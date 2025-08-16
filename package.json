@@ -1,5 +1,5 @@
 {
-	"name": "aibot-cli",
+	"name": "@mufasa/aibot-cli",
 	"version": "0.0.4",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
