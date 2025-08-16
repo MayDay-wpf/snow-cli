@@ -17,6 +17,10 @@
 		"type": "git",
 		"url": "https://github.com/yourusername/aibot-cli.git"
 	},
+	"bugs": {
+		"url": "https://github.com/yourusername/aibot-cli/issues"
+	},
+	"homepage": "https://github.com/yourusername/aibot-cli#readme",
 	"engines": {
 		"node": ">=16"
 	},
@@ -24,6 +28,7 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"start": "node dist/cli.js",
+		"prepublishOnly": "npm run build",
 		"test": "prettier --check . && xo && ava",
 		"lint": "xo",
 		"format": "prettier --write ."
