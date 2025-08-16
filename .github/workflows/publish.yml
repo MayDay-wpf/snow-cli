@@ -57,12 +57,12 @@ jobs:
             
             ### Installation
             ```bash
-            npm install -g aibot
+            npm install -g aibot-cli
             ```
             
             ### Usage
             ```bash
-            aibot
+            aibot-cli
             ```
             
             See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.
