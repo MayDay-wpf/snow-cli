@@ -12,10 +12,6 @@ const cli = meow(
 	Options
 		--help     Show help
 		--version  Show version
-
-	Examples
-	  $ aibotpro
-	  Welcome to AI Bot CLI
 `,
 	{
 		importMeta: import.meta,

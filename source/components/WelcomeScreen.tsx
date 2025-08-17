@@ -20,7 +20,7 @@ export default function WelcomeScreen({version = '1.0.0'}: Props) {
 			const gradientText = gradient(['#00CED1', '#4169E1', '#8A2BE2'])(ascii);
 			return gradientText;
 		} catch {
-			return 'AI BOT CLI';
+			return 'AIBOTPRO CLI';
 		}
 	}, []);
 
