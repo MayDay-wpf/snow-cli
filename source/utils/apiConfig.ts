@@ -2,9 +2,12 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 
+export type RequestMethod = 'chat' | 'responses';
+
 export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
+	requestMethod: RequestMethod;
 }
 
 export interface AppConfig {
@@ -15,6 +18,7 @@ const DEFAULT_CONFIG: AppConfig = {
 	openai: {
 		baseUrl: 'https://api.openai.com/v1',
 		apiKey: '',
+		requestMethod: 'chat',
 	},
 };
 
@@ -38,7 +42,17 @@ export function loadConfig(): AppConfig {
 	try {
 		const configData = readFileSync(CONFIG_FILE, 'utf8');
 		const config = JSON.parse(configData);
-		return {...DEFAULT_CONFIG, ...config};
+		// Ensure backward compatibility by adding default requestMethod if missing
+		const mergedConfig = {
+			...DEFAULT_CONFIG,
+			...config,
+			openai: {
+				...DEFAULT_CONFIG.openai,
+				...config.openai,
+				requestMethod: (config.openai?.requestMethod === 'completions' ? 'chat' : config.openai?.requestMethod) || DEFAULT_CONFIG.openai.requestMethod,
+			},
+		};
+		return mergedConfig;
 	} catch (error) {
 		return DEFAULT_CONFIG;
 	}

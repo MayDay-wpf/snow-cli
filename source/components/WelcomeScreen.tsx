@@ -1,5 +1,6 @@
-import React, {useState} from 'react';
-import {Box, Text} from 'ink';
+import React, { useState } from 'react';
+import { Box, Text } from 'ink';
+import { Alert } from '@inkjs/ui';
 import Menu from './Menu.js';
 
 type Props = {
@@ -14,14 +15,18 @@ export default function WelcomeScreen({
 	const [infoText, setInfoText] = useState('Start a new chat conversation');
 
 	const menuOptions = [
-		{label: 'Start', value: 'chat', infoText: 'Start a new chat conversation'},
 		{
-			label: 'API Settings',
+			label: 'Start ✦',
+			value: 'chat',
+			infoText: 'Start a new chat conversation'
+		},
+		{
+			label: 'API Settings ✧',
 			value: 'config',
 			infoText: 'Configure OpenAI API settings',
 		},
 		{
-			label: 'Exit',
+			label: 'Exit ✘',
 			value: 'exit',
 			color: 'rgb(232, 131, 136)',
 			infoText: 'Exit the application',
@@ -60,10 +65,10 @@ export default function WelcomeScreen({
 			)}
 
 			<Box justifyContent="space-between">
-				<Text color="gray" dimColor>
+				<Alert variant='info'>
 					{infoText}
-				</Text>
+				</Alert>
 			</Box>
-		</Box>
+		</Box >
 	);
 }

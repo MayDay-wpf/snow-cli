@@ -1,10 +1,12 @@
-import React, {useState, useEffect} from 'react';
-import {Box, Text, useInput} from 'ink';
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { Select, Alert } from '@inkjs/ui';
 import TextInput from 'ink-text-input';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
 	validateApiConfig,
+	type RequestMethod,
 } from '../utils/apiConfig.js';
 
 type Props = {
@@ -12,41 +14,77 @@ type Props = {
 	onSave: () => void;
 };
 
-export default function ApiConfigScreen({onBack, onSave}: Props) {
+export default function ApiConfigScreen({ onBack, onSave }: Props) {
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
-	const [currentField, setCurrentField] = useState<'baseUrl' | 'apiKey'>(
+	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
+	const [currentField, setCurrentField] = useState<'baseUrl' | 'apiKey' | 'requestMethod'>(
 		'baseUrl',
 	);
 	const [errors, setErrors] = useState<string[]>([]);
+	const [isEditing, setIsEditing] = useState(false);
+
+	const requestMethodOptions = [
+		{
+			label: 'Chat Completions - Modern chat API (GPT-4, GPT-3.5-turbo)',
+			value: 'chat' as RequestMethod,
+		},
+		{
+			label: 'Responses - New responses API (2025, with built-in tools)',
+			value: 'responses' as RequestMethod,
+		},
+	];
 
 	useEffect(() => {
 		const config = getOpenAiConfig();
 		setBaseUrl(config.baseUrl);
 		setApiKey(config.apiKey);
+		setRequestMethod(config.requestMethod || 'chat');
 	}, []);
 
 	useInput((input, key) => {
-		if (key.upArrow && currentField === 'apiKey') {
-			setCurrentField('baseUrl');
-		} else if (key.downArrow && currentField === 'baseUrl') {
-			setCurrentField('apiKey');
-		} else if (input === 's' && (key.ctrl || key.meta)) {
-			const validationErrors = validateApiConfig({baseUrl, apiKey});
+		// Don't handle input when Select component is active
+		if (isEditing && currentField === 'requestMethod') {
+			return;
+		}
+
+		// Handle save/exit globally
+		if (input === 's' && (key.ctrl || key.meta)) {
+			const validationErrors = validateApiConfig({ baseUrl, apiKey, requestMethod });
 			if (validationErrors.length === 0) {
-				updateOpenAiConfig({baseUrl, apiKey});
+				updateOpenAiConfig({ baseUrl, apiKey, requestMethod });
 				setErrors([]);
 				onSave();
 			} else {
 				setErrors(validationErrors);
 			}
 		} else if (key.escape) {
-			const validationErrors = validateApiConfig({baseUrl, apiKey});
+			const validationErrors = validateApiConfig({ baseUrl, apiKey, requestMethod });
 			if (validationErrors.length === 0) {
-				updateOpenAiConfig({baseUrl, apiKey});
+				updateOpenAiConfig({ baseUrl, apiKey, requestMethod });
 				setErrors([]);
 			}
 			onBack();
+		} else if (key.return) {
+			if (isEditing) {
+				// Exit edit mode, return to navigation
+				setIsEditing(false);
+			} else {
+				// Enter edit mode for current field
+				setIsEditing(true);
+			}
+		} else if (!isEditing && key.upArrow) {
+			if (currentField === 'apiKey') {
+				setCurrentField('baseUrl');
+			} else if (currentField === 'requestMethod') {
+				setCurrentField('apiKey');
+			}
+		} else if (!isEditing && key.downArrow) {
+			if (currentField === 'baseUrl') {
+				setCurrentField('apiKey');
+			} else if (currentField === 'apiKey') {
+				setCurrentField('requestMethod');
+			}
 		}
 	});
 
@@ -69,7 +107,7 @@ export default function ApiConfigScreen({onBack, onSave}: Props) {
 						<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
 							{currentField === 'baseUrl' ? '➣ ' : '  '}Base URL:
 						</Text>
-						{currentField === 'baseUrl' && (
+						{currentField === 'baseUrl' && isEditing && (
 							<Box marginLeft={3}>
 								<TextInput
 									value={baseUrl}
@@ -78,7 +116,7 @@ export default function ApiConfigScreen({onBack, onSave}: Props) {
 								/>
 							</Box>
 						)}
-						{currentField !== 'baseUrl' && (
+						{(!isEditing || currentField !== 'baseUrl') && (
 							<Box marginLeft={3}>
 								<Text color="gray">{baseUrl || 'Not set'}</Text>
 							</Box>
@@ -91,7 +129,7 @@ export default function ApiConfigScreen({onBack, onSave}: Props) {
 						<Text color={currentField === 'apiKey' ? 'green' : 'white'}>
 							{currentField === 'apiKey' ? '➣ ' : '  '}API Key:
 						</Text>
-						{currentField === 'apiKey' && (
+						{currentField === 'apiKey' && isEditing && (
 							<Box marginLeft={3}>
 								<TextInput
 									value={apiKey}
@@ -101,10 +139,37 @@ export default function ApiConfigScreen({onBack, onSave}: Props) {
 								/>
 							</Box>
 						)}
-						{currentField !== 'apiKey' && (
+						{(!isEditing || currentField !== 'apiKey') && (
 							<Box marginLeft={3}>
 								<Text color="gray">
 									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'requestMethod' ? 'green' : 'white'}>
+							{currentField === 'requestMethod' ? '➣ ' : '  '}Request Method:
+						</Text>
+						{currentField === 'requestMethod' && isEditing && (
+							<Box marginLeft={3}>
+								<Select
+									options={requestMethodOptions}
+									defaultValue={requestMethod}
+									onChange={(value) => {
+										setRequestMethod(value as RequestMethod);
+										setIsEditing(false); // Auto exit edit mode after selection
+									}}
+								/>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'requestMethod') && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{requestMethodOptions.find(opt => opt.value === requestMethod)?.label || 'Not set'}
 								</Text>
 							</Box>
 						)}
@@ -126,10 +191,21 @@ export default function ApiConfigScreen({onBack, onSave}: Props) {
 			)}
 
 			<Box flexDirection="column">
-				<Text color="cyan">Use ↑↓ to navigate between fields</Text>
-				<Text color="gray" dimColor>
-					Press Ctrl+S or Esc to save and go back
-				</Text>
+				{isEditing ? (
+					<>
+						<Alert variant="info">
+							Editing mode: Press Enter to save and exit editing 
+							(Make your changes and press Enter when done)
+						</Alert>
+					</>
+				) : (
+					<>
+						<Alert variant="info">
+							Use ↑↓ to navigate between fields, press Enter to edit, 
+							and press Ctrl+S or Esc to save and return
+						</Alert>
+					</>
+				)}
 			</Box>
 		</Box>
 	);
