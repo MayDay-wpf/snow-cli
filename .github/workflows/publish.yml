@@ -64,7 +64,7 @@ jobs:
             
             ### Usage
             ```bash
-            aibotpro-cli
+            aibotpro
             ```
             
             See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.

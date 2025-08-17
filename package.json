@@ -3,7 +3,9 @@
 	"version": "0.0.10",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
-	"bin": "dist/cli.js",
+	"bin": {
+		"aibotpro": "dist/cli.js"
+	},
 	"type": "module",
 	"keywords": [
 		"cli",
@@ -15,12 +17,12 @@
 	"author": "Mufasa",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/MayDay-wpf/aibot-cli.git"
+		"url": "https://github.com/MayDay-wpf/aibotpro-cli.git"
 	},
 	"bugs": {
-		"url": "https://github.com/MayDay-wpf/aibot-cli/issues"
+		"url": "https://github.com/MayDay-wpf/aibotpro-cli/issues"
 	},
-	"homepage": "https://github.com/MayDay-wpf/aibot-cli#readme",
+	"homepage": "https://github.com/MayDay-wpf/aibotpro-cli#readme",
 	"engines": {
 		"node": ">=16"
 	},

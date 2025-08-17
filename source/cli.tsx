@@ -7,14 +7,14 @@ import App from './app.js';
 const cli = meow(
 	`
 	Usage
-	  $ aibot
+	  $ aibotpro
 
 	Options
 		--help     Show help
 		--version  Show version
 
 	Examples
-	  $ aibot
+	  $ aibotpro
 	  Welcome to AI Bot CLI
 `,
 	{

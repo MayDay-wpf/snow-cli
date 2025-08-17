@@ -11,5 +11,5 @@ $ npm install --global aibotpro-cli
 
 ### Usage
 ```bash
-aibot
+aibotpro
 ```
