@@ -1,48 +1,67 @@
-import React, {useMemo} from 'react';
-import {Box, Text, Newline} from 'ink';
-import figlet from 'figlet';
-import gradient from 'gradient-string';
+import React, {useState} from 'react';
+import {Box, Text} from 'ink';
+import Menu from './Menu.js';
 
 type Props = {
 	version?: string;
+	onMenuSelect?: (value: string) => void;
 };
 
-export default function WelcomeScreen({version = '1.0.0'}: Props) {
-	const logo = useMemo(() => {
-		try {
-			const ascii = figlet.textSync('>AIBOT', {
-				font: 'ANSI Shadow',
-				horizontalLayout: 'default',
-				verticalLayout: 'default',
-			});
-			
-			// Apply gradient coloring similar to the image
-			const gradientText = gradient(['#00CED1', '#4169E1', '#8A2BE2'])(ascii);
-			return gradientText;
-		} catch {
-			return 'AIBOTPRO CLI';
-		}
-	}, []);
+export default function WelcomeScreen({
+	version = '1.0.0',
+	onMenuSelect,
+}: Props) {
+	const [infoText, setInfoText] = useState('Start a new chat conversation');
+
+	const menuOptions = [
+		{label: 'Start', value: 'chat', infoText: 'Start a new chat conversation'},
+		{
+			label: 'API Settings',
+			value: 'config',
+			infoText: 'Configure OpenAI API settings',
+		},
+		{
+			label: 'Exit',
+			value: 'exit',
+			color: 'rgb(232, 131, 136)',
+			infoText: 'Exit the application',
+		},
+	];
+
+	const handleSelectionChange = (newInfoText: string) => {
+		setInfoText(newInfoText);
+	};
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={1}>
-				<Text>{logo}</Text>
+			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+				<Box flexDirection="column">
+					<Text color="cyan" bold>
+						A I B O T P R O
+					</Text>
+					<Text color="blue">C L I</Text>
+					<Text color="gray" dimColor>
+						Intelligent Command Line Assistant
+					</Text>
+					<Text color="magenta" dimColor>
+						Version {version}
+					</Text>
+				</Box>
 			</Box>
 
-			<Box marginBottom={2}>
-				<Text color="gray" dimColor>
-					Intelligent Command Line Assistant
-				</Text>
-			</Box>
-			<Newline />
+			{onMenuSelect && (
+				<Box marginBottom={2}>
+					<Menu
+						options={menuOptions}
+						onSelect={onMenuSelect}
+						onSelectionChange={handleSelectionChange}
+					/>
+				</Box>
+			)}
 
 			<Box justifyContent="space-between">
-				<Text color="magenta" dimColor>
-					Version {version}
-				</Text>
 				<Text color="gray" dimColor>
-					Press Ctrl+C to exit
+					{infoText}
 				</Text>
 			</Box>
 		</Box>

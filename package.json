@@ -40,8 +40,8 @@
 	],
 	"dependencies": {
 		"figlet": "^1.8.2",
-		"gradient-string": "^3.0.0",
 		"ink": "^4.1.0",
+		"ink-text-input": "^5.0.1",
 		"meow": "^11.0.0",
 		"react": "^18.2.0"
 	},
