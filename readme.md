@@ -5,21 +5,5 @@
 ## Install
 
 ```bash
-$ npm install --global aibot-cli
-```
-
-## CLI
-
-```
-$ aibot-cli --help
-
-  Usage
-    $ aibot-cli
-
-  Options
-    --name  Your name
-
-  Examples
-    $ aibot-cli --name=Jane
-    Hello, Jane
+$ npm install --global aibotpro-cli
 ```

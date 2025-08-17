@@ -1,12 +1,12 @@
 # Changelog
 
 
-## [0.0.1] - 2025-08-16
+## [0.1.0] - 2025-08-16
 
 
 ### Installation
 ```bash
-npm install -g aibot
+$ npm install --global aibotpro-cli
 ```
 
 ### Usage
