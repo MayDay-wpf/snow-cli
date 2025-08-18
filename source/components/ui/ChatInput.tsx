@@ -54,6 +54,20 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 		);
 	}, [buffer]);
 
+	// Debounced command panel state update to prevent terminal freezing
+	const updateCommandPanelState = useCallback((text: string) => {
+		// Use setTimeout to defer state updates and prevent blocking the event loop
+		setTimeout(() => {
+			if (text.startsWith('/') && text.length > 0) {
+				setShowCommands(true);
+				setCommandSelectedIndex(0);
+			} else {
+				setShowCommands(false);
+				setCommandSelectedIndex(0);
+			}
+		}, 0);
+	}, []);
+
 	// Force re-render when buffer changes - debounced for performance and stability
 	const triggerUpdate = useCallback(() => {
 		const now = Date.now();
@@ -115,14 +129,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				
 				// Always check and update command panel state after backspace
 				const text = buffer.getFullText();
-				if (!text.startsWith('/') || text.length === 0) {
-					setShowCommands(false);
-					setCommandSelectedIndex(0);
-				} else {
-					// Still starts with '/', ensure command panel is visible and reset selection
-					setShowCommands(true);
-					setCommandSelectedIndex(0);
-				}
+				updateCommandPanelState(text);
 				
 				triggerUpdate();
 				return;
@@ -149,10 +156,10 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 					}
 				}
 				
-				// Enter - select command (just close panel for now)
+				// Enter - select command or fall through to normal message sending
 				if (code === 13) {
 					if (filteredCommands.length > 0 && commandSelectedIndex < filteredCommands.length) {
-						// For now, just insert the command name
+						// Select command if available
 						const selectedCommand = filteredCommands[commandSelectedIndex];
 						if (selectedCommand) {
 							const commandText = `/${selectedCommand.name}`;
@@ -162,9 +169,10 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 							setShowCommands(false);
 							setCommandSelectedIndex(0);
 							triggerUpdate();
+							return;
 						}
 					}
-					return;
+					// If no commands available, fall through to normal Enter handling
 				}
 				
 				// Allow normal text input to continue filtering
@@ -207,10 +215,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				buffer.delete();
 				// Also update command panel state for delete operations
 				const text = buffer.getFullText();
-				if (!text.startsWith('/') || text.length === 0) {
-					setShowCommands(false);
-					setCommandSelectedIndex(0);
-				}
+				updateCommandPanelState(text);
 				triggerUpdate();
 				return;
 			}
@@ -224,14 +229,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				
 				// Check if input starts with '/' to show command panel
 				const text = buffer.getFullText();
-				if (text.startsWith('/') && text.length > 0) {
-					setShowCommands(true);
-					// Reset selection index when filtering changes
-					setCommandSelectedIndex(0);
-				} else {
-					setShowCommands(false);
-					setCommandSelectedIndex(0);
-				}
+				updateCommandPanelState(text);
 				
 				triggerUpdate();
 			}
@@ -249,7 +247,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				clearTimeout(inputTimeoutRef.current);
 			}
 		};
-	}, [buffer, onSubmit, triggerUpdate, showCommands, commandSelectedIndex, getFilteredCommands]);
+	}, [buffer, onSubmit, triggerUpdate, showCommands, commandSelectedIndex, getFilteredCommands, updateCommandPanelState]);
 
 	const visualLines = buffer.viewportVisualLines;
 	const [cursorRow, cursorCol] = buffer.visualCursor;
@@ -331,7 +329,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 			/>
 			<Box marginTop={1}>
 				<Text color="gray" dimColor>
-					{showCommands ? "Type to filter commands" : "Press Esc to return to main menu"}
+					{showCommands && getFilteredCommands().length > 0 ? "Type to filter commands" : "Press Esc to return to main menu"}
 				</Text>
 			</Box>
 		</Box>
