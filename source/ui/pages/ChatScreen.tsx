@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import ChatInput from '../ui/ChatInput.js';
+import ChatInput from '../components/ChatInput.js';
 
 type Props = {
 	onBack: () => void;
@@ -21,25 +21,14 @@ export default function ChatScreen({ onBack }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+			<Box marginBottom={2} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
 				<Box flexDirection="column">
-					<Text color="green" bold>
-						Tips & Quick Commands:
+					<Text color="white" bold>
+						<Text color="cyan">❄ </Text>
+						Welcome to the AI Coding!:
 					</Text>
-					<Text color="white">
+					<Text color="gray" dimColor>
 						• Ask for code explanations and debugging help
-					</Text>
-					<Text color="white">
-						• Request code reviews and optimization suggestions
-					</Text>
-					<Text color="white">
-						• Get help with specific programming languages
-					</Text>
-					<Text color="white">
-						• Ask about best practices and design patterns
-					</Text>
-					<Text color="yellow" dimColor>
-						Pro tip: Be specific about your programming context for better help
 					</Text>
 				</Box>
 			</Box>

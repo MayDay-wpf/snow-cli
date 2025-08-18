@@ -1,9 +1,9 @@
 import React, {useState} from 'react';
 import {Box, Text} from 'ink';
-import WelcomeScreen from './components/pages/WelcomeScreen.js';
-import ApiConfigScreen from './components/pages/ApiConfigScreen.js';
-import ModelConfigScreen from './components/pages/ModelConfigScreen.js';
-import ChatScreen from './components/pages/ChatScreen.js';
+import WelcomeScreen from './ui/pages/WelcomeScreen.js';
+import ApiConfigScreen from './ui/pages/ApiConfigScreen.js';
+import ModelConfigScreen from './ui/pages/ModelConfigScreen.js';
+import ChatScreen from './ui/pages/ChatScreen.js';
 
 type Props = {
 	version?: string;

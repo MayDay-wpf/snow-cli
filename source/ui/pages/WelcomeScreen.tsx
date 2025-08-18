@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
-import Menu from '../ui/Menu.js';
+import Menu from '../components/Menu.js';
 
 type Props = {
 	version?: string;

@@ -34,6 +34,7 @@ export class TextBuffer {
   private pendingUpdates: boolean = false;
   private pasteStorage: Map<string, PastePlaceholder> = new Map(); // 存储大粘贴内容
   private pasteCounter: number = 0; // 粘贴计数器
+  private lastPasteTime: number = 0; // 最后粘贴时间
 
   constructor(viewport: Viewport) {
     this.viewport = viewport;
@@ -99,6 +100,7 @@ export class TextBuffer {
     if (text === '') {
       this.pasteStorage.clear();
       this.pasteCounter = 0;
+      this.lastPasteTime = 0;
     }
     
     this.scheduleUpdate();
@@ -107,11 +109,18 @@ export class TextBuffer {
   insert(input: string): void {
     const sanitized = sanitizeInput(input);
     const lines = sanitized.split('\n');
+    const now = Date.now();
     
-    // 检查是否为大量粘贴（超过10行）
+    // 检查是否为大量粘贴（超过10行），并防止重复处理
     if (lines.length > 10) {
+      // 防止在短时间内重复处理同样的粘贴内容
+      if (now - this.lastPasteTime < 100) {
+        return;
+      }
+      
+      this.lastPasteTime = now;
       this.pasteCounter++;
-      const pasteId = `paste_${Date.now()}_${this.pasteCounter}`;
+      const pasteId = `paste_${now}_${this.pasteCounter}`;
       const placeholder = `[Paste ${lines.length} line #${this.pasteCounter}]`;
       
       // 存储原始内容

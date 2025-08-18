@@ -23,7 +23,7 @@ export default function CommandPanel({ commands, selectedIndex, query, visible }
 		<Box flexDirection="column">
 			<Box width="100%">
 				<Box flexDirection="column" width="100%">
-					<Box marginBottom={1}>
+					<Box>
 						<Text color="yellow" bold>
 							Available Commands {query && `(${commands.length} matches)`}
 						</Text>
@@ -41,11 +41,6 @@ export default function CommandPanel({ commands, selectedIndex, query, visible }
 							</Box>
 						</Box>
 					))}
-					<Box marginTop={1}>
-						<Text color="gray" dimColor>
-							↑↓ Navigate • Enter Select • Esc Cancel
-						</Text>
-					</Box>
 				</Box>
 			</Box>
 		</Box>

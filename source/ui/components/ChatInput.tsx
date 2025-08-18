@@ -11,16 +11,8 @@ type Props = {
 
 // 命令定义
 const commands = [
-	{ name: 'add-dir', description: 'Add a new working directory' },
-	{ name: 'agents', description: 'Manage agent configurations' },
-	{ name: 'bashes', description: 'List and manage background bash shells' },
-	{ name: 'bug', description: 'Submit feedback about Claude Code' },
-	{ name: 'clear', description: 'Clear conversation history and free up context' },
-	{ name: 'compact', description: 'Clear conversation history but keep a summary in context' },
-	{ name: 'config', description: 'Open config panel' },
-	{ name: 'cost', description: 'Show the total cost and duration of the current session' },
-	{ name: 'doctor', description: 'Diagnose and verify your Claude Code installation and settings' },
-	{ name: 'exit', description: 'Exit the REPL' },
+	{ name: 'clear', description: 'Add a new working directory' },
+	{ name: 'agents', description: 'Manage agent configurations' }
 ];
 
 export default function ChatInput({ onSubmit, placeholder = 'Type your message...' }: Props) {
@@ -37,6 +29,8 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 	const isActiveRef = useRef(true);
 	const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const lastUpdateTime = useRef<number>(0);
+	const pasteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const lastPasteTime = useRef<number>(0);
 	
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
@@ -117,10 +111,45 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 			if (!isActiveRef.current) return;
 
 			const code = data.charCodeAt(0);
+			const now = Date.now();
 
 			// Ctrl+C
 			if (code === 3) {
 				process.exit(0);
+			}
+
+			// 首先检查是否是粘贴操作 - 在处理任何其他键之前
+			const containsNewline = data.includes('\n') || data.includes('\r');
+			const isMultiChar = data.length > 1;
+			const isControlSequence = data.startsWith('\x1b');
+			const isPrintableText = data.length > 0 && !isControlSequence && !/^[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+$/.test(data);
+			const isSingleEnterKey = data === '\n' || data === '\r' || data === '\r\n';
+			
+			// 如果是包含换行符的多字符文本，或者是多字符的可打印文本，认为是粘贴
+			// 但排除单独的 Enter 键
+			const isPaste = isPrintableText && !isSingleEnterKey && (containsNewline || (isMultiChar && !/^[\s]*$/.test(data)));
+			
+			// 防抖处理粘贴，避免多次触发
+			if (isPaste) {
+				// 如果在很短时间内收到多个粘贴事件，只处理第一个
+				if (now - lastPasteTime.current < 100) {
+					return;
+				}
+				
+				if (pasteTimeoutRef.current) {
+					clearTimeout(pasteTimeoutRef.current);
+				}
+				
+				lastPasteTime.current = now;
+				
+				// 延迟处理粘贴，确保所有数据都到达，但不触发发送
+				pasteTimeoutRef.current = setTimeout(() => {
+					buffer.insert(data);
+					const text = buffer.getFullText();
+					updateCommandPanelState(text);
+					triggerUpdate();
+				}, 20);
+				return;
 			}
 
 			// Backspace - handle first to avoid conflicts
@@ -178,9 +207,9 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				// Allow normal text input to continue filtering
 			}
 
-			// Enter
-			if (code === 13) {
-				const message = buffer.getFullText().trim(); // 使用完整文本包括粘贴内容
+			// Enter - 发送消息
+			if (code === 13 && (data === '\n' || data === '\r' || data === '\r\n')) {
+				const message = buffer.getFullText().trim();
 				if (message) {
 					// 立即清空输入框，确保UI快速响应
 					buffer.setText('');
@@ -220,11 +249,8 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				return;
 			}
 
-			// Handle paste (detect multi-character input)
-			const isPaste = data.length > 1 && !/^[\x00-\x1F]/.test(data);
-
-			// Printable characters and newlines
-			if (code >= 32 || code === 10 || isPaste) {
+			// Printable characters and newlines (excluding paste which is handled above)
+			if ((code >= 32 || code === 10) && !isPaste) {
 				buffer.insert(data);
 				
 				// Check if input starts with '/' to show command panel
@@ -245,6 +271,9 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 			}
 			if (inputTimeoutRef.current) {
 				clearTimeout(inputTimeoutRef.current);
+			}
+			if (pasteTimeoutRef.current) {
+				clearTimeout(pasteTimeoutRef.current);
 			}
 		};
 	}, [buffer, onSubmit, triggerUpdate, showCommands, commandSelectedIndex, getFilteredCommands, updateCommandPanelState]);
@@ -309,12 +338,12 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 			<Box 
 				flexDirection="row" 
 				borderStyle="round"
-				borderColor="blue"
+				borderColor="gray"
 				paddingX={1}
 				paddingY={0}
 				width="100%"
 			>
-				<Text color="blue" dimColor>
+				<Text color="cyan" bold>
 					➣{' '}
 				</Text>
 				<Box flexDirection="column" flexGrow={1}>
@@ -329,7 +358,10 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 			/>
 			<Box marginTop={1}>
 				<Text color="gray" dimColor>
-					{showCommands && getFilteredCommands().length > 0 ? "Type to filter commands" : "Press Esc to return to main menu"}
+					{showCommands && getFilteredCommands().length > 0 
+						? "Type to filter commands" 
+						: "Press Esc to return to main menu"
+					}
 				</Text>
 			</Box>
 		</Box>
