@@ -16,21 +16,26 @@ export default function WelcomeScreen({
 
 	const menuOptions = [
 		{
-			label: 'Start ✦',
+			label: 'Start',
 			value: 'chat',
 			infoText: 'Start a new chat conversation'
 		},
 		{
-			label: 'API Settings ✧',
+			label: 'API Settings',
 			value: 'config',
 			infoText: 'Configure OpenAI API settings',
 		},
 		{
-			label: 'Exit ✘',
+			label: 'Model Settings',
+			value: 'models',
+			infoText: 'Configure AI models for different tasks',
+		},
+		{
+			label: 'Exit',
 			value: 'exit',
 			color: 'rgb(232, 131, 136)',
 			infoText: 'Exit the application',
-		},
+		}
 	];
 
 	const handleSelectionChange = (newInfoText: string) => {
@@ -39,7 +44,7 @@ export default function WelcomeScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1} borderColor={'cyan'}>
 				<Box flexDirection="column">
 					<Text color="cyan" bold>
 						A I B O T P R O

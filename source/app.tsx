@@ -2,6 +2,8 @@ import React, {useState} from 'react';
 import {Box, Text} from 'ink';
 import WelcomeScreen from './components/WelcomeScreen.js';
 import ApiConfigScreen from './components/ApiConfigScreen.js';
+import ModelConfigScreen from './components/ModelConfigScreen.js';
+import ChatScreen from './components/ChatScreen.js';
 
 type Props = {
 	version?: string;
@@ -9,11 +11,11 @@ type Props = {
 
 export default function App({version}: Props) {
 	const [currentView, setCurrentView] = useState<
-		'welcome' | 'chat' | 'settings' | 'config'
+		'welcome' | 'chat' | 'settings' | 'config' | 'models'
 	>('welcome');
 
 	const handleMenuSelect = (value: string) => {
-		if (value === 'chat' || value === 'settings' || value === 'config') {
+		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models') {
 			setCurrentView(value);
 		} else if (value === 'exit') {
 			process.exit(0);
@@ -28,12 +30,7 @@ export default function App({version}: Props) {
 				);
 			case 'chat':
 				return (
-					<Box flexDirection="column">
-						<Text color="green">Starting conversation...</Text>
-						<Text color="gray">
-							Chat functionality would be implemented here
-						</Text>
-					</Box>
+					<ChatScreen onBack={() => setCurrentView('welcome')} />
 				);
 			case 'settings':
 				return (
@@ -47,6 +44,13 @@ export default function App({version}: Props) {
 			case 'config':
 				return (
 					<ApiConfigScreen
+						onBack={() => setCurrentView('welcome')}
+						onSave={() => setCurrentView('welcome')}
+					/>
+				);
+			case 'models':
+				return (
+					<ModelConfigScreen
 						onBack={() => setCurrentView('welcome')}
 						onSave={() => setCurrentView('welcome')}
 					/>

@@ -8,6 +8,8 @@ export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
 	requestMethod: RequestMethod;
+	advancedModel?: string;
+	basicModel?: string;
 }
 
 export interface AppConfig {
@@ -19,6 +21,8 @@ const DEFAULT_CONFIG: AppConfig = {
 		baseUrl: 'https://api.openai.com/v1',
 		apiKey: '',
 		requestMethod: 'chat',
+		advancedModel: '',
+		basicModel: '',
 	},
 };
 
