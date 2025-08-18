@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Select, Alert } from '@inkjs/ui';
-import { fetchAvailableModels, filterModels, type Model } from '../api/models.js';
+import { fetchAvailableModels, filterModels, type Model } from '../../api/models.js';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
 	type ApiConfig,
-} from '../utils/apiConfig.js';
+} from '../../utils/apiConfig.js';
 
 type Props = {
 	onBack: () => void;

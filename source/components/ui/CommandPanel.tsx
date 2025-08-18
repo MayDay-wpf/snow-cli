@@ -19,14 +19,8 @@ export default function CommandPanel({ commands, selectedIndex, query, visible }
 	}
 
 	return (
-		<Box flexDirection="column" marginTop={1}>
-			<Box 
-				borderStyle="round" 
-				borderColor="yellow" 
-				paddingX={1} 
-				paddingY={0}
-				width="100%"
-			>
+		<Box flexDirection="column">
+			<Box width="100%">
 				<Box flexDirection="column" width="100%">
 					{commands.length > 0 ? (
 						<>

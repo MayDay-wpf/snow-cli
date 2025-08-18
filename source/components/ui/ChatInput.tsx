@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text, useStdout } from 'ink';
-import { TextBuffer, Viewport } from '../utils/textBuffer.js';
-import { cpSlice } from '../utils/textUtils.js';
+import { TextBuffer, Viewport } from '../../utils/textBuffer.js';
+import { cpSlice } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 
 type Props = {

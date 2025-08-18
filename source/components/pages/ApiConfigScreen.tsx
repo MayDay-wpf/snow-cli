@@ -7,7 +7,7 @@ import {
 	updateOpenAiConfig,
 	validateApiConfig,
 	type RequestMethod,
-} from '../utils/apiConfig.js';
+} from '../../utils/apiConfig.js';
 
 type Props = {
 	onBack: () => void;
