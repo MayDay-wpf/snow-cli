@@ -59,7 +59,7 @@ jobs:
             
             ### Installation
             ```bash
-            npm install -g snow-cli
+            npm install -g snow-ai
             ```
             
             ### Usage
