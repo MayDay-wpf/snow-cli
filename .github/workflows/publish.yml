@@ -51,7 +51,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: |
-            ## 🚀 AI Bot CLI ${{ github.ref_name }}
+            ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
             - New features and improvements
@@ -59,12 +59,12 @@ jobs:
             
             ### Installation
             ```bash
-            npm install -g aibotpro-cli
+            npm install -g snow-cli
             ```
             
             ### Usage
             ```bash
-            aibotpro
+            snow
             ```
             
             See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.
