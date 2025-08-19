@@ -74,6 +74,12 @@ export default function ChatScreen({ }: Props) {
 		}
 	};
 
+	const handleHistorySelect = (selectedIndex: number, _message: string) => {
+		// Truncate messages array to remove the selected user message and everything after it
+		// Keep everything before the selected message (exclude the selected message itself)
+		setMessages(prev => prev.slice(0, selectedIndex));
+	};
+
 	const handleMessageSubmit = async (message: string) => {
 		// If streaming, add to pending messages instead of sending immediately
 		if (isStreaming) {
@@ -319,6 +325,9 @@ export default function ChatScreen({ }: Props) {
 					<Text color="gray" dimColor>
 						• Press ESC during response to interrupt
 					</Text>
+					<Text color="gray" dimColor>
+						• Double ESC for history
+					</Text>
 				</Box>
 			</Box>
 
@@ -336,6 +345,8 @@ export default function ChatScreen({ }: Props) {
 					onCommand={handleCommandExecution}
 					placeholder="Ask me anything about coding..."
 					disabled={false}
+					chatHistory={messages}
+					onHistorySelect={handleHistorySelect}
 				/>
 			</Box>
 		</Box>

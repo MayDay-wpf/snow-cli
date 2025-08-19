@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: AppConfig = {
 	},
 };
 
-const CONFIG_DIR = join(homedir(), '.aibotpro');
+const CONFIG_DIR = join(homedir(), '.snow');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 function ensureConfigDirectory(): void {

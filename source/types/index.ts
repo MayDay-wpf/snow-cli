@@ -1,4 +1,4 @@
-export interface AIBotConfig {
+export interface SnowConfig {
 	model?: string;
 	apiKey?: string;
 	maxTokens?: number;

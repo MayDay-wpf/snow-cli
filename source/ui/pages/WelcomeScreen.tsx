@@ -47,10 +47,10 @@ export default function WelcomeScreen({
 		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={2} borderStyle="double" paddingX={2} paddingY={1} borderColor={'cyan'}>
 				<Box flexDirection="column">
-					<Gradient name="rainbow">
-						<Text bold>A I B O T P R O</Text>
-					</Gradient>
-					<Text color="blue">C L I</Text>
+					<Text color="white" bold>
+						<Text color="cyan">❆ </Text>
+						<Gradient name="rainbow">SNOW AI CLI</Gradient>
+					</Text>
 					<Text color="gray" dimColor>
 						Intelligent Command Line Assistant
 					</Text>

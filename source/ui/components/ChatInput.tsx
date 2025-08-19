@@ -4,12 +4,15 @@ import { TextBuffer, Viewport } from '../../utils/textBuffer.js';
 import { cpSlice } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import { executeCommand } from '../../utils/commandExecutor.js';
+import Menu from './Menu.js';
 
 type Props = {
 	onSubmit: (message: string) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
+	chatHistory?: Array<{role: string, content: string}>;
+	onHistorySelect?: (selectedIndex: number, message: string) => void;
 };
 
 // Command Definition
@@ -18,7 +21,7 @@ const commands = [
 	{ name: 'agents', description: 'Manage agent configurations' }
 ];
 
-export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false }: Props) {
+export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect }: Props) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 	
@@ -34,6 +37,26 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+	
+	// History navigation state
+	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+	const [escapeKeyCount, setEscapeKeyCount] = useState(0);
+	const escapeKeyTimer = useRef<NodeJS.Timeout | null>(null);
+	
+	// Get user messages from chat history for navigation
+	const getUserMessages = useCallback(() => {
+		const userMessages = chatHistory
+			.map((msg, index) => ({ ...msg, originalIndex: index }))
+			.filter(msg => msg.role === 'user' && msg.content.trim());
+		
+		// Keep original order (oldest first, newest last) and map with display numbers
+		return userMessages
+			.map((msg, index) => ({
+				label: `${index + 1}. ${msg.content.slice(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
+				value: msg.originalIndex.toString(),
+				infoText: msg.content
+			}));
+	}, [chatHistory]);
 	
 	// Get filtered commands based on current input
 	const getFilteredCommands = useCallback(() => {
@@ -81,6 +104,55 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	// Handle input using useInput hook instead of raw stdin
 	useInput((input, key) => {
 		if (disabled) return;
+		
+		// Handle escape key for double-ESC history navigation
+		if (key.escape) {
+			// Don't interfere with existing ESC behavior if in command panel
+			if (showCommands) {
+				setShowCommands(false);
+				setCommandSelectedIndex(0);
+				return;
+			}
+			
+			// Handle history navigation
+			if (showHistoryMenu) {
+				setShowHistoryMenu(false);
+				return;
+			}
+			
+			// Count escape key presses for double-ESC detection
+			setEscapeKeyCount(prev => prev + 1);
+			
+			// Clear any existing timer
+			if (escapeKeyTimer.current) {
+				clearTimeout(escapeKeyTimer.current);
+			}
+			
+			// Set timer to reset count after 500ms
+			escapeKeyTimer.current = setTimeout(() => {
+				setEscapeKeyCount(0);
+			}, 500);
+			
+			// Check for double escape
+			if (escapeKeyCount >= 1) { // This will be 2 after increment
+				const userMessages = getUserMessages();
+				if (userMessages.length > 0) {
+					setShowHistoryMenu(true);
+					setEscapeKeyCount(0);
+					if (escapeKeyTimer.current) {
+						clearTimeout(escapeKeyTimer.current);
+						escapeKeyTimer.current = null;
+					}
+				}
+			}
+			return;
+		}
+		
+		// Handle history menu navigation
+		if (showHistoryMenu) {
+			// History navigation is handled by the Menu component itself
+			return;
+		}
 		
 		// Backspace
 		if (key.backspace || key.delete) {
@@ -201,6 +273,19 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		return undefined;
 	}, [buffer, updateCommandPanelState, triggerUpdate]);
 
+	// Handle history selection
+	const handleHistorySelect = useCallback((value: string) => {
+		const selectedIndex = parseInt(value, 10);
+		const selectedMessage = chatHistory[selectedIndex];
+		if (selectedMessage && onHistorySelect) {
+			// Put the message content in the input buffer
+			buffer.setText(selectedMessage.content);
+			setShowHistoryMenu(false);
+			triggerUpdate();
+			onHistorySelect(selectedIndex, selectedMessage.content);
+		}
+	}, [chatHistory, onHistorySelect, buffer, triggerUpdate]);
+
 	const visualLines = buffer.viewportVisualLines;
 	const [cursorRow, cursorCol] = buffer.visualCursor;
 
@@ -258,35 +343,48 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 
 	return (
 		<Box flexDirection="column" width={"100%"}>
-			<Box 
-				flexDirection="row" 
-				borderStyle="round"
-				borderColor="gray"
-				paddingX={1}
-				paddingY={0}
-				width="100%"
-			>
-				<Text color="cyan" bold>
-					➣{' '}
-				</Text>
-				<Box flexDirection="column" flexGrow={1}>
-					{renderContent()}
+			{showHistoryMenu && (
+				<Box marginBottom={1}>
+					<Menu
+						options={getUserMessages()}
+						onSelect={handleHistorySelect}
+						onSelectionChange={() => {}}
+					/>
 				</Box>
-			</Box>
-			<CommandPanel
-				commands={getFilteredCommands()}
-				selectedIndex={commandSelectedIndex}
-				query={buffer.getFullText().slice(1)}
-				visible={showCommands}
-			/>
-			<Box marginTop={1}>
-				<Text color="gray" dimColor>
-					{showCommands && getFilteredCommands().length > 0 
-						? "Type to filter commands" 
-						: "Press Ctrl+C twice to exit"
-					}
-				</Text>
-			</Box>
+			)}
+			{!showHistoryMenu && (
+				<>
+					<Box 
+						flexDirection="row" 
+						borderStyle="round"
+						borderColor="gray"
+						paddingX={1}
+						paddingY={0}
+						width="100%"
+					>
+						<Text color="cyan" bold>
+							➣{' '}
+						</Text>
+						<Box flexDirection="column" flexGrow={1}>
+							{renderContent()}
+						</Box>
+					</Box>
+					<CommandPanel
+						commands={getFilteredCommands()}
+						selectedIndex={commandSelectedIndex}
+						query={buffer.getFullText().slice(1)}
+						visible={showCommands}
+					/>
+					<Box marginTop={1}>
+						<Text color="gray" dimColor>
+							{showCommands && getFilteredCommands().length > 0 
+								? "Type to filter commands" 
+								: "Press Ctrl+C twice to exit"
+							}
+						</Text>
+					</Box>
+				</>
+			)}
 		</Box>
 	);
 }

@@ -29,14 +29,14 @@ export default function CommandPanel({ commands, selectedIndex, query, visible }
 						</Text>
 					</Box>
 					{commands.map((command, index) => (
-						<Box key={command.name} flexDirection="row" width="100%">
-							<Text color={index === selectedIndex ? "green" : "gray"}>
+						<Box key={command.name} flexDirection="column" width="100%">
+							<Text color={index === selectedIndex ? "green" : "gray"} bold>
 								{index === selectedIndex ? "➣ " : "  "}
 								/{command.name}
 							</Text>
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color={index === selectedIndex ? "green" : "gray"} dimColor>
-									{command.description}
+									└─ {command.description}
 								</Text>
 							</Box>
 						</Box>

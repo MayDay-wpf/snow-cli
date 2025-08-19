@@ -7,7 +7,7 @@ import App from './app.js';
 const cli = meow(
 	`
 	Usage
-	  $ aibotpro
+	  $ snow
 
 	Options
 		--help     Show help

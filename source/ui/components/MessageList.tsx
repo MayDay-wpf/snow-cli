@@ -21,9 +21,9 @@ export default function MessageList({ messages, animationFrame, maxMessages = 6 
 	}
 
 	return (
-		<Box marginBottom={1} flexDirection="column" paddingX={1} paddingY={1}>
+		<Box marginBottom={1} flexDirection="column">
 			{messages.slice(-maxMessages).map((message, index) => (
-				<Box key={index} marginLeft={1}>
+				<Box key={index}>
 					<Text color={
 						message.role === 'user' ? 'blue' : 
 						message.role === 'command' ? 'gray' :
