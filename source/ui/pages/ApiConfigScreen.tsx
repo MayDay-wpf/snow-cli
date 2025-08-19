@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import Gradient from 'ink-gradient';
 import { Select, Alert } from '@inkjs/ui';
 import TextInput from 'ink-text-input';
 import {
@@ -90,11 +91,11 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+			<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
 				<Box flexDirection="column">
-					<Text color="cyan" bold>
+					<Gradient name="rainbow">
 						OpenAI API Configuration
-					</Text>
+					</Gradient>
 					<Text color="gray" dimColor>
 						Configure your OpenAI API settings
 					</Text>

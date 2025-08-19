@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import Gradient from 'ink-gradient';
 import { Select, Alert } from '@inkjs/ui';
 import { fetchAvailableModels, filterModels, type Model } from '../../api/models.js';
 import {
@@ -13,11 +14,12 @@ type Props = {
 	onSave: () => void;
 };
 
-type ModelField = 'advancedModel' | 'basicModel';
+type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens';
 
 export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
+	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [currentField, setCurrentField] = useState<ModelField>('advancedModel');
 	const [isEditing, setIsEditing] = useState(false);
 	const [models, setModels] = useState<Model[]>([]);
@@ -30,6 +32,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		const config = getOpenAiConfig();
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
+		setMaxContextTokens(config.maxContextTokens || 4000);
 
 		if (!config.baseUrl) {
 			setBaseUrlMissing(true);
@@ -59,14 +62,21 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	};
 
 	const getCurrentValue = () => {
-		return currentField === 'advancedModel' ? advancedModel : basicModel;
+		if (currentField === 'advancedModel') return advancedModel;
+		if (currentField === 'basicModel') return basicModel;
+		return maxContextTokens.toString();
 	};
 
 	const handleModelChange = (value: string) => {
 		if (currentField === 'advancedModel') {
 			setAdvancedModel(value);
-		} else {
+		} else if (currentField === 'basicModel') {
 			setBasicModel(value);
+		} else if (currentField === 'maxContextTokens') {
+			const numValue = parseInt(value, 10);
+			if (!isNaN(numValue) && numValue > 0) {
+				setMaxContextTokens(numValue);
+			}
 		}
 		setIsEditing(false);
 		setSearchTerm(''); // Reset search when selection is made
@@ -82,11 +92,35 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 		// Don't handle input when Select component is active
 		if (isEditing) {
-			// Allow typing to filter in edit mode
-			if (input && input.match(/[a-zA-Z0-9-_.]/)) {
-				setSearchTerm(prev => prev + input);
-			} else if (key.backspace || key.delete) {
-				setSearchTerm(prev => prev.slice(0, -1));
+			if (currentField === 'maxContextTokens') {
+				// Handle numeric input for maxContextTokens
+				if (input && input.match(/[0-9]/)) {
+					const newValue = parseInt(maxContextTokens.toString() + input, 10);
+					if (!isNaN(newValue)) {
+						setMaxContextTokens(newValue);
+					}
+				} else if (key.backspace || key.delete) {
+					const currentStr = maxContextTokens.toString();
+					const newStr = currentStr.slice(0, -1);
+					const newValue = parseInt(newStr, 10);
+					if (!isNaN(newValue)) {
+						setMaxContextTokens(newValue);
+					} else {
+						setMaxContextTokens(0);
+					}
+				} else if (key.return) {
+					// Save value, but enforce minimum of 4000
+					const finalValue = maxContextTokens < 4000 ? 4000 : maxContextTokens;
+					setMaxContextTokens(finalValue);
+					setIsEditing(false);
+				}
+			} else {
+				// Allow typing to filter in edit mode for model selection
+				if (input && input.match(/[a-zA-Z0-9-_.]/)) {
+					setSearchTerm(prev => prev + input);
+				} else if (key.backspace || key.delete) {
+					setSearchTerm(prev => prev.slice(0, -1));
+				}
 			}
 			return;
 		}
@@ -96,6 +130,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			const config: Partial<ApiConfig> = {
 				advancedModel,
 				basicModel,
+				maxContextTokens,
 			};
 			updateOpenAiConfig(config);
 			onSave();
@@ -103,22 +138,31 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			const config: Partial<ApiConfig> = {
 				advancedModel,
 				basicModel,
+				maxContextTokens,
 			};
 			updateOpenAiConfig(config);
 			onBack();
 		} else if (key.return) {
-			// Load models first, then enter edit mode
+			// Load models first for model fields, or enter edit mode directly for maxContextTokens
 			setSearchTerm(''); // Reset search when entering edit mode
-			loadModels().then(() => {
+			if (currentField === 'maxContextTokens') {
 				setIsEditing(true);
-			});
+			} else {
+				loadModels().then(() => {
+					setIsEditing(true);
+				});
+			}
 		} else if (key.upArrow) {
 			if (currentField === 'basicModel') {
 				setCurrentField('advancedModel');
+			} else if (currentField === 'maxContextTokens') {
+				setCurrentField('basicModel');
 			}
 		} else if (key.downArrow) {
 			if (currentField === 'advancedModel') {
 				setCurrentField('basicModel');
+			} else if (currentField === 'basicModel') {
+				setCurrentField('maxContextTokens');
 			}
 		}
 	});
@@ -126,11 +170,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (baseUrlMissing) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
-						<Text color="cyan" bold>
+						<Gradient name='rainbow'>
 							Model Configuration
-						</Text>
+						</Gradient>
 						<Text color="gray" dimColor>
 							Configure AI models for different tasks
 						</Text>
@@ -155,11 +199,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+				<Box marginBottom={2} borderStyle="double" paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
-						<Text color="cyan" bold>
+						<Gradient name="rainbow">
 							Model Configuration
-						</Text>
+						</Gradient>
 						<Text color="gray" dimColor>
 							Loading available models...
 						</Text>
@@ -172,11 +216,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (error) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+				<Box marginBottom={2} borderStyle="double" borderColor={"red"} paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
-						<Text color="cyan" bold>
+						<Gradient name='rainbow'>
 							Model Configuration
-						</Text>
+						</Gradient>
 						<Text color="gray" dimColor>
 							Configure AI models for different tasks
 						</Text>
@@ -200,11 +244,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1}>
+			<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
 				<Box flexDirection="column">
-					<Text color="cyan" bold>
+					<Gradient name='rainbow'>
 						Model Configuration
-					</Text>
+					</Gradient>
 					<Text color="gray" dimColor>
 						Configure AI models for different tasks
 					</Text>
@@ -269,6 +313,26 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 						{(!isEditing || currentField !== 'basicModel') && (
 							<Box marginLeft={3}>
 								<Text color="gray">{basicModel || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
+							{currentField === 'maxContextTokens' ? '➣ ' : '  '}Max Context Tokens (Auto-compress when reached):
+						</Text>
+						{currentField === 'maxContextTokens' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">
+									Enter value: {maxContextTokens}
+								</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'maxContextTokens') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{maxContextTokens}</Text>
 							</Box>
 						)}
 					</Box>

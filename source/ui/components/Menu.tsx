@@ -38,7 +38,7 @@ export default function Menu({options, onSelect, onSelectionChange}: Props) {
 	});
 
 	return (
-		<Box flexDirection="column">
+		<Box flexDirection="column" width={'100%'} borderStyle={'round'} borderColor="#A9C13E" padding={1}>
 			<Box marginBottom={1}>
 				<Text color="cyan">
 					Use ↑↓ keys to navigate, press Enter to select:
@@ -48,6 +48,7 @@ export default function Menu({options, onSelect, onSelectionChange}: Props) {
 				<Box key={option.value}>
 					<Text
 						color={index === selectedIndex ? 'green' : option.color || 'white'}
+						bold
 					>
 						{index === selectedIndex ? '➣ ' : '  '}
 						{option.label}

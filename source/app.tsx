@@ -1,18 +1,28 @@
-import React, {useState} from 'react';
-import {Box, Text} from 'ink';
+import React, { useState } from 'react';
+import { Box, Text } from 'ink';
+import { Alert } from '@inkjs/ui';
 import WelcomeScreen from './ui/pages/WelcomeScreen.js';
 import ApiConfigScreen from './ui/pages/ApiConfigScreen.js';
 import ModelConfigScreen from './ui/pages/ModelConfigScreen.js';
 import ChatScreen from './ui/pages/ChatScreen.js';
+import { useGlobalExit, ExitNotification as ExitNotificationType } from './hooks/useGlobalExit.js';
 
 type Props = {
 	version?: string;
 };
 
-export default function App({version}: Props) {
+export default function App({ version }: Props) {
 	const [currentView, setCurrentView] = useState<
 		'welcome' | 'chat' | 'settings' | 'config' | 'models'
 	>('welcome');
+
+	const [exitNotification, setExitNotification] = useState<ExitNotificationType>({
+		show: false,
+		message: ''
+	});
+
+	// Global exit handler
+	useGlobalExit(setExitNotification);
 
 	const handleMenuSelect = (value: string) => {
 		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models') {
@@ -30,7 +40,7 @@ export default function App({version}: Props) {
 				);
 			case 'chat':
 				return (
-					<ChatScreen onBack={() => setCurrentView('welcome')} />
+					<ChatScreen />
 				);
 			case 'settings':
 				return (
@@ -62,5 +72,16 @@ export default function App({version}: Props) {
 		}
 	};
 
-	return <Box flexDirection="column">{renderView()}</Box>;
+	return (
+		<Box flexDirection="column" padding={1}>
+			{renderView()}
+			{exitNotification.show && (
+				<Box padding={1}>
+					<Alert variant="warning">
+						{exitNotification.message}
+					</Alert>
+				</Box>
+			)}
+		</Box>
+	);
 }

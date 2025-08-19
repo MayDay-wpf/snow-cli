@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
+import Gradient from 'ink-gradient';
 import Menu from '../components/Menu.js';
 
 type Props = {
@@ -44,11 +45,11 @@ export default function WelcomeScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="round" paddingX={2} paddingY={1} borderColor={'cyan'}>
+			<Box marginBottom={2} borderStyle="double" paddingX={2} paddingY={1} borderColor={'cyan'}>
 				<Box flexDirection="column">
-					<Text color="cyan" bold>
-						A I B O T P R O
-					</Text>
+					<Gradient name="rainbow">
+						<Text bold>A I B O T P R O</Text>
+					</Gradient>
 					<Text color="blue">C L I</Text>
 					<Text color="gray" dimColor>
 						Intelligent Command Line Assistant
@@ -60,7 +61,7 @@ export default function WelcomeScreen({
 			</Box>
 
 			{onMenuSelect && (
-				<Box marginBottom={2}>
+				<Box marginBottom={0}>
 					<Menu
 						options={menuOptions}
 						onSelect={onMenuSelect}

@@ -1,36 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text, useStdout, useInput } from 'ink';
 import { TextBuffer, Viewport } from '../../utils/textBuffer.js';
 import { cpSlice } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
+import { executeCommand } from '../../utils/commandExecutor.js';
 
 type Props = {
 	onSubmit: (message: string) => void;
+	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
+	disabled?: boolean;
 };
 
-// 命令定义
+// Command Definition
 const commands = [
-	{ name: 'clear', description: 'Add a new working directory' },
+	{ name: 'clear', description: 'Clear chat context and conversation history' },
 	{ name: 'agents', description: 'Manage agent configurations' }
 ];
 
-export default function ChatInput({ onSubmit, placeholder = 'Type your message...' }: Props) {
+export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false }: Props) {
 	const { stdout } = useStdout();
-	const terminalWidth = stdout?.columns || 80; // Get the actual width of the terminal
+	const terminalWidth = stdout?.columns || 80;
 	
-	// Use the actual terminal width and leave some margins
+	const uiOverhead = 8;
 	const viewport: Viewport = { 
-		width: Math.max(40, terminalWidth - 4), // Minimum 40 characters, minus margins
+		width: Math.max(40, terminalWidth - uiOverhead),
 		height: 1 
 	};
 	const [buffer] = useState(() => new TextBuffer(viewport));
 	const [, forceUpdate] = useState({});
-	const isActiveRef = useRef(true);
-	const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const lastUpdateTime = useRef<number>(0);
-	const pasteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-	const lastPasteTime = useRef<number>(0);
 	
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
@@ -48,240 +47,164 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 		);
 	}, [buffer]);
 
-	// Debounced command panel state update to prevent terminal freezing
+	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {
-		// Use setTimeout to defer state updates and prevent blocking the event loop
-		setTimeout(() => {
-			if (text.startsWith('/') && text.length > 0) {
-				setShowCommands(true);
-				setCommandSelectedIndex(0);
-			} else {
-				setShowCommands(false);
-				setCommandSelectedIndex(0);
-			}
-		}, 0);
+		if (text.startsWith('/') && text.length > 0) {
+			setShowCommands(true);
+			setCommandSelectedIndex(0);
+		} else {
+			setShowCommands(false);
+			setCommandSelectedIndex(0);
+		}
 	}, []);
 
-	// Force re-render when buffer changes - debounced for performance and stability
+	// Force re-render when buffer changes
 	const triggerUpdate = useCallback(() => {
 		const now = Date.now();
-		
-		if (inputTimeoutRef.current) {
-			clearTimeout(inputTimeoutRef.current);
+		// Avoid too frequent updates
+		if (now - lastUpdateTime.current > 16) { // ~60fps limit
+			lastUpdateTime.current = now;
+			forceUpdate({});
 		}
-		
-		// Increase the anti-shake time to reduce the frequency of redrawing
-		inputTimeoutRef.current = setTimeout(() => {
-			// Avoid too frequent updates
-			if (now - lastUpdateTime.current > 16) { // ~60fps limit
-				lastUpdateTime.current = now;
-				forceUpdate({});
-			}
-		}, 32); // 32ms to improve stability
 	}, []);
 
-	// Monitor the change of terminal size
+	// Update buffer viewport when terminal width changes
 	useEffect(() => {
-		const handleResize = () => {
-			const newWidth = stdout?.columns || 80;
-			const newViewport = { 
-				width: Math.max(40, newWidth - 4), 
-				height: 1 
-			};
-			// 只有宽度显著变化时才重新创建buffer
-			if (Math.abs(newViewport.width - viewport.width) > 5) {
-				triggerUpdate();
+		const newViewport: Viewport = {
+			width: Math.max(40, terminalWidth - uiOverhead),
+			height: 1
+		};
+		buffer.updateViewport(newViewport);
+		triggerUpdate();
+	}, [terminalWidth, buffer, triggerUpdate]);
+
+	// Handle input using useInput hook instead of raw stdin
+	useInput((input, key) => {
+		if (disabled) return;
+		
+		// Backspace
+		if (key.backspace || key.delete) {
+			buffer.backspace();
+			const text = buffer.getFullText();
+			updateCommandPanelState(text);
+			triggerUpdate();
+			return;
+		}
+
+		// Handle command panel navigation
+		if (showCommands) {
+			const filteredCommands = getFilteredCommands();
+			
+			// Up arrow in command panel
+			if (key.upArrow) {
+				setCommandSelectedIndex(prev => Math.max(0, prev - 1));
+				return;
 			}
-		};
+			
+			// Down arrow in command panel
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, filteredCommands.length - 1);
+				setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+			
+			// Enter - select command
+			if (key.return) {
+				if (filteredCommands.length > 0 && commandSelectedIndex < filteredCommands.length) {
+					const selectedCommand = filteredCommands[commandSelectedIndex];
+					if (selectedCommand) {
+						// Execute command instead of inserting text
+						executeCommand(selectedCommand.name).then(result => {
+							if (onCommand) {
+								onCommand(selectedCommand.name, result);
+							}
+						});
+						buffer.setText('');
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						triggerUpdate();
+						return;
+					}
+				}
+				// If no commands available, fall through to normal Enter handling
+			}
+		}
 
-		process.stdout?.on('resize', handleResize);
-		return () => {
-			process.stdout?.off('resize', handleResize);
-		};
-	}, [triggerUpdate, viewport.width]);
+		// Enter - submit message
+		if (key.return) {
+			const message = buffer.getFullText().trim();
+			if (message) {
+				buffer.setText('');
+				forceUpdate({});
+				onSubmit(message);
+			}
+			return;
+		}
 
+		// Arrow keys for cursor movement
+		if (key.leftArrow) {
+			buffer.moveLeft();
+			triggerUpdate();
+			return;
+		}
+		
+		if (key.rightArrow) {
+			buffer.moveRight();
+			triggerUpdate();
+			return;
+		}
+		
+		if (key.upArrow && !showCommands) {
+			buffer.moveUp();
+			triggerUpdate();
+			return;
+		}
+		
+		if (key.downArrow && !showCommands) {
+			buffer.moveDown();
+			triggerUpdate();
+			return;
+		}
+
+		// Regular character input
+		if (input && !key.ctrl && !key.meta && !key.escape) {
+			buffer.insert(input);
+			const text = buffer.getFullText();
+			updateCommandPanelState(text);
+			triggerUpdate();
+		}
+	});
+
+	// Handle paste events - useInput should handle paste automatically
+	// but we may need to handle large pastes specially
 	useEffect(() => {
-		if (!process.stdin.isTTY) return;
-
-		process.stdin.setRawMode(true);
-		process.stdin.resume();
-		process.stdin.setEncoding('utf8');
-
-		const handleKeypress = (data: string) => {
-			if (!isActiveRef.current) return;
-
-			const code = data.charCodeAt(0);
-			const now = Date.now();
-
-			// Ctrl+C
-			if (code === 3) {
-				process.exit(0);
-			}
-
-			// 首先检查是否是粘贴操作 - 在处理任何其他键之前
-			const containsNewline = data.includes('\n') || data.includes('\r');
-			const isMultiChar = data.length > 1;
-			const isControlSequence = data.startsWith('\x1b');
-			const isPrintableText = data.length > 0 && !isControlSequence && !/^[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+$/.test(data);
-			const isSingleEnterKey = data === '\n' || data === '\r' || data === '\r\n';
-			
-			// 如果是包含换行符的多字符文本，或者是多字符的可打印文本，认为是粘贴
-			// 但排除单独的 Enter 键
-			const isPaste = isPrintableText && !isSingleEnterKey && (containsNewline || (isMultiChar && !/^[\s]*$/.test(data)));
-			
-			// 防抖处理粘贴，避免多次触发
-			if (isPaste) {
-				// 如果在很短时间内收到多个粘贴事件，只处理第一个
-				if (now - lastPasteTime.current < 100) {
-					return;
-				}
-				
-				if (pasteTimeoutRef.current) {
-					clearTimeout(pasteTimeoutRef.current);
-				}
-				
-				lastPasteTime.current = now;
-				
-				// 延迟处理粘贴，确保所有数据都到达，但不触发发送
-				pasteTimeoutRef.current = setTimeout(() => {
-					buffer.insert(data);
+		const handlePaste = (event: ClipboardEvent) => {
+			if (event.clipboardData) {
+				const pastedText = event.clipboardData.getData('text');
+				if (pastedText && pastedText.length > 0) {
+					// Let TextBuffer handle the paste processing
+					buffer.insert(pastedText);
 					const text = buffer.getFullText();
 					updateCommandPanelState(text);
 					triggerUpdate();
-				}, 20);
-				return;
-			}
-
-			// Backspace - handle first to avoid conflicts
-			if (code === 127 || code === 8) {
-				buffer.backspace();
-				
-				// Always check and update command panel state after backspace
-				const text = buffer.getFullText();
-				updateCommandPanelState(text);
-				
-				triggerUpdate();
-				return;
-			}
-
-			// Handle command panel navigation
-			if (showCommands) {
-				const filteredCommands = getFilteredCommands();
-				
-				// Escape - close command panel
-				if (code === 27) {
-					const seq = data.slice(1);
-					if (seq === '') { // Pure Escape key
-						setShowCommands(false);
-						setCommandSelectedIndex(0);
-						return;
-					} else if (seq === '[A') { // Up arrow
-						setCommandSelectedIndex(prev => Math.max(0, prev - 1));
-						return;
-					} else if (seq === '[B') { // Down arrow
-						const maxIndex = Math.max(0, filteredCommands.length - 1);
-						setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
-						return;
-					}
 				}
-				
-				// Enter - select command or fall through to normal message sending
-				if (code === 13) {
-					if (filteredCommands.length > 0 && commandSelectedIndex < filteredCommands.length) {
-						// Select command if available
-						const selectedCommand = filteredCommands[commandSelectedIndex];
-						if (selectedCommand) {
-							const commandText = `/${selectedCommand.name}`;
-							// 清空buffer然后插入文本，确保光标在末尾
-							buffer.setText('');
-							buffer.insert(commandText);
-							setShowCommands(false);
-							setCommandSelectedIndex(0);
-							triggerUpdate();
-							return;
-						}
-					}
-					// If no commands available, fall through to normal Enter handling
-				}
-				
-				// Allow normal text input to continue filtering
-			}
-
-			// Enter - 发送消息
-			if (code === 13 && (data === '\n' || data === '\r' || data === '\r\n')) {
-				const message = buffer.getFullText().trim();
-				if (message) {
-					// 立即清空输入框，确保UI快速响应
-					buffer.setText('');
-					
-					// 立即触发更新，不使用防抖
-					forceUpdate({});
-					
-					// 然后提交消息
-					onSubmit(message);
-				}
-				return;
-			}
-
-			// Escape sequences (arrow keys)
-			if (code === 27) {
-				const seq = data.slice(1);
-				if (seq === '[D') { // Left arrow
-					buffer.moveLeft();
-				} else if (seq === '[C') { // Right arrow
-					buffer.moveRight();
-				} else if (seq === '[A') { // Up arrow
-					buffer.moveUp();
-				} else if (seq === '[B') { // Down arrow
-					buffer.moveDown();
-				}
-				triggerUpdate();
-				return;
-			}
-
-			// Delete key
-			if (code === 127 && data.length === 1) {
-				buffer.delete();
-				// Also update command panel state for delete operations
-				const text = buffer.getFullText();
-				updateCommandPanelState(text);
-				triggerUpdate();
-				return;
-			}
-
-			// Printable characters and newlines (excluding paste which is handled above)
-			if ((code >= 32 || code === 10) && !isPaste) {
-				buffer.insert(data);
-				
-				// Check if input starts with '/' to show command panel
-				const text = buffer.getFullText();
-				updateCommandPanelState(text);
-				
-				triggerUpdate();
 			}
 		};
 
-		process.stdin.on('data', handleKeypress);
-
-		return () => {
-			process.stdin.off('data', handleKeypress);
-			if (process.stdin.isTTY) {
-				process.stdin.setRawMode(false);
-				process.stdin.pause();
-			}
-			if (inputTimeoutRef.current) {
-				clearTimeout(inputTimeoutRef.current);
-			}
-			if (pasteTimeoutRef.current) {
-				clearTimeout(pasteTimeoutRef.current);
-			}
-		};
-	}, [buffer, onSubmit, triggerUpdate, showCommands, commandSelectedIndex, getFilteredCommands, updateCommandPanelState]);
+		// Note: This might not work in all terminal environments
+		// but the useInput hook should handle most paste scenarios
+		if (typeof window !== 'undefined') {
+			window.addEventListener('paste', handlePaste);
+			return () => window.removeEventListener('paste', handlePaste);
+		}
+		
+		return undefined;
+	}, [buffer, updateCommandPanelState, triggerUpdate]);
 
 	const visualLines = buffer.viewportVisualLines;
 	const [cursorRow, cursorCol] = buffer.visualCursor;
 
-	// In-inlay layout and border, and special display and paste placeholders
+	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
 		if (buffer.text.length > 0) {
 			return visualLines.map((line, index) => (
@@ -299,7 +222,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 								{cpSlice(line, cursorCol + 1)}
 							</>
 						) : (
-							// Check whether it contains pasted placeholders and highlights
+							// Check for paste placeholders and highlight them
 							line.includes('[Paste ') && line.includes(' line #') ? (
 								<Text>
 									{line.split(/(\[Paste \d+ line #\d+\])/).map((part, partIndex) => 
@@ -313,7 +236,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 									)}
 								</Text>
 							) : (
-								line || ' ' // Make sure that blank lines can also be displayed
+								line || ' '
 							)
 						)}
 					</Text>
@@ -322,11 +245,11 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 		} else {
 			return (
 				<Box>
-					<Text backgroundColor="white" color="black">
+					<Text backgroundColor={disabled ? "gray" : "white"} color={disabled ? "darkGray" : "black"}>
 						{' '}
 					</Text>
-					<Text color="gray" dimColor>
-						{placeholder}
+					<Text color={disabled ? "darkGray" : "gray"} dimColor>
+						{disabled ? 'Waiting for response...' : placeholder}
 					</Text>
 				</Box>
 			);
@@ -360,7 +283,7 @@ export default function ChatInput({ onSubmit, placeholder = 'Type your message..
 				<Text color="gray" dimColor>
 					{showCommands && getFilteredCommands().length > 0 
 						? "Type to filter commands" 
-						: "Press Esc to return to main menu"
+						: "Press Ctrl+C twice to exit"
 					}
 				</Text>
 			</Box>

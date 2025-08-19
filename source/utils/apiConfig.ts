@@ -10,6 +10,7 @@ export interface ApiConfig {
 	requestMethod: RequestMethod;
 	advancedModel?: string;
 	basicModel?: string;
+	maxContextTokens?: number;
 }
 
 export interface AppConfig {
@@ -23,6 +24,7 @@ const DEFAULT_CONFIG: AppConfig = {
 		requestMethod: 'chat',
 		advancedModel: '',
 		basicModel: '',
+		maxContextTokens: 4000,
 	},
 };
 

@@ -19,4 +19,6 @@ const cli = meow(
 	},
 );
 
-render(<App version={cli.pkg.version} />);
+render(<App version={cli.pkg.version} />, {
+	exitOnCtrlC: false,
+});

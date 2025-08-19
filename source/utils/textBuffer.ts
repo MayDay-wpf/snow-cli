@@ -159,8 +159,17 @@ export class TextBuffer {
           const secondPart = cpSlice(newLine, breakPoint);
           this.lines[this.cursorRow] = firstPart;
           this.lines.splice(this.cursorRow + 1, 0, secondPart);
-          this.cursorRow++;
-          this.cursorCol = cpLen(secondPart);
+          
+          // Calculate where cursor should be after insertion
+          const newCursorPos = this.cursorCol + cpLen(sanitized);
+          if (newCursorPos <= cpLen(firstPart)) {
+            // Cursor stays on first line
+            this.cursorCol = newCursorPos;
+          } else {
+            // Cursor moves to second line
+            this.cursorRow++;
+            this.cursorCol = newCursorPos - cpLen(firstPart);
+          }
         } else {
           // 无法找到合适换行点，直接设置
           this.lines[this.cursorRow] = newLine;
@@ -283,6 +292,14 @@ export class TextBuffer {
       const newLineLength = cpLen(this.getCurrentLine());
       this.cursorCol = Math.min(this.cursorCol, newLineLength);
     }
+  }
+
+  /**
+   * Update the viewport dimensions, useful for terminal resize handling.
+   */
+  updateViewport(viewport: Viewport): void {
+    this.viewport = viewport;
+    this.scheduleUpdate();
   }
 
   /**
