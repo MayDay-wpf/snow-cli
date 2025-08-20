@@ -5,7 +5,9 @@ import ChatInput from '../components/ChatInput.js';
 import MessageList, { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import SessionListScreen from '../components/SessionListScreen.js';
+import MCPInfoPanel from '../components/MCPInfoPanel.js';
 import { createStreamingChatCompletion, type ChatMessage } from '../../api/chat.js';
+import { collectAllMCPTools } from '../../utils/mcpToolsManager.js';
 import { getOpenAiConfig } from '../../utils/apiConfig.js';
 import { sessionManager } from '../../utils/sessionManager.js';
 import { useSessionSave } from '../../hooks/useSessionSave.js';
@@ -182,6 +184,9 @@ export default function ChatScreen({ }: Props) {
 				// Create message for AI with file read instructions (use already parsed data)
 				const messageForAI = createMessageWithFileInstructions(cleanContent, validFiles);
 
+				// Collect all MCP tools
+				const mcpTools = await collectAllMCPTools();
+
 				const chatMessages: ChatMessage[] = [
 					{ role: 'system', content: 'You are a helpful coding assistant.' },
 					...messages.filter(msg => msg.role !== 'command').map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
@@ -194,7 +199,8 @@ export default function ChatScreen({ }: Props) {
 				for await (const chunk of createStreamingChatCompletion({
 					model,
 					messages: chatMessages,
-					temperature: 0
+					temperature: 0,
+					tools: mcpTools.length > 0 ? mcpTools : undefined
 				}, controller.signal)) {
 					if (controller.signal.aborted) break;
 
@@ -326,6 +332,9 @@ export default function ChatScreen({ }: Props) {
 				});
 				await onStreamingComplete(finalMessage);
 			} else {
+				// Collect all MCP tools
+				const mcpTools = await collectAllMCPTools();
+
 				const chatMessages: ChatMessage[] = [
 					{ role: 'system', content: 'You are a helpful coding assistant.' },
 					...messages.filter(msg => msg.role !== 'command').map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
@@ -338,7 +347,8 @@ export default function ChatScreen({ }: Props) {
 				for await (const chunk of createStreamingChatCompletion({
 					model,
 					messages: chatMessages,
-					temperature: 0
+					temperature: 0,
+					tools: mcpTools.length > 0 ? mcpTools : undefined
 				}, controller.signal)) {
 					if (controller.signal.aborted) break;
 
@@ -446,6 +456,8 @@ export default function ChatScreen({ }: Props) {
 							</Text>
 						</Box>
 					</Box>
+
+					<MCPInfoPanel />
 
 					<MessageList
 						messages={messages}

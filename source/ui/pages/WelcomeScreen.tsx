@@ -32,6 +32,11 @@ export default function WelcomeScreen({
 			infoText: 'Configure AI models for different tasks',
 		},
 		{
+			label: 'MCP Settings',
+			value: 'mcp',
+			infoText: 'Configure Model Context Protocol servers',
+		},
+		{
 			label: 'Exit',
 			value: 'exit',
 			color: 'rgb(232, 131, 136)',

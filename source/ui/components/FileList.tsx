@@ -195,7 +195,6 @@ const FileList = forwardRef<FileListRef, Props>(({
 		<Box borderStyle="round" borderColor="blue" paddingX={1} marginTop={1} flexDirection="column">
 			<Box marginBottom={1}>
 				<Text color="blue" bold>Files ({filteredFiles.length})</Text>
-				<Text color="gray" dimColor>◻︎:Directory ◼︎:File</Text>
 			</Box>
 			{filteredFiles.map((file, index) => (
 				<Box key={file.path}>
@@ -203,7 +202,6 @@ const FileList = forwardRef<FileListRef, Props>(({
 						backgroundColor={index === selectedIndex ? "blue" : undefined}
 						color={index === selectedIndex ? "white" : file.isDirectory ? "cyan" : "white"}
 					>
-						{file.isDirectory ? "◻︎ " : "◼︎ "}
 						{file.path}
 					</Text>
 				</Box>

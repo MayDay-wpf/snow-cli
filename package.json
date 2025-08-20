@@ -40,6 +40,7 @@
 	],
 	"dependencies": {
 		"@inkjs/ui": "^2.0.0",
+		"@modelcontextprotocol/sdk": "^1.17.3",
 		"figlet": "^1.8.2",
 		"ink": "^5.2.1",
 		"ink-gradient": "^3.0.0",
