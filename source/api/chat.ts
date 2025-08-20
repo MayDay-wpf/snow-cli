@@ -54,7 +54,7 @@ export function resetOpenAIClient(): void {
 
 export async function createChatCompletion(options: ChatCompletionOptions): Promise<string> {
 	const client = getOpenAIClient();
-	
+	console.log('send messages:', options.messages);
 	try {
 		const response = await client.chat.completions.create({
 			model: options.model,

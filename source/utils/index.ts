@@ -1,5 +1,9 @@
 import {Command} from '../types/index.js';
 
+// Import commands to register them
+import './commands/clear.js';
+import './commands/resume.js';
+
 export function formatCommand(command: Command): string {
 	return `${command.name.padEnd(12)} ${command.description}`;
 }

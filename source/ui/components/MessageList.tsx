@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { SelectedFile } from '../../utils/fileUtils.js';
 
 export interface Message {
 	role: 'user' | 'assistant' | 'command';
@@ -7,6 +8,7 @@ export interface Message {
 	streaming?: boolean;
 	discontinued?: boolean;
 	commandName?: string;
+	files?: SelectedFile[];
 }
 
 interface Props {
@@ -41,6 +43,15 @@ export default function MessageList({ messages, animationFrame, maxMessages = 6 
 								<Text color={message.role === 'user' ? 'gray' : ''}>
 									{message.content}
 								</Text>
+								{message.files && message.files.length > 0 && (
+									<Box marginTop={1} flexDirection="column">
+										{message.files.map((file, fileIndex) => (
+											<Text key={fileIndex} color="blue">
+												└─ Read `{file.path}`{file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}
+											</Text>
+										))}
+									</Box>
+								)}
 								{message.discontinued && (
 									<Text color="red" bold>
 										└─ user discontinue

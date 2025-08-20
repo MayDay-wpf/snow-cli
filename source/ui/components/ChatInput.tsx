@@ -5,6 +5,7 @@ import { cpSlice } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import { executeCommand } from '../../utils/commandExecutor.js';
 import Menu from './Menu.js';
+import FileList, { FileListRef } from './FileList.js';
 
 type Props = {
 	onSubmit: (message: string) => void;
@@ -18,7 +19,7 @@ type Props = {
 // Command Definition
 const commands = [
 	{ name: 'clear', description: 'Clear chat context and conversation history' },
-	{ name: 'agents', description: 'Manage agent configurations' }
+	{ name: 'resume', description: 'Resume a conversation' }
 ];
 
 export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect }: Props) {
@@ -37,6 +38,16 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+	
+	// File picker state
+	const [showFilePicker, setShowFilePicker] = useState(false);
+	const [fileSelectedIndex, setFileSelectedIndex] = useState(0);
+	const [fileQuery, setFileQuery] = useState('');
+	const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
+	const [filteredFileCount, setFilteredFileCount] = useState(0);
+	
+	// Refs
+	const fileListRef = useRef<FileListRef>(null);
 	
 	// History navigation state
 	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
@@ -81,15 +92,112 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		}
 	}, []);
 
+	// Update file picker state
+	const updateFilePickerState = useCallback((text: string, cursorPos: number) => {
+		if (!text.includes('@')) {
+			if (showFilePicker) {
+				setShowFilePicker(false);
+				setFileSelectedIndex(0);
+				setFileQuery('');
+				setAtSymbolPosition(-1);
+			}
+			return;
+		}
+		
+		// Find the last '@' symbol before the cursor
+		const beforeCursor = text.slice(0, cursorPos);
+		const lastAtIndex = beforeCursor.lastIndexOf('@');
+		
+		if (lastAtIndex !== -1) {
+			// Check if there's no space between '@' and cursor
+			const afterAt = beforeCursor.slice(lastAtIndex + 1);
+			if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+				if (!showFilePicker || fileQuery !== afterAt || atSymbolPosition !== lastAtIndex) {
+					setShowFilePicker(true);
+					setFileSelectedIndex(0);
+					setFileQuery(afterAt);
+					setAtSymbolPosition(lastAtIndex);
+				}
+				return;
+			}
+		}
+		
+		// Hide file picker if no valid @ context found
+		if (showFilePicker) {
+			setShowFilePicker(false);
+			setFileSelectedIndex(0);
+			setFileQuery('');
+			setAtSymbolPosition(-1);
+		}
+	}, [showFilePicker, fileQuery, atSymbolPosition]);
+
+	// Force immediate state update for critical operations like backspace
+	const forceStateUpdate = useCallback(() => {
+		const text = buffer.getFullText();
+		const cursorPos = buffer.getCursorPosition();
+		
+		updateFilePickerState(text, cursorPos);
+		updateCommandPanelState(text);
+		
+		forceUpdate({});
+	}, [buffer, updateFilePickerState, updateCommandPanelState]);
+
 	// Force re-render when buffer changes
 	const triggerUpdate = useCallback(() => {
 		const now = Date.now();
-		// Avoid too frequent updates
-		if (now - lastUpdateTime.current > 16) { // ~60fps limit
-			lastUpdateTime.current = now;
-			forceUpdate({});
-		}
+		lastUpdateTime.current = now;
+		forceUpdate({});
 	}, []);
+
+	// Handle file selection
+	const handleFileSelect = useCallback(async (filePath: string) => {
+		if (atSymbolPosition !== -1) {
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			
+			// Replace @query with @filePath + space
+			const beforeAt = text.slice(0, atSymbolPosition);
+			const afterCursor = text.slice(cursorPos);
+			const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
+			
+			// Set the new text and position cursor after the inserted file path + space
+			buffer.setText(newText);
+			
+			// Calculate cursor position after the inserted file path + space
+			// Reset cursor to beginning, then move to correct position
+			for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) { // +2 for @ and space
+				if (i < buffer.getFullText().length) {
+					buffer.moveRight();
+				}
+			}
+			
+			setShowFilePicker(false);
+			setFileSelectedIndex(0);
+			setFileQuery('');
+			setAtSymbolPosition(-1);
+			triggerUpdate();
+		}
+	}, [atSymbolPosition, buffer, triggerUpdate]);
+
+	// Handle filtered file count change
+	const handleFilteredCountChange = useCallback((count: number) => {
+		setFilteredFileCount(count);
+	}, []);
+
+	// Force full re-render when file picker visibility changes to prevent artifacts
+	useEffect(() => {
+		// Clear terminal artifacts by writing clear sequences
+		if (typeof process !== 'undefined' && process.stdout && process.stdout.write) {
+			// Use ANSI escape sequences to clear screen artifacts
+			process.stdout.write('\x1b[J'); // Clear from cursor to end of screen
+		}
+		
+		// Use a small delay to ensure the component tree has updated
+		const timer = setTimeout(() => {
+			forceUpdate({});
+		}, 10);
+		return () => clearTimeout(timer);
+	}, [showFilePicker]);
 
 	// Update buffer viewport when terminal width changes
 	useEffect(() => {
@@ -107,6 +215,15 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
+			// Close file picker if open
+			if (showFilePicker) {
+				setShowFilePicker(false);
+				setFileSelectedIndex(0);
+				setFileQuery('');
+				setAtSymbolPosition(-1);
+				return;
+			}
+			
 			// Don't interfere with existing ESC behavior if in command panel
 			if (showCommands) {
 				setShowCommands(false);
@@ -150,17 +267,41 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		
 		// Handle history menu navigation
 		if (showHistoryMenu) {
-			// History navigation is handled by the Menu component itself
 			return;
 		}
 		
 		// Backspace
 		if (key.backspace || key.delete) {
 			buffer.backspace();
-			const text = buffer.getFullText();
-			updateCommandPanelState(text);
-			triggerUpdate();
+			forceStateUpdate();
 			return;
+		}
+
+		// Handle file picker navigation
+		if (showFilePicker) {
+			// Up arrow in file picker
+			if (key.upArrow) {
+				setFileSelectedIndex(prev => Math.max(0, prev - 1));
+				return;
+			}
+			
+			// Down arrow in file picker
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, filteredFileCount - 1);
+				setFileSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+			
+			// Tab or Enter - select file
+			if (key.tab || key.return) {
+				if (filteredFileCount > 0 && fileSelectedIndex < filteredFileCount) {
+					const selectedFile = fileListRef.current?.getSelectedFile();
+					if (selectedFile) {
+						handleFileSelect(selectedFile);
+					}
+				}
+				return;
+			}
 		}
 
 		// Handle command panel navigation
@@ -216,24 +357,36 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		// Arrow keys for cursor movement
 		if (key.leftArrow) {
 			buffer.moveLeft();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
 			triggerUpdate();
 			return;
 		}
 		
 		if (key.rightArrow) {
 			buffer.moveRight();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
 			triggerUpdate();
 			return;
 		}
 		
-		if (key.upArrow && !showCommands) {
+		if (key.upArrow && !showCommands && !showFilePicker) {
 			buffer.moveUp();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
 			triggerUpdate();
 			return;
 		}
 		
-		if (key.downArrow && !showCommands) {
+		if (key.downArrow && !showCommands && !showFilePicker) {
 			buffer.moveDown();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
 			triggerUpdate();
 			return;
 		}
@@ -242,13 +395,12 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		if (input && !key.ctrl && !key.meta && !key.escape) {
 			buffer.insert(input);
 			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
 			updateCommandPanelState(text);
+			updateFilePickerState(text, cursorPos);
 			triggerUpdate();
 		}
 	});
-
-	// Handle paste events - useInput should handle paste automatically
-	// but we may need to handle large pastes specially
 	useEffect(() => {
 		const handlePaste = (event: ClipboardEvent) => {
 			if (event.clipboardData) {
@@ -257,21 +409,20 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 					// Let TextBuffer handle the paste processing
 					buffer.insert(pastedText);
 					const text = buffer.getFullText();
+					const cursorPos = buffer.getCursorPosition();
 					updateCommandPanelState(text);
+					updateFilePickerState(text, cursorPos);
 					triggerUpdate();
 				}
 			}
 		};
-
-		// Note: This might not work in all terminal environments
-		// but the useInput hook should handle most paste scenarios
 		if (typeof window !== 'undefined') {
 			window.addEventListener('paste', handlePaste);
 			return () => window.removeEventListener('paste', handlePaste);
 		}
 		
 		return undefined;
-	}, [buffer, updateCommandPanelState, triggerUpdate]);
+	}, [buffer, updateCommandPanelState, updateFilePickerState, triggerUpdate]);
 
 	// Handle history selection
 	const handleHistorySelect = useCallback((value: string) => {
@@ -342,7 +493,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	}, [visualLines, cursorRow, cursorCol, buffer, placeholder]);
 
 	return (
-		<Box flexDirection="column" width={"100%"}>
+		<Box flexDirection="column" width={"100%"} key={`input-${showFilePicker ? 'picker' : 'normal'}`}>
 			{showHistoryMenu && (
 				<Box marginBottom={1}>
 					<Menu
@@ -375,11 +526,24 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 						query={buffer.getFullText().slice(1)}
 						visible={showCommands}
 					/>
+					<Box minHeight={showFilePicker ? 12 : 0}>
+						<FileList
+							ref={fileListRef}
+							query={fileQuery}
+							selectedIndex={fileSelectedIndex}
+							visible={showFilePicker}
+							maxItems={10}
+							rootPath={process.cwd()}
+							onFilteredCountChange={handleFilteredCountChange}
+						/>
+					</Box>
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
 							{showCommands && getFilteredCommands().length > 0 
 								? "Type to filter commands" 
-								: "Press Ctrl+C twice to exit"
+								: showFilePicker
+								? "Type to filter files • Tab/Enter to select • ESC to cancel"
+								: "Press Ctrl+C twice to exit • Type '@' for files • Type '/' for commands"
 							}
 						</Text>
 					</Box>

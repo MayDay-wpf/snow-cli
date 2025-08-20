@@ -62,6 +62,19 @@ export class TextBuffer {
     return [this.cursorRow, this.cursorCol];
   }
 
+  getCursorPosition(): number {
+    // Calculate absolute cursor position in the text
+    let position = 0;
+    for (let i = 0; i < this.cursorRow; i++) {
+      const line = this.lines[i];
+      if (line !== undefined) {
+        position += cpLen(line) + 1; // +1 for newline
+      }
+    }
+    position += this.cursorCol;
+    return position;
+  }
+
   get viewportVisualLines(): string[] {
     // Return all lines instead of limiting by viewport height
     // Viewport height should only be used for initial sizing, not content limiting

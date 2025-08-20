@@ -1,7 +1,7 @@
 export interface CommandResult {
 	success: boolean;
 	message?: string;
-	action?: 'clear' | 'info';
+	action?: 'clear' | 'resume' | 'info';
 }
 
 export interface CommandHandler {
