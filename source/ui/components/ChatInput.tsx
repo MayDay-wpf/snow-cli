@@ -186,12 +186,6 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
 	useEffect(() => {
-		// Clear terminal artifacts by writing clear sequences
-		if (typeof process !== 'undefined' && process.stdout && process.stdout.write) {
-			// Use ANSI escape sequences to clear screen artifacts
-			process.stdout.write('\x1b[J'); // Clear from cursor to end of screen
-		}
-		
 		// Use a small delay to ensure the component tree has updated
 		const timer = setTimeout(() => {
 			forceUpdate({});
@@ -526,7 +520,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 						query={buffer.getFullText().slice(1)}
 						visible={showCommands}
 					/>
-					<Box minHeight={showFilePicker ? 12 : 0}>
+					<Box>
 						<FileList
 							ref={fileListRef}
 							query={fileQuery}

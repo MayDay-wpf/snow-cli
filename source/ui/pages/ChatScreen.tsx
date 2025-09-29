@@ -467,7 +467,7 @@ export default function ChatScreen({ }: Props) {
 
 					<PendingMessages pendingMessages={pendingMessages} />
 
-					<Box marginBottom={0} minHeight={15}>
+					<Box marginBottom={0}>
 						<ChatInput
 							onSubmit={handleMessageSubmit}
 							onCommand={handleCommandExecution}
