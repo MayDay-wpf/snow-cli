@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 
 interface Command {
@@ -13,7 +13,7 @@ interface Props {
 	visible: boolean;
 }
 
-export default function CommandPanel({ commands, selectedIndex, query, visible }: Props) {
+const CommandPanel = memo(({ commands, selectedIndex, query, visible }: Props) => {
 	// Don't show panel if not visible or no commands found
 	if (!visible || commands.length === 0) {
 		return null;
@@ -45,4 +45,8 @@ export default function CommandPanel({ commands, selectedIndex, query, visible }
 			</Box>
 		</Box>
 	);
-}
+});
+
+CommandPanel.displayName = 'CommandPanel';
+
+export default CommandPanel;

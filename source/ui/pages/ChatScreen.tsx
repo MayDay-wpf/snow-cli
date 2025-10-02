@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, Static } from 'ink';
 import Gradient from 'ink-gradient';
 import ChatInput from '../components/ChatInput.js';
-import MessageList, { type Message } from '../components/MessageList.js';
+import { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import SessionListScreen from '../components/SessionListScreen.js';
-import MCPInfoPanel from '../components/MCPInfoPanel.js';
 import { createStreamingChatCompletion, type ChatMessage } from '../../api/chat.js';
-import { collectAllMCPTools } from '../../utils/mcpToolsManager.js';
+import { collectAllMCPTools, getMCPServicesInfo } from '../../utils/mcpToolsManager.js';
 import { getOpenAiConfig } from '../../utils/apiConfig.js';
 import { sessionManager } from '../../utils/sessionManager.js';
 import { useSessionSave } from '../../hooks/useSessionSave.js';
@@ -18,6 +17,15 @@ import '../../utils/commands/resume.js';
 
 type Props = {};
 
+interface MCPConnectionStatus {
+	name: string;
+	connected: boolean;
+	tools: string[];
+	connectionMethod?: string;
+	error?: string;
+	isBuiltIn?: boolean;
+}
+
 export default function ChatScreen({ }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
@@ -25,9 +33,35 @@ export default function ChatScreen({ }: Props) {
 	const [abortController, setAbortController] = useState<AbortController | null>(null);
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
 	const [showSessionList, setShowSessionList] = useState(false);
+	const [remountKey, setRemountKey] = useState(0);
+	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
+	const [mcpLoaded, setMcpLoaded] = useState(false);
 
 	// Use session save hook
 	const { onStreamingComplete, onUserMessage, clearSavedMessages, initializeFromSession } = useSessionSave();
+
+	// Load MCP info once on mount
+	useEffect(() => {
+		const loadMCPStatus = async () => {
+			try {
+				const servicesInfo = await getMCPServicesInfo();
+				const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
+					name: service.serviceName,
+					connected: service.connected,
+					tools: service.tools.map(tool => tool.name),
+					connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
+					isBuiltIn: service.isBuiltIn,
+					error: service.error
+				}));
+				setMcpStatus(statusList);
+				setMcpLoaded(true);
+			} catch (error) {
+				setMcpLoaded(true);
+			}
+		};
+
+		loadMCPStatus();
+	}, []);
 
 	// Animation for streaming indicator
 	useEffect(() => {
@@ -77,6 +111,7 @@ export default function ChatScreen({ }: Props) {
 			sessionManager.clearCurrentSession();
 			clearSavedMessages();
 			setMessages([]);
+			setRemountKey(prev => prev + 1); // Force Static to remount
 			// Add command execution feedback
 			const commandMessage: Message = {
 				role: 'command',
@@ -431,52 +466,150 @@ export default function ChatScreen({ }: Props) {
 
 
 	return (
-		<Box flexDirection="column" padding={1}>
+		<Box flexDirection="column">
 			{showSessionList ? (
 				<SessionListScreen
 					onBack={handleBackFromSessionList}
 					onSelectSession={handleSessionSelect}
 				/>
+			) : !mcpLoaded ? (
+				<Box borderColor="gray" borderStyle="round" paddingX={2} paddingY={1} marginX={1}>
+					<Text color="gray">Loading MCP services...</Text>
+				</Box>
 			) : (
 				<>
-					<Box marginBottom={1} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
-						<Box flexDirection="column">
-							<Text color="white" bold>
-								<Text color="cyan">❆ </Text>
-								<Gradient name="rainbow">Programming efficiency x10!</Gradient>
+					<Static key={remountKey} items={[
+						<Box key="header" marginBottom={1} marginX={1} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
+							<Box flexDirection="column">
+								<Text color="white" bold>
+									<Text color="cyan">❆ </Text>
+									<Gradient name="rainbow">Programming efficiency x10!</Gradient>
+								</Text>
+								<Text color="gray" dimColor>
+									• Ask for code explanations and debugging help
+								</Text>
+								<Text color="gray" dimColor>
+									• Press ESC during response to interrupt
+								</Text>
+								<Text color="gray" dimColor>
+									• Double ESC for history • /resume to restore session
+								</Text>
+							</Box>
+						</Box>,
+						...(mcpStatus.length > 0 ? [
+							<Box key="mcp" marginX={1} borderColor="cyan" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
+								<Box flexDirection="column">
+									<Text color="cyan" bold>MCP Services</Text>
+									{mcpStatus.map((status, index) => (
+										<Box key={index} flexDirection="column" marginTop={index > 0 ? 1 : 0}>
+											<Box flexDirection="row">
+												<Text color={status.connected ? "green" : "red"}>
+													{status.connected ? "●" : "●"}
+												</Text>
+												<Box marginLeft={1}>
+													<Text color="white" bold>
+														{status.name}
+													</Text>
+													{status.isBuiltIn && (
+														<Text color="blue" dimColor>
+															 (System)
+														</Text>
+													)}
+													{status.connected && status.connectionMethod && !status.isBuiltIn && (
+														<Text color="gray" dimColor>
+															 ({status.connectionMethod})
+														</Text>
+													)}
+												</Box>
+											</Box>
+											{status.connected && status.tools.length > 0 && (
+												<Box flexDirection="column" marginLeft={2}>
+													<Text color="gray" dimColor>
+														Tools: {status.tools.join(', ')}
+													</Text>
+												</Box>
+											)}
+											{!status.connected && status.error && (
+												<Box marginLeft={2}>
+													<Text color="red" dimColor>
+														Error: {status.error}
+													</Text>
+												</Box>
+											)}
+										</Box>
+									))}
+								</Box>
+							</Box>
+						] : []),
+						...messages.filter(m => !m.streaming).map((message, index) => (
+							<Box key={`msg-${index}`} marginBottom={1} flexDirection="column">
+								<Box>
+									<Text color={
+										message.role === 'user' ? 'blue' :
+										message.role === 'command' ? 'gray' : 'cyan'
+									} bold>
+										{message.role === 'user' ? '⛇' : message.role === 'command' ? '⌘' : '❆'}
+									</Text>
+									<Box marginLeft={1} marginBottom={1} flexDirection="column">
+										{message.role === 'command' ? (
+											<Text color="gray">
+												└─ {message.commandName}
+											</Text>
+										) : (
+											<>
+												<Text color={message.role === 'user' ? 'gray' : ''}>
+													{message.content}
+												</Text>
+												{message.files && message.files.length > 0 && (
+													<Box marginTop={1} flexDirection="column">
+														{message.files.map((file, fileIndex) => (
+															<Text key={fileIndex} color="blue">
+																└─ Read `{file.path}`{file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}
+															</Text>
+														))}
+													</Box>
+												)}
+												{message.discontinued && (
+													<Text color="red" bold>
+														└─ user discontinue
+													</Text>
+												)}
+											</>
+										)}
+									</Box>
+								</Box>
+							</Box>
+						))
+					]}>
+						{(item) => item}
+					</Static>
+
+					{/* Streaming message - not in Static */}
+					{messages.filter(m => m.streaming).map((message, index) => (
+						<Box key={`streaming-${index}`} marginBottom={1} marginX={1}>
+							<Text color={(['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][animationFrame] as any)} bold>
+								❆
 							</Text>
-							<Text color="gray" dimColor>
-								• Ask for code explanations and debugging help
-							</Text>
-							<Text color="gray" dimColor>
-								• Press ESC during response to interrupt
-							</Text>
-							<Text color="gray" dimColor>
-								• Double ESC for history • /resume to restore session
-							</Text>
+							<Box marginLeft={1} marginBottom={1} flexDirection="column">
+								<Text>
+									{message.content}
+								</Text>
+							</Box>
 						</Box>
+					))}
+
+					<Box marginX={1}>
+						<PendingMessages pendingMessages={pendingMessages} />
 					</Box>
 
-					<MCPInfoPanel />
-
-					<MessageList
-						messages={messages}
-						animationFrame={animationFrame}
-						maxMessages={6}
+					<ChatInput
+						onSubmit={handleMessageSubmit}
+						onCommand={handleCommandExecution}
+						placeholder="Ask me anything about coding..."
+						disabled={false}
+						chatHistory={messages}
+						onHistorySelect={handleHistorySelect}
 					/>
-
-					<PendingMessages pendingMessages={pendingMessages} />
-
-					<Box marginBottom={0}>
-						<ChatInput
-							onSubmit={handleMessageSubmit}
-							onCommand={handleCommandExecution}
-							placeholder="Ask me anything about coding..."
-							disabled={false}
-							chatHistory={messages}
-							onHistorySelect={handleHistorySelect}
-						/>
-					</Box>
 				</>
 			)}
 		</Box>

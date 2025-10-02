@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
 import WelcomeScreen from './ui/pages/WelcomeScreen.js';
@@ -13,6 +13,10 @@ type Props = {
 };
 
 export default function App({ version }: Props) {
+	// Get initial terminal size only once, don't listen to resize events on Windows
+	const initialHeightRef = useRef(process.stdout.rows || 24);
+	const isWindowsRef = useRef(process.platform === 'win32');
+
 	const [currentView, setCurrentView] = useState<
 		'welcome' | 'chat' | 'settings' | 'config' | 'models' | 'mcp'
 	>('welcome');
@@ -80,8 +84,21 @@ export default function App({ version }: Props) {
 		}
 	};
 
-	return (
-		<Box flexDirection="column" padding={1}>
+	// On Windows, don't set height to prevent overflow issues
+	// On other platforms, can safely use full height
+	return isWindowsRef.current ? (
+		<Box flexDirection="column" paddingX={1}>
+			{renderView()}
+			{exitNotification.show && (
+				<Box padding={1}>
+					<Alert variant="warning">
+						{exitNotification.message}
+					</Alert>
+				</Box>
+			)}
+		</Box>
+	) : (
+		<Box flexDirection="column" height={initialHeightRef.current} overflow="hidden">
 			{renderView()}
 			{exitNotification.show && (
 				<Box padding={1}>

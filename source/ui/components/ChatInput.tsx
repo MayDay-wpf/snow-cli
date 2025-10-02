@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text, useStdout, useInput } from 'ink';
 import { TextBuffer, Viewport } from '../../utils/textBuffer.js';
-import { cpSlice } from '../../utils/textUtils.js';
+import { cpSlice, cpLen } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import { executeCommand } from '../../utils/commandExecutor.js';
-import Menu from './Menu.js';
 import FileList, { FileListRef } from './FileList.js';
 
 type Props = {
@@ -51,6 +50,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	
 	// History navigation state
 	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+	const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
 	const [escapeKeyCount, setEscapeKeyCount] = useState(0);
 	const escapeKeyTimer = useRef<NodeJS.Timeout | null>(null);
 	
@@ -249,6 +249,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 				const userMessages = getUserMessages();
 				if (userMessages.length > 0) {
 					setShowHistoryMenu(true);
+					setHistorySelectedIndex(0); // Reset selection to first item
 					setEscapeKeyCount(0);
 					if (escapeKeyTimer.current) {
 						clearTimeout(escapeKeyTimer.current);
@@ -261,6 +262,33 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		
 		// Handle history menu navigation
 		if (showHistoryMenu) {
+			const userMessages = getUserMessages();
+
+			// Up arrow in history menu
+			if (key.upArrow) {
+				setHistorySelectedIndex(prev => Math.max(0, prev - 1));
+				return;
+			}
+
+			// Down arrow in history menu
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, userMessages.length - 1);
+				setHistorySelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+
+			// Enter - select history item
+			if (key.return) {
+				if (userMessages.length > 0 && historySelectedIndex < userMessages.length) {
+					const selectedMessage = userMessages[historySelectedIndex];
+					if (selectedMessage) {
+						handleHistorySelect(selectedMessage.value);
+					}
+				}
+				return;
+			}
+
+			// For any other key in history menu, just return to prevent interference
 			return;
 		}
 		
@@ -431,86 +459,148 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		}
 	}, [chatHistory, onHistorySelect, buffer, triggerUpdate]);
 
-	const visualLines = buffer.viewportVisualLines;
-	const [cursorRow, cursorCol] = buffer.visualCursor;
-
 	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
 		if (buffer.text.length > 0) {
-			return visualLines.map((line, index) => (
-				<Box key={`line-${index}`}>
+			// 使用buffer的内部文本而不是getFullText()，这样可以显示占位符
+			const displayText = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+
+			// 检查是否包含粘贴占位符并高亮显示
+			if (displayText.includes('[Paste ') && displayText.includes(' line #')) {
+				const atCursor = (() => {
+					const charInfo = buffer.getCharAtCursor();
+					return charInfo.char === '\n' ? ' ' : charInfo.char;
+				})();
+
+				// 分割文本并高亮占位符
+				const parts = displayText.split(/(\[Paste \d+ line #\d+\])/);
+				let processedLength = 0;
+
+				return (
 					<Text>
-						{index === cursorRow ? (
-							<>
-								{cpSlice(line, 0, cursorCol)}
-								<Text backgroundColor="white" color="black">
-									{(() => {
-										const charInfo = buffer.getCharAtCursor();
-										return charInfo.char === '\n' ? ' ' : charInfo.char;
-									})()}
-								</Text>
-								{cpSlice(line, cursorCol + 1)}
-							</>
-						) : (
-							// Check for paste placeholders and highlight them
-							line.includes('[Paste ') && line.includes(' line #') ? (
-								<Text>
-									{line.split(/(\[Paste \d+ line #\d+\])/).map((part, partIndex) => 
-										part.match(/^\[Paste \d+ line #\d+\]$/) ? (
-											<Text key={partIndex} color="cyan" dimColor>
-												{part}
+						{parts.map((part, partIndex) => {
+							const isPlaceholder = part.match(/^\[Paste \d+ line #\d+\]$/);
+							const partStart = processedLength;
+							const partEnd = processedLength + cpLen(part);
+							processedLength = partEnd;
+
+							// 检查光标是否在这个部分
+							if (cursorPos >= partStart && cursorPos < partEnd) {
+								const beforeCursorInPart = cpSlice(part, 0, cursorPos - partStart);
+								const afterCursorInPart = cpSlice(part, cursorPos - partStart + 1);
+
+								return (
+									<React.Fragment key={partIndex}>
+										{isPlaceholder ? (
+											<Text color="cyan" dimColor>
+												{beforeCursorInPart}
+												<Text backgroundColor="white" color="black">
+													{atCursor}
+												</Text>
+												{afterCursorInPart}
 											</Text>
 										) : (
-											<Text key={partIndex}>{part}</Text>
-										)
-									)}
-								</Text>
-							) : (
-								line || ' '
-							)
-						)}
+											<>
+												{beforeCursorInPart}
+												<Text backgroundColor="white" color="black">
+													{atCursor}
+												</Text>
+												{afterCursorInPart}
+											</>
+										)}
+									</React.Fragment>
+								);
+							} else {
+								return isPlaceholder ? (
+									<Text key={partIndex} color="cyan" dimColor>
+										{part}
+									</Text>
+								) : (
+									<Text key={partIndex}>{part}</Text>
+								);
+							}
+						})}
 					</Text>
-				</Box>
-			));
+				);
+			} else {
+				// 普通文本渲染
+				return (
+					<Text>
+						{cpSlice(displayText, 0, cursorPos)}
+						<Text backgroundColor="white" color="black">
+							{(() => {
+								const charInfo = buffer.getCharAtCursor();
+								return charInfo.char === '\n' ? ' ' : charInfo.char;
+							})()}
+						</Text>
+						{cpSlice(displayText, cursorPos + 1)}
+					</Text>
+				);
+			}
 		} else {
 			return (
-				<Box>
+				<>
 					<Text backgroundColor={disabled ? "gray" : "white"} color={disabled ? "darkGray" : "black"}>
 						{' '}
 					</Text>
 					<Text color={disabled ? "darkGray" : "gray"} dimColor>
 						{disabled ? 'Waiting for response...' : placeholder}
 					</Text>
-				</Box>
+				</>
 			);
 		}
-	}, [visualLines, cursorRow, cursorCol, buffer, placeholder]);
+	}, [buffer, disabled, placeholder]);
 
 	return (
-		<Box flexDirection="column" width={"100%"} key={`input-${showFilePicker ? 'picker' : 'normal'}`}>
+		<Box flexDirection="column" marginX={1} key={`input-${showFilePicker ? 'picker' : 'normal'}`}>
 			{showHistoryMenu && (
-				<Box marginBottom={1}>
-					<Menu
-						options={getUserMessages()}
-						onSelect={handleHistorySelect}
-						onSelectionChange={() => {}}
-					/>
+				<Box marginBottom={1} borderStyle="round" borderColor="#A9C13E" padding={1}>
+					<Box marginBottom={1}>
+						<Text color="cyan">
+							Use ↑↓ keys to navigate, press Enter to select:
+						</Text>
+					</Box>
+					{(() => {
+						const userMessages = getUserMessages();
+						const maxHeight = 8;
+						const visibleMessages = userMessages.slice(0, maxHeight);
+
+						return visibleMessages.map((message, index) => (
+							<Box key={message.value}>
+								<Text
+									color={index === historySelectedIndex ? 'green' : 'white'}
+									bold
+								>
+									{index === historySelectedIndex ? '➣ ' : '  '}
+									{message.label}
+								</Text>
+							</Box>
+						));
+					})()}
+					{getUserMessages().length > 8 && (
+						<Box>
+							<Text color="gray" dimColor>
+								... and {getUserMessages().length - 8} more items
+							</Text>
+						</Box>
+					)}
 				</Box>
 			)}
 			{!showHistoryMenu && (
 				<>
-					<Box 
-						flexDirection="row" 
+					<Box
+						flexDirection="row"
 						borderStyle="round"
 						borderColor="gray"
 						paddingX={1}
 						paddingY={0}
-						width="100%"
+						flexGrow={1}
 					>
 						<Text color="cyan" bold>
 							➣{' '}
 						</Text>
-						<Box flexDirection="column" flexGrow={1}>
+						<Box flexGrow={1}>
 							{renderContent()}
 						</Box>
 					</Box>

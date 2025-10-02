@@ -16,28 +16,37 @@ export default function MCPInfoPanel() {
 	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
+		let isMounted = true;
+
 		const loadMCPStatus = async () => {
 			try {
-				setIsLoading(true);
 				const servicesInfo = await getMCPServicesInfo();
-				
-				const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
-					name: service.serviceName,
-					connected: service.connected,
-					tools: service.tools.map(tool => tool.name),
-					connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
-					isBuiltIn: service.isBuiltIn,
-					error: service.error
-				}));
 
-				setMcpStatus(statusList);
-				setIsLoading(false);
+				if (isMounted) {
+					const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
+						name: service.serviceName,
+						connected: service.connected,
+						tools: service.tools.map(tool => tool.name),
+						connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
+						isBuiltIn: service.isBuiltIn,
+						error: service.error
+					}));
+
+					setMcpStatus(statusList);
+					setIsLoading(false);
+				}
 			} catch (error) {
-				setIsLoading(false);
+				if (isMounted) {
+					setIsLoading(false);
+				}
 			}
 		};
 
 		loadMCPStatus();
+
+		return () => {
+			isMounted = false;
+		};
 	}, []);
 
 	if (isLoading) {
@@ -49,11 +58,7 @@ export default function MCPInfoPanel() {
 	}
 
 	if (mcpStatus.length === 0) {
-		return (
-			<Box borderColor="gray" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
-				<Text color="gray">No MCP services configured</Text>
-			</Box>
-		);
+		return null;
 	}
 
 	return (

@@ -27,284 +27,193 @@ export interface PastePlaceholder {
 }
 
 export class TextBuffer {
-  private lines: string[] = [''];
-  private cursorRow: number = 0;
-  private cursorCol: number = 0;
-  private viewport: Viewport; // Still needed for width-based text wrapping
-  private pendingUpdates: boolean = false;
-  private pasteStorage: Map<string, PastePlaceholder> = new Map(); // 存储大粘贴内容
-  private pasteCounter: number = 0; // 粘贴计数器
-  private lastPasteTime: number = 0; // 最后粘贴时间
+  private content = '';
+  private cursorIndex = 0;
+  private viewport: Viewport;
+  private pasteStorage: Map<string, PastePlaceholder> = new Map();
+  private pasteCounter = 0;
+  private lastPasteTime = 0;
+
+  private visualLines: string[] = [''];
+  private visualLineStarts: number[] = [0];
+  private visualCursorPos: [number, number] = [0, 0];
+  private preferredVisualCol = 0;
 
   constructor(viewport: Viewport) {
     this.viewport = viewport;
+    this.recalculateVisualState();
   }
 
   get text(): string {
-    return this.lines.join('\n');
+    return this.content;
   }
 
   /**
    * 获取完整文本，包括替换占位符为原始内容
    */
   getFullText(): string {
-    let fullText = this.text;
-    
-    // 替换所有占位符为原始内容
-    for (const [, placeholder] of this.pasteStorage) {
-      fullText = fullText.replace(placeholder.placeholder, placeholder.content);
+    let fullText = this.content;
+
+    for (const placeholder of this.pasteStorage.values()) {
+      if (placeholder.placeholder) {
+        fullText = fullText.split(placeholder.placeholder).join(placeholder.content);
+      }
     }
-    
+
     return fullText;
   }
 
   get visualCursor(): [number, number] {
-    return [this.cursorRow, this.cursorCol];
+    return this.visualCursorPos;
   }
 
   getCursorPosition(): number {
-    // Calculate absolute cursor position in the text
-    let position = 0;
-    for (let i = 0; i < this.cursorRow; i++) {
-      const line = this.lines[i];
-      if (line !== undefined) {
-        position += cpLen(line) + 1; // +1 for newline
-      }
-    }
-    position += this.cursorCol;
-    return position;
+    return this.cursorIndex;
   }
 
   get viewportVisualLines(): string[] {
-    // Return all lines instead of limiting by viewport height
-    // Viewport height should only be used for initial sizing, not content limiting
-    return this.lines;
+    return this.visualLines;
   }
 
   get maxWidth(): number {
-    // Viewport width is still useful for text wrapping/formatting
     return this.viewport.width;
   }
 
-  private getCurrentLine(): string {
-    return this.lines[this.cursorRow] || '';
-  }
-
   private scheduleUpdate(): void {
-    if (this.pendingUpdates) return;
-    this.pendingUpdates = true;
-    
-    // Defer updates to next tick to handle rapid input
-    process.nextTick(() => {
-      this.pendingUpdates = false;
-    });
+    // Removed pendingUpdates logic since it's not needed
   }
 
   setText(text: string): void {
     const sanitized = sanitizeInput(text);
-    this.lines = sanitized.split('\n');
-    if (this.lines.length === 0) {
-      this.lines = [''];
-    }
-    this.cursorRow = Math.min(this.cursorRow, this.lines.length - 1);
-    this.cursorCol = Math.min(this.cursorCol, cpLen(this.getCurrentLine()));
-    
-    // 清空时重置粘贴存储和计数器
-    if (text === '') {
+    this.content = sanitized;
+    this.clampCursorIndex();
+
+    if (sanitized === '') {
       this.pasteStorage.clear();
       this.pasteCounter = 0;
       this.lastPasteTime = 0;
     }
-    
+
+    this.recalculateVisualState();
     this.scheduleUpdate();
   }
 
   insert(input: string): void {
     const sanitized = sanitizeInput(input);
+    if (!sanitized) {
+      return;
+    }
+
     const lines = sanitized.split('\n');
     const now = Date.now();
-    
-    // 检查是否为大量粘贴（超过10行），并防止重复处理
+
     if (lines.length > 10) {
-      // 防止在短时间内重复处理同样的粘贴内容
       if (now - this.lastPasteTime < 100) {
         return;
       }
-      
+
       this.lastPasteTime = now;
       this.pasteCounter++;
       const pasteId = `paste_${now}_${this.pasteCounter}`;
-      const placeholder = `[Paste ${lines.length} line #${this.pasteCounter}]`;
-      
-      // 存储原始内容
+      const placeholderText = `[Paste ${lines.length} line #${this.pasteCounter}]`;
+
       this.pasteStorage.set(pasteId, {
         id: pasteId,
         content: sanitized,
         lineCount: lines.length,
         index: this.pasteCounter,
-        placeholder: placeholder
+        placeholder: placeholderText
       });
-      
-      // 插入占位符
-      const currentLine = this.getCurrentLine();
-      const before = cpSlice(currentLine, 0, this.cursorCol);
-      const after = cpSlice(currentLine, this.cursorCol);
-      this.lines[this.cursorRow] = before + placeholder + after;
-      this.cursorCol += cpLen(placeholder);
-      
+
+      this.insertPlainText(placeholderText);
       this.scheduleUpdate();
       return;
     }
-    
-    if (lines.length === 1) {
-      // Single line input - check for wrapping
-      const currentLine = this.getCurrentLine();
-      const before = cpSlice(currentLine, 0, this.cursorCol);
-      const after = cpSlice(currentLine, this.cursorCol);
-      const newLine = before + sanitized + after;
-      
-      // 简化换行逻辑，只在超过最大宽度时换行
-      if (visualWidth(newLine) > this.viewport.width && this.viewport.width > 20) {
-        // 尝试在合适位置换行
-        const breakPoint = this.findBreakPoint(newLine, this.viewport.width);
-        if (breakPoint > 0 && breakPoint < newLine.length) {
-          const firstPart = cpSlice(newLine, 0, breakPoint);
-          const secondPart = cpSlice(newLine, breakPoint);
-          this.lines[this.cursorRow] = firstPart;
-          this.lines.splice(this.cursorRow + 1, 0, secondPart);
-          
-          // Calculate where cursor should be after insertion
-          const newCursorPos = this.cursorCol + cpLen(sanitized);
-          if (newCursorPos <= cpLen(firstPart)) {
-            // Cursor stays on first line
-            this.cursorCol = newCursorPos;
-          } else {
-            // Cursor moves to second line
-            this.cursorRow++;
-            this.cursorCol = newCursorPos - cpLen(firstPart);
-          }
-        } else {
-          // 无法找到合适换行点，直接设置
-          this.lines[this.cursorRow] = newLine;
-          this.cursorCol += cpLen(sanitized);
-        }
-      } else {
-        this.lines[this.cursorRow] = newLine;
-        this.cursorCol += cpLen(sanitized);
-      }
-    } else {
-      // Multi-line input (paste) - 正常处理小于等于10行的粘贴
-      const currentLine = this.getCurrentLine();
-      const before = cpSlice(currentLine, 0, this.cursorCol);
-      const after = cpSlice(currentLine, this.cursorCol);
-      
-      // First line: current line prefix + first paste line
-      this.lines[this.cursorRow] = before + lines[0];
-      
-      // Middle lines: insert as new lines
-      const middleLines = lines.slice(1, -1);
-      this.lines.splice(this.cursorRow + 1, 0, ...middleLines);
-      
-      // Last line: last paste line + current line suffix
-      const lastLine = lines[lines.length - 1] + after;
-      this.lines.splice(this.cursorRow + lines.length - 1, 0, lastLine);
-      
-      // Update cursor position
-      this.cursorRow += lines.length - 1;
-      this.cursorCol = cpLen(lines[lines.length - 1] || '');
-    }
-    
+
+    this.insertPlainText(sanitized);
     this.scheduleUpdate();
   }
 
-  private findBreakPoint(line: string, maxWidth: number): number {
-    const codePoints = toCodePoints(line);
-    let currentWidth = 0;
-    let lastSpaceIndex = -1;
-    
-    for (let i = 0; i < codePoints.length; i++) {
-      const char = codePoints[i] || '';
-      const charWidth = visualWidth(char);
-      
-      if (char === ' ') {
-        lastSpaceIndex = i;
-      }
-      
-      if (currentWidth + charWidth > maxWidth) {
-        return lastSpaceIndex > 0 ? lastSpaceIndex : Math.max(1, i);
-      }
-      
-      currentWidth += charWidth;
+  private insertPlainText(text: string): void {
+    if (!text) {
+      return;
     }
-    
-    return codePoints.length;
+
+    this.clampCursorIndex();
+    const before = cpSlice(this.content, 0, this.cursorIndex);
+    const after = cpSlice(this.content, this.cursorIndex);
+    this.content = before + text + after;
+    this.cursorIndex += cpLen(text);
+    this.recalculateVisualState();
   }
 
   backspace(): void {
-    if (this.cursorCol > 0) {
-      const currentLine = this.getCurrentLine();
-      const before = cpSlice(currentLine, 0, this.cursorCol - 1);
-      const after = cpSlice(currentLine, this.cursorCol);
-      this.lines[this.cursorRow] = before + after;
-      this.cursorCol--;
-    } else if (this.cursorRow > 0) {
-      const currentLine = this.getCurrentLine();
-      const prevLine = this.lines[this.cursorRow - 1] || '';
-      this.cursorCol = cpLen(prevLine);
-      this.lines[this.cursorRow - 1] = prevLine + currentLine;
-      this.lines.splice(this.cursorRow, 1);
-      this.cursorRow--;
+    if (this.cursorIndex === 0) {
+      return;
     }
+
+    const before = cpSlice(this.content, 0, this.cursorIndex - 1);
+    const after = cpSlice(this.content, this.cursorIndex);
+    this.content = before + after;
+    this.cursorIndex -= 1;
+    this.recalculateVisualState();
     this.scheduleUpdate();
   }
 
   delete(): void {
-    const currentLine = this.getCurrentLine();
-    if (this.cursorCol < cpLen(currentLine)) {
-      const before = cpSlice(currentLine, 0, this.cursorCol);
-      const after = cpSlice(currentLine, this.cursorCol + 1);
-      this.lines[this.cursorRow] = before + after;
-    } else if (this.cursorRow < this.lines.length - 1) {
-      const nextLine = this.lines[this.cursorRow + 1] || '';
-      this.lines[this.cursorRow] = currentLine + nextLine;
-      this.lines.splice(this.cursorRow + 1, 1);
+    if (this.cursorIndex >= cpLen(this.content)) {
+      return;
     }
+
+    const before = cpSlice(this.content, 0, this.cursorIndex);
+    const after = cpSlice(this.content, this.cursorIndex + 1);
+    this.content = before + after;
+    this.recalculateVisualState();
     this.scheduleUpdate();
   }
 
   moveLeft(): void {
-    if (this.cursorCol > 0) {
-      this.cursorCol--;
-    } else if (this.cursorRow > 0) {
-      this.cursorRow--;
-      this.cursorCol = cpLen(this.getCurrentLine());
+    if (this.cursorIndex === 0) {
+      return;
     }
+
+    this.cursorIndex -= 1;
+    this.recomputeVisualCursorOnly();
   }
 
   moveRight(): void {
-    const currentLine = this.getCurrentLine();
-    if (this.cursorCol < cpLen(currentLine)) {
-      this.cursorCol++;
-    } else if (this.cursorRow < this.lines.length - 1) {
-      this.cursorRow++;
-      this.cursorCol = 0;
+    if (this.cursorIndex >= cpLen(this.content)) {
+      return;
     }
+
+    this.cursorIndex += 1;
+    this.recomputeVisualCursorOnly();
   }
 
   moveUp(): void {
-    if (this.cursorRow > 0) {
-      this.cursorRow--;
-      const newLineLength = cpLen(this.getCurrentLine());
-      this.cursorCol = Math.min(this.cursorCol, newLineLength);
+    if (this.visualLines.length === 0) {
+      return;
     }
+
+    const currentRow = this.visualCursorPos[0];
+    if (currentRow <= 0) {
+      return;
+    }
+
+    this.moveCursorToVisualRow(currentRow - 1);
   }
 
   moveDown(): void {
-    if (this.cursorRow < this.lines.length - 1) {
-      this.cursorRow++;
-      const newLineLength = cpLen(this.getCurrentLine());
-      this.cursorCol = Math.min(this.cursorCol, newLineLength);
+    if (this.visualLines.length === 0) {
+      return;
     }
+
+    const currentRow = this.visualCursorPos[0];
+    if (currentRow >= this.visualLines.length - 1) {
+      return;
+    }
+
+    this.moveCursorToVisualRow(currentRow + 1);
   }
 
   /**
@@ -312,6 +221,7 @@ export class TextBuffer {
    */
   updateViewport(viewport: Viewport): void {
     this.viewport = viewport;
+    this.recalculateVisualState();
     this.scheduleUpdate();
   }
 
@@ -319,16 +229,156 @@ export class TextBuffer {
    * Get the character and its visual info at cursor position for proper rendering.
    */
   getCharAtCursor(): { char: string; isWideChar: boolean } {
-    const currentLine = this.getCurrentLine();
-    const codePoints = toCodePoints(currentLine);
-    
-    if (this.cursorCol >= codePoints.length) {
+    const codePoints = toCodePoints(this.content);
+
+    if (this.cursorIndex >= codePoints.length) {
       return { char: ' ', isWideChar: false };
     }
-    
-    const char = codePoints[this.cursorCol] || ' ';
-    const isWideChar = visualWidth(char) > 1;
-    
-    return { char, isWideChar };
+
+    const char = codePoints[this.cursorIndex] || ' ';
+    return { char, isWideChar: visualWidth(char) > 1 };
+  }
+
+  private clampCursorIndex(): void {
+    const length = cpLen(this.content);
+    if (this.cursorIndex < 0) {
+      this.cursorIndex = 0;
+    } else if (this.cursorIndex > length) {
+      this.cursorIndex = length;
+    }
+  }
+
+  private recalculateVisualState(): void {
+    this.clampCursorIndex();
+
+    const width = this.viewport.width;
+    const effectiveWidth = Number.isFinite(width) && width > 0 ? width : Number.POSITIVE_INFINITY;
+    const rawLines = this.content.split('\n');
+    const nextVisualLines: string[] = [];
+    const nextStarts: number[] = [];
+
+    let cpOffset = 0;
+    const linesToProcess = rawLines.length > 0 ? rawLines : [''];
+
+    for (let i = 0; i < linesToProcess.length; i++) {
+      const rawLine = linesToProcess[i] ?? '';
+      const segments = this.wrapLineToWidth(rawLine, effectiveWidth);
+
+      if (segments.length === 0) {
+        nextVisualLines.push('');
+        nextStarts.push(cpOffset);
+      } else {
+        for (const segment of segments) {
+          nextVisualLines.push(segment);
+          nextStarts.push(cpOffset);
+          cpOffset += cpLen(segment);
+        }
+      }
+
+      if (i < linesToProcess.length - 1) {
+        // Account for the newline character that separates raw lines
+        cpOffset += 1;
+      }
+    }
+
+    if (nextVisualLines.length === 0) {
+      nextVisualLines.push('');
+      nextStarts.push(0);
+    }
+
+    this.visualLines = nextVisualLines;
+    this.visualLineStarts = nextStarts;
+    this.visualCursorPos = this.computeVisualCursorFromIndex(this.cursorIndex);
+    this.preferredVisualCol = this.visualCursorPos[1];
+  }
+
+  private wrapLineToWidth(line: string, width: number): string[] {
+    if (line === '') {
+      return [''];
+    }
+
+    if (!Number.isFinite(width) || width <= 0) {
+      return [line];
+    }
+
+    const codePoints = toCodePoints(line);
+    const segments: string[] = [];
+    let start = 0;
+
+    while (start < codePoints.length) {
+      let currentWidth = 0;
+      let end = start;
+      let lastBreak = -1;
+
+      while (end < codePoints.length) {
+        const char = codePoints[end] || '';
+        const charWidth = visualWidth(char);
+
+        if (char === ' ') {
+          lastBreak = end + 1;
+        }
+
+        if (currentWidth + charWidth > width) {
+          if (lastBreak > start) {
+            end = lastBreak;
+          }
+          break;
+        }
+
+        currentWidth += charWidth;
+        end++;
+      }
+
+      if (end === start) {
+        end = Math.min(start + 1, codePoints.length);
+      }
+
+      segments.push(codePoints.slice(start, end).join(''));
+      start = end;
+    }
+
+    return segments;
+  }
+
+  private computeVisualCursorFromIndex(position: number): [number, number] {
+    if (this.visualLines.length === 0) {
+      return [0, 0];
+    }
+
+    const totalLength = cpLen(this.content);
+    const clamped = Math.max(0, Math.min(position, totalLength));
+
+    for (let i = this.visualLines.length - 1; i >= 0; i--) {
+      const start = this.visualLineStarts[i] ?? 0;
+      if (clamped >= start) {
+        const line = this.visualLines[i] ?? '';
+        const col = Math.min(cpLen(line), clamped - start);
+        return [i, col];
+      }
+    }
+
+    return [0, clamped];
+  }
+
+  private moveCursorToVisualRow(targetRow: number): void {
+    if (this.visualLines.length === 0) {
+      this.cursorIndex = 0;
+      this.visualCursorPos = [0, 0];
+      return;
+    }
+
+    const row = Math.max(0, Math.min(targetRow, this.visualLines.length - 1));
+    const start = this.visualLineStarts[row] ?? 0;
+    const line = this.visualLines[row] ?? '';
+    const lineLength = cpLen(line);
+    const column = Math.min(this.preferredVisualCol, lineLength);
+
+    this.cursorIndex = start + column;
+    this.visualCursorPos = [row, column];
+  }
+
+  private recomputeVisualCursorOnly(): void {
+    this.visualCursorPos = this.computeVisualCursorFromIndex(this.cursorIndex);
+    this.preferredVisualCol = this.visualCursorPos[1];
   }
 }
