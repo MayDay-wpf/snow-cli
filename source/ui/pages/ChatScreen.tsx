@@ -465,14 +465,19 @@ export default function ChatScreen({ }: Props) {
 	};
 
 
+	// If showing session list, only render that - don't render chat at all
+	if (showSessionList) {
+		return (
+			<SessionListScreen
+				onBack={handleBackFromSessionList}
+				onSelectSession={handleSessionSelect}
+			/>
+		);
+	}
+
 	return (
 		<Box flexDirection="column">
-			{showSessionList ? (
-				<SessionListScreen
-					onBack={handleBackFromSessionList}
-					onSelectSession={handleSessionSelect}
-				/>
-			) : !mcpLoaded ? (
+			{!mcpLoaded ? (
 				<Box borderColor="gray" borderStyle="round" paddingX={2} paddingY={1} marginX={1}>
 					<Text color="gray">Loading MCP services...</Text>
 				</Box>

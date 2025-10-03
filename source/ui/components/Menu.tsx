@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
 
 type MenuOption = {
@@ -15,7 +15,7 @@ type Props = {
 	maxHeight?: number; // Maximum number of visible items
 };
 
-export default function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
+function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const {stdout} = useStdout();
@@ -42,7 +42,7 @@ export default function Menu({options, onSelect, onSelectionChange, maxHeight}: 
 		}
 	}, [selectedIndex, scrollOffset, visibleItemCount]);
 
-	useInput((_, key) => {
+	const handleInput = useCallback((_input: string, key: any) => {
 		if (key.upArrow) {
 			setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
 		} else if (key.downArrow) {
@@ -53,7 +53,9 @@ export default function Menu({options, onSelect, onSelectionChange, maxHeight}: 
 				onSelect(selectedOption.value);
 			}
 		}
-	});
+	}, [options.length, selectedIndex, onSelect]);
+
+	useInput(handleInput);
 
 	// Calculate visible options and "more" counts
 	const visibleOptions = options.slice(scrollOffset, scrollOffset + visibleItemCount);
@@ -103,3 +105,13 @@ export default function Menu({options, onSelect, onSelectionChange, maxHeight}: 
 		</Box>
 	);
 }
+
+// Memoize to prevent unnecessary re-renders
+export default React.memo(Menu, (prevProps, nextProps) => {
+	return (
+		prevProps.options === nextProps.options &&
+		prevProps.onSelect === nextProps.onSelect &&
+		prevProps.onSelectionChange === nextProps.onSelectionChange &&
+		prevProps.maxHeight === nextProps.maxHeight
+	);
+});

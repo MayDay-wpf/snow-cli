@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Box, Text, useInput, useStdout } from 'ink';
 import Gradient from 'ink-gradient';
 import { Alert } from '@inkjs/ui';
-import Menu from './Menu.js';
+import SelectInput from 'ink-select-input';
 import { sessionManager, type SessionListItem } from '../../utils/sessionManager.js';
 
 type Props = {
@@ -10,17 +10,29 @@ type Props = {
 	onSelectSession: (sessionId: string) => void;
 };
 
+type SelectItem = {
+	label: string;
+	value: string;
+};
+
 export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
-	const [selectedSessionInfo, setSelectedSessionInfo] = useState('');
+	const { stdout } = useStdout();
 
+	// Enable alternate screen buffer when this component mounts
 	useEffect(() => {
-		loadSessions();
+		process.stdout.write('\x1B[?1049h');
+		process.stdout.write('\x1B[2J');
+		process.stdout.write('\x1B[H');
+		return () => {
+			process.stdout.write('\x1B[2J');
+			process.stdout.write('\x1B[?1049l');
+		};
 	}, []);
 
-	const loadSessions = async () => {
+	const loadSessions = useCallback(async () => {
 		setLoading(true);
 		setError('');
 		try {
@@ -31,9 +43,13 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
 
-	const formatDate = (timestamp: number): string => {
+	useEffect(() => {
+		void loadSessions();
+	}, [loadSessions]);
+
+	const formatDate = useCallback((timestamp: number): string => {
 		const date = new Date(timestamp);
 		const now = new Date();
 		const diffMs = now.getTime() - date.getTime();
@@ -50,34 +66,46 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 		} else {
 			return date.toLocaleDateString();
 		}
-	};
+	}, []);
 
-	const getMenuOptions = () => {
+	// Create select items with truncated labels
+	const selectItems = useMemo((): SelectItem[] => {
+		const terminalWidth = stdout?.columns || 80;
+		// Increase margin and ensure minimum width
+		const maxLabelWidth = Math.max(20, terminalWidth - 20);
+
 		return sessions.map(session => {
 			const timeString = formatDate(session.updatedAt);
+			const title = session.title || 'Untitled';
+			const label = `${title} (${session.messageCount}) - ${timeString}`;
+
+			// Truncate if too long with safer boundary check
+			let truncatedLabel = label;
+			if (label.length > maxLabelWidth) {
+				const maxLength = Math.max(10, maxLabelWidth - 3);
+				truncatedLabel = label.substring(0, maxLength) + '...';
+			}
+
 			return {
-				label: `${session.title || 'Untitled'} (${session.messageCount} messages) - ${timeString}`,
-				value: session.id,
-				infoText: session.summary || 'No summary'
+				label: truncatedLabel,
+				value: session.id
 			};
 		});
-	};
+	}, [sessions, formatDate, stdout?.columns]);
 
-	const handleSessionSelect = (sessionId: string) => {
-		onSelectSession(sessionId);
-	};
+	const handleSelect = useCallback((item: SelectItem) => {
+		onSelectSession(item.value);
+	}, [onSelectSession]);
 
-	const handleSelectionChange = (infoText: string) => {
-		setSelectedSessionInfo(infoText);
-	};
-
-	useInput((input, key) => {
+	const handleInput = useCallback((input: string, key: any) => {
 		if (key.escape) {
 			onBack();
-		} else if (input === 'r') {
-			loadSessions();
+		} else if (input === 'r' || input === 'R') {
+			void loadSessions();
 		}
-	});
+	}, [onBack, loadSessions]);
+
+	useInput(handleInput);
 
 	if (loading) {
 		return (
@@ -154,37 +182,47 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 		);
 	}
 
+	// Calculate available height for the list with safer bounds
+	const terminalHeight = stdout?.rows || 24;
+	const headerHeight = 7; // Header box height (including borders and padding)
+	const footerHeight = 4; // Footer info height (including margins)
+	const availableHeight = Math.max(5, terminalHeight - headerHeight - footerHeight);
+	const listLimit = Math.min(selectItems.length, Math.max(3, availableHeight));
+
 	return (
-		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="double" borderColor="cyan" paddingX={2} paddingY={1}>
+		<Box flexDirection="column" padding={1} height={terminalHeight - 2}>
+			<Box marginBottom={1} borderStyle="double" borderColor="cyan" paddingX={2} paddingY={1}>
 				<Box flexDirection="column">
 					<Gradient name="rainbow">
 						Resume Conversation
 					</Gradient>
 					<Text color="gray" dimColor>
-						Select a conversation to resume ({sessions.length} available)
+						{sessions.length} conversation{sessions.length !== 1 ? 's' : ''} available
 					</Text>
 				</Box>
 			</Box>
 
-			<Box marginBottom={1}>
-				<Menu
-					options={getMenuOptions()}
-					onSelect={handleSessionSelect}
-					onSelectionChange={handleSelectionChange}
+			<Box marginBottom={1} flexShrink={0}>
+				<SelectInput
+					items={selectItems}
+					onSelect={handleSelect}
+					limit={listLimit}
+					indicatorComponent={({ isSelected }) => (
+						<Text color={isSelected ? 'green' : 'gray'}>
+							{isSelected ? '❯ ' : '  '}
+						</Text>
+					)}
+					itemComponent={({ isSelected, label }) => (
+						<Text color={isSelected ? 'cyan' : 'white'}>
+							{label}
+						</Text>
+					)}
 				/>
 			</Box>
 
-			{selectedSessionInfo && (
-				<Box marginBottom={1} borderStyle="single" borderColor="gray" paddingX={1}>
-					<Text color="yellow">Summary: </Text>
-					<Text color="gray">{selectedSessionInfo}</Text>
-				</Box>
-			)}
-
-			<Box flexDirection="column">
+			<Box flexDirection="column" flexShrink={0}>
 				<Alert variant="info">
-					Use ↑↓ to navigate, Enter to select, Esc to return, R to refresh
+					↑↓ navigate • Enter select • Esc return • R refresh
 				</Alert>
 			</Box>
 		</Box>

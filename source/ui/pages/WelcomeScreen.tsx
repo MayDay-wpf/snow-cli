@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
 import Gradient from 'ink-gradient';
@@ -15,7 +15,7 @@ export default function WelcomeScreen({
 }: Props) {
 	const [infoText, setInfoText] = useState('Start a new chat conversation');
 
-	const menuOptions = [
+	const menuOptions = useMemo(() => [
 		{
 			label: 'Start',
 			value: 'chat',
@@ -42,11 +42,11 @@ export default function WelcomeScreen({
 			color: 'rgb(232, 131, 136)',
 			infoText: 'Exit the application',
 		}
-	];
+	], []);
 
-	const handleSelectionChange = (newInfoText: string) => {
+	const handleSelectionChange = useCallback((newInfoText: string) => {
 		setInfoText(newInfoText);
-	};
+	}, []);
 
 	return (
 		<Box flexDirection="column" padding={1}>
