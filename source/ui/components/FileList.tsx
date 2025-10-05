@@ -166,9 +166,9 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 	}
 
 	return (
-		<Box borderStyle="round" borderColor="blue" paddingX={1} marginTop={1} flexDirection="column">
+		<Box paddingX={1} marginTop={1} flexDirection="column">
 			<Box marginBottom={1}>
-				<Text color="blue" bold>Files ({filteredFiles.length})</Text>
+				<Text color="blue" bold>🗐 Files ({filteredFiles.length})</Text>
 			</Box>
 			{filteredFiles.map((file, index) => (
 				<Box key={file.path}>

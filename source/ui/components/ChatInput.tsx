@@ -18,7 +18,8 @@ type Props = {
 // Command Definition
 const commands = [
 	{ name: 'clear', description: 'Clear chat context and conversation history' },
-	{ name: 'resume', description: 'Resume a conversation' }
+	{ name: 'resume', description: 'Resume a conversation' },
+	{ name: 'mcp', description: 'Show Model Context Protocol services and tools' }
 ];
 
 export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect }: Props) {

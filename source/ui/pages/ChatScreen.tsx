@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput, Static } from 'ink';
+import { Box, Text, useInput, Static, useStdout } from 'ink';
 import Gradient from 'ink-gradient';
 import ChatInput from '../components/ChatInput.js';
 import { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import SessionListScreen from '../components/SessionListScreen.js';
+import MCPInfoPanel from '../components/MCPInfoPanel.js';
 import { createStreamingChatCompletion, type ChatMessage } from '../../api/chat.js';
-import { collectAllMCPTools, getMCPServicesInfo } from '../../utils/mcpToolsManager.js';
+import { collectAllMCPTools } from '../../utils/mcpToolsManager.js';
 import { getOpenAiConfig } from '../../utils/apiConfig.js';
 import { sessionManager } from '../../utils/sessionManager.js';
 import { useSessionSave } from '../../hooks/useSessionSave.js';
@@ -14,16 +15,48 @@ import { parseAndValidateFileReferences, createMessageWithFileInstructions } fro
 // Import commands to register them
 import '../../utils/commands/clear.js';
 import '../../utils/commands/resume.js';
+import '../../utils/commands/mcp.js';
 
 type Props = {};
 
-interface MCPConnectionStatus {
-	name: string;
-	connected: boolean;
-	tools: string[];
-	connectionMethod?: string;
-	error?: string;
-	isBuiltIn?: boolean;
+type MCPInfoScreenProps = {
+	onClose: () => void;
+	panelKey: number;
+};
+
+function MCPInfoScreen({ onClose, panelKey }: MCPInfoScreenProps) {
+	useEffect(() => {
+		process.stdout.write('\x1B[?1049h');
+		process.stdout.write('\x1B[2J');
+		process.stdout.write('\x1B[H');
+		return () => {
+			process.stdout.write('\x1B[2J');
+			process.stdout.write('\x1B[?1049l');
+		};
+	}, []);
+
+	useInput((_, key) => {
+		if (key.escape) {
+			onClose();
+		}
+	});
+
+	return (
+		<Box flexDirection="column" padding={1}>
+			<Box marginBottom={1} borderStyle="double" paddingX={2} paddingY={1} borderColor={'cyan'}>
+				<Box flexDirection="column">
+					<Text color="white" bold>
+						<Text color="cyan">❆ </Text>
+						MCP Services Overview
+					</Text>
+					<Text color="gray" dimColor>
+						Press ESC to return to the chat
+					</Text>
+				</Box>
+			</Box>
+			<MCPInfoPanel key={panelKey} />
+		</Box>
+	);
 }
 
 export default function ChatScreen({ }: Props) {
@@ -34,34 +67,13 @@ export default function ChatScreen({ }: Props) {
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
 	const [showSessionList, setShowSessionList] = useState(false);
 	const [remountKey, setRemountKey] = useState(0);
-	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
-	const [mcpLoaded, setMcpLoaded] = useState(false);
+	const [showMcpInfo, setShowMcpInfo] = useState(false);
+	const [mcpPanelKey, setMcpPanelKey] = useState(0);
+	const { stdout } = useStdout();
+	const workingDirectory = process.cwd();
 
 	// Use session save hook
 	const { onStreamingComplete, onUserMessage, clearSavedMessages, initializeFromSession } = useSessionSave();
-
-	// Load MCP info once on mount
-	useEffect(() => {
-		const loadMCPStatus = async () => {
-			try {
-				const servicesInfo = await getMCPServicesInfo();
-				const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
-					name: service.serviceName,
-					connected: service.connected,
-					tools: service.tools.map(tool => tool.name),
-					connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
-					isBuiltIn: service.isBuiltIn,
-					error: service.error
-				}));
-				setMcpStatus(statusList);
-				setMcpLoaded(true);
-			} catch (error) {
-				setMcpLoaded(true);
-			}
-		};
-
-		loadMCPStatus();
-	}, []);
 
 	// Animation for streaming indicator
 	useEffect(() => {
@@ -86,8 +98,15 @@ export default function ChatScreen({ }: Props) {
 		return undefined;
 	}, [isStreaming, pendingMessages.length]);
 
-	// ESC key handler to interrupt streaming
+	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
+		if (showMcpInfo) {
+			if (key.escape) {
+				setShowMcpInfo(false);
+			}
+			return;
+		}
+
 		if (key.escape && isStreaming && abortController) {
 			abortController.abort();
 			setMessages(prev => {
@@ -96,6 +115,7 @@ export default function ChatScreen({ }: Props) {
 				if (lastMessage && lastMessage.streaming) {
 					lastMessage.streaming = false;
 					lastMessage.discontinued = true;
+					lastMessage.renderedLines = undefined;
 				}
 				return newMessages;
 			});
@@ -107,6 +127,9 @@ export default function ChatScreen({ }: Props) {
 
 	const handleCommandExecution = (commandName: string, result: any) => {
 		if (result.success && result.action === 'clear') {
+			if (stdout && typeof stdout.write === 'function') {
+				stdout.write('\x1B[3J\x1B[2J\x1B[H');
+			}
 			// Clear current session and start new one
 			sessionManager.clearCurrentSession();
 			clearSavedMessages();
@@ -120,8 +143,20 @@ export default function ChatScreen({ }: Props) {
 			};
 			setMessages([commandMessage]);
 		} else if (result.success && result.action === 'resume') {
+			if (stdout && typeof stdout.write === 'function') {
+				stdout.write('\x1B[3J\x1B[2J\x1B[H');
+			}
 			// Show session list screen
 			setShowSessionList(true);
+		} else if (result.success && result.action === 'showMcpInfo') {
+			setShowMcpInfo(true);
+			setMcpPanelKey(prev => prev + 1);
+			const commandMessage: Message = {
+				role: 'command',
+				content: '',
+				commandName: commandName
+			};
+			setMessages(prev => [...prev, commandMessage]);
 		}
 	};
 
@@ -129,6 +164,9 @@ export default function ChatScreen({ }: Props) {
 		try {
 			const session = await sessionManager.loadSession(sessionId);
 			if (session) {
+				if (stdout && typeof stdout.write === 'function') {
+					stdout.write('\x1B[3J\x1B[2J\x1B[H');
+				}
 				// Convert session messages back to UI messages, filtering out system messages
 				const uiMessages: Message[] = session.messages
 					.filter(msg => msg.role !== 'system')
@@ -138,7 +176,10 @@ export default function ChatScreen({ }: Props) {
 						streaming: false
 					}));
 				setMessages(uiMessages);
+				setPendingMessages([]);
+				setIsStreaming(false);
 				setShowSessionList(false);
+				setRemountKey(prev => prev + 1);
 
 				// Initialize session save hook with loaded messages
 				initializeFromSession(uiMessages);
@@ -185,7 +226,7 @@ export default function ChatScreen({ }: Props) {
 		const controller = new AbortController();
 		setAbortController(controller);
 
-		const assistantMessage: Message = { role: 'assistant', content: '', streaming: true };
+		const assistantMessage: Message = { role: 'assistant', content: '', streaming: true, renderedLines: [] };
 		setMessages(prev => [...prev, assistantMessage]);
 
 		// Save user message in background (non-blocking)
@@ -210,6 +251,7 @@ export default function ChatScreen({ }: Props) {
 					if (lastMessage) {
 						lastMessage.content = finalMessage.content;
 						lastMessage.streaming = false;
+						lastMessage.renderedLines = undefined;
 					}
 					return newMessages;
 				});
@@ -229,8 +271,7 @@ export default function ChatScreen({ }: Props) {
 				];
 
 				let fullResponse = '';
-				let currentLine = '';
-
+				
 				for await (const chunk of createStreamingChatCompletion({
 					model,
 					messages: chatMessages,
@@ -239,32 +280,22 @@ export default function ChatScreen({ }: Props) {
 				}, controller.signal)) {
 					if (controller.signal.aborted) break;
 
-					currentLine += chunk;
-
-					// Check if we have a complete line (contains newline or certain punctuation)
-					if (chunk.includes('\n') || chunk.includes('.') || chunk.includes('!') || chunk.includes('?') || chunk.includes(';')) {
-						fullResponse += currentLine;
-						currentLine = '';
-
-						setMessages(prev => {
-							const newMessages = [...prev];
-							const lastMessage = newMessages[newMessages.length - 1];
-							if (lastMessage && lastMessage.streaming) {
-								lastMessage.content = fullResponse;
-							}
-							return newMessages;
-						});
+					if (!chunk) {
+						continue;
 					}
-				}
 
-				// Add any remaining content
-				if (currentLine && !controller.signal.aborted) {
-					fullResponse += currentLine;
+					fullResponse += chunk;
+
 					setMessages(prev => {
 						const newMessages = [...prev];
 						const lastMessage = newMessages[newMessages.length - 1];
 						if (lastMessage && lastMessage.streaming) {
-							lastMessage.content = fullResponse;
+							lastMessage.content += chunk;
+							if (lastMessage.renderedLines) {
+								lastMessage.renderedLines.push(chunk);
+							} else {
+								lastMessage.renderedLines = [chunk];
+							}
 						}
 						return newMessages;
 					});
@@ -282,6 +313,7 @@ export default function ChatScreen({ }: Props) {
 					const lastMessage = newMessages[newMessages.length - 1];
 					if (lastMessage && !lastMessage.discontinued) {
 						lastMessage.streaming = false;
+						lastMessage.renderedLines = undefined;
 					}
 					return newMessages;
 				});
@@ -305,6 +337,7 @@ export default function ChatScreen({ }: Props) {
 				if (lastMessage) {
 					lastMessage.content = finalMessage.content;
 					lastMessage.streaming = false;
+					lastMessage.renderedLines = undefined;
 				}
 				return newMessages;
 			});
@@ -333,7 +366,7 @@ export default function ChatScreen({ }: Props) {
 		// Start streaming response (without calling processMessage to avoid recursion)
 		setIsStreaming(true);
 
-		const assistantMessage: Message = { role: 'assistant', content: '', streaming: true };
+		const assistantMessage: Message = { role: 'assistant', content: '', streaming: true, renderedLines: [] };
 		setMessages(prev => [...prev, assistantMessage]);
 		
 		// Create new abort controller for this request
@@ -362,6 +395,7 @@ export default function ChatScreen({ }: Props) {
 					if (lastMessage) {
 						lastMessage.content = finalMessage.content;
 						lastMessage.streaming = false;
+						lastMessage.renderedLines = undefined;
 					}
 					return newMessages;
 				});
@@ -377,7 +411,6 @@ export default function ChatScreen({ }: Props) {
 				];
 
 				let fullResponse = '';
-				let currentLine = '';
 
 				for await (const chunk of createStreamingChatCompletion({
 					model,
@@ -387,32 +420,22 @@ export default function ChatScreen({ }: Props) {
 				}, controller.signal)) {
 					if (controller.signal.aborted) break;
 
-					currentLine += chunk;
-
-					// Check if we have a complete line (contains newline or certain punctuation)
-					if (chunk.includes('\n') || chunk.includes('.') || chunk.includes('!') || chunk.includes('?') || chunk.includes(';')) {
-						fullResponse += currentLine;
-						currentLine = '';
-
-						setMessages(prev => {
-							const newMessages = [...prev];
-							const lastMessage = newMessages[newMessages.length - 1];
-							if (lastMessage && lastMessage.streaming) {
-								lastMessage.content = fullResponse;
-							}
-							return newMessages;
-						});
+					if (!chunk) {
+						continue;
 					}
-				}
 
-				// Add any remaining content
-				if (currentLine && !controller.signal.aborted) {
-					fullResponse += currentLine;
+					fullResponse += chunk;
+
 					setMessages(prev => {
 						const newMessages = [...prev];
 						const lastMessage = newMessages[newMessages.length - 1];
 						if (lastMessage && lastMessage.streaming) {
-							lastMessage.content = fullResponse;
+							lastMessage.content += chunk;
+							if (lastMessage.renderedLines) {
+								lastMessage.renderedLines.push(chunk);
+							} else {
+								lastMessage.renderedLines = [chunk];
+							}
 						}
 						return newMessages;
 					});
@@ -430,6 +453,7 @@ export default function ChatScreen({ }: Props) {
 					const lastMessage = newMessages[newMessages.length - 1];
 					if (lastMessage && !lastMessage.discontinued) {
 						lastMessage.streaming = false;
+						lastMessage.renderedLines = undefined;
 					}
 					return newMessages;
 				});
@@ -453,6 +477,7 @@ export default function ChatScreen({ }: Props) {
 				if (lastMessage) {
 					lastMessage.content = finalMessage.content;
 					lastMessage.streaming = false;
+					lastMessage.renderedLines = undefined;
 				}
 				return newMessages;
 			});
@@ -475,82 +500,41 @@ export default function ChatScreen({ }: Props) {
 		);
 	}
 
+	if (showMcpInfo) {
+		return (
+			<MCPInfoScreen
+				onClose={() => setShowMcpInfo(false)}
+				panelKey={mcpPanelKey}
+			/>
+		);
+	}
+
 	return (
 		<Box flexDirection="column">
-			{!mcpLoaded ? (
-				<Box borderColor="gray" borderStyle="round" paddingX={2} paddingY={1} marginX={1}>
-					<Text color="gray">Loading MCP services...</Text>
-				</Box>
-			) : (
-				<>
-					<Static key={remountKey} items={[
-						<Box key="header" marginBottom={1} marginX={1} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
-							<Box flexDirection="column">
-								<Text color="white" bold>
-									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">Programming efficiency x10!</Gradient>
-								</Text>
-								<Text color="gray" dimColor>
-									• Ask for code explanations and debugging help
-								</Text>
-								<Text color="gray" dimColor>
-									• Press ESC during response to interrupt
-								</Text>
-								<Text color="gray" dimColor>
-									• Double ESC for history • /resume to restore session
-								</Text>
-							</Box>
-						</Box>,
-						...(mcpStatus.length > 0 ? [
-							<Box key="mcp" marginX={1} borderColor="cyan" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
-								<Box flexDirection="column">
-									<Text color="cyan" bold>MCP Services</Text>
-									{mcpStatus.map((status, index) => (
-										<Box key={index} flexDirection="column" marginTop={index > 0 ? 1 : 0}>
-											<Box flexDirection="row">
-												<Text color={status.connected ? "green" : "red"}>
-													{status.connected ? "●" : "●"}
-												</Text>
-												<Box marginLeft={1}>
-													<Text color="white" bold>
-														{status.name}
-													</Text>
-													{status.isBuiltIn && (
-														<Text color="blue" dimColor>
-															 (System)
-														</Text>
-													)}
-													{status.connected && status.connectionMethod && !status.isBuiltIn && (
-														<Text color="gray" dimColor>
-															 ({status.connectionMethod})
-														</Text>
-													)}
-												</Box>
-											</Box>
-											{status.connected && status.tools.length > 0 && (
-												<Box flexDirection="column" marginLeft={2}>
-													<Text color="gray" dimColor>
-														Tools: {status.tools.join(', ')}
-													</Text>
-												</Box>
-											)}
-											{!status.connected && status.error && (
-												<Box marginLeft={2}>
-													<Text color="red" dimColor>
-														Error: {status.error}
-													</Text>
-												</Box>
-											)}
-										</Box>
-									))}
-								</Box>
-							</Box>
-						] : []),
-						...messages.filter(m => !m.streaming).map((message, index) => (
-							<Box key={`msg-${index}`} marginBottom={1} flexDirection="column">
-								<Box>
-									<Text color={
-										message.role === 'user' ? 'blue' :
+			<Static key={remountKey} items={[
+				<Box key="header" marginX={1} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
+					<Box flexDirection="column">
+						<Text color="white" bold>
+							<Text color="cyan">❆ </Text>
+							<Gradient name="rainbow">Programming efficiency x10!</Gradient>
+							<Text color="white"> ⛇</Text>
+						</Text>
+						<Text color="gray" dimColor>
+							• Ask for code explanations and debugging help
+						</Text>
+						<Text color="gray" dimColor>
+							• Press ESC during response to interrupt
+						</Text>
+						<Text color="gray" dimColor>
+							• Working directory: {workingDirectory}
+						</Text>
+					</Box>
+				</Box>,
+				...messages.filter(m => !m.streaming).map((message, index) => (
+						<Box key={`msg-${index}`} marginBottom={1} marginX={1} flexDirection="column">
+							<Box>
+								<Text color={
+										message.role === 'user' ? 'green' :
 										message.role === 'command' ? 'gray' : 'cyan'
 									} bold>
 										{message.role === 'user' ? '⛇' : message.role === 'command' ? '⌘' : '❆'}
@@ -615,8 +599,6 @@ export default function ChatScreen({ }: Props) {
 						chatHistory={messages}
 						onHistorySelect={handleHistorySelect}
 					/>
-				</>
-			)}
 		</Box>
 	);
 }

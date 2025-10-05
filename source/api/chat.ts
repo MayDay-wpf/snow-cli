@@ -149,7 +149,6 @@ export async function createChatCompletionWithTools(
 				for (const toolCall of message.tool_calls) {
 					if (toolCall.type === 'function') {
 						try {
-							console.log(`Executing tool: ${toolCall.function.name}`);
 							const args = JSON.parse(toolCall.function.arguments);
 							const result = await executeMCPTool(toolCall.function.name, args);
 
@@ -160,7 +159,6 @@ export async function createChatCompletionWithTools(
 								tool_call_id: toolCall.id
 							});
 						} catch (error) {
-							console.error(`Tool execution failed for ${toolCall.function.name}:`, error);
 							// Add error result to conversation
 							messages.push({
 								role: 'tool',
@@ -225,7 +223,6 @@ export async function createChatCompletion(options: ChatCompletionOptions): Prom
 				for (const toolCall of message.tool_calls) {
 					if (toolCall.type === 'function') {
 						try {
-							console.log(`Executing tool: ${toolCall.function.name}`);
 							const args = JSON.parse(toolCall.function.arguments);
 							const result = await executeMCPTool(toolCall.function.name, args);
 
@@ -236,7 +233,6 @@ export async function createChatCompletion(options: ChatCompletionOptions): Prom
 								tool_call_id: toolCall.id
 							});
 						} catch (error) {
-							console.error(`Tool execution failed for ${toolCall.function.name}:`, error);
 							// Add error result to conversation
 							messages.push({
 								role: 'tool',
@@ -290,6 +286,33 @@ export async function* createStreamingChatCompletion(
 
 			let toolCallsBuffer: { [index: number]: any } = {};
 			let hasToolCalls = false;
+			let pendingLine = '';
+
+			const collectLines = (text: string): string[] => {
+				const output: string[] = [];
+				if (!text) {
+					return output;
+				}
+
+				pendingLine += text;
+
+				let newlineIndex: number;
+				while ((newlineIndex = pendingLine.indexOf('\n')) !== -1) {
+					output.push(pendingLine.slice(0, newlineIndex + 1));
+					pendingLine = pendingLine.slice(newlineIndex + 1);
+				}
+
+				return output;
+			};
+
+			const drainPending = (): string[] => {
+				if (!pendingLine) {
+					return [];
+				}
+				const remaining = pendingLine;
+				pendingLine = '';
+				return [remaining];
+			};
 
 			for await (const chunk of stream) {
 				if (abortSignal?.aborted) {
@@ -297,16 +320,18 @@ export async function* createStreamingChatCompletion(
 				}
 
 				const choice = chunk.choices[0];
-				if (!choice) continue;
+				if (!choice) {
+					continue;
+				}
 
-				// Handle content streaming
 				const content = choice.delta?.content;
 				if (content) {
 					assistantMessage.content += content;
-					yield content;
+					for (const line of collectLines(content)) {
+						yield line;
+					}
 				}
 
-				// Handle tool calls streaming
 				const deltaToolCalls = choice.delta?.tool_calls;
 				if (deltaToolCalls) {
 					hasToolCalls = true;
@@ -336,42 +361,40 @@ export async function* createStreamingChatCompletion(
 					}
 				}
 
-				// Check if streaming is finished
 				if (choice.finish_reason) {
 					break;
 				}
 			}
 
-			// Convert buffered tool calls to array
-			if (hasToolCalls) {
-				assistantMessage.tool_calls = Object.values(toolCallsBuffer);
+			for (const line of drainPending()) {
+				yield line;
 			}
 
-			// Add assistant message to conversation
-			messages.push(assistantMessage);
+			if (hasToolCalls) {
+				assistantMessage.tool_calls = Object.values(toolCallsBuffer);
 
-			// Handle tool calls if present
-			if (hasToolCalls && assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-				yield '\n\n🔧 Executing tools...\n';
+				messages.push(assistantMessage);
 
-				// Execute each tool call
-				for (const toolCall of assistantMessage.tool_calls) {
+				for (const toolCall of assistantMessage.tool_calls ?? []) {
 					if (toolCall.type === 'function') {
 						try {
-							yield `\n• Calling ${toolCall.function.name}...`;
-							console.log(`Executing tool: ${toolCall.function.name}`);
+							for (const line of collectLines(`\n└─ ${toolCall.function.name}`)) {
+								yield line;
+							}
 							const args = JSON.parse(toolCall.function.arguments);
 							const result = await executeMCPTool(toolCall.function.name, args);
-							// Add tool result to conversation
 							messages.push({
 								role: 'tool',
 								content: JSON.stringify(result),
 								tool_call_id: toolCall.id
 							});
-							yield ` ✅\n`;
+							for (const line of collectLines(' ✔\n')) {
+								yield line;
+							}
 						} catch (error) {
-							yield ` ❌\n`;
-							// Add error result to conversation
+							for (const line of collectLines(' ✘\n')) {
+								yield line;
+							}
 							messages.push({
 								role: 'tool',
 								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
@@ -381,17 +404,19 @@ export async function* createStreamingChatCompletion(
 					}
 				}
 
-				yield '\n📝 Continuing with results...\n\n';
-				// Continue the conversation with tool results
+				for (const line of drainPending()) {
+					yield line;
+				}
+
 				continue;
 			}
 
-			// No tool calls, we're done
+			messages.push(assistantMessage);
 			return;
 		}
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
-			return; // Silently handle abort
+			return;
 		}
 		if (error instanceof Error) {
 			throw new Error(`Streaming chat completion failed: ${error.message}`);
@@ -399,6 +424,7 @@ export async function* createStreamingChatCompletion(
 		throw new Error('Streaming chat completion failed: Unknown error');
 	}
 }
+
 
 export function validateChatOptions(options: ChatCompletionOptions): string[] {
 	const errors: string[] = [];

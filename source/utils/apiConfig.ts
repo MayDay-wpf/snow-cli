@@ -26,7 +26,6 @@ export interface MCPConfig {
 
 export interface AppConfig {
 	openai: ApiConfig;
-	mcp?: MCPConfig;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -38,13 +37,27 @@ const DEFAULT_CONFIG: AppConfig = {
 		basicModel: '',
 		maxContextTokens: 4000,
 	},
-	mcp: {
-		mcpServers: {
-		}
-	},
+};
+
+const DEFAULT_MCP_CONFIG: MCPConfig = {
+	mcpServers: {},
 };
 
 const CONFIG_DIR = join(homedir(), '.snow');
+
+function normalizeRequestMethod(method: unknown): RequestMethod {
+	if (method === 'chat' || method === 'responses') {
+		return method;
+	}
+
+	if (method === 'completions') {
+		return 'chat';
+	}
+
+	return DEFAULT_CONFIG.openai.requestMethod;
+}
+
+
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
@@ -52,6 +65,12 @@ function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
 		mkdirSync(CONFIG_DIR, {recursive: true});
 	}
+}
+
+function cloneDefaultMCPConfig(): MCPConfig {
+	return {
+		mcpServers: {...DEFAULT_MCP_CONFIG.mcpServers},
+	};
 }
 
 export function loadConfig(): AppConfig {
@@ -64,17 +83,27 @@ export function loadConfig(): AppConfig {
 
 	try {
 		const configData = readFileSync(CONFIG_FILE, 'utf8');
-		const config = JSON.parse(configData);
-		// Ensure backward compatibility by adding default requestMethod if missing
-		const mergedConfig = {
-			...DEFAULT_CONFIG,
-			...config,
-			openai: {
-				...DEFAULT_CONFIG.openai,
-				...config.openai,
-				requestMethod: (config.openai?.requestMethod === 'completions' ? 'chat' : config.openai?.requestMethod) || DEFAULT_CONFIG.openai.requestMethod,
-			},
+		const parsedConfig = JSON.parse(configData) as Partial<AppConfig> & {mcp?: unknown};
+		const {mcp: legacyMcp, ...restConfig} = parsedConfig;
+		const configWithoutMcp = restConfig as Partial<AppConfig>;
+
+		const mergedOpenai: ApiConfig = {
+			...DEFAULT_CONFIG.openai,
+			...configWithoutMcp.openai,
+			requestMethod: DEFAULT_CONFIG.openai.requestMethod,
 		};
+		mergedOpenai.requestMethod = normalizeRequestMethod(configWithoutMcp.openai?.requestMethod);
+
+		const mergedConfig: AppConfig = {
+			...DEFAULT_CONFIG,
+			...configWithoutMcp,
+			openai: mergedOpenai,
+		};
+
+		if (legacyMcp !== undefined) {
+			saveConfig(mergedConfig);
+		}
+
 		return mergedConfig;
 	} catch (error) {
 		return DEFAULT_CONFIG;
@@ -94,7 +123,7 @@ export function saveConfig(config: AppConfig): void {
 
 export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
 	const currentConfig = loadConfig();
-	const updatedConfig = {
+	const updatedConfig: AppConfig = {
 		...currentConfig,
 		openai: {...currentConfig.openai, ...apiConfig},
 	};
@@ -143,17 +172,17 @@ export function getMCPConfig(): MCPConfig {
 	ensureConfigDirectory();
 	
 	if (!existsSync(MCP_CONFIG_FILE)) {
-		const defaultMCPConfig = DEFAULT_CONFIG.mcp!;
+		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig);
 		return defaultMCPConfig;
 	}
 
 	try {
 		const configData = readFileSync(MCP_CONFIG_FILE, 'utf8');
-		const config = JSON.parse(configData);
+		const config = JSON.parse(configData) as MCPConfig;
 		return config;
 	} catch (error) {
-		const defaultMCPConfig = DEFAULT_CONFIG.mcp!;
+		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig);
 		return defaultMCPConfig;
 	}

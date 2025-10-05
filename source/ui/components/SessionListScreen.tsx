@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import Gradient from 'ink-gradient';
 import { Alert } from '@inkjs/ui';
-import SelectInput from 'ink-select-input';
+import ScrollableSelectInput from './ScrollableSelectInput.js';
 import { sessionManager, type SessionListItem } from '../../utils/sessionManager.js';
 
 type Props = {
@@ -13,12 +13,15 @@ type Props = {
 type SelectItem = {
 	label: string;
 	value: string;
+	isMarked: boolean;
 };
 
 export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
+	const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+	const [actionMessage, setActionMessage] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
 	const { stdout } = useStdout();
 
 	// Enable alternate screen buffer when this component mounts
@@ -38,6 +41,8 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 		try {
 			const sessionList = await sessionManager.listSessions();
 			setSessions(sessionList);
+			setSelectedSessions(new Set());
+			setActionMessage(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load sessions');
 		} finally {
@@ -88,22 +93,83 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 
 			return {
 				label: truncatedLabel,
-				value: session.id
+				value: session.id,
+				isMarked: selectedSessions.has(session.id)
 			};
 		});
-	}, [sessions, formatDate, stdout?.columns]);
+	}, [sessions, formatDate, stdout?.columns, selectedSessions]);
 
 	const handleSelect = useCallback((item: SelectItem) => {
 		onSelectSession(item.value);
 	}, [onSelectSession]);
 
+
+	const handleToggleItem = useCallback((item: SelectItem) => {
+		setSelectedSessions(previous => {
+			const next = new Set(previous);
+			if (next.has(item.value)) {
+				next.delete(item.value);
+			} else {
+				next.add(item.value);
+			}
+			return next;
+		});
+		setActionMessage(null);
+	}, []);
+
+	const handleDeleteSelected = useCallback(async () => {
+		if (selectedSessions.size === 0) {
+			setActionMessage({ type: 'info', text: 'No conversations selected.' });
+			return;
+		}
+
+		const ids = Array.from(selectedSessions);
+		const deletionResults = await Promise.all(
+			ids.map(async id => ({
+				id,
+				success: await sessionManager.deleteSession(id)
+			}))
+		);
+
+		const succeededIds = deletionResults.filter(result => result.success).map(result => result.id);
+		const failedIds = deletionResults.filter(result => !result.success).map(result => result.id);
+
+		if (succeededIds.length > 0) {
+			setSessions(previous => previous.filter(session => !succeededIds.includes(session.id)));
+			setSelectedSessions(previous => {
+				const next = new Set(previous);
+				for (const id of succeededIds) {
+					next.delete(id);
+				}
+				return next;
+			});
+		}
+
+		if (failedIds.length > 0) {
+			setActionMessage({
+				type: 'error',
+				text: `Failed to delete ${failedIds.length} conversation${failedIds.length > 1 ? 's' : ''}.`
+			});
+		} else if (succeededIds.length > 0) {
+			setActionMessage({
+				type: 'info',
+				text: `Deleted ${succeededIds.length} conversation${succeededIds.length > 1 ? 's' : ''}.`
+			});
+		} else {
+			setActionMessage({ type: 'info', text: 'No conversations deleted.' });
+		}
+	}, [selectedSessions]);
+
 	const handleInput = useCallback((input: string, key: any) => {
 		if (key.escape) {
 			onBack();
-		} else if (input === 'r' || input === 'R') {
+			return;
+		}
+
+		if (input === 'r' || input === 'R') {
 			void loadSessions();
 		}
-	}, [onBack, loadSessions]);
+	}, [loadSessions, onBack]);
 
 	useInput(handleInput);
 
@@ -187,10 +253,14 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 	const headerHeight = 7; // Header box height (including borders and padding)
 	const footerHeight = 4; // Footer info height (including margins)
 	const availableHeight = Math.max(5, terminalHeight - headerHeight - footerHeight);
-	const listLimit = Math.min(selectItems.length, Math.max(3, availableHeight));
+	const maxVisibleSessions = 10;
+	const desiredListSize = Math.max(3, Math.min(maxVisibleSessions, availableHeight));
+	const listLimit = Math.min(selectItems.length, desiredListSize);
+
+	const containerHeight = terminalHeight > 2 ? terminalHeight - 2 : undefined;
 
 	return (
-		<Box flexDirection="column" padding={1} height={terminalHeight - 2}>
+		<Box flexDirection="column" padding={1} height={containerHeight}>
 			<Box marginBottom={1} borderStyle="double" borderColor="cyan" paddingX={2} paddingY={1}>
 				<Box flexDirection="column">
 					<Gradient name="rainbow">
@@ -203,26 +273,36 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 			</Box>
 
 			<Box marginBottom={1} flexShrink={0}>
-				<SelectInput
+				<ScrollableSelectInput
 					items={selectItems}
-					onSelect={handleSelect}
 					limit={listLimit}
-					indicatorComponent={({ isSelected }) => (
-						<Text color={isSelected ? 'green' : 'gray'}>
-							{isSelected ? '❯ ' : '  '}
-						</Text>
+					onSelect={handleSelect}
+					onToggleItem={handleToggleItem}
+					onDeleteSelection={handleDeleteSelected}
+					selectedValues={selectedSessions}
+					indicator={({ isSelected }) => (
+						<Text color={isSelected ? 'green' : 'gray'}>{isSelected ? '❯ ' : '  '}</Text>
 					)}
-					itemComponent={({ isSelected, label }) => (
-						<Text color={isSelected ? 'cyan' : 'white'}>
-							{label}
+					renderItem={({ isSelected, isMarked, label }) => (
+						<Text>
+							<Text color={isMarked ? 'green' : 'gray'}>{isMarked ? '✔ ' : '  '}</Text>
+							<Text color={isMarked ? 'green' : isSelected ? 'cyan' : 'white'}>{label}</Text>
 						</Text>
 					)}
 				/>
-			</Box>
+				</Box>
 
 			<Box flexDirection="column" flexShrink={0}>
+				{actionMessage ? (
+					<Box marginBottom={1}>
+						<Alert variant={actionMessage.type}>
+							{actionMessage.text}
+						</Alert>
+					</Box>
+				) : null}
 				<Alert variant="info">
-					↑↓ navigate • Enter select • Esc return • R refresh
+					↑↓ navigate • Space mark • D delete • Enter select • Esc return • R refresh
+					{selectedSessions.size > 0 ? ` • ${selectedSessions.size} selected` : ''}
 				</Alert>
 			</Box>
 		</Box>

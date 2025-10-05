@@ -19,7 +19,8 @@ export default function WelcomeScreen({
 		{
 			label: 'Start',
 			value: 'chat',
-			infoText: 'Start a new chat conversation'
+			infoText: 'Start a new chat conversation',
+			clearTerminal: true
 		},
 		{
 			label: 'API Settings',
@@ -50,7 +51,7 @@ export default function WelcomeScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="double" paddingX={2} paddingY={1} borderColor={'cyan'}>
+			<Box borderStyle="double" paddingX={1} paddingY={1} borderColor={'cyan'}>
 				<Box flexDirection="column">
 					<Text color="white" bold>
 						<Text color="cyan">❆ </Text>
@@ -66,7 +67,7 @@ export default function WelcomeScreen({
 			</Box>
 
 			{onMenuSelect && (
-				<Box marginBottom={0}>
+				<Box>
 					<Menu
 						options={menuOptions}
 						onSelect={onMenuSelect}

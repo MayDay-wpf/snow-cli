@@ -6,6 +6,7 @@ type MenuOption = {
 	value: string;
 	color?: string;
 	infoText?: string;
+	clearTerminal?: boolean;
 };
 
 type Props = {
@@ -42,6 +43,12 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 		}
 	}, [selectedIndex, scrollOffset, visibleItemCount]);
 
+	const clearTerminal = useCallback(() => {
+		if (stdout && typeof stdout.write === 'function') {
+			stdout.write('\x1B[3J\x1B[2J\x1B[H');
+		}
+	}, [stdout]);
+
 	const handleInput = useCallback((_input: string, key: any) => {
 		if (key.upArrow) {
 			setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
@@ -50,10 +57,13 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 		} else if (key.return) {
 			const selectedOption = options[selectedIndex];
 			if (selectedOption) {
+				if (selectedOption.clearTerminal) {
+					clearTerminal();
+				}
 				onSelect(selectedOption.value);
 			}
 		}
-	}, [options.length, selectedIndex, onSelect]);
+	}, [options, selectedIndex, onSelect, clearTerminal]);
 
 	useInput(handleInput);
 

@@ -24,9 +24,9 @@ const CommandPanel = memo(({ commands, selectedIndex, query, visible }: Props) =
 			<Box width="100%">
 				<Box flexDirection="column" width="100%">
 					<Box>
-						<Text color="yellow" bold>
-							Available Commands {query && `(${commands.length} matches)`}
-						</Text>
+					<Text color="yellow" bold>
+						Available Commands {query && `(${commands.length} matches)`}
+					</Text>
 					</Box>
 					{commands.map((command, index) => (
 						<Box key={command.name} flexDirection="column" width="100%">

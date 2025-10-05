@@ -1,7 +1,7 @@
 export interface CommandResult {
 	success: boolean;
 	message?: string;
-	action?: 'clear' | 'resume' | 'info';
+	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo';
 }
 
 export interface CommandHandler {

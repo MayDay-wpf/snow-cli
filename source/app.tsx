@@ -84,7 +84,7 @@ export default function App({ version }: Props) {
 		<Box flexDirection="column">
 			{renderView()}
 			{exitNotification.show && (
-				<Box padding={1}>
+				<Box paddingX={1}>
 					<Alert variant="warning">
 						{exitNotification.message}
 					</Alert>

@@ -14,6 +14,7 @@ interface MCPConnectionStatus {
 export default function MCPInfoPanel() {
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
 	useEffect(() => {
 		let isMounted = true;
@@ -33,10 +34,12 @@ export default function MCPInfoPanel() {
 					}));
 
 					setMcpStatus(statusList);
+					setErrorMessage(null);
 					setIsLoading(false);
 				}
 			} catch (error) {
 				if (isMounted) {
+					setErrorMessage(error instanceof Error ? error.message : 'Failed to load MCP services');
 					setIsLoading(false);
 				}
 			}
@@ -57,8 +60,22 @@ export default function MCPInfoPanel() {
 		);
 	}
 
+	if (errorMessage) {
+		return (
+			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
+				<Text color="red" dimColor>
+					加载 MCP 服务信息时出错：{errorMessage}
+				</Text>
+			</Box>
+		);
+	}
+
 	if (mcpStatus.length === 0) {
-		return null;
+		return (
+			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
+				<Text color="gray" dimColor>未检测到可用的 MCP 服务。</Text>
+			</Box>
+		);
 	}
 
 	return (

@@ -7,6 +7,7 @@ export interface Message {
 	streaming?: boolean;
 	discontinued?: boolean;
 	commandName?: string;
+	renderedLines?: string[];
 }
 
 export function useSessionSave() {
