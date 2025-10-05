@@ -370,17 +370,30 @@ export async function* createStreamingChatCompletion(
 				yield line;
 			}
 
+			// Signal end of this streaming round - frontend should display accumulated content now
+			yield '__STREAM_ROUND_END__';
+
 			if (hasToolCalls) {
 				assistantMessage.tool_calls = Object.values(toolCallsBuffer);
 
 				messages.push(assistantMessage);
 
+				// Yield tool calls JSON to frontend
+				for (const toolCall of assistantMessage.tool_calls ?? []) {
+					if (toolCall.type === 'function') {
+						// Send JSON marker to frontend
+						yield `__TOOL_CALL_START__${JSON.stringify({
+							id: toolCall.id,
+							name: toolCall.function.name,
+							arguments: toolCall.function.arguments
+						})}__TOOL_CALL_END__`;
+					}
+				}
+
+				// Execute tool calls
 				for (const toolCall of assistantMessage.tool_calls ?? []) {
 					if (toolCall.type === 'function') {
 						try {
-							for (const line of collectLines(`\n└─ ${toolCall.function.name}`)) {
-								yield line;
-							}
 							const args = JSON.parse(toolCall.function.arguments);
 							const result = await executeMCPTool(toolCall.function.name, args);
 							messages.push({
@@ -388,24 +401,25 @@ export async function* createStreamingChatCompletion(
 								content: JSON.stringify(result),
 								tool_call_id: toolCall.id
 							});
-							for (const line of collectLines(' ✔\n')) {
-								yield line;
-							}
+							// Yield success status
+							yield `__TOOL_RESULT__${JSON.stringify({
+								id: toolCall.id,
+								status: 'success'
+							})}__TOOL_RESULT_END__`;
 						} catch (error) {
-							for (const line of collectLines(' ✘\n')) {
-								yield line;
-							}
 							messages.push({
 								role: 'tool',
 								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
 								tool_call_id: toolCall.id
 							});
+							// Yield error status
+							yield `__TOOL_RESULT__${JSON.stringify({
+								id: toolCall.id,
+								status: 'error',
+								error: error instanceof Error ? error.message : 'Tool execution failed'
+							})}__TOOL_RESULT_END__`;
 						}
 					}
-				}
-
-				for (const line of drainPending()) {
-					yield line;
 				}
 
 				continue;

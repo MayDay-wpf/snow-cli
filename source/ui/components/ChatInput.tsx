@@ -204,6 +204,10 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		triggerUpdate();
 	}, [terminalWidth, buffer, triggerUpdate]);
 
+	// Track paste detection
+	const inputBuffer = useRef<string>('');
+	const inputTimer = useRef<NodeJS.Timeout | null>(null);
+
 	// Handle input using useInput hook instead of raw stdin
 	useInput((input, key) => {
 		if (disabled) return;
@@ -416,12 +420,29 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
-			buffer.insert(input);
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateCommandPanelState(text);
-			updateFilePickerState(text, cursorPos);
-			triggerUpdate();
+			// Accumulate input for paste detection
+			inputBuffer.current += input;
+
+			// Clear existing timer
+			if (inputTimer.current) {
+				clearTimeout(inputTimer.current);
+			}
+
+			// Set timer to process accumulated input
+			inputTimer.current = setTimeout(() => {
+				const accumulated = inputBuffer.current;
+				inputBuffer.current = '';
+
+				// If we accumulated input, it's likely a paste
+				if (accumulated) {
+					buffer.insert(accumulated);
+					const text = buffer.getFullText();
+					const cursorPos = buffer.getCursorPosition();
+					updateCommandPanelState(text);
+					updateFilePickerState(text, cursorPos);
+					triggerUpdate();
+				}
+			}, 10); // Short delay to accumulate rapid input
 		}
 	});
 	useEffect(() => {
@@ -468,60 +489,69 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			const cursorPos = buffer.getCursorPosition();
 
 			// 检查是否包含粘贴占位符并高亮显示
-			if (displayText.includes('[Paste ') && displayText.includes(' line #')) {
+			if (displayText.includes('[Paste ') && displayText.includes(' characters #')) {
 				const atCursor = (() => {
 					const charInfo = buffer.getCharAtCursor();
 					return charInfo.char === '\n' ? ' ' : charInfo.char;
 				})();
 
 				// 分割文本并高亮占位符
-				const parts = displayText.split(/(\[Paste \d+ line #\d+\])/);
+				const parts = displayText.split(/(\[Paste \d+ characters #\d+\])/);
 				let processedLength = 0;
+				let cursorRendered = false;
+
+				const elements = parts.map((part, partIndex) => {
+					const isPlaceholder = part.match(/^\[Paste \d+ characters #\d+\]$/);
+					const partStart = processedLength;
+					const partEnd = processedLength + cpLen(part);
+					processedLength = partEnd;
+
+					// 检查光标是否在这个部分
+					if (cursorPos >= partStart && cursorPos < partEnd) {
+						cursorRendered = true;
+						const beforeCursorInPart = cpSlice(part, 0, cursorPos - partStart);
+						const afterCursorInPart = cpSlice(part, cursorPos - partStart + 1);
+
+						return (
+							<React.Fragment key={partIndex}>
+								{isPlaceholder ? (
+									<Text color="cyan" dimColor>
+										{beforeCursorInPart}
+										<Text backgroundColor="white" color="black">
+											{atCursor}
+										</Text>
+										{afterCursorInPart}
+									</Text>
+								) : (
+									<>
+										{beforeCursorInPart}
+										<Text backgroundColor="white" color="black">
+											{atCursor}
+										</Text>
+										{afterCursorInPart}
+									</>
+								)}
+							</React.Fragment>
+						);
+					} else {
+						return isPlaceholder ? (
+							<Text key={partIndex} color="cyan" dimColor>
+								{part}
+							</Text>
+						) : (
+							<Text key={partIndex}>{part}</Text>
+						);
+					}
+				});
 
 				return (
 					<Text>
-						{parts.map((part, partIndex) => {
-							const isPlaceholder = part.match(/^\[Paste \d+ line #\d+\]$/);
-							const partStart = processedLength;
-							const partEnd = processedLength + cpLen(part);
-							processedLength = partEnd;
-
-							// 检查光标是否在这个部分
-							if (cursorPos >= partStart && cursorPos < partEnd) {
-								const beforeCursorInPart = cpSlice(part, 0, cursorPos - partStart);
-								const afterCursorInPart = cpSlice(part, cursorPos - partStart + 1);
-
-								return (
-									<React.Fragment key={partIndex}>
-										{isPlaceholder ? (
-											<Text color="cyan" dimColor>
-												{beforeCursorInPart}
-												<Text backgroundColor="white" color="black">
-													{atCursor}
-												</Text>
-												{afterCursorInPart}
-											</Text>
-										) : (
-											<>
-												{beforeCursorInPart}
-												<Text backgroundColor="white" color="black">
-													{atCursor}
-												</Text>
-												{afterCursorInPart}
-											</>
-										)}
-									</React.Fragment>
-								);
-							} else {
-								return isPlaceholder ? (
-									<Text key={partIndex} color="cyan" dimColor>
-										{part}
-									</Text>
-								) : (
-									<Text key={partIndex}>{part}</Text>
-								);
-							}
-						})}
+						{elements}
+						{!cursorRendered && (
+							<Text backgroundColor="white" color="black">
+								{' '}
+							</Text>
+						)}
 					</Text>
 				);
 			} else {
@@ -573,7 +603,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 									color={index === historySelectedIndex ? 'green' : 'white'}
 									bold
 								>
-									{index === historySelectedIndex ? '➣ ' : '  '}
+									{index === historySelectedIndex ? '➣  ' : '  '}
 									{message.label}
 								</Text>
 							</Box>

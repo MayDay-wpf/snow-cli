@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 import { SelectedFile } from '../../utils/fileUtils.js';
+import MarkdownRenderer from './MarkdownRenderer.js';
 
 export interface Message {
 	role: 'user' | 'assistant' | 'command';
@@ -9,7 +10,6 @@ export interface Message {
 	discontinued?: boolean;
 	commandName?: string;
 	files?: SelectedFile[];
-	renderedLines?: string[];
 }
 
 interface Props {
@@ -47,14 +47,10 @@ const MessageList = memo(({ messages, animationFrame, maxMessages = 6 }: Props) 
 								<Text color="gray">└─ {message.commandName}</Text>
 							) : (
 								<>
-									{getDisplayLines(message).map((line, lineIndex) => (
-										<Text
-											key={lineIndex}
-											color={message.role === 'user' ? 'gray' : undefined}
-										>
-												{line}
-										</Text>
-									))}
+									<MarkdownRenderer
+										content={message.content || ' '}
+										color={message.role === 'user' ? 'gray' : undefined}
+									/>
 									{message.files && message.files.length > 0 && (
 										<Box marginTop={1} flexDirection="column">
 											{message.files.map((file, fileIndex) => (
@@ -88,18 +84,3 @@ const MessageList = memo(({ messages, animationFrame, maxMessages = 6 }: Props) 
 MessageList.displayName = 'MessageList';
 
 export default MessageList;
-
-function getDisplayLines(message: Message): string[] {
-	const source = message.renderedLines?.length
-		? message.renderedLines
-		: message.content === ''
-			? ['']
-			: message.content.split('\n');
-
-	return source.map(line => {
-		const normalized = message.renderedLines
-			? line.replace(/\r?\n$/, '')
-			: line.replace(/\r/g, '');
-		return normalized === '' ? ' ' : normalized;
-	});
-}

@@ -64,7 +64,7 @@ export default function MCPInfoPanel() {
 		return (
 			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
 				<Text color="red" dimColor>
-					加载 MCP 服务信息时出错：{errorMessage}
+					Error loading MCP service information:{errorMessage}
 				</Text>
 			</Box>
 		);
@@ -73,7 +73,7 @@ export default function MCPInfoPanel() {
 	if (mcpStatus.length === 0) {
 		return (
 			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
-				<Text color="gray" dimColor>未检测到可用的 MCP 服务。</Text>
+				<Text color="gray" dimColor>No available MCP service was detected</Text>
 			</Box>
 		);
 	}

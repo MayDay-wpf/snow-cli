@@ -21,7 +21,7 @@ function sanitizeInput(str: string): string {
 export interface PastePlaceholder {
   id: string;
   content: string; // 原始粘贴内容
-  lineCount: number;
+  charCount: number; // 字符数
   index: number; // 第几次粘贴
   placeholder: string; // 显示的占位符文本
 }
@@ -104,10 +104,10 @@ export class TextBuffer {
       return;
     }
 
-    const lines = sanitized.split('\n');
+    const charCount = sanitized.length;
     const now = Date.now();
 
-    if (lines.length > 10) {
+    if (charCount > 300) {
       if (now - this.lastPasteTime < 100) {
         return;
       }
@@ -115,12 +115,12 @@ export class TextBuffer {
       this.lastPasteTime = now;
       this.pasteCounter++;
       const pasteId = `paste_${now}_${this.pasteCounter}`;
-      const placeholderText = `[Paste ${lines.length} line #${this.pasteCounter}]`;
+      const placeholderText = `[Paste ${charCount} characters #${this.pasteCounter}]`;
 
       this.pasteStorage.set(pasteId, {
         id: pasteId,
         content: sanitized,
-        lineCount: lines.length,
+        charCount: charCount,
         index: this.pasteCounter,
         placeholder: placeholderText
       });

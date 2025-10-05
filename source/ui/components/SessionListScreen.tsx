@@ -24,17 +24,6 @@ export default function SessionListScreen({ onBack, onSelectSession }: Props) {
 	const [actionMessage, setActionMessage] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
 	const { stdout } = useStdout();
 
-	// Enable alternate screen buffer when this component mounts
-	useEffect(() => {
-		process.stdout.write('\x1B[?1049h');
-		process.stdout.write('\x1B[2J');
-		process.stdout.write('\x1B[H');
-		return () => {
-			process.stdout.write('\x1B[2J');
-			process.stdout.write('\x1B[?1049l');
-		};
-	}, []);
-
 	const loadSessions = useCallback(async () => {
 		setLoading(true);
 		setError('');
