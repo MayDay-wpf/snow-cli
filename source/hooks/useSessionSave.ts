@@ -1,38 +1,27 @@
 import { useCallback, useRef } from 'react';
 import { sessionManager, type ChatMessage as SessionChatMessage } from '../utils/sessionManager.js';
-
-export interface Message {
-	role: 'user' | 'assistant' | 'command';
-	content: string;
-	streaming?: boolean;
-	discontinued?: boolean;
-	commandName?: string;
-	renderedLines?: string[];
-}
+import type { ChatMessage as APIChatMessage } from '../api/chat.js';
 
 export function useSessionSave() {
 	const savedMessagesRef = useRef<Set<string>>(new Set());
 
-	// Generate a unique ID for a message
-	const generateMessageId = useCallback((message: Message): string => {
-		return `${message.role}-${message.content.length}-${message.content.slice(0, 30).replace(/\s/g, '')}`;
+	// Generate a unique ID for a message (based on role + content + timestamp window)
+	const generateMessageId = useCallback((message: APIChatMessage, timestamp: number): string => {
+		return `${message.role}-${message.content.length}-${Math.floor(timestamp / 5000)}`;
 	}, []);
 
-	// Save a single message
-	const saveMessage = useCallback(async (message: Message) => {
-		if (message.role === 'command' || message.streaming) {
-			return;
-		}
+	// Save API message directly - 直接保存 API 格式的消息
+	const saveMessage = useCallback(async (message: APIChatMessage) => {
+		const timestamp = Date.now();
+		const messageId = generateMessageId(message, timestamp);
 
-		const messageId = generateMessageId(message);
 		if (savedMessagesRef.current.has(messageId)) {
 			return; // Already saved
 		}
 
 		const sessionMessage: SessionChatMessage = {
-			role: message.role as 'user' | 'assistant',
-			content: message.content,
-			timestamp: Date.now()
+			...message, // 直接展开 API 消息，包含所有字段
+			timestamp
 		};
 
 		try {
@@ -43,24 +32,10 @@ export function useSessionSave() {
 		}
 	}, [generateMessageId]);
 
-	// Save multiple messages at once
-	const saveMessages = useCallback(async (messages: Message[]) => {
+	// Save multiple API messages at once
+	const saveMessages = useCallback(async (messages: APIChatMessage[]) => {
 		for (const message of messages) {
 			await saveMessage(message);
-		}
-	}, [saveMessage]);
-
-	// Hook for when streaming completes - save the final message
-	const onStreamingComplete = useCallback(async (finalMessage: Message) => {
-		if (finalMessage.role === 'assistant' && !finalMessage.streaming && !finalMessage.discontinued) {
-			await saveMessage(finalMessage);
-		}
-	}, [saveMessage]);
-
-	// Hook for when user sends a message
-	const onUserMessage = useCallback(async (userMessage: Message) => {
-		if (userMessage.role === 'user') {
-			await saveMessage(userMessage);
 		}
 	}, [saveMessage]);
 
@@ -69,22 +44,18 @@ export function useSessionSave() {
 		savedMessagesRef.current.clear();
 	}, []);
 
-	// Initialize from existing session
-	const initializeFromSession = useCallback((messages: Message[]) => {
+	// Initialize from existing session - 从已有会话初始化
+	const initializeFromSession = useCallback((messages: SessionChatMessage[]) => {
 		savedMessagesRef.current.clear();
 		messages.forEach(message => {
-			if (message.role !== 'command' && !message.streaming) {
-				const messageId = generateMessageId(message);
-				savedMessagesRef.current.add(messageId);
-			}
+			const messageId = generateMessageId(message, message.timestamp);
+			savedMessagesRef.current.add(messageId);
 		});
 	}, [generateMessageId]);
 
 	return {
 		saveMessage,
 		saveMessages,
-		onStreamingComplete,
-		onUserMessage,
 		clearSavedMessages,
 		initializeFromSession
 	};

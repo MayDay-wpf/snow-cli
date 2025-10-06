@@ -9,7 +9,22 @@ export interface Message {
 	streaming?: boolean;
 	discontinued?: boolean;
 	commandName?: string;
+	showTodoTree?: boolean;
 	files?: SelectedFile[];
+	images?: Array<{
+		type: 'image';
+		data: string;
+		mimeType: string;
+	}>;
+	toolCall?: {
+		name: string;
+		arguments: any;
+	};
+	toolDisplay?: {
+		toolName: string;
+		args: Array<{key: string; value: string; isLast: boolean}>;
+	};
+	toolResult?: string; // Raw JSON string from tool execution for preview
 }
 
 interface Props {
@@ -54,10 +69,51 @@ const MessageList = memo(({ messages, animationFrame, maxMessages = 6 }: Props) 
 									{message.files && message.files.length > 0 && (
 										<Box marginTop={1} flexDirection="column">
 											{message.files.map((file, fileIndex) => (
-												<Text key={fileIndex} color="blue">
-													└─ Read `{file.path}`{file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}
+												<Text key={fileIndex} color={file.isImage ? "magenta" : "blue"}>
+													{file.isImage
+														? `└─ [image #{fileIndex + 1}] ${file.path}`
+														: `└─ Read \`${file.path}\`${file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}`
+													}
 												</Text>
 											))}
+										</Box>
+									)}
+									{message.images && message.images.length > 0 && (
+										<Box marginTop={1} flexDirection="column">
+											{message.images.map((_image, imageIndex) => (
+												<Text key={imageIndex} color="magenta">
+													└─ [image #{imageIndex + 1}]
+												</Text>
+											))}
+										</Box>
+									)}
+									{/* Show terminal execution result */}
+									{message.toolCall && message.toolCall.name === 'terminal-execute' && message.toolCall.arguments.command && (
+										<Box marginTop={1} flexDirection="column">
+											<Text color="gray" dimColor>└─ Command: <Text color="white">{message.toolCall.arguments.command}</Text></Text>
+											<Text color="gray" dimColor>└─ Exit Code: <Text color={message.toolCall.arguments.exitCode === 0 ? 'green' : 'red'}>{message.toolCall.arguments.exitCode}</Text></Text>
+											{message.toolCall.arguments.stdout && message.toolCall.arguments.stdout.trim().length > 0 && (
+												<Box flexDirection="column" marginTop={1}>
+													<Text color="green" dimColor>└─ stdout:</Text>
+													<Box paddingLeft={2}>
+														<Text color="white">{message.toolCall.arguments.stdout.trim().split('\n').slice(0, 20).join('\n')}</Text>
+														{message.toolCall.arguments.stdout.trim().split('\n').length > 20 && (
+															<Text color="gray" dimColor>... (output truncated)</Text>
+														)}
+													</Box>
+												</Box>
+											)}
+											{message.toolCall.arguments.stderr && message.toolCall.arguments.stderr.trim().length > 0 && (
+												<Box flexDirection="column" marginTop={1}>
+													<Text color="red" dimColor>└─ stderr:</Text>
+													<Box paddingLeft={2}>
+														<Text color="red">{message.toolCall.arguments.stderr.trim().split('\n').slice(0, 10).join('\n')}</Text>
+														{message.toolCall.arguments.stderr.trim().split('\n').length > 10 && (
+															<Text color="gray" dimColor>... (output truncated)</Text>
+														)}
+													</Box>
+												</Box>
+											)}
 										</Box>
 									)}
 									{message.discontinued && (

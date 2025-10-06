@@ -1,13 +1,21 @@
 import OpenAI from 'openai';
 import { getOpenAiConfig } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
+import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+
+export interface ImageContent {
+	type: 'image';
+	data: string; // Base64 编码的图片数据
+	mimeType: string; // 图片 MIME 类型
+}
 
 export interface ChatMessage {
 	role: 'system' | 'user' | 'assistant' | 'tool';
 	content: string;
 	tool_call_id?: string;
 	tool_calls?: ToolCall[];
+	images?: ImageContent[]; // 图片内容
 }
 
 export interface ToolCall {
@@ -55,9 +63,38 @@ export interface ChatCompletionChunk {
 
 /**
  * Convert our ChatMessage format to OpenAI's ChatCompletionMessageParam format
+ * Automatically prepends system prompt if not present
  */
-function convertToOpenAIMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
-	return messages.map(msg => {
+function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: boolean = true): ChatCompletionMessageParam[] {
+	let result = messages.map(msg => {
+		// 如果消息包含图片，使用 content 数组格式
+		if (msg.role === 'user' && msg.images && msg.images.length > 0) {
+			const contentParts: Array<{type: 'text' | 'image_url', text?: string, image_url?: {url: string}}> = [];
+
+			// 添加文本内容
+			if (msg.content) {
+				contentParts.push({
+					type: 'text',
+					text: msg.content
+				});
+			}
+
+			// 添加图片内容
+			for (const image of msg.images) {
+				contentParts.push({
+					type: 'image_url',
+					image_url: {
+						url: image.data // Base64 data URL
+					}
+				});
+			}
+
+			return {
+				role: 'user',
+				content: contentParts
+			} as ChatCompletionMessageParam;
+		}
+
 		const baseMessage = {
 			role: msg.role,
 			content: msg.content
@@ -80,6 +117,19 @@ function convertToOpenAIMessages(messages: ChatMessage[]): ChatCompletionMessage
 
 		return baseMessage as ChatCompletionMessageParam;
 	});
+
+	// 如果需要系统提示词且第一条消息不是 system 消息，则添加
+	if (includeSystemPrompt && (result.length === 0 || result[0]?.role !== 'system')) {
+		result = [
+			{
+				role: 'system',
+				content: SYSTEM_PROMPT
+			} as ChatCompletionMessageParam,
+			...result
+		];
+	}
+
+	return result;
 }
 
 let openaiClient: OpenAI | null = null;
@@ -257,177 +307,138 @@ export async function createChatCompletion(options: ChatCompletionOptions): Prom
 	}
 }
 
+export interface StreamChunk {
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done';
+	content?: string;
+	tool_calls?: Array<{
+		id: string;
+		type: 'function';
+		function: {
+			name: string;
+			arguments: string;
+		};
+	}>;
+	delta?: string; // For tool call streaming chunks or reasoning content
+}
+
+/**
+ * Simple streaming chat completion - only handles OpenAI interaction
+ * Tool execution should be handled by the caller
+ */
 export async function* createStreamingChatCompletion(
 	options: ChatCompletionOptions,
 	abortSignal?: AbortSignal
-): AsyncGenerator<string, void, unknown> {
+): AsyncGenerator<StreamChunk, void, unknown> {
 	const client = getOpenAIClient();
-	let messages = [...options.messages];
 
 	try {
-		while (true) {
-			const stream = await client.chat.completions.create({
-				model: options.model,
-				messages: convertToOpenAIMessages(messages),
-				stream: true,
-				temperature: options.temperature || 0.7,
-				max_tokens: options.max_tokens,
-				tools: options.tools,
-				tool_choice: options.tool_choice,
-			}, {
-				signal: abortSignal,
-			});
+		const stream = await client.chat.completions.create({
+			model: options.model,
+			messages: convertToOpenAIMessages(options.messages),
+			stream: true,
+			temperature: options.temperature || 0.7,
+			max_tokens: options.max_tokens,
+			tools: options.tools,
+			tool_choice: options.tool_choice,
+		}, {
+			signal: abortSignal,
+		}) as AsyncIterable<any>;
 
-			let assistantMessage: ChatMessage = {
-				role: 'assistant',
-				content: '',
-				tool_calls: []
-			};
+		let contentBuffer = '';
+		let toolCallsBuffer: { [index: number]: any } = {};
+		let hasToolCalls = false;
 
-			let toolCallsBuffer: { [index: number]: any } = {};
-			let hasToolCalls = false;
-			let pendingLine = '';
-
-			const collectLines = (text: string): string[] => {
-				const output: string[] = [];
-				if (!text) {
-					return output;
-				}
-
-				pendingLine += text;
-
-				let newlineIndex: number;
-				while ((newlineIndex = pendingLine.indexOf('\n')) !== -1) {
-					output.push(pendingLine.slice(0, newlineIndex + 1));
-					pendingLine = pendingLine.slice(newlineIndex + 1);
-				}
-
-				return output;
-			};
-
-			const drainPending = (): string[] => {
-				if (!pendingLine) {
-					return [];
-				}
-				const remaining = pendingLine;
-				pendingLine = '';
-				return [remaining];
-			};
-
-			for await (const chunk of stream) {
-				if (abortSignal?.aborted) {
-					return;
-				}
-
-				const choice = chunk.choices[0];
-				if (!choice) {
-					continue;
-				}
-
-				const content = choice.delta?.content;
-				if (content) {
-					assistantMessage.content += content;
-					for (const line of collectLines(content)) {
-						yield line;
-					}
-				}
-
-				const deltaToolCalls = choice.delta?.tool_calls;
-				if (deltaToolCalls) {
-					hasToolCalls = true;
-					for (const deltaCall of deltaToolCalls) {
-						const index = deltaCall.index ?? 0;
-
-						if (!toolCallsBuffer[index]) {
-							toolCallsBuffer[index] = {
-								id: '',
-								type: 'function',
-								function: {
-									name: '',
-									arguments: ''
-								}
-							};
-						}
-
-						if (deltaCall.id) {
-							toolCallsBuffer[index].id = deltaCall.id;
-						}
-						if (deltaCall.function?.name) {
-							toolCallsBuffer[index].function.name += deltaCall.function.name;
-						}
-						if (deltaCall.function?.arguments) {
-							toolCallsBuffer[index].function.arguments += deltaCall.function.arguments;
-						}
-					}
-				}
-
-				if (choice.finish_reason) {
-					break;
-				}
+		for await (const chunk of stream) {
+			if (abortSignal?.aborted) {
+				return;
 			}
 
-			for (const line of drainPending()) {
-				yield line;
-			}
-
-			// Signal end of this streaming round - frontend should display accumulated content now
-			yield '__STREAM_ROUND_END__';
-
-			if (hasToolCalls) {
-				assistantMessage.tool_calls = Object.values(toolCallsBuffer);
-
-				messages.push(assistantMessage);
-
-				// Yield tool calls JSON to frontend
-				for (const toolCall of assistantMessage.tool_calls ?? []) {
-					if (toolCall.type === 'function') {
-						// Send JSON marker to frontend
-						yield `__TOOL_CALL_START__${JSON.stringify({
-							id: toolCall.id,
-							name: toolCall.function.name,
-							arguments: toolCall.function.arguments
-						})}__TOOL_CALL_END__`;
-					}
-				}
-
-				// Execute tool calls
-				for (const toolCall of assistantMessage.tool_calls ?? []) {
-					if (toolCall.type === 'function') {
-						try {
-							const args = JSON.parse(toolCall.function.arguments);
-							const result = await executeMCPTool(toolCall.function.name, args);
-							messages.push({
-								role: 'tool',
-								content: JSON.stringify(result),
-								tool_call_id: toolCall.id
-							});
-							// Yield success status
-							yield `__TOOL_RESULT__${JSON.stringify({
-								id: toolCall.id,
-								status: 'success'
-							})}__TOOL_RESULT_END__`;
-						} catch (error) {
-							messages.push({
-								role: 'tool',
-								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
-								tool_call_id: toolCall.id
-							});
-							// Yield error status
-							yield `__TOOL_RESULT__${JSON.stringify({
-								id: toolCall.id,
-								status: 'error',
-								error: error instanceof Error ? error.message : 'Tool execution failed'
-							})}__TOOL_RESULT_END__`;
-						}
-					}
-				}
-
+			const choice = chunk.choices[0];
+			if (!choice) {
 				continue;
 			}
 
-			messages.push(assistantMessage);
-			return;
+			// Stream content chunks
+			const content = choice.delta?.content;
+			if (content) {
+				contentBuffer += content;
+				yield {
+					type: 'content',
+					content
+				};
+			}
+
+		// Stream reasoning content (for o1 models, etc.)
+		// Note: reasoning_content is NOT included in the response, only counted for tokens
+		const reasoningContent = (choice.delta as any)?.reasoning_content;
+		if (reasoningContent) {
+			yield {
+				type: 'reasoning_delta',
+				delta: reasoningContent
+			};
 		}
+
+			// Accumulate tool calls and stream deltas
+			const deltaToolCalls = choice.delta?.tool_calls;
+			if (deltaToolCalls) {
+				hasToolCalls = true;
+				for (const deltaCall of deltaToolCalls) {
+					const index = deltaCall.index ?? 0;
+
+					if (!toolCallsBuffer[index]) {
+						toolCallsBuffer[index] = {
+							id: '',
+							type: 'function',
+							function: {
+								name: '',
+								arguments: ''
+							}
+						};
+					}
+
+					if (deltaCall.id) {
+						toolCallsBuffer[index].id = deltaCall.id;
+					}
+
+					// Yield tool call deltas for token counting
+					let deltaText = '';
+					if (deltaCall.function?.name) {
+						toolCallsBuffer[index].function.name += deltaCall.function.name;
+						deltaText += deltaCall.function.name;
+					}
+					if (deltaCall.function?.arguments) {
+						toolCallsBuffer[index].function.arguments += deltaCall.function.arguments;
+						deltaText += deltaCall.function.arguments;
+					}
+
+					// Stream the delta to frontend for real-time token counting
+					if (deltaText) {
+						yield {
+							type: 'tool_call_delta',
+							delta: deltaText
+						};
+					}
+				}
+			}
+
+			if (choice.finish_reason) {
+				break;
+			}
+		}
+
+		// If there are tool calls, yield them
+		if (hasToolCalls) {
+			yield {
+				type: 'tool_calls',
+				tool_calls: Object.values(toolCallsBuffer)
+			};
+		}
+
+		// Signal completion
+		yield {
+			type: 'done'
+		};
+
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			return;

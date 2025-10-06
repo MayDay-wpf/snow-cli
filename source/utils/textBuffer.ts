@@ -26,6 +26,14 @@ export interface PastePlaceholder {
   placeholder: string; // 显示的占位符文本
 }
 
+export interface ImageData {
+  id: string;
+  data: string; // Base64 编码的图片数据
+  mimeType: string; // 图片 MIME 类型 (e.g., image/png, image/jpeg)
+  index: number; // 第几张图片
+  placeholder: string; // 显示的占位符文本 [image #xxx]
+}
+
 export class TextBuffer {
   private content = '';
   private cursorIndex = 0;
@@ -33,6 +41,8 @@ export class TextBuffer {
   private pasteStorage: Map<string, PastePlaceholder> = new Map();
   private pasteCounter = 0;
   private lastPasteTime = 0;
+  private imageStorage: Map<string, ImageData> = new Map();
+  private imageCounter = 0;
 
   private visualLines: string[] = [''];
   private visualLineStarts: number[] = [0];
@@ -92,6 +102,8 @@ export class TextBuffer {
       this.pasteStorage.clear();
       this.pasteCounter = 0;
       this.lastPasteTime = 0;
+      this.imageStorage.clear();
+      this.imageCounter = 0;
     }
 
     this.recalculateVisualState();
@@ -380,5 +392,40 @@ export class TextBuffer {
   private recomputeVisualCursorOnly(): void {
     this.visualCursorPos = this.computeVisualCursorFromIndex(this.cursorIndex);
     this.preferredVisualCol = this.visualCursorPos[1];
+  }
+
+  /**
+   * 插入图片数据
+   */
+  insertImage(base64Data: string, mimeType: string): void {
+    this.imageCounter++;
+    const imageId = `image_${Date.now()}_${this.imageCounter}`;
+    const placeholderText = `[image #${this.imageCounter}]`;
+
+    this.imageStorage.set(imageId, {
+      id: imageId,
+      data: base64Data,
+      mimeType: mimeType,
+      index: this.imageCounter,
+      placeholder: placeholderText
+    });
+
+    this.insertPlainText(placeholderText);
+    this.scheduleUpdate();
+  }
+
+  /**
+   * 获取所有图片数据
+   */
+  getImages(): ImageData[] {
+    return Array.from(this.imageStorage.values()).sort((a, b) => a.index - b.index);
+  }
+
+  /**
+   * 清除所有图片
+   */
+  clearImages(): void {
+    this.imageStorage.clear();
+    this.imageCounter = 0;
   }
 }

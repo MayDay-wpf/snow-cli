@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
 import WelcomeScreen from './ui/pages/WelcomeScreen.js';
@@ -7,6 +7,7 @@ import ModelConfigScreen from './ui/pages/ModelConfigScreen.js';
 import MCPConfigScreen from './ui/pages/MCPConfigScreen.js';
 import ChatScreen from './ui/pages/ChatScreen.js';
 import { useGlobalExit, ExitNotification as ExitNotificationType } from './hooks/useGlobalExit.js';
+import { onNavigate } from './hooks/useGlobalNavigation.js';
 
 type Props = {
 	version?: string;
@@ -24,6 +25,14 @@ export default function App({ version }: Props) {
 
 	// Global exit handler
 	useGlobalExit(setExitNotification);
+
+	// Global navigation handler
+	useEffect(() => {
+		const unsubscribe = onNavigate((event) => {
+			setCurrentView(event.destination);
+		});
+		return unsubscribe;
+	}, []);
 
 	const handleMenuSelect = (value: string) => {
 		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models' || value === 'mcp') {

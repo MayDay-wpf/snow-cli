@@ -4,7 +4,12 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { getMCPConfig, type MCPServer } from './apiConfig.js';
 import { mcpTools as filesystemTools } from '../mcp/filesystem.js';
+import { mcpTools as terminalTools } from '../mcp/bash.js';
+import { TodoService } from '../mcp/todo.js';
+import { sessionManager } from './sessionManager.js';
 import { logger } from './logger.js';
+import os from 'os';
+import path from 'path';
 
 export interface MCPTool {
   type: "function";
@@ -43,6 +48,22 @@ interface MCPToolsCache {
 
 let toolsCache: MCPToolsCache | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Initialize TODO service with sessionManager accessor
+const todoService = new TodoService(
+	path.join(os.homedir(), '.snow'),
+	() => {
+		const session = sessionManager.getCurrentSession();
+		return session ? session.id : null;
+	}
+);
+
+/**
+ * Get the TODO service instance
+ */
+export function getTodoService(): TodoService {
+  return todoService;
+}
 
 /**
  * Generate a hash of the current MCP configuration
@@ -107,6 +128,58 @@ async function refreshToolsCache(): Promise<void> {
       function: {
         name: `filesystem-${tool.name.replace('filesystem_', '')}`,
         description: tool.description,
+        parameters: tool.inputSchema
+      }
+    });
+  }
+
+  // Add built-in terminal tools (always available)
+  const terminalServiceTools = terminalTools.map(tool => ({
+    name: tool.name.replace('terminal_', ''),
+    description: tool.description,
+    inputSchema: tool.inputSchema
+  }));
+
+  servicesInfo.push({
+    serviceName: 'terminal',
+    tools: terminalServiceTools,
+    isBuiltIn: true,
+    connected: true
+  });
+
+  for (const tool of terminalTools) {
+    allTools.push({
+      type: "function",
+      function: {
+        name: `terminal-${tool.name.replace('terminal_', '')}`,
+        description: tool.description,
+        parameters: tool.inputSchema
+      }
+    });
+  }
+
+  // Add built-in TODO tools (always available)
+  await todoService.initialize();
+  const todoTools = todoService.getTools();
+  const todoServiceTools = todoTools.map(tool => ({
+    name: tool.name.replace('todo-', ''),
+    description: tool.description || '',
+    inputSchema: tool.inputSchema
+  }));
+
+  servicesInfo.push({
+    serviceName: 'todo',
+    tools: todoServiceTools,
+    isBuiltIn: true,
+    connected: true
+  });
+
+  for (const tool of todoTools) {
+    allTools.push({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description || '',
         parameters: tool.inputSchema
       }
     });
@@ -341,10 +414,16 @@ export async function executeMCPTool(toolName: string, args: any): Promise<any> 
   let serviceName: string | null = null;
   let actualToolName: string | null = null;
 
-  // Check built-in filesystem service first
-  if (toolName.startsWith('filesystem-')) {
+  // Check built-in services first
+  if (toolName.startsWith('todo-')) {
+    serviceName = 'todo';
+    actualToolName = toolName.substring('todo-'.length);
+  } else if (toolName.startsWith('filesystem-')) {
     serviceName = 'filesystem';
     actualToolName = toolName.substring('filesystem-'.length);
+  } else if (toolName.startsWith('terminal-')) {
+    serviceName = 'terminal';
+    actualToolName = toolName.substring('terminal-'.length);
   } else {
     // Check configured MCP services
     try {
@@ -366,13 +445,16 @@ export async function executeMCPTool(toolName: string, args: any): Promise<any> 
     throw new Error(`Invalid tool name format: ${toolName}. Expected format: serviceName-toolName`);
   }
 
-  if (serviceName === 'filesystem') {
+  if (serviceName === 'todo') {
+    // Handle built-in TODO tools (no connection needed)
+    return await todoService.executeTool(toolName, args);
+  } else if (serviceName === 'filesystem') {
     // Handle built-in filesystem tools (no connection needed)
     const { filesystemService } = await import('../mcp/filesystem.js');
 
     switch (actualToolName) {
       case 'read':
-        return await filesystemService.getFileContent(args.filePath);
+        return await filesystemService.getFileContent(args.filePath, args.startLine, args.endLine);
       case 'create':
         return await filesystemService.createFile(args.filePath, args.content, args.createDirectories);
       case 'delete':
@@ -383,8 +465,34 @@ export async function executeMCPTool(toolName: string, args: any): Promise<any> 
         return await filesystemService.exists(args.filePath);
       case 'info':
         return await filesystemService.getFileInfo(args.filePath);
+      case 'edit':
+        return await filesystemService.editFile(
+          args.filePath,
+          args.startLine,
+          args.endLine,
+          args.newContent,
+          args.contextLines
+        );
+      case 'search':
+        return await filesystemService.searchCode(
+          args.query,
+          args.dirPath,
+          args.fileExtensions,
+          args.caseSensitive,
+          args.maxResults
+        );
       default:
         throw new Error(`Unknown filesystem tool: ${actualToolName}`);
+    }
+  } else if (serviceName === 'terminal') {
+    // Handle built-in terminal tools (no connection needed)
+    const { terminalService } = await import('../mcp/bash.js');
+
+    switch (actualToolName) {
+      case 'execute':
+        return await terminalService.executeCommand(args.command, args.timeout);
+      default:
+        throw new Error(`Unknown terminal tool: ${actualToolName}`);
     }
   } else {
     // Handle user-configured MCP service tools - connect only when needed

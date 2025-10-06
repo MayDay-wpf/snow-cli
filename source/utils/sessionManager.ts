@@ -1,11 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { getOpenAiConfig } from './apiConfig.js';
+import { randomUUID } from 'crypto';
+import type { ChatMessage as APIChatMessage } from '../api/chat.js';
 
-export interface ChatMessage {
-	role: 'user' | 'assistant' | 'system';
-	content: string;
+// Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
+export interface ChatMessage extends APIChatMessage {
 	timestamp: number;
 }
 
@@ -51,7 +51,8 @@ class SessionManager {
 	async createNewSession(): Promise<Session> {
 		await this.ensureSessionsDir();
 
-		const sessionId = Date.now().toString();
+		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
+		const sessionId = randomUUID();
 		const session: Session = {
 			id: sessionId,
 			title: 'New Chat',
@@ -141,118 +142,13 @@ class SessionManager {
 		this.currentSession.messageCount = this.currentSession.messages.length;
 		this.currentSession.updatedAt = Date.now();
 
-		// Generate summary for the first user message or when messages reach certain count
-		if (this.shouldGenerateSummary()) {
-			await this.generateSessionSummary();
+		// Simple title generation from first user message (no API call)
+		if (this.currentSession.messageCount === 1 && message.role === 'user') {
+			this.currentSession.title = message.content.slice(0, 50);
+			this.currentSession.summary = message.content.slice(0, 100);
 		}
 
 		await this.saveSession(this.currentSession);
-	}
-
-	private shouldGenerateSummary(): boolean {
-		if (!this.currentSession) return false;
-
-		const userMessages = this.currentSession.messages.filter(m => m.role === 'user');
-
-		// Generate summary for first user message or every 5 user messages
-		return userMessages.length === 1 || userMessages.length % 5 === 0;
-	}
-
-	private async generateSessionSummary(): Promise<void> {
-		if (!this.currentSession || this.currentSession.messages.length === 0) return;
-
-		try {
-			const config = getOpenAiConfig();
-			if (!config.basicModel || !config.baseUrl || !config.apiKey) {
-				// No basic model configured, use simple title from first user message
-				const firstUserMessage = this.currentSession.messages.find(m => m.role === 'user');
-				if (firstUserMessage) {
-					this.currentSession.title = firstUserMessage.content.slice(0, 50);
-					this.currentSession.summary = firstUserMessage.content.slice(0, 100);
-				}
-				return;
-			}
-
-			// Prepare conversation context for summary
-			const recentMessages = this.currentSession.messages.slice(-10); // Last 10 messages
-			const conversationContext = recentMessages
-				.map(m => `${m.role}: ${m.content}`)
-				.join('\n');
-
-			const summaryPrompt = `Please provide a brief title (max 50 characters) and summary (max 100 characters) for this conversation:
-
-${conversationContext}
-
-Format your response as JSON:
-{
-  "title": "Brief descriptive title",
-  "summary": "Short summary of the conversation"
-}`;
-
-			// Call the basic model for summary generation
-			const response = await this.callBasicModel(summaryPrompt);
-			const summaryData = this.parseJsonResponse(response);
-
-			if (summaryData && summaryData.title && summaryData.summary) {
-				this.currentSession.title = summaryData.title.slice(0, 50);
-				this.currentSession.summary = summaryData.summary.slice(0, 100);
-			}
-		} catch (error) {
-			// Fallback to simple title from first user message
-			const firstUserMessage = this.currentSession.messages.find(m => m.role === 'user');
-			if (firstUserMessage) {
-				this.currentSession.title = firstUserMessage.content.slice(0, 50);
-				this.currentSession.summary = firstUserMessage.content.slice(0, 100);
-			}
-		}
-	}
-
-	private async callBasicModel(prompt: string): Promise<string> {
-		const config = getOpenAiConfig();
-
-		const requestBody = {
-			model: config.basicModel,
-			messages: [
-				{
-					role: 'user',
-					content: prompt
-				}
-			],
-			response_format: {
-				type: 'json'
-			},
-			max_tokens: 150,
-			temperature: 0.1
-		};
-
-		const response = await fetch(`${config.baseUrl}/chat/completions`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${config.apiKey}`
-			},
-			body: JSON.stringify(requestBody)
-		});
-
-		if (!response.ok) {
-			throw new Error(`API request failed: ${response.statusText}`);
-		}
-
-		const data = await response.json();
-		return data.choices?.[0]?.message?.content || '';
-	}
-
-	private parseJsonResponse(response: string): any {
-		try {
-			// Try to extract JSON from response
-			const jsonMatch = response.match(/\{[\s\S]*\}/);
-			if (jsonMatch) {
-				return JSON.parse(jsonMatch[0]);
-			}
-			return null;
-		} catch (error) {
-			return null;
-		}
 	}
 
 	getCurrentSession(): Session | null {

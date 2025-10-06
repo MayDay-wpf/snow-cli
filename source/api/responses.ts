@@ -1,0 +1,640 @@
+import OpenAI from 'openai';
+import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { executeMCPTool } from '../utils/mcpToolsManager.js';
+import { SYSTEM_PROMPT } from './systemPrompt.js';
+import type { ChatMessage, ToolCall } from './chat.js';
+
+export interface ResponseOptions {
+	model: string;
+	messages: ChatMessage[];
+	stream?: boolean;
+	temperature?: number;
+	max_tokens?: number;
+	tools?: Array<{
+		type: 'function';
+		function: {
+			name: string;
+			description?: string;
+			parameters?: Record<string, any>;
+		};
+	}>;
+	tool_choice?: 'auto' | 'none' | 'required';
+	reasoning?: {
+		summary?: 'auto' | 'none';
+		effort?: 'low' | 'medium' | 'high';
+	};
+	prompt_cache_key?: string;
+	store?: boolean;
+	include?: string[];
+}
+
+/**
+ * 确保 schema 符合 Responses API 的 strict 模式要求：
+ * 1. additionalProperties: false
+ * 2. required 数组包含所有属性
+ * 3. 可选属性使用 [type, "null"] 格式
+ */
+function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> | undefined {
+	if (!schema) {
+		return undefined;
+	}
+
+	// 深拷贝 schema
+	const strictSchema = JSON.parse(JSON.stringify(schema));
+
+	if (strictSchema.type === 'object') {
+		// 1. 添加 additionalProperties: false
+		strictSchema.additionalProperties = false;
+
+		// 2. 确保 required 包含所有属性
+		if (strictSchema.properties) {
+			const allPropertyKeys = Object.keys(strictSchema.properties);
+			const existingRequired = strictSchema.required || [];
+
+			// 找出所有属性
+			const requiredSet = new Set(existingRequired);
+
+			// 处理每个属性
+			for (const key of allPropertyKeys) {
+				const prop = strictSchema.properties[key];
+
+				// 如果属性不在 required 中，说明是可选的
+				if (!requiredSet.has(key)) {
+					// 转换为 [type, "null"] 格式
+					if (prop.type && typeof prop.type === 'string') {
+						prop.type = [prop.type, 'null'];
+					}
+					// 添加到 required（strict 模式要求）
+					requiredSet.add(key);
+				}
+
+				// 递归处理嵌套的 object
+				if (prop.type === 'object' || (Array.isArray(prop.type) && prop.type.includes('object'))) {
+					if (!('additionalProperties' in prop)) {
+						prop.additionalProperties = false;
+					}
+				}
+			}
+
+			// 更新 required 数组
+			strictSchema.required = Array.from(requiredSet);
+		}
+	}
+
+	return strictSchema;
+}
+
+/**
+ * 转换 Chat Completions 格式的工具为 Responses API 格式
+ * Chat Completions: {type: 'function', function: {name, description, parameters}}
+ * Responses API: {type: 'function', name, description, parameters, strict}
+ */
+function convertToolsForResponses(tools?: Array<{
+	type: 'function';
+	function: {
+		name: string;
+		description?: string;
+		parameters?: Record<string, any>;
+	};
+}>): Array<{
+	type: 'function';
+	name: string;
+	description?: string;
+	parameters?: Record<string, any>;
+	strict?: boolean;
+}> | undefined {
+	if (!tools || tools.length === 0) {
+		return undefined;
+	}
+
+	return tools.map(tool => ({
+		type: 'function',
+		name: tool.function.name,
+		description: tool.function.description,
+		parameters: ensureStrictSchema(tool.function.parameters),
+		strict: false
+	}));
+}
+
+export interface ResponseStreamChunk {
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done';
+	content?: string;
+	tool_calls?: ToolCall[];
+	delta?: string;
+}
+
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+	if (!openaiClient) {
+		const config = getOpenAiConfig();
+
+		if (!config.apiKey || !config.baseUrl) {
+			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
+		}
+
+		openaiClient = new OpenAI({
+			apiKey: config.apiKey,
+			baseURL: config.baseUrl,
+		});
+	}
+
+	return openaiClient;
+}
+
+export function resetOpenAIClient(): void {
+	openaiClient = null;
+}
+
+/**
+ * 转换消息格式为 Responses API 的 input 格式
+ * Responses API 的 input 格式：
+ * 1. 支持 user, assistant 角色消息，使用 type: "message" 包裹
+ * 2. 工具调用在 assistant 中表示为 function_call 类型的 item
+ * 3. 工具结果使用 function_call_output 类型
+ *
+ * 注意：Responses API 使用 instructions 字段代替 system 消息
+ * 优化：使用 type: "message" 包裹以提高缓存命中率
+ */
+function convertToResponseInput(messages: ChatMessage[]): any[] {
+	const result: any[] = [];
+
+	for (const msg of messages) {
+		if (!msg) continue;
+
+		// 跳过 system 消息（在 createResponse 中使用 instructions 字段）
+		if (msg.role === 'system') {
+			continue;
+		}
+
+		// 用户消息：content 必须是数组格式，使用 type: "message" 包裹
+		if (msg.role === 'user') {
+			const contentParts: any[] = [];
+
+			// 添加文本内容
+			if (msg.content) {
+				contentParts.push({
+					type: 'input_text',
+					text: msg.content
+				});
+			}
+
+			// 添加图片内容
+			if (msg.images && msg.images.length > 0) {
+				for (const image of msg.images) {
+					contentParts.push({
+						type: 'input_image',
+						image_url: image.data
+					});
+				}
+			}
+
+			result.push({
+				type: 'message',
+				role: 'user',
+				content: contentParts
+			});
+			continue;
+		}
+
+		// Assistant 消息（带工具调用）
+		// 在 Responses API 中，需要将工具调用转换为 function_call 类型的独立项
+		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+			// 添加 assistant 文本内容（如果有）
+			if (msg.content) {
+				result.push({
+					type: 'message',
+					role: 'assistant',
+					content: [{
+						type: 'output_text',
+						text: msg.content
+					}]
+				});
+			}
+
+			// 为每个工具调用添加 function_call 项
+			for (const toolCall of msg.tool_calls) {
+				result.push({
+					type: 'function_call',
+					call_id: toolCall.id,
+					name: toolCall.function.name,
+					arguments: toolCall.function.arguments
+				});
+			}
+			continue;
+		}
+
+		// Assistant 消息（纯文本）
+		if (msg.role === 'assistant') {
+			result.push({
+				type: 'message',
+				role: 'assistant',
+				content: [{
+					type: 'output_text',
+					text: msg.content || ''
+				}]
+			});
+			continue;
+		}
+
+		// Tool 消息：转换为 function_call_output
+		if (msg.role === 'tool' && msg.tool_call_id) {
+			result.push({
+				type: 'function_call_output',
+				call_id: msg.tool_call_id,
+				output: msg.content
+			});
+			continue;
+		}
+	}
+
+	return result;
+}
+
+/**
+ * 使用 Responses API 创建响应（非流式，带自动工具调用）
+ */
+export async function createResponse(options: ResponseOptions): Promise<string> {
+	const client = getOpenAIClient();
+	let messages = [...options.messages];
+
+	// 提取系统提示词（如果存在）
+	let systemInstructions = SYSTEM_PROMPT;
+	const firstMessage = messages[0];
+	if (firstMessage?.role === 'system') {
+		systemInstructions = firstMessage.content;
+		messages = messages.slice(1); // 移除系统消息
+	}
+
+	try {
+		// 使用 Responses API
+		while (true) {
+			const requestPayload = {
+				model: options.model,
+				instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
+				input: convertToResponseInput(messages),
+				tools: convertToolsForResponses(options.tools),
+				tool_choice: options.tool_choice,
+				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
+				store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
+				include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
+				prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+			};
+
+			const response = await client.responses.create(requestPayload as any);
+
+			// 提取响应 - Responses API 返回 output 数组
+			const output = (response as any).output;
+			if (!output || output.length === 0) {
+				throw new Error('No output from AI');
+			}
+
+			// 获取最后一条消息（通常是 assistant 的响应）
+			const lastMessage = output[output.length - 1];
+
+			// 添加 assistant 消息到对话
+			messages.push({
+				role: 'assistant',
+				content: lastMessage.content || '',
+				tool_calls: lastMessage.tool_calls as ToolCall[] | undefined
+			});
+
+			// 检查是否有工具调用
+			if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+				// 执行每个工具调用
+				for (const toolCall of lastMessage.tool_calls) {
+					if (toolCall.type === 'function') {
+						try {
+							const args = JSON.parse(toolCall.function.arguments);
+							const result = await executeMCPTool(toolCall.function.name, args);
+
+							// 添加工具结果到对话
+							messages.push({
+								role: 'tool',
+								content: JSON.stringify(result),
+								tool_call_id: toolCall.id
+							});
+						} catch (error) {
+							// 添加错误结果到对话
+							messages.push({
+								role: 'tool',
+								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+								tool_call_id: toolCall.id
+							});
+						}
+					}
+				}
+				// 继续对话获取工具结果后的响应
+				continue;
+			}
+
+			// 没有工具调用，返回内容
+			return lastMessage.content || '';
+		}
+	} catch (error) {
+		if (error instanceof Error) {
+			// 检查是否是 API 网关不支持 Responses API
+			if (error.message.includes('Panic detected') ||
+			    error.message.includes('nil pointer') ||
+			    error.message.includes('404') ||
+			    error.message.includes('not found')) {
+				throw new Error(
+					'Response creation failed: Your API endpoint does not support the Responses API. ' +
+					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API.'
+				);
+			}
+			throw new Error(`Response creation failed: ${error.message}`);
+		}
+		throw new Error('Response creation failed: Unknown error');
+	}
+}
+
+/**
+ * 使用 Responses API 创建流式响应（带自动工具调用）
+ */
+export async function* createStreamingResponse(
+	options: ResponseOptions,
+	abortSignal?: AbortSignal
+): AsyncGenerator<ResponseStreamChunk, void, unknown> {
+	const client = getOpenAIClient();
+
+	// 提取系统提示词（如果存在）
+	let systemInstructions = SYSTEM_PROMPT;
+	let messages = [...options.messages];
+	const firstMessage = messages[0];
+	if (firstMessage?.role === 'system') {
+		systemInstructions = firstMessage.content;
+		messages = messages.slice(1); // 移除系统消息
+	}
+
+	try {
+		const requestInput = convertToResponseInput(messages);
+		const requestPayload = {
+			model: options.model,
+			instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
+			input: requestInput,
+			stream: true,
+			tools: convertToolsForResponses(options.tools),
+			tool_choice: options.tool_choice,
+			reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
+			store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
+			include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
+			prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+		};
+
+		const stream = await client.responses.create(requestPayload as any, {
+			signal: abortSignal,
+		});
+
+		let contentBuffer = '';
+		let toolCallsBuffer: { [call_id: string]: any } = {};
+		let hasToolCalls = false;
+		let currentFunctionCallId: string | null = null;
+
+		for await (const chunk of stream as any) {
+			if (abortSignal?.aborted) {
+				return;
+			}
+
+			// Responses API 使用 SSE 事件格式
+			const eventType = chunk.type;
+
+			// 根据事件类型处理
+			if (eventType === 'response.created' || eventType === 'response.in_progress') {
+				// 响应创建/进行中 - 忽略
+				continue;
+			} else if (eventType === 'response.output_item.added') {
+				// 新输出项添加
+				const item = chunk.item;
+				if (item?.type === 'reasoning') {
+					// 推理摘要开始 - 忽略
+					continue;
+				} else if (item?.type === 'message') {
+					// 消息开始 - 忽略
+					continue;
+				} else if (item?.type === 'function_call') {
+					// 工具调用开始
+					hasToolCalls = true;
+					const callId = item.call_id || item.id;
+					currentFunctionCallId = callId;
+					toolCallsBuffer[callId] = {
+						id: callId,
+						type: 'function',
+						function: {
+							name: item.name || '',
+							arguments: ''
+						}
+					};
+					continue;
+				}
+				continue;
+			} else if (eventType === 'response.function_call_arguments.delta') {
+				// 工具调用参数增量
+				const delta = chunk.delta;
+				if (delta && currentFunctionCallId) {
+					toolCallsBuffer[currentFunctionCallId].function.arguments += delta;
+					// 发送 delta 用于 token 计数
+					yield {
+						type: 'tool_call_delta',
+						delta: delta
+					};
+				}
+			} else if (eventType === 'response.function_call_arguments.done') {
+				// 工具调用参数完成
+				const itemId = chunk.item_id;
+				const args = chunk.arguments;
+				if (itemId && toolCallsBuffer[itemId]) {
+					toolCallsBuffer[itemId].function.arguments = args;
+				}
+				currentFunctionCallId = null;
+				continue;
+			} else if (eventType === 'response.output_item.done') {
+				// 输出项完成
+				const item = chunk.item;
+				if (item?.type === 'function_call') {
+					// 确保工具调用信息完整
+					const callId = item.call_id || item.id;
+					if (toolCallsBuffer[callId]) {
+						toolCallsBuffer[callId].function.name = item.name;
+						toolCallsBuffer[callId].function.arguments = item.arguments;
+					}
+				}
+				continue;
+			} else if (eventType === 'response.content_part.added') {
+				// 内容部分添加 - 忽略
+				continue;
+		} else if (eventType === 'response.reasoning_summary_text.delta') {
+			// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
+			const delta = chunk.delta;
+			if (delta) {
+				yield {
+					type: 'reasoning_delta',
+					delta: delta
+				};
+			}
+			} else if (eventType === 'response.output_text.delta') {
+				// 文本增量更新
+				const delta = chunk.delta;
+				if (delta) {
+					contentBuffer += delta;
+					yield {
+						type: 'content',
+						content: delta
+					};
+				}
+			} else if (eventType === 'response.output_text.done') {
+				// 文本输出完成 - 忽略
+				continue;
+			} else if (eventType === 'response.content_part.done') {
+				// 内容部分完成 - 忽略
+				continue;
+			} else if (eventType === 'response.completed') {
+				// 响应完全完成
+				break;
+			} else if (eventType === 'response.failed' || eventType === 'response.cancelled') {
+				// 响应失败或取消
+				const error = chunk.error;
+				if (error) {
+					throw new Error(`Response failed: ${error.message || 'Unknown error'}`);
+				}
+				break;
+			}
+		}
+
+		// 如果有工具调用，返回它们
+		if (hasToolCalls) {
+			yield {
+				type: 'tool_calls',
+				tool_calls: Object.values(toolCallsBuffer)
+			};
+		}
+
+		// 发送完成信号
+		yield {
+			type: 'done'
+		};
+
+	} catch (error) {
+		if (error instanceof Error && error.name === 'AbortError') {
+			return;
+		}
+		if (error instanceof Error) {
+			// 检查是否是 API 网关不支持 Responses API
+			if (error.message.includes('Panic detected') ||
+			    error.message.includes('nil pointer') ||
+			    error.message.includes('404') ||
+			    error.message.includes('not found')) {
+				throw new Error(
+					'Streaming response creation failed: Your API endpoint does not support the Responses API. ' +
+					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API (OpenAI official API, or compatible providers).'
+				);
+			}
+			throw new Error(`Streaming response creation failed: ${error.message}`);
+		}
+		throw new Error('Streaming response creation failed: Unknown error');
+	}
+}
+
+/**
+ * 使用 Responses API 创建响应（限制工具调用轮数）
+ */
+export async function createResponseWithTools(
+	options: ResponseOptions,
+	maxToolRounds: number = 5
+): Promise<{ content: string; toolCalls: ToolCall[] }> {
+	const client = getOpenAIClient();
+	let messages = [...options.messages];
+	let allToolCalls: ToolCall[] = [];
+	let rounds = 0;
+
+	// 提取系统提示词（如果存在）
+	let systemInstructions = SYSTEM_PROMPT;
+	const firstMessage = messages[0];
+	if (firstMessage?.role === 'system') {
+		systemInstructions = firstMessage.content;
+		messages = messages.slice(1); // 移除系统消息
+	}
+
+	try {
+		while (rounds < maxToolRounds) {
+			const response = await client.responses.create({
+				model: options.model,
+				instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
+				input: convertToResponseInput(messages),
+				tools: convertToolsForResponses(options.tools),
+				tool_choice: options.tool_choice,
+				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
+				store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
+				include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
+				prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+			} as any);
+
+			const output = (response as any).output;
+			if (!output || output.length === 0) {
+				throw new Error('No output from AI');
+			}
+
+			const lastMessage = output[output.length - 1];
+
+			// 添加 assistant 消息
+			messages.push({
+				role: 'assistant',
+				content: lastMessage.content || '',
+				tool_calls: lastMessage.tool_calls as ToolCall[] | undefined
+			});
+
+			// 检查工具调用
+			if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+				allToolCalls.push(...lastMessage.tool_calls as ToolCall[]);
+
+				// 执行工具调用
+				for (const toolCall of lastMessage.tool_calls) {
+					if (toolCall.type === 'function') {
+						try {
+							const args = JSON.parse(toolCall.function.arguments);
+							const result = await executeMCPTool(toolCall.function.name, args);
+
+							messages.push({
+								role: 'tool',
+								content: JSON.stringify(result),
+								tool_call_id: toolCall.id
+							});
+						} catch (error) {
+							messages.push({
+								role: 'tool',
+								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+								tool_call_id: toolCall.id
+							});
+						}
+					}
+				}
+
+				rounds++;
+				continue;
+			}
+
+			// 没有工具调用，返回结果
+			return {
+				content: lastMessage.content || '',
+				toolCalls: allToolCalls
+			};
+		}
+
+		throw new Error(`Maximum tool calling rounds (${maxToolRounds}) exceeded`);
+	} catch (error) {
+		if (error instanceof Error) {
+			// 检查是否是 API 网关不支持 Responses API
+			if (error.message.includes('Panic detected') ||
+			    error.message.includes('nil pointer') ||
+			    error.message.includes('404') ||
+			    error.message.includes('not found')) {
+				throw new Error(
+					'Response creation with tools failed: Your API endpoint does not support the Responses API. ' +
+					'Please switch to "Chat Completions" method in API settings.'
+				);
+			}
+			throw new Error(`Response creation with tools failed: ${error.message}`);
+		}
+		throw new Error('Response creation with tools failed: Unknown error');
+	}
+}
