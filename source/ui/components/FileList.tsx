@@ -166,6 +166,15 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 		}
 	}), [allFilteredFiles, selectedIndex]);
 
+	// Calculate display index for the scrolling window
+	// MUST be before early returns to avoid hook order issues
+	const displaySelectedIndex = useMemo(() => {
+		return filteredFiles.findIndex((file) => {
+			const originalIndex = allFilteredFiles.indexOf(file);
+			return originalIndex === selectedIndex;
+		});
+	}, [filteredFiles, allFilteredFiles, selectedIndex]);
+
 	if (!visible) {
 		return null;
 	}
@@ -185,14 +194,6 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 			</Box>
 		);
 	}
-
-	// Calculate display index for the scrolling window
-	const displaySelectedIndex = useMemo(() => {
-		return filteredFiles.findIndex((file) => {
-			const originalIndex = allFilteredFiles.indexOf(file);
-			return originalIndex === selectedIndex;
-		});
-	}, [filteredFiles, allFilteredFiles, selectedIndex]);
 
 	return (
 		<Box paddingX={1} marginTop={1} flexDirection="column">
