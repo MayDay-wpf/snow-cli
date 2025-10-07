@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { vscodeConnection, type Diagnostic } from '../utils/vscodeConnection.js';
 const { resolve, dirname, isAbsolute } = path;
 
 interface SearchMatch {
@@ -261,6 +262,7 @@ export class FilesystemMCPService {
     contextStartLine: number;
     contextEndLine: number;
     totalLines: number;
+    diagnostics?: Diagnostic[];
   }> {
     try {
       const fullPath = this.resolvePath(filePath);
@@ -315,7 +317,25 @@ export class FilesystemMCPService {
       // Write the modified content back to file
       await fs.writeFile(fullPath, modifiedLines.join('\n'), 'utf-8');
 
-      return {
+      // Try to get diagnostics from VS Code after editing
+      let diagnostics: Diagnostic[] = [];
+      try {
+        // Wait a bit for VS Code to process the file change
+        await new Promise(resolve => setTimeout(resolve, 500));
+        diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
+      } catch (error) {
+        // Ignore diagnostics errors, they are optional
+      }
+
+      const result: {
+        message: string;
+        oldContent: string;
+        newContent: string;
+        contextStartLine: number;
+        contextEndLine: number;
+        totalLines: number;
+        diagnostics?: Diagnostic[];
+      } = {
         message: `File edited successfully: ${filePath} (lines ${startLine}-${adjustedEndLine} replaced)`,
         oldContent,
         newContent: newContextContent,
@@ -323,6 +343,19 @@ export class FilesystemMCPService {
         contextEndLine: newContextEnd,
         totalLines: newTotalLines
       };
+
+      // Add diagnostics if any were found
+      if (diagnostics.length > 0) {
+        result.diagnostics = diagnostics;
+        const errorCount = diagnostics.filter(d => d.severity === 'error').length;
+        const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+
+        if (errorCount > 0 || warningCount > 0) {
+          result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
+        }
+      }
+
+      return result;
     } catch (error) {
       throw new Error(`Failed to edit file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

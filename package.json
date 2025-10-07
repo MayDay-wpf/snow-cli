@@ -56,13 +56,15 @@
 		"openai": "^6.1.0",
 		"react": "^18.2.0",
 		"string-width": "^7.2.0",
-		"tiktoken": "^1.0.22"
+		"tiktoken": "^1.0.22",
+		"ws": "^8.14.2"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
 		"@types/figlet": "^1.7.0",
 		"@types/react": "^18.0.32",
+		"@types/ws": "^8.5.8",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",
 		"chalk": "^5.2.0",

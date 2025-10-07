@@ -20,13 +20,17 @@ import { useSessionManagement } from '../../hooks/useSessionManagement.js';
 import { useToolConfirmation } from '../../hooks/useToolConfirmation.js';
 import { handleConversationWithTools } from '../../hooks/useConversation.js';
 import { parseAndValidateFileReferences, createMessageWithFileInstructions, getSystemInfo } from '../../utils/fileUtils.js';
+import { compressContext } from '../../utils/contextCompressor.js';
 // Import commands to register them
 import '../../utils/commands/clear.js';
 import '../../utils/commands/resume.js';
 import '../../utils/commands/mcp.js';
 import '../../utils/commands/yolo.js';
 import '../../utils/commands/init.js';
+import '../../utils/commands/ide.js';
+import '../../utils/commands/compact.js';
 import { navigateTo } from '../../hooks/useGlobalNavigation.js';
+import { vscodeConnection, type EditorContext } from '../../utils/vscodeConnection.js';
 
 type Props = {};
 
@@ -63,6 +67,11 @@ export default function ChatScreen({ }: Props) {
 	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
+	const [vscodeConnected, setVscodeConnected] = useState(false);
+	const [vscodeConnectionStatus, setVscodeConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+	const [editorContext, setEditorContext] = useState<EditorContext>({});
+	const [isCompressing, setIsCompressing] = useState(false);
+	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const { stdout } = useStdout();
 	const workingDirectory = process.cwd();
 
@@ -134,6 +143,64 @@ export default function ChatScreen({ }: Props) {
 		return () => clearInterval(interval);
 	}, [timerStartTime]);
 
+	// Monitor VSCode connection status and editor context
+	useEffect(() => {
+		let connectingTimeout: NodeJS.Timeout | null = null;
+
+		const checkConnection = setInterval(() => {
+			const isConnected = vscodeConnection.isConnected();
+			const isServerRunning = vscodeConnection.isServerRunning();
+			setVscodeConnected(isConnected);
+
+			// Update connection status based on actual connection state
+			if (isConnected && vscodeConnectionStatus !== 'connected') {
+				setVscodeConnectionStatus('connected');
+				if (connectingTimeout) {
+					clearTimeout(connectingTimeout);
+					connectingTimeout = null;
+				}
+			} else if (!isConnected && vscodeConnectionStatus === 'connected') {
+				setVscodeConnectionStatus('disconnected');
+			} else if (vscodeConnectionStatus === 'connecting' && !isServerRunning) {
+				// Server failed to start
+				setVscodeConnectionStatus('error');
+				if (connectingTimeout) {
+					clearTimeout(connectingTimeout);
+					connectingTimeout = null;
+				}
+			}
+		}, 1000);
+
+		// Set timeout for connecting state (15 seconds)
+		if (vscodeConnectionStatus === 'connecting') {
+			connectingTimeout = setTimeout(() => {
+				if (vscodeConnectionStatus === 'connecting') {
+					setVscodeConnectionStatus('error');
+				}
+			}, 15000);
+		}
+
+		const unsubscribe = vscodeConnection.onContextUpdate((context) => {
+			setEditorContext(context);
+			// When we receive context, it means connection is successful
+			if (vscodeConnectionStatus !== 'connected') {
+				setVscodeConnectionStatus('connected');
+				if (connectingTimeout) {
+					clearTimeout(connectingTimeout);
+					connectingTimeout = null;
+				}
+			}
+		});
+
+		return () => {
+			clearInterval(checkConnection);
+			if (connectingTimeout) {
+				clearTimeout(connectingTimeout);
+			}
+			unsubscribe();
+		};
+	}, [vscodeConnectionStatus]);
+
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
 	useEffect(() => {
@@ -174,7 +241,79 @@ export default function ChatScreen({ }: Props) {
 		}
 	});
 
-	const handleCommandExecution = (commandName: string, result: any) => {
+	const handleCommandExecution = async (commandName: string, result: any) => {
+		// Handle /compact command
+		if (commandName === 'compact' && result.success && result.action === 'compact') {
+			// Set compressing state (不添加命令面板消息)
+			setIsCompressing(true);
+			setCompressionError(null);
+
+			try {
+				// Convert messages to ChatMessage format for compression
+				const chatMessages = messages
+					.filter(msg => msg.role !== 'command')
+					.map(msg => ({
+						role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
+						content: msg.content,
+						tool_call_id: msg.toolCallId
+					}));
+
+				// Compress the context
+				const result = await compressContext(chatMessages);
+
+				// Replace all messages with a summary message (不包含 "Context Compressed" 标题)
+				const summaryMessage: Message = {
+					role: 'assistant',
+					content: result.summary,
+					streaming: false
+				};
+
+				// Clear session and set new compressed state
+				sessionManager.clearCurrentSession();
+				clearSavedMessages();
+				setMessages([summaryMessage]);
+				setRemountKey(prev => prev + 1);
+
+				// Update token usage with compression result
+				setContextUsage({
+					prompt_tokens: result.usage.prompt_tokens,
+					completion_tokens: result.usage.completion_tokens,
+					total_tokens: result.usage.total_tokens
+				});
+			} catch (error) {
+				// Show error message
+				const errorMsg = error instanceof Error ? error.message : 'Unknown compression error';
+				setCompressionError(errorMsg);
+
+				const errorMessage: Message = {
+					role: 'assistant',
+					content: `**Compression Failed**\n\n${errorMsg}`,
+					streaming: false
+				};
+				setMessages(prev => [...prev, errorMessage]);
+			} finally {
+				setIsCompressing(false);
+			}
+			return;
+		}
+
+		// Handle /ide command
+		if (commandName === 'ide') {
+			if (result.success) {
+				setVscodeConnectionStatus('connecting');
+				// Add command execution feedback
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName
+				};
+				setMessages(prev => [...prev, commandMessage]);
+			} else {
+				setVscodeConnectionStatus('error');
+			}
+			return;
+		}
+
 		if (result.success && result.action === 'clear') {
 			if (stdout && typeof stdout.write === 'function') {
 				stdout.write('\x1B[3J\x1B[2J\x1B[H');
@@ -280,8 +419,13 @@ export default function ChatScreen({ }: Props) {
 		setAbortController(controller);
 
 		try {
-			// Create message for AI with file read instructions and system info
-			const messageForAI = createMessageWithFileInstructions(cleanContent, regularFiles, systemInfo);
+			// Create message for AI with file read instructions, system info, and editor context
+			const messageForAI = createMessageWithFileInstructions(
+				cleanContent,
+				regularFiles,
+				systemInfo,
+				vscodeConnected ? editorContext : undefined
+			);
 
 			// Start conversation with tool support
 			await handleConversationWithTools({
@@ -657,21 +801,62 @@ export default function ChatScreen({ }: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation */}
-			{!pendingToolConfirmation && (
-				<ChatInput
-					onSubmit={handleMessageSubmit}
-					onCommand={handleCommandExecution}
-					placeholder="Ask me anything about coding..."
-					disabled={!!pendingToolConfirmation}
-					chatHistory={messages}
-					onHistorySelect={handleHistorySelect}
-					yoloMode={yoloMode}
-					contextUsage={contextUsage ? {
-						inputTokens: contextUsage.prompt_tokens,
-						maxContextTokens: getOpenAiConfig().maxContextTokens || 4000
-					} : undefined}
-				/>
+			{/* Hide input during tool confirmation or compression */}
+			{!pendingToolConfirmation && !isCompressing && (
+				<>
+					<ChatInput
+						onSubmit={handleMessageSubmit}
+						onCommand={handleCommandExecution}
+						placeholder="Ask me anything about coding..."
+						disabled={!!pendingToolConfirmation}
+						chatHistory={messages}
+						onHistorySelect={handleHistorySelect}
+						yoloMode={yoloMode}
+						contextUsage={contextUsage ? {
+							inputTokens: contextUsage.prompt_tokens,
+							maxContextTokens: getOpenAiConfig().maxContextTokens || 4000
+						} : undefined}
+					/>
+					{/* VSCode connection status indicator */}
+					{vscodeConnectionStatus !== 'disconnected' && (
+						<Box marginTop={1}>
+							<Text
+								color={
+									vscodeConnectionStatus === 'connecting' ? 'yellow' :
+									vscodeConnectionStatus === 'connected' ? 'green' :
+									vscodeConnectionStatus === 'error' ? 'red' : 'gray'
+								}
+								dimColor={vscodeConnectionStatus !== 'error'}
+							>
+								● {
+									vscodeConnectionStatus === 'connecting' ? 'Connecting to VSCode...' :
+									vscodeConnectionStatus === 'connected' ? 'VSCode Connected' :
+									vscodeConnectionStatus === 'error' ? 'Connection Failed' : 'VSCode'
+								}
+								{vscodeConnectionStatus === 'connected' && editorContext.activeFile && ` | ${editorContext.activeFile}`}
+								{vscodeConnectionStatus === 'connected' && editorContext.selectedText && ` | ${editorContext.selectedText.length} chars selected`}
+							</Text>
+						</Box>
+					)}
+				</>
+			)}
+
+			{/* Context compression status indicator - always visible when compressing */}
+			{isCompressing && (
+				<Box marginTop={1}>
+					<Text color="cyan">
+						<Spinner type="dots" /> Compressing conversation history...
+					</Text>
+				</Box>
+			)}
+
+			{/* Compression error indicator */}
+			{compressionError && (
+				<Box marginTop={1}>
+					<Text color="red">
+						✗ Compression failed: {compressionError}
+					</Text>
+				</Box>
 			)}
 		</Box>
 	);

@@ -193,7 +193,8 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 export function createMessageWithFileInstructions(
 	content: string,
 	files: SelectedFile[],
-	systemInfo?: {platform: string; shell: string; workingDirectory: string}
+	systemInfo?: {platform: string; shell: string; workingDirectory: string},
+	editorContext?: {activeFile?: string; selectedText?: string; cursorPosition?: {line: number; character: number}; workspaceFolder?: string}
 ): string {
 	const parts: string[] = [content];
 
@@ -205,6 +206,26 @@ export function createMessageWithFileInstructions(
 			`└─ Working Directory: ${systemInfo.workingDirectory}`
 		];
 		parts.push(systemInfoLines.join('\n'));
+	}
+
+	// Add editor context if provided (from VSCode connection)
+	if (editorContext) {
+		const editorLines: string[] = [];
+		if (editorContext.workspaceFolder) {
+			editorLines.push(`└─ VSCode Workspace: ${editorContext.workspaceFolder}`);
+		}
+		if (editorContext.activeFile) {
+			editorLines.push(`└─ Active File: ${editorContext.activeFile}`);
+		}
+		if (editorContext.cursorPosition) {
+			editorLines.push(`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${editorContext.cursorPosition.character + 1}`);
+		}
+		if (editorContext.selectedText) {
+			editorLines.push(`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``);
+		}
+		if (editorLines.length > 0) {
+			parts.push(editorLines.join('\n'));
+		}
 	}
 
 	// Add file instructions if provided

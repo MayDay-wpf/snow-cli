@@ -1,0 +1,57 @@
+{
+  "name": "snow-cli",
+  "displayName": "Snow CLI",
+  "description": "Quickly open the Snow AI command-line tool in VSCode",
+  "version": "0.2.3",
+  "publisher": "mufasa",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "snow-cli.openTerminal",
+        "title": "Open Snow CLI",
+        "icon": {
+          "light": "./snow.png",
+          "dark": "./snow.png"
+        }
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "snow-cli.openTerminal",
+          "group": "navigation",
+          "when": "editorFocus"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "18.x",
+    "@types/ws": "^8.5.8",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.3"
+  },
+  "icon": "snow.png"
+}

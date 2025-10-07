@@ -14,12 +14,15 @@ type Props = {
 	onSave: () => void;
 };
 
-type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens';
+type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens' | 'compactBaseUrl' | 'compactApiKey' | 'compactModelName';
 
 export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
+	const [compactBaseUrl, setCompactBaseUrl] = useState('');
+	const [compactApiKey, setCompactApiKey] = useState('');
+	const [compactModelName, setCompactModelName] = useState('');
 	const [currentField, setCurrentField] = useState<ModelField>('advancedModel');
 	const [isEditing, setIsEditing] = useState(false);
 	const [models, setModels] = useState<Model[]>([]);
@@ -34,6 +37,9 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
+		setCompactBaseUrl(config.compactModel?.baseUrl || '');
+		setCompactApiKey(config.compactModel?.apiKey || '');
+		setCompactModelName(config.compactModel?.modelName || '');
 
 		if (!config.baseUrl) {
 			setBaseUrlMissing(true);
@@ -71,7 +77,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	const getCurrentValue = () => {
 		if (currentField === 'advancedModel') return advancedModel;
 		if (currentField === 'basicModel') return basicModel;
-		return maxContextTokens.toString();
+		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
+		if (currentField === 'compactBaseUrl') return compactBaseUrl;
+		if (currentField === 'compactApiKey') return compactApiKey;
+		if (currentField === 'compactModelName') return compactModelName;
+		return '';
 	};
 
 	const handleModelChange = (value: string) => {
@@ -155,6 +165,27 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 					setMaxContextTokens(finalValue);
 					setIsEditing(false);
 				}
+			} else if (currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName') {
+				// Handle text input for compact model fields
+				if (key.return) {
+					setIsEditing(false);
+				} else if (key.backspace || key.delete) {
+					if (currentField === 'compactBaseUrl') {
+						setCompactBaseUrl(prev => prev.slice(0, -1));
+					} else if (currentField === 'compactApiKey') {
+						setCompactApiKey(prev => prev.slice(0, -1));
+					} else if (currentField === 'compactModelName') {
+						setCompactModelName(prev => prev.slice(0, -1));
+					}
+				} else if (input && input.match(/[a-zA-Z0-9-_./:]/)) {
+					if (currentField === 'compactBaseUrl') {
+						setCompactBaseUrl(prev => prev + input);
+					} else if (currentField === 'compactApiKey') {
+						setCompactApiKey(prev => prev + input);
+					} else if (currentField === 'compactModelName') {
+						setCompactModelName(prev => prev + input);
+					}
+				}
 			} else {
 				// Allow typing to filter in edit mode for model selection
 				if (input && input.match(/[a-zA-Z0-9-_.]/)) {
@@ -173,6 +204,14 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				basicModel,
 				maxContextTokens,
 			};
+			// 只有当所有字段都填写时才保存 compactModel
+			if (compactBaseUrl && compactApiKey && compactModelName) {
+				config.compactModel = {
+					baseUrl: compactBaseUrl,
+					apiKey: compactApiKey,
+					modelName: compactModelName,
+				};
+			}
 			updateOpenAiConfig(config);
 			onSave();
 		} else if (key.escape) {
@@ -181,12 +220,21 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				basicModel,
 				maxContextTokens,
 			};
+			// 只有当所有字段都填写时才保存 compactModel
+			if (compactBaseUrl && compactApiKey && compactModelName) {
+				config.compactModel = {
+					baseUrl: compactBaseUrl,
+					apiKey: compactApiKey,
+					modelName: compactModelName,
+				};
+			}
 			updateOpenAiConfig(config);
 			onBack();
 		} else if (key.return) {
-			// Load models first for model fields, or enter edit mode directly for maxContextTokens
+			// Load models first for model fields, or enter edit mode directly for maxContextTokens and compact fields
 			setSearchTerm(''); // Reset search when entering edit mode
-			if (currentField === 'maxContextTokens') {
+			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
+			if (currentField === 'maxContextTokens' || isCompactField) {
 				setIsEditing(true);
 			} else {
 				loadModels().then(() => {
@@ -199,7 +247,8 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			}
 		} else if (input === 'm') {
 			// 快捷键：按 'm' 直接进入手动输入模式
-			if (currentField !== 'maxContextTokens') {
+			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
+			if (currentField !== 'maxContextTokens' && !isCompactField) {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -208,12 +257,24 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				setCurrentField('advancedModel');
 			} else if (currentField === 'maxContextTokens') {
 				setCurrentField('basicModel');
+			} else if (currentField === 'compactBaseUrl') {
+				setCurrentField('maxContextTokens');
+			} else if (currentField === 'compactApiKey') {
+				setCurrentField('compactBaseUrl');
+			} else if (currentField === 'compactModelName') {
+				setCurrentField('compactApiKey');
 			}
 		} else if (key.downArrow) {
 			if (currentField === 'advancedModel') {
 				setCurrentField('basicModel');
 			} else if (currentField === 'basicModel') {
 				setCurrentField('maxContextTokens');
+			} else if (currentField === 'maxContextTokens') {
+				setCurrentField('compactBaseUrl');
+			} else if (currentField === 'compactBaseUrl') {
+				setCurrentField('compactApiKey');
+			} else if (currentField === 'compactApiKey') {
+				setCurrentField('compactModelName');
 			}
 		}
 	});
@@ -393,6 +454,70 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 						{(!isEditing || currentField !== 'maxContextTokens') && (
 							<Box marginLeft={3}>
 								<Text color="gray">{maxContextTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={2} marginTop={1}>
+					<Text color="cyan" bold>Compact Model (Context Compression):</Text>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'compactBaseUrl' ? 'green' : 'white'}>
+							{currentField === 'compactBaseUrl' ? '➣ ' : '  '}Base URL:
+						</Text>
+						{currentField === 'compactBaseUrl' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">
+									{compactBaseUrl}<Text color="white">_</Text>
+								</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'compactBaseUrl') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{compactBaseUrl || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'compactApiKey' ? 'green' : 'white'}>
+							{currentField === 'compactApiKey' ? '➣ ' : '  '}API Key:
+						</Text>
+						{currentField === 'compactApiKey' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">
+									{compactApiKey.replace(/./g, '*')}<Text color="white">_</Text>
+								</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'compactApiKey') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{compactApiKey ? compactApiKey.replace(/./g, '*') : 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
+							{currentField === 'compactModelName' ? '➣ ' : '  '}Model Name:
+						</Text>
+						{currentField === 'compactModelName' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">
+									{compactModelName}<Text color="white">_</Text>
+								</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'compactModelName') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{compactModelName || 'Not set'}</Text>
 							</Box>
 						)}
 					</Box>

@@ -573,7 +573,7 @@ export async function createResponseWithTools(
 				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
 				store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
 				include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
-				prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+				prompt_cache_key: options.prompt_cache_key, // 缓存键
 			} as any);
 
 			const output = (response as any).output;

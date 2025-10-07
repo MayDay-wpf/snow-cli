@@ -4,6 +4,12 @@ import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 
 export type RequestMethod = 'chat' | 'responses';
 
+export interface CompactModelConfig {
+	baseUrl: string;
+	apiKey: string;
+	modelName: string;
+}
+
 export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
@@ -11,6 +17,7 @@ export interface ApiConfig {
 	advancedModel?: string;
 	basicModel?: string;
 	maxContextTokens?: number;
+	compactModel?: CompactModelConfig;
 }
 
 export interface MCPServer {

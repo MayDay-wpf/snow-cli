@@ -1,7 +1,7 @@
 export interface CommandResult {
 	success: boolean;
 	message?: string;
-	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo' | 'goHome' | 'toggleYolo' | 'initProject';
+	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo' | 'goHome' | 'toggleYolo' | 'initProject' | 'compact';
 	prompt?: string;
 }
 
