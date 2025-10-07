@@ -2,6 +2,7 @@
 import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
+import {execSync} from 'child_process';
 import App from './app.js';
 
 const cli = meow(
@@ -12,12 +13,31 @@ const cli = meow(
 	Options
 		--help     Show help
 		--version  Show version
+		--update   Update to latest version
 `,
 	{
 		importMeta: import.meta,
-		flags: {},
+		flags: {
+			update: {
+				type: 'boolean',
+				default: false,
+			},
+		},
 	},
 );
+
+// Handle update flag
+if (cli.flags.update) {
+	console.log('🔄 Updating snow-ai to latest version...');
+	try {
+		execSync('npm install -g snow-ai@latest', {stdio: 'inherit'});
+		console.log('✅ Update completed successfully!');
+		process.exit(0);
+	} catch (error) {
+		console.error('❌ Update failed:', error instanceof Error ? error.message : error);
+		process.exit(1);
+	}
+}
 
 // Disable bracketed paste mode on startup
 process.stdout.write('\x1b[?2004l');
