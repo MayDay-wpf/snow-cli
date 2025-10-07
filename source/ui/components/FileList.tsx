@@ -33,6 +33,12 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 	const [files, setFiles] = useState<FileItem[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 
+	// Fixed maximum display items to prevent rendering issues
+	const MAX_DISPLAY_ITEMS = 5;
+	const effectiveMaxItems = useMemo(() => {
+		return maxItems ? Math.min(maxItems, MAX_DISPLAY_ITEMS) : MAX_DISPLAY_ITEMS;
+	}, [maxItems]);
+
 	// Get files from directory - optimized to batch updates
 	const loadFiles = useCallback(async () => {
 		const getFilesRecursively = async (dir: string, depth: number = 0, maxDepth: number = 3): Promise<FileItem[]> => {
@@ -97,53 +103,68 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 		}
 	}, [visible, loadFiles]);
 
-	// Filter files based on query
-	const filteredFiles = useMemo(() => {
-		let filtered: FileItem[];
-
+	// Filter files based on query (no limit here, we'll slice for display)
+	const allFilteredFiles = useMemo(() => {
 		if (!query.trim()) {
-			filtered = files.slice(0, maxItems);
-		} else {
-			const queryLower = query.toLowerCase();
-			filtered = files.filter(file => {
-				const fileName = file.name.toLowerCase();
-				const filePath = file.path.toLowerCase();
-				return fileName.includes(queryLower) || filePath.includes(queryLower);
-			});
-
-			// Sort by relevance (exact name matches first, then path matches)
-			filtered.sort((a, b) => {
-				const aNameMatch = a.name.toLowerCase().startsWith(queryLower);
-				const bNameMatch = b.name.toLowerCase().startsWith(queryLower);
-
-				if (aNameMatch && !bNameMatch) return -1;
-				if (!aNameMatch && bNameMatch) return 1;
-
-				return a.name.localeCompare(b.name);
-			});
-
-			filtered = filtered.slice(0, maxItems);
+			return files;
 		}
 
+		const queryLower = query.toLowerCase();
+		const filtered = files.filter(file => {
+			const fileName = file.name.toLowerCase();
+			const filePath = file.path.toLowerCase();
+			return fileName.includes(queryLower) || filePath.includes(queryLower);
+		});
+
+		// Sort by relevance (exact name matches first, then path matches)
+		filtered.sort((a, b) => {
+			const aNameMatch = a.name.toLowerCase().startsWith(queryLower);
+			const bNameMatch = b.name.toLowerCase().startsWith(queryLower);
+
+			if (aNameMatch && !bNameMatch) return -1;
+			if (!aNameMatch && bNameMatch) return 1;
+
+			return a.name.localeCompare(b.name);
+		});
+
 		return filtered;
-	}, [files, query, maxItems]);
+	}, [files, query]);
+
+	// Display with scrolling window
+	const filteredFiles = useMemo(() => {
+		if (allFilteredFiles.length <= effectiveMaxItems) {
+			return allFilteredFiles;
+		}
+
+		// Show files around the selected index
+		const halfWindow = Math.floor(effectiveMaxItems / 2);
+		let startIndex = Math.max(0, selectedIndex - halfWindow);
+		let endIndex = Math.min(allFilteredFiles.length, startIndex + effectiveMaxItems);
+
+		// Adjust if we're near the end
+		if (endIndex - startIndex < effectiveMaxItems) {
+			startIndex = Math.max(0, endIndex - effectiveMaxItems);
+		}
+
+		return allFilteredFiles.slice(startIndex, endIndex);
+	}, [allFilteredFiles, selectedIndex, effectiveMaxItems]);
 
 	// Notify parent of filtered count changes
 	useEffect(() => {
 		if (onFilteredCountChange) {
-			onFilteredCountChange(filteredFiles.length);
+			onFilteredCountChange(allFilteredFiles.length);
 		}
-	}, [filteredFiles.length, onFilteredCountChange]);
+	}, [allFilteredFiles.length, onFilteredCountChange]);
 
 	// Expose methods to parent
 	useImperativeHandle(ref, () => ({
 		getSelectedFile: () => {
-			if (filteredFiles.length > 0 && selectedIndex < filteredFiles.length && filteredFiles[selectedIndex]) {
-				return filteredFiles[selectedIndex].path;
+			if (allFilteredFiles.length > 0 && selectedIndex < allFilteredFiles.length && allFilteredFiles[selectedIndex]) {
+				return allFilteredFiles[selectedIndex].path;
 			}
 			return null;
 		}
-	}), [filteredFiles, selectedIndex]);
+	}), [allFilteredFiles, selectedIndex]);
 
 	if (!visible) {
 		return null;
@@ -165,25 +186,35 @@ const FileList = memo(forwardRef<FileListRef, Props>(({
 		);
 	}
 
+	// Calculate display index for the scrolling window
+	const displaySelectedIndex = useMemo(() => {
+		return filteredFiles.findIndex((file) => {
+			const originalIndex = allFilteredFiles.indexOf(file);
+			return originalIndex === selectedIndex;
+		});
+	}, [filteredFiles, allFilteredFiles, selectedIndex]);
+
 	return (
 		<Box paddingX={1} marginTop={1} flexDirection="column">
 			<Box marginBottom={1}>
-				<Text color="blue" bold>🗐 Files ({filteredFiles.length})</Text>
+				<Text color="blue" bold>
+					🗐 Files {allFilteredFiles.length > effectiveMaxItems && `(${selectedIndex + 1}/${allFilteredFiles.length})`}
+				</Text>
 			</Box>
 			{filteredFiles.map((file, index) => (
 				<Box key={file.path}>
 					<Text
-						backgroundColor={index === selectedIndex ? "blue" : undefined}
-						color={index === selectedIndex ? "white" : file.isDirectory ? "cyan" : "white"}
+						backgroundColor={index === displaySelectedIndex ? "blue" : undefined}
+						color={index === displaySelectedIndex ? "white" : file.isDirectory ? "cyan" : "white"}
 					>
 						{file.path}
 					</Text>
 				</Box>
 			))}
-			{filteredFiles.length === maxItems && files.length > maxItems && (
+			{allFilteredFiles.length > effectiveMaxItems && (
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						... and {files.length - maxItems} more files
+						↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems} more hidden
 					</Text>
 				</Box>
 			)}

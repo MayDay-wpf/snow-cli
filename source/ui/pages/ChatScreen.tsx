@@ -73,7 +73,11 @@ export default function ChatScreen({ }: Props) {
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const { stdout } = useStdout();
+	const terminalHeight = stdout?.rows || 24;
 	const workingDirectory = process.cwd();
+
+	// Minimum terminal height required for proper rendering
+	const MIN_TERMINAL_HEIGHT = 10;
 
 	// Use session save hook
 	const { saveMessage, clearSavedMessages, initializeFromSession } = useSessionSave();
@@ -552,6 +556,29 @@ export default function ChatScreen({ }: Props) {
 				onClose={() => setShowMcpInfo(false)}
 				panelKey={mcpPanelKey}
 			/>
+		);
+	}
+
+	// Show warning if terminal is too small
+	if (terminalHeight < MIN_TERMINAL_HEIGHT) {
+		return (
+			<Box flexDirection="column" padding={2}>
+				<Box borderStyle="round" borderColor="red" padding={1}>
+					<Text color="red" bold>
+						⚠  Terminal Too Small
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text color="yellow">
+						Your terminal height is {terminalHeight} lines, but at least {MIN_TERMINAL_HEIGHT} lines are required.
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text color="gray" dimColor>
+						Please resize your terminal window to continue.
+					</Text>
+				</Box>
+			</Box>
 		);
 	}
 

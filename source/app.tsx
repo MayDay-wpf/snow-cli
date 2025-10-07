@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 import { Alert } from '@inkjs/ui';
 import WelcomeScreen from './ui/pages/WelcomeScreen.js';
 import ApiConfigScreen from './ui/pages/ApiConfigScreen.js';
@@ -23,10 +23,6 @@ export default function App({ version }: Props) {
 		message: ''
 	});
 
-	// Terminal resize handling - force re-render on resize
-	const { stdout } = useStdout();
-	const [terminalSize, setTerminalSize] = useState({ columns: stdout?.columns || 80, rows: stdout?.rows || 24 });
-
 	// Global exit handler
 	useGlobalExit(setExitNotification);
 
@@ -37,29 +33,6 @@ export default function App({ version }: Props) {
 		});
 		return unsubscribe;
 	}, []);
-
-	// Terminal resize listener with debounce
-	useEffect(() => {
-		if (!stdout) return;
-
-		let resizeTimeout: NodeJS.Timeout;
-		const handleResize = () => {
-			// Debounce resize events - wait for resize to stabilize
-			clearTimeout(resizeTimeout);
-			resizeTimeout = setTimeout(() => {
-				// Clear screen before re-render
-				stdout.write('\x1Bc'); // Full reset
-				setTerminalSize({ columns: stdout.columns, rows: stdout.rows });
-			}, 100); // 100ms debounce
-		};
-
-		stdout.on('resize', handleResize);
-
-		return () => {
-			stdout.off('resize', handleResize);
-			clearTimeout(resizeTimeout);
-		};
-	}, [stdout]);
 
 	const handleMenuSelect = (value: string) => {
 		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models' || value === 'mcp') {
@@ -73,7 +46,10 @@ export default function App({ version }: Props) {
 		switch (currentView) {
 			case 'welcome':
 				return (
-					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+					<WelcomeScreen
+						version={version}
+						onMenuSelect={handleMenuSelect}
+					/>
 				);
 			case 'chat':
 				return (
@@ -117,7 +93,7 @@ export default function App({ version }: Props) {
 	};
 
 	return (
-		<Box flexDirection="column" key={`term-${terminalSize.columns}x${terminalSize.rows}`}>
+		<Box flexDirection="column">
 			{renderView()}
 			{exitNotification.show && (
 				<Box paddingX={1}>

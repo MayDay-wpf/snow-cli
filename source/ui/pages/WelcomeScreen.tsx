@@ -63,23 +63,20 @@ export default function WelcomeScreen({
 					<Text color="magenta" dimColor>
 						Version {version}
 					</Text>
-				</Box>
-			</Box>
 
-			{onMenuSelect && (
-				<Box>
-					<Menu
-						options={menuOptions}
-						onSelect={onMenuSelect}
-						onSelectionChange={handleSelectionChange}
-					/>
+					{onMenuSelect && (
+						<Box>
+							<Menu
+								options={menuOptions}
+								onSelect={onMenuSelect}
+								onSelectionChange={handleSelectionChange}
+							/>
+						</Box>
+					)}
+					<Alert variant='info'>
+						{infoText}
+					</Alert>
 				</Box>
-			)}
-
-			<Box justifyContent="space-between">
-				<Alert variant='info'>
-					{infoText}
-				</Alert>
 			</Box>
 		</Box >
 	);

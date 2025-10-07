@@ -310,6 +310,28 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			return;
 		}
 		
+		// Ctrl+L - Delete from cursor to beginning
+		if (key.ctrl && input === 'l') {
+			const fullText = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			const afterCursor = fullText.slice(cursorPos);
+
+			buffer.setText(afterCursor);
+			forceStateUpdate();
+			return;
+		}
+
+		// Ctrl+R - Delete from cursor to end
+		if (key.ctrl && input === 'r') {
+			const fullText = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			const beforeCursor = fullText.slice(0, cursorPos);
+
+			buffer.setText(beforeCursor);
+			forceStateUpdate();
+			return;
+		}
+
 		// Alt+V / Option+V - Paste from clipboard (including images)
 		if (key.meta && input === 'v') {
 			try {
@@ -762,7 +784,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 								? "Type to filter commands"
 								: showFilePicker
 								? "Type to filter files • Tab/Enter to select • ESC to cancel"
-								: "Press Ctrl+C twice to exit • Alt+V to paste images • Type '@' for files • Type '/' for commands"
+								: "Ctrl+L: delete to start • Ctrl+R: delete to end • Alt+V: paste images • '@': files • '/': commands"
 							}
 						</Text>
 					</Box>

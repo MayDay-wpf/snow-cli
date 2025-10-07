@@ -75,7 +75,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	const moreBelowCount = options.length - (scrollOffset + visibleItemCount);
 
 	return (
-		<Box flexDirection="column" width={'100%'} borderStyle={'round'} borderColor="#A9C13E" padding={1}>
+		<Box flexDirection="column" width={'100%'} padding={1}>
 			<Box marginBottom={1}>
 				<Text color="cyan">
 					Use ↑↓ keys to navigate, press Enter to select:
