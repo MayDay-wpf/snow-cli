@@ -16,6 +16,11 @@ export interface Message {
 		data: string;
 		mimeType: string;
 	}>;
+	systemInfo?: {
+		platform: string;
+		shell: string;
+		workingDirectory: string;
+	};
 	toolCall?: {
 		name: string;
 		arguments: any;
@@ -25,6 +30,8 @@ export interface Message {
 		args: Array<{key: string; value: string; isLast: boolean}>;
 	};
 	toolResult?: string; // Raw JSON string from tool execution for preview
+	toolCallId?: string; // Tool call ID for updating message in place
+	toolPending?: boolean; // Whether the tool is still executing
 }
 
 interface Props {
@@ -66,25 +73,42 @@ const MessageList = memo(({ messages, animationFrame, maxMessages = 6 }: Props) 
 										content={message.content || ' '}
 										color={message.role === 'user' ? 'gray' : undefined}
 									/>
-									{message.files && message.files.length > 0 && (
+									{(message.systemInfo || message.files || message.images) && (
 										<Box marginTop={1} flexDirection="column">
-											{message.files.map((file, fileIndex) => (
-												<Text key={fileIndex} color={file.isImage ? "magenta" : "blue"}>
-													{file.isImage
-														? `└─ [image #{fileIndex + 1}] ${file.path}`
-														: `└─ Read \`${file.path}\`${file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}`
-													}
-												</Text>
-											))}
-										</Box>
-									)}
-									{message.images && message.images.length > 0 && (
-										<Box marginTop={1} flexDirection="column">
-											{message.images.map((_image, imageIndex) => (
-												<Text key={imageIndex} color="magenta">
-													└─ [image #{imageIndex + 1}]
-												</Text>
-											))}
+											{message.systemInfo && (
+												<>
+													<Text color="gray" dimColor>
+														└─ Platform: {message.systemInfo.platform}
+													</Text>
+													<Text color="gray" dimColor>
+														└─ Shell: {message.systemInfo.shell}
+													</Text>
+													<Text color="gray" dimColor>
+														└─ Working Directory: {message.systemInfo.workingDirectory}
+													</Text>
+												</>
+											)}
+											{message.files && message.files.length > 0 && (
+												<>
+													{message.files.map((file, fileIndex) => (
+														<Text key={fileIndex} color="gray" dimColor>
+															{file.isImage
+																? `└─ [image #{fileIndex + 1}] ${file.path}`
+																: `└─ Read \`${file.path}\`${file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}`
+															}
+														</Text>
+													))}
+												</>
+											)}
+											{message.images && message.images.length > 0 && (
+												<>
+													{message.images.map((_image, imageIndex) => (
+														<Text key={imageIndex} color="gray" dimColor>
+															└─ [image #{imageIndex + 1}]
+														</Text>
+													))}
+												</>
+											)}
 										</Box>
 									)}
 									{/* Show terminal execution result */}

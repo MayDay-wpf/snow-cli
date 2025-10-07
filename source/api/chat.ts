@@ -307,8 +307,14 @@ export async function createChatCompletion(options: ChatCompletionOptions): Prom
 	}
 }
 
+export interface UsageInfo {
+	prompt_tokens: number;
+	completion_tokens: number;
+	total_tokens: number;
+}
+
 export interface StreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done';
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done' | 'usage';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -319,6 +325,7 @@ export interface StreamChunk {
 		};
 	}>;
 	delta?: string; // For tool call streaming chunks or reasoning content
+	usage?: UsageInfo; // Token usage information
 }
 
 /**
@@ -332,27 +339,40 @@ export async function* createStreamingChatCompletion(
 	const client = getOpenAIClient();
 
 	try {
-		const stream = await client.chat.completions.create({
+		const stream = (await client.chat.completions.create({
 			model: options.model,
 			messages: convertToOpenAIMessages(options.messages),
 			stream: true,
+			stream_options: { include_usage: true } as any, // Request usage data in stream
 			temperature: options.temperature || 0.7,
 			max_tokens: options.max_tokens,
 			tools: options.tools,
 			tool_choice: options.tool_choice,
-		}, {
+		} as any, {
 			signal: abortSignal,
-		}) as AsyncIterable<any>;
+		}) as unknown) as AsyncIterable<any>;
 
 		let contentBuffer = '';
 		let toolCallsBuffer: { [index: number]: any } = {};
 		let hasToolCalls = false;
+		let usageData: UsageInfo | undefined;
 
 		for await (const chunk of stream) {
 			if (abortSignal?.aborted) {
 				return;
 			}
 
+			// Capture usage information if available (usually in the last chunk)
+			const usageValue = (chunk as any).usage;
+			if (usageValue !== null && usageValue !== undefined) {
+				usageData = {
+					prompt_tokens: usageValue.prompt_tokens || 0,
+					completion_tokens: usageValue.completion_tokens || 0,
+					total_tokens: usageValue.total_tokens || 0
+				};
+			}
+
+			// Skip content processing if no choices (but usage is already captured above)
 			const choice = chunk.choices[0];
 			if (!choice) {
 				continue;
@@ -431,6 +451,14 @@ export async function* createStreamingChatCompletion(
 			yield {
 				type: 'tool_calls',
 				tool_calls: Object.values(toolCallsBuffer)
+			};
+		}
+
+		// Yield usage information if available
+		if (usageData) {
+			yield {
+				type: 'usage',
+				usage: usageData
 			};
 		}
 

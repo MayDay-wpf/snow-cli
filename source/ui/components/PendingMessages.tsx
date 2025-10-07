@@ -28,7 +28,7 @@ export default function PendingMessages({ pendingMessages }: Props) {
 				</Box>
 			))}
 			<Text color="yellow" dimColor>
-				Will be sent when AI finishes responding
+				Will be sent after tool execution completes
 			</Text>
 		</Box>
 	);

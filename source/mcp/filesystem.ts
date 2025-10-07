@@ -32,7 +32,7 @@ export class FilesystemMCPService {
    * @param filePath - Path to the file (relative to base path or absolute)
    * @param startLine - Starting line number (1-indexed, inclusive)
    * @param endLine - Ending line number (1-indexed, inclusive)
-   * @returns Object containing the requested content and metadata
+   * @returns Object containing the requested content with line numbers and metadata
    * @throws Error if file doesn't exist or cannot be read
    */
   async getFileContent(
@@ -46,6 +46,20 @@ export class FilesystemMCPService {
       // For absolute paths, skip validation to allow access outside base path
       if (!isAbsolute(filePath)) {
         await this.validatePath(fullPath);
+      }
+
+      // Check if the path is a directory, if so, list its contents instead
+      const stats = await fs.stat(fullPath);
+      if (stats.isDirectory()) {
+        const files = await this.listFiles(filePath);
+        const fileList = files.join('\n');
+        const lines = fileList.split('\n');
+        return {
+          content: `Directory: ${filePath}\n\n${fileList}`,
+          startLine: 1,
+          endLine: lines.length,
+          totalLines: lines.length
+        };
       }
 
       const content = await fs.readFile(fullPath, 'utf-8');
@@ -68,9 +82,19 @@ export class FilesystemMCPService {
       const start = startLine;
       const end = Math.min(totalLines, endLine);
 
-      // Extract specified lines (convert to 0-indexed)
+      // Extract specified lines (convert to 0-indexed) and add line numbers
       const selectedLines = lines.slice(start - 1, end);
-      const partialContent = selectedLines.join('\n');
+
+      // Format with line numbers (similar to cat -n)
+      // Calculate the width needed for line numbers
+      const maxLineNumWidth = String(end).length;
+      const numberedLines = selectedLines.map((line, index) => {
+        const lineNum = start + index;
+        const paddedLineNum = String(lineNum).padStart(maxLineNumWidth, ' ');
+        return `${paddedLineNum}→${line}`;
+      });
+
+      const partialContent = numberedLines.join('\n');
 
       return {
         content: partialContent,
@@ -440,13 +464,13 @@ export const filesystemService = new FilesystemMCPService();
 export const mcpTools = [
   {
     name: 'filesystem_read',
-    description: 'Read the content of a file within specified line range. You MUST specify startLine and endLine. To read the entire file, use startLine=1 and a large endLine value (e.g., 999999).',
+    description: 'Read the content of a file within specified line range. The returned content includes line numbers (format: "lineNum→content") for precise editing. You MUST specify startLine and endLine. To read the entire file, use startLine=1 and a large endLine value (e.g., 999999). IMPORTANT: When you need to edit a file, you MUST read it first to see the exact line numbers and current content. NOTE: If the path points to a directory, this tool will automatically list its contents instead of throwing an error.',
     inputSchema: {
       type: 'object',
       properties: {
         filePath: {
           type: 'string',
-          description: 'Path to the file to read'
+          description: 'Path to the file to read (or directory to list)'
         },
         startLine: {
           type: 'number',
@@ -513,7 +537,7 @@ export const mcpTools = [
   },
   {
     name: 'filesystem_edit',
-    description: 'Edit a file by replacing lines within a specified range. Returns context around the edited region for verification.',
+    description: 'Edit a file by replacing lines within a specified range. CRITICAL: You MUST use filesystem_read first to see the exact line numbers and current content before editing. This ensures precise line-based editing without errors. Returns context around the edited region for verification.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -523,15 +547,15 @@ export const mcpTools = [
         },
         startLine: {
           type: 'number',
-          description: 'Starting line number (1-indexed, inclusive)'
+          description: 'Starting line number (1-indexed, inclusive). Get this from filesystem_read output.'
         },
         endLine: {
           type: 'number',
-          description: 'Ending line number (1-indexed, inclusive)'
+          description: 'Ending line number (1-indexed, inclusive). Get this from filesystem_read output.'
         },
         newContent: {
           type: 'string',
-          description: 'New content to replace the specified lines'
+          description: 'New content to replace the specified lines. Do NOT include line numbers in this content.'
         },
         contextLines: {
           type: 'number',

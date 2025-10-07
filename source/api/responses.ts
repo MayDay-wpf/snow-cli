@@ -29,10 +29,9 @@ export interface ResponseOptions {
 }
 
 /**
- * 确保 schema 符合 Responses API 的 strict 模式要求：
+ * 确保 schema 符合 Responses API 的要求：
  * 1. additionalProperties: false
- * 2. required 数组包含所有属性
- * 3. 可选属性使用 [type, "null"] 格式
+ * 2. 保持原有的 required 数组（不修改）
  */
 function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> | undefined {
 	if (!schema) {
@@ -43,30 +42,13 @@ function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> |
 	const strictSchema = JSON.parse(JSON.stringify(schema));
 
 	if (strictSchema.type === 'object') {
-		// 1. 添加 additionalProperties: false
+		// 添加 additionalProperties: false
 		strictSchema.additionalProperties = false;
 
-		// 2. 确保 required 包含所有属性
+		// 递归处理嵌套的 object 属性
 		if (strictSchema.properties) {
-			const allPropertyKeys = Object.keys(strictSchema.properties);
-			const existingRequired = strictSchema.required || [];
-
-			// 找出所有属性
-			const requiredSet = new Set(existingRequired);
-
-			// 处理每个属性
-			for (const key of allPropertyKeys) {
+			for (const key of Object.keys(strictSchema.properties)) {
 				const prop = strictSchema.properties[key];
-
-				// 如果属性不在 required 中，说明是可选的
-				if (!requiredSet.has(key)) {
-					// 转换为 [type, "null"] 格式
-					if (prop.type && typeof prop.type === 'string') {
-						prop.type = [prop.type, 'null'];
-					}
-					// 添加到 required（strict 模式要求）
-					requiredSet.add(key);
-				}
 
 				// 递归处理嵌套的 object
 				if (prop.type === 'object' || (Array.isArray(prop.type) && prop.type.includes('object'))) {
@@ -75,9 +57,11 @@ function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> |
 					}
 				}
 			}
+		}
 
-			// 更新 required 数组
-			strictSchema.required = Array.from(requiredSet);
+		// 如果 properties 为空且有 required 字段，删除它
+		if (strictSchema.properties && Object.keys(strictSchema.properties).length === 0 && strictSchema.required) {
+			delete strictSchema.required;
 		}
 	}
 
@@ -116,11 +100,18 @@ function convertToolsForResponses(tools?: Array<{
 	}));
 }
 
+export interface UsageInfo {
+	prompt_tokens: number;
+	completion_tokens: number;
+	total_tokens: number;
+}
+
 export interface ResponseStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done';
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done' | 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
+	usage?: UsageInfo;
 }
 
 let openaiClient: OpenAI | null = null;
@@ -390,6 +381,7 @@ export async function* createStreamingResponse(
 		let toolCallsBuffer: { [call_id: string]: any } = {};
 		let hasToolCalls = false;
 		let currentFunctionCallId: string | null = null;
+		let usageData: UsageInfo | undefined;
 
 		for await (const chunk of stream as any) {
 			if (abortSignal?.aborted) {
@@ -489,7 +481,14 @@ export async function* createStreamingResponse(
 				// 内容部分完成 - 忽略
 				continue;
 			} else if (eventType === 'response.completed') {
-				// 响应完全完成
+				// 响应完全完成 - 从 response 对象中提取 usage
+				if (chunk.response && chunk.response.usage) {
+					usageData = {
+						prompt_tokens: chunk.response.usage.input_tokens || 0,
+						completion_tokens: chunk.response.usage.output_tokens || 0,
+						total_tokens: chunk.response.usage.total_tokens || 0
+					};
+				}
 				break;
 			} else if (eventType === 'response.failed' || eventType === 'response.cancelled') {
 				// 响应失败或取消
@@ -506,6 +505,14 @@ export async function* createStreamingResponse(
 			yield {
 				type: 'tool_calls',
 				tool_calls: Object.values(toolCallsBuffer)
+			};
+		}
+
+		// Yield usage information if available
+		if (usageData) {
+			yield {
+				type: 'usage',
+				usage: usageData
 			};
 		}
 

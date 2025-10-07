@@ -24,9 +24,10 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [models, setModels] = useState<Model[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState('');
 	const [baseUrlMissing, setBaseUrlMissing] = useState(false);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [manualInputMode, setManualInputMode] = useState(false);
+	const [manualInputValue, setManualInputValue] = useState('');
 
 	useEffect(() => {
 		const config = getOpenAiConfig();
@@ -42,12 +43,12 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 	const loadModels = async () => {
 		setLoading(true);
-		setError('');
 		try {
 			const fetchedModels = await fetchAvailableModels();
 			setModels(fetchedModels);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to load models');
+			// 加载失败时抛出错误,由调用方处理
+			throw err;
 		} finally {
 			setLoading(false);
 		}
@@ -55,10 +56,16 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 	const getCurrentOptions = () => {
 		const filteredModels = filterModels(models, searchTerm);
-		return filteredModels.map(model => ({
+		const modelOptions = filteredModels.map(model => ({
 			label: model.id,
 			value: model.id,
 		}));
+
+		// 添加手动输入选项
+		return [
+			{ label: 'Manual Input (Enter model name)', value: '__MANUAL_INPUT__' },
+			...modelOptions,
+		];
 	};
 
 	const getCurrentValue = () => {
@@ -68,6 +75,13 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	};
 
 	const handleModelChange = (value: string) => {
+		// 如果选择了手动输入选项
+		if (value === '__MANUAL_INPUT__') {
+			setManualInputMode(true);
+			setManualInputValue('');
+			return;
+		}
+
 		if (currentField === 'advancedModel') {
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
@@ -86,6 +100,33 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		if (baseUrlMissing) {
 			if (key.escape) {
 				onBack();
+			}
+			return;
+		}
+
+		// 处理手动输入模式
+		if (manualInputMode) {
+			if (key.return) {
+				// 确认输入
+				if (manualInputValue.trim()) {
+					if (currentField === 'advancedModel') {
+						setAdvancedModel(manualInputValue.trim());
+					} else if (currentField === 'basicModel') {
+						setBasicModel(manualInputValue.trim());
+					}
+				}
+				setManualInputMode(false);
+				setManualInputValue('');
+				setIsEditing(false);
+				setSearchTerm('');
+			} else if (key.escape) {
+				// 取消输入
+				setManualInputMode(false);
+				setManualInputValue('');
+			} else if (key.backspace || key.delete) {
+				setManualInputValue(prev => prev.slice(0, -1));
+			} else if (input && input.match(/[a-zA-Z0-9-_./:]/)) {
+				setManualInputValue(prev => prev + input);
 			}
 			return;
 		}
@@ -150,7 +191,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			} else {
 				loadModels().then(() => {
 					setIsEditing(true);
+				}).catch(() => {
+					// 如果加载模型失败，直接进入手动输入模式
+					setManualInputMode(true);
+					setManualInputValue(getCurrentValue());
 				});
+			}
+		} else if (input === 'm') {
+			// 快捷键：按 'm' 直接进入手动输入模式
+			if (currentField !== 'maxContextTokens') {
+				setManualInputMode(true);
+				setManualInputValue(getCurrentValue());
 			}
 		} else if (key.upArrow) {
 			if (currentField === 'basicModel') {
@@ -213,29 +264,38 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		);
 	}
 
-	if (error) {
+	// 手动输入模式的界面
+	if (manualInputMode) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="double" borderColor={"red"} paddingX={2} paddingY={1}>
+				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
 						<Gradient name='rainbow'>
-							Model Configuration
+							Manual Input Model
 						</Gradient>
 						<Text color="gray" dimColor>
-							Configure AI models for different tasks
+							Enter model name manually
 						</Text>
 					</Box>
 				</Box>
 
-				<Box marginBottom={2}>
-					<Alert variant="error">
-						{error}
-					</Alert>
+				<Box flexDirection="column" marginBottom={2}>
+					<Text color="cyan">
+						{currentField === 'advancedModel' ? 'Advanced Model' : 'Basic Model'}:
+					</Text>
+					<Box marginLeft={2} marginTop={1}>
+						<Text color="green">
+							{`> ${manualInputValue}`}<Text color="white">_</Text>
+						</Text>
+					</Box>
 				</Box>
 
 				<Box flexDirection="column">
 					<Alert variant="info">
-						Press Esc to return to main menu
+						Type model name (e.g., gpt-4o, claude-3-5-sonnet-20241022)
+					</Alert>
+					<Alert variant="info">
+						Press Enter to confirm, Esc to cancel
 					</Alert>
 				</Box>
 			</Box>
@@ -349,7 +409,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				) : (
 					<>
 						<Alert variant="info">
-							Use ↑↓ to navigate, Enter to edit, Ctrl+S or Esc to save
+							Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or Esc to save
 						</Alert>
 					</>
 				)}

@@ -148,7 +148,7 @@ export class TodoService {
 		return [
 			{
 				name: 'todo-create',
-				description: '为当前会话创建 TODO List (会话 ID 自动获取)',
+				description: 'Create a TODO list for current session. CRITICAL FOR PROGRAMMING TASKS: You MUST use this tool at the start of ANY programming task (bug fixes, new features, refactoring, optimization, etc.) to break down the work into trackable steps. This ensures systematic execution and prevents missing critical steps. The TODO list helps maintain context and provides clear progress visibility to the user. WARNING: This tool creates/replaces the entire TODO list for the session - use it ONLY ONCE at the beginning. To add more tasks later, use "todo-add" instead.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -159,16 +159,16 @@ export class TodoService {
 								properties: {
 									content: {
 										type: 'string',
-										description: 'TODO 内容',
+										description: 'TODO item description (be specific and actionable)',
 									},
 									parentId: {
 										type: 'string',
-										description: '父 TODO ID (可选,用于创建子任务)',
+										description: 'Parent TODO ID (optional, for creating subtasks)',
 									},
 								},
 								required: ['content'],
 							},
-							description: 'TODO 项列表',
+							description: 'List of TODO items to create. For programming tasks, include steps like: analyze requirements, implement changes, test functionality, verify build, etc. The list can contain multiple tasks that will be tracked and executed sequentially.',
 						},
 					},
 					required: ['todos'],
@@ -176,7 +176,7 @@ export class TodoService {
 			},
 			{
 				name: 'todo-get',
-				description: '获取当前会话的 TODO List (会话 ID 自动获取)',
+				description: 'Get the TODO list for current session. Use this to check existing tasks and their status before making updates.',
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -184,22 +184,22 @@ export class TodoService {
 			},
 			{
 				name: 'todo-update',
-				description: '更新 TODO 项状态或内容 (会话 ID 自动获取)',
+				description: 'Update TODO item status or content. IMPORTANT: Mark task as "in_progress" BEFORE starting work, and "completed" IMMEDIATELY after finishing. Keep exactly ONE task in "in_progress" status at any time. This provides real-time progress feedback to the user.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO 项 ID',
+							description: 'TODO item ID to update',
 						},
 						status: {
 							type: 'string',
 							enum: ['pending', 'in_progress', 'completed'],
-							description: 'TODO 状态',
+							description: 'New status: "in_progress" when starting, "completed" when done, "pending" for not started',
 						},
 						content: {
 							type: 'string',
-							description: '新的 TODO 内容 (可选)',
+							description: 'Updated TODO content (optional)',
 						},
 					},
 					required: ['todoId'],
@@ -207,17 +207,17 @@ export class TodoService {
 			},
 			{
 				name: 'todo-add',
-				description: '向当前会话添加新的 TODO 项 (会话 ID 自动获取)',
+				description: 'Add a new TODO item to current session. Use this when you discover additional steps during execution, or when breaking down complex tasks into smaller subtasks.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						content: {
 							type: 'string',
-							description: 'TODO 内容',
+							description: 'TODO item description (be specific and actionable)',
 						},
 						parentId: {
 							type: 'string',
-							description: '父 TODO ID (可选)',
+							description: 'Parent TODO ID (optional, for creating subtasks)',
 						},
 					},
 					required: ['content'],
@@ -225,13 +225,13 @@ export class TodoService {
 			},
 			{
 				name: 'todo-delete',
-				description: '删除 TODO 项 (会话 ID 自动获取)',
+				description: 'Delete a TODO item from current session. Use this to remove tasks that are no longer relevant or were created by mistake.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO 项 ID',
+							description: 'TODO item ID to delete',
 						},
 					},
 					required: ['todoId'],

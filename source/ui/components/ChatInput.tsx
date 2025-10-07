@@ -15,6 +15,10 @@ type Props = {
 	chatHistory?: Array<{role: string, content: string}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
+	contextUsage?: {
+		inputTokens: number;
+		maxContextTokens: number;
+	};
 };
 
 // Command Definition
@@ -22,11 +26,11 @@ const commands = [
 	{ name: 'clear', description: 'Clear chat context and conversation history' },
 	{ name: 'resume', description: 'Resume a conversation' },
 	{ name: 'mcp', description: 'Show Model Context Protocol services and tools' },
-	{ name: 'home', description: 'Return to welcome screen' },
-	{ name: 'yolo', description: 'Toggle unattended mode (auto-approve all tools)' }
+	{ name: 'yolo', description: 'Toggle unattended mode (auto-approve all tools)' },
+	{ name: 'init', description: 'Analyze project and generate/update SNOW.md documentation' }
 ];
 
-export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false }: Props) {
+export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false, contextUsage }: Props) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 	
@@ -719,6 +723,34 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 						<Box marginTop={1} paddingX={1}>
 							<Text color="yellow" dimColor>
 								❁  YOLO MODE ACTIVE - All tools will be auto-approved without confirmation
+							</Text>
+						</Box>
+					)}
+					{contextUsage && (
+						<Box marginTop={1} paddingX={1}>
+							<Text color="gray" dimColor>
+								{(() => {
+									const percentage = Math.min(100, (contextUsage.inputTokens / contextUsage.maxContextTokens) * 100);
+									let color: string;
+									if (percentage < 50) color = 'green';
+									else if (percentage < 75) color = 'yellow';
+									else if (percentage < 90) color = 'orange';
+									else color = 'red';
+
+									const formatNumber = (num: number) => {
+										if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+										return num.toString();
+									};
+
+									return (
+										<>
+											<Text color={color}>{percentage.toFixed(1)}%</Text>
+											<Text> · </Text>
+											<Text color={color}>{formatNumber(contextUsage.inputTokens)}</Text>
+											<Text> tokens</Text>
+										</>
+									);
+								})()}
 							</Text>
 						</Box>
 					)}

@@ -1,128 +1,102 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, Static, useStdout } from 'ink';
+import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
-import { encoding_for_model } from 'tiktoken';
 import ChatInput from '../components/ChatInput.js';
 import { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
-import SessionListScreen from '../components/SessionListScreen.js';
-import MCPInfoPanel from '../components/MCPInfoPanel.js';
+import MCPInfoScreen from '../components/MCPInfoScreen.js';
+import SessionListScreenWrapper from '../components/SessionListScreenWrapper.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
-import ToolConfirmation, { type ConfirmationResult } from '../components/ToolConfirmation.js';
+import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import TodoTree from '../components/TodoTree.js';
-import { createStreamingChatCompletion, type ChatMessage } from '../../api/chat.js';
-import { createStreamingResponse } from '../../api/responses.js';
-import { SYSTEM_PROMPT } from '../../api/systemPrompt.js';
-import { collectAllMCPTools, getTodoService } from '../../utils/mcpToolsManager.js';
-import { executeToolCalls, type ToolCall } from '../../utils/toolExecutor.js';
+import type { UsageInfo } from '../../api/chat.js';
 import { getOpenAiConfig } from '../../utils/apiConfig.js';
 import { sessionManager } from '../../utils/sessionManager.js';
 import { useSessionSave } from '../../hooks/useSessionSave.js';
-import { parseAndValidateFileReferences, createMessageWithFileInstructions } from '../../utils/fileUtils.js';
-import { formatTodoContext } from '../../utils/todoPreprocessor.js';
+import { useSessionManagement } from '../../hooks/useSessionManagement.js';
+import { useToolConfirmation } from '../../hooks/useToolConfirmation.js';
+import { handleConversationWithTools } from '../../hooks/useConversation.js';
+import { parseAndValidateFileReferences, createMessageWithFileInstructions, getSystemInfo } from '../../utils/fileUtils.js';
 // Import commands to register them
 import '../../utils/commands/clear.js';
 import '../../utils/commands/resume.js';
 import '../../utils/commands/mcp.js';
-import '../../utils/commands/home.js';
 import '../../utils/commands/yolo.js';
+import '../../utils/commands/init.js';
 import { navigateTo } from '../../hooks/useGlobalNavigation.js';
 
 type Props = {};
 
-type MCPInfoScreenProps = {
-	onClose: () => void;
-	panelKey: number;
-};
-
-function MCPInfoScreen({ onClose, panelKey }: MCPInfoScreenProps) {
-	useEffect(() => {
-		process.stdout.write('\x1B[?1049h');
-		process.stdout.write('\x1B[2J');
-		process.stdout.write('\x1B[H');
-		return () => {
-			process.stdout.write('\x1B[2J');
-			process.stdout.write('\x1B[?1049l');
-		};
-	}, []);
-
-	useInput((_, key) => {
-		if (key.escape) {
-			onClose();
-		}
-	});
-
-	return (
-		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={1} borderStyle="double" paddingX={2} paddingY={1} borderColor={'cyan'}>
-				<Box flexDirection="column">
-					<Text color="white" bold>
-						<Text color="cyan">❆ </Text>
-						MCP Services Overview
-					</Text>
-					<Text color="gray" dimColor>
-						Press ESC to return to the chat
-					</Text>
-				</Box>
-			</Box>
-			<MCPInfoPanel key={panelKey} />
-		</Box>
-	);
-}
-
-type SessionListScreenWrapperProps = {
-	onBack: () => void;
-	onSelectSession: (sessionId: string) => void;
-};
-
-function SessionListScreenWrapper({ onBack, onSelectSession }: SessionListScreenWrapperProps) {
-	useEffect(() => {
-		process.stdout.write('\x1B[?1049h');
-		process.stdout.write('\x1B[2J');
-		process.stdout.write('\x1B[H');
-		return () => {
-			process.stdout.write('\x1B[2J');
-			process.stdout.write('\x1B[?1049l');
-		};
-	}, []);
-
-	return (
-		<SessionListScreen
-			onBack={onBack}
-			onSelectSession={onSelectSession}
-		/>
-	);
+// Format elapsed time to human readable format
+function formatElapsedTime(seconds: number): string {
+	if (seconds < 60) {
+		return `${seconds}s`;
+	} else if (seconds < 3600) {
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		return `${minutes}m ${remainingSeconds}s`;
+	} else {
+		const hours = Math.floor(seconds / 3600);
+		const remainingMinutes = Math.floor((seconds % 3600) / 60);
+		const remainingSeconds = seconds % 60;
+		return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+	}
 }
 
 export default function ChatScreen({ }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
-	const [isSaving, setIsSaving] = useState(false);
+	const [isSaving] = useState(false);
 	const [currentTodos, setCurrentTodos] = useState<Array<{id: string; content: string; status: 'pending' | 'in_progress' | 'completed'}>>([]);
 	const [animationFrame, setAnimationFrame] = useState(0);
 	const [abortController, setAbortController] = useState<AbortController | null>(null);
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
-	const [showSessionList, setShowSessionList] = useState(false);
+	const pendingMessagesRef = useRef<string[]>([]);
 	const [remountKey, setRemountKey] = useState(0);
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
-	const [pendingToolConfirmation, setPendingToolConfirmation] = useState<{
-		tool: ToolCall;
-		batchToolNames?: string;
-		resolve: (result: ConfirmationResult) => void;
-	} | null>(null);
-	const [alwaysApprovedTools, setAlwaysApprovedTools] = useState<Set<string>>(new Set());
 	const [yoloMode, setYoloMode] = useState(false);
+	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
+	const [elapsedSeconds, setElapsedSeconds] = useState(0);
+	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
 	const { stdout } = useStdout();
 	const workingDirectory = process.cwd();
 
 	// Use session save hook
 	const { saveMessage, clearSavedMessages, initializeFromSession } = useSessionSave();
 
-	// Animation for streaming/saving indicator - only update when actually showing
+	// Sync pendingMessages to ref for real-time access in callbacks
+	useEffect(() => {
+		pendingMessagesRef.current = pendingMessages;
+	}, [pendingMessages]);
+
+	// Use tool confirmation hook
+	const {
+		pendingToolConfirmation,
+		requestToolConfirmation,
+		isToolAutoApproved,
+		addMultipleToAlwaysApproved
+	} = useToolConfirmation();
+
+	// Use session management hook
+	const {
+		showSessionList,
+		setShowSessionList,
+		handleSessionSelect,
+		handleBackFromSessionList
+	} = useSessionManagement(
+		setMessages,
+		setPendingMessages,
+		setIsStreaming,
+		setRemountKey,
+		initializeFromSession
+	);
+
+	// Animation for streaming/saving indicator
 	useEffect(() => {
 		if (!isStreaming && !isSaving) return;
 
@@ -136,10 +110,34 @@ export default function ChatScreen({ }: Props) {
 		};
 	}, [isStreaming, isSaving]);
 
-	// Auto-send pending messages when streaming stops
+	// Timer for tracking request duration
+	useEffect(() => {
+		if (isStreaming && timerStartTime === null) {
+			// Start timer when streaming begins
+			setTimerStartTime(Date.now());
+			setElapsedSeconds(0);
+		} else if (!isStreaming && timerStartTime !== null) {
+			// Stop timer when streaming ends
+			setTimerStartTime(null);
+		}
+	}, [isStreaming, timerStartTime]);
+
+	// Update elapsed time every second
+	useEffect(() => {
+		if (timerStartTime === null) return;
+
+		const interval = setInterval(() => {
+			const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+			setElapsedSeconds(elapsed);
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, [timerStartTime]);
+
+	// Pending messages are now handled inline during tool execution in useConversation
+	// Auto-send pending messages when streaming completely stops (as fallback)
 	useEffect(() => {
 		if (!isStreaming && pendingMessages.length > 0) {
-			// Use setTimeout to ensure state updates are complete
 			const timer = setTimeout(() => {
 				processPendingMessages();
 			}, 100);
@@ -158,29 +156,21 @@ export default function ChatScreen({ }: Props) {
 		}
 
 		if (key.escape && isStreaming && abortController) {
+			// Abort the controller
 			abortController.abort();
 
-			// Mark the last streaming message as discontinued
-			setMessages(prev => {
-				const lastMsg = prev[prev.length - 1];
-				if (lastMsg && lastMsg.role === 'assistant') {
-					return [...prev.slice(0, -1), {
-						...lastMsg,
-						streaming: false,
-						discontinued: true
-					}];
-				}
-				// If no assistant message, add a discontinued message
-				return [...prev, {
-					role: 'assistant',
-					content: '',
-					streaming: false,
-					discontinued: true
-				}];
-			});
+			// Immediately add discontinued message
+			setMessages(prev => [...prev, {
+				role: 'assistant',
+				content: '',
+				streaming: false,
+				discontinued: true
+			}]);
 
+			// Stop streaming state
 			setIsStreaming(false);
 			setAbortController(null);
+			setStreamTokenCount(0);
 		}
 	});
 
@@ -193,7 +183,9 @@ export default function ChatScreen({ }: Props) {
 			sessionManager.clearCurrentSession();
 			clearSavedMessages();
 			setMessages([]);
-			setRemountKey(prev => prev + 1); // Force Static to remount
+			setRemountKey(prev => prev + 1);
+			// Reset context usage (token statistics)
+			setContextUsage(null);
 			// Add command execution feedback
 			const commandMessage: Message = {
 				role: 'command',
@@ -202,7 +194,6 @@ export default function ChatScreen({ }: Props) {
 			};
 			setMessages([commandMessage]);
 		} else if (result.success && result.action === 'resume') {
-			// Show session list screen
 			setShowSessionList(true);
 		} else if (result.success && result.action === 'showMcpInfo') {
 			setShowMcpInfo(true);
@@ -214,10 +205,8 @@ export default function ChatScreen({ }: Props) {
 			};
 			setMessages(prev => [...prev, commandMessage]);
 		} else if (result.success && result.action === 'goHome') {
-			// Navigate back to welcome screen
 			navigateTo('welcome');
 		} else if (result.success && result.action === 'toggleYolo') {
-			// Toggle YOLO mode
 			setYoloMode(prev => !prev);
 			const commandMessage: Message = {
 				role: 'command',
@@ -225,99 +214,23 @@ export default function ChatScreen({ }: Props) {
 				commandName: commandName
 			};
 			setMessages(prev => [...prev, commandMessage]);
+		} else if (result.success && result.action === 'initProject' && result.prompt) {
+			// Add command execution feedback
+			const commandMessage: Message = {
+				role: 'command',
+				content: '',
+				commandName: commandName
+			};
+			setMessages(prev => [...prev, commandMessage]);
+			// Auto-send the prompt using basicModel, hide the prompt from UI
+			processMessage(result.prompt, undefined, true, true);
 		}
-	};
-
-	const handleSessionSelect = async (sessionId: string) => {
-		try {
-			const session = await sessionManager.loadSession(sessionId);
-			if (session) {
-				// Session 使用 API 格式存储，需要转换为 UI Message 格式
-				const uiMessages: Message[] = [];
-
-				for (const msg of session.messages) {
-					// 跳过 system 消息
-					if (msg.role === 'system') continue;
-
-					// 处理 tool 角色消息（工具执行结果）
-					if (msg.role === 'tool') {
-						const isError = msg.content.startsWith('Error:');
-						const statusIcon = isError ? '✗' : '✓';
-						const statusText = isError ? `\n  └─ ${msg.content}` : '';
-						const toolName = msg.tool_call_id || 'unknown-tool';
-
-						uiMessages.push({
-							role: 'assistant',
-							content: `${statusIcon} ${toolName}${statusText}`,
-							streaming: false,
-							toolResult: !isError ? msg.content : undefined
-						});
-						continue;
-					}
-
-					// 处理 user 和 assistant 消息
-					const uiMessage: Message = {
-						role: msg.role as 'user' | 'assistant',
-						content: msg.content,
-						streaming: false,
-						images: msg.images
-					};
-
-					// 如果 assistant 消息有 tool_calls，需要展开显示每个工具调用
-					if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-						for (const toolCall of msg.tool_calls) {
-							const toolDisplay = formatToolCallMessage(toolCall as any);
-							let toolArgs;
-							try {
-								toolArgs = JSON.parse(toolCall.function.arguments);
-							} catch (e) {
-								toolArgs = {};
-							}
-
-							uiMessages.push({
-								role: 'assistant',
-								content: `⚡ ${toolDisplay.toolName}`,
-								streaming: false,
-								toolCall: {
-									name: toolCall.function.name,
-									arguments: toolArgs
-								},
-								toolDisplay
-							});
-						}
-					} else {
-						// 普通消息直接添加
-						uiMessages.push(uiMessage);
-					}
-				}
-
-				setMessages(uiMessages);
-				setPendingMessages([]);
-				setIsStreaming(false);
-				setShowSessionList(false);
-				setRemountKey(prev => prev + 1);
-
-				// Initialize session save hook with loaded API messages
-				initializeFromSession(session.messages);
-			}
-		} catch (error) {
-			console.error('Failed to load session:', error);
-		}
-	};
-
-	const handleBackFromSessionList = () => {
-		setShowSessionList(false);
 	};
 
 	const handleHistorySelect = (selectedIndex: number, _message: string) => {
 		// Truncate messages array to remove the selected user message and everything after it
-		// Only keep messages before the selected message (exclude the selected message itself)
 		setMessages(prev => prev.slice(0, selectedIndex));
-
-		// Clear saved messages cache to ensure session is updated correctly
 		clearSavedMessages();
-
-		// Force remount of Static component to clear displayed messages
 		setRemountKey(prev => prev + 1);
 	};
 
@@ -332,7 +245,7 @@ export default function ChatScreen({ }: Props) {
 		await processMessage(message, images);
 	};
 
-	const processMessage = async (message: string, images?: Array<{data: string, mimeType: string}>) => {
+	const processMessage = async (message: string, images?: Array<{data: string, mimeType: string}>, useBasicModel?: boolean, hideUserMessage?: boolean) => {
 		// Parse and validate file references
 		const { cleanContent, validFiles } = await parseAndValidateFileReferences(message);
 
@@ -346,13 +259,20 @@ export default function ChatScreen({ }: Props) {
 			...imageFiles.map(f => ({ type: 'image' as const, data: f.imageData!, mimeType: f.mimeType! }))
 		];
 
-		const userMessage: Message = {
-			role: 'user',
-			content: cleanContent,
-			files: validFiles.length > 0 ? validFiles : undefined,
-			images: imageContents.length > 0 ? imageContents : undefined
-		};
-		setMessages(prev => [...prev, userMessage]);
+		// Get system information
+		const systemInfo = getSystemInfo();
+
+		// Only add user message to UI if not hidden
+		if (!hideUserMessage) {
+			const userMessage: Message = {
+				role: 'user',
+				content: cleanContent,
+				files: validFiles.length > 0 ? validFiles : undefined,
+				images: imageContents.length > 0 ? imageContents : undefined,
+				systemInfo
+			};
+			setMessages(prev => [...prev, userMessage]);
+		}
 		setIsStreaming(true);
 
 		// Create new abort controller for this request
@@ -360,8 +280,28 @@ export default function ChatScreen({ }: Props) {
 		setAbortController(controller);
 
 		try {
-			// Start conversation with tool support (user message will be saved inside)
-			await handleConversationWithTools(cleanContent, regularFiles, imageContents, controller);
+			// Create message for AI with file read instructions and system info
+			const messageForAI = createMessageWithFileInstructions(cleanContent, regularFiles, systemInfo);
+
+			// Start conversation with tool support
+			await handleConversationWithTools({
+				userContent: messageForAI,
+				imageContents,
+				controller,
+				messages,
+				saveMessage,
+				setMessages,
+				setStreamTokenCount,
+				setCurrentTodos,
+				requestToolConfirmation,
+				isToolAutoApproved,
+				addMultipleToAlwaysApproved,
+				yoloMode,
+				setContextUsage,
+				useBasicModel,
+				getPendingMessages: () => pendingMessagesRef.current,
+				clearPendingMessages: () => setPendingMessages([])
+			});
 
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -375,466 +315,18 @@ export default function ChatScreen({ }: Props) {
 				streaming: false
 			};
 			setMessages(prev => [...prev, finalMessage]);
-
-			// End streaming and start saving
+		} finally {
+			// End streaming
 			setIsStreaming(false);
 			setAbortController(null);
 			setStreamTokenCount(0);
-
-			// Save error message
-			setIsSaving(true);
-			try {
-				// Message already saved via conversationMessages
-			} finally {
-				setIsSaving(false);
-			}
-		}
-	};
-
-	// Helper function to format tool call display
-	const formatToolCallMessage = (toolCall: ToolCall): {toolName: string; args: Array<{key: string; value: string; isLast: boolean}>} => {
-		try {
-			const args = JSON.parse(toolCall.function.arguments);
-			const argEntries = Object.entries(args);
-			const formattedArgs: Array<{key: string; value: string; isLast: boolean}> = [];
-
-			if (argEntries.length > 0) {
-				argEntries.forEach(([key, value], idx, arr) => {
-					const valueStr = typeof value === 'string'
-						? value.length > 60 ? `"${value.slice(0, 60)}..."` : `"${value}"`
-						: JSON.stringify(value);
-					formattedArgs.push({
-						key,
-						value: valueStr,
-						isLast: idx === arr.length - 1
-					});
-				});
-			}
-
-			return {
-				toolName: toolCall.function.name,
-				args: formattedArgs
-			};
-		} catch (e) {
-			return {
-				toolName: toolCall.function.name,
-				args: []
-			};
-		}
-	};
-
-	// Request user confirmation for tool execution
-	const requestToolConfirmation = async (toolCall: ToolCall, batchToolNames?: string): Promise<ConfirmationResult> => {
-		// Wait for user confirmation
-		return new Promise<ConfirmationResult>((resolve) => {
-			setPendingToolConfirmation({
-				tool: toolCall,
-				batchToolNames,
-				resolve: (result: ConfirmationResult) => {
-					setPendingToolConfirmation(null);
-					resolve(result);
-				}
-			});
-		});
-	};
-
-	// New simplified conversation handler with tool support
-	const handleConversationWithTools = async (userContent: string, validFiles: any[], imageContents: Array<{type: 'image', data: string, mimeType: string}> | undefined, controller: AbortController) => {
-		// Create message for AI with file read instructions
-		const messageForAI = createMessageWithFileInstructions(userContent, validFiles);
-
-		// Step 1: 确保会话已创建并获取现有 TODO
-		let currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) {
-			currentSession = await sessionManager.createNewSession();
-		}
-		const todoService = getTodoService();
-
-		// 获取现有的 TODO List
-		const existingTodoList = await todoService.getTodoList(currentSession.id);
-
-		// 更新 UI 状态
-		if (existingTodoList) {
-			setCurrentTodos(existingTodoList.todos);
-		}
-
-		// Collect all MCP tools
-		const mcpTools = await collectAllMCPTools();
-
-		// Build conversation history with TODO context as pinned user message
-		let conversationMessages: ChatMessage[] = [
-			{ role: 'system', content: SYSTEM_PROMPT }
-		];
-
-		// 如果有 TODO,在最前面添加置顶的上下文消息
-		if (existingTodoList && existingTodoList.todos.length > 0) {
-			const todoContext = formatTodoContext(existingTodoList.todos);
-			conversationMessages.push({
-				role: 'user',
-				content: todoContext
-			});
-		}
-
-		// 添加历史消息
-		conversationMessages.push(
-			...messages.filter(msg => msg.role !== 'command').map(msg => ({
-				role: msg.role as 'user' | 'assistant',
-				content: msg.content,
-				images: msg.images
-			}))
-		);
-
-		// 添加当前用户消息
-		conversationMessages.push({
-			role: 'user',
-			content: messageForAI,
-			images: imageContents
-		});
-
-		// Save user message (直接保存 API 格式的消息)
-		saveMessage({
-			role: 'user',
-			content: messageForAI,
-			images: imageContents
-		}).catch(error => {
-			console.error('Failed to save user message:', error);
-		});
-
-		// Initialize token encoder
-		let encoder;
-		try {
-			encoder = encoding_for_model('gpt-4');
-		} catch (e) {
-			encoder = encoding_for_model('gpt-3.5-turbo');
-		}
-		setStreamTokenCount(0);
-
-		const config = getOpenAiConfig();
-		const model = config.advancedModel || 'gpt-4.1';
-
-		// Tool calling loop (no limit on rounds)
-		let finalAssistantMessage: Message | null = null;
-		// Track approved tools within this conversation to handle state update delays
-		let currentlyApprovedTools = new Set(alwaysApprovedTools);
-
-		try {
-			while (true) {
-				if (controller.signal.aborted) break;
-
-				let streamedContent = '';
-				let receivedToolCalls: ToolCall[] | undefined;
-
-				// Stream AI response - choose API based on config
-				let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
-			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
-
-				// Get or create session for cache key
-				const currentSession = sessionManager.getCurrentSession();
-				// 使用会话 ID 作为缓存键，确保同一会话的请求共享缓存
-				const cacheKey = currentSession?.id;
-
-				const streamGenerator = config.requestMethod === 'responses'
-					? createStreamingResponse({
-						model,
-						messages: conversationMessages,
-						temperature: 0,
-						tools: mcpTools.length > 0 ? mcpTools : undefined,
-						prompt_cache_key: cacheKey // 使用会话 ID 作为缓存键
-					}, controller.signal)
-					: createStreamingChatCompletion({
-						model,
-						messages: conversationMessages,
-						temperature: 0,
-						tools: mcpTools.length > 0 ? mcpTools : undefined
-					}, controller.signal);
-
-				for await (const chunk of streamGenerator) {
-					if (controller.signal.aborted) break;
-
-					if (chunk.type === 'content' && chunk.content) {
-						// Accumulate content and update token count
-						streamedContent += chunk.content;
-						try {
-							const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
-							setStreamTokenCount(tokens.length);
-						} catch (e) {
-							// Ignore encoding errors
-						}
-					} else if (chunk.type === 'tool_call_delta' && chunk.delta) {
-						// Accumulate tool call deltas and update token count in real-time
-						toolCallAccumulator += chunk.delta;
-						try {
-							const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
-							setStreamTokenCount(tokens.length);
-						} catch (e) {
-							// Ignore encoding errors
-						}
-					} else if (chunk.type === 'reasoning_delta' && chunk.delta) {
-						// Accumulate reasoning summary deltas for token counting (Responses API only)
-						// Note: reasoning content is NOT sent back to AI, only counted for display
-						reasoningAccumulator += chunk.delta;
-						try {
-							const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
-							setStreamTokenCount(tokens.length);
-						} catch (e) {
-							// Ignore encoding errors
-						}
-					} else if (chunk.type === 'tool_calls' && chunk.tool_calls) {
-						receivedToolCalls = chunk.tool_calls;
-					}
-				}
-
-				// Reset token count after stream ends
-				setStreamTokenCount(0);
-
-				// If there are tool calls, we need to handle them specially
-				if (receivedToolCalls && receivedToolCalls.length > 0) {
-					// Add assistant message with tool_calls to conversation (OpenAI requires this format)
-					const assistantMessage: ChatMessage = {
-						role: 'assistant',
-						content: streamedContent || '',
-						tool_calls: receivedToolCalls.map(tc => ({
-							id: tc.id,
-							type: 'function' as const,
-							function: {
-								name: tc.function.name,
-								arguments: tc.function.arguments
-							}
-						}))
-					} as any;
-					conversationMessages.push(assistantMessage);
-
-					// Save assistant message with tool calls
-					saveMessage(assistantMessage).catch(error => {
-						console.error('Failed to save assistant message:', error);
-					});
-
-					// Display tool calls in UI
-					for (const toolCall of receivedToolCalls) {
-						const toolDisplay = formatToolCallMessage(toolCall);
-						let toolArgs;
-						try {
-							toolArgs = JSON.parse(toolCall.function.arguments);
-						} catch (e) {
-							toolArgs = {};
-						}
-
-						setMessages(prev => [...prev, {
-							role: 'assistant',
-							content: `⚡ ${toolDisplay.toolName}`,
-							streaming: false,
-							toolCall: {
-								name: toolCall.function.name,
-								arguments: toolArgs
-							},
-							toolDisplay
-						}]);
-					}
-
-					// Filter tools that need confirmation (not in always-approved list)
-					// TODO tools are always auto-approved
-					const toolsNeedingConfirmation: ToolCall[] = [];
-					const autoApprovedTools: ToolCall[] = [];
-
-					for (const toolCall of receivedToolCalls) {
-						const isTodoTool = toolCall.function.name.startsWith('todo-');
-						if (currentlyApprovedTools.has(toolCall.function.name) || isTodoTool) {
-							autoApprovedTools.push(toolCall);
-						} else {
-							toolsNeedingConfirmation.push(toolCall);
-						}
-					}
-
-					// Request confirmation only once for all tools needing confirmation
-					let approvedTools: ToolCall[] = [...autoApprovedTools];
-
-					// In YOLO mode, auto-approve all tools
-					if (yoloMode) {
-						approvedTools.push(...toolsNeedingConfirmation);
-					} else if (toolsNeedingConfirmation.length > 0) {
-						// Show all tools needing confirmation as a batch
-						const toolNames = toolsNeedingConfirmation.map(t => t.function.name).join(', ');
-						const firstTool = toolsNeedingConfirmation[0]!; // Safe: length > 0 guarantees this exists
-
-						// Use first tool for confirmation UI, but apply result to all
-						const confirmation = await requestToolConfirmation(firstTool, toolNames);
-
-						if (confirmation === 'reject') {
-							// User rejected - end conversation
-							setMessages(prev => [...prev, {
-								role: 'assistant',
-								content: 'Tool call rejected, session ended',
-								streaming: false
-							}]);
-
-							// End streaming
-							setIsStreaming(false);
-							setAbortController(null);
-							setStreamTokenCount(0);
-							encoder.free();
-							return; // Exit the conversation loop
-						}
-
-						// If approved_always, add ALL these tools to the always-approved set
-						if (confirmation === 'approve_always') {
-							const newApprovedTools = new Set(alwaysApprovedTools);
-							for (const tool of toolsNeedingConfirmation) {
-								newApprovedTools.add(tool.function.name);
-								// Also update local tracking for immediate effect
-								currentlyApprovedTools.add(tool.function.name);
-							}
-							setAlwaysApprovedTools(newApprovedTools);
-						}
-
-						// Add all tools to approved list
-						approvedTools.push(...toolsNeedingConfirmation);
-					}
-
-					// Execute approved tools
-					const toolResults = await executeToolCalls(approvedTools);
-
-					// 检查是否有 TODO 相关的工具调用,如果有则刷新 TODO 列表
-					const hasTodoTools = approvedTools.some(t => t.function.name.startsWith('todo-'));
-					if (hasTodoTools) {
-						const session = sessionManager.getCurrentSession();
-						if (session) {
-							const updatedTodoList = await todoService.getTodoList(session.id);
-							if (updatedTodoList) {
-								setCurrentTodos(updatedTodoList.todos);
-								// 在消息流中显示更新后的 TODO
-								setMessages(prev => [...prev, {
-									role: 'assistant',
-									content: '[TODO List Updated]',
-									streaming: false,
-									showTodoTree: true
-								}]);
-							}
-						}
-					}
-
-					// Display results and add to conversation
-					for (const result of toolResults) {
-						const toolCall = receivedToolCalls.find(tc => tc.id === result.tool_call_id);
-						if (toolCall) {
-							const isError = result.content.startsWith('Error:');
-							const statusIcon = isError ? '✗' : '✓';
-							const statusText = isError ? `\n  └─ ${result.content}` : '';
-
-
-							// Check if this is an edit tool with diff data
-							let editDiffData: {oldContent?: string; newContent?: string; filename?: string} | undefined;
-							if (toolCall.function.name === 'filesystem-edit' && !isError) {
-								try {
-									const resultData = JSON.parse(result.content);
-									if (resultData.oldContent && resultData.newContent) {
-										editDiffData = {
-											oldContent: resultData.oldContent,
-											newContent: resultData.newContent,
-											filename: JSON.parse(toolCall.function.arguments).filePath
-										};
-									}
-								} catch (e) {
-									// If parsing fails, just show regular result
-								}
-							}
-
-							// Check if this is a terminal execution result
-							let terminalResultData: {stdout?: string; stderr?: string; exitCode?: number; command?: string} | undefined;
-							if (toolCall.function.name === 'terminal-execute' && !isError) {
-								try {
-									const resultData = JSON.parse(result.content);
-									if (resultData.command !== undefined) {
-										terminalResultData = {
-											stdout: resultData.stdout || '',
-											stderr: resultData.stderr || '',
-											exitCode: resultData.exitCode || 0,
-											command: resultData.command
-										};
-									}
-								} catch (e) {
-									// If parsing fails, just show regular result
-								}
-							}
-
-							setMessages(prev => [...prev, {
-								role: 'assistant',
-								content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-								streaming: false,
-								toolCall: editDiffData ? {
-									name: toolCall.function.name,
-									arguments: editDiffData
-								} : terminalResultData ? {
-									name: toolCall.function.name,
-									arguments: terminalResultData
-								} : undefined,
-								// Store tool result for preview rendering
-								toolResult: !isError ? result.content : undefined
-							}]);
-						}
-
-						// Add tool result to conversation history and save
-						conversationMessages.push(result as any);
-						saveMessage(result).catch(error => {
-							console.error('Failed to save tool result:', error);
-						});
-					}
-
-					// Continue loop to get next response
-					continue;
-				}
-
-				// No tool calls - display text content if any
-				if (streamedContent.trim()) {
-					finalAssistantMessage = {
-						role: 'assistant',
-						content: streamedContent.trim(),
-						streaming: false,
-						discontinued: controller.signal.aborted
-					};
-					setMessages(prev => [...prev, finalAssistantMessage!]);
-
-					// Add to conversation history and save
-					const assistantMessage: ChatMessage = {
-						role: 'assistant',
-						content: streamedContent.trim()
-					};
-					conversationMessages.push(assistantMessage);
-					saveMessage(assistantMessage).catch(error => {
-						console.error('Failed to save assistant message:', error);
-					});
-				}
-
-				// Conversation complete
-				break;
-			}
-
-			// Free encoder
-			encoder.free();
-
-			// End streaming and start saving
-			setIsStreaming(false);
-			setAbortController(null);
-			setStreamTokenCount(0);
-
-			// Save the final assistant message
-			if (!controller.signal.aborted && finalAssistantMessage) {
-				setIsSaving(true);
-				try {
-					// Message already saved via conversationMessages
-				} finally {
-					setIsSaving(false);
-				}
-			}
-		} catch (error) {
-			encoder.free();
-			throw error;
 		}
 	};
 
 	const processPendingMessages = async () => {
 		if (pendingMessages.length === 0) return;
 
-		// Get current pending messages and clear them immediately to prevent infinite loop
+		// Get current pending messages and clear them immediately
 		const messagesToProcess = [...pendingMessages];
 		setPendingMessages([]);
 
@@ -845,14 +337,14 @@ export default function ChatScreen({ }: Props) {
 		const userMessage: Message = { role: 'user', content: combinedMessage };
 		setMessages(prev => [...prev, userMessage]);
 
-		// Start streaming response (without calling processMessage to avoid recursion)
+		// Start streaming response
 		setIsStreaming(true);
 
 		// Create new abort controller for this request
 		const controller = new AbortController();
 		setAbortController(controller);
 
-		// Save user message (API 格式)
+		// Save user message
 		saveMessage({
 			role: 'user',
 			content: combinedMessage
@@ -861,22 +353,24 @@ export default function ChatScreen({ }: Props) {
 		});
 
 		try {
-			const config = getOpenAiConfig();
-
-			// Check if request method is responses (not yet implemented)
-			if (config.requestMethod === 'responses') {
-				const finalMessage: Message = {
-					role: 'assistant',
-					content: 'Responses API is not yet implemented. Please use "Chat Completions" method in API settings.',
-					streaming: false
-				};
-				setMessages(prev => [...prev, finalMessage]);
-				// Message already saved via conversationMessages
-				return;
-			}
-
 			// Use the same conversation handler (no file references for pending messages)
-			await handleConversationWithTools(combinedMessage, [], undefined, controller);
+			await handleConversationWithTools({
+				userContent: combinedMessage,
+				imageContents: undefined,
+				controller,
+				messages,
+				saveMessage,
+				setMessages,
+				setStreamTokenCount,
+				setCurrentTodos,
+				requestToolConfirmation,
+				isToolAutoApproved,
+				addMultipleToAlwaysApproved,
+				yoloMode,
+				setContextUsage,
+				getPendingMessages: () => pendingMessagesRef.current,
+				clearPendingMessages: () => setPendingMessages([])
+			});
 
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -890,24 +384,15 @@ export default function ChatScreen({ }: Props) {
 				streaming: false
 			};
 			setMessages(prev => [...prev, finalMessage]);
-
-			// End streaming and start saving
+		} finally {
+			// End streaming
 			setIsStreaming(false);
 			setAbortController(null);
 			setStreamTokenCount(0);
-
-			// Save error message
-			setIsSaving(true);
-			try {
-				// Message already saved via conversationMessages
-			} finally {
-				setIsSaving(false);
-			}
 		}
 	};
 
-
-	// If showing session list, only render that - don't render chat at all
+	// If showing session list, only render that
 	if (showSessionList) {
 		return (
 			<SessionListScreenWrapper
@@ -947,58 +432,54 @@ export default function ChatScreen({ }: Props) {
 						</Text>
 					</Box>
 				</Box>,
-				...messages.filter(m => !m.streaming).map((message, index) => {
-						// Determine tool message type and color
-						let toolStatusColor: string = 'cyan'; // default for normal assistant messages
-						let isToolMessage = false;
+				...messages.filter(m => !m.streaming && !m.toolPending).map((message, index) => {
+					// Determine tool message type and color
+					let toolStatusColor: string = 'cyan';
+					let isToolMessage = false;
 
-						if (message.role === 'assistant') {
-							if (message.content.startsWith('⚡')) {
-								// Tool executing
-								isToolMessage = true;
-								toolStatusColor = 'yellowBright';
-							} else if (message.content.startsWith('✓')) {
-								// Tool success
-								isToolMessage = true;
-								toolStatusColor = 'green';
-							} else if (message.content.startsWith('✗')) {
-								// Tool failed
-								isToolMessage = true;
-								toolStatusColor = 'red';
-							} else {
-								// Normal assistant response (after tools complete)
-								toolStatusColor = 'blue';
-							}
+					if (message.role === 'assistant') {
+						if (message.content.startsWith('⚡')) {
+							isToolMessage = true;
+							toolStatusColor = 'yellowBright';
+						} else if (message.content.startsWith('✓')) {
+							isToolMessage = true;
+							toolStatusColor = 'green';
+						} else if (message.content.startsWith('✗')) {
+							isToolMessage = true;
+							toolStatusColor = 'red';
+						} else {
+							toolStatusColor = 'blue';
 						}
+					}
 
-						return (
-							<Box key={`msg-${index}`} marginBottom={isToolMessage ? 0 : 1} marginX={1} flexDirection="column">
-								<Box>
-									<Text color={
-											message.role === 'user' ? 'green' :
-											message.role === 'command' ? 'gray' : toolStatusColor
-										} bold>
-											{message.role === 'user' ? '⛇' : message.role === 'command' ? '⌘' : '❆'}
+					return (
+						<Box key={`msg-${index}`} marginBottom={isToolMessage ? 0 : 1} marginX={1} flexDirection="column">
+							<Box>
+								<Text color={
+									message.role === 'user' ? 'green' :
+									message.role === 'command' ? 'gray' : toolStatusColor
+								} bold>
+									{message.role === 'user' ? '⛇' : message.role === 'command' ? '⌘' : '❆'}
+								</Text>
+								<Box marginLeft={1} marginBottom={1} flexDirection="column">
+									{message.role === 'command' ? (
+										<Text color="gray" dimColor>
+											  └─ {message.commandName}
 										</Text>
-										<Box marginLeft={1} marginBottom={1} flexDirection="column">
-											{message.role === 'command' ? (
-												<Text color="gray" dimColor>
-													  └─ {message.commandName}
-												</Text>
-											) : message.showTodoTree ? (
-												<TodoTree todos={currentTodos} />
-											) : (
-												<>
-													<MarkdownRenderer
-														content={message.content || ' '}
-														color={
-															message.role === 'user' ? 'gray' :
-															isToolMessage ? (
-																message.content.startsWith('⚡') ? 'yellow' :
-																message.content.startsWith('✓') ? 'green' : 'red'
-															) : undefined
-														}
-													/>
+									) : message.showTodoTree ? (
+										<TodoTree todos={currentTodos} />
+									) : (
+										<>
+											<MarkdownRenderer
+												content={message.content || ' '}
+												color={
+													message.role === 'user' ? 'gray' :
+													isToolMessage ? (
+														message.content.startsWith('⚡') ? 'yellow' :
+														message.content.startsWith('✓') ? 'green' : 'red'
+													) : undefined
+												}
+											/>
 											{message.toolDisplay && message.toolDisplay.args.length > 0 && (
 												<Box flexDirection="column">
 													{message.toolDisplay.args.map((arg, argIndex) => (
@@ -1008,24 +489,24 @@ export default function ChatScreen({ }: Props) {
 													))}
 												</Box>
 											)}
-													{message.toolCall && (message.toolCall.name === 'filesystem-create' || message.toolCall.name === 'filesystem-write') && message.toolCall.arguments.content && (
-															<Box marginTop={1}>
-																<DiffViewer
-																	newContent={message.toolCall.arguments.content}
-																	filename={message.toolCall.arguments.path}
-																	maxLines={50}
-																/>
-															</Box>
-														)}
+											{message.toolCall && (message.toolCall.name === 'filesystem-create' || message.toolCall.name === 'filesystem-write') && message.toolCall.arguments.content && (
+												<Box marginTop={1}>
+													<DiffViewer
+														newContent={message.toolCall.arguments.content}
+														filename={message.toolCall.arguments.path}
+														maxLines={50}
+													/>
+												</Box>
+											)}
 											{message.toolCall && message.toolCall.name === 'filesystem-edit' && message.toolCall.arguments.oldContent && message.toolCall.arguments.newContent && (
-													<Box marginTop={1}>
-														<DiffViewer
-															oldContent={message.toolCall.arguments.oldContent}
-															newContent={message.toolCall.arguments.newContent}
-															filename={message.toolCall.arguments.filename}
-															maxLines={50}
-														/>
-													</Box>
+												<Box marginTop={1}>
+													<DiffViewer
+														oldContent={message.toolCall.arguments.oldContent}
+														newContent={message.toolCall.arguments.newContent}
+														filename={message.toolCall.arguments.filename}
+														maxLines={50}
+													/>
+												</Box>
 											)}
 											{/* Show terminal execution result */}
 											{message.toolCall && message.toolCall.name === 'terminal-execute' && message.toolCall.arguments.command && (
@@ -1056,7 +537,7 @@ export default function ChatScreen({ }: Props) {
 													)}
 												</Box>
 											)}
-											{/* Show tool result preview for successful tool executions (except edit and bash which have their own views) */}
+											{/* Show tool result preview for successful tool executions */}
 											{message.content.startsWith('✓') && message.toolResult && !message.toolCall && (
 												<ToolResultPreview
 													toolName={message.content.replace('✓ ', '').split('\n')[0] || ''}
@@ -1064,76 +545,134 @@ export default function ChatScreen({ }: Props) {
 													maxLines={5}
 												/>
 											)}
-													{message.files && message.files.length > 0 && (
-														<Box marginTop={1} flexDirection="column">
-															{message.files.map((file, fileIndex) => (
-																<Text key={fileIndex} color="blue" dimColor>
-																	  └─ Read `{file.path}`{file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}
-																</Text>
-															))}
-														</Box>
-													)}
-													{message.discontinued && (
-														<Text color="red" bold>
-															  └─ user discontinue
-														</Text>
-													)}
-												</>
+											{/* System info for user messages */}
+											{message.role === 'user' && message.systemInfo && (
+												<Box marginTop={1} flexDirection="column">
+													<Text color="gray" dimColor>
+														└─ Platform: {message.systemInfo.platform}
+													</Text>
+													<Text color="gray" dimColor>
+														└─ Shell: {message.systemInfo.shell}
+													</Text>
+													<Text color="gray" dimColor>
+														└─ Working Directory: {message.systemInfo.workingDirectory}
+													</Text>
+												</Box>
 											)}
-										</Box>
-									</Box>
-								</Box>
-						);
-					})
-					]}>
-						{(item) => item}
-					</Static>
-
-					{/* Show loading indicator when streaming or saving, but hide during tool confirmation */}
-					{(isStreaming || isSaving) && !pendingToolConfirmation && (
-						<Box marginBottom={1} marginX={1}>
-							<Text color={(['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][animationFrame] as any)} bold>
-								❆
-							</Text>
-							<Box marginLeft={1} marginBottom={1}>
-								<Text color="gray" dimColor>
-									{isStreaming ? 'Thinking...' : 'Create the first dialogue record file...'}
-									{isStreaming && streamTokenCount > 0 && (
-										<Text color="cyan">
-											{' '}(↓ {streamTokenCount >= 1000
-												? `${(streamTokenCount / 1000).toFixed(1)}k`
-												: streamTokenCount} tokens)
-										</Text>
+											{message.files && message.files.length > 0 && (
+												<Box flexDirection="column">
+													{message.files.map((file, fileIndex) => (
+														<Text key={fileIndex} color="gray" dimColor>
+															└─ {file.path}{file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}
+														</Text>
+													))}
+												</Box>
+											)}
+											{/* Images for user messages */}
+											{message.role === 'user' && message.images && message.images.length > 0 && (
+												<Box marginTop={1} flexDirection="column">
+													{message.images.map((_image, imageIndex) => (
+														<Text key={imageIndex} color="gray" dimColor>
+															└─ [image #{imageIndex + 1}]
+														</Text>
+													))}
+												</Box>
+											)}
+											{message.discontinued && (
+												<Text color="red" bold>
+													  └─ user discontinue
+												</Text>
+											)}
+										</>
 									)}
-								</Text>
+								</Box>
 							</Box>
 						</Box>
-					)}
+					);
+				})
+			]}>
+				{(item) => item}
+			</Static>
 
-					<Box marginX={1}>
-						<PendingMessages pendingMessages={pendingMessages} />
+			{/* Show pending tool calls in dynamic area */}
+			{messages.filter(m => m.toolPending).map((message, index) => (
+				<Box key={`pending-tool-${index}`} marginBottom={1} marginX={1}>
+					<Text color="yellowBright" bold>
+						❆
+					</Text>
+					<Box marginLeft={1} marginBottom={1} flexDirection="row">
+						<MarkdownRenderer
+							content={message.content || ' '}
+							color="yellow"
+						/>
+						<Box marginLeft={1}>
+							<Text color="yellow">
+								<Spinner type="dots" />
+							</Text>
+						</Box>
 					</Box>
+				</Box>
+			))}
 
-					{/* Show tool confirmation dialog if pending */}
-					{pendingToolConfirmation && (
-						<ToolConfirmation
-							toolName={pendingToolConfirmation.batchToolNames || pendingToolConfirmation.tool.function.name}
-							onConfirm={pendingToolConfirmation.resolve}
-						/>
-					)}
+			{/* Show loading indicator when streaming or saving */}
+			{(isStreaming || isSaving) && !pendingToolConfirmation && (
+				<Box marginBottom={1} marginX={1}>
+					<Text color={(['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][animationFrame] as any)} bold>
+						❆
+					</Text>
+					<Box marginLeft={1} marginBottom={1}>
+						<Text color="gray" dimColor>
+							{isStreaming ? (
+								<>
+									Thinking... ({formatElapsedTime(elapsedSeconds)}
+									{streamTokenCount > 0 && (
+										<>
+											{' · '}
+											<Text color="cyan">
+												↓ {streamTokenCount >= 1000
+													? `${(streamTokenCount / 1000).toFixed(1)}k`
+													: streamTokenCount} tokens
+											</Text>
+										</>
+									)}
+									)
+								</>
+							) : (
+								'Create the first dialogue record file...'
+							)}
+						</Text>
+					</Box>
+				</Box>
+			)}
 
-					{/* Hide input during tool confirmation */}
-					{!pendingToolConfirmation && (
-						<ChatInput
-							onSubmit={handleMessageSubmit}
-							onCommand={handleCommandExecution}
-							placeholder="Ask me anything about coding..."
-							disabled={!!pendingToolConfirmation}
-							chatHistory={messages}
-							onHistorySelect={handleHistorySelect}
-							yoloMode={yoloMode}
-						/>
-					)}
+			<Box marginX={1}>
+				<PendingMessages pendingMessages={pendingMessages} />
+			</Box>
+
+			{/* Show tool confirmation dialog if pending */}
+			{pendingToolConfirmation && (
+				<ToolConfirmation
+					toolName={pendingToolConfirmation.batchToolNames || pendingToolConfirmation.tool.function.name}
+					onConfirm={pendingToolConfirmation.resolve}
+				/>
+			)}
+
+			{/* Hide input during tool confirmation */}
+			{!pendingToolConfirmation && (
+				<ChatInput
+					onSubmit={handleMessageSubmit}
+					onCommand={handleCommandExecution}
+					placeholder="Ask me anything about coding..."
+					disabled={!!pendingToolConfirmation}
+					chatHistory={messages}
+					onHistorySelect={handleHistorySelect}
+					yoloMode={yoloMode}
+					contextUsage={contextUsage ? {
+						inputTokens: contextUsage.prompt_tokens,
+						maxContextTokens: getOpenAiConfig().maxContextTokens || 4000
+					} : undefined}
+				/>
+			)}
 		</Box>
 	);
 }
