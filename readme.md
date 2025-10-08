@@ -18,6 +18,25 @@ $ snow
 $ snow --update
 ```
 
+## Config example  `./User/.snow/config.json`
+```json
+{
+  "openai": {
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "your-api-key",
+    "requestMethod": "responses",
+    "advancedModel": "gpt-5-codex",
+    "basicModel": "gpt-5-codex",
+    "maxContextTokens": 200000,
+    "compactModel": {
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "your-api-key",
+      "modelName": "gpt-4.1-mini"
+    }
+  }
+}
+```
+
 ## Uninstall
 ```bash
 $ npm uninstall --global snow-ai
