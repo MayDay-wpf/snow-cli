@@ -27,6 +27,7 @@ export type ConversationHandlerOptions = {
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
 	getPendingMessages?: () => string[]; // Get pending user messages
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
+	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
 };
 
 /**
@@ -279,6 +280,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					const confirmation = await requestToolConfirmation(firstTool, toolNames);
 
 					if (confirmation === 'reject') {
+						// Remove pending tool messages
+						setMessages(prev => prev.filter(msg => !msg.toolPending));
+
 						// User rejected - end conversation
 						setMessages(prev => [...prev, {
 							role: 'assistant',
@@ -286,7 +290,10 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 							streaming: false
 						}]);
 
-						// End streaming
+						// End streaming immediately
+						if (options.setIsStreaming) {
+							options.setIsStreaming(false);
+						}
 						encoder.free();
 						return; // Exit the conversation loop
 					}
@@ -308,9 +315,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 				const toolResults = await executeToolCalls(approvedTools);
 
 				// Check if there are TODO related tool calls, if yes refresh TODO list
-				// Only show TODO panel for todo-get and todo-update, not for todo-create or todo-add
+				// Only show TODO panel for todo-update, not for other todo operations
 				const shouldShowTodoPanel = approvedTools.some(t =>
-					t.function.name === 'todo-get' || t.function.name === 'todo-update'
+					t.function.name === 'todo-update'
 				);
 				const hasTodoTools = approvedTools.some(t => t.function.name.startsWith('todo-'));
 
@@ -321,7 +328,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						if (updatedTodoList) {
 							setCurrentTodos(updatedTodoList.todos);
 
-							// Only show TODO panel for get/update operations
+							// Only show TODO panel for update operations
 							if (shouldShowTodoPanel) {
 								// Remove any existing TODO tree messages and add a new one
 								setMessages(prev => {

@@ -6,21 +6,23 @@ import ChatInput from '../components/ChatInput.js';
 import { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import MCPInfoScreen from '../components/MCPInfoScreen.js';
-import SessionListScreenWrapper from '../components/SessionListScreenWrapper.js';
+import MCPInfoPanel from '../components/MCPInfoPanel.js';
+import SessionListPanel from '../components/SessionListPanel.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import TodoTree from '../components/TodoTree.js';
+import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import type { UsageInfo } from '../../api/chat.js';
 import { getOpenAiConfig } from '../../utils/apiConfig.js';
 import { sessionManager } from '../../utils/sessionManager.js';
 import { useSessionSave } from '../../hooks/useSessionSave.js';
-import { useSessionManagement } from '../../hooks/useSessionManagement.js';
 import { useToolConfirmation } from '../../hooks/useToolConfirmation.js';
 import { handleConversationWithTools } from '../../hooks/useConversation.js';
 import { parseAndValidateFileReferences, createMessageWithFileInstructions, getSystemInfo } from '../../utils/fileUtils.js';
 import { compressContext } from '../../utils/contextCompressor.js';
+import { incrementalSnapshotManager } from '../../utils/incrementalSnapshot.js';
 // Import commands to register them
 import '../../utils/commands/clear.js';
 import '../../utils/commands/resume.js';
@@ -72,6 +74,10 @@ export default function ChatScreen({ }: Props) {
 	const [editorContext, setEditorContext] = useState<EditorContext>({});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
+	const [showSessionPanel, setShowSessionPanel] = useState(false);
+	const [showMcpPanel, setShowMcpPanel] = useState(false);
+	const [snapshotFileCount, setSnapshotFileCount] = useState<Map<number, number>>(new Map());
+	const [pendingRollback, setPendingRollback] = useState<{messageIndex: number; fileCount: number} | null>(null);
 	const { stdout } = useStdout();
 	const terminalHeight = stdout?.rows || 24;
 	const workingDirectory = process.cwd();
@@ -94,20 +100,6 @@ export default function ChatScreen({ }: Props) {
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved
 	} = useToolConfirmation();
-
-	// Use session management hook
-	const {
-		showSessionList,
-		setShowSessionList,
-		handleSessionSelect,
-		handleBackFromSessionList
-	} = useSessionManagement(
-		setMessages,
-		setPendingMessages,
-		setIsStreaming,
-		setRemountKey,
-		initializeFromSession
-	);
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
@@ -205,6 +197,25 @@ export default function ChatScreen({ }: Props) {
 		};
 	}, [vscodeConnectionStatus]);
 
+	// Load snapshot file counts when session changes
+	useEffect(() => {
+		const loadSnapshotFileCounts = async () => {
+			const currentSession = sessionManager.getCurrentSession();
+			if (!currentSession) return;
+
+			const snapshots = await incrementalSnapshotManager.listSnapshots(currentSession.id);
+			const counts = new Map<number, number>();
+
+			for (const snapshot of snapshots) {
+				counts.set(snapshot.messageIndex, snapshot.fileCount);
+			}
+
+			setSnapshotFileCount(counts);
+		};
+
+		loadSnapshotFileCounts();
+	}, [messages.length]); // Reload when messages change
+
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
 	useEffect(() => {
@@ -219,6 +230,27 @@ export default function ChatScreen({ }: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
+		if (pendingRollback) {
+			if (key.escape) {
+				setPendingRollback(null);
+			}
+			return;
+		}
+
+		if (showSessionPanel) {
+			if (key.escape) {
+				setShowSessionPanel(false);
+			}
+			return;
+		}
+
+		if (showMcpPanel) {
+			if (key.escape) {
+				setShowMcpPanel(false);
+			}
+			return;
+		}
+
 		if (showMcpInfo) {
 			if (key.escape) {
 				setShowMcpInfo(false);
@@ -230,7 +262,7 @@ export default function ChatScreen({ }: Props) {
 			// Abort the controller
 			abortController.abort();
 
-			// Immediately add discontinued message
+			// Add discontinued message
 			setMessages(prev => [...prev, {
 				role: 'assistant',
 				content: '',
@@ -336,11 +368,25 @@ export default function ChatScreen({ }: Props) {
 				commandName: commandName
 			};
 			setMessages([commandMessage]);
-		} else if (result.success && result.action === 'resume') {
-			setShowSessionList(true);
+		} else if (result.success && result.action === 'showSessionPanel') {
+			setShowSessionPanel(true);
+			const commandMessage: Message = {
+				role: 'command',
+				content: '',
+				commandName: commandName
+			};
+			setMessages(prev => [...prev, commandMessage]);
 		} else if (result.success && result.action === 'showMcpInfo') {
 			setShowMcpInfo(true);
 			setMcpPanelKey(prev => prev + 1);
+			const commandMessage: Message = {
+				role: 'command',
+				content: '',
+				commandName: commandName
+			};
+			setMessages(prev => [...prev, commandMessage]);
+		} else if (result.success && result.action === 'showMcpPanel') {
+			setShowMcpPanel(true);
 			const commandMessage: Message = {
 				role: 'command',
 				content: '',
@@ -370,11 +416,57 @@ export default function ChatScreen({ }: Props) {
 		}
 	};
 
-	const handleHistorySelect = (selectedIndex: number, _message: string) => {
+	const handleHistorySelect = async (selectedIndex: number, _message: string) => {
+		// Check if there are files to rollback
+		const fileCount = snapshotFileCount.get(selectedIndex) || 0;
+
+		if (fileCount > 0) {
+			// Show confirmation dialog
+			setPendingRollback({ messageIndex: selectedIndex, fileCount });
+		} else {
+			// No files to rollback, just rollback conversation
+			performRollback(selectedIndex, false);
+		}
+	};
+
+	const performRollback = async (selectedIndex: number, rollbackFiles: boolean) => {
+		// Rollback workspace to checkpoint if requested
+		if (rollbackFiles) {
+			const currentSession = sessionManager.getCurrentSession();
+			if (currentSession) {
+				await incrementalSnapshotManager.rollbackToSnapshot(currentSession.id, selectedIndex);
+			}
+		}
+
 		// Truncate messages array to remove the selected user message and everything after it
 		setMessages(prev => prev.slice(0, selectedIndex));
 		clearSavedMessages();
 		setRemountKey(prev => prev + 1);
+
+		// Clear pending rollback dialog
+		setPendingRollback(null);
+	};
+
+	const handleRollbackConfirm = (rollbackFiles: boolean) => {
+		if (pendingRollback) {
+			performRollback(pendingRollback.messageIndex, rollbackFiles);
+		}
+	};
+
+	const handleSessionPanelSelect = async (sessionId: string) => {
+		setShowSessionPanel(false);
+		try {
+			const session = await sessionManager.loadSession(sessionId);
+			if (session) {
+				initializeFromSession(session.messages);
+				setMessages(session.messages as Message[]);
+				setPendingMessages([]);
+				setIsStreaming(false);
+				setRemountKey(prev => prev + 1);
+			}
+		} catch (error) {
+			console.error('Failed to load session:', error);
+		}
 	};
 
 	const handleMessageSubmit = async (message: string, images?: Array<{data: string, mimeType: string}>) => {
@@ -382,6 +474,16 @@ export default function ChatScreen({ }: Props) {
 		if (isStreaming) {
 			setPendingMessages(prev => [...prev, message]);
 			return;
+		}
+
+		// Create checkpoint (lightweight, only tracks modifications)
+		const currentSession = sessionManager.getCurrentSession();
+		if (!currentSession) {
+			await sessionManager.createNewSession();
+		}
+		const session = sessionManager.getCurrentSession();
+		if (session) {
+			await incrementalSnapshotManager.createSnapshot(session.id, messages.length);
 		}
 
 		// Process the message normally
@@ -448,7 +550,8 @@ export default function ChatScreen({ }: Props) {
 				setContextUsage,
 				useBasicModel,
 				getPendingMessages: () => pendingMessagesRef.current,
-				clearPendingMessages: () => setPendingMessages([])
+				clearPendingMessages: () => setPendingMessages([]),
+				setIsStreaming
 			});
 
 		} catch (error) {
@@ -517,7 +620,8 @@ export default function ChatScreen({ }: Props) {
 				yoloMode,
 				setContextUsage,
 				getPendingMessages: () => pendingMessagesRef.current,
-				clearPendingMessages: () => setPendingMessages([])
+				clearPendingMessages: () => setPendingMessages([]),
+				setIsStreaming
 			});
 
 		} catch (error) {
@@ -539,16 +643,6 @@ export default function ChatScreen({ }: Props) {
 			setStreamTokenCount(0);
 		}
 	};
-
-	// If showing session list, only render that
-	if (showSessionList) {
-		return (
-			<SessionListScreenWrapper
-				onBack={handleBackFromSessionList}
-				onSelectSession={handleSessionSelect}
-			/>
-		);
-	}
 
 	if (showMcpInfo) {
 		return (
@@ -583,7 +677,7 @@ export default function ChatScreen({ }: Props) {
 	}
 
 	return (
-		<Box flexDirection="column">
+		<Box flexDirection="column" height="100%">
 			<Static key={remountKey} items={[
 				<Box key="header" marginX={1} borderColor={'cyan'} borderStyle="round" paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
@@ -828,8 +922,36 @@ export default function ChatScreen({ }: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression */}
-			{!pendingToolConfirmation && !isCompressing && (
+			{/* Show session list panel if active - replaces input */}
+			{showSessionPanel && (
+				<Box marginX={1}>
+					<SessionListPanel
+						onSelectSession={handleSessionPanelSelect}
+						onClose={() => setShowSessionPanel(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show MCP info panel if active - replaces input */}
+			{showMcpPanel && (
+				<Box marginX={1} flexDirection="column">
+					<MCPInfoPanel />
+					<Box marginTop={1}>
+						<Text color="gray" dimColor>Press ESC to close</Text>
+					</Box>
+				</Box>
+			)}
+
+			{/* Show file rollback confirmation if pending */}
+			{pendingRollback && (
+				<FileRollbackConfirmation
+					fileCount={pendingRollback.fileCount}
+					onConfirm={handleRollbackConfirm}
+				/>
+			)}
+
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or rollback confirmation */}
+			{!pendingToolConfirmation && !isCompressing && !showSessionPanel && !showMcpPanel && !pendingRollback && (
 				<>
 					<ChatInput
 						onSubmit={handleMessageSubmit}
@@ -843,6 +965,7 @@ export default function ChatScreen({ }: Props) {
 							inputTokens: contextUsage.prompt_tokens,
 							maxContextTokens: getOpenAiConfig().maxContextTokens || 4000
 						} : undefined}
+						snapshotFileCount={snapshotFileCount}
 					/>
 					{/* VSCode connection status indicator */}
 					{vscodeConnectionStatus !== 'disconnected' && (

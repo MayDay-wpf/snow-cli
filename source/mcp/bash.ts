@@ -128,13 +128,13 @@ export const terminalService = new TerminalCommandService();
 export const mcpTools = [
 	{
 		name: 'terminal_execute',
-		description: 'Run terminal commands. Pass commands exactly as typed in terminal. Examples: "npm -v", "git status", "node index.js"',
+		description: 'Execute terminal commands like npm, git, build scripts, etc. BEST PRACTICE: For file modifications, prefer filesystem_edit/filesystem_create tools first - they are more reliable and provide better error handling. Terminal commands (sed, awk, echo >file, cat <<EOF) can be used for file editing, but only as a fallback option when filesystem tools are not suitable. Primary use cases: (1) Running build/test/lint scripts, (2) Version control operations, (3) Package management, (4) System utilities, (5) Fallback file editing when needed.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				command: {
 					type: 'string',
-					description: 'Terminal command to execute. Examples: "npm -v", "git status", "ls -la"'
+					description: 'Terminal command to execute. For file editing, filesystem tools are generally preferred.'
 				},
 				timeout: {
 					type: 'number',

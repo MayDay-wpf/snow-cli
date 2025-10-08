@@ -93,10 +93,12 @@ export default function App({ version }: Props) {
 	};
 
 	return (
-		<Box flexDirection="column">
-			{renderView()}
+		<Box flexDirection="column" height="100%">
+			<Box flexGrow={1} flexShrink={1} minHeight={0}>
+				{renderView()}
+			</Box>
 			{exitNotification.show && (
-				<Box paddingX={1}>
+				<Box paddingX={1} flexShrink={0}>
 					<Alert variant="warning">
 						{exitNotification.message}
 					</Alert>

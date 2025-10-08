@@ -1,12 +1,12 @@
 import { registerCommand, type CommandResult } from '../commandExecutor.js';
 
-// MCP info command handler
+// MCP info command handler - shows MCP panel in chat
 registerCommand('mcp', {
 	execute: (): CommandResult => {
 		return {
 			success: true,
-			action: 'showMcpInfo',
-			message: 'Opening MCP services overview'
+			action: 'showMcpPanel',
+			message: 'Showing MCP services panel'
 		};
 	}
 });

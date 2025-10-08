@@ -19,6 +19,7 @@ type Props = {
 		inputTokens: number;
 		maxContextTokens: number;
 	};
+	snapshotFileCount?: Map<number, number>; // Map of message index to file count
 };
 
 // Command Definition
@@ -32,7 +33,7 @@ const commands = [
 	{ name: 'compact', description: 'Compress conversation history using compact model' }
 ];
 
-export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false, contextUsage }: Props) {
+export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false, contextUsage, snapshotFileCount }: Props) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 	
@@ -687,17 +688,27 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 							const maxHeight = 8;
 							const visibleMessages = userMessages.slice(0, maxHeight);
 
-							return visibleMessages.map((message, index) => (
-								<Box key={message.value}>
-									<Text
-										color={index === historySelectedIndex ? 'green' : 'white'}
-										bold
-									>
-										{index === historySelectedIndex ? '➣  ' : '  '}
-										{message.label}
-									</Text>
-								</Box>
-							));
+							return visibleMessages.map((message, index) => {
+								const messageIndex = parseInt(message.value, 10);
+								const fileCount = snapshotFileCount?.get(messageIndex) || 0;
+
+								return (
+									<Box key={message.value}>
+										<Text
+											color={index === historySelectedIndex ? 'green' : 'white'}
+											bold
+										>
+											{index === historySelectedIndex ? '➣  ' : '  '}
+											{message.label}
+										</Text>
+										{fileCount > 0 && (
+											<Text color="yellow" dimColor>
+												{' '}({fileCount} file{fileCount > 1 ? 's' : ''})
+											</Text>
+										)}
+									</Box>
+								);
+							});
 						})()}
 						{getUserMessages().length > 8 && (
 							<Box>

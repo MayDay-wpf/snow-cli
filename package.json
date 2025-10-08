@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -63,6 +63,7 @@
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
 		"@types/figlet": "^1.7.0",
+		"@types/glob": "^8.1.0",
 		"@types/react": "^18.0.32",
 		"@types/ws": "^8.5.8",
 		"@vdemedes/prettier-config": "^2.0.1",

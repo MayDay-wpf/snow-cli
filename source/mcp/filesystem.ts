@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { vscodeConnection, type Diagnostic } from '../utils/vscodeConnection.js';
+import { incrementalSnapshotManager } from '../utils/incrementalSnapshot.js';
 const { resolve, dirname, isAbsolute } = path;
 
 interface SearchMatch {
@@ -131,6 +132,9 @@ export class FilesystemMCPService {
         }
       }
 
+      // Backup file before creation
+      await incrementalSnapshotManager.backupFile(fullPath);
+
       // Create parent directories if needed
       if (createDirectories) {
         const dir = dirname(fullPath);
@@ -159,6 +163,9 @@ export class FilesystemMCPService {
       if (!stats.isFile()) {
         throw new Error(`Path is not a file: ${filePath}`);
       }
+
+      // Backup file before deletion
+      await incrementalSnapshotManager.backupFile(fullPath);
 
       await fs.unlink(fullPath);
       return `File deleted successfully: ${filePath}`;
@@ -241,27 +248,32 @@ export class FilesystemMCPService {
 
   /**
    * Edit a file by replacing lines within a specified range
+   * IMPORTANT: This tool enforces small, precise edits (max 15 lines per edit) to ensure accuracy.
+   * For larger changes, make multiple sequential edits instead of one large edit.
+   *
    * @param filePath - Path to the file to edit
-   * @param startLine - Starting line number (1-indexed, inclusive)
-   * @param endLine - Ending line number (1-indexed, inclusive)
-   * @param newContent - New content to replace the specified lines
-   * @param contextLines - Number of context lines to return before and after the edit (default: 50)
-   * @returns Object containing success message, old content, new content, and context
-   * @throws Error if file editing fails
+   * @param startLine - Starting line number (1-indexed, inclusive) - get from filesystem_read output
+   * @param endLine - Ending line number (1-indexed, inclusive) - get from filesystem_read output
+   * @param newContent - New content to replace the specified lines (WITHOUT line numbers)
+   * @param contextLines - Number of context lines to return before and after the edit (default: 8)
+   * @returns Object containing success message, precise before/after comparison, and diagnostics
+   * @throws Error if file editing fails or if the edit range is too large
    */
   async editFile(
     filePath: string,
     startLine: number,
     endLine: number,
     newContent: string,
-    contextLines: number = 50
+    contextLines: number = 8
   ): Promise<{
     message: string;
     oldContent: string;
     newContent: string;
+    replacedLines: string;
     contextStartLine: number;
     contextEndLine: number;
     totalLines: number;
+    linesModified: number;
     diagnostics?: Diagnostic[];
   }> {
     try {
@@ -291,13 +303,43 @@ export class FilesystemMCPService {
       // Adjust endLine if it exceeds file length
       const adjustedEndLine = Math.min(endLine, totalLines);
 
-      // Calculate context range
+      // ENFORCE SMALL EDITS: Limit to max 15 lines per edit for precision
+      const linesToModify = adjustedEndLine - startLine + 1;
+      const MAX_LINES_PER_EDIT = 15;
+      if (linesToModify > MAX_LINES_PER_EDIT) {
+        throw new Error(
+          `❌ Edit range too large (${linesToModify} lines). Maximum allowed: ${MAX_LINES_PER_EDIT} lines.\n\n` +
+          `💡 Best Practice: Make SMALL, PRECISE edits instead of large changes.\n` +
+          `   - Break your changes into multiple sequential edits\n` +
+          `   - Each edit should modify at most ${MAX_LINES_PER_EDIT} lines\n` +
+          `   - This ensures accuracy and prevents syntax errors\n\n` +
+          `Current request: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
+          `Suggested approach: Split into ${Math.ceil(linesToModify / MAX_LINES_PER_EDIT)} smaller edits`
+        );
+      }
+
+      // Backup file before editing
+      await incrementalSnapshotManager.backupFile(fullPath);
+
+      // Extract the lines that will be replaced (for comparison)
+      const replacedLines = lines.slice(startLine - 1, adjustedEndLine);
+      const replacedContent = replacedLines.map((line, idx) => {
+        const lineNum = startLine + idx;
+        const paddedNum = String(lineNum).padStart(String(adjustedEndLine).length, ' ');
+        return `${paddedNum}→${line}`;
+      }).join('\n');
+
+      // Calculate context range (smaller context for focused edits)
       const contextStart = Math.max(1, startLine - contextLines);
-      const contextEnd = Math.min(totalLines, endLine + contextLines);
+      const contextEnd = Math.min(totalLines, adjustedEndLine + contextLines);
 
       // Extract old content for context (including the lines to be replaced)
       const oldContextLines = lines.slice(contextStart - 1, contextEnd);
-      const oldContent = oldContextLines.join('\n');
+      const oldContent = oldContextLines.map((line, idx) => {
+        const lineNum = contextStart + idx;
+        const paddedNum = String(lineNum).padStart(String(contextEnd).length, ' ');
+        return `${paddedNum}→${line}`;
+      }).join('\n');
 
       // Replace the specified lines
       const newContentLines = newContent.split('\n');
@@ -310,9 +352,13 @@ export class FilesystemMCPService {
       const lineDifference = newContentLines.length - (adjustedEndLine - startLine + 1);
       const newContextEnd = Math.min(newTotalLines, contextEnd + lineDifference);
 
-      // Extract new content for context
+      // Extract new content for context with line numbers
       const newContextLines = modifiedLines.slice(contextStart - 1, newContextEnd);
-      const newContextContent = newContextLines.join('\n');
+      const newContextContent = newContextLines.map((line, idx) => {
+        const lineNum = contextStart + idx;
+        const paddedNum = String(lineNum).padStart(String(newContextEnd).length, ' ');
+        return `${paddedNum}→${line}`;
+      }).join('\n');
 
       // Write the modified content back to file
       await fs.writeFile(fullPath, modifiedLines.join('\n'), 'utf-8');
@@ -331,17 +377,23 @@ export class FilesystemMCPService {
         message: string;
         oldContent: string;
         newContent: string;
+        replacedLines: string;
         contextStartLine: number;
         contextEndLine: number;
         totalLines: number;
+        linesModified: number;
         diagnostics?: Diagnostic[];
       } = {
-        message: `File edited successfully: ${filePath} (lines ${startLine}-${adjustedEndLine} replaced)`,
+        message: `✅ File edited successfully: ${filePath}\n` +
+                 `   Replaced: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
+                 `   Result: ${newContentLines.length} new lines`,
         oldContent,
         newContent: newContextContent,
+        replacedLines: replacedContent,
         contextStartLine: contextStart,
         contextEndLine: newContextEnd,
-        totalLines: newTotalLines
+        totalLines: newTotalLines,
+        linesModified: linesToModify
       };
 
       // Add diagnostics if any were found
@@ -351,7 +403,8 @@ export class FilesystemMCPService {
         const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
 
         if (errorCount > 0 || warningCount > 0) {
-          result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
+          result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)\n` +
+                           `   ⚡ TIP: Check the diagnostics and make another small edit to fix issues`;
         }
       }
 
@@ -519,7 +572,7 @@ export const mcpTools = [
   },
   {
     name: 'filesystem_create',
-    description: 'Create a new file with specified content',
+    description: 'PREFERRED tool for file creation: Create a new file with specified content. More reliable than terminal commands like echo/cat with redirects. Automatically creates parent directories if needed. Terminal commands can be used as a fallback if needed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -570,30 +623,30 @@ export const mcpTools = [
   },
   {
     name: 'filesystem_edit',
-    description: 'Edit a file by replacing lines within a specified range. CRITICAL: You MUST use filesystem_read first to see the exact line numbers and current content before editing. This ensures precise line-based editing without errors. Returns context around the edited region for verification.',
+    description: '🎯 PREFERRED tool for precise file editing. **CRITICAL CONSTRAINTS**: (1) Maximum 15 lines per edit - larger changes will be REJECTED, (2) Must use exact line numbers from filesystem_read output. **BEST PRACTICES**: Use SMALL, INCREMENTAL edits instead of large changes. Multiple small edits are SAFER and MORE ACCURATE than one large edit. This prevents syntax errors and bracket mismatches. **WORKFLOW**: (1) Read target section with filesystem_read to get exact line numbers, (2) Edit SMALL sections (≤15 lines), (3) Verify with diagnostics, (4) Make next small edit if needed. Returns precise before/after comparison with line numbers and VS Code diagnostics.',
     inputSchema: {
       type: 'object',
       properties: {
         filePath: {
           type: 'string',
-          description: 'Path to the file to edit'
+          description: 'Path to the file to edit (absolute or relative)'
         },
         startLine: {
           type: 'number',
-          description: 'Starting line number (1-indexed, inclusive). Get this from filesystem_read output.'
+          description: '⚠️  CRITICAL: Starting line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. Double-check this value!'
         },
         endLine: {
           type: 'number',
-          description: 'Ending line number (1-indexed, inclusive). Get this from filesystem_read output.'
+          description: '⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. Range CANNOT exceed 15 lines (endLine - startLine + 1 ≤ 15).'
         },
         newContent: {
           type: 'string',
-          description: 'New content to replace the specified lines. Do NOT include line numbers in this content.'
+          description: 'New content to replace specified lines. ⚠️  Do NOT include line numbers. ⚠️  Ensure proper indentation and bracket closure. Keep changes MINIMAL and FOCUSED.'
         },
         contextLines: {
           type: 'number',
-          description: 'Number of context lines to return before and after the edit (default: 50)',
-          default: 50
+          description: 'Number of context lines to show before/after edit for verification (default: 8)',
+          default: 8
         }
       },
       required: ['filePath', 'startLine', 'endLine', 'newContent']

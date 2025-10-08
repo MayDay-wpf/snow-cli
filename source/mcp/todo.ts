@@ -148,7 +148,36 @@ export class TodoService {
 		return [
 			{
 				name: 'todo-create',
-				description: 'Create a TODO list for current session. CRITICAL FOR PROGRAMMING TASKS: You MUST use this tool at the start of ANY programming task (bug fixes, new features, refactoring, optimization, etc.) to break down the work into trackable steps. This ensures systematic execution and prevents missing critical steps. The TODO list helps maintain context and provides clear progress visibility to the user. WARNING: This tool creates/replaces the entire TODO list for the session - use it ONLY ONCE at the beginning. To add more tasks later, use "todo-add" instead.',
+				description: `Create a TODO list for complex multi-step tasks (optional planning tool).
+
+## CORE PRINCIPLE - FOCUS ON EXECUTION:
+TODO lists are OPTIONAL helpers for complex tasks. Your PRIMARY goal is COMPLETING THE WORK, not maintaining perfect TODO lists. Use this tool only when it genuinely helps organize complex work - don't let TODO management slow you down.
+
+## WHEN TO USE (Optional):
+- Complex tasks with 5+ distinct steps that benefit from tracking
+- Long-running tasks where progress visibility helps the user
+- Tasks with multiple dependencies that need careful ordering
+- User explicitly requests a TODO list
+
+## WHEN TO SKIP:
+- Simple 1-3 step tasks (just do the work directly)
+- Straightforward file edits or single-function changes
+- Quick fixes or minor modifications
+- When TODO creation takes longer than just doing the task
+
+## LIFECYCLE MANAGEMENT:
+1. **NEW REQUEST = NEW TODO LIST**: Completely new requirement? Delete old todos first, then create new list.
+2. **INCREMENTAL REQUEST = USE TODO-ADD**: Adding to existing requirement? Use "todo-add" instead.
+3. Use this tool ONLY when starting fresh (new session or new requirement after cleanup).
+
+## CREATION GUIDELINES:
+- Keep it simple and actionable
+- 3-7 main tasks is usually sufficient (don't over-plan)
+- Include verification steps only if critical
+- Order by dependencies
+
+## WARNING:
+This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo-add" instead.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -159,16 +188,16 @@ export class TodoService {
 								properties: {
 									content: {
 										type: 'string',
-										description: 'TODO item description (be specific and actionable)',
+										description: 'TODO item description - must be specific, actionable, and technically precise (e.g., "Modify handleSubmit function in ChatInput.tsx to validate user input before processing" NOT "fix input validation")',
 									},
 									parentId: {
 										type: 'string',
-										description: 'Parent TODO ID (optional, for creating subtasks)',
+										description: 'Parent TODO ID (optional, for creating subtasks in hierarchical structure)',
 									},
 								},
 								required: ['content'],
 							},
-							description: 'List of TODO items to create. For programming tasks, include steps like: analyze requirements, implement changes, test functionality, verify build, etc. The list can contain multiple tasks that will be tracked and executed sequentially.',
+							description: 'Complete list of TODO items. Each item must represent a discrete, verifiable unit of work. For programming tasks, typical structure: analyze code → implement changes → test functionality → verify build → commit (if requested).',
 						},
 					},
 					required: ['todos'],
@@ -176,7 +205,15 @@ export class TodoService {
 			},
 			{
 				name: 'todo-get',
-				description: 'Get the TODO list for current session. Use this to check existing tasks and their status before making updates.',
+				description: `Get the current TODO list for this session.
+
+## WHEN TO USE:
+- Before making any updates to check current task status and IDs
+- To verify what tasks exist before deciding to add/delete/update
+- To inspect the TODO structure before planning next steps
+
+## RETURNS:
+Complete TODO list with all task IDs, content, status, and hierarchy.`,
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -184,22 +221,50 @@ export class TodoService {
 			},
 			{
 				name: 'todo-update',
-				description: 'Update TODO item status or content. IMPORTANT: Mark task as "in_progress" BEFORE starting work, and "completed" IMMEDIATELY after finishing. Keep exactly ONE task in "in_progress" status at any time. This provides real-time progress feedback to the user.',
+				description: `Update TODO status - USE SPARINGLY, focus on actual work instead.
+
+## CORE PRINCIPLE - WORK FIRST, UPDATES SECOND:
+Prioritize COMPLETING TASKS over updating TODO status. Update TODO only at natural breakpoints, not constantly. It's better to finish 3 tasks and update once than to update TODO 10 times while making slow progress.
+
+## WHEN TO UPDATE (Sparingly):
+1. **Starting a major task**: Mark "in_progress" when beginning significant work (not for every micro-step)
+2. **Completing a major task**: Mark "completed" ONLY when task is 100% done and verified
+3. **Natural breakpoints**: When you finish a logical chunk of work
+
+## WHEN NOT TO UPDATE:
+- ❌ Every few minutes during work (you're wasting time on bookkeeping)
+- ❌ Multiple updates for sub-steps of one task (just finish the task first)
+- ❌ Immediately after starting (start working first, update later if it's a long task)
+- ❌ Before verifying the work is actually complete
+
+## SIMPLE RULES:
+- Keep MAXIMUM one task as "in_progress" (don't over-track)
+- Mark "completed" only when 100% done (no partial credit)
+- If you're spending more time updating TODO than working, you're doing it wrong
+
+## HONEST COMPLETION CRITERIA:
+Only mark complete if:
+- Task is 100% finished (no partial work)
+- Tests/builds passed (if applicable)
+- No errors or blockers
+- You've actually verified it works
+
+If blocked, keep as "in_progress" and report the blocker (don't create elaborate sub-TODO structures).`,
 				inputSchema: {
 					type: 'object',
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO item ID to update',
+							description: 'TODO item ID to update (get exact ID from todo-get)',
 						},
 						status: {
 							type: 'string',
 							enum: ['pending', 'in_progress', 'completed'],
-							description: 'New status: "in_progress" when starting, "completed" when done, "pending" for not started',
+							description: 'New status - follow strict rules: "in_progress" when starting, "completed" when 100% done and verified, "pending" if not started',
 						},
 						content: {
 							type: 'string',
-							description: 'Updated TODO content (optional)',
+							description: 'Updated TODO content (optional, only if task description needs refinement)',
 						},
 					},
 					required: ['todoId'],
@@ -207,17 +272,34 @@ export class TodoService {
 			},
 			{
 				name: 'todo-add',
-				description: 'Add a new TODO item to current session. Use this when you discover additional steps during execution, or when breaking down complex tasks into smaller subtasks.',
+				description: `Add tasks to existing TODO list (use sparingly).
+
+## CORE PRINCIPLE - AVOID TODO BLOAT:
+Don't constantly add TODO items while working. If you discover small steps during execution, JUST DO THEM instead of creating TODO items. Only add to TODO if it's genuinely complex or user-requested.
+
+## WHEN TO USE (Rare):
+1. **User Adds Requirements**: User explicitly requests additional tasks
+2. **Major Discovery**: You find a significant, complex step that wasn't initially planned
+3. **Blocking Issue**: You discover a prerequisite that requires substantial separate work
+
+## WHEN NOT TO USE (Common):
+- ❌ Discovered a small 5-minute task while working (just do it, don't track it)
+- ❌ Breaking down an existing task into micro-steps (over-planning)
+- ❌ "Organizing" or "clarifying" existing tasks (maintain original structure)
+- ❌ New unrelated requirement (use todo-delete + todo-create instead)
+
+## GUIDELINE:
+If a task takes less than 10 minutes, just do it instead of adding it to TODO. The goal is progress, not perfect tracking.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
 						content: {
 							type: 'string',
-							description: 'TODO item description (be specific and actionable)',
+							description: 'TODO item description - must be specific, actionable, and technically precise',
 						},
 						parentId: {
 							type: 'string',
-							description: 'Parent TODO ID (optional, for creating subtasks)',
+							description: 'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get.',
 						},
 					},
 					required: ['content'],
@@ -225,13 +307,33 @@ export class TodoService {
 			},
 			{
 				name: 'todo-delete',
-				description: 'Delete a TODO item from current session. Use this to remove tasks that are no longer relevant or were created by mistake.',
+				description: `Delete TODO items from the current session.
+
+## WHEN TO USE:
+1. **Task No Longer Needed**: Requirement changed, task became irrelevant
+2. **Mistake Correction**: Task was added by error or duplicated
+3. **Clearing for New Requirement**: User provides COMPLETELY NEW requirement - delete all old todos first, then create new list
+4. **Cascade Deletion**: Delete parent task with subtasks (automatically removes children)
+
+## LIFECYCLE PATTERN FOR NEW REQUIREMENTS:
+When user asks for something completely different:
+1. Use todo-get to see current list
+2. Use todo-delete on root items (children auto-delete via parentId cascade)
+3. Use todo-create for the new requirement
+
+## WHEN NOT TO USE:
+- Do NOT delete completed tasks just for "cleanup" (keep as history)
+- Do NOT delete in-progress tasks unless requirement truly changed
+- Do NOT use for "reorganizing" (maintain original structure)
+
+## CASCADE BEHAVIOR:
+Deleting a parent task automatically deletes all its subtasks (parentId relationship).`,
 				inputSchema: {
 					type: 'object',
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO item ID to delete',
+							description: 'TODO item ID to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
 						},
 					},
 					required: ['todoId'],

@@ -1,12 +1,12 @@
 import { registerCommand, type CommandResult } from '../commandExecutor.js';
 
-// Resume command handler
+// Resume command handler - shows session panel instead of navigating to new page
 registerCommand('resume', {
 	execute: (): CommandResult => {
 		return {
 			success: true,
-			action: 'resume',
-			message: 'Opening session selection'
+			action: 'showSessionPanel',
+			message: 'Opening session panel'
 		};
 	}
 });
