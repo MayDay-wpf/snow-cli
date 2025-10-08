@@ -403,8 +403,20 @@ export class FilesystemMCPService {
         const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
 
         if (errorCount > 0 || warningCount > 0) {
-          result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)\n` +
-                           `   ⚡ TIP: Check the diagnostics and make another small edit to fix issues`;
+          result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
+
+          // Format diagnostics for better readability
+          const formattedDiagnostics = diagnostics
+            .filter(d => d.severity === 'error' || d.severity === 'warning')
+            .map(d => {
+              const icon = d.severity === 'error' ? '❌' : '⚠️';
+              const location = `${filePath}:${d.line}:${d.character}`;
+              return `   ${icon} [${d.source || 'unknown'}] ${location}\n      ${d.message}`;
+            })
+            .join('\n\n');
+
+          result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
+          result.message += `\n\n   ⚡ TIP: Review the errors above and make another small edit to fix them`;
         }
       }
 
