@@ -13,6 +13,11 @@ $ npm install --global snow-ai
 $ snow
 ```
 
+## Update
+```bash
+$ snow --update
+```
+
 ## Uninstall
 ```bash
 $ npm uninstall --global snow-ai
