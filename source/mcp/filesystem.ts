@@ -18,6 +18,24 @@ interface SearchResult {
   searchedFiles: number;
 }
 
+interface StructureAnalysis {
+  bracketBalance: {
+    curly: { open: number; close: number; balanced: boolean };
+    round: { open: number; close: number; balanced: boolean };
+    square: { open: number; close: number; balanced: boolean };
+  };
+  htmlTags?: {
+    unclosedTags: string[];
+    unopenedTags: string[];
+    balanced: boolean;
+  };
+  indentationWarnings: string[];
+  codeBlockBoundary?: {
+    isInCompleteBlock: boolean;
+    suggestion?: string;
+  };
+}
+
 /**
  * Filesystem MCP Service
  * Provides basic file operations: read, create, and delete files
@@ -27,6 +45,217 @@ export class FilesystemMCPService {
 
   constructor(basePath: string = process.cwd()) {
     this.basePath = resolve(basePath);
+  }
+
+  /**
+   * Analyze code structure for balance and completeness
+   * Helps AI identify bracket mismatches, unclosed tags, and boundary issues
+   */
+  private analyzeCodeStructure(
+    _content: string,
+    filePath: string,
+    editedLines: string[]
+  ): StructureAnalysis {
+    const analysis: StructureAnalysis = {
+      bracketBalance: {
+        curly: { open: 0, close: 0, balanced: true },
+        round: { open: 0, close: 0, balanced: true },
+        square: { open: 0, close: 0, balanced: true }
+      },
+      indentationWarnings: []
+    };
+
+    // Count brackets in the edited content
+    const editedContent = editedLines.join('\n');
+
+    // Remove string literals and comments to avoid false positives
+    const cleanContent = editedContent
+      .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '""') // Remove strings
+      .replace(/\/\/.*$/gm, '') // Remove single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ''); // Remove multi-line comments
+
+    // Count brackets
+    analysis.bracketBalance.curly.open = (cleanContent.match(/\{/g) || []).length;
+    analysis.bracketBalance.curly.close = (cleanContent.match(/\}/g) || []).length;
+    analysis.bracketBalance.curly.balanced =
+      analysis.bracketBalance.curly.open === analysis.bracketBalance.curly.close;
+
+    analysis.bracketBalance.round.open = (cleanContent.match(/\(/g) || []).length;
+    analysis.bracketBalance.round.close = (cleanContent.match(/\)/g) || []).length;
+    analysis.bracketBalance.round.balanced =
+      analysis.bracketBalance.round.open === analysis.bracketBalance.round.close;
+
+    analysis.bracketBalance.square.open = (cleanContent.match(/\[/g) || []).length;
+    analysis.bracketBalance.square.close = (cleanContent.match(/\]/g) || []).length;
+    analysis.bracketBalance.square.balanced =
+      analysis.bracketBalance.square.open === analysis.bracketBalance.square.close;
+
+    // HTML/JSX tag analysis (for .html, .jsx, .tsx, .vue files)
+    const isMarkupFile = /\.(html|jsx|tsx|vue)$/i.test(filePath);
+    if (isMarkupFile) {
+      const tagPattern = /<\/?([a-zA-Z][a-zA-Z0-9-]*)[^>]*>/g;
+      const selfClosingPattern = /<[a-zA-Z][a-zA-Z0-9-]*[^>]*\/>/g;
+
+      // Remove self-closing tags
+      const contentWithoutSelfClosing = cleanContent.replace(selfClosingPattern, '');
+
+      const tags: string[] = [];
+      const unclosedTags: string[] = [];
+      const unopenedTags: string[] = [];
+
+      let match;
+      while ((match = tagPattern.exec(contentWithoutSelfClosing)) !== null) {
+        const isClosing = match[0]?.startsWith('</');
+        const tagName = match[1]?.toLowerCase();
+
+        if (!tagName) continue;
+
+        if (isClosing) {
+          const lastOpenTag = tags.pop();
+          if (!lastOpenTag || lastOpenTag !== tagName) {
+            unopenedTags.push(tagName);
+            if (lastOpenTag) tags.push(lastOpenTag); // Put it back
+          }
+        } else {
+          tags.push(tagName);
+        }
+      }
+
+      unclosedTags.push(...tags);
+
+      analysis.htmlTags = {
+        unclosedTags,
+        unopenedTags,
+        balanced: unclosedTags.length === 0 && unopenedTags.length === 0
+      };
+    }
+
+    // Check indentation consistency
+    const lines = editedContent.split('\n');
+    const indents = lines
+      .filter(line => line.trim().length > 0)
+      .map(line => {
+        const match = line.match(/^(\s*)/);
+        return match ? match[1] : '';
+      })
+      .filter((indent): indent is string => indent !== undefined);
+
+    // Detect mixed tabs/spaces
+    const hasTabs = indents.some(indent => indent.includes('\t'));
+    const hasSpaces = indents.some(indent => indent.includes(' '));
+    if (hasTabs && hasSpaces) {
+      analysis.indentationWarnings.push('Mixed tabs and spaces detected');
+    }
+
+    // Detect inconsistent indentation levels (spaces only)
+    if (!hasTabs && hasSpaces) {
+      const spaceCounts = indents
+        .filter(indent => indent.length > 0)
+        .map(indent => indent.length);
+
+      if (spaceCounts.length > 1) {
+        const gcd = spaceCounts.reduce((a, b) => {
+          while (b !== 0) {
+            const temp = b;
+            b = a % b;
+            a = temp;
+          }
+          return a;
+        });
+
+        const hasInconsistent = spaceCounts.some(count => count % gcd !== 0 && gcd > 1);
+        if (hasInconsistent) {
+          analysis.indentationWarnings.push(`Inconsistent indentation (expected multiples of ${gcd} spaces)`);
+        }
+      }
+    }
+
+    // Check if edit is at a code block boundary
+    const lastLine = editedLines[editedLines.length - 1]?.trim() || '';
+    const firstLine = editedLines[0]?.trim() || '';
+
+    const endsWithOpenBrace = lastLine.endsWith('{') || lastLine.endsWith('(') || lastLine.endsWith('[');
+    const startsWithCloseBrace = firstLine.startsWith('}') || firstLine.startsWith(')') || firstLine.startsWith(']');
+
+    if (endsWithOpenBrace || startsWithCloseBrace) {
+      analysis.codeBlockBoundary = {
+        isInCompleteBlock: false,
+        suggestion: endsWithOpenBrace
+          ? 'Edit ends with an opening bracket - ensure the closing bracket is included in a subsequent edit or already exists in the file'
+          : 'Edit starts with a closing bracket - ensure the opening bracket exists before this edit'
+      };
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Find smart context boundaries for editing
+   * Expands context to include complete code blocks when possible
+   */
+  private findSmartContextBoundaries(
+    lines: string[],
+    startLine: number,
+    endLine: number,
+    requestedContext: number
+  ): { start: number; end: number; extended: boolean } {
+    const totalLines = lines.length;
+    let contextStart = Math.max(1, startLine - requestedContext);
+    let contextEnd = Math.min(totalLines, endLine + requestedContext);
+    let extended = false;
+
+    // Try to find the start of the enclosing block
+    let bracketDepth = 0;
+    for (let i = startLine - 1; i >= Math.max(0, startLine - 50); i--) {
+      const line = lines[i];
+      if (!line) continue;
+
+      const trimmed = line.trim();
+
+      // Count brackets (simple approach)
+      const openBrackets = (line.match(/\{/g) || []).length;
+      const closeBrackets = (line.match(/\}/g) || []).length;
+      bracketDepth += closeBrackets - openBrackets;
+
+      // If we find a function/class/block definition with balanced brackets
+      if (
+        bracketDepth === 0 &&
+        (trimmed.match(/^(function|class|const|let|var|if|for|while|async|export)\s/i) ||
+         trimmed.match(/=>\s*\{/) ||
+         trimmed.match(/^\w+\s*\(/))
+      ) {
+        if (i + 1 < contextStart) {
+          contextStart = i + 1;
+          extended = true;
+        }
+        break;
+      }
+    }
+
+    // Try to find the end of the enclosing block
+    bracketDepth = 0;
+    for (let i = endLine - 1; i < Math.min(totalLines, endLine + 50); i++) {
+      const line = lines[i];
+      if (!line) continue;
+
+      const trimmed = line.trim();
+
+      // Count brackets
+      const openBrackets = (line.match(/\{/g) || []).length;
+      const closeBrackets = (line.match(/\}/g) || []).length;
+      bracketDepth += openBrackets - closeBrackets;
+
+      // If we find a closing bracket at depth 0
+      if (bracketDepth === 0 && trimmed.startsWith('}')) {
+        if (i + 1 > contextEnd) {
+          contextEnd = i + 1;
+          extended = true;
+        }
+        break;
+      }
+    }
+
+    return { start: contextStart, end: contextEnd, extended };
   }
 
   /**
@@ -274,6 +503,7 @@ export class FilesystemMCPService {
     contextEndLine: number;
     totalLines: number;
     linesModified: number;
+    structureAnalysis?: StructureAnalysis;
     diagnostics?: Diagnostic[];
   }> {
     try {
@@ -315,9 +545,10 @@ export class FilesystemMCPService {
         return `${paddedNum}→${line}`;
       }).join('\n');
 
-      // Calculate context range (smaller context for focused edits)
-      const contextStart = Math.max(1, startLine - contextLines);
-      const contextEnd = Math.min(totalLines, adjustedEndLine + contextLines);
+      // Calculate context range using smart boundary detection
+      const smartBoundaries = this.findSmartContextBoundaries(lines, startLine, adjustedEndLine, contextLines);
+      const contextStart = smartBoundaries.start;
+      const contextEnd = smartBoundaries.end;
 
       // Extract old content for context (including the lines to be replaced)
       const oldContextLines = lines.slice(contextStart - 1, contextEnd);
@@ -349,6 +580,13 @@ export class FilesystemMCPService {
       // Write the modified content back to file
       await fs.writeFile(fullPath, modifiedLines.join('\n'), 'utf-8');
 
+      // Analyze code structure of the edited content
+      const structureAnalysis = this.analyzeCodeStructure(
+        modifiedLines.join('\n'),
+        filePath,
+        newContentLines
+      );
+
       // Try to get diagnostics from VS Code after editing
       let diagnostics: Diagnostic[] = [];
       try {
@@ -368,18 +606,21 @@ export class FilesystemMCPService {
         contextEndLine: number;
         totalLines: number;
         linesModified: number;
+        structureAnalysis?: StructureAnalysis;
         diagnostics?: Diagnostic[];
       } = {
         message: `✅ File edited successfully: ${filePath}\n` +
                  `   Replaced: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
-                 `   Result: ${newContentLines.length} new lines`,
+                 `   Result: ${newContentLines.length} new lines` +
+                 (smartBoundaries.extended ? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${newContextEnd})` : ''),
         oldContent,
         newContent: newContextContent,
         replacedLines: replacedContent,
         contextStartLine: contextStart,
         contextEndLine: newContextEnd,
         totalLines: newTotalLines,
-        linesModified: linesToModify
+        linesModified: linesToModify,
+        structureAnalysis
       };
 
       // Add diagnostics if any were found
@@ -404,6 +645,62 @@ export class FilesystemMCPService {
           result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
           result.message += `\n\n   ⚡ TIP: Review the errors above and make another small edit to fix them`;
         }
+      }
+
+      // Add structure analysis warnings to the message
+      const structureWarnings: string[] = [];
+
+      // Check bracket balance
+      if (!structureAnalysis.bracketBalance.curly.balanced) {
+        const diff = structureAnalysis.bracketBalance.curly.open - structureAnalysis.bracketBalance.curly.close;
+        structureWarnings.push(
+          `Curly brackets: ${diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`}`
+        );
+      }
+      if (!structureAnalysis.bracketBalance.round.balanced) {
+        const diff = structureAnalysis.bracketBalance.round.open - structureAnalysis.bracketBalance.round.close;
+        structureWarnings.push(
+          `Round brackets: ${diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`}`
+        );
+      }
+      if (!structureAnalysis.bracketBalance.square.balanced) {
+        const diff = structureAnalysis.bracketBalance.square.open - structureAnalysis.bracketBalance.square.close;
+        structureWarnings.push(
+          `Square brackets: ${diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`}`
+        );
+      }
+
+      // Check HTML tags
+      if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
+        if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
+          structureWarnings.push(
+            `Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`
+          );
+        }
+        if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
+          structureWarnings.push(
+            `Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`
+          );
+        }
+      }
+
+      // Check indentation
+      if (structureAnalysis.indentationWarnings.length > 0) {
+        structureWarnings.push(...structureAnalysis.indentationWarnings.map(w => `Indentation: ${w}`));
+      }
+
+      // Add code block boundary warnings
+      if (structureAnalysis.codeBlockBoundary && structureAnalysis.codeBlockBoundary.suggestion) {
+        structureWarnings.push(`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`);
+      }
+
+      // Format structure warnings
+      if (structureWarnings.length > 0) {
+        result.message += `\n\n🔍 Structure Analysis:\n`;
+        structureWarnings.forEach(warning => {
+          result.message += `   ⚠️  ${warning}\n`;
+        });
+        result.message += `\n   💡 TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.`;
       }
 
       return result;
@@ -621,7 +918,7 @@ export const mcpTools = [
   },
   {
     name: 'filesystem_edit',
-    description: '🎯 PREFERRED tool for precise file editing. **BEST PRACTICES**: (1) Use SMALL, INCREMENTAL edits (recommended ≤15 lines per edit) instead of large changes - this is SAFER and MORE ACCURATE, preventing syntax errors and bracket mismatches. (2) For large changes, make MULTIPLE PARALLEL edits to different sections of the file instead of one large edit. (3) Must use exact line numbers from filesystem_read output. **WORKFLOW**: (1) Read target section with filesystem_read to get exact line numbers, (2) Edit small sections, (3) Verify with diagnostics, (4) If editing multiple sections, you can make parallel edits to non-overlapping line ranges. Returns precise before/after comparison with line numbers and VS Code diagnostics.',
+    description: '🎯 PREFERRED tool for precise file editing with intelligent feedback. **BEST PRACTICES**: (1) Use SMALL, INCREMENTAL edits (recommended ≤15 lines per edit) - SAFER and MORE ACCURATE, preventing syntax errors. (2) For large changes, make MULTIPLE PARALLEL edits to different sections instead of one large edit. (3) Must use exact line numbers  Code boundaries should not be redundant or missing, such as `{}` or HTML tags causing syntax errors. **WORKFLOW**: (1) Read target section with filesystem_read, (2) Edit small sections, (3) Review auto-generated structure analysis and diagnostics, (4) Make parallel edits to non-overlapping ranges if needed. **SMART FEATURES**: Auto-detects bracket/tag mismatches, indentation issues, and code block boundaries. Context auto-extends to show complete functions/classes when detected.',
     inputSchema: {
       type: 'object',
       properties: {
