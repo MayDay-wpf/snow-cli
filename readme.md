@@ -7,3 +7,32 @@
 ```bash
 $ npm install --global snow-ai
 ```
+
+## Start
+```bash
+$ snow
+```
+
+## Uninstall
+```bash
+$ npm uninstall --global snow-ai
+```
+
+## Install VSCode Extension
+
+* download [VSIX/snow-cli-0.2.5.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.5.vsix)
+
+* open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.5.vsix`
+
+## Live View
+* **Welcome & Settings**
+
+![alt text](image.png)
+
+* **Agent**
+
+![alt text](image-1.png)
+
+* **Commands**
+
+![alt text](image-2.png)
