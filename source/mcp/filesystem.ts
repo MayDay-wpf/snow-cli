@@ -248,8 +248,8 @@ export class FilesystemMCPService {
 
   /**
    * Edit a file by replacing lines within a specified range
-   * IMPORTANT: This tool enforces small, precise edits (max 15 lines per edit) to ensure accuracy.
-   * For larger changes, make multiple sequential edits instead of one large edit.
+   * BEST PRACTICE: Keep edits small and focused (≤15 lines recommended) for better accuracy.
+   * For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit.
    *
    * @param filePath - Path to the file to edit
    * @param startLine - Starting line number (1-indexed, inclusive) - get from filesystem_read output
@@ -257,7 +257,7 @@ export class FilesystemMCPService {
    * @param newContent - New content to replace the specified lines (WITHOUT line numbers)
    * @param contextLines - Number of context lines to return before and after the edit (default: 8)
    * @returns Object containing success message, precise before/after comparison, and diagnostics
-   * @throws Error if file editing fails or if the edit range is too large
+   * @throws Error if file editing fails
    */
   async editFile(
     filePath: string,
@@ -302,21 +302,7 @@ export class FilesystemMCPService {
 
       // Adjust endLine if it exceeds file length
       const adjustedEndLine = Math.min(endLine, totalLines);
-
-      // ENFORCE SMALL EDITS: Limit to max 15 lines per edit for precision
       const linesToModify = adjustedEndLine - startLine + 1;
-      const MAX_LINES_PER_EDIT = 15;
-      if (linesToModify > MAX_LINES_PER_EDIT) {
-        throw new Error(
-          `❌ Edit range too large (${linesToModify} lines). Maximum allowed: ${MAX_LINES_PER_EDIT} lines.\n\n` +
-          `💡 Best Practice: Make SMALL, PRECISE edits instead of large changes.\n` +
-          `   - Break your changes into multiple sequential edits\n` +
-          `   - Each edit should modify at most ${MAX_LINES_PER_EDIT} lines\n` +
-          `   - This ensures accuracy and prevents syntax errors\n\n` +
-          `Current request: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
-          `Suggested approach: Split into ${Math.ceil(linesToModify / MAX_LINES_PER_EDIT)} smaller edits`
-        );
-      }
 
       // Backup file before editing
       await incrementalSnapshotManager.backupFile(fullPath);
@@ -562,7 +548,7 @@ export const filesystemService = new FilesystemMCPService();
 export const mcpTools = [
   {
     name: 'filesystem_read',
-    description: 'Read the content of a file within specified line range. The returned content includes line numbers (format: "lineNum→content") for precise editing. You MUST specify startLine and endLine. To read the entire file, use startLine=1 and a large endLine value (e.g., 999999). IMPORTANT: When you need to edit a file, you MUST read it first to see the exact line numbers and current content. NOTE: If the path points to a directory, this tool will automatically list its contents instead of throwing an error.',
+    description: 'Read the content of a file within specified line range. The returned content includes line numbers (format: "lineNum→content") for precise editing. You MUST specify startLine and endLine. To read the entire file, use startLine=1 and a large endLine value (e.g., 500). IMPORTANT: When you need to edit a file, you MUST read it first to see the exact line numbers and current content. NOTE: If the path points to a directory, this tool will automatically list its contents instead of throwing an error.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -635,7 +621,7 @@ export const mcpTools = [
   },
   {
     name: 'filesystem_edit',
-    description: '🎯 PREFERRED tool for precise file editing. **CRITICAL CONSTRAINTS**: (1) Maximum 15 lines per edit - larger changes will be REJECTED, (2) Must use exact line numbers from filesystem_read output. **BEST PRACTICES**: Use SMALL, INCREMENTAL edits instead of large changes. Multiple small edits are SAFER and MORE ACCURATE than one large edit. This prevents syntax errors and bracket mismatches. **WORKFLOW**: (1) Read target section with filesystem_read to get exact line numbers, (2) Edit SMALL sections (≤15 lines), (3) Verify with diagnostics, (4) Make next small edit if needed. Returns precise before/after comparison with line numbers and VS Code diagnostics.',
+    description: '🎯 PREFERRED tool for precise file editing. **BEST PRACTICES**: (1) Use SMALL, INCREMENTAL edits (recommended ≤15 lines per edit) instead of large changes - this is SAFER and MORE ACCURATE, preventing syntax errors and bracket mismatches. (2) For large changes, make MULTIPLE PARALLEL edits to different sections of the file instead of one large edit. (3) Must use exact line numbers from filesystem_read output. **WORKFLOW**: (1) Read target section with filesystem_read to get exact line numbers, (2) Edit small sections, (3) Verify with diagnostics, (4) If editing multiple sections, you can make parallel edits to non-overlapping line ranges. Returns precise before/after comparison with line numbers and VS Code diagnostics.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -649,7 +635,7 @@ export const mcpTools = [
         },
         endLine: {
           type: 'number',
-          description: '⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. Range CANNOT exceed 15 lines (endLine - startLine + 1 ≤ 15).'
+          description: '⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. 💡 TIP: Keep edits small (≤15 lines recommended) for better accuracy.'
         },
         newContent: {
           type: 'string',
