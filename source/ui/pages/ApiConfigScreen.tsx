@@ -36,11 +36,11 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 			value: 'responses' as RequestMethod,
 		},
 		{
-			label: 'Gemini - Google Gemini API (Hajimi =^W^=)',
+			label: 'Gemini - Google Gemini API',
 			value: 'gemini' as RequestMethod,
 		},
 		{
-			label: 'Anthropic - Claude API (Claude 4.5 Sonnet, etc. Birth)',
+			label: 'Anthropic - Claude API',
 			value: 'anthropic' as RequestMethod,
 		},
 	];
