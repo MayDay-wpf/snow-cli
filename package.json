@@ -39,6 +39,7 @@
 		"dist"
 	],
 	"dependencies": {
+		"@google/generative-ai": "^0.24.1",
 		"@inkjs/ui": "^2.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
 		"chalk-template": "^1.1.2",

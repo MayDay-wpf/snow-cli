@@ -34,6 +34,10 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 			label: 'Responses - New responses API (2025, with built-in tools)',
 			value: 'responses' as RequestMethod,
 		},
+		{
+			label: 'Gemini - Google Gemini API',
+			value: 'gemini' as RequestMethod,
+		},
 	];
 
 	useEffect(() => {

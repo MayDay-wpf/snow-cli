@@ -2,7 +2,7 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 
-export type RequestMethod = 'chat' | 'responses';
+export type RequestMethod = 'chat' | 'responses' | 'gemini';
 
 export interface CompactModelConfig {
 	baseUrl: string;
@@ -32,11 +32,12 @@ export interface MCPConfig {
 }
 
 export interface AppConfig {
-	openai: ApiConfig;
+	snowcfg: ApiConfig;
+	openai?: ApiConfig; // 向下兼容旧版本
 }
 
 const DEFAULT_CONFIG: AppConfig = {
-	openai: {
+	snowcfg: {
 		baseUrl: 'https://api.openai.com/v1',
 		apiKey: '',
 		requestMethod: 'chat',
@@ -53,7 +54,7 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 const CONFIG_DIR = join(homedir(), '.snow');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
-	if (method === 'chat' || method === 'responses') {
+	if (method === 'chat' || method === 'responses' || method === 'gemini') {
 		return method;
 	}
 
@@ -61,7 +62,7 @@ function normalizeRequestMethod(method: unknown): RequestMethod {
 		return 'chat';
 	}
 
-	return DEFAULT_CONFIG.openai.requestMethod;
+	return DEFAULT_CONFIG.snowcfg.requestMethod;
 }
 
 
@@ -94,20 +95,36 @@ export function loadConfig(): AppConfig {
 		const {mcp: legacyMcp, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
-		const mergedOpenai: ApiConfig = {
-			...DEFAULT_CONFIG.openai,
-			...configWithoutMcp.openai,
-			requestMethod: DEFAULT_CONFIG.openai.requestMethod,
-		};
-		mergedOpenai.requestMethod = normalizeRequestMethod(configWithoutMcp.openai?.requestMethod);
+		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
+		let apiConfig: ApiConfig;
+		if (configWithoutMcp.snowcfg) {
+			apiConfig = {
+				...DEFAULT_CONFIG.snowcfg,
+				...configWithoutMcp.snowcfg,
+				requestMethod: normalizeRequestMethod(configWithoutMcp.snowcfg.requestMethod),
+			};
+		} else if (configWithoutMcp.openai) {
+			// 向下兼容旧版本
+			apiConfig = {
+				...DEFAULT_CONFIG.snowcfg,
+				...configWithoutMcp.openai,
+				requestMethod: normalizeRequestMethod(configWithoutMcp.openai.requestMethod),
+			};
+		} else {
+			apiConfig = {
+				...DEFAULT_CONFIG.snowcfg,
+				requestMethod: DEFAULT_CONFIG.snowcfg.requestMethod,
+			};
+		}
 
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...configWithoutMcp,
-			openai: mergedOpenai,
+			snowcfg: apiConfig,
 		};
 
-		if (legacyMcp !== undefined) {
+		// 如果是从旧版本迁移过来的，保存新配置
+		if (legacyMcp !== undefined || (configWithoutMcp.openai && !configWithoutMcp.snowcfg)) {
 			saveConfig(mergedConfig);
 		}
 
@@ -121,7 +138,9 @@ export function saveConfig(config: AppConfig): void {
 	ensureConfigDirectory();
 
 	try {
-		const configData = JSON.stringify(config, null, 2);
+		// 只保留 snowcfg，去除 openai 字段
+		const {openai, ...configWithoutOpenai} = config;
+		const configData = JSON.stringify(configWithoutOpenai, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
 	} catch (error) {
 		throw new Error(`Failed to save configuration: ${error}`);
@@ -132,14 +151,14 @@ export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
 	const currentConfig = loadConfig();
 	const updatedConfig: AppConfig = {
 		...currentConfig,
-		openai: {...currentConfig.openai, ...apiConfig},
+		snowcfg: {...currentConfig.snowcfg, ...apiConfig},
 	};
 	saveConfig(updatedConfig);
 }
 
 export function getOpenAiConfig(): ApiConfig {
 	const config = loadConfig();
-	return config.openai;
+	return config.snowcfg;
 }
 
 export function validateApiConfig(config: Partial<ApiConfig>): string[] {

@@ -40,17 +40,21 @@ export class TextBuffer {
   private viewport: Viewport;
   private pasteStorage: Map<string, PastePlaceholder> = new Map();
   private pasteCounter = 0;
-  private lastPasteTime = 0;
   private imageStorage: Map<string, ImageData> = new Map();
   private imageCounter = 0;
+  private pasteAccumulator: string = ''; // 累积粘贴内容
+  private pasteTimer: NodeJS.Timeout | null = null; // 粘贴完成检测定时器
+  private pastePlaceholderPosition: number = -1; // 占位符插入位置
+  private onUpdateCallback?: () => void; // 更新回调函数
 
   private visualLines: string[] = [''];
   private visualLineStarts: number[] = [0];
   private visualCursorPos: [number, number] = [0, 0];
   private preferredVisualCol = 0;
 
-  constructor(viewport: Viewport) {
+  constructor(viewport: Viewport, onUpdate?: () => void) {
     this.viewport = viewport;
+    this.onUpdateCallback = onUpdate;
     this.recalculateVisualState();
   }
 
@@ -90,7 +94,10 @@ export class TextBuffer {
   }
 
   private scheduleUpdate(): void {
-    // Removed pendingUpdates logic since it's not needed
+    // Notify external components of updates
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback();
+    }
   }
 
   setText(text: string): void {
@@ -101,9 +108,14 @@ export class TextBuffer {
     if (sanitized === '') {
       this.pasteStorage.clear();
       this.pasteCounter = 0;
-      this.lastPasteTime = 0;
       this.imageStorage.clear();
       this.imageCounter = 0;
+      this.pasteAccumulator = '';
+      if (this.pasteTimer) {
+        clearTimeout(this.pasteTimer);
+        this.pasteTimer = null;
+      }
+      this.pastePlaceholderPosition = -1;
     }
 
     this.recalculateVisualState();
@@ -117,32 +129,108 @@ export class TextBuffer {
     }
 
     const charCount = sanitized.length;
-    const now = Date.now();
 
-    if (charCount > 300) {
-      if (now - this.lastPasteTime < 100) {
-        return;
+    // 检测是否是大文本输入（可能是粘贴操作的一部分）
+    if (charCount > 200) {
+      // 清除之前的定时器
+      if (this.pasteTimer) {
+        clearTimeout(this.pasteTimer);
       }
 
-      this.lastPasteTime = now;
-      this.pasteCounter++;
-      const pasteId = `paste_${now}_${this.pasteCounter}`;
-      const placeholderText = `[Paste ${charCount} characters #${this.pasteCounter}]`;
+      // 如果是第一批数据，记录插入位置
+      const isFirstBatch = !this.pasteAccumulator;
+      if (isFirstBatch) {
+        this.pastePlaceholderPosition = this.cursorIndex;
+      }
 
-      this.pasteStorage.set(pasteId, {
-        id: pasteId,
-        content: sanitized,
-        charCount: charCount,
-        index: this.pasteCounter,
-        placeholder: placeholderText
-      });
+      // 累积数据
+      this.pasteAccumulator += sanitized;
 
-      this.insertPlainText(placeholderText);
+      // 移除旧的临时占位符（如果存在）
+      if (!isFirstBatch) {
+        const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/;
+        this.content = this.content.replace(tempPlaceholderPattern, '');
+      }
+
+      // 显示更新后的临时占位符
+      const tempPlaceholder = `[Pasting... ${this.pasteAccumulator.length} chars]`;
+      const before = cpSlice(this.content, 0, this.pastePlaceholderPosition);
+      const after = cpSlice(this.content, this.pastePlaceholderPosition);
+      this.content = before + tempPlaceholder + after;
+      this.cursorIndex = this.pastePlaceholderPosition + cpLen(tempPlaceholder);
+
+      // 设置150ms的定时器，如果150ms内没有新数据，则认为粘贴完成
+      this.pasteTimer = setTimeout(() => {
+        this.finalizePaste();
+      }, 150);
+
+      this.recalculateVisualState();
       this.scheduleUpdate();
       return;
     }
 
+    // 普通输入（小于200字符）
+    // 如果有累积的粘贴数据，先完成粘贴
+    if (this.pasteAccumulator) {
+      this.finalizePaste();
+    }
+
+    // 正常插入文本
     this.insertPlainText(sanitized);
+    this.scheduleUpdate();
+  }
+
+  /**
+   * 完成粘贴操作，创建占位符
+   */
+  private finalizePaste(): void {
+    if (!this.pasteAccumulator) {
+      return;
+    }
+
+    const totalChars = this.pasteAccumulator.length;
+
+    // 移除临时占位符（如果存在）
+    // 临时占位符格式: [Pasting... XXX chars]
+    const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/;
+    this.content = this.content.replace(tempPlaceholderPattern, '');
+
+    // 只有当累积的字符数超过300时才创建占位符
+    if (totalChars > 300) {
+      this.pasteCounter++;
+      const pasteId = `paste_${Date.now()}_${this.pasteCounter}`;
+      const placeholderText = `[Paste ${totalChars} characters #${this.pasteCounter}]`;
+
+      this.pasteStorage.set(pasteId, {
+        id: pasteId,
+        content: this.pasteAccumulator,
+        charCount: totalChars,
+        index: this.pasteCounter,
+        placeholder: placeholderText
+      });
+
+      // 在记录的位置插入占位符
+      const before = cpSlice(this.content, 0, this.pastePlaceholderPosition);
+      const after = cpSlice(this.content, this.pastePlaceholderPosition);
+      this.content = before + placeholderText + after;
+      this.cursorIndex = this.pastePlaceholderPosition + cpLen(placeholderText);
+    } else {
+      // 如果总字符数不够，直接插入原文本
+      const before = cpSlice(this.content, 0, this.pastePlaceholderPosition);
+      const after = cpSlice(this.content, this.pastePlaceholderPosition);
+      this.content = before + this.pasteAccumulator + after;
+      this.cursorIndex = this.pastePlaceholderPosition + cpLen(this.pasteAccumulator);
+    }
+
+    // 清理状态
+    this.pasteAccumulator = '';
+    this.pastePlaceholderPosition = -1;
+    if (this.pasteTimer) {
+      clearTimeout(this.pasteTimer);
+      this.pasteTimer = null;
+    }
+
+    this.recalculateVisualState();
     this.scheduleUpdate();
   }
 

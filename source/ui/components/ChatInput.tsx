@@ -38,13 +38,21 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	const terminalWidth = stdout?.columns || 80;
 	
 	const uiOverhead = 8;
-	const viewport: Viewport = { 
+	const viewport: Viewport = {
 		width: Math.max(40, terminalWidth - uiOverhead),
-		height: 1 
+		height: 1
 	};
-	const [buffer] = useState(() => new TextBuffer(viewport));
 	const [, forceUpdate] = useState({});
 	const lastUpdateTime = useRef<number>(0);
+
+	// Force re-render when buffer changes
+	const triggerUpdate = useCallback(() => {
+		const now = Date.now();
+		lastUpdateTime.current = now;
+		forceUpdate({});
+	}, []);
+
+	const [buffer] = useState(() => new TextBuffer(viewport, triggerUpdate));
 	
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
@@ -154,13 +162,6 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		forceUpdate({});
 	}, [buffer, updateFilePickerState, updateCommandPanelState]);
 
-	// Force re-render when buffer changes
-	const triggerUpdate = useCallback(() => {
-		const now = Date.now();
-		lastUpdateTime.current = now;
-		forceUpdate({});
-	}, []);
-
 	// Handle file selection
 	const handleFileSelect = useCallback(async (filePath: string) => {
 		if (atSymbolPosition !== -1) {
@@ -222,9 +223,6 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	// Handle input using useInput hook instead of raw stdin
 	useInput((input, key) => {
 		if (disabled) return;
-
-		// Debug: Log key presses
-		// console.error('Input:', JSON.stringify(input), 'Key:', JSON.stringify(key));
 		
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
@@ -333,11 +331,16 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			return;
 		}
 
-		// Alt+V / Option+V - Paste from clipboard (including images)
+		// Windows: Alt+V, macOS: Option+V - Paste from clipboard (including images)
+		// In Ink, key.meta represents:
+		// - On Windows/Linux: Alt key (Meta key)
+		// - On macOS: Option key is also mapped to meta in most terminal emulators
+		// So we can use key.meta for both platforms
 		if (key.meta && input === 'v') {
 			try {
-				// Try to read image from clipboard using PowerShell (Windows)
+				// Try to read image from clipboard
 				if (process.platform === 'win32') {
+					// Windows: Use PowerShell to read image from clipboard
 					try {
 						const psScript = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $clipboard = [System.Windows.Forms.Clipboard]::GetImage(); if ($clipboard -ne $null) { $ms = New-Object System.IO.MemoryStream; $clipboard.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $bytes = $ms.ToArray(); $ms.Close(); [Convert]::ToBase64String($bytes) }`;
 
@@ -358,6 +361,60 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 						}
 					} catch (imgError) {
 						// No image in clipboard or error, fall through to text
+					}
+				} else if (process.platform === 'darwin') {
+					// macOS: Use osascript to read image from clipboard
+					try {
+						// First check if there's an image in clipboard
+						const checkScript = `osascript -e 'try
+	set imgData to the clipboard as «class PNGf»
+	return "hasImage"
+on error
+	return "noImage"
+end try'`;
+
+						const hasImage = execSync(checkScript, {
+							encoding: 'utf-8',
+							timeout: 2000
+						}).trim();
+
+						if (hasImage === 'hasImage') {
+							// Save clipboard image to temporary file and read it
+							const tmpFile = `/tmp/snow_clipboard_${Date.now()}.png`;
+							const saveScript = `osascript -e 'set imgData to the clipboard as «class PNGf»' -e 'set fileRef to open for access POSIX file "${tmpFile}" with write permission' -e 'write imgData to fileRef' -e 'close access fileRef'`;
+
+							execSync(saveScript, {
+								encoding: 'utf-8',
+								timeout: 3000
+							});
+
+							// Read the file as base64
+							const base64 = execSync(`base64 -i "${tmpFile}"`, {
+								encoding: 'utf-8',
+								timeout: 2000
+							}).trim();
+
+							// Clean up temp file
+							try {
+								execSync(`rm "${tmpFile}"`, { timeout: 1000 });
+							} catch (e) {
+								// Ignore cleanup errors
+							}
+
+							if (base64 && base64.length > 100) {
+								const dataUrl = `data:image/png;base64,${base64}`;
+								buffer.insertImage(dataUrl, 'image/png');
+								const text = buffer.getFullText();
+								const cursorPos = buffer.getCursorPosition();
+								updateCommandPanelState(text);
+								updateFilePickerState(text, cursorPos);
+								triggerUpdate();
+								return;
+							}
+						}
+					} catch (imgError) {
+						// No image in clipboard or error, fall through to text
+						console.error('Failed to read image from macOS clipboard:', imgError);
 					}
 				}
 
@@ -475,15 +532,19 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		if (key.return) {
 			const message = buffer.getFullText().trim();
 			if (message) {
-				// 获取图片数据
-				const images = buffer.getImages().map(img => ({
+				// 获取图片数据，但只包含占位符仍然存在的图片
+				const currentText = buffer.text; // 使用内部文本（包含占位符）
+				const allImages = buffer.getImages();
+				const validImages = allImages.filter(img =>
+					currentText.includes(img.placeholder)
+				).map(img => ({
 					data: img.data,
 					mimeType: img.mimeType
 				}));
 
 				buffer.setText('');
 				forceUpdate({});
-				onSubmit(message, images.length > 0 ? images : undefined);
+				onSubmit(message, validImages.length > 0 ? validImages : undefined);
 			}
 			return;
 		}
@@ -795,7 +856,10 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 								? "Type to filter commands"
 								: showFilePicker
 								? "Type to filter files • Tab/Enter to select • ESC to cancel"
-								: "Ctrl+L: delete to start • Ctrl+R: delete to end • Alt+V: paste images • '@': files • '/': commands"
+								: (() => {
+									const pasteKey = process.platform === 'darwin' ? 'Option+V' : 'Alt+V';
+									return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
+								})()
 							}
 						</Text>
 					</Box>
