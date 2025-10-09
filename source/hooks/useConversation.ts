@@ -2,6 +2,7 @@ import { encoding_for_model } from 'tiktoken';
 import { createStreamingChatCompletion, type ChatMessage } from '../api/chat.js';
 import { createStreamingResponse } from '../api/responses.js';
 import { createStreamingGeminiCompletion } from '../api/gemini.js';
+import { createStreamingAnthropicCompletion } from '../api/anthropic.js';
 import { SYSTEM_PROMPT } from '../api/systemPrompt.js';
 import { collectAllMCPTools, getTodoService } from '../utils/mcpToolsManager.js';
 import { executeToolCalls, type ToolCall } from '../utils/toolExecutor.js';
@@ -144,7 +145,16 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 			// Use session ID as cache key to ensure same session requests share cache
 			const cacheKey = currentSession?.id;
 
-			const streamGenerator = config.requestMethod === 'gemini'
+			const streamGenerator = config.requestMethod === 'anthropic'
+				? createStreamingAnthropicCompletion({
+					model,
+					messages: conversationMessages,
+					temperature: 0,
+					max_tokens: config.maxContextTokens || 4096,
+					tools: mcpTools.length > 0 ? mcpTools : undefined,
+					sessionId: currentSession?.id
+				}, controller.signal)
+				: config.requestMethod === 'gemini'
 				? createStreamingGeminiCompletion({
 					model,
 					messages: conversationMessages,

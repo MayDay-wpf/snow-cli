@@ -2,7 +2,7 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 
-export type RequestMethod = 'chat' | 'responses' | 'gemini';
+export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 
 export interface CompactModelConfig {
 	baseUrl: string;
@@ -18,6 +18,7 @@ export interface ApiConfig {
 	basicModel?: string;
 	maxContextTokens?: number;
 	compactModel?: CompactModelConfig;
+	anthropicBeta?: boolean; // Enable Anthropic Beta features
 }
 
 export interface MCPServer {
@@ -44,6 +45,7 @@ const DEFAULT_CONFIG: AppConfig = {
 		advancedModel: '',
 		basicModel: '',
 		maxContextTokens: 4000,
+		anthropicBeta: false,
 	},
 };
 
@@ -54,7 +56,7 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 const CONFIG_DIR = join(homedir(), '.snow');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
-	if (method === 'chat' || method === 'responses' || method === 'gemini') {
+	if (method === 'chat' || method === 'responses' || method === 'gemini' || method === 'anthropic') {
 		return method;
 	}
 

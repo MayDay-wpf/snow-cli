@@ -19,7 +19,8 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
-	const [currentField, setCurrentField] = useState<'baseUrl' | 'apiKey' | 'requestMethod'>(
+	const [anthropicBeta, setAnthropicBeta] = useState(false);
+	const [currentField, setCurrentField] = useState<'baseUrl' | 'apiKey' | 'requestMethod' | 'anthropicBeta'>(
 		'baseUrl',
 	);
 	const [errors, setErrors] = useState<string[]>([]);
@@ -35,8 +36,12 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 			value: 'responses' as RequestMethod,
 		},
 		{
-			label: 'Gemini - Google Gemini API',
+			label: 'Gemini - Google Gemini API (Hajimi =^W^=)',
 			value: 'gemini' as RequestMethod,
+		},
+		{
+			label: 'Anthropic - Claude API (Claude 4.5 Sonnet, etc. Birth)',
+			value: 'anthropic' as RequestMethod,
 		},
 	];
 
@@ -45,10 +50,17 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 		setBaseUrl(config.baseUrl);
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
+		setAnthropicBeta(config.anthropicBeta || false);
 	}, []);
 
 	useInput((input, key) => {
-		// Don't handle input when Select component is active
+		// Allow Escape key to exit Select component without changes
+		if (isEditing && currentField === 'requestMethod' && key.escape) {
+			setIsEditing(false);
+			return;
+		}
+
+		// Don't handle other input when Select component is active
 		if (isEditing && currentField === 'requestMethod') {
 			return;
 		}
@@ -57,7 +69,7 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 		if (input === 's' && (key.ctrl || key.meta)) {
 			const validationErrors = validateApiConfig({ baseUrl, apiKey, requestMethod });
 			if (validationErrors.length === 0) {
-				updateOpenAiConfig({ baseUrl, apiKey, requestMethod });
+				updateOpenAiConfig({ baseUrl, apiKey, requestMethod, anthropicBeta });
 				setErrors([]);
 				onSave();
 			} else {
@@ -66,7 +78,7 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 		} else if (key.escape) {
 			const validationErrors = validateApiConfig({ baseUrl, apiKey, requestMethod });
 			if (validationErrors.length === 0) {
-				updateOpenAiConfig({ baseUrl, apiKey, requestMethod });
+				updateOpenAiConfig({ baseUrl, apiKey, requestMethod, anthropicBeta });
 				setErrors([]);
 			}
 			onBack();
@@ -75,20 +87,28 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 				// Exit edit mode, return to navigation
 				setIsEditing(false);
 			} else {
-				// Enter edit mode for current field
-				setIsEditing(true);
+				// Enter edit mode for current field (toggle for checkbox)
+				if (currentField === 'anthropicBeta') {
+					setAnthropicBeta(!anthropicBeta);
+				} else {
+					setIsEditing(true);
+				}
 			}
 		} else if (!isEditing && key.upArrow) {
 			if (currentField === 'apiKey') {
 				setCurrentField('baseUrl');
 			} else if (currentField === 'requestMethod') {
 				setCurrentField('apiKey');
+			} else if (currentField === 'anthropicBeta') {
+				setCurrentField('requestMethod');
 			}
 		} else if (!isEditing && key.downArrow) {
 			if (currentField === 'baseUrl') {
 				setCurrentField('apiKey');
 			} else if (currentField === 'apiKey') {
 				setCurrentField('requestMethod');
+			} else if (currentField === 'requestMethod') {
+				setCurrentField('anthropicBeta');
 			}
 		}
 	});
@@ -178,6 +198,19 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 								</Text>
 							</Box>
 						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
+							{currentField === 'anthropicBeta' ? '➣ ' : '  '}Anthropic Beta (for Claude API):
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{anthropicBeta ? '☑ Enabled' : '☐ Disabled'} (Press Enter to toggle)
+							</Text>
+						</Box>
 					</Box>
 				</Box>
 			</Box>
