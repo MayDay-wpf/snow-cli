@@ -54,8 +54,9 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - New features and improvements
-            - Bug fixes and performance enhancements
+            - Added support Gemini
+            - Added support for Claude
+            - Added support for Claude Beta
             
             ### Installation
             ```bash

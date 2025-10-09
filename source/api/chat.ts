@@ -64,8 +64,14 @@ export interface ChatCompletionChunk {
 /**
  * Convert our ChatMessage format to OpenAI's ChatCompletionMessageParam format
  * Automatically prepends system prompt if not present
+ * Logic:
+ * 1. If custom system prompt exists: use custom as system, prepend default as first user message
+ * 2. If no custom system prompt: use default as system
  */
 function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: boolean = true): ChatCompletionMessageParam[] {
+	const config = getOpenAiConfig();
+	const customSystemPrompt = config.systemPrompt;
+
 	let result = messages.map(msg => {
 		// 如果消息包含图片，使用 content 数组格式
 		if (msg.role === 'user' && msg.images && msg.images.length > 0) {
@@ -118,15 +124,37 @@ function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: b
 		return baseMessage as ChatCompletionMessageParam;
 	});
 
-	// 如果需要系统提示词且第一条消息不是 system 消息，则添加
-	if (includeSystemPrompt && (result.length === 0 || result[0]?.role !== 'system')) {
-		result = [
-			{
-				role: 'system',
-				content: SYSTEM_PROMPT
-			} as ChatCompletionMessageParam,
-			...result
-		];
+	// 如果需要系统提示词
+	if (includeSystemPrompt) {
+		// 如果第一条消息已经是 system 消息，跳过
+		if (result.length > 0 && result[0]?.role === 'system') {
+			return result;
+		}
+
+		// 如果配置了自定义系统提示词
+		if (customSystemPrompt) {
+			// 自定义系统提示词作为 system 消息，默认系统提示词作为第一条 user 消息
+			result = [
+				{
+					role: 'system',
+					content: customSystemPrompt
+				} as ChatCompletionMessageParam,
+				{
+					role: 'user',
+					content: SYSTEM_PROMPT
+				} as ChatCompletionMessageParam,
+				...result
+			];
+		} else {
+			// 没有自定义系统提示词，默认系统提示词作为 system 消息
+			result = [
+				{
+					role: 'system',
+					content: SYSTEM_PROMPT
+				} as ChatCompletionMessageParam,
+				...result
+			];
+		}
 	}
 
 	return result;

@@ -33,6 +33,11 @@ export default function WelcomeScreen({
 			infoText: 'Configure AI models for different tasks',
 		},
 		{
+			label: 'System Prompt Settings',
+			value: 'systemprompt',
+			infoText: 'Configure custom system prompt (overrides default)',
+		},
+		{
 			label: 'MCP Settings',
 			value: 'mcp',
 			infoText: 'Configure Model Context Protocol servers',

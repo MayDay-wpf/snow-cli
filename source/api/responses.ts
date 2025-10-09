@@ -146,8 +146,13 @@ export function resetOpenAIClient(): void {
  *
  * 注意：Responses API 使用 instructions 字段代替 system 消息
  * 优化：使用 type: "message" 包裹以提高缓存命中率
+ * Logic:
+ * 1. If custom system prompt exists: use custom as instructions, prepend default as first user message
+ * 2. If no custom system prompt: use default as instructions
  */
-function convertToResponseInput(messages: ChatMessage[]): any[] {
+function convertToResponseInput(messages: ChatMessage[]): { input: any[]; systemInstructions: string } {
+	const config = getOpenAiConfig();
+	const customSystemPrompt = config.systemPrompt;
 	const result: any[] = [];
 
 	for (const msg of messages) {
@@ -239,7 +244,25 @@ function convertToResponseInput(messages: ChatMessage[]): any[] {
 		}
 	}
 
-	return result;
+	// 确定系统提示词
+	let systemInstructions: string;
+	if (customSystemPrompt) {
+		// 有自定义系统提示词：自定义作为 instructions，默认作为第一条用户消息
+		systemInstructions = customSystemPrompt;
+		result.unshift({
+			type: 'message',
+			role: 'user',
+			content: [{
+				type: 'input_text',
+				text: SYSTEM_PROMPT
+			}]
+		});
+	} else {
+		// 没有自定义系统提示词：默认作为 instructions
+		systemInstructions = SYSTEM_PROMPT;
+	}
+
+	return { input: result, systemInstructions };
 }
 
 /**
@@ -249,30 +272,25 @@ export async function createResponse(options: ResponseOptions): Promise<string> 
 	const client = getOpenAIClient();
 	let messages = [...options.messages];
 
-	// 提取系统提示词（如果存在）
-	let systemInstructions = SYSTEM_PROMPT;
-	const firstMessage = messages[0];
-	if (firstMessage?.role === 'system') {
-		systemInstructions = firstMessage.content;
-		messages = messages.slice(1); // 移除系统消息
-	}
+	// 提取系统提示词和转换后的消息
+	const { input: convertedInput, systemInstructions } = convertToResponseInput(messages);
 
 	try {
 		// 使用 Responses API
 		while (true) {
-			const requestPayload = {
+			const requestPayload: any = {
 				model: options.model,
-				instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
-				input: convertToResponseInput(messages),
+				instructions: systemInstructions,
+				input: convertedInput,
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-				store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
-				include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
-				prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+				store: options.store ?? false,
+				include: options.include || ['reasoning.encrypted_content'],
+				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const response = await client.responses.create(requestPayload as any);
+			const response = await client.responses.create(requestPayload);
 
 			// 提取响应 - Responses API 返回 output 数组
 			const output = (response as any).output;
@@ -349,31 +367,24 @@ export async function* createStreamingResponse(
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
 	const client = getOpenAIClient();
 
-	// 提取系统提示词（如果存在）
-	let systemInstructions = SYSTEM_PROMPT;
-	let messages = [...options.messages];
-	const firstMessage = messages[0];
-	if (firstMessage?.role === 'system') {
-		systemInstructions = firstMessage.content;
-		messages = messages.slice(1); // 移除系统消息
-	}
+	// 提取系统提示词和转换后的消息
+	const { input: requestInput, systemInstructions } = convertToResponseInput(options.messages);
 
 	try {
-		const requestInput = convertToResponseInput(messages);
-		const requestPayload = {
+		const requestPayload: any = {
 			model: options.model,
-			instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
+			instructions: systemInstructions,
 			input: requestInput,
 			stream: true,
 			tools: convertToolsForResponses(options.tools),
 			tool_choice: options.tool_choice,
 			reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-			store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
-			include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
-			prompt_cache_key: options.prompt_cache_key, // 缓存键（可选）
+			store: options.store ?? false,
+			include: options.include || ['reasoning.encrypted_content'],
+			prompt_cache_key: options.prompt_cache_key,
 		};
 
-		const stream = await client.responses.create(requestPayload as any, {
+		const stream = await client.responses.create(requestPayload, {
 			signal: abortSignal,
 		});
 
@@ -554,27 +565,24 @@ export async function createResponseWithTools(
 	let allToolCalls: ToolCall[] = [];
 	let rounds = 0;
 
-	// 提取系统提示词（如果存在）
-	let systemInstructions = SYSTEM_PROMPT;
-	const firstMessage = messages[0];
-	if (firstMessage?.role === 'system') {
-		systemInstructions = firstMessage.content;
-		messages = messages.slice(1); // 移除系统消息
-	}
+	// 提取系统提示词和转换后的消息
+	const { input: convertedInput, systemInstructions } = convertToResponseInput(messages);
 
 	try {
 		while (rounds < maxToolRounds) {
-			const response = await client.responses.create({
+			const requestPayload: any = {
 				model: options.model,
-				instructions: systemInstructions, // Responses API 使用 instructions 代替 system 消息
-				input: convertToResponseInput(messages),
+				instructions: systemInstructions,
+				input: convertedInput,
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-				store: options.store ?? false, // 默认不存储对话历史，提高缓存命中
-				include: options.include || ['reasoning.encrypted_content'], // 包含加密推理内容
-				prompt_cache_key: options.prompt_cache_key, // 缓存键
-			} as any);
+				store: options.store ?? false,
+				include: options.include || ['reasoning.encrypted_content'],
+				prompt_cache_key: options.prompt_cache_key,
+			};
+
+			const response = await client.responses.create(requestPayload);
 
 			const output = (response as any).output;
 			if (!output || output.length === 0) {

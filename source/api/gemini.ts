@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, Part, Content, FunctionDeclaration, Tool } from '@google/generative-ai';
 import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -77,8 +78,13 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): Tool[] | undefined 
 
 /**
  * Convert our ChatMessage format to Gemini's Content format
+ * Logic:
+ * 1. If custom system prompt exists: use custom as systemInstruction, prepend default as first user message
+ * 2. If no custom system prompt: use default as systemInstruction
  */
 function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?: string; contents: Content[] } {
+	const config = getOpenAiConfig();
+	const customSystemPrompt = config.systemPrompt;
 	let systemInstruction: string | undefined;
 	const contents: Content[] = [];
 
@@ -151,6 +157,19 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 			role,
 			parts
 		});
+	}
+
+	// 如果配置了自定义系统提示词
+	if (customSystemPrompt) {
+		// 自定义系统提示词作为 systemInstruction，默认系统提示词作为第一条用户消息
+		systemInstruction = customSystemPrompt;
+		contents.unshift({
+			role: 'user',
+			parts: [{ text: SYSTEM_PROMPT }]
+		});
+	} else if (!systemInstruction) {
+		// 没有自定义系统提示词，默认系统提示词作为 systemInstruction
+		systemInstruction = SYSTEM_PROMPT;
 	}
 
 	return { systemInstruction, contents };

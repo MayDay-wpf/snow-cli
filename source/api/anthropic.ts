@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomUUID } from 'crypto';
 import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -58,6 +59,11 @@ function getAnthropicClient(): Anthropic {
 			clientConfig.defaultQuery = { beta: 'true' };
 		}
 
+		// Add Authorization header for enhanced compatibility
+		clientConfig.defaultHeaders = {
+			'Authorization': `Bearer ${config.apiKey}`,
+		};
+
 		anthropicClient = new Anthropic(clientConfig);
 	}
 
@@ -107,11 +113,16 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): Anthropic.Tool[]
 /**
  * Convert our ChatMessage format to Anthropic's message format
  * Adds cache_control to system prompt and last user message for prompt caching
+ * Logic:
+ * 1. If custom system prompt exists: use custom as system, prepend default as first user message
+ * 2. If no custom system prompt: use default as system
  */
 function convertToAnthropicMessages(messages: ChatMessage[]): {
 	system?: any;
 	messages: Anthropic.MessageParam[]
 } {
+	const config = getOpenAiConfig();
+	const customSystemPrompt = config.systemPrompt;
 	let systemContent: string | undefined;
 	const anthropicMessages: Anthropic.MessageParam[] = [];
 
@@ -209,6 +220,19 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		}
 	}
 
+	// 如果配置了自定义系统提示词
+	if (customSystemPrompt) {
+		// 自定义系统提示词作为 system，默认系统提示词作为第一条用户消息
+		systemContent = customSystemPrompt;
+		anthropicMessages.unshift({
+			role: 'user',
+			content: SYSTEM_PROMPT
+		});
+	} else if (!systemContent) {
+		// 没有自定义系统提示词，默认系统提示词作为 system
+		systemContent = SYSTEM_PROMPT;
+	}
+
 	// Add cache_control to last user message for prompt caching
 	if (anthropicMessages.length > 0) {
 		const lastMessageIndex = anthropicMessages.length - 1;
@@ -233,7 +257,7 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		}
 	}
 
-	// Format system prompt with cache_control
+	// Format system prompt with cache_control (only if we have a system prompt)
 	const system = systemContent ? [{
 		type: 'text',
 		text: systemContent,

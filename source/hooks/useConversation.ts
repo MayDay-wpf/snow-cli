@@ -150,7 +150,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					model,
 					messages: conversationMessages,
 					temperature: 0,
-					max_tokens: config.maxContextTokens || 4096,
+					max_tokens: config.maxTokens || 4096,
 					tools: mcpTools.length > 0 ? mcpTools : undefined,
 					sessionId: currentSession?.id
 				}, controller.signal)

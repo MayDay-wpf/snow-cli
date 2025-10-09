@@ -14,12 +14,13 @@ type Props = {
 	onSave: () => void;
 };
 
-type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens' | 'compactBaseUrl' | 'compactApiKey' | 'compactModelName';
+type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens' | 'maxTokens' | 'compactBaseUrl' | 'compactApiKey' | 'compactModelName';
 
 export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
+	const [maxTokens, setMaxTokens] = useState(4096);
 	const [compactBaseUrl, setCompactBaseUrl] = useState('');
 	const [compactApiKey, setCompactApiKey] = useState('');
 	const [compactModelName, setCompactModelName] = useState('');
@@ -37,6 +38,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
+		setMaxTokens(config.maxTokens || 4096);
 		setCompactBaseUrl(config.compactModel?.baseUrl || '');
 		setCompactApiKey(config.compactModel?.apiKey || '');
 		setCompactModelName(config.compactModel?.modelName || '');
@@ -78,6 +80,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		if (currentField === 'advancedModel') return advancedModel;
 		if (currentField === 'basicModel') return basicModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
+		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'compactBaseUrl') return compactBaseUrl;
 		if (currentField === 'compactApiKey') return compactApiKey;
 		if (currentField === 'compactModelName') return compactModelName;
@@ -100,6 +103,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			const numValue = parseInt(value, 10);
 			if (!isNaN(numValue) && numValue > 0) {
 				setMaxContextTokens(numValue);
+			}
+		} else if (currentField === 'maxTokens') {
+			const numValue = parseInt(value, 10);
+			if (!isNaN(numValue) && numValue > 0) {
+				setMaxTokens(numValue);
 			}
 		}
 		setIsEditing(false);
@@ -165,6 +173,28 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 					setMaxContextTokens(finalValue);
 					setIsEditing(false);
 				}
+			} else if (currentField === 'maxTokens') {
+				// Handle numeric input for maxTokens
+				if (input && input.match(/[0-9]/)) {
+					const newValue = parseInt(maxTokens.toString() + input, 10);
+					if (!isNaN(newValue)) {
+						setMaxTokens(newValue);
+					}
+				} else if (key.backspace || key.delete) {
+					const currentStr = maxTokens.toString();
+					const newStr = currentStr.slice(0, -1);
+					const newValue = parseInt(newStr, 10);
+					if (!isNaN(newValue)) {
+						setMaxTokens(newValue);
+					} else {
+						setMaxTokens(0);
+					}
+				} else if (key.return) {
+					// Save value, but enforce minimum of 100
+					const finalValue = maxTokens < 100 ? 100 : maxTokens;
+					setMaxTokens(finalValue);
+					setIsEditing(false);
+				}
 			} else if (currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName') {
 				// Handle text input for compact model fields
 				if (key.return) {
@@ -203,6 +233,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				advancedModel,
 				basicModel,
 				maxContextTokens,
+				maxTokens,
 			};
 			// 只有当所有字段都填写时才保存 compactModel
 			if (compactBaseUrl && compactApiKey && compactModelName) {
@@ -219,6 +250,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				advancedModel,
 				basicModel,
 				maxContextTokens,
+				maxTokens,
 			};
 			// 只有当所有字段都填写时才保存 compactModel
 			if (compactBaseUrl && compactApiKey && compactModelName) {
@@ -231,10 +263,10 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			updateOpenAiConfig(config);
 			onBack();
 		} else if (key.return) {
-			// Load models first for model fields, or enter edit mode directly for maxContextTokens and compact fields
+			// Load models first for model fields, or enter edit mode directly for maxContextTokens/maxTokens and compact fields
 			setSearchTerm(''); // Reset search when entering edit mode
 			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
-			if (currentField === 'maxContextTokens' || isCompactField) {
+			if (currentField === 'maxContextTokens' || currentField === 'maxTokens' || isCompactField) {
 				setIsEditing(true);
 			} else {
 				loadModels().then(() => {
@@ -248,7 +280,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 		} else if (input === 'm') {
 			// 快捷键：按 'm' 直接进入手动输入模式
 			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
-			if (currentField !== 'maxContextTokens' && !isCompactField) {
+			if (currentField !== 'maxContextTokens' && currentField !== 'maxTokens' && !isCompactField) {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -257,8 +289,10 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				setCurrentField('advancedModel');
 			} else if (currentField === 'maxContextTokens') {
 				setCurrentField('basicModel');
-			} else if (currentField === 'compactBaseUrl') {
+			} else if (currentField === 'maxTokens') {
 				setCurrentField('maxContextTokens');
+			} else if (currentField === 'compactBaseUrl') {
+				setCurrentField('maxTokens');
 			} else if (currentField === 'compactApiKey') {
 				setCurrentField('compactBaseUrl');
 			} else if (currentField === 'compactModelName') {
@@ -270,6 +304,8 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 			} else if (currentField === 'basicModel') {
 				setCurrentField('maxContextTokens');
 			} else if (currentField === 'maxContextTokens') {
+				setCurrentField('maxTokens');
+			} else if (currentField === 'maxTokens') {
 				setCurrentField('compactBaseUrl');
 			} else if (currentField === 'compactBaseUrl') {
 				setCurrentField('compactApiKey');
@@ -282,7 +318,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (baseUrlMissing) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
 					<Box flexDirection="column">
 						<Gradient name='rainbow'>
 							Model Configuration
@@ -293,7 +329,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 					</Box>
 				</Box>
 
-				<Box marginBottom={2}>
+				<Box marginBottom={1}>
 					<Alert variant="error">
 						Base URL not configured. Please configure API settings first before setting up models.
 					</Alert>
@@ -311,7 +347,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="double" paddingX={2} paddingY={1}>
+				<Box marginBottom={1} borderStyle="double" paddingX={1} paddingY={0}>
 					<Box flexDirection="column">
 						<Gradient name="rainbow">
 							Model Configuration
@@ -329,7 +365,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (manualInputMode) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
 					<Box flexDirection="column">
 						<Gradient name='rainbow'>
 							Manual Input Model
@@ -340,11 +376,11 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 					</Box>
 				</Box>
 
-				<Box flexDirection="column" marginBottom={2}>
+				<Box flexDirection="column" marginBottom={1}>
 					<Text color="cyan">
 						{currentField === 'advancedModel' ? 'Advanced Model' : 'Basic Model'}:
 					</Text>
-					<Box marginLeft={2} marginTop={1}>
+					<Box marginLeft={2}>
 						<Text color="green">
 							{`> ${manualInputValue}`}<Text color="white">_</Text>
 						</Text>
@@ -365,7 +401,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+			<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
 				<Box flexDirection="column">
 					<Gradient name='rainbow'>
 						Model Configuration
@@ -376,14 +412,14 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				</Box>
 			</Box>
 
-			<Box flexDirection="column" marginBottom={2}>
-				<Box marginBottom={1}>
+			<Box flexDirection="column">
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
 							{currentField === 'advancedModel' ? '➣ ' : '  '}Advanced Model (Main Work):
 						</Text>
 						{currentField === 'advancedModel' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								{loading ? (
 									<Text color="yellow">Loading models...</Text>
 								) : (
@@ -401,20 +437,20 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'advancedModel') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{advancedModel || 'Not set'}</Text>
 							</Box>
 						)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
 							{currentField === 'basicModel' ? '➣ ' : '  '}Basic Model (Summary & Analysis):
 						</Text>
 						{currentField === 'basicModel' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								{loading ? (
 									<Text color="yellow">Loading models...</Text>
 								) : (
@@ -432,91 +468,111 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'basicModel') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{basicModel || 'Not set'}</Text>
 							</Box>
 						)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
 							{currentField === 'maxContextTokens' ? '➣ ' : '  '}Max Context Tokens (Auto-compress when reached):
 						</Text>
 						{currentField === 'maxContextTokens' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="cyan">
 									Enter value: {maxContextTokens}
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'maxContextTokens') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{maxContextTokens}</Text>
 							</Box>
 						)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={2} marginTop={1}>
+				<Box>
+					<Box flexDirection="column">
+						<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
+							{currentField === 'maxTokens' ? '➣ ' : '  '}Max Tokens (Max tokens for single response):
+						</Text>
+						{currentField === 'maxTokens' && isEditing && (
+							<Box marginLeft={2}>
+								<Text color="cyan">
+									Enter value: {maxTokens}
+								</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'maxTokens') && (
+							<Box marginLeft={2}>
+								<Text color="gray">{maxTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginTop={1}>
 					<Text color="cyan" bold>Compact Model (Context Compression):</Text>
 				</Box>
 
-				<Box marginBottom={1}>
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactBaseUrl' ? 'green' : 'white'}>
 							{currentField === 'compactBaseUrl' ? '➣ ' : '  '}Base URL:
 						</Text>
 						{currentField === 'compactBaseUrl' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="cyan">
 									{compactBaseUrl}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactBaseUrl') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{compactBaseUrl || 'Not set'}</Text>
 							</Box>
 						)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactApiKey' ? 'green' : 'white'}>
 							{currentField === 'compactApiKey' ? '➣ ' : '  '}API Key:
 						</Text>
 						{currentField === 'compactApiKey' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="cyan">
 									{compactApiKey.replace(/./g, '*')}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactApiKey') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{compactApiKey ? compactApiKey.replace(/./g, '*') : 'Not set'}</Text>
 							</Box>
 						)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
+				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
 							{currentField === 'compactModelName' ? '➣ ' : '  '}Model Name:
 						</Text>
 						{currentField === 'compactModelName' && isEditing && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="cyan">
 									{compactModelName}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactModelName') && (
-							<Box marginLeft={3}>
+							<Box marginLeft={2}>
 								<Text color="gray">{compactModelName || 'Not set'}</Text>
 							</Box>
 						)}
@@ -524,7 +580,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				</Box>
 			</Box>
 
-			<Box flexDirection="column">
+			<Box flexDirection="column" marginTop={1}>
 				{isEditing ? (
 					<>
 						<Alert variant="info">

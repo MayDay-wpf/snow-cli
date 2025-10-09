@@ -17,8 +17,10 @@ export interface ApiConfig {
 	advancedModel?: string;
 	basicModel?: string;
 	maxContextTokens?: number;
+	maxTokens?: number; // Max tokens for single response (API request parameter)
 	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
+	systemPrompt?: string; // Custom system prompt (overrides default)
 }
 
 export interface MCPServer {
@@ -45,6 +47,7 @@ const DEFAULT_CONFIG: AppConfig = {
 		advancedModel: '',
 		basicModel: '',
 		maxContextTokens: 4000,
+		maxTokens: 4096,
 		anthropicBeta: false,
 	},
 };

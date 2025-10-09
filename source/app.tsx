@@ -5,6 +5,7 @@ import WelcomeScreen from './ui/pages/WelcomeScreen.js';
 import ApiConfigScreen from './ui/pages/ApiConfigScreen.js';
 import ModelConfigScreen from './ui/pages/ModelConfigScreen.js';
 import MCPConfigScreen from './ui/pages/MCPConfigScreen.js';
+import SystemPromptConfigScreen from './ui/pages/SystemPromptConfigScreen.js';
 import ChatScreen from './ui/pages/ChatScreen.js';
 import { useGlobalExit, ExitNotification as ExitNotificationType } from './hooks/useGlobalExit.js';
 import { onNavigate } from './hooks/useGlobalNavigation.js';
@@ -15,7 +16,7 @@ type Props = {
 
 export default function App({ version }: Props) {
 	const [currentView, setCurrentView] = useState<
-		'welcome' | 'chat' | 'settings' | 'config' | 'models' | 'mcp'
+		'welcome' | 'chat' | 'settings' | 'config' | 'models' | 'mcp' | 'systemprompt'
 	>('welcome');
 
 	const [exitNotification, setExitNotification] = useState<ExitNotificationType>({
@@ -35,7 +36,7 @@ export default function App({ version }: Props) {
 	}, []);
 
 	const handleMenuSelect = (value: string) => {
-		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models' || value === 'mcp') {
+		if (value === 'chat' || value === 'settings' || value === 'config' || value === 'models' || value === 'mcp' || value === 'systemprompt') {
 			setCurrentView(value);
 		} else if (value === 'exit') {
 			process.exit(0);
@@ -81,6 +82,13 @@ export default function App({ version }: Props) {
 			case 'mcp':
 				return (
 					<MCPConfigScreen
+						onBack={() => setCurrentView('welcome')}
+						onSave={() => setCurrentView('welcome')}
+					/>
+				);
+			case 'systemprompt':
+				return (
+					<SystemPromptConfigScreen
 						onBack={() => setCurrentView('welcome')}
 						onSave={() => setCurrentView('welcome')}
 					/>
