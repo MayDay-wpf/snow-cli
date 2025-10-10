@@ -57,9 +57,9 @@ $ npm uninstall --global snow-ai
 
 ## Install VSCode Extension
 
-* download [VSIX/snow-cli-0.2.5.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.5.vsix)
+* download [VSIX/snow-cli-0.2.6.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.6.vsix)
 
-* open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.5.vsix`
+* open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.6.vsix`
 
 ## Live View
 * **Welcome & Settings**
@@ -72,6 +72,8 @@ $ npm uninstall --global snow-ai
 * In the middle of the conversation: click ESC to stop AI generation
 
 * When mounting: double-click ESC, view the dialogue recorder, select rollback, including file checkpoints
+
+* Windows & MacOS:`ctrl + v` Paste image
 
 * **Commands**
 

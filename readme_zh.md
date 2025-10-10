@@ -57,9 +57,9 @@ $ npm uninstall --global snow-ai
 
 ## 安装 VSCode 扩展
 
-* 下载 [VSIX/snow-cli-0.2.5.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.5.vsix)
+* 下载 [VSIX/snow-cli-0.2.6.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.6.vsix)
 
-* 打开 VSCode，点击 `扩展` -> `从 VSIX 安装...` -> 选择 `snow-cli-0.2.5.vsix`
+* 打开 VSCode，点击 `扩展` -> `从 VSIX 安装...` -> 选择 `snow-cli-0.2.6.vsix`
 
 ## 实时预览
 * **欢迎 & 设置**
@@ -72,6 +72,8 @@ $ npm uninstall --global snow-ai
 * 对话进行中：按 ESC 停止 AI 生成
 
 * 挂载时：双击 ESC，查看对话记录器，选择回滚，包括文件检查点
+
+* Windows & MacOS：`ctrl + v` 粘贴图片
 
 * **命令**
 
