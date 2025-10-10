@@ -1,6 +1,16 @@
+<div align="center">
+
+<img src="logo.png" alt="Snow AI CLI Logo" width="200"/>
+
 # snow-ai
 
-[English](readme.md) | 中文
+[English](readme.md) | **中文**
+
+*面向开发者的智能 AI 命令行工具*
+
+</div>
+
+---
 
 
 ## 安装
@@ -66,7 +76,7 @@ $ npm uninstall --global snow-ai
 * **命令**
 
 ![alt text](image-2.png)
-  - /clear —— 创建新会话
+  - /clear - 创建新会话
 
   - /resume - 恢复历史会话
 

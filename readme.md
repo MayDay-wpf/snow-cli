@@ -1,6 +1,16 @@
+<div align="center">
+
+<img src="logo.png" alt="Snow AI CLI Logo" width="200"/>
+
 # snow-ai
 
-English | [中文](readme_zh.md)
+**English** | [中文](readme_zh.md)
+
+*An intelligent AI-powered CLI tool for developers*
+
+</div>
+
+---
 
 
 ## Install
@@ -66,7 +76,7 @@ $ npm uninstall --global snow-ai
 * **Commands**
 
 ![alt text](image-2.png)
-  - /clear —— Create a new session
+  - /clear - Create a new session
 
   - /resume - The recovery history has
 
