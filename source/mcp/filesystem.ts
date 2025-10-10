@@ -682,45 +682,51 @@ export class FilesystemMCPService {
 			let finalContextEnd = newContextEnd;
 			let finalContextContent = newContextContent;
 
-			try {
-				execSync(`npx prettier --write "${fullPath}"`, {
-					stdio: 'pipe',
-					encoding: 'utf-8',
-				});
+			// Check if Prettier supports this file type
+			const prettierSupportedExtensions = [
+				'.js', '.jsx', '.ts', '.tsx', '.json', '.css', '.scss', '.less',
+				'.html', '.vue', '.yaml', '.yml', '.md', '.graphql', '.gql'
+			];
+			const fileExtension = path.extname(fullPath).toLowerCase();
+			const shouldFormat = prettierSupportedExtensions.includes(fileExtension);
 
-				// Re-read the file after formatting to get the formatted content
-				const formattedContent = await fs.readFile(fullPath, 'utf-8');
-				finalLines = formattedContent.split('\n');
-				finalTotalLines = finalLines.length;
+			if (shouldFormat) {
+				try {
+					execSync(`npx prettier --write "${fullPath}"`, {
+						stdio: 'pipe',
+						encoding: 'utf-8',
+					});
 
-				// Recalculate the context end line based on formatted content
-				finalContextEnd = Math.min(
-					finalTotalLines,
-					contextStart + (newContextEnd - contextStart),
-				);
+					// Re-read the file after formatting to get the formatted content
+					const formattedContent = await fs.readFile(fullPath, 'utf-8');
+					finalLines = formattedContent.split('\n');
+					finalTotalLines = finalLines.length;
 
-				// Extract formatted content for context with line numbers
-				const formattedContextLines = finalLines.slice(
-					contextStart - 1,
-					finalContextEnd,
-				);
-				finalContextContent = formattedContextLines
-					.map((line, idx) => {
-						const lineNum = contextStart + idx;
-						const paddedNum = String(lineNum).padStart(
-							String(finalContextEnd).length,
-							' ',
-						);
-						return `${paddedNum}→${line}`;
-					})
-					.join('\n');
-			} catch (formatError) {
-				// If formatting fails, continue with the original content
-				// This ensures editing is not blocked by formatting issues
-				console.warn(
-					`⚠️  Prettier formatting failed for ${filePath}, returning unformatted content:`,
-					formatError instanceof Error ? formatError.message : 'Unknown error',
-				);
+					// Recalculate the context end line based on formatted content
+					finalContextEnd = Math.min(
+						finalTotalLines,
+						contextStart + (newContextEnd - contextStart),
+					);
+
+					// Extract formatted content for context with line numbers
+					const formattedContextLines = finalLines.slice(
+						contextStart - 1,
+						finalContextEnd,
+					);
+					finalContextContent = formattedContextLines
+						.map((line, idx) => {
+							const lineNum = contextStart + idx;
+							const paddedNum = String(lineNum).padStart(
+								String(finalContextEnd).length,
+								' ',
+							);
+							return `${paddedNum}→${line}`;
+						})
+						.join('\n');
+				} catch (formatError) {
+					// If formatting fails, continue with the original content
+					// This ensures editing is not blocked by formatting issues
+				}
 			}
 
 			// Analyze code structure of the edited content (using formatted content if available)

@@ -54,8 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Adds support AST,Grep Search
-            -- fix some bugs
+            -- fix some warnings
             
             ### Installation
             ```bash
