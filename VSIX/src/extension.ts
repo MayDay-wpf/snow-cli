@@ -3,6 +3,9 @@ import WebSocket from 'ws';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY = 2000; // 2 seconds
 
 // Global cache for last valid editor context
 let lastValidContext: any = {
@@ -18,10 +21,17 @@ function connectToSnowCLI() {
 		return;
 	}
 
+	// Stop reconnecting if we've exceeded the maximum attempts
+	if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+		return;
+	}
+
 	try {
 		ws = new WebSocket('ws://localhost:9527');
 
 		ws.on('open', () => {
+			// Reset reconnect attempts on successful connection
+			reconnectAttempts = 0;
 			sendEditorContext();
 		});
 
@@ -34,11 +44,24 @@ function connectToSnowCLI() {
 			if (reconnectTimer) {
 				clearTimeout(reconnectTimer);
 			}
-			reconnectTimer = setTimeout(connectToSnowCLI, 3000);
+
+			// Exponential backoff with jitter for reconnection
+			reconnectAttempts++;
+			if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				const delay = Math.min(
+					BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts - 1),
+					30000 // Max 30 seconds
+				);
+				reconnectTimer = setTimeout(connectToSnowCLI, delay);
+			}
 		});
 
-		ws.on('error', () => {});
-	} catch (error) {}
+		ws.on('error', () => {
+			// Silently handle errors, let the close event handle reconnection
+		});
+	} catch (error) {
+		// Silently handle connection errors
+	}
 }
 
 function sendEditorContext() {
@@ -114,6 +137,9 @@ function handleMessage(message: string) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+	// Try to connect immediately when extension activates
+	connectToSnowCLI();
+
 	const disposable = vscode.commands.registerCommand('snow-cli.openTerminal', () => {
 		// Create a new terminal split to the right in editor area
 		const terminal = vscode.window.createTerminal({
@@ -130,6 +156,8 @@ export function activate(context: vscode.ExtensionContext) {
 		// Execute the snow command
 		terminal.sendText('snow');
 
+		// Reset reconnect attempts when manually opening terminal
+		reconnectAttempts = 0;
 		// Try to connect to Snow CLI WebSocket server
 		setTimeout(connectToSnowCLI, 2000);
 	});

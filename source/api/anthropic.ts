@@ -341,7 +341,7 @@ export async function* createStreamingAnthropicCompletion(
 						type: 'function',
 						function: {
 							name: block.name,
-							arguments: ''
+							arguments: '{}' // Initialize with empty object instead of empty string
 						}
 					});
 
@@ -371,7 +371,12 @@ export async function* createStreamingAnthropicCompletion(
 					if (currentToolUseId) {
 						const toolCall = toolCallsBuffer.get(currentToolUseId);
 						if (toolCall) {
-							toolCall.function.arguments += jsonDelta;
+							// If this is the first delta and arguments is still '{}', replace it
+							if (toolCall.function.arguments === '{}') {
+								toolCall.function.arguments = jsonDelta;
+							} else {
+								toolCall.function.arguments += jsonDelta;
+							}
 
 							// Yield delta for token counting
 							yield {
@@ -425,9 +430,14 @@ export async function* createStreamingAnthropicCompletion(
 			for (const toolCall of toolCalls) {
 				try {
 					// Validate JSON completeness
-					JSON.parse(toolCall.function.arguments);
+					// Empty string should be treated as empty object
+					const args = toolCall.function.arguments.trim() || '{}';
+					JSON.parse(args);
+					// Update with normalized version
+					toolCall.function.arguments = args;
 				} catch (e) {
-					throw new Error(`Incomplete tool call JSON for ${toolCall.function.name}: ${toolCall.function.arguments}`);
+					const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+					throw new Error(`Incomplete tool call JSON for ${toolCall.function.name}: ${toolCall.function.arguments} (${errorMsg})`);
 				}
 			}
 

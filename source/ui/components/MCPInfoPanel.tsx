@@ -54,9 +54,7 @@ export default function MCPInfoPanel() {
 
 	if (isLoading) {
 		return (
-			<Box borderColor="gray" borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
-				<Text color="gray">Loading MCP services...</Text>
-			</Box>
+			<Text color="gray">Loading MCP services...</Text>
 		);
 	}
 
@@ -94,12 +92,12 @@ export default function MCPInfoPanel() {
 								</Text>
 								{status.isBuiltIn && (
 									<Text color="blue" dimColor>
-										 (System)
+										(System)
 									</Text>
 								)}
 								{status.connected && status.connectionMethod && !status.isBuiltIn && (
 									<Text color="gray" dimColor>
-										 ({status.connectionMethod})
+										({status.connectionMethod})
 									</Text>
 								)}
 							</Box>

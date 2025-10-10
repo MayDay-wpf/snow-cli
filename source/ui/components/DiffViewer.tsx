@@ -6,21 +6,19 @@ interface Props {
 	oldContent?: string;
 	newContent: string;
 	filename?: string;
-	maxLines?: number;
 }
 
 export default function DiffViewer({
 	oldContent = '',
 	newContent,
-	filename,
-	maxLines = 100
+	filename
 }: Props) {
 	// If no old content, show as new file creation
 	const isNewFile = !oldContent || oldContent.trim() === '';
 
 	if (isNewFile) {
-		const lines = newContent.split('\n').slice(0, maxLines);
-		const totalLines = newContent.split('\n').length;
+		const allLines = newContent.split('\n');
+		const totalLines = allLines.length;
 		const lineNumberWidth = String(totalLines).length;
 
 		return (
@@ -37,23 +35,16 @@ export default function DiffViewer({
 					)}
 				</Box>
 				<Box flexDirection="column">
-					{lines.map((line, index) => (
+					{allLines.map((line, index) => (
 						<Box key={index}>
 							<Text color="gray" dimColor>
-								{String(index + 1).padStart(lineNumberWidth, ' ')}{' '}
+								{String(index + 1).padStart(lineNumberWidth, ' ')} │
 							</Text>
 							<Text color="white" backgroundColor="green">
 								+ {line}
 							</Text>
 						</Box>
 					))}
-					{totalLines > maxLines && (
-						<Box marginTop={1}>
-							<Text dimColor>
-								... {totalLines - maxLines} more lines
-							</Text>
-						</Box>
-					)}
 				</Box>
 			</Box>
 		);
@@ -62,12 +53,49 @@ export default function DiffViewer({
 	// Generate diff
 	const diffResult = Diff.diffLines(oldContent, newContent);
 
-	// Calculate line numbers
+	// Calculate line numbers and build display lines
 	let oldLineNum = 1;
 	let newLineNum = 1;
 	const totalOldLines = oldContent.split('\n').length;
 	const totalNewLines = newContent.split('\n').length;
 	const lineNumberWidth = Math.max(String(totalOldLines).length, String(totalNewLines).length);
+
+	// Build all display lines with their metadata
+	interface DisplayLine {
+		type: 'added' | 'removed' | 'unchanged';
+		content: string;
+		oldLineNum?: number;
+		newLineNum?: number;
+	}
+
+	const displayLines: DisplayLine[] = [];
+
+	diffResult.forEach((part) => {
+		const lines = part.value.replace(/\n$/, '').split('\n');
+
+		lines.forEach((line) => {
+			if (part.added) {
+				displayLines.push({
+					type: 'added',
+					content: line,
+					newLineNum: newLineNum++
+				});
+			} else if (part.removed) {
+				displayLines.push({
+					type: 'removed',
+					content: line,
+					oldLineNum: oldLineNum++
+				});
+			} else {
+				displayLines.push({
+					type: 'unchanged',
+					content: line,
+					oldLineNum: oldLineNum++,
+					newLineNum: newLineNum++
+				});
+			}
+		});
+	});
 
 	return (
 		<Box flexDirection="column">
@@ -83,69 +111,45 @@ export default function DiffViewer({
 				)}
 			</Box>
 			<Box flexDirection="column">
-				{diffResult.slice(0, maxLines).map((part, index) => {
-					const lines = part.value.replace(/\n$/, '').split('\n');
-
-					return lines.map((line, lineIndex) => {
-						if (part.added) {
-							const currentLineNum = newLineNum++;
-							return (
-								<Box key={`${index}-${lineIndex}`}>
-									<Text color="gray" dimColor>
-										{' '.repeat(lineNumberWidth)}{' '}
-									</Text>
-									<Text color="gray" dimColor>
-										{String(currentLineNum).padStart(lineNumberWidth, ' ')}{' '}
-									</Text>
-									<Text color="white" backgroundColor="green">
-										+ {line}
-									</Text>
-								</Box>
-							);
-						}
-
-						if (part.removed) {
-							const currentLineNum = oldLineNum++;
-							return (
-								<Box key={`${index}-${lineIndex}`}>
-									<Text color="gray" dimColor>
-										{String(currentLineNum).padStart(lineNumberWidth, ' ')}{' '}
-									</Text>
-									<Text color="gray" dimColor>
-										{' '.repeat(lineNumberWidth)}{' '}
-									</Text>
-									<Text color="white" backgroundColor="red">
-										- {line}
-									</Text>
-								</Box>
-							);
-						}
-
-						// Unchanged lines
-						const currentOldLineNum = oldLineNum++;
-						const currentNewLineNum = newLineNum++;
+				{displayLines.map((displayLine, index) => {
+					if (displayLine.type === 'added') {
 						return (
-							<Box key={`${index}-${lineIndex}`}>
+							<Box key={index}>
 								<Text color="gray" dimColor>
-									{String(currentOldLineNum).padStart(lineNumberWidth, ' ')}{' '}
+									{String(displayLine.newLineNum).padStart(lineNumberWidth, ' ')} │
 								</Text>
-								<Text color="gray" dimColor>
-									{String(currentNewLineNum).padStart(lineNumberWidth, ' ')}{' '}
-								</Text>
-								<Text dimColor>
-									  {line}
+								<Text color="white" backgroundColor="green">
+									+ {displayLine.content}
 								</Text>
 							</Box>
 						);
-					});
-				}).flat()}
-				{diffResult.length > maxLines && (
-					<Box marginTop={1}>
-						<Text dimColor>
-							... {diffResult.length - maxLines} more lines
-						</Text>
-					</Box>
-				)}
+					}
+
+					if (displayLine.type === 'removed') {
+						return (
+							<Box key={index}>
+								<Text color="gray" dimColor>
+									{String(displayLine.oldLineNum).padStart(lineNumberWidth, ' ')} │
+								</Text>
+								<Text color="white" backgroundColor="red">
+									- {displayLine.content}
+								</Text>
+							</Box>
+						);
+					}
+
+					// Unchanged lines
+					return (
+						<Box key={index}>
+							<Text color="gray" dimColor>
+								{String(displayLine.oldLineNum).padStart(lineNumberWidth, ' ')} │
+							</Text>
+							<Text dimColor>
+								  {displayLine.content}
+							</Text>
+						</Box>
+					);
+				})}
 			</Box>
 		</Box>
 	);

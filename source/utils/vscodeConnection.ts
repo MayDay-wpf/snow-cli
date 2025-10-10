@@ -34,6 +34,11 @@ class VSCodeConnectionManager {
 				this.server = new WebSocketServer({ port: this.port });
 
 				this.server.on('connection', (ws) => {
+					// Close old client if exists
+					if (this.client && this.client !== ws) {
+						this.client.close();
+					}
+
 					this.client = ws;
 
 					ws.on('message', (message) => {
@@ -46,7 +51,13 @@ class VSCodeConnectionManager {
 					});
 
 					ws.on('close', () => {
-						this.client = null;
+						if (this.client === ws) {
+							this.client = null;
+						}
+					});
+
+					ws.on('error', () => {
+						// Silently handle errors
 					});
 				});
 

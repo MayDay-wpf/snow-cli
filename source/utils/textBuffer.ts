@@ -46,6 +46,7 @@ export class TextBuffer {
   private pasteTimer: NodeJS.Timeout | null = null; // 粘贴完成检测定时器
   private pastePlaceholderPosition: number = -1; // 占位符插入位置
   private onUpdateCallback?: () => void; // 更新回调函数
+  private isDestroyed: boolean = false; // 标记是否已销毁
 
   private visualLines: string[] = [''];
   private visualLineStarts: number[] = [0];
@@ -56,6 +57,20 @@ export class TextBuffer {
     this.viewport = viewport;
     this.onUpdateCallback = onUpdate;
     this.recalculateVisualState();
+  }
+
+  /**
+   * Cleanup method to be called when the buffer is no longer needed
+   */
+  destroy(): void {
+    this.isDestroyed = true;
+    if (this.pasteTimer) {
+      clearTimeout(this.pasteTimer);
+      this.pasteTimer = null;
+    }
+    this.pasteStorage.clear();
+    this.imageStorage.clear();
+    this.onUpdateCallback = undefined;
   }
 
   get text(): string {
@@ -95,7 +110,7 @@ export class TextBuffer {
 
   private scheduleUpdate(): void {
     // Notify external components of updates
-    if (this.onUpdateCallback) {
+    if (!this.isDestroyed && this.onUpdateCallback) {
       this.onUpdateCallback();
     }
   }
@@ -161,7 +176,9 @@ export class TextBuffer {
 
       // 设置150ms的定时器，如果150ms内没有新数据，则认为粘贴完成
       this.pasteTimer = setTimeout(() => {
-        this.finalizePaste();
+        if (!this.isDestroyed) {
+          this.finalizePaste();
+        }
       }, 150);
 
       this.recalculateVisualState();

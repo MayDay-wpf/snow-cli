@@ -8,11 +8,14 @@ import FileList, { FileListRef } from './FileList.js';
 import { execSync } from 'child_process';
 
 type Props = {
-	onSubmit: (message: string, images?: Array<{ data: string, mimeType: string }>) => void;
+	onSubmit: (
+		message: string,
+		images?: Array<{ data: string; mimeType: string }>,
+	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
-	chatHistory?: Array<{ role: string, content: string }>;
+	chatHistory?: Array<{ role: string; content: string }>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -32,20 +35,39 @@ const commands = [
 	{ name: 'clear', description: 'Clear chat context and conversation history' },
 	{ name: 'resume', description: 'Resume a conversation' },
 	{ name: 'mcp', description: 'Show Model Context Protocol services and tools' },
-	{ name: 'yolo', description: 'Toggle unattended mode (auto-approve all tools)' },
-	{ name: 'init', description: 'Analyze project and generate/update SNOW.md documentation' },
+	{
+		name: 'yolo',
+		description: 'Toggle unattended mode (auto-approve all tools)',
+	},
+	{
+		name: 'init',
+		description: 'Analyze project and generate/update SNOW.md documentation',
+	},
 	{ name: 'ide', description: 'Connect to VSCode editor and sync context' },
-	{ name: 'compact', description: 'Compress conversation history using compact model' }
+	{
+		name: 'compact',
+		description: 'Compress conversation history using compact model',
+	},
 ];
 
-export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false, contextUsage, snapshotFileCount }: Props) {
+export default function ChatInput({
+	onSubmit,
+	onCommand,
+	placeholder = 'Type your message...',
+	disabled = false,
+	chatHistory = [],
+	onHistorySelect,
+	yoloMode = false,
+	contextUsage,
+	snapshotFileCount,
+}: Props) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 
 	const uiOverhead = 8;
 	const viewport: Viewport = {
 		width: Math.max(40, terminalWidth - uiOverhead),
-		height: 1
+		height: 1,
 	};
 	const [, forceUpdate] = useState({});
 	const lastUpdateTime = useRef<number>(0);
@@ -58,6 +80,19 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	}, []);
 
 	const [buffer] = useState(() => new TextBuffer(viewport, triggerUpdate));
+
+	// Cleanup buffer and timers on unmount
+	useEffect(() => {
+		return () => {
+			buffer.destroy();
+			if (inputTimer.current) {
+				clearTimeout(inputTimer.current);
+			}
+			if (escapeKeyTimer.current) {
+				clearTimeout(escapeKeyTimer.current);
+			}
+		};
+	}, [buffer]);
 
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
@@ -86,12 +121,12 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			.filter(msg => msg.role === 'user' && msg.content.trim());
 
 		// Keep original order (oldest first, newest last) and map with display numbers
-		return userMessages
-			.map((msg, index) => ({
-				label: `${index + 1}. ${msg.content.slice(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
-				value: msg.originalIndex.toString(),
-				infoText: msg.content
-			}));
+		return userMessages.map((msg, index) => ({
+			label: `${index + 1}. ${msg.content.slice(0, 50)}${msg.content.length > 50 ? '...' : ''
+				}`,
+			value: msg.originalIndex.toString(),
+			infoText: msg.content,
+		}));
 	}, [chatHistory]);
 
 	// Get filtered commands based on current input
@@ -100,9 +135,10 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		if (!text.startsWith('/')) return [];
 
 		const query = text.slice(1).toLowerCase();
-		return commands.filter(command =>
-			command.name.toLowerCase().includes(query) ||
-			command.description.toLowerCase().includes(query)
+		return commands.filter(
+			command =>
+				command.name.toLowerCase().includes(query) ||
+				command.description.toLowerCase().includes(query),
 		);
 	}, [buffer]);
 
@@ -118,43 +154,50 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	}, []);
 
 	// Update file picker state
-	const updateFilePickerState = useCallback((text: string, cursorPos: number) => {
-		if (!text.includes('@')) {
+	const updateFilePickerState = useCallback(
+		(text: string, cursorPos: number) => {
+			if (!text.includes('@')) {
+				if (showFilePicker) {
+					setShowFilePicker(false);
+					setFileSelectedIndex(0);
+					setFileQuery('');
+					setAtSymbolPosition(-1);
+				}
+				return;
+			}
+
+			// Find the last '@' symbol before the cursor
+			const beforeCursor = text.slice(0, cursorPos);
+			const lastAtIndex = beforeCursor.lastIndexOf('@');
+
+			if (lastAtIndex !== -1) {
+				// Check if there's no space between '@' and cursor
+				const afterAt = beforeCursor.slice(lastAtIndex + 1);
+				if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+					if (
+						!showFilePicker ||
+						fileQuery !== afterAt ||
+						atSymbolPosition !== lastAtIndex
+					) {
+						setShowFilePicker(true);
+						setFileSelectedIndex(0);
+						setFileQuery(afterAt);
+						setAtSymbolPosition(lastAtIndex);
+					}
+					return;
+				}
+			}
+
+			// Hide file picker if no valid @ context found
 			if (showFilePicker) {
 				setShowFilePicker(false);
 				setFileSelectedIndex(0);
 				setFileQuery('');
 				setAtSymbolPosition(-1);
 			}
-			return;
-		}
-
-		// Find the last '@' symbol before the cursor
-		const beforeCursor = text.slice(0, cursorPos);
-		const lastAtIndex = beforeCursor.lastIndexOf('@');
-
-		if (lastAtIndex !== -1) {
-			// Check if there's no space between '@' and cursor
-			const afterAt = beforeCursor.slice(lastAtIndex + 1);
-			if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
-				if (!showFilePicker || fileQuery !== afterAt || atSymbolPosition !== lastAtIndex) {
-					setShowFilePicker(true);
-					setFileSelectedIndex(0);
-					setFileQuery(afterAt);
-					setAtSymbolPosition(lastAtIndex);
-				}
-				return;
-			}
-		}
-
-		// Hide file picker if no valid @ context found
-		if (showFilePicker) {
-			setShowFilePicker(false);
-			setFileSelectedIndex(0);
-			setFileQuery('');
-			setAtSymbolPosition(-1);
-		}
-	}, [showFilePicker, fileQuery, atSymbolPosition]);
+		},
+		[showFilePicker, fileQuery, atSymbolPosition],
+	);
 
 	// Force immediate state update for critical operations like backspace
 	const forceStateUpdate = useCallback(() => {
@@ -168,34 +211,38 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	}, [buffer, updateFilePickerState, updateCommandPanelState]);
 
 	// Handle file selection
-	const handleFileSelect = useCallback(async (filePath: string) => {
-		if (atSymbolPosition !== -1) {
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
+	const handleFileSelect = useCallback(
+		async (filePath: string) => {
+			if (atSymbolPosition !== -1) {
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
 
-			// Replace @query with @filePath + space
-			const beforeAt = text.slice(0, atSymbolPosition);
-			const afterCursor = text.slice(cursorPos);
-			const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
+				// Replace @query with @filePath + space
+				const beforeAt = text.slice(0, atSymbolPosition);
+				const afterCursor = text.slice(cursorPos);
+				const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
 
-			// Set the new text and position cursor after the inserted file path + space
-			buffer.setText(newText);
+				// Set the new text and position cursor after the inserted file path + space
+				buffer.setText(newText);
 
-			// Calculate cursor position after the inserted file path + space
-			// Reset cursor to beginning, then move to correct position
-			for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) { // +2 for @ and space
-				if (i < buffer.getFullText().length) {
-					buffer.moveRight();
+				// Calculate cursor position after the inserted file path + space
+				// Reset cursor to beginning, then move to correct position
+				for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) {
+					// +2 for @ and space
+					if (i < buffer.getFullText().length) {
+						buffer.moveRight();
+					}
 				}
-			}
 
-			setShowFilePicker(false);
-			setFileSelectedIndex(0);
-			setFileQuery('');
-			setAtSymbolPosition(-1);
-			triggerUpdate();
-		}
-	}, [atSymbolPosition, buffer, triggerUpdate]);
+				setShowFilePicker(false);
+				setFileSelectedIndex(0);
+				setFileQuery('');
+				setAtSymbolPosition(-1);
+				triggerUpdate();
+			}
+		},
+		[atSymbolPosition, buffer, triggerUpdate],
+	);
 
 	// Handle filtered file count change
 	const handleFilteredCountChange = useCallback((count: number) => {
@@ -215,7 +262,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	useEffect(() => {
 		const newViewport: Viewport = {
 			width: Math.max(40, terminalWidth - uiOverhead),
-			height: 1
+			height: 1,
 		};
 		buffer.updateViewport(newViewport);
 		triggerUpdate();
@@ -267,7 +314,8 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			}, 500);
 
 			// Check for double escape
-			if (escapeKeyCount >= 1) { // This will be 2 after increment
+			if (escapeKeyCount >= 1) {
+				// This will be 2 after increment
 				const userMessages = getUserMessages();
 				if (userMessages.length > 0) {
 					setShowHistoryMenu(true);
@@ -301,7 +349,10 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 
 			// Enter - select history item
 			if (key.return) {
-				if (userMessages.length > 0 && historySelectedIndex < userMessages.length) {
+				if (
+					userMessages.length > 0 &&
+					historySelectedIndex < userMessages.length
+				) {
 					const selectedMessage = userMessages[historySelectedIndex];
 					if (selectedMessage) {
 						handleHistorySelect(selectedMessage.value);
@@ -340,12 +391,12 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		// In Ink, key.meta represents:
 		// - On Windows/Linux: Alt key (Meta key)
 		// - On macOS: We use Ctrl+V to avoid conflict with VSCode shortcuts
-		const isPasteShortcut = process.platform === 'darwin'
-			? (key.ctrl && input === 'v')
-			: (key.meta && input === 'v');
+		const isPasteShortcut =
+			process.platform === 'darwin'
+				? key.ctrl && input === 'v'
+				: key.meta && input === 'v';
 
 		if (isPasteShortcut) {
-
 			try {
 				// Try to read image from clipboard
 				if (process.platform === 'win32') {
@@ -355,7 +406,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 
 						const base64 = execSync(`powershell -Command "${psScript}"`, {
 							encoding: 'utf-8',
-							timeout: 5000
+							timeout: 5000,
 						}).trim();
 
 						if (base64 && base64.length > 100) {
@@ -384,7 +435,7 @@ end try'`;
 
 						const hasImage = execSync(checkScript, {
 							encoding: 'utf-8',
-							timeout: 2000
+							timeout: 2000,
 						}).trim();
 
 						if (hasImage === 'hasImage') {
@@ -394,13 +445,13 @@ end try'`;
 
 							execSync(saveScript, {
 								encoding: 'utf-8',
-								timeout: 3000
+								timeout: 3000,
 							});
 
 							// Read the file as base64
 							const base64 = execSync(`base64 -i "${tmpFile}"`, {
 								encoding: 'utf-8',
-								timeout: 2000
+								timeout: 2000,
 							}).trim();
 
 							// Clean up temp file
@@ -423,7 +474,10 @@ end try'`;
 						}
 					} catch (imgError) {
 						// No image in clipboard or error, fall through to text
-						console.error('Failed to read image from macOS clipboard:', imgError);
+						console.error(
+							'Failed to read image from macOS clipboard:',
+							imgError,
+						);
 					}
 				}
 
@@ -433,17 +487,17 @@ end try'`;
 					if (process.platform === 'win32') {
 						clipboardText = execSync('powershell -Command "Get-Clipboard"', {
 							encoding: 'utf-8',
-							timeout: 2000
+							timeout: 2000,
 						}).trim();
 					} else if (process.platform === 'darwin') {
 						clipboardText = execSync('pbpaste', {
 							encoding: 'utf-8',
-							timeout: 2000
+							timeout: 2000,
 						}).trim();
 					} else {
 						clipboardText = execSync('xclip -selection clipboard -o', {
 							encoding: 'utf-8',
-							timeout: 2000
+							timeout: 2000,
 						}).trim();
 					}
 
@@ -517,7 +571,10 @@ end try'`;
 
 			// Enter - select command
 			if (key.return) {
-				if (filteredCommands.length > 0 && commandSelectedIndex < filteredCommands.length) {
+				if (
+					filteredCommands.length > 0 &&
+					commandSelectedIndex < filteredCommands.length
+				) {
 					const selectedCommand = filteredCommands[commandSelectedIndex];
 					if (selectedCommand) {
 						// Execute command instead of inserting text
@@ -544,12 +601,12 @@ end try'`;
 				// 获取图片数据，但只包含占位符仍然存在的图片
 				const currentText = buffer.text; // 使用内部文本（包含占位符）
 				const allImages = buffer.getImages();
-				const validImages = allImages.filter(img =>
-					currentText.includes(img.placeholder)
-				).map(img => ({
-					data: img.data,
-					mimeType: img.mimeType
-				}));
+				const validImages = allImages
+					.filter(img => currentText.includes(img.placeholder))
+					.map(img => ({
+						data: img.data,
+						mimeType: img.mimeType,
+					}));
 
 				buffer.setText('');
 				forceUpdate({});
@@ -624,17 +681,20 @@ end try'`;
 	});
 
 	// Handle history selection
-	const handleHistorySelect = useCallback((value: string) => {
-		const selectedIndex = parseInt(value, 10);
-		const selectedMessage = chatHistory[selectedIndex];
-		if (selectedMessage && onHistorySelect) {
-			// Put the message content in the input buffer
-			buffer.setText(selectedMessage.content);
-			setShowHistoryMenu(false);
-			triggerUpdate();
-			onHistorySelect(selectedIndex, selectedMessage.content);
-		}
-	}, [chatHistory, onHistorySelect, buffer, triggerUpdate]);
+	const handleHistorySelect = useCallback(
+		(value: string) => {
+			const selectedIndex = parseInt(value, 10);
+			const selectedMessage = chatHistory[selectedIndex];
+			if (selectedMessage && onHistorySelect) {
+				// Put the message content in the input buffer
+				buffer.setText(selectedMessage.content);
+				setShowHistoryMenu(false);
+				triggerUpdate();
+				onHistorySelect(selectedIndex, selectedMessage.content);
+			}
+		},
+		[chatHistory, onHistorySelect, buffer, triggerUpdate],
+	);
 
 	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
@@ -644,7 +704,9 @@ end try'`;
 			const cursorPos = buffer.getCursorPosition();
 
 			// 检查是否包含粘贴占位符或图片占位符并高亮显示
-			const hasPastePlaceholder = displayText.includes('[Paste ') && displayText.includes(' characters #');
+			const hasPastePlaceholder =
+				displayText.includes('[Paste ') &&
+				displayText.includes(' characters #');
 			const hasImagePlaceholder = displayText.includes('[image #');
 
 			if (hasPastePlaceholder || hasImagePlaceholder) {
@@ -654,12 +716,16 @@ end try'`;
 				})();
 
 				// 分割文本并高亮占位符（粘贴和图片）
-				const parts = displayText.split(/(\[Paste \d+ characters #\d+\]|\[image #\d+\])/);
+				const parts = displayText.split(
+					/(\[Paste \d+ characters #\d+\]|\[image #\d+\])/,
+				);
 				let processedLength = 0;
 				let cursorRendered = false;
 
 				const elements = parts.map((part, partIndex) => {
-					const isPastePlaceholder = part.match(/^\[Paste \d+ characters #\d+\]$/);
+					const isPastePlaceholder = part.match(
+						/^\[Paste \d+ characters #\d+\]$/,
+					);
 					const isImagePlaceholder = part.match(/^\[image #\d+\]$/);
 					const isPlaceholder = isPastePlaceholder || isImagePlaceholder;
 					const partStart = processedLength;
@@ -675,7 +741,10 @@ end try'`;
 						return (
 							<React.Fragment key={partIndex}>
 								{isPlaceholder ? (
-									<Text color={isImagePlaceholder ? "magenta" : "cyan"} dimColor>
+									<Text
+										color={isImagePlaceholder ? 'magenta' : 'cyan'}
+										dimColor
+									>
 										{beforeCursorInPart}
 										<Text backgroundColor="white" color="black">
 											{atCursor}
@@ -695,7 +764,11 @@ end try'`;
 						);
 					} else {
 						return isPlaceholder ? (
-							<Text key={partIndex} color={isImagePlaceholder ? "magenta" : "cyan"} dimColor>
+							<Text
+								key={partIndex}
+								color={isImagePlaceholder ? 'magenta' : 'cyan'}
+								dimColor
+							>
 								{part}
 							</Text>
 						) : (
@@ -732,10 +805,13 @@ end try'`;
 		} else {
 			return (
 				<>
-					<Text backgroundColor={disabled ? "gray" : "white"} color={disabled ? "darkGray" : "black"}>
+					<Text
+						backgroundColor={disabled ? 'gray' : 'white'}
+						color={disabled ? 'darkGray' : 'black'}
+					>
 						{' '}
 					</Text>
-					<Text color={disabled ? "darkGray" : "gray"} dimColor>
+					<Text color={disabled ? 'darkGray' : 'gray'} dimColor>
 						{disabled ? 'Waiting for response...' : placeholder}
 					</Text>
 				</>
@@ -744,9 +820,19 @@ end try'`;
 	}, [buffer, disabled, placeholder]);
 
 	return (
-		<Box flexDirection="column" marginX={1} key={`input-${showFilePicker ? 'picker' : 'normal'}`}>
+		<Box
+			flexDirection="column"
+			marginX={1}
+			key={`input-${showFilePicker ? 'picker' : 'normal'}`}
+		>
 			{showHistoryMenu && (
-				<Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="#A9C13E" padding={1}>
+				<Box
+					flexDirection="column"
+					marginBottom={1}
+					borderStyle="round"
+					borderColor="#A9C13E"
+					padding={1}
+				>
 					<Box marginBottom={1}>
 						<Text color="cyan">
 							Use ↑↓ keys to navigate, press Enter to select:
@@ -773,7 +859,8 @@ end try'`;
 										</Text>
 										{fileCount > 0 && (
 											<Text color="yellow" dimColor>
-												{' '}({fileCount} file{fileCount > 1 ? 's' : ''})
+												{' '}
+												({fileCount} file{fileCount > 1 ? 's' : ''})
 											</Text>
 										)}
 									</Box>
@@ -803,9 +890,7 @@ end try'`;
 						<Text color="cyan" bold>
 							➣{' '}
 						</Text>
-						<Box flexGrow={1}>
-							{renderContent()}
-						</Box>
+						<Box flexGrow={1}>{renderContent()}</Box>
 					</Box>
 					<CommandPanel
 						commands={getFilteredCommands()}
@@ -827,7 +912,8 @@ end try'`;
 					{yoloMode && (
 						<Box marginTop={1} paddingX={1}>
 							<Text color="yellow" dimColor>
-								❁  YOLO MODE ACTIVE - All tools will be auto-approved without confirmation
+								❁ YOLO MODE ACTIVE - All tools will be auto-approved without
+								confirmation
 							</Text>
 						</Box>
 					)}
@@ -836,16 +922,24 @@ end try'`;
 							<Text color="gray" dimColor>
 								{(() => {
 									// Determine which caching system is being used
-									const isAnthropic = (contextUsage.cacheCreationTokens || 0) > 0 || (contextUsage.cacheReadTokens || 0) > 0;
+									const isAnthropic =
+										(contextUsage.cacheCreationTokens || 0) > 0 ||
+										(contextUsage.cacheReadTokens || 0) > 0;
 									const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
 
-									// For Anthropic: Total = inputTokens + cacheCreationTokens
+									// For Anthropic: Total = inputTokens + cacheCreationTokens + cacheReadTokens
 									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 									const totalInputTokens = isAnthropic
-										? contextUsage.inputTokens + (contextUsage.cacheCreationTokens || 0)
+										? contextUsage.inputTokens +
+										(contextUsage.cacheCreationTokens || 0) +
+										(contextUsage.cacheReadTokens || 0)
 										: contextUsage.inputTokens;
 
-									const percentage = Math.min(100, (totalInputTokens / contextUsage.maxContextTokens) * 100);
+
+									const percentage = Math.min(
+										100,
+										(totalInputTokens / contextUsage.maxContextTokens) * 100,
+									);
 									let color: string;
 									if (percentage < 50) color = 'green';
 									else if (percentage < 75) color = 'yellow';
@@ -863,7 +957,9 @@ end try'`;
 										<>
 											<Text color={color}>{percentage.toFixed(1)}%</Text>
 											<Text> · </Text>
-											<Text color={color}>{formatNumber(totalInputTokens)}</Text>
+											<Text color={color}>
+												{formatNumber(totalInputTokens)}
+											</Text>
 											<Text> tokens</Text>
 											{hasCacheMetrics && (
 												<>
@@ -873,20 +969,37 @@ end try'`;
 														<>
 															{(contextUsage.cacheReadTokens || 0) > 0 && (
 																<>
-																	<Text color="cyan">↯ {formatNumber(contextUsage.cacheReadTokens || 0)} cached</Text>
+																	<Text color="cyan">
+																		↯{' '}
+																		{formatNumber(
+																			contextUsage.cacheReadTokens || 0,
+																		)}{' '}
+																		cached
+																	</Text>
 																</>
 															)}
 															{(contextUsage.cacheCreationTokens || 0) > 0 && (
 																<>
-																	{(contextUsage.cacheReadTokens || 0) > 0 && <Text> · </Text>}
-																	<Text color="magenta">◆ {formatNumber(contextUsage.cacheCreationTokens || 0)} new cache</Text>
+																	{(contextUsage.cacheReadTokens || 0) > 0 && (
+																		<Text> · </Text>
+																	)}
+																	<Text color="magenta">
+																		◆{' '}
+																		{formatNumber(
+																			contextUsage.cacheCreationTokens || 0,
+																		)}{' '}
+																		new cache
+																	</Text>
 																</>
 															)}
 														</>
 													)}
 													{/* OpenAI caching display */}
 													{isOpenAI && (
-														<Text color="cyan">↯ {formatNumber(contextUsage.cachedTokens || 0)} cached</Text>
+														<Text color="cyan">
+															↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
+															cached
+														</Text>
 													)}
 												</>
 											)}
@@ -899,16 +1012,15 @@ end try'`;
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
 							{showCommands && getFilteredCommands().length > 0
-								? "Type to filter commands"
+								? 'Type to filter commands'
 								: showFilePicker
-									? "Type to filter files • Tab/Enter to select • ESC to cancel"
+									? 'Type to filter files • Tab/Enter to select • ESC to cancel'
 									: (() => {
-										const pasteKey = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+										const pasteKey =
+											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
-									})()
-							}
+									})()}
 						</Text>
-
 					</Box>
 				</>
 			)}

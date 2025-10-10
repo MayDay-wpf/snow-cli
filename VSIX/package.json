@@ -2,7 +2,7 @@
   "name": "snow-cli",
   "displayName": "Snow CLI",
   "description": "Quickly open the Snow AI command-line tool in VSCode",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "publisher": "mufasa",
   "engines": {
     "vscode": "^1.75.0"
@@ -10,7 +10,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
