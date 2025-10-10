@@ -8,11 +8,11 @@ import FileList, { FileListRef } from './FileList.js';
 import { execSync } from 'child_process';
 
 type Props = {
-	onSubmit: (message: string, images?: Array<{data: string, mimeType: string}>) => void;
+	onSubmit: (message: string, images?: Array<{ data: string, mimeType: string }>) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
-	chatHistory?: Array<{role: string, content: string}>;
+	chatHistory?: Array<{ role: string, content: string }>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -41,7 +41,7 @@ const commands = [
 export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type your message...', disabled = false, chatHistory = [], onHistorySelect, yoloMode = false, contextUsage, snapshotFileCount }: Props) {
 	const { stdout } = useStdout();
 	const terminalWidth = stdout?.columns || 80;
-	
+
 	const uiOverhead = 8;
 	const viewport: Viewport = {
 		width: Math.max(40, terminalWidth - uiOverhead),
@@ -58,33 +58,33 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	}, []);
 
 	const [buffer] = useState(() => new TextBuffer(viewport, triggerUpdate));
-	
+
 	// Command panel state
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
-	
+
 	// File picker state
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [fileSelectedIndex, setFileSelectedIndex] = useState(0);
 	const [fileQuery, setFileQuery] = useState('');
 	const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
 	const [filteredFileCount, setFilteredFileCount] = useState(0);
-	
+
 	// Refs
 	const fileListRef = useRef<FileListRef>(null);
-	
+
 	// History navigation state
 	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
 	const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
 	const [escapeKeyCount, setEscapeKeyCount] = useState(0);
 	const escapeKeyTimer = useRef<NodeJS.Timeout | null>(null);
-	
+
 	// Get user messages from chat history for navigation
 	const getUserMessages = useCallback(() => {
 		const userMessages = chatHistory
 			.map((msg, index) => ({ ...msg, originalIndex: index }))
 			.filter(msg => msg.role === 'user' && msg.content.trim());
-		
+
 		// Keep original order (oldest first, newest last) and map with display numbers
 		return userMessages
 			.map((msg, index) => ({
@@ -93,15 +93,15 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 				infoText: msg.content
 			}));
 	}, [chatHistory]);
-	
+
 	// Get filtered commands based on current input
 	const getFilteredCommands = useCallback(() => {
 		const text = buffer.getFullText();
 		if (!text.startsWith('/')) return [];
-		
+
 		const query = text.slice(1).toLowerCase();
-		return commands.filter(command => 
-			command.name.toLowerCase().includes(query) || 
+		return commands.filter(command =>
+			command.name.toLowerCase().includes(query) ||
 			command.description.toLowerCase().includes(query)
 		);
 	}, [buffer]);
@@ -128,11 +128,11 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			}
 			return;
 		}
-		
+
 		// Find the last '@' symbol before the cursor
 		const beforeCursor = text.slice(0, cursorPos);
 		const lastAtIndex = beforeCursor.lastIndexOf('@');
-		
+
 		if (lastAtIndex !== -1) {
 			// Check if there's no space between '@' and cursor
 			const afterAt = beforeCursor.slice(lastAtIndex + 1);
@@ -146,7 +146,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 				return;
 			}
 		}
-		
+
 		// Hide file picker if no valid @ context found
 		if (showFilePicker) {
 			setShowFilePicker(false);
@@ -160,10 +160,10 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	const forceStateUpdate = useCallback(() => {
 		const text = buffer.getFullText();
 		const cursorPos = buffer.getCursorPosition();
-		
+
 		updateFilePickerState(text, cursorPos);
 		updateCommandPanelState(text);
-		
+
 		forceUpdate({});
 	}, [buffer, updateFilePickerState, updateCommandPanelState]);
 
@@ -172,15 +172,15 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 		if (atSymbolPosition !== -1) {
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
-			
+
 			// Replace @query with @filePath + space
 			const beforeAt = text.slice(0, atSymbolPosition);
 			const afterCursor = text.slice(cursorPos);
 			const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
-			
+
 			// Set the new text and position cursor after the inserted file path + space
 			buffer.setText(newText);
-			
+
 			// Calculate cursor position after the inserted file path + space
 			// Reset cursor to beginning, then move to correct position
 			for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) { // +2 for @ and space
@@ -188,7 +188,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 					buffer.moveRight();
 				}
 			}
-			
+
 			setShowFilePicker(false);
 			setFileSelectedIndex(0);
 			setFileQuery('');
@@ -228,7 +228,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 	// Handle input using useInput hook instead of raw stdin
 	useInput((input, key) => {
 		if (disabled) return;
-		
+
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
 			// Close file picker if open
@@ -239,33 +239,33 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 				setAtSymbolPosition(-1);
 				return;
 			}
-			
+
 			// Don't interfere with existing ESC behavior if in command panel
 			if (showCommands) {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
 				return;
 			}
-			
+
 			// Handle history navigation
 			if (showHistoryMenu) {
 				setShowHistoryMenu(false);
 				return;
 			}
-			
+
 			// Count escape key presses for double-ESC detection
 			setEscapeKeyCount(prev => prev + 1);
-			
+
 			// Clear any existing timer
 			if (escapeKeyTimer.current) {
 				clearTimeout(escapeKeyTimer.current);
 			}
-			
+
 			// Set timer to reset count after 500ms
 			escapeKeyTimer.current = setTimeout(() => {
 				setEscapeKeyCount(0);
 			}, 500);
-			
+
 			// Check for double escape
 			if (escapeKeyCount >= 1) { // This will be 2 after increment
 				const userMessages = getUserMessages();
@@ -281,7 +281,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			}
 			return;
 		}
-		
+
 		// Handle history menu navigation
 		if (showHistoryMenu) {
 			const userMessages = getUserMessages();
@@ -313,7 +313,7 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			// For any other key in history menu, just return to prevent interference
 			return;
 		}
-		
+
 		// Ctrl+L - Delete from cursor to beginning
 		if (key.ctrl && input === 'l') {
 			const fullText = buffer.getFullText();
@@ -336,12 +336,16 @@ export default function ChatInput({ onSubmit, onCommand, placeholder = 'Type you
 			return;
 		}
 
-		// Windows: Alt+V, macOS: Option+V - Paste from clipboard (including images)
+		// Windows: Alt+V, macOS: Ctrl+V - Paste from clipboard (including images)
 		// In Ink, key.meta represents:
 		// - On Windows/Linux: Alt key (Meta key)
-		// - On macOS: Option key is also mapped to meta in most terminal emulators
-		// So we can use key.meta for both platforms
-		if (key.meta && input === 'v') {
+		// - On macOS: We use Ctrl+V to avoid conflict with VSCode shortcuts
+		const isPasteShortcut = process.platform === 'darwin'
+			? (key.ctrl && input === 'v')
+			: (key.meta && input === 'v');
+
+		if (isPasteShortcut) {
+
 			try {
 				// Try to read image from clipboard
 				if (process.platform === 'win32') {
@@ -474,14 +478,14 @@ end try'`;
 				setFileSelectedIndex(prev => Math.max(0, prev - 1));
 				return;
 			}
-			
+
 			// Down arrow in file picker
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredFileCount - 1);
 				setFileSelectedIndex(prev => Math.min(maxIndex, prev + 1));
 				return;
 			}
-			
+
 			// Tab or Enter - select file
 			if (key.tab || key.return) {
 				if (filteredFileCount > 0 && fileSelectedIndex < filteredFileCount) {
@@ -497,20 +501,20 @@ end try'`;
 		// Handle command panel navigation
 		if (showCommands) {
 			const filteredCommands = getFilteredCommands();
-			
+
 			// Up arrow in command panel
 			if (key.upArrow) {
 				setCommandSelectedIndex(prev => Math.max(0, prev - 1));
 				return;
 			}
-			
+
 			// Down arrow in command panel
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredCommands.length - 1);
 				setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
 				return;
 			}
-			
+
 			// Enter - select command
 			if (key.return) {
 				if (filteredCommands.length > 0 && commandSelectedIndex < filteredCommands.length) {
@@ -563,7 +567,7 @@ end try'`;
 			triggerUpdate();
 			return;
 		}
-		
+
 		if (key.rightArrow) {
 			buffer.moveRight();
 			const text = buffer.getFullText();
@@ -572,7 +576,7 @@ end try'`;
 			triggerUpdate();
 			return;
 		}
-		
+
 		if (key.upArrow && !showCommands && !showFilePicker) {
 			buffer.moveUp();
 			const text = buffer.getFullText();
@@ -581,7 +585,7 @@ end try'`;
 			triggerUpdate();
 			return;
 		}
-		
+
 		if (key.downArrow && !showCommands && !showFilePicker) {
 			buffer.moveDown();
 			const text = buffer.getFullText();
@@ -897,13 +901,14 @@ end try'`;
 							{showCommands && getFilteredCommands().length > 0
 								? "Type to filter commands"
 								: showFilePicker
-								? "Type to filter files • Tab/Enter to select • ESC to cancel"
-								: (() => {
-									const pasteKey = process.platform === 'darwin' ? 'Option+V' : 'Alt+V';
-									return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
-								})()
+									? "Type to filter files • Tab/Enter to select • ESC to cancel"
+									: (() => {
+										const pasteKey = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
+									})()
 							}
 						</Text>
+
 					</Box>
 				</>
 			)}

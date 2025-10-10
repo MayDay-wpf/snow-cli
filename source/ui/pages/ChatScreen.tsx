@@ -65,7 +65,15 @@ export default function ChatScreen({ }: Props) {
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
-	const [yoloMode, setYoloMode] = useState(false);
+	const [yoloMode, setYoloMode] = useState(() => {
+		// Load yolo mode from localStorage on initialization
+		try {
+			const saved = localStorage.getItem('snow-yolo-mode');
+			return saved === 'true';
+		} catch {
+			return false;
+		}
+	});
 	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
@@ -92,6 +100,15 @@ export default function ChatScreen({ }: Props) {
 	useEffect(() => {
 		pendingMessagesRef.current = pendingMessages;
 	}, [pendingMessages]);
+
+	// Persist yolo mode to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem('snow-yolo-mode', String(yoloMode));
+		} catch {
+			// Ignore localStorage errors
+		}
+	}, [yoloMode]);
 
 	// Use tool confirmation hook
 	const {
@@ -918,6 +935,8 @@ export default function ChatScreen({ }: Props) {
 			{pendingToolConfirmation && (
 				<ToolConfirmation
 					toolName={pendingToolConfirmation.batchToolNames || pendingToolConfirmation.tool.function.name}
+					toolArguments={!pendingToolConfirmation.allTools ? pendingToolConfirmation.tool.function.arguments : undefined}
+					allTools={pendingToolConfirmation.allTools}
 					onConfirm={pendingToolConfirmation.resolve}
 				/>
 			)}

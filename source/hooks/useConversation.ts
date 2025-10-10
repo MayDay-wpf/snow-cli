@@ -21,7 +21,7 @@ export type ConversationHandlerOptions = {
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
 	setCurrentTodos: React.Dispatch<React.SetStateAction<Array<{id: string; content: string; status: 'pending' | 'in_progress' | 'completed'}>>>;
-	requestToolConfirmation: (toolCall: ToolCall, batchToolNames?: string) => Promise<string>;
+	requestToolConfirmation: (toolCall: ToolCall, batchToolNames?: string, allTools?: ToolCall[]) => Promise<string>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
@@ -290,12 +290,15 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 				if (yoloMode) {
 					approvedTools.push(...toolsNeedingConfirmation);
 				} else if (toolsNeedingConfirmation.length > 0) {
-					// Show all tools needing confirmation as a batch
-					const toolNames = toolsNeedingConfirmation.map(t => t.function.name).join(', ');
 					const firstTool = toolsNeedingConfirmation[0]!; // Safe: length > 0 guarantees this exists
 
+					// Pass all tools for proper display in confirmation UI
+					const allTools = toolsNeedingConfirmation.length > 1
+						? toolsNeedingConfirmation
+						: undefined;
+
 					// Use first tool for confirmation UI, but apply result to all
-					const confirmation = await requestToolConfirmation(firstTool, toolNames);
+					const confirmation = await requestToolConfirmation(firstTool, undefined, allTools);
 
 					if (confirmation === 'reject') {
 						// Remove pending tool messages

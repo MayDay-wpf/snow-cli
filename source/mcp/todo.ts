@@ -1,15 +1,16 @@
-import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
+import { Tool, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import fs from 'fs/promises';
 import path from 'path';
 
 interface TodoItem {
 	id: string;
 	content: string;
-	status: 'pending' | 'in_progress' | 'completed';
+	status: 'pending' | 'completed';
 	createdAt: string;
 	updatedAt: string;
 	parentId?: string;
 }
+
 
 interface TodoList {
 	sessionId: string;
@@ -34,7 +35,7 @@ export class TodoService {
 	}
 
 	async initialize(): Promise<void> {
-		await fs.mkdir(this.todoDir, {recursive: true});
+		await fs.mkdir(this.todoDir, { recursive: true });
 	}
 
 	private getTodoPath(sessionId: string): string {
@@ -221,35 +222,32 @@ Complete TODO list with all task IDs, content, status, and hierarchy.`,
 			},
 			{
 				name: 'todo-update',
-				description: `Update TODO status - USE SPARINGLY, focus on actual work instead.
+				description: `Update TODO status or content - USE ONLY WHEN COMPLETING TASKS.
 
-## CORE PRINCIPLE - WORK FIRST, UPDATES SECOND:
-Prioritize COMPLETING TASKS over updating TODO status. Update TODO only at natural breakpoints, not constantly. It's better to finish 3 tasks and update once than to update TODO 10 times while making slow progress.
+## CORE PRINCIPLE - WORK FIRST, UPDATES LAST:
+Focus on COMPLETING TASKS, not updating status. Only update TODO when a task is 100% finished and verified.
 
-## WHEN TO UPDATE (Sparingly):
-1. **Starting a major task**: Mark "in_progress" when beginning significant work (not for every micro-step)
-2. **Completing a major task**: Mark "completed" ONLY when task is 100% done and verified
-3. **Natural breakpoints**: When you finish a logical chunk of work
+## SIMPLIFIED STATUS MODEL:
+- **pending**: Task not yet completed (default)
+- **completed**: Task is 100% finished and verified
+
+## WHEN TO UPDATE:
+✅ **Mark "completed"** ONLY when:
+  - Task is 100% finished (no partial work)
+  - Tests/builds passed (if applicable)
+  - No errors or blockers
+  - You've actually verified it works
 
 ## WHEN NOT TO UPDATE:
-- ❌ Every few minutes during work (you're wasting time on bookkeeping)
-- ❌ Multiple updates for sub-steps of one task (just finish the task first)
-- ❌ Immediately after starting (start working first, update later if it's a long task)
-- ❌ Before verifying the work is actually complete
+❌ Don't update status to track "in progress" - just do the work
+❌ Don't update multiple times per task - once when done is enough
+❌ Don't update before verifying the work is complete
+❌ Don't update content unless there's a genuine error in the description
 
-## SIMPLE RULES:
-- Keep MAXIMUM one task as "in_progress" (don't over-track)
-- Mark "completed" only when 100% done (no partial credit)
-- If you're spending more time updating TODO than working, you're doing it wrong
+## BEST PRACTICE:
+Complete 3-5 tasks, then batch update them all to "completed" at once. This is more efficient than constant status updates.`,
 
-## HONEST COMPLETION CRITERIA:
-Only mark complete if:
-- Task is 100% finished (no partial work)
-- Tests/builds passed (if applicable)
-- No errors or blockers
-- You've actually verified it works
 
-If blocked, keep as "in_progress" and report the blocker (don't create elaborate sub-TODO structures).`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -259,9 +257,10 @@ If blocked, keep as "in_progress" and report the blocker (don't create elaborate
 						},
 						status: {
 							type: 'string',
-							enum: ['pending', 'in_progress', 'completed'],
-							description: 'New status - follow strict rules: "in_progress" when starting, "completed" when 100% done and verified, "pending" if not started',
+							enum: ['pending', 'completed'],
+							description: 'New status - "pending" (not done) or "completed" (100% finished and verified)',
 						},
+
 						content: {
 							type: 'string',
 							description: 'Updated TODO content (optional, only if task description needs refinement)',
@@ -363,8 +362,8 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 		try {
 			switch (toolName) {
 				case 'todo-create': {
-					const {todos} = args as {
-						todos: Array<{content: string; parentId?: string}>;
+					const { todos } = args as {
+						todos: Array<{ content: string; parentId?: string }>;
 					};
 
 					const todoItems: TodoItem[] = todos.map(t => {
@@ -403,11 +402,12 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 				}
 
 				case 'todo-update': {
-					const {todoId, status, content} = args as {
+					const { todoId, status, content } = args as {
 						todoId: string;
-						status?: 'pending' | 'in_progress' | 'completed';
+						status?: 'pending' | 'completed';
 						content?: string;
 					};
+
 
 					const updates: Partial<Omit<TodoItem, 'id' | 'createdAt'>> = {};
 					if (status) updates.status = status;
@@ -425,7 +425,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 				}
 
 				case 'todo-add': {
-					const {content, parentId} = args as {
+					const { content, parentId } = args as {
 						content: string;
 						parentId?: string;
 					};
@@ -442,7 +442,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 				}
 
 				case 'todo-delete': {
-					const {todoId} = args as {
+					const { todoId } = args as {
 						todoId: string;
 					};
 

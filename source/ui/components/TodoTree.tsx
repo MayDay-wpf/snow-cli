@@ -82,7 +82,7 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 			{rootTodos.map(todo => renderTodo(todo))}
 			<Box marginTop={0}>
 				<Text dimColor color="gray">
-					[ ] Pending · [~] In Progress · [x] Completed
+					[ ] Pending · [x] Completed
 				</Text>
 			</Box>
 		</Box>

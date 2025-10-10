@@ -4,7 +4,8 @@ import type { ConfirmationResult } from '../ui/components/ToolConfirmation.js';
 
 export type PendingConfirmation = {
 	tool: ToolCall;
-	batchToolNames?: string;
+	batchToolNames?: string; // Deprecated: kept for backward compatibility
+	allTools?: ToolCall[]; // All tools when confirming multiple tools
 	resolve: (result: ConfirmationResult) => void;
 };
 
@@ -20,12 +21,14 @@ export function useToolConfirmation() {
 	 */
 	const requestToolConfirmation = async (
 		toolCall: ToolCall,
-		batchToolNames?: string
+		batchToolNames?: string,
+		allTools?: ToolCall[]
 	): Promise<ConfirmationResult> => {
 		return new Promise<ConfirmationResult>((resolve) => {
 			setPendingToolConfirmation({
 				tool: toolCall,
 				batchToolNames,
+				allTools,
 				resolve: (result: ConfirmationResult) => {
 					setPendingToolConfirmation(null);
 					resolve(result);
