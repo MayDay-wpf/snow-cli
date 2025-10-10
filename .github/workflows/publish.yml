@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- fix some warnings
+            -- fix some bugs
             
             ### Installation
             ```bash

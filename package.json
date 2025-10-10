@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.2.14",
+	"version": "0.2.15",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -59,18 +59,6 @@
 		"react": "^18.2.0",
 		"string-width": "^7.2.0",
 		"tiktoken": "^1.0.22",
-		"tree-sitter": "^0.25.0",
-		"tree-sitter-c": "^0.24.1",
-		"tree-sitter-c-sharp": "^0.23.1",
-		"tree-sitter-cpp": "^0.23.4",
-		"tree-sitter-go": "^0.25.0",
-		"tree-sitter-java": "^0.23.5",
-		"tree-sitter-javascript": "^0.25.0",
-		"tree-sitter-php": "^0.24.2",
-		"tree-sitter-python": "^0.25.0",
-		"tree-sitter-ruby": "^0.23.1",
-		"tree-sitter-rust": "^0.24.0",
-		"tree-sitter-typescript": "^0.23.2",
 		"ws": "^8.14.2"
 	},
 	"devDependencies": {

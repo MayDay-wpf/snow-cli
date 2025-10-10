@@ -511,9 +511,9 @@ export async function executeMCPTool(
 					args.contextLines,
 				);
 			case 'search': {
-				// 兼容性处理：如果 searchMode 不存在或无效，默认使用 'text'
-				const validSearchModes = ['text', 'regex', 'ast'] as const;
-				let searchMode: 'text' | 'regex' | 'ast' = 'text';
+				// 兼容性处理:如果 searchMode 不存在或无效,默认使用 'text'
+				const validSearchModes = ['text', 'regex'] as const;
+				let searchMode: 'text' | 'regex' = 'text';
 
 				if (args.searchMode && validSearchModes.includes(args.searchMode)) {
 					searchMode = args.searchMode;

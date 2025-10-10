@@ -3,7 +3,6 @@ import * as path from 'path';
 import {execSync} from 'child_process';
 import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
-import {multiLanguageASTParser} from './multiLanguageASTParser.js';
 const {resolve, dirname, isAbsolute} = path;
 
 interface SearchMatch {
@@ -12,9 +11,6 @@ interface SearchMatch {
 	lineContent: string;
 	column: number;
 	matchedText?: string;
-	nodeType?: string;
-	nodeName?: string;
-	language?: string;
 }
 
 interface SearchResult {
@@ -915,7 +911,7 @@ export class FilesystemMCPService {
 		fileExtensions: string[] = [],
 		caseSensitive: boolean = false,
 		maxResults: number = 100,
-		searchMode: 'text' | 'regex' | 'ast' = 'text',
+		searchMode: 'text' | 'regex' = 'text',
 	): Promise<SearchResult> {
 		const matches: SearchMatch[] = [];
 		let searchedFiles = 0;
@@ -975,44 +971,8 @@ export class FilesystemMCPService {
 						try {
 							const content = await fs.readFile(fullPath, 'utf-8');
 
-							// AST search mode - supports multiple languages via tree-sitter
-							if (searchMode === 'ast') {
-								// Check if file is supported for AST parsing
-								if (multiLanguageASTParser.isSupported(fullPath)) {
-									try {
-										const astResults = multiLanguageASTParser.searchAST(
-											content,
-											fullPath,
-											query,
-											caseSensitive,
-										);
-
-										for (const result of astResults) {
-											if (matches.length >= maxResults) {
-												break;
-											}
-
-											const lineContent =
-												content.split('\n')[result.startPosition.line - 1] ||
-												'';
-
-											matches.push({
-												filePath: path.relative(this.basePath, fullPath),
-												lineNumber: result.startPosition.line,
-												lineContent: lineContent.trim(),
-												column: result.startPosition.column,
-												matchedText: result.name,
-												nodeType: result.type,
-												nodeName: result.name,
-												language: result.language,
-											});
-										}
-									} catch (error) {
-										// Skip files with AST parsing errors
-									}
-								}
-							} else if (searchRegex) {
-								// Text or Regex search mode
+							// Text or Regex search mode
+							if (searchRegex) {
 								const lines = content.split('\n');
 
 								lines.forEach((line, index) => {
@@ -1246,9 +1206,9 @@ export const mcpTools = [
 				},
 				searchMode: {
 					type: 'string',
-					enum: ['text', 'regex', 'ast'],
+					enum: ['text', 'regex'],
 					description:
-						'Search mode: "text" for literal text search (default), "regex" for regular expression search, "ast" for AST-based semantic search (supports function/class/variable names)',
+						'Search mode: "text" for literal text search (default), "regex" for regular expression search',
 					default: 'text',
 				},
 			},
