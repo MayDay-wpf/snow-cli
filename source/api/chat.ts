@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
@@ -69,8 +69,7 @@ export interface ChatCompletionChunk {
  * 2. If no custom system prompt: use default as system
  */
 function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: boolean = true): ChatCompletionMessageParam[] {
-	const config = getOpenAiConfig();
-	const customSystemPrompt = config.systemPrompt;
+	const customSystemPrompt = getCustomSystemPrompt();
 
 	let result = messages.map(msg => {
 		// 如果消息包含图片，使用 content 数组格式
@@ -339,6 +338,9 @@ export interface UsageInfo {
 	prompt_tokens: number;
 	completion_tokens: number;
 	total_tokens: number;
+	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
+	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
+	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
 }
 
 export interface StreamChunk {
@@ -396,7 +398,9 @@ export async function* createStreamingChatCompletion(
 				usageData = {
 					prompt_tokens: usageValue.prompt_tokens || 0,
 					completion_tokens: usageValue.completion_tokens || 0,
-					total_tokens: usageValue.total_tokens || 0
+					total_tokens: usageValue.total_tokens || 0,
+					// OpenAI Chat API: cached_tokens in prompt_tokens_details
+					cached_tokens: usageValue.prompt_tokens_details?.cached_tokens
 				};
 			}
 

@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.2.11",
+	"version": "0.2.12",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -40,7 +40,7 @@
 	],
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.65.0",
-		"@google/generative-ai": "^0.24.1",
+		"@google/genai": "^1.23.0",
 		"@inkjs/ui": "^2.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
 		"chalk-template": "^1.1.2",

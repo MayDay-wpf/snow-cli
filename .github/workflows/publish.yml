@@ -54,9 +54,9 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Added support Gemini
-            - Added support for Claude
-            - Added support for Claude Beta
+            - Fix the bug of calling gemini and anthropic request tools
+            - Add custom system prompts
+            - Optimize the cache hit and creation display of token statistics
             
             ### Installation
             ```bash

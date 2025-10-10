@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomUUID } from 'crypto';
-import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
@@ -18,6 +18,8 @@ export interface UsageInfo {
 	prompt_tokens: number;
 	completion_tokens: number;
 	total_tokens: number;
+	cache_creation_input_tokens?: number; // Tokens used to create cache (first time)
+	cache_read_input_tokens?: number; // Tokens read from cache (cache hit)
 }
 
 export interface AnthropicStreamChunk {
@@ -90,13 +92,14 @@ function generateUserId(sessionId: string): string {
 
 /**
  * Convert OpenAI-style tools to Anthropic tool format
+ * Adds cache_control to the last tool for prompt caching
  */
 function convertToolsToAnthropic(tools?: ChatCompletionTool[]): Anthropic.Tool[] | undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
 	}
 
-	return tools
+	const convertedTools = tools
 		.filter(tool => tool.type === 'function' && 'function' in tool)
 		.map(tool => {
 			if (tool.type === 'function' && 'function' in tool) {
@@ -108,6 +111,14 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): Anthropic.Tool[]
 			}
 			throw new Error('Invalid tool format');
 		});
+
+	// Add cache_control to the last tool for prompt caching
+	if (convertedTools.length > 0) {
+		const lastTool = convertedTools[convertedTools.length - 1];
+		(lastTool as any).cache_control = { type: 'ephemeral' };
+	}
+
+	return convertedTools;
 }
 
 /**
@@ -121,8 +132,7 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 	system?: any;
 	messages: Anthropic.MessageParam[]
 } {
-	const config = getOpenAiConfig();
-	const customSystemPrompt = config.systemPrompt;
+	const customSystemPrompt = getCustomSystemPrompt();
 	let systemContent: string | undefined;
 	const anthropicMessages: Anthropic.MessageParam[] = [];
 
@@ -311,6 +321,7 @@ export async function* createStreamingAnthropicCompletion(
 		}> = new Map();
 		let hasToolCalls = false;
 		let usageData: UsageInfo | undefined;
+		let currentToolUseId: string | null = null; // Track current tool use block ID
 
 		for await (const event of stream) {
 			if (abortSignal?.aborted) {
@@ -324,6 +335,7 @@ export async function* createStreamingAnthropicCompletion(
 				// Handle tool use blocks
 				if (block.type === 'tool_use') {
 					hasToolCalls = true;
+					currentToolUseId = block.id; // Store current tool use ID
 					toolCallsBuffer.set(block.id, {
 						id: block.id,
 						type: 'function',
@@ -355,28 +367,36 @@ export async function* createStreamingAnthropicCompletion(
 				// Handle tool input deltas
 				if (delta.type === 'input_json_delta') {
 					const jsonDelta = delta.partial_json;
-					const toolCall = toolCallsBuffer.get(event.index.toString());
-					if (toolCall) {
-						toolCall.function.arguments += jsonDelta;
+					// Use currentToolUseId instead of event.index
+					if (currentToolUseId) {
+						const toolCall = toolCallsBuffer.get(currentToolUseId);
+						if (toolCall) {
+							toolCall.function.arguments += jsonDelta;
 
-						// Yield delta for token counting
-						yield {
-							type: 'tool_call_delta',
-							delta: jsonDelta
-						};
+							// Yield delta for token counting
+							yield {
+								type: 'tool_call_delta',
+								delta: jsonDelta
+							};
+						}
 					}
 				}
+			} else if (event.type === 'content_block_stop') {
+				// Reset current tool use ID when block ends
+				currentToolUseId = null;
 			} else if (event.type === 'message_start') {
-				// Capture initial usage data
+				// Capture initial usage data (including cache metrics)
 				if (event.message.usage) {
 					usageData = {
 						prompt_tokens: event.message.usage.input_tokens || 0,
 						completion_tokens: event.message.usage.output_tokens || 0,
-						total_tokens: (event.message.usage.input_tokens || 0) + (event.message.usage.output_tokens || 0)
+						total_tokens: (event.message.usage.input_tokens || 0) + (event.message.usage.output_tokens || 0),
+						cache_creation_input_tokens: (event.message.usage as any).cache_creation_input_tokens,
+						cache_read_input_tokens: (event.message.usage as any).cache_read_input_tokens
 					};
 				}
 			} else if (event.type === 'message_delta') {
-				// Update usage data with final token counts
+				// Update usage data with final token counts (including cache metrics)
 				if (event.usage) {
 					if (!usageData) {
 						usageData = {
@@ -387,15 +407,33 @@ export async function* createStreamingAnthropicCompletion(
 					}
 					usageData.completion_tokens = event.usage.output_tokens || 0;
 					usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
+					// Update cache metrics if present
+					if ((event.usage as any).cache_creation_input_tokens !== undefined) {
+						usageData.cache_creation_input_tokens = (event.usage as any).cache_creation_input_tokens;
+					}
+					if ((event.usage as any).cache_read_input_tokens !== undefined) {
+						usageData.cache_read_input_tokens = (event.usage as any).cache_read_input_tokens;
+					}
 				}
 			}
 		}
 
-		// Yield tool calls if any
+		// Yield tool calls if any (only after stream completes)
 		if (hasToolCalls && toolCallsBuffer.size > 0) {
+			// Validate that all tool call arguments are complete valid JSON
+			const toolCalls = Array.from(toolCallsBuffer.values());
+			for (const toolCall of toolCalls) {
+				try {
+					// Validate JSON completeness
+					JSON.parse(toolCall.function.arguments);
+				} catch (e) {
+					throw new Error(`Incomplete tool call JSON for ${toolCall.function.name}: ${toolCall.function.arguments}`);
+				}
+			}
+
 			yield {
 				type: 'tool_calls',
-				tool_calls: Array.from(toolCallsBuffer.values())
+				tool_calls: toolCalls
 			};
 		}
 

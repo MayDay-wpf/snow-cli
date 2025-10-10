@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI, Part, Content, FunctionDeclaration, Tool } from '@google/generative-ai';
-import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { GoogleGenAI } from '@google/genai';
+import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
@@ -15,6 +15,9 @@ export interface UsageInfo {
 	prompt_tokens: number;
 	completion_tokens: number;
 	total_tokens: number;
+	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
+	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
+	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
 }
 
 export interface GeminiStreamChunk {
@@ -32,9 +35,9 @@ export interface GeminiStreamChunk {
 	usage?: UsageInfo;
 }
 
-let geminiClient: GoogleGenerativeAI | null = null;
+let geminiClient: GoogleGenAI | null = null;
 
-function getGeminiClient(): GoogleGenerativeAI {
+function getGeminiClient(): GoogleGenAI {
 	if (!geminiClient) {
 		const config = getOpenAiConfig();
 
@@ -42,7 +45,22 @@ function getGeminiClient(): GoogleGenerativeAI {
 			throw new Error('Gemini API configuration is incomplete. Please configure API key first.');
 		}
 
-		geminiClient = new GoogleGenerativeAI(config.apiKey);
+		// Create client configuration
+		const clientConfig: any = {
+			apiKey: config.apiKey
+		};
+
+		// Support custom baseUrl and headers for proxy servers
+		if (config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1') {
+			clientConfig.httpOptions = {
+				baseUrl: config.baseUrl,
+				headers: {
+					'x-goog-api-key': config.apiKey, // Gemini API requires this header
+				}
+			};
+		}
+
+		geminiClient = new GoogleGenAI(clientConfig);
 	}
 
 	return geminiClient;
@@ -55,19 +73,26 @@ export function resetGeminiClient(): void {
 /**
  * Convert OpenAI-style tools to Gemini function declarations
  */
-function convertToolsToGemini(tools?: ChatCompletionTool[]): Tool[] | undefined {
+function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
 	}
 
-	const functionDeclarations: FunctionDeclaration[] = tools
+	const functionDeclarations = tools
 		.filter(tool => tool.type === 'function' && 'function' in tool)
 		.map(tool => {
 			if (tool.type === 'function' && 'function' in tool) {
+				// Convert OpenAI parameters schema to Gemini format
+				const params = tool.function.parameters as any;
+
 				return {
 					name: tool.function.name,
 					description: tool.function.description || '',
-					parameters: tool.function.parameters as any
+					parametersJsonSchema: {
+						type: 'object',
+						properties: params.properties || {},
+						required: params.required || []
+					}
 				};
 			}
 			throw new Error('Invalid tool format');
@@ -77,45 +102,118 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): Tool[] | undefined 
 }
 
 /**
- * Convert our ChatMessage format to Gemini's Content format
- * Logic:
- * 1. If custom system prompt exists: use custom as systemInstruction, prepend default as first user message
- * 2. If no custom system prompt: use default as systemInstruction
+ * Convert our ChatMessage format to Gemini's format
  */
-function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?: string; contents: Content[] } {
-	const config = getOpenAiConfig();
-	const customSystemPrompt = config.systemPrompt;
+function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?: string; contents: any[] } {
+	const customSystemPrompt = getCustomSystemPrompt();
 	let systemInstruction: string | undefined;
-	const contents: Content[] = [];
+	const contents: any[] = [];
 
-	for (const msg of messages) {
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i];
+		if (!msg) continue;
+
 		// Extract system message as systemInstruction
 		if (msg.role === 'system') {
 			systemInstruction = msg.content;
 			continue;
 		}
 
-		// Skip tool messages for now (Gemini handles them differently)
+		// Handle tool results
 		if (msg.role === 'tool') {
-			// Tool results in Gemini are represented as function response parts
-			const parts: Part[] = [{
-				functionResponse: {
-					name: 'function_name', // This should be mapped from tool_call_id
-					response: {
-						content: msg.content
+			// Find the corresponding function call to get the function name
+			// Look backwards in contents to find the matching tool call
+			let functionName = 'unknown_function';
+			for (let j = contents.length - 1; j >= 0; j--) {
+				const contentMsg = contents[j];
+				if (contentMsg.role === 'model' && contentMsg.parts) {
+					for (const part of contentMsg.parts) {
+						if (part.functionCall) {
+							functionName = part.functionCall.name;
+							break;
+						}
 					}
+					if (functionName !== 'unknown_function') break;
 				}
-			}];
+			}
+
+			// Tool response must be a valid object for Gemini API
+			// If content is a JSON string, parse it; otherwise wrap it in an object
+			let responseData: any;
+
+			if (!msg.content) {
+				responseData = {};
+			} else {
+				let contentToParse = msg.content;
+
+				// Sometimes the content is double-encoded as JSON
+				// First, try to parse it once
+				try {
+					const firstParse = JSON.parse(contentToParse);
+					// If it's a string, it might be double-encoded, try parsing again
+					if (typeof firstParse === 'string') {
+						contentToParse = firstParse;
+					}
+				} catch {
+					// Not JSON, use as-is
+				}
+
+				// Now parse or wrap the final content
+				try {
+					const parsed = JSON.parse(contentToParse);
+					// If parsed result is an object (not array, not null), use it directly
+					if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+						responseData = parsed;
+					} else {
+						// If it's a primitive, array, or null, wrap it
+						responseData = { content: parsed };
+					}
+				} catch {
+					// Not valid JSON, wrap the raw string
+					responseData = { content: contentToParse };
+				}
+			}
 
 			contents.push({
-				role: 'function',
+				role: 'user',
+				parts: [{
+					functionResponse: {
+						name: functionName,
+						response: responseData
+					}
+				}]
+			});
+			continue;
+		}
+
+		// Handle tool calls in assistant messages
+		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+			const parts: any[] = [];
+
+			// Add text content if exists
+			if (msg.content) {
+				parts.push({ text: msg.content });
+			}
+
+			// Add function calls
+			for (const toolCall of msg.tool_calls) {
+				parts.push({
+					functionCall: {
+						name: toolCall.function.name,
+						args: JSON.parse(toolCall.function.arguments)
+					}
+				});
+			}
+
+			contents.push({
+				role: 'model',
 				parts
 			});
 			continue;
 		}
 
-		// Convert user/assistant messages
-		const parts: Part[] = [];
+		// Build message parts
+		const parts: any[] = [];
 
 		// Add text content
 		if (msg.content) {
@@ -125,7 +223,6 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 		// Add images for user messages
 		if (msg.role === 'user' && msg.images && msg.images.length > 0) {
 			for (const image of msg.images) {
-				// Extract base64 data and mime type
 				const base64Match = image.data.match(/^data:([^;]+);base64,(.+)$/);
 				if (base64Match) {
 					parts.push({
@@ -138,37 +235,20 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 			}
 		}
 
-		// Handle tool calls in assistant messages
-		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-			for (const toolCall of msg.tool_calls) {
-				parts.push({
-					functionCall: {
-						name: toolCall.function.name,
-						args: JSON.parse(toolCall.function.arguments)
-					}
-				});
-			}
-		}
-
-		// Map role (Gemini uses 'user' and 'model' instead of 'user' and 'assistant')
+		// Add to contents
 		const role = msg.role === 'assistant' ? 'model' : 'user';
-
-		contents.push({
-			role,
-			parts
-		});
+		contents.push({ role, parts });
 	}
 
-	// 如果配置了自定义系统提示词
+	// Handle system instruction
 	if (customSystemPrompt) {
-		// 自定义系统提示词作为 systemInstruction，默认系统提示词作为第一条用户消息
 		systemInstruction = customSystemPrompt;
+		// Prepend default system prompt as first user message
 		contents.unshift({
 			role: 'user',
 			parts: [{ text: SYSTEM_PROMPT }]
 		});
 	} else if (!systemInstruction) {
-		// 没有自定义系统提示词，默认系统提示词作为 systemInstruction
 		systemInstruction = SYSTEM_PROMPT;
 	}
 
@@ -183,45 +263,28 @@ export async function* createStreamingGeminiCompletion(
 	abortSignal?: AbortSignal
 ): AsyncGenerator<GeminiStreamChunk, void, unknown> {
 	const client = getGeminiClient();
-	const config = getOpenAiConfig();
 
 	try {
 		const { systemInstruction, contents } = convertToGeminiMessages(options.messages);
 
-		// Initialize the model with optional custom baseUrl
-		// Note: For Gemini API, baseUrl should be in format: https://your-proxy.com/v1beta
-		// Default is: https://generativelanguage.googleapis.com/v1beta
-		const modelConfig: any = {
+		// Build request config
+		const requestConfig: any = {
 			model: options.model,
-			systemInstruction,
-			tools: convertToolsToGemini(options.tools),
-			generationConfig: {
+			contents,
+			config: {
+				systemInstruction,
 				temperature: options.temperature ?? 0.7,
 			}
 		};
 
-		// Support custom baseUrl for proxy servers
-		const requestOptions: any = {};
-		if (config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1') {
-			// Only set custom baseUrl if it's not the default OpenAI URL
-			requestOptions.baseUrl = config.baseUrl;
-		}
-
-		const model = client.getGenerativeModel(modelConfig, requestOptions);
-
-		// Start chat session
-		const chat = model.startChat({
-			history: contents.slice(0, -1), // All messages except the last one
-		});
-
-		// Get the last user message
-		const lastMessage = contents[contents.length - 1];
-		if (!lastMessage) {
-			throw new Error('No user message found');
+		// Add tools if provided
+		const geminiTools = convertToolsToGemini(options.tools);
+		if (geminiTools) {
+			requestConfig.config.tools = geminiTools;
 		}
 
 		// Stream the response
-		const result = await chat.sendMessageStream(lastMessage.parts);
+		const stream = await client.models.generateContentStream(requestConfig);
 
 		let contentBuffer = '';
 		let toolCallsBuffer: Array<{
@@ -234,51 +297,64 @@ export async function* createStreamingGeminiCompletion(
 		}> = [];
 		let hasToolCalls = false;
 		let toolCallIndex = 0;
+		let totalTokens = { prompt: 0, completion: 0, total: 0 };
 
-		for await (const chunk of result.stream) {
+		// Save original console.warn to suppress SDK warnings
+		const originalWarn = console.warn;
+		console.warn = () => {}; // Suppress "there are non-text parts" warnings
+
+		for await (const chunk of stream) {
 			if (abortSignal?.aborted) {
+				console.warn = originalWarn; // Restore console.warn
 				return;
 			}
 
-			const candidate = chunk.candidates?.[0];
-			if (!candidate) continue;
-
 			// Process text content
-			const text = chunk.text();
-			if (text) {
-				contentBuffer += text;
+			if (chunk.text) {
+				contentBuffer += chunk.text;
 				yield {
 					type: 'content',
-					content: text
+					content: chunk.text
 				};
 			}
 
-			// Process function calls (tool calls)
-			const functionCalls = candidate.content?.parts?.filter(part => 'functionCall' in part);
-			if (functionCalls && functionCalls.length > 0) {
+			// Process function calls using the official API
+			if (chunk.functionCalls && chunk.functionCalls.length > 0) {
 				hasToolCalls = true;
-				for (const fc of functionCalls) {
-					if ('functionCall' in fc && fc.functionCall) {
-						const toolCall = {
-							id: `call_${toolCallIndex++}`,
-							type: 'function' as const,
-							function: {
-								name: fc.functionCall.name,
-								arguments: JSON.stringify(fc.functionCall.args)
-							}
-						};
-						toolCallsBuffer.push(toolCall);
+				for (const fc of chunk.functionCalls) {
+					if (!fc.name) continue;
 
-						// Yield delta for token counting
-						const deltaText = fc.functionCall.name + JSON.stringify(fc.functionCall.args);
-						yield {
-							type: 'tool_call_delta',
-							delta: deltaText
-						};
-					}
+					const toolCall = {
+						id: `call_${toolCallIndex++}`,
+						type: 'function' as const,
+						function: {
+							name: fc.name,
+							arguments: JSON.stringify(fc.args)
+						}
+					};
+					toolCallsBuffer.push(toolCall);
+
+					// Yield delta for token counting
+					const deltaText = fc.name + JSON.stringify(fc.args);
+					yield {
+						type: 'tool_call_delta',
+						delta: deltaText
+					};
 				}
 			}
+
+			// Track usage info
+			if (chunk.usageMetadata) {
+				totalTokens = {
+					prompt: chunk.usageMetadata.promptTokenCount || 0,
+					completion: chunk.usageMetadata.candidatesTokenCount || 0,
+					total: chunk.usageMetadata.totalTokenCount || 0
+				};
+			}
 		}
+
+		// Restore console.warn
+		console.warn = originalWarn;
 
 		// Yield tool calls if any
 		if (hasToolCalls && toolCallsBuffer.length > 0) {
@@ -288,17 +364,14 @@ export async function* createStreamingGeminiCompletion(
 			};
 		}
 
-		// Get final response for usage info
-		const finalResponse = await result.response;
-		const usageMetadata = finalResponse.usageMetadata;
-
-		if (usageMetadata) {
+		// Yield usage info
+		if (totalTokens.total > 0) {
 			yield {
 				type: 'usage',
 				usage: {
-					prompt_tokens: usageMetadata.promptTokenCount || 0,
-					completion_tokens: usageMetadata.candidatesTokenCount || 0,
-					total_tokens: usageMetadata.totalTokenCount || 0
+					prompt_tokens: totalTokens.prompt,
+					completion_tokens: totalTokens.completion,
+					total_tokens: totalTokens.total
 				}
 			};
 		}

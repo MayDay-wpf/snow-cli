@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getOpenAiConfig } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import type { ChatMessage, ToolCall } from './chat.js';
@@ -104,6 +104,9 @@ export interface UsageInfo {
 	prompt_tokens: number;
 	completion_tokens: number;
 	total_tokens: number;
+	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
+	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
+	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
 }
 
 export interface ResponseStreamChunk {
@@ -151,8 +154,7 @@ export function resetOpenAIClient(): void {
  * 2. If no custom system prompt: use default as instructions
  */
 function convertToResponseInput(messages: ChatMessage[]): { input: any[]; systemInstructions: string } {
-	const config = getOpenAiConfig();
-	const customSystemPrompt = config.systemPrompt;
+	const customSystemPrompt = getCustomSystemPrompt();
 	const result: any[] = [];
 
 	for (const msg of messages) {
@@ -344,9 +346,9 @@ export async function createResponse(options: ResponseOptions): Promise<string> 
 		if (error instanceof Error) {
 			// 检查是否是 API 网关不支持 Responses API
 			if (error.message.includes('Panic detected') ||
-			    error.message.includes('nil pointer') ||
-			    error.message.includes('404') ||
-			    error.message.includes('not found')) {
+				error.message.includes('nil pointer') ||
+				error.message.includes('404') ||
+				error.message.includes('not found')) {
 				throw new Error(
 					'Response creation failed: Your API endpoint does not support the Responses API. ' +
 					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API.'
@@ -466,15 +468,15 @@ export async function* createStreamingResponse(
 			} else if (eventType === 'response.content_part.added') {
 				// 内容部分添加 - 忽略
 				continue;
-		} else if (eventType === 'response.reasoning_summary_text.delta') {
-			// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
-			const delta = chunk.delta;
-			if (delta) {
-				yield {
-					type: 'reasoning_delta',
-					delta: delta
-				};
-			}
+			} else if (eventType === 'response.reasoning_summary_text.delta') {
+				// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
+				const delta = chunk.delta;
+				if (delta) {
+					yield {
+						type: 'reasoning_delta',
+						delta: delta
+					};
+				}
 			} else if (eventType === 'response.output_text.delta') {
 				// 文本增量更新
 				const delta = chunk.delta;
@@ -497,7 +499,9 @@ export async function* createStreamingResponse(
 					usageData = {
 						prompt_tokens: chunk.response.usage.input_tokens || 0,
 						completion_tokens: chunk.response.usage.output_tokens || 0,
-						total_tokens: chunk.response.usage.total_tokens || 0
+						total_tokens: chunk.response.usage.total_tokens || 0,
+						// OpenAI Responses API: cached_tokens in input_tokens_details (note: tokenS)
+						cached_tokens: (chunk.response.usage as any).input_tokens_details?.cached_tokens
 					};
 				}
 				break;
@@ -539,9 +543,9 @@ export async function* createStreamingResponse(
 		if (error instanceof Error) {
 			// 检查是否是 API 网关不支持 Responses API
 			if (error.message.includes('Panic detected') ||
-			    error.message.includes('nil pointer') ||
-			    error.message.includes('404') ||
-			    error.message.includes('not found')) {
+				error.message.includes('nil pointer') ||
+				error.message.includes('404') ||
+				error.message.includes('not found')) {
 				throw new Error(
 					'Streaming response creation failed: Your API endpoint does not support the Responses API. ' +
 					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API (OpenAI official API, or compatible providers).'
@@ -640,9 +644,9 @@ export async function createResponseWithTools(
 		if (error instanceof Error) {
 			// 检查是否是 API 网关不支持 Responses API
 			if (error.message.includes('Panic detected') ||
-			    error.message.includes('nil pointer') ||
-			    error.message.includes('404') ||
-			    error.message.includes('not found')) {
+				error.message.includes('nil pointer') ||
+				error.message.includes('404') ||
+				error.message.includes('not found')) {
 				throw new Error(
 					'Response creation with tools failed: Your API endpoint does not support the Responses API. ' +
 					'Please switch to "Chat Completions" method in API settings.'

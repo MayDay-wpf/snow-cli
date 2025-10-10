@@ -4,10 +4,6 @@ import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir, platform } from 'os';
-import {
-	getOpenAiConfig,
-	updateOpenAiConfig,
-} from '../../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from '../../api/systemPrompt.js';
 
 type Props = {
@@ -38,9 +34,16 @@ export default function SystemPromptConfigScreen({ onBack }: Props) {
 		const openEditor = async () => {
 			ensureConfigDirectory();
 
-			// 读取当前配置的自定义系统提示词，如果为空则使用默认系统提示词
-			const config = getOpenAiConfig();
-			const currentPrompt = config.systemPrompt || SYSTEM_PROMPT;
+			// 读取系统提示词文件，如果不存在则使用默认系统提示词
+			let currentPrompt = SYSTEM_PROMPT;
+			if (existsSync(SYSTEM_PROMPT_FILE)) {
+				try {
+					currentPrompt = readFileSync(SYSTEM_PROMPT_FILE, 'utf8');
+				} catch {
+					// 读取失败，使用默认
+					currentPrompt = SYSTEM_PROMPT;
+				}
+			}
 
 			// 写入临时文件供编辑
 			writeFileSync(SYSTEM_PROMPT_FILE, currentPrompt, 'utf8');
@@ -58,22 +61,26 @@ export default function SystemPromptConfigScreen({ onBack }: Props) {
 				if (existsSync(SYSTEM_PROMPT_FILE)) {
 					try {
 						const editedContent = readFileSync(SYSTEM_PROMPT_FILE, 'utf8');
-
-						// 如果编辑后的内容为空或与默认提示词相同，则保存为空（使用默认）
-						// 否则保存自定义提示词
 						const trimmedContent = editedContent.trim();
 
 						if (trimmedContent === '' || trimmedContent === SYSTEM_PROMPT.trim()) {
-							// 保存为空，表示使用默认提示词
-							updateOpenAiConfig({ systemPrompt: undefined });
-							console.log('System prompt reset to default. Please use `snow` to restart!');
+							// 内容为空或与默认相同，删除文件，使用默认提示词
+							try {
+								const fs = require('fs');
+								fs.unlinkSync(SYSTEM_PROMPT_FILE);
+								console.log('System prompt reset to default. Please use `snow` to restart!');
+							} catch {
+								// 删除失败，保存空内容
+								writeFileSync(SYSTEM_PROMPT_FILE, '', 'utf8');
+								console.log('System prompt reset to default. Please use `snow` to restart!');
+							}
 						} else {
-							// 保存自定义提示词
-							updateOpenAiConfig({ systemPrompt: editedContent });
+							// 保存自定义提示词到文件
+							writeFileSync(SYSTEM_PROMPT_FILE, editedContent, 'utf8');
 							console.log('Custom system prompt saved successfully! Please use `snow` to restart!');
 						}
 					} catch (error) {
-						console.error('Failed to read edited content:', error instanceof Error ? error.message : 'Unknown error');
+						console.error('Failed to save system prompt:', error instanceof Error ? error.message : 'Unknown error');
 					}
 				}
 

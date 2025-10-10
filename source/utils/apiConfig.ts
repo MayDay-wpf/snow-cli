@@ -20,7 +20,6 @@ export interface ApiConfig {
 	maxTokens?: number; // Max tokens for single response (API request parameter)
 	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
-	systemPrompt?: string; // Custom system prompt (overrides default)
 }
 
 export interface MCPServer {
@@ -57,6 +56,8 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 };
 
 const CONFIG_DIR = join(homedir(), '.snow');
+
+const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
 	if (method === 'chat' || method === 'responses' || method === 'gemini' || method === 'anthropic') {
@@ -258,4 +259,31 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 	}
 
 	return errors;
+}
+
+/**
+ * 读取自定义系统提示词
+ * 如果 system-prompt.txt 文件存在且不为空，返回其内容
+ * 否则返回 undefined (使用默认系统提示词)
+ */
+export function getCustomSystemPrompt(): string | undefined {
+	ensureConfigDirectory();
+
+	if (!existsSync(SYSTEM_PROMPT_FILE)) {
+		return undefined;
+	}
+
+	try {
+		const content = readFileSync(SYSTEM_PROMPT_FILE, 'utf8');
+
+		// 只有当文件完全为空时才返回 undefined
+		if (content.length === 0) {
+			return undefined;
+		}
+
+		// 返回原始内容，不做任何处理
+		return content;
+	} catch {
+		return undefined;
+	}
 }

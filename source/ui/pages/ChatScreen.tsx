@@ -963,7 +963,10 @@ export default function ChatScreen({ }: Props) {
 						yoloMode={yoloMode}
 						contextUsage={contextUsage ? {
 							inputTokens: contextUsage.prompt_tokens,
-							maxContextTokens: getOpenAiConfig().maxContextTokens || 4000
+							maxContextTokens: getOpenAiConfig().maxContextTokens || 4000,
+							cacheCreationTokens: contextUsage.cache_creation_input_tokens,
+							cacheReadTokens: contextUsage.cache_read_input_tokens,
+							cachedTokens: contextUsage.cached_tokens
 						} : undefined}
 						snapshotFileCount={snapshotFileCount}
 					/>

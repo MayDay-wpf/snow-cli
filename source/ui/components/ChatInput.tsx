@@ -18,6 +18,11 @@ type Props = {
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
+		// Anthropic caching
+		cacheCreationTokens?: number;
+		cacheReadTokens?: number;
+		// OpenAI caching
+		cachedTokens?: number;
 	};
 	snapshotFileCount?: Map<number, number>; // Map of message index to file count
 };
@@ -826,7 +831,17 @@ end try'`;
 						<Box marginTop={1} paddingX={1}>
 							<Text color="gray" dimColor>
 								{(() => {
-									const percentage = Math.min(100, (contextUsage.inputTokens / contextUsage.maxContextTokens) * 100);
+									// Determine which caching system is being used
+									const isAnthropic = (contextUsage.cacheCreationTokens || 0) > 0 || (contextUsage.cacheReadTokens || 0) > 0;
+									const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
+
+									// For Anthropic: Total = inputTokens + cacheCreationTokens
+									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
+									const totalInputTokens = isAnthropic
+										? contextUsage.inputTokens + (contextUsage.cacheCreationTokens || 0)
+										: contextUsage.inputTokens;
+
+									const percentage = Math.min(100, (totalInputTokens / contextUsage.maxContextTokens) * 100);
 									let color: string;
 									if (percentage < 50) color = 'green';
 									else if (percentage < 75) color = 'yellow';
@@ -838,12 +853,39 @@ end try'`;
 										return num.toString();
 									};
 
+									const hasCacheMetrics = isAnthropic || isOpenAI;
+
 									return (
 										<>
 											<Text color={color}>{percentage.toFixed(1)}%</Text>
 											<Text> · </Text>
-											<Text color={color}>{formatNumber(contextUsage.inputTokens)}</Text>
+											<Text color={color}>{formatNumber(totalInputTokens)}</Text>
 											<Text> tokens</Text>
+											{hasCacheMetrics && (
+												<>
+													<Text> · </Text>
+													{/* Anthropic caching display */}
+													{isAnthropic && (
+														<>
+															{(contextUsage.cacheReadTokens || 0) > 0 && (
+																<>
+																	<Text color="cyan">↯ {formatNumber(contextUsage.cacheReadTokens || 0)} cached</Text>
+																</>
+															)}
+															{(contextUsage.cacheCreationTokens || 0) > 0 && (
+																<>
+																	{(contextUsage.cacheReadTokens || 0) > 0 && <Text> · </Text>}
+																	<Text color="magenta">◆ {formatNumber(contextUsage.cacheCreationTokens || 0)} new cache</Text>
+																</>
+															)}
+														</>
+													)}
+													{/* OpenAI caching display */}
+													{isOpenAI && (
+														<Text color="cyan">↯ {formatNumber(contextUsage.cachedTokens || 0)} cached</Text>
+													)}
+												</>
+											)}
 										</>
 									);
 								})()}
