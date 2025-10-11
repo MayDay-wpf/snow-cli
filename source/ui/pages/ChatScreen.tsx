@@ -15,19 +15,24 @@ import ToolResultPreview from '../components/ToolResultPreview.js';
 import TodoTree from '../components/TodoTree.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
-import type {UsageInfo} from '../../api/chat.js';
 import {getOpenAiConfig} from '../../utils/apiConfig.js';
 import {sessionManager} from '../../utils/sessionManager.js';
 import {useSessionSave} from '../../hooks/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
 import {handleConversationWithTools} from '../../hooks/useConversation.js';
+import {useVSCodeState} from '../../hooks/useVSCodeState.js';
+import {useSnapshotState} from '../../hooks/useSnapshotState.js';
+import {useStreamingState} from '../../hooks/useStreamingState.js';
+import {useCommandHandler} from '../../hooks/useCommandHandler.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
 	getSystemInfo,
 } from '../../utils/fileUtils.js';
-import {compressContext} from '../../utils/contextCompressor.js';
+import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
 import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
+import {formatElapsedTime} from '../../utils/textUtils.js';
+
 // Import commands to register them
 import '../../utils/commands/clear.js';
 import '../../utils/commands/resume.js';
@@ -36,33 +41,11 @@ import '../../utils/commands/yolo.js';
 import '../../utils/commands/init.js';
 import '../../utils/commands/ide.js';
 import '../../utils/commands/compact.js';
-import {navigateTo} from '../../hooks/useGlobalNavigation.js';
-import {
-	vscodeConnection,
-	type EditorContext,
-} from '../../utils/vscodeConnection.js';
 
 type Props = {};
 
-// Format elapsed time to human readable format
-function formatElapsedTime(seconds: number): string {
-	if (seconds < 60) {
-		return `${seconds}s`;
-	} else if (seconds < 3600) {
-		const minutes = Math.floor(seconds / 60);
-		const remainingSeconds = seconds % 60;
-		return `${minutes}m ${remainingSeconds}s`;
-	} else {
-		const hours = Math.floor(seconds / 3600);
-		const remainingMinutes = Math.floor((seconds % 3600) / 60);
-		const remainingSeconds = seconds % 60;
-		return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
-	}
-}
-
 export default function ChatScreen({}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
-	const [isStreaming, setIsStreaming] = useState(false);
 	const [isSaving] = useState(false);
 	const [currentTodos, setCurrentTodos] = useState<
 		Array<{
@@ -71,16 +54,11 @@ export default function ChatScreen({}: Props) {
 			status: 'pending' | 'completed';
 		}>
 	>([]);
-	const [animationFrame, setAnimationFrame] = useState(0);
-	const [abortController, setAbortController] =
-		useState<AbortController | null>(null);
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
 	const pendingMessagesRef = useRef<string[]>([]);
 	const [remountKey, setRemountKey] = useState(0);
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
-	const [streamTokenCount, setStreamTokenCount] = useState(0);
-	const [isReasoning, setIsReasoning] = useState(false);
 	const [yoloMode, setYoloMode] = useState(() => {
 		// Load yolo mode from localStorage on initialization
 		try {
@@ -90,32 +68,19 @@ export default function ChatScreen({}: Props) {
 			return false;
 		}
 	});
-	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
-	const [elapsedSeconds, setElapsedSeconds] = useState(0);
-	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
-	const [vscodeConnected, setVscodeConnected] = useState(false);
-	const [vscodeConnectionStatus, setVscodeConnectionStatus] = useState<
-		'disconnected' | 'connecting' | 'connected' | 'error'
-	>('disconnected');
-	const [editorContext, setEditorContext] = useState<EditorContext>({});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
-	const [snapshotFileCount, setSnapshotFileCount] = useState<
-		Map<number, number>
-	>(new Map());
-	const [pendingRollback, setPendingRollback] = useState<{
-		messageIndex: number;
-		fileCount: number;
-	} | null>(null);
 	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
 	const {stdout} = useStdout();
 	const terminalHeight = stdout?.rows || 24;
 	const workingDirectory = process.cwd();
 
-	// Minimum terminal height required for proper rendering
-	const MIN_TERMINAL_HEIGHT = 10;
+	// Use custom hooks
+	const streamingState = useStreamingState();
+	const vscodeState = useVSCodeState();
+	const snapshotState = useSnapshotState(messages.length);
 
 	// Use session save hook
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
@@ -143,138 +108,49 @@ export default function ChatScreen({}: Props) {
 		addMultipleToAlwaysApproved,
 	} = useToolConfirmation();
 
-	// Animation for streaming/saving indicator
-	useEffect(() => {
-		if (!isStreaming && !isSaving) return;
+	// Minimum terminal height required for proper rendering
+	const MIN_TERMINAL_HEIGHT = 10;
 
-		const interval = setInterval(() => {
-			setAnimationFrame(prev => (prev + 1) % 5);
-		}, 300);
+	// Forward reference for processMessage (defined below)
+	const processMessageRef = useRef<(message: string, images?: Array<{data: string; mimeType: string}>, useBasicModel?: boolean, hideUserMessage?: boolean) => Promise<void>>();
 
-		return () => {
-			clearInterval(interval);
-			setAnimationFrame(0);
-		};
-	}, [isStreaming, isSaving]);
-
-	// Timer for tracking request duration
-	useEffect(() => {
-		if (isStreaming && timerStartTime === null) {
-			// Start timer when streaming begins
-			setTimerStartTime(Date.now());
-			setElapsedSeconds(0);
-		} else if (!isStreaming && timerStartTime !== null) {
-			// Stop timer when streaming ends
-			setTimerStartTime(null);
-		}
-	}, [isStreaming, timerStartTime]);
-
-	// Update elapsed time every second
-	useEffect(() => {
-		if (timerStartTime === null) return;
-
-		const interval = setInterval(() => {
-			const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
-			setElapsedSeconds(elapsed);
-		}, 1000);
-
-		return () => clearInterval(interval);
-	}, [timerStartTime]);
-
-	// Monitor VSCode connection status and editor context
-	useEffect(() => {
-		const checkConnectionInterval = setInterval(() => {
-			const isConnected = vscodeConnection.isConnected();
-			setVscodeConnected(isConnected);
-
-			// Update connection status based on actual connection state
-			if (isConnected && vscodeConnectionStatus !== 'connected') {
-				setVscodeConnectionStatus('connected');
-			} else if (!isConnected && vscodeConnectionStatus === 'connected') {
-				setVscodeConnectionStatus('disconnected');
-			}
-		}, 1000);
-
-		const unsubscribe = vscodeConnection.onContextUpdate(context => {
-			setEditorContext(context);
-			// When we receive context, it means connection is successful
-			if (vscodeConnectionStatus !== 'connected') {
-				setVscodeConnectionStatus('connected');
-			}
-		});
-
-		return () => {
-			clearInterval(checkConnectionInterval);
-			unsubscribe();
-		};
-	}, [vscodeConnectionStatus]);
-
-	// Separate effect for handling connecting timeout
-	useEffect(() => {
-		if (vscodeConnectionStatus !== 'connecting') {
-			return;
-		}
-
-		// Set timeout for connecting state (30 seconds to allow for VSCode extension reconnection)
-		const connectingTimeout = setTimeout(() => {
-			const isConnected = vscodeConnection.isConnected();
-			const isServerRunning = vscodeConnection.isServerRunning();
-
-			// Only set error if still not connected after timeout
-			if (!isConnected) {
-				if (isServerRunning) {
-					// Server is running but no connection - show error with helpful message
-					setVscodeConnectionStatus('error');
-				} else {
-					// Server not running - go back to disconnected
-					setVscodeConnectionStatus('disconnected');
-				}
-			}
-		}, 30000); // Increased to 30 seconds
-
-		return () => {
-			clearTimeout(connectingTimeout);
-		};
-	}, [vscodeConnectionStatus]);
-
-	// Load snapshot file counts when session changes
-	useEffect(() => {
-		const loadSnapshotFileCounts = async () => {
-			const currentSession = sessionManager.getCurrentSession();
-			if (!currentSession) return;
-
-			const snapshots = await incrementalSnapshotManager.listSnapshots(
-				currentSession.id,
-			);
-			const counts = new Map<number, number>();
-
-			for (const snapshot of snapshots) {
-				counts.set(snapshot.messageIndex, snapshot.fileCount);
-			}
-
-			setSnapshotFileCount(counts);
-		};
-
-		loadSnapshotFileCounts();
-	}, [messages.length]); // Reload when messages change
+	// Use command handler hook
+	const {handleCommandExecution} = useCommandHandler({
+		messages,
+		setMessages,
+		setRemountKey,
+		clearSavedMessages,
+		setIsCompressing,
+		setCompressionError,
+		setShowSessionPanel,
+		setShowMcpInfo,
+		setShowMcpPanel,
+		setMcpPanelKey,
+		setYoloMode,
+		setContextUsage: streamingState.setContextUsage,
+		setShouldIncludeSystemInfo,
+		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
+		processMessage: (message, images, useBasicModel, hideUserMessage) =>
+			processMessageRef.current?.(message, images, useBasicModel, hideUserMessage) || Promise.resolve(),
+	});
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
 	useEffect(() => {
-		if (!isStreaming && pendingMessages.length > 0) {
+		if (!streamingState.isStreaming && pendingMessages.length > 0) {
 			const timer = setTimeout(() => {
 				processPendingMessages();
 			}, 100);
 			return () => clearTimeout(timer);
 		}
 		return undefined;
-	}, [isStreaming, pendingMessages.length]);
+	}, [streamingState.isStreaming, pendingMessages.length]);
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
-		if (pendingRollback) {
+		if (snapshotState.pendingRollback) {
 			if (key.escape) {
-				setPendingRollback(null);
+				snapshotState.setPendingRollback(null);
 			}
 			return;
 		}
@@ -300,9 +176,9 @@ export default function ChatScreen({}: Props) {
 			return;
 		}
 
-		if (key.escape && isStreaming && abortController) {
+		if (key.escape && streamingState.isStreaming && streamingState.abortController) {
 			// Abort the controller
-			abortController.abort();
+			streamingState.abortController.abort();
 
 			// Add discontinued message
 			setMessages(prev => [
@@ -316,177 +192,30 @@ export default function ChatScreen({}: Props) {
 			]);
 
 			// Stop streaming state
-			setIsStreaming(false);
-			setAbortController(null);
-			setStreamTokenCount(0);
+			streamingState.setIsStreaming(false);
+			streamingState.setAbortController(null);
+			streamingState.setStreamTokenCount(0);
 		}
 	});
-
-	const handleCommandExecution = async (commandName: string, result: any) => {
-		// Handle /compact command
-		if (
-			commandName === 'compact' &&
-			result.success &&
-			result.action === 'compact'
-		) {
-			// Set compressing state (不添加命令面板消息)
-			setIsCompressing(true);
-			setCompressionError(null);
-
-			try {
-				// Convert messages to ChatMessage format for compression
-				const chatMessages = messages
-					.filter(msg => msg.role !== 'command')
-					.map(msg => ({
-						role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
-						content: msg.content,
-						tool_call_id: msg.toolCallId,
-					}));
-
-				// Compress the context
-				const result = await compressContext(chatMessages);
-
-				// Replace all messages with a summary message (不包含 "Context Compressed" 标题)
-				const summaryMessage: Message = {
-					role: 'assistant',
-					content: result.summary,
-					streaming: false,
-				};
-
-				// Clear session and set new compressed state
-				sessionManager.clearCurrentSession();
-				clearSavedMessages();
-				setMessages([summaryMessage]);
-				setRemountKey(prev => prev + 1);
-
-				// Reset system info flag to include in next message
-				setShouldIncludeSystemInfo(true);
-
-				// Update token usage with compression result
-				setContextUsage({
-					prompt_tokens: result.usage.prompt_tokens,
-					completion_tokens: result.usage.completion_tokens,
-					total_tokens: result.usage.total_tokens,
-				});
-			} catch (error) {
-				// Show error message
-				const errorMsg =
-					error instanceof Error ? error.message : 'Unknown compression error';
-				setCompressionError(errorMsg);
-
-				const errorMessage: Message = {
-					role: 'assistant',
-					content: `**Compression Failed**\n\n${errorMsg}`,
-					streaming: false,
-				};
-				setMessages(prev => [...prev, errorMessage]);
-			} finally {
-				setIsCompressing(false);
-			}
-			return;
-		}
-
-		// Handle /ide command
-		if (commandName === 'ide') {
-			if (result.success) {
-				setVscodeConnectionStatus('connecting');
-				// Add command execution feedback
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				setMessages(prev => [...prev, commandMessage]);
-			} else {
-				setVscodeConnectionStatus('error');
-			}
-			return;
-		}
-
-		if (result.success && result.action === 'clear') {
-			if (stdout && typeof stdout.write === 'function') {
-				stdout.write('\x1B[3J\x1B[2J\x1B[H');
-			}
-			// Clear current session and start new one
-			sessionManager.clearCurrentSession();
-			clearSavedMessages();
-			setMessages([]);
-			setRemountKey(prev => prev + 1);
-			// Reset context usage (token statistics)
-			setContextUsage(null);
-			// Reset system info flag to include in next message
-			setShouldIncludeSystemInfo(true);
-			// Note: yoloMode is preserved via localStorage (lines 68-76, 104-111)
-			// Note: VSCode connection is preserved and managed by vscodeConnection utility
-			// Add command execution feedback
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages([commandMessage]);
-		} else if (result.success && result.action === 'showSessionPanel') {
-			setShowSessionPanel(true);
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages(prev => [...prev, commandMessage]);
-		} else if (result.success && result.action === 'showMcpInfo') {
-			setShowMcpInfo(true);
-			setMcpPanelKey(prev => prev + 1);
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages(prev => [...prev, commandMessage]);
-		} else if (result.success && result.action === 'showMcpPanel') {
-			setShowMcpPanel(true);
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages(prev => [...prev, commandMessage]);
-		} else if (result.success && result.action === 'goHome') {
-			navigateTo('welcome');
-		} else if (result.success && result.action === 'toggleYolo') {
-			setYoloMode(prev => !prev);
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages(prev => [...prev, commandMessage]);
-		} else if (
-			result.success &&
-			result.action === 'initProject' &&
-			result.prompt
-		) {
-			// Add command execution feedback
-			const commandMessage: Message = {
-				role: 'command',
-				content: '',
-				commandName: commandName,
-			};
-			setMessages(prev => [...prev, commandMessage]);
-			// Auto-send the prompt using basicModel, hide the prompt from UI
-			processMessage(result.prompt, undefined, true, true);
-		}
-	};
 
 	const handleHistorySelect = async (
 		selectedIndex: number,
 		_message: string,
 	) => {
-		// Check if there are files to rollback
-		const fileCount = snapshotFileCount.get(selectedIndex) || 0;
+		// Count total files that will be rolled back (from selectedIndex onwards)
+		let totalFileCount = 0;
+		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
+			if (index >= selectedIndex) {
+				totalFileCount += count;
+			}
+		}
 
-		if (fileCount > 0) {
-			// Show confirmation dialog
-			setPendingRollback({messageIndex: selectedIndex, fileCount});
+		if (totalFileCount > 0) {
+			// Show confirmation dialog with total file count
+			snapshotState.setPendingRollback({
+				messageIndex: selectedIndex,
+				fileCount: totalFileCount,
+			});
 		} else {
 			// No files to rollback, just rollback conversation
 			performRollback(selectedIndex, false);
@@ -501,7 +230,8 @@ export default function ChatScreen({}: Props) {
 		if (rollbackFiles) {
 			const currentSession = sessionManager.getCurrentSession();
 			if (currentSession) {
-				await incrementalSnapshotManager.rollbackToSnapshot(
+				// Use rollbackToMessageIndex to rollback all snapshots >= selectedIndex
+				await incrementalSnapshotManager.rollbackToMessageIndex(
 					currentSession.id,
 					selectedIndex,
 				);
@@ -514,12 +244,12 @@ export default function ChatScreen({}: Props) {
 		setRemountKey(prev => prev + 1);
 
 		// Clear pending rollback dialog
-		setPendingRollback(null);
+		snapshotState.setPendingRollback(null);
 	};
 
 	const handleRollbackConfirm = (rollbackFiles: boolean) => {
-		if (pendingRollback) {
-			performRollback(pendingRollback.messageIndex, rollbackFiles);
+		if (snapshotState.pendingRollback) {
+			performRollback(snapshotState.pendingRollback.messageIndex, rollbackFiles);
 		}
 	};
 
@@ -528,11 +258,24 @@ export default function ChatScreen({}: Props) {
 		try {
 			const session = await sessionManager.loadSession(sessionId);
 			if (session) {
+				// Convert API format messages to UI format for proper rendering
+				const uiMessages = convertSessionMessagesToUI(session.messages);
+
 				initializeFromSession(session.messages);
-				setMessages(session.messages as Message[]);
+				setMessages(uiMessages);
 				setPendingMessages([]);
-				setIsStreaming(false);
+				streamingState.setIsStreaming(false);
 				setRemountKey(prev => prev + 1);
+
+				// Load snapshot file counts for the loaded session
+				const snapshots = await incrementalSnapshotManager.listSnapshots(
+					session.id,
+				);
+				const counts = new Map<number, number>();
+				for (const snapshot of snapshots) {
+					counts.set(snapshot.messageIndex, snapshot.fileCount);
+				}
+				snapshotState.setSnapshotFileCount(counts);
 			}
 		} catch (error) {
 			console.error('Failed to load session:', error);
@@ -544,7 +287,7 @@ export default function ChatScreen({}: Props) {
 		images?: Array<{data: string; mimeType: string}>,
 	) => {
 		// If streaming, add to pending messages instead of sending immediately
-		if (isStreaming) {
+		if (streamingState.isStreaming) {
 			setPendingMessages(prev => [...prev, message]);
 			return;
 		}
@@ -616,11 +359,11 @@ export default function ChatScreen({}: Props) {
 				setShouldIncludeSystemInfo(false);
 			}
 		}
-		setIsStreaming(true);
+		streamingState.setIsStreaming(true);
 
 		// Create new abort controller for this request
 		const controller = new AbortController();
-		setAbortController(controller);
+		streamingState.setAbortController(controller);
 
 		try {
 			// Create message for AI with file read instructions, system info, and editor context
@@ -628,7 +371,7 @@ export default function ChatScreen({}: Props) {
 				cleanContent,
 				regularFiles,
 				systemInfo,
-				vscodeConnected ? editorContext : undefined,
+				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
 			// Start conversation with tool support
@@ -639,18 +382,19 @@ export default function ChatScreen({}: Props) {
 				messages,
 				saveMessage,
 				setMessages,
-				setStreamTokenCount,
+				setStreamTokenCount: streamingState.setStreamTokenCount,
 				setCurrentTodos,
 				requestToolConfirmation,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
-				setContextUsage,
+				setContextUsage: streamingState.setContextUsage,
 				useBasicModel,
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
-				setIsStreaming,
-				setIsReasoning,
+				setIsStreaming: streamingState.setIsStreaming,
+				setIsReasoning: streamingState.setIsReasoning,
+				setRetryStatus: streamingState.setRetryStatus,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -667,11 +411,14 @@ export default function ChatScreen({}: Props) {
 			setMessages(prev => [...prev, finalMessage]);
 		} finally {
 			// End streaming
-			setIsStreaming(false);
-			setAbortController(null);
-			setStreamTokenCount(0);
+			streamingState.setIsStreaming(false);
+			streamingState.setAbortController(null);
+			streamingState.setStreamTokenCount(0);
 		}
 	};
+
+	// Set the ref to the actual function
+	processMessageRef.current = processMessage;
 
 	const processPendingMessages = async () => {
 		if (pendingMessages.length === 0) return;
@@ -688,11 +435,11 @@ export default function ChatScreen({}: Props) {
 		setMessages(prev => [...prev, userMessage]);
 
 		// Start streaming response
-		setIsStreaming(true);
+		streamingState.setIsStreaming(true);
 
 		// Create new abort controller for this request
 		const controller = new AbortController();
-		setAbortController(controller);
+		streamingState.setAbortController(controller);
 
 		// Save user message
 		saveMessage({
@@ -711,17 +458,18 @@ export default function ChatScreen({}: Props) {
 				messages,
 				saveMessage,
 				setMessages,
-				setStreamTokenCount,
+				setStreamTokenCount: streamingState.setStreamTokenCount,
 				setCurrentTodos,
 				requestToolConfirmation,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
-				setContextUsage,
+				setContextUsage: streamingState.setContextUsage,
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
-				setIsStreaming,
-				setIsReasoning,
+				setIsStreaming: streamingState.setIsStreaming,
+				setIsReasoning: streamingState.setIsReasoning,
+				setRetryStatus: streamingState.setRetryStatus,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -738,9 +486,9 @@ export default function ChatScreen({}: Props) {
 			setMessages(prev => [...prev, finalMessage]);
 		} finally {
 			// End streaming
-			setIsStreaming(false);
-			setAbortController(null);
-			setStreamTokenCount(0);
+			streamingState.setIsStreaming(false);
+			streamingState.setAbortController(null);
+			streamingState.setStreamTokenCount(0);
 		}
 	};
 
@@ -796,15 +544,9 @@ export default function ChatScreen({}: Props) {
 								<Gradient name="rainbow">Programming efficiency x10!</Gradient>
 								<Text color="white"> ⛇</Text>
 							</Text>
-							<Text>
-								• Ask for code explanations and debugging help
-							</Text>
-							<Text>
-								• Press ESC during response to interrupt
-							</Text>
-							<Text>
-								• Working directory: {workingDirectory}
-							</Text>
+							<Text>• Ask for code explanations and debugging help</Text>
+							<Text>• Press ESC during response to interrupt</Text>
+							<Text>• Working directory: {workingDirectory}</Text>
 						</Box>
 					</Box>,
 					...messages
@@ -1086,33 +828,58 @@ export default function ChatScreen({}: Props) {
 				))}
 
 			{/* Show loading indicator when streaming or saving */}
-			{(isStreaming || isSaving) && !pendingToolConfirmation && (
+			{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
 				<Box marginBottom={1} marginX={1}>
 					<Text
 						color={
 							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
-								animationFrame
+								streamingState.animationFrame
 							] as any
 						}
 						bold
 					>
 						❆
 					</Text>
-					<Box marginLeft={1} marginBottom={1}>
-						{isStreaming ? (
-							<Text color="gray" dimColor>
-								<ShimmerText text={isReasoning ? 'Deep thinking...' : 'Thinking...'} />{' '}
-								({formatElapsedTime(elapsedSeconds)}
-								{' · '}
-								<Text color="cyan">
-									↓{' '}
-									{streamTokenCount >= 1000
-										? `${(streamTokenCount / 1000).toFixed(1)}k`
-										: streamTokenCount}{' '}
-									tokens
-								</Text>
-								)
-							</Text>
+					<Box marginLeft={1} marginBottom={1} flexDirection="column">
+						{streamingState.isStreaming ? (
+							<>
+								{streamingState.retryStatus && streamingState.retryStatus.isRetrying ? (
+									// Retry status display - hide "Thinking" and show retry info
+									<Box flexDirection="column">
+										{streamingState.retryStatus.errorMessage && (
+											<Text color="red" dimColor>
+												✗ Error: {streamingState.retryStatus.errorMessage}
+											</Text>
+										)}
+										{streamingState.retryStatus.remainingSeconds !== undefined && streamingState.retryStatus.remainingSeconds > 0 ? (
+											<Text color="yellow" dimColor>
+												⟳ Retry {streamingState.retryStatus.attempt}/5 in {streamingState.retryStatus.remainingSeconds}s...
+											</Text>
+										) : (
+											<Text color="yellow" dimColor>
+												⟳ Resending... (Attempt {streamingState.retryStatus.attempt}/5)
+											</Text>
+										)}
+									</Box>
+								) : (
+									// Normal thinking status
+									<Text color="gray" dimColor>
+										<ShimmerText
+											text={streamingState.isReasoning ? 'Deep thinking...' : 'Thinking...'}
+										/>{' '}
+										({formatElapsedTime(streamingState.elapsedSeconds)}
+										{' · '}
+										<Text color="cyan">
+											↓{' '}
+											{streamingState.streamTokenCount >= 1000
+												? `${(streamingState.streamTokenCount / 1000).toFixed(1)}k`
+												: streamingState.streamTokenCount}{' '}
+											tokens
+										</Text>
+										)
+									</Text>
+								)}
+							</>
 						) : (
 							<Text color="gray" dimColor>
 								Create the first dialogue record file...
@@ -1166,9 +933,9 @@ export default function ChatScreen({}: Props) {
 			)}
 
 			{/* Show file rollback confirmation if pending */}
-			{pendingRollback && (
+			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
-					fileCount={pendingRollback.fileCount}
+					fileCount={snapshotState.pendingRollback.fileCount}
 					onConfirm={handleRollbackConfirm}
 				/>
 			)}
@@ -1178,7 +945,7 @@ export default function ChatScreen({}: Props) {
 				!isCompressing &&
 				!showSessionPanel &&
 				!showMcpPanel &&
-				!pendingRollback && (
+				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput
 							onSubmit={handleMessageSubmit}
@@ -1189,49 +956,49 @@ export default function ChatScreen({}: Props) {
 							onHistorySelect={handleHistorySelect}
 							yoloMode={yoloMode}
 							contextUsage={
-								contextUsage
+								streamingState.contextUsage
 									? {
-											inputTokens: contextUsage.prompt_tokens,
+											inputTokens: streamingState.contextUsage.prompt_tokens,
 											maxContextTokens:
 												getOpenAiConfig().maxContextTokens || 4000,
 											cacheCreationTokens:
-												contextUsage.cache_creation_input_tokens,
-											cacheReadTokens: contextUsage.cache_read_input_tokens,
-											cachedTokens: contextUsage.cached_tokens,
+												streamingState.contextUsage.cache_creation_input_tokens,
+											cacheReadTokens: streamingState.contextUsage.cache_read_input_tokens,
+											cachedTokens: streamingState.contextUsage.cached_tokens,
 									  }
 									: undefined
 							}
-							snapshotFileCount={snapshotFileCount}
+							snapshotFileCount={snapshotState.snapshotFileCount}
 						/>
 						{/* VSCode connection status indicator */}
-						{vscodeConnectionStatus !== 'disconnected' && (
+						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
 							<Box marginTop={1}>
 								<Text
 									color={
-										vscodeConnectionStatus === 'connecting'
+										vscodeState.vscodeConnectionStatus === 'connecting'
 											? 'yellow'
-											: vscodeConnectionStatus === 'connected'
+											: vscodeState.vscodeConnectionStatus === 'connected'
 											? 'green'
-											: vscodeConnectionStatus === 'error'
+											: vscodeState.vscodeConnectionStatus === 'error'
 											? 'red'
 											: 'gray'
 									}
-									dimColor={vscodeConnectionStatus !== 'error'}
+									dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
 								>
 									●{' '}
-									{vscodeConnectionStatus === 'connecting'
+									{vscodeState.vscodeConnectionStatus === 'connecting'
 										? 'Waiting for VSCode extension to connect...'
-										: vscodeConnectionStatus === 'connected'
+										: vscodeState.vscodeConnectionStatus === 'connected'
 										? 'VSCode Connected'
-										: vscodeConnectionStatus === 'error'
+										: vscodeState.vscodeConnectionStatus === 'error'
 										? 'Connection Failed - Make sure Snow CLI extension is installed and active in VSCode'
 										: 'VSCode'}
-									{vscodeConnectionStatus === 'connected' &&
-										editorContext.activeFile &&
-										` | ${editorContext.activeFile}`}
-									{vscodeConnectionStatus === 'connected' &&
-										editorContext.selectedText &&
-										` | ${editorContext.selectedText.length} chars selected`}
+									{vscodeState.vscodeConnectionStatus === 'connected' &&
+										vscodeState.editorContext.activeFile &&
+										` | ${vscodeState.editorContext.activeFile}`}
+									{vscodeState.vscodeConnectionStatus === 'connected' &&
+										vscodeState.editorContext.selectedText &&
+										` | ${vscodeState.editorContext.selectedText.length} chars selected`}
 								</Text>
 							</Box>
 						)}

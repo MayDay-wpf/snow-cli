@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Text, useStdout, useInput } from 'ink';
-import { TextBuffer, Viewport } from '../../utils/textBuffer.js';
+import React, { useCallback, useEffect } from 'react';
+import { Box, Text, useStdout } from 'ink';
+import { Viewport } from '../../utils/textBuffer.js';
 import { cpSlice, cpLen } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
-import { executeCommand } from '../../utils/commandExecutor.js';
-import FileList, { FileListRef } from './FileList.js';
-import { execSync } from 'child_process';
+import FileList from './FileList.js';
+import { useInputBuffer } from '../../hooks/useInputBuffer.js';
+import { useCommandPanel } from '../../hooks/useCommandPanel.js';
+import { useFilePicker } from '../../hooks/useFilePicker.js';
+import { useHistoryNavigation } from '../../hooks/useHistoryNavigation.js';
+import { useClipboard } from '../../hooks/useClipboard.js';
+import { useKeyboardInput } from '../../hooks/useKeyboardInput.js';
 
 type Props = {
 	onSubmit: (
@@ -30,26 +34,6 @@ type Props = {
 	snapshotFileCount?: Map<number, number>; // Map of message index to file count
 };
 
-// Command Definition
-const commands = [
-	{ name: 'clear', description: 'Clear chat context and conversation history' },
-	{ name: 'resume', description: 'Resume a conversation' },
-	{ name: 'mcp', description: 'Show Model Context Protocol services and tools' },
-	{
-		name: 'yolo',
-		description: 'Toggle unattended mode (auto-approve all tools)',
-	},
-	{
-		name: 'init',
-		description: 'Analyze project and generate/update SNOW.md documentation',
-	},
-	{ name: 'ide', description: 'Connect to VSCode editor and sync context' },
-	{
-		name: 'compact',
-		description: 'Compress conversation history using compact model',
-	},
-];
-
 export default function ChatInput({
 	onSubmit,
 	onCommand,
@@ -69,185 +53,95 @@ export default function ChatInput({
 		width: Math.max(40, terminalWidth - uiOverhead),
 		height: 1,
 	};
-	const [, forceUpdate] = useState({});
-	const lastUpdateTime = useRef<number>(0);
 
-	// Force re-render when buffer changes
-	const triggerUpdate = useCallback(() => {
-		const now = Date.now();
-		lastUpdateTime.current = now;
-		forceUpdate({});
-	}, []);
+	// Use input buffer hook
+	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
 
-	const [buffer] = useState(() => new TextBuffer(viewport, triggerUpdate));
+	// Use command panel hook
+	const {
+		showCommands,
+		setShowCommands,
+		commandSelectedIndex,
+		setCommandSelectedIndex,
+		getFilteredCommands,
+		updateCommandPanelState,
+	} = useCommandPanel(buffer);
 
-	// Cleanup buffer and timers on unmount
-	useEffect(() => {
-		return () => {
-			buffer.destroy();
-			if (inputTimer.current) {
-				clearTimeout(inputTimer.current);
-			}
-			if (escapeKeyTimer.current) {
-				clearTimeout(escapeKeyTimer.current);
-			}
-		};
-	}, [buffer]);
+	// Use file picker hook
+	const {
+		showFilePicker,
+		setShowFilePicker,
+		fileSelectedIndex,
+		setFileSelectedIndex,
+		fileQuery,
+		setFileQuery,
+		atSymbolPosition,
+		setAtSymbolPosition,
+		filteredFileCount,
+		updateFilePickerState,
+		handleFileSelect,
+		handleFilteredCountChange,
+		fileListRef,
+	} = useFilePicker(buffer, triggerUpdate);
 
-	// Command panel state
-	const [showCommands, setShowCommands] = useState(false);
-	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+	// Use history navigation hook
+	const {
+		showHistoryMenu,
+		setShowHistoryMenu,
+		historySelectedIndex,
+		setHistorySelectedIndex,
+		escapeKeyCount,
+		setEscapeKeyCount,
+		escapeKeyTimer,
+		getUserMessages,
+		handleHistorySelect,
+	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
 
-	// File picker state
-	const [showFilePicker, setShowFilePicker] = useState(false);
-	const [fileSelectedIndex, setFileSelectedIndex] = useState(0);
-	const [fileQuery, setFileQuery] = useState('');
-	const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
-	const [filteredFileCount, setFilteredFileCount] = useState(0);
-
-	// Refs
-	const fileListRef = useRef<FileListRef>(null);
-
-	// History navigation state
-	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
-	const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
-	const [escapeKeyCount, setEscapeKeyCount] = useState(0);
-	const escapeKeyTimer = useRef<NodeJS.Timeout | null>(null);
-
-	// Get user messages from chat history for navigation
-	const getUserMessages = useCallback(() => {
-		const userMessages = chatHistory
-			.map((msg, index) => ({ ...msg, originalIndex: index }))
-			.filter(msg => msg.role === 'user' && msg.content.trim());
-
-		// Keep original order (oldest first, newest last) and map with display numbers
-		return userMessages.map((msg, index) => ({
-			label: `${index + 1}. ${msg.content.slice(0, 50)}${msg.content.length > 50 ? '...' : ''
-				}`,
-			value: msg.originalIndex.toString(),
-			infoText: msg.content,
-		}));
-	}, [chatHistory]);
-
-	// Get filtered commands based on current input
-	const getFilteredCommands = useCallback(() => {
-		const text = buffer.getFullText();
-		if (!text.startsWith('/')) return [];
-
-		const query = text.slice(1).toLowerCase();
-		return commands.filter(
-			command =>
-				command.name.toLowerCase().includes(query) ||
-				command.description.toLowerCase().includes(query),
-		);
-	}, [buffer]);
-
-	// Update command panel state
-	const updateCommandPanelState = useCallback((text: string) => {
-		if (text.startsWith('/') && text.length > 0) {
-			setShowCommands(true);
-			setCommandSelectedIndex(0);
-		} else {
-			setShowCommands(false);
-			setCommandSelectedIndex(0);
-		}
-	}, []);
-
-	// Update file picker state
-	const updateFilePickerState = useCallback(
-		(text: string, cursorPos: number) => {
-			if (!text.includes('@')) {
-				if (showFilePicker) {
-					setShowFilePicker(false);
-					setFileSelectedIndex(0);
-					setFileQuery('');
-					setAtSymbolPosition(-1);
-				}
-				return;
-			}
-
-			// Find the last '@' symbol before the cursor
-			const beforeCursor = text.slice(0, cursorPos);
-			const lastAtIndex = beforeCursor.lastIndexOf('@');
-
-			if (lastAtIndex !== -1) {
-				// Check if there's no space between '@' and cursor
-				const afterAt = beforeCursor.slice(lastAtIndex + 1);
-				if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
-					if (
-						!showFilePicker ||
-						fileQuery !== afterAt ||
-						atSymbolPosition !== lastAtIndex
-					) {
-						setShowFilePicker(true);
-						setFileSelectedIndex(0);
-						setFileQuery(afterAt);
-						setAtSymbolPosition(lastAtIndex);
-					}
-					return;
-				}
-			}
-
-			// Hide file picker if no valid @ context found
-			if (showFilePicker) {
-				setShowFilePicker(false);
-				setFileSelectedIndex(0);
-				setFileQuery('');
-				setAtSymbolPosition(-1);
-			}
-		},
-		[showFilePicker, fileQuery, atSymbolPosition],
+	// Use clipboard hook
+	const { pasteFromClipboard } = useClipboard(
+		buffer,
+		updateCommandPanelState,
+		updateFilePickerState,
+		triggerUpdate,
 	);
 
-	// Force immediate state update for critical operations like backspace
-	const forceStateUpdate = useCallback(() => {
-		const text = buffer.getFullText();
-		const cursorPos = buffer.getCursorPosition();
-
-		updateFilePickerState(text, cursorPos);
-		updateCommandPanelState(text);
-
-		forceUpdate({});
-	}, [buffer, updateFilePickerState, updateCommandPanelState]);
-
-	// Handle file selection
-	const handleFileSelect = useCallback(
-		async (filePath: string) => {
-			if (atSymbolPosition !== -1) {
-				const text = buffer.getFullText();
-				const cursorPos = buffer.getCursorPosition();
-
-				// Replace @query with @filePath + space
-				const beforeAt = text.slice(0, atSymbolPosition);
-				const afterCursor = text.slice(cursorPos);
-				const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
-
-				// Set the new text and position cursor after the inserted file path + space
-				buffer.setText(newText);
-
-				// Calculate cursor position after the inserted file path + space
-				// Reset cursor to beginning, then move to correct position
-				for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) {
-					// +2 for @ and space
-					if (i < buffer.getFullText().length) {
-						buffer.moveRight();
-					}
-				}
-
-				setShowFilePicker(false);
-				setFileSelectedIndex(0);
-				setFileQuery('');
-				setAtSymbolPosition(-1);
-				triggerUpdate();
-			}
-		},
-		[atSymbolPosition, buffer, triggerUpdate],
-	);
-
-	// Handle filtered file count change
-	const handleFilteredCountChange = useCallback((count: number) => {
-		setFilteredFileCount(count);
-	}, []);
+	// Use keyboard input hook
+	useKeyboardInput({
+		buffer,
+		disabled,
+		triggerUpdate,
+		forceUpdate,
+		showCommands,
+		setShowCommands,
+		commandSelectedIndex,
+		setCommandSelectedIndex,
+		getFilteredCommands,
+		updateCommandPanelState,
+		onCommand,
+		showFilePicker,
+		setShowFilePicker,
+		fileSelectedIndex,
+		setFileSelectedIndex,
+		fileQuery,
+		setFileQuery,
+		atSymbolPosition,
+		setAtSymbolPosition,
+		filteredFileCount,
+		updateFilePickerState,
+		handleFileSelect,
+		fileListRef,
+		showHistoryMenu,
+		setShowHistoryMenu,
+		historySelectedIndex,
+		setHistorySelectedIndex,
+		escapeKeyCount,
+		setEscapeKeyCount,
+		escapeKeyTimer,
+		getUserMessages,
+		handleHistorySelect,
+		pasteFromClipboard,
+		onSubmit,
+	});
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
 	useEffect(() => {
@@ -256,445 +150,7 @@ export default function ChatInput({
 			forceUpdate({});
 		}, 10);
 		return () => clearTimeout(timer);
-	}, [showFilePicker]);
-
-	// Update buffer viewport when terminal width changes
-	useEffect(() => {
-		const newViewport: Viewport = {
-			width: Math.max(40, terminalWidth - uiOverhead),
-			height: 1,
-		};
-		buffer.updateViewport(newViewport);
-		triggerUpdate();
-	}, [terminalWidth, buffer, triggerUpdate]);
-
-	// Track paste detection
-	const inputBuffer = useRef<string>('');
-	const inputTimer = useRef<NodeJS.Timeout | null>(null);
-
-	// Handle input using useInput hook instead of raw stdin
-	useInput((input, key) => {
-		if (disabled) return;
-
-		// Handle escape key for double-ESC history navigation
-		if (key.escape) {
-			// Close file picker if open
-			if (showFilePicker) {
-				setShowFilePicker(false);
-				setFileSelectedIndex(0);
-				setFileQuery('');
-				setAtSymbolPosition(-1);
-				return;
-			}
-
-			// Don't interfere with existing ESC behavior if in command panel
-			if (showCommands) {
-				setShowCommands(false);
-				setCommandSelectedIndex(0);
-				return;
-			}
-
-			// Handle history navigation
-			if (showHistoryMenu) {
-				setShowHistoryMenu(false);
-				return;
-			}
-
-			// Count escape key presses for double-ESC detection
-			setEscapeKeyCount(prev => prev + 1);
-
-			// Clear any existing timer
-			if (escapeKeyTimer.current) {
-				clearTimeout(escapeKeyTimer.current);
-			}
-
-			// Set timer to reset count after 500ms
-			escapeKeyTimer.current = setTimeout(() => {
-				setEscapeKeyCount(0);
-			}, 500);
-
-			// Check for double escape
-			if (escapeKeyCount >= 1) {
-				// This will be 2 after increment
-				const userMessages = getUserMessages();
-				if (userMessages.length > 0) {
-					setShowHistoryMenu(true);
-					setHistorySelectedIndex(0); // Reset selection to first item
-					setEscapeKeyCount(0);
-					if (escapeKeyTimer.current) {
-						clearTimeout(escapeKeyTimer.current);
-						escapeKeyTimer.current = null;
-					}
-				}
-			}
-			return;
-		}
-
-		// Handle history menu navigation
-		if (showHistoryMenu) {
-			const userMessages = getUserMessages();
-
-			// Up arrow in history menu
-			if (key.upArrow) {
-				setHistorySelectedIndex(prev => Math.max(0, prev - 1));
-				return;
-			}
-
-			// Down arrow in history menu
-			if (key.downArrow) {
-				const maxIndex = Math.max(0, userMessages.length - 1);
-				setHistorySelectedIndex(prev => Math.min(maxIndex, prev + 1));
-				return;
-			}
-
-			// Enter - select history item
-			if (key.return) {
-				if (
-					userMessages.length > 0 &&
-					historySelectedIndex < userMessages.length
-				) {
-					const selectedMessage = userMessages[historySelectedIndex];
-					if (selectedMessage) {
-						handleHistorySelect(selectedMessage.value);
-					}
-				}
-				return;
-			}
-
-			// For any other key in history menu, just return to prevent interference
-			return;
-		}
-
-		// Ctrl+L - Delete from cursor to beginning
-		if (key.ctrl && input === 'l') {
-			const fullText = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			const afterCursor = fullText.slice(cursorPos);
-
-			buffer.setText(afterCursor);
-			forceStateUpdate();
-			return;
-		}
-
-		// Ctrl+R - Delete from cursor to end
-		if (key.ctrl && input === 'r') {
-			const fullText = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			const beforeCursor = fullText.slice(0, cursorPos);
-
-			buffer.setText(beforeCursor);
-			forceStateUpdate();
-			return;
-		}
-
-		// Windows: Alt+V, macOS: Ctrl+V - Paste from clipboard (including images)
-		// In Ink, key.meta represents:
-		// - On Windows/Linux: Alt key (Meta key)
-		// - On macOS: We use Ctrl+V to avoid conflict with VSCode shortcuts
-		const isPasteShortcut =
-			process.platform === 'darwin'
-				? key.ctrl && input === 'v'
-				: key.meta && input === 'v';
-
-		if (isPasteShortcut) {
-			try {
-				// Try to read image from clipboard
-				if (process.platform === 'win32') {
-					// Windows: Use PowerShell to read image from clipboard
-					try {
-						const psScript = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $clipboard = [System.Windows.Forms.Clipboard]::GetImage(); if ($clipboard -ne $null) { $ms = New-Object System.IO.MemoryStream; $clipboard.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $bytes = $ms.ToArray(); $ms.Close(); [Convert]::ToBase64String($bytes) }`;
-
-						const base64 = execSync(`powershell -Command "${psScript}"`, {
-							encoding: 'utf-8',
-							timeout: 5000,
-						}).trim();
-
-						if (base64 && base64.length > 100) {
-							const dataUrl = `data:image/png;base64,${base64}`;
-							buffer.insertImage(dataUrl, 'image/png');
-							const text = buffer.getFullText();
-							const cursorPos = buffer.getCursorPosition();
-							updateCommandPanelState(text);
-							updateFilePickerState(text, cursorPos);
-							triggerUpdate();
-							return;
-						}
-					} catch (imgError) {
-						// No image in clipboard or error, fall through to text
-					}
-				} else if (process.platform === 'darwin') {
-					// macOS: Use osascript to read image from clipboard
-					try {
-						// First check if there's an image in clipboard
-						const checkScript = `osascript -e 'try
-	set imgData to the clipboard as «class PNGf»
-	return "hasImage"
-on error
-	return "noImage"
-end try'`;
-
-						const hasImage = execSync(checkScript, {
-							encoding: 'utf-8',
-							timeout: 2000,
-						}).trim();
-
-						if (hasImage === 'hasImage') {
-							// Save clipboard image to temporary file and read it
-							const tmpFile = `/tmp/snow_clipboard_${Date.now()}.png`;
-							const saveScript = `osascript -e 'set imgData to the clipboard as «class PNGf»' -e 'set fileRef to open for access POSIX file "${tmpFile}" with write permission' -e 'write imgData to fileRef' -e 'close access fileRef'`;
-
-							execSync(saveScript, {
-								encoding: 'utf-8',
-								timeout: 3000,
-							});
-
-							// Read the file as base64
-							const base64 = execSync(`base64 -i "${tmpFile}"`, {
-								encoding: 'utf-8',
-								timeout: 2000,
-							}).trim();
-
-							// Clean up temp file
-							try {
-								execSync(`rm "${tmpFile}"`, { timeout: 1000 });
-							} catch (e) {
-								// Ignore cleanup errors
-							}
-
-							if (base64 && base64.length > 100) {
-								const dataUrl = `data:image/png;base64,${base64}`;
-								buffer.insertImage(dataUrl, 'image/png');
-								const text = buffer.getFullText();
-								const cursorPos = buffer.getCursorPosition();
-								updateCommandPanelState(text);
-								updateFilePickerState(text, cursorPos);
-								triggerUpdate();
-								return;
-							}
-						}
-					} catch (imgError) {
-						// No image in clipboard or error, fall through to text
-						console.error(
-							'Failed to read image from macOS clipboard:',
-							imgError,
-						);
-					}
-				}
-
-				// If no image, try to read text from clipboard
-				try {
-					let clipboardText = '';
-					if (process.platform === 'win32') {
-						clipboardText = execSync('powershell -Command "Get-Clipboard"', {
-							encoding: 'utf-8',
-							timeout: 2000,
-						}).trim();
-					} else if (process.platform === 'darwin') {
-						clipboardText = execSync('pbpaste', {
-							encoding: 'utf-8',
-							timeout: 2000,
-						}).trim();
-					} else {
-						clipboardText = execSync('xclip -selection clipboard -o', {
-							encoding: 'utf-8',
-							timeout: 2000,
-						}).trim();
-					}
-
-					if (clipboardText) {
-						buffer.insert(clipboardText);
-						const fullText = buffer.getFullText();
-						const cursorPos = buffer.getCursorPosition();
-						updateCommandPanelState(fullText);
-						updateFilePickerState(fullText, cursorPos);
-						triggerUpdate();
-					}
-				} catch (textError) {
-					console.error('Failed to read text from clipboard:', textError);
-				}
-			} catch (error) {
-				console.error('Failed to read from clipboard:', error);
-			}
-			return;
-		}
-
-		// Backspace
-		if (key.backspace || key.delete) {
-			buffer.backspace();
-			forceStateUpdate();
-			return;
-		}
-
-		// Handle file picker navigation
-		if (showFilePicker) {
-			// Up arrow in file picker
-			if (key.upArrow) {
-				setFileSelectedIndex(prev => Math.max(0, prev - 1));
-				return;
-			}
-
-			// Down arrow in file picker
-			if (key.downArrow) {
-				const maxIndex = Math.max(0, filteredFileCount - 1);
-				setFileSelectedIndex(prev => Math.min(maxIndex, prev + 1));
-				return;
-			}
-
-			// Tab or Enter - select file
-			if (key.tab || key.return) {
-				if (filteredFileCount > 0 && fileSelectedIndex < filteredFileCount) {
-					const selectedFile = fileListRef.current?.getSelectedFile();
-					if (selectedFile) {
-						handleFileSelect(selectedFile);
-					}
-				}
-				return;
-			}
-		}
-
-		// Handle command panel navigation
-		if (showCommands) {
-			const filteredCommands = getFilteredCommands();
-
-			// Up arrow in command panel
-			if (key.upArrow) {
-				setCommandSelectedIndex(prev => Math.max(0, prev - 1));
-				return;
-			}
-
-			// Down arrow in command panel
-			if (key.downArrow) {
-				const maxIndex = Math.max(0, filteredCommands.length - 1);
-				setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
-				return;
-			}
-
-			// Enter - select command
-			if (key.return) {
-				if (
-					filteredCommands.length > 0 &&
-					commandSelectedIndex < filteredCommands.length
-				) {
-					const selectedCommand = filteredCommands[commandSelectedIndex];
-					if (selectedCommand) {
-						// Execute command instead of inserting text
-						executeCommand(selectedCommand.name).then(result => {
-							if (onCommand) {
-								onCommand(selectedCommand.name, result);
-							}
-						});
-						buffer.setText('');
-						setShowCommands(false);
-						setCommandSelectedIndex(0);
-						triggerUpdate();
-						return;
-					}
-				}
-				// If no commands available, fall through to normal Enter handling
-			}
-		}
-
-		// Enter - submit message
-		if (key.return) {
-			const message = buffer.getFullText().trim();
-			if (message) {
-				// 获取图片数据，但只包含占位符仍然存在的图片
-				const currentText = buffer.text; // 使用内部文本（包含占位符）
-				const allImages = buffer.getImages();
-				const validImages = allImages
-					.filter(img => currentText.includes(img.placeholder))
-					.map(img => ({
-						data: img.data,
-						mimeType: img.mimeType,
-					}));
-
-				buffer.setText('');
-				forceUpdate({});
-				onSubmit(message, validImages.length > 0 ? validImages : undefined);
-			}
-			return;
-		}
-
-		// Arrow keys for cursor movement
-		if (key.leftArrow) {
-			buffer.moveLeft();
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
-			triggerUpdate();
-			return;
-		}
-
-		if (key.rightArrow) {
-			buffer.moveRight();
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
-			triggerUpdate();
-			return;
-		}
-
-		if (key.upArrow && !showCommands && !showFilePicker) {
-			buffer.moveUp();
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
-			triggerUpdate();
-			return;
-		}
-
-		if (key.downArrow && !showCommands && !showFilePicker) {
-			buffer.moveDown();
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
-			triggerUpdate();
-			return;
-		}
-
-		// Regular character input
-		if (input && !key.ctrl && !key.meta && !key.escape) {
-			// Accumulate input for paste detection
-			inputBuffer.current += input;
-
-			// Clear existing timer
-			if (inputTimer.current) {
-				clearTimeout(inputTimer.current);
-			}
-
-			// Set timer to process accumulated input
-			inputTimer.current = setTimeout(() => {
-				const accumulated = inputBuffer.current;
-				inputBuffer.current = '';
-
-				// If we accumulated input, it's likely a paste
-				if (accumulated) {
-					buffer.insert(accumulated);
-					const text = buffer.getFullText();
-					const cursorPos = buffer.getCursorPosition();
-					updateCommandPanelState(text);
-					updateFilePickerState(text, cursorPos);
-					triggerUpdate();
-				}
-			}, 10); // Short delay to accumulate rapid input
-		}
-	});
-
-	// Handle history selection
-	const handleHistorySelect = useCallback(
-		(value: string) => {
-			const selectedIndex = parseInt(value, 10);
-			const selectedMessage = chatHistory[selectedIndex];
-			if (selectedMessage && onHistorySelect) {
-				// Put the message content in the input buffer
-				buffer.setText(selectedMessage.content);
-				setShowHistoryMenu(false);
-				triggerUpdate();
-				onHistorySelect(selectedIndex, selectedMessage.content);
-			}
-		},
-		[chatHistory, onHistorySelect, buffer, triggerUpdate],
-	);
+	}, [showFilePicker, forceUpdate]);
 
 	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
@@ -846,7 +302,18 @@ end try'`;
 
 							return visibleMessages.map((message, index) => {
 								const messageIndex = parseInt(message.value, 10);
-								const fileCount = snapshotFileCount?.get(messageIndex) || 0;
+
+								// Find snapshot created after this user message
+								// Snapshots are created AFTER submitting a message, so we look for
+								// the smallest snapshot index that is > messageIndex
+								let fileCount = 0;
+								if (snapshotFileCount && snapshotFileCount.size > 0) {
+									const snapshotIndices = Array.from(snapshotFileCount.keys()).sort((a, b) => a - b);
+									const matchingSnapshot = snapshotIndices.find(idx => idx > messageIndex);
+									if (matchingSnapshot !== undefined) {
+										fileCount = snapshotFileCount.get(matchingSnapshot) || 0;
+									}
+								}
 
 								return (
 									<Box key={message.value}>

@@ -31,6 +31,7 @@ export type ConversationHandlerOptions = {
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
 	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>; // Control reasoning state (Responses API only)
+	setRetryStatus?: React.Dispatch<React.SetStateAction<{isRetrying: boolean; attempt: number; nextDelay: number; remainingSeconds?: number; errorMessage?: string} | null>>; // Retry status
 };
 
 /**
@@ -41,7 +42,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		userContent,
 		imageContents,
 		controller,
-		messages,
+		// messages, // No longer used - we load from session instead to get complete history with tool calls
 		saveMessage,
 		setMessages,
 		setStreamTokenCount,
@@ -51,7 +52,8 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		addMultipleToAlwaysApproved,
 		yoloMode,
 		setContextUsage,
-		setIsReasoning
+		setIsReasoning,
+		setRetryStatus
 	} = options;
 
 	// Step 1: Ensure session exists and get existing TODOs
@@ -86,14 +88,13 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		});
 	}
 
-	// Add history messages
-	conversationMessages.push(
-		...messages.filter(msg => msg.role !== 'command').map(msg => ({
-			role: msg.role as 'user' | 'assistant',
-			content: msg.content,
-			images: msg.images
-		}))
-	);
+	// Add history messages from session (includes tool_calls and tool results)
+	// Load from session to get complete conversation history with tool interactions
+	const session = sessionManager.getCurrentSession();
+	if (session && session.messages.length > 0) {
+		// Use session messages directly (they are already in API format)
+		conversationMessages.push(...session.messages);
+	}
 
 	// Add current user message
 	conversationMessages.push({
@@ -141,11 +142,24 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
 			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
+			let chunkCount = 0; // Track number of chunks received (to delay clearing retry status)
 
 			// Get or create session for cache key
 			const currentSession = sessionManager.getCurrentSession();
 			// Use session ID as cache key to ensure same session requests share cache
 			const cacheKey = currentSession?.id;
+
+			// 重试回调函数
+			const onRetry = (error: Error, attempt: number, nextDelay: number) => {
+				if (setRetryStatus) {
+					setRetryStatus({
+						isRetrying: true,
+						attempt,
+						nextDelay,
+						errorMessage: error.message
+					});
+				}
+			};
 
 			const streamGenerator = config.requestMethod === 'anthropic'
 				? createStreamingAnthropicCompletion({
@@ -155,14 +169,14 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					max_tokens: config.maxTokens || 4096,
 					tools: mcpTools.length > 0 ? mcpTools : undefined,
 					sessionId: currentSession?.id
-				}, controller.signal)
+				}, controller.signal, onRetry)
 				: config.requestMethod === 'gemini'
 				? createStreamingGeminiCompletion({
 					model,
 					messages: conversationMessages,
 					temperature: 0,
 					tools: mcpTools.length > 0 ? mcpTools : undefined
-				}, controller.signal)
+				}, controller.signal, onRetry)
 				: config.requestMethod === 'responses'
 				? createStreamingResponse({
 					model,
@@ -170,16 +184,25 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					temperature: 0,
 					tools: mcpTools.length > 0 ? mcpTools : undefined,
 					prompt_cache_key: cacheKey // Use session ID as cache key
-				}, controller.signal)
+				}, controller.signal, onRetry)
 				: createStreamingChatCompletion({
 					model,
 					messages: conversationMessages,
 					temperature: 0,
 					tools: mcpTools.length > 0 ? mcpTools : undefined
-				}, controller.signal);
+				}, controller.signal, onRetry);
 
 			for await (const chunk of streamGenerator) {
 				if (controller.signal.aborted) break;
+
+				// Clear retry status after a delay when first chunk arrives
+				// This gives users time to see the retry message (500ms delay)
+				chunkCount++;
+				if (setRetryStatus && chunkCount === 1) {
+					setTimeout(() => {
+						setRetryStatus(null);
+					}, 500);
+				}
 
 				if (chunk.type === 'reasoning_started') {
 					// Reasoning started (Responses API only) - set reasoning state

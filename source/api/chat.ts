@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
+import { withRetry, withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 
 export interface ImageContent {
@@ -187,7 +188,9 @@ export function resetOpenAIClient(): void {
  */
 export async function createChatCompletionWithTools(
 	options: ChatCompletionOptions,
-	maxToolRounds: number = 5
+	maxToolRounds: number = 5,
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
 	const client = getOpenAIClient();
 	let messages = [...options.messages];
@@ -196,15 +199,21 @@ export async function createChatCompletionWithTools(
 
 	try {
 		while (rounds < maxToolRounds) {
-			const response = await client.chat.completions.create({
-				model: options.model,
-				messages: convertToOpenAIMessages(messages),
-				stream: false,
-				temperature: options.temperature || 0.7,
-				max_tokens: options.max_tokens,
-				tools: options.tools,
-				tool_choice: options.tool_choice,
-			});
+			const response = await withRetry(
+				() => client.chat.completions.create({
+					model: options.model,
+					messages: convertToOpenAIMessages(messages),
+					stream: false,
+					temperature: options.temperature || 0.7,
+					max_tokens: options.max_tokens,
+					tools: options.tools,
+					tool_choice: options.tool_choice,
+				}),
+				{
+					abortSignal,
+					onRetry
+				}
+			);
 
 			const message = response.choices[0]?.message;
 			if (!message) {
@@ -266,21 +275,31 @@ export async function createChatCompletionWithTools(
 	}
 }
 
-export async function createChatCompletion(options: ChatCompletionOptions): Promise<string> {
+export async function createChatCompletion(
+	options: ChatCompletionOptions,
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+): Promise<string> {
 	const client = getOpenAIClient();
 	let messages = [...options.messages];
 
 	try {
 		while (true) {
-			const response = await client.chat.completions.create({
-				model: options.model,
-				messages: convertToOpenAIMessages(messages),
-				stream: false,
-				temperature: options.temperature || 0.7,
-				max_tokens: options.max_tokens,
-				tools: options.tools,
-				tool_choice: options.tool_choice,
-			});
+			const response = await withRetry(
+				() => client.chat.completions.create({
+					model: options.model,
+					messages: convertToOpenAIMessages(messages),
+					stream: false,
+					temperature: options.temperature || 0.7,
+					max_tokens: options.max_tokens,
+					tools: options.tools,
+					tool_choice: options.tool_choice,
+				}),
+				{
+					abortSignal,
+					onRetry
+				}
+			);
 
 			const message = response.choices[0]?.message;
 			if (!message) {
@@ -364,23 +383,26 @@ export interface StreamChunk {
  */
 export async function* createStreamingChatCompletion(
 	options: ChatCompletionOptions,
-	abortSignal?: AbortSignal
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<StreamChunk, void, unknown> {
 	const client = getOpenAIClient();
 
-	try {
-		const stream = (await client.chat.completions.create({
-			model: options.model,
-			messages: convertToOpenAIMessages(options.messages),
-			stream: true,
-			stream_options: { include_usage: true } as any, // Request usage data in stream
-			temperature: options.temperature || 0.7,
-			max_tokens: options.max_tokens,
-			tools: options.tools,
-			tool_choice: options.tool_choice,
-		} as any, {
-			signal: abortSignal,
-		}) as unknown) as AsyncIterable<any>;
+	// 使用重试包装生成器
+	yield* withRetryGenerator(
+		async function* () {
+			const stream = (await client.chat.completions.create({
+				model: options.model,
+				messages: convertToOpenAIMessages(options.messages),
+				stream: true,
+				stream_options: { include_usage: true } as any, // Request usage data in stream
+				temperature: options.temperature || 0.7,
+				max_tokens: options.max_tokens,
+				tools: options.tools,
+				tool_choice: options.tool_choice,
+			} as any, {
+				signal: abortSignal,
+			}) as unknown) as AsyncIterable<any>;
 
 		let contentBuffer = '';
 		let toolCallsBuffer: { [index: number]: any } = {};
@@ -502,20 +524,16 @@ export async function* createStreamingChatCompletion(
 			};
 		}
 
-		// Signal completion
-		yield {
-			type: 'done'
-		};
-
-	} catch (error) {
-		if (error instanceof Error && error.name === 'AbortError') {
-			return;
+			// Signal completion
+			yield {
+				type: 'done'
+			};
+		},
+		{
+			abortSignal,
+			onRetry
 		}
-		if (error instanceof Error) {
-			throw new Error(`Streaming chat completion failed: ${error.message}`);
-		}
-		throw new Error('Streaming chat completion failed: Unknown error');
-	}
+	);
 }
 
 

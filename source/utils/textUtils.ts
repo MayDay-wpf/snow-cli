@@ -83,21 +83,39 @@ export function codePointToVisualPos(str: string, codePointIndex: number): numbe
 export function visualPosToCodePoint(str: string, visualPos: number): number {
   const codePoints = toCodePoints(str);
   let currentVisualPos = 0;
-  
+
   for (let i = 0; i < codePoints.length; i++) {
     const char = codePoints[i] || '';
     const charWidth = visualWidth(char);
-    
+
     if (currentVisualPos + charWidth > visualPos) {
       return i;
     }
-    
+
     currentVisualPos += charWidth;
-    
+
     if (currentVisualPos >= visualPos) {
       return i + 1;
     }
   }
-  
+
   return codePoints.length;
+}
+
+/**
+ * Format elapsed time to human readable format.
+ */
+export function formatElapsedTime(seconds: number): string {
+	if (seconds < 60) {
+		return `${seconds}s`;
+	} else if (seconds < 3600) {
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		return `${minutes}m ${remainingSeconds}s`;
+	} else {
+		const hours = Math.floor(seconds / 3600);
+		const remainingMinutes = Math.floor((seconds % 3600) / 60);
+		const remainingSeconds = seconds % 60;
+		return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+	}
 }

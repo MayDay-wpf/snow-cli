@@ -429,29 +429,50 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Delete a file
-	 * @param filePath - Path to the file to delete
-	 * @returns Success message
+	 * Delete one or multiple files
+	 * @param filePaths - Single file path or array of file paths to delete
+	 * @returns Success message with details
 	 * @throws Error if file deletion fails
 	 */
-	async deleteFile(filePath: string): Promise<string> {
+	async deleteFile(filePaths: string | string[]): Promise<string> {
 		try {
-			const fullPath = this.resolvePath(filePath);
-			await this.validatePath(fullPath);
+			const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+			const results: string[] = [];
+			const errors: string[] = [];
 
-			const stats = await fs.stat(fullPath);
-			if (!stats.isFile()) {
-				throw new Error(`Path is not a file: ${filePath}`);
+			for (const filePath of paths) {
+				try {
+					const fullPath = this.resolvePath(filePath);
+					await this.validatePath(fullPath);
+
+					const stats = await fs.stat(fullPath);
+					if (!stats.isFile()) {
+						throw new Error(`Path is not a file: ${filePath}`);
+					}
+
+					// Backup file before deletion
+					await incrementalSnapshotManager.backupFile(fullPath);
+
+					await fs.unlink(fullPath);
+					results.push(`✅ ${filePath}`);
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					errors.push(`❌ ${filePath}: ${errorMsg}`);
+				}
 			}
 
-			// Backup file before deletion
-			await incrementalSnapshotManager.backupFile(fullPath);
+			const summary = [];
+			if (results.length > 0) {
+				summary.push(`Successfully deleted ${results.length} file(s):\n${results.join('\n')}`);
+			}
+			if (errors.length > 0) {
+				summary.push(`Failed to delete ${errors.length} file(s):\n${errors.join('\n')}`);
+			}
 
-			await fs.unlink(fullPath);
-			return `File deleted successfully: ${filePath}`;
+			return summary.join('\n\n');
 		} catch (error) {
 			throw new Error(
-				`Failed to delete file ${filePath}: ${
+				`Failed to delete files: ${
 					error instanceof Error ? error.message : 'Unknown error'
 				}`,
 			);
@@ -1105,16 +1126,32 @@ export const mcpTools = [
 	},
 	{
 		name: 'filesystem_delete',
-		description: 'Delete a file',
+		description: 'Delete one or multiple files. Supports both single file and batch deletion.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
 					type: 'string',
-					description: 'Path to the file to delete',
+					description: 'Path to a single file to delete (deprecated: use filePaths for single or multiple files)',
+				},
+				filePaths: {
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path to a single file to delete'
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string'
+							},
+							description: 'Array of file paths to delete'
+						}
+					],
+					description: 'Single file path or array of file paths to delete'
 				},
 			},
-			required: ['filePath'],
+			// Make both optional, but at least one is required (validated in code)
 		},
 	},
 	{

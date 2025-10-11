@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
+import { withRetry, withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatMessage, ToolCall } from './chat.js';
 
 export interface ResponseOptions {
@@ -268,9 +269,13 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 }
 
 /**
- * 使用 Responses API 创建响应（非流式，带自动工具调用）
+ * 使用 Responses API 创建响应（非流式,带自动工具调用）
  */
-export async function createResponse(options: ResponseOptions): Promise<string> {
+export async function createResponse(
+	options: ResponseOptions,
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+): Promise<string> {
 	const client = getOpenAIClient();
 	let messages = [...options.messages];
 
@@ -292,7 +297,13 @@ export async function createResponse(options: ResponseOptions): Promise<string> 
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const response = await client.responses.create(requestPayload);
+			const response = await withRetry(
+				() => client.responses.create(requestPayload),
+				{
+					abortSignal,
+					onRetry
+				}
+			);
 
 			// 提取响应 - Responses API 返回 output 数组
 			const output = (response as any).output;
@@ -365,30 +376,33 @@ export async function createResponse(options: ResponseOptions): Promise<string> 
  */
 export async function* createStreamingResponse(
 	options: ResponseOptions,
-	abortSignal?: AbortSignal
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
 	const client = getOpenAIClient();
 
 	// 提取系统提示词和转换后的消息
 	const { input: requestInput, systemInstructions } = convertToResponseInput(options.messages);
 
-	try {
-		const requestPayload: any = {
-			model: options.model,
-			instructions: systemInstructions,
-			input: requestInput,
-			stream: true,
-			tools: convertToolsForResponses(options.tools),
-			tool_choice: options.tool_choice,
-			reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-			store: options.store ?? false,
-			include: options.include || ['reasoning.encrypted_content'],
-			prompt_cache_key: options.prompt_cache_key,
-		};
+	// 使用重试包装生成器
+	yield* withRetryGenerator(
+		async function* () {
+			const requestPayload: any = {
+				model: options.model,
+				instructions: systemInstructions,
+				input: requestInput,
+				stream: true,
+				tools: convertToolsForResponses(options.tools),
+				tool_choice: options.tool_choice,
+				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
+				store: options.store ?? false,
+				include: options.include || ['reasoning.encrypted_content'],
+				prompt_cache_key: options.prompt_cache_key,
+			};
 
-		const stream = await client.responses.create(requestPayload, {
-			signal: abortSignal,
-		});
+			const stream = await client.responses.create(requestPayload, {
+				signal: abortSignal,
+			});
 
 		let contentBuffer = '';
 		let toolCallsBuffer: { [call_id: string]: any } = {};
@@ -538,26 +552,12 @@ export async function* createStreamingResponse(
 		yield {
 			type: 'done'
 		};
-
-	} catch (error) {
-		if (error instanceof Error && error.name === 'AbortError') {
-			return;
+		},
+		{
+			abortSignal,
+			onRetry
 		}
-		if (error instanceof Error) {
-			// 检查是否是 API 网关不支持 Responses API
-			if (error.message.includes('Panic detected') ||
-				error.message.includes('nil pointer') ||
-				error.message.includes('404') ||
-				error.message.includes('not found')) {
-				throw new Error(
-					'Streaming response creation failed: Your API endpoint does not support the Responses API. ' +
-					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API (OpenAI official API, or compatible providers).'
-				);
-			}
-			throw new Error(`Streaming response creation failed: ${error.message}`);
-		}
-		throw new Error('Streaming response creation failed: Unknown error');
-	}
+	);
 }
 
 /**
@@ -565,7 +565,9 @@ export async function* createStreamingResponse(
  */
 export async function createResponseWithTools(
 	options: ResponseOptions,
-	maxToolRounds: number = 5
+	maxToolRounds: number = 5,
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
 	const client = getOpenAIClient();
 	let messages = [...options.messages];
@@ -589,7 +591,13 @@ export async function createResponseWithTools(
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const response = await client.responses.create(requestPayload);
+			const response = await withRetry(
+				() => client.responses.create(requestPayload),
+				{
+					abortSignal,
+					onRetry
+				}
+			);
 
 			const output = (response as any).output;
 			if (!output || output.length === 0) {

@@ -185,6 +185,72 @@ class IncrementalSnapshotManager {
 	}
 
 	/**
+	 * Rollback all snapshots after a specific message index
+	 * This is used when user selects to rollback to a specific message
+	 * @param sessionId Session ID
+	 * @param targetMessageIndex The message index to rollback to (inclusive)
+	 * @returns Number of files rolled back
+	 */
+	async rollbackToMessageIndex(sessionId: string, targetMessageIndex: number): Promise<number> {
+		await this.ensureSnapshotsDir();
+
+		try {
+			const files = await fs.readdir(this.snapshotsDir);
+			const snapshots: Array<{ messageIndex: number; path: string; metadata: SnapshotMetadata }> = [];
+
+			// Load all snapshots for this session
+			for (const file of files) {
+				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+					const snapshotPath = path.join(this.snapshotsDir, file);
+					const content = await fs.readFile(snapshotPath, 'utf-8');
+					const metadata: SnapshotMetadata = JSON.parse(content);
+					snapshots.push({
+						messageIndex: metadata.messageIndex,
+						path: snapshotPath,
+						metadata
+					});
+				}
+			}
+
+			// Filter snapshots that are >= targetMessageIndex and sort in descending order
+			// We rollback from newest to oldest to ensure correct restoration
+			const snapshotsToRollback = snapshots
+				.filter(s => s.messageIndex >= targetMessageIndex)
+				.sort((a, b) => b.messageIndex - a.messageIndex);
+
+			let totalFilesRolledBack = 0;
+
+			// Rollback each snapshot in reverse chronological order
+			for (const snapshot of snapshotsToRollback) {
+				for (const backup of snapshot.metadata.backups) {
+					try {
+						if (backup.existed && backup.content !== null) {
+							// Restore original file content
+							await fs.writeFile(backup.path, backup.content, 'utf-8');
+							totalFilesRolledBack++;
+						} else if (!backup.existed) {
+							// Delete file that was created
+							try {
+								await fs.unlink(backup.path);
+								totalFilesRolledBack++;
+							} catch (error) {
+								// File may not exist, ignore
+							}
+						}
+					} catch (error) {
+						console.error(`Failed to restore file ${backup.path}:`, error);
+					}
+				}
+			}
+
+			return totalFilesRolledBack;
+		} catch (error) {
+			console.error('Failed to rollback to message index:', error);
+			return 0;
+		}
+	}
+
+	/**
 	 * Clear all snapshots for a session
 	 */
 	async clearAllSnapshots(sessionId: string): Promise<void> {

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomUUID } from 'crypto';
 import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
+import { withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -56,15 +57,18 @@ function getAnthropicClient(): Anthropic {
 			clientConfig.baseURL = config.baseUrl;
 		}
 
-		// If Anthropic Beta is enabled, add default query parameter
-		if (config.anthropicBeta) {
-			clientConfig.defaultQuery = { beta: 'true' };
-		}
-
-		// Add Authorization header for enhanced compatibility
+		// Configure headers for prompt caching support
+		// Prompt caching is available by default in API version 2024-09-24+
+		// No need for beta flag - it's a standard feature now
 		clientConfig.defaultHeaders = {
 			'Authorization': `Bearer ${config.apiKey}`,
+			'anthropic-version': '2024-09-24',
 		};
+
+		// If explicit Beta flag is set, add the beta header (for backwards compatibility)
+		if (config.anthropicBeta) {
+			clientConfig.defaultHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
+		}
 
 		anthropicClient = new Anthropic(clientConfig);
 	}
@@ -234,9 +238,14 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 	if (customSystemPrompt) {
 		// 自定义系统提示词作为 system，默认系统提示词作为第一条用户消息
 		systemContent = customSystemPrompt;
+		// Add cache_control to the default system prompt (now as first user message)
 		anthropicMessages.unshift({
 			role: 'user',
-			content: SYSTEM_PROMPT
+			content: [{
+				type: 'text',
+				text: SYSTEM_PROMPT,
+				cache_control: { type: 'ephemeral' }
+			}] as any
 		});
 	} else if (!systemContent) {
 		// 没有自定义系统提示词，默认系统提示词作为 system
@@ -244,10 +253,21 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 	}
 
 	// Add cache_control to last user message for prompt caching
-	if (anthropicMessages.length > 0) {
-		const lastMessageIndex = anthropicMessages.length - 1;
-		const lastMessage = anthropicMessages[lastMessageIndex];
+	// Find the last user message (skip if it's the first message we just added)
+	let lastUserMessageIndex = -1;
+	for (let i = anthropicMessages.length - 1; i >= 0; i--) {
+		if (anthropicMessages[i]?.role === 'user') {
+			// Skip the first message if it's the default system prompt
+			if (customSystemPrompt && i === 0) {
+				continue;
+			}
+			lastUserMessageIndex = i;
+			break;
+		}
+	}
 
+	if (lastUserMessageIndex >= 0) {
+		const lastMessage = anthropicMessages[lastUserMessageIndex];
 		if (lastMessage && lastMessage.role === 'user') {
 			// Convert content to array format if it's a string
 			if (typeof lastMessage.content === 'string') {
@@ -282,12 +302,15 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
  */
 export async function* createStreamingAnthropicCompletion(
 	options: AnthropicOptions,
-	abortSignal?: AbortSignal
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<AnthropicStreamChunk, void, unknown> {
 	const client = getAnthropicClient();
 
-	try {
-		const { system, messages } = convertToAnthropicMessages(options.messages);
+	// 使用重试包装生成器
+	yield* withRetryGenerator(
+		async function* () {
+			const { system, messages } = convertToAnthropicMessages(options.messages);
 
 		// Generate user_id with session tracking if sessionId is provided
 		const sessionId = options.sessionId || randomUUID();
@@ -321,7 +344,8 @@ export async function* createStreamingAnthropicCompletion(
 		}> = new Map();
 		let hasToolCalls = false;
 		let usageData: UsageInfo | undefined;
-		let currentToolUseId: string | null = null; // Track current tool use block ID
+		// Map content block index to tool use ID for tracking deltas
+		let blockIndexToId: Map<number, string> = new Map();
 
 		for await (const event of stream) {
 			if (abortSignal?.aborted) {
@@ -335,7 +359,10 @@ export async function* createStreamingAnthropicCompletion(
 				// Handle tool use blocks
 				if (block.type === 'tool_use') {
 					hasToolCalls = true;
-					currentToolUseId = block.id; // Store current tool use ID
+					const blockIndex = event.index;
+					// Map block index to tool ID for tracking deltas
+					blockIndexToId.set(blockIndex, block.id);
+
 					toolCallsBuffer.set(block.id, {
 						id: block.id,
 						type: 'function',
@@ -367,9 +394,12 @@ export async function* createStreamingAnthropicCompletion(
 				// Handle tool input deltas
 				if (delta.type === 'input_json_delta') {
 					const jsonDelta = delta.partial_json;
-					// Use currentToolUseId instead of event.index
-					if (currentToolUseId) {
-						const toolCall = toolCallsBuffer.get(currentToolUseId);
+					const blockIndex = event.index;
+					// Use block index to find the correct tool ID
+					const toolId = blockIndexToId.get(blockIndex);
+
+					if (toolId) {
+						const toolCall = toolCallsBuffer.get(toolId);
 						if (toolCall) {
 							// If this is the first delta and arguments is still '{}', replace it
 							if (toolCall.function.arguments === '{}') {
@@ -386,9 +416,6 @@ export async function* createStreamingAnthropicCompletion(
 						}
 					}
 				}
-			} else if (event.type === 'content_block_stop') {
-				// Reset current tool use ID when block ends
-				currentToolUseId = null;
 			} else if (event.type === 'message_start') {
 				// Capture initial usage data (including cache metrics)
 				if (event.message.usage) {
@@ -459,14 +486,10 @@ export async function* createStreamingAnthropicCompletion(
 		yield {
 			type: 'done'
 		};
-
-	} catch (error) {
-		if (abortSignal?.aborted) {
-			return;
+		},
+		{
+			abortSignal,
+			onRetry
 		}
-		if (error instanceof Error) {
-			throw new Error(`Anthropic streaming completion failed: ${error.message}`);
-		}
-		throw new Error('Anthropic streaming completion failed: Unknown error');
-	}
+	);
 }

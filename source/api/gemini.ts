@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
+import { withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatMessage } from './chat.js';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -260,12 +261,15 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
  */
 export async function* createStreamingGeminiCompletion(
 	options: GeminiOptions,
-	abortSignal?: AbortSignal
+	abortSignal?: AbortSignal,
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<GeminiStreamChunk, void, unknown> {
 	const client = getGeminiClient();
 
-	try {
-		const { systemInstruction, contents } = convertToGeminiMessages(options.messages);
+	// 使用重试包装生成器
+	yield* withRetryGenerator(
+		async function* () {
+			const { systemInstruction, contents } = convertToGeminiMessages(options.messages);
 
 		// Build request config
 		const requestConfig: any = {
@@ -380,14 +384,10 @@ export async function* createStreamingGeminiCompletion(
 		yield {
 			type: 'done'
 		};
-
-	} catch (error) {
-		if (abortSignal?.aborted) {
-			return;
+		},
+		{
+			abortSignal,
+			onRetry
 		}
-		if (error instanceof Error) {
-			throw new Error(`Gemini streaming completion failed: ${error.message}`);
-		}
-		throw new Error('Gemini streaming completion failed: Unknown error');
-	}
+	);
 }

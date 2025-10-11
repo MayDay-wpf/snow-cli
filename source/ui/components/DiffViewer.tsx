@@ -56,7 +56,7 @@ export default function DiffViewer({
 							<Text color="gray" dimColor>
 								{String(index + 1).padStart(lineNumberWidth, ' ')} │
 							</Text>
-							<Text color="white" backgroundColor="green">
+							<Text color="white" backgroundColor="#006400">
 								+ {line}
 							</Text>
 						</Box>
@@ -157,7 +157,7 @@ export default function DiffViewer({
 									<Text dimColor> │ </Text>
 								</Box>
 								<Box>
-									<Text color="white" backgroundColor="green" wrap="truncate-end">
+									<Text color="white" backgroundColor="#006400" wrap="truncate-end">
 										{' ' + displayLine.content}
 									</Text>
 								</Box>
@@ -181,7 +181,7 @@ export default function DiffViewer({
 									<Text dimColor> │ </Text>
 								</Box>
 								<Box>
-									<Text color="white" backgroundColor="red" wrap="truncate-end">
+									<Text color="white" backgroundColor="#8B0000" wrap="truncate-end">
 										{' ' + displayLine.content}
 									</Text>
 								</Box>
