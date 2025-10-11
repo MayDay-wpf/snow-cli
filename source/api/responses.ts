@@ -110,7 +110,7 @@ export interface UsageInfo {
 }
 
 export interface ResponseStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done' | 'usage';
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'reasoning_started' | 'done' | 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
@@ -412,7 +412,10 @@ export async function* createStreamingResponse(
 				// 新输出项添加
 				const item = chunk.item;
 				if (item?.type === 'reasoning') {
-					// 推理摘要开始 - 忽略
+					// 推理摘要开始 - 发送 reasoning_started 事件
+					yield {
+						type: 'reasoning_started'
+					};
 					continue;
 				} else if (item?.type === 'message') {
 					// 消息开始 - 忽略

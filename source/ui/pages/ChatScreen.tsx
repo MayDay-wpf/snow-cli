@@ -14,6 +14,7 @@ import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import TodoTree from '../components/TodoTree.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
+import ShimmerText from '../components/ShimmerText.js';
 import type {UsageInfo} from '../../api/chat.js';
 import {getOpenAiConfig} from '../../utils/apiConfig.js';
 import {sessionManager} from '../../utils/sessionManager.js';
@@ -67,7 +68,7 @@ export default function ChatScreen({}: Props) {
 		Array<{
 			id: string;
 			content: string;
-			status: 'pending' | 'in_progress' | 'completed';
+			status: 'pending' | 'completed';
 		}>
 	>([]);
 	const [animationFrame, setAnimationFrame] = useState(0);
@@ -79,6 +80,7 @@ export default function ChatScreen({}: Props) {
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
+	const [isReasoning, setIsReasoning] = useState(false);
 	const [yoloMode, setYoloMode] = useState(() => {
 		// Load yolo mode from localStorage on initialization
 		try {
@@ -107,6 +109,7 @@ export default function ChatScreen({}: Props) {
 		messageIndex: number;
 		fileCount: number;
 	} | null>(null);
+	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
 	const {stdout} = useStdout();
 	const terminalHeight = stdout?.rows || 24;
 	const workingDirectory = process.cwd();
@@ -356,6 +359,9 @@ export default function ChatScreen({}: Props) {
 				setMessages([summaryMessage]);
 				setRemountKey(prev => prev + 1);
 
+				// Reset system info flag to include in next message
+				setShouldIncludeSystemInfo(true);
+
 				// Update token usage with compression result
 				setContextUsage({
 					prompt_tokens: result.usage.prompt_tokens,
@@ -408,6 +414,8 @@ export default function ChatScreen({}: Props) {
 			setRemountKey(prev => prev + 1);
 			// Reset context usage (token statistics)
 			setContextUsage(null);
+			// Reset system info flag to include in next message
+			setShouldIncludeSystemInfo(true);
 			// Note: yoloMode is preserved via localStorage (lines 68-76, 104-111)
 			// Note: VSCode connection is preserved and managed by vscodeConnection utility
 			// Add command execution feedback
@@ -589,8 +597,8 @@ export default function ChatScreen({}: Props) {
 			})),
 		];
 
-		// Get system information
-		const systemInfo = getSystemInfo();
+		// Get system information only if needed
+		const systemInfo = shouldIncludeSystemInfo ? getSystemInfo() : undefined;
 
 		// Only add user message to UI if not hidden
 		if (!hideUserMessage) {
@@ -602,6 +610,11 @@ export default function ChatScreen({}: Props) {
 				systemInfo,
 			};
 			setMessages(prev => [...prev, userMessage]);
+
+			// After including system info once, don't include it again
+			if (shouldIncludeSystemInfo) {
+				setShouldIncludeSystemInfo(false);
+			}
 		}
 		setIsStreaming(true);
 
@@ -637,6 +650,7 @@ export default function ChatScreen({}: Props) {
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
 				setIsStreaming,
+				setIsReasoning,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -707,6 +721,7 @@ export default function ChatScreen({}: Props) {
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
 				setIsStreaming,
+				setIsReasoning,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -781,13 +796,13 @@ export default function ChatScreen({}: Props) {
 								<Gradient name="rainbow">Programming efficiency x10!</Gradient>
 								<Text color="white"> ⛇</Text>
 							</Text>
-							<Text color="gray" dimColor>
+							<Text>
 								• Ask for code explanations and debugging help
 							</Text>
-							<Text color="gray" dimColor>
+							<Text>
 								• Press ESC during response to interrupt
 							</Text>
-							<Text color="gray" dimColor>
+							<Text>
 								• Working directory: {workingDirectory}
 							</Text>
 						</Box>
@@ -1084,28 +1099,25 @@ export default function ChatScreen({}: Props) {
 						❆
 					</Text>
 					<Box marginLeft={1} marginBottom={1}>
-						<Text color="gray" dimColor>
-							{isStreaming ? (
-								<>
-									Thinking... ({formatElapsedTime(elapsedSeconds)}
-									{streamTokenCount > 0 && (
-										<>
-											{' · '}
-											<Text color="cyan">
-												↓{' '}
-												{streamTokenCount >= 1000
-													? `${(streamTokenCount / 1000).toFixed(1)}k`
-													: streamTokenCount}{' '}
-												tokens
-											</Text>
-										</>
-									)}
-									)
-								</>
-							) : (
-								'Create the first dialogue record file...'
-							)}
-						</Text>
+						{isStreaming ? (
+							<Text color="gray" dimColor>
+								<ShimmerText text={isReasoning ? 'Deep thinking...' : 'Thinking...'} />{' '}
+								({formatElapsedTime(elapsedSeconds)}
+								{' · '}
+								<Text color="cyan">
+									↓{' '}
+									{streamTokenCount >= 1000
+										? `${(streamTokenCount / 1000).toFixed(1)}k`
+										: streamTokenCount}{' '}
+									tokens
+								</Text>
+								)
+							</Text>
+						) : (
+							<Text color="gray" dimColor>
+								Create the first dialogue record file...
+							</Text>
+						)}
 					</Box>
 				</Box>
 			)}

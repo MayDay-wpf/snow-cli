@@ -20,7 +20,7 @@ export type ConversationHandlerOptions = {
 	saveMessage: (message: any) => Promise<void>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
-	setCurrentTodos: React.Dispatch<React.SetStateAction<Array<{id: string; content: string; status: 'pending' | 'in_progress' | 'completed'}>>>;
+	setCurrentTodos: React.Dispatch<React.SetStateAction<Array<{id: string; content: string; status: 'pending' | 'completed'}>>>;
 	requestToolConfirmation: (toolCall: ToolCall, batchToolNames?: string, allTools?: ToolCall[]) => Promise<string>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
@@ -30,6 +30,7 @@ export type ConversationHandlerOptions = {
 	getPendingMessages?: () => string[]; // Get pending user messages
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
 	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
+	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>; // Control reasoning state (Responses API only)
 };
 
 /**
@@ -49,7 +50,8 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
 		yoloMode,
-		setContextUsage
+		setContextUsage,
+		setIsReasoning
 	} = options;
 
 	// Step 1: Ensure session exists and get existing TODOs
@@ -179,8 +181,13 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 			for await (const chunk of streamGenerator) {
 				if (controller.signal.aborted) break;
 
-				if (chunk.type === 'content' && chunk.content) {
+				if (chunk.type === 'reasoning_started') {
+					// Reasoning started (Responses API only) - set reasoning state
+					setIsReasoning?.(true);
+				} else if (chunk.type === 'content' && chunk.content) {
 					// Accumulate content and update token count
+					// When content starts, reasoning is done
+					setIsReasoning?.(false);
 					streamedContent += chunk.content;
 					try {
 						const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
@@ -336,11 +343,8 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 				const toolResults = await executeToolCalls(approvedTools);
 
 				// Check if there are TODO related tool calls, if yes refresh TODO list
-				// Only show TODO panel for todo-update, not for other todo operations
-				const shouldShowTodoPanel = approvedTools.some(t =>
-					t.function.name === 'todo-update'
-				);
 				const hasTodoTools = approvedTools.some(t => t.function.name.startsWith('todo-'));
+				const hasTodoUpdateTools = approvedTools.some(t => t.function.name === 'todo-update');
 
 				if (hasTodoTools) {
 					const session = sessionManager.getCurrentSession();
@@ -348,22 +352,6 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						const updatedTodoList = await todoService.getTodoList(session.id);
 						if (updatedTodoList) {
 							setCurrentTodos(updatedTodoList.todos);
-
-							// Only show TODO panel for update operations
-							if (shouldShowTodoPanel) {
-								// Remove any existing TODO tree messages and add a new one
-								setMessages(prev => {
-									// Filter out previous TODO tree messages
-									const withoutTodoTree = prev.filter(m => !m.showTodoTree);
-									// Add new TODO tree message
-									return [...withoutTodoTree, {
-										role: 'assistant',
-										content: '[TODO List Updated]',
-										streaming: false,
-										showTodoTree: true
-									}];
-								});
-							}
 						}
 					}
 				}
@@ -438,6 +426,19 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					saveMessage(result).catch(error => {
 						console.error('Failed to save tool result:', error);
 					});
+				}
+
+				// After all tool results are processed, show TODO panel if there were todo-update calls
+				if (hasTodoUpdateTools) {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: '',
+							streaming: false,
+							showTodoTree: true
+						}
+					]);
 				}
 
 				// Check if there are pending user messages to insert

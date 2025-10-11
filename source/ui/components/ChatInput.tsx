@@ -1010,7 +1010,7 @@ end try'`;
 						</Box>
 					)}
 					<Box marginTop={1}>
-						<Text color="gray" dimColor>
+						<Text>
 							{showCommands && getFilteredCommands().length > 0
 								? 'Type to filter commands'
 								: showFilePicker

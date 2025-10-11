@@ -344,7 +344,7 @@ export interface UsageInfo {
 }
 
 export interface StreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'done' | 'usage';
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'reasoning_started' | 'done' | 'usage';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -386,6 +386,7 @@ export async function* createStreamingChatCompletion(
 		let toolCallsBuffer: { [index: number]: any } = {};
 		let hasToolCalls = false;
 		let usageData: UsageInfo | undefined;
+		let reasoningStarted = false; // Track if reasoning has started
 
 		for await (const chunk of stream) {
 			if (abortSignal?.aborted) {
@@ -424,6 +425,13 @@ export async function* createStreamingChatCompletion(
 		// Note: reasoning_content is NOT included in the response, only counted for tokens
 		const reasoningContent = (choice.delta as any)?.reasoning_content;
 		if (reasoningContent) {
+			// Emit reasoning_started event on first reasoning content
+			if (!reasoningStarted) {
+				reasoningStarted = true;
+				yield {
+					type: 'reasoning_started'
+				};
+			}
 			yield {
 				type: 'reasoning_delta',
 				delta: reasoningContent

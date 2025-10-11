@@ -128,11 +128,38 @@ class SessionManager {
 		}
 
 		// Check if this exact message already exists to prevent duplicates
-		const existingMessage = this.currentSession.messages.find(m =>
-			m.role === message.role &&
-			m.content === message.content &&
-			Math.abs(m.timestamp - message.timestamp) < 5000 // Within 5 seconds
-		);
+		// For assistant messages with tool_calls, also compare tool_call_id to ensure uniqueness
+		const existingMessage = this.currentSession.messages.find(m => {
+			if (m.role !== message.role) return false;
+			if (m.content !== message.content) return false;
+			if (Math.abs(m.timestamp - message.timestamp) >= 5000) return false;
+
+			// If both messages have tool_calls, compare tool call IDs
+			if (m.tool_calls && message.tool_calls) {
+				// Create sets of tool call IDs for comparison
+				const existingIds = new Set(m.tool_calls.map(tc => tc.id));
+				const newIds = new Set(message.tool_calls.map(tc => tc.id));
+
+				// If IDs are different, these are different messages
+				if (existingIds.size !== newIds.size) return false;
+				for (const id of newIds) {
+					if (!existingIds.has(id)) return false;
+				}
+			} else if (m.tool_calls || message.tool_calls) {
+				// One has tool_calls, the other doesn't - different messages
+				return false;
+			}
+
+			// If both have tool_call_id (tool response), compare them
+			if (m.tool_call_id && message.tool_call_id) {
+				return m.tool_call_id === message.tool_call_id;
+			} else if (m.tool_call_id || message.tool_call_id) {
+				// One has tool_call_id, the other doesn't - different messages
+				return false;
+			}
+
+			return true;
+		});
 
 		if (existingMessage) {
 			return; // Don't add duplicate message

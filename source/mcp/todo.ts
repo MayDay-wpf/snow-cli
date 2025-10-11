@@ -224,28 +224,24 @@ Complete TODO list with all task IDs, content, status, and hierarchy.`,
 				name: 'todo-update',
 				description: `Update TODO status or content - USE ONLY WHEN COMPLETING TASKS.
 
-## CORE PRINCIPLE - WORK FIRST, UPDATES LAST:
-Focus on COMPLETING TASKS, not updating status. Only update TODO when a task is 100% finished and verified.
+## CORE PRINCIPLE - WORK FIRST, completed in an orderly manner:
 
-## SIMPLIFIED STATUS MODEL:
+## STATUS MODEL:
 - **pending**: Task not yet completed (default)
 - **completed**: Task is 100% finished and verified
 
 ## WHEN TO UPDATE:
 ✅ **Mark "completed"** ONLY when:
-  - Task is 100% finished (no partial work)
-  - Tests/builds passed (if applicable)
+  - When completing a task in the List
   - No errors or blockers
   - You've actually verified it works
 
 ## WHEN NOT TO UPDATE:
 ❌ Don't update status to track "in progress" - just do the work
-❌ Don't update multiple times per task - once when done is enough
 ❌ Don't update before verifying the work is complete
-❌ Don't update content unless there's a genuine error in the description
 
 ## BEST PRACTICE:
-Complete 3-5 tasks, then batch update them all to "completed" at once. This is more efficient than constant status updates.`,
+Every time you complete a task in Task, it will be updated to "Completed" immediately.`,
 
 
 				inputSchema: {

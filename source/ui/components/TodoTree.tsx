@@ -4,7 +4,7 @@ import { Box, Text } from 'ink';
 interface TodoItem {
 	id: string;
 	content: string;
-	status: 'pending' | 'in_progress' | 'completed';
+	status: 'pending' | 'completed';
 	parentId?: string;
 }
 
@@ -36,8 +36,6 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 		switch (status) {
 			case 'completed':
 				return '[x]';
-			case 'in_progress':
-				return '[~]';
 			case 'pending':
 				return '[ ]';
 		}
@@ -47,8 +45,6 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 		switch (status) {
 			case 'completed':
 				return 'green';
-			case 'in_progress':
-				return 'yellow';
 			case 'pending':
 				return 'gray';
 		}
