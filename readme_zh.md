@@ -73,7 +73,9 @@ $ npm uninstall --global snow-ai
 
 * 挂载时：双击 ESC，查看对话记录器，选择回滚，包括文件检查点
 
-* Windows & MacOS：`ctrl + v` 粘贴图片
+* MacOS：`ctrl + v` 粘贴图片
+* Windows：`ctrl + v` 粘贴图片
+
 
 * **命令**
 

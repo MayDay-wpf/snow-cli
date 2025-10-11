@@ -73,7 +73,9 @@ $ npm uninstall --global snow-ai
 
 * When mounting: double-click ESC, view the dialogue recorder, select rollback, including file checkpoints
 
-* Windows & MacOS:`ctrl + v` Paste image
+* MacOS:`ctrl + v` Paste image
+* Windows:`alt + v` Paste image
+
 
 * **Commands**
 
