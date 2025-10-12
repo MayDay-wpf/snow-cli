@@ -278,7 +278,8 @@ export default function ChatInput({
 	return (
 		<Box
 			flexDirection="column"
-			marginX={1}
+			paddingX={1}
+			width="100%"
 			key={`input-${showFilePicker ? 'picker' : 'normal'}`}
 		>
 			{showHistoryMenu && (
@@ -288,6 +289,7 @@ export default function ChatInput({
 					borderStyle="round"
 					borderColor="#A9C13E"
 					padding={1}
+					width="100%"
 				>
 					<Box marginBottom={1}>
 						<Text color="cyan">
@@ -353,6 +355,7 @@ export default function ChatInput({
 						paddingX={1}
 						paddingY={0}
 						flexGrow={1}
+						width="100%"
 					>
 						<Text color="cyan" bold>
 							➣{' '}

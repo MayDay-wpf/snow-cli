@@ -526,27 +526,32 @@ export default function ChatScreen({}: Props) {
 	}
 
 	return (
-		<Box flexDirection="column" height="100%">
+		<Box flexDirection="column" height="100%" width="100%">
 			<Static
 				key={remountKey}
 				items={[
 					<Box
 						key="header"
-						marginX={1}
-						borderColor={'cyan'}
-						borderStyle="round"
-						paddingX={2}
-						paddingY={1}
+						paddingX={1}
+						width="100%"
 					>
-						<Box flexDirection="column">
-							<Text color="white" bold>
-								<Text color="cyan">❆ </Text>
-								<Gradient name="rainbow">Programming efficiency x10!</Gradient>
-								<Text color="white"> ⛇</Text>
-							</Text>
-							<Text>• Ask for code explanations and debugging help</Text>
-							<Text>• Press ESC during response to interrupt</Text>
-							<Text>• Working directory: {workingDirectory}</Text>
+						<Box
+							borderColor={'cyan'}
+							borderStyle="round"
+							paddingX={2}
+							paddingY={1}
+							width="100%"
+						>
+							<Box flexDirection="column">
+								<Text color="white" bold>
+									<Text color="cyan">❆ </Text>
+									<Gradient name="rainbow">Programming efficiency x10!</Gradient>
+									<Text color="white"> ⛇</Text>
+								</Text>
+								<Text>• Ask for code explanations and debugging help</Text>
+								<Text>• Press ESC during response to interrupt</Text>
+								<Text>• Working directory: {workingDirectory}</Text>
+							</Box>
 						</Box>
 					</Box>,
 					...messages
@@ -575,8 +580,9 @@ export default function ChatScreen({}: Props) {
 								<Box
 									key={`msg-${index}`}
 									marginBottom={isToolMessage ? 0 : 1}
-									marginX={1}
+									paddingX={1}
 									flexDirection="column"
+									width="100%"
 								>
 									<Box>
 										<Text
@@ -809,7 +815,7 @@ export default function ChatScreen({}: Props) {
 			{messages
 				.filter(m => m.toolPending)
 				.map((message, index) => (
-					<Box key={`pending-tool-${index}`} marginBottom={1} marginX={1}>
+					<Box key={`pending-tool-${index}`} marginBottom={1} paddingX={1} width="100%">
 						<Text color="yellowBright" bold>
 							❆
 						</Text>
@@ -829,7 +835,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show loading indicator when streaming or saving */}
 			{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
-				<Box marginBottom={1} marginX={1}>
+				<Box marginBottom={1} paddingX={1} width="100%">
 					<Text
 						color={
 							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
@@ -889,7 +895,7 @@ export default function ChatScreen({}: Props) {
 				</Box>
 			)}
 
-			<Box marginX={1}>
+			<Box paddingX={1} width="100%">
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
 
@@ -912,7 +918,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show session list panel if active - replaces input */}
 			{showSessionPanel && (
-				<Box marginX={1}>
+				<Box paddingX={1} width="100%">
 					<SessionListPanel
 						onSelectSession={handleSessionPanelSelect}
 						onClose={() => setShowSessionPanel(false)}
@@ -922,7 +928,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show MCP info panel if active - replaces input */}
 			{showMcpPanel && (
-				<Box marginX={1} flexDirection="column">
+				<Box paddingX={1} flexDirection="column" width="100%">
 					<MCPInfoPanel />
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
