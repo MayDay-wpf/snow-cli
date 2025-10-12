@@ -663,6 +663,12 @@ export default function ChatScreen({}: Props) {
 																		message.toolCall.arguments.newContent
 																	}
 																	filename={message.toolCall.arguments.filename}
+																	completeOldContent={
+																		message.toolCall.arguments.completeOldContent
+																	}
+																	completeNewContent={
+																		message.toolCall.arguments.completeNewContent
+																	}
 																/>
 															</Box>
 														)}

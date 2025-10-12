@@ -36,7 +36,7 @@ function formatArgumentValue(value: any, maxLength: number = 100): string {
 }
 
 // Helper function to convert parsed arguments to tree display format
-function formatArgumentsAsTree(args: Record<string, any>, toolName?: string): Array<{key: string; value: string; isLast: boolean}> {
+function formatArgumentsAsTree(args: Record<string, any>, toolName?: string): Array<{ key: string; value: string; isLast: boolean }> {
 	// For filesystem-create and filesystem-edit, exclude content fields
 	const excludeFields = new Set<string>();
 
@@ -113,7 +113,7 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 	};
 
 	return (
-		<Box flexDirection="column" marginX={1} marginY={1} paddingX={1}>
+		<Box flexDirection="column" marginX={1} marginY={1} borderStyle={'round'} borderColor={'yellow'} paddingX={1}>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">
 					[Tool Confirmation]

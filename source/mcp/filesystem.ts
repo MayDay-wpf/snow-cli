@@ -589,6 +589,9 @@ export class FilesystemMCPService {
 		linesModified: number;
 		structureAnalysis?: StructureAnalysis;
 		diagnostics?: Diagnostic[];
+		// New fields for complete file comparison
+		completeOldContent?: string;
+		completeNewContent?: string;
 	}> {
 		try {
 			const fullPath = this.resolvePath(filePath);
@@ -767,6 +770,10 @@ export class FilesystemMCPService {
 				// Ignore diagnostics errors, they are optional
 			}
 
+			// Prepare complete file contents (without line numbers for diff comparison)
+			const completeOldContent = lines.join('\n');
+			const completeNewContent = finalLines.join('\n');
+
 			const result: {
 				message: string;
 				oldContent: string;
@@ -778,9 +785,11 @@ export class FilesystemMCPService {
 				linesModified: number;
 				structureAnalysis?: StructureAnalysis;
 				diagnostics?: Diagnostic[];
+				completeOldContent?: string;
+				completeNewContent?: string;
 			} = {
 				message:
-					`✅ File edited successfully: ${filePath}\n` +
+					`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
 					`   Replaced: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
 					`   Result: ${newContentLines.length} new lines` +
 					(smartBoundaries.extended
@@ -794,6 +803,9 @@ export class FilesystemMCPService {
 				totalLines: finalTotalLines,
 				linesModified: linesToModify,
 				structureAnalysis,
+				// Add complete file contents for intelligent diff display
+				completeOldContent,
+				completeNewContent,
 			};
 
 			// Add diagnostics if any were found

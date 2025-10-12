@@ -237,6 +237,84 @@ export async function refreshMCPToolsCache(): Promise<void> {
 }
 
 /**
+ * Reconnect a specific MCP service and update cache
+ * @param serviceName - Name of the service to reconnect
+ */
+export async function reconnectMCPService(serviceName: string): Promise<void> {
+	if (!toolsCache) {
+		// If no cache, do full refresh
+		await refreshToolsCache();
+		return;
+	}
+
+	// Handle built-in services (they don't need reconnection)
+	if (serviceName === 'filesystem' || serviceName === 'terminal' || serviceName === 'todo') {
+		return;
+	}
+
+	// Get the server config
+	const mcpConfig = getMCPConfig();
+	const server = mcpConfig.mcpServers[serviceName];
+
+	if (!server) {
+		throw new Error(`Service ${serviceName} not found in configuration`);
+	}
+
+	// Find and update the service in cache
+	const serviceIndex = toolsCache.servicesInfo.findIndex(s => s.serviceName === serviceName);
+
+	if (serviceIndex === -1) {
+		// Service not in cache, do full refresh
+		await refreshToolsCache();
+		return;
+	}
+
+	try {
+		// Try to reconnect to the service
+		const serviceTools = await probeServiceTools(serviceName, server);
+
+		// Update service info in cache
+		toolsCache.servicesInfo[serviceIndex] = {
+			serviceName,
+			tools: serviceTools,
+			isBuiltIn: false,
+			connected: true,
+		};
+
+		// Remove old tools for this service from the tools list
+		toolsCache.tools = toolsCache.tools.filter(
+			tool => !tool.function.name.startsWith(`${serviceName}-`)
+		);
+
+		// Add new tools for this service
+		for (const tool of serviceTools) {
+			toolsCache.tools.push({
+				type: 'function',
+				function: {
+					name: `${serviceName}-${tool.name}`,
+					description: tool.description,
+					parameters: tool.inputSchema,
+				},
+			});
+		}
+	} catch (error) {
+		// Update service as failed
+		toolsCache.servicesInfo[serviceIndex] = {
+			serviceName,
+			tools: [],
+			isBuiltIn: false,
+			connected: false,
+			error: error instanceof Error ? error.message : 'Unknown error',
+		};
+
+		// Remove tools for this service from the tools list
+		toolsCache.tools = toolsCache.tools.filter(
+			tool => !tool.function.name.startsWith(`${serviceName}-`)
+		);
+	}
+}
+
+/**
  * Clear the tools cache (useful for testing or forcing refresh)
  */
 export function clearMCPToolsCache(): void {
