@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetry, withRetryGenerator } from '../utils/retryUtils.js';
@@ -128,9 +128,15 @@ function getOpenAIClient(): OpenAI {
 			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
 		}
 
+		// Get custom headers
+		const customHeaders = getCustomHeaders();
+
 		openaiClient = new OpenAI({
 			apiKey: config.apiKey,
 			baseURL: config.baseUrl,
+			defaultHeaders: {
+				...customHeaders
+			}
 		});
 	}
 

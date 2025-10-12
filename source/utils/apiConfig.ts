@@ -58,6 +58,7 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 const CONFIG_DIR = join(homedir(), '.snow');
 
 const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt');
+const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
 	if (method === 'chat' || method === 'responses' || method === 'gemini' || method === 'anthropic') {
@@ -287,3 +288,61 @@ export function getCustomSystemPrompt(): string | undefined {
 		return undefined;
 	}
 }
+
+/**
+ * 读取自定义请求头配置
+ * 如果 custom-headers.json 文件存在且有效，返回其内容
+ * 否则返回空对象
+ */
+export function getCustomHeaders(): Record<string, string> {
+	ensureConfigDirectory();
+
+	if (!existsSync(CUSTOM_HEADERS_FILE)) {
+		return {};
+	}
+
+	try {
+		const content = readFileSync(CUSTOM_HEADERS_FILE, 'utf8');
+		const headers = JSON.parse(content);
+
+		// 验证格式：必须是对象，且所有值都是字符串
+		if (typeof headers !== 'object' || headers === null || Array.isArray(headers)) {
+			return {};
+		}
+
+		// 过滤掉非字符串的值
+		const validHeaders: Record<string, string> = {};
+		for (const [key, value] of Object.entries(headers)) {
+			if (typeof value === 'string') {
+				validHeaders[key] = value;
+			}
+		}
+
+		return validHeaders;
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * 保存自定义请求头配置
+ */
+export function saveCustomHeaders(headers: Record<string, string>): void {
+	ensureConfigDirectory();
+
+	try {
+		// 过滤掉空键值对
+		const filteredHeaders: Record<string, string> = {};
+		for (const [key, value] of Object.entries(headers)) {
+			if (key.trim() && value.trim()) {
+				filteredHeaders[key.trim()] = value.trim();
+			}
+		}
+
+		const content = JSON.stringify(filteredHeaders, null, 2);
+		writeFileSync(CUSTOM_HEADERS_FILE, content, 'utf8');
+	} catch (error) {
+		throw new Error(`Failed to save custom headers: ${error}`);
+	}
+}
+

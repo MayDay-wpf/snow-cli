@@ -130,9 +130,75 @@ function handleMessage(message: string) {
 					diagnostics: simpleDiagnostics
 				}));
 			}
+		} else if (data.type === 'diffApply') {
+			const filePath = data.filePath;
+			const oldContent = data.oldContent;
+			const newContent = data.newContent;
+			const requestId = data.requestId;
+
+			// Show diff in VS Code
+			handleDiffApply(filePath, oldContent, newContent, requestId);
 		}
 	} catch (error) {
 		// Ignore invalid messages
+	}
+}
+
+async function handleDiffApply(filePath: string, oldContent: string, newContent: string, requestId: string) {
+	try {
+		// Create a temporary file for old content
+		const oldUri = vscode.Uri.parse(`untitled:${filePath}.old`);
+		const newUri = vscode.Uri.file(filePath);
+
+		// Show diff editor
+		await vscode.commands.executeCommand(
+			'vscode.diff',
+			oldUri,
+			newUri,
+			`${filePath} (Confirm Changes)`
+		);
+
+		// Write old content to the left side
+		const edit = new vscode.WorkspaceEdit();
+		edit.createFile(oldUri, { overwrite: true });
+		edit.insert(oldUri, new vscode.Position(0, 0), oldContent);
+		await vscode.workspace.applyEdit(edit);
+
+		// Show quick pick for user decision
+		const choice = await vscode.window.showQuickPick(
+			[
+				{ label: 'Approve (once)', value: 'approve' },
+				{ label: 'Always approve this tool', value: 'approve_always' },
+				{ label: 'Reject (end session)', value: 'reject' }
+			],
+			{
+				placeHolder: 'Review the changes and choose an action',
+				ignoreFocusOut: true
+			}
+		);
+
+		const result = choice?.value || 'approve';
+
+		// Send response back
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'diffApplyResult',
+				requestId,
+				result
+			}));
+		}
+
+		// Close the diff editor
+		await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+	} catch (error) {
+		// On error, default to approve and let CLI handle confirmation
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'diffApplyResult',
+				requestId,
+				result: 'approve'
+			}));
+		}
 	}
 }
 

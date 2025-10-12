@@ -55,6 +55,8 @@ jobs:
             
             ### What's New
             -- fix some bugs
+            -- Upload the extension to the Visual Studio Marketplace
+            -- Custom request headers
             
             ### Installation
             ```bash

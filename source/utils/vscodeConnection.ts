@@ -171,6 +171,60 @@ class VSCodeConnectionManager {
 			);
 		});
 	}
+
+	/**
+	 * Request DIFF+APPLY view for file changes in VS Code
+	 * @param filePath - The file path for the diff
+	 * @param oldContent - Original content with line numbers
+	 * @param newContent - Modified content with line numbers
+	 * @returns Promise that resolves with user's approval response
+	 */
+	async requestDiffApply(
+		filePath: string,
+		oldContent: string,
+		newContent: string
+	): Promise<'approve' | 'approve_always' | 'reject'> {
+		return new Promise((resolve) => {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+				resolve('approve'); // If not connected, default to approve (fallback to CLI confirmation)
+				return;
+			}
+
+			const requestId = Math.random().toString(36).substring(7);
+			const timeout = setTimeout(() => {
+				cleanup();
+				resolve('approve'); // Timeout, default to approve
+			}, 30000); // 30 second timeout for user decision
+
+			const handler = (message: any) => {
+				try {
+					const data = JSON.parse(message.toString());
+					if (data.type === 'diffApplyResult' && data.requestId === requestId) {
+						cleanup();
+						resolve(data.result || 'approve');
+					}
+				} catch (error) {
+					// Ignore invalid JSON
+				}
+			};
+
+			const cleanup = () => {
+				clearTimeout(timeout);
+				this.client?.removeListener('message', handler);
+			};
+
+			this.client.on('message', handler);
+			this.client.send(
+				JSON.stringify({
+					type: 'diffApply',
+					requestId,
+					filePath,
+					oldContent,
+					newContent
+				})
+			);
+		});
+	}
 }
 
 export const vscodeConnection = new VSCodeConnectionManager();

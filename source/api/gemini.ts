@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { getOpenAiConfig, getCustomSystemPrompt } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatMessage } from './chat.js';
@@ -51,12 +51,23 @@ function getGeminiClient(): GoogleGenAI {
 			apiKey: config.apiKey
 		};
 
+		// Get custom headers
+		const customHeaders = getCustomHeaders();
+
 		// Support custom baseUrl and headers for proxy servers
 		if (config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1') {
 			clientConfig.httpOptions = {
 				baseUrl: config.baseUrl,
 				headers: {
 					'x-goog-api-key': config.apiKey, // Gemini API requires this header
+					...customHeaders
+				}
+			};
+		} else if (Object.keys(customHeaders).length > 0) {
+			// If using default base URL but have custom headers
+			clientConfig.httpOptions = {
+				headers: {
+					...customHeaders
 				}
 			};
 		}

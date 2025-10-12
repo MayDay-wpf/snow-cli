@@ -38,6 +38,11 @@ export default function WelcomeScreen({
 			infoText: 'Configure custom system prompt (overrides default)',
 		},
 		{
+			label: 'Custom Headers Settings',
+			value: 'customheaders',
+			infoText: 'Configure custom HTTP headers for API requests',
+		},
+		{
 			label: 'MCP Settings',
 			value: 'mcp',
 			infoText: 'Configure Model Context Protocol servers',

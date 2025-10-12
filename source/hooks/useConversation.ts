@@ -11,6 +11,8 @@ import { sessionManager } from '../utils/sessionManager.js';
 import { formatTodoContext } from '../utils/todoPreprocessor.js';
 import type { Message } from '../ui/components/MessageList.js';
 import { formatToolCallMessage } from '../utils/messageFormatter.js';
+import { vscodeConnection } from '../utils/vscodeConnection.js';
+import { filesystemService } from '../mcp/filesystem.js';
 
 export type ConversationHandlerOptions = {
 	userContent: string;
@@ -322,44 +324,129 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 				} else if (toolsNeedingConfirmation.length > 0) {
 					const firstTool = toolsNeedingConfirmation[0]!; // Safe: length > 0 guarantees this exists
 
-					// Pass all tools for proper display in confirmation UI
-					const allTools = toolsNeedingConfirmation.length > 1
-						? toolsNeedingConfirmation
-						: undefined;
+					// Check if we should use DIFF+APPLY for filesystem tools
+					let usedDiffApply = false;
+					if (vscodeConnection.isConnected()) {
+						// Try to use DIFF+APPLY for filesystem_create or filesystem_edit
+						if (firstTool.function.name === 'filesystem-create' || firstTool.function.name === 'filesystem-edit') {
+							try {
+								const args = JSON.parse(firstTool.function.arguments);
 
-					// Use first tool for confirmation UI, but apply result to all
-					const confirmation = await requestToolConfirmation(firstTool, undefined, allTools);
+								if (firstTool.function.name === 'filesystem-create') {
+									// For create, show diff with empty old content
+									const confirmation = await vscodeConnection.requestDiffApply(
+										args.filePath,
+										'', // Empty old content for new file
+										args.content
+									);
 
-					if (confirmation === 'reject') {
-						// Remove pending tool messages
-						setMessages(prev => prev.filter(msg => !msg.toolPending));
+									if (confirmation === 'reject') {
+										// Remove pending tool messages
+										setMessages(prev => prev.filter(msg => !msg.toolPending));
+										setMessages(prev => [...prev, {
+											role: 'assistant',
+											content: 'Tool call rejected, session ended',
+											streaming: false
+										}]);
+										if (options.setIsStreaming) {
+											options.setIsStreaming(false);
+										}
+										encoder.free();
+										return;
+									}
 
-						// User rejected - end conversation
-						setMessages(prev => [...prev, {
-							role: 'assistant',
-							content: 'Tool call rejected, session ended',
-							streaming: false
-						}]);
+									if (confirmation === 'approve_always') {
+										addMultipleToAlwaysApproved([firstTool.function.name]);
+										sessionApprovedTools.add(firstTool.function.name);
+									}
 
-						// End streaming immediately
-						if (options.setIsStreaming) {
-							options.setIsStreaming(false);
+									approvedTools.push(...toolsNeedingConfirmation);
+									usedDiffApply = true;
+								} else if (firstTool.function.name === 'filesystem-edit') {
+									// For edit, read the file first to get old content
+									const fileContent = await filesystemService.getFileContent(
+										args.filePath,
+										args.startLine,
+										args.endLine
+									);
+
+									const confirmation = await vscodeConnection.requestDiffApply(
+										args.filePath,
+										fileContent.content,
+										args.newContent
+									);
+
+									if (confirmation === 'reject') {
+										// Remove pending tool messages
+										setMessages(prev => prev.filter(msg => !msg.toolPending));
+										setMessages(prev => [...prev, {
+											role: 'assistant',
+											content: 'Tool call rejected, session ended',
+											streaming: false
+										}]);
+										if (options.setIsStreaming) {
+											options.setIsStreaming(false);
+										}
+										encoder.free();
+										return;
+									}
+
+									if (confirmation === 'approve_always') {
+										addMultipleToAlwaysApproved([firstTool.function.name]);
+										sessionApprovedTools.add(firstTool.function.name);
+									}
+
+									approvedTools.push(...toolsNeedingConfirmation);
+									usedDiffApply = true;
+								}
+							} catch (error) {
+								// If DIFF+APPLY fails, fall back to regular confirmation
+								console.error('Failed to use DIFF+APPLY:', error);
+							}
 						}
-						encoder.free();
-						return; // Exit the conversation loop
 					}
 
-					// If approved_always, add ALL these tools to both global and session-approved sets
-					if (confirmation === 'approve_always') {
-						const toolNamesToAdd = toolsNeedingConfirmation.map(t => t.function.name);
-						// Add to global state (async, for future sessions)
-						addMultipleToAlwaysApproved(toolNamesToAdd);
-						// Add to local session set (sync, for this conversation)
-						toolNamesToAdd.forEach(name => sessionApprovedTools.add(name));
-					}
+					// If we didn't use DIFF+APPLY, fall back to regular CLI confirmation
+					if (!usedDiffApply) {
+						// Pass all tools for proper display in confirmation UI
+						const allTools = toolsNeedingConfirmation.length > 1
+							? toolsNeedingConfirmation
+							: undefined;
 
-					// Add all tools to approved list
-					approvedTools.push(...toolsNeedingConfirmation);
+						// Use first tool for confirmation UI, but apply result to all
+						const confirmation = await requestToolConfirmation(firstTool, undefined, allTools);
+
+						if (confirmation === 'reject') {
+							// Remove pending tool messages
+							setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+							// User rejected - end conversation
+							setMessages(prev => [...prev, {
+								role: 'assistant',
+								content: 'Tool call rejected, session ended',
+								streaming: false
+							}]);
+
+							// End streaming immediately
+							if (options.setIsStreaming) {
+								options.setIsStreaming(false);
+							}
+							encoder.free();
+							return; // Exit the conversation loop
+						}
+
+						// If approved_always, add ALL these tools to both global and session-approved sets
+						if (confirmation === 'approve_always') {
+							const toolNamesToAdd = toolsNeedingConfirmation.map(t => t.function.name);
+							// Add to global state (async, for future sessions)
+							addMultipleToAlwaysApproved(toolNamesToAdd);
+							// Add to local session set (sync, for this conversation)
+							toolNamesToAdd.forEach(name => sessionApprovedTools.add(name));
+						}
+
+						// Add all tools to approved list
+						approvedTools.push(...toolsNeedingConfirmation);
+					}
 				}
 
 				// Execute approved tools
