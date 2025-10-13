@@ -1,29 +1,37 @@
-import { encoding_for_model } from 'tiktoken';
-import { createStreamingChatCompletion, type ChatMessage } from '../api/chat.js';
-import { createStreamingResponse } from '../api/responses.js';
-import { createStreamingGeminiCompletion } from '../api/gemini.js';
-import { createStreamingAnthropicCompletion } from '../api/anthropic.js';
-import { SYSTEM_PROMPT } from '../api/systemPrompt.js';
-import { collectAllMCPTools, getTodoService } from '../utils/mcpToolsManager.js';
-import { executeToolCalls, type ToolCall } from '../utils/toolExecutor.js';
-import { getOpenAiConfig } from '../utils/apiConfig.js';
-import { sessionManager } from '../utils/sessionManager.js';
-import { formatTodoContext } from '../utils/todoPreprocessor.js';
-import type { Message } from '../ui/components/MessageList.js';
-import { formatToolCallMessage } from '../utils/messageFormatter.js';
-import { vscodeConnection } from '../utils/vscodeConnection.js';
-import { filesystemService } from '../mcp/filesystem.js';
+import {encoding_for_model} from 'tiktoken';
+import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
+import {createStreamingResponse} from '../api/responses.js';
+import {createStreamingGeminiCompletion} from '../api/gemini.js';
+import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
+import {SYSTEM_PROMPT} from '../api/systemPrompt.js';
+import {collectAllMCPTools, getTodoService} from '../utils/mcpToolsManager.js';
+import {executeToolCalls, type ToolCall} from '../utils/toolExecutor.js';
+import {getOpenAiConfig} from '../utils/apiConfig.js';
+import {sessionManager} from '../utils/sessionManager.js';
+import {formatTodoContext} from '../utils/todoPreprocessor.js';
+import type {Message} from '../ui/components/MessageList.js';
+import {formatToolCallMessage} from '../utils/messageFormatter.js';
 
 export type ConversationHandlerOptions = {
 	userContent: string;
-	imageContents: Array<{type: 'image', data: string, mimeType: string}> | undefined;
+	imageContents:
+		| Array<{type: 'image'; data: string; mimeType: string}>
+		| undefined;
 	controller: AbortController;
 	messages: Message[];
 	saveMessage: (message: any) => Promise<void>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
-	setCurrentTodos: React.Dispatch<React.SetStateAction<Array<{id: string; content: string; status: 'pending' | 'completed'}>>>;
-	requestToolConfirmation: (toolCall: ToolCall, batchToolNames?: string, allTools?: ToolCall[]) => Promise<string>;
+	setCurrentTodos: React.Dispatch<
+		React.SetStateAction<
+			Array<{id: string; content: string; status: 'pending' | 'completed'}>
+		>
+	>;
+	requestToolConfirmation: (
+		toolCall: ToolCall,
+		batchToolNames?: string,
+		allTools?: ToolCall[],
+	) => Promise<string>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
@@ -33,13 +41,23 @@ export type ConversationHandlerOptions = {
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
 	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>; // Control reasoning state (Responses API only)
-	setRetryStatus?: React.Dispatch<React.SetStateAction<{isRetrying: boolean; attempt: number; nextDelay: number; remainingSeconds?: number; errorMessage?: string} | null>>; // Retry status
+	setRetryStatus?: React.Dispatch<
+		React.SetStateAction<{
+			isRetrying: boolean;
+			attempt: number;
+			nextDelay: number;
+			remainingSeconds?: number;
+			errorMessage?: string;
+		} | null>
+	>; // Retry status
 };
 
 /**
  * Handle conversation with streaming and tool calls
  */
-export async function handleConversationWithTools(options: ConversationHandlerOptions) {
+export async function handleConversationWithTools(
+	options: ConversationHandlerOptions,
+) {
 	const {
 		userContent,
 		imageContents,
@@ -55,7 +73,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		yoloMode,
 		setContextUsage,
 		setIsReasoning,
-		setRetryStatus
+		setRetryStatus,
 	} = options;
 
 	// Step 1: Ensure session exists and get existing TODOs
@@ -78,7 +96,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 
 	// Build conversation history with TODO context as pinned user message
 	let conversationMessages: ChatMessage[] = [
-		{ role: 'system', content: SYSTEM_PROMPT }
+		{role: 'system', content: SYSTEM_PROMPT},
 	];
 
 	// If there are TODOs, add pinned context message at the front
@@ -86,7 +104,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 		const todoContext = formatTodoContext(existingTodoList.todos);
 		conversationMessages.push({
 			role: 'user',
-			content: todoContext
+			content: todoContext,
 		});
 	}
 
@@ -102,14 +120,14 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 	conversationMessages.push({
 		role: 'user',
 		content: userContent,
-		images: imageContents
+		images: imageContents,
 	});
 
 	// Save user message (directly save API format message)
 	saveMessage({
 		role: 'user',
 		content: userContent,
-		images: imageContents
+		images: imageContents,
 	}).catch(error => {
 		console.error('Failed to save user message:', error);
 	});
@@ -125,8 +143,8 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 
 	const config = getOpenAiConfig();
 	const model = options.useBasicModel
-		? (config.basicModel || config.advancedModel || 'gpt-4.1')
-		: (config.advancedModel || 'gpt-4.1');
+		? config.basicModel || config.advancedModel || 'gpt-4.1'
+		: config.advancedModel || 'gpt-4.1';
 
 	// Tool calling loop (no limit on rounds)
 	let finalAssistantMessage: Message | null = null;
@@ -158,41 +176,58 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						isRetrying: true,
 						attempt,
 						nextDelay,
-						errorMessage: error.message
+						errorMessage: error.message,
 					});
 				}
 			};
 
-			const streamGenerator = config.requestMethod === 'anthropic'
-				? createStreamingAnthropicCompletion({
-					model,
-					messages: conversationMessages,
-					temperature: 0,
-					max_tokens: config.maxTokens || 4096,
-					tools: mcpTools.length > 0 ? mcpTools : undefined,
-					sessionId: currentSession?.id
-				}, controller.signal, onRetry)
-				: config.requestMethod === 'gemini'
-				? createStreamingGeminiCompletion({
-					model,
-					messages: conversationMessages,
-					temperature: 0,
-					tools: mcpTools.length > 0 ? mcpTools : undefined
-				}, controller.signal, onRetry)
-				: config.requestMethod === 'responses'
-				? createStreamingResponse({
-					model,
-					messages: conversationMessages,
-					temperature: 0,
-					tools: mcpTools.length > 0 ? mcpTools : undefined,
-					prompt_cache_key: cacheKey // Use session ID as cache key
-				}, controller.signal, onRetry)
-				: createStreamingChatCompletion({
-					model,
-					messages: conversationMessages,
-					temperature: 0,
-					tools: mcpTools.length > 0 ? mcpTools : undefined
-				}, controller.signal, onRetry);
+			const streamGenerator =
+				config.requestMethod === 'anthropic'
+					? createStreamingAnthropicCompletion(
+							{
+								model,
+								messages: conversationMessages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								sessionId: currentSession?.id,
+							},
+							controller.signal,
+							onRetry,
+					  )
+					: config.requestMethod === 'gemini'
+					? createStreamingGeminiCompletion(
+							{
+								model,
+								messages: conversationMessages,
+								temperature: 0,
+								tools: mcpTools.length > 0 ? mcpTools : undefined,
+							},
+							controller.signal,
+							onRetry,
+					  )
+					: config.requestMethod === 'responses'
+					? createStreamingResponse(
+							{
+								model,
+								messages: conversationMessages,
+								temperature: 0,
+								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								prompt_cache_key: cacheKey, // Use session ID as cache key
+							},
+							controller.signal,
+							onRetry,
+					  )
+					: createStreamingChatCompletion(
+							{
+								model,
+								messages: conversationMessages,
+								temperature: 0,
+								tools: mcpTools.length > 0 ? mcpTools : undefined,
+							},
+							controller.signal,
+							onRetry,
+					  );
 
 			for await (const chunk of streamGenerator) {
 				if (controller.signal.aborted) break;
@@ -215,7 +250,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					setIsReasoning?.(false);
 					streamedContent += chunk.content;
 					try {
-						const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
+						const tokens = encoder.encode(
+							streamedContent + toolCallAccumulator + reasoningAccumulator,
+						);
 						setStreamTokenCount(tokens.length);
 					} catch (e) {
 						// Ignore encoding errors
@@ -224,7 +261,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					// Accumulate tool call deltas and update token count in real-time
 					toolCallAccumulator += chunk.delta;
 					try {
-						const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
+						const tokens = encoder.encode(
+							streamedContent + toolCallAccumulator + reasoningAccumulator,
+						);
 						setStreamTokenCount(tokens.length);
 					} catch (e) {
 						// Ignore encoding errors
@@ -234,7 +273,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					// Note: reasoning content is NOT sent back to AI, only counted for display
 					reasoningAccumulator += chunk.delta;
 					try {
-						const tokens = encoder.encode(streamedContent + toolCallAccumulator + reasoningAccumulator);
+						const tokens = encoder.encode(
+							streamedContent + toolCallAccumulator + reasoningAccumulator,
+						);
 						setStreamTokenCount(tokens.length);
 					} catch (e) {
 						// Ignore encoding errors
@@ -267,9 +308,9 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						type: 'function' as const,
 						function: {
 							name: tc.function.name,
-							arguments: tc.function.arguments
-						}
-					}))
+							arguments: tc.function.arguments,
+						},
+					})),
 				} as any;
 				conversationMessages.push(assistantMessage);
 
@@ -288,18 +329,21 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						toolArgs = {};
 					}
 
-					setMessages(prev => [...prev, {
-						role: 'assistant',
-						content: `⚡ ${toolDisplay.toolName}`,
-						streaming: false,
-						toolCall: {
-							name: toolCall.function.name,
-							arguments: toolArgs
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: `⚡ ${toolDisplay.toolName}`,
+							streaming: false,
+							toolCall: {
+								name: toolCall.function.name,
+								arguments: toolArgs,
+							},
+							toolDisplay,
+							toolCallId: toolCall.id, // Store tool call ID for later update
+							toolPending: true, // Mark as pending execution
 						},
-						toolDisplay,
-						toolCallId: toolCall.id, // Store tool call ID for later update
-						toolPending: true // Mark as pending execution
-					}]);
+					]);
 				}
 
 				// Filter tools that need confirmation (not in always-approved list OR session-approved list)
@@ -308,7 +352,10 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 
 				for (const toolCall of receivedToolCalls) {
 					// Check both global approved list and session-approved list
-					if (isToolAutoApproved(toolCall.function.name) || sessionApprovedTools.has(toolCall.function.name)) {
+					if (
+						isToolAutoApproved(toolCall.function.name) ||
+						sessionApprovedTools.has(toolCall.function.name)
+					) {
 						autoApprovedTools.push(toolCall);
 					} else {
 						toolsNeedingConfirmation.push(toolCall);
@@ -324,137 +371,67 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 				} else if (toolsNeedingConfirmation.length > 0) {
 					const firstTool = toolsNeedingConfirmation[0]!; // Safe: length > 0 guarantees this exists
 
-					// Check if we should use DIFF+APPLY for filesystem tools
-					let usedDiffApply = false;
-					if (vscodeConnection.isConnected()) {
-						// Try to use DIFF+APPLY for filesystem_create or filesystem_edit
-						if (firstTool.function.name === 'filesystem-create' || firstTool.function.name === 'filesystem-edit') {
-							try {
-								const args = JSON.parse(firstTool.function.arguments);
-
-								if (firstTool.function.name === 'filesystem-create') {
-									// For create, show diff with empty old content
-									const confirmation = await vscodeConnection.requestDiffApply(
-										args.filePath,
-										'', // Empty old content for new file
-										args.content
-									);
-
-									if (confirmation === 'reject') {
-										// Remove pending tool messages
-										setMessages(prev => prev.filter(msg => !msg.toolPending));
-										setMessages(prev => [...prev, {
-											role: 'assistant',
-											content: 'Tool call rejected, session ended',
-											streaming: false
-										}]);
-										if (options.setIsStreaming) {
-											options.setIsStreaming(false);
-										}
-										encoder.free();
-										return;
-									}
-
-									if (confirmation === 'approve_always') {
-										addMultipleToAlwaysApproved([firstTool.function.name]);
-										sessionApprovedTools.add(firstTool.function.name);
-									}
-
-									approvedTools.push(...toolsNeedingConfirmation);
-									usedDiffApply = true;
-								} else if (firstTool.function.name === 'filesystem-edit') {
-									// For edit, read the file first to get old content
-									const fileContent = await filesystemService.getFileContent(
-										args.filePath,
-										args.startLine,
-										args.endLine
-									);
-
-									const confirmation = await vscodeConnection.requestDiffApply(
-										args.filePath,
-										fileContent.content,
-										args.newContent
-									);
-
-									if (confirmation === 'reject') {
-										// Remove pending tool messages
-										setMessages(prev => prev.filter(msg => !msg.toolPending));
-										setMessages(prev => [...prev, {
-											role: 'assistant',
-											content: 'Tool call rejected, session ended',
-											streaming: false
-										}]);
-										if (options.setIsStreaming) {
-											options.setIsStreaming(false);
-										}
-										encoder.free();
-										return;
-									}
-
-									if (confirmation === 'approve_always') {
-										addMultipleToAlwaysApproved([firstTool.function.name]);
-										sessionApprovedTools.add(firstTool.function.name);
-									}
-
-									approvedTools.push(...toolsNeedingConfirmation);
-									usedDiffApply = true;
-								}
-							} catch (error) {
-								// If DIFF+APPLY fails, fall back to regular confirmation
-								console.error('Failed to use DIFF+APPLY:', error);
-							}
-						}
-					}
-
-					// If we didn't use DIFF+APPLY, fall back to regular CLI confirmation
-					if (!usedDiffApply) {
-						// Pass all tools for proper display in confirmation UI
-						const allTools = toolsNeedingConfirmation.length > 1
+					// Use regular CLI confirmation
+					// Pass all tools for proper display in confirmation UI
+					const allTools =
+						toolsNeedingConfirmation.length > 1
 							? toolsNeedingConfirmation
 							: undefined;
 
-						// Use first tool for confirmation UI, but apply result to all
-						const confirmation = await requestToolConfirmation(firstTool, undefined, allTools);
+					// Use first tool for confirmation UI, but apply result to all
+					const confirmation = await requestToolConfirmation(
+						firstTool,
+						undefined,
+						allTools,
+					);
 
-						if (confirmation === 'reject') {
-							// Remove pending tool messages
-							setMessages(prev => prev.filter(msg => !msg.toolPending));
+					if (confirmation === 'reject') {
+						// Remove pending tool messages
+						setMessages(prev => prev.filter(msg => !msg.toolPending));
 
-							// User rejected - end conversation
-							setMessages(prev => [...prev, {
+						// User rejected - end conversation
+						setMessages(prev => [
+							...prev,
+							{
 								role: 'assistant',
 								content: 'Tool call rejected, session ended',
-								streaming: false
-							}]);
+								streaming: false,
+							},
+						]);
 
-							// End streaming immediately
-							if (options.setIsStreaming) {
-								options.setIsStreaming(false);
-							}
-							encoder.free();
-							return; // Exit the conversation loop
+						// End streaming immediately
+						if (options.setIsStreaming) {
+							options.setIsStreaming(false);
 						}
-
-						// If approved_always, add ALL these tools to both global and session-approved sets
-						if (confirmation === 'approve_always') {
-							const toolNamesToAdd = toolsNeedingConfirmation.map(t => t.function.name);
-							// Add to global state (async, for future sessions)
-							addMultipleToAlwaysApproved(toolNamesToAdd);
-							// Add to local session set (sync, for this conversation)
-							toolNamesToAdd.forEach(name => sessionApprovedTools.add(name));
-						}
-
-						// Add all tools to approved list
-						approvedTools.push(...toolsNeedingConfirmation);
+						encoder.free();
+						return; // Exit the conversation loop
 					}
+
+					// If approved_always, add ALL these tools to both global and session-approved sets
+					if (confirmation === 'approve_always') {
+						const toolNamesToAdd = toolsNeedingConfirmation.map(
+							t => t.function.name,
+						);
+						// Add to global state (async, for future sessions)
+						addMultipleToAlwaysApproved(toolNamesToAdd);
+						// Add to local session set (sync, for this conversation)
+						toolNamesToAdd.forEach(name => sessionApprovedTools.add(name));
+					}
+
+					// Add all tools to approved list
+					approvedTools.push(...toolsNeedingConfirmation);
 				}
 
 				// Execute approved tools
 				const toolResults = await executeToolCalls(approvedTools);
 
 				// Check if there are TODO related tool calls, if yes refresh TODO list
-				const hasTodoTools = approvedTools.some(t => t.function.name.startsWith('todo-'));
-				const hasTodoUpdateTools = approvedTools.some(t => t.function.name === 'todo-update');
+				const hasTodoTools = approvedTools.some(t =>
+					t.function.name.startsWith('todo-'),
+				);
+				const hasTodoUpdateTools = approvedTools.some(
+					t => t.function.name === 'todo-update',
+				);
 
 				if (hasTodoTools) {
 					const session = sessionManager.getCurrentSession();
@@ -468,15 +445,30 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 
 				// Update existing tool call messages with results
 				for (const result of toolResults) {
-					const toolCall = receivedToolCalls.find(tc => tc.id === result.tool_call_id);
+					const toolCall = receivedToolCalls.find(
+						tc => tc.id === result.tool_call_id,
+					);
 					if (toolCall) {
 						const isError = result.content.startsWith('Error:');
 						const statusIcon = isError ? '✗' : '✓';
 						const statusText = isError ? `\n  └─ ${result.content}` : '';
 
 						// Check if this is an edit tool with diff data
-						let editDiffData: {oldContent?: string; newContent?: string; filename?: string; completeOldContent?: string; completeNewContent?: string; contextStartLine?: number} | undefined;
-						if ((toolCall.function.name === 'filesystem-edit' || toolCall.function.name === 'filesystem-edit_search') && !isError) {
+						let editDiffData:
+							| {
+									oldContent?: string;
+									newContent?: string;
+									filename?: string;
+									completeOldContent?: string;
+									completeNewContent?: string;
+									contextStartLine?: number;
+							  }
+							| undefined;
+						if (
+							(toolCall.function.name === 'filesystem-edit' ||
+								toolCall.function.name === 'filesystem-edit_search') &&
+							!isError
+						) {
 							try {
 								const resultData = JSON.parse(result.content);
 								if (resultData.oldContent && resultData.newContent) {
@@ -486,7 +478,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 										filename: JSON.parse(toolCall.function.arguments).filePath,
 										completeOldContent: resultData.completeOldContent,
 										completeNewContent: resultData.completeNewContent,
-										contextStartLine: resultData.contextStartLine
+										contextStartLine: resultData.contextStartLine,
 									};
 								}
 							} catch (e) {
@@ -495,7 +487,14 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						}
 
 						// Check if this is a terminal execution result
-						let terminalResultData: {stdout?: string; stderr?: string; exitCode?: number; command?: string} | undefined;
+						let terminalResultData:
+							| {
+									stdout?: string;
+									stderr?: string;
+									exitCode?: number;
+									command?: string;
+							  }
+							| undefined;
 						if (toolCall.function.name === 'terminal-execute' && !isError) {
 							try {
 								const resultData = JSON.parse(result.content);
@@ -504,7 +503,7 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 										stdout: resultData.stdout || '',
 										stderr: resultData.stderr || '',
 										exitCode: resultData.exitCode || 0,
-										command: resultData.command
+										command: resultData.command,
 									};
 								}
 							} catch (e) {
@@ -513,25 +512,31 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						}
 
 						// Update the existing pending message instead of adding a new one
-						setMessages(prev => prev.map(msg => {
-							if (msg.toolCallId === toolCall.id && msg.toolPending) {
-								return {
-									...msg,
-									content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-									toolPending: false,
-									toolCall: editDiffData ? {
-										name: toolCall.function.name,
-										arguments: editDiffData
-									} : terminalResultData ? {
-										name: toolCall.function.name,
-										arguments: terminalResultData
-									} : msg.toolCall,
-									// Store tool result for preview rendering
-									toolResult: !isError ? result.content : undefined
-								};
-							}
-							return msg;
-						}));
+						setMessages(prev =>
+							prev.map(msg => {
+								if (msg.toolCallId === toolCall.id && msg.toolPending) {
+									return {
+										...msg,
+										content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+										toolPending: false,
+										toolCall: editDiffData
+											? {
+													name: toolCall.function.name,
+													arguments: editDiffData,
+											  }
+											: terminalResultData
+											? {
+													name: toolCall.function.name,
+													arguments: terminalResultData,
+											  }
+											: msg.toolCall,
+										// Store tool result for preview rendering
+										toolResult: !isError ? result.content : undefined,
+									};
+								}
+								return msg;
+							}),
+						);
 					}
 
 					// Add tool result to conversation history and save
@@ -549,8 +554,8 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 							role: 'assistant',
 							content: '',
 							streaming: false,
-							showTodoTree: true
-						}
+							showTodoTree: true,
+						},
 					]);
 				}
 
@@ -565,19 +570,22 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						const combinedMessage = pendingMessages.join('\n\n');
 
 						// Add user message to UI
-						const userMessage: Message = { role: 'user', content: combinedMessage };
+						const userMessage: Message = {
+							role: 'user',
+							content: combinedMessage,
+						};
 						setMessages(prev => [...prev, userMessage]);
 
 						// Add user message to conversation history
 						conversationMessages.push({
 							role: 'user',
-							content: combinedMessage
+							content: combinedMessage,
 						});
 
 						// Save user message
 						saveMessage({
 							role: 'user',
-							content: combinedMessage
+							content: combinedMessage,
 						}).catch(error => {
 							console.error('Failed to save pending user message:', error);
 						});
@@ -594,14 +602,14 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 					role: 'assistant',
 					content: streamedContent.trim(),
 					streaming: false,
-					discontinued: controller.signal.aborted
+					discontinued: controller.signal.aborted,
 				};
 				setMessages(prev => [...prev, finalAssistantMessage!]);
 
 				// Add to conversation history and save
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
-					content: streamedContent.trim()
+					content: streamedContent.trim(),
 				};
 				conversationMessages.push(assistantMessage);
 				saveMessage(assistantMessage).catch(error => {

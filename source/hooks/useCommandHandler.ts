@@ -20,8 +20,15 @@ type CommandHandlerOptions = {
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setShouldIncludeSystemInfo: React.Dispatch<React.SetStateAction<boolean>>;
-	setVscodeConnectionStatus: React.Dispatch<React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>>;
-	processMessage: (message: string, images?: Array<{data: string; mimeType: string}>, useBasicModel?: boolean, hideUserMessage?: boolean) => Promise<void>;
+	setVscodeConnectionStatus: React.Dispatch<
+		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
+	>;
+	processMessage: (
+		message: string,
+		images?: Array<{data: string; mimeType: string}>,
+		useBasicModel?: boolean,
+		hideUserMessage?: boolean,
+	) => Promise<void>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -68,7 +75,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						await sessionManager.addMessage({
 							role: 'assistant',
 							content: result.summary,
-							timestamp: Date.now()
+							timestamp: Date.now(),
 						});
 					}
 
@@ -88,7 +95,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				} catch (error) {
 					// Show error message
 					const errorMsg =
-						error instanceof Error ? error.message : 'Unknown compression error';
+						error instanceof Error
+							? error.message
+							: 'Unknown compression error';
 					options.setCompressionError(errorMsg);
 
 					const errorMessage: Message = {
@@ -113,13 +122,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					} else {
 						options.setVscodeConnectionStatus('connecting');
 					}
-					// Add command execution feedback
-					const commandMessage: Message = {
-						role: 'command',
-						content: '',
-						commandName: commandName,
-					};
-					options.setMessages(prev => [...prev, commandMessage]);
+					// Don't add command message to keep UI clean
 				} else {
 					options.setVscodeConnectionStatus('error');
 				}
@@ -176,13 +179,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'goHome') {
 				navigateTo('welcome');
 			} else if (result.success && result.action === 'toggleYolo') {
+				// Toggle YOLO mode without adding command message
 				options.setYoloMode(prev => !prev);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
+				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
 				result.action === 'initProject' &&

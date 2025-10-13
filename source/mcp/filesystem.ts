@@ -609,26 +609,37 @@ export class FilesystemMCPService {
 			const content = await fs.readFile(fullPath, 'utf-8');
 			const lines = content.split('\n');
 
-			// Normalize search content (handle different line ending styles)
+			// Normalize line endings
 			const normalizedSearch = searchContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 			const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-			// Find all matches
-			const matches: Array<{index: number; line: number; endLine: number}> = [];
-			let searchIndex = 0;
+			// Apply whitespace normalization for matching (same as getFileContent output)
+			const normalizeWhitespace = (text: string) =>
+				text.replace(/\t/g, ' ').replace(/  +/g, ' ');
 
-			while (true) {
-				const matchIndex = normalizedContent.indexOf(normalizedSearch, searchIndex);
-				if (matchIndex === -1) break;
+			const normalizedSearchForMatch = normalizeWhitespace(normalizedSearch);
+			const normalizedContentForMatch = normalizeWhitespace(normalizedContent);
 
-				// Calculate line numbers for this match
-				const beforeMatch = normalizedContent.substring(0, matchIndex);
-				const startLine = (beforeMatch.match(/\n/g) || []).length + 1;
-				const matchLines = (normalizedSearch.match(/\n/g) || []).length;
-				const endLine = startLine + matchLines;
+			// Find all matches by comparing normalized versions line by line
+			// This avoids complex character position mapping
+			const matches: Array<{startLine: number; endLine: number}> = [];
+			const searchLines = normalizedSearchForMatch.split('\n');
+			const contentLines = normalizedContentForMatch.split('\n');
 
-				matches.push({index: matchIndex, line: startLine, endLine});
-				searchIndex = matchIndex + normalizedSearch.length;
+			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+				let isMatch = true;
+				for (let j = 0; j < searchLines.length; j++) {
+					if (contentLines[i + j] !== searchLines[j]) {
+						isMatch = false;
+						break;
+					}
+				}
+
+				if (isMatch) {
+					const startLine = i + 1; // Convert to 1-indexed
+					const endLine = startLine + searchLines.length - 1;
+					matches.push({startLine, endLine});
+				}
 			}
 
 			// Handle no matches
@@ -639,7 +650,7 @@ export class FilesystemMCPService {
 			}
 
 			// Handle occurrence selection
-			let selectedMatch: {index: number; line: number; endLine: number};
+			let selectedMatch: {startLine: number; endLine: number};
 
 			if (occurrence === -1) {
 				// Replace all occurrences
@@ -653,25 +664,25 @@ export class FilesystemMCPService {
 			} else if (occurrence < 1 || occurrence > matches.length) {
 				throw new Error(
 					`Invalid occurrence ${occurrence}. Found ${matches.length} match(es) at lines: ${matches
-						.map(m => m.line)
+						.map(m => m.startLine)
 						.join(', ')}`,
 				);
 			} else {
 				selectedMatch = matches[occurrence - 1]!;
 			}
 
-			const {line: startLine, endLine} = selectedMatch;
+			const {startLine, endLine} = selectedMatch;
 
 			// Backup file before editing
 			await incrementalSnapshotManager.backupFile(fullPath);
 
-			// Perform the replacement
+			// Perform the replacement by replacing the matched lines
 			const normalizedReplace = replaceContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-			const beforeContent = normalizedContent.substring(0, selectedMatch.index);
-			const afterContent = normalizedContent.substring(
-				selectedMatch.index + normalizedSearch.length,
-			);
-			const modifiedContent = beforeContent + normalizedReplace + afterContent;
+			const beforeLines = lines.slice(0, startLine - 1);
+			const afterLines = lines.slice(endLine);
+			const replaceLines = normalizedReplace.split('\n');
+			const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
+			const modifiedContent = modifiedLines.join('\n');
 
 			// Calculate replaced content for display
 			const replacedLines = lines.slice(startLine - 1, endLine);
@@ -684,9 +695,7 @@ export class FilesystemMCPService {
 				.join('\n');
 
 			// Calculate context boundaries
-			const modifiedLines = modifiedContent.split('\n');
-			const replaceLines = normalizedReplace.split('\n');
-			const lineDifference = replaceLines.length - (endLine - startLine);
+			const lineDifference = replaceLines.length - (endLine - startLine + 1);
 
 			const smartBoundaries = this.findSmartContextBoundaries(
 				lines,

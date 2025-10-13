@@ -1,7 +1,7 @@
-import { useRef, useEffect } from 'react';
-import { useInput } from 'ink';
-import { TextBuffer } from '../utils/textBuffer.js';
-import { executeCommand } from '../utils/commandExecutor.js';
+import {useRef, useEffect} from 'react';
+import {useInput} from 'ink';
+import {TextBuffer} from '../utils/textBuffer.js';
+import {executeCommand} from '../utils/commandExecutor.js';
 
 type KeyboardInputOptions = {
 	buffer: TextBuffer;
@@ -13,7 +13,7 @@ type KeyboardInputOptions = {
 	setShowCommands: (show: boolean) => void;
 	commandSelectedIndex: number;
 	setCommandSelectedIndex: (index: number | ((prev: number) => number)) => void;
-	getFilteredCommands: () => Array<{ name: string; description: string }>;
+	getFilteredCommands: () => Array<{name: string; description: string}>;
 	updateCommandPanelState: (text: string) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	// File picker
@@ -28,7 +28,7 @@ type KeyboardInputOptions = {
 	filteredFileCount: number;
 	updateFilePickerState: (text: string, cursorPos: number) => void;
 	handleFileSelect: (filePath: string) => Promise<void>;
-	fileListRef: React.RefObject<{ getSelectedFile: () => string | null }>;
+	fileListRef: React.RefObject<{getSelectedFile: () => string | null}>;
 	// History navigation
 	showHistoryMenu: boolean;
 	setShowHistoryMenu: (show: boolean) => void;
@@ -37,14 +37,18 @@ type KeyboardInputOptions = {
 	escapeKeyCount: number;
 	setEscapeKeyCount: (count: number | ((prev: number) => number)) => void;
 	escapeKeyTimer: React.MutableRefObject<NodeJS.Timeout | null>;
-	getUserMessages: () => Array<{ label: string; value: string; infoText: string }>;
+	getUserMessages: () => Array<{
+		label: string;
+		value: string;
+		infoText: string;
+	}>;
 	handleHistorySelect: (value: string) => void;
 	// Clipboard
 	pasteFromClipboard: () => Promise<void>;
 	// Submit
 	onSubmit: (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 	) => void;
 };
 
@@ -111,6 +115,16 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Handle input using useInput hook
 	useInput((input, key) => {
 		if (disabled) return;
+
+		// Shift+Tab - Toggle YOLO mode
+		if (key.shift && key.tab) {
+			executeCommand('yolo').then(result => {
+				if (onCommand) {
+					onCommand('yolo', result);
+				}
+			});
+			return;
+		}
 
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {

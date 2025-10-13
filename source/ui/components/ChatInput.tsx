@@ -1,25 +1,25 @@
-import React, { useCallback, useEffect } from 'react';
-import { Box, Text, useStdout } from 'ink';
-import { Viewport } from '../../utils/textBuffer.js';
-import { cpSlice, cpLen } from '../../utils/textUtils.js';
+import React, {useCallback, useEffect} from 'react';
+import {Box, Text, useStdout} from 'ink';
+import {Viewport} from '../../utils/textBuffer.js';
+import {cpSlice, cpLen} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
-import { useInputBuffer } from '../../hooks/useInputBuffer.js';
-import { useCommandPanel } from '../../hooks/useCommandPanel.js';
-import { useFilePicker } from '../../hooks/useFilePicker.js';
-import { useHistoryNavigation } from '../../hooks/useHistoryNavigation.js';
-import { useClipboard } from '../../hooks/useClipboard.js';
-import { useKeyboardInput } from '../../hooks/useKeyboardInput.js';
+import {useInputBuffer} from '../../hooks/useInputBuffer.js';
+import {useCommandPanel} from '../../hooks/useCommandPanel.js';
+import {useFilePicker} from '../../hooks/useFilePicker.js';
+import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
+import {useClipboard} from '../../hooks/useClipboard.js';
+import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
 
 type Props = {
 	onSubmit: (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
-	chatHistory?: Array<{ role: string; content: string }>;
+	chatHistory?: Array<{role: string; content: string}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -45,7 +45,7 @@ export default function ChatInput({
 	contextUsage,
 	snapshotFileCount,
 }: Props) {
-	const { stdout } = useStdout();
+	const {stdout} = useStdout();
 	const terminalWidth = stdout?.columns || 80;
 
 	const uiOverhead = 8;
@@ -55,7 +55,7 @@ export default function ChatInput({
 	};
 
 	// Use input buffer hook
-	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
+	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
 
 	// Use command panel hook
 	const {
@@ -98,7 +98,7 @@ export default function ChatInput({
 	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
 
 	// Use clipboard hook
-	const { pasteFromClipboard } = useClipboard(
+	const {pasteFromClipboard} = useClipboard(
 		buffer,
 		updateCommandPanelState,
 		updateFilePickerState,
@@ -310,8 +310,12 @@ export default function ChatInput({
 								// the smallest snapshot index that is > messageIndex
 								let fileCount = 0;
 								if (snapshotFileCount && snapshotFileCount.size > 0) {
-									const snapshotIndices = Array.from(snapshotFileCount.keys()).sort((a, b) => a - b);
-									const matchingSnapshot = snapshotIndices.find(idx => idx > messageIndex);
+									const snapshotIndices = Array.from(
+										snapshotFileCount.keys(),
+									).sort((a, b) => a - b);
+									const matchingSnapshot = snapshotIndices.find(
+										idx => idx > messageIndex,
+									);
 									if (matchingSnapshot !== undefined) {
 										fileCount = snapshotFileCount.get(matchingSnapshot) || 0;
 									}
@@ -401,10 +405,9 @@ export default function ChatInput({
 									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 									const totalInputTokens = isAnthropic
 										? contextUsage.inputTokens +
-										(contextUsage.cacheCreationTokens || 0) +
-										(contextUsage.cacheReadTokens || 0)
+										  (contextUsage.cacheCreationTokens || 0) +
+										  (contextUsage.cacheReadTokens || 0)
 										: contextUsage.inputTokens;
-
 
 									const percentage = Math.min(
 										100,
@@ -484,12 +487,12 @@ export default function ChatInput({
 							{showCommands && getFilteredCommands().length > 0
 								? 'Type to filter commands'
 								: showFilePicker
-									? 'Type to filter files • Tab/Enter to select • ESC to cancel'
-									: (() => {
+								? 'Type to filter files • Tab/Enter to select • ESC to cancel'
+								: (() => {
 										const pasteKey =
 											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
-									})()}
+								  })()}
 						</Text>
 					</Box>
 				</>

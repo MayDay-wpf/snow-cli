@@ -598,6 +598,7 @@ export default function ChatScreen({}: Props) {
 								</Text>
 								<Text>• Ask for code explanations and debugging help</Text>
 								<Text>• Press ESC during response to interrupt</Text>
+								<Text>• Press Shift+Tab: toggle YOLO</Text>
 								<Text>• Working directory: {workingDirectory}</Text>
 							</Box>
 						</Box>
