@@ -361,13 +361,15 @@ export class FilesystemMCPService {
 			// Extract specified lines (convert to 0-indexed) and add line numbers
 			const selectedLines = lines.slice(start - 1, end);
 
-			// Format with line numbers (similar to cat -n)
-			// Calculate the width needed for line numbers
-			const maxLineNumWidth = String(end).length;
+			// Format with line numbers (no padding to save tokens)
+			// Normalize whitespace: tabs → single space, multiple spaces → single space
 			const numberedLines = selectedLines.map((line, index) => {
 				const lineNum = start + index;
-				const paddedLineNum = String(lineNum).padStart(maxLineNumWidth, ' ');
-				return `${paddedLineNum}→${line}`;
+				// Normalize whitespace to reduce token usage
+				const normalizedLine = line
+					.replace(/\t/g, ' ')      // Convert tabs to single space
+					.replace(/  +/g, ' ');    // Compress multiple spaces to single space
+				return `${lineNum}→${normalizedLine}`;
 			});
 
 			const partialContent = numberedLines.join('\n');
@@ -594,8 +596,6 @@ export class FilesystemMCPService {
 		totalLines: number;
 		structureAnalysis?: StructureAnalysis;
 		diagnostics?: Diagnostic[];
-		completeOldContent?: string;
-		completeNewContent?: string;
 	}> {
 		try {
 			const fullPath = this.resolvePath(filePath);
@@ -675,12 +675,11 @@ export class FilesystemMCPService {
 
 			// Calculate replaced content for display
 			const replacedLines = lines.slice(startLine - 1, endLine);
-			const maxLineNumWidth = String(endLine).length;
 			const replacedContent = replacedLines
 				.map((line, idx) => {
 					const lineNum = startLine + idx;
-					const paddedNum = String(lineNum).padStart(maxLineNumWidth, ' ');
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -703,8 +702,8 @@ export class FilesystemMCPService {
 			const oldContent = oldContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const paddedNum = String(lineNum).padStart(String(contextEnd).length, ' ');
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -747,8 +746,8 @@ export class FilesystemMCPService {
 			const newContextContent = newContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const paddedNum = String(lineNum).padStart(String(finalContextEnd).length, ' ');
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -786,22 +785,25 @@ export class FilesystemMCPService {
 				contextEndLine: finalContextEnd,
 				totalLines: finalTotalLines,
 				structureAnalysis,
-				completeOldContent: content,
-				completeNewContent: finalContent,
 				diagnostics: undefined as Diagnostic[] | undefined,
 			};
 
 			// Add diagnostics if found
 			if (diagnostics.length > 0) {
-				result.diagnostics = diagnostics;
+				// Limit diagnostics to top 10 to avoid excessive token usage
+				const limitedDiagnostics = diagnostics.slice(0, 10);
+				result.diagnostics = limitedDiagnostics;
+
 				const errorCount = diagnostics.filter(d => d.severity === 'error').length;
 				const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
 
 				if (errorCount > 0 || warningCount > 0) {
 					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
 
+					// Format diagnostics for better readability (limit to first 5 for message display)
 					const formattedDiagnostics = diagnostics
 						.filter(d => d.severity === 'error' || d.severity === 'warning')
+						.slice(0, 5)
 						.map(d => {
 							const icon = d.severity === 'error' ? '❌' : '⚠️';
 							const location = `${filePath}:${d.line}:${d.character}`;
@@ -810,6 +812,9 @@ export class FilesystemMCPService {
 						.join('\n\n');
 
 					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
+					if (errorCount + warningCount > 5) {
+						result.message += `\n   ... and ${errorCount + warningCount - 5} more issue(s)`;
+					}
 					result.message += `\n\n   ⚡ TIP: Review the errors above and make another edit to fix them`;
 				}
 			}
@@ -914,9 +919,6 @@ export class FilesystemMCPService {
 		linesModified: number;
 		structureAnalysis?: StructureAnalysis;
 		diagnostics?: Diagnostic[];
-		// New fields for complete file comparison
-		completeOldContent?: string;
-		completeNewContent?: string;
 	}> {
 		try {
 			const fullPath = this.resolvePath(filePath);
@@ -956,11 +958,8 @@ export class FilesystemMCPService {
 			const replacedContent = replacedLines
 				.map((line, idx) => {
 					const lineNum = startLine + idx;
-					const paddedNum = String(lineNum).padStart(
-						String(adjustedEndLine).length,
-						' ',
-					);
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -979,11 +978,8 @@ export class FilesystemMCPService {
 			const oldContent = oldContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const paddedNum = String(lineNum).padStart(
-						String(contextEnd).length,
-						' ',
-					);
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -1010,11 +1006,8 @@ export class FilesystemMCPService {
 			const newContextContent = newContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const paddedNum = String(lineNum).padStart(
-						String(newContextEnd).length,
-						' ',
-					);
-					return `${paddedNum}→${line}`;
+					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+					return `${lineNum}→${normalizedLine}`;
 				})
 				.join('\n');
 
@@ -1057,11 +1050,8 @@ export class FilesystemMCPService {
 					finalContextContent = formattedContextLines
 						.map((line, idx) => {
 							const lineNum = contextStart + idx;
-							const paddedNum = String(lineNum).padStart(
-								String(finalContextEnd).length,
-								' ',
-							);
-							return `${paddedNum}→${line}`;
+							const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+							return `${lineNum}→${normalizedLine}`;
 						})
 						.join('\n');
 				} catch (formatError) {
@@ -1091,10 +1081,6 @@ export class FilesystemMCPService {
 				// Ignore diagnostics errors, they are optional
 			}
 
-			// Prepare complete file contents (without line numbers for diff comparison)
-			const completeOldContent = lines.join('\n');
-			const completeNewContent = finalLines.join('\n');
-
 			const result: {
 				message: string;
 				oldContent: string;
@@ -1106,8 +1092,6 @@ export class FilesystemMCPService {
 				linesModified: number;
 				structureAnalysis?: StructureAnalysis;
 				diagnostics?: Diagnostic[];
-				completeOldContent?: string;
-				completeNewContent?: string;
 			} = {
 				message:
 					`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
@@ -1124,14 +1108,14 @@ export class FilesystemMCPService {
 				totalLines: finalTotalLines,
 				linesModified: linesToModify,
 				structureAnalysis,
-				// Add complete file contents for intelligent diff display
-				completeOldContent,
-				completeNewContent,
 			};
 
 			// Add diagnostics if any were found
 			if (diagnostics.length > 0) {
-				result.diagnostics = diagnostics;
+				// Limit diagnostics to top 10 to avoid excessive token usage
+				const limitedDiagnostics = diagnostics.slice(0, 10);
+				result.diagnostics = limitedDiagnostics;
+
 				const errorCount = diagnostics.filter(
 					d => d.severity === 'error',
 				).length;
@@ -1142,9 +1126,10 @@ export class FilesystemMCPService {
 				if (errorCount > 0 || warningCount > 0) {
 					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
 
-					// Format diagnostics for better readability
+					// Format diagnostics for better readability (limit to first 5 for message display)
 					const formattedDiagnostics = diagnostics
 						.filter(d => d.severity === 'error' || d.severity === 'warning')
+						.slice(0, 5)
 						.map(d => {
 							const icon = d.severity === 'error' ? '❌' : '⚠️';
 							const location = `${filePath}:${d.line}:${d.character}`;
@@ -1155,6 +1140,9 @@ export class FilesystemMCPService {
 						.join('\n\n');
 
 					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
+					if (errorCount + warningCount > 5) {
+						result.message += `\n   ... and ${errorCount + warningCount - 5} more issue(s)`;
+					}
 					result.message += `\n\n   ⚡ TIP: Review the errors above and make another small edit to fix them`;
 				}
 			}

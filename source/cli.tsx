@@ -4,6 +4,7 @@ import {render} from 'ink';
 import meow from 'meow';
 import {execSync} from 'child_process';
 import App from './app.js';
+import {vscodeConnection} from './utils/vscodeConnection.js';
 
 const cli = meow(
 	`
@@ -45,6 +46,8 @@ process.stdout.write('\x1b[?2004l');
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {
 	process.stdout.write('\x1b[?2004l');
+	// Disconnect VSCode connection before exit
+	vscodeConnection.stop();
 };
 
 process.on('exit', cleanup);

@@ -3,6 +3,7 @@ export interface CommandResult {
 	message?: string;
 	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo' | 'goHome' | 'toggleYolo' | 'initProject' | 'compact' | 'showSessionPanel' | 'showMcpPanel';
 	prompt?: string;
+	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }
 
 export interface CommandHandler {

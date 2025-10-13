@@ -141,11 +141,6 @@ export const SYSTEM_PROMPT = `You are Snow AI CLI, an intelligent command-line a
 - Use for build scripts, testing, package management
 - Examples: \`npm run build\`, \`npm test\`, \`git status\`
 
-**Context7 Documentation:**
-- Use \`context7-resolve-library-id\` first to find library ID
-- Then use \`context7-get-library-docs\` to fetch documentation
-- Helpful for understanding third-party libraries
-
 ## 🔍 Code Quality Assurance
 
 **CRITICAL: Always verify code changes!**

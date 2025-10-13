@@ -4,21 +4,16 @@ import { vscodeConnection } from '../vscodeConnection.js';
 // IDE connection command handler
 registerCommand('ide', {
 	execute: async (): Promise<CommandResult> => {
-		// Check if already connected
-		if (vscodeConnection.isConnected()) {
-			return {
-				success: true,
-				action: 'info',
-				message: 'Already connected to VSCode editor'
-			};
-		}
-
-		// Check if server is already running (but not connected yet)
+		// Check if server is already running in THIS process (allow multiple clients to connect)
 		if (vscodeConnection.isServerRunning()) {
+			const isConnected = vscodeConnection.isConnected();
 			return {
 				success: true,
 				action: 'info',
-				message: `VSCode connection server is already running on port ${vscodeConnection.getPort()}\nWaiting for VSCode extension to connect...`
+				alreadyConnected: isConnected, // Add this flag to indicate connection status
+				message: isConnected
+					? `Connected to VSCode (server running on port ${vscodeConnection.getPort()})`
+					: `VSCode connection server is running on port ${vscodeConnection.getPort()}\nWaiting for VSCode extension to connect...`
 			};
 		}
 
@@ -33,9 +28,13 @@ registerCommand('ide', {
 		} catch (error) {
 			// Handle EADDRINUSE error specifically
 			if (error instanceof Error && 'code' in error && error.code === 'EADDRINUSE') {
+				// Port is in use by another Snow CLI process - this is OK!
+				// Return success and indicate already connected
 				return {
-					success: false,
-					message: `Port ${vscodeConnection.getPort()} is already in use. Please restart Snow CLI to reset the connection.`
+					success: true,
+					action: 'info',
+					alreadyConnected: true, // Treat as already connected since another terminal has the connection
+					message: `VSCode connection is already active in another Snow CLI terminal.\nNo additional connection needed - context will be shared through VSCode extension.`
 				};
 			}
 			return {

@@ -1,9 +1,9 @@
-import { WebSocketServer, WebSocket } from 'ws';
+import {WebSocketServer, WebSocket} from 'ws';
 
 interface EditorContext {
 	activeFile?: string;
 	selectedText?: string;
-	cursorPosition?: { line: number; character: number };
+	cursorPosition?: {line: number; character: number};
 	workspaceFolder?: string;
 }
 
@@ -18,7 +18,7 @@ interface Diagnostic {
 
 class VSCodeConnectionManager {
 	private server: WebSocketServer | null = null;
-	private client: WebSocket | null = null;
+	private clients: Set<WebSocket> = new Set();
 	private port = 9527;
 	private editorContext: EditorContext = {};
 	private listeners: Array<(context: EditorContext) => void> = [];
@@ -31,17 +31,13 @@ class VSCodeConnectionManager {
 
 		return new Promise((resolve, reject) => {
 			try {
-				this.server = new WebSocketServer({ port: this.port });
+				this.server = new WebSocketServer({port: this.port});
 
-				this.server.on('connection', (ws) => {
-					// Close old client if exists
-					if (this.client && this.client !== ws) {
-						this.client.close();
-					}
+				this.server.on('connection', ws => {
+					// Add new client to the set (allow multiple connections)
+					this.clients.add(ws);
 
-					this.client = ws;
-
-					ws.on('message', (message) => {
+					ws.on('message', message => {
 						try {
 							const data = JSON.parse(message.toString());
 							this.handleMessage(data);
@@ -51,13 +47,12 @@ class VSCodeConnectionManager {
 					});
 
 					ws.on('close', () => {
-						if (this.client === ws) {
-							this.client = null;
-						}
+						this.clients.delete(ws);
 					});
 
 					ws.on('error', () => {
 						// Silently handle errors
+						this.clients.delete(ws);
 					});
 				});
 
@@ -65,7 +60,7 @@ class VSCodeConnectionManager {
 					resolve();
 				});
 
-				this.server.on('error', (error) => {
+				this.server.on('error', error => {
 					reject(error);
 				});
 			} catch (error) {
@@ -75,10 +70,12 @@ class VSCodeConnectionManager {
 	}
 
 	stop(): void {
-		if (this.client) {
-			this.client.close();
-			this.client = null;
+		// Close all connected clients
+		for (const client of this.clients) {
+			client.close();
 		}
+		this.clients.clear();
+
 		if (this.server) {
 			this.server.close();
 			this.server = null;
@@ -86,7 +83,12 @@ class VSCodeConnectionManager {
 	}
 
 	isConnected(): boolean {
-		return this.client !== null && this.client.readyState === WebSocket.OPEN;
+		return (
+			this.clients.size > 0 &&
+			Array.from(this.clients).some(
+				client => client.readyState === WebSocket.OPEN,
+			)
+		);
 	}
 
 	isServerRunning(): boolean {
@@ -94,13 +96,13 @@ class VSCodeConnectionManager {
 	}
 
 	getContext(): EditorContext {
-		return { ...this.editorContext };
+		return {...this.editorContext};
 	}
 
 	onContextUpdate(listener: (context: EditorContext) => void): () => void {
 		this.listeners.push(listener);
 		return () => {
-			this.listeners = this.listeners.filter((l) => l !== listener);
+			this.listeners = this.listeners.filter(l => l !== listener);
 		};
 	}
 
@@ -110,7 +112,7 @@ class VSCodeConnectionManager {
 				activeFile: data.activeFile,
 				selectedText: data.selectedText,
 				cursorPosition: data.cursorPosition,
-				workspaceFolder: data.workspaceFolder
+				workspaceFolder: data.workspaceFolder,
 			};
 			this.notifyListeners();
 		}
@@ -132,8 +134,13 @@ class VSCodeConnectionManager {
 	 * @returns Promise that resolves with diagnostics array
 	 */
 	async requestDiagnostics(filePath: string): Promise<Diagnostic[]> {
-		return new Promise((resolve) => {
-			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+		return new Promise(resolve => {
+			// Get first connected client
+			const client = Array.from(this.clients).find(
+				c => c.readyState === WebSocket.OPEN,
+			);
+
+			if (!client) {
 				resolve([]); // Return empty array if not connected
 				return;
 			}
@@ -158,16 +165,16 @@ class VSCodeConnectionManager {
 
 			const cleanup = () => {
 				clearTimeout(timeout);
-				this.client?.removeListener('message', handler);
+				client?.removeListener('message', handler);
 			};
 
-			this.client.on('message', handler);
-			this.client.send(
+			client.on('message', handler);
+			client.send(
 				JSON.stringify({
 					type: 'getDiagnostics',
 					requestId,
-					filePath
-				})
+					filePath,
+				}),
 			);
 		});
 	}
@@ -182,10 +189,15 @@ class VSCodeConnectionManager {
 	async requestDiffApply(
 		filePath: string,
 		oldContent: string,
-		newContent: string
+		newContent: string,
 	): Promise<'approve' | 'approve_always' | 'reject'> {
-		return new Promise((resolve) => {
-			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+		return new Promise(resolve => {
+			// Get first connected client
+			const client = Array.from(this.clients).find(
+				c => c.readyState === WebSocket.OPEN,
+			);
+
+			if (!client) {
 				resolve('approve'); // If not connected, default to approve (fallback to CLI confirmation)
 				return;
 			}
@@ -210,22 +222,23 @@ class VSCodeConnectionManager {
 
 			const cleanup = () => {
 				clearTimeout(timeout);
-				this.client?.removeListener('message', handler);
+				client?.removeListener('message', handler);
 			};
 
-			this.client.on('message', handler);
-			this.client.send(
+			client.on('message', handler);
+			client.send(
 				JSON.stringify({
 					type: 'diffApply',
 					requestId,
 					filePath,
 					oldContent,
-					newContent
-				})
+					newContent,
+				}),
 			);
 		});
 	}
 }
 
 export const vscodeConnection = new VSCodeConnectionManager();
-export type { EditorContext, Diagnostic };
+
+export type {EditorContext, Diagnostic};

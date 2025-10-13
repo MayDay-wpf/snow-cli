@@ -29,6 +29,7 @@ import {
 	createMessageWithFileInstructions,
 	getSystemInfo,
 } from '../../utils/fileUtils.js';
+import {executeCommand} from '../../utils/commandExecutor.js';
 import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
 import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
 import {formatElapsedTime} from '../../utils/textUtils.js';
@@ -56,6 +57,7 @@ export default function ChatScreen({}: Props) {
 	>([]);
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
 	const pendingMessagesRef = useRef<string[]>([]);
+	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const [remountKey, setRemountKey] = useState(0);
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
@@ -112,8 +114,15 @@ export default function ChatScreen({}: Props) {
 	const MIN_TERMINAL_HEIGHT = 10;
 
 	// Forward reference for processMessage (defined below)
-	const processMessageRef = useRef<(message: string, images?: Array<{data: string; mimeType: string}>, useBasicModel?: boolean, hideUserMessage?: boolean) => Promise<void>>();
-
+	const processMessageRef =
+		useRef<
+			(
+				message: string,
+				images?: Array<{data: string; mimeType: string}>,
+				useBasicModel?: boolean,
+				hideUserMessage?: boolean,
+			) => Promise<void>
+		>();
 	// Use command handler hook
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
@@ -131,8 +140,42 @@ export default function ChatScreen({}: Props) {
 		setShouldIncludeSystemInfo,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
-			processMessageRef.current?.(message, images, useBasicModel, hideUserMessage) || Promise.resolve(),
+			processMessageRef.current?.(
+				message,
+				images,
+				useBasicModel,
+				hideUserMessage,
+			) || Promise.resolve(),
 	});
+
+	useEffect(() => {
+		if (hasAttemptedAutoVscodeConnect.current) {
+			return;
+		}
+
+		if (vscodeState.vscodeConnectionStatus !== 'disconnected') {
+			hasAttemptedAutoVscodeConnect.current = true;
+			return;
+		}
+
+		hasAttemptedAutoVscodeConnect.current = true;
+
+		(async () => {
+			try {
+				const result = await executeCommand('ide');
+				await handleCommandExecution('ide', result);
+			} catch (error) {
+				console.error('Failed to auto-connect VSCode:', error);
+				await handleCommandExecution('ide', {
+					success: false,
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to start VSCode connection',
+				});
+			}
+		})();
+	}, [handleCommandExecution, vscodeState.vscodeConnectionStatus]);
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
@@ -176,7 +219,11 @@ export default function ChatScreen({}: Props) {
 			return;
 		}
 
-		if (key.escape && streamingState.isStreaming && streamingState.abortController) {
+		if (
+			key.escape &&
+			streamingState.isStreaming &&
+			streamingState.abortController
+		) {
 			// Abort the controller
 			streamingState.abortController.abort();
 
@@ -249,7 +296,10 @@ export default function ChatScreen({}: Props) {
 
 	const handleRollbackConfirm = (rollbackFiles: boolean) => {
 		if (snapshotState.pendingRollback) {
-			performRollback(snapshotState.pendingRollback.messageIndex, rollbackFiles);
+			performRollback(
+				snapshotState.pendingRollback.messageIndex,
+				rollbackFiles,
+			);
 		}
 	};
 
@@ -530,11 +580,7 @@ export default function ChatScreen({}: Props) {
 			<Static
 				key={remountKey}
 				items={[
-					<Box
-						key="header"
-						paddingX={1}
-						width="100%"
-					>
+					<Box key="header" paddingX={1} width="100%">
 						<Box
 							borderColor={'cyan'}
 							borderStyle="round"
@@ -545,7 +591,9 @@ export default function ChatScreen({}: Props) {
 							<Box flexDirection="column">
 								<Text color="white" bold>
 									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">Programming efficiency x10!</Gradient>
+									<Gradient name="rainbow">
+										Programming efficiency x10!
+									</Gradient>
 									<Text color="white"> ⛇</Text>
 								</Text>
 								<Text>• Ask for code explanations and debugging help</Text>
@@ -664,10 +712,12 @@ export default function ChatScreen({}: Props) {
 																	}
 																	filename={message.toolCall.arguments.filename}
 																	completeOldContent={
-																		message.toolCall.arguments.completeOldContent
+																		message.toolCall.arguments
+																			.completeOldContent
 																	}
 																	completeNewContent={
-																		message.toolCall.arguments.completeNewContent
+																		message.toolCall.arguments
+																			.completeNewContent
 																	}
 																	startLineNumber={
 																		message.toolCall.arguments.contextStartLine
@@ -676,7 +726,8 @@ export default function ChatScreen({}: Props) {
 															</Box>
 														)}
 													{message.toolCall &&
-														message.toolCall.name === 'filesystem-edit_search' &&
+														message.toolCall.name ===
+															'filesystem-edit_search' &&
 														message.toolCall.arguments.oldContent &&
 														message.toolCall.arguments.newContent && (
 															<Box marginTop={1}>
@@ -689,10 +740,12 @@ export default function ChatScreen({}: Props) {
 																	}
 																	filename={message.toolCall.arguments.filename}
 																	completeOldContent={
-																		message.toolCall.arguments.completeOldContent
+																		message.toolCall.arguments
+																			.completeOldContent
 																	}
 																	completeNewContent={
-																		message.toolCall.arguments.completeNewContent
+																		message.toolCall.arguments
+																			.completeNewContent
 																	}
 																	startLineNumber={
 																		message.toolCall.arguments.contextStartLine
@@ -849,7 +902,12 @@ export default function ChatScreen({}: Props) {
 			{messages
 				.filter(m => m.toolPending)
 				.map((message, index) => (
-					<Box key={`pending-tool-${index}`} marginBottom={1} paddingX={1} width="100%">
+					<Box
+						key={`pending-tool-${index}`}
+						marginBottom={1}
+						paddingX={1}
+						width="100%"
+					>
 						<Text color="yellowBright" bold>
 							❆
 						</Text>
@@ -883,7 +941,8 @@ export default function ChatScreen({}: Props) {
 					<Box marginLeft={1} marginBottom={1} flexDirection="column">
 						{streamingState.isStreaming ? (
 							<>
-								{streamingState.retryStatus && streamingState.retryStatus.isRetrying ? (
+								{streamingState.retryStatus &&
+								streamingState.retryStatus.isRetrying ? (
 									// Retry status display - hide "Thinking" and show retry info
 									<Box flexDirection="column">
 										{streamingState.retryStatus.errorMessage && (
@@ -891,13 +950,17 @@ export default function ChatScreen({}: Props) {
 												✗ Error: {streamingState.retryStatus.errorMessage}
 											</Text>
 										)}
-										{streamingState.retryStatus.remainingSeconds !== undefined && streamingState.retryStatus.remainingSeconds > 0 ? (
+										{streamingState.retryStatus.remainingSeconds !==
+											undefined &&
+										streamingState.retryStatus.remainingSeconds > 0 ? (
 											<Text color="yellow" dimColor>
-												⟳ Retry {streamingState.retryStatus.attempt}/5 in {streamingState.retryStatus.remainingSeconds}s...
+												⟳ Retry {streamingState.retryStatus.attempt}/5 in{' '}
+												{streamingState.retryStatus.remainingSeconds}s...
 											</Text>
 										) : (
 											<Text color="yellow" dimColor>
-												⟳ Resending... (Attempt {streamingState.retryStatus.attempt}/5)
+												⟳ Resending... (Attempt{' '}
+												{streamingState.retryStatus.attempt}/5)
 											</Text>
 										)}
 									</Box>
@@ -905,14 +968,20 @@ export default function ChatScreen({}: Props) {
 									// Normal thinking status
 									<Text color="gray" dimColor>
 										<ShimmerText
-											text={streamingState.isReasoning ? 'Deep thinking...' : 'Thinking...'}
+											text={
+												streamingState.isReasoning
+													? 'Deep thinking...'
+													: 'Thinking...'
+											}
 										/>{' '}
 										({formatElapsedTime(streamingState.elapsedSeconds)}
 										{' · '}
 										<Text color="cyan">
 											↓{' '}
 											{streamingState.streamTokenCount >= 1000
-												? `${(streamingState.streamTokenCount / 1000).toFixed(1)}k`
+												? `${(streamingState.streamTokenCount / 1000).toFixed(
+														1,
+												  )}k`
 												: streamingState.streamTokenCount}{' '}
 											tokens
 										</Text>
@@ -1003,7 +1072,8 @@ export default function ChatScreen({}: Props) {
 												getOpenAiConfig().maxContextTokens || 4000,
 											cacheCreationTokens:
 												streamingState.contextUsage.cache_creation_input_tokens,
-											cacheReadTokens: streamingState.contextUsage.cache_read_input_tokens,
+											cacheReadTokens:
+												streamingState.contextUsage.cache_read_input_tokens,
 											cachedTokens: streamingState.contextUsage.cached_tokens,
 									  }
 									: undefined

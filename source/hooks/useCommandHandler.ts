@@ -59,8 +59,19 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						streaming: false,
 					};
 
-					// Clear session and set new compressed state
+					// Clear session and create new session with compressed summary
 					sessionManager.clearCurrentSession();
+					const newSession = await sessionManager.createNewSession();
+
+					// Save the summary message to the new session so it's included in next API call
+					if (newSession) {
+						await sessionManager.addMessage({
+							role: 'assistant',
+							content: result.summary,
+							timestamp: Date.now()
+						});
+					}
+
 					options.clearSavedMessages();
 					options.setMessages([summaryMessage]);
 					options.setRemountKey(prev => prev + 1);
@@ -95,7 +106,13 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			// Handle /ide command
 			if (commandName === 'ide') {
 				if (result.success) {
-					options.setVscodeConnectionStatus('connecting');
+					// If already connected, set status to connected immediately
+					// Otherwise, set to connecting and wait for VSCode extension
+					if (result.alreadyConnected) {
+						options.setVscodeConnectionStatus('connected');
+					} else {
+						options.setVscodeConnectionStatus('connecting');
+					}
 					// Add command execution feedback
 					const commandMessage: Message = {
 						role: 'command',
