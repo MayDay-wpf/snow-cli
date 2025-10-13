@@ -9,6 +9,8 @@ interface Props {
 	// New props for complete file diff
 	completeOldContent?: string;
 	completeNewContent?: string;
+	// Starting line number for the content (if it's a fragment of a larger file)
+	startLineNumber?: number;
 }
 
 interface DiffHunk {
@@ -40,6 +42,7 @@ export default function DiffViewer({
 	filename,
 	completeOldContent,
 	completeNewContent,
+	startLineNumber = 1,
 }: Props) {
 	// If complete file contents are provided, use them for intelligent diff
 	const useCompleteContent = completeOldContent && completeNewContent;
@@ -92,8 +95,8 @@ export default function DiffViewer({
 	}
 
 	const allChanges: Change[] = [];
-	let oldLineNum = 1;
-	let newLineNum = 1;
+	let oldLineNum = startLineNumber;
+	let newLineNum = startLineNumber;
 
 	diffResult.forEach((part) => {
 		const lines = part.value.replace(/\n$/, '').split('\n');
@@ -203,12 +206,22 @@ export default function DiffViewer({
 			<Box flexDirection="column">
 				{hunks.map((hunk, hunkIndex) => (
 					<Box key={hunkIndex} flexDirection="column" marginBottom={1}>
+						{/* Hunk header showing line range */}
+						<Text color="cyan" dimColor>
+							@@ Lines {hunk.startLine}-{hunk.endLine} @@
+						</Text>
 						{/* Hunk changes */}
 						{hunk.changes.map((change, changeIndex) => {
+							// Calculate line number to display
+							const lineNum = change.type === 'added'
+								? change.newLineNum
+								: change.oldLineNum;
+							const lineNumStr = lineNum ? String(lineNum).padStart(4, ' ') : '    ';
+
 							if (change.type === 'added') {
 								return (
 									<Text key={changeIndex} color="white" backgroundColor="#006400">
-										+ {change.content}
+										{lineNumStr} + {change.content}
 									</Text>
 								);
 							}
@@ -216,7 +229,7 @@ export default function DiffViewer({
 							if (change.type === 'removed') {
 								return (
 									<Text key={changeIndex} color="white" backgroundColor="#8B0000">
-										- {change.content}
+										{lineNumStr} - {change.content}
 									</Text>
 								);
 							}
@@ -224,7 +237,7 @@ export default function DiffViewer({
 							// Unchanged lines (context)
 							return (
 								<Text key={changeIndex} dimColor>
-									  {change.content}
+									{lineNumStr}   {change.content}
 								</Text>
 							);
 						})}

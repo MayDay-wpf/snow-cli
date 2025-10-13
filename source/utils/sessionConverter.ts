@@ -52,12 +52,12 @@ export function convertSessionMessagesToUI(
 				const toolResult = toolResultsMap.get(toolCall.id);
 				const isError = toolResult?.startsWith('Error:') || false;
 
-				// For filesystem-edit, try to extract diff data from result
+				// For filesystem-edit and filesystem-edit_search, try to extract diff data from result
 				let editDiffData:
-					| {oldContent?: string; newContent?: string; filename?: string}
+					| {oldContent?: string; newContent?: string; filename?: string; completeOldContent?: string; completeNewContent?: string; contextStartLine?: number}
 					| undefined;
 				if (
-					toolCall.function.name === 'filesystem-edit' &&
+					(toolCall.function.name === 'filesystem-edit' || toolCall.function.name === 'filesystem-edit_search') &&
 					toolResult &&
 					!isError
 				) {
@@ -68,10 +68,16 @@ export function convertSessionMessagesToUI(
 								oldContent: resultData.oldContent,
 								newContent: resultData.newContent,
 								filename: toolArgs.filePath,
+								completeOldContent: resultData.completeOldContent,
+								completeNewContent: resultData.completeNewContent,
+								contextStartLine: resultData.contextStartLine
 							};
 							// Merge diff data into toolArgs for DiffViewer
 							toolArgs.oldContent = resultData.oldContent;
 							toolArgs.newContent = resultData.newContent;
+							toolArgs.completeOldContent = resultData.completeOldContent;
+							toolArgs.completeNewContent = resultData.completeNewContent;
+							toolArgs.contextStartLine = resultData.contextStartLine;
 						}
 					} catch (e) {
 						// If parsing fails, just show regular result

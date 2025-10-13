@@ -21,10 +21,12 @@ export default function ToolResultPreview({ toolName, result, maxLines = 5 }: To
 			return renderReadPreview(data, maxLines);
 		} else if (toolName === 'filesystem-list') {
 			return renderListPreview(data, maxLines);
-		} else if (toolName === 'filesystem-search') {
-			return renderSearchPreview(data, maxLines);
 		} else if (toolName === 'filesystem-create' || toolName === 'filesystem-write') {
 			return renderCreatePreview(data);
+		} else if (toolName === 'filesystem-edit_search') {
+			return renderEditSearchPreview(data);
+		} else if (toolName.startsWith('ace-')) {
+			return renderACEPreview(toolName, data, maxLines);
 		} else {
 			// Generic preview for unknown tools
 			return renderGenericPreview(data, maxLines);
@@ -84,36 +86,188 @@ function renderListPreview(data: string[] | any, maxLines: number) {
 	);
 }
 
-function renderSearchPreview(data: any, maxLines: number) {
-	if (!data.matches || data.matches.length === 0) {
+function renderACEPreview(toolName: string, data: any, maxLines: number) {
+	// Handle ace-text-search results
+	if (toolName === 'ace-text-search' || toolName === 'ace_text_search') {
+		if (!data || data.length === 0) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ No matches found
+					</Text>
+				</Box>
+			);
+		}
+
+		const results = Array.isArray(data) ? data : [];
+		const previewMatches = results.slice(0, maxLines);
+		const hasMore = results.length > maxLines;
+
 		return (
-			<Box marginLeft={2}>
+			<Box flexDirection="column" marginLeft={2}>
+				{previewMatches.map((match: any, idx: number) => (
+					<Text key={idx} color="gray" dimColor>
+						{idx === previewMatches.length - 1 && !hasMore ? '└─ ' : '├─ '}
+						{match.filePath}:{match.line} - {match.content.slice(0, 60)}
+						{match.content.length > 60 ? '...' : ''}
+					</Text>
+				))}
+				{hasMore && (
+					<Text color="gray" dimColor>
+						└─ ... ({results.length - maxLines} more matches)
+					</Text>
+				)}
+			</Box>
+		);
+	}
+
+	// Handle ace-search-symbols results
+	if (toolName === 'ace-search-symbols' || toolName === 'ace_search_symbols') {
+		const symbols = data.symbols || [];
+		if (symbols.length === 0) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ No symbols found
+					</Text>
+				</Box>
+			);
+		}
+
+		const previewSymbols = symbols.slice(0, maxLines);
+		const hasMore = symbols.length > maxLines;
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
+				{previewSymbols.map((symbol: any, idx: number) => (
+					<Text key={idx} color="gray" dimColor>
+						{idx === previewSymbols.length - 1 && !hasMore ? '└─ ' : '├─ '}
+						{symbol.type} {symbol.name} - {symbol.filePath}:{symbol.line}
+					</Text>
+				))}
+				{hasMore && (
+					<Text color="gray" dimColor>
+						└─ ... ({data.totalResults - maxLines} more symbols)
+					</Text>
+				)}
+			</Box>
+		);
+	}
+
+	// Handle ace-find-references results
+	if (toolName === 'ace-find-references' || toolName === 'ace_find_references') {
+		const references = Array.isArray(data) ? data : [];
+		if (references.length === 0) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ No references found
+					</Text>
+				</Box>
+			);
+		}
+
+		const previewRefs = references.slice(0, maxLines);
+		const hasMore = references.length > maxLines;
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
+				{previewRefs.map((ref: any, idx: number) => (
+					<Text key={idx} color="gray" dimColor>
+						{idx === previewRefs.length - 1 && !hasMore ? '└─ ' : '├─ '}
+						{ref.referenceType} - {ref.filePath}:{ref.line}
+					</Text>
+				))}
+				{hasMore && (
+					<Text color="gray" dimColor>
+						└─ ... ({references.length - maxLines} more references)
+					</Text>
+				)}
+			</Box>
+		);
+	}
+
+	// Handle ace-find-definition result
+	if (toolName === 'ace-find-definition' || toolName === 'ace_find_definition') {
+		if (!data) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ Definition not found
+					</Text>
+				</Box>
+			);
+		}
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ No matches found (searched {data.searchedFiles} files)
+					└─ {data.type} {data.name} - {data.filePath}:{data.line}
 				</Text>
 			</Box>
 		);
 	}
 
-	const previewMatches = data.matches.slice(0, maxLines);
-	const hasMore = data.matches.length > maxLines;
+	// Handle ace-file-outline result
+	if (toolName === 'ace-file-outline' || toolName === 'ace_file_outline') {
+		const symbols = Array.isArray(data) ? data : [];
+		if (symbols.length === 0) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ No symbols in file
+					</Text>
+				</Box>
+			);
+		}
 
-	return (
-		<Box flexDirection="column" marginLeft={2}>
-			{previewMatches.map((match: any, idx: number) => (
-				<Text key={idx} color="gray" dimColor>
-					{idx === previewMatches.length - 1 && !hasMore ? '└─ ' : '├─ '}
-					{match.filePath}:{match.lineNumber} - {match.lineContent.slice(0, 60)}
-					{match.lineContent.length > 60 ? '...' : ''}
-				</Text>
-			))}
-			{hasMore && (
+		const previewSymbols = symbols.slice(0, maxLines);
+		const hasMore = symbols.length > maxLines;
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
+				{previewSymbols.map((symbol: any, idx: number) => (
+					<Text key={idx} color="gray" dimColor>
+						{idx === previewSymbols.length - 1 && !hasMore ? '└─ ' : '├─ '}
+						{symbol.type} {symbol.name} (line {symbol.line})
+					</Text>
+				))}
+				{hasMore && (
+					<Text color="gray" dimColor>
+						└─ ... ({symbols.length - maxLines} more symbols)
+					</Text>
+				)}
+			</Box>
+		);
+	}
+
+	// Handle ace-semantic-search result
+	if (toolName === 'ace-semantic-search' || toolName === 'ace_semantic_search') {
+		const totalResults = (data.symbols?.length || 0) + (data.references?.length || 0);
+		if (totalResults === 0) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ No results found
+					</Text>
+				</Box>
+			);
+		}
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ ... ({data.totalMatches - maxLines} more matches)
+					├─ Symbols: {data.symbols?.length || 0}
 				</Text>
-			)}
-		</Box>
-	);
+				<Text color="gray" dimColor>
+					└─ References: {data.references?.length || 0}
+				</Text>
+			</Box>
+		);
+	}
+
+	// Generic ACE tool preview
+	return renderGenericPreview(data, maxLines);
 }
 
 function renderCreatePreview(data: any) {
@@ -123,6 +277,29 @@ function renderCreatePreview(data: any) {
 			<Text color="gray" dimColor>
 				└─ {data.message || data}
 			</Text>
+		</Box>
+	);
+}
+
+function renderEditSearchPreview(data: any) {
+	// For edit_search, show only key metadata, exclude searchContent and replaceContent
+	return (
+		<Box flexDirection="column" marginLeft={2}>
+			{data.message && (
+				<Text color="gray" dimColor>
+					├─ {data.message}
+				</Text>
+			)}
+			{data.matchLocation && (
+				<Text color="gray" dimColor>
+					├─ Match: lines {data.matchLocation.startLine}-{data.matchLocation.endLine}
+				</Text>
+			)}
+			{data.totalLines && (
+				<Text color="gray" dimColor>
+					└─ Total lines: {data.totalLines}
+				</Text>
+			)}
 		</Box>
 	);
 }

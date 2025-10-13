@@ -55,8 +55,7 @@ jobs:
             
             ### What's New
             -- fix some bugs
-            -- Refactor Diff View
-            -- Added MCP manual reconnect
+            -- ACE Code Search
             
             ### Installation
             ```bash

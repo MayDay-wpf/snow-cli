@@ -475,15 +475,18 @@ export async function handleConversationWithTools(options: ConversationHandlerOp
 						const statusText = isError ? `\n  └─ ${result.content}` : '';
 
 						// Check if this is an edit tool with diff data
-						let editDiffData: {oldContent?: string; newContent?: string; filename?: string} | undefined;
-						if (toolCall.function.name === 'filesystem-edit' && !isError) {
+						let editDiffData: {oldContent?: string; newContent?: string; filename?: string; completeOldContent?: string; completeNewContent?: string; contextStartLine?: number} | undefined;
+						if ((toolCall.function.name === 'filesystem-edit' || toolCall.function.name === 'filesystem-edit_search') && !isError) {
 							try {
 								const resultData = JSON.parse(result.content);
 								if (resultData.oldContent && resultData.newContent) {
 									editDiffData = {
 										oldContent: resultData.oldContent,
 										newContent: resultData.newContent,
-										filename: JSON.parse(toolCall.function.arguments).filePath
+										filename: JSON.parse(toolCall.function.arguments).filePath,
+										completeOldContent: resultData.completeOldContent,
+										completeNewContent: resultData.completeNewContent,
+										contextStartLine: resultData.contextStartLine
 									};
 								}
 							} catch (e) {

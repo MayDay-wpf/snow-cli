@@ -5,21 +5,6 @@ import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
 const {resolve, dirname, isAbsolute} = path;
 
-interface SearchMatch {
-	filePath: string;
-	lineNumber: number;
-	lineContent: string;
-	column: number;
-	matchedText?: string;
-}
-
-interface SearchResult {
-	query: string;
-	totalMatches: number;
-	matches: SearchMatch[];
-	searchedFiles: number;
-}
-
 interface StructureAnalysis {
 	bracketBalance: {
 		curly: {open: number; close: number; balanced: boolean};
@@ -44,6 +29,27 @@ interface StructureAnalysis {
  */
 export class FilesystemMCPService {
 	private basePath: string;
+
+	/**
+	 * File extensions supported by Prettier for automatic formatting
+	 */
+	private readonly prettierSupportedExtensions = [
+		'.js',
+		'.jsx',
+		'.ts',
+		'.tsx',
+		'.json',
+		'.css',
+		'.scss',
+		'.less',
+		'.html',
+		'.vue',
+		'.yaml',
+		'.yml',
+		'.md',
+		'.graphql',
+		'.gql',
+	];
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = resolve(basePath);
@@ -560,6 +566,325 @@ export class FilesystemMCPService {
 	}
 
 	/**
+	 * Edit a file by searching for exact content and replacing it
+	 * This method is SAFER than line-based editing as it automatically handles code boundaries.
+	 *
+	 * @param filePath - Path to the file to edit
+	 * @param searchContent - Exact content to search for (must match precisely, including whitespace)
+	 * @param replaceContent - New content to replace the search content with
+	 * @param occurrence - Which occurrence to replace (1-indexed, default: 1, use -1 for all)
+	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
+	 * @returns Object containing success message, before/after comparison, and diagnostics
+	 * @throws Error if search content is not found or multiple matches exist
+	 */
+	async editFileBySearch(
+		filePath: string,
+		searchContent: string,
+		replaceContent: string,
+		occurrence: number = 1,
+		contextLines: number = 8,
+	): Promise<{
+		message: string;
+		oldContent: string;
+		newContent: string;
+		replacedContent: string;
+		matchLocation: {startLine: number; endLine: number};
+		contextStartLine: number;
+		contextEndLine: number;
+		totalLines: number;
+		structureAnalysis?: StructureAnalysis;
+		diagnostics?: Diagnostic[];
+		completeOldContent?: string;
+		completeNewContent?: string;
+	}> {
+		try {
+			const fullPath = this.resolvePath(filePath);
+
+			// For absolute paths, skip validation to allow access outside base path
+			if (!isAbsolute(filePath)) {
+				await this.validatePath(fullPath);
+			}
+
+			// Read the entire file
+			const content = await fs.readFile(fullPath, 'utf-8');
+			const lines = content.split('\n');
+
+			// Normalize search content (handle different line ending styles)
+			const normalizedSearch = searchContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+			const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+			// Find all matches
+			const matches: Array<{index: number; line: number; endLine: number}> = [];
+			let searchIndex = 0;
+
+			while (true) {
+				const matchIndex = normalizedContent.indexOf(normalizedSearch, searchIndex);
+				if (matchIndex === -1) break;
+
+				// Calculate line numbers for this match
+				const beforeMatch = normalizedContent.substring(0, matchIndex);
+				const startLine = (beforeMatch.match(/\n/g) || []).length + 1;
+				const matchLines = (normalizedSearch.match(/\n/g) || []).length;
+				const endLine = startLine + matchLines;
+
+				matches.push({index: matchIndex, line: startLine, endLine});
+				searchIndex = matchIndex + normalizedSearch.length;
+			}
+
+			// Handle no matches
+			if (matches.length === 0) {
+				throw new Error(
+					`Search content not found in file. Please verify the exact content including whitespace and indentation.`,
+				);
+			}
+
+			// Handle occurrence selection
+			let selectedMatch: {index: number; line: number; endLine: number};
+
+			if (occurrence === -1) {
+				// Replace all occurrences
+				if (matches.length === 1) {
+					selectedMatch = matches[0]!;
+				} else {
+					throw new Error(
+						`Found ${matches.length} matches. Please specify which occurrence to replace (1-${matches.length}), or use occurrence=-1 to replace all (not yet implemented for safety).`,
+					);
+				}
+			} else if (occurrence < 1 || occurrence > matches.length) {
+				throw new Error(
+					`Invalid occurrence ${occurrence}. Found ${matches.length} match(es) at lines: ${matches
+						.map(m => m.line)
+						.join(', ')}`,
+				);
+			} else {
+				selectedMatch = matches[occurrence - 1]!;
+			}
+
+			const {line: startLine, endLine} = selectedMatch;
+
+			// Backup file before editing
+			await incrementalSnapshotManager.backupFile(fullPath);
+
+			// Perform the replacement
+			const normalizedReplace = replaceContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+			const beforeContent = normalizedContent.substring(0, selectedMatch.index);
+			const afterContent = normalizedContent.substring(
+				selectedMatch.index + normalizedSearch.length,
+			);
+			const modifiedContent = beforeContent + normalizedReplace + afterContent;
+
+			// Calculate replaced content for display
+			const replacedLines = lines.slice(startLine - 1, endLine);
+			const maxLineNumWidth = String(endLine).length;
+			const replacedContent = replacedLines
+				.map((line, idx) => {
+					const lineNum = startLine + idx;
+					const paddedNum = String(lineNum).padStart(maxLineNumWidth, ' ');
+					return `${paddedNum}→${line}`;
+				})
+				.join('\n');
+
+			// Calculate context boundaries
+			const modifiedLines = modifiedContent.split('\n');
+			const replaceLines = normalizedReplace.split('\n');
+			const lineDifference = replaceLines.length - (endLine - startLine);
+
+			const smartBoundaries = this.findSmartContextBoundaries(
+				lines,
+				startLine,
+				endLine,
+				contextLines,
+			);
+			const contextStart = smartBoundaries.start;
+			const contextEnd = smartBoundaries.end;
+
+			// Extract old content for context
+			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
+			const oldContent = oldContextLines
+				.map((line, idx) => {
+					const lineNum = contextStart + idx;
+					const paddedNum = String(lineNum).padStart(String(contextEnd).length, ' ');
+					return `${paddedNum}→${line}`;
+				})
+				.join('\n');
+
+			// Write the modified content
+			await fs.writeFile(fullPath, modifiedContent, 'utf-8');
+
+			// Format with Prettier if applicable
+			let finalContent = modifiedContent;
+			let finalLines = modifiedLines;
+			let finalTotalLines = modifiedLines.length;
+			let finalContextEnd = Math.min(finalTotalLines, contextEnd + lineDifference);
+
+			// Check if Prettier supports this file type
+			const fileExtension = path.extname(fullPath).toLowerCase();
+			const shouldFormat = this.prettierSupportedExtensions.includes(fileExtension);
+
+			if (shouldFormat) {
+				try {
+					execSync(`npx prettier --write "${fullPath}"`, {
+						stdio: 'pipe',
+						encoding: 'utf-8',
+					});
+
+					// Re-read the file after formatting
+					finalContent = await fs.readFile(fullPath, 'utf-8');
+					finalLines = finalContent.split('\n');
+					finalTotalLines = finalLines.length;
+
+					finalContextEnd = Math.min(
+						finalTotalLines,
+						contextStart + (contextEnd - contextStart) + lineDifference,
+					);
+				} catch (formatError) {
+					// Continue with unformatted content
+				}
+			}
+
+			// Extract new content for context
+			const newContextLines = finalLines.slice(contextStart - 1, finalContextEnd);
+			const newContextContent = newContextLines
+				.map((line, idx) => {
+					const lineNum = contextStart + idx;
+					const paddedNum = String(lineNum).padStart(String(finalContextEnd).length, ' ');
+					return `${paddedNum}→${line}`;
+				})
+				.join('\n');
+
+			// Analyze code structure
+			const editedContentLines = replaceLines;
+			const structureAnalysis = this.analyzeCodeStructure(
+				finalContent,
+				filePath,
+				editedContentLines,
+			);
+
+			// Get diagnostics from VS Code
+			let diagnostics: Diagnostic[] = [];
+			try {
+				await new Promise(resolve => setTimeout(resolve, 500));
+				diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
+			} catch (error) {
+				// Ignore diagnostics errors
+			}
+
+			// Build result
+			const result = {
+				message:
+					`✅ File edited successfully using search-replace (safer boundary detection): ${filePath}\n` +
+					`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})\n` +
+					`   Result: ${replaceLines.length} new lines` +
+					(smartBoundaries.extended
+						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
+						: ''),
+				oldContent,
+				newContent: newContextContent,
+				replacedContent,
+				matchLocation: {startLine, endLine},
+				contextStartLine: contextStart,
+				contextEndLine: finalContextEnd,
+				totalLines: finalTotalLines,
+				structureAnalysis,
+				completeOldContent: content,
+				completeNewContent: finalContent,
+				diagnostics: undefined as Diagnostic[] | undefined,
+			};
+
+			// Add diagnostics if found
+			if (diagnostics.length > 0) {
+				result.diagnostics = diagnostics;
+				const errorCount = diagnostics.filter(d => d.severity === 'error').length;
+				const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+
+				if (errorCount > 0 || warningCount > 0) {
+					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
+
+					const formattedDiagnostics = diagnostics
+						.filter(d => d.severity === 'error' || d.severity === 'warning')
+						.map(d => {
+							const icon = d.severity === 'error' ? '❌' : '⚠️';
+							const location = `${filePath}:${d.line}:${d.character}`;
+							return `   ${icon} [${d.source || 'unknown'}] ${location}\n      ${d.message}`;
+						})
+						.join('\n\n');
+
+					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
+					result.message += `\n\n   ⚡ TIP: Review the errors above and make another edit to fix them`;
+				}
+			}
+
+			// Add structure analysis warnings
+			const structureWarnings: string[] = [];
+
+			if (!structureAnalysis.bracketBalance.curly.balanced) {
+				const diff =
+					structureAnalysis.bracketBalance.curly.open -
+					structureAnalysis.bracketBalance.curly.close;
+				structureWarnings.push(
+					`Curly brackets: ${diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`}`,
+				);
+			}
+			if (!structureAnalysis.bracketBalance.round.balanced) {
+				const diff =
+					structureAnalysis.bracketBalance.round.open -
+					structureAnalysis.bracketBalance.round.close;
+				structureWarnings.push(
+					`Round brackets: ${diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`}`,
+				);
+			}
+			if (!structureAnalysis.bracketBalance.square.balanced) {
+				const diff =
+					structureAnalysis.bracketBalance.square.open -
+					structureAnalysis.bracketBalance.square.close;
+				structureWarnings.push(
+					`Square brackets: ${diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`}`,
+				);
+			}
+
+			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
+				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
+					structureWarnings.push(
+						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`,
+					);
+				}
+				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
+					structureWarnings.push(
+						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`,
+					);
+				}
+			}
+
+			if (structureAnalysis.indentationWarnings.length > 0) {
+				structureWarnings.push(
+					...structureAnalysis.indentationWarnings.map(w => `Indentation: ${w}`),
+				);
+			}
+
+			if (
+				structureAnalysis.codeBlockBoundary &&
+				structureAnalysis.codeBlockBoundary.suggestion
+			) {
+				structureWarnings.push(`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`);
+			}
+
+			if (structureWarnings.length > 0) {
+				result.message += `\n\n🔍 Structure Analysis:\n`;
+				structureWarnings.forEach(warning => {
+					result.message += `   ⚠️  ${warning}\n`;
+				});
+				result.message += `\n   💡 TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.`;
+			}
+
+			return result;
+		} catch (error) {
+			throw new Error(
+				`Failed to edit file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			);
+		}
+	}
+
+	/**
 	 * Edit a file by replacing lines within a specified range
 	 * BEST PRACTICE: Keep edits small and focused (≤15 lines recommended) for better accuracy.
 	 * For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit.
@@ -703,12 +1028,8 @@ export class FilesystemMCPService {
 			let finalContextContent = newContextContent;
 
 			// Check if Prettier supports this file type
-			const prettierSupportedExtensions = [
-				'.js', '.jsx', '.ts', '.tsx', '.json', '.css', '.scss', '.less',
-				'.html', '.vue', '.yaml', '.yml', '.md', '.graphql', '.gql'
-			];
 			const fileExtension = path.extname(fullPath).toLowerCase();
-			const shouldFormat = prettierSupportedExtensions.includes(fileExtension);
+			const shouldFormat = this.prettierSupportedExtensions.includes(fileExtension);
 
 			if (shouldFormat) {
 				try {
@@ -930,125 +1251,6 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Search for code keywords in files within a directory
-	 * @param query - Search keyword or pattern
-	 * @param dirPath - Directory to search in (default: current directory)
-	 * @param fileExtensions - Array of file extensions to search (e.g., ['.ts', '.tsx', '.js']). If empty, search all files.
-	 * @param caseSensitive - Whether the search should be case-sensitive (default: false)
-	 * @param maxResults - Maximum number of results to return (default: 100)
-	 * @returns Search results with file paths, line numbers, and matched content
-	 */
-	async searchCode(
-		query: string,
-		dirPath: string = '.',
-		fileExtensions: string[] = [],
-		caseSensitive: boolean = false,
-		maxResults: number = 100,
-		searchMode: 'text' | 'regex' = 'text',
-	): Promise<SearchResult> {
-		const matches: SearchMatch[] = [];
-		let searchedFiles = 0;
-		const fullDirPath = this.resolvePath(dirPath);
-
-		// Prepare search regex based on mode
-		const flags = caseSensitive ? 'g' : 'gi';
-		let searchRegex: RegExp | null = null;
-
-		if (searchMode === 'text') {
-			// Escape special regex characters for literal text search
-			searchRegex = new RegExp(
-				query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-				flags,
-			);
-		} else if (searchMode === 'regex') {
-			// Use query as-is for regex search
-			searchRegex = new RegExp(query, flags);
-		}
-
-		// Recursively search files
-		const searchInDirectory = async (currentPath: string): Promise<void> => {
-			try {
-				const entries = await fs.readdir(currentPath, {withFileTypes: true});
-
-				for (const entry of entries) {
-					if (matches.length >= maxResults) {
-						return;
-					}
-
-					const fullPath = path.join(currentPath, entry.name);
-
-					// Skip common directories that should be ignored
-					if (entry.isDirectory()) {
-						const dirName = entry.name;
-						if (
-							dirName === 'node_modules' ||
-							dirName === '.git' ||
-							dirName === 'dist' ||
-							dirName === 'build' ||
-							dirName.startsWith('.')
-						) {
-							continue;
-						}
-						await searchInDirectory(fullPath);
-					} else if (entry.isFile()) {
-						// Filter by file extension if specified
-						if (fileExtensions.length > 0) {
-							const ext = path.extname(entry.name);
-							if (!fileExtensions.includes(ext)) {
-								continue;
-							}
-						}
-
-						searchedFiles++;
-
-						try {
-							const content = await fs.readFile(fullPath, 'utf-8');
-
-							// Text or Regex search mode
-							if (searchRegex) {
-								const lines = content.split('\n');
-
-								lines.forEach((line, index) => {
-									if (matches.length >= maxResults) {
-										return;
-									}
-
-									// Reset regex for each line
-									searchRegex!.lastIndex = 0;
-									const match = searchRegex!.exec(line);
-
-									if (match) {
-										matches.push({
-											filePath: path.relative(this.basePath, fullPath),
-											lineNumber: index + 1,
-											lineContent: line.trim(),
-											column: match.index + 1,
-											matchedText: match[0],
-										});
-									}
-								});
-							}
-						} catch (error) {
-							// Skip files that cannot be read (binary files, permission issues, etc.)
-						}
-					}
-				}
-			} catch (error) {
-				// Skip directories that cannot be accessed
-			}
-		};
-
-		await searchInDirectory(fullDirPath);
-
-		return {
-			query,
-			totalMatches: matches.length,
-			matches,
-			searchedFiles,
-		};
-	}
-
-	/**
 	 * Resolve path relative to base path and normalize it
 	 * @private
 	 */
@@ -1181,9 +1383,45 @@ export const mcpTools = [
 		},
 	},
 	{
+		name: 'filesystem_edit_search',
+		description:
+			'🎯 **RECOMMENDED** for most edits: Search-and-replace editing with AUTOMATIC boundary detection. **WHY USE THIS**: (1) NO need to count line numbers - just copy the exact code you want to change, (2) SAFER - automatically handles code boundaries to prevent bracket/tag mismatches, (3) CLEARER intent - shows exactly what you\'re changing. **BEST FOR**: Modifying existing functions, fixing bugs, updating logic. **WORKFLOW**: (1) Read file with filesystem_read, (2) Copy exact code block to change (including whitespace!), (3) Provide the replacement. **HANDLES**: Multiple occurrences, whitespace normalization, structure validation. **TIP**: For new code additions, use filesystem_edit with line numbers instead.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				filePath: {
+					type: 'string',
+					description: 'Path to the file to edit',
+				},
+				searchContent: {
+					type: 'string',
+					description:
+						'⚠️  EXACT content to find and replace. MUST match precisely including indentation and whitespace. Copy directly from filesystem_read output (WITHOUT line numbers like "123→").',
+				},
+				replaceContent: {
+					type: 'string',
+					description:
+						'New content to replace the search content. Should maintain consistent indentation with surrounding code.',
+				},
+				occurrence: {
+					type: 'number',
+					description:
+						'Which occurrence to replace if multiple matches found (1-indexed). Default: 1 (first match). Use -1 for all occurrences (not yet supported).',
+					default: 1,
+				},
+				contextLines: {
+					type: 'number',
+					description: 'Number of context lines to show before/after edit (default: 8)',
+					default: 8,
+				},
+			},
+			required: ['filePath', 'searchContent', 'replaceContent'],
+		},
+	},
+	{
 		name: 'filesystem_edit',
 		description:
-			'🎯 PREFERRED tool for precise file editing with intelligent feedback. **BEST PRACTICES**: (1) Use SMALL, INCREMENTAL edits (recommended ≤15 lines per edit) - SAFER and MORE ACCURATE, preventing syntax errors. (2) For large changes, make MULTIPLE PARALLEL edits to different sections instead of one large edit. (3) Must use exact line numbers  Code boundaries should not be redundant or missing, such as `{}` or HTML tags causing syntax errors. **WORKFLOW**: (1) Read target section with filesystem_read, (2) Edit small sections, (3) Review auto-generated structure analysis and diagnostics, (4) Make parallel edits to non-overlapping ranges if needed. **SMART FEATURES**: Auto-detects bracket/tag mismatches, indentation issues, and code block boundaries. Context auto-extends to show complete functions/classes when detected.',
+			'🔧 Line-based editing for precise line range replacements. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When you need exact line-number control. **LIMITATIONS**: Requires manual line number tracking, higher risk of boundary errors. **RECOMMENDATION**: For most edits, use filesystem_edit_search instead - it\'s safer and easier. **BEST PRACTICES**: (1) Keep edits small (≤15 lines), (2) Always read file first to get exact line numbers, (3) Double-check boundaries for brackets/tags. **SMART FEATURES**: Auto-detects bracket/tag mismatches, indentation issues, context auto-extends to show complete code blocks.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1214,54 +1452,6 @@ export const mcpTools = [
 				},
 			},
 			required: ['filePath', 'startLine', 'endLine', 'newContent'],
-		},
-	},
-	{
-		name: 'filesystem_search',
-		description:
-			"Search for code keywords across files in a directory. Useful for finding function definitions, variable usages, or any code patterns. Similar to VS Code's global search feature.",
-		inputSchema: {
-			type: 'object',
-			properties: {
-				query: {
-					type: 'string',
-					description:
-						'The keyword or text to search for (e.g., function name, variable name, or any code pattern)',
-				},
-				dirPath: {
-					type: 'string',
-					description:
-						'Directory to search in (relative to base path or absolute). Defaults to current directory.',
-					default: '.',
-				},
-				fileExtensions: {
-					type: 'array',
-					items: {
-						type: 'string',
-					},
-					description:
-						'Array of file extensions to search (e.g., [".ts", ".tsx", ".js"]). If empty, searches all text files.',
-					default: [],
-				},
-				caseSensitive: {
-					type: 'boolean',
-					description: 'Whether the search should be case-sensitive',
-					default: false,
-				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of results to return',
-					default: 100,
-				},
-				searchMode: {
-					type: 'string',
-					enum: ['text', 'regex'],
-					description:
-						'Search mode: "text" for literal text search (default), "regex" for regular expression search',
-					default: 'text',
-				},
-			},
-			required: ['query'],
 		},
 	},
 ];

@@ -130,6 +130,28 @@ function handleMessage(message: string) {
 					diagnostics: simpleDiagnostics
 				}));
 			}
+		} else if (data.type === 'aceGoToDefinition') {
+			// ACE Code Search: Go to definition
+			const filePath = data.filePath;
+			const line = data.line;
+			const column = data.column;
+			const requestId = data.requestId;
+
+			handleGoToDefinition(filePath, line, column, requestId);
+		} else if (data.type === 'aceFindReferences') {
+			// ACE Code Search: Find references
+			const filePath = data.filePath;
+			const line = data.line;
+			const column = data.column;
+			const requestId = data.requestId;
+
+			handleFindReferences(filePath, line, column, requestId);
+		} else if (data.type === 'aceGetSymbols') {
+			// ACE Code Search: Get document symbols
+			const filePath = data.filePath;
+			const requestId = data.requestId;
+
+			handleGetSymbols(filePath, requestId);
 		} else if (data.type === 'diffApply') {
 			const filePath = data.filePath;
 			const oldContent = data.oldContent;
@@ -141,6 +163,137 @@ function handleMessage(message: string) {
 		}
 	} catch (error) {
 		// Ignore invalid messages
+	}
+}
+
+async function handleGoToDefinition(filePath: string, line: number, column: number, requestId: string) {
+	try {
+		const uri = vscode.Uri.file(filePath);
+		const position = new vscode.Position(line, column);
+
+		// Use VS Code's built-in go to definition
+		const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
+			'vscode.executeDefinitionProvider',
+			uri,
+			position
+		);
+
+		const results = (definitions || []).map(def => ({
+			filePath: def.uri.fsPath,
+			line: def.range.start.line,
+			column: def.range.start.character,
+			endLine: def.range.end.line,
+			endColumn: def.range.end.character
+		}));
+
+		// Send response back
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceGoToDefinitionResult',
+				requestId,
+				definitions: results
+			}));
+		}
+	} catch (error) {
+		// On error, send empty results
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceGoToDefinitionResult',
+				requestId,
+				definitions: []
+			}));
+		}
+	}
+}
+
+async function handleFindReferences(filePath: string, line: number, column: number, requestId: string) {
+	try {
+		const uri = vscode.Uri.file(filePath);
+		const position = new vscode.Position(line, column);
+
+		// Use VS Code's built-in find references
+		const references = await vscode.commands.executeCommand<vscode.Location[]>(
+			'vscode.executeReferenceProvider',
+			uri,
+			position
+		);
+
+		const results = (references || []).map(ref => ({
+			filePath: ref.uri.fsPath,
+			line: ref.range.start.line,
+			column: ref.range.start.character,
+			endLine: ref.range.end.line,
+			endColumn: ref.range.end.character
+		}));
+
+		// Send response back
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceFindReferencesResult',
+				requestId,
+				references: results
+			}));
+		}
+	} catch (error) {
+		// On error, send empty results
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceFindReferencesResult',
+				requestId,
+				references: []
+			}));
+		}
+	}
+}
+
+async function handleGetSymbols(filePath: string, requestId: string) {
+	try {
+		const uri = vscode.Uri.file(filePath);
+
+		// Use VS Code's built-in document symbol provider
+		const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+			'vscode.executeDocumentSymbolProvider',
+			uri
+		);
+
+		const flattenSymbols = (symbolList: vscode.DocumentSymbol[]): any[] => {
+			const result: any[] = [];
+			for (const symbol of symbolList) {
+				result.push({
+					name: symbol.name,
+					kind: vscode.SymbolKind[symbol.kind],
+					line: symbol.range.start.line,
+					column: symbol.range.start.character,
+					endLine: symbol.range.end.line,
+					endColumn: symbol.range.end.character,
+					detail: symbol.detail
+				});
+				if (symbol.children && symbol.children.length > 0) {
+					result.push(...flattenSymbols(symbol.children));
+				}
+			}
+			return result;
+		};
+
+		const results = symbols ? flattenSymbols(symbols) : [];
+
+		// Send response back
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceGetSymbolsResult',
+				requestId,
+				symbols: results
+			}));
+		}
+	} catch (error) {
+		// On error, send empty results
+		if (ws && ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({
+				type: 'aceGetSymbolsResult',
+				requestId,
+				symbols: []
+			}));
+		}
 	}
 }
 

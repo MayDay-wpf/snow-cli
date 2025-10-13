@@ -5,6 +5,7 @@ import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
 import {getMCPConfig, type MCPServer} from './apiConfig.js';
 import {mcpTools as filesystemTools} from '../mcp/filesystem.js';
 import {mcpTools as terminalTools} from '../mcp/bash.js';
+import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {TodoService} from '../mcp/todo.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
@@ -177,6 +178,31 @@ async function refreshToolsCache(): Promise<void> {
 			function: {
 				name: tool.name,
 				description: tool.description || '',
+				parameters: tool.inputSchema,
+			},
+		});
+	}
+
+	// Add built-in ACE Code Search tools (always available)
+	const aceServiceTools = aceCodeSearchTools.map(tool => ({
+		name: tool.name.replace('ace_', ''),
+		description: tool.description,
+		inputSchema: tool.inputSchema,
+	}));
+
+	servicesInfo.push({
+		serviceName: 'ace',
+		tools: aceServiceTools,
+		isBuiltIn: true,
+		connected: true,
+	});
+
+	for (const tool of aceCodeSearchTools) {
+		allTools.push({
+			type: 'function',
+			function: {
+				name: `ace-${tool.name.replace('ace_', '')}`,
+				description: tool.description,
 				parameters: tool.inputSchema,
 			},
 		});
@@ -529,6 +555,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('terminal-')) {
 		serviceName = 'terminal';
 		actualToolName = toolName.substring('terminal-'.length);
+	} else if (toolName.startsWith('ace-')) {
+		serviceName = 'ace';
+		actualToolName = toolName.substring('ace-'.length);
 	} else {
 		// Check configured MCP services
 		try {
@@ -593,24 +622,14 @@ export async function executeMCPTool(
 					args.newContent,
 					args.contextLines,
 				);
-			case 'search': {
-				// 兼容性处理:如果 searchMode 不存在或无效,默认使用 'text'
-				const validSearchModes = ['text', 'regex'] as const;
-				let searchMode: 'text' | 'regex' = 'text';
-
-				if (args.searchMode && validSearchModes.includes(args.searchMode)) {
-					searchMode = args.searchMode;
-				}
-
-				return await filesystemService.searchCode(
-					args.query,
-					args.dirPath,
-					args.fileExtensions,
-					args.caseSensitive,
-					args.maxResults,
-					searchMode,
+			case 'edit_search':
+				return await filesystemService.editFileBySearch(
+					args.filePath,
+					args.searchContent,
+					args.replaceContent,
+					args.occurrence,
+					args.contextLines,
 				);
-			}
 
 			default:
 				throw new Error(`Unknown filesystem tool: ${actualToolName}`);
@@ -624,6 +643,52 @@ export async function executeMCPTool(
 				return await terminalService.executeCommand(args.command, args.timeout);
 			default:
 				throw new Error(`Unknown terminal tool: ${actualToolName}`);
+		}
+	} else if (serviceName === 'ace') {
+		// Handle built-in ACE Code Search tools (no connection needed)
+		const {aceCodeSearchService} = await import('../mcp/aceCodeSearch.js');
+
+		switch (actualToolName) {
+			case 'search_symbols':
+				return await aceCodeSearchService.searchSymbols(
+					args.query,
+					args.symbolType,
+					args.language,
+					args.maxResults,
+				);
+			case 'find_definition':
+				return await aceCodeSearchService.findDefinition(
+					args.symbolName,
+					args.contextFile,
+				);
+			case 'find_references':
+				return await aceCodeSearchService.findReferences(
+					args.symbolName,
+					args.maxResults,
+				);
+			case 'semantic_search':
+				return await aceCodeSearchService.semanticSearch(
+					args.query,
+					args.searchType,
+					args.language,
+					args.maxResults,
+				);
+			case 'file_outline':
+				return await aceCodeSearchService.getFileOutline(args.filePath);
+			case 'text_search':
+				return await aceCodeSearchService.textSearch(
+					args.pattern,
+					args.fileGlob,
+					args.isRegex,
+					args.maxResults,
+				);
+			case 'index_stats':
+				return aceCodeSearchService.getIndexStats();
+			case 'clear_cache':
+				aceCodeSearchService.clearCache();
+				return {message: 'ACE Code Search cache cleared successfully'};
+			default:
+				throw new Error(`Unknown ACE tool: ${actualToolName}`);
 		}
 	} else {
 		// Handle user-configured MCP service tools - connect only when needed

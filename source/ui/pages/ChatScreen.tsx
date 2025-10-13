@@ -669,6 +669,34 @@ export default function ChatScreen({}: Props) {
 																	completeNewContent={
 																		message.toolCall.arguments.completeNewContent
 																	}
+																	startLineNumber={
+																		message.toolCall.arguments.contextStartLine
+																	}
+																/>
+															</Box>
+														)}
+													{message.toolCall &&
+														message.toolCall.name === 'filesystem-edit_search' &&
+														message.toolCall.arguments.oldContent &&
+														message.toolCall.arguments.newContent && (
+															<Box marginTop={1}>
+																<DiffViewer
+																	oldContent={
+																		message.toolCall.arguments.oldContent
+																	}
+																	newContent={
+																		message.toolCall.arguments.newContent
+																	}
+																	filename={message.toolCall.arguments.filename}
+																	completeOldContent={
+																		message.toolCall.arguments.completeOldContent
+																	}
+																	completeNewContent={
+																		message.toolCall.arguments.completeNewContent
+																	}
+																	startLineNumber={
+																		message.toolCall.arguments.contextStartLine
+																	}
 																/>
 															</Box>
 														)}

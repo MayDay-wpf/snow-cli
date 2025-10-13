@@ -46,6 +46,16 @@ function formatArgumentsAsTree(args: Record<string, any>, toolName?: string): Ar
 	if (toolName === 'filesystem-edit') {
 		excludeFields.add('newContent');
 	}
+	if (toolName === 'filesystem-edit_search') {
+		excludeFields.add('searchContent');
+		excludeFields.add('replaceContent');
+	}
+
+	// For ACE tools, exclude large result fields that may contain extensive code
+	if (toolName?.startsWith('ace-')) {
+		excludeFields.add('context'); // ACE tools may return large context strings
+		excludeFields.add('signature'); // Function signatures can be verbose
+	}
 
 	const keys = Object.keys(args).filter(key => !excludeFields.has(key));
 	return keys.map((key, index) => ({

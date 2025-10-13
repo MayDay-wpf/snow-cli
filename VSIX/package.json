@@ -1,9 +1,13 @@
 {
   "name": "snow-cli",
   "displayName": "Snow CLI",
-  "description": "Quickly open the Snow AI command-line tool in VSCode",
-  "version": "0.2.6",
+  "description": "Snow AI CLI with ACE Code Search - Intelligent code navigation and search powered by AI",
+  "version": "0.3.0",
   "publisher": "mufasa",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/snow-cli"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
