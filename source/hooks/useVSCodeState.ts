@@ -42,18 +42,18 @@ export function useVSCodeState() {
 			return;
 		}
 
-		// Set timeout for connecting state (30 seconds to allow for VSCode extension reconnection)
+		// Set timeout for connecting state (30 seconds to allow for IDE plugin reconnection)
 		const connectingTimeout = setTimeout(() => {
 			const isConnected = vscodeConnection.isConnected();
-			const isServerRunning = vscodeConnection.isServerRunning();
+			const isClientRunning = vscodeConnection.isClientRunning();
 
 			// Only set error if still not connected after timeout
 			if (!isConnected) {
-				if (isServerRunning) {
-					// Server is running but no connection - show error with helpful message
+				if (isClientRunning) {
+					// Client is running but no connection - show error with helpful message
 					setVscodeConnectionStatus('error');
 				} else {
-					// Server not running - go back to disconnected
+					// Client not running - go back to disconnected
 					setVscodeConnectionStatus('disconnected');
 				}
 			}

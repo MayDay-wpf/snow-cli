@@ -1081,7 +1081,7 @@ export default function ChatScreen({}: Props) {
 							}
 							snapshotFileCount={snapshotState.snapshotFileCount}
 						/>
-						{/* VSCode connection status indicator */}
+						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
 							<Box marginTop={1}>
 								<Text
@@ -1098,12 +1098,12 @@ export default function ChatScreen({}: Props) {
 								>
 									●{' '}
 									{vscodeState.vscodeConnectionStatus === 'connecting'
-										? 'Waiting for VSCode extension to connect...'
+										? 'Connecting to IDE...'
 										: vscodeState.vscodeConnectionStatus === 'connected'
-										? 'VSCode Connected'
+										? 'IDE Connected'
 										: vscodeState.vscodeConnectionStatus === 'error'
-										? 'Connection Failed - Make sure Snow CLI extension is installed and active in VSCode'
-										: 'VSCode'}
+										? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
+										: 'IDE'}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.activeFile &&
 										` | ${vscodeState.editorContext.activeFile}`}

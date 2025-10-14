@@ -1,4 +1,7 @@
-import {WebSocketServer, WebSocket} from 'ws';
+import {WebSocket} from 'ws';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 interface EditorContext {
 	activeFile?: string;
@@ -17,82 +20,187 @@ interface Diagnostic {
 }
 
 class VSCodeConnectionManager {
-	private server: WebSocketServer | null = null;
-	private clients: Set<WebSocket> = new Set();
+	private client: WebSocket | null = null;
+	private reconnectTimer: NodeJS.Timeout | null = null;
+	private reconnectAttempts = 0;
+	private readonly MAX_RECONNECT_ATTEMPTS = 10;
+	private readonly BASE_RECONNECT_DELAY = 2000; // 2 seconds
+	private readonly MAX_RECONNECT_DELAY = 30000; // 30 seconds
+	// Port ranges: VSCode uses 9527-9537, JetBrains uses 9538-9548
+	private readonly VSCODE_BASE_PORT = 9527;
+	private readonly VSCODE_MAX_PORT = 9537;
+	private readonly JETBRAINS_BASE_PORT = 9538;
+	private readonly JETBRAINS_MAX_PORT = 9548;
 	private port = 9527;
 	private editorContext: EditorContext = {};
 	private listeners: Array<(context: EditorContext) => void> = [];
+	private currentWorkingDirectory = process.cwd();
 
 	async start(): Promise<void> {
-		// If already running, just return success
-		if (this.server) {
+		// If already connected, just return success
+		if (this.client?.readyState === WebSocket.OPEN) {
 			return Promise.resolve();
 		}
 
+		// Try to find the correct port for this workspace
+		const targetPort = this.findPortForWorkspace();
+
 		return new Promise((resolve, reject) => {
-			try {
-				this.server = new WebSocketServer({port: this.port});
+			const tryConnect = (port: number) => {
+				// Check both VSCode and JetBrains port ranges
+				if (port > this.VSCODE_MAX_PORT && port < this.JETBRAINS_BASE_PORT) {
+					// Jump from VSCode range to JetBrains range
+					tryConnect(this.JETBRAINS_BASE_PORT);
+					return;
+				}
+				if (port > this.JETBRAINS_MAX_PORT) {
+					reject(
+						new Error(
+							`Failed to connect: no IDE server found on ports ${this.VSCODE_BASE_PORT}-${this.VSCODE_MAX_PORT} or ${this.JETBRAINS_BASE_PORT}-${this.JETBRAINS_MAX_PORT}`,
+						),
+					);
+					return;
+				}
 
-				this.server.on('connection', ws => {
-					// Add new client to the set (allow multiple connections)
-					this.clients.add(ws);
+				try {
+					this.client = new WebSocket(`ws://localhost:${port}`);
 
-					ws.on('message', message => {
+					this.client.on('open', () => {
+						// Reset reconnect attempts on successful connection
+						this.reconnectAttempts = 0;
+						this.port = port;
+						resolve();
+					});
+
+					this.client.on('message', message => {
 						try {
 							const data = JSON.parse(message.toString());
-							this.handleMessage(data);
+
+							// Filter messages by workspace folder
+							if (this.shouldHandleMessage(data)) {
+								this.handleMessage(data);
+							}
 						} catch (error) {
 							// Ignore invalid JSON
 						}
 					});
 
-					ws.on('close', () => {
-						this.clients.delete(ws);
+					this.client.on('close', () => {
+						this.client = null;
+						this.scheduleReconnect();
 					});
 
-					ws.on('error', () => {
-						// Silently handle errors
-						this.clients.delete(ws);
+					this.client.on('error', _error => {
+						// On initial connection, try next port
+						if (this.reconnectAttempts === 0) {
+							this.client = null;
+							tryConnect(port + 1);
+						}
+						// For reconnections, silently handle and let close event trigger reconnect
 					});
-				});
+				} catch (error) {
+					tryConnect(port + 1);
+				}
+			};
 
-				this.server.on('listening', () => {
-					resolve();
-				});
-
-				this.server.on('error', error => {
-					reject(error);
-				});
-			} catch (error) {
-				reject(error);
-			}
+			tryConnect(targetPort);
 		});
 	}
 
-	stop(): void {
-		// Close all connected clients
-		for (const client of this.clients) {
-			client.close();
-		}
-		this.clients.clear();
+	/**
+	 * Find the correct port for the current workspace
+	 */
+	private findPortForWorkspace(): number {
+		try {
+			const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
+			if (fs.existsSync(portInfoPath)) {
+				const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
 
-		if (this.server) {
-			this.server.close();
-			this.server = null;
+				// Try to match current working directory
+				const cwd = this.currentWorkingDirectory;
+
+				// Direct match
+				if (portInfo[cwd]) {
+					return portInfo[cwd];
+				}
+
+				// Check if cwd is within any of the workspace folders
+				for (const [workspace, port] of Object.entries(portInfo)) {
+					if (cwd.startsWith(workspace)) {
+						return port as number;
+					}
+				}
+			}
+		} catch (error) {
+			// Ignore errors, will fall back to VSCODE_BASE_PORT
 		}
+
+		// Start with VSCode port range by default
+		return this.VSCODE_BASE_PORT;
+	}
+
+	/**
+	 * Check if we should handle this message based on workspace folder
+	 */
+	private shouldHandleMessage(data: any): boolean {
+		// If no workspace folder in message, accept it (backwards compatibility)
+		if (!data.workspaceFolder) {
+			return true;
+		}
+
+		// Check if message's workspace folder matches our current working directory
+		const cwd = this.currentWorkingDirectory;
+
+		// Bidirectional check: either cwd is within IDE workspace, or IDE workspace is within cwd
+		const cwdInWorkspace = cwd.startsWith(data.workspaceFolder);
+		const workspaceInCwd = data.workspaceFolder.startsWith(cwd);
+		const matches = cwdInWorkspace || workspaceInCwd;
+
+		return matches;
+	}
+
+	private scheduleReconnect(): void {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+		}
+
+		this.reconnectAttempts++;
+		if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+			return;
+		}
+
+		const delay = Math.min(
+			this.BASE_RECONNECT_DELAY * Math.pow(1.5, this.reconnectAttempts - 1),
+			this.MAX_RECONNECT_DELAY,
+		);
+
+		this.reconnectTimer = setTimeout(() => {
+			this.start().catch(() => {
+				// Silently handle reconnection failures
+			});
+		}, delay);
+	}
+
+	stop(): void {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+
+		if (this.client) {
+			this.client.close();
+			this.client = null;
+		}
+
+		this.reconnectAttempts = 0;
 	}
 
 	isConnected(): boolean {
-		return (
-			this.clients.size > 0 &&
-			Array.from(this.clients).some(
-				client => client.readyState === WebSocket.OPEN,
-			)
-		);
+		return this.client?.readyState === WebSocket.OPEN;
 	}
 
-	isServerRunning(): boolean {
-		return this.server !== null;
+	isClientRunning(): boolean {
+		return this.client !== null;
 	}
 
 	getContext(): EditorContext {
@@ -114,6 +222,7 @@ class VSCodeConnectionManager {
 				cursorPosition: data.cursorPosition,
 				workspaceFolder: data.workspaceFolder,
 			};
+
 			this.notifyListeners();
 		}
 	}
@@ -129,18 +238,13 @@ class VSCodeConnectionManager {
 	}
 
 	/**
-	 * Request diagnostics for a specific file from VS Code
+	 * Request diagnostics for a specific file from IDE
 	 * @param filePath - The file path to get diagnostics for
 	 * @returns Promise that resolves with diagnostics array
 	 */
 	async requestDiagnostics(filePath: string): Promise<Diagnostic[]> {
 		return new Promise(resolve => {
-			// Get first connected client
-			const client = Array.from(this.clients).find(
-				c => c.readyState === WebSocket.OPEN,
-			);
-
-			if (!client) {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
 				resolve([]); // Return empty array if not connected
 				return;
 			}
@@ -165,11 +269,11 @@ class VSCodeConnectionManager {
 
 			const cleanup = () => {
 				clearTimeout(timeout);
-				client?.removeListener('message', handler);
+				this.client?.removeListener('message', handler);
 			};
 
-			client.on('message', handler);
-			client.send(
+			this.client.on('message', handler);
+			this.client.send(
 				JSON.stringify({
 					type: 'getDiagnostics',
 					requestId,
@@ -177,6 +281,13 @@ class VSCodeConnectionManager {
 				}),
 			);
 		});
+	}
+
+	/**
+	 * Reset reconnection attempts (e.g., when user manually triggers reconnect)
+	 */
+	resetReconnectAttempts(): void {
+		this.reconnectAttempts = 0;
 	}
 }
 

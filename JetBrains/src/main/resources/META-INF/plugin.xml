@@ -1,0 +1,59 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>com.snow.plugin</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+    <name>Snow CLI</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor email="support@yourcompany.com" url="https://github.com/yourusername/snow-cli">Snow AI</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+    <description><![CDATA[
+    Snow AI CLI integration for JetBrains IDEs. Provides intelligent code navigation and search powered by AI.<br>
+    <br>
+    Features:<br>
+    <ul>
+      <li>WebSocket-based integration with Snow CLI</li>
+      <li>Real-time editor context sharing</li>
+      <li>Code diagnostics integration</li>
+      <li>Go to definition support</li>
+      <li>Find references support</li>
+      <li>Document symbols extraction</li>
+      <li>Automatic reconnection with exponential backoff</li>
+    </ul>
+  ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
+
+    <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Snow CLI" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+        <action id="snow.OpenTerminal"
+                class="com.snow.plugin.actions.OpenSnowTerminalAction"
+                text="Snow CLI"
+                description="Open Snow CLI in integrated terminal"
+                icon="SnowPluginIcons.SnowAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="TerminalToolwindowActionGroup" anchor="first"/>
+            <keyboard-shortcut first-keystroke="control alt S" keymap="$default"/>
+        </action>
+    </actions>
+
+    <applicationListeners>
+        <listener class="com.snow.plugin.SnowPluginLifecycle"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+</idea-plugin>

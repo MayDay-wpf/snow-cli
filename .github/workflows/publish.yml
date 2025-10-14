@@ -54,9 +54,8 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- fix some bugs
-            -- ACE Code Search
-            
+            -- fix vscode extension some bugs
+            -- add JetBrains Plugin  `/JetBrains/build/distributions/snow-cli-jetbrains-0.3.8.zip`  
             ### Installation
             ```bash
             npm install -g snow-ai

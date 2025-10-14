@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import WebSocket from 'ws';
+import {WebSocketServer, WebSocket} from 'ws';
 
-let ws: WebSocket | null = null;
-let reconnectTimer: NodeJS.Timeout | null = null;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const BASE_RECONNECT_DELAY = 2000; // 2 seconds
+let wss: WebSocketServer | null = null;
+let clients: Set<WebSocket> = new Set();
+let actualPort = 9527;
+const BASE_PORT = 9527;
+const MAX_PORT = 9537;
 
 // Global cache for last valid editor context
 let lastValidContext: any = {
@@ -16,56 +16,91 @@ let lastValidContext: any = {
 	selectedText: undefined,
 };
 
-function connectToSnowCLI() {
-	if (ws?.readyState === WebSocket.OPEN) {
-		return;
+function startWebSocketServer() {
+	if (wss) {
+		return; // Server already running
 	}
 
-	// Stop reconnecting if we've exceeded the maximum attempts
-	if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-		return;
-	}
+	// Try ports from BASE_PORT to MAX_PORT
+	let port = BASE_PORT;
+	let serverStarted = false;
 
-	try {
-		ws = new WebSocket('ws://localhost:9527');
+	const tryPort = (currentPort: number) => {
+		if (currentPort > MAX_PORT) {
+			console.error(`Failed to start WebSocket server: all ports ${BASE_PORT}-${MAX_PORT} are in use`);
+			return;
+		}
 
-		ws.on('open', () => {
-			// Reset reconnect attempts on successful connection
-			reconnectAttempts = 0;
-			sendEditorContext();
-		});
+		try {
+			const server = new WebSocketServer({port: currentPort});
 
-		ws.on('message', message => {
-			handleMessage(message.toString());
-		});
+			server.on('error', (error: any) => {
+				if (error.code === 'EADDRINUSE') {
+					console.log(`Port ${currentPort} is in use, trying next port...`);
+					tryPort(currentPort + 1);
+				} else {
+					console.error('WebSocket server error:', error);
+				}
+			});
 
-		ws.on('close', () => {
-			ws = null;
-			if (reconnectTimer) {
-				clearTimeout(reconnectTimer);
-			}
+			server.on('listening', () => {
+				actualPort = currentPort;
+				serverStarted = true;
+				console.log(`Snow CLI WebSocket server started on port ${actualPort}`);
 
-			// Exponential backoff with jitter for reconnection
-			reconnectAttempts++;
-			if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-				const delay = Math.min(
-					BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts - 1),
-					30000, // Max 30 seconds
-				);
-				reconnectTimer = setTimeout(connectToSnowCLI, delay);
-			}
-		});
+				// Write port to a temp file so CLI can discover it
+				const fs = require('fs');
+				const os = require('os');
+				const path = require('path');
+				const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+				const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
-		ws.on('error', () => {
-			// Silently handle errors, let the close event handle reconnection
-		});
-	} catch (error) {
-		// Silently handle connection errors
-	}
+				try {
+					let portInfo: any = {};
+					if (fs.existsSync(portInfoPath)) {
+						portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
+					}
+					portInfo[workspaceFolder] = actualPort;
+					fs.writeFileSync(portInfoPath, JSON.stringify(portInfo, null, 2));
+				} catch (err) {
+					console.error('Failed to write port info:', err);
+				}
+			});
+
+			server.on('connection', ws => {
+				console.log('Snow CLI connected');
+				clients.add(ws);
+
+				// Send current editor context immediately upon connection
+				sendEditorContext();
+
+				ws.on('message', message => {
+					handleMessage(message.toString());
+				});
+
+				ws.on('close', () => {
+					console.log('Snow CLI disconnected');
+					clients.delete(ws);
+				});
+
+				ws.on('error', error => {
+					console.error('WebSocket error:', error);
+					clients.delete(ws);
+				});
+			});
+
+			wss = server;
+		} catch (error) {
+			console.error(`Failed to start server on port ${currentPort}:`, error);
+			tryPort(currentPort + 1);
+		}
+	};
+
+	tryPort(port);
 }
 
 function sendEditorContext() {
-	if (!ws || ws.readyState !== WebSocket.OPEN) {
+	if (clients.size === 0) {
 		return;
 	}
 
@@ -74,7 +109,7 @@ function sendEditorContext() {
 	// If no active editor (focus lost), use cached context
 	if (!editor) {
 		if (lastValidContext.activeFile) {
-			ws.send(JSON.stringify(lastValidContext));
+			broadcast(JSON.stringify(lastValidContext));
 		}
 		return;
 	}
@@ -97,7 +132,15 @@ function sendEditorContext() {
 	// Always update cache with valid editor state
 	lastValidContext = {...context};
 
-	ws.send(JSON.stringify(context));
+	broadcast(JSON.stringify(context));
+}
+
+function broadcast(message: string) {
+	for (const client of clients) {
+		if (client.readyState === WebSocket.OPEN) {
+			client.send(message);
+		}
+	}
 }
 
 function handleMessage(message: string) {
@@ -122,16 +165,14 @@ function handleMessage(message: string) {
 				code: d.code,
 			}));
 
-			// Send response back
-			if (ws && ws.readyState === WebSocket.OPEN) {
-				ws.send(
-					JSON.stringify({
-						type: 'diagnostics',
-						requestId,
-						diagnostics: simpleDiagnostics,
-					}),
-				);
-			}
+			// Send response back to all connected clients
+			broadcast(
+				JSON.stringify({
+					type: 'diagnostics',
+					requestId,
+					diagnostics: simpleDiagnostics,
+				}),
+			);
 		} else if (data.type === 'aceGoToDefinition') {
 			// ACE Code Search: Go to definition
 			const filePath = data.filePath;
@@ -186,26 +227,22 @@ async function handleGoToDefinition(
 		}));
 
 		// Send response back
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceGoToDefinitionResult',
-					requestId,
-					definitions: results,
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceGoToDefinitionResult',
+				requestId,
+				definitions: results,
+			}),
+		);
 	} catch (error) {
 		// On error, send empty results
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceGoToDefinitionResult',
-					requestId,
-					definitions: [],
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceGoToDefinitionResult',
+				requestId,
+				definitions: [],
+			}),
+		);
 	}
 }
 
@@ -235,26 +272,22 @@ async function handleFindReferences(
 		}));
 
 		// Send response back
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceFindReferencesResult',
-					requestId,
-					references: results,
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceFindReferencesResult',
+				requestId,
+				references: results,
+			}),
+		);
 	} catch (error) {
 		// On error, send empty results
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceFindReferencesResult',
-					requestId,
-					references: [],
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceFindReferencesResult',
+				requestId,
+				references: [],
+			}),
+		);
 	}
 }
 
@@ -289,32 +322,28 @@ async function handleGetSymbols(filePath: string, requestId: string) {
 		const results = symbols ? flattenSymbols(symbols) : [];
 
 		// Send response back
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceGetSymbolsResult',
-					requestId,
-					symbols: results,
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceGetSymbolsResult',
+				requestId,
+				symbols: results,
+			}),
+		);
 	} catch (error) {
 		// On error, send empty results
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(
-				JSON.stringify({
-					type: 'aceGetSymbolsResult',
-					requestId,
-					symbols: [],
-				}),
-			);
-		}
+		broadcast(
+			JSON.stringify({
+				type: 'aceGetSymbolsResult',
+				requestId,
+				symbols: [],
+			}),
+		);
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	// Try to connect immediately when extension activates
-	connectToSnowCLI();
+	// Start WebSocket server immediately when extension activates
+	startWebSocketServer();
 
 	const disposable = vscode.commands.registerCommand(
 		'snow-cli.openTerminal',
@@ -333,11 +362,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Execute the snow command
 			terminal.sendText('snow');
-
-			// Reset reconnect attempts when manually opening terminal
-			reconnectAttempts = 0;
-			// Try to connect to Snow CLI WebSocket server
-			setTimeout(connectToSnowCLI, 2000);
 		},
 	);
 
@@ -358,11 +382,36 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-	if (reconnectTimer) {
-		clearTimeout(reconnectTimer);
+	// Close all client connections
+	for (const client of clients) {
+		client.close();
 	}
-	if (ws) {
-		ws.close();
-		ws = null;
+	clients.clear();
+
+	// Close server
+	if (wss) {
+		wss.close();
+		wss = null;
+	}
+
+	// Clean up port info file
+	try {
+		const fs = require('fs');
+		const os = require('os');
+		const path = require('path');
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+		const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
+
+		if (fs.existsSync(portInfoPath)) {
+			const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
+			delete portInfo[workspaceFolder];
+			if (Object.keys(portInfo).length === 0) {
+				fs.unlinkSync(portInfoPath);
+			} else {
+				fs.writeFileSync(portInfoPath, JSON.stringify(portInfo, null, 2));
+			}
+		}
+	} catch (err) {
+		console.error('Failed to clean up port info:', err);
 	}
 }

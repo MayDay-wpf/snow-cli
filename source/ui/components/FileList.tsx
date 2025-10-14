@@ -277,7 +277,7 @@ const FileList = memo(
 				<Box paddingX={1} marginTop={1} flexDirection="column">
 					<Box marginBottom={1}>
 						<Text color="blue" bold>
-							🗐 Files{' '}
+							≡ Files{' '}
 							{allFilteredFiles.length > effectiveMaxItems &&
 								`(${selectedIndex + 1}/${allFilteredFiles.length})`}
 						</Text>
