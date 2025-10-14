@@ -57,10 +57,15 @@ $ npm uninstall --global snow-ai
 
 ## 安装 VSCode 扩展
 
-* 下载 [VSIX/snow-cli-0.2.6.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/snow-cli-0.2.6.vsix)
+* 下载 [VSIX/snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/)
 
 * 打开 VSCode，点击 `扩展` -> `从 VSIX 安装...` -> 选择 `snow-cli-0.2.6.vsix`
 
+## 安装 JetBrains 插件
+
+* 下载 [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
+
+* File > Settings > Plugins
 ## 实时预览
 * **欢迎 & 设置**
 
