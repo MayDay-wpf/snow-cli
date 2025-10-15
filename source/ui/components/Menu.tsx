@@ -1,5 +1,6 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
+import {resetTerminal} from '../../utils/terminal.js';
 
 type MenuOption = {
 	label: string;
@@ -44,9 +45,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	}, [selectedIndex, scrollOffset, visibleItemCount]);
 
 	const clearTerminal = useCallback(() => {
-		if (stdout && typeof stdout.write === 'function') {
-			stdout.write('\x1B[3J\x1B[2J\x1B[H');
-		}
+		resetTerminal(stdout);
 	}, [stdout]);
 
 	const handleInput = useCallback((_input: string, key: any) => {

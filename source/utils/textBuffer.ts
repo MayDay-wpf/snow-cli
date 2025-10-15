@@ -337,9 +337,16 @@ export class TextBuffer {
    * Update the viewport dimensions, useful for terminal resize handling.
    */
   updateViewport(viewport: Viewport): void {
+    const needsRecalculation =
+      this.viewport.width !== viewport.width ||
+      this.viewport.height !== viewport.height;
+
     this.viewport = viewport;
-    this.recalculateVisualState();
-    this.scheduleUpdate();
+
+    if (needsRecalculation) {
+      this.recalculateVisualState();
+      this.scheduleUpdate();
+    }
   }
 
   /**

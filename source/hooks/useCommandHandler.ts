@@ -5,6 +5,7 @@ import {sessionManager} from '../utils/sessionManager.js';
 import {compressContext} from '../utils/contextCompressor.js';
 import {navigateTo} from './useGlobalNavigation.js';
 import type {UsageInfo} from '../api/chat.js';
+import {resetTerminal} from '../utils/terminal.js';
 
 type CommandHandlerOptions = {
 	messages: Message[];
@@ -130,9 +131,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			}
 
 			if (result.success && result.action === 'clear') {
-				if (stdout && typeof stdout.write === 'function') {
-					stdout.write('\x1B[3J\x1B[2J\x1B[H');
-				}
+				resetTerminal(stdout);
 				// Clear current session and start new one
 				sessionManager.clearCurrentSession();
 				options.clearSavedMessages();

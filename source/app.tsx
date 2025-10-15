@@ -10,6 +10,7 @@ import CustomHeadersScreen from './ui/pages/CustomHeadersScreen.js';
 import ChatScreen from './ui/pages/ChatScreen.js';
 import { useGlobalExit, ExitNotification as ExitNotificationType } from './hooks/useGlobalExit.js';
 import { onNavigate } from './hooks/useGlobalNavigation.js';
+import { useTerminalSize } from './hooks/useTerminalSize.js';
 
 type Props = {
 	version?: string;
@@ -24,6 +25,9 @@ export default function App({ version }: Props) {
 		show: false,
 		message: ''
 	});
+
+	// Get terminal size for proper width calculation
+	const {columns: terminalWidth} = useTerminalSize();
 
 	// Global exit handler
 	useGlobalExit(setExitNotification);
@@ -109,10 +113,8 @@ export default function App({ version }: Props) {
 	};
 
 	return (
-		<Box flexDirection="column" height="100%">
-			<Box flexGrow={1} flexShrink={1} minHeight={0}>
-				{renderView()}
-			</Box>
+		<Box flexDirection="column" width={terminalWidth}>
+			{renderView()}
 			{exitNotification.show && (
 				<Box paddingX={1} flexShrink={0}>
 					<Alert variant="warning">

@@ -1,5 +1,5 @@
-import React, {useCallback, useEffect} from 'react';
-import {Box, Text, useStdout} from 'ink';
+import React, {useCallback, useEffect, useRef} from 'react';
+import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
 import {cpSlice, cpLen} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
@@ -10,6 +10,7 @@ import {useFilePicker} from '../../hooks/useFilePicker.js';
 import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
 import {useClipboard} from '../../hooks/useClipboard.js';
 import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 
 type Props = {
 	onSubmit: (
@@ -45,12 +46,15 @@ export default function ChatInput({
 	contextUsage,
 	snapshotFileCount,
 }: Props) {
-	const {stdout} = useStdout();
-	const terminalWidth = stdout?.columns || 80;
+	// Use terminal size hook to listen for resize events
+	const {columns: terminalWidth} = useTerminalSize();
+	const prevTerminalWidthRef = useRef(terminalWidth);
 
+	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
+	const viewportWidth = Math.max(40, terminalWidth - uiOverhead);
 	const viewport: Viewport = {
-		width: Math.max(40, terminalWidth - uiOverhead),
+		width: viewportWidth,
 		height: 1,
 	};
 
@@ -151,6 +155,24 @@ export default function ChatInput({
 		}, 10);
 		return () => clearTimeout(timer);
 	}, [showFilePicker, forceUpdate]);
+
+	// Handle terminal width changes with debounce (like gemini-cli)
+	useEffect(() => {
+		// Skip on initial mount
+		if (prevTerminalWidthRef.current === terminalWidth) {
+			prevTerminalWidthRef.current = terminalWidth;
+			return;
+		}
+
+		prevTerminalWidthRef.current = terminalWidth;
+
+		// Debounce the re-render to avoid flickering during resize
+		const timer = setTimeout(() => {
+			forceUpdate({});
+		}, 100);
+
+		return () => clearTimeout(timer);
+	}, [terminalWidth, forceUpdate]);
 
 	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
@@ -279,8 +301,7 @@ export default function ChatInput({
 		<Box
 			flexDirection="column"
 			paddingX={1}
-			width="100%"
-			key={`input-${showFilePicker ? 'picker' : 'normal'}`}
+			width={terminalWidth}
 		>
 			{showHistoryMenu && (
 				<Box
@@ -289,7 +310,7 @@ export default function ChatInput({
 					borderStyle="round"
 					borderColor="#A9C13E"
 					padding={1}
-					width="100%"
+					width={terminalWidth - 2}
 				>
 					<Box marginBottom={1}>
 						<Text color="cyan">
@@ -358,8 +379,7 @@ export default function ChatInput({
 						borderColor="gray"
 						paddingX={1}
 						paddingY={0}
-						flexGrow={1}
-						width="100%"
+						width={terminalWidth - 2}
 					>
 						<Text color="cyan" bold>
 							➣{' '}

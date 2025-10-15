@@ -2,6 +2,7 @@ import React, {useState, useEffect, useRef} from 'react';
 import {Box, Text, useInput, Static, useStdout} from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
+import ansiEscapes from 'ansi-escapes';
 import ChatInput from '../components/ChatInput.js';
 import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
@@ -24,6 +25,7 @@ import {useVSCodeState} from '../../hooks/useVSCodeState.js';
 import {useSnapshotState} from '../../hooks/useSnapshotState.js';
 import {useStreamingState} from '../../hooks/useStreamingState.js';
 import {useCommandHandler} from '../../hooks/useCommandHandler.js';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -75,9 +77,10 @@ export default function ChatScreen({}: Props) {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
+	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const {stdout} = useStdout();
-	const terminalHeight = stdout?.rows || 24;
 	const workingDirectory = process.cwd();
+	const isInitialMount = useRef(true);
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -101,6 +104,24 @@ export default function ChatScreen({}: Props) {
 			// Ignore localStorage errors
 		}
 	}, [yoloMode]);
+
+	// Clear terminal and remount on terminal width change (like gemini-cli)
+	// Use debounce to avoid flickering during continuous resize
+	useEffect(() => {
+		if (isInitialMount.current) {
+			isInitialMount.current = false;
+			return;
+		}
+
+		const handler = setTimeout(() => {
+			stdout.write(ansiEscapes.clearTerminal);
+			setRemountKey(prev => prev + 1);
+		}, 200); // Wait for resize to stabilize
+
+		return () => {
+			clearTimeout(handler);
+		};
+	}, [terminalWidth, stdout]);
 
 	// Use tool confirmation hook
 	const {
@@ -576,17 +597,17 @@ export default function ChatScreen({}: Props) {
 	}
 
 	return (
-		<Box flexDirection="column" height="100%" width="100%">
+		<Box flexDirection="column" height="100%" width={terminalWidth}>
 			<Static
 				key={remountKey}
 				items={[
-					<Box key="header" paddingX={1} width="100%">
+					<Box key="header" paddingX={1} width={terminalWidth}>
 						<Box
 							borderColor={'cyan'}
 							borderStyle="round"
 							paddingX={2}
 							paddingY={1}
-							width="100%"
+							width={terminalWidth - 2}
 						>
 							<Box flexDirection="column">
 								<Text color="white" bold>
@@ -631,7 +652,7 @@ export default function ChatScreen({}: Props) {
 									marginBottom={isToolMessage ? 0 : 1}
 									paddingX={1}
 									flexDirection="column"
-									width="100%"
+									width={terminalWidth}
 								>
 									<Box>
 										<Text
@@ -907,7 +928,7 @@ export default function ChatScreen({}: Props) {
 						key={`pending-tool-${index}`}
 						marginBottom={1}
 						paddingX={1}
-						width="100%"
+						width={terminalWidth}
 					>
 						<Text color="yellowBright" bold>
 							❆
@@ -928,7 +949,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show loading indicator when streaming or saving */}
 			{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
-				<Box marginBottom={1} paddingX={1} width="100%">
+				<Box marginBottom={1} paddingX={1} width={terminalWidth}>
 					<Text
 						color={
 							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
@@ -999,7 +1020,7 @@ export default function ChatScreen({}: Props) {
 				</Box>
 			)}
 
-			<Box paddingX={1} width="100%">
+			<Box paddingX={1} width={terminalWidth}>
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
 
@@ -1022,7 +1043,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show session list panel if active - replaces input */}
 			{showSessionPanel && (
-				<Box paddingX={1} width="100%">
+				<Box paddingX={1} width={terminalWidth}>
 					<SessionListPanel
 						onSelectSession={handleSessionPanelSelect}
 						onClose={() => setShowSessionPanel(false)}
@@ -1032,7 +1053,7 @@ export default function ChatScreen({}: Props) {
 
 			{/* Show MCP info panel if active - replaces input */}
 			{showMcpPanel && (
-				<Box paddingX={1} flexDirection="column" width="100%">
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<MCPInfoPanel />
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
