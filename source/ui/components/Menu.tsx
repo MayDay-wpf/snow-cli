@@ -97,7 +97,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 							color={actualIndex === selectedIndex ? 'green' : option.color || 'white'}
 							bold
 						>
-							{actualIndex === selectedIndex ? '➣ ' : '  '}
+							{actualIndex === selectedIndex ? '❯ ' : '  '}
 							{option.label}
 						</Text>
 					</Box>

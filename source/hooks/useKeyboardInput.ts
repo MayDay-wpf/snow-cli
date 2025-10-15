@@ -116,6 +116,20 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	useInput((input, key) => {
 		if (disabled) return;
 
+		// Filter out focus events - ONLY if the input is exactly a focus event
+		// Focus events from terminals: ESC[I (focus in) or ESC[O (focus out)
+		// DO NOT filter if input contains other content (like drag-and-drop paths)
+		// The key insight: focus events are standalone, user input is never JUST "[I" or "[O"
+		if (
+			input === '\x1b[I' ||
+			input === '\x1b[O' ||
+			// Some terminals may send without ESC, but only if it's the entire input
+			(input === '[I' && input.length === 2) ||
+			(input === '[O' && input.length === 2)
+		) {
+			return;
+		}
+
 		// Shift+Tab - Toggle YOLO mode
 		if (key.shift && key.tab) {
 			executeCommand('yolo').then(result => {

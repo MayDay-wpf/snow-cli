@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 import React from 'react';
-import {render} from 'ink';
+import {render, Text, Box} from 'ink';
+import Spinner from 'ink-spinner';
 import meow from 'meow';
-import {execSync} from 'child_process';
+import {exec, execSync} from 'child_process';
+import {promisify} from 'util';
 import App from './app.js';
 import {vscodeConnection} from './utils/vscodeConnection.js';
 
-// Check for updates in the background
-async function checkForUpdates(currentVersion: string) {
+const execAsync = promisify(exec);
+
+// Check for updates asynchronously
+async function checkForUpdates(currentVersion: string): Promise<void> {
 	try {
-		const latestVersion = execSync('npm view snow-ai version', {
+		const {stdout} = await execAsync('npm view snow-ai version', {
 			encoding: 'utf8',
-			stdio: ['pipe', 'pipe', 'ignore'],
-		}).trim();
+		});
+		const latestVersion = stdout.trim();
 
 		if (latestVersion && latestVersion !== currentVersion) {
 			console.log('\n🔔 Update available!');
@@ -62,13 +66,55 @@ if (cli.flags.update) {
 	}
 }
 
+// Startup component that shows loading spinner during update check
+const Startup = ({version}: {version: string | undefined}) => {
+	const [appReady, setAppReady] = React.useState(false);
+
+	React.useEffect(() => {
+		let mounted = true;
+
+		const init = async () => {
+			// Check for updates with timeout
+			const updateCheckPromise = version
+				? checkForUpdates(version)
+				: Promise.resolve();
+
+			// Race between update check and 3-second timeout
+			await Promise.race([
+				updateCheckPromise,
+				new Promise(resolve => setTimeout(resolve, 3000)),
+			]);
+
+			if (mounted) {
+				setAppReady(true);
+			}
+		};
+
+		init();
+
+		return () => {
+			mounted = false;
+		};
+	}, [version]);
+
+	if (!appReady) {
+		return (
+			<Box flexDirection="column">
+				<Box>
+					<Text color="cyan">
+						<Spinner type="dots" />
+					</Text>
+					<Text> Checking for updates...</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	return <App version={version} />;
+};
+
 // Disable bracketed paste mode on startup
 process.stdout.write('\x1b[?2004l');
-
-// Check for updates in the background (non-blocking)
-if (cli.pkg.version) {
-	checkForUpdates(cli.pkg.version);
-}
 
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {
@@ -87,7 +133,7 @@ process.on('SIGTERM', () => {
 	process.exit(0);
 });
 
-render(<App version={cli.pkg.version} />, {
+render(<Startup version={cli.pkg.version} />, {
 	exitOnCtrlC: false,
 	patchConsole: true,
 });

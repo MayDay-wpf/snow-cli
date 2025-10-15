@@ -11,6 +11,7 @@ import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
 import {useClipboard} from '../../hooks/useClipboard.js';
 import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
 
 type Props = {
 	onSubmit: (
@@ -49,6 +50,9 @@ export default function ChatInput({
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
+
+	// Use terminal focus hook to detect focus state
+	const {hasFocus} = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -174,6 +178,24 @@ export default function ChatInput({
 		return () => clearTimeout(timer);
 	}, [terminalWidth, forceUpdate]);
 
+	// Render cursor based on focus state
+	const renderCursor = useCallback(
+		(char: string) => {
+			if (hasFocus) {
+				// Focused: solid block cursor
+				return (
+					<Text backgroundColor="white" color="black">
+						{char}
+					</Text>
+				);
+			} else {
+				// Unfocused: no cursor, just render the character normally
+				return <Text>{char}</Text>;
+			}
+		},
+		[hasFocus],
+	);
+
 	// Render content with cursor and paste placeholders
 	const renderContent = useCallback(() => {
 		if (buffer.text.length > 0) {
@@ -224,17 +246,13 @@ export default function ChatInput({
 										dimColor
 									>
 										{beforeCursorInPart}
-										<Text backgroundColor="white" color="black">
-											{atCursor}
-										</Text>
+										{renderCursor(atCursor)}
 										{afterCursorInPart}
 									</Text>
 								) : (
 									<>
 										{beforeCursorInPart}
-										<Text backgroundColor="white" color="black">
-											{atCursor}
-										</Text>
+										{renderCursor(atCursor)}
 										{afterCursorInPart}
 									</>
 								)}
@@ -258,24 +276,18 @@ export default function ChatInput({
 				return (
 					<Text>
 						{elements}
-						{!cursorRendered && (
-							<Text backgroundColor="white" color="black">
-								{' '}
-							</Text>
-						)}
+						{!cursorRendered && renderCursor(' ')}
 					</Text>
 				);
 			} else {
 				// 普通文本渲染
+				const charInfo = buffer.getCharAtCursor();
+				const atCursor = charInfo.char === '\n' ? ' ' : charInfo.char;
+
 				return (
 					<Text>
 						{cpSlice(displayText, 0, cursorPos)}
-						<Text backgroundColor="white" color="black">
-							{(() => {
-								const charInfo = buffer.getCharAtCursor();
-								return charInfo.char === '\n' ? ' ' : charInfo.char;
-							})()}
-						</Text>
+						{renderCursor(atCursor)}
 						{cpSlice(displayText, cursorPos + 1)}
 					</Text>
 				);
@@ -283,19 +295,14 @@ export default function ChatInput({
 		} else {
 			return (
 				<>
-					<Text
-						backgroundColor={disabled ? 'gray' : 'white'}
-						color={disabled ? 'darkGray' : 'black'}
-					>
-						{' '}
-					</Text>
+					{renderCursor(' ')}
 					<Text color={disabled ? 'darkGray' : 'gray'} dimColor>
 						{disabled ? 'Waiting for response...' : placeholder}
 					</Text>
 				</>
 			);
 		}
-	}, [buffer, disabled, placeholder]);
+	}, [buffer, disabled, placeholder, renderCursor]);
 
 	return (
 		<Box
@@ -348,7 +355,7 @@ export default function ChatInput({
 											color={index === historySelectedIndex ? 'green' : 'white'}
 											bold
 										>
-											{index === historySelectedIndex ? '➣  ' : '  '}
+											{index === historySelectedIndex ? '❯  ' : '  '}
 											{message.label}
 										</Text>
 										{fileCount > 0 && (
@@ -373,18 +380,15 @@ export default function ChatInput({
 			)}
 			{!showHistoryMenu && (
 				<>
-					<Box
-						flexDirection="row"
-						borderStyle="round"
-						borderColor="gray"
-						paddingX={1}
-						paddingY={0}
-						width={terminalWidth - 2}
-					>
-						<Text color="cyan" bold>
-							➣{' '}
-						</Text>
-						<Box flexGrow={1}>{renderContent()}</Box>
+					<Box flexDirection="column" width={terminalWidth - 2}>
+						<Text color="gray">{'─'.repeat(terminalWidth - 2)}</Text>
+						<Box flexDirection="row">
+							<Text color="cyan" bold>
+								❯{' '}
+							</Text>
+							<Box flexGrow={1}>{renderContent()}</Box>
+						</Box>
+						<Text color="gray">{'─'.repeat(terminalWidth - 2)}</Text>
 					</Box>
 					<CommandPanel
 						commands={getFilteredCommands()}

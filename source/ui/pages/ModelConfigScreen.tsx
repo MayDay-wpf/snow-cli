@@ -12,11 +12,12 @@ import {
 type Props = {
 	onBack: () => void;
 	onSave: () => void;
+	inlineMode?: boolean;
 };
 
 type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens' | 'maxTokens' | 'compactBaseUrl' | 'compactApiKey' | 'compactModelName';
 
-export default function ModelConfigScreen({ onBack, onSave }: Props) {
+export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }: Props) {
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
@@ -318,16 +319,18 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (baseUrlMissing) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
-					<Box flexDirection="column">
-						<Gradient name='rainbow'>
-							Model Configuration
-						</Gradient>
-						<Text color="gray" dimColor>
-							Configure AI models for different tasks
-						</Text>
+				{!inlineMode && (
+					<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+						<Box flexDirection="column">
+							<Gradient name='rainbow'>
+								Model Configuration
+							</Gradient>
+							<Text color="gray" dimColor>
+								Configure AI models for different tasks
+							</Text>
+						</Box>
 					</Box>
-				</Box>
+				)}
 
 				<Box marginBottom={1}>
 					<Alert variant="error">
@@ -347,16 +350,18 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (loading) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1} borderStyle="double" paddingX={1} paddingY={0}>
-					<Box flexDirection="column">
-						<Gradient name="rainbow">
-							Model Configuration
-						</Gradient>
-						<Text color="gray" dimColor>
-							Loading available models...
-						</Text>
+				{!inlineMode && (
+					<Box marginBottom={1} borderStyle="double" paddingX={1} paddingY={0}>
+						<Box flexDirection="column">
+							<Gradient name="rainbow">
+								Model Configuration
+							</Gradient>
+							<Text color="gray" dimColor>
+								Loading available models...
+							</Text>
+						</Box>
 					</Box>
-				</Box>
+				)}
 			</Box>
 		);
 	}
@@ -365,16 +370,18 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 	if (manualInputMode) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
-					<Box flexDirection="column">
-						<Gradient name='rainbow'>
-							Manual Input Model
-						</Gradient>
-						<Text color="gray" dimColor>
-							Enter model name manually
-						</Text>
+				{!inlineMode && (
+					<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+						<Box flexDirection="column">
+							<Gradient name='rainbow'>
+								Manual Input Model
+							</Gradient>
+							<Text color="gray" dimColor>
+								Enter model name manually
+							</Text>
+						</Box>
 					</Box>
-				</Box>
+				)}
 
 				<Box flexDirection="column" marginBottom={1}>
 					<Text color="cyan">
@@ -401,25 +408,27 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
-				<Box flexDirection="column">
-					<Gradient name='rainbow'>
-						Model Configuration
-					</Gradient>
-					<Text color="gray" dimColor>
-						Configure AI models for different tasks
-					</Text>
+			{!inlineMode && (
+				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+					<Box flexDirection="column">
+						<Gradient name='rainbow'>
+							Model Configuration
+						</Gradient>
+						<Text color="gray" dimColor>
+							Configure AI models for different tasks
+						</Text>
+					</Box>
 				</Box>
-			</Box>
+			)}
 
 			<Box flexDirection="column">
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
-							{currentField === 'advancedModel' ? '➣ ' : '  '}Advanced Model (Main Work):
+							{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model (Main Work):
 						</Text>
 						{currentField === 'advancedModel' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								{loading ? (
 									<Text color="yellow">Loading models...</Text>
 								) : (
@@ -437,7 +446,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'advancedModel') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{advancedModel || 'Not set'}</Text>
 							</Box>
 						)}
@@ -447,10 +456,10 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
-							{currentField === 'basicModel' ? '➣ ' : '  '}Basic Model (Summary & Analysis):
+							{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model (Summary & Analysis):
 						</Text>
 						{currentField === 'basicModel' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								{loading ? (
 									<Text color="yellow">Loading models...</Text>
 								) : (
@@ -468,7 +477,7 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'basicModel') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{basicModel || 'Not set'}</Text>
 							</Box>
 						)}
@@ -478,17 +487,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
-							{currentField === 'maxContextTokens' ? '➣ ' : '  '}Max Context Tokens (Auto-compress when reached):
+							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context Tokens (Auto-compress when reached):
 						</Text>
 						{currentField === 'maxContextTokens' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="cyan">
 									Enter value: {maxContextTokens}
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'maxContextTokens') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{maxContextTokens}</Text>
 							</Box>
 						)}
@@ -498,17 +507,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
-							{currentField === 'maxTokens' ? '➣ ' : '  '}Max Tokens (Max tokens for single response):
+							{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens (Max tokens for single response):
 						</Text>
 						{currentField === 'maxTokens' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="cyan">
 									Enter value: {maxTokens}
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'maxTokens') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{maxTokens}</Text>
 							</Box>
 						)}
@@ -522,17 +531,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactBaseUrl' ? 'green' : 'white'}>
-							{currentField === 'compactBaseUrl' ? '➣ ' : '  '}Base URL:
+							{currentField === 'compactBaseUrl' ? '❯ ' : '  '}Base URL:
 						</Text>
 						{currentField === 'compactBaseUrl' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="cyan">
 									{compactBaseUrl}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactBaseUrl') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{compactBaseUrl || 'Not set'}</Text>
 							</Box>
 						)}
@@ -542,17 +551,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactApiKey' ? 'green' : 'white'}>
-							{currentField === 'compactApiKey' ? '➣ ' : '  '}API Key:
+							{currentField === 'compactApiKey' ? '❯ ' : '  '}API Key:
 						</Text>
 						{currentField === 'compactApiKey' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="cyan">
 									{compactApiKey.replace(/./g, '*')}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactApiKey') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{compactApiKey ? compactApiKey.replace(/./g, '*') : 'Not set'}</Text>
 							</Box>
 						)}
@@ -562,17 +571,17 @@ export default function ModelConfigScreen({ onBack, onSave }: Props) {
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
-							{currentField === 'compactModelName' ? '➣ ' : '  '}Model Name:
+							{currentField === 'compactModelName' ? '❯ ' : '  '}Model Name:
 						</Text>
 						{currentField === 'compactModelName' && isEditing && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="cyan">
 									{compactModelName}<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactModelName') && (
-							<Box marginLeft={2}>
+							<Box marginLeft={3}>
 								<Text color="gray">{compactModelName || 'Not set'}</Text>
 							</Box>
 						)}

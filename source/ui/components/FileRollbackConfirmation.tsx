@@ -67,7 +67,7 @@ export default function FileRollbackConfirmation({ fileCount, onConfirm }: Props
 							color={index === selectedIndex ? 'green' : 'white'}
 							bold={index === selectedIndex}
 						>
-							{index === selectedIndex ? '➣  ' : '  '}
+							{index === selectedIndex ? '❯  ' : '  '}
 							{option.label}
 						</Text>
 					</Box>

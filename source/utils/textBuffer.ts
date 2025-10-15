@@ -14,6 +14,10 @@ function sanitizeInput(str: string): string {
     .replace(/\r\n/g, '\n') // Normalize line endings
     .replace(/\r/g, '\n') // Convert remaining \r to \n
     .replace(/\t/g, '  ') // Convert tabs to spaces
+    // Remove focus events - only the complete escape sequences
+    // ESC[I and ESC[O are focus events, don't confuse with user input like "[I"
+    .replace(/\x1b\[I/g, '')
+    .replace(/\x1b\[O/g, '')
     // Remove control characters except newlines
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }

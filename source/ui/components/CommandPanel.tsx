@@ -63,7 +63,7 @@ const CommandPanel = memo(({ commands, selectedIndex, visible, maxHeight }: Prop
 					{displayedCommands.map((command, index) => (
 						<Box key={command.name} flexDirection="column" width="100%">
 							<Text color={index === displayedSelectedIndex ? "green" : "gray"} bold>
-								{index === displayedSelectedIndex ? "➣ " : "  "}
+								{index === displayedSelectedIndex ? "❯ " : "  "}
 								/{command.name}
 							</Text>
 							<Box marginLeft={3}>

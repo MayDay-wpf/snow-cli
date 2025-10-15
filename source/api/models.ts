@@ -32,13 +32,6 @@ interface AnthropicModel {
 	type: string;
 }
 
-interface AnthropicModelsResponse {
-	data: AnthropicModel[];
-	first_id?: string;
-	last_id?: string;
-	has_more?: boolean;
-}
-
 /**
  * Fetch models from OpenAI-compatible API
  */
@@ -98,6 +91,7 @@ async function fetchGeminiModels(baseUrl: string, apiKey: string): Promise<Model
 
 /**
  * Fetch models from Anthropic API
+ * Supports both Anthropic native format and OpenAI-compatible format for backward compatibility
  */
 async function fetchAnthropicModels(baseUrl: string, apiKey: string, customHeaders: Record<string, string>): Promise<Model[]> {
 	const url = `${baseUrl.replace(/\/$/, '')}/models`;
@@ -110,6 +104,7 @@ async function fetchAnthropicModels(baseUrl: string, apiKey: string, customHeade
 
 	if (apiKey) {
 		headers['x-api-key'] = apiKey;
+		headers['Authorization'] = `Bearer ${apiKey}`;
 	}
 
 	const response = await fetch(url, {
@@ -121,15 +116,32 @@ async function fetchAnthropicModels(baseUrl: string, apiKey: string, customHeade
 		throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
 	}
 
-	const data: AnthropicModelsResponse = await response.json();
+	const data: any = await response.json();
 
-	// Convert Anthropic format to standard Model format
-	return (data.data || []).map(model => ({
-		id: model.id,
-		object: 'model',
-		created: new Date(model.created_at).getTime() / 1000, // Convert to Unix timestamp
-		owned_by: 'anthropic',
-	}));
+	// Try to parse as Anthropic format first
+	if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+		const firstItem = data.data[0];
+
+		// Check if it's Anthropic format (has created_at field)
+		if ('created_at' in firstItem && typeof firstItem.created_at === 'string') {
+			// Anthropic native format
+			return (data.data as AnthropicModel[]).map(model => ({
+				id: model.id,
+				object: 'model',
+				created: new Date(model.created_at).getTime() / 1000,
+				owned_by: 'anthropic',
+			}));
+		}
+
+		// Fallback to OpenAI format (has created field as number)
+		if ('id' in firstItem && 'object' in firstItem) {
+			// OpenAI-compatible format
+			return data.data as Model[];
+		}
+	}
+
+	// If no data array or empty, return empty array
+	return [];
 }
 
 /**

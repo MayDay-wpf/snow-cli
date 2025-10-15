@@ -13,9 +13,10 @@ import {
 type Props = {
 	onBack: () => void;
 	onSave: () => void;
+	inlineMode?: boolean;
 };
 
-export default function ApiConfigScreen({ onBack, onSave }: Props) {
+export default function ApiConfigScreen({ onBack, onSave, inlineMode = false }: Props) {
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
@@ -115,22 +116,24 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
-				<Box flexDirection="column">
-					<Gradient name="rainbow">
-						OpenAI API Configuration
-					</Gradient>
-					<Text color="gray" dimColor>
-						Configure your OpenAI API settings
-					</Text>
+			{!inlineMode && (
+				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+					<Box flexDirection="column">
+						<Gradient name="rainbow">
+							OpenAI API Configuration
+						</Gradient>
+						<Text color="gray" dimColor>
+							Configure your OpenAI API settings
+						</Text>
+					</Box>
 				</Box>
-			</Box>
+			)}
 
 			<Box flexDirection="column" marginBottom={2}>
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
-							{currentField === 'baseUrl' ? '➣ ' : '  '}Base URL:
+							{currentField === 'baseUrl' ? '❯ ' : '  '}Base URL:
 						</Text>
 						{currentField === 'baseUrl' && isEditing && (
 							<Box marginLeft={3}>
@@ -152,7 +155,7 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'apiKey' ? 'green' : 'white'}>
-							{currentField === 'apiKey' ? '➣ ' : '  '}API Key:
+							{currentField === 'apiKey' ? '❯ ' : '  '}API Key:
 						</Text>
 						{currentField === 'apiKey' && isEditing && (
 							<Box marginLeft={3}>
@@ -177,7 +180,7 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'requestMethod' ? 'green' : 'white'}>
-							{currentField === 'requestMethod' ? '➣ ' : '  '}Request Method:
+							{currentField === 'requestMethod' ? '❯ ' : '  '}Request Method:
 						</Text>
 						{currentField === 'requestMethod' && isEditing && (
 							<Box marginLeft={3}>
@@ -204,7 +207,7 @@ export default function ApiConfigScreen({ onBack, onSave }: Props) {
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
-							{currentField === 'anthropicBeta' ? '➣ ' : '  '}Anthropic Beta (for Claude API):
+							{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta (for Claude API):
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">

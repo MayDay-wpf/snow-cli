@@ -5,17 +5,22 @@ import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import Menu from '../components/Menu.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import ApiConfigScreen from './ApiConfigScreen.js';
+import ModelConfigScreen from './ModelConfigScreen.js';
 
 type Props = {
 	version?: string;
 	onMenuSelect?: (value: string) => void;
 };
 
+type InlineView = 'menu' | 'api-config' | 'model-config';
+
 export default function WelcomeScreen({
 	version = '1.0.0',
 	onMenuSelect,
 }: Props) {
 	const [infoText, setInfoText] = useState('Start a new chat conversation');
+	const [inlineView, setInlineView] = useState<InlineView>('menu');
 	const {columns: terminalWidth} = useTerminalSize();
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
@@ -68,6 +73,29 @@ export default function WelcomeScreen({
 		setInfoText(newInfoText);
 	}, []);
 
+	const handleInlineMenuSelect = useCallback(
+		(value: string) => {
+			// Handle inline views (config, models) or pass through to parent
+			if (value === 'config') {
+				setInlineView('api-config');
+			} else if (value === 'models') {
+				setInlineView('model-config');
+			} else {
+				// Pass through to parent for other actions (chat, exit, etc.)
+				onMenuSelect?.(value);
+			}
+		},
+		[onMenuSelect],
+	);
+
+	const handleBackToMenu = useCallback(() => {
+		setInlineView('menu');
+	}, []);
+
+	const handleConfigSave = useCallback(() => {
+		setInlineView('menu');
+	}, []);
+
 	// Clear terminal and re-render on terminal width change
 	// Use debounce to avoid flickering during continuous resize
 	useEffect(() => {
@@ -93,29 +121,19 @@ export default function WelcomeScreen({
 				items={[
 					<Box
 						key="welcome-header"
-						flexDirection="column"
-						padding={1}
+						flexDirection="row"
+						paddingLeft={2}
+						paddingTop={1}
+						paddingBottom={1}
 						width={terminalWidth}
 					>
-						<Box
-							borderStyle="double"
-							borderColor={'cyan'}
-							paddingX={1}
-							paddingY={1}
-							width={terminalWidth - 2}
-						>
-							<Box flexDirection="column">
-								<Text color="white" bold>
-									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">SNOW AI CLI</Gradient>
-								</Text>
-								<Text color="gray" dimColor>
-									Intelligent Command Line Assistant
-								</Text>
-								<Text color="magenta" dimColor>
-									Version {version}
-								</Text>
-							</Box>
+						<Box flexDirection="column" justifyContent="center">
+							<Text bold>
+								<Gradient name="rainbow">❆ SNOW AI CLI</Gradient>
+							</Text>
+							<Text color="gray" dimColor>
+								v{version} • Intelligent Command Line Assistant
+							</Text>
 						</Box>
 					</Box>,
 				]}
@@ -124,19 +142,42 @@ export default function WelcomeScreen({
 			</Static>
 
 			{/* Menu must be outside Static to receive input */}
-			{onMenuSelect && (
-				<Box paddingX={2}>
-					<Menu
-						options={menuOptions}
-						onSelect={onMenuSelect}
-						onSelectionChange={handleSelectionChange}
-					/>
+			{onMenuSelect && inlineView === 'menu' && (
+				<Box paddingX={1}>
+					<Box borderStyle="round" borderColor="cyan" paddingX={1}>
+						<Menu
+							options={menuOptions}
+							onSelect={handleInlineMenuSelect}
+							onSelectionChange={handleSelectionChange}
+						/>
+					</Box>
 				</Box>
 			)}
 
-			<Box paddingX={2}>
-				<Alert variant="info">{infoText}</Alert>
-			</Box>
+			{/* Render inline view content based on current state */}
+			{inlineView === 'menu' && (
+				<Box paddingX={1}>
+					<Alert variant="info">{infoText}</Alert>
+				</Box>
+			)}
+			{inlineView === 'api-config' && (
+				<Box paddingX={1}>
+					<ApiConfigScreen
+						onBack={handleBackToMenu}
+						onSave={handleConfigSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'model-config' && (
+				<Box paddingX={1}>
+					<ModelConfigScreen
+						onBack={handleBackToMenu}
+						onSave={handleConfigSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
 		</Box>
 	);
 }

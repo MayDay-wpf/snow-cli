@@ -7,7 +7,7 @@ import React, {
 	useImperativeHandle,
 	memo,
 } from 'react';
-import {Box, Text} from 'ink';
+import { Box, Text } from 'ink';
 import fs from 'fs';
 import path from 'path';
 
@@ -292,11 +292,11 @@ const FileList = memo(
 									index === displaySelectedIndex
 										? '#FFFFFF'
 										: file.isDirectory
-										? 'cyan'
-										: 'white'
+											? 'yellow'
+											: 'white'
 								}
 							>
-								{file.path}
+								{file.isDirectory ? '◇ ' + file.path : '◆ ' + file.path}
 							</Text>
 						</Box>
 					))}
