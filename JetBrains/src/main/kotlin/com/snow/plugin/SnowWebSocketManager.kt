@@ -28,6 +28,21 @@ class SnowWebSocketManager private constructor() {
         private const val MAX_PORT = 9548
 
         val instance: SnowWebSocketManager by lazy { SnowWebSocketManager() }
+
+        /**
+         * Normalize path for cross-platform compatibility
+         * - Converts Windows backslashes to forward slashes
+         * - Converts drive letters to lowercase for consistent comparison
+         */
+        private fun normalizePath(path: String?): String? {
+            if (path == null) return null
+            var normalized = path.replace('\\', '/')
+            // Convert Windows drive letter to lowercase (C: -> c:)
+            if (normalized.matches(Regex("^[A-Z]:.*"))) {
+                normalized = normalized[0].lowercaseChar() + normalized.substring(1)
+            }
+            return normalized
+        }
     }
 
     @Volatile
@@ -94,9 +109,9 @@ class SnowWebSocketManager private constructor() {
                 org.json.JSONObject()
             }
 
-            // Get workspace folder from first open project
+            // Get workspace folder from first open project - normalize path for Windows compatibility
             val project = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.firstOrNull()
-            val workspaceFolder = project?.basePath ?: ""
+            val workspaceFolder = normalizePath(project?.basePath) ?: ""
 
             portInfo.put(workspaceFolder, port)
             portInfoFile.writeText(portInfo.toString(2))
@@ -133,9 +148,9 @@ class SnowWebSocketManager private constructor() {
             if (portInfoFile.exists()) {
                 val portInfo = org.json.JSONObject(portInfoFile.readText())
 
-                // Get workspace folder from first open project
+                // Get workspace folder from first open project - normalize path for Windows compatibility
                 val project = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.firstOrNull()
-                val workspaceFolder = project?.basePath ?: ""
+                val workspaceFolder = normalizePath(project?.basePath) ?: ""
 
                 portInfo.remove(workspaceFolder)
 
@@ -197,11 +212,11 @@ class SnowWebSocketManager private constructor() {
                     "type" to "context"
                 )
 
-                // Add workspace folder
-                project.basePath?.let { context["workspaceFolder"] = it }
+                // Add workspace folder - normalize path for Windows compatibility
+                project.basePath?.let { context["workspaceFolder"] = normalizePath(it) }
 
-                // Add active file
-                virtualFile?.path?.let { context["activeFile"] = it }
+                // Add active file - normalize path for Windows compatibility
+                virtualFile?.path?.let { context["activeFile"] = normalizePath(it) }
 
                 // Add cursor position if editor available
                 if (editor != null) {

@@ -26,6 +26,21 @@ class SnowEditorContextTracker(private val project: Project) {
     }
 
     /**
+     * Normalize path for cross-platform compatibility
+     * - Converts Windows backslashes to forward slashes
+     * - Converts drive letters to lowercase for consistent comparison
+     */
+    private fun normalizePath(path: String?): String? {
+        if (path == null) return null
+        var normalized = path.replace('\\', '/')
+        // Convert Windows drive letter to lowercase (C: -> c:)
+        if (normalized.matches(Regex("^[A-Z]:.*"))) {
+            normalized = normalized[0].lowercaseChar() + normalized.substring(1)
+        }
+        return normalized
+    }
+
+    /**
      * Setup editor listeners
      */
     private fun setupListeners() {
@@ -101,13 +116,13 @@ class SnowEditorContextTracker(private val project: Project) {
             "type" to "context"
         )
 
-        // Get workspace folder (always include)
-        project.basePath?.let { context["workspaceFolder"] = it }
+        // Get workspace folder (always include) - normalize path for Windows compatibility
+        project.basePath?.let { context["workspaceFolder"] = normalizePath(it) }
 
-        // Get active file (try to get even if editor is null)
+        // Get active file (try to get even if editor is null) - normalize path for Windows compatibility
         val virtualFile = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
         virtualFile?.path?.let {
-            context["activeFile"] = it
+            context["activeFile"] = normalizePath(it)
         }
 
         // If no editor, still return context with file info

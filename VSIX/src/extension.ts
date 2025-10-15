@@ -52,7 +52,7 @@ function startWebSocketServer() {
 				const fs = require('fs');
 				const os = require('os');
 				const path = require('path');
-				const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+				const workspaceFolder = normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
 				const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 				try {
@@ -99,6 +99,19 @@ function startWebSocketServer() {
 	tryPort(port);
 }
 
+function normalizePath(filePath: string | undefined): string | undefined {
+	if (!filePath) {
+		return undefined;
+	}
+	// Convert Windows backslashes to forward slashes for consistent path comparison
+	let normalized = filePath.replace(/\\/g, '/');
+	// Convert Windows drive letter to lowercase (C: -> c:)
+	if (/^[A-Z]:/.test(normalized)) {
+		normalized = normalized.charAt(0).toLowerCase() + normalized.slice(1);
+	}
+	return normalized;
+}
+
 function sendEditorContext() {
 	if (clients.size === 0) {
 		return;
@@ -116,8 +129,8 @@ function sendEditorContext() {
 
 	const context: any = {
 		type: 'context',
-		workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-		activeFile: editor.document.uri.fsPath,
+		workspaceFolder: normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath),
+		activeFile: normalizePath(editor.document.uri.fsPath),
 		cursorPosition: {
 			line: editor.selection.active.line,
 			character: editor.selection.active.character,
@@ -399,7 +412,7 @@ export function deactivate() {
 		const fs = require('fs');
 		const os = require('os');
 		const path = require('path');
-		const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+		const workspaceFolder = normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
 		const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 		if (fs.existsSync(portInfoPath)) {

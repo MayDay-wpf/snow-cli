@@ -108,6 +108,20 @@ class VSCodeConnectionManager {
 	}
 
 	/**
+	 * Normalize path for cross-platform compatibility
+	 * - Converts Windows backslashes to forward slashes
+	 * - Converts drive letters to lowercase for consistent comparison
+	 */
+	private normalizePath(filePath: string): string {
+		let normalized = filePath.replace(/\\/g, '/');
+		// Convert Windows drive letter to lowercase (C: -> c:)
+		if (/^[A-Z]:/.test(normalized)) {
+			normalized = normalized.charAt(0).toLowerCase() + normalized.slice(1);
+		}
+		return normalized;
+	}
+
+	/**
 	 * Find the correct port for the current workspace
 	 */
 	private findPortForWorkspace(): number {
@@ -116,8 +130,8 @@ class VSCodeConnectionManager {
 			if (fs.existsSync(portInfoPath)) {
 				const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
 
-				// Try to match current working directory
-				const cwd = this.currentWorkingDirectory;
+				// Normalize cwd for consistent comparison
+				const cwd = this.normalizePath(this.currentWorkingDirectory);
 
 				// Direct match
 				if (portInfo[cwd]) {
@@ -126,7 +140,8 @@ class VSCodeConnectionManager {
 
 				// Check if cwd is within any of the workspace folders
 				for (const [workspace, port] of Object.entries(portInfo)) {
-					if (cwd.startsWith(workspace)) {
+					const normalizedWorkspace = this.normalizePath(workspace);
+					if (cwd.startsWith(normalizedWorkspace)) {
 						return port as number;
 					}
 				}
@@ -148,12 +163,13 @@ class VSCodeConnectionManager {
 			return true;
 		}
 
-		// Check if message's workspace folder matches our current working directory
-		const cwd = this.currentWorkingDirectory;
+		// Normalize paths for consistent comparison across platforms
+		const cwd = this.normalizePath(this.currentWorkingDirectory);
+		const workspaceFolder = this.normalizePath(data.workspaceFolder);
 
 		// Bidirectional check: either cwd is within IDE workspace, or IDE workspace is within cwd
-		const cwdInWorkspace = cwd.startsWith(data.workspaceFolder);
-		const workspaceInCwd = data.workspaceFolder.startsWith(cwd);
+		const cwdInWorkspace = cwd.startsWith(workspaceFolder);
+		const workspaceInCwd = workspaceFolder.startsWith(cwd);
 		const matches = cwdInWorkspace || workspaceInCwd;
 
 		return matches;
