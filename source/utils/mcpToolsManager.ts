@@ -10,6 +10,7 @@ import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {TodoService} from '../mcp/todo.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
+import {resourceMonitor} from './resourceMonitor.js';
 import os from 'os';
 import path from 'path';
 
@@ -416,6 +417,17 @@ async function connectAndGetTools(
 ): Promise<InternalMCPTool[]> {
 	let client: Client | null = null;
 	let transport: any;
+	let timeoutId: NodeJS.Timeout | null = null;
+	let connectionAborted = false;
+
+	// Create abort mechanism for cleanup
+	const abortConnection = () => {
+		connectionAborted = true;
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+			timeoutId = null;
+		}
+	};
 
 	try {
 		client = new Client(
@@ -427,6 +439,8 @@ async function connectAndGetTools(
 				capabilities: {},
 			},
 		);
+
+		resourceMonitor.trackMCPConnectionOpened(serviceName);
 
 		// Create transport based on server configuration
 		if (server.url) {
@@ -473,20 +487,30 @@ async function connectAndGetTools(
 					requestInit: {headers},
 				});
 
+				// Use timeout with abort mechanism
 				await Promise.race([
 					client.connect(transport),
-					new Promise<never>((_, reject) =>
-						setTimeout(
-							() => reject(new Error('HTTP connection timeout')),
-							timeoutMs,
-						),
-					),
+					new Promise<never>((_, reject) => {
+						timeoutId = setTimeout(() => {
+							abortConnection();
+							reject(new Error('HTTP connection timeout'));
+						}, timeoutMs);
+					}),
 				]);
+
+				if (timeoutId) {
+					clearTimeout(timeoutId);
+					timeoutId = null;
+				}
 			} catch (httpError) {
 				// Fallback to SSE
 				try {
 					await client.close();
 				} catch {}
+
+				if (connectionAborted) {
+					throw new Error('Connection aborted due to timeout');
+				}
 
 				client = new Client(
 					{
@@ -501,13 +525,18 @@ async function connectAndGetTools(
 				transport = new SSEClientTransport(url);
 				await Promise.race([
 					client.connect(transport),
-					new Promise<never>((_, reject) =>
-						setTimeout(
-							() => reject(new Error('SSE connection timeout')),
-							timeoutMs,
-						),
-					),
+					new Promise<never>((_, reject) => {
+						timeoutId = setTimeout(() => {
+							abortConnection();
+							reject(new Error('SSE connection timeout'));
+						}, timeoutMs);
+					}),
 				]);
+
+				if (timeoutId) {
+					clearTimeout(timeoutId);
+					timeoutId = null;
+				}
 			}
 		} else if (server.command) {
 			const processEnv: Record<string, string> = {};
@@ -536,10 +565,18 @@ async function connectAndGetTools(
 		// Get tools from the service
 		const toolsResult = await Promise.race([
 			client.listTools(),
-			new Promise<never>((_, reject) =>
-				setTimeout(() => reject(new Error('ListTools timeout')), timeoutMs),
-			),
+			new Promise<never>((_, reject) => {
+				timeoutId = setTimeout(() => {
+					abortConnection();
+					reject(new Error('ListTools timeout'));
+				}, timeoutMs);
+			}),
 		]);
+
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+			timeoutId = null;
+		}
 
 		return (
 			toolsResult.tools?.map(tool => ({
@@ -549,12 +586,22 @@ async function connectAndGetTools(
 			})) || []
 		);
 	} finally {
+		// Clean up timeout
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+		}
+
 		try {
 			if (client) {
-				await client.close();
+				await Promise.race([
+					client.close(),
+					new Promise(resolve => setTimeout(resolve, 1000)), // Max 1s for cleanup
+				]);
+				resourceMonitor.trackMCPConnectionClosed(serviceName);
 			}
 		} catch (error) {
 			logger.warn(`Failed to close client for ${serviceName}:`, error);
+			resourceMonitor.trackMCPConnectionClosed(serviceName); // Track even on error
 		}
 	}
 }
@@ -794,6 +841,8 @@ async function executeOnExternalMCPService(
 			},
 		);
 
+		resourceMonitor.trackMCPConnectionOpened(serviceName);
+
 		// Setup transport (similar to getServiceTools)
 		let transport: any;
 
@@ -841,9 +890,11 @@ async function executeOnExternalMCPService(
 		try {
 			if (client) {
 				await client.close();
+				resourceMonitor.trackMCPConnectionClosed(serviceName);
 			}
 		} catch (error) {
 			logger.warn(`Failed to close client for ${serviceName}:`, error);
+			resourceMonitor.trackMCPConnectionClosed(serviceName); // Track even on error
 		}
 	}
 }

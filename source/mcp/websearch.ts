@@ -1,5 +1,8 @@
-import puppeteer, {type Browser, type Page} from 'puppeteer';
+import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {getProxyConfig} from '../utils/apiConfig.js';
+import {execSync} from 'node:child_process';
+import {existsSync} from 'node:fs';
+import {platform} from 'node:os';
 
 interface SearchResult {
 	title: string;
@@ -23,12 +26,65 @@ interface WebPageContent {
 }
 
 /**
- * Web Search Service using DuckDuckGo Lite with Puppeteer
+ * Detect system Chrome/Edge browser executable path
+ */
+function findBrowserExecutable(): string | null {
+	const os = platform();
+	const paths: string[] = [];
+
+	if (os === 'win32') {
+		// Windows: Prioritize Edge (built-in), then Chrome
+		const edgePaths = [
+			'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+		];
+		const chromePaths = [
+			'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+			'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+			process.env['LOCALAPPDATA'] + '\\Google\\Chrome\\Application\\chrome.exe',
+		];
+		paths.push(...edgePaths, ...chromePaths);
+	} else if (os === 'darwin') {
+		// macOS
+		paths.push(
+			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+			'/Applications/Chromium.app/Contents/MacOS/Chromium',
+			'/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+		);
+	} else {
+		// Linux
+		const binPaths = ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge'];
+		for (const bin of binPaths) {
+			try {
+				const path = execSync(`which ${bin}`, {encoding: 'utf8'}).trim();
+				if (path) {
+					return path;
+				}
+			} catch {
+				// Continue to next binary
+			}
+		}
+	}
+
+	// Check if any path exists
+	for (const path of paths) {
+		if (path && existsSync(path)) {
+			return path;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Web Search Service using DuckDuckGo Lite with Puppeteer Core
  * Provides web search functionality with real browser support and proxy
+ * Uses system-installed Chrome/Edge to reduce package size
  */
 export class WebSearchService {
 	private maxResults: number;
 	private browser: Browser | null = null;
+	private executablePath: string | null = null;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
@@ -43,6 +99,24 @@ export class WebSearchService {
 		}
 
 		const proxyConfig = getProxyConfig();
+
+		// Find browser executable path (cache it)
+		// Priority: 1. User-configured path, 2. Auto-detect
+		if (!this.executablePath) {
+			// First try user-configured browser path
+			if (proxyConfig.browserPath && existsSync(proxyConfig.browserPath)) {
+				this.executablePath = proxyConfig.browserPath;
+			} else {
+				// Fallback to auto-detection
+				this.executablePath = findBrowserExecutable();
+				if (!this.executablePath) {
+					throw new Error(
+						'No system browser found. Please install Chrome or Edge browser, or configure browser path in Proxy settings.',
+					);
+				}
+			}
+		}
+
 		const launchArgs = [
 			'--no-sandbox',
 			'--disable-setuid-sandbox',
@@ -57,6 +131,7 @@ export class WebSearchService {
 		}
 
 		this.browser = await puppeteer.launch({
+			executablePath: this.executablePath,
 			headless: true,
 			args: launchArgs,
 		});

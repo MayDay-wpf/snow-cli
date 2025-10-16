@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, {useState, useEffect} from 'react';
+import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
-import { Select, Alert } from '@inkjs/ui';
-import { fetchAvailableModels, filterModels, type Model } from '../../api/models.js';
+import {Select, Alert, Spinner} from '@inkjs/ui';
+import {
+	fetchAvailableModels,
+	filterModels,
+	type Model,
+} from '../../api/models.js';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
@@ -15,9 +19,20 @@ type Props = {
 	inlineMode?: boolean;
 };
 
-type ModelField = 'advancedModel' | 'basicModel' | 'maxContextTokens' | 'maxTokens' | 'compactBaseUrl' | 'compactApiKey' | 'compactModelName';
+type ModelField =
+	| 'advancedModel'
+	| 'basicModel'
+	| 'maxContextTokens'
+	| 'maxTokens'
+	| 'compactBaseUrl'
+	| 'compactApiKey'
+	| 'compactModelName';
 
-export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }: Props) {
+export default function ModelConfigScreen({
+	onBack,
+	onSave,
+	inlineMode = false,
+}: Props) {
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
@@ -72,7 +87,7 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 
 		// 添加手动输入选项
 		return [
-			{ label: 'Manual Input (Enter model name)', value: '__MANUAL_INPUT__' },
+			{label: 'Manual Input (Enter model name)', value: '__MANUAL_INPUT__'},
 			...modelOptions,
 		];
 	};
@@ -123,6 +138,14 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 			return;
 		}
 
+		// Allow Escape key to cancel loading
+		if (loading) {
+			if (key.escape) {
+				setLoading(false);
+			}
+			return;
+		}
+
 		// 处理手动输入模式
 		if (manualInputMode) {
 			if (key.return) {
@@ -147,6 +170,17 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 			} else if (input && input.match(/[a-zA-Z0-9-_./:]/)) {
 				setManualInputValue(prev => prev + input);
 			}
+			return;
+		}
+
+		// Allow Escape key to exit Select component without changes (for model selection)
+		if (
+			isEditing &&
+			(currentField === 'advancedModel' || currentField === 'basicModel') &&
+			key.escape
+		) {
+			setIsEditing(false);
+			setSearchTerm('');
 			return;
 		}
 
@@ -196,7 +230,11 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 					setMaxTokens(finalValue);
 					setIsEditing(false);
 				}
-			} else if (currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName') {
+			} else if (
+				currentField === 'compactBaseUrl' ||
+				currentField === 'compactApiKey' ||
+				currentField === 'compactModelName'
+			) {
 				// Handle text input for compact model fields
 				if (key.return) {
 					setIsEditing(false);
@@ -266,22 +304,38 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 		} else if (key.return) {
 			// Load models first for model fields, or enter edit mode directly for maxContextTokens/maxTokens and compact fields
 			setSearchTerm(''); // Reset search when entering edit mode
-			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
-			if (currentField === 'maxContextTokens' || currentField === 'maxTokens' || isCompactField) {
+			const isCompactField =
+				currentField === 'compactBaseUrl' ||
+				currentField === 'compactApiKey' ||
+				currentField === 'compactModelName';
+			if (
+				currentField === 'maxContextTokens' ||
+				currentField === 'maxTokens' ||
+				isCompactField
+			) {
 				setIsEditing(true);
 			} else {
-				loadModels().then(() => {
-					setIsEditing(true);
-				}).catch(() => {
-					// 如果加载模型失败，直接进入手动输入模式
-					setManualInputMode(true);
-					setManualInputValue(getCurrentValue());
-				});
+				loadModels()
+					.then(() => {
+						setIsEditing(true);
+					})
+					.catch(() => {
+						// 如果加载模型失败，直接进入手动输入模式
+						setManualInputMode(true);
+						setManualInputValue(getCurrentValue());
+					});
 			}
 		} else if (input === 'm') {
 			// 快捷键：按 'm' 直接进入手动输入模式
-			const isCompactField = currentField === 'compactBaseUrl' || currentField === 'compactApiKey' || currentField === 'compactModelName';
-			if (currentField !== 'maxContextTokens' && currentField !== 'maxTokens' && !isCompactField) {
+			const isCompactField =
+				currentField === 'compactBaseUrl' ||
+				currentField === 'compactApiKey' ||
+				currentField === 'compactModelName';
+			if (
+				currentField !== 'maxContextTokens' &&
+				currentField !== 'maxTokens' &&
+				!isCompactField
+			) {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -320,11 +374,15 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 		return (
 			<Box flexDirection="column" padding={1}>
 				{!inlineMode && (
-					<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+					<Box
+						marginBottom={1}
+						borderStyle="double"
+						borderColor={'cyan'}
+						paddingX={1}
+						paddingY={0}
+					>
 						<Box flexDirection="column">
-							<Gradient name='rainbow'>
-								Model Configuration
-							</Gradient>
+							<Gradient name="rainbow">Model Configuration</Gradient>
 							<Text color="gray" dimColor>
 								Configure AI models for different tasks
 							</Text>
@@ -334,14 +392,13 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 
 				<Box marginBottom={1}>
 					<Alert variant="error">
-						Base URL not configured. Please configure API settings first before setting up models.
+						Base URL not configured. Please configure API settings first before
+						setting up models.
 					</Alert>
 				</Box>
 
 				<Box flexDirection="column">
-					<Alert variant="info">
-						Press Esc to return to main menu
-					</Alert>
+					<Alert variant="info">Press Esc to return to main menu</Alert>
 				</Box>
 			</Box>
 		);
@@ -351,17 +408,39 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 		return (
 			<Box flexDirection="column" padding={1}>
 				{!inlineMode && (
-					<Box marginBottom={1} borderStyle="double" paddingX={1} paddingY={0}>
+					<Box
+						marginBottom={1}
+						borderStyle="double"
+						borderColor={'cyan'}
+						paddingX={1}
+						paddingY={0}
+					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">
-								Model Configuration
-							</Gradient>
+							<Gradient name="rainbow">Model Configuration</Gradient>
 							<Text color="gray" dimColor>
 								Loading available models...
 							</Text>
 						</Box>
 					</Box>
 				)}
+
+				<Box flexDirection="column" marginY={2}>
+					<Box marginBottom={1}>
+						<Spinner type="dots" />
+						<Text color="cyan"> Fetching models from API...</Text>
+					</Box>
+					<Box marginLeft={2}>
+						<Text color="gray" dimColor>
+							This may take a few seconds depending on your network connection
+						</Text>
+					</Box>
+				</Box>
+
+				<Box flexDirection="column">
+					<Alert variant="info">
+						Press Esc to cancel and return to configuration
+					</Alert>
+				</Box>
 			</Box>
 		);
 	}
@@ -371,11 +450,15 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 		return (
 			<Box flexDirection="column" padding={1}>
 				{!inlineMode && (
-					<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+					<Box
+						marginBottom={1}
+						borderStyle="double"
+						borderColor={'cyan'}
+						paddingX={1}
+						paddingY={0}
+					>
 						<Box flexDirection="column">
-							<Gradient name='rainbow'>
-								Manual Input Model
-							</Gradient>
+							<Gradient name="rainbow">Manual Input Model</Gradient>
 							<Text color="gray" dimColor>
 								Enter model name manually
 							</Text>
@@ -385,22 +468,21 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 
 				<Box flexDirection="column" marginBottom={1}>
 					<Text color="cyan">
-						{currentField === 'advancedModel' ? 'Advanced Model' : 'Basic Model'}:
+						{currentField === 'advancedModel'
+							? 'Advanced Model'
+							: 'Basic Model'}
+						:
 					</Text>
 					<Box marginLeft={2}>
 						<Text color="green">
-							{`> ${manualInputValue}`}<Text color="white">_</Text>
+							{`> ${manualInputValue}`}
+							<Text color="white">_</Text>
 						</Text>
 					</Box>
 				</Box>
 
 				<Box flexDirection="column">
-					<Alert variant="info">
-						Type model name (e.g., gpt-4o, claude-3-5-sonnet-20241022)
-					</Alert>
-					<Alert variant="info">
-						Press Enter to confirm, Esc to cancel
-					</Alert>
+					<Alert variant="info">Press Enter to confirm, Esc to cancel</Alert>
 				</Box>
 			</Box>
 		);
@@ -409,11 +491,15 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 	return (
 		<Box flexDirection="column" padding={1}>
 			{!inlineMode && (
-				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={1} paddingY={0}>
+				<Box
+					marginBottom={1}
+					borderStyle="double"
+					borderColor={'cyan'}
+					paddingX={1}
+					paddingY={0}
+				>
 					<Box flexDirection="column">
-						<Gradient name='rainbow'>
-							Model Configuration
-						</Gradient>
+						<Gradient name="rainbow">Model Configuration</Gradient>
 						<Text color="gray" dimColor>
 							Configure AI models for different tasks
 						</Text>
@@ -425,7 +511,8 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
-							{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model (Main Work):
+							{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model
+							(Main Work):
 						</Text>
 						{currentField === 'advancedModel' && isEditing && (
 							<Box marginLeft={3}>
@@ -456,7 +543,8 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
-							{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model (Summary & Analysis):
+							{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model (Summary
+							& Analysis):
 						</Text>
 						{currentField === 'basicModel' && isEditing && (
 							<Box marginLeft={3}>
@@ -486,14 +574,15 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 
 				<Box>
 					<Box flexDirection="column">
-						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
-							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context Tokens (Auto-compress when reached):
+						<Text
+							color={currentField === 'maxContextTokens' ? 'green' : 'white'}
+						>
+							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
+							Tokens (Auto-compress when reached):
 						</Text>
 						{currentField === 'maxContextTokens' && isEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">
-									Enter value: {maxContextTokens}
-								</Text>
+								<Text color="cyan">Enter value: {maxContextTokens}</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'maxContextTokens') && (
@@ -507,13 +596,12 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 				<Box>
 					<Box flexDirection="column">
 						<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
-							{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens (Max tokens for single response):
+							{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens (Max tokens
+							for single response):
 						</Text>
 						{currentField === 'maxTokens' && isEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">
-									Enter value: {maxTokens}
-								</Text>
+								<Text color="cyan">Enter value: {maxTokens}</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'maxTokens') && (
@@ -525,7 +613,9 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 				</Box>
 
 				<Box marginTop={1}>
-					<Text color="cyan" bold>Compact Model (Context Compression):</Text>
+					<Text color="cyan" bold>
+						Compact Model (Context Compression):
+					</Text>
 				</Box>
 
 				<Box>
@@ -536,7 +626,8 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 						{currentField === 'compactBaseUrl' && isEditing && (
 							<Box marginLeft={3}>
 								<Text color="cyan">
-									{compactBaseUrl}<Text color="white">_</Text>
+									{compactBaseUrl}
+									<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
@@ -556,13 +647,16 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 						{currentField === 'compactApiKey' && isEditing && (
 							<Box marginLeft={3}>
 								<Text color="cyan">
-									{compactApiKey.replace(/./g, '*')}<Text color="white">_</Text>
+									{compactApiKey.replace(/./g, '*')}
+									<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'compactApiKey') && (
 							<Box marginLeft={3}>
-								<Text color="gray">{compactApiKey ? compactApiKey.replace(/./g, '*') : 'Not set'}</Text>
+								<Text color="gray">
+									{compactApiKey ? compactApiKey.replace(/./g, '*') : 'Not set'}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -570,13 +664,16 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 
 				<Box>
 					<Box flexDirection="column">
-						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
+						<Text
+							color={currentField === 'compactModelName' ? 'green' : 'white'}
+						>
 							{currentField === 'compactModelName' ? '❯ ' : '  '}Model Name:
 						</Text>
 						{currentField === 'compactModelName' && isEditing && (
 							<Box marginLeft={3}>
 								<Text color="cyan">
-									{compactModelName}<Text color="white">_</Text>
+									{compactModelName}
+									<Text color="white">_</Text>
 								</Text>
 							</Box>
 						)}
@@ -593,13 +690,15 @@ export default function ModelConfigScreen({ onBack, onSave, inlineMode = false }
 				{isEditing ? (
 					<>
 						<Alert variant="info">
-							Editing mode: Type to filter models, ↑↓ to select, Enter to confirm
+							Editing mode: Type to filter models, ↑↓ to select, Enter to
+							confirm
 						</Alert>
 					</>
 				) : (
 					<>
 						<Alert variant="info">
-							Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or Esc to save
+							Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or
+							Esc to save
 						</Alert>
 					</>
 				)}

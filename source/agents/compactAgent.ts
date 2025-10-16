@@ -144,10 +144,10 @@ export class CompactAgent {
 			let encoder;
 			try {
 				const {encoding_for_model} = await import('tiktoken');
-				encoder = encoding_for_model('gpt-4');
+				encoder = encoding_for_model('gpt-5');
 			} catch (e) {
 				const {encoding_for_model} = await import('tiktoken');
-				encoder = encoding_for_model('gpt-3.5-turbo');
+				encoder = encoding_for_model('gpt-5');
 			}
 
 			try {

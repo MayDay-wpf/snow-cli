@@ -11,6 +11,7 @@ import {sessionManager} from '../utils/sessionManager.js';
 import {formatTodoContext} from '../utils/todoPreprocessor.js';
 import type {Message} from '../ui/components/MessageList.js';
 import {formatToolCallMessage} from '../utils/messageFormatter.js';
+import {resourceMonitor} from '../utils/resourceMonitor.js';
 
 export type ConversationHandlerOptions = {
 	userContent: string;
@@ -132,12 +133,27 @@ export async function handleConversationWithTools(
 		console.error('Failed to save user message:', error);
 	});
 
-	// Initialize token encoder
-	let encoder;
+	// Initialize token encoder with proper cleanup tracking
+	let encoder: any;
+	let encoderFreed = false;
+	const freeEncoder = () => {
+		if (!encoderFreed && encoder) {
+			try {
+				encoder.free();
+				encoderFreed = true;
+				resourceMonitor.trackEncoderFreed();
+			} catch (e) {
+				console.error('Failed to free encoder:', e);
+			}
+		}
+	};
+
 	try {
 		encoder = encoding_for_model('gpt-4');
+		resourceMonitor.trackEncoderCreated();
 	} catch (e) {
 		encoder = encoding_for_model('gpt-3.5-turbo');
+		resourceMonitor.trackEncoderCreated();
 	}
 	setStreamTokenCount(0);
 
@@ -154,7 +170,10 @@ export async function handleConversationWithTools(
 
 	try {
 		while (true) {
-			if (controller.signal.aborted) break;
+			if (controller.signal.aborted) {
+				freeEncoder();
+				break;
+			}
 
 			let streamedContent = '';
 			let receivedToolCalls: ToolCall[] | undefined;
@@ -294,6 +313,7 @@ export async function handleConversationWithTools(
 			// If aborted during streaming, exit the loop
 			// (discontinued message already added by ChatScreen ESC handler)
 			if (controller.signal.aborted) {
+				freeEncoder();
 				break;
 			}
 
@@ -415,7 +435,7 @@ export async function handleConversationWithTools(
 						if (options.setIsStreaming) {
 							options.setIsStreaming(false);
 						}
-						encoder.free();
+						freeEncoder();
 						return; // Exit the conversation loop
 					}
 
@@ -440,6 +460,7 @@ export async function handleConversationWithTools(
 
 			// Check if aborted during tool execution
 			if (controller.signal.aborted) {
+				freeEncoder();
 				break;
 			}
 				// Check if there are TODO related tool calls, if yes refresh TODO list
@@ -650,9 +671,9 @@ export async function handleConversationWithTools(
 		}
 
 		// Free encoder
-		encoder.free();
+		freeEncoder();
 	} catch (error) {
-		encoder.free();
+		freeEncoder();
 		throw error;
 	}
 }

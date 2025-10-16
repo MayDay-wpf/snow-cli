@@ -1,7 +1,7 @@
 export interface CommandResult {
 	success: boolean;
 	message?: string;
-	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo' | 'goHome' | 'toggleYolo' | 'initProject' | 'compact' | 'showSessionPanel' | 'showMcpPanel';
+	action?: 'clear' | 'resume' | 'info' | 'showMcpInfo' | 'toggleYolo' | 'initProject' | 'compact' | 'showSessionPanel' | 'showMcpPanel';
 	prompt?: string;
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }

@@ -46,9 +46,9 @@ export default function WelcomeScreen({
 				infoText: 'Configure AI models for different tasks',
 			},
 			{
-				label: 'Proxy Settings',
+				label: 'Proxy & Browser Settings',
 				value: 'proxy',
-				infoText: 'Configure system proxy for web search and fetch',
+				infoText: 'Configure system proxy and browser for web search and fetch',
 			},
 			{
 				label: 'System Prompt Settings',

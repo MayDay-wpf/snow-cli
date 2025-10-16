@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Newline, Text, useInput } from 'ink';
 import Gradient from 'ink-gradient';
 import { Alert } from '@inkjs/ui';
 import TextInput from 'ink-text-input';
@@ -18,7 +18,8 @@ type Props = {
 export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }: Props) {
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
-	const [currentField, setCurrentField] = useState<'enabled' | 'port'>('enabled');
+	const [browserPath, setBrowserPath] = useState('');
+	const [currentField, setCurrentField] = useState<'enabled' | 'port' | 'browserPath'>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
 
@@ -26,6 +27,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 		const config = getProxyConfig();
 		setEnabled(config.enabled);
 		setPort(config.port.toString());
+		setBrowserPath(config.browserPath || '');
 	}, []);
 
 	const validateConfig = (): string[] => {
@@ -45,6 +47,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 			const config: ProxyConfig = {
 				enabled,
 				port: parseInt(port, 10),
+				browserPath: browserPath.trim() || undefined,
 			};
 			updateProxyConfig(config);
 			setErrors([]);
@@ -79,10 +82,14 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 		} else if (!isEditing && key.upArrow) {
 			if (currentField === 'port') {
 				setCurrentField('enabled');
+			} else if (currentField === 'browserPath') {
+				setCurrentField('port');
 			}
 		} else if (!isEditing && key.downArrow) {
 			if (currentField === 'enabled') {
 				setCurrentField('port');
+			} else if (currentField === 'port') {
+				setCurrentField('browserPath');
 			}
 		}
 	});
@@ -90,7 +97,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 	return (
 		<Box flexDirection="column" padding={1}>
 			{!inlineMode && (
-				<Box marginBottom={2} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
 					<Box flexDirection="column">
 						<Gradient name="rainbow">
 							Proxy Configuration
@@ -102,7 +109,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 				</Box>
 			)}
 
-			<Box flexDirection="column" marginBottom={2}>
+			<Box flexDirection="column" marginBottom={1}>
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'enabled' ? 'green' : 'white'}>
@@ -133,6 +140,28 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 						{(!isEditing || currentField !== 'port') && (
 							<Box marginLeft={3}>
 								<Text color="gray">{port || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={currentField === 'browserPath' ? 'green' : 'white'}>
+							{currentField === 'browserPath' ? '❯ ' : '  '}Browser Path (Optional):
+						</Text>
+						{currentField === 'browserPath' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={browserPath}
+									onChange={setBrowserPath}
+									placeholder="Leave empty for auto-detect"
+								/>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'browserPath') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{browserPath || 'Auto-detect'}</Text>
 							</Box>
 						)}
 					</Box>
@@ -172,8 +201,11 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 
 			<Box flexDirection="column" marginTop={1}>
 				<Alert variant="info">
-					Proxy will be used for websearch tools (DuckDuckGo search and page fetch).
-					Default port is 7890. Make sure your proxy server is running on http://127.0.0.1:[port]
+					Browser Path Examples: <Newline />
+					<Text color={'blue'}>• Windows: C:\Program Files(x86)\Microsoft\Edge\Application\msedge.exe</Text> <Newline />
+					<Text color={'green'}>• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome</Text> <Newline />
+					<Text color={'yellow'}>• Linux: /usr/bin/chromium-browser</Text> <Newline />
+					Leave empty to auto-detect system browser (Edge/Chrome)
 				</Alert>
 			</Box>
 		</Box>

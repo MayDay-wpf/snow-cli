@@ -7,6 +7,7 @@ import {exec, execSync} from 'child_process';
 import {promisify} from 'util';
 import App from './app.js';
 import {vscodeConnection} from './utils/vscodeConnection.js';
+import {resourceMonitor} from './utils/resourceMonitor.js';
 
 const execAsync = promisify(exec);
 
@@ -66,6 +67,20 @@ if (cli.flags.update) {
 	}
 }
 
+// Start resource monitoring in development/debug mode
+if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
+	resourceMonitor.startMonitoring(30000); // Monitor every 30 seconds
+
+	// Check for leaks every 5 minutes
+	setInterval(() => {
+		const {hasLeak, reasons} = resourceMonitor.checkForLeaks();
+		if (hasLeak) {
+			console.error('⚠️ Potential memory leak detected:');
+			reasons.forEach(reason => console.error(`  - ${reason}`));
+		}
+	}, 5 * 60 * 1000);
+}
+
 // Startup component that shows loading spinner during update check
 const Startup = ({version}: {version: string | undefined}) => {
 	const [appReady, setAppReady] = React.useState(false);
@@ -119,6 +134,8 @@ process.stdout.write('\x1b[?2004l');
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {
 	process.stdout.write('\x1b[?2004l');
+	// Stop resource monitoring
+	resourceMonitor.stopMonitoring();
 	// Disconnect VSCode connection before exit
 	vscodeConnection.stop();
 };

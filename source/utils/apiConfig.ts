@@ -36,6 +36,7 @@ export interface MCPConfig {
 export interface ProxyConfig {
 	enabled: boolean;
 	port: number;
+	browserPath?: string; // Custom browser executable path
 }
 
 export interface AppConfig {

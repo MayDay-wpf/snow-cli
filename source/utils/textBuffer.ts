@@ -14,10 +14,15 @@ function sanitizeInput(str: string): string {
     .replace(/\r\n/g, '\n') // Normalize line endings
     .replace(/\r/g, '\n') // Convert remaining \r to \n
     .replace(/\t/g, '  ') // Convert tabs to spaces
-    // Remove focus events - only the complete escape sequences
-    // ESC[I and ESC[O are focus events, don't confuse with user input like "[I"
+    // Remove focus events - complete escape sequences and standalone patterns
+    // ESC[I and ESC[O are focus events from terminal focus in/out
     .replace(/\x1b\[I/g, '')
     .replace(/\x1b\[O/g, '')
+    // Also remove standalone [I and [O if they appear at word boundaries
+    // This catches cases where escape sequences arrive fragmented
+    // But we preserve legitimate text like "FOO[I]BAR" or "[Inside]"
+    .replace(/(?:^|\s)\[I(?:\s|$)/g, ' ')
+    .replace(/(?:^|\s)\[O(?:\s|$)/g, ' ')
     // Remove control characters except newlines
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }

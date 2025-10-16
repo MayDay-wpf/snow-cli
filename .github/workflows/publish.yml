@@ -54,7 +54,14 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Fully optimize the UI display effect
+            -- Added resource monitoring functionality in cli.tsx to track memory usage and active encoders/MCP connections.
+            -- Integrated resource monitoring in useConversation.ts to track encoder creation and freeing.
+            -- Enhanced useKeyboardInput.ts to robustly filter out focus events from terminal input.
+            --Updated websearch.ts to detect system-installed Chrome/Edge browser paths for Puppeteer.
+            -- Modified ModelConfigScreen.tsx and ProxyConfigScreen.tsx to include browser path configuration.
+            -- Added resourceMonitor utility for tracking resource usage and potential memory leaks.
+            -- Improved textBuffer.ts to sanitize input by removing fragmented focus events.
+            -- Updated MCP connection management in mcpToolsManager.ts to track connections and handle timeouts.
             ### Installation
             ```bash
             npm install -g snow-ai

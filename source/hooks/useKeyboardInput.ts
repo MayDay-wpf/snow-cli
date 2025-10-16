@@ -116,16 +116,21 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	useInput((input, key) => {
 		if (disabled) return;
 
-		// Filter out focus events - ONLY if the input is exactly a focus event
-		// Focus events from terminals: ESC[I (focus in) or ESC[O (focus out)
-		// DO NOT filter if input contains other content (like drag-and-drop paths)
-		// The key insight: focus events are standalone, user input is never JUST "[I" or "[O"
+		// Filter out focus events more robustly
+		// Focus events: ESC[I (focus in) or ESC[O (focus out)
+		// Some terminals may send these with or without ESC, and they might appear
+		// anywhere in the input string (especially during drag-and-drop with Shift held)
+		// We need to filter them out but NOT remove legitimate user input
 		if (
+			// Complete escape sequences
 			input === '\x1b[I' ||
 			input === '\x1b[O' ||
-			// Some terminals may send without ESC, but only if it's the entire input
-			(input === '[I' && input.length === 2) ||
-			(input === '[O' && input.length === 2)
+			// Standalone sequences (exact match only)
+			input === '[I' ||
+			input === '[O' ||
+			// Filter if input ONLY contains focus events and whitespace
+			// This handles cases like " [I" or "[I " from drag-and-drop with Shift
+			/^[\s\x1b\[IO]+$/.test(input) && (input.includes('[I') || input.includes('[O'))
 		) {
 			return;
 		}

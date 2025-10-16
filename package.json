@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.2.23",
+	"version": "0.2.24",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -58,7 +58,7 @@
 		"jsdom": "^27.0.0",
 		"meow": "^11.0.0",
 		"openai": "^6.1.0",
-		"puppeteer": "^24.25.0",
+		"puppeteer-core": "^24.25.0",
 		"react": "^18.2.0",
 		"string-width": "^7.2.0",
 		"tiktoken": "^1.0.22",
