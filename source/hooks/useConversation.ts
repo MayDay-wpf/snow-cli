@@ -319,6 +319,18 @@ export async function handleConversationWithTools(
 					console.error('Failed to save assistant message:', error);
 				});
 
+				// If there's text content before tool calls, display it first
+				if (streamedContent && streamedContent.trim()) {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: streamedContent.trim(),
+							streaming: false,
+						},
+					]);
+				}
+
 				// Display tool calls in UI with pending status
 				for (const toolCall of receivedToolCalls) {
 					const toolDisplay = formatToolCallMessage(toolCall);
@@ -423,8 +435,13 @@ export async function handleConversationWithTools(
 				}
 
 				// Execute approved tools
-				const toolResults = await executeToolCalls(approvedTools);
+				const toolResults = await executeToolCalls(approvedTools, controller.signal, setStreamTokenCount);
 
+
+			// Check if aborted during tool execution
+			if (controller.signal.aborted) {
+				break;
+			}
 				// Check if there are TODO related tool calls, if yes refresh TODO list
 				const hasTodoTools = approvedTools.some(t =>
 					t.function.name.startsWith('todo-'),
@@ -511,6 +528,15 @@ export async function handleConversationWithTools(
 							}
 						}
 
+						// Check if this tool should show preview (websearch, ace, filesystem-read, etc.)
+						const shouldShowPreview =
+							toolCall.function.name.startsWith('websearch-') ||
+							toolCall.function.name.startsWith('ace-') ||
+							toolCall.function.name === 'filesystem-read' ||
+							toolCall.function.name === 'filesystem-list' ||
+							toolCall.function.name === 'filesystem-create' ||
+							toolCall.function.name === 'filesystem-write';
+
 						// Update the existing pending message instead of adding a new one
 						setMessages(prev =>
 							prev.map(msg => {
@@ -529,7 +555,9 @@ export async function handleConversationWithTools(
 													name: toolCall.function.name,
 													arguments: terminalResultData,
 											  }
-											: msg.toolCall,
+											: shouldShowPreview
+											? undefined // Clear toolCall for preview-enabled tools
+											: msg.toolCall, // Keep original toolCall for other tools
 										// Store tool result for preview rendering
 										toolResult: !isError ? result.content : undefined,
 									};

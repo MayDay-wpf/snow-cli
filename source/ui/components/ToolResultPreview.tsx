@@ -25,6 +25,10 @@ export default function ToolResultPreview({ toolName, result, maxLines = 5 }: To
 			return renderCreatePreview(data);
 		} else if (toolName === 'filesystem-edit_search') {
 			return renderEditSearchPreview(data);
+		} else if (toolName === 'websearch-search') {
+			return renderWebSearchPreview(data, maxLines);
+		} else if (toolName === 'websearch-fetch') {
+			return renderWebFetchPreview(data);
 		} else if (toolName.startsWith('ace-')) {
 			return renderACEPreview(toolName, data, maxLines);
 		} else {
@@ -304,6 +308,71 @@ function renderEditSearchPreview(data: any) {
 	);
 }
 
+function renderWebSearchPreview(data: any, maxLines: number) {
+	if (!data.results || data.results.length === 0) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ No search results found for "{data.query}"
+				</Text>
+			</Box>
+		);
+	}
+
+	const previewResults = data.results.slice(0, maxLines);
+	const hasMore = data.results.length > maxLines;
+
+	return (
+		<Box flexDirection="column" marginLeft={2}>
+			<Text color="cyan" dimColor>
+				├─ Query: {data.query}
+			</Text>
+			<Text color="cyan" dimColor>
+				├─ Found {data.totalResults} results
+			</Text>
+			{previewResults.map((result: any, idx: number) => (
+				<Box key={idx} flexDirection="column">
+					<Text color="gray" dimColor>
+						{idx === previewResults.length - 1 && !hasMore ? '└─ ' : '├─ '}
+						[{idx + 1}] {result.title.slice(0, 20)}{result.title.length > 20 ? '...' : ''}
+					</Text>
+					{result.snippet && (
+						<Box marginLeft={3}>
+							<Text color="gray" dimColor>
+								{result.snippet.slice(0, 20)}{result.snippet.length > 20 ? '...' : ''}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			))}
+			{hasMore && (
+				<Text color="gray" dimColor>
+					└─ ... ({data.results.length - maxLines} more results)
+				</Text>
+			)}
+		</Box>
+	);
+}
+
+function renderWebFetchPreview(data: any) {
+	return (
+		<Box flexDirection="column" marginLeft={2}>
+			<Text color="cyan" dimColor>
+				├─ Page: {data.title || 'Untitled'}
+			</Text>
+			<Text color="cyan" dimColor>
+				├─ URL: {data.url.slice(0, 20)}{data.url.length > 20 ? '...' : ''}
+			</Text>
+			<Text color="gray" dimColor>
+				├─ Content length: {data.textLength} characters
+			</Text>
+			<Text color="gray" dimColor>
+				└─ Preview: {data.contentPreview.slice(0, 20)}{data.contentPreview.length > 20 ? '...' : ''}
+			</Text>
+		</Box>
+	);
+}
+
 function renderGenericPreview(data: any, maxLines: number) {
 	// For unknown tool types, show first few properties
 	const entries = Object.entries(data).slice(0, maxLines);
@@ -313,7 +382,7 @@ function renderGenericPreview(data: any, maxLines: number) {
 		<Box flexDirection="column" marginLeft={2}>
 			{entries.map(([key, value], idx) => {
 				const valueStr = typeof value === 'string'
-					? value.slice(0, 60) + (value.length > 60 ? '...' : '')
+					? value.slice(0, 20) + (value.length > 20 ? '...' : '')
 					: JSON.stringify(value).slice(0, 60);
 
 				return (

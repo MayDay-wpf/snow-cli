@@ -33,9 +33,15 @@ export interface MCPConfig {
 	mcpServers: Record<string, MCPServer>;
 }
 
+export interface ProxyConfig {
+	enabled: boolean;
+	port: number;
+}
+
 export interface AppConfig {
 	snowcfg: ApiConfig;
 	openai?: ApiConfig; // 向下兼容旧版本
+	proxy?: ProxyConfig; // Proxy configuration
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -48,6 +54,10 @@ const DEFAULT_CONFIG: AppConfig = {
 		maxContextTokens: 4000,
 		maxTokens: 4096,
 		anthropicBeta: false,
+	},
+	proxy: {
+		enabled: false,
+		port: 7890,
 	},
 };
 
@@ -203,7 +213,7 @@ export function updateMCPConfig(mcpConfig: MCPConfig): void {
 
 export function getMCPConfig(): MCPConfig {
 	ensureConfigDirectory();
-	
+
 	if (!existsSync(MCP_CONFIG_FILE)) {
 		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig);
@@ -218,6 +228,24 @@ export function getMCPConfig(): MCPConfig {
 		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig);
 		return defaultMCPConfig;
+	}
+}
+
+export function getProxyConfig(): ProxyConfig {
+	const fullConfig = loadConfig();
+	return fullConfig.proxy || DEFAULT_CONFIG.proxy!;
+}
+
+export function updateProxyConfig(proxyConfig: ProxyConfig): void {
+	ensureConfigDirectory();
+	try {
+		const fullConfig = loadConfig();
+		fullConfig.proxy = proxyConfig;
+		const {openai, ...configWithoutOpenai} = fullConfig;
+		const configData = JSON.stringify(configWithoutOpenai, null, 2);
+		writeFileSync(CONFIG_FILE, configData, 'utf8');
+	} catch (error) {
+		throw new Error(`Failed to save proxy configuration: ${error}`);
 	}
 }
 

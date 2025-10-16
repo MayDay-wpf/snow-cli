@@ -6,6 +6,7 @@ import {getMCPConfig, type MCPServer} from './apiConfig.js';
 import {mcpTools as filesystemTools} from '../mcp/filesystem.js';
 import {mcpTools as terminalTools} from '../mcp/bash.js';
 import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
+import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {TodoService} from '../mcp/todo.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
@@ -208,6 +209,31 @@ async function refreshToolsCache(): Promise<void> {
 		});
 	}
 
+	// Add built-in Web Search tools (always available)
+	const websearchServiceTools = websearchTools.map(tool => ({
+		name: tool.name.replace('websearch_', ''),
+		description: tool.description,
+		inputSchema: tool.inputSchema,
+	}));
+
+	servicesInfo.push({
+		serviceName: 'websearch',
+		tools: websearchServiceTools,
+		isBuiltIn: true,
+		connected: true,
+	});
+
+	for (const tool of websearchTools) {
+		allTools.push({
+			type: 'function',
+			function: {
+				name: `websearch-${tool.name.replace('websearch_', '')}`,
+				description: tool.description,
+				parameters: tool.inputSchema,
+			},
+		});
+	}
+
 	// Add user-configured MCP server tools (probe for availability but don't maintain connections)
 	try {
 		const mcpConfig = getMCPConfig();
@@ -274,7 +300,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 	}
 
 	// Handle built-in services (they don't need reconnection)
-	if (serviceName === 'filesystem' || serviceName === 'terminal' || serviceName === 'todo') {
+	if (serviceName === 'filesystem' || serviceName === 'terminal' || serviceName === 'todo' || serviceName === 'ace' || serviceName === 'websearch') {
 		return;
 	}
 
@@ -540,6 +566,8 @@ async function connectAndGetTools(
 export async function executeMCPTool(
 	toolName: string,
 	args: any,
+	abortSignal?: AbortSignal,
+	onTokenUpdate?: (tokenCount: number) => void,
 ): Promise<any> {
 	// Find the service name by checking against known services
 	let serviceName: string | null = null;
@@ -558,6 +586,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('ace-')) {
 		serviceName = 'ace';
 		actualToolName = toolName.substring('ace-'.length);
+	} else if (toolName.startsWith('websearch-')) {
+		serviceName = 'websearch';
+		actualToolName = toolName.substring('websearch-'.length);
 	} else {
 		// Check configured MCP services
 		try {
@@ -689,6 +720,31 @@ export async function executeMCPTool(
 				return {message: 'ACE Code Search cache cleared successfully'};
 			default:
 				throw new Error(`Unknown ACE tool: ${actualToolName}`);
+		}
+	} else if (serviceName === 'websearch') {
+		// Handle built-in Web Search tools (no connection needed)
+		const {webSearchService} = await import('../mcp/websearch.js');
+
+		switch (actualToolName) {
+			case 'search':
+				const searchResponse = await webSearchService.search(
+					args.query,
+					args.maxResults,
+				);
+				// Return object directly, will be JSON.stringify in API layer
+				return searchResponse;
+			case 'fetch':
+				const pageContent = await webSearchService.fetchPage(
+					args.url,
+					args.maxLength,
+					args.userQuery, // Pass optional userQuery parameter
+					abortSignal, // Pass abort signal
+					onTokenUpdate, // Pass token update callback
+				);
+				// Return object directly, will be JSON.stringify in API layer
+				return pageContent;
+			default:
+				throw new Error(`Unknown websearch tool: ${actualToolName}`);
 		}
 	} else {
 		// Handle user-configured MCP service tools - connect only when needed

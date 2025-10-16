@@ -248,6 +248,9 @@ export default function ChatScreen({}: Props) {
 			// Abort the controller
 			streamingState.abortController.abort();
 
+			// Remove all pending tool call messages (those with toolPending: true)
+			setMessages(prev => prev.filter(msg => !msg.toolPending));
+
 			// Add discontinued message
 			setMessages(prev => [
 				...prev,
@@ -308,6 +311,10 @@ export default function ChatScreen({}: Props) {
 
 		// Truncate messages array to remove the selected user message and everything after it
 		setMessages(prev => prev.slice(0, selectedIndex));
+
+		// Truncate session messages to match the UI state
+		await sessionManager.truncateMessages(selectedIndex);
+
 		clearSavedMessages();
 		setRemountKey(prev => prev + 1);
 
@@ -501,8 +508,37 @@ export default function ChatScreen({}: Props) {
 		// Combine multiple pending messages into one
 		const combinedMessage = messagesToProcess.join('\n\n');
 
-		// Add user message to chat
-		const userMessage: Message = {role: 'user', content: combinedMessage};
+		// Parse and validate file references (same as processMessage)
+		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
+			combinedMessage,
+		);
+
+		// Separate image files from regular files
+		const imageFiles = validFiles.filter(
+			f => f.isImage && f.imageData && f.mimeType,
+		);
+		const regularFiles = validFiles.filter(f => !f.isImage);
+
+		// Convert image files to image content format
+		const imageContents =
+			imageFiles.length > 0
+				? imageFiles.map(f => ({
+						type: 'image' as const,
+						data: f.imageData!,
+						mimeType: f.mimeType!,
+				  }))
+				: undefined;
+
+		// Get system information (not needed for pending messages - they are follow-ups)
+		const systemInfo = undefined;
+
+		// Add user message to chat with file references and images
+		const userMessage: Message = {
+			role: 'user',
+			content: cleanContent,
+			files: validFiles.length > 0 ? validFiles : undefined,
+			images: imageContents,
+		};
 		setMessages(prev => [...prev, userMessage]);
 
 		// Start streaming response
@@ -512,19 +548,19 @@ export default function ChatScreen({}: Props) {
 		const controller = new AbortController();
 		streamingState.setAbortController(controller);
 
-		// Save user message
-		saveMessage({
-			role: 'user',
-			content: combinedMessage,
-		}).catch(error => {
-			console.error('Failed to save user message:', error);
-		});
-
 		try {
-			// Use the same conversation handler (no file references for pending messages)
+			// Create message for AI with file read instructions, and editor context
+			const messageForAI = createMessageWithFileInstructions(
+				cleanContent,
+				regularFiles,
+				systemInfo,
+				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
+			);
+
+			// Use the same conversation handler
 			await handleConversationWithTools({
-				userContent: combinedMessage,
-				imageContents: undefined,
+				userContent: messageForAI,
+				imageContents,
 				controller,
 				messages,
 				saveMessage,

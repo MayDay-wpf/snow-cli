@@ -18,10 +18,10 @@ export interface ToolResult {
 /**
  * Execute a single tool call and return the result
  */
-export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
+export async function executeToolCall(toolCall: ToolCall, abortSignal?: AbortSignal, onTokenUpdate?: (tokenCount: number) => void): Promise<ToolResult> {
 	try {
 		const args = JSON.parse(toolCall.function.arguments);
-		const result = await executeMCPTool(toolCall.function.name, args);
+		const result = await executeMCPTool(toolCall.function.name, args, abortSignal, onTokenUpdate);
 
 		return {
 			tool_call_id: toolCall.id,
@@ -40,6 +40,6 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
 /**
  * Execute multiple tool calls in parallel
  */
-export async function executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
-	return Promise.all(toolCalls.map(tc => executeToolCall(tc)));
+export async function executeToolCalls(toolCalls: ToolCall[], abortSignal?: AbortSignal, onTokenUpdate?: (tokenCount: number) => void): Promise<ToolResult[]> {
+	return Promise.all(toolCalls.map(tc => executeToolCall(tc, abortSignal, onTokenUpdate)));
 }

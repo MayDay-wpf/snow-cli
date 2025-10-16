@@ -199,6 +199,19 @@ class SessionManager {
 			return false;
 		}
 	}
+
+	async truncateMessages(messageCount: number): Promise<void> {
+		if (!this.currentSession) {
+			return;
+		}
+
+		// Truncate messages array to specified count
+		this.currentSession.messages = this.currentSession.messages.slice(0, messageCount);
+		this.currentSession.messageCount = this.currentSession.messages.length;
+		this.currentSession.updatedAt = Date.now();
+
+		await this.saveSession(this.currentSession);
+	}
 }
 
 export const sessionManager = new SessionManager();

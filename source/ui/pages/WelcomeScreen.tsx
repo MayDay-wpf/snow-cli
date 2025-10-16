@@ -7,13 +7,14 @@ import Menu from '../components/Menu.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import ApiConfigScreen from './ApiConfigScreen.js';
 import ModelConfigScreen from './ModelConfigScreen.js';
+import ProxyConfigScreen from './ProxyConfigScreen.js';
 
 type Props = {
 	version?: string;
 	onMenuSelect?: (value: string) => void;
 };
 
-type InlineView = 'menu' | 'api-config' | 'model-config';
+type InlineView = 'menu' | 'api-config' | 'model-config' | 'proxy-config';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -43,6 +44,11 @@ export default function WelcomeScreen({
 				label: 'Model Settings',
 				value: 'models',
 				infoText: 'Configure AI models for different tasks',
+			},
+			{
+				label: 'Proxy Settings',
+				value: 'proxy',
+				infoText: 'Configure system proxy for web search and fetch',
 			},
 			{
 				label: 'System Prompt Settings',
@@ -75,11 +81,13 @@ export default function WelcomeScreen({
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {
-			// Handle inline views (config, models) or pass through to parent
+			// Handle inline views (config, models, proxy) or pass through to parent
 			if (value === 'config') {
 				setInlineView('api-config');
 			} else if (value === 'models') {
 				setInlineView('model-config');
+			} else if (value === 'proxy') {
+				setInlineView('proxy-config');
 			} else {
 				// Pass through to parent for other actions (chat, exit, etc.)
 				onMenuSelect?.(value);
@@ -172,6 +180,15 @@ export default function WelcomeScreen({
 			{inlineView === 'model-config' && (
 				<Box paddingX={1}>
 					<ModelConfigScreen
+						onBack={handleBackToMenu}
+						onSave={handleConfigSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'proxy-config' && (
+				<Box paddingX={1}>
+					<ProxyConfigScreen
 						onBack={handleBackToMenu}
 						onSave={handleConfigSave}
 						inlineMode={true}
