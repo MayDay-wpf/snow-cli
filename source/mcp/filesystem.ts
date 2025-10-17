@@ -1,9 +1,11 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
-import {execSync} from 'child_process';
+import {exec} from 'child_process';
+import {promisify} from 'util';
 import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
 const {resolve, dirname, isAbsolute} = path;
+const execAsync = promisify(exec);
 
 interface StructureAnalysis {
 	bracketBalance: {
@@ -21,6 +23,13 @@ interface StructureAnalysis {
 		isInCompleteBlock: boolean;
 		suggestion?: string;
 	};
+}
+
+interface MatchCandidate {
+	startLine: number;
+	endLine: number;
+	similarity: number;
+	preview: string;
 }
 
 /**
@@ -53,6 +62,147 @@ export class FilesystemMCPService {
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = resolve(basePath);
+	}
+
+	/**
+	 * Calculate similarity between two strings using a smarter algorithm
+	 * This normalizes whitespace first to avoid false negatives from spacing differences
+	 * Returns a value between 0 (completely different) and 1 (identical)
+	 */
+	private calculateSimilarity(str1: string, str2: string): number {
+		// Normalize whitespace for comparison: collapse all whitespace to single spaces
+		const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+		const norm1 = normalize(str1);
+		const norm2 = normalize(str2);
+
+		const len1 = norm1.length;
+		const len2 = norm2.length;
+
+		if (len1 === 0) return len2 === 0 ? 1 : 0;
+		if (len2 === 0) return 0;
+
+		// Use Levenshtein distance for better similarity calculation
+		const maxLen = Math.max(len1, len2);
+		const distance = this.levenshteinDistance(norm1, norm2);
+
+		return 1 - distance / maxLen;
+	}
+
+	/**
+	 * Calculate Levenshtein distance between two strings
+	 */
+	private levenshteinDistance(str1: string, str2: string): number {
+		const len1 = str1.length;
+		const len2 = str2.length;
+
+		// Create distance matrix
+		const matrix: number[][] = [];
+		for (let i = 0; i <= len1; i++) {
+			matrix[i] = [i];
+		}
+		for (let j = 0; j <= len2; j++) {
+			matrix[0]![j] = j;
+		}
+
+		// Fill matrix
+		for (let i = 1; i <= len1; i++) {
+			for (let j = 1; j <= len2; j++) {
+				const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+				matrix[i]![j] = Math.min(
+					matrix[i - 1]![j]! + 1, // deletion
+					matrix[i]![j - 1]! + 1, // insertion
+					matrix[i - 1]![j - 1]! + cost, // substitution
+				);
+			}
+		}
+
+		return matrix[len1]![len2]!;
+	}
+
+	/**
+	 * Find the closest matching candidates in the file content
+	 * Returns top N candidates sorted by similarity
+	 */
+	private findClosestMatches(
+		searchContent: string,
+		fileLines: string[],
+		topN: number = 3,
+	): MatchCandidate[] {
+		const searchLines = searchContent.split('\n');
+		const candidates: MatchCandidate[] = [];
+
+		// Normalize whitespace for display only (makes preview more readable)
+		const normalizeForDisplay = (line: string) =>
+			line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+
+		// Try to find candidates by sliding window
+		for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
+			const candidateLines = fileLines.slice(i, i + searchLines.length);
+			const candidateContent = candidateLines.join('\n');
+
+			const similarity = this.calculateSimilarity(
+				searchContent,
+				candidateContent,
+			);
+
+			// Only consider candidates with >50% similarity
+			if (similarity > 0.5) {
+				candidates.push({
+					startLine: i + 1,
+					endLine: i + searchLines.length,
+					similarity,
+					preview: candidateLines
+						.map((line, idx) => `${i + idx + 1}→${normalizeForDisplay(line)}`)
+						.join('\n'),
+				});
+			}
+		}
+
+		// Sort by similarity descending and return top N
+		return candidates
+			.sort((a, b) => b.similarity - a.similarity)
+			.slice(0, topN);
+	}
+
+	/**
+	 * Generate a helpful diff message showing differences between search and actual content
+	 * Note: This is ONLY for display purposes. Tabs/spaces are normalized for better readability.
+	 */
+	private generateDiffMessage(
+		searchContent: string,
+		actualContent: string,
+		maxLines: number = 10,
+	): string {
+		const searchLines = searchContent.split('\n');
+		const actualLines = actualContent.split('\n');
+		const diffLines: string[] = [];
+
+		const maxLen = Math.max(searchLines.length, actualLines.length);
+
+		// Normalize whitespace for display only (makes diff more readable)
+		const normalizeForDisplay = (line: string) =>
+			line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+
+		for (let i = 0; i < Math.min(maxLen, maxLines); i++) {
+			const searchLine = searchLines[i] || '';
+			const actualLine = actualLines[i] || '';
+
+			if (searchLine !== actualLine) {
+				diffLines.push(`Line ${i + 1}:`);
+				diffLines.push(
+					`  Search: ${JSON.stringify(normalizeForDisplay(searchLine))}`,
+				);
+				diffLines.push(
+					`  Actual: ${JSON.stringify(normalizeForDisplay(actualLine))}`,
+				);
+			}
+		}
+
+		if (maxLen > maxLines) {
+			diffLines.push(`... (${maxLen - maxLines} more lines)`);
+		}
+
+		return diffLines.join('\n');
 	}
 
 	/**
@@ -297,17 +447,17 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Get the content of a file with specified line range
+	 * Get the content of a file with optional line range
 	 * @param filePath - Path to the file (relative to base path or absolute)
-	 * @param startLine - Starting line number (1-indexed, inclusive)
-	 * @param endLine - Ending line number (1-indexed, inclusive)
+	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1)
+	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to 500 or file end)
 	 * @returns Object containing the requested content with line numbers and metadata
 	 * @throws Error if file doesn't exist or cannot be read
 	 */
 	async getFileContent(
 		filePath: string,
-		startLine: number,
-		endLine: number,
+		startLine?: number,
+		endLine?: number,
 	): Promise<{
 		content: string;
 		startLine: number;
@@ -342,34 +492,36 @@ export class FilesystemMCPService {
 			const lines = content.split('\n');
 			const totalLines = lines.length;
 
+			// Default values and logic:
+			// - No params: read entire file (1 to totalLines)
+			// - Only startLine: read from startLine to end of file
+			// - Both params: read from startLine to endLine
+			const actualStartLine = startLine ?? 1;
+			const actualEndLine = endLine ?? totalLines;
+
 			// Validate and adjust line numbers
-			if (startLine < 1) {
+			if (actualStartLine < 1) {
 				throw new Error('Start line must be greater than 0');
 			}
-			if (endLine < startLine) {
+			if (actualEndLine < actualStartLine) {
 				throw new Error('End line must be greater than or equal to start line');
 			}
-			if (startLine > totalLines) {
+			if (actualStartLine > totalLines) {
 				throw new Error(
-					`Start line ${startLine} exceeds file length ${totalLines}`,
+					`Start line ${actualStartLine} exceeds file length ${totalLines}`,
 				);
 			}
 
-			const start = startLine;
-			const end = Math.min(totalLines, endLine);
+			const start = actualStartLine;
+			const end = Math.min(totalLines, actualEndLine);
 
 			// Extract specified lines (convert to 0-indexed) and add line numbers
 			const selectedLines = lines.slice(start - 1, end);
 
 			// Format with line numbers (no padding to save tokens)
-			// Normalize whitespace: tabs → single space, multiple spaces → single space
 			const numberedLines = selectedLines.map((line, index) => {
 				const lineNum = start + index;
-				// Normalize whitespace to reduce token usage
-				const normalizedLine = line
-					.replace(/\t/g, ' ')      // Convert tabs to single space
-					.replace(/  +/g, ' ');    // Compress multiple spaces to single space
-				return `${lineNum}→${normalizedLine}`;
+				return `${lineNum}→${line}`;
 			});
 
 			const partialContent = numberedLines.join('\n');
@@ -464,17 +616,24 @@ export class FilesystemMCPService {
 					await fs.unlink(fullPath);
 					results.push(`✅ ${filePath}`);
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					const errorMsg =
+						error instanceof Error ? error.message : 'Unknown error';
 					errors.push(`❌ ${filePath}: ${errorMsg}`);
 				}
 			}
 
 			const summary = [];
 			if (results.length > 0) {
-				summary.push(`Successfully deleted ${results.length} file(s):\n${results.join('\n')}`);
+				summary.push(
+					`Successfully deleted ${results.length} file(s):\n${results.join(
+						'\n',
+					)}`,
+				);
 			}
 			if (errors.length > 0) {
-				summary.push(`Failed to delete ${errors.length} file(s):\n${errors.join('\n')}`);
+				summary.push(
+					`Failed to delete ${errors.length} file(s):\n${errors.join('\n')}`,
+				);
 			}
 
 			return summary.join('\n\n');
@@ -569,10 +728,10 @@ export class FilesystemMCPService {
 
 	/**
 	 * Edit a file by searching for exact content and replacing it
-	 * This method is SAFER than line-based editing as it automatically handles code boundaries.
+	 * This method uses SMART MATCHING to handle whitespace differences automatically.
 	 *
 	 * @param filePath - Path to the file to edit
-	 * @param searchContent - Exact content to search for (must match precisely, including whitespace)
+	 * @param searchContent - Content to search for (whitespace will be normalized automatically)
 	 * @param replaceContent - New content to replace the search content with
 	 * @param occurrence - Which occurrence to replace (1-indexed, default: 1, use -1 for all)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
@@ -610,43 +769,103 @@ export class FilesystemMCPService {
 			const lines = content.split('\n');
 
 			// Normalize line endings
-			const normalizedSearch = searchContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-			const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+			const normalizedSearch = searchContent
+				.replace(/\r\n/g, '\n')
+				.replace(/\r/g, '\n');
+			const normalizedContent = content
+				.replace(/\r\n/g, '\n')
+				.replace(/\r/g, '\n');
 
-			// Apply whitespace normalization for matching (same as getFileContent output)
-			const normalizeWhitespace = (text: string) =>
-				text.replace(/\t/g, ' ').replace(/  +/g, ' ');
+			// Split into lines for matching
+			const searchLines = normalizedSearch.split('\n');
+			const contentLines = normalizedContent.split('\n');
 
-			const normalizedSearchForMatch = normalizeWhitespace(normalizedSearch);
-			const normalizedContentForMatch = normalizeWhitespace(normalizedContent);
-
-			// Find all matches by comparing normalized versions line by line
-			// This avoids complex character position mapping
-			const matches: Array<{startLine: number; endLine: number}> = [];
-			const searchLines = normalizedSearchForMatch.split('\n');
-			const contentLines = normalizedContentForMatch.split('\n');
+			// Find all matches using smart fuzzy matching (auto-handles whitespace)
+			const matches: Array<{
+				startLine: number;
+				endLine: number;
+				similarity: number;
+			}> = [];
+			const threshold = 0.75; // Lower threshold for better tolerance
 
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-				let isMatch = true;
-				for (let j = 0; j < searchLines.length; j++) {
-					if (contentLines[i + j] !== searchLines[j]) {
-						isMatch = false;
-						break;
-					}
-				}
+				const candidateLines = contentLines.slice(i, i + searchLines.length);
+				const candidateContent = candidateLines.join('\n');
+				const similarity = this.calculateSimilarity(
+					normalizedSearch,
+					candidateContent,
+				);
 
-				if (isMatch) {
-					const startLine = i + 1; // Convert to 1-indexed
-					const endLine = startLine + searchLines.length - 1;
-					matches.push({startLine, endLine});
+				// Accept matches above threshold
+				if (similarity >= threshold) {
+					matches.push({
+						startLine: i + 1,
+						endLine: i + searchLines.length,
+						similarity,
+					});
 				}
 			}
 
-			// Handle no matches
+			// Sort by similarity descending (best match first)
+			matches.sort((a, b) => b.similarity - a.similarity);
+
+			// Handle no matches with enhanced error message
 			if (matches.length === 0) {
-				throw new Error(
-					`Search content not found in file. Please verify the exact content including whitespace and indentation.`,
+				// Find closest matches for suggestions
+				const closestMatches = this.findClosestMatches(
+					normalizedSearch,
+					normalizedContent.split('\n'),
+					3,
 				);
+
+				let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
+				errorMessage += `🔍 Using smart fuzzy matching (threshold: 75%)\n\n`;
+
+				if (closestMatches.length > 0) {
+					errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
+					closestMatches.forEach((candidate, idx) => {
+						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
+							candidate.endLine
+						} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
+						errorMessage += `${candidate.preview}\n\n`;
+					});
+
+					// Show diff with the closest match
+					const bestMatch = closestMatches[0];
+					if (bestMatch) {
+						const bestMatchLines = lines.slice(
+							bestMatch.startLine - 1,
+							bestMatch.endLine,
+						);
+						const bestMatchContent = bestMatchLines.join('\n');
+						const diffMsg = this.generateDiffMessage(
+							normalizedSearch,
+							bestMatchContent,
+							5,
+						);
+						if (diffMsg) {
+							errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
+						}
+					}
+
+					errorMessage += `💡 Suggestions:\n`;
+					errorMessage += `  • Make sure you copied content from filesystem_read (without "123→")\n`;
+					errorMessage += `  • Whitespace differences are automatically handled\n`;
+					errorMessage += `  • Try copying a larger or smaller code block\n`;
+				} else {
+					errorMessage += `⚠️  No similar content found in the file.\n\n`;
+					errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
+					const normalizeForDisplay = (line: string) =>
+						line.replace(/\s+/g, ' ').trim();
+					searchLines.slice(0, 5).forEach((line, idx) => {
+						errorMessage += `${idx + 1}. ${JSON.stringify(
+							normalizeForDisplay(line),
+						)}\n`;
+					});
+					errorMessage += `\n💡 Copy exact content from filesystem_read (without line numbers)\n`;
+				}
+
+				throw new Error(errorMessage);
 			}
 
 			// Handle occurrence selection
@@ -663,9 +882,9 @@ export class FilesystemMCPService {
 				}
 			} else if (occurrence < 1 || occurrence > matches.length) {
 				throw new Error(
-					`Invalid occurrence ${occurrence}. Found ${matches.length} match(es) at lines: ${matches
-						.map(m => m.startLine)
-						.join(', ')}`,
+					`Invalid occurrence ${occurrence}. Found ${
+						matches.length
+					} match(es) at lines: ${matches.map(m => m.startLine).join(', ')}`,
 				);
 			} else {
 				selectedMatch = matches[occurrence - 1]!;
@@ -677,20 +896,22 @@ export class FilesystemMCPService {
 			await incrementalSnapshotManager.backupFile(fullPath);
 
 			// Perform the replacement by replacing the matched lines
-			const normalizedReplace = replaceContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+			const normalizedReplace = replaceContent
+				.replace(/\r\n/g, '\n')
+				.replace(/\r/g, '\n');
 			const beforeLines = lines.slice(0, startLine - 1);
 			const afterLines = lines.slice(endLine);
 			const replaceLines = normalizedReplace.split('\n');
 			const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
 			const modifiedContent = modifiedLines.join('\n');
 
-			// Calculate replaced content for display
+			// Calculate replaced content for display (compress whitespace for readability)
+			const normalizeForDisplay = (line: string) => line.replace(/\s+/g, ' ');
 			const replacedLines = lines.slice(startLine - 1, endLine);
 			const replacedContent = replacedLines
 				.map((line, idx) => {
 					const lineNum = startLine + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
@@ -706,33 +927,35 @@ export class FilesystemMCPService {
 			const contextStart = smartBoundaries.start;
 			const contextEnd = smartBoundaries.end;
 
-			// Extract old content for context
+			// Extract old content for context (compress whitespace for readability)
 			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
 			const oldContent = oldContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
 			// Write the modified content
 			await fs.writeFile(fullPath, modifiedContent, 'utf-8');
 
-			// Format with Prettier if applicable
+			// Format with Prettier asynchronously (non-blocking)
 			let finalContent = modifiedContent;
 			let finalLines = modifiedLines;
 			let finalTotalLines = modifiedLines.length;
-			let finalContextEnd = Math.min(finalTotalLines, contextEnd + lineDifference);
+			let finalContextEnd = Math.min(
+				finalTotalLines,
+				contextEnd + lineDifference,
+			);
 
 			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
-			const shouldFormat = this.prettierSupportedExtensions.includes(fileExtension);
+			const shouldFormat =
+				this.prettierSupportedExtensions.includes(fileExtension);
 
 			if (shouldFormat) {
 				try {
-					execSync(`npx prettier --write "${fullPath}"`, {
-						stdio: 'pipe',
+					await execAsync(`npx prettier --write "${fullPath}"`, {
 						encoding: 'utf-8',
 					});
 
@@ -750,13 +973,15 @@ export class FilesystemMCPService {
 				}
 			}
 
-			// Extract new content for context
-			const newContextLines = finalLines.slice(contextStart - 1, finalContextEnd);
+			// Extract new content for context (compress whitespace for readability)
+			const newContextLines = finalLines.slice(
+				contextStart - 1,
+				finalContextEnd,
+			);
 			const newContextContent = newContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
@@ -803,8 +1028,12 @@ export class FilesystemMCPService {
 				const limitedDiagnostics = diagnostics.slice(0, 10);
 				result.diagnostics = limitedDiagnostics;
 
-				const errorCount = diagnostics.filter(d => d.severity === 'error').length;
-				const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+				const errorCount = diagnostics.filter(
+					d => d.severity === 'error',
+				).length;
+				const warningCount = diagnostics.filter(
+					d => d.severity === 'warning',
+				).length;
 
 				if (errorCount > 0 || warningCount > 0) {
 					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
@@ -816,13 +1045,17 @@ export class FilesystemMCPService {
 						.map(d => {
 							const icon = d.severity === 'error' ? '❌' : '⚠️';
 							const location = `${filePath}:${d.line}:${d.character}`;
-							return `   ${icon} [${d.source || 'unknown'}] ${location}\n      ${d.message}`;
+							return `   ${icon} [${
+								d.source || 'unknown'
+							}] ${location}\n      ${d.message}`;
 						})
 						.join('\n\n');
 
 					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
 					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${errorCount + warningCount - 5} more issue(s)`;
+						result.message += `\n   ... and ${
+							errorCount + warningCount - 5
+						} more issue(s)`;
 					}
 					result.message += `\n\n   ⚡ TIP: Review the errors above and make another edit to fix them`;
 				}
@@ -836,7 +1069,9 @@ export class FilesystemMCPService {
 					structureAnalysis.bracketBalance.curly.open -
 					structureAnalysis.bracketBalance.curly.close;
 				structureWarnings.push(
-					`Curly brackets: ${diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`}`,
+					`Curly brackets: ${
+						diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`
+					}`,
 				);
 			}
 			if (!structureAnalysis.bracketBalance.round.balanced) {
@@ -844,7 +1079,9 @@ export class FilesystemMCPService {
 					structureAnalysis.bracketBalance.round.open -
 					structureAnalysis.bracketBalance.round.close;
 				structureWarnings.push(
-					`Round brackets: ${diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`}`,
+					`Round brackets: ${
+						diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`
+					}`,
 				);
 			}
 			if (!structureAnalysis.bracketBalance.square.balanced) {
@@ -852,26 +1089,34 @@ export class FilesystemMCPService {
 					structureAnalysis.bracketBalance.square.open -
 					structureAnalysis.bracketBalance.square.close;
 				structureWarnings.push(
-					`Square brackets: ${diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`}`,
+					`Square brackets: ${
+						diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`
+					}`,
 				);
 			}
 
 			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
 				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
 					structureWarnings.push(
-						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`,
+						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
+							', ',
+						)}`,
 					);
 				}
 				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
 					structureWarnings.push(
-						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`,
+						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
+							', ',
+						)}`,
 					);
 				}
 			}
 
 			if (structureAnalysis.indentationWarnings.length > 0) {
 				structureWarnings.push(
-					...structureAnalysis.indentationWarnings.map(w => `Indentation: ${w}`),
+					...structureAnalysis.indentationWarnings.map(
+						w => `Indentation: ${w}`,
+					),
 				);
 			}
 
@@ -879,7 +1124,9 @@ export class FilesystemMCPService {
 				structureAnalysis.codeBlockBoundary &&
 				structureAnalysis.codeBlockBoundary.suggestion
 			) {
-				structureWarnings.push(`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`);
+				structureWarnings.push(
+					`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`,
+				);
 			}
 
 			if (structureWarnings.length > 0) {
@@ -893,7 +1140,9 @@ export class FilesystemMCPService {
 			return result;
 		} catch (error) {
 			throw new Error(
-				`Failed to edit file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Failed to edit file ${filePath}: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
 			);
 		}
 	}
@@ -963,12 +1212,13 @@ export class FilesystemMCPService {
 			await incrementalSnapshotManager.backupFile(fullPath);
 
 			// Extract the lines that will be replaced (for comparison)
+			// Compress whitespace for display readability
+			const normalizeForDisplay = (line: string) => line.replace(/\s+/g, ' ');
 			const replacedLines = lines.slice(startLine - 1, adjustedEndLine);
 			const replacedContent = replacedLines
 				.map((line, idx) => {
 					const lineNum = startLine + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
@@ -982,13 +1232,12 @@ export class FilesystemMCPService {
 			const contextStart = smartBoundaries.start;
 			const contextEnd = smartBoundaries.end;
 
-			// Extract old content for context (including the lines to be replaced)
+			// Extract old content for context (compress whitespace for readability)
 			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
 			const oldContent = oldContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
@@ -1007,7 +1256,7 @@ export class FilesystemMCPService {
 				contextEnd + lineDifference,
 			);
 
-			// Extract new content for context with line numbers
+			// Extract new content for context with line numbers (compress whitespace)
 			const newContextLines = modifiedLines.slice(
 				contextStart - 1,
 				newContextEnd,
@@ -1015,8 +1264,7 @@ export class FilesystemMCPService {
 			const newContextContent = newContextLines
 				.map((line, idx) => {
 					const lineNum = contextStart + idx;
-					const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-					return `${lineNum}→${normalizedLine}`;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
 				})
 				.join('\n');
 
@@ -1031,12 +1279,12 @@ export class FilesystemMCPService {
 
 			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
-			const shouldFormat = this.prettierSupportedExtensions.includes(fileExtension);
+			const shouldFormat =
+				this.prettierSupportedExtensions.includes(fileExtension);
 
 			if (shouldFormat) {
 				try {
-					execSync(`npx prettier --write "${fullPath}"`, {
-						stdio: 'pipe',
+					await execAsync(`npx prettier --write "${fullPath}"`, {
 						encoding: 'utf-8',
 					});
 
@@ -1051,7 +1299,7 @@ export class FilesystemMCPService {
 						contextStart + (newContextEnd - contextStart),
 					);
 
-					// Extract formatted content for context with line numbers
+					// Extract formatted content for context (compress whitespace)
 					const formattedContextLines = finalLines.slice(
 						contextStart - 1,
 						finalContextEnd,
@@ -1059,8 +1307,7 @@ export class FilesystemMCPService {
 					finalContextContent = formattedContextLines
 						.map((line, idx) => {
 							const lineNum = contextStart + idx;
-							const normalizedLine = line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-							return `${lineNum}→${normalizedLine}`;
+							return `${lineNum}→${normalizeForDisplay(line)}`;
 						})
 						.join('\n');
 				} catch (formatError) {
@@ -1150,7 +1397,9 @@ export class FilesystemMCPService {
 
 					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
 					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${errorCount + warningCount - 5} more issue(s)`;
+						result.message += `\n   ... and ${
+							errorCount + warningCount - 5
+						} more issue(s)`;
 					}
 					result.message += `\n\n   ⚡ TIP: Review the errors above and make another small edit to fix them`;
 				}
@@ -1283,12 +1532,34 @@ export class FilesystemMCPService {
 // Export a default instance
 export const filesystemService = new FilesystemMCPService();
 
-// MCP Tool definitions for integration
+/**
+ * MCP Tool definitions for integration
+ *
+ * 🎯 **RECOMMENDED WORKFLOW FOR AI AGENTS**:
+ *
+ * 1️⃣ **SEARCH FIRST** (DON'T skip this!):
+ *    - Use ace_text_search() to find code patterns/strings
+ *    - Use ace_search_symbols() to find functions/classes by name
+ *    - Use ace_file_outline() to understand file structure
+ *
+ * 2️⃣ **READ STRATEGICALLY** (Only after search):
+ *    - Use filesystem_read() WITHOUT line numbers to read entire file
+ *    - OR use filesystem_read(filePath, startLine, endLine) to read specific range
+ *    - ⚠️ AVOID reading files line-by-line from top - wastes tokens!
+ *
+ * 3️⃣ **EDIT SAFELY**:
+ *    - PREFER filesystem_edit_search() for modifying existing code (no line counting!)
+ *    - Use filesystem_edit() only for adding new code or when search-replace doesn't fit
+ *
+ * 📊 **TOKEN EFFICIENCY**:
+ *    - ❌ BAD: Read file top-to-bottom, repeat reading, blind scanning
+ *    - ✅ GOOD: Search → Targeted read → Edit with context
+ */
 export const mcpTools = [
 	{
 		name: 'filesystem_read',
 		description:
-			'Read the content of a file within specified line range. The returned content includes line numbers (format: "lineNum→content") for precise editing. You MUST specify startLine and endLine. To read the entire file, use startLine=1 and a large endLine value (e.g., 500). IMPORTANT: When you need to edit a file, you MUST read it first to see the exact line numbers and current content. NOTE: If the path points to a directory, this tool will automatically list its contents instead of throwing an error.',
+			'📖 Read file content with line numbers. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace_text_search/ace_search_symbols/ace_file_outline) to locate the relevant code, (2) ONLY use filesystem_read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file, or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1299,15 +1570,15 @@ export const mcpTools = [
 				startLine: {
 					type: 'number',
 					description:
-						'Starting line number (1-indexed, inclusive). Must be >= 1.',
+						'Optional: Starting line number (1-indexed). Omit to read from line 1.',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'Ending line number (1-indexed, inclusive). Can exceed file length (will be capped automatically).',
+						'Optional: Ending line number (1-indexed). Omit to read to end of file.',
 				},
 			},
-			required: ['filePath', 'startLine', 'endLine'],
+			required: ['filePath'],
 		},
 	},
 	{
@@ -1337,29 +1608,31 @@ export const mcpTools = [
 	},
 	{
 		name: 'filesystem_delete',
-		description: 'Delete one or multiple files. Supports both single file and batch deletion.',
+		description:
+			'Delete one or multiple files. Supports both single file and batch deletion.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
 					type: 'string',
-					description: 'Path to a single file to delete (deprecated: use filePaths for single or multiple files)',
+					description:
+						'Path to a single file to delete (deprecated: use filePaths for single or multiple files)',
 				},
 				filePaths: {
 					oneOf: [
 						{
 							type: 'string',
-							description: 'Path to a single file to delete'
+							description: 'Path to a single file to delete',
 						},
 						{
 							type: 'array',
 							items: {
-								type: 'string'
+								type: 'string',
 							},
-							description: 'Array of file paths to delete'
-						}
+							description: 'Array of file paths to delete',
+						},
 					],
-					description: 'Single file path or array of file paths to delete'
+					description: 'Single file path or array of file paths to delete',
 				},
 			},
 			// Make both optional, but at least one is required (validated in code)
@@ -1382,7 +1655,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem_edit_search',
 		description:
-			'🎯 **RECOMMENDED** for most edits: Search-and-replace editing with AUTOMATIC boundary detection. **WHY USE THIS**: (1) NO need to count line numbers - just copy the exact code you want to change, (2) SAFER - automatically handles code boundaries to prevent bracket/tag mismatches, (3) CLEARER intent - shows exactly what you\'re changing. **BEST FOR**: Modifying existing functions, fixing bugs, updating logic. **WORKFLOW**: (1) Read file with filesystem_read, (2) Copy exact code block to change (including whitespace!), (3) Provide the replacement. **HANDLES**: Multiple occurrences, whitespace normalization, structure validation. **TIP**: For new code additions, use filesystem_edit with line numbers instead.',
+			'🎯 **RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING that automatically handles whitespace differences. **WORKFLOW**: (1) Use ace_text_search/ace_search_symbols to locate code, (2) Use filesystem_read to view content, (3) Copy the code block you want to change (without line numbers), (4) Use THIS tool - whitespace will be normalized automatically. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BEST FOR**: Modifying functions, fixing bugs, updating logic.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1393,22 +1666,22 @@ export const mcpTools = [
 				searchContent: {
 					type: 'string',
 					description:
-						'⚠️  EXACT content to find and replace. MUST match precisely including indentation and whitespace. Copy directly from filesystem_read output (WITHOUT line numbers like "123→").',
+						'Content to find and replace. Copy from filesystem_read output WITHOUT line numbers (e.g., "123→"). Whitespace differences are automatically handled - focus on getting the content right.',
 				},
 				replaceContent: {
 					type: 'string',
 					description:
-						'New content to replace the search content. Should maintain consistent indentation with surrounding code.',
+						'New content to replace with. Indentation will be preserved automatically.',
 				},
 				occurrence: {
 					type: 'number',
 					description:
-						'Which occurrence to replace if multiple matches found (1-indexed). Default: 1 (first match). Use -1 for all occurrences (not yet supported).',
+						'Which match to replace if multiple found (1-indexed). Default: 1 (best match first). Use -1 for all (not yet supported).',
 					default: 1,
 				},
 				contextLines: {
 					type: 'number',
-					description: 'Number of context lines to show before/after edit (default: 8)',
+					description: 'Context lines to show before/after (default: 8)',
 					default: 8,
 				},
 			},
@@ -1418,7 +1691,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem_edit',
 		description:
-			'🔧 Line-based editing for precise line range replacements. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When you need exact line-number control. **LIMITATIONS**: Requires manual line number tracking, higher risk of boundary errors. **RECOMMENDATION**: For most edits, use filesystem_edit_search instead - it\'s safer and easier. **BEST PRACTICES**: (1) Keep edits small (≤15 lines), (2) Always read file first to get exact line numbers, (3) Double-check boundaries for brackets/tags. **SMART FEATURES**: Auto-detects bracket/tag mismatches, indentation issues, context auto-extends to show complete code blocks.',
+			"🔧 Line-based editing for precise control. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When search-replace is not suitable. **WORKFLOW**: (1) Use ace_text_search/ace_file_outline to locate relevant area, (2) Use filesystem_read to get exact line numbers, (3) Use THIS tool with precise line ranges. **RECOMMENDATION**: For modifying existing code, use filesystem_edit_search instead - it's safer. **BEST PRACTICES**: Keep edits small (≤15 lines), double-check line numbers, verify bracket closure.",
 		inputSchema: {
 			type: 'object',
 			properties: {

@@ -82,6 +82,13 @@ function isRetriableError(error: Error): boolean {
 		return true;
 	}
 
+	// Connection terminated by server
+	if (errorMessage.includes('terminated') ||
+		errorMessage.includes('connection reset') ||
+		errorMessage.includes('socket hang up')) {
+		return true;
+	}
+
 	return false;
 }
 

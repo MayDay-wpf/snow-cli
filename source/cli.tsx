@@ -39,11 +39,16 @@ const cli = meow(
 		--help     Show help
 		--version  Show version
 		--update   Update to latest version
+		-c         Skip welcome screen and resume last conversation
 `,
 	{
 		importMeta: import.meta,
 		flags: {
 			update: {
+				type: 'boolean',
+				default: false,
+			},
+			c: {
 				type: 'boolean',
 				default: false,
 			},
@@ -82,7 +87,13 @@ if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
 }
 
 // Startup component that shows loading spinner during update check
-const Startup = ({version}: {version: string | undefined}) => {
+const Startup = ({
+	version,
+	skipWelcome,
+}: {
+	version: string | undefined;
+	skipWelcome: boolean;
+}) => {
 	const [appReady, setAppReady] = React.useState(false);
 
 	React.useEffect(() => {
@@ -125,7 +136,7 @@ const Startup = ({version}: {version: string | undefined}) => {
 		);
 	}
 
-	return <App version={version} />;
+	return <App version={version} skipWelcome={skipWelcome} />;
 };
 
 // Disable bracketed paste mode on startup
@@ -150,7 +161,7 @@ process.on('SIGTERM', () => {
 	process.exit(0);
 });
 
-render(<Startup version={cli.pkg.version} />, {
+render(<Startup version={cli.pkg.version} skipWelcome={cli.flags.c} />, {
 	exitOnCtrlC: false,
 	patchConsole: true,
 });

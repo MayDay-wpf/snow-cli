@@ -5,8 +5,6 @@ import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 
 export interface CompactModelConfig {
-	baseUrl: string;
-	apiKey: string;
 	modelName: string;
 }
 

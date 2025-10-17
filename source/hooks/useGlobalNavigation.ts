@@ -8,7 +8,7 @@ navigationEmitter.setMaxListeners(20);
 export const NAVIGATION_EVENT = 'navigate';
 
 export interface NavigationEvent {
-	destination: 'welcome' | 'chat' | 'settings' | 'config' | 'models' | 'mcp';
+	destination: 'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders';
 }
 
 // Emit navigation event

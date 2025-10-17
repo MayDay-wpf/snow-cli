@@ -1,8 +1,7 @@
 import OpenAI from 'openai';
 import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
-import { executeMCPTool } from '../utils/mcpToolsManager.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
-import { withRetry, withRetryGenerator } from '../utils/retryUtils.js';
+import { withRetryGenerator } from '../utils/retryUtils.js';
 import type { ChatMessage, ToolCall } from './chat.js';
 
 export interface ResponseOptions {
@@ -147,19 +146,6 @@ export function resetOpenAIClient(): void {
 	openaiClient = null;
 }
 
-/**
- * 转换消息格式为 Responses API 的 input 格式
- * Responses API 的 input 格式：
- * 1. 支持 user, assistant 角色消息，使用 type: "message" 包裹
- * 2. 工具调用在 assistant 中表示为 function_call 类型的 item
- * 3. 工具结果使用 function_call_output 类型
- *
- * 注意：Responses API 使用 instructions 字段代替 system 消息
- * 优化：使用 type: "message" 包裹以提高缓存命中率
- * Logic:
- * 1. If custom system prompt exists: use custom as instructions, prepend default as first user message
- * 2. If no custom system prompt: use default as instructions
- */
 function convertToResponseInput(messages: ChatMessage[]): { input: any[]; systemInstructions: string } {
 	const customSystemPrompt = getCustomSystemPrompt();
 	const result: any[] = [];
@@ -272,109 +258,6 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 	}
 
 	return { input: result, systemInstructions };
-}
-
-/**
- * 使用 Responses API 创建响应（非流式,带自动工具调用）
- */
-export async function createResponse(
-	options: ResponseOptions,
-	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
-): Promise<string> {
-	const client = getOpenAIClient();
-	let messages = [...options.messages];
-
-	// 提取系统提示词和转换后的消息
-	const { input: convertedInput, systemInstructions } = convertToResponseInput(messages);
-
-	try {
-		// 使用 Responses API
-		while (true) {
-			const requestPayload: any = {
-				model: options.model,
-				instructions: systemInstructions,
-				input: convertedInput,
-				tools: convertToolsForResponses(options.tools),
-				tool_choice: options.tool_choice,
-				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-				store: options.store ?? false,
-				include: options.include || ['reasoning.encrypted_content'],
-				prompt_cache_key: options.prompt_cache_key,
-			};
-
-			const response = await withRetry(
-				() => client.responses.create(requestPayload),
-				{
-					abortSignal,
-					onRetry
-				}
-			);
-
-			// 提取响应 - Responses API 返回 output 数组
-			const output = (response as any).output;
-			if (!output || output.length === 0) {
-				throw new Error('No output from AI');
-			}
-
-			// 获取最后一条消息（通常是 assistant 的响应）
-			const lastMessage = output[output.length - 1];
-
-			// 添加 assistant 消息到对话
-			messages.push({
-				role: 'assistant',
-				content: lastMessage.content || '',
-				tool_calls: lastMessage.tool_calls as ToolCall[] | undefined
-			});
-
-			// 检查是否有工具调用
-			if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
-				// 执行每个工具调用
-				for (const toolCall of lastMessage.tool_calls) {
-					if (toolCall.type === 'function') {
-						try {
-							const args = JSON.parse(toolCall.function.arguments);
-							const result = await executeMCPTool(toolCall.function.name, args);
-
-							// 添加工具结果到对话
-							messages.push({
-								role: 'tool',
-								content: JSON.stringify(result),
-								tool_call_id: toolCall.id
-							});
-						} catch (error) {
-							// 添加错误结果到对话
-							messages.push({
-								role: 'tool',
-								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
-								tool_call_id: toolCall.id
-							});
-						}
-					}
-				}
-				// 继续对话获取工具结果后的响应
-				continue;
-			}
-
-			// 没有工具调用，返回内容
-			return lastMessage.content || '';
-		}
-	} catch (error) {
-		if (error instanceof Error) {
-			// 检查是否是 API 网关不支持 Responses API
-			if (error.message.includes('Panic detected') ||
-				error.message.includes('nil pointer') ||
-				error.message.includes('404') ||
-				error.message.includes('not found')) {
-				throw new Error(
-					'Response creation failed: Your API endpoint does not support the Responses API. ' +
-					'Please switch to "Chat Completions" method in API settings, or use an OpenAI-compatible endpoint that supports Responses API.'
-				);
-			}
-			throw new Error(`Response creation failed: ${error.message}`);
-		}
-		throw new Error('Response creation failed: Unknown error');
-	}
 }
 
 /**
@@ -564,113 +447,4 @@ export async function* createStreamingResponse(
 			onRetry
 		}
 	);
-}
-
-/**
- * 使用 Responses API 创建响应（限制工具调用轮数）
- */
-export async function createResponseWithTools(
-	options: ResponseOptions,
-	maxToolRounds: number = 5,
-	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
-): Promise<{ content: string; toolCalls: ToolCall[] }> {
-	const client = getOpenAIClient();
-	let messages = [...options.messages];
-	let allToolCalls: ToolCall[] = [];
-	let rounds = 0;
-
-	// 提取系统提示词和转换后的消息
-	const { input: convertedInput, systemInstructions } = convertToResponseInput(messages);
-
-	try {
-		while (rounds < maxToolRounds) {
-			const requestPayload: any = {
-				model: options.model,
-				instructions: systemInstructions,
-				input: convertedInput,
-				tools: convertToolsForResponses(options.tools),
-				tool_choice: options.tool_choice,
-				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
-				store: options.store ?? false,
-				include: options.include || ['reasoning.encrypted_content'],
-				prompt_cache_key: options.prompt_cache_key,
-			};
-
-			const response = await withRetry(
-				() => client.responses.create(requestPayload),
-				{
-					abortSignal,
-					onRetry
-				}
-			);
-
-			const output = (response as any).output;
-			if (!output || output.length === 0) {
-				throw new Error('No output from AI');
-			}
-
-			const lastMessage = output[output.length - 1];
-
-			// 添加 assistant 消息
-			messages.push({
-				role: 'assistant',
-				content: lastMessage.content || '',
-				tool_calls: lastMessage.tool_calls as ToolCall[] | undefined
-			});
-
-			// 检查工具调用
-			if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
-				allToolCalls.push(...lastMessage.tool_calls as ToolCall[]);
-
-				// 执行工具调用
-				for (const toolCall of lastMessage.tool_calls) {
-					if (toolCall.type === 'function') {
-						try {
-							const args = JSON.parse(toolCall.function.arguments);
-							const result = await executeMCPTool(toolCall.function.name, args);
-
-							messages.push({
-								role: 'tool',
-								content: JSON.stringify(result),
-								tool_call_id: toolCall.id
-							});
-						} catch (error) {
-							messages.push({
-								role: 'tool',
-								content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
-								tool_call_id: toolCall.id
-							});
-						}
-					}
-				}
-
-				rounds++;
-				continue;
-			}
-
-			// 没有工具调用，返回结果
-			return {
-				content: lastMessage.content || '',
-				toolCalls: allToolCalls
-			};
-		}
-
-		throw new Error(`Maximum tool calling rounds (${maxToolRounds}) exceeded`);
-	} catch (error) {
-		if (error instanceof Error) {
-			// 检查是否是 API 网关不支持 Responses API
-			if (error.message.includes('Panic detected') ||
-				error.message.includes('nil pointer') ||
-				error.message.includes('404') ||
-				error.message.includes('not found')) {
-				throw new Error(
-					'Response creation with tools failed: Your API endpoint does not support the Responses API. ' +
-					'Please switch to "Chat Completions" method in API settings.'
-				);
-			}
-			throw new Error(`Response creation with tools failed: ${error.message}`);
-		}
-		throw new Error('Response creation with tools failed: Unknown error');
-	}
 }

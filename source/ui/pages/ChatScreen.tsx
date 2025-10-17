@@ -45,9 +45,11 @@ import '../../utils/commands/init.js';
 import '../../utils/commands/ide.js';
 import '../../utils/commands/compact.js';
 
-type Props = {};
+type Props = {
+	skipWelcome?: boolean;
+};
 
-export default function ChatScreen({}: Props) {
+export default function ChatScreen({skipWelcome}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [currentTodos, setCurrentTodos] = useState<
@@ -104,6 +106,37 @@ export default function ChatScreen({}: Props) {
 			// Ignore localStorage errors
 		}
 	}, [yoloMode]);
+
+	// Auto-resume last session when skipWelcome is true
+	useEffect(() => {
+		if (!skipWelcome) return;
+
+		const autoResume = async () => {
+			try {
+				const sessions = await sessionManager.listSessions();
+				if (sessions.length > 0) {
+					// Get the most recent session (already sorted by updatedAt)
+					const latestSession = sessions[0];
+					if (latestSession) {
+						const session = await sessionManager.loadSession(latestSession.id);
+
+						if (session) {
+							// Initialize from session
+							const uiMessages = convertSessionMessagesToUI(session.messages);
+							setMessages(uiMessages);
+							initializeFromSession(session.messages);
+						}
+					}
+				}
+				// If no sessions exist, just stay in chat screen with empty state
+			} catch (error) {
+				// Silently fail - just stay in empty chat screen
+				console.error('Failed to auto-resume session:', error);
+			}
+		};
+
+		autoResume();
+	}, [skipWelcome, initializeFromSession]);
 
 	// Clear terminal and remount on terminal width change (like gemini-cli)
 	// Use debounce to avoid flickering during continuous resize
@@ -281,8 +314,8 @@ export default function ChatScreen({}: Props) {
 			}
 		}
 
+		// Show confirmation dialog if there are files to rollback
 		if (totalFileCount > 0) {
-			// Show confirmation dialog with total file count
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: totalFileCount,

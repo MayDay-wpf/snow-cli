@@ -5,8 +5,7 @@ import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import Menu from '../components/Menu.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
-import ApiConfigScreen from './ApiConfigScreen.js';
-import ModelConfigScreen from './ModelConfigScreen.js';
+import ConfigScreen from './ConfigScreen.js';
 import ProxyConfigScreen from './ProxyConfigScreen.js';
 
 type Props = {
@@ -14,7 +13,7 @@ type Props = {
 	onMenuSelect?: (value: string) => void;
 };
 
-type InlineView = 'menu' | 'api-config' | 'model-config' | 'proxy-config';
+type InlineView = 'menu' | 'config' | 'proxy-config';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -36,14 +35,9 @@ export default function WelcomeScreen({
 				clearTerminal: true,
 			},
 			{
-				label: 'API Settings',
+				label: 'API & Model Settings',
 				value: 'config',
-				infoText: 'Configure OpenAI API settings',
-			},
-			{
-				label: 'Model Settings',
-				value: 'models',
-				infoText: 'Configure AI models for different tasks',
+				infoText: 'Configure API settings and AI models',
 			},
 			{
 				label: 'Proxy & Browser Settings',
@@ -81,11 +75,9 @@ export default function WelcomeScreen({
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {
-			// Handle inline views (config, models, proxy) or pass through to parent
+			// Handle inline views (config, proxy) or pass through to parent
 			if (value === 'config') {
-				setInlineView('api-config');
-			} else if (value === 'models') {
-				setInlineView('model-config');
+				setInlineView('config');
 			} else if (value === 'proxy') {
 				setInlineView('proxy-config');
 			} else {
@@ -168,18 +160,9 @@ export default function WelcomeScreen({
 					<Alert variant="info">{infoText}</Alert>
 				</Box>
 			)}
-			{inlineView === 'api-config' && (
+			{inlineView === 'config' && (
 				<Box paddingX={1}>
-					<ApiConfigScreen
-						onBack={handleBackToMenu}
-						onSave={handleConfigSave}
-						inlineMode={true}
-					/>
-				</Box>
-			)}
-			{inlineView === 'model-config' && (
-				<Box paddingX={1}>
-					<ModelConfigScreen
+					<ConfigScreen
 						onBack={handleBackToMenu}
 						onSave={handleConfigSave}
 						inlineMode={true}
