@@ -54,8 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Enhance IDE diagnostics support 
-            -- optimize file search to prevent UI freeze
+            -- Remove unwanted dependencies
             ### Installation
             ```bash
             npm install -g snow-ai
