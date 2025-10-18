@@ -8,6 +8,7 @@ import {promisify} from 'util';
 import App from './app.js';
 import {vscodeConnection} from './utils/vscodeConnection.js';
 import {resourceMonitor} from './utils/resourceMonitor.js';
+import {initializeProfiles} from './utils/configManager.js';
 
 const execAsync = promisify(exec);
 
@@ -100,6 +101,13 @@ const Startup = ({
 		let mounted = true;
 
 		const init = async () => {
+			// Initialize profiles system first
+			try {
+				initializeProfiles();
+			} catch (error) {
+				console.error('Failed to initialize profiles:', error);
+			}
+
 			// Check for updates with timeout
 			const updateCheckPromise = version
 				? checkForUpdates(version)

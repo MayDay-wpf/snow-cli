@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { logger } from '../utils/logger.js';
 
 /**
  * File backup entry
@@ -142,7 +143,7 @@ class IncrementalSnapshotManager {
 				}
 			}
 		} catch (error) {
-			console.error('Failed to list snapshots:', error);
+			logger.error('Failed to list snapshots:', error);
 		}
 
 		return snapshots.sort((a, b) => b.messageIndex - a.messageIndex);

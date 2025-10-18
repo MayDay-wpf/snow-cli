@@ -37,7 +37,7 @@ export default function WelcomeScreen({
 			{
 				label: 'API & Model Settings',
 				value: 'config',
-				infoText: 'Configure API settings and AI models',
+				infoText: 'Configure API settings, AI models, and manage profiles',
 			},
 			{
 				label: 'Proxy & Browser Settings',

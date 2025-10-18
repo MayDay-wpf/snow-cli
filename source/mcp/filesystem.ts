@@ -75,7 +75,7 @@ export class FilesystemMCPService {
 	 * This normalizes whitespace first to avoid false negatives from spacing differences
 	 * Returns a value between 0 (completely different) and 1 (identical)
 	 */
-	private calculateSimilarity(str1: string, str2: string): number {
+	private calculateSimilarity(str1: string, str2: string, threshold: number = 0): number {
 		// Normalize whitespace for comparison: collapse all whitespace to single spaces
 		const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
 		const norm1 = normalize(str1);
@@ -87,47 +87,72 @@ export class FilesystemMCPService {
 		if (len1 === 0) return len2 === 0 ? 1 : 0;
 		if (len2 === 0) return 0;
 
-		// Use Levenshtein distance for better similarity calculation
+		// Quick length check - if lengths differ too much, similarity can't be above threshold
 		const maxLen = Math.max(len1, len2);
-		const distance = this.levenshteinDistance(norm1, norm2);
+		const minLen = Math.min(len1, len2);
+		const lengthRatio = minLen / maxLen;
+		if (threshold > 0 && lengthRatio < threshold) {
+			return lengthRatio; // Can't possibly meet threshold
+		}
+
+		// Use Levenshtein distance for better similarity calculation
+		const distance = this.levenshteinDistance(norm1, norm2, Math.ceil(maxLen * (1 - threshold)));
 
 		return 1 - distance / maxLen;
 	}
 
 	/**
-	 * Calculate Levenshtein distance between two strings
+	 * Calculate Levenshtein distance between two strings with early termination
+	 * @param str1 First string
+	 * @param str2 Second string
+	 * @param maxDistance Maximum distance to compute (early exit if exceeded)
+	 * @returns Levenshtein distance, or maxDistance+1 if exceeded
 	 */
-	private levenshteinDistance(str1: string, str2: string): number {
+	private levenshteinDistance(str1: string, str2: string, maxDistance: number = Infinity): number {
 		const len1 = str1.length;
 		const len2 = str2.length;
 
-		// Create distance matrix
-		const matrix: number[][] = [];
-		for (let i = 0; i <= len1; i++) {
-			matrix[i] = [i];
-		}
-		for (let j = 0; j <= len2; j++) {
-			matrix[0]![j] = j;
+		// Quick exit for identical strings
+		if (str1 === str2) return 0;
+
+		// Quick exit if length difference already exceeds maxDistance
+		if (Math.abs(len1 - len2) > maxDistance) {
+			return maxDistance + 1;
 		}
 
-		// Fill matrix
+		// Use single-row algorithm to save memory (only need previous row)
+		let prevRow: number[] = Array.from({length: len2 + 1}, (_, i) => i);
+
 		for (let i = 1; i <= len1; i++) {
+			const currRow: number[] = [i];
+			let minInRow = i; // Track minimum value in current row
+
 			for (let j = 1; j <= len2; j++) {
 				const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-				matrix[i]![j] = Math.min(
-					matrix[i - 1]![j]! + 1, // deletion
-					matrix[i]![j - 1]! + 1, // insertion
-					matrix[i - 1]![j - 1]! + cost, // substitution
+				const val = Math.min(
+					prevRow[j]! + 1,      // deletion
+					currRow[j - 1]! + 1,  // insertion
+					prevRow[j - 1]! + cost // substitution
 				);
+				currRow[j] = val;
+				minInRow = Math.min(minInRow, val);
 			}
+
+			// Early termination: if minimum in this row exceeds maxDistance, we can stop
+			if (minInRow > maxDistance) {
+				return maxDistance + 1;
+			}
+
+			prevRow = currRow;
 		}
 
-		return matrix[len1]![len2]!;
+		return prevRow[len2]!;
 	}
 
 	/**
 	 * Find the closest matching candidates in the file content
 	 * Returns top N candidates sorted by similarity
+	 * Optimized with safe pre-filtering and early exit
 	 */
 	private findClosestMatches(
 		searchContent: string,
@@ -141,18 +166,42 @@ export class FilesystemMCPService {
 		const normalizeForDisplay = (line: string) =>
 			line.replace(/\t/g, ' ').replace(/  +/g, ' ');
 
-		// Try to find candidates by sliding window
+		// Fast pre-filter: use first line as anchor (only for multi-line searches)
+		const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
+		const threshold = 0.5;
+		const usePreFilter = searchLines.length >= 5; // Only for 5+ line searches
+		const preFilterThreshold = 0.2; // Very conservative - only skip completely unrelated lines
+
+		// Try to find candidates by sliding window with optimizations
+		const maxCandidates = topN * 3; // Collect more candidates, then pick best
 		for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
+			// Quick pre-filter: check first line similarity (only for multi-line)
+			if (usePreFilter) {
+				const firstLineCandidate = fileLines[i]?.replace(/\s+/g, ' ').trim() || '';
+				const firstLineSimilarity = this.calculateSimilarity(
+					searchFirstLine,
+					firstLineCandidate,
+					preFilterThreshold,
+				);
+
+				// Skip only if first line is very different
+				if (firstLineSimilarity < preFilterThreshold) {
+					continue;
+				}
+			}
+
+			// Full candidate check
 			const candidateLines = fileLines.slice(i, i + searchLines.length);
 			const candidateContent = candidateLines.join('\n');
 
 			const similarity = this.calculateSimilarity(
 				searchContent,
 				candidateContent,
+				threshold,
 			);
 
 			// Only consider candidates with >50% similarity
-			if (similarity > 0.5) {
+			if (similarity > threshold) {
 				candidates.push({
 					startLine: i + 1,
 					endLine: i + searchLines.length,
@@ -161,6 +210,16 @@ export class FilesystemMCPService {
 						.map((line, idx) => `${i + idx + 1}→${normalizeForDisplay(line)}`)
 						.join('\n'),
 				});
+
+				// Early exit if we found a nearly perfect match
+				if (similarity >= 0.95) {
+					break;
+				}
+
+				// Limit candidates to avoid excessive computation
+				if (candidates.length >= maxCandidates) {
+					break;
+				}
 			}
 		}
 
@@ -435,23 +494,128 @@ export class FilesystemMCPService {
 
 	/**
 	 * Get the content of a file with optional line range
-	 * @param filePath - Path to the file (relative to base path or absolute)
+	 * @param filePath - Path to the file (relative to base path or absolute) or array of file paths
 	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1)
 	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to 500 or file end)
 	 * @returns Object containing the requested content with line numbers and metadata
 	 * @throws Error if file doesn't exist or cannot be read
 	 */
 	async getFileContent(
-		filePath: string,
+		filePath: string | string[],
 		startLine?: number,
 		endLine?: number,
-	): Promise<{
-		content: string;
-		startLine: number;
-		endLine: number;
-		totalLines: number;
-	}> {
+	): Promise<
+		| {
+				content: string;
+				startLine: number;
+				endLine: number;
+				totalLines: number;
+		  }
+		| {
+				content: string;
+				files: Array<{
+					path: string;
+					startLine: number;
+					endLine: number;
+					totalLines: number;
+				}>;
+				totalFiles: number;
+		  }
+	> {
 		try {
+			// Handle array of files
+			if (Array.isArray(filePath)) {
+				const filesData: Array<{
+					path: string;
+					startLine: number;
+					endLine: number;
+					totalLines: number;
+				}> = [];
+				const allContents: string[] = [];
+
+				for (const file of filePath) {
+					try {
+						const fullPath = this.resolvePath(file);
+
+						// For absolute paths, skip validation to allow access outside base path
+						if (!isAbsolute(file)) {
+							await this.validatePath(fullPath);
+						}
+
+						// Check if the path is a directory, if so, list its contents instead
+						const stats = await fs.stat(fullPath);
+						if (stats.isDirectory()) {
+							const dirFiles = await this.listFiles(file);
+							const fileList = dirFiles.join('\n');
+							allContents.push(`📁 Directory: ${file}\n${fileList}`);
+							filesData.push({
+								path: file,
+								startLine: 1,
+								endLine: dirFiles.length,
+								totalLines: dirFiles.length,
+							});
+							continue;
+						}
+
+						const content = await fs.readFile(fullPath, 'utf-8');
+						const lines = content.split('\n');
+						const totalLines = lines.length;
+
+						// Default values and logic
+						const actualStartLine = startLine ?? 1;
+						const actualEndLine = endLine ?? totalLines;
+
+						// Validate and adjust line numbers
+						if (actualStartLine < 1) {
+							throw new Error(`Start line must be greater than 0 for ${file}`);
+						}
+						if (actualEndLine < actualStartLine) {
+							throw new Error(
+								`End line must be greater than or equal to start line for ${file}`,
+							);
+						}
+						if (actualStartLine > totalLines) {
+							throw new Error(
+								`Start line ${actualStartLine} exceeds file length ${totalLines} for ${file}`,
+							);
+						}
+
+						const start = actualStartLine;
+						const end = Math.min(totalLines, actualEndLine);
+
+						// Extract specified lines
+						const selectedLines = lines.slice(start - 1, end);
+						const numberedLines = selectedLines.map((line, index) => {
+							const lineNum = start + index;
+							return `${lineNum}→${line}`;
+						});
+
+						const fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})\n${numberedLines.join(
+							'\n',
+						)}`;
+						allContents.push(fileContent);
+
+						filesData.push({
+							path: file,
+							startLine: start,
+							endLine: end,
+							totalLines,
+						});
+					} catch (error) {
+						const errorMsg =
+							error instanceof Error ? error.message : 'Unknown error';
+						allContents.push(`❌ ${file}: ${errorMsg}`);
+					}
+				}
+
+				return {
+					content: allContents.join('\n\n'),
+					files: filesData,
+					totalFiles: filePath.length,
+				};
+			}
+
+			// Original single file logic
 			const fullPath = this.resolvePath(filePath);
 
 			// For absolute paths, skip validation to allow access outside base path
@@ -775,12 +939,37 @@ export class FilesystemMCPService {
 			}> = [];
 			const threshold = 0.6; // Lowered to 60% to allow smaller partial edits (was 0.75)
 
+			// Fast pre-filter: use first line as anchor to skip unlikely positions
+			// Only apply pre-filter for multi-line searches to avoid missing valid matches
+			const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
+			const usePreFilter = searchLines.length >= 5; // Only pre-filter for 5+ line searches
+			const preFilterThreshold = 0.2; // Very low threshold - only skip completely unrelated lines
+			const maxMatches = 10; // Limit matches to avoid excessive computation
+
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+				// Quick pre-filter: check first line similarity (only for multi-line searches)
+				if (usePreFilter) {
+					const firstLineCandidate = contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
+					const firstLineSimilarity = this.calculateSimilarity(
+						searchFirstLine,
+						firstLineCandidate,
+						preFilterThreshold,
+					);
+
+					// Skip only if first line is very different (< 30% match)
+					// This is safe because if first line differs this much, full match unlikely
+					if (firstLineSimilarity < preFilterThreshold) {
+						continue;
+					}
+				}
+
+				// Full candidate check
 				const candidateLines = contentLines.slice(i, i + searchLines.length);
 				const candidateContent = candidateLines.join('\n');
 				const similarity = this.calculateSimilarity(
 					normalizedSearch,
 					candidateContent,
+					threshold, // Pass threshold for early exit
 				);
 
 				// Accept matches above threshold
@@ -790,6 +979,16 @@ export class FilesystemMCPService {
 						endLine: i + searchLines.length,
 						similarity,
 					});
+
+					// Early exit if we found a nearly perfect match
+					if (similarity >= 0.95) {
+						break;
+					}
+
+					// Limit matches to avoid excessive computation
+					if (matches.length >= maxMatches) {
+						break;
+					}
 				}
 			}
 
@@ -1049,7 +1248,9 @@ export class FilesystemMCPService {
 				// Request diagnostics without blocking (with timeout protection)
 				const diagnosticsPromise = Promise.race([
 					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)), // 1s max wait
+					new Promise<Diagnostic[]>(resolve =>
+						setTimeout(() => resolve([]), 1000),
+					), // 1s max wait
 				]);
 				diagnostics = await diagnosticsPromise;
 			} catch (error) {
@@ -1380,7 +1581,9 @@ export class FilesystemMCPService {
 				// Request diagnostics without blocking (with timeout protection)
 				const diagnosticsPromise = Promise.race([
 					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)), // 1s max wait
+					new Promise<Diagnostic[]>(resolve =>
+						setTimeout(() => resolve([]), 1000),
+					), // 1s max wait
 				]);
 				diagnostics = await diagnosticsPromise;
 			} catch (error) {
@@ -1578,23 +1781,36 @@ export const mcpTools = [
 	{
 		name: 'filesystem_read',
 		description:
-			'📖 Read file content with line numbers. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace_text_search/ace_search_symbols/ace_file_outline) to locate the relevant code, (2) ONLY use filesystem_read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file, or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing.',
+			'📖 Read file content with line numbers. **SUPPORTS MULTIPLE FILES**: Pass either a single file path (string) or multiple file paths (array of strings) to read in one call. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace_text_search/ace_search_symbols/ace_file_outline) to locate the relevant code, (2) ONLY use filesystem_read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **MULTI-FILE EXAMPLE**: filePath=["src/component.ts", "src/utils.ts"] reads both files together.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
-					type: 'string',
-					description: 'Path to the file to read (or directory to list)',
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path to a single file to read',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+							},
+							description: 'Array of file paths to read in one call',
+						},
+					],
+					description:
+						'Path to the file(s) to read (single string or array of strings)',
 				},
 				startLine: {
 					type: 'number',
 					description:
-						'Optional: Starting line number (1-indexed). Omit to read from line 1.',
+						'Optional: Starting line number (1-indexed). Omit to read from line 1. Applied to all files.',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'Optional: Ending line number (1-indexed). Omit to read to end of file.',
+						'Optional: Ending line number (1-indexed). Omit to read to end of file. Applied to all files.',
 				},
 			},
 			required: ['filePath'],

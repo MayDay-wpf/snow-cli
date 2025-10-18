@@ -72,9 +72,6 @@ async function compressWithChatCompletions(
 		stream_options: { include_usage: true } as any,
 	};
 
-	// Log request payload
-	console.log('[ContextCompressor] Chat Completions Request:', JSON.stringify(requestPayload, null, 2));
-
 	// Use streaming to avoid timeout
 	const stream = (await client.chat.completions.create(requestPayload, {
 		headers: customHeaders,
@@ -176,9 +173,6 @@ async function compressWithResponses(
 		input,
 		stream: true,
 	};
-
-	// Log request payload
-	console.log('[ContextCompressor] Responses API Request:', JSON.stringify(requestPayload, null, 2));
 
 	// Use streaming to avoid timeout
 	const stream = await client.responses.create(requestPayload, {
@@ -297,9 +291,6 @@ async function compressWithGemini(
 		contents,
 	};
 
-	// Log request payload
-	console.log('[ContextCompressor] Gemini Request:', JSON.stringify(requestConfig, null, 2));
-
 	// Use streaming to avoid timeout
 	const stream = await client.models.generateContentStream(requestConfig);
 
@@ -395,9 +386,6 @@ async function compressWithAnthropic(
 		system: systemParam,
 		messages,
 	};
-
-	// Log request payload
-	console.log('[ContextCompressor] Anthropic Request:', JSON.stringify(requestPayload, null, 2));
 
 	// Use streaming to avoid timeout
 	const stream = await client.messages.stream(requestPayload);

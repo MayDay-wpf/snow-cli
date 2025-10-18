@@ -170,6 +170,18 @@ export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
 		snowcfg: {...currentConfig.snowcfg, ...apiConfig},
 	};
 	saveConfig(updatedConfig);
+
+	// Also save to the active profile if profiles system is initialized
+	try {
+		// Dynamic import to avoid circular dependencies
+		const {getActiveProfileName, saveProfile} = require('./configManager.js');
+		const activeProfileName = getActiveProfileName();
+		if (activeProfileName) {
+			saveProfile(activeProfileName, updatedConfig);
+		}
+	} catch {
+		// Profiles system not available yet (during initialization), skip sync
+	}
 }
 
 export function getOpenAiConfig(): ApiConfig {

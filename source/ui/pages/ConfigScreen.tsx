@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Select, Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
+import chalk from 'chalk';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
@@ -15,6 +16,15 @@ import {
 	filterModels,
 	type Model,
 } from '../../api/models.js';
+import {
+	getActiveProfileName,
+	getAllProfiles,
+	switchProfile,
+	createProfile,
+	deleteProfile,
+	saveProfile,
+	type ConfigProfile,
+} from '../../utils/configManager.js';
 
 type Props = {
 	onBack: () => void;
@@ -23,15 +33,18 @@ type Props = {
 };
 
 type ConfigField =
+	| 'profile'
 	| 'baseUrl'
 	| 'apiKey'
 	| 'requestMethod'
 	| 'anthropicBeta'
 	| 'advancedModel'
 	| 'basicModel'
+	| 'compactModelName'
 	| 'maxContextTokens'
-	| 'maxTokens'
-	| 'compactModelName';
+	| 'maxTokens';
+
+type ProfileMode = 'normal' | 'creating' | 'deleting';
 
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
 
@@ -80,6 +93,12 @@ export default function ConfigScreen({
 	onSave,
 	inlineMode = false,
 }: Props) {
+	// Profile management
+	const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
+	const [activeProfile, setActiveProfile] = useState('');
+	const [profileMode, setProfileMode] = useState<ProfileMode>('normal');
+	const [newProfileName, setNewProfileName] = useState('');
+
 	// API settings
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
@@ -94,7 +113,7 @@ export default function ConfigScreen({
 	const [compactModelName, setCompactModelName] = useState('');
 
 	// UI state
-	const [currentField, setCurrentField] = useState<ConfigField>('baseUrl');
+	const [currentField, setCurrentField] = useState<ConfigField>('profile');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
 	const [models, setModels] = useState<Model[]>([]);
@@ -124,6 +143,15 @@ export default function ConfigScreen({
 	];
 
 	useEffect(() => {
+		loadProfilesAndConfig();
+	}, []);
+
+	const loadProfilesAndConfig = () => {
+		// Load profiles
+		const loadedProfiles = getAllProfiles();
+		setProfiles(loadedProfiles);
+
+		// Load current config
 		const config = getOpenAiConfig();
 		setBaseUrl(config.baseUrl);
 		setApiKey(config.apiKey);
@@ -134,7 +162,8 @@ export default function ConfigScreen({
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setCompactModelName(config.compactModel?.modelName || '');
-	}, []);
+		setActiveProfile(getActiveProfileName());
+	};
 
 	const loadModels = async () => {
 		setLoading(true);
@@ -175,6 +204,7 @@ export default function ConfigScreen({
 	};
 
 	const getCurrentValue = () => {
+		if (currentField === 'profile') return activeProfile;
 		if (currentField === 'baseUrl') return baseUrl;
 		if (currentField === 'apiKey') return apiKey;
 		if (currentField === 'advancedModel') return advancedModel;
@@ -183,6 +213,87 @@ export default function ConfigScreen({
 		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'compactModelName') return compactModelName;
 		return '';
+	};
+
+	const handleProfileChange = (value: string) => {
+		if (value === '__CREATE_NEW__') {
+			setProfileMode('creating');
+			setNewProfileName('');
+			return;
+		}
+
+		if (value === '__DELETE__') {
+			if (activeProfile === 'default') {
+				setErrors(['Cannot delete the default profile']);
+				return;
+			}
+			setProfileMode('deleting');
+			return;
+		}
+
+		// Switch profile
+		try {
+			switchProfile(value);
+			loadProfilesAndConfig();
+			setIsEditing(false);
+			setErrors([]);
+		} catch (err) {
+			setErrors([
+				err instanceof Error ? err.message : 'Failed to switch profile',
+			]);
+		}
+	};
+
+	const handleCreateProfile = () => {
+		const cleaned = stripFocusArtifacts(newProfileName).trim();
+
+		if (!cleaned) {
+			setErrors(['Profile name cannot be empty']);
+			return;
+		}
+
+		try {
+			// Create new profile with current config
+			const currentConfig = {
+				snowcfg: {
+					baseUrl,
+					apiKey,
+					requestMethod,
+					anthropicBeta,
+					advancedModel,
+					basicModel,
+					maxContextTokens,
+					maxTokens,
+					compactModel: compactModelName ? {modelName: compactModelName} : undefined,
+				},
+			};
+			createProfile(cleaned, currentConfig as any);
+			switchProfile(cleaned);
+			loadProfilesAndConfig();
+			setProfileMode('normal');
+			setNewProfileName('');
+			setIsEditing(false);
+			setErrors([]);
+		} catch (err) {
+			setErrors([
+				err instanceof Error ? err.message : 'Failed to create profile',
+			]);
+		}
+	};
+
+	const handleDeleteProfile = () => {
+		try {
+			deleteProfile(activeProfile);
+			loadProfilesAndConfig();
+			setProfileMode('normal');
+			setIsEditing(false);
+			setErrors([]);
+		} catch (err) {
+			setErrors([
+				err instanceof Error ? err.message : 'Failed to delete profile',
+			]);
+			setProfileMode('normal');
+		}
 	};
 
 	const handleModelChange = (value: string) => {
@@ -228,7 +339,31 @@ export default function ConfigScreen({
 				};
 			}
 
+			// Save to main config
 			updateOpenAiConfig(config);
+
+			// Also save to the current profile
+			try {
+				const fullConfig = {
+					snowcfg: {
+						baseUrl,
+						apiKey,
+						requestMethod,
+						anthropicBeta,
+						advancedModel,
+						basicModel,
+						maxContextTokens,
+						maxTokens,
+						compactModel: compactModelName
+							? {modelName: compactModelName}
+							: undefined,
+					},
+				};
+				saveProfile(activeProfile, fullConfig as any);
+			} catch (err) {
+				console.error('Failed to save profile:', err);
+			}
+
 			setErrors([]);
 			return true;
 		} else {
@@ -245,6 +380,29 @@ export default function ConfigScreen({
 		}
 
 		if (isFocusEventInput(rawInput)) {
+			return;
+		}
+
+		// Handle profile creation mode
+		if (profileMode === 'creating') {
+			if (key.return) {
+				handleCreateProfile();
+			} else if (key.escape) {
+				setProfileMode('normal');
+				setNewProfileName('');
+				setErrors([]);
+			}
+			return;
+		}
+
+		// Handle profile deletion confirmation
+		if (profileMode === 'deleting') {
+			if (input === 'y' || input === 'Y') {
+				handleDeleteProfile();
+			} else if (input === 'n' || input === 'N' || key.escape) {
+				setProfileMode('normal');
+				setErrors([]);
+			}
 			return;
 		}
 
@@ -287,7 +445,8 @@ export default function ConfigScreen({
 		// Allow Escape key to exit Select component
 		if (
 			isEditing &&
-			(currentField === 'requestMethod' ||
+			(currentField === 'profile' ||
+				currentField === 'requestMethod' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
 				currentField === 'compactModelName') &&
@@ -408,15 +567,16 @@ export default function ConfigScreen({
 			}
 		} else if (!isEditing && key.upArrow) {
 			const fields: ConfigField[] = [
+				'profile',
 				'baseUrl',
 				'apiKey',
 				'requestMethod',
 				'anthropicBeta',
 				'advancedModel',
 				'basicModel',
+				'compactModelName',
 				'maxContextTokens',
 				'maxTokens',
-				'compactModelName',
 			];
 			const currentIndex = fields.indexOf(currentField);
 			if (currentIndex > 0) {
@@ -424,15 +584,16 @@ export default function ConfigScreen({
 			}
 		} else if (!isEditing && key.downArrow) {
 			const fields: ConfigField[] = [
+				'profile',
 				'baseUrl',
 				'apiKey',
 				'requestMethod',
 				'anthropicBeta',
 				'advancedModel',
 				'basicModel',
+				'compactModelName',
 				'maxContextTokens',
 				'maxTokens',
-				'compactModelName',
 			];
 			const currentIndex = fields.indexOf(currentField);
 			if (currentIndex < fields.length - 1) {
@@ -440,6 +601,96 @@ export default function ConfigScreen({
 			}
 		}
 	});
+
+	// Render profile creation mode
+	if (profileMode === 'creating') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				{!inlineMode && (
+					<Box
+						marginBottom={1}
+						borderStyle="double"
+						borderColor={'cyan'}
+						paddingX={2}
+					>
+						<Box flexDirection="column">
+							<Gradient name="rainbow">Create New Profile</Gradient>
+							<Text color="gray" dimColor>
+								Enter a name for the new configuration profile
+							</Text>
+						</Box>
+					</Box>
+				)}
+
+				<Box flexDirection="column">
+					<Text color="cyan">Profile Name:</Text>
+					<Box marginLeft={2}>
+						<TextInput
+							value={newProfileName}
+							onChange={value => setNewProfileName(stripFocusArtifacts(value))}
+							placeholder="e.g., work, personal, test"
+						/>
+					</Box>
+				</Box>
+
+				{errors.length > 0 && (
+					<Box marginTop={1}>
+						<Text color="red">{errors[0]}</Text>
+					</Box>
+				)}
+
+				<Box marginTop={1}>
+					<Alert variant="info">Press Enter to create, Esc to cancel</Alert>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Render profile deletion confirmation
+	if (profileMode === 'deleting') {
+		return (
+			<Box flexDirection="column" padding={1}>
+				{!inlineMode && (
+					<Box
+						marginBottom={1}
+						borderStyle="double"
+						borderColor={'cyan'}
+						paddingX={2}
+					>
+						<Box flexDirection="column">
+							<Gradient name="rainbow">Delete Profile</Gradient>
+							<Text color="gray" dimColor>
+								Confirm profile deletion
+							</Text>
+						</Box>
+					</Box>
+				)}
+
+				<Box flexDirection="column">
+					<Text color="yellow">
+						Are you sure you want to delete the profile &quot;{activeProfile}
+						&quot;?
+					</Text>
+					<Text color="gray" dimColor>
+						This action cannot be undone. You will be switched to the default
+						profile.
+					</Text>
+				</Box>
+
+				{errors.length > 0 && (
+					<Box marginTop={1}>
+						<Text color="red">{errors[0]}</Text>
+					</Box>
+				)}
+
+				<Box marginTop={1}>
+					<Alert variant="warning">
+						Press Y to confirm, N or Esc to cancel
+					</Alert>
+				</Box>
+			</Box>
+		);
+	}
 
 	if (loading) {
 		return (
@@ -544,16 +795,54 @@ export default function ConfigScreen({
 						<Text color="gray" dimColor>
 							Configure your API settings and AI models
 						</Text>
+						{activeProfile && (
+							<Text color="cyan" dimColor>
+								Active Profile: {activeProfile}
+							</Text>
+						)}
 					</Box>
 				</Box>
 			)}
 
 			<Box flexDirection="column">
-				{/* API Configuration Section */}
-				<Text color="cyan" bold>
-					API Settings:
-				</Text>
+				{/* Profile Selection */}
+				<Box flexDirection="column">
+					<Text color={currentField === 'profile' ? 'green' : 'white'}>
+						{currentField === 'profile' ? '❯ ' : '  '}Profile:
+					</Text>
+					{currentField === 'profile' && isEditing && (
+						<Box marginLeft={3}>
+							<Select
+								options={[
+									...profiles.map(p => ({
+										label: `${p.displayName}${p.isActive ? ' (Active)' : ''}`,
+										value: p.name,
+									})),
+									{
+										label: chalk.green('+ New Profile'),
+										value: '__CREATE_NEW__',
+									},
+									{
+										label: chalk.red('🆇 Delete Profile'),
+										value: '__DELETE__',
+									},
+								]}
+								defaultValue={activeProfile}
+								onChange={handleProfileChange}
+							/>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'profile') && (
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{profiles.find(p => p.name === activeProfile)?.displayName ||
+									activeProfile}
+							</Text>
+						</Box>
+					)}
+				</Box>
 
+				{/* API Settings */}
 				<Box flexDirection="column">
 					<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
 						{currentField === 'baseUrl' ? '❯ ' : '  '}Base URL:
@@ -623,10 +912,9 @@ export default function ConfigScreen({
 					)}
 				</Box>
 
-				<Box flexDirection="column" marginBottom={1}>
+				<Box flexDirection="column">
 					<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
-						{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta (for
-						Claude API):
+						{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta:
 					</Text>
 					<Box marginLeft={3}>
 						<Text color="gray">
@@ -636,15 +924,10 @@ export default function ConfigScreen({
 					</Box>
 				</Box>
 
-				{/* Model Configuration Section */}
-				<Text color="cyan" bold>
-					Model Settings:
-				</Text>
-
+				{/* Model Settings */}
 				<Box flexDirection="column">
 					<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
-						{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model (Main
-						Work):
+						{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model:
 					</Text>
 					{currentField === 'advancedModel' && isEditing && (
 						<Box marginLeft={3}>
@@ -667,8 +950,7 @@ export default function ConfigScreen({
 
 				<Box flexDirection="column">
 					<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
-						{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model (Summary &
-						Analysis):
+						{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model:
 					</Text>
 					{currentField === 'basicModel' && isEditing && (
 						<Box marginLeft={3}>
@@ -690,48 +972,8 @@ export default function ConfigScreen({
 				</Box>
 
 				<Box flexDirection="column">
-					<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
-						{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
-						Tokens (Auto-compress when reached):
-					</Text>
-					{currentField === 'maxContextTokens' && isEditing && (
-						<Box marginLeft={3}>
-							<Text color="cyan">Enter value: {maxContextTokens}</Text>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'maxContextTokens') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{maxContextTokens}</Text>
-						</Box>
-					)}
-				</Box>
-
-				<Box flexDirection="column" marginBottom={1}>
-					<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
-						{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens (Max tokens
-						for single response):
-					</Text>
-					{currentField === 'maxTokens' && isEditing && (
-						<Box marginLeft={3}>
-							<Text color="cyan">Enter value: {maxTokens}</Text>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'maxTokens') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{maxTokens}</Text>
-						</Box>
-					)}
-				</Box>
-
-				{/* Compact Model Section */}
-				<Text color="cyan" bold>
-					Compact Model (Context Compression):
-				</Text>
-
-				<Box flexDirection="column">
 					<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
-						{currentField === 'compactModelName' ? '❯ ' : '  '}Model Name (uses
-						same API credentials):
+						{currentField === 'compactModelName' ? '❯ ' : '  '}Compact Model:
 					</Text>
 					{currentField === 'compactModelName' && isEditing && (
 						<Box marginLeft={3}>
@@ -748,6 +990,39 @@ export default function ConfigScreen({
 					{(!isEditing || currentField !== 'compactModelName') && (
 						<Box marginLeft={3}>
 							<Text color="gray">{compactModelName || 'Not set'}</Text>
+						</Box>
+					)}
+				</Box>
+
+				<Box flexDirection="column">
+					<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
+						{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
+						Tokens:
+					</Text>
+					{currentField === 'maxContextTokens' && isEditing && (
+						<Box marginLeft={3}>
+							<Text color="cyan">Enter value: {maxContextTokens}</Text>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'maxContextTokens') && (
+						<Box marginLeft={3}>
+							<Text color="gray">{maxContextTokens}</Text>
+						</Box>
+					)}
+				</Box>
+
+				<Box flexDirection="column">
+					<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
+						{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens:
+					</Text>
+					{currentField === 'maxTokens' && isEditing && (
+						<Box marginLeft={3}>
+							<Text color="cyan">Enter value: {maxTokens}</Text>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'maxTokens') && (
+						<Box marginLeft={3}>
+							<Text color="gray">{maxTokens}</Text>
 						</Box>
 					)}
 				</Box>
