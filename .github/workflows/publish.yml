@@ -54,12 +54,8 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Added ConfigProfileScreen for managing user profiles, including creating, renaming, deleting, and switching profiles.
-            -- Enhanced ConfigScreen to support profile selection and management, allowing users to create and delete profiles directly from the configuration settings.
-            -- Introduced configManager utility for handling profile operations such as loading, saving, and switching profiles.
-            -- Updated apiConfig to synchronize active profile settings with the main configuration.
-            -- Improved user experience by providing clear prompts and error messages during profile management actions.
-            -- Refactored existing code to accommodate the new profiles feature, ensuring backward compatibility with legacy configurations.
+            -- Enhance IDE diagnostics support 
+            -- optimize file search to prevent UI freeze
             ### Installation
             ```bash
             npm install -g snow-ai

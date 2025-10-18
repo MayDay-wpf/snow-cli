@@ -153,12 +153,13 @@ export class FilesystemMCPService {
 	 * Find the closest matching candidates in the file content
 	 * Returns top N candidates sorted by similarity
 	 * Optimized with safe pre-filtering and early exit
+	 * ASYNC to prevent terminal freeze during search
 	 */
-	private findClosestMatches(
+	private async findClosestMatches(
 		searchContent: string,
 		fileLines: string[],
 		topN: number = 3,
-	): MatchCandidate[] {
+	): Promise<MatchCandidate[]> {
 		const searchLines = searchContent.split('\n');
 		const candidates: MatchCandidate[] = [];
 
@@ -174,7 +175,14 @@ export class FilesystemMCPService {
 
 		// Try to find candidates by sliding window with optimizations
 		const maxCandidates = topN * 3; // Collect more candidates, then pick best
+		const YIELD_INTERVAL = 100; // Yield control every 100 iterations
+
 		for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
+			// Yield control periodically to prevent UI freeze
+			if (i % YIELD_INTERVAL === 0) {
+				await new Promise(resolve => setImmediate(resolve));
+			}
+
 			// Quick pre-filter: check first line similarity (only for multi-line)
 			if (usePreFilter) {
 				const firstLineCandidate = fileLines[i]?.replace(/\s+/g, ' ').trim() || '';
@@ -945,8 +953,14 @@ export class FilesystemMCPService {
 			const usePreFilter = searchLines.length >= 5; // Only pre-filter for 5+ line searches
 			const preFilterThreshold = 0.2; // Very low threshold - only skip completely unrelated lines
 			const maxMatches = 10; // Limit matches to avoid excessive computation
+			const YIELD_INTERVAL = 100; // Yield control every 100 iterations to prevent UI freeze
 
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+				// Yield control periodically to prevent UI freeze
+				if (i % YIELD_INTERVAL === 0) {
+					await new Promise(resolve => setImmediate(resolve));
+				}
+
 				// Quick pre-filter: check first line similarity (only for multi-line searches)
 				if (usePreFilter) {
 					const firstLineCandidate = contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
@@ -1011,6 +1025,11 @@ export class FilesystemMCPService {
 						i <= contentLines.length - correctedSearchLines.length;
 						i++
 					) {
+						// Yield control periodically to prevent UI freeze
+						if (i % YIELD_INTERVAL === 0) {
+							await new Promise(resolve => setImmediate(resolve));
+						}
+
 						const candidateLines = contentLines.slice(
 							i,
 							i + correctedSearchLines.length,
@@ -1055,7 +1074,7 @@ export class FilesystemMCPService {
 				// If still no matches after unescape, provide detailed error
 				if (matches.length === 0) {
 					// Find closest matches for suggestions
-					const closestMatches = this.findClosestMatches(
+					const closestMatches = await this.findClosestMatches(
 						normalizedSearch,
 						normalizedContent.split('\n'),
 						3,
