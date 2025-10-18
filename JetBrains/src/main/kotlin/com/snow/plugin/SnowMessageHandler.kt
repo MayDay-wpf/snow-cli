@@ -84,41 +84,57 @@ class SnowMessageHandler(private val project: Project) {
         val document = PsiDocumentManager.getInstance(project).getDocument(psiFile) ?: return emptyList()
 
         return try {
-            // Get diagnostics from DaemonCodeAnalyzer
-            val daemonCodeAnalyzer = com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.getInstance(project)
             val highlightInfos = mutableListOf<Map<String, Any?>>()
 
-            // Use HighlightingSessionImpl to get highlighting information
+            // Wrap in read action to ensure thread safety
             ApplicationManager.getApplication().runReadAction {
                 try {
-                    // Get all highlight infos for the document
-                    val infos = com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx.getInstanceEx(project)
-                        .getFileLevelHighlights(project, psiFile)
+                    // Use DocumentMarkupModel to get all highlight infos safely
+                    val markupModel = com.intellij.openapi.editor.impl.DocumentMarkupModel.forDocument(document, project, true)
+                    if (markupModel != null) {
+                        // Process all highlighters
+                        markupModel.allHighlighters.forEach { highlighter ->
+                            try {
+                                // Get HighlightInfo from the highlighter's error stripe tooltip
+                                val errorStripeTooltip = highlighter.errorStripeTooltip
 
-                    infos.forEach { info ->
-                        val severity = info.severity
-                        val startOffset = info.startOffset
-                        val line = document.getLineNumber(startOffset)
-                        val lineStartOffset = document.getLineStartOffset(line)
-                        val character = startOffset - lineStartOffset
+                                // Try to extract info from different tooltip types
+                                if (errorStripeTooltip is HighlightInfo) {
+                                    val info = errorStripeTooltip
+                                    val severity = info.severity
 
-                        highlightInfos.add(mapOf(
-                            "message" to (info.description ?: "Unknown issue"),
-                            "severity" to when {
-                                severity == HighlightSeverity.ERROR -> "error"
-                                severity == HighlightSeverity.WARNING -> "warning"
-                                severity == HighlightSeverity.WEAK_WARNING -> "info"
-                                severity == HighlightSeverity.INFORMATION -> "info"
-                                else -> "hint"
-                            },
-                            "line" to line,
-                            "character" to character,
-                            "source" to (info.toolTip ?: "IntelliJ"),
-                            "code" to (info.inspectionToolId ?: "")
-                        ))
+                                    // Skip if severity is too low (e.g., just syntax highlighting)
+                                    if (severity.myVal <= HighlightSeverity.INFORMATION.myVal) {
+                                        return@forEach
+                                    }
+
+                                    val startOffset = info.startOffset
+                                    val line = document.getLineNumber(startOffset)
+                                    val lineStartOffset = document.getLineStartOffset(line)
+                                    val character = startOffset - lineStartOffset
+
+                                    highlightInfos.add(mapOf(
+                                        "message" to (info.description ?: "Unknown issue"),
+                                        "severity" to when {
+                                            severity == HighlightSeverity.ERROR -> "error"
+                                            severity == HighlightSeverity.WARNING -> "warning"
+                                            severity == HighlightSeverity.WEAK_WARNING -> "info"
+                                            else -> "hint"
+                                        },
+                                        "line" to line,
+                                        "character" to character,
+                                        "source" to "IntelliJ",
+                                        "code" to (info.inspectionToolId ?: "")
+                                    ))
+                                }
+                            } catch (e: Exception) {
+                                // Silently skip this highlighter if we can't process it
+                                logger.debug("Failed to process highlighter", e)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
-                    logger.warn("Failed to extract diagnostics from highlighting info", e)
+                    logger.warn("Failed to extract diagnostics from markup model", e)
                 }
             }
 
