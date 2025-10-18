@@ -2,6 +2,7 @@ import {promises as fs} from 'fs';
 import * as path from 'path';
 import {exec} from 'child_process';
 import {promisify} from 'util';
+// IDE connection supports both VSCode and JetBrains IDEs
 import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
 import {
@@ -721,7 +722,7 @@ export class FilesystemMCPService {
 	 * @param replaceContent - New content to replace the search content with
 	 * @param occurrence - Which occurrence to replace (1-indexed, default: 1, use -1 for all)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
-	 * @returns Object containing success message, before/after comparison, and diagnostics
+	 * @returns Object containing success message, before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
 	 * @throws Error if search content is not found or multiple matches exist
 	 */
 	async editFileBySearch(
@@ -1042,7 +1043,7 @@ export class FilesystemMCPService {
 				editedContentLines,
 			);
 
-			// Get diagnostics from VS Code (non-blocking, fire-and-forget)
+			// Get diagnostics from IDE (VSCode or JetBrains) - non-blocking, fire-and-forget
 			let diagnostics: Diagnostic[] = [];
 			try {
 				// Request diagnostics without blocking (with timeout protection)
@@ -1203,7 +1204,7 @@ export class FilesystemMCPService {
 	 * @param endLine - Ending line number (1-indexed, inclusive) - get from filesystem_read output
 	 * @param newContent - New content to replace the specified lines (WITHOUT line numbers)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
-	 * @returns Object containing success message, precise before/after comparison, and diagnostics
+	 * @returns Object containing success message, precise before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
 	 * @throws Error if file editing fails
 	 */
 	async editFile(
@@ -1373,7 +1374,7 @@ export class FilesystemMCPService {
 				editedContentLines,
 			);
 
-			// Try to get diagnostics from VS Code after editing (non-blocking)
+			// Try to get diagnostics from IDE (VSCode or JetBrains) after editing (non-blocking)
 			let diagnostics: Diagnostic[] = [];
 			try {
 				// Request diagnostics without blocking (with timeout protection)
