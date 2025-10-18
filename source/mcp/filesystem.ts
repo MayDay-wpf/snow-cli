@@ -4,6 +4,11 @@ import {exec} from 'child_process';
 import {promisify} from 'util';
 import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
+import {
+	tryUnescapeFix,
+	trimPairIfPossible,
+	isOverEscaped,
+} from '../utils/escapeHandler.js';
 const {resolve, dirname, isAbsolute} = path;
 const execAsync = promisify(exec);
 
@@ -350,27 +355,8 @@ export class FilesystemMCPService {
 			}
 		}
 
-		// Check if edit is at a code block boundary
-		const lastLine = editedLines[editedLines.length - 1]?.trim() || '';
-		const firstLine = editedLines[0]?.trim() || '';
-
-		const endsWithOpenBrace =
-			lastLine.endsWith('{') ||
-			lastLine.endsWith('(') ||
-			lastLine.endsWith('[');
-		const startsWithCloseBrace =
-			firstLine.startsWith('}') ||
-			firstLine.startsWith(')') ||
-			firstLine.startsWith(']');
-
-		if (endsWithOpenBrace || startsWithCloseBrace) {
-			analysis.codeBlockBoundary = {
-				isInCompleteBlock: false,
-				suggestion: endsWithOpenBrace
-					? 'Edit ends with an opening bracket - ensure the closing bracket is included in a subsequent edit or already exists in the file'
-					: 'Edit starts with a closing bracket - ensure the opening bracket exists before this edit',
-			};
-		}
+		// Note: Boundary checking removed - AI should be free to edit partial code blocks
+		// The bracket balance check above is sufficient for detecting real issues
 
 		return analysis;
 	}
@@ -769,7 +755,7 @@ export class FilesystemMCPService {
 			const lines = content.split('\n');
 
 			// Normalize line endings
-			const normalizedSearch = searchContent
+			let normalizedSearch = searchContent
 				.replace(/\r\n/g, '\n')
 				.replace(/\r/g, '\n');
 			const normalizedContent = content
@@ -777,7 +763,7 @@ export class FilesystemMCPService {
 				.replace(/\r/g, '\n');
 
 			// Split into lines for matching
-			const searchLines = normalizedSearch.split('\n');
+			let searchLines = normalizedSearch.split('\n');
 			const contentLines = normalizedContent.split('\n');
 
 			// Find all matches using smart fuzzy matching (auto-handles whitespace)
@@ -786,7 +772,7 @@ export class FilesystemMCPService {
 				endLine: number;
 				similarity: number;
 			}> = [];
-			const threshold = 0.75; // Lower threshold for better tolerance
+			const threshold = 0.6; // Lowered to 60% to allow smaller partial edits (was 0.75)
 
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
 				const candidateLines = contentLines.slice(i, i + searchLines.length);
@@ -809,63 +795,126 @@ export class FilesystemMCPService {
 			// Sort by similarity descending (best match first)
 			matches.sort((a, b) => b.similarity - a.similarity);
 
-			// Handle no matches with enhanced error message
+			// Handle no matches: Try escape correction before giving up
 			if (matches.length === 0) {
-				// Find closest matches for suggestions
-				const closestMatches = this.findClosestMatches(
+				// Step 1: Try unescape correction (lightweight, no LLM)
+				const unescapeFix = tryUnescapeFix(
+					normalizedContent,
 					normalizedSearch,
-					normalizedContent.split('\n'),
-					3,
+					1,
 				);
-
-				let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
-				errorMessage += `🔍 Using smart fuzzy matching (threshold: 75%)\n\n`;
-
-				if (closestMatches.length > 0) {
-					errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
-					closestMatches.forEach((candidate, idx) => {
-						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
-							candidate.endLine
-						} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
-						errorMessage += `${candidate.preview}\n\n`;
-					});
-
-					// Show diff with the closest match
-					const bestMatch = closestMatches[0];
-					if (bestMatch) {
-						const bestMatchLines = lines.slice(
-							bestMatch.startLine - 1,
-							bestMatch.endLine,
+				if (unescapeFix) {
+					// Unescape succeeded! Re-run the matching with corrected content
+					const correctedSearchLines = unescapeFix.correctedString.split('\n');
+					for (
+						let i = 0;
+						i <= contentLines.length - correctedSearchLines.length;
+						i++
+					) {
+						const candidateLines = contentLines.slice(
+							i,
+							i + correctedSearchLines.length,
 						);
-						const bestMatchContent = bestMatchLines.join('\n');
-						const diffMsg = this.generateDiffMessage(
-							normalizedSearch,
-							bestMatchContent,
-							5,
+						const candidateContent = candidateLines.join('\n');
+						const similarity = this.calculateSimilarity(
+							unescapeFix.correctedString,
+							candidateContent,
 						);
-						if (diffMsg) {
-							errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
+
+						if (similarity >= threshold) {
+							matches.push({
+								startLine: i + 1,
+								endLine: i + correctedSearchLines.length,
+								similarity,
+							});
 						}
 					}
 
-					errorMessage += `💡 Suggestions:\n`;
-					errorMessage += `  • Make sure you copied content from filesystem_read (without "123→")\n`;
-					errorMessage += `  • Whitespace differences are automatically handled\n`;
-					errorMessage += `  • Try copying a larger or smaller code block\n`;
-				} else {
-					errorMessage += `⚠️  No similar content found in the file.\n\n`;
-					errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
-					const normalizeForDisplay = (line: string) =>
-						line.replace(/\s+/g, ' ').trim();
-					searchLines.slice(0, 5).forEach((line, idx) => {
-						errorMessage += `${idx + 1}. ${JSON.stringify(
-							normalizeForDisplay(line),
-						)}\n`;
-					});
-					errorMessage += `\n💡 Copy exact content from filesystem_read (without line numbers)\n`;
+					matches.sort((a, b) => b.similarity - a.similarity);
+
+					// If unescape fix worked, also fix replaceContent if needed
+					if (matches.length > 0) {
+						const trimResult = trimPairIfPossible(
+							unescapeFix.correctedString,
+							replaceContent,
+							normalizedContent,
+							1,
+						);
+						// Update searchContent and replaceContent for the edit
+						normalizedSearch = trimResult.target;
+						replaceContent = trimResult.paired;
+						// Also update searchLines for later use
+						searchLines.splice(
+							0,
+							searchLines.length,
+							...normalizedSearch.split('\n'),
+						);
+					}
 				}
 
-				throw new Error(errorMessage);
+				// If still no matches after unescape, provide detailed error
+				if (matches.length === 0) {
+					// Find closest matches for suggestions
+					const closestMatches = this.findClosestMatches(
+						normalizedSearch,
+						normalizedContent.split('\n'),
+						3,
+					);
+
+					let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
+					errorMessage += `🔍 Using smart fuzzy matching (threshold: 60%)\n`;
+					if (isOverEscaped(searchContent)) {
+						errorMessage += `⚠️  Detected over-escaped content, automatic fix attempted but failed\n`;
+					}
+
+					errorMessage += `\n`;
+
+					if (closestMatches.length > 0) {
+						errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
+						closestMatches.forEach((candidate, idx) => {
+							errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
+								candidate.endLine
+							} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
+							errorMessage += `${candidate.preview}\n\n`;
+						});
+
+						// Show diff with the closest match
+						const bestMatch = closestMatches[0];
+						if (bestMatch) {
+							const bestMatchLines = lines.slice(
+								bestMatch.startLine - 1,
+								bestMatch.endLine,
+							);
+							const bestMatchContent = bestMatchLines.join('\n');
+							const diffMsg = this.generateDiffMessage(
+								normalizedSearch,
+								bestMatchContent,
+								5,
+							);
+							if (diffMsg) {
+								errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
+							}
+						}
+						errorMessage += `💡 Suggestions:\n`;
+						errorMessage += `  • Make sure you copied content from filesystem_read (without "123→")\n`;
+						errorMessage += `  • Whitespace differences are automatically handled\n`;
+						errorMessage += `  • Try copying a larger or smaller code block\n`;
+						errorMessage += `  • If multiple filesystem_edit_search attempts fail, use terminal_execute to edit via command line (e.g. sed, printf)\n`;
+
+						errorMessage += `⚠️  No similar content found in the file.\n\n`;
+						errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
+						const normalizeForDisplay = (line: string) =>
+							line.replace(/\s+/g, ' ').trim();
+						searchLines.slice(0, 5).forEach((line, idx) => {
+							errorMessage += `${idx + 1}. ${JSON.stringify(
+								normalizeForDisplay(line),
+							)}\n`;
+						});
+						errorMessage += `\n💡 Copy exact content from filesystem_read (without line numbers)\n`;
+					}
+
+					throw new Error(errorMessage);
+				}
 			}
 
 			// Handle occurrence selection
@@ -993,13 +1042,17 @@ export class FilesystemMCPService {
 				editedContentLines,
 			);
 
-			// Get diagnostics from VS Code
+			// Get diagnostics from VS Code (non-blocking, fire-and-forget)
 			let diagnostics: Diagnostic[] = [];
 			try {
-				await new Promise(resolve => setTimeout(resolve, 500));
-				diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
+				// Request diagnostics without blocking (with timeout protection)
+				const diagnosticsPromise = Promise.race([
+					vscodeConnection.requestDiagnostics(fullPath),
+					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)), // 1s max wait
+				]);
+				diagnostics = await diagnosticsPromise;
 			} catch (error) {
-				// Ignore diagnostics errors
+				// Ignore diagnostics errors - this is optional functionality
 			}
 
 			// Build result
@@ -1120,14 +1173,7 @@ export class FilesystemMCPService {
 				);
 			}
 
-			if (
-				structureAnalysis.codeBlockBoundary &&
-				structureAnalysis.codeBlockBoundary.suggestion
-			) {
-				structureWarnings.push(
-					`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`,
-				);
-			}
+			// Note: Boundary warnings removed - partial edits are common and expected
 
 			if (structureWarnings.length > 0) {
 				result.message += `\n\n🔍 Structure Analysis:\n`;
@@ -1327,14 +1373,17 @@ export class FilesystemMCPService {
 				editedContentLines,
 			);
 
-			// Try to get diagnostics from VS Code after editing
+			// Try to get diagnostics from VS Code after editing (non-blocking)
 			let diagnostics: Diagnostic[] = [];
 			try {
-				// Wait a bit for VS Code to process the file change
-				await new Promise(resolve => setTimeout(resolve, 500));
-				diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
+				// Request diagnostics without blocking (with timeout protection)
+				const diagnosticsPromise = Promise.race([
+					vscodeConnection.requestDiagnostics(fullPath),
+					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)), // 1s max wait
+				]);
+				diagnostics = await diagnosticsPromise;
 			} catch (error) {
-				// Ignore diagnostics errors, they are optional
+				// Ignore diagnostics errors - they are optional
 			}
 
 			const result: {
@@ -1467,15 +1516,7 @@ export class FilesystemMCPService {
 				);
 			}
 
-			// Add code block boundary warnings
-			if (
-				structureAnalysis.codeBlockBoundary &&
-				structureAnalysis.codeBlockBoundary.suggestion
-			) {
-				structureWarnings.push(
-					`Boundary: ${structureAnalysis.codeBlockBoundary.suggestion}`,
-				);
-			}
+			// Note: Boundary warnings removed - partial edits are common and expected
 
 			// Format structure warnings
 			if (structureWarnings.length > 0) {
@@ -1532,29 +1573,6 @@ export class FilesystemMCPService {
 // Export a default instance
 export const filesystemService = new FilesystemMCPService();
 
-/**
- * MCP Tool definitions for integration
- *
- * 🎯 **RECOMMENDED WORKFLOW FOR AI AGENTS**:
- *
- * 1️⃣ **SEARCH FIRST** (DON'T skip this!):
- *    - Use ace_text_search() to find code patterns/strings
- *    - Use ace_search_symbols() to find functions/classes by name
- *    - Use ace_file_outline() to understand file structure
- *
- * 2️⃣ **READ STRATEGICALLY** (Only after search):
- *    - Use filesystem_read() WITHOUT line numbers to read entire file
- *    - OR use filesystem_read(filePath, startLine, endLine) to read specific range
- *    - ⚠️ AVOID reading files line-by-line from top - wastes tokens!
- *
- * 3️⃣ **EDIT SAFELY**:
- *    - PREFER filesystem_edit_search() for modifying existing code (no line counting!)
- *    - Use filesystem_edit() only for adding new code or when search-replace doesn't fit
- *
- * 📊 **TOKEN EFFICIENCY**:
- *    - ❌ BAD: Read file top-to-bottom, repeat reading, blind scanning
- *    - ✅ GOOD: Search → Targeted read → Edit with context
- */
 export const mcpTools = [
 	{
 		name: 'filesystem_read',

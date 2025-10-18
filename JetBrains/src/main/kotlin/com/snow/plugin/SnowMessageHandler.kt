@@ -83,9 +83,50 @@ class SnowMessageHandler(private val project: Project) {
         val psiFile = PsiManager.getInstance(project).findFile(file) ?: return emptyList()
         val document = PsiDocumentManager.getInstance(project).getDocument(psiFile) ?: return emptyList()
 
-        // Note: Getting diagnostics in IntelliJ requires access to the inspection system
-        // This is a simplified version. Full implementation would use DaemonCodeAnalyzer
-        return emptyList() // Placeholder - would need inspection integration
+        return try {
+            // Get diagnostics from DaemonCodeAnalyzer
+            val daemonCodeAnalyzer = com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.getInstance(project)
+            val highlightInfos = mutableListOf<Map<String, Any?>>()
+
+            // Use HighlightingSessionImpl to get highlighting information
+            ApplicationManager.getApplication().runReadAction {
+                try {
+                    // Get all highlight infos for the document
+                    val infos = com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx.getInstanceEx(project)
+                        .getFileLevelHighlights(project, psiFile)
+
+                    infos.forEach { info ->
+                        val severity = info.severity
+                        val startOffset = info.startOffset
+                        val line = document.getLineNumber(startOffset)
+                        val lineStartOffset = document.getLineStartOffset(line)
+                        val character = startOffset - lineStartOffset
+
+                        highlightInfos.add(mapOf(
+                            "message" to (info.description ?: "Unknown issue"),
+                            "severity" to when {
+                                severity == HighlightSeverity.ERROR -> "error"
+                                severity == HighlightSeverity.WARNING -> "warning"
+                                severity == HighlightSeverity.WEAK_WARNING -> "info"
+                                severity == HighlightSeverity.INFORMATION -> "info"
+                                else -> "hint"
+                            },
+                            "line" to line,
+                            "character" to character,
+                            "source" to (info.toolTip ?: "IntelliJ"),
+                            "code" to (info.inspectionToolId ?: "")
+                        ))
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Failed to extract diagnostics from highlighting info", e)
+                }
+            }
+
+            highlightInfos
+        } catch (e: Exception) {
+            logger.warn("Failed to get diagnostics", e)
+            emptyList()
+        }
     }
 
     /**

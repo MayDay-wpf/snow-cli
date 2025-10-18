@@ -18,10 +18,15 @@ import {useState, useEffect} from 'react';
  *
  * Also provides a function to check if input contains focus events
  * so they can be filtered from normal input processing.
+ *
+ * Auto-focus recovery: If user input is detected while in unfocused state,
+ * automatically restore focus state to ensure cursor visibility during
+ * operations like Shift+drag file drop where focus events may be delayed.
  */
 export function useTerminalFocus(): {
 	hasFocus: boolean;
 	isFocusEvent: (input: string) => boolean;
+	ensureFocus: () => void;
 } {
 	const [hasFocus, setHasFocus] = useState(true); // Default to focused
 
@@ -33,11 +38,26 @@ export function useTerminalFocus(): {
 			// Focus gained: ESC[I
 			if (str === '\x1b[I') {
 				setHasFocus(true);
+				return;
 			}
 
 			// Focus lost: ESC[O
 			if (str === '\x1b[O') {
 				setHasFocus(false);
+				return;
+			}
+
+			// Auto-recovery: If we receive any input that's NOT a focus event
+			// while in unfocused state, treat it as an implicit focus gain.
+			// This handles cases where focus events are delayed (e.g., Shift+drag operations)
+			// Filter out escape sequences and other non-printable characters
+			const isPrintableInput =
+				str.length > 0 &&
+				!str.startsWith('\x1b') && // Not an escape sequence
+				!/^[\x00-\x1f\x7f]+$/.test(str); // Not only control characters
+
+			if (!hasFocus && isPrintableInput) {
+				setHasFocus(true);
 			}
 		};
 
@@ -58,12 +78,17 @@ export function useTerminalFocus(): {
 			process.stdout.write('\x1b[?1004l');
 			process.stdin.off('data', handleData);
 		};
-	}, []);
+	}, [hasFocus]); // Add hasFocus to dependencies to access current state
 
 	// Helper function to check if input is a focus event
 	const isFocusEvent = (input: string): boolean => {
 		return input === '\x1b[I' || input === '\x1b[O';
 	};
 
-	return {hasFocus, isFocusEvent};
+	// Manual focus restoration function (can be called externally if needed)
+	const ensureFocus = () => {
+		setHasFocus(true);
+	};
+
+	return {hasFocus, isFocusEvent, ensureFocus};
 }

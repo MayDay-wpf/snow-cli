@@ -266,17 +266,23 @@ class VSCodeConnectionManager {
 			}
 
 			const requestId = Math.random().toString(36).substring(7);
+			let isResolved = false;
+
 			const timeout = setTimeout(() => {
-				cleanup();
-				resolve([]); // Timeout, return empty array
-			}, 5000); // 5 second timeout
+				if (!isResolved) {
+					cleanup();
+					resolve([]); // Timeout, return empty array
+				}
+			}, 2000); // Reduce timeout from 5s to 2s to avoid long blocking
 
 			const handler = (message: any) => {
 				try {
 					const data = JSON.parse(message.toString());
 					if (data.type === 'diagnostics' && data.requestId === requestId) {
-						cleanup();
-						resolve(data.diagnostics || []);
+						if (!isResolved) {
+							cleanup();
+							resolve(data.diagnostics || []);
+						}
 					}
 				} catch (error) {
 					// Ignore invalid JSON
@@ -284,18 +290,28 @@ class VSCodeConnectionManager {
 			};
 
 			const cleanup = () => {
+				isResolved = true;
 				clearTimeout(timeout);
-				this.client?.removeListener('message', handler);
+				if (this.client) {
+					this.client.off('message', handler);
+				}
 			};
 
 			this.client.on('message', handler);
-			this.client.send(
-				JSON.stringify({
-					type: 'getDiagnostics',
-					requestId,
-					filePath,
-				}),
-			);
+
+			// Add error handling for send operation
+			try {
+				this.client.send(
+					JSON.stringify({
+						type: 'getDiagnostics',
+						requestId,
+						filePath,
+					}),
+				);
+			} catch (error) {
+				cleanup();
+				resolve([]); // If send fails, return empty array
+			}
 		});
 	}
 

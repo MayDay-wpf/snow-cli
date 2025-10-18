@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { execSync } from 'child_process';
 import { TextBuffer } from '../utils/textBuffer.js';
+import { logger } from '../utils/logger.js';
 
 export function useClipboard(
 	buffer: TextBuffer,
@@ -85,11 +86,7 @@ end try'`;
 						}
 					}
 				} catch (imgError) {
-					// No image in clipboard or error, fall through to text
-					console.error(
-						'Failed to read image from macOS clipboard:',
-						imgError,
-					);
+					logger.error('Failed to read image from macOS clipboard:', imgError);
 				}
 			}
 
@@ -122,10 +119,10 @@ end try'`;
 					triggerUpdate();
 				}
 			} catch (textError) {
-				console.error('Failed to read text from clipboard:', textError);
+				logger.error('Failed to read text from clipboard:', textError);
 			}
 		} catch (error) {
-			console.error('Failed to read from clipboard:', error);
+			logger.error('Failed to read from clipboard:', error);
 		}
 	}, [buffer, updateCommandPanelState, updateFilePickerState, triggerUpdate]);
 

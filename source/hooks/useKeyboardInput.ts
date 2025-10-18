@@ -50,6 +50,8 @@ type KeyboardInputOptions = {
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
 	) => void;
+	// Focus management
+	ensureFocus: () => void;
 };
 
 export function useKeyboardInput(options: KeyboardInputOptions) {
@@ -86,6 +88,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		handleHistorySelect,
 		pasteFromClipboard,
 		onSubmit,
+		ensureFocus,
 	} = options;
 
 	// Track paste detection
@@ -115,12 +118,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Handle input using useInput hook
 	useInput((input, key) => {
 		if (disabled) return;
-
 		// Filter out focus events more robustly
 		// Focus events: ESC[I (focus in) or ESC[O (focus out)
 		// Some terminals may send these with or without ESC, and they might appear
 		// anywhere in the input string (especially during drag-and-drop with Shift held)
 		// We need to filter them out but NOT remove legitimate user input
+		const focusEventPattern = /(\s|^)\[(?:I|O)(?=(?:\s|$|["'~\\\/]|[A-Za-z]:))/;
+
 		if (
 			// Complete escape sequences
 			input === '\x1b[I' ||
@@ -128,9 +132,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// Standalone sequences (exact match only)
 			input === '[I' ||
 			input === '[O' ||
-			// Filter if input ONLY contains focus events and whitespace
-			// This handles cases like " [I" or "[I " from drag-and-drop with Shift
-			/^[\s\x1b\[IO]+$/.test(input) && (input.includes('[I') || input.includes('[O'))
+			// Filter if input ONLY contains focus events, whitespace, and optional ESC prefix
+			(/^[\s\x1b\[IO]+$/.test(input) && focusEventPattern.test(input))
 		) {
 			return;
 		}
@@ -403,6 +406,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
+			// Ensure focus is active when user is typing (handles delayed focus events)
+			// This is especially important for drag-and-drop operations where focus
+			// events may arrive out of order or be filtered by sanitizeInput
+			ensureFocus();
+
 			// Accumulate input for paste detection
 			inputBuffer.current += input;
 

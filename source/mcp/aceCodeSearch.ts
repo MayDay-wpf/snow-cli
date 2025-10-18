@@ -1,5 +1,8 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
+import {spawn} from 'child_process';
+import {EOL} from 'os';
+import {type FzfResultItem, AsyncFzf} from 'fzf';
 
 /**
  * ACE Code Search Types
@@ -143,9 +146,120 @@ export class ACECodeSearchService {
 	private indexCache: Map<string, CodeSymbol[]> = new Map();
 	private lastIndexTime: number = 0;
 	private readonly INDEX_CACHE_DURATION = 60000; // 1 minute
+	private fzfIndex: AsyncFzf<string[]> | undefined;
+	private allIndexedFiles: string[] = [];
+	private fileModTimes: Map<string, number> = new Map(); // Track file modification times
+	private customExcludes: string[] = []; // Custom exclusion patterns from config files
+	private excludesLoaded: boolean = false; // Track if exclusions have been loaded
+
+	// Default exclusion directories
+	private readonly DEFAULT_EXCLUDES = [
+		'node_modules',
+		'.git',
+		'dist',
+		'build',
+		'__pycache__',
+		'target',
+		'.next',
+		'.nuxt',
+		'coverage',
+		'out',
+		'.cache',
+		'vendor',
+	];
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = path.resolve(basePath);
+	}
+
+	/**
+	 * Load custom exclusion patterns from .gitignore and .snowignore
+	 */
+	private async loadExclusionPatterns(): Promise<void> {
+		if (this.excludesLoaded) return;
+
+		const patterns: string[] = [];
+
+		// Load .gitignore if exists
+		const gitignorePath = path.join(this.basePath, '.gitignore');
+		try {
+			const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
+			const lines = gitignoreContent.split('\n');
+			for (const line of lines) {
+				const trimmed = line.trim();
+				// Skip empty lines and comments
+				if (trimmed && !trimmed.startsWith('#')) {
+					// Remove leading slash and trailing slash
+					const pattern = trimmed.replace(/^\//, '').replace(/\/$/, '');
+					if (pattern) {
+						patterns.push(pattern);
+					}
+				}
+			}
+		} catch {
+			// .gitignore doesn't exist or cannot be read, skip
+		}
+
+		// Load .snowignore if exists
+		const snowignorePath = path.join(this.basePath, '.snowignore');
+		try {
+			const snowignoreContent = await fs.readFile(snowignorePath, 'utf-8');
+			const lines = snowignoreContent.split('\n');
+			for (const line of lines) {
+				const trimmed = line.trim();
+				// Skip empty lines and comments
+				if (trimmed && !trimmed.startsWith('#')) {
+					// Remove leading slash and trailing slash
+					const pattern = trimmed.replace(/^\//, '').replace(/\/$/, '');
+					if (pattern) {
+						patterns.push(pattern);
+					}
+				}
+			}
+		} catch {
+			// .snowignore doesn't exist or cannot be read, skip
+		}
+
+		this.customExcludes = patterns;
+		this.excludesLoaded = true;
+	}
+
+	/**
+	 * Check if a directory should be excluded based on exclusion patterns
+	 */
+	private shouldExcludeDirectory(dirName: string, fullPath: string): boolean {
+		// Check default excludes
+		if (this.DEFAULT_EXCLUDES.includes(dirName)) {
+			return true;
+		}
+
+		// Check hidden directories
+		if (dirName.startsWith('.')) {
+			return true;
+		}
+
+		// Check custom exclusion patterns
+		const relativePath = path.relative(this.basePath, fullPath);
+		for (const pattern of this.customExcludes) {
+			// Simple pattern matching: exact match or glob-style wildcards
+			if (pattern.includes('*')) {
+				// Convert simple glob to regex for matching
+				const regexPattern = pattern
+					.replace(/\./g, '\\.')
+					.replace(/\*/g, '.*');
+				const regex = new RegExp(`^${regexPattern}$`);
+				if (regex.test(relativePath) || regex.test(dirName)) {
+					return true;
+				}
+			} else {
+				// Exact match
+				if (relativePath === pattern || dirName === pattern || relativePath.startsWith(pattern + '/')) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -297,7 +411,93 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Build or refresh the code symbol index
+	 * Check if a directory is a Git repository
+	 */
+	private async isGitRepository(directory: string = this.basePath): Promise<boolean> {
+		try {
+			const gitDir = path.join(directory, '.git');
+			const stats = await fs.stat(gitDir);
+			return stats.isDirectory();
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Check if a command is available in the system PATH
+	 */
+	private isCommandAvailable(command: string): Promise<boolean> {
+		return new Promise((resolve) => {
+			try {
+				let child;
+				if (process.platform === 'win32') {
+					// Windows: where is an executable, no shell needed
+					child = spawn('where', [command], {
+						stdio: 'ignore',
+						windowsHide: true,
+					});
+				} else {
+					// Unix/Linux: Use 'which' command instead of 'command -v'
+					// 'which' is an external executable, not a shell builtin
+					child = spawn('which', [command], {
+						stdio: 'ignore',
+					});
+				}
+
+				child.on('close', (code) => resolve(code === 0));
+				child.on('error', () => resolve(false));
+			} catch {
+				resolve(false);
+			}
+		});
+	}
+
+	/**
+	 * Parse grep output (format: filePath:lineNumber:lineContent)
+	 */
+	private parseGrepOutput(
+		output: string,
+		basePath: string,
+	): Array<{filePath: string; line: number; column: number; content: string}> {
+		const results: Array<{filePath: string; line: number; column: number; content: string}> = [];
+		if (!output) return results;
+
+		const lines = output.split(EOL);
+
+		for (const line of lines) {
+			if (!line.trim()) continue;
+
+			// Find first and second colon indices
+			const firstColonIndex = line.indexOf(':');
+			if (firstColonIndex === -1) continue;
+
+			const secondColonIndex = line.indexOf(':', firstColonIndex + 1);
+			if (secondColonIndex === -1) continue;
+
+			// Extract parts
+			const filePathRaw = line.substring(0, firstColonIndex);
+			const lineNumberStr = line.substring(firstColonIndex + 1, secondColonIndex);
+			const lineContent = line.substring(secondColonIndex + 1);
+
+			const lineNumber = parseInt(lineNumberStr, 10);
+			if (isNaN(lineNumber)) continue;
+
+			const absoluteFilePath = path.resolve(basePath, filePathRaw);
+			const relativeFilePath = path.relative(basePath, absoluteFilePath);
+
+			results.push({
+				filePath: relativeFilePath || path.basename(absoluteFilePath),
+				line: lineNumber,
+				column: 1, // grep doesn't provide column info, default to 1
+				content: lineContent.trim(),
+			});
+		}
+
+		return results;
+	}
+
+	/**
+	 * Build or refresh the code symbol index with incremental updates
 	 */
 	private async buildIndex(forceRefresh: boolean = false): Promise<void> {
 		const now = Date.now();
@@ -307,7 +507,17 @@ export class ACECodeSearchService {
 			return;
 		}
 
-		this.indexCache.clear();
+		// Load exclusion patterns
+		await this.loadExclusionPatterns();
+
+		// For force refresh, clear everything
+		if (forceRefresh) {
+			this.indexCache.clear();
+			this.fileModTimes.clear();
+			this.allIndexedFiles = [];
+		}
+
+		const filesToProcess: string[] = [];
 
 		const searchInDirectory = async (dirPath: string): Promise<void> => {
 			try {
@@ -317,30 +527,32 @@ export class ACECodeSearchService {
 					const fullPath = path.join(dirPath, entry.name);
 
 					if (entry.isDirectory()) {
-						// Skip common ignored directories
-						if (
-							entry.name === 'node_modules' ||
-							entry.name === '.git' ||
-							entry.name === 'dist' ||
-							entry.name === 'build' ||
-							entry.name === '__pycache__' ||
-							entry.name === 'target' ||
-							entry.name.startsWith('.')
-						) {
+						// Use configurable exclusion check
+						if (this.shouldExcludeDirectory(entry.name, fullPath)) {
 							continue;
 						}
 						await searchInDirectory(fullPath);
 					} else if (entry.isFile()) {
 						const language = this.detectLanguage(fullPath);
 						if (language) {
+							// Check if file needs to be re-indexed
 							try {
-								const content = await fs.readFile(fullPath, 'utf-8');
-								const symbols = await this.parseFileSymbols(fullPath, content);
-								if (symbols.length > 0) {
-									this.indexCache.set(fullPath, symbols);
+								const stats = await fs.stat(fullPath);
+								const currentMtime = stats.mtimeMs;
+								const cachedMtime = this.fileModTimes.get(fullPath);
+
+								// Only process if file is new or modified
+								if (cachedMtime === undefined || currentMtime > cachedMtime) {
+									filesToProcess.push(fullPath);
+									this.fileModTimes.set(fullPath, currentMtime);
+								}
+
+								// Track all indexed files (even if not modified)
+								if (!this.allIndexedFiles.includes(fullPath)) {
+									this.allIndexedFiles.push(fullPath);
 								}
 							} catch (error) {
-								// Skip files that cannot be read
+								// If we can't stat the file, skip it
 							}
 						}
 					}
@@ -351,11 +563,74 @@ export class ACECodeSearchService {
 		};
 
 		await searchInDirectory(this.basePath);
+
+		// Process only modified or new files
+		for (const fullPath of filesToProcess) {
+			try {
+				const content = await fs.readFile(fullPath, 'utf-8');
+				const symbols = await this.parseFileSymbols(fullPath, content);
+				if (symbols.length > 0) {
+					this.indexCache.set(fullPath, symbols);
+				} else {
+					// Remove entry if no symbols found
+					this.indexCache.delete(fullPath);
+				}
+			} catch (error) {
+				// Remove from index if file cannot be read
+				this.indexCache.delete(fullPath);
+				this.fileModTimes.delete(fullPath);
+			}
+		}
+
+		// Clean up deleted files from cache
+		for (const cachedPath of Array.from(this.indexCache.keys())) {
+			try {
+				await fs.access(cachedPath);
+			} catch {
+				// File no longer exists, remove from cache
+				this.indexCache.delete(cachedPath);
+				this.fileModTimes.delete(cachedPath);
+				const fileIndex = this.allIndexedFiles.indexOf(cachedPath);
+				if (fileIndex !== -1) {
+					this.allIndexedFiles.splice(fileIndex, 1);
+				}
+			}
+		}
+
 		this.lastIndexTime = now;
+
+		// Rebuild fzf index only if files were processed
+		if (filesToProcess.length > 0 || forceRefresh) {
+			this.buildFzfIndex();
+		}
 	}
 
 	/**
-	 * Search for symbols by name with fuzzy matching
+	 * Build fzf index for fast fuzzy symbol name matching
+	 */
+	private buildFzfIndex(): void {
+		const symbolNames: string[] = [];
+
+		// Collect all unique symbol names
+		for (const fileSymbols of this.indexCache.values()) {
+			for (const symbol of fileSymbols) {
+				symbolNames.push(symbol.name);
+			}
+		}
+
+		// Remove duplicates and sort
+		const uniqueNames = Array.from(new Set(symbolNames));
+
+		// Build fzf index with adaptive algorithm selection
+		// Use v1 for >20k symbols, v2 for ≤20k symbols
+		const fuzzyAlgorithm = uniqueNames.length > 20000 ? 'v1' : 'v2';
+		this.fzfIndex = new AsyncFzf(uniqueNames, {
+			fuzzy: fuzzyAlgorithm,
+		});
+	}
+
+	/**
+	 * Search for symbols by name with fuzzy matching using fzf
 	 */
 	async searchSymbols(
 		query: string,
@@ -366,6 +641,78 @@ export class ACECodeSearchService {
 		const startTime = Date.now();
 		await this.buildIndex();
 
+		const symbols: CodeSymbol[] = [];
+
+		// Use fzf for fuzzy matching if available
+		if (this.fzfIndex) {
+			try {
+				// Get fuzzy matches from fzf
+				const fzfResults = await this.fzfIndex.find(query);
+
+				// Build a set of matched symbol names for quick lookup
+				const matchedNames = new Set(fzfResults.map((r: FzfResultItem<string>) => r.item));
+
+				// Collect matching symbols with filters
+				for (const fileSymbols of this.indexCache.values()) {
+					for (const symbol of fileSymbols) {
+						// Apply filters
+						if (symbolType && symbol.type !== symbolType) continue;
+						if (language && symbol.language !== language) continue;
+
+						// Check if symbol name is in fzf matches
+						if (matchedNames.has(symbol.name)) {
+							symbols.push({...symbol});
+						}
+
+						if (symbols.length >= maxResults) break;
+					}
+					if (symbols.length >= maxResults) break;
+				}
+
+				// Sort by fzf score (already sorted by relevance from fzf.find)
+				// Maintain the fzf order by using the original fzfResults order
+				const nameOrder = new Map(fzfResults.map((r: FzfResultItem<string>, i: number) => [r.item, i]));
+				symbols.sort((a, b) => {
+					const aOrder = nameOrder.get(a.name);
+					const bOrder = nameOrder.get(b.name);
+					// Handle undefined cases
+					if (aOrder === undefined && bOrder === undefined) return 0;
+					if (aOrder === undefined) return 1;
+					if (bOrder === undefined) return -1;
+					// Both are numbers (TypeScript needs explicit assertion)
+					return (aOrder as number) - (bOrder as number);
+				});
+			} catch (error) {
+				// Fall back to manual scoring if fzf fails
+				console.debug('fzf search failed, falling back to manual scoring');
+				return this.searchSymbolsManual(query, symbolType, language, maxResults, startTime);
+			}
+		} else {
+			// Fallback to manual scoring if fzf is not available
+			return this.searchSymbolsManual(query, symbolType, language, maxResults, startTime);
+		}
+
+		const searchTime = Date.now() - startTime;
+
+		return {
+			query,
+			symbols,
+			references: [], // References would be populated by findReferences
+			totalResults: symbols.length,
+			searchTime,
+		};
+	}
+
+	/**
+	 * Fallback symbol search using manual fuzzy matching
+	 */
+	private async searchSymbolsManual(
+		query: string,
+		symbolType?: CodeSymbol['type'],
+		language?: string,
+		maxResults: number = 100,
+		startTime: number = Date.now(),
+	): Promise<SemanticSearchResult> {
 		const symbols: CodeSymbol[] = [];
 		const queryLower = query.toLowerCase();
 
@@ -535,10 +882,136 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Fast text search using built-in Node.js (no external dependencies)
-	 * Searches for text patterns across files with glob filtering
+	 * Strategy 1: Use git grep for fast searching in Git repositories
 	 */
-	async textSearch(
+	private async gitGrepSearch(
+		pattern: string,
+		fileGlob?: string,
+		maxResults: number = 100,
+	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+		return new Promise((resolve, reject) => {
+			const args = ['grep', '--untracked', '-n', '-E', '--ignore-case', pattern];
+
+			if (fileGlob) {
+				args.push('--', fileGlob);
+			}
+
+			const child = spawn('git', args, {
+				cwd: this.basePath,
+				windowsHide: true,
+			});
+
+			const stdoutChunks: Buffer[] = [];
+			const stderrChunks: Buffer[] = [];
+
+			child.stdout.on('data', (chunk) => stdoutChunks.push(chunk));
+			child.stderr.on('data', (chunk) => stderrChunks.push(chunk));
+
+			child.on('error', (err) => {
+				reject(new Error(`Failed to start git grep: ${err.message}`));
+			});
+
+			child.on('close', (code) => {
+				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+				const stderrData = Buffer.concat(stderrChunks).toString('utf8');
+
+				if (code === 0) {
+					const results = this.parseGrepOutput(stdoutData, this.basePath);
+					resolve(results.slice(0, maxResults));
+				} else if (code === 1) {
+					// No matches found
+					resolve([]);
+				} else {
+					reject(new Error(`git grep exited with code ${code}: ${stderrData}`));
+				}
+			});
+		});
+	}
+
+	/**
+	 * Strategy 2: Use system grep (or ripgrep if available) for fast searching
+	 */
+	private async systemGrepSearch(
+		pattern: string,
+		fileGlob?: string,
+		maxResults: number = 100,
+	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+		// Prefer ripgrep (rg) over grep if available
+		const grepCommand = await this.isCommandAvailable('rg') ? 'rg' : 'grep';
+		const isRipgrep = grepCommand === 'rg';
+
+		return new Promise((resolve, reject) => {
+			const args = isRipgrep
+				? ['-n', '-i', '--no-heading', pattern]
+				: ['-r', '-n', '-H', '-E', '-i'];
+
+			// Add exclusion patterns
+			const excludeDirs = [
+				'node_modules', '.git', 'dist', 'build',
+				'__pycache__', 'target', '.next', '.nuxt', 'coverage'
+			];
+
+			if (isRipgrep) {
+				// Ripgrep uses --glob for filtering
+				excludeDirs.forEach(dir => args.push('--glob', `!${dir}/`));
+				if (fileGlob) {
+					args.push('--glob', fileGlob);
+				}
+			} else {
+				// System grep uses --exclude-dir
+				excludeDirs.forEach(dir => args.push(`--exclude-dir=${dir}`));
+				if (fileGlob) {
+					args.push(`--include=${fileGlob}`);
+				}
+				args.push(pattern, '.');
+			}
+
+			const child = spawn(grepCommand, args, {
+				cwd: this.basePath,
+				windowsHide: true,
+			});
+
+			const stdoutChunks: Buffer[] = [];
+			const stderrChunks: Buffer[] = [];
+
+			child.stdout.on('data', (chunk) => stdoutChunks.push(chunk));
+			child.stderr.on('data', (chunk) => {
+				const stderrStr = chunk.toString();
+				// Suppress common harmless stderr messages
+				if (!stderrStr.includes('Permission denied') &&
+					!/grep:.*: Is a directory/i.test(stderrStr)) {
+					stderrChunks.push(chunk);
+				}
+			});
+
+			child.on('error', (err) => {
+				reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
+			});
+
+			child.on('close', (code) => {
+				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
+
+				if (code === 0) {
+					const results = this.parseGrepOutput(stdoutData, this.basePath);
+					resolve(results.slice(0, maxResults));
+				} else if (code === 1) {
+					// No matches found
+					resolve([]);
+				} else if (stderrData) {
+					reject(new Error(`${grepCommand} exited with code ${code}: ${stderrData}`));
+				} else {
+					// Exit code > 1 but no stderr, likely just suppressed errors
+					resolve([]);
+				}
+			});
+		});
+	}
+
+	/**
+	 * Strategy 3: Pure JavaScript fallback search
+	 */
+	private async jsTextSearch(
 		pattern: string,
 		fileGlob?: string,
 		isRegex: boolean = false,
@@ -651,6 +1124,102 @@ export class ACECodeSearchService {
 	}
 
 	/**
+	 * Fast text search with multi-layer strategy
+	 * Strategy 1: git grep (fastest, uses git index)
+	 * Strategy 2: system grep/ripgrep (fast, system-optimized)
+	 * Strategy 3: JavaScript fallback (slower, but always works)
+	 * Searches for text patterns across files with glob filtering
+	 */
+	async textSearch(
+		pattern: string,
+		fileGlob?: string,
+		isRegex: boolean = false,
+		maxResults: number = 100,
+	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+		// Strategy 1: Try git grep first
+		if (await this.isGitRepository()) {
+			try {
+				const gitAvailable = await this.isCommandAvailable('git');
+				if (gitAvailable) {
+					const results = await this.gitGrepSearch(pattern, fileGlob, maxResults);
+					if (results.length > 0 || !isRegex) {
+						// git grep doesn't support all regex features,
+						// fall back if pattern is complex regex and no results
+						return await this.sortResultsByRecency(results);
+					}
+				}
+			} catch (error) {
+				// Fall through to next strategy
+				//console.debug('git grep failed, falling back to system grep');
+			}
+		}
+
+		// Strategy 2: Try system grep/ripgrep
+		try {
+			const grepAvailable = await this.isCommandAvailable('rg') ||
+				await this.isCommandAvailable('grep');
+			if (grepAvailable) {
+				const results = await this.systemGrepSearch(pattern, fileGlob, maxResults);
+				return await this.sortResultsByRecency(results);
+			}
+		} catch (error) {
+			// Fall through to JavaScript fallback
+			//console.debug('system grep failed, falling back to JavaScript search');
+		}
+
+		// Strategy 3: JavaScript fallback (always works)
+		const results = await this.jsTextSearch(pattern, fileGlob, isRegex, maxResults);
+		return await this.sortResultsByRecency(results);
+	}
+
+	/**
+	 * Sort search results by file modification time (recent files first)
+	 * Files modified within last 24 hours are prioritized
+	 */
+	private async sortResultsByRecency(
+		results: Array<{filePath: string; line: number; column: number; content: string}>,
+	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+		if (results.length === 0) return results;
+
+		const now = Date.now();
+		const recentThreshold = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+		// Get file modification times
+		const fileModTimes = new Map<string, number>();
+		for (const result of results) {
+			if (fileModTimes.has(result.filePath)) continue;
+
+			try {
+				const fullPath = path.resolve(this.basePath, result.filePath);
+				const stats = await fs.stat(fullPath);
+				fileModTimes.set(result.filePath, stats.mtimeMs);
+			} catch {
+				// If we can't get stats, treat as old file
+				fileModTimes.set(result.filePath, 0);
+			}
+		}
+
+		// Sort results: recent files first, then by original order
+		return results.sort((a, b) => {
+			const aMtime = fileModTimes.get(a.filePath) || 0;
+			const bMtime = fileModTimes.get(b.filePath) || 0;
+
+			const aIsRecent = (now - aMtime) < recentThreshold;
+			const bIsRecent = (now - bMtime) < recentThreshold;
+
+			// Recent files come first
+			if (aIsRecent && !bIsRecent) return -1;
+			if (!aIsRecent && bIsRecent) return 1;
+
+			// Both recent or both old: sort by modification time (newer first)
+			if (aIsRecent && bIsRecent) return bMtime - aMtime;
+
+			// Both old: maintain original order (preserve relevance from grep)
+			return 0;
+		});
+	}
+
+	/**
 	 * Convert glob pattern to RegExp
 	 * Supports: *, **, ?, [abc], {js,ts}
 	 */
@@ -739,10 +1308,12 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Clear the symbol index cache
+	 * Clear the symbol index cache and force full re-index on next search
 	 */
 	clearCache(): void {
 		this.indexCache.clear();
+		this.fileModTimes.clear();
+		this.allIndexedFiles = [];
 		this.lastIndexTime = 0;
 	}
 

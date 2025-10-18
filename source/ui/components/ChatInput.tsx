@@ -52,7 +52,7 @@ export default function ChatInput({
 	const prevTerminalWidthRef = useRef(terminalWidth);
 
 	// Use terminal focus hook to detect focus state
-	const {hasFocus} = useTerminalFocus();
+	const {hasFocus, ensureFocus} = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -149,6 +149,7 @@ export default function ChatInput({
 		handleHistorySelect,
 		pasteFromClipboard,
 		onSubmit,
+		ensureFocus,
 	});
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
@@ -203,13 +204,16 @@ export default function ChatInput({
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 
-			// 检查是否包含粘贴占位符或图片占位符并高亮显示
 			const hasPastePlaceholder =
 				displayText.includes('[Paste ') &&
 				displayText.includes(' characters #');
-			const hasImagePlaceholder = displayText.includes('[image #');
 
-			if (hasPastePlaceholder || hasImagePlaceholder) {
+			const hasImagePlaceholder = displayText.includes('[image #');
+			const focusTokenPattern = /(\x1b)?\[[IO]/g;
+			const cleanedText = displayText.replace(focusTokenPattern, '').trim();
+			const isFocusNoise = cleanedText.length === 0;
+
+			if (hasPastePlaceholder || hasImagePlaceholder || isFocusNoise) {
 				const atCursor = (() => {
 					const charInfo = buffer.getCharAtCursor();
 					return charInfo.char === '\n' ? ' ' : charInfo.char;
@@ -305,11 +309,7 @@ export default function ChatInput({
 	}, [buffer, disabled, placeholder, renderCursor]);
 
 	return (
-		<Box
-			flexDirection="column"
-			paddingX={1}
-			width={terminalWidth}
-		>
+		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
 			{showHistoryMenu && (
 				<Box
 					flexDirection="column"

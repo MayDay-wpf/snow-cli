@@ -7,6 +7,7 @@ import {mcpTools as filesystemTools} from '../mcp/filesystem.js';
 import {mcpTools as terminalTools} from '../mcp/bash.js';
 import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {mcpTools as websearchTools} from '../mcp/websearch.js';
+import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
 import {TodoService} from '../mcp/todo.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
@@ -229,6 +230,31 @@ async function refreshToolsCache(): Promise<void> {
 			type: 'function',
 			function: {
 				name: `websearch-${tool.name.replace('websearch_', '')}`,
+				description: tool.description,
+				parameters: tool.inputSchema,
+			},
+		});
+	}
+
+	// Add built-in IDE Diagnostics tools (always available)
+	const ideDiagnosticsServiceTools = ideDiagnosticsTools.map(tool => ({
+		name: tool.name.replace('ide_', ''),
+		description: tool.description,
+		inputSchema: tool.inputSchema,
+	}));
+
+	servicesInfo.push({
+		serviceName: 'ide',
+		tools: ideDiagnosticsServiceTools,
+		isBuiltIn: true,
+		connected: true,
+	});
+
+	for (const tool of ideDiagnosticsTools) {
+		allTools.push({
+			type: 'function',
+			function: {
+				name: `ide-${tool.name.replace('ide_', '')}`,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -636,6 +662,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('websearch-')) {
 		serviceName = 'websearch';
 		actualToolName = toolName.substring('websearch-'.length);
+	} else if (toolName.startsWith('ide-')) {
+		serviceName = 'ide';
+		actualToolName = toolName.substring('ide-'.length);
 	} else {
 		// Check configured MCP services
 		try {
@@ -792,6 +821,28 @@ export async function executeMCPTool(
 				return pageContent;
 			default:
 				throw new Error(`Unknown websearch tool: ${actualToolName}`);
+		}
+	} else if (serviceName === 'ide') {
+		// Handle built-in IDE Diagnostics tools (no connection needed)
+		const {ideDiagnosticsService} = await import('../mcp/ideDiagnostics.js');
+
+		switch (actualToolName) {
+			case 'get_diagnostics':
+				const diagnostics = await ideDiagnosticsService.getDiagnostics(
+					args.filePath,
+				);
+				// Format diagnostics for better readability
+				const formatted = ideDiagnosticsService.formatDiagnostics(
+					diagnostics,
+					args.filePath,
+				);
+				return {
+					diagnostics,
+					formatted,
+					summary: `Found ${diagnostics.length} diagnostic(s) in ${args.filePath}`,
+				};
+			default:
+				throw new Error(`Unknown IDE tool: ${actualToolName}`);
 		}
 	} else {
 		// Handle user-configured MCP service tools - connect only when needed
