@@ -225,6 +225,7 @@ export default function ConfigScreen({
 		if (value === '__DELETE__') {
 			if (activeProfile === 'default') {
 				setErrors(['Cannot delete the default profile']);
+				setIsEditing(false); // Exit editing mode to prevent Select component error
 				return;
 			}
 			setProfileMode('deleting');
@@ -284,6 +285,10 @@ export default function ConfigScreen({
 	const handleDeleteProfile = () => {
 		try {
 			deleteProfile(activeProfile);
+			// Important: Update activeProfile state BEFORE loading profiles
+			// because deleteProfile switches to 'default' if the active profile is deleted
+			const newActiveProfile = getActiveProfileName();
+			setActiveProfile(newActiveProfile);
 			loadProfilesAndConfig();
 			setProfileMode('normal');
 			setIsEditing(false);
