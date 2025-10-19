@@ -1,9 +1,6 @@
-import OpenAI from 'openai';
-import { GoogleGenAI } from '@google/genai';
-import Anthropic from '@anthropic-ai/sdk';
 import { getOpenAiConfig, getCustomHeaders, getCustomSystemPrompt } from './apiConfig.js';
 import { SYSTEM_PROMPT } from '../api/systemPrompt.js';
-import type { ChatMessage } from '../api/chat.js';
+import type { ChatMessage } from '../api/types.js';
 
 export interface CompressionResult {
 	summary: string;
@@ -20,6 +17,41 @@ export interface CompressionResult {
 const COMPRESSION_PROMPT = 'Please provide a concise summary of our conversation so far. Focus on: 1) The current task or goal we are working on, 2) Key decisions and approaches we have agreed upon, 3) Important context needed to continue, 4) Any pending or unfinished work. Keep it brief but ensure I can seamlessly continue assisting with the task.';
 
 /**
+ * Parse Server-Sent Events (SSE) stream
+ */
+async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed === 'data: [DONE]') {
+				return;
+			}
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					yield JSON.parse(data);
+				} catch (e) {
+					console.error('Failed to parse SSE data:', data);
+				}
+			}
+		}
+	}
+}
+
+/**
  * Compress context using OpenAI Chat Completions API
  */
 async function compressWithChatCompletions(
@@ -29,11 +61,6 @@ async function compressWithChatCompletions(
 	conversationMessages: ChatMessage[],
 	systemPrompt: string | null,
 ): Promise<CompressionResult> {
-	const client = new OpenAI({
-		apiKey,
-		baseURL: baseUrl,
-	});
-
 	const customHeaders = getCustomHeaders();
 
 	// Build messages with system prompt support
@@ -69,13 +96,27 @@ async function compressWithChatCompletions(
 		model: modelName,
 		messages,
 		stream: true,
-		stream_options: { include_usage: true } as any,
+		stream_options: { include_usage: true },
 	};
 
-	// Use streaming to avoid timeout
-	const stream = (await client.chat.completions.create(requestPayload, {
-		headers: customHeaders,
-	})) as any;
+	const response = await fetch(`${baseUrl}/chat/completions`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`,
+			...customHeaders
+		},
+		body: JSON.stringify(requestPayload)
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+	}
+
+	if (!response.body) {
+		throw new Error('No response body from OpenAI API');
+	}
 
 	let summary = '';
 	let usage = {
@@ -84,7 +125,7 @@ async function compressWithChatCompletions(
 		total_tokens: 0,
 	};
 
-	for await (const chunk of stream) {
+	for await (const chunk of parseSSEStream(response.body.getReader())) {
 		const delta = chunk.choices[0]?.delta;
 		if (delta?.content) {
 			summary += delta.content;
@@ -120,11 +161,6 @@ async function compressWithResponses(
 	conversationMessages: ChatMessage[],
 	systemPrompt: string | null,
 ): Promise<CompressionResult> {
-	const client = new OpenAI({
-		apiKey,
-		baseURL: baseUrl,
-	});
-
 	const customHeaders = getCustomHeaders();
 
 	// Build instructions
@@ -174,10 +210,24 @@ async function compressWithResponses(
 		stream: true,
 	};
 
-	// Use streaming to avoid timeout
-	const stream = await client.responses.create(requestPayload, {
-		headers: customHeaders,
+	const response = await fetch(`${baseUrl}/responses`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`,
+			...customHeaders
+		},
+		body: JSON.stringify(requestPayload)
 	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`);
+	}
+
+	if (!response.body) {
+		throw new Error('No response body from OpenAI Responses API');
+	}
 
 	let summary = '';
 	let usage = {
@@ -186,7 +236,7 @@ async function compressWithResponses(
 		total_tokens: 0,
 	};
 
-	for await (const chunk of stream as any) {
+	for await (const chunk of parseSSEStream(response.body.getReader())) {
 		const eventType = chunk.type;
 
 		// Handle text content delta
@@ -198,7 +248,7 @@ async function compressWithResponses(
 		}
 
 		// Handle usage info
-		if (eventType === 'response.done') {
+		if (eventType === 'response.completed') {
 			const response = chunk.response;
 			if (response?.usage) {
 				usage = {
@@ -230,28 +280,7 @@ async function compressWithGemini(
 	conversationMessages: ChatMessage[],
 	systemPrompt: string | null,
 ): Promise<CompressionResult> {
-	const clientConfig: any = {
-		apiKey,
-	};
-
 	const customHeaders = getCustomHeaders();
-
-	// Support custom baseUrl and headers for proxy servers
-	if (baseUrl && baseUrl !== 'https://api.openai.com/v1') {
-		clientConfig.httpOptions = {
-			baseUrl,
-			headers: {
-				'x-goog-api-key': apiKey,
-				...customHeaders,
-			},
-		};
-	} else if (Object.keys(customHeaders).length > 0) {
-		clientConfig.httpOptions = {
-			headers: customHeaders,
-		};
-	}
-
-	const client = new GoogleGenAI(clientConfig);
 
 	// Build system instruction
 	const systemInstruction = systemPrompt || SYSTEM_PROMPT;
@@ -285,14 +314,37 @@ async function compressWithGemini(
 		}],
 	});
 
-	const requestConfig = {
-		model: modelName,
-		systemInstruction,
+	const requestBody = {
 		contents,
+		systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
 	};
 
-	// Use streaming to avoid timeout
-	const stream = await client.models.generateContentStream(requestConfig);
+	// Extract model name
+	const effectiveBaseUrl = baseUrl && baseUrl !== 'https://api.openai.com/v1'
+		? baseUrl
+		: 'https://generativelanguage.googleapis.com/v1beta';
+
+	const model = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
+	const url = `${effectiveBaseUrl}/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`,
+			...customHeaders
+		},
+		body: JSON.stringify(requestBody)
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+	}
+
+	if (!response.body) {
+		throw new Error('No response body from Gemini API');
+	}
 
 	let summary = '';
 	let usage = {
@@ -301,18 +353,52 @@ async function compressWithGemini(
 		total_tokens: 0,
 	};
 
-	for await (const chunk of stream) {
-		if (chunk.text) {
-			summary += chunk.text;
-		}
+	// Parse SSE stream
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
 
-		// Collect usage info
-		if (chunk.usageMetadata) {
-			usage = {
-				prompt_tokens: chunk.usageMetadata.promptTokenCount || 0,
-				completion_tokens: chunk.usageMetadata.candidatesTokenCount || 0,
-				total_tokens: chunk.usageMetadata.totalTokenCount || 0,
-			};
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					const chunk = JSON.parse(data);
+
+					// Process candidates
+					if (chunk.candidates && chunk.candidates.length > 0) {
+						const candidate = chunk.candidates[0];
+						if (candidate.content && candidate.content.parts) {
+							for (const part of candidate.content.parts) {
+								if (part.text) {
+									summary += part.text;
+								}
+							}
+						}
+					}
+
+					// Collect usage info
+					if (chunk.usageMetadata) {
+						usage = {
+							prompt_tokens: chunk.usageMetadata.promptTokenCount || 0,
+							completion_tokens: chunk.usageMetadata.candidatesTokenCount || 0,
+							total_tokens: chunk.usageMetadata.totalTokenCount || 0,
+						};
+					}
+				} catch (e) {
+					console.error('Failed to parse Gemini SSE data:', data);
+				}
+			}
 		}
 	}
 
@@ -336,21 +422,7 @@ async function compressWithAnthropic(
 	conversationMessages: ChatMessage[],
 	systemPrompt: string | null,
 ): Promise<CompressionResult> {
-	const clientConfig: any = {
-		apiKey,
-	};
-
-	if (baseUrl && baseUrl !== 'https://api.openai.com/v1') {
-		clientConfig.baseURL = baseUrl;
-	}
-
 	const customHeaders = getCustomHeaders();
-	clientConfig.defaultHeaders = {
-		'Authorization': `Bearer ${apiKey}`,
-		...customHeaders,
-	};
-
-	const client = new Anthropic(clientConfig);
 
 	// Build messages array with conversation history
 	const messages: Array<{role: 'user' | 'assistant'; content: string}> = [];
@@ -385,10 +457,32 @@ async function compressWithAnthropic(
 		max_tokens: 4096,
 		system: systemParam,
 		messages,
+		stream: true
 	};
 
-	// Use streaming to avoid timeout
-	const stream = await client.messages.stream(requestPayload);
+	const effectiveBaseUrl = baseUrl && baseUrl !== 'https://api.openai.com/v1'
+		? baseUrl
+		: 'https://api.anthropic.com/v1';
+
+	const response = await fetch(`${effectiveBaseUrl}/messages`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'x-api-key': apiKey,
+			'authorization': `Bearer ${apiKey}`,
+			...customHeaders
+		},
+		body: JSON.stringify(requestPayload)
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
+	}
+
+	if (!response.body) {
+		throw new Error('No response body from Anthropic API');
+	}
 
 	let summary = '';
 	let usage = {
@@ -397,19 +491,50 @@ async function compressWithAnthropic(
 		total_tokens: 0,
 	};
 
-	for await (const event of stream) {
-		if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-			summary += event.delta.text;
-		}
+	// Parse Anthropic SSE stream
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
 
-		// Collect usage info from message_stop event
-		if (event.type === 'message_stop') {
-			const finalMessage = await stream.finalMessage();
-			usage = {
-				prompt_tokens: finalMessage.usage.input_tokens,
-				completion_tokens: finalMessage.usage.output_tokens,
-				total_tokens: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
-			};
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed.startsWith('event: ')) {
+				continue;
+			}
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					const event = JSON.parse(data);
+
+					if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+						summary += event.delta.text;
+					}
+
+					// Collect usage info from message_start event
+					if (event.type === 'message_start' && event.message?.usage) {
+						usage.prompt_tokens = event.message.usage.input_tokens || 0;
+					}
+
+					// Collect usage info from message_delta event
+					if (event.type === 'message_delta' && event.usage) {
+						usage.completion_tokens = event.usage.output_tokens || 0;
+						usage.total_tokens = usage.prompt_tokens + usage.completion_tokens;
+					}
+				} catch (e) {
+					console.error('Failed to parse Anthropic SSE data:', data);
+				}
+			}
 		}
 	}
 

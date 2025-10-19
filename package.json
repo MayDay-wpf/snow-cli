@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -39,8 +39,6 @@
 		"dist"
 	],
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.65.0",
-		"@google/genai": "^1.23.0",
 		"@inkjs/ui": "^2.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
 		"chalk-template": "^1.1.2",
@@ -57,7 +55,6 @@
 		"ink-text-input": "^6.0.0",
 		"ink-tree-select": "^2.3.1",
 		"meow": "^11.0.0",
-		"openai": "^6.1.0",
 		"puppeteer-core": "^24.25.0",
 		"react": "^18.2.0",
 		"string-width": "^7.2.0",

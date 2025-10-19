@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- fix some bugs
+            -- Remove all AI SDK dependencies
             ### Installation
             ```bash
             npm install -g snow-ai
@@ -64,7 +64,10 @@ jobs:
             ```bash
             snow
             ```
-            
+            ### Update
+            ```bash
+            snow --update
+            ```
             See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.
           draft: false
           prerelease: false

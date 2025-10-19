@@ -36,7 +36,7 @@ interface AnthropicModel {
  * Fetch models from OpenAI-compatible API
  */
 async function fetchOpenAIModels(baseUrl: string, apiKey: string, customHeaders: Record<string, string>): Promise<Model[]> {
-	const url = `${baseUrl.replace(/\/$/, '')}/models`;
+	const url = `${baseUrl}/models`;
 
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ async function fetchOpenAIModels(baseUrl: string, apiKey: string, customHeaders:
  */
 async function fetchGeminiModels(baseUrl: string, apiKey: string): Promise<Model[]> {
 	// Gemini uses API key as query parameter
-	const url = `${baseUrl.replace(/\/$/, '')}/models?key=${apiKey}`;
+	const url = `${baseUrl}/models?key=${apiKey}`;
 
 	const response = await fetch(url, {
 		method: 'GET',
@@ -94,11 +94,10 @@ async function fetchGeminiModels(baseUrl: string, apiKey: string): Promise<Model
  * Supports both Anthropic native format and OpenAI-compatible format for backward compatibility
  */
 async function fetchAnthropicModels(baseUrl: string, apiKey: string, customHeaders: Record<string, string>): Promise<Model[]> {
-	const url = `${baseUrl.replace(/\/$/, '')}/models`;
+	const url = `${baseUrl}/models`;
 
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		'anthropic-version': '2023-06-01',
 		...customHeaders,
 	};
 
@@ -164,21 +163,21 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 				if (!config.apiKey) {
 					throw new Error('API key is required for Gemini API');
 				}
-				models = await fetchGeminiModels(config.baseUrl.replace(/\/$/, '') + '/v1beta', config.apiKey);
+				models = await fetchGeminiModels(config.baseUrl.replace(/\/$/, ''), config.apiKey);
 				break;
 
 			case 'anthropic':
 				if (!config.apiKey) {
 					throw new Error('API key is required for Anthropic API');
 				}
-				models = await fetchAnthropicModels(config.baseUrl.replace(/\/$/, '') + '/v1', config.apiKey, customHeaders);
+				models = await fetchAnthropicModels(config.baseUrl.replace(/\/$/, ''), config.apiKey, customHeaders);
 				break;
 
 			case 'chat':
 			case 'responses':
 			default:
 				// OpenAI-compatible API
-				models = await fetchOpenAIModels(config.baseUrl, config.apiKey, customHeaders);
+				models = await fetchOpenAIModels(config.baseUrl.replace(/\/$/, ''), config.apiKey, customHeaders);
 				break;
 		}
 

@@ -1,24 +1,13 @@
-import { GoogleGenAI } from '@google/genai';
 import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage } from './chat.js';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
 
 export interface GeminiOptions {
 	model: string;
 	messages: ChatMessage[];
 	temperature?: number;
 	tools?: ChatCompletionTool[];
-}
-
-export interface UsageInfo {
-	prompt_tokens: number;
-	completion_tokens: number;
-	total_tokens: number;
-	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
-	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
-	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
 }
 
 export interface GeminiStreamChunk {
@@ -36,50 +25,36 @@ export interface GeminiStreamChunk {
 	usage?: UsageInfo;
 }
 
-let geminiClient: GoogleGenAI | null = null;
+let geminiConfig: {
+	apiKey: string;
+	baseUrl: string;
+	customHeaders: Record<string, string>;
+} | null = null;
 
-function getGeminiClient(): GoogleGenAI {
-	if (!geminiClient) {
+function getGeminiConfig() {
+	if (!geminiConfig) {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey) {
 			throw new Error('Gemini API configuration is incomplete. Please configure API key first.');
 		}
 
-		// Create client configuration
-		const clientConfig: any = {
-			apiKey: config.apiKey
-		};
-
-		// Get custom headers
 		const customHeaders = getCustomHeaders();
 
-		// Support custom baseUrl and headers for proxy servers
-		if (config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1') {
-			clientConfig.httpOptions = {
-				baseUrl: config.baseUrl,
-				headers: {
-					'x-goog-api-key': config.apiKey, // Gemini API requires this header
-					...customHeaders
-				}
-			};
-		} else if (Object.keys(customHeaders).length > 0) {
-			// If using default base URL but have custom headers
-			clientConfig.httpOptions = {
-				headers: {
-					...customHeaders
-				}
-			};
-		}
-
-		geminiClient = new GoogleGenAI(clientConfig);
+		geminiConfig = {
+			apiKey: config.apiKey,
+			baseUrl: config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+				? config.baseUrl
+				: 'https://generativelanguage.googleapis.com/v1beta',
+			customHeaders
+		};
 	}
 
-	return geminiClient;
+	return geminiConfig;
 }
 
 export function resetGeminiClient(): void {
-	geminiClient = null;
+	geminiConfig = null;
 }
 
 /**
@@ -275,126 +250,171 @@ export async function* createStreamingGeminiCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<GeminiStreamChunk, void, unknown> {
-	const client = getGeminiClient();
+	const config = getGeminiConfig();
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
 			const { systemInstruction, contents } = convertToGeminiMessages(options.messages);
 
-		// Build request config
-		const requestConfig: any = {
-			model: options.model,
-			contents,
-			config: {
-				systemInstruction,
-				temperature: options.temperature ?? 0.7,
-			}
-		};
-
-		// Add tools if provided
-		const geminiTools = convertToolsToGemini(options.tools);
-		if (geminiTools) {
-			requestConfig.config.tools = geminiTools;
-		}
-
-		// Stream the response
-		const stream = await client.models.generateContentStream(requestConfig);
-
-		let contentBuffer = '';
-		let toolCallsBuffer: Array<{
-			id: string;
-			type: 'function';
-			function: {
-				name: string;
-				arguments: string;
+			// Build request payload
+			const requestBody: any = {
+				contents,
+				systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+				generationConfig: {
+					temperature: options.temperature ?? 0.7,
+				}
 			};
-		}> = [];
-		let hasToolCalls = false;
-		let toolCallIndex = 0;
-		let totalTokens = { prompt: 0, completion: 0, total: 0 };
 
-		// Save original console.warn to suppress SDK warnings
-		const originalWarn = console.warn;
-		console.warn = () => {}; // Suppress "there are non-text parts" warnings
-
-		for await (const chunk of stream) {
-			if (abortSignal?.aborted) {
-				console.warn = originalWarn; // Restore console.warn
-				return;
+			// Add tools if provided
+			const geminiTools = convertToolsToGemini(options.tools);
+			if (geminiTools) {
+				requestBody.tools = geminiTools;
 			}
 
-			// Process text content
-			if (chunk.text) {
-				contentBuffer += chunk.text;
-				yield {
-					type: 'content',
-					content: chunk.text
+			// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
+			const modelName = options.model.startsWith('models/') ? options.model : `models/${options.model}`;
+
+			const url = `${config.baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
+
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'authorization': `Bearer ${config.apiKey}`,
+					...config.customHeaders
+				},
+				body: JSON.stringify(requestBody),
+				signal: abortSignal
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+			}
+
+			if (!response.body) {
+				throw new Error('No response body from Gemini API');
+			}
+
+			let contentBuffer = '';
+			let toolCallsBuffer: Array<{
+				id: string;
+				type: 'function';
+				function: {
+					name: string;
+					arguments: string;
 				};
-			}
+			}> = [];
+			let hasToolCalls = false;
+			let toolCallIndex = 0;
+			let totalTokens = { prompt: 0, completion: 0, total: 0 };
 
-			// Process function calls using the official API
-			if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-				hasToolCalls = true;
-				for (const fc of chunk.functionCalls) {
-					if (!fc.name) continue;
+			// Parse SSE stream
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
 
-					const toolCall = {
-						id: `call_${toolCallIndex++}`,
-						type: 'function' as const,
-						function: {
-							name: fc.name,
-							arguments: JSON.stringify(fc.args)
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				if (abortSignal?.aborted) {
+					return;
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					const trimmed = line.trim();
+					if (!trimmed || trimmed.startsWith(':')) continue;
+
+					if (trimmed.startsWith('data: ')) {
+						const data = trimmed.slice(6);
+						try {
+							const chunk = JSON.parse(data);
+
+							// Process candidates
+							if (chunk.candidates && chunk.candidates.length > 0) {
+								const candidate = chunk.candidates[0];
+								if (candidate.content && candidate.content.parts) {
+									for (const part of candidate.content.parts) {
+										// Process text content
+										if (part.text) {
+											contentBuffer += part.text;
+											yield {
+												type: 'content',
+												content: part.text
+											};
+										}
+
+										// Process function calls
+										if (part.functionCall) {
+											hasToolCalls = true;
+											const fc = part.functionCall;
+
+											const toolCall = {
+												id: `call_${toolCallIndex++}`,
+												type: 'function' as const,
+												function: {
+													name: fc.name,
+													arguments: JSON.stringify(fc.args || {})
+												}
+											};
+											toolCallsBuffer.push(toolCall);
+
+											// Yield delta for token counting
+											const deltaText = fc.name + JSON.stringify(fc.args || {});
+											yield {
+												type: 'tool_call_delta',
+												delta: deltaText
+											};
+										}
+									}
+								}
+							}
+
+							// Track usage info
+							if (chunk.usageMetadata) {
+								totalTokens = {
+									prompt: chunk.usageMetadata.promptTokenCount || 0,
+									completion: chunk.usageMetadata.candidatesTokenCount || 0,
+									total: chunk.usageMetadata.totalTokenCount || 0
+								};
+							}
+						} catch (e) {
+							console.error('Failed to parse Gemini SSE data:', data);
 						}
-					};
-					toolCallsBuffer.push(toolCall);
-
-					// Yield delta for token counting
-					const deltaText = fc.name + JSON.stringify(fc.args);
-					yield {
-						type: 'tool_call_delta',
-						delta: deltaText
-					};
+					}
 				}
 			}
 
-			// Track usage info
-			if (chunk.usageMetadata) {
-				totalTokens = {
-					prompt: chunk.usageMetadata.promptTokenCount || 0,
-					completion: chunk.usageMetadata.candidatesTokenCount || 0,
-					total: chunk.usageMetadata.totalTokenCount || 0
+			// Yield tool calls if any
+			if (hasToolCalls && toolCallsBuffer.length > 0) {
+				yield {
+					type: 'tool_calls',
+					tool_calls: toolCallsBuffer
 				};
 			}
-		}
 
-		// Restore console.warn
-		console.warn = originalWarn;
+			// Yield usage info
+			if (totalTokens.total > 0) {
+				yield {
+					type: 'usage',
+					usage: {
+						prompt_tokens: totalTokens.prompt,
+						completion_tokens: totalTokens.completion,
+						total_tokens: totalTokens.total
+					}
+				};
+			}
 
-		// Yield tool calls if any
-		if (hasToolCalls && toolCallsBuffer.length > 0) {
+			// Signal completion
 			yield {
-				type: 'tool_calls',
-				tool_calls: toolCallsBuffer
+				type: 'done'
 			};
-		}
-
-		// Yield usage info
-		if (totalTokens.total > 0) {
-			yield {
-				type: 'usage',
-				usage: {
-					prompt_tokens: totalTokens.prompt,
-					completion_tokens: totalTokens.completion,
-					total_tokens: totalTokens.total
-				}
-			};
-		}
-
-		// Signal completion
-		yield {
-			type: 'done'
-		};
 		},
 		{
 			abortSignal,

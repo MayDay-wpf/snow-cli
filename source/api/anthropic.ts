@@ -1,10 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomUUID } from 'crypto';
 import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage } from './chat.js';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -13,14 +11,6 @@ export interface AnthropicOptions {
 	max_tokens?: number;
 	tools?: ChatCompletionTool[];
 	sessionId?: string; // Session ID for user tracking and caching
-}
-
-export interface UsageInfo {
-	prompt_tokens: number;
-	completion_tokens: number;
-	total_tokens: number;
-	cache_creation_input_tokens?: number; // Tokens used to create cache (first time)
-	cache_read_input_tokens?: number; // Tokens read from cache (cache hit)
 }
 
 export interface AnthropicStreamChunk {
@@ -38,54 +28,50 @@ export interface AnthropicStreamChunk {
 	usage?: UsageInfo;
 }
 
-let anthropicClient: Anthropic | null = null;
+export interface AnthropicTool {
+	name: string;
+	description: string;
+	input_schema: any;
+	cache_control?: { type: 'ephemeral' };
+}
 
-function getAnthropicClient(): Anthropic {
-	if (!anthropicClient) {
+export interface AnthropicMessageParam {
+	role: 'user' | 'assistant';
+	content: string | Array<any>;
+}
+
+let anthropicConfig: {
+	apiKey: string;
+	baseUrl: string;
+	customHeaders: Record<string, string>;
+	anthropicBeta?: boolean;
+} | null = null;
+
+function getAnthropicConfig() {
+	if (!anthropicConfig) {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey) {
 			throw new Error('Anthropic API configuration is incomplete. Please configure API key first.');
 		}
 
-		const clientConfig: any = {
-			apiKey: config.apiKey,
-		};
-
-		if (config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1') {
-			clientConfig.baseURL = config.baseUrl;
-		}
-
 		const customHeaders = getCustomHeaders();
 
-		clientConfig.defaultHeaders = {
-			'Authorization': `Bearer ${config.apiKey}`,
-			//'anthropic-version': '2024-09-24',
-			...customHeaders
+		anthropicConfig = {
+			apiKey: config.apiKey,
+			baseUrl: config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+				? config.baseUrl
+				: 'https://api.anthropic.com/v1',
+			customHeaders,
+			anthropicBeta: config.anthropicBeta
 		};
-
-		// if (config.anthropicBeta) {
-		// 	clientConfig.defaultHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
-		// }
-
-		// Intercept fetch to add beta parameter to URL
-		const originalFetch = clientConfig.fetch || globalThis.fetch;
-		clientConfig.fetch = async (url: any, init: any) => {
-			let finalUrl = url;
-			if (config.anthropicBeta && typeof url === 'string' && !url.includes('?beta=')) {
-				finalUrl = url + (url.includes('?') ? '&beta=true' : '?beta=true');
-			}
-			return originalFetch(finalUrl, init);
-		};
-
-		anthropicClient = new Anthropic(clientConfig);
 	}
 
-	return anthropicClient;
+	return anthropicConfig;
 }
 
 export function resetAnthropicClient(): void {
-	anthropicClient = null;
+	anthropicConfig = null;
 }
 
 /**
@@ -106,7 +92,7 @@ function generateUserId(sessionId: string): string {
  * Convert OpenAI-style tools to Anthropic tool format
  * Adds cache_control to the last tool for prompt caching
  */
-function convertToolsToAnthropic(tools?: ChatCompletionTool[]): Anthropic.Tool[] | undefined {
+function convertToolsToAnthropic(tools?: ChatCompletionTool[]): AnthropicTool[] | undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
 	}
@@ -138,11 +124,11 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): Anthropic.Tool[]
  */
 function convertToAnthropicMessages(messages: ChatMessage[]): {
 	system?: any;
-	messages: Anthropic.MessageParam[]
+	messages: AnthropicMessageParam[]
 } {
 	const customSystemPrompt = getCustomSystemPrompt();
 	let systemContent: string | undefined;
-	const anthropicMessages: Anthropic.MessageParam[] = [];
+	const anthropicMessages: AnthropicMessageParam[] = [];
 
 	for (const msg of messages) {
 		if (msg.role === 'system') {
@@ -281,6 +267,46 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 }
 
 /**
+ * Parse Server-Sent Events (SSE) stream
+ */
+async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed === 'data: [DONE]') {
+				return;
+			}
+
+			if (trimmed.startsWith('event: ')) {
+				// Event type, will be followed by data
+				continue;
+			}
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					yield JSON.parse(data);
+				} catch (e) {
+					console.error('Failed to parse SSE data:', data);
+				}
+			}
+		}
+	}
+}
+
+/**
  * Create streaming chat completion using Anthropic API
  */
 export async function* createStreamingAnthropicCompletion(
@@ -288,15 +314,13 @@ export async function* createStreamingAnthropicCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<AnthropicStreamChunk, void, unknown> {
-	const client = getAnthropicClient();
-
 	yield* withRetryGenerator(
 		async function* () {
+			const config = getAnthropicConfig();
 			const { system, messages } = convertToAnthropicMessages(options.messages);
 
 		const sessionId = options.sessionId || randomUUID();
 		const userId = generateUserId(sessionId);
-		const customHeaders = getCustomHeaders();
 
 		const requestBody: any = {
 			model: options.model,
@@ -311,9 +335,39 @@ export async function* createStreamingAnthropicCompletion(
 			stream: true
 		};
 
-		const stream = await client.messages.create(requestBody, {
-			headers: customHeaders
-		}) as any;
+		// Prepare headers
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'x-api-key': config.apiKey,
+			'authorization' : `Bearer ${config.apiKey}`,
+			'anthropic-version': '2023-06-01',
+			...config.customHeaders
+		};
+
+		// Add beta parameter if configured
+		// if (config.anthropicBeta) {
+		// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+		// }
+
+		const url = config.anthropicBeta
+			? `${config.baseUrl}/messages?beta=true`
+			: `${config.baseUrl}/messages`;
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify(requestBody),
+			signal: abortSignal
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
+		}
+
+		if (!response.body) {
+			throw new Error('No response body from Anthropic API');
+		}
 
 		let contentBuffer = '';
 		let toolCallsBuffer: Map<string, {
@@ -328,7 +382,7 @@ export async function* createStreamingAnthropicCompletion(
 		let usageData: UsageInfo | undefined;
 		let blockIndexToId: Map<number, string> = new Map();
 
-		for await (const event of stream) {
+		for await (const event of parseSSEStream(response.body.getReader())) {
 			if (abortSignal?.aborted) {
 				return;
 			}

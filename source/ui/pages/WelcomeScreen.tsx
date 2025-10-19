@@ -124,7 +124,7 @@ export default function WelcomeScreen({
 						flexDirection="row"
 						paddingLeft={2}
 						paddingTop={1}
-						paddingBottom={1}
+						paddingBottom={0}
 						width={terminalWidth}
 					>
 						<Box flexDirection="column" justifyContent="center">

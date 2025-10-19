@@ -1,31 +1,9 @@
-import OpenAI from 'openai';
 import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { ChatMessage, ChatCompletionTool, ToolCall, UsageInfo, ImageContent } from './types.js';
 
-export interface ImageContent {
-	type: 'image';
-	data: string; // Base64 编码的图片数据
-	mimeType: string; // 图片 MIME 类型
-}
-
-export interface ChatMessage {
-	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string;
-	tool_call_id?: string;
-	tool_calls?: ToolCall[];
-	images?: ImageContent[]; // 图片内容
-}
-
-export interface ToolCall {
-	id: string;
-	type: 'function';
-	function: {
-		name: string;
-		arguments: string;
-	};
-}
+export type { ChatMessage, ChatCompletionTool, ToolCall, UsageInfo, ImageContent };
 
 export interface ChatCompletionOptions {
 	model: string;
@@ -59,6 +37,13 @@ export interface ChatCompletionChunk {
 		};
 		finish_reason?: string | null;
 	}>;
+}
+
+export interface ChatCompletionMessageParam {
+	role: 'system' | 'user' | 'assistant' | 'tool';
+	content: string | Array<{type: 'text' | 'image_url', text?: string, image_url?: {url: string}}>;
+	tool_call_id?: string;
+	tool_calls?: ToolCall[];
 }
 
 /**
@@ -159,42 +144,34 @@ function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: b
 	return result;
 }
 
-let openaiClient: OpenAI | null = null;
+let openaiConfig: {
+	apiKey: string;
+	baseUrl: string;
+	customHeaders: Record<string, string>;
+} | null = null;
 
-function getOpenAIClient(): OpenAI {
-	if (!openaiClient) {
+function getOpenAIConfig() {
+	if (!openaiConfig) {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey || !config.baseUrl) {
 			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
 		}
 
-		// Get custom headers
 		const customHeaders = getCustomHeaders();
 
-		openaiClient = new OpenAI({
+		openaiConfig = {
 			apiKey: config.apiKey,
-			baseURL: config.baseUrl,
-			defaultHeaders: {
-				...customHeaders
-			}
-		});
+			baseUrl: config.baseUrl,
+			customHeaders
+		};
 	}
 
-	return openaiClient;
+	return openaiConfig;
 }
 
 export function resetOpenAIClient(): void {
-	openaiClient = null;
-}
-
-export interface UsageInfo {
-	prompt_tokens: number;
-	completion_tokens: number;
-	total_tokens: number;
-	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
-	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
-	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
+	openaiConfig = null;
 }
 
 export interface StreamChunk {
@@ -213,6 +190,41 @@ export interface StreamChunk {
 }
 
 /**
+ * Parse Server-Sent Events (SSE) stream
+ */
+async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed === 'data: [DONE]') {
+				return;
+			}
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					yield JSON.parse(data);
+				} catch (e) {
+					console.error('Failed to parse SSE data:', data);
+				}
+			}
+		}
+	}
+}
+
+/**
  * Simple streaming chat completion - only handles OpenAI interaction
  * Tool execution should be handled by the caller
  */
@@ -221,23 +233,41 @@ export async function* createStreamingChatCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<StreamChunk, void, unknown> {
-	const client = getOpenAIClient();
+	const config = getOpenAIConfig();
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
-			const stream = (await client.chat.completions.create({
+			const requestBody = {
 				model: options.model,
 				messages: convertToOpenAIMessages(options.messages),
 				stream: true,
-				stream_options: { include_usage: true } as any, // Request usage data in stream
+				stream_options: { include_usage: true },
 				temperature: options.temperature || 0.7,
 				max_tokens: options.max_tokens,
 				tools: options.tools,
 				tool_choice: options.tool_choice,
-			} as any, {
-				signal: abortSignal,
-			}) as unknown) as AsyncIterable<any>;
+			};
+
+			const response = await fetch(`${config.baseUrl}/chat/completions`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${config.apiKey}`,
+					...config.customHeaders
+				},
+				body: JSON.stringify(requestBody),
+				signal: abortSignal
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+			}
+
+			if (!response.body) {
+				throw new Error('No response body from OpenAI API');
+			}
 
 		let contentBuffer = '';
 		let toolCallsBuffer: { [index: number]: any } = {};
@@ -245,7 +275,7 @@ export async function* createStreamingChatCompletion(
 		let usageData: UsageInfo | undefined;
 		let reasoningStarted = false; // Track if reasoning has started
 
-		for await (const chunk of stream) {
+		for await (const chunk of parseSSEStream(response.body.getReader())) {
 			if (abortSignal?.aborted) {
 				return;
 			}

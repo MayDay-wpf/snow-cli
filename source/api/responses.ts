@@ -1,8 +1,7 @@
-import OpenAI from 'openai';
 import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage, ToolCall } from './chat.js';
+import type { ChatMessage, ToolCall, ChatCompletionTool, UsageInfo } from './types.js';
 
 export interface ResponseOptions {
 	model: string;
@@ -10,14 +9,7 @@ export interface ResponseOptions {
 	stream?: boolean;
 	temperature?: number;
 	max_tokens?: number;
-	tools?: Array<{
-		type: 'function';
-		function: {
-			name: string;
-			description?: string;
-			parameters?: Record<string, any>;
-		};
-	}>;
+	tools?: ChatCompletionTool[];
 	tool_choice?: 'auto' | 'none' | 'required';
 	reasoning?: {
 		summary?: 'auto' | 'none';
@@ -73,14 +65,7 @@ function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> |
  * Chat Completions: {type: 'function', function: {name, description, parameters}}
  * Responses API: {type: 'function', name, description, parameters, strict}
  */
-function convertToolsForResponses(tools?: Array<{
-	type: 'function';
-	function: {
-		name: string;
-		description?: string;
-		parameters?: Record<string, any>;
-	};
-}>): Array<{
+function convertToolsForResponses(tools?: ChatCompletionTool[]): Array<{
 	type: 'function';
 	name: string;
 	description?: string;
@@ -100,15 +85,6 @@ function convertToolsForResponses(tools?: Array<{
 	}));
 }
 
-export interface UsageInfo {
-	prompt_tokens: number;
-	completion_tokens: number;
-	total_tokens: number;
-	cache_creation_input_tokens?: number; // Tokens used to create cache (Anthropic)
-	cache_read_input_tokens?: number; // Tokens read from cache (Anthropic)
-	cached_tokens?: number; // Cached tokens from prompt_tokens_details (OpenAI)
-}
-
 export interface ResponseStreamChunk {
 	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'reasoning_started' | 'done' | 'usage';
 	content?: string;
@@ -117,33 +93,34 @@ export interface ResponseStreamChunk {
 	usage?: UsageInfo;
 }
 
-let openaiClient: OpenAI | null = null;
+let openaiConfig: {
+	apiKey: string;
+	baseUrl: string;
+	customHeaders: Record<string, string>;
+} | null = null;
 
-function getOpenAIClient(): OpenAI {
-	if (!openaiClient) {
+function getOpenAIConfig() {
+	if (!openaiConfig) {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey || !config.baseUrl) {
 			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
 		}
 
-		// Get custom headers
 		const customHeaders = getCustomHeaders();
 
-		openaiClient = new OpenAI({
+		openaiConfig = {
 			apiKey: config.apiKey,
-			baseURL: config.baseUrl,
-			defaultHeaders: {
-				...customHeaders
-			}
-		});
+			baseUrl: config.baseUrl,
+			customHeaders
+		};
 	}
 
-	return openaiClient;
+	return openaiConfig;
 }
 
 export function resetOpenAIClient(): void {
-	openaiClient = null;
+	openaiConfig = null;
 }
 
 function convertToResponseInput(messages: ChatMessage[]): { input: any[]; systemInstructions: string } {
@@ -261,6 +238,41 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 }
 
 /**
+ * Parse Server-Sent Events (SSE) stream
+ */
+async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith(':')) continue;
+
+			if (trimmed === 'data: [DONE]') {
+				return;
+			}
+
+			if (trimmed.startsWith('data: ')) {
+				const data = trimmed.slice(6);
+				try {
+					yield JSON.parse(data);
+				} catch (e) {
+					console.error('Failed to parse SSE data:', data);
+				}
+			}
+		}
+	}
+}
+
+/**
  * 使用 Responses API 创建流式响应（带自动工具调用）
  */
 export async function* createStreamingResponse(
@@ -268,7 +280,7 @@ export async function* createStreamingResponse(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
-	const client = getOpenAIClient();
+	const config = getOpenAIConfig();
 
 	// 提取系统提示词和转换后的消息
 	const { input: requestInput, systemInstructions } = convertToResponseInput(options.messages);
@@ -289,9 +301,25 @@ export async function* createStreamingResponse(
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const stream = await client.responses.create(requestPayload, {
-				signal: abortSignal,
+			const response = await fetch(`${config.baseUrl}/responses`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${config.apiKey}`,
+					...config.customHeaders
+				},
+				body: JSON.stringify(requestPayload),
+				signal: abortSignal
 			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`);
+			}
+
+			if (!response.body) {
+				throw new Error('No response body from OpenAI Responses API');
+			}
 
 		let contentBuffer = '';
 		let toolCallsBuffer: { [call_id: string]: any } = {};
@@ -299,7 +327,7 @@ export async function* createStreamingResponse(
 		let currentFunctionCallId: string | null = null;
 		let usageData: UsageInfo | undefined;
 
-		for await (const chunk of stream as any) {
+		for await (const chunk of parseSSEStream(response.body.getReader())) {
 			if (abortSignal?.aborted) {
 				return;
 			}

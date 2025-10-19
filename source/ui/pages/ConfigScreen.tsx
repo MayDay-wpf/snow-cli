@@ -122,6 +122,7 @@ export default function ConfigScreen({
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
+	const [, forceUpdate] = useState(0);
 
 	const requestMethodOptions = [
 		{
@@ -459,6 +460,8 @@ export default function ConfigScreen({
 		) {
 			setIsEditing(false);
 			setSearchTerm('');
+			// Force re-render to clear Select component artifacts
+			forceUpdate(prev => prev + 1);
 			return;
 		}
 
@@ -809,14 +812,23 @@ export default function ConfigScreen({
 				</Box>
 			)}
 
-			<Box flexDirection="column">
-				{/* Profile Selection */}
+			{/* When editing with Select, show simplified view */}
+			{isEditing &&
+			(currentField === 'profile' ||
+				currentField === 'requestMethod' ||
+				currentField === 'advancedModel' ||
+				currentField === 'basicModel' ||
+				currentField === 'compactModelName') ? (
 				<Box flexDirection="column">
-					<Text color={currentField === 'profile' ? 'green' : 'white'}>
-						{currentField === 'profile' ? '❯ ' : '  '}Profile:
+					<Text color="green">
+						❯ {currentField === 'profile' && 'Profile'}
+						{currentField === 'requestMethod' && 'Request Method'}
+						{currentField === 'advancedModel' && 'Advanced Model'}
+						{currentField === 'basicModel' && 'Basic Model'}
+						{currentField === 'compactModelName' && 'Compact Model'}:
 					</Text>
-					{currentField === 'profile' && isEditing && (
-						<Box marginLeft={3}>
+					<Box marginLeft={3} marginTop={1}>
+						{currentField === 'profile' && (
 							<Select
 								options={[
 									...profiles.map(p => ({
@@ -835,68 +847,8 @@ export default function ConfigScreen({
 								defaultValue={activeProfile}
 								onChange={handleProfileChange}
 							/>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'profile') && (
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{profiles.find(p => p.name === activeProfile)?.displayName ||
-									activeProfile}
-							</Text>
-						</Box>
-					)}
-				</Box>
-
-				{/* API Settings */}
-				<Box flexDirection="column">
-					<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
-						{currentField === 'baseUrl' ? '❯ ' : '  '}Base URL:
-					</Text>
-					{currentField === 'baseUrl' && isEditing && (
-						<Box marginLeft={3}>
-							<TextInput
-								value={baseUrl}
-								onChange={value => setBaseUrl(stripFocusArtifacts(value))}
-								placeholder="https://api.openai.com/v1"
-							/>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'baseUrl') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{baseUrl || 'Not set'}</Text>
-						</Box>
-					)}
-				</Box>
-
-				<Box flexDirection="column">
-					<Text color={currentField === 'apiKey' ? 'green' : 'white'}>
-						{currentField === 'apiKey' ? '❯ ' : '  '}API Key:
-					</Text>
-					{currentField === 'apiKey' && isEditing && (
-						<Box marginLeft={3}>
-							<TextInput
-								value={apiKey}
-								onChange={value => setApiKey(stripFocusArtifacts(value))}
-								placeholder="sk-..."
-								mask="*"
-							/>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'apiKey') && (
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
-							</Text>
-						</Box>
-					)}
-				</Box>
-
-				<Box flexDirection="column">
-					<Text color={currentField === 'requestMethod' ? 'green' : 'white'}>
-						{currentField === 'requestMethod' ? '❯ ' : '  '}Request Method:
-					</Text>
-					{currentField === 'requestMethod' && isEditing && (
-						<Box marginLeft={3}>
+						)}
+						{currentField === 'requestMethod' && (
 							<Select
 								options={requestMethodOptions}
 								defaultValue={requestMethod}
@@ -905,133 +857,186 @@ export default function ConfigScreen({
 									setIsEditing(false);
 								}}
 							/>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'requestMethod') && (
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{requestMethodOptions.find(opt => opt.value === requestMethod)
-									?.label || 'Not set'}
-							</Text>
-						</Box>
-					)}
-				</Box>
-
-				<Box flexDirection="column">
-					<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
-						{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta:
-					</Text>
-					<Box marginLeft={3}>
-						<Text color="gray">
-							{anthropicBeta ? '☑ Enabled' : '☐ Disabled'} (Press Enter to
-							toggle)
-						</Text>
+						)}
+						{(currentField === 'advancedModel' ||
+							currentField === 'basicModel' ||
+							currentField === 'compactModelName') && (
+							<Box flexDirection="column">
+								{searchTerm && <Text color="cyan">Filter: {searchTerm}</Text>}
+								<Select
+									options={getCurrentOptions()}
+									defaultValue={getCurrentValue()}
+									onChange={handleModelChange}
+								/>
+							</Box>
+						)}
+					</Box>
+					<Box marginTop={1}>
+						<Alert variant="info">
+							{(currentField === 'advancedModel' ||
+								currentField === 'basicModel' ||
+								currentField === 'compactModelName') &&
+								'Type to filter, ↑↓ to select, Enter to confirm, Esc to cancel'}
+							{(currentField === 'profile' || currentField === 'requestMethod') &&
+								'↑↓ to select, Enter to confirm, Esc to cancel'}
+						</Alert>
 					</Box>
 				</Box>
-
-				{/* Model Settings */}
+			) : (
 				<Box flexDirection="column">
-					<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
-						{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model:
-					</Text>
-					{currentField === 'advancedModel' && isEditing && (
-						<Box marginLeft={3}>
-							<Box flexDirection="column">
-								{searchTerm && <Text color="cyan">Filter: {searchTerm}</Text>}
-								<Select
-									options={getCurrentOptions()}
-									defaultValue={getCurrentValue()}
-									onChange={handleModelChange}
+					{/* Profile Selection */}
+					<Box flexDirection="column">
+						<Text color={currentField === 'profile' ? 'green' : 'white'}>
+							{currentField === 'profile' ? '❯ ' : '  '}Profile:
+						</Text>
+						{(!isEditing || currentField !== 'profile') && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{profiles.find(p => p.name === activeProfile)?.displayName ||
+										activeProfile}
+								</Text>
+							</Box>
+						)}
+					</Box>
+
+					{/* API Settings */}
+					<Box flexDirection="column">
+						<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
+							{currentField === 'baseUrl' ? '❯ ' : '  '}Base URL:
+						</Text>
+						{currentField === 'baseUrl' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={baseUrl}
+									onChange={value => setBaseUrl(stripFocusArtifacts(value))}
+									placeholder="https://api.openai.com/v1"
 								/>
 							</Box>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'advancedModel') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{advancedModel || 'Not set'}</Text>
-						</Box>
-					)}
-				</Box>
+						)}
+						{(!isEditing || currentField !== 'baseUrl') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{baseUrl || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
 
-				<Box flexDirection="column">
-					<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
-						{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model:
-					</Text>
-					{currentField === 'basicModel' && isEditing && (
-						<Box marginLeft={3}>
-							<Box flexDirection="column">
-								{searchTerm && <Text color="cyan">Filter: {searchTerm}</Text>}
-								<Select
-									options={getCurrentOptions()}
-									defaultValue={getCurrentValue()}
-									onChange={handleModelChange}
+					<Box flexDirection="column">
+						<Text color={currentField === 'apiKey' ? 'green' : 'white'}>
+							{currentField === 'apiKey' ? '❯ ' : '  '}API Key:
+						</Text>
+						{currentField === 'apiKey' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={apiKey}
+									onChange={value => setApiKey(stripFocusArtifacts(value))}
+									placeholder="sk-..."
+									mask="*"
 								/>
 							</Box>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'basicModel') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{basicModel || 'Not set'}</Text>
-						</Box>
-					)}
-				</Box>
-
-				<Box flexDirection="column">
-					<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
-						{currentField === 'compactModelName' ? '❯ ' : '  '}Compact Model:
-					</Text>
-					{currentField === 'compactModelName' && isEditing && (
-						<Box marginLeft={3}>
-							<Box flexDirection="column">
-								{searchTerm && <Text color="cyan">Filter: {searchTerm}</Text>}
-								<Select
-									options={getCurrentOptions()}
-									defaultValue={getCurrentValue()}
-									onChange={handleModelChange}
-								/>
+						)}
+						{(!isEditing || currentField !== 'apiKey') && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
+								</Text>
 							</Box>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'compactModelName') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{compactModelName || 'Not set'}</Text>
-						</Box>
-					)}
-				</Box>
+						)}
+					</Box>
 
-				<Box flexDirection="column">
-					<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
-						{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
-						Tokens:
-					</Text>
-					{currentField === 'maxContextTokens' && isEditing && (
-						<Box marginLeft={3}>
-							<Text color="cyan">Enter value: {maxContextTokens}</Text>
-						</Box>
-					)}
-					{(!isEditing || currentField !== 'maxContextTokens') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{maxContextTokens}</Text>
-						</Box>
-					)}
-				</Box>
+					<Box flexDirection="column">
+						<Text color={currentField === 'requestMethod' ? 'green' : 'white'}>
+							{currentField === 'requestMethod' ? '❯ ' : '  '}Request Method:
+						</Text>
+						{(!isEditing || currentField !== 'requestMethod') && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{requestMethodOptions.find(opt => opt.value === requestMethod)
+										?.label || 'Not set'}
+								</Text>
+							</Box>
+						)}
+					</Box>
 
-				<Box flexDirection="column">
-					<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
-						{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens:
-					</Text>
-					{currentField === 'maxTokens' && isEditing && (
+					<Box flexDirection="column">
+						<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
+							{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta:
+						</Text>
 						<Box marginLeft={3}>
-							<Text color="cyan">Enter value: {maxTokens}</Text>
+							<Text color="gray">
+								{anthropicBeta ? '☑ Enabled' : '☐ Disabled'} (Press Enter to
+								toggle)
+							</Text>
 						</Box>
-					)}
-					{(!isEditing || currentField !== 'maxTokens') && (
-						<Box marginLeft={3}>
-							<Text color="gray">{maxTokens}</Text>
-						</Box>
-					)}
+					</Box>
+
+					{/* Model Settings */}
+					<Box flexDirection="column">
+						<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
+							{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model:
+						</Text>
+						{(!isEditing || currentField !== 'advancedModel') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{advancedModel || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+
+					<Box flexDirection="column">
+						<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
+							{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model:
+						</Text>
+						{(!isEditing || currentField !== 'basicModel') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{basicModel || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+
+					<Box flexDirection="column">
+						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
+							{currentField === 'compactModelName' ? '❯ ' : '  '}Compact Model:
+						</Text>
+						{(!isEditing || currentField !== 'compactModelName') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{compactModelName || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+
+					<Box flexDirection="column">
+						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
+							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
+							Tokens:
+						</Text>
+						{currentField === 'maxContextTokens' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {maxContextTokens}</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'maxContextTokens') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{maxContextTokens}</Text>
+							</Box>
+						)}
+					</Box>
+
+					<Box flexDirection="column">
+						<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
+							{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens:
+						</Text>
+						{currentField === 'maxTokens' && isEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {maxTokens}</Text>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'maxTokens') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{maxTokens}</Text>
+							</Box>
+						)}
+					</Box>
 				</Box>
-			</Box>
+			)}
 
 			{errors.length > 0 && (
 				<Box flexDirection="column" marginTop={1}>
@@ -1046,27 +1051,31 @@ export default function ConfigScreen({
 				</Box>
 			)}
 
-			<Box flexDirection="column" marginTop={1}>
-				{isEditing ? (
-					<>
+			{/* Only show navigation hints when not in Select editing mode */}
+			{!(
+				isEditing &&
+				(currentField === 'profile' ||
+					currentField === 'requestMethod' ||
+					currentField === 'advancedModel' ||
+					currentField === 'basicModel' ||
+					currentField === 'compactModelName')
+			) && (
+				<Box flexDirection="column" marginTop={1}>
+					{isEditing ? (
 						<Alert variant="info">
 							Editing mode:{' '}
-							{currentField === 'advancedModel' ||
-							currentField === 'basicModel' ||
-							currentField === 'compactModelName'
-								? 'Type to filter, ↑↓ to select, Enter to confirm'
+							{currentField === 'maxContextTokens' || currentField === 'maxTokens'
+								? 'Type to edit, Enter to save'
 								: 'Press Enter to save and exit editing'}
 						</Alert>
-					</>
-				) : (
-					<>
+					) : (
 						<Alert variant="info">
 							Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or
 							Esc to save
 						</Alert>
-					</>
-				)}
-			</Box>
+					)}
+				</Box>
+			)}
 		</Box>
 	);
 }
