@@ -5,9 +5,23 @@ import type { ChatMessage as APIChatMessage } from '../api/chat.js';
 export function useSessionSave() {
 	const savedMessagesRef = useRef<Set<string>>(new Set());
 
-	// Generate a unique ID for a message (based on role + content + timestamp window)
+	// Generate a unique ID for a message (based on role + content + timestamp window + tool identifiers)
 	const generateMessageId = useCallback((message: APIChatMessage, timestamp: number): string => {
-		return `${message.role}-${message.content.length}-${Math.floor(timestamp / 5000)}`;
+		// Base ID with role, content length, and time window
+		let id = `${message.role}-${message.content.length}-${Math.floor(timestamp / 5000)}`;
+
+		// For assistant messages with tool_calls, include tool call IDs to ensure uniqueness
+		if (message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0) {
+			const toolCallIds = message.tool_calls.map(tc => tc.id).sort().join(',');
+			id += `-tools:${toolCallIds}`;
+		}
+
+		// For tool result messages, include the tool_call_id to ensure uniqueness
+		if (message.role === 'tool' && message.tool_call_id) {
+			id += `-toolcall:${message.tool_call_id}`;
+		}
+
+		return id;
 	}, []);
 
 	// Save API message directly - 直接保存 API 格式的消息

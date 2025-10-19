@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Remove all AI SDK dependencies
+            -- SummaryAgent
             ### Installation
             ```bash
             npm install -g snow-ai

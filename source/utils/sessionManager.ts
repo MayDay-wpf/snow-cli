@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { randomUUID } from 'crypto';
-import type { ChatMessage as APIChatMessage } from '../api/chat.js';
+import {randomUUID} from 'crypto';
+import type {ChatMessage as APIChatMessage} from '../api/chat.js';
+import {summaryAgent} from '../agents/summaryAgent.js';
 
 // Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
@@ -31,6 +32,8 @@ export interface SessionListItem {
 class SessionManager {
 	private readonly sessionsDir: string;
 	private currentSession: Session | null = null;
+	private summaryAbortController: AbortController | null = null;
+	private summaryTimeoutId: NodeJS.Timeout | null = null;
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
@@ -38,7 +41,7 @@ class SessionManager {
 
 	private async ensureSessionsDir(): Promise<void> {
 		try {
-			await fs.mkdir(this.sessionsDir, { recursive: true });
+			await fs.mkdir(this.sessionsDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists or other error
 		}
@@ -46,6 +49,21 @@ class SessionManager {
 
 	private getSessionPath(sessionId: string): string {
 		return path.join(this.sessionsDir, `${sessionId}.json`);
+	}
+
+	/**
+	 * Cancel any ongoing summary generation
+	 * This prevents wasted resources and race conditions
+	 */
+	private cancelOngoingSummaryGeneration(): void {
+		if (this.summaryAbortController) {
+			this.summaryAbortController.abort();
+			this.summaryAbortController = null;
+		}
+		if (this.summaryTimeoutId) {
+			clearTimeout(this.summaryTimeoutId);
+			this.summaryTimeoutId = null;
+		}
 	}
 
 	async createNewSession(): Promise<Session> {
@@ -60,7 +78,7 @@ class SessionManager {
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			messages: [],
-			messageCount: 0
+			messageCount: 0,
 		};
 
 		this.currentSession = session;
@@ -106,7 +124,7 @@ class SessionManager {
 							summary: session.summary,
 							createdAt: session.createdAt,
 							updatedAt: session.updatedAt,
-							messageCount: session.messageCount
+							messageCount: session.messageCount,
 						});
 					} catch (error) {
 						// Skip invalid session files
@@ -169,10 +187,69 @@ class SessionManager {
 		this.currentSession.messageCount = this.currentSession.messages.length;
 		this.currentSession.updatedAt = Date.now();
 
-		// Simple title generation from first user message (no API call)
+		// Generate summary from first user message using summaryAgent (parallel, non-blocking)
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
+			// Set temporary title immediately (synchronous)
 			this.currentSession.title = message.content.slice(0, 50);
 			this.currentSession.summary = message.content.slice(0, 100);
+
+			// Cancel any previous summary generation (防呆机制)
+			this.cancelOngoingSummaryGeneration();
+
+			// Create new AbortController for this summary generation
+			this.summaryAbortController = new AbortController();
+			const currentSessionId = this.currentSession.id;
+			const abortSignal = this.summaryAbortController.signal;
+
+			// Set timeout to cancel summary generation after 30 seconds (防呆机制)
+			this.summaryTimeoutId = setTimeout(() => {
+				if (this.summaryAbortController) {
+					console.warn('Summary generation timeout after 30s, aborting...');
+					this.summaryAbortController.abort();
+					this.summaryAbortController = null;
+				}
+			}, 30000);
+
+			// Generate better summary in parallel (non-blocking)
+			// This won't delay the main conversation flow
+			summaryAgent
+				.generateSummary(message.content, abortSignal)
+				.then(summary => {
+					// 防呆检查：确保会话没有被切换，且仍然是第一条消息
+					if (
+						this.currentSession &&
+						this.currentSession.id === currentSessionId &&
+						this.currentSession.messageCount === 1
+					) {
+						// Only update if this is still the first message in the same session
+						this.currentSession.title = summary;
+						this.currentSession.summary = summary;
+						this.saveSession(this.currentSession).catch(error => {
+							console.error(
+								'Failed to save session with generated summary:',
+								error,
+							);
+						});
+					}
+					// Clean up
+					this.cancelOngoingSummaryGeneration();
+				})
+				.catch(error => {
+					// Clean up on error
+					this.cancelOngoingSummaryGeneration();
+
+					// Silently fail if aborted (expected behavior)
+					if (error.name === 'AbortError' || abortSignal.aborted) {
+						console.log('Summary generation cancelled (expected)');
+						return;
+					}
+
+					// Log other errors - we already have a fallback title/summary
+					console.warn('Summary generation failed, using fallback:', error);
+				});
+		} else if (this.currentSession.messageCount > 1) {
+			// 防呆机制：如果不是第一条消息，取消任何正在进行的摘要生成
+			this.cancelOngoingSummaryGeneration();
 		}
 
 		await this.saveSession(this.currentSession);
@@ -183,10 +260,14 @@ class SessionManager {
 	}
 
 	setCurrentSession(session: Session): void {
+		// 防呆机制：切换会话时取消正在进行的摘要生成
+		this.cancelOngoingSummaryGeneration();
 		this.currentSession = session;
 	}
 
 	clearCurrentSession(): void {
+		// 防呆机制：清除会话时取消正在进行的摘要生成
+		this.cancelOngoingSummaryGeneration();
 		this.currentSession = null;
 	}
 
@@ -206,7 +287,10 @@ class SessionManager {
 		}
 
 		// Truncate messages array to specified count
-		this.currentSession.messages = this.currentSession.messages.slice(0, messageCount);
+		this.currentSession.messages = this.currentSession.messages.slice(
+			0,
+			messageCount,
+		);
 		this.currentSession.messageCount = this.currentSession.messages.length;
 		this.currentSession.updatedAt = Date.now();
 

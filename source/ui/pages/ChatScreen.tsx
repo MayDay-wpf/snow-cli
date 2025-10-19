@@ -1002,16 +1002,28 @@ export default function ChatScreen({skipWelcome}: Props) {
 						<Text color="yellowBright" bold>
 							❆
 						</Text>
-						<Box marginLeft={1} marginBottom={1} flexDirection="row">
-							<MarkdownRenderer
-								content={message.content || ' '}
-								color="yellow"
-							/>
-							<Box marginLeft={1}>
-								<Text color="yellow">
-									<Spinner type="dots" />
-								</Text>
+						<Box marginLeft={1} marginBottom={1} flexDirection="column">
+							<Box flexDirection="row">
+								<MarkdownRenderer
+									content={message.content || ' '}
+									color="yellow"
+								/>
+								<Box marginLeft={1}>
+									<Text color="yellow">
+										<Spinner type="dots" />
+									</Text>
+								</Box>
 							</Box>
+							{/* Show tool parameters preview during execution */}
+							{message.toolDisplay && message.toolDisplay.args.length > 0 && (
+								<Box flexDirection="column" marginTop={1}>
+									{message.toolDisplay.args.map((arg, argIndex) => (
+										<Text key={argIndex} color="gray" dimColor>
+											{arg.isLast ? '└─' : '├─'} {arg.key}: {arg.value}
+										</Text>
+									))}
+								</Box>
+							)}
 						</Box>
 					</Box>
 				))}
