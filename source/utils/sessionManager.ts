@@ -4,6 +4,7 @@ import os from 'os';
 import {randomUUID} from 'crypto';
 import type {ChatMessage as APIChatMessage} from '../api/chat.js';
 import {summaryAgent} from '../agents/summaryAgent.js';
+import {getTodoService} from './mcpToolsManager.js';
 
 // Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
@@ -39,16 +40,31 @@ class SessionManager {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
 	}
 
-	private async ensureSessionsDir(): Promise<void> {
+	private async ensureSessionsDir(date?: Date): Promise<void> {
 		try {
 			await fs.mkdir(this.sessionsDir, {recursive: true});
+
+			if (date) {
+				const dateFolder = this.formatDateForFolder(date);
+				const sessionDir = path.join(this.sessionsDir, dateFolder);
+				await fs.mkdir(sessionDir, {recursive: true});
+			}
 		} catch (error) {
 			// Directory already exists or other error
 		}
 	}
+	private getSessionPath(sessionId: string, date?: Date): string {
+		const sessionDate = date || new Date();
+		const dateFolder = this.formatDateForFolder(sessionDate);
+		const sessionDir = path.join(this.sessionsDir, dateFolder);
+		return path.join(sessionDir, `${sessionId}.json`);
+	}
 
-	private getSessionPath(sessionId: string): string {
-		return path.join(this.sessionsDir, `${sessionId}.json`);
+	private formatDateForFolder(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
 	}
 
 	/**
@@ -67,7 +83,7 @@ class SessionManager {
 	}
 
 	async createNewSession(): Promise<Session> {
-		await this.ensureSessionsDir();
+		await this.ensureSessionsDir(new Date());
 
 		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
 		const sessionId = randomUUID();
@@ -87,35 +103,87 @@ class SessionManager {
 	}
 
 	async saveSession(session: Session): Promise<void> {
-		await this.ensureSessionsDir();
-		const sessionPath = this.getSessionPath(session.id);
+		const sessionDate = new Date(session.createdAt);
+		await this.ensureSessionsDir(sessionDate);
+		const sessionPath = this.getSessionPath(session.id, sessionDate);
 		await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
 	}
 
 	async loadSession(sessionId: string): Promise<Session | null> {
+		// 首先尝试从旧格式加载（向下兼容）
 		try {
-			const sessionPath = this.getSessionPath(sessionId);
-			const data = await fs.readFile(sessionPath, 'utf-8');
+			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
+			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
 			this.currentSession = session;
 			return session;
 		} catch (error) {
-			return null;
+			// 旧格式不存在，搜索日期文件夹
 		}
+
+		// 在日期文件夹中查找会话
+		try {
+			const session = await this.findSessionInDateFolders(sessionId);
+			if (session) {
+				this.currentSession = session;
+				return session;
+			}
+		} catch (error) {
+			// 搜索失败
+		}
+
+		return null;
+	}
+
+	private async findSessionInDateFolders(
+		sessionId: string,
+	): Promise<Session | null> {
+		try {
+			const files = await fs.readdir(this.sessionsDir);
+
+			for (const file of files) {
+				const filePath = path.join(this.sessionsDir, file);
+				const stat = await fs.stat(filePath);
+
+				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
+					// 这是日期文件夹，查找会话文件
+					const sessionPath = path.join(filePath, `${sessionId}.json`);
+					try {
+						const data = await fs.readFile(sessionPath, 'utf-8');
+						const session: Session = JSON.parse(data);
+						return session;
+					} catch (error) {
+						// 文件不存在或读取失败，继续搜索
+						continue;
+					}
+				}
+			}
+		} catch (error) {
+			// 目录读取失败
+		}
+
+		return null;
 	}
 
 	async listSessions(): Promise<SessionListItem[]> {
 		await this.ensureSessionsDir();
+		const sessions: SessionListItem[] = [];
 
 		try {
+			// 首先处理新的日期文件夹结构
 			const files = await fs.readdir(this.sessionsDir);
-			const sessions: SessionListItem[] = [];
 
 			for (const file of files) {
-				if (file.endsWith('.json')) {
+				const filePath = path.join(this.sessionsDir, file);
+				const stat = await fs.stat(filePath);
+
+				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
+					// 这是日期文件夹，读取其中的会话文件
+					await this.readSessionsFromDir(filePath, sessions);
+				} else if (file.endsWith('.json')) {
+					// 这是旧格式的会话文件（向下兼容）
 					try {
-						const sessionPath = path.join(this.sessionsDir, file);
-						const data = await fs.readFile(sessionPath, 'utf-8');
+						const data = await fs.readFile(filePath, 'utf-8');
 						const session: Session = JSON.parse(data);
 
 						sessions.push({
@@ -137,6 +205,39 @@ class SessionManager {
 			return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 		} catch (error) {
 			return [];
+		}
+	}
+
+	private async readSessionsFromDir(
+		dirPath: string,
+		sessions: SessionListItem[],
+	): Promise<void> {
+		try {
+			const files = await fs.readdir(dirPath);
+
+			for (const file of files) {
+				if (file.endsWith('.json')) {
+					try {
+						const sessionPath = path.join(dirPath, file);
+						const data = await fs.readFile(sessionPath, 'utf-8');
+						const session: Session = JSON.parse(data);
+
+						sessions.push({
+							id: session.id,
+							title: session.title,
+							summary: session.summary,
+							createdAt: session.createdAt,
+							updatedAt: session.updatedAt,
+							messageCount: session.messageCount,
+						});
+					} catch (error) {
+						// Skip invalid session files
+						continue;
+					}
+				}
+			}
+		} catch (error) {
+			// Skip directory if it can't be read
 		}
 	}
 
@@ -272,13 +373,59 @@ class SessionManager {
 	}
 
 	async deleteSession(sessionId: string): Promise<boolean> {
+		let sessionDeleted = false;
+
+		// 首先尝试删除旧格式（向下兼容）
 		try {
-			const sessionPath = this.getSessionPath(sessionId);
-			await fs.unlink(sessionPath);
-			return true;
+			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
+			await fs.unlink(oldSessionPath);
+			sessionDeleted = true;
 		} catch (error) {
-			return false;
+			// 旧格式不存在，搜索日期文件夹
 		}
+
+		// 在日期文件夹中查找并删除会话
+		if (!sessionDeleted) {
+			try {
+				const files = await fs.readdir(this.sessionsDir);
+
+				for (const file of files) {
+					const filePath = path.join(this.sessionsDir, file);
+					const stat = await fs.stat(filePath);
+
+					if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
+						// 这是日期文件夹，查找会话文件
+						const sessionPath = path.join(filePath, `${sessionId}.json`);
+						try {
+							await fs.unlink(sessionPath);
+							sessionDeleted = true;
+							break;
+						} catch (error) {
+							// 文件不存在，继续搜索
+							continue;
+						}
+					}
+				}
+			} catch (error) {
+				// 目录读取失败
+			}
+		}
+
+		// 如果会话删除成功，同时删除对应的TODO列表
+		if (sessionDeleted) {
+			try {
+				const todoService = getTodoService();
+				await todoService.deleteTodoList(sessionId);
+			} catch (error) {
+				// TODO删除失败不影响会话删除结果
+				console.warn(
+					`Failed to delete TODO list for session ${sessionId}:`,
+					error,
+				);
+			}
+		}
+
+		return sessionDeleted;
 	}
 
 	async truncateMessages(messageCount: number): Promise<void> {

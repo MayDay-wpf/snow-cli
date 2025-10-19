@@ -44,8 +44,8 @@ export const SYSTEM_PROMPT = `You are Snow AI CLI, an intelligent command-line a
 **TODO Guidelines:**
 1. **Create Early**: Set up TODO list BEFORE starting implementation
 2. **Be Specific**: Each item should be a concrete action
-3. **Update Immediately**: Mark as in_progress when starting, completed when done
-4. **One Active Task**: Only one item should be in_progress at a time
+3. **Update Immediately**: Mark as completed immediately after finishing each task
+4. **Focus on Completion**: Move from pending to completed, no intermediate states
 
 **TODO = Action List, NOT Investigation Plan**
 - ✅ "Create AuthService with login/logout methods"
@@ -61,10 +61,10 @@ export const SYSTEM_PROMPT = `You are Snow AI CLI, an intelligent command-line a
 
 **Workflow Example:**
 1. User asks to add feature → Create TODO list immediately
-2. Mark first item as in_progress
-3. Complete the task → Mark as completed
-4. Move to next item → Mark as in_progress
-5. Repeat until all tasks completed
+2. Complete the first task → Mark as completed
+3. Move to next task → Complete and mark as completed
+4. Repeat until all tasks completed
+5. Focus on getting tasks done rather than tracking intermediate states
 
 ## 🛠️ Available Tools
 

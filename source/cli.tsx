@@ -33,14 +33,16 @@ async function checkForUpdates(currentVersion: string): Promise<void> {
 
 const cli = meow(
 	`
-	Usage
-	  $ snow
+Usage
+  $ snow
+  $ snow --ask "your prompt"
 
-	Options
+Options
 		--help     Show help
 		--version  Show version
 		--update   Update to latest version
 		-c         Skip welcome screen and resume last conversation
+		--ask      Quick question mode (headless mode with single prompt)
 `,
 	{
 		importMeta: import.meta,
@@ -52,6 +54,9 @@ const cli = meow(
 			c: {
 				type: 'boolean',
 				default: false,
+			},
+			ask: {
+				type: 'string',
 			},
 		},
 	},
@@ -91,9 +96,11 @@ if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
 const Startup = ({
 	version,
 	skipWelcome,
+	headlessPrompt,
 }: {
 	version: string | undefined;
 	skipWelcome: boolean;
+	headlessPrompt?: string;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
 
@@ -144,7 +151,13 @@ const Startup = ({
 		);
 	}
 
-	return <App version={version} skipWelcome={skipWelcome} />;
+	return (
+		<App
+			version={version}
+			skipWelcome={skipWelcome}
+			headlessPrompt={headlessPrompt}
+		/>
+	);
 };
 
 // Disable bracketed paste mode on startup
@@ -168,8 +181,14 @@ process.on('SIGTERM', () => {
 	cleanup();
 	process.exit(0);
 });
-
-render(<Startup version={cli.pkg.version} skipWelcome={cli.flags.c} />, {
-	exitOnCtrlC: false,
-	patchConsole: true,
-});
+render(
+	<Startup
+		version={cli.pkg.version}
+		skipWelcome={cli.flags.c}
+		headlessPrompt={cli.flags.ask}
+	/>,
+	{
+		exitOnCtrlC: false,
+		patchConsole: true,
+	},
+);

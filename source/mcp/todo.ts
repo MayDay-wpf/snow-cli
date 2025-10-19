@@ -1,4 +1,4 @@
-import { Tool, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -10,7 +10,6 @@ interface TodoItem {
 	updatedAt: string;
 	parentId?: string;
 }
-
 
 interface TodoList {
 	sessionId: string;
@@ -35,19 +34,52 @@ export class TodoService {
 	}
 
 	async initialize(): Promise<void> {
-		await fs.mkdir(this.todoDir, { recursive: true });
+		await fs.mkdir(this.todoDir, {recursive: true});
 	}
 
-	private getTodoPath(sessionId: string): string {
-		return path.join(this.todoDir, `${sessionId}.json`);
+	private getTodoPath(sessionId: string, date?: Date): string {
+		const sessionDate = date || new Date();
+		const dateFolder = this.formatDateForFolder(sessionDate);
+		const todoDir = path.join(this.todoDir, dateFolder);
+		return path.join(todoDir, `${sessionId}.json`);
+	}
+
+	private formatDateForFolder(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
+
+	private async ensureTodoDir(date?: Date): Promise<void> {
+		try {
+			await fs.mkdir(this.todoDir, {recursive: true});
+
+			if (date) {
+				const dateFolder = this.formatDateForFolder(date);
+				const todoDir = path.join(this.todoDir, dateFolder);
+				await fs.mkdir(todoDir, {recursive: true});
+			}
+		} catch (error) {
+			// Directory already exists or other error
+		}
 	}
 
 	/**
 	 * 创建或更新会话的 TODO List
 	 */
-	async saveTodoList(sessionId: string, todos: TodoItem[]): Promise<TodoList> {
-		const todoPath = this.getTodoPath(sessionId);
-		let existingList: TodoList | undefined;
+	async saveTodoList(
+		sessionId: string,
+		todos: TodoItem[],
+		existingList?: TodoList | null,
+	): Promise<TodoList> {
+		// 使用现有TODO列表的createdAt信息，或者使用当前时间
+		const sessionCreatedAt = existingList?.createdAt
+			? new Date(existingList.createdAt).getTime()
+			: Date.now();
+		const sessionDate = new Date(sessionCreatedAt);
+		await this.ensureTodoDir(sessionDate);
+		const todoPath = this.getTodoPath(sessionId, sessionDate);
 
 		try {
 			const content = await fs.readFile(todoPath, 'utf-8');
@@ -72,13 +104,53 @@ export class TodoService {
 	 * 获取会话的 TODO List
 	 */
 	async getTodoList(sessionId: string): Promise<TodoList | null> {
-		const todoPath = this.getTodoPath(sessionId);
+		// 首先尝试从旧格式加载（向下兼容）
 		try {
-			const content = await fs.readFile(todoPath, 'utf-8');
+			const oldTodoPath = path.join(this.todoDir, `${sessionId}.json`);
+			const content = await fs.readFile(oldTodoPath, 'utf-8');
 			return JSON.parse(content);
-		} catch {
-			return null;
+		} catch (error) {
+			// 旧格式不存在，搜索日期文件夹
 		}
+
+		// 在日期文件夹中查找 TODO
+		try {
+			const todo = await this.findTodoInDateFolders(sessionId);
+			return todo;
+		} catch (error) {
+			// 搜索失败
+		}
+
+		return null;
+	}
+
+	private async findTodoInDateFolders(
+		sessionId: string,
+	): Promise<TodoList | null> {
+		try {
+			const files = await fs.readdir(this.todoDir);
+
+			for (const file of files) {
+				const filePath = path.join(this.todoDir, file);
+				const stat = await fs.stat(filePath);
+
+				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
+					// 这是日期文件夹，查找 TODO 文件
+					const todoPath = path.join(filePath, `${sessionId}.json`);
+					try {
+						const content = await fs.readFile(todoPath, 'utf-8');
+						return JSON.parse(content);
+					} catch (error) {
+						// 文件不存在或读取失败，继续搜索
+						continue;
+					}
+				}
+			}
+		} catch (error) {
+			// 目录读取失败
+		}
+
+		return null;
 	}
 
 	/**
@@ -106,13 +178,17 @@ export class TodoService {
 			updatedAt: new Date().toISOString(),
 		};
 
-		return this.saveTodoList(sessionId, todoList.todos);
+		return this.saveTodoList(sessionId, todoList.todos, todoList);
 	}
 
 	/**
 	 * 添加 TODO 项
 	 */
-	async addTodoItem(sessionId: string, content: string, parentId?: string): Promise<TodoList> {
+	async addTodoItem(
+		sessionId: string,
+		content: string,
+		parentId?: string,
+	): Promise<TodoList> {
 		const todoList = await this.getTodoList(sessionId);
 		const now = new Date().toISOString();
 
@@ -126,20 +202,65 @@ export class TodoService {
 		};
 
 		const todos = todoList ? [...todoList.todos, newTodo] : [newTodo];
-		return this.saveTodoList(sessionId, todos);
+		return this.saveTodoList(sessionId, todos, todoList);
 	}
 
 	/**
 	 * 删除 TODO 项
 	 */
-	async deleteTodoItem(sessionId: string, todoId: string): Promise<TodoList | null> {
+	async deleteTodoItem(
+		sessionId: string,
+		todoId: string,
+	): Promise<TodoList | null> {
 		const todoList = await this.getTodoList(sessionId);
 		if (!todoList) {
 			return null;
 		}
 
-		const filteredTodos = todoList.todos.filter(t => t.id !== todoId && t.parentId !== todoId);
-		return this.saveTodoList(sessionId, filteredTodos);
+		const filteredTodos = todoList.todos.filter(
+			t => t.id !== todoId && t.parentId !== todoId,
+		);
+		return this.saveTodoList(sessionId, filteredTodos, todoList);
+	}
+
+	/**
+	 * 删除整个会话的 TODO 列表
+	 */
+	async deleteTodoList(sessionId: string): Promise<boolean> {
+		// 首先尝试删除旧格式（向下兼容）
+		try {
+			const oldTodoPath = path.join(this.todoDir, `${sessionId}.json`);
+			await fs.unlink(oldTodoPath);
+			return true;
+		} catch (error) {
+			// 旧格式不存在，搜索日期文件夹
+		}
+
+		// 在日期文件夹中查找并删除 TODO
+		try {
+			const files = await fs.readdir(this.todoDir);
+
+			for (const file of files) {
+				const filePath = path.join(this.todoDir, file);
+				const stat = await fs.stat(filePath);
+
+				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
+					// 这是日期文件夹，查找 TODO 文件
+					const todoPath = path.join(filePath, `${sessionId}.json`);
+					try {
+						await fs.unlink(todoPath);
+						return true;
+					} catch (error) {
+						// 文件不存在，继续搜索
+						continue;
+					}
+				}
+			}
+		} catch (error) {
+			// 目录读取失败
+		}
+
+		return false;
 	}
 
 	/**
@@ -189,16 +310,19 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 								properties: {
 									content: {
 										type: 'string',
-										description: 'TODO item description - must be specific, actionable, and technically precise (e.g., "Modify handleSubmit function in ChatInput.tsx to validate user input before processing" NOT "fix input validation")',
+										description:
+											'TODO item description - must be specific, actionable, and technically precise (e.g., "Modify handleSubmit function in ChatInput.tsx to validate user input before processing" NOT "fix input validation")',
 									},
 									parentId: {
 										type: 'string',
-										description: 'Parent TODO ID (optional, for creating subtasks in hierarchical structure)',
+										description:
+											'Parent TODO ID (optional, for creating subtasks in hierarchical structure)',
 									},
 								},
 								required: ['content'],
 							},
-							description: 'Complete list of TODO items. Each item must represent a discrete, verifiable unit of work. For programming tasks, typical structure: analyze code → implement changes → test functionality → verify build → commit (if requested).',
+							description:
+								'Complete list of TODO items. Each item must represent a discrete, verifiable unit of work. For programming tasks, typical structure: analyze code → implement changes → test functionality → verify build → commit (if requested).',
 						},
 					},
 					required: ['todos'],
@@ -243,23 +367,25 @@ Complete TODO list with all task IDs, content, status, and hierarchy.`,
 ## BEST PRACTICE:
 Every time you complete a task in Task, it will be updated to "Completed" immediately.`,
 
-
 				inputSchema: {
 					type: 'object',
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO item ID to update (get exact ID from todo-get)',
+							description:
+								'TODO item ID to update (get exact ID from todo-get)',
 						},
 						status: {
 							type: 'string',
 							enum: ['pending', 'completed'],
-							description: 'New status - "pending" (not done) or "completed" (100% finished and verified)',
+							description:
+								'New status - "pending" (not done) or "completed" (100% finished and verified)',
 						},
 
 						content: {
 							type: 'string',
-							description: 'Updated TODO content (optional, only if task description needs refinement)',
+							description:
+								'Updated TODO content (optional, only if task description needs refinement)',
 						},
 					},
 					required: ['todoId'],
@@ -290,11 +416,13 @@ If a task takes less than 10 minutes, just do it instead of adding it to TODO. T
 					properties: {
 						content: {
 							type: 'string',
-							description: 'TODO item description - must be specific, actionable, and technically precise',
+							description:
+								'TODO item description - must be specific, actionable, and technically precise',
 						},
 						parentId: {
 							type: 'string',
-							description: 'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get.',
+							description:
+								'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get.',
 						},
 					},
 					required: ['content'],
@@ -328,7 +456,8 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					properties: {
 						todoId: {
 							type: 'string',
-							description: 'TODO item ID to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
+							description:
+								'TODO item ID to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
 						},
 					},
 					required: ['todoId'],
@@ -340,7 +469,10 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 	/**
 	 * 执行工具调用
 	 */
-	async executeTool(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
+	async executeTool(
+		toolName: string,
+		args: Record<string, unknown>,
+	): Promise<CallToolResult> {
 		// 自动获取当前会话 ID
 		const sessionId = this.getCurrentSessionId();
 		if (!sessionId) {
@@ -358,14 +490,16 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 		try {
 			switch (toolName) {
 				case 'todo-create': {
-					const { todos } = args as {
-						todos: Array<{ content: string; parentId?: string }>;
+					const {todos} = args as {
+						todos: Array<{content: string; parentId?: string}>;
 					};
 
 					const todoItems: TodoItem[] = todos.map(t => {
 						const now = new Date().toISOString();
 						return {
-							id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+							id: `todo_${Date.now()}_${Math.random()
+								.toString(36)
+								.slice(2, 9)}`,
 							content: t.content,
 							status: 'pending' as const,
 							createdAt: now,
@@ -374,7 +508,12 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 						};
 					});
 
-					const result = await this.saveTodoList(sessionId, todoItems);
+					const existingList = await this.getTodoList(sessionId);
+					const result = await this.saveTodoList(
+						sessionId,
+						todoItems,
+						existingList,
+					);
 					return {
 						content: [
 							{
@@ -391,19 +530,20 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 						content: [
 							{
 								type: 'text',
-								text: result ? JSON.stringify(result, null, 2) : 'No TODO list found',
+								text: result
+									? JSON.stringify(result, null, 2)
+									: 'No TODO list found',
 							},
 						],
 					};
 				}
 
 				case 'todo-update': {
-					const { todoId, status, content } = args as {
+					const {todoId, status, content} = args as {
 						todoId: string;
 						status?: 'pending' | 'completed';
 						content?: string;
 					};
-
 
 					const updates: Partial<Omit<TodoItem, 'id' | 'createdAt'>> = {};
 					if (status) updates.status = status;
@@ -414,14 +554,16 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 						content: [
 							{
 								type: 'text',
-								text: result ? JSON.stringify(result, null, 2) : 'TODO item not found',
+								text: result
+									? JSON.stringify(result, null, 2)
+									: 'TODO item not found',
 							},
 						],
 					};
 				}
 
 				case 'todo-add': {
-					const { content, parentId } = args as {
+					const {content, parentId} = args as {
 						content: string;
 						parentId?: string;
 					};
@@ -438,7 +580,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 				}
 
 				case 'todo-delete': {
-					const { todoId } = args as {
+					const {todoId} = args as {
 						todoId: string;
 					};
 
@@ -447,7 +589,9 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 						content: [
 							{
 								type: 'text',
-								text: result ? JSON.stringify(result, null, 2) : 'TODO item not found',
+								text: result
+									? JSON.stringify(result, null, 2)
+									: 'TODO item not found',
 							},
 						],
 					};
@@ -469,7 +613,9 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 				content: [
 					{
 						type: 'text',
-						text: `Error executing ${toolName}: ${error instanceof Error ? error.message : String(error)}`,
+						text: `Error executing ${toolName}: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
 					},
 				],
 				isError: true,

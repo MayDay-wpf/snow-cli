@@ -6,6 +6,7 @@ import MCPConfigScreen from './ui/pages/MCPConfigScreen.js';
 import SystemPromptConfigScreen from './ui/pages/SystemPromptConfigScreen.js';
 import CustomHeadersScreen from './ui/pages/CustomHeadersScreen.js';
 import ChatScreen from './ui/pages/ChatScreen.js';
+import HeadlessModeScreen from './ui/pages/HeadlessModeScreen.js';
 import {
 	useGlobalExit,
 	ExitNotification as ExitNotificationType,
@@ -16,9 +17,20 @@ import {useTerminalSize} from './hooks/useTerminalSize.js';
 type Props = {
 	version?: string;
 	skipWelcome?: boolean;
+	headlessPrompt?: string;
 };
 
-export default function App({version, skipWelcome}: Props) {
+export default function App({version, skipWelcome, headlessPrompt}: Props) {
+	// If headless prompt is provided, use headless mode
+	if (headlessPrompt) {
+		return (
+			<HeadlessModeScreen
+				prompt={headlessPrompt}
+				onComplete={() => process.exit(0)}
+			/>
+		);
+	}
+
 	const [currentView, setCurrentView] = useState<
 		'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders'
 	>(skipWelcome ? 'chat' : 'welcome');
