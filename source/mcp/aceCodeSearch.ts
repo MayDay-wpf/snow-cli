@@ -9,7 +9,17 @@ import {type FzfResultItem, AsyncFzf} from 'fzf';
  */
 export interface CodeSymbol {
 	name: string;
-	type: 'function' | 'class' | 'method' | 'variable' | 'constant' | 'interface' | 'type' | 'enum' | 'import' | 'export';
+	type:
+		| 'function'
+		| 'class'
+		| 'method'
+		| 'variable'
+		| 'constant'
+		| 'interface'
+		| 'type'
+		| 'enum'
+		| 'import'
+		| 'export';
 	filePath: string;
 	line: number;
 	column: number;
@@ -51,37 +61,44 @@ export interface ASTNode {
 /**
  * Language-specific parsers configuration
  */
-const LANGUAGE_CONFIG: Record<string, {
-	extensions: string[];
-	parser: string;
-	symbolPatterns: {
-		function: RegExp;
-		class: RegExp;
-		variable?: RegExp;
-		import?: RegExp;
-		export?: RegExp;
-	};
-}> = {
+const LANGUAGE_CONFIG: Record<
+	string,
+	{
+		extensions: string[];
+		parser: string;
+		symbolPatterns: {
+			function: RegExp;
+			class: RegExp;
+			variable?: RegExp;
+			import?: RegExp;
+			export?: RegExp;
+		};
+	}
+> = {
 	typescript: {
 		extensions: ['.ts', '.tsx'],
 		parser: 'typescript',
 		symbolPatterns: {
-			function: /(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/,
+			function:
+				/(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/,
 			class: /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/,
 			variable: /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=/,
 			import: /import\s+(?:{[^}]+}|\w+)\s+from\s+['"]([^'"]+)['"]/,
-			export: /export\s+(?:default\s+)?(?:class|function|const|let|var|interface|type|enum)\s+(\w+)/,
+			export:
+				/export\s+(?:default\s+)?(?:class|function|const|let|var|interface|type|enum)\s+(\w+)/,
 		},
 	},
 	javascript: {
 		extensions: ['.js', '.jsx', '.mjs', '.cjs'],
 		parser: 'javascript',
 		symbolPatterns: {
-			function: /(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/,
+			function:
+				/(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/,
 			class: /(?:export\s+)?class\s+(\w+)/,
 			variable: /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=/,
 			import: /import\s+(?:{[^}]+}|\w+)\s+from\s+['"]([^'"]+)['"]/,
-			export: /export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)/,
+			export:
+				/export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)/,
 		},
 	},
 	python: {
@@ -111,7 +128,8 @@ const LANGUAGE_CONFIG: Record<string, {
 		parser: 'rust',
 		symbolPatterns: {
 			function: /(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*[<(]/,
-			class: /(?:pub\s+)?struct\s+(\w+)|(?:pub\s+)?enum\s+(\w+)|(?:pub\s+)?trait\s+(\w+)/,
+			class:
+				/(?:pub\s+)?struct\s+(\w+)|(?:pub\s+)?enum\s+(\w+)|(?:pub\s+)?trait\s+(\w+)/,
 			variable: /(?:pub\s+)?(?:static|const)\s+(\w+)\s*:/,
 			import: /use\s+([^;]+);/,
 			export: /pub\s+(?:fn|struct|enum|trait|const|static)\s+(\w+)/,
@@ -121,9 +139,12 @@ const LANGUAGE_CONFIG: Record<string, {
 		extensions: ['.java'],
 		parser: 'java',
 		symbolPatterns: {
-			function: /(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{/,
-			class: /(?:public|private|protected)?\s*(?:abstract|final)?\s*class\s+(\w+)/,
-			variable: /(?:public|private|protected|static|final|\s)+[\w<>\[\]]+\s+(\w+)\s*[=;]/,
+			function:
+				/(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{/,
+			class:
+				/(?:public|private|protected)?\s*(?:abstract|final)?\s*class\s+(\w+)/,
+			variable:
+				/(?:public|private|protected|static|final|\s)+[\w<>\[\]]+\s+(\w+)\s*[=;]/,
 			import: /import\s+([\w.]+);/,
 			export: /public\s+(?:class|interface|enum)\s+(\w+)/,
 		},
@@ -132,9 +153,12 @@ const LANGUAGE_CONFIG: Record<string, {
 		extensions: ['.cs'],
 		parser: 'csharp',
 		symbolPatterns: {
-			function: /(?:public|private|protected|internal|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{/,
-			class: /(?:public|private|protected|internal)?\s*(?:abstract|sealed|static)?\s*class\s+(\w+)/,
-			variable: /(?:public|private|protected|internal|static|readonly|\s)+[\w<>\[\]]+\s+(\w+)\s*[=;]/,
+			function:
+				/(?:public|private|protected|internal|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{/,
+			class:
+				/(?:public|private|protected|internal)?\s*(?:abstract|sealed|static)?\s*class\s+(\w+)/,
+			variable:
+				/(?:public|private|protected|internal|static|readonly|\s)+[\w<>\[\]]+\s+(\w+)\s*[=;]/,
 			import: /using\s+([\w.]+);/,
 			export: /public\s+(?:class|interface|enum|struct)\s+(\w+)/,
 		},
@@ -147,10 +171,17 @@ export class ACECodeSearchService {
 	private lastIndexTime: number = 0;
 	private readonly INDEX_CACHE_DURATION = 60000; // 1 minute
 	private fzfIndex: AsyncFzf<string[]> | undefined;
-	private allIndexedFiles: string[] = [];
+	private allIndexedFiles: Set<string> = new Set(); // 使用 Set 提高查找性能 O(1)
 	private fileModTimes: Map<string, number> = new Map(); // Track file modification times
 	private customExcludes: string[] = []; // Custom exclusion patterns from config files
 	private excludesLoaded: boolean = false; // Track if exclusions have been loaded
+
+	// 预编译的正则表达式缓存
+	private regexCache: Map<string, RegExp> = new Map();
+	// 文件内容缓存（用于减少重复读取）
+	private fileContentCache: Map<string, {content: string; mtime: number}> =
+		new Map();
+	private readonly FILE_CONTENT_CACHE_SIZE = 50; // 限制缓存大小
 
 	// Default exclusion directories
 	private readonly DEFAULT_EXCLUDES = [
@@ -243,17 +274,25 @@ export class ACECodeSearchService {
 		for (const pattern of this.customExcludes) {
 			// Simple pattern matching: exact match or glob-style wildcards
 			if (pattern.includes('*')) {
-				// Convert simple glob to regex for matching
-				const regexPattern = pattern
-					.replace(/\./g, '\\.')
-					.replace(/\*/g, '.*');
-				const regex = new RegExp(`^${regexPattern}$`);
+				// 使用缓存的正则表达式，避免重复编译
+				let regex = this.regexCache.get(pattern);
+				if (!regex) {
+					const regexPattern = pattern
+						.replace(/\./g, '\\.')
+						.replace(/\*/g, '.*');
+					regex = new RegExp(`^${regexPattern}$`);
+					this.regexCache.set(pattern, regex);
+				}
 				if (regex.test(relativePath) || regex.test(dirName)) {
 					return true;
 				}
 			} else {
 				// Exact match
-				if (relativePath === pattern || dirName === pattern || relativePath.startsWith(pattern + '/')) {
+				if (
+					relativePath === pattern ||
+					dirName === pattern ||
+					relativePath.startsWith(pattern + '/')
+				) {
 					return true;
 				}
 			}
@@ -276,9 +315,42 @@ export class ACECodeSearchService {
 	}
 
 	/**
+	 * Read file with LRU cache to reduce repeated file system access
+	 */
+	private async readFileWithCache(filePath: string): Promise<string> {
+		const stats = await fs.stat(filePath);
+		const mtime = stats.mtimeMs;
+
+		// Check cache
+		const cached = this.fileContentCache.get(filePath);
+		if (cached && cached.mtime === mtime) {
+			return cached.content;
+		}
+
+		// Read file
+		const content = await fs.readFile(filePath, 'utf-8');
+
+		// Manage cache size (simple LRU: remove oldest if over limit)
+		if (this.fileContentCache.size >= this.FILE_CONTENT_CACHE_SIZE) {
+			const firstKey = this.fileContentCache.keys().next().value;
+			if (firstKey) {
+				this.fileContentCache.delete(firstKey);
+			}
+		}
+
+		// Cache the content
+		this.fileContentCache.set(filePath, {content, mtime});
+
+		return content;
+	}
+
+	/**
 	 * Parse file content to extract code symbols using regex patterns
 	 */
-	private async parseFileSymbols(filePath: string, content: string): Promise<CodeSymbol[]> {
+	private async parseFileSymbols(
+		filePath: string,
+		content: string,
+	): Promise<CodeSymbol[]> {
 		const symbols: CodeSymbol[] = [];
 		const language = this.detectLanguage(filePath);
 
@@ -404,16 +476,26 @@ export class ACECodeSearchService {
 	/**
 	 * Get context lines around a specific line
 	 */
-	private getContext(lines: string[], lineIndex: number, contextSize: number): string {
+	private getContext(
+		lines: string[],
+		lineIndex: number,
+		contextSize: number,
+	): string {
 		const start = Math.max(0, lineIndex - contextSize);
 		const end = Math.min(lines.length, lineIndex + contextSize + 1);
-		return lines.slice(start, end).filter(l => l !== undefined).join('\n').trim();
+		return lines
+			.slice(start, end)
+			.filter(l => l !== undefined)
+			.join('\n')
+			.trim();
 	}
 
 	/**
 	 * Check if a directory is a Git repository
 	 */
-	private async isGitRepository(directory: string = this.basePath): Promise<boolean> {
+	private async isGitRepository(
+		directory: string = this.basePath,
+	): Promise<boolean> {
 		try {
 			const gitDir = path.join(directory, '.git');
 			const stats = await fs.stat(gitDir);
@@ -427,7 +509,7 @@ export class ACECodeSearchService {
 	 * Check if a command is available in the system PATH
 	 */
 	private isCommandAvailable(command: string): Promise<boolean> {
-		return new Promise((resolve) => {
+		return new Promise(resolve => {
 			try {
 				let child;
 				if (process.platform === 'win32') {
@@ -444,7 +526,7 @@ export class ACECodeSearchService {
 					});
 				}
 
-				child.on('close', (code) => resolve(code === 0));
+				child.on('close', code => resolve(code === 0));
 				child.on('error', () => resolve(false));
 			} catch {
 				resolve(false);
@@ -459,7 +541,12 @@ export class ACECodeSearchService {
 		output: string,
 		basePath: string,
 	): Array<{filePath: string; line: number; column: number; content: string}> {
-		const results: Array<{filePath: string; line: number; column: number; content: string}> = [];
+		const results: Array<{
+			filePath: string;
+			line: number;
+			column: number;
+			content: string;
+		}> = [];
 		if (!output) return results;
 
 		const lines = output.split(EOL);
@@ -476,7 +563,10 @@ export class ACECodeSearchService {
 
 			// Extract parts
 			const filePathRaw = line.substring(0, firstColonIndex);
-			const lineNumberStr = line.substring(firstColonIndex + 1, secondColonIndex);
+			const lineNumberStr = line.substring(
+				firstColonIndex + 1,
+				secondColonIndex,
+			);
 			const lineContent = line.substring(secondColonIndex + 1);
 
 			const lineNumber = parseInt(lineNumberStr, 10);
@@ -503,7 +593,11 @@ export class ACECodeSearchService {
 		const now = Date.now();
 
 		// Use cache if available and not expired
-		if (!forceRefresh && this.indexCache.size > 0 && (now - this.lastIndexTime) < this.INDEX_CACHE_DURATION) {
+		if (
+			!forceRefresh &&
+			this.indexCache.size > 0 &&
+			now - this.lastIndexTime < this.INDEX_CACHE_DURATION
+		) {
 			return;
 		}
 
@@ -514,7 +608,8 @@ export class ACECodeSearchService {
 		if (forceRefresh) {
 			this.indexCache.clear();
 			this.fileModTimes.clear();
-			this.allIndexedFiles = [];
+			this.allIndexedFiles.clear();
+			this.fileContentCache.clear();
 		}
 
 		const filesToProcess: string[] = [];
@@ -548,9 +643,7 @@ export class ACECodeSearchService {
 								}
 
 								// Track all indexed files (even if not modified)
-								if (!this.allIndexedFiles.includes(fullPath)) {
-									this.allIndexedFiles.push(fullPath);
-								}
+								this.allIndexedFiles.add(fullPath);
 							} catch (error) {
 								// If we can't stat the file, skip it
 							}
@@ -564,22 +657,34 @@ export class ACECodeSearchService {
 
 		await searchInDirectory(this.basePath);
 
-		// Process only modified or new files
-		for (const fullPath of filesToProcess) {
-			try {
-				const content = await fs.readFile(fullPath, 'utf-8');
-				const symbols = await this.parseFileSymbols(fullPath, content);
-				if (symbols.length > 0) {
-					this.indexCache.set(fullPath, symbols);
-				} else {
-					// Remove entry if no symbols found
-					this.indexCache.delete(fullPath);
-				}
-			} catch (error) {
-				// Remove from index if file cannot be read
-				this.indexCache.delete(fullPath);
-				this.fileModTimes.delete(fullPath);
-			}
+		// Process files in batches for better performance
+		const BATCH_SIZE = 10; // 并发处理批次大小
+		const batches: string[][] = [];
+
+		for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+			batches.push(filesToProcess.slice(i, i + BATCH_SIZE));
+		}
+
+		// Process batches concurrently
+		for (const batch of batches) {
+			await Promise.all(
+				batch.map(async fullPath => {
+					try {
+						const content = await this.readFileWithCache(fullPath);
+						const symbols = await this.parseFileSymbols(fullPath, content);
+						if (symbols.length > 0) {
+							this.indexCache.set(fullPath, symbols);
+						} else {
+							// Remove entry if no symbols found
+							this.indexCache.delete(fullPath);
+						}
+					} catch (error) {
+						// Remove from index if file cannot be read
+						this.indexCache.delete(fullPath);
+						this.fileModTimes.delete(fullPath);
+					}
+				}),
+			);
 		}
 
 		// Clean up deleted files from cache
@@ -590,10 +695,7 @@ export class ACECodeSearchService {
 				// File no longer exists, remove from cache
 				this.indexCache.delete(cachedPath);
 				this.fileModTimes.delete(cachedPath);
-				const fileIndex = this.allIndexedFiles.indexOf(cachedPath);
-				if (fileIndex !== -1) {
-					this.allIndexedFiles.splice(fileIndex, 1);
-				}
+				this.allIndexedFiles.delete(cachedPath);
 			}
 		}
 
@@ -650,7 +752,9 @@ export class ACECodeSearchService {
 				const fzfResults = await this.fzfIndex.find(query);
 
 				// Build a set of matched symbol names for quick lookup
-				const matchedNames = new Set(fzfResults.map((r: FzfResultItem<string>) => r.item));
+				const matchedNames = new Set(
+					fzfResults.map((r: FzfResultItem<string>) => r.item),
+				);
 
 				// Collect matching symbols with filters
 				for (const fileSymbols of this.indexCache.values()) {
@@ -671,7 +775,9 @@ export class ACECodeSearchService {
 
 				// Sort by fzf score (already sorted by relevance from fzf.find)
 				// Maintain the fzf order by using the original fzfResults order
-				const nameOrder = new Map(fzfResults.map((r: FzfResultItem<string>, i: number) => [r.item, i]));
+				const nameOrder = new Map(
+					fzfResults.map((r: FzfResultItem<string>, i: number) => [r.item, i]),
+				);
 				symbols.sort((a, b) => {
 					const aOrder = nameOrder.get(a.name);
 					const bOrder = nameOrder.get(b.name);
@@ -685,11 +791,23 @@ export class ACECodeSearchService {
 			} catch (error) {
 				// Fall back to manual scoring if fzf fails
 				console.debug('fzf search failed, falling back to manual scoring');
-				return this.searchSymbolsManual(query, symbolType, language, maxResults, startTime);
+				return this.searchSymbolsManual(
+					query,
+					symbolType,
+					language,
+					maxResults,
+					startTime,
+				);
 			}
 		} else {
 			// Fallback to manual scoring if fzf is not available
-			return this.searchSymbolsManual(query, symbolType, language, maxResults, startTime);
+			return this.searchSymbolsManual(
+				query,
+				symbolType,
+				language,
+				maxResults,
+				startTime,
+			);
 		}
 
 		const searchTime = Date.now() - startTime;
@@ -713,7 +831,6 @@ export class ACECodeSearchService {
 		maxResults: number = 100,
 		startTime: number = Date.now(),
 	): Promise<SemanticSearchResult> {
-		const symbols: CodeSymbol[] = [];
 		const queryLower = query.toLowerCase();
 
 		// Fuzzy match scoring
@@ -730,13 +847,20 @@ export class ACECodeSearchService {
 			if (nameLower.includes(queryLower)) return 60;
 
 			// Camel case match (e.g., "gfc" matches "getFileContent")
-			const camelCaseMatch = symbolName.split(/(?=[A-Z])/).map(s => s[0]?.toLowerCase() || '').join('');
+			const camelCaseMatch = symbolName
+				.split(/(?=[A-Z])/)
+				.map(s => s[0]?.toLowerCase() || '')
+				.join('');
 			if (camelCaseMatch.includes(queryLower)) return 40;
 
 			// Fuzzy match
 			let score = 0;
 			let queryIndex = 0;
-			for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
+			for (
+				let i = 0;
+				i < nameLower.length && queryIndex < queryLower.length;
+				i++
+			) {
 				if (nameLower[i] === queryLower[queryIndex]) {
 					score += 20;
 					queryIndex++;
@@ -747,7 +871,9 @@ export class ACECodeSearchService {
 			return 0;
 		};
 
-		// Search through all indexed symbols
+		// Search through all indexed symbols with score caching
+		const symbolsWithScores: Array<{symbol: CodeSymbol; score: number}> = [];
+
 		for (const fileSymbols of this.indexCache.values()) {
 			for (const symbol of fileSymbols) {
 				// Apply filters
@@ -756,16 +882,21 @@ export class ACECodeSearchService {
 
 				const score = calculateScore(symbol.name);
 				if (score > 0) {
-					symbols.push({...symbol});
+					symbolsWithScores.push({symbol: {...symbol}, score});
 				}
 
-				if (symbols.length >= maxResults) break;
+				if (symbolsWithScores.length >= maxResults * 2) break; // 获取更多候选以便排序
 			}
-			if (symbols.length >= maxResults) break;
+			if (symbolsWithScores.length >= maxResults * 2) break;
 		}
 
-		// Sort by relevance
-		symbols.sort((a, b) => calculateScore(b.name) - calculateScore(a.name));
+		// Sort by score (避免重复计算)
+		symbolsWithScores.sort((a, b) => b.score - a.score);
+
+		// Extract top results
+		const symbols = symbolsWithScores
+			.slice(0, maxResults)
+			.map(item => item.symbol);
 
 		const searchTime = Date.now() - startTime;
 
@@ -781,7 +912,10 @@ export class ACECodeSearchService {
 	/**
 	 * Find all references to a symbol
 	 */
-	async findReferences(symbolName: string, maxResults: number = 100): Promise<CodeReference[]> {
+	async findReferences(
+		symbolName: string,
+		maxResults: number = 100,
+	): Promise<CodeReference[]> {
 		const references: CodeReference[] = [];
 
 		const searchInDirectory = async (dirPath: string): Promise<void> => {
@@ -825,9 +959,18 @@ export class ACECodeSearchService {
 										let referenceType: CodeReference['referenceType'] = 'usage';
 										if (line.includes('import') && line.includes(symbolName)) {
 											referenceType = 'import';
-										} else if (line.match(new RegExp(`(?:function|class|const|let|var)\\s+${symbolName}`))) {
+										} else if (
+											line.match(
+												new RegExp(
+													`(?:function|class|const|let|var)\\s+${symbolName}`,
+												),
+											)
+										) {
 											referenceType = 'definition';
-										} else if (line.includes(':') && line.includes(symbolName)) {
+										} else if (
+											line.includes(':') &&
+											line.includes(symbolName)
+										) {
 											referenceType = 'type';
 										}
 
@@ -859,7 +1002,10 @@ export class ACECodeSearchService {
 	/**
 	 * Find symbol definition (go to definition)
 	 */
-	async findDefinition(symbolName: string, contextFile?: string): Promise<CodeSymbol | null> {
+	async findDefinition(
+		symbolName: string,
+		contextFile?: string,
+	): Promise<CodeSymbol | null> {
 		await this.buildIndex();
 
 		// Search in the same file first if context is provided
@@ -867,14 +1013,26 @@ export class ACECodeSearchService {
 			const fullPath = path.resolve(this.basePath, contextFile);
 			const fileSymbols = this.indexCache.get(fullPath);
 			if (fileSymbols) {
-				const symbol = fileSymbols.find(s => s.name === symbolName && (s.type === 'function' || s.type === 'class' || s.type === 'variable'));
+				const symbol = fileSymbols.find(
+					s =>
+						s.name === symbolName &&
+						(s.type === 'function' ||
+							s.type === 'class' ||
+							s.type === 'variable'),
+				);
 				if (symbol) return symbol;
 			}
 		}
 
 		// Search in all files
 		for (const fileSymbols of this.indexCache.values()) {
-			const symbol = fileSymbols.find(s => s.name === symbolName && (s.type === 'function' || s.type === 'class' || s.type === 'variable'));
+			const symbol = fileSymbols.find(
+				s =>
+					s.name === symbolName &&
+					(s.type === 'function' ||
+						s.type === 'class' ||
+						s.type === 'variable'),
+			);
 			if (symbol) return symbol;
 		}
 
@@ -888,9 +1046,18 @@ export class ACECodeSearchService {
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
-	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
 		return new Promise((resolve, reject) => {
-			const args = ['grep', '--untracked', '-n', '-E', '--ignore-case', pattern];
+			const args = [
+				'grep',
+				'--untracked',
+				'-n',
+				'-E',
+				'--ignore-case',
+				pattern,
+			];
 
 			if (fileGlob) {
 				args.push('--', fileGlob);
@@ -904,14 +1071,14 @@ export class ACECodeSearchService {
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
 
-			child.stdout.on('data', (chunk) => stdoutChunks.push(chunk));
-			child.stderr.on('data', (chunk) => stderrChunks.push(chunk));
+			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
+			child.stderr.on('data', chunk => stderrChunks.push(chunk));
 
-			child.on('error', (err) => {
+			child.on('error', err => {
 				reject(new Error(`Failed to start git grep: ${err.message}`));
 			});
 
-			child.on('close', (code) => {
+			child.on('close', code => {
 				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
 				const stderrData = Buffer.concat(stderrChunks).toString('utf8');
 
@@ -935,9 +1102,11 @@ export class ACECodeSearchService {
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
-	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
 		// Prefer ripgrep (rg) over grep if available
-		const grepCommand = await this.isCommandAvailable('rg') ? 'rg' : 'grep';
+		const grepCommand = (await this.isCommandAvailable('rg')) ? 'rg' : 'grep';
 		const isRipgrep = grepCommand === 'rg';
 
 		return new Promise((resolve, reject) => {
@@ -947,8 +1116,15 @@ export class ACECodeSearchService {
 
 			// Add exclusion patterns
 			const excludeDirs = [
-				'node_modules', '.git', 'dist', 'build',
-				'__pycache__', 'target', '.next', '.nuxt', 'coverage'
+				'node_modules',
+				'.git',
+				'dist',
+				'build',
+				'__pycache__',
+				'target',
+				'.next',
+				'.nuxt',
+				'coverage',
 			];
 
 			if (isRipgrep) {
@@ -974,21 +1150,23 @@ export class ACECodeSearchService {
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
 
-			child.stdout.on('data', (chunk) => stdoutChunks.push(chunk));
-			child.stderr.on('data', (chunk) => {
+			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
+			child.stderr.on('data', chunk => {
 				const stderrStr = chunk.toString();
 				// Suppress common harmless stderr messages
-				if (!stderrStr.includes('Permission denied') &&
-					!/grep:.*: Is a directory/i.test(stderrStr)) {
+				if (
+					!stderrStr.includes('Permission denied') &&
+					!/grep:.*: Is a directory/i.test(stderrStr)
+				) {
 					stderrChunks.push(chunk);
 				}
 			});
 
-			child.on('error', (err) => {
+			child.on('error', err => {
 				reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
 			});
 
-			child.on('close', (code) => {
+			child.on('close', code => {
 				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
 				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
 
@@ -999,7 +1177,9 @@ export class ACECodeSearchService {
 					// No matches found
 					resolve([]);
 				} else if (stderrData) {
-					reject(new Error(`${grepCommand} exited with code ${code}: ${stderrData}`));
+					reject(
+						new Error(`${grepCommand} exited with code ${code}: ${stderrData}`),
+					);
 				} else {
 					// Exit code > 1 but no stderr, likely just suppressed errors
 					resolve([]);
@@ -1016,8 +1196,15 @@ export class ACECodeSearchService {
 		fileGlob?: string,
 		isRegex: boolean = false,
 		maxResults: number = 100,
-	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
-		const results: Array<{filePath: string; line: number; column: number; content: string}> = [];
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
+		const results: Array<{
+			filePath: string;
+			line: number;
+			column: number;
+			content: string;
+		}> = [];
 
 		// Compile search pattern
 		let searchRegex: RegExp;
@@ -1074,13 +1261,37 @@ export class ACECodeSearchService {
 						// Skip binary files
 						const ext = path.extname(entry.name).toLowerCase();
 						const binaryExts = [
-							'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg',
-							'.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
-							'.exe', '.dll', '.so', '.dylib',
-							'.mp3', '.mp4', '.avi', '.mov',
-							'.woff', '.woff2', '.ttf', '.eot',
-							'.class', '.jar', '.war',
-							'.o', '.a', '.lib'
+							'.jpg',
+							'.jpeg',
+							'.png',
+							'.gif',
+							'.bmp',
+							'.ico',
+							'.svg',
+							'.pdf',
+							'.zip',
+							'.tar',
+							'.gz',
+							'.rar',
+							'.7z',
+							'.exe',
+							'.dll',
+							'.so',
+							'.dylib',
+							'.mp3',
+							'.mp4',
+							'.avi',
+							'.mov',
+							'.woff',
+							'.woff2',
+							'.ttf',
+							'.eot',
+							'.class',
+							'.jar',
+							'.war',
+							'.o',
+							'.a',
+							'.lib',
 						];
 						if (binaryExts.includes(ext)) {
 							continue;
@@ -1135,13 +1346,19 @@ export class ACECodeSearchService {
 		fileGlob?: string,
 		isRegex: boolean = false,
 		maxResults: number = 100,
-	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
 		// Strategy 1: Try git grep first
 		if (await this.isGitRepository()) {
 			try {
 				const gitAvailable = await this.isCommandAvailable('git');
 				if (gitAvailable) {
-					const results = await this.gitGrepSearch(pattern, fileGlob, maxResults);
+					const results = await this.gitGrepSearch(
+						pattern,
+						fileGlob,
+						maxResults,
+					);
 					if (results.length > 0 || !isRegex) {
 						// git grep doesn't support all regex features,
 						// fall back if pattern is complex regex and no results
@@ -1156,10 +1373,15 @@ export class ACECodeSearchService {
 
 		// Strategy 2: Try system grep/ripgrep
 		try {
-			const grepAvailable = await this.isCommandAvailable('rg') ||
-				await this.isCommandAvailable('grep');
+			const grepAvailable =
+				(await this.isCommandAvailable('rg')) ||
+				(await this.isCommandAvailable('grep'));
 			if (grepAvailable) {
-				const results = await this.systemGrepSearch(pattern, fileGlob, maxResults);
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+				);
 				return await this.sortResultsByRecency(results);
 			}
 		} catch (error) {
@@ -1168,7 +1390,12 @@ export class ACECodeSearchService {
 		}
 
 		// Strategy 3: JavaScript fallback (always works)
-		const results = await this.jsTextSearch(pattern, fileGlob, isRegex, maxResults);
+		const results = await this.jsTextSearch(
+			pattern,
+			fileGlob,
+			isRegex,
+			maxResults,
+		);
 		return await this.sortResultsByRecency(results);
 	}
 
@@ -1177,8 +1404,15 @@ export class ACECodeSearchService {
 	 * Files modified within last 24 hours are prioritized
 	 */
 	private async sortResultsByRecency(
-		results: Array<{filePath: string; line: number; column: number; content: string}>,
-	): Promise<Array<{filePath: string; line: number; column: number; content: string}>> {
+		results: Array<{
+			filePath: string;
+			line: number;
+			column: number;
+			content: string;
+		}>,
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
 		if (results.length === 0) return results;
 
 		const now = Date.now();
@@ -1204,8 +1438,8 @@ export class ACECodeSearchService {
 			const aMtime = fileModTimes.get(a.filePath) || 0;
 			const bMtime = fileModTimes.get(b.filePath) || 0;
 
-			const aIsRecent = (now - aMtime) < recentThreshold;
-			const bIsRecent = (now - bMtime) < recentThreshold;
+			const aIsRecent = now - aMtime < recentThreshold;
+			const bIsRecent = now - bMtime < recentThreshold;
 
 			// Recent files come first
 			if (aIsRecent && !bIsRecent) return -1;
@@ -1226,11 +1460,11 @@ export class ACECodeSearchService {
 	private globToRegex(glob: string): RegExp {
 		// Escape special regex characters except glob wildcards
 		let pattern = glob
-			.replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape regex special chars
+			.replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars
 			.replace(/\*\*/g, '<<<DOUBLESTAR>>>') // Temporarily replace **
-			.replace(/\*/g, '[^/]*')               // * matches anything except /
-			.replace(/<<<DOUBLESTAR>>>/g, '.*')   // ** matches everything
-			.replace(/\?/g, '[^/]');               // ? matches single char except /
+			.replace(/\*/g, '[^/]*') // * matches anything except /
+			.replace(/<<<DOUBLESTAR>>>/g, '.*') // ** matches everything
+			.replace(/\?/g, '[^/]'); // ? matches single char except /
 
 		// Handle {js,ts} alternatives
 		pattern = pattern.replace(/\\\{([^}]+)\\\}/g, (_, alternatives) => {
@@ -1253,7 +1487,11 @@ export class ACECodeSearchService {
 			const content = await fs.readFile(fullPath, 'utf-8');
 			return await this.parseFileSymbols(fullPath, content);
 		} catch (error) {
-			throw new Error(`Failed to get outline for ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			throw new Error(
+				`Failed to get outline for ${filePath}: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
 		}
 	}
 
@@ -1269,7 +1507,12 @@ export class ACECodeSearchService {
 		const startTime = Date.now();
 
 		// Get symbol search results
-		const symbolResults = await this.searchSymbols(query, undefined, language, maxResults);
+		const symbolResults = await this.searchSymbols(
+			query,
+			undefined,
+			language,
+			maxResults,
+		);
 
 		// Get reference results if needed
 		let references: CodeReference[] = [];
@@ -1285,14 +1528,15 @@ export class ACECodeSearchService {
 		// Filter results based on search type
 		let filteredSymbols = symbolResults.symbols;
 		if (searchType === 'definition') {
-			filteredSymbols = symbolResults.symbols.filter(s =>
-				s.type === 'function' || s.type === 'class' || s.type === 'interface'
+			filteredSymbols = symbolResults.symbols.filter(
+				s =>
+					s.type === 'function' || s.type === 'class' || s.type === 'interface',
 			);
 		} else if (searchType === 'usage') {
 			filteredSymbols = [];
 		} else if (searchType === 'implementation') {
-			filteredSymbols = symbolResults.symbols.filter(s =>
-				s.type === 'function' || s.type === 'method' || s.type === 'class'
+			filteredSymbols = symbolResults.symbols.filter(
+				s => s.type === 'function' || s.type === 'method' || s.type === 'class',
 			);
 		}
 
@@ -1313,7 +1557,8 @@ export class ACECodeSearchService {
 	clearCache(): void {
 		this.indexCache.clear();
 		this.fileModTimes.clear();
-		this.allIndexedFiles = [];
+		this.allIndexedFiles.clear();
+		this.fileContentCache.clear();
 		this.lastIndexTime = 0;
 	}
 
@@ -1332,7 +1577,8 @@ export class ACECodeSearchService {
 		for (const symbols of this.indexCache.values()) {
 			totalSymbols += symbols.length;
 			for (const symbol of symbols) {
-				languageBreakdown[symbol.language] = (languageBreakdown[symbol.language] || 0) + 1;
+				languageBreakdown[symbol.language] =
+					(languageBreakdown[symbol.language] || 0) + 1;
 			}
 		}
 
@@ -1352,22 +1598,43 @@ export const aceCodeSearchService = new ACECodeSearchService();
 export const mcpTools = [
 	{
 		name: 'ace_search_symbols',
-		description: 'ACE Code Search: Intelligent symbol search across the codebase. Finds functions, classes, variables, and other code symbols with fuzzy matching. Supports multiple programming languages (TypeScript, JavaScript, Python, Go, Rust, Java, C#). Returns precise file locations with line numbers and context.',
+		description:
+			'ACE Code Search: Intelligent symbol search across the codebase. Finds functions, classes, variables, and other code symbols with fuzzy matching. Supports multiple programming languages (TypeScript, JavaScript, Python, Go, Rust, Java, C#). Returns precise file locations with line numbers and context.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				query: {
 					type: 'string',
-					description: 'Symbol name to search for (supports fuzzy matching, e.g., "gfc" can match "getFileContent")',
+					description:
+						'Symbol name to search for (supports fuzzy matching, e.g., "gfc" can match "getFileContent")',
 				},
 				symbolType: {
 					type: 'string',
-					enum: ['function', 'class', 'method', 'variable', 'constant', 'interface', 'type', 'enum', 'import', 'export'],
+					enum: [
+						'function',
+						'class',
+						'method',
+						'variable',
+						'constant',
+						'interface',
+						'type',
+						'enum',
+						'import',
+						'export',
+					],
 					description: 'Filter by specific symbol type (optional)',
 				},
 				language: {
 					type: 'string',
-					enum: ['typescript', 'javascript', 'python', 'go', 'rust', 'java', 'csharp'],
+					enum: [
+						'typescript',
+						'javascript',
+						'python',
+						'go',
+						'rust',
+						'java',
+						'csharp',
+					],
 					description: 'Filter by programming language (optional)',
 				},
 				maxResults: {
@@ -1381,7 +1648,8 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_find_definition',
-		description: 'ACE Code Search: Find the definition of a symbol (Go to Definition). Locates where a function, class, or variable is defined in the codebase. Returns precise location with full signature and context.',
+		description:
+			'ACE Code Search: Find the definition of a symbol (Go to Definition). Locates where a function, class, or variable is defined in the codebase. Returns precise location with full signature and context.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1391,7 +1659,8 @@ export const mcpTools = [
 				},
 				contextFile: {
 					type: 'string',
-					description: 'Current file path for context-aware search (optional, searches current file first)',
+					description:
+						'Current file path for context-aware search (optional, searches current file first)',
 				},
 			},
 			required: ['symbolName'],
@@ -1399,7 +1668,8 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_find_references',
-		description: 'ACE Code Search: Find all references to a symbol (Find All References). Shows where a function, class, or variable is used throughout the codebase. Categorizes references as definition, usage, import, or type reference.',
+		description:
+			'ACE Code Search: Find all references to a symbol (Find All References). Shows where a function, class, or variable is used throughout the codebase. Categorizes references as definition, usage, import, or type reference.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1418,7 +1688,8 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_semantic_search',
-		description: 'ACE Code Search: Advanced semantic search with context understanding. Searches for symbols with intelligent filtering by search type (definition, usage, implementation, all). Combines symbol search with cross-reference analysis.',
+		description:
+			'ACE Code Search: Advanced semantic search with context understanding. Searches for symbols with intelligent filtering by search type (definition, usage, implementation, all). Combines symbol search with cross-reference analysis.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1429,12 +1700,21 @@ export const mcpTools = [
 				searchType: {
 					type: 'string',
 					enum: ['definition', 'usage', 'implementation', 'all'],
-					description: 'Type of search: definition (find declarations), usage (find usages), implementation (find implementations), all (comprehensive search)',
+					description:
+						'Type of search: definition (find declarations), usage (find usages), implementation (find implementations), all (comprehensive search)',
 					default: 'all',
 				},
 				language: {
 					type: 'string',
-					enum: ['typescript', 'javascript', 'python', 'go', 'rust', 'java', 'csharp'],
+					enum: [
+						'typescript',
+						'javascript',
+						'python',
+						'go',
+						'rust',
+						'java',
+						'csharp',
+					],
 					description: 'Filter by programming language (optional)',
 				},
 				maxResults: {
@@ -1448,13 +1728,15 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_file_outline',
-		description: 'ACE Code Search: Get complete code outline for a file. Shows all functions, classes, variables, and other symbols defined in the file with their locations. Similar to VS Code\'s outline view.',
+		description:
+			"ACE Code Search: Get complete code outline for a file. Shows all functions, classes, variables, and other symbols defined in the file with their locations. Similar to VS Code's outline view.",
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
 					type: 'string',
-					description: 'Path to the file to get outline for (relative to workspace root)',
+					description:
+						'Path to the file to get outline for (relative to workspace root)',
 				},
 			},
 			required: ['filePath'],
@@ -1462,21 +1744,25 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_text_search',
-		description: 'ACE Code Search: Fast text search across the entire codebase using Node.js built-in features (no external dependencies required). Search for exact patterns or regex across all files. Useful for finding strings, comments, TODOs, or any text patterns. Supports glob filtering.',
+		description:
+			'ACE Code Search: Fast text search across the entire codebase using Node.js built-in features (no external dependencies required). Search for exact patterns or regex across all files. Useful for finding strings, comments, TODOs, or any text patterns. Supports glob filtering.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				pattern: {
 					type: 'string',
-					description: 'Text pattern or regex to search for (e.g., "TODO:", "import.*from", "throw new Error")',
+					description:
+						'Text pattern or regex to search for (e.g., "TODO:", "import.*from", "throw new Error")',
 				},
 				fileGlob: {
 					type: 'string',
-					description: 'Glob pattern to filter files (e.g., "*.ts" for TypeScript only, "**/*.{js,ts}" for JS and TS, "src/**/*.py" for Python in src)',
+					description:
+						'Glob pattern to filter files (e.g., "*.ts" for TypeScript only, "**/*.{js,ts}" for JS and TS, "src/**/*.py" for Python in src)',
 				},
 				isRegex: {
 					type: 'boolean',
-					description: 'Whether the pattern is a regular expression (default: false for literal text search)',
+					description:
+						'Whether the pattern is a regular expression (default: false for literal text search)',
 					default: false,
 				},
 				maxResults: {
@@ -1490,7 +1776,8 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_index_stats',
-		description: 'ACE Code Search: Get statistics about the code index. Shows number of indexed files, symbols, language breakdown, and cache status. Useful for understanding search coverage.',
+		description:
+			'ACE Code Search: Get statistics about the code index. Shows number of indexed files, symbols, language breakdown, and cache status. Useful for understanding search coverage.',
 		inputSchema: {
 			type: 'object',
 			properties: {},
@@ -1498,7 +1785,8 @@ export const mcpTools = [
 	},
 	{
 		name: 'ace_clear_cache',
-		description: 'ACE Code Search: Clear the symbol index cache and force a full re-index on next search. Use when codebase has changed significantly or search results seem stale.',
+		description:
+			'ACE Code Search: Clear the symbol index cache and force a full re-index on next search. Use when codebase has changed significantly or search results seem stale.',
 		inputSchema: {
 			type: 'object',
 			properties: {},

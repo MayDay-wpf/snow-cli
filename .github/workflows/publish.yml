@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- Remove unwanted dependencies
+            -- Search performance optimization
             ### Installation
             ```bash
             npm install -g snow-ai

@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.2.28",
+	"version": "0.3.0",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
