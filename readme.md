@@ -6,97 +6,118 @@
 
 **English** | [中文](readme_zh.md)
 
-*An intelligent AI-powered CLI tool for developers*
+_An intelligent AI-powered CLI tool for developers_
 
 </div>
 
 ---
 
-
-## Install
+## Installation
 
 ```bash
-$ npm install --global snow-ai
+$ npm install -g snow-ai
 ```
 
-## Start
-```bash
-$ snow
-```
+You can also clone and build from source: https://github.com/MayDay-wpf/snow-cli
 
-## Update
-```bash
-$ snow --update
-```
+### Install VSCode Extension
 
-## Config example  `./User/.snow/config.json`
-```json
-{
-  "snowcfg": {
-    "baseUrl": "https://api.openai.com/v1",//Gemini：https://generativelanguage.googleapis.com Anthropic：https://api.anthropic.com
-    "apiKey": "your-api-key",
-    "requestMethod": "responses",
-    "advancedModel": "gpt-5-codex",
-    "basicModel": "gpt-5-codex",
-    "maxContextTokens": 32000, //The maximum context length of the model
-    "maxTokens": 4096, // The maximum generation length of the model
-    "anthropicBeta": false,
-    "compactModel": {
-      "baseUrl": "https://api.opeai.com/v1",
-      "apiKey": "your-api-key",
-      "modelName": "gpt-4.1-mini"
-    }
-  }
-}
-```
+- Download [VSIX/snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/)
 
-## Uninstall
-```bash
-$ npm uninstall --global snow-ai
-```
+- Open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.6.vsix`
 
-## Install VSCode Extension
+### Install JetBrains Plugin
 
-* download [VSIX/snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/)
+- Download [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
 
-* open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.6.vsix`
+## Available Commands
 
-## Install JetBrains plugin
+- **Start**: `$ snow`
+- **Update**: `$ snow --update`
+- **Version**: `$ snow --version`
+- **Resume**: `$ snow -c` - Restore the latest conversation history (fully compatible with Claude Code)
 
-* download [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
+## API & Model Settings
 
-* File > Settings > Plugins
+In version `v0.3.2` and later, all official SDKs have been removed (they were too heavy), so the configuration is slightly different. After starting, enter `API & Model Settings` to see the following options:
 
-## Live View
-* **Welcome & Settings**
+- **Profile** - Switch or create new configurations. Snow now supports saving multiple API and model schemes
+- **Base URL** - Request endpoint. Since official SDKs were removed, OpenAI and Anthropic require `/v1` suffix, Gemini requires `/v1beta`
+- **API Key** - Your API key
+- **Request Method** - Choose based on your needs: `Chat Completions`, `Responses`, `Gemini`, or `Anthropic`
+- **Anthropic Beta** - When checked, Anthropic requests will automatically include `beta=true` parameter
+- **Advanced Model**, **Basic Model**, **Compact Model** - Set the high-performance model for tasks, small model for summarization, and compact model for context compression. All three models use the configured `BaseURL` and `API Key`. The system automatically fetches available models from the `/models` endpoint with filtering support. For APIs with incomplete model lists, use `Manual Input (Enter model name)` to specify the model name
+- **Max Context Tokens** - The model's maximum context window, used for calculating context percentage. For example, Gemini typically has 1M context, so enter `1000000`. This parameter only affects UI calculations, not actual model context
+- **Max Tokens** - This is critical and will be directly added to API requests as the `max_tokens` parameter
 
 ![alt text](image.png)
 
-* **Agent**
+## Proxy & Browser Settings
+
+Configure system proxy port and search engine for web search. In most cases, this doesn't need modification as the app will automatically use system proxy. The app automatically detects available search engines (Edge/Chrome) unless you've manually changed their installation paths.
 
 ![alt text](image-1.png)
-* In the middle of the conversation: click ESC to stop AI generation
 
-* When mounting: double-click ESC, view the dialogue recorder, select rollback, including file checkpoints
+## System Prompt Settings
 
-* MacOS:`ctrl + v` Paste image
-* Windows:`alt + v` Paste image
+Customize your system prompt. Note that this supplements Snow's built-in system prompt rather than replacing it. When you set a custom system prompt, Snow's default prompt is downgraded to a user message and appended to the first user message. On Windows, the app automatically opens Notepad; on macOS/Linux, it uses the system's default terminal text editor. After editing and saving, Snow will close and prompt you to restart: `Custom system prompt saved successfully! Please use 'snow' to restart!`
 
+## Custom Headers Settings
 
-* **Commands**
+Add custom request headers. Note that you can only add headers, not override Snow's built-in headers.
+
+## MCP Settings
+
+Configure MCP services. The method is identical to setting system prompts, and the JSON format matches Cursor's format.
+
+## Getting Started - Start Conversation
+
+Once everything is configured, enter the conversation page by clicking `Start`.
+
+- If you launch Snow from VSCode or other editors, Snow will automatically connect to the IDE using the `Snow CLI` plugin. You'll see a connection message. The plugins are published online - search for `Snow CLI` in the plugin marketplace to install.
 
 ![alt text](image-2.png)
-  - /clear - Create a new session
 
-  - /resume - The recovery history has
+### File Selection & Commands
 
-  - /mcp - Check the status of MCP service
+- Use `@` to select files. In VSCode, you can also hold `Shift` and drag files for the same effect
+- Use `/` to view available commands:
+  - `/init` - Build project documentation `SNOW.md`
+  - `/clear` - Create a new session
+  - `/resume` - Restore conversation history
+  - `/mcp` - Check MCP connection status and reconnect
+  - `/yolo` - Unattended mode (all tool calls execute without confirmation - use with caution)
+  - `/ide` - Manually connect to IDE (usually automatic if plugin is installed)
+  - `/compact` - Compress context (rarely used as compression reduces AI quality)
 
-  - /yolo - Unattended mode, all tools automatically agree to execute
+### Keyboard Shortcuts
 
-  - /init - Initialize the project and generate the SNOW.md description document
+- **Windows**: `Alt+V` - Paste image; **macOS/Linux**: `Ctrl+V` - Paste image (with prompt)
+- `Ctrl+L` - Clear input from cursor position to the left
+- `Ctrl+R` - Clear input from cursor position to the right
+- `Shift+Tab` - Toggle Yolo mode on/off
+- `ESC` - Stop AI generation
+- **Double-click `ESC`** - Rollback conversation (with file checkpoints)
 
-  - /ide - Connect to VSCode, you need to install the plug-in
+### Token Usage
 
-  - /compact - compress the context into a sentence
+The input area displays context usage percentage, token count, cache hit tokens, and cache creation tokens.
 
+![alt text](image-3.png)
+
+## Snow System Files
+
+All Snow files are stored in the `.snow` folder in your user directory. Here's what each file/folder contains:
+
+![alt text](image-4.png)
+
+- **log** - Runtime logs (not uploaded anywhere, kept locally for debugging). Safe to delete
+- **profiles** - Multiple configuration files for switching between different API/model setups
+- **sessions** - All conversation history (required for `/resume` and other features, not uploaded)
+- **snapshots** - File snapshots before AI edits (used for rollback). Automatic management, no manual intervention needed
+- **todo** - Persisted todo lists from each conversation (prevents AI from forgetting tasks if app exits unexpectedly)
+- **active-profile.txt** - Identifies the currently active profile (for backward compatibility with early versions)
+- **config.json** - Main API configuration file
+- **custom-headers.json** - Custom request headers
+- **mcp-config.json** - MCP service configuration
+- **system-prompt.txt** - Custom system prompt content
