@@ -694,7 +694,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 						</Box>
 					</Box>,
 					...messages
-						.filter(m => !m.streaming && !m.toolPending)
+						.filter(m => !m.streaming)
 						.map((message, index) => {
 							// Determine tool message type and color
 							let toolStatusColor: string = 'cyan';
@@ -988,45 +988,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 			>
 				{item => item}
 			</Static>
-
-			{/* Show pending tool calls in dynamic area */}
-			{messages
-				.filter(m => m.toolPending)
-				.map((message, index) => (
-					<Box
-						key={`pending-tool-${index}`}
-						marginBottom={1}
-						paddingX={1}
-						width={terminalWidth}
-					>
-						<Text color="yellowBright" bold>
-							❆
-						</Text>
-						<Box marginLeft={1} marginBottom={1} flexDirection="column">
-							<Box flexDirection="row">
-								<MarkdownRenderer
-									content={message.content || ' '}
-									color="yellow"
-								/>
-								<Box marginLeft={1}>
-									<Text color="yellow">
-										<Spinner type="dots" />
-									</Text>
-								</Box>
-							</Box>
-							{/* Show tool parameters preview during execution */}
-							{message.toolDisplay && message.toolDisplay.args.length > 0 && (
-								<Box flexDirection="column" marginTop={1}>
-									{message.toolDisplay.args.map((arg, argIndex) => (
-										<Text key={argIndex} color="gray" dimColor>
-											{arg.isLast ? '└─' : '├─'} {arg.key}: {arg.value}
-										</Text>
-									))}
-								</Box>
-							)}
-						</Box>
-					</Box>
-				))}
 
 			{/* Show loading indicator when streaming or saving */}
 			{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (

@@ -524,69 +524,28 @@ export async function handleConversationWithTools(
 							}
 						}
 
-						// Check if this is a terminal execution result
-						let terminalResultData:
-							| {
-									stdout?: string;
-									stderr?: string;
-									exitCode?: number;
-									command?: string;
-							  }
-							| undefined;
-						if (toolCall.function.name === 'terminal-execute' && !isError) {
-							try {
-								const resultData = JSON.parse(result.content);
-								if (resultData.command !== undefined) {
-									terminalResultData = {
-										stdout: resultData.stdout || '',
-										stderr: resultData.stderr || '',
-										exitCode: resultData.exitCode || 0,
-										command: resultData.command,
-									};
-								}
-							} catch (e) {
-								// If parsing fails, just show regular result
-							}
-						}
 
-						// Check if this tool should show preview (websearch, ace, filesystem-read, etc.)
-						const shouldShowPreview =
-							toolCall.function.name.startsWith('websearch-') ||
-							toolCall.function.name.startsWith('ace-') ||
-							toolCall.function.name === 'filesystem-read' ||
-							toolCall.function.name === 'filesystem-list' ||
-							toolCall.function.name === 'filesystem-create' ||
-							toolCall.function.name === 'filesystem-write';
-
-						// Update the existing pending message instead of adding a new one
-						setMessages(prev =>
-							prev.map(msg => {
-								if (msg.toolCallId === toolCall.id && msg.toolPending) {
-									return {
-										...msg,
-										content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-										toolPending: false,
-										toolCall: editDiffData
-											? {
-													name: toolCall.function.name,
-													arguments: editDiffData,
-											  }
-											: terminalResultData
-											? {
-													name: toolCall.function.name,
-													arguments: terminalResultData,
-											  }
-											: shouldShowPreview
-											? undefined // Clear toolCall for preview-enabled tools
-											: msg.toolCall, // Keep original toolCall for other tools
-										// Store tool result for preview rendering
-										toolResult: !isError ? result.content : undefined,
-									};
-								}
-								return msg;
-							}),
-						);
-					}
+					// Append completed message to static area (don't remove pending message)
+					// Static area doesn't support deletion, only append
+					// Completed message only shows diff data (for edit tools), no other parameters
+					setMessages(prev => [
+						...prev,
+						// Add new completed message
+						{
+							role: 'assistant',
+							content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+							streaming: false,
+							toolCall: editDiffData
+								? {
+										name: toolCall.function.name,
+										arguments: editDiffData,
+								  }
+								: undefined, // Don't show arguments for completed tools (already shown in pending)
+							// Store tool result for preview rendering
+							toolResult: !isError ? result.content : undefined,
+						},
+					]);
+				}
 
 					// Add tool result to conversation history and save
 					conversationMessages.push(result as any);

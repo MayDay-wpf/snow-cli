@@ -3,7 +3,6 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Select, Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
-import chalk from 'chalk';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
@@ -216,36 +215,6 @@ export default function ConfigScreen({
 		return '';
 	};
 
-	const handleProfileChange = (value: string) => {
-		if (value === '__CREATE_NEW__') {
-			setProfileMode('creating');
-			setNewProfileName('');
-			return;
-		}
-
-		if (value === '__DELETE__') {
-			if (activeProfile === 'default') {
-				setErrors(['Cannot delete the default profile']);
-				setIsEditing(false); // Exit editing mode to prevent Select component error
-				return;
-			}
-			setProfileMode('deleting');
-			return;
-		}
-
-		// Switch profile
-		try {
-			switchProfile(value);
-			loadProfilesAndConfig();
-			setIsEditing(false);
-			setErrors([]);
-		} catch (err) {
-			setErrors([
-				err instanceof Error ? err.message : 'Failed to switch profile',
-			]);
-		}
-	};
-
 	const handleCreateProfile = () => {
 		const cleaned = stripFocusArtifacts(newProfileName).trim();
 
@@ -266,7 +235,9 @@ export default function ConfigScreen({
 					basicModel,
 					maxContextTokens,
 					maxTokens,
-					compactModel: compactModelName ? {modelName: compactModelName} : undefined,
+					compactModel: compactModelName
+						? {modelName: compactModelName}
+						: undefined,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -386,6 +357,27 @@ export default function ConfigScreen({
 		}
 
 		if (isFocusEventInput(rawInput)) {
+			return;
+		}
+
+		// Handle profile shortcuts (highest priority - works even in Select mode)
+		if (currentField === 'profile' && (input === 'n' || input === 'N')) {
+			// Handle profile creation (works in both normal and editing mode)
+			setProfileMode('creating');
+			setNewProfileName('');
+			setIsEditing(false); // Exit Select editing mode
+			return;
+		}
+
+		if (currentField === 'profile' && (input === 'd' || input === 'D')) {
+			// Handle profile deletion (works in both normal and editing mode)
+			if (activeProfile === 'default') {
+				setErrors(['Cannot delete the default profile']);
+				setIsEditing(false);
+				return;
+			}
+			setProfileMode('deleting');
+			setIsEditing(false); // Exit Select editing mode
 			return;
 		}
 
@@ -829,24 +821,36 @@ export default function ConfigScreen({
 					</Text>
 					<Box marginLeft={3} marginTop={1}>
 						{currentField === 'profile' && (
-							<Select
-								options={[
-									...profiles.map(p => ({
+							<Box flexDirection="column">
+								{profiles.length > 1 && (
+									<Text color="gray" dimColor>
+										Scroll to see more profiles (↑↓)
+									</Text>
+								)}
+								<Select
+									options={profiles.map(p => ({
 										label: `${p.displayName}${p.isActive ? ' (Active)' : ''}`,
 										value: p.name,
-									})),
-									{
-										label: chalk.green('+ New Profile'),
-										value: '__CREATE_NEW__',
-									},
-									{
-										label: chalk.red('🆇 Delete Profile'),
-										value: '__DELETE__',
-									},
-								]}
-								defaultValue={activeProfile}
-								onChange={handleProfileChange}
-							/>
+									}))}
+									defaultValue={activeProfile}
+									onChange={value => {
+										switchProfile(value);
+										loadProfilesAndConfig();
+										setIsEditing(false);
+										setErrors([]);
+									}}
+								/>
+								<Box flexDirection="row" marginTop={1}>
+									<Box marginRight={2}>
+										<Text color="green">+ New</Text>
+										<Text color="gray"> (n)</Text>
+									</Box>
+									<Box>
+										<Text color="red">🆇 Delete</Text>
+										<Text color="gray"> (d)</Text>
+									</Box>
+								</Box>
+							</Box>
 						)}
 						{currentField === 'requestMethod' && (
 							<Select
@@ -877,7 +881,9 @@ export default function ConfigScreen({
 								currentField === 'basicModel' ||
 								currentField === 'compactModelName') &&
 								'Type to filter, ↑↓ to select, Enter to confirm, Esc to cancel'}
-							{(currentField === 'profile' || currentField === 'requestMethod') &&
+							{currentField === 'profile' &&
+								'↑↓ to select profile, N to create new, D to delete, Enter to confirm, Esc to cancel'}
+							{currentField === 'requestMethod' &&
 								'↑↓ to select, Enter to confirm, Esc to cancel'}
 						</Alert>
 					</Box>
@@ -993,7 +999,9 @@ export default function ConfigScreen({
 					</Box>
 
 					<Box flexDirection="column">
-						<Text color={currentField === 'compactModelName' ? 'green' : 'white'}>
+						<Text
+							color={currentField === 'compactModelName' ? 'green' : 'white'}
+						>
 							{currentField === 'compactModelName' ? '❯ ' : '  '}Compact Model:
 						</Text>
 						{(!isEditing || currentField !== 'compactModelName') && (
@@ -1004,7 +1012,9 @@ export default function ConfigScreen({
 					</Box>
 
 					<Box flexDirection="column">
-						<Text color={currentField === 'maxContextTokens' ? 'green' : 'white'}>
+						<Text
+							color={currentField === 'maxContextTokens' ? 'green' : 'white'}
+						>
 							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
 							Tokens:
 						</Text>
@@ -1064,14 +1074,16 @@ export default function ConfigScreen({
 					{isEditing ? (
 						<Alert variant="info">
 							Editing mode:{' '}
-							{currentField === 'maxContextTokens' || currentField === 'maxTokens'
+							{currentField === 'maxContextTokens' ||
+							currentField === 'maxTokens'
 								? 'Type to edit, Enter to save'
 								: 'Press Enter to save and exit editing'}
 						</Alert>
 					) : (
 						<Alert variant="info">
-							Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or
-							Esc to save
+							{currentField === 'profile'
+								? 'Use ↑↓ to navigate, N to create new profile, D to delete profile, Ctrl+S or Esc to save'
+								: 'Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or Esc to save'}
 						</Alert>
 					)}
 				</Box>
