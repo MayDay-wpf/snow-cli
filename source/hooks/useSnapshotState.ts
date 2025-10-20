@@ -7,6 +7,7 @@ export function useSnapshotState(messagesLength: number) {
 	const [pendingRollback, setPendingRollback] = useState<{
 		messageIndex: number;
 		fileCount: number;
+		filePaths?: string[];
 	} | null>(null);
 
 	// Load snapshot file counts when session changes

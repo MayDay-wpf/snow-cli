@@ -111,10 +111,15 @@ export async function handleConversationWithTools(
 
 	// Add history messages from session (includes tool_calls and tool results)
 	// Load from session to get complete conversation history with tool interactions
+	// Filter out internal sub-agent messages (marked with subAgentInternal: true)
 	const session = sessionManager.getCurrentSession();
 	if (session && session.messages.length > 0) {
 		// Use session messages directly (they are already in API format)
-		conversationMessages.push(...session.messages);
+		// Filter out sub-agent internal messages before sending to API
+		const filteredMessages = session.messages.filter(
+			msg => !msg.subAgentInternal,
+		);
+		conversationMessages.push(...filteredMessages);
 	}
 
 	// Add current user message
@@ -454,15 +459,210 @@ export async function handleConversationWithTools(
 					approvedTools.push(...toolsNeedingConfirmation);
 				}
 
-				// Execute approved tools
-				const toolResults = await executeToolCalls(approvedTools, controller.signal, setStreamTokenCount);
+				// Execute approved tools with sub-agent message callback
+				const toolResults = await executeToolCalls(
+					approvedTools,
+					controller.signal,
+					setStreamTokenCount,
+					async subAgentMessage => {
+						// Handle sub-agent messages - display and save to session
+						setMessages(prev => {
+							// Handle tool calls from sub-agent
+							if (subAgentMessage.message.type === 'tool_calls') {
+								const toolCalls = subAgentMessage.message.tool_calls;
+								if (toolCalls && toolCalls.length > 0) {
+									// Add tool call messages for each tool
+									const toolMessages = toolCalls.map((toolCall: any) => {
+										const toolDisplay = formatToolCallMessage(toolCall);
+										let toolArgs;
+										try {
+											toolArgs = JSON.parse(toolCall.function.arguments);
+										} catch (e) {
+											toolArgs = {};
+										}
 
+										const uiMsg = {
+											role: 'subagent' as const,
+											content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+											streaming: false,
+											toolCall: {
+												name: toolCall.function.name,
+												arguments: toolArgs,
+											},
+											toolDisplay,
+											toolCallId: toolCall.id,
+											toolPending: true,
+											subAgent: {
+												agentId: subAgentMessage.agentId,
+												agentName: subAgentMessage.agentName,
+												isComplete: false,
+											},
+											subAgentInternal: true, // Mark as internal sub-agent message
+										};
 
-			// Check if aborted during tool execution
-			if (controller.signal.aborted) {
-				freeEncoder();
-				break;
-			}
+										// Save to session as 'assistant' role for API compatibility
+										const sessionMsg = {
+											role: 'assistant' as const,
+											content: `⚇⚡ ${toolDisplay.toolName}`,
+											subAgentInternal: true,
+											tool_calls: [toolCall],
+										};
+										saveMessage(sessionMsg).catch(err =>
+											console.error('Failed to save sub-agent tool call:', err),
+										);
+
+										return uiMsg;
+									});
+
+									return [...prev, ...toolMessages];
+								}
+							}
+
+							// Handle tool results from sub-agent
+							if (subAgentMessage.message.type === 'tool_result') {
+								const msg = subAgentMessage.message as any;
+								const isError = msg.content.startsWith('Error:');
+								const statusIcon = isError ? '✗' : '✓';
+								const statusText = isError ? `\n  └─ ${msg.content}` : '';
+
+								// For terminal-execute, try to extract terminal result data
+								let terminalResultData:
+									| {
+											stdout?: string;
+											stderr?: string;
+											exitCode?: number;
+											command?: string;
+									  }
+									| undefined;
+								if (msg.tool_name === 'terminal-execute' && !isError) {
+									try {
+										const resultData = JSON.parse(msg.content);
+										if (
+											resultData.stdout !== undefined ||
+											resultData.stderr !== undefined
+										) {
+											terminalResultData = {
+												stdout: resultData.stdout,
+												stderr: resultData.stderr,
+												exitCode: resultData.exitCode,
+												command: resultData.command,
+											};
+										}
+									} catch (e) {
+										// If parsing fails, just show regular result
+									}
+								}
+
+								// Create completed tool result message for UI
+								const uiMsg = {
+									role: 'subagent' as const,
+									content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
+									streaming: false,
+									toolResult: !isError ? msg.content : undefined,
+									terminalResult: terminalResultData,
+									toolCall: terminalResultData
+										? {
+												name: msg.tool_name,
+												arguments: terminalResultData,
+										  }
+										: undefined,
+									subAgent: {
+										agentId: subAgentMessage.agentId,
+										agentName: subAgentMessage.agentName,
+										isComplete: false,
+									},
+									subAgentInternal: true,
+								};
+
+								// Save to session as 'tool' role for API compatibility
+								const sessionMsg = {
+									role: 'tool' as const,
+									tool_call_id: msg.tool_call_id,
+									content: msg.content,
+									subAgentInternal: true,
+								};
+								saveMessage(sessionMsg).catch(err =>
+									console.error('Failed to save sub-agent tool result:', err),
+								);
+
+								// Add completed tool result message
+								return [...prev, uiMsg];
+							}
+
+							// Check if we already have a message for this agent
+							const existingIndex = prev.findIndex(
+								m =>
+									m.role === 'subagent' &&
+									m.subAgent?.agentId === subAgentMessage.agentId &&
+									!m.subAgent?.isComplete &&
+									!m.toolCall, // Don't match tool call messages
+							);
+
+							// Extract content from the sub-agent message
+							let content = '';
+							if (subAgentMessage.message.type === 'content') {
+								content = subAgentMessage.message.content;
+							} else if (subAgentMessage.message.type === 'done') {
+								// Mark as complete
+								if (existingIndex !== -1) {
+									const updated = [...prev];
+									const existing = updated[existingIndex];
+									if (existing && existing.subAgent) {
+										updated[existingIndex] = {
+											...existing,
+											subAgent: {
+												...existing.subAgent,
+												isComplete: true,
+											},
+										};
+									}
+									return updated;
+								}
+								return prev;
+							}
+
+							if (existingIndex !== -1) {
+								// Update existing message
+								const updated = [...prev];
+								const existing = updated[existingIndex];
+								if (existing) {
+									updated[existingIndex] = {
+										...existing,
+										content: (existing.content || '') + content,
+										streaming: true,
+									};
+								}
+								return updated;
+							} else if (content) {
+								// Add new sub-agent message
+								return [
+									...prev,
+									{
+										role: 'subagent' as const,
+										content,
+										streaming: true,
+										subAgent: {
+											agentId: subAgentMessage.agentId,
+											agentName: subAgentMessage.agentName,
+											isComplete: false,
+										},
+									},
+								];
+							}
+
+							return prev;
+						});
+					},
+					requestToolConfirmation,
+					isToolAutoApproved,
+					yoloMode,
+				);
+
+				// Check if aborted during tool execution
+				if (controller.signal.aborted) {
+					freeEncoder();
+					break;
+				}
 				// Check if there are TODO related tool calls, if yes refresh TODO list
 				const hasTodoTools = approvedTools.some(t =>
 					t.function.name.startsWith('todo-'),
@@ -481,12 +681,35 @@ export async function handleConversationWithTools(
 					}
 				}
 
+				// Remove only streaming sub-agent content messages (not tool-related messages)
+				// Keep sub-agent tool call and tool result messages for display
+				setMessages(prev =>
+					prev.filter(
+						m =>
+							m.role !== 'subagent' ||
+							m.toolCall !== undefined ||
+							m.toolResult !== undefined ||
+							m.subAgentInternal === true,
+					),
+				);
+
 				// Update existing tool call messages with results
 				for (const result of toolResults) {
 					const toolCall = receivedToolCalls.find(
 						tc => tc.id === result.tool_call_id,
 					);
 					if (toolCall) {
+						// Skip displaying result for sub-agent tools here
+						// Sub-agent results will be added by the callback after internal messages
+						if (toolCall.function.name.startsWith('subagent-')) {
+							// Still save the tool result to conversation history
+							conversationMessages.push(result as any);
+							saveMessage(result).catch(error => {
+								console.error('Failed to save tool result:', error);
+							});
+							continue;
+						}
+
 						const isError = result.content.startsWith('Error:');
 						const statusIcon = isError ? '✗' : '✓';
 						const statusText = isError ? `\n  └─ ${result.content}` : '';
@@ -524,34 +747,35 @@ export async function handleConversationWithTools(
 							}
 						}
 
+						// Append completed message to static area (don't remove pending message)
+						// Static area doesn't support deletion, only append
+						// Completed message only shows diff data (for edit tools), no other parameters
+						setMessages(prev => [
+							...prev,
+							// Add new completed message
+							{
+								role: 'assistant',
+								content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+								streaming: false,
+								toolCall: editDiffData
+									? {
+											name: toolCall.function.name,
+											arguments: editDiffData,
+									  }
+									: undefined, // Don't show arguments for completed tools (already shown in pending)
+								// Store tool result for preview rendering
+								toolResult: !isError ? result.content : undefined,
+							},
+						]);
+					}
 
-					// Append completed message to static area (don't remove pending message)
-					// Static area doesn't support deletion, only append
-					// Completed message only shows diff data (for edit tools), no other parameters
-					setMessages(prev => [
-						...prev,
-						// Add new completed message
-						{
-							role: 'assistant',
-							content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-							streaming: false,
-							toolCall: editDiffData
-								? {
-										name: toolCall.function.name,
-										arguments: editDiffData,
-								  }
-								: undefined, // Don't show arguments for completed tools (already shown in pending)
-							// Store tool result for preview rendering
-							toolResult: !isError ? result.content : undefined,
-						},
-					]);
-				}
-
-					// Add tool result to conversation history and save
-					conversationMessages.push(result as any);
-					saveMessage(result).catch(error => {
-						console.error('Failed to save tool result:', error);
-					});
+					// Add tool result to conversation history and save (skip if already saved above)
+					if (toolCall && !toolCall.function.name.startsWith('subagent-')) {
+						conversationMessages.push(result as any);
+						saveMessage(result).catch(error => {
+							console.error('Failed to save tool result:', error);
+						});
+					}
 				}
 
 				// After all tool results are processed, show TODO panel if there were todo-update calls

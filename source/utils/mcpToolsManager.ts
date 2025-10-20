@@ -9,6 +9,7 @@ import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
 import {TodoService} from '../mcp/todo.js';
+import {getMCPTools as getSubAgentTools, subAgentService} from '../mcp/subagent.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
 import {resourceMonitor} from './resourceMonitor.js';
@@ -261,6 +262,29 @@ async function refreshToolsCache(): Promise<void> {
 		});
 	}
 
+	// Add sub-agent tools (dynamically generated from configuration)
+	const subAgentTools = getSubAgentTools();
+
+	if (subAgentTools.length > 0) {
+		servicesInfo.push({
+			serviceName: 'subagent',
+			tools: subAgentTools,
+			isBuiltIn: true,
+			connected: true,
+		});
+
+		for (const tool of subAgentTools) {
+			allTools.push({
+				type: 'function',
+				function: {
+					name: `subagent-${tool.name}`,
+					description: tool.description,
+					parameters: tool.inputSchema,
+				},
+			});
+		}
+	}
+
 	// Add user-configured MCP server tools (probe for availability but don't maintain connections)
 	try {
 		const mcpConfig = getMCPConfig();
@@ -327,7 +351,14 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 	}
 
 	// Handle built-in services (they don't need reconnection)
-	if (serviceName === 'filesystem' || serviceName === 'terminal' || serviceName === 'todo' || serviceName === 'ace' || serviceName === 'websearch') {
+	if (
+		serviceName === 'filesystem' ||
+		serviceName === 'terminal' ||
+		serviceName === 'todo' ||
+		serviceName === 'ace' ||
+		serviceName === 'websearch' ||
+		serviceName === 'subagent'
+	) {
 		return;
 	}
 
@@ -340,7 +371,9 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 	}
 
 	// Find and update the service in cache
-	const serviceIndex = toolsCache.servicesInfo.findIndex(s => s.serviceName === serviceName);
+	const serviceIndex = toolsCache.servicesInfo.findIndex(
+		s => s.serviceName === serviceName,
+	);
 
 	if (serviceIndex === -1) {
 		// Service not in cache, do full refresh
@@ -362,7 +395,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 
 		// Remove old tools for this service from the tools list
 		toolsCache.tools = toolsCache.tools.filter(
-			tool => !tool.function.name.startsWith(`${serviceName}-`)
+			tool => !tool.function.name.startsWith(`${serviceName}-`),
 		);
 
 		// Add new tools for this service
@@ -388,7 +421,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 
 		// Remove tools for this service from the tools list
 		toolsCache.tools = toolsCache.tools.filter(
-			tool => !tool.function.name.startsWith(`${serviceName}-`)
+			tool => !tool.function.name.startsWith(`${serviceName}-`),
 		);
 	}
 }
@@ -665,6 +698,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('ide-')) {
 		serviceName = 'ide';
 		actualToolName = toolName.substring('ide-'.length);
+	} else if (toolName.startsWith('subagent-')) {
+		serviceName = 'subagent';
+		actualToolName = toolName.substring('subagent-'.length);
 	} else {
 		// Check configured MCP services
 		try {
@@ -844,6 +880,16 @@ export async function executeMCPTool(
 			default:
 				throw new Error(`Unknown IDE tool: ${actualToolName}`);
 		}
+	} else if (serviceName === 'subagent') {
+		// Handle sub-agent tools
+		// actualToolName is the agent ID
+		const result = await subAgentService.execute({
+			agentId: actualToolName,
+			prompt: args.prompt,
+			abortSignal,
+		});
+
+		return result;
 	} else {
 		// Handle user-configured MCP service tools - connect only when needed
 		const mcpConfig = getMCPConfig();

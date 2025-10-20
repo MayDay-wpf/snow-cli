@@ -4,7 +4,7 @@ import {SelectedFile} from '../../utils/fileUtils.js';
 import MarkdownRenderer from './MarkdownRenderer.js';
 
 export interface Message {
-	role: 'user' | 'assistant' | 'command';
+	role: 'user' | 'assistant' | 'command' | 'subagent';
 	content: string;
 	streaming?: boolean;
 	discontinued?: boolean;
@@ -38,6 +38,12 @@ export interface Message {
 		exitCode?: number;
 		command?: string;
 	};
+	subAgent?: {
+		agentId: string;
+		agentName: string;
+		isComplete?: boolean;
+	};
+	subAgentInternal?: boolean; // Mark internal sub-agent messages to filter from API requests
 }
 
 interface Props {
@@ -62,6 +68,8 @@ const MessageList = memo(
 							? 'green'
 							: message.role === 'command'
 							? 'gray'
+							: message.role === 'subagent'
+							? 'magenta'
 							: message.streaming
 							? (STREAM_COLORS[animationFrame] as any)
 							: 'cyan';
@@ -73,11 +81,26 @@ const MessageList = memo(
 									? '⛇'
 									: message.role === 'command'
 									? '⌘'
+									: message.role === 'subagent'
+									? '◈'
 									: '❆'}
 							</Text>
 							<Box marginLeft={1} marginBottom={1} flexDirection="column">
 								{message.role === 'command' ? (
 									<Text color="gray">└─ {message.commandName}</Text>
+								) : message.role === 'subagent' ? (
+									<>
+										<Text color="magenta" dimColor>
+											└─ Sub-Agent: {message.subAgent?.agentName}
+											{message.subAgent?.isComplete ? ' ✓' : ' ...'}
+										</Text>
+										<Box marginLeft={2}>
+											<MarkdownRenderer
+												content={message.content || ' '}
+												color="gray"
+											/>
+										</Box>
+									</>
 								) : (
 									<>
 										<MarkdownRenderer
@@ -85,6 +108,7 @@ const MessageList = memo(
 											color={message.role === 'user' ? 'gray' : undefined}
 										/>
 										{(message.systemInfo ||
+											message.files ||
 											message.files ||
 											message.images) && (
 											<Box marginTop={1} flexDirection="column">

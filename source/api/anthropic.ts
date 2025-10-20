@@ -319,189 +319,216 @@ export async function* createStreamingAnthropicCompletion(
 			const config = getAnthropicConfig();
 			const { system, messages } = convertToAnthropicMessages(options.messages);
 
-		const sessionId = options.sessionId || randomUUID();
-		const userId = generateUserId(sessionId);
+			const sessionId = options.sessionId || randomUUID();
+			const userId = generateUserId(sessionId);
 
-		const requestBody: any = {
-			model: options.model,
-			max_tokens: options.max_tokens || 4096,
-			temperature: options.temperature ?? 0.7,
-			system,
-			messages,
-			tools: convertToolsToAnthropic(options.tools),
-			metadata: {
-				user_id: userId
-			},
-			stream: true
-		};
-
-		// Prepare headers
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-			'x-api-key': config.apiKey,
-			'authorization' : `Bearer ${config.apiKey}`,
-			'anthropic-version': '2023-06-01',
-			...config.customHeaders
-		};
-
-		// Add beta parameter if configured
-		// if (config.anthropicBeta) {
-		// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
-		// }
-
-		const url = config.anthropicBeta
-			? `${config.baseUrl}/messages?beta=true`
-			: `${config.baseUrl}/messages`;
-
-		const response = await fetch(url, {
-			method: 'POST',
-			headers,
-			body: JSON.stringify(requestBody),
-			signal: abortSignal
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
-		}
-
-		if (!response.body) {
-			throw new Error('No response body from Anthropic API');
-		}
-
-		let contentBuffer = '';
-		let toolCallsBuffer: Map<string, {
-			id: string;
-			type: 'function';
-			function: {
-				name: string;
-				arguments: string;
+			const requestBody: any = {
+				model: options.model,
+				max_tokens: options.max_tokens || 4096,
+				temperature: options.temperature ?? 0.7,
+				system,
+				messages,
+				tools: convertToolsToAnthropic(options.tools),
+				metadata: {
+					user_id: userId
+				},
+				stream: true
 			};
-		}> = new Map();
-		let hasToolCalls = false;
-		let usageData: UsageInfo | undefined;
-		let blockIndexToId: Map<number, string> = new Map();
 
-		for await (const event of parseSSEStream(response.body.getReader())) {
-			if (abortSignal?.aborted) {
-				return;
+			// Prepare headers
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+				'x-api-key': config.apiKey,
+				'authorization': `Bearer ${config.apiKey}`,
+				'anthropic-version': '2023-06-01',
+				...config.customHeaders
+			};
+
+			// Add beta parameter if configured
+			// if (config.anthropicBeta) {
+			// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+			// }
+
+			const url = config.anthropicBeta
+				? `${config.baseUrl}/messages?beta=true`
+				: `${config.baseUrl}/messages`;
+
+			const response = await fetch(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(requestBody),
+				signal: abortSignal
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
 			}
 
-			if (event.type === 'content_block_start') {
-				const block = event.content_block;
+			if (!response.body) {
+				throw new Error('No response body from Anthropic API');
+			}
 
-				if (block.type === 'tool_use') {
-					hasToolCalls = true;
-					const blockIndex = event.index;
-					blockIndexToId.set(blockIndex, block.id);
+			let contentBuffer = '';
+			let toolCallsBuffer: Map<string, {
+				id: string;
+				type: 'function';
+				function: {
+					name: string;
+					arguments: string;
+				};
+			}> = new Map();
+			let hasToolCalls = false;
+			let usageData: UsageInfo | undefined;
+			let blockIndexToId: Map<number, string> = new Map();
+			let completedToolBlocks = new Set<string>(); // Track which tool blocks have finished streaming
 
-					toolCallsBuffer.set(block.id, {
-						id: block.id,
-						type: 'function',
-						function: {
-							name: block.name,
-							arguments: '{}'
-						}
-					});
-
-					yield {
-						type: 'tool_call_delta',
-						delta: block.name
-					};
-				}
-			} else if (event.type === 'content_block_delta') {
-				const delta = event.delta;
-
-				if (delta.type === 'text_delta') {
-					const text = delta.text;
-					contentBuffer += text;
-					yield {
-						type: 'content',
-						content: text
-					};
+			for await (const event of parseSSEStream(response.body.getReader())) {
+				if (abortSignal?.aborted) {
+					return;
 				}
 
-				if (delta.type === 'input_json_delta') {
-					const jsonDelta = delta.partial_json;
-					const blockIndex = event.index;
-					const toolId = blockIndexToId.get(blockIndex);
+				if (event.type === 'content_block_start') {
+					const block = event.content_block;
 
-					if (toolId) {
-						const toolCall = toolCallsBuffer.get(toolId);
-						if (toolCall) {
-							if (toolCall.function.arguments === '{}') {
-								toolCall.function.arguments = jsonDelta;
-							} else {
-								toolCall.function.arguments += jsonDelta;
+					if (block.type === 'tool_use') {
+						hasToolCalls = true;
+						const blockIndex = event.index;
+						blockIndexToId.set(blockIndex, block.id);
+
+						toolCallsBuffer.set(block.id, {
+							id: block.id,
+							type: 'function',
+							function: {
+								name: block.name,
+								arguments: ''
 							}
+						});
 
-							yield {
-								type: 'tool_call_delta',
-								delta: jsonDelta
-							};
-						}
-					}
-				}
-			} else if (event.type === 'message_start') {
-				if (event.message.usage) {
-					usageData = {
-						prompt_tokens: event.message.usage.input_tokens || 0,
-						completion_tokens: event.message.usage.output_tokens || 0,
-						total_tokens: (event.message.usage.input_tokens || 0) + (event.message.usage.output_tokens || 0),
-						cache_creation_input_tokens: (event.message.usage as any).cache_creation_input_tokens,
-						cache_read_input_tokens: (event.message.usage as any).cache_read_input_tokens
-					};
-				}
-			} else if (event.type === 'message_delta') {
-				if (event.usage) {
-					if (!usageData) {
-						usageData = {
-							prompt_tokens: 0,
-							completion_tokens: 0,
-							total_tokens: 0
+						yield {
+							type: 'tool_call_delta',
+							delta: block.name
 						};
 					}
-					usageData.completion_tokens = event.usage.output_tokens || 0;
-					usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
-					if ((event.usage as any).cache_creation_input_tokens !== undefined) {
-						usageData.cache_creation_input_tokens = (event.usage as any).cache_creation_input_tokens;
+				} else if (event.type === 'content_block_delta') {
+					const delta = event.delta;
+
+					if (delta.type === 'text_delta') {
+						const text = delta.text;
+						contentBuffer += text;
+						yield {
+							type: 'content',
+							content: text
+						};
 					}
-					if ((event.usage as any).cache_read_input_tokens !== undefined) {
-						usageData.cache_read_input_tokens = (event.usage as any).cache_read_input_tokens;
+
+					if (delta.type === 'input_json_delta') {
+						const jsonDelta = delta.partial_json;
+						const blockIndex = event.index;
+						const toolId = blockIndexToId.get(blockIndex);
+
+						if (toolId) {
+							const toolCall = toolCallsBuffer.get(toolId);
+							if (toolCall) {
+								// Filter out any XML-like tags that might be mixed in the JSON delta
+								// This can happen when the model output contains XML that gets interpreted as JSON
+								const cleanedDelta = jsonDelta.replace(/<\/?parameter[^>]*>/g, '');
+
+								if (cleanedDelta) {
+									toolCall.function.arguments += cleanedDelta;
+
+									yield {
+										type: 'tool_call_delta',
+										delta: cleanedDelta
+									};
+								}
+							}
+						}
+					}
+				} else if (event.type === 'content_block_stop') {
+					// Mark this block as completed
+					const blockIndex = event.index;
+					const toolId = blockIndexToId.get(blockIndex);
+					if (toolId) {
+						completedToolBlocks.add(toolId);
+					}
+				} else if (event.type === 'message_start') {
+					if (event.message.usage) {
+						usageData = {
+							prompt_tokens: event.message.usage.input_tokens || 0,
+							completion_tokens: event.message.usage.output_tokens || 0,
+							total_tokens: (event.message.usage.input_tokens || 0) + (event.message.usage.output_tokens || 0),
+							cache_creation_input_tokens: (event.message.usage as any).cache_creation_input_tokens,
+							cache_read_input_tokens: (event.message.usage as any).cache_read_input_tokens
+						};
+					}
+				} else if (event.type === 'message_delta') {
+					if (event.usage) {
+						if (!usageData) {
+							usageData = {
+								prompt_tokens: 0,
+								completion_tokens: 0,
+								total_tokens: 0
+							};
+						}
+						usageData.completion_tokens = event.usage.output_tokens || 0;
+						usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
+						if ((event.usage as any).cache_creation_input_tokens !== undefined) {
+							usageData.cache_creation_input_tokens = (event.usage as any).cache_creation_input_tokens;
+						}
+						if ((event.usage as any).cache_read_input_tokens !== undefined) {
+							usageData.cache_read_input_tokens = (event.usage as any).cache_read_input_tokens;
+						}
 					}
 				}
 			}
-		}
 
-		if (hasToolCalls && toolCallsBuffer.size > 0) {
-			const toolCalls = Array.from(toolCallsBuffer.values());
-			for (const toolCall of toolCalls) {
-				try {
-					const args = toolCall.function.arguments.trim() || '{}';
-					JSON.parse(args);
-					toolCall.function.arguments = args;
-				} catch (e) {
-					const errorMsg = e instanceof Error ? e.message : 'Unknown error';
-					throw new Error(`Incomplete tool call JSON for ${toolCall.function.name}: ${toolCall.function.arguments} (${errorMsg})`);
+			if (hasToolCalls && toolCallsBuffer.size > 0) {
+				const toolCalls = Array.from(toolCallsBuffer.values());
+				for (const toolCall of toolCalls) {
+					// Normalize the arguments
+					let args = toolCall.function.arguments.trim();
+
+					// If arguments is empty, use empty object
+					if (!args) {
+						args = '{}';
+					}
+
+					// Try to parse the JSON
+					try {
+						JSON.parse(args);
+						toolCall.function.arguments = args;
+					} catch (e) {
+						// Only throw error if this tool block was marked as completed
+						// This prevents errors from incomplete streaming
+						if (completedToolBlocks.has(toolCall.id)) {
+							const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+							throw new Error(`Invalid tool call JSON for ${toolCall.function.name}: ${args} (${errorMsg})`);
+						} else {
+							// Tool block wasn't completed, likely interrupted stream
+							// Use partial data or empty object
+							console.warn(`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using partial data.`);
+							toolCall.function.arguments = '{}';
+						}
+					}
 				}
+
+				yield {
+					type: 'tool_calls',
+					tool_calls: toolCalls
+				};
+			}
+
+			if (usageData) {
+				yield {
+					type: 'usage',
+					usage: usageData
+				};
 			}
 
 			yield {
-				type: 'tool_calls',
-				tool_calls: toolCalls
+				type: 'done'
 			};
-		}
-
-		if (usageData) {
-			yield {
-				type: 'usage',
-				usage: usageData
-			};
-		}
-
-		yield {
-			type: 'done'
-		};
 		},
 		{
 			abortSignal,

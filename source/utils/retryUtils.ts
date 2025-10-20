@@ -89,6 +89,12 @@ function isRetriableError(error: Error): boolean {
 		return true;
 	}
 
+	// JSON parsing errors from streaming (incomplete or malformed tool calls)
+	if (errorMessage.includes('invalid tool call json') ||
+		errorMessage.includes('incomplete tool call json')) {
+		return true;
+	}
+
 	return false;
 }
 

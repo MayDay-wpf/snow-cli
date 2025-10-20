@@ -969,7 +969,7 @@ export default function ConfigScreen({
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{anthropicBeta ? '☑ Enabled' : '☐ Disabled'} (Press Enter to
+								{anthropicBeta ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
 								toggle)
 							</Text>
 						</Box>

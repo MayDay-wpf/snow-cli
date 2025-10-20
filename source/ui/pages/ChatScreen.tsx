@@ -156,6 +156,22 @@ export default function ChatScreen({skipWelcome}: Props) {
 		};
 	}, [terminalWidth, stdout]);
 
+	// Reload messages from session when remountKey changes (to restore sub-agent messages)
+	useEffect(() => {
+		if (remountKey === 0) return; // Skip initial render
+
+		const reloadMessages = async () => {
+			const currentSession = sessionManager.getCurrentSession();
+			if (currentSession && currentSession.messages.length > 0) {
+				// Convert session messages back to UI format
+				const uiMessages = convertSessionMessagesToUI(currentSession.messages);
+				setMessages(uiMessages);
+			}
+		};
+
+		reloadMessages();
+	}, [remountKey]);
+
 	// Use tool confirmation hook
 	const {
 		pendingToolConfirmation,
@@ -316,9 +332,19 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 		// Show confirmation dialog if there are files to rollback
 		if (totalFileCount > 0) {
+			// Get list of files that will be rolled back
+			const currentSession = sessionManager.getCurrentSession();
+			const filePaths = currentSession
+				? await incrementalSnapshotManager.getFilesToRollback(
+						currentSession.id,
+						selectedIndex,
+				  )
+				: [];
+
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
-				fileCount: totalFileCount,
+				fileCount: filePaths.length, // Use actual unique file count
+				filePaths,
 			});
 		} else {
 			// No files to rollback, just rollback conversation
@@ -355,7 +381,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 		snapshotState.setPendingRollback(null);
 	};
 
-	const handleRollbackConfirm = (rollbackFiles: boolean) => {
+	const handleRollbackConfirm = (rollbackFiles: boolean | null) => {
+		if (rollbackFiles === null) {
+			// User cancelled - just close the dialog without doing anything
+			snapshotState.setPendingRollback(null);
+			return;
+		}
+
 		if (snapshotState.pendingRollback) {
 			performRollback(
 				snapshotState.pendingRollback.messageIndex,
@@ -1109,6 +1141,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
 					fileCount={snapshotState.pendingRollback.fileCount}
+					filePaths={snapshotState.pendingRollback.filePaths || []}
 					onConfirm={handleRollbackConfirm}
 				/>
 			)}
@@ -1142,7 +1175,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 									  }
 									: undefined
 							}
-							snapshotFileCount={snapshotState.snapshotFileCount}
 						/>
 						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (

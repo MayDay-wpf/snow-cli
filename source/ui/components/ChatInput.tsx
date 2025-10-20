@@ -1,27 +1,27 @@
-import React, {useCallback, useEffect, useRef} from 'react';
-import {Box, Text} from 'ink';
-import {Viewport} from '../../utils/textBuffer.js';
-import {cpSlice, cpLen} from '../../utils/textUtils.js';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Box, Text } from 'ink';
+import { Viewport } from '../../utils/textBuffer.js';
+import { cpSlice, cpLen } from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
-import {useInputBuffer} from '../../hooks/useInputBuffer.js';
-import {useCommandPanel} from '../../hooks/useCommandPanel.js';
-import {useFilePicker} from '../../hooks/useFilePicker.js';
-import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
-import {useClipboard} from '../../hooks/useClipboard.js';
-import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
-import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
+import { useInputBuffer } from '../../hooks/useInputBuffer.js';
+import { useCommandPanel } from '../../hooks/useCommandPanel.js';
+import { useFilePicker } from '../../hooks/useFilePicker.js';
+import { useHistoryNavigation } from '../../hooks/useHistoryNavigation.js';
+import { useClipboard } from '../../hooks/useClipboard.js';
+import { useKeyboardInput } from '../../hooks/useKeyboardInput.js';
+import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import { useTerminalFocus } from '../../hooks/useTerminalFocus.js';
 
 type Props = {
 	onSubmit: (
 		message: string,
-		images?: Array<{data: string; mimeType: string}>,
+		images?: Array<{ data: string; mimeType: string }>,
 	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
-	chatHistory?: Array<{role: string; content: string}>;
+	chatHistory?: Array<{ role: string; content: string }>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -33,7 +33,6 @@ type Props = {
 		// OpenAI caching
 		cachedTokens?: number;
 	};
-	snapshotFileCount?: Map<number, number>; // Map of message index to file count
 };
 
 export default function ChatInput({
@@ -45,14 +44,13 @@ export default function ChatInput({
 	onHistorySelect,
 	yoloMode = false,
 	contextUsage,
-	snapshotFileCount,
 }: Props) {
 	// Use terminal size hook to listen for resize events
-	const {columns: terminalWidth} = useTerminalSize();
+	const { columns: terminalWidth } = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
 
 	// Use terminal focus hook to detect focus state
-	const {hasFocus, ensureFocus} = useTerminalFocus();
+	const { hasFocus, ensureFocus } = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -63,7 +61,7 @@ export default function ChatInput({
 	};
 
 	// Use input buffer hook
-	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
+	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
 
 	// Use command panel hook
 	const {
@@ -106,7 +104,7 @@ export default function ChatInput({
 	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
 
 	// Use clipboard hook
-	const {pasteFromClipboard} = useClipboard(
+	const { pasteFromClipboard } = useClipboard(
 		buffer,
 		updateCommandPanelState,
 		updateFilePickerState,
@@ -314,67 +312,92 @@ export default function ChatInput({
 				<Box
 					flexDirection="column"
 					marginBottom={1}
-					borderStyle="round"
-					borderColor="#A9C13E"
-					padding={1}
 					width={terminalWidth - 2}
 				>
-					<Box marginBottom={1}>
-						<Text color="cyan">
-							Use ↑↓ keys to navigate, press Enter to select:
-						</Text>
-					</Box>
 					<Box flexDirection="column">
 						{(() => {
 							const userMessages = getUserMessages();
-							const maxHeight = 8;
-							const visibleMessages = userMessages.slice(0, maxHeight);
+							const maxVisibleItems = 5; // Number of message items to show (reduced for small terminals)
 
-							return visibleMessages.map((message, index) => {
-								const messageIndex = parseInt(message.value, 10);
+							// Calculate scroll window to keep selected index visible
+							let startIndex = 0;
+							if (userMessages.length > maxVisibleItems) {
+								// Keep selected item in the middle of the view when possible
+								startIndex = Math.max(0, historySelectedIndex - Math.floor(maxVisibleItems / 2));
+								// Adjust if we're near the end
+								startIndex = Math.min(startIndex, userMessages.length - maxVisibleItems);
+							}
 
-								// Find snapshot created after this user message
-								// Snapshots are created AFTER submitting a message, so we look for
-								// the smallest snapshot index that is > messageIndex
-								let fileCount = 0;
-								if (snapshotFileCount && snapshotFileCount.size > 0) {
-									const snapshotIndices = Array.from(
-										snapshotFileCount.keys(),
-									).sort((a, b) => a - b);
-									const matchingSnapshot = snapshotIndices.find(
-										idx => idx > messageIndex,
-									);
-									if (matchingSnapshot !== undefined) {
-										fileCount = snapshotFileCount.get(matchingSnapshot) || 0;
-									}
-								}
+							const endIndex = Math.min(userMessages.length, startIndex + maxVisibleItems);
+							const visibleMessages = userMessages.slice(startIndex, endIndex);
 
-								return (
-									<Box key={message.value}>
-										<Text
-											color={index === historySelectedIndex ? 'green' : 'white'}
-											bold
-										>
-											{index === historySelectedIndex ? '❯  ' : '  '}
-											{message.label}
-										</Text>
-										{fileCount > 0 && (
-											<Text color="yellow" dimColor>
-												{' '}
-												({fileCount} file{fileCount > 1 ? 's' : ''})
+							const hasMoreAbove = startIndex > 0;
+							const hasMoreBelow = endIndex < userMessages.length;
+
+							return (
+								<>
+									{/* Top scroll indicator - always reserve space */}
+									<Box height={1}>
+										{hasMoreAbove ? (
+											<Text color="gray" dimColor>
+												↑ {startIndex} more above...
 											</Text>
+										) : (
+											<Text> </Text>
 										)}
 									</Box>
-								);
-							});
+
+									{/* Message list - each item fixed to 1 line */}
+									{visibleMessages.map((message, displayIndex) => {
+										const actualIndex = startIndex + displayIndex;
+
+										// Remove all newlines and extra spaces from label to ensure single line
+										const singleLineLabel = message.label
+											.replace(/\s+/g, ' ')
+											.trim();
+										// Calculate available width for the message
+										const prefixWidth = 3; // "❯  " or "  "
+										const maxLabelWidth = terminalWidth - 4 - prefixWidth;
+										const truncatedLabel =
+											singleLineLabel.length > maxLabelWidth
+												? singleLineLabel.slice(0, maxLabelWidth - 3) + '...'
+												: singleLineLabel;
+
+										return (
+											<Box key={message.value} height={1}>
+												<Text
+													color={
+														actualIndex === historySelectedIndex
+															? 'green'
+															: 'white'
+													}
+													bold
+												>
+													{actualIndex === historySelectedIndex ? '❯  ' : '  '}
+													{truncatedLabel}
+												</Text>
+											</Box>
+										);
+									})}
+
+									{/* Bottom scroll indicator - always reserve space */}
+									<Box height={1}>
+										{hasMoreBelow ? (
+											<Text color="gray" dimColor>
+												↓ {userMessages.length - endIndex} more below...
+											</Text>
+										) : (
+											<Text> </Text>
+										)}
+									</Box>
+								</>
+							);
 						})()}
-						{getUserMessages().length > 8 && (
-							<Box>
-								<Text color="gray" dimColor>
-									... and {getUserMessages().length - 8} more items
-								</Text>
-							</Box>
-						)}
+					</Box>
+					<Box marginBottom={1}>
+						<Text color="cyan" dimColor>
+							↑↓ navigate · Enter select · ESC close
+						</Text>
 					</Box>
 				</Box>
 			)}
@@ -429,8 +452,8 @@ export default function ChatInput({
 									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 									const totalInputTokens = isAnthropic
 										? contextUsage.inputTokens +
-										  (contextUsage.cacheCreationTokens || 0) +
-										  (contextUsage.cacheReadTokens || 0)
+										(contextUsage.cacheCreationTokens || 0) +
+										(contextUsage.cacheReadTokens || 0)
 										: contextUsage.inputTokens;
 
 									const percentage = Math.min(
@@ -511,12 +534,12 @@ export default function ChatInput({
 							{showCommands && getFilteredCommands().length > 0
 								? 'Type to filter commands'
 								: showFilePicker
-								? 'Type to filter files • Tab/Enter to select • ESC to cancel'
-								: (() => {
+									? 'Type to filter files • Tab/Enter to select • ESC to cancel'
+									: (() => {
 										const pasteKey =
 											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
-								  })()}
+									})()}
 						</Text>
 					</Box>
 				</>

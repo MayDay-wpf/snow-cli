@@ -117,7 +117,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{enabled ? '☑ Enabled' : '☐ Disabled'} (Press Enter to toggle)
+								{enabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to toggle)
 							</Text>
 						</Box>
 					</Box>

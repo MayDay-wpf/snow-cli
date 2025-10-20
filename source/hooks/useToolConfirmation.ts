@@ -41,7 +41,7 @@ export function useToolConfirmation() {
 	 * Check if a tool is auto-approved
 	 */
 	const isToolAutoApproved = (toolName: string): boolean => {
-		return alwaysApprovedTools.has(toolName) || toolName.startsWith('todo-');
+		return alwaysApprovedTools.has(toolName) || toolName.startsWith('todo-') || toolName.startsWith('subagent-');
 	};
 
 	/**

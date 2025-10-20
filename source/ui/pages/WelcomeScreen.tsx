@@ -7,13 +7,21 @@ import Menu from '../components/Menu.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import ConfigScreen from './ConfigScreen.js';
 import ProxyConfigScreen from './ProxyConfigScreen.js';
+import SubAgentConfigScreen from './SubAgentConfigScreen.js';
+import SubAgentListScreen from './SubAgentListScreen.js';
 
 type Props = {
 	version?: string;
 	onMenuSelect?: (value: string) => void;
 };
 
-type InlineView = 'menu' | 'config' | 'proxy-config';
+type InlineView =
+	| 'menu'
+	| 'config'
+	| 'proxy-config'
+	| 'subagent-list'
+	| 'subagent-add'
+	| 'subagent-edit';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -21,6 +29,7 @@ export default function WelcomeScreen({
 }: Props) {
 	const [infoText, setInfoText] = useState('Start a new chat conversation');
 	const [inlineView, setInlineView] = useState<InlineView>('menu');
+	const [editingAgentId, setEditingAgentId] = useState<string | undefined>();
 	const {columns: terminalWidth} = useTerminalSize();
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
@@ -60,6 +69,11 @@ export default function WelcomeScreen({
 				infoText: 'Configure Model Context Protocol servers',
 			},
 			{
+				label: 'Sub-Agent Settings',
+				value: 'subagent',
+				infoText: 'Configure sub-agents with custom tool permissions',
+			},
+			{
 				label: 'Exit',
 				value: 'exit',
 				color: 'rgb(232, 131, 136)',
@@ -75,11 +89,13 @@ export default function WelcomeScreen({
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {
-			// Handle inline views (config, proxy) or pass through to parent
+			// Handle inline views (config, proxy, subagent) or pass through to parent
 			if (value === 'config') {
 				setInlineView('config');
 			} else if (value === 'proxy') {
 				setInlineView('proxy-config');
+			} else if (value === 'subagent') {
+				setInlineView('subagent-list');
 			} else {
 				// Pass through to parent for other actions (chat, exit, etc.)
 				onMenuSelect?.(value);
@@ -94,6 +110,20 @@ export default function WelcomeScreen({
 
 	const handleConfigSave = useCallback(() => {
 		setInlineView('menu');
+	}, []);
+
+	const handleSubAgentAdd = useCallback(() => {
+		setEditingAgentId(undefined);
+		setInlineView('subagent-add');
+	}, []);
+
+	const handleSubAgentEdit = useCallback((agentId: string) => {
+		setEditingAgentId(agentId);
+		setInlineView('subagent-edit');
+	}, []);
+
+	const handleSubAgentSave = useCallback(() => {
+		setInlineView('subagent-list');
 	}, []);
 
 	// Clear terminal and re-render on terminal width change
@@ -174,6 +204,35 @@ export default function WelcomeScreen({
 					<ProxyConfigScreen
 						onBack={handleBackToMenu}
 						onSave={handleConfigSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'subagent-list' && (
+				<Box paddingX={1}>
+					<SubAgentListScreen
+						onBack={handleBackToMenu}
+						onAdd={handleSubAgentAdd}
+						onEdit={handleSubAgentEdit}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'subagent-add' && (
+				<Box paddingX={1}>
+					<SubAgentConfigScreen
+						onBack={() => setInlineView('subagent-list')}
+						onSave={handleSubAgentSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'subagent-edit' && (
+				<Box paddingX={1}>
+					<SubAgentConfigScreen
+						onBack={() => setInlineView('subagent-list')}
+						onSave={handleSubAgentSave}
+						agentId={editingAgentId}
 						inlineMode={true}
 					/>
 				</Box>

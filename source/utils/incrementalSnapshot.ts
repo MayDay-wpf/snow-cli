@@ -186,6 +186,44 @@ class IncrementalSnapshotManager {
 	}
 
 	/**
+	 * Get list of files that will be affected by rollback to a specific message index
+	 * @param sessionId Session ID
+	 * @param targetMessageIndex The message index to rollback to (inclusive)
+	 * @returns Array of file paths that will be rolled back
+	 */
+	async getFilesToRollback(sessionId: string, targetMessageIndex: number): Promise<string[]> {
+		await this.ensureSnapshotsDir();
+
+		try {
+			const files = await fs.readdir(this.snapshotsDir);
+			const filesToRollback = new Set<string>();
+
+			// Load all snapshots for this session
+			for (const file of files) {
+				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+					const snapshotPath = path.join(this.snapshotsDir, file);
+					const content = await fs.readFile(snapshotPath, 'utf-8');
+					const metadata: SnapshotMetadata = JSON.parse(content);
+
+					// Include files from snapshots >= targetMessageIndex
+					if (metadata.messageIndex >= targetMessageIndex) {
+						for (const backup of metadata.backups) {
+							// Convert to relative path for better display
+							const relativePath = path.relative(process.cwd(), backup.path);
+							filesToRollback.add(relativePath || backup.path);
+						}
+					}
+				}
+			}
+
+			return Array.from(filesToRollback).sort();
+		} catch (error) {
+			console.error('Failed to get files to rollback:', error);
+			return [];
+		}
+	}
+
+	/**
 	 * Rollback all snapshots after a specific message index
 	 * This is used when user selects to rollback to a specific message
 	 * @param sessionId Session ID

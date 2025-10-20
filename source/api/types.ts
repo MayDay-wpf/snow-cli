@@ -23,6 +23,7 @@ export interface ChatMessage {
 	tool_call_id?: string;
 	tool_calls?: ToolCall[];
 	images?: ImageContent[]; // 图片内容
+	subAgentInternal?: boolean; // Mark internal sub-agent messages (filtered from API requests)
 }
 
 export interface ChatCompletionTool {
