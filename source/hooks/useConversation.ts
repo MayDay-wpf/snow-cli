@@ -699,10 +699,26 @@ export async function handleConversationWithTools(
 						tc => tc.id === result.tool_call_id,
 					);
 					if (toolCall) {
-						// Skip displaying result for sub-agent tools here
-						// Sub-agent results will be added by the callback after internal messages
+						// Special handling for sub-agent tools - show completion message
+						// Pass the full JSON result to ToolResultPreview for proper parsing
 						if (toolCall.function.name.startsWith('subagent-')) {
-							// Still save the tool result to conversation history
+							const isError = result.content.startsWith('Error:');
+							const statusIcon = isError ? '✗' : '✓';
+							const statusText = isError ? `\n  └─ ${result.content}` : '';
+
+							// Display subagent completion message in main flow
+							setMessages(prev => [
+								...prev,
+								{
+									role: 'assistant',
+									content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+									streaming: false,
+									// Pass the full result.content for ToolResultPreview to parse
+									toolResult: !isError ? result.content : undefined,
+								},
+							]);
+
+							// Save the tool result to conversation history
 							conversationMessages.push(result as any);
 							saveMessage(result).catch(error => {
 								console.error('Failed to save tool result:', error);

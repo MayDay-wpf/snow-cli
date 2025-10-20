@@ -17,7 +17,9 @@ export default function ToolResultPreview({ toolName, result, maxLines = 5 }: To
 		const data = JSON.parse(result);
 
 		// Handle different tool types
-		if (toolName === 'filesystem-read') {
+		if (toolName.startsWith('subagent-')) {
+			return renderSubAgentPreview(data, maxLines);
+		} else if (toolName === 'filesystem-read') {
 			return renderReadPreview(data, maxLines);
 		} else if (toolName === 'filesystem-list') {
 			return renderListPreview(data, maxLines);
@@ -39,6 +41,32 @@ export default function ToolResultPreview({ toolName, result, maxLines = 5 }: To
 		// If not JSON or parsing fails, return null (no preview)
 		return null;
 	}
+}
+
+function renderSubAgentPreview(data: any, maxLines: number) {
+	// Sub-agent results have format: { success: boolean, result: string }
+	if (!data.result) return null;
+
+	// Split the result into lines
+	const lines = data.result.split('\n').filter((line: string) => line.trim());
+	const previewLines = lines.slice(0, maxLines);
+	const hasMore = lines.length > maxLines;
+
+	return (
+		<Box flexDirection="column" marginLeft={2}>
+			{previewLines.map((line: string, idx: number) => (
+				<Text key={idx} color="gray" dimColor>
+					{idx === previewLines.length - 1 && !hasMore ? '└─ ' : '├─ '}
+					{line.length > 80 ? line.slice(0, 80) + '...' : line}
+				</Text>
+			))}
+			{hasMore && (
+				<Text color="gray" dimColor>
+					└─ ... ({lines.length - maxLines} more lines)
+				</Text>
+			)}
+		</Box>
+	);
 }
 
 function renderReadPreview(data: any, maxLines: number) {
