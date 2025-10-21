@@ -1,7 +1,12 @@
-import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
-import { SYSTEM_PROMPT } from './systemPrompt.js';
-import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
+import {
+	getOpenAiConfig,
+	getCustomSystemPrompt,
+	getCustomHeaders,
+} from '../utils/apiConfig.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
+import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -36,17 +41,20 @@ function getGeminiConfig() {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey) {
-			throw new Error('Gemini API configuration is incomplete. Please configure API key first.');
+			throw new Error(
+				'Gemini API configuration is incomplete. Please configure API key first.',
+			);
 		}
 
 		const customHeaders = getCustomHeaders();
 
 		geminiConfig = {
 			apiKey: config.apiKey,
-			baseUrl: config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-				? config.baseUrl
-				: 'https://generativelanguage.googleapis.com/v1beta',
-			customHeaders
+			baseUrl:
+				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+					? config.baseUrl
+					: 'https://generativelanguage.googleapis.com/v1beta',
+			customHeaders,
 		};
 	}
 
@@ -78,20 +86,23 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 					parametersJsonSchema: {
 						type: 'object',
 						properties: params.properties || {},
-						required: params.required || []
-					}
+						required: params.required || [],
+					},
 				};
 			}
 			throw new Error('Invalid tool format');
 		});
 
-	return [{ functionDeclarations }];
+	return [{functionDeclarations}];
 }
 
 /**
  * Convert our ChatMessage format to Gemini's format
  */
-function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?: string; contents: any[] } {
+function convertToGeminiMessages(messages: ChatMessage[]): {
+	systemInstruction?: string;
+	contents: any[];
+} {
 	const customSystemPrompt = getCustomSystemPrompt();
 	let systemInstruction: string | undefined;
 	const contents: any[] = [];
@@ -135,66 +146,93 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 
 				// Sometimes the content is double-encoded as JSON
 				// First, try to parse it once
-				try {
-					const firstParse = JSON.parse(contentToParse);
+				const firstParseResult = parseJsonWithFix(contentToParse, {
+					toolName: 'Gemini tool response (first parse)',
+					logWarning: false,
+					logError: false,
+				});
+
+				if (
+					firstParseResult.success &&
+					typeof firstParseResult.data === 'string'
+				) {
 					// If it's a string, it might be double-encoded, try parsing again
-					if (typeof firstParse === 'string') {
-						contentToParse = firstParse;
-					}
-				} catch {
-					// Not JSON, use as-is
+					contentToParse = firstParseResult.data;
 				}
 
 				// Now parse or wrap the final content
-				try {
-					const parsed = JSON.parse(contentToParse);
+				const finalParseResult = parseJsonWithFix(contentToParse, {
+					toolName: 'Gemini tool response (final parse)',
+					logWarning: false,
+					logError: false,
+				});
+
+				if (finalParseResult.success) {
+					const parsed = finalParseResult.data;
 					// If parsed result is an object (not array, not null), use it directly
-					if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+					if (
+						typeof parsed === 'object' &&
+						parsed !== null &&
+						!Array.isArray(parsed)
+					) {
 						responseData = parsed;
 					} else {
 						// If it's a primitive, array, or null, wrap it
-						responseData = { content: parsed };
+						responseData = {content: parsed};
 					}
-				} catch {
+				} else {
 					// Not valid JSON, wrap the raw string
-					responseData = { content: contentToParse };
+					responseData = {content: contentToParse};
 				}
 			}
 
 			contents.push({
 				role: 'user',
-				parts: [{
-					functionResponse: {
-						name: functionName,
-						response: responseData
-					}
-				}]
+				parts: [
+					{
+						functionResponse: {
+							name: functionName,
+							response: responseData,
+						},
+					},
+				],
 			});
 			continue;
 		}
 
 		// Handle tool calls in assistant messages
-		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+		if (
+			msg.role === 'assistant' &&
+			msg.tool_calls &&
+			msg.tool_calls.length > 0
+		) {
 			const parts: any[] = [];
 
 			// Add text content if exists
 			if (msg.content) {
-				parts.push({ text: msg.content });
+				parts.push({text: msg.content});
 			}
 
 			// Add function calls
 			for (const toolCall of msg.tool_calls) {
+				const argsParseResult = parseJsonWithFix(toolCall.function.arguments, {
+					toolName: `Gemini function call: ${toolCall.function.name}`,
+					fallbackValue: {},
+					logWarning: true,
+					logError: true,
+				});
+
 				parts.push({
 					functionCall: {
 						name: toolCall.function.name,
-						args: JSON.parse(toolCall.function.arguments)
-					}
+						args: argsParseResult.data,
+					},
 				});
 			}
 
 			contents.push({
 				role: 'model',
-				parts
+				parts,
 			});
 			continue;
 		}
@@ -204,7 +242,7 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 
 		// Add text content
 		if (msg.content) {
-			parts.push({ text: msg.content });
+			parts.push({text: msg.content});
 		}
 
 		// Add images for user messages
@@ -215,8 +253,8 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 					parts.push({
 						inlineData: {
 							mimeType: base64Match[1] || image.mimeType,
-							data: base64Match[2] || ''
-						}
+							data: base64Match[2] || '',
+						},
 					});
 				}
 			}
@@ -224,7 +262,7 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 
 		// Add to contents
 		const role = msg.role === 'assistant' ? 'model' : 'user';
-		contents.push({ role, parts });
+		contents.push({role, parts});
 	}
 
 	// Handle system instruction
@@ -233,13 +271,13 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 		// Prepend default system prompt as first user message
 		contents.unshift({
 			role: 'user',
-			parts: [{ text: SYSTEM_PROMPT }]
+			parts: [{text: getSystemPrompt()}],
 		});
 	} else if (!systemInstruction) {
-		systemInstruction = SYSTEM_PROMPT;
+		systemInstruction = getSystemPrompt();
 	}
 
-	return { systemInstruction, contents };
+	return {systemInstruction, contents};
 }
 
 /**
@@ -248,22 +286,26 @@ function convertToGeminiMessages(messages: ChatMessage[]): { systemInstruction?:
 export async function* createStreamingGeminiCompletion(
 	options: GeminiOptions,
 	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<GeminiStreamChunk, void, unknown> {
 	const config = getGeminiConfig();
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
-			const { systemInstruction, contents } = convertToGeminiMessages(options.messages);
+			const {systemInstruction, contents} = convertToGeminiMessages(
+				options.messages,
+			);
 
 			// Build request payload
 			const requestBody: any = {
 				contents,
-				systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+				systemInstruction: systemInstruction
+					? {parts: [{text: systemInstruction}]}
+					: undefined,
 				generationConfig: {
 					temperature: options.temperature ?? 0.7,
-				}
+				},
 			};
 
 			// Add tools if provided
@@ -273,24 +315,30 @@ export async function* createStreamingGeminiCompletion(
 			}
 
 			// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
-			const modelName = options.model.startsWith('models/') ? options.model : `models/${options.model}`;
+			const modelName = options.model.startsWith('models/')
+				? options.model
+				: `models/${options.model}`;
 
 			const url = `${config.baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
 
-			const response = await fetch(url, {
+			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'authorization': `Bearer ${config.apiKey}`,
-					...config.customHeaders
+					'Authorization': `Bearer ${config.apiKey}`,
+					...config.customHeaders,
 				},
 				body: JSON.stringify(requestBody),
-				signal: abortSignal
+				signal: abortSignal,
 			});
+
+			const response = await fetch(url, fetchOptions);
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+				throw new Error(
+					`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
+				);
 			}
 
 			if (!response.body) {
@@ -308,7 +356,7 @@ export async function* createStreamingGeminiCompletion(
 			}> = [];
 			let hasToolCalls = false;
 			let toolCallIndex = 0;
-			let totalTokens = { prompt: 0, completion: 0, total: 0 };
+			let totalTokens = {prompt: 0, completion: 0, total: 0};
 
 			// Parse SSE stream
 			const reader = response.body.getReader();
@@ -316,14 +364,14 @@ export async function* createStreamingGeminiCompletion(
 			let buffer = '';
 
 			while (true) {
-				const { done, value } = await reader.read();
+				const {done, value} = await reader.read();
 				if (done) break;
 
 				if (abortSignal?.aborted) {
 					return;
 				}
 
-				buffer += decoder.decode(value, { stream: true });
+				buffer += decoder.decode(value, {stream: true});
 				const lines = buffer.split('\n');
 				buffer = lines.pop() || '';
 
@@ -331,10 +379,29 @@ export async function* createStreamingGeminiCompletion(
 					const trimmed = line.trim();
 					if (!trimmed || trimmed.startsWith(':')) continue;
 
-					if (trimmed.startsWith('data: ')) {
-						const data = trimmed.slice(6);
-						try {
-							const chunk = JSON.parse(data);
+					if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
+						break;
+					}
+
+					// Handle both "event: " and "event:" formats
+					if (trimmed.startsWith('event:')) {
+						// Event type, will be followed by data
+						continue;
+					}
+
+					// Handle both "data: " and "data:" formats
+					if (trimmed.startsWith('data:')) {
+						const data = trimmed.startsWith('data: ')
+							? trimmed.slice(6)
+							: trimmed.slice(5);
+						const parseResult = parseJsonWithFix(data, {
+							toolName: 'Gemini SSE stream',
+							logWarning: false,
+							logError: true,
+						});
+
+						if (parseResult.success) {
+							const chunk = parseResult.data;
 
 							// Process candidates
 							if (chunk.candidates && chunk.candidates.length > 0) {
@@ -346,7 +413,7 @@ export async function* createStreamingGeminiCompletion(
 											contentBuffer += part.text;
 											yield {
 												type: 'content',
-												content: part.text
+												content: part.text,
 											};
 										}
 
@@ -360,8 +427,8 @@ export async function* createStreamingGeminiCompletion(
 												type: 'function' as const,
 												function: {
 													name: fc.name,
-													arguments: JSON.stringify(fc.args || {})
-												}
+													arguments: JSON.stringify(fc.args || {}),
+												},
 											};
 											toolCallsBuffer.push(toolCall);
 
@@ -369,7 +436,7 @@ export async function* createStreamingGeminiCompletion(
 											const deltaText = fc.name + JSON.stringify(fc.args || {});
 											yield {
 												type: 'tool_call_delta',
-												delta: deltaText
+												delta: deltaText,
 											};
 										}
 									}
@@ -381,11 +448,9 @@ export async function* createStreamingGeminiCompletion(
 								totalTokens = {
 									prompt: chunk.usageMetadata.promptTokenCount || 0,
 									completion: chunk.usageMetadata.candidatesTokenCount || 0,
-									total: chunk.usageMetadata.totalTokenCount || 0
+									total: chunk.usageMetadata.totalTokenCount || 0,
 								};
 							}
-						} catch (e) {
-							console.error('Failed to parse Gemini SSE data:', data);
 						}
 					}
 				}
@@ -395,7 +460,7 @@ export async function* createStreamingGeminiCompletion(
 			if (hasToolCalls && toolCallsBuffer.length > 0) {
 				yield {
 					type: 'tool_calls',
-					tool_calls: toolCallsBuffer
+					tool_calls: toolCallsBuffer,
 				};
 			}
 
@@ -406,19 +471,19 @@ export async function* createStreamingGeminiCompletion(
 					usage: {
 						prompt_tokens: totalTokens.prompt,
 						completion_tokens: totalTokens.completion,
-						total_tokens: totalTokens.total
-					}
+						total_tokens: totalTokens.total,
+					},
 				};
 			}
 
 			// Signal completion
 			yield {
-				type: 'done'
+				type: 'done',
 			};
 		},
 		{
 			abortSignal,
-			onRetry
-		}
+			onRetry,
+		},
 	);
 }

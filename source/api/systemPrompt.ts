@@ -2,7 +2,38 @@
  * System prompt configuration for Snow AI CLI
  */
 
-export const SYSTEM_PROMPT = `You are Snow AI CLI, an intelligent command-line assistant.
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Get the system prompt, dynamically reading from ROLE.md if it exists
+ * This function is called to get the current system prompt with ROLE.md content if available
+ */
+function getSystemPromptWithRole(): string {
+	try {
+		const cwd = process.cwd();
+		const roleFilePath = path.join(cwd, 'ROLE.md');
+
+		// Check if ROLE.md exists and is not empty
+		if (fs.existsSync(roleFilePath)) {
+			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
+			if (roleContent) {
+				// Replace the default role description with ROLE.md content
+				return SYSTEM_PROMPT_TEMPLATE.replace(
+					'You are Snow AI CLI, an intelligent command-line assistant.',
+					roleContent,
+				);
+			}
+		}
+	} catch (error) {
+		// If reading fails, fall back to default
+		console.error('Failed to read ROLE.md:', error);
+	}
+
+	return SYSTEM_PROMPT_TEMPLATE;
+}
+
+const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line assistant.
 
 ## 🎯 Core Principles
 
@@ -112,3 +143,8 @@ Guidance and recommendations:
 - Contains: project overview, architecture, tech stack
 
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.`;
+
+// Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
+export function getSystemPrompt(): string {
+	return getSystemPromptWithRole();
+}

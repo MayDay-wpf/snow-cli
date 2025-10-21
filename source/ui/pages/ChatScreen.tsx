@@ -26,6 +26,7 @@ import {useSnapshotState} from '../../hooks/useSnapshotState.js';
 import {useStreamingState} from '../../hooks/useStreamingState.js';
 import {useCommandHandler} from '../../hooks/useCommandHandler.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useUsagePersistence} from '../../hooks/useUsagePersistence.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -46,6 +47,7 @@ import '../../utils/commands/ide.js';
 import '../../utils/commands/compact.js';
 import '../../utils/commands/home.js';
 import '../../utils/commands/review.js';
+import '../../utils/commands/role.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -93,6 +95,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
 	const snapshotState = useSnapshotState(messages.length);
+	const {createUsageSaver} = useUsagePersistence();
 
 	// Use session save hook
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
@@ -539,6 +542,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
+			// Get model name for usage tracking
+			const config = getOpenAiConfig();
+			const modelName = useBasicModel
+				? config.basicModel || config.advancedModel || 'unknown'
+				: config.advancedModel || config.basicModel || 'unknown';
+
 			// Start conversation with tool support
 			await handleConversationWithTools({
 				userContent: messageForAI,
@@ -560,20 +569,22 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
+				onUsageUpdate: createUsageSaver(modelName), // Save usage after each round
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
-				return;
+				// Don't return here - let finally block execute
+				// Just skip error display for aborted requests
+			} else {
+				const errorMessage =
+					error instanceof Error ? error.message : 'Unknown error occurred';
+				const finalMessage: Message = {
+					role: 'assistant',
+					content: `Error: ${errorMessage}`,
+					streaming: false,
+				};
+				setMessages(prev => [...prev, finalMessage]);
 			}
-
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error occurred';
-			const finalMessage: Message = {
-				role: 'assistant',
-				content: `Error: ${errorMessage}`,
-				streaming: false,
-			};
-			setMessages(prev => [...prev, finalMessage]);
 		} finally {
 			// End streaming
 			streamingState.setIsStreaming(false);
@@ -644,6 +655,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
+			// Get model name for usage tracking
+			const config = getOpenAiConfig();
+			const modelName = config.advancedModel || config.basicModel || 'unknown';
+
 			// Use the same conversation handler
 			await handleConversationWithTools({
 				userContent: messageForAI,
@@ -664,20 +679,22 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
+				onUsageUpdate: createUsageSaver(modelName), // Save usage after each round
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
-				return;
+				// Don't return here - let finally block execute
+				// Just skip error display for aborted requests
+			} else {
+				const errorMessage =
+					error instanceof Error ? error.message : 'Unknown error occurred';
+				const finalMessage: Message = {
+					role: 'assistant',
+					content: `Error: ${errorMessage}`,
+					streaming: false,
+				};
+				setMessages(prev => [...prev, finalMessage]);
 			}
-
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error occurred';
-			const finalMessage: Message = {
-				role: 'assistant',
-				content: `Error: ${errorMessage}`,
-				streaming: false,
-			};
-			setMessages(prev => [...prev, finalMessage]);
 		} finally {
 			// End streaming
 			streamingState.setIsStreaming(false);

@@ -1,12 +1,14 @@
-import {createHash, randomUUID} from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
 	getOpenAiConfig,
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/apiConfig.js';
-import {SYSTEM_PROMPT} from './systemPrompt.js';
-import {withRetryGenerator} from '../utils/retryUtils.js';
-import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
+import { getSystemPrompt } from './systemPrompt.js';
+import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
+import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
+import { logger } from '../utils/logger.js';
+import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -36,7 +38,7 @@ export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: {type: 'ephemeral'};
+	cache_control?: { type: 'ephemeral' };
 }
 
 export interface AnthropicMessageParam {
@@ -121,7 +123,7 @@ function convertToolsToAnthropic(
 
 	if (convertedTools.length > 0) {
 		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = {type: 'ephemeral'};
+		(lastTool as any).cache_control = { type: 'ephemeral' };
 	}
 
 	return convertedTools;
@@ -235,13 +237,13 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 			content: [
 				{
 					type: 'text',
-					text: SYSTEM_PROMPT,
-					cache_control: {type: 'ephemeral'},
+					text: getSystemPrompt(),
+					cache_control: { type: 'ephemeral' },
 				},
 			] as any,
 		});
 	} else if (!systemContent) {
-		systemContent = SYSTEM_PROMPT;
+		systemContent = getSystemPrompt();
 	}
 
 	let lastUserMessageIndex = -1;
@@ -263,14 +265,14 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 					{
 						type: 'text',
 						text: lastMessage.content,
-						cache_control: {type: 'ephemeral'},
+						cache_control: { type: 'ephemeral' },
 					} as any,
 				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = {type: 'ephemeral'};
+					lastContent.cache_control = { type: 'ephemeral' };
 				}
 			}
 		}
@@ -278,15 +280,15 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 
 	const system = systemContent
 		? [
-				{
-					type: 'text',
-					text: systemContent,
-					cache_control: {type: 'ephemeral'},
-				},
-		  ]
+			{
+				type: 'text',
+				text: systemContent,
+				cache_control: { type: 'ephemeral' },
+			},
+		]
 		: undefined;
 
-	return {system, messages: anthropicMessages};
+	return { system, messages: anthropicMessages };
 }
 
 /**
@@ -299,10 +301,10 @@ async function* parseSSEStream(
 	let buffer = '';
 
 	while (true) {
-		const {done, value} = await reader.read();
+		const { done, value } = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, {stream: true});
+		buffer += decoder.decode(value, { stream: true });
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -310,21 +312,25 @@ async function* parseSSEStream(
 			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith(':')) continue;
 
-			if (trimmed === 'data: [DONE]') {
+			if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
 				return;
 			}
 
-			if (trimmed.startsWith('event: ')) {
+			// Handle both "event: " and "event:" formats
+			if (trimmed.startsWith('event:')) {
 				// Event type, will be followed by data
 				continue;
 			}
 
-			if (trimmed.startsWith('data: ')) {
-				const data = trimmed.slice(6);
+			// Handle both "data: " and "data:" formats
+			if (trimmed.startsWith('data:')) {
+				const data = trimmed.startsWith('data: ')
+					? trimmed.slice(6)
+					: trimmed.slice(5);
 				try {
 					yield JSON.parse(data);
 				} catch (e) {
-					console.error('Failed to parse SSE data:', data);
+					logger.error('Failed to parse SSE data:', data);
 				}
 			}
 		}
@@ -342,7 +348,7 @@ export async function* createStreamingAnthropicCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			const config = getAnthropicConfig();
-			const {system, messages} = convertToAnthropicMessages(options.messages);
+			const { system, messages } = convertToAnthropicMessages(options.messages);
 
 			const sessionId = options.sessionId || randomUUID();
 			const userId = generateUserId(sessionId);
@@ -364,7 +370,7 @@ export async function* createStreamingAnthropicCompletion(
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
 				'x-api-key': config.apiKey,
-				authorization: `Bearer ${config.apiKey}`,
+				'Authorization': `Bearer ${config.apiKey}`,
 				'anthropic-version': '2023-06-01',
 				...config.customHeaders,
 			};
@@ -378,12 +384,14 @@ export async function* createStreamingAnthropicCompletion(
 				? `${config.baseUrl}/messages?beta=true`
 				: `${config.baseUrl}/messages`;
 
-			const response = await fetch(url, {
+			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers,
 				body: JSON.stringify(requestBody),
 				signal: abortSignal,
 			});
+
+			const response = await fetch(url, fetchOptions);
 
 			if (!response.ok) {
 				const errorText = await response.text();
@@ -538,105 +546,35 @@ export async function* createStreamingAnthropicCompletion(
 						args = '{}';
 					}
 
-					// Try to parse the JSON
-					try {
-						JSON.parse(args);
-						toolCall.function.arguments = args;
-					} catch (e) {
-						// Only throw error if this tool block was marked as completed
-						// This prevents errors from incomplete streaming
-						if (completedToolBlocks.has(toolCall.id)) {
-							// Try to fix common JSON errors before throwing
-							let fixedArgs = args;
-							let wasFixed = false;
+					// Try to parse the JSON using the unified parseJsonWithFix utility
+					if (completedToolBlocks.has(toolCall.id)) {
+						// Tool block was completed, parse with fix and logging
+						const parseResult = parseJsonWithFix(args, {
+							toolName: toolCall.function.name,
+							fallbackValue: {},
+							logWarning: true,
+							logError: true,
+						});
 
-							// Fix 1: Remove malformed patterns like "endLine":685 ": ""
-							// This handles cases where there's an extra colon and quotes after a value
-							const malformedPattern =
-								/("[\w]+"\s*:\s*[^,}\]]+)\s*":\s*"[^"]*"/g;
-							if (malformedPattern.test(fixedArgs)) {
-								fixedArgs = fixedArgs.replace(malformedPattern, '$1');
-								wasFixed = true;
-							}
+						// Use the parsed data or fallback value
+						toolCall.function.arguments = JSON.stringify(parseResult.data);
+					} else {
+						// Tool block wasn't completed, likely interrupted stream
+						// Try to parse without logging errors (incomplete data is expected)
+						const parseResult = parseJsonWithFix(args, {
+							toolName: toolCall.function.name,
+							fallbackValue: {},
+							logWarning: false,
+							logError: false,
+						});
 
-							// Fix 2: Remove trailing commas before closing braces/brackets
-							if (/,(\s*[}\]])/.test(fixedArgs)) {
-								fixedArgs = fixedArgs.replace(/,(\s*[}\]])/g, '$1');
-								wasFixed = true;
-							}
-
-							// Fix 3: Fix missing quotes around property names
-							if (/{\s*\w+\s*:/.test(fixedArgs)) {
-								fixedArgs = fixedArgs.replace(/{\s*(\w+)\s*:/g, '{"$1":');
-								fixedArgs = fixedArgs.replace(/,\s*(\w+)\s*:/g, ',"$1":');
-								wasFixed = true;
-							}
-
-							// Fix 4: Add missing closing braces/brackets
-							const openBraces = (fixedArgs.match(/{/g) || []).length;
-							const closeBraces = (fixedArgs.match(/}/g) || []).length;
-							const openBrackets = (fixedArgs.match(/\[/g) || []).length;
-							const closeBrackets = (fixedArgs.match(/\]/g) || []).length;
-
-							if (openBraces > closeBraces) {
-								fixedArgs += '}'.repeat(openBraces - closeBraces);
-								wasFixed = true;
-							}
-							if (openBrackets > closeBrackets) {
-								fixedArgs += ']'.repeat(openBrackets - closeBrackets);
-								wasFixed = true;
-							}
-
-							// Fix 5: Remove extra closing braces/brackets
-							if (closeBraces > openBraces) {
-								const extraBraces = closeBraces - openBraces;
-								for (let i = 0; i < extraBraces; i++) {
-									fixedArgs = fixedArgs.replace(/}([^}]*)$/, '$1');
-								}
-								wasFixed = true;
-							}
-							if (closeBrackets > openBrackets) {
-								const extraBrackets = closeBrackets - openBrackets;
-								for (let i = 0; i < extraBrackets; i++) {
-									fixedArgs = fixedArgs.replace(/\]([^\]]*)$/, '$1');
-								}
-								wasFixed = true;
-							}
-
-							// Try parsing the fixed JSON
-							try {
-								JSON.parse(fixedArgs);
-								if (wasFixed) {
-									console.warn(
-										`Warning: Fixed malformed JSON for ${toolCall.function.name}`,
-									);
-								}
-								toolCall.function.arguments = fixedArgs;
-							} catch (fixError) {
-								// If fixing failed, use empty object and log warning
-								// This prevents the entire request from failing
-								console.error(
-									`Error: Failed to fix malformed JSON for ${toolCall.function.name}`,
-								);
-								console.error(`Original: ${args}`);
-								console.error(`After fixes: ${fixedArgs}`);
-								console.error(
-									`Parse error: ${
-										fixError instanceof Error ? fixError.message : 'Unknown'
-									}`,
-								);
-
-								// Use empty object as fallback instead of throwing
-								toolCall.function.arguments = '{}';
-							}
-						} else {
-							// Tool block wasn't completed, likely interrupted stream
-							// Use partial data or empty object
-							console.warn(
-								`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using partial data.`,
+						if (!parseResult.success) {
+							logger.warn(
+								`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using fallback data.`,
 							);
-							toolCall.function.arguments = '{}';
 						}
+
+						toolCall.function.arguments = JSON.stringify(parseResult.data);
 					}
 				}
 

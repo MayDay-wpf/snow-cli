@@ -25,6 +25,10 @@ const commands = [
 		description:
 			'Review git changes and identify potential issues. Usage: /review [optional note]',
 	},
+	{
+		name: 'role',
+		description: 'Open or create ROLE.md file to customize AI assistant role',
+	},
 ];
 
 export function useCommandPanel(buffer: TextBuffer) {

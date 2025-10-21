@@ -1,7 +1,17 @@
-import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
-import { SYSTEM_PROMPT } from './systemPrompt.js';
-import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage, ToolCall, ChatCompletionTool, UsageInfo } from './types.js';
+import {
+	getOpenAiConfig,
+	getCustomSystemPrompt,
+	getCustomHeaders,
+} from '../utils/apiConfig.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import type {
+	ChatMessage,
+	ToolCall,
+	ChatCompletionTool,
+	UsageInfo,
+} from './types.js';
+import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
 
 export interface ResponseOptions {
 	model: string;
@@ -25,35 +35,51 @@ export interface ResponseOptions {
  * 1. additionalProperties: false
  * 2. 保持原有的 required 数组（不修改）
  */
-function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> | undefined {
+function ensureStrictSchema(
+	schema?: Record<string, any>,
+): Record<string, any> | undefined {
 	if (!schema) {
 		return undefined;
 	}
 
 	// 深拷贝 schema
-	const strictSchema = JSON.parse(JSON.stringify(schema));
+	const stringified = JSON.stringify(schema);
+	const parseResult = parseJsonWithFix(stringified, {
+		toolName: 'Schema deep copy',
+		fallbackValue: schema, // 如果失败，使用原始 schema
+		logWarning: true,
+		logError: true,
+	});
+	const strictSchema = parseResult.data as Record<string, any>;
 
-	if (strictSchema.type === 'object') {
+	if (strictSchema?.['type'] === 'object') {
 		// 添加 additionalProperties: false
-		strictSchema.additionalProperties = false;
+		strictSchema['additionalProperties'] = false;
 
 		// 递归处理嵌套的 object 属性
-		if (strictSchema.properties) {
-			for (const key of Object.keys(strictSchema.properties)) {
-				const prop = strictSchema.properties[key];
+		if (strictSchema['properties']) {
+			for (const key of Object.keys(strictSchema['properties'])) {
+				const prop = strictSchema['properties'][key];
 
 				// 递归处理嵌套的 object
-				if (prop.type === 'object' || (Array.isArray(prop.type) && prop.type.includes('object'))) {
+				if (
+					prop['type'] === 'object' ||
+					(Array.isArray(prop['type']) && prop['type'].includes('object'))
+				) {
 					if (!('additionalProperties' in prop)) {
-						prop.additionalProperties = false;
+						prop['additionalProperties'] = false;
 					}
 				}
 			}
 		}
 
 		// 如果 properties 为空且有 required 字段，删除它
-		if (strictSchema.properties && Object.keys(strictSchema.properties).length === 0 && strictSchema.required) {
-			delete strictSchema.required;
+		if (
+			strictSchema['properties'] &&
+			Object.keys(strictSchema['properties']).length === 0 &&
+			strictSchema['required']
+		) {
+			delete strictSchema['required'];
 		}
 	}
 
@@ -65,13 +91,15 @@ function ensureStrictSchema(schema?: Record<string, any>): Record<string, any> |
  * Chat Completions: {type: 'function', function: {name, description, parameters}}
  * Responses API: {type: 'function', name, description, parameters, strict}
  */
-function convertToolsForResponses(tools?: ChatCompletionTool[]): Array<{
-	type: 'function';
-	name: string;
-	description?: string;
-	parameters?: Record<string, any>;
-	strict?: boolean;
-}> | undefined {
+function convertToolsForResponses(tools?: ChatCompletionTool[]):
+	| Array<{
+			type: 'function';
+			name: string;
+			description?: string;
+			parameters?: Record<string, any>;
+			strict?: boolean;
+	  }>
+	| undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
 	}
@@ -81,12 +109,19 @@ function convertToolsForResponses(tools?: ChatCompletionTool[]): Array<{
 		name: tool.function.name,
 		description: tool.function.description,
 		parameters: ensureStrictSchema(tool.function.parameters),
-		strict: false
+		strict: false,
 	}));
 }
 
 export interface ResponseStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'reasoning_started' | 'done' | 'usage';
+	type:
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'reasoning_delta'
+		| 'reasoning_started'
+		| 'done'
+		| 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
@@ -104,7 +139,9 @@ function getOpenAIConfig() {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey || !config.baseUrl) {
-			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
+			throw new Error(
+				'OpenAI API configuration is incomplete. Please configure API settings first.',
+			);
 		}
 
 		const customHeaders = getCustomHeaders();
@@ -112,7 +149,7 @@ function getOpenAIConfig() {
 		openaiConfig = {
 			apiKey: config.apiKey,
 			baseUrl: config.baseUrl,
-			customHeaders
+			customHeaders,
 		};
 	}
 
@@ -123,7 +160,10 @@ export function resetOpenAIClient(): void {
 	openaiConfig = null;
 }
 
-function convertToResponseInput(messages: ChatMessage[]): { input: any[]; systemInstructions: string } {
+function convertToResponseInput(messages: ChatMessage[]): {
+	input: any[];
+	systemInstructions: string;
+} {
 	const customSystemPrompt = getCustomSystemPrompt();
 	const result: any[] = [];
 
@@ -143,7 +183,7 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 			if (msg.content) {
 				contentParts.push({
 					type: 'input_text',
-					text: msg.content
+					text: msg.content,
 				});
 			}
 
@@ -152,7 +192,7 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 				for (const image of msg.images) {
 					contentParts.push({
 						type: 'input_image',
-						image_url: image.data
+						image_url: image.data,
 					});
 				}
 			}
@@ -160,23 +200,29 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 			result.push({
 				type: 'message',
 				role: 'user',
-				content: contentParts
+				content: contentParts,
 			});
 			continue;
 		}
 
 		// Assistant 消息（带工具调用）
 		// 在 Responses API 中，需要将工具调用转换为 function_call 类型的独立项
-		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+		if (
+			msg.role === 'assistant' &&
+			msg.tool_calls &&
+			msg.tool_calls.length > 0
+		) {
 			// 添加 assistant 文本内容（如果有）
 			if (msg.content) {
 				result.push({
 					type: 'message',
 					role: 'assistant',
-					content: [{
-						type: 'output_text',
-						text: msg.content
-					}]
+					content: [
+						{
+							type: 'output_text',
+							text: msg.content,
+						},
+					],
 				});
 			}
 
@@ -186,7 +232,7 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 					type: 'function_call',
 					call_id: toolCall.id,
 					name: toolCall.function.name,
-					arguments: toolCall.function.arguments
+					arguments: toolCall.function.arguments,
 				});
 			}
 			continue;
@@ -197,10 +243,12 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 			result.push({
 				type: 'message',
 				role: 'assistant',
-				content: [{
-					type: 'output_text',
-					text: msg.content || ''
-				}]
+				content: [
+					{
+						type: 'output_text',
+						text: msg.content || '',
+					},
+				],
 			});
 			continue;
 		}
@@ -210,7 +258,7 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 			result.push({
 				type: 'function_call_output',
 				call_id: msg.tool_call_id,
-				output: msg.content
+				output: msg.content,
 			});
 			continue;
 		}
@@ -224,31 +272,35 @@ function convertToResponseInput(messages: ChatMessage[]): { input: any[]; system
 		result.unshift({
 			type: 'message',
 			role: 'user',
-			content: [{
-				type: 'input_text',
-				text: SYSTEM_PROMPT
-			}]
+			content: [
+				{
+					type: 'input_text',
+					text: getSystemPrompt(),
+				},
+			],
 		});
 	} else {
 		// 没有自定义系统提示词：默认作为 instructions
-		systemInstructions = SYSTEM_PROMPT;
+		systemInstructions = getSystemPrompt();
 	}
 
-	return { input: result, systemInstructions };
+	return {input: result, systemInstructions};
 }
 
 /**
  * Parse Server-Sent Events (SSE) stream
  */
-async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+async function* parseSSEStream(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+): AsyncGenerator<any, void, unknown> {
 	const decoder = new TextDecoder();
 	let buffer = '';
 
 	while (true) {
-		const { done, value } = await reader.read();
+		const {done, value} = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
+		buffer += decoder.decode(value, {stream: true});
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -256,16 +308,29 @@ async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>):
 			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith(':')) continue;
 
-			if (trimmed === 'data: [DONE]') {
+			if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
 				return;
 			}
 
-			if (trimmed.startsWith('data: ')) {
-				const data = trimmed.slice(6);
-				try {
-					yield JSON.parse(data);
-				} catch (e) {
-					console.error('Failed to parse SSE data:', data);
+			// Handle both "event: " and "event:" formats
+			if (trimmed.startsWith('event:')) {
+				// Event type, will be followed by data
+				continue;
+			}
+
+			// Handle both "data: " and "data:" formats
+			if (trimmed.startsWith('data:')) {
+				const data = trimmed.startsWith('data: ')
+					? trimmed.slice(6)
+					: trimmed.slice(5);
+				const parseResult = parseJsonWithFix(data, {
+					toolName: 'Responses API SSE stream',
+					logWarning: false,
+					logError: true,
+				});
+
+				if (parseResult.success) {
+					yield parseResult.data;
 				}
 			}
 		}
@@ -278,12 +343,14 @@ async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>):
 export async function* createStreamingResponse(
 	options: ResponseOptions,
 	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
 	const config = getOpenAIConfig();
 
 	// 提取系统提示词和转换后的消息
-	const { input: requestInput, systemInstructions } = convertToResponseInput(options.messages);
+	const {input: requestInput, systemInstructions} = convertToResponseInput(
+		options.messages,
+	);
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
@@ -295,184 +362,198 @@ export async function* createStreamingResponse(
 				stream: true,
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
-				reasoning: options.reasoning || { summary: 'auto', effort: 'high' },
+				reasoning: options.reasoning || {summary: 'auto', effort: 'high'},
 				store: options.store ?? false,
 				include: options.include || ['reasoning.encrypted_content'],
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const response = await fetch(`${config.baseUrl}/responses`, {
+			const url = `${config.baseUrl}/responses`;
+			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${config.apiKey}`,
-					...config.customHeaders
+					...config.customHeaders,
 				},
 				body: JSON.stringify(requestPayload),
-				signal: abortSignal
+				signal: abortSignal,
 			});
+
+			const response = await fetch(url, fetchOptions);
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				throw new Error(`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`);
+				throw new Error(
+					`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
+				);
 			}
 
 			if (!response.body) {
 				throw new Error('No response body from OpenAI Responses API');
 			}
 
-		let contentBuffer = '';
-		let toolCallsBuffer: { [call_id: string]: any } = {};
-		let hasToolCalls = false;
-		let currentFunctionCallId: string | null = null;
-		let usageData: UsageInfo | undefined;
+			let contentBuffer = '';
+			let toolCallsBuffer: {[call_id: string]: any} = {};
+			let hasToolCalls = false;
+			let currentFunctionCallId: string | null = null;
+			let usageData: UsageInfo | undefined;
 
-		for await (const chunk of parseSSEStream(response.body.getReader())) {
-			if (abortSignal?.aborted) {
-				return;
-			}
+			for await (const chunk of parseSSEStream(response.body.getReader())) {
+				if (abortSignal?.aborted) {
+					return;
+				}
 
-			// Responses API 使用 SSE 事件格式
-			const eventType = chunk.type;
+				// Responses API 使用 SSE 事件格式
+				const eventType = chunk.type;
 
-			// 根据事件类型处理
-			if (eventType === 'response.created' || eventType === 'response.in_progress') {
-				// 响应创建/进行中 - 忽略
-				continue;
-			} else if (eventType === 'response.output_item.added') {
-				// 新输出项添加
-				const item = chunk.item;
-				if (item?.type === 'reasoning') {
-					// 推理摘要开始 - 发送 reasoning_started 事件
-					yield {
-						type: 'reasoning_started'
-					};
+				// 根据事件类型处理
+				if (
+					eventType === 'response.created' ||
+					eventType === 'response.in_progress'
+				) {
+					// 响应创建/进行中 - 忽略
 					continue;
-				} else if (item?.type === 'message') {
-					// 消息开始 - 忽略
-					continue;
-				} else if (item?.type === 'function_call') {
-					// 工具调用开始
-					hasToolCalls = true;
-					const callId = item.call_id || item.id;
-					currentFunctionCallId = callId;
-					toolCallsBuffer[callId] = {
-						id: callId,
-						type: 'function',
-						function: {
-							name: item.name || '',
-							arguments: ''
-						}
-					};
-					continue;
-				}
-				continue;
-			} else if (eventType === 'response.function_call_arguments.delta') {
-				// 工具调用参数增量
-				const delta = chunk.delta;
-				if (delta && currentFunctionCallId) {
-					toolCallsBuffer[currentFunctionCallId].function.arguments += delta;
-					// 发送 delta 用于 token 计数
-					yield {
-						type: 'tool_call_delta',
-						delta: delta
-					};
-				}
-			} else if (eventType === 'response.function_call_arguments.done') {
-				// 工具调用参数完成
-				const itemId = chunk.item_id;
-				const args = chunk.arguments;
-				if (itemId && toolCallsBuffer[itemId]) {
-					toolCallsBuffer[itemId].function.arguments = args;
-				}
-				currentFunctionCallId = null;
-				continue;
-			} else if (eventType === 'response.output_item.done') {
-				// 输出项完成
-				const item = chunk.item;
-				if (item?.type === 'function_call') {
-					// 确保工具调用信息完整
-					const callId = item.call_id || item.id;
-					if (toolCallsBuffer[callId]) {
-						toolCallsBuffer[callId].function.name = item.name;
-						toolCallsBuffer[callId].function.arguments = item.arguments;
+				} else if (eventType === 'response.output_item.added') {
+					// 新输出项添加
+					const item = chunk.item;
+					if (item?.type === 'reasoning') {
+						// 推理摘要开始 - 发送 reasoning_started 事件
+						yield {
+							type: 'reasoning_started',
+						};
+						continue;
+					} else if (item?.type === 'message') {
+						// 消息开始 - 忽略
+						continue;
+					} else if (item?.type === 'function_call') {
+						// 工具调用开始
+						hasToolCalls = true;
+						const callId = item.call_id || item.id;
+						currentFunctionCallId = callId;
+						toolCallsBuffer[callId] = {
+							id: callId,
+							type: 'function',
+							function: {
+								name: item.name || '',
+								arguments: '',
+							},
+						};
+						continue;
 					}
+					continue;
+				} else if (eventType === 'response.function_call_arguments.delta') {
+					// 工具调用参数增量
+					const delta = chunk.delta;
+					if (delta && currentFunctionCallId) {
+						toolCallsBuffer[currentFunctionCallId].function.arguments += delta;
+						// 发送 delta 用于 token 计数
+						yield {
+							type: 'tool_call_delta',
+							delta: delta,
+						};
+					}
+				} else if (eventType === 'response.function_call_arguments.done') {
+					// 工具调用参数完成
+					const itemId = chunk.item_id;
+					const args = chunk.arguments;
+					if (itemId && toolCallsBuffer[itemId]) {
+						toolCallsBuffer[itemId].function.arguments = args;
+					}
+					currentFunctionCallId = null;
+					continue;
+				} else if (eventType === 'response.output_item.done') {
+					// 输出项完成
+					const item = chunk.item;
+					if (item?.type === 'function_call') {
+						// 确保工具调用信息完整
+						const callId = item.call_id || item.id;
+						if (toolCallsBuffer[callId]) {
+							toolCallsBuffer[callId].function.name = item.name;
+							toolCallsBuffer[callId].function.arguments = item.arguments;
+						}
+					}
+					continue;
+				} else if (eventType === 'response.content_part.added') {
+					// 内容部分添加 - 忽略
+					continue;
+				} else if (eventType === 'response.reasoning_summary_text.delta') {
+					// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
+					const delta = chunk.delta;
+					if (delta) {
+						yield {
+							type: 'reasoning_delta',
+							delta: delta,
+						};
+					}
+				} else if (eventType === 'response.output_text.delta') {
+					// 文本增量更新
+					const delta = chunk.delta;
+					if (delta) {
+						contentBuffer += delta;
+						yield {
+							type: 'content',
+							content: delta,
+						};
+					}
+				} else if (eventType === 'response.output_text.done') {
+					// 文本输出完成 - 忽略
+					continue;
+				} else if (eventType === 'response.content_part.done') {
+					// 内容部分完成 - 忽略
+					continue;
+				} else if (eventType === 'response.completed') {
+					// 响应完全完成 - 从 response 对象中提取 usage
+					if (chunk.response && chunk.response.usage) {
+						usageData = {
+							prompt_tokens: chunk.response.usage.input_tokens || 0,
+							completion_tokens: chunk.response.usage.output_tokens || 0,
+							total_tokens: chunk.response.usage.total_tokens || 0,
+							// OpenAI Responses API: cached_tokens in input_tokens_details (note: tokenS)
+							cached_tokens: (chunk.response.usage as any).input_tokens_details
+								?.cached_tokens,
+						};
+					}
+					break;
+				} else if (
+					eventType === 'response.failed' ||
+					eventType === 'response.cancelled'
+				) {
+					// 响应失败或取消
+					const error = chunk.error;
+					if (error) {
+						throw new Error(
+							`Response failed: ${error.message || 'Unknown error'}`,
+						);
+					}
+					break;
 				}
-				continue;
-			} else if (eventType === 'response.content_part.added') {
-				// 内容部分添加 - 忽略
-				continue;
-			} else if (eventType === 'response.reasoning_summary_text.delta') {
-				// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
-				const delta = chunk.delta;
-				if (delta) {
-					yield {
-						type: 'reasoning_delta',
-						delta: delta
-					};
-				}
-			} else if (eventType === 'response.output_text.delta') {
-				// 文本增量更新
-				const delta = chunk.delta;
-				if (delta) {
-					contentBuffer += delta;
-					yield {
-						type: 'content',
-						content: delta
-					};
-				}
-			} else if (eventType === 'response.output_text.done') {
-				// 文本输出完成 - 忽略
-				continue;
-			} else if (eventType === 'response.content_part.done') {
-				// 内容部分完成 - 忽略
-				continue;
-			} else if (eventType === 'response.completed') {
-				// 响应完全完成 - 从 response 对象中提取 usage
-				if (chunk.response && chunk.response.usage) {
-					usageData = {
-						prompt_tokens: chunk.response.usage.input_tokens || 0,
-						completion_tokens: chunk.response.usage.output_tokens || 0,
-						total_tokens: chunk.response.usage.total_tokens || 0,
-						// OpenAI Responses API: cached_tokens in input_tokens_details (note: tokenS)
-						cached_tokens: (chunk.response.usage as any).input_tokens_details?.cached_tokens
-					};
-				}
-				break;
-			} else if (eventType === 'response.failed' || eventType === 'response.cancelled') {
-				// 响应失败或取消
-				const error = chunk.error;
-				if (error) {
-					throw new Error(`Response failed: ${error.message || 'Unknown error'}`);
-				}
-				break;
 			}
-		}
 
-		// 如果有工具调用，返回它们
-		if (hasToolCalls) {
+			// 如果有工具调用，返回它们
+			if (hasToolCalls) {
+				yield {
+					type: 'tool_calls',
+					tool_calls: Object.values(toolCallsBuffer),
+				};
+			}
+
+			// Yield usage information if available
+			if (usageData) {
+				yield {
+					type: 'usage',
+					usage: usageData,
+				};
+			}
+
+			// 发送完成信号
 			yield {
-				type: 'tool_calls',
-				tool_calls: Object.values(toolCallsBuffer)
+				type: 'done',
 			};
-		}
-
-		// Yield usage information if available
-		if (usageData) {
-			yield {
-				type: 'usage',
-				usage: usageData
-			};
-		}
-
-		// 发送完成信号
-		yield {
-			type: 'done'
-		};
 		},
 		{
 			abortSignal,
-			onRetry
-		}
+			onRetry,
+		},
 	);
 }

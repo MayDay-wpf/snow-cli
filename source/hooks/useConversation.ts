@@ -3,7 +3,7 @@ import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
-import {SYSTEM_PROMPT} from '../api/systemPrompt.js';
+import {getSystemPrompt} from '../api/systemPrompt.js';
 import {collectAllMCPTools, getTodoService} from '../utils/mcpToolsManager.js';
 import {executeToolCalls, type ToolCall} from '../utils/toolExecutor.js';
 import {getOpenAiConfig} from '../utils/apiConfig.js';
@@ -51,14 +51,16 @@ export type ConversationHandlerOptions = {
 			errorMessage?: string;
 		} | null>
 	>; // Retry status
+	onUsageUpdate?: (usage: any) => void; // Callback to save usage data after each round
 };
 
 /**
  * Handle conversation with streaming and tool calls
+ * Returns the usage data collected during the conversation
  */
 export async function handleConversationWithTools(
 	options: ConversationHandlerOptions,
-) {
+): Promise<{usage: any | null}> {
 	const {
 		userContent,
 		imageContents,
@@ -94,10 +96,9 @@ export async function handleConversationWithTools(
 
 	// Collect all MCP tools
 	const mcpTools = await collectAllMCPTools();
-
 	// Build conversation history with TODO context as pinned user message
 	let conversationMessages: ChatMessage[] = [
-		{role: 'system', content: SYSTEM_PROMPT},
+		{role: 'system', content: getSystemPrompt()},
 	];
 
 	// If there are TODOs, add pinned context message at the front
@@ -169,6 +170,14 @@ export async function handleConversationWithTools(
 
 	// Tool calling loop (no limit on rounds)
 	let finalAssistantMessage: Message | null = null;
+	// Accumulate usage data across all rounds
+	let accumulatedUsage: {
+		prompt_tokens: number;
+		completion_tokens: number;
+		total_tokens: number;
+		cache_creation_input_tokens?: number;
+		cache_read_input_tokens?: number;
+	} | null = null;
 
 	// Local set to track approved tools in this conversation (solves async setState issue)
 	const sessionApprovedTools = new Set<string>();
@@ -307,8 +316,40 @@ export async function handleConversationWithTools(
 				} else if (chunk.type === 'tool_calls' && chunk.tool_calls) {
 					receivedToolCalls = chunk.tool_calls;
 				} else if (chunk.type === 'usage' && chunk.usage) {
-					// Capture usage information
+					// Capture usage information both in state and locally
 					setContextUsage(chunk.usage);
+
+					// Save usage data immediately for this round
+					if (options.onUsageUpdate) {
+						options.onUsageUpdate(chunk.usage);
+					}
+
+					// Also accumulate for final return (UI display purposes)
+					if (!accumulatedUsage) {
+						accumulatedUsage = {
+							prompt_tokens: chunk.usage.prompt_tokens || 0,
+							completion_tokens: chunk.usage.completion_tokens || 0,
+							total_tokens: chunk.usage.total_tokens || 0,
+							cache_creation_input_tokens: chunk.usage.cache_creation_input_tokens,
+							cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
+						};
+					} else {
+						// Add to existing usage for UI display
+						accumulatedUsage.prompt_tokens += chunk.usage.prompt_tokens || 0;
+						accumulatedUsage.completion_tokens += chunk.usage.completion_tokens || 0;
+						accumulatedUsage.total_tokens += chunk.usage.total_tokens || 0;
+
+						if (chunk.usage.cache_creation_input_tokens !== undefined) {
+							accumulatedUsage.cache_creation_input_tokens =
+								(accumulatedUsage.cache_creation_input_tokens || 0) +
+								chunk.usage.cache_creation_input_tokens;
+						}
+						if (chunk.usage.cache_read_input_tokens !== undefined) {
+							accumulatedUsage.cache_read_input_tokens =
+								(accumulatedUsage.cache_read_input_tokens || 0) +
+								chunk.usage.cache_read_input_tokens;
+						}
+					}
 				}
 			}
 
@@ -441,7 +482,7 @@ export async function handleConversationWithTools(
 							options.setIsStreaming(false);
 						}
 						freeEncoder();
-						return; // Exit the conversation loop
+						return {usage: accumulatedUsage}; // Exit the conversation loop
 					}
 
 					// If approved_always, add ALL these tools to both global and session-approved sets
@@ -844,7 +885,8 @@ export async function handleConversationWithTools(
 				continue;
 			}
 
-			// No tool calls - display text content if any
+			// No tool calls - conversation is complete
+			// Display text content if any
 			if (streamedContent.trim()) {
 				finalAssistantMessage = {
 					role: 'assistant',
@@ -865,7 +907,7 @@ export async function handleConversationWithTools(
 				});
 			}
 
-			// Conversation complete
+			// Conversation complete - exit the loop
 			break;
 		}
 
@@ -875,4 +917,7 @@ export async function handleConversationWithTools(
 		freeEncoder();
 		throw error;
 	}
+
+	// Return the accumulated usage data
+	return {usage: accumulatedUsage};
 }

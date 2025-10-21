@@ -1,9 +1,26 @@
-import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
-import { SYSTEM_PROMPT } from './systemPrompt.js';
-import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage, ChatCompletionTool, ToolCall, UsageInfo, ImageContent } from './types.js';
+import {
+	getOpenAiConfig,
+	getCustomSystemPrompt,
+	getCustomHeaders,
+} from '../utils/apiConfig.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import type {
+	ChatMessage,
+	ChatCompletionTool,
+	ToolCall,
+	UsageInfo,
+	ImageContent,
+} from './types.js';
+import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
 
-export type { ChatMessage, ChatCompletionTool, ToolCall, UsageInfo, ImageContent };
+export type {
+	ChatMessage,
+	ChatCompletionTool,
+	ToolCall,
+	UsageInfo,
+	ImageContent,
+};
 
 export interface ChatCompletionOptions {
 	model: string;
@@ -12,7 +29,11 @@ export interface ChatCompletionOptions {
 	temperature?: number;
 	max_tokens?: number;
 	tools?: ChatCompletionTool[];
-	tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
+	tool_choice?:
+		| 'auto'
+		| 'none'
+		| 'required'
+		| {type: 'function'; function: {name: string}};
 }
 
 export interface ChatCompletionChunk {
@@ -41,7 +62,13 @@ export interface ChatCompletionChunk {
 
 export interface ChatCompletionMessageParam {
 	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string | Array<{type: 'text' | 'image_url', text?: string, image_url?: {url: string}}>;
+	content:
+		| string
+		| Array<{
+				type: 'text' | 'image_url';
+				text?: string;
+				image_url?: {url: string};
+		  }>;
 	tool_call_id?: string;
 	tool_calls?: ToolCall[];
 }
@@ -53,19 +80,26 @@ export interface ChatCompletionMessageParam {
  * 1. If custom system prompt exists: use custom as system, prepend default as first user message
  * 2. If no custom system prompt: use default as system
  */
-function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: boolean = true): ChatCompletionMessageParam[] {
+function convertToOpenAIMessages(
+	messages: ChatMessage[],
+	includeSystemPrompt: boolean = true,
+): ChatCompletionMessageParam[] {
 	const customSystemPrompt = getCustomSystemPrompt();
 
 	let result = messages.map(msg => {
 		// 如果消息包含图片，使用 content 数组格式
 		if (msg.role === 'user' && msg.images && msg.images.length > 0) {
-			const contentParts: Array<{type: 'text' | 'image_url', text?: string, image_url?: {url: string}}> = [];
+			const contentParts: Array<{
+				type: 'text' | 'image_url';
+				text?: string;
+				image_url?: {url: string};
+			}> = [];
 
 			// 添加文本内容
 			if (msg.content) {
 				contentParts.push({
 					type: 'text',
-					text: msg.content
+					text: msg.content,
 				});
 			}
 
@@ -74,26 +108,26 @@ function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: b
 				contentParts.push({
 					type: 'image_url',
 					image_url: {
-						url: image.data // Base64 data URL
-					}
+						url: image.data, // Base64 data URL
+					},
 				});
 			}
 
 			return {
 				role: 'user',
-				content: contentParts
+				content: contentParts,
 			} as ChatCompletionMessageParam;
 		}
 
 		const baseMessage = {
 			role: msg.role,
-			content: msg.content
+			content: msg.content,
 		};
 
 		if (msg.role === 'assistant' && msg.tool_calls) {
 			return {
 				...baseMessage,
-				tool_calls: msg.tool_calls
+				tool_calls: msg.tool_calls,
 			} as ChatCompletionMessageParam;
 		}
 
@@ -101,7 +135,7 @@ function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: b
 			return {
 				role: 'tool',
 				content: msg.content,
-				tool_call_id: msg.tool_call_id
+				tool_call_id: msg.tool_call_id,
 			} as ChatCompletionMessageParam;
 		}
 
@@ -121,22 +155,22 @@ function convertToOpenAIMessages(messages: ChatMessage[], includeSystemPrompt: b
 			result = [
 				{
 					role: 'system',
-					content: customSystemPrompt
+					content: customSystemPrompt,
 				} as ChatCompletionMessageParam,
 				{
 					role: 'user',
-					content: SYSTEM_PROMPT
+					content: getSystemPrompt(),
 				} as ChatCompletionMessageParam,
-				...result
+				...result,
 			];
 		} else {
 			// 没有自定义系统提示词，默认系统提示词作为 system 消息
 			result = [
 				{
 					role: 'system',
-					content: SYSTEM_PROMPT
+					content: getSystemPrompt(),
 				} as ChatCompletionMessageParam,
-				...result
+				...result,
 			];
 		}
 	}
@@ -155,7 +189,9 @@ function getOpenAIConfig() {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey || !config.baseUrl) {
-			throw new Error('OpenAI API configuration is incomplete. Please configure API settings first.');
+			throw new Error(
+				'OpenAI API configuration is incomplete. Please configure API settings first.',
+			);
 		}
 
 		const customHeaders = getCustomHeaders();
@@ -163,7 +199,7 @@ function getOpenAIConfig() {
 		openaiConfig = {
 			apiKey: config.apiKey,
 			baseUrl: config.baseUrl,
-			customHeaders
+			customHeaders,
 		};
 	}
 
@@ -175,7 +211,14 @@ export function resetOpenAIClient(): void {
 }
 
 export interface StreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'reasoning_delta' | 'reasoning_started' | 'done' | 'usage';
+	type:
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'reasoning_delta'
+		| 'reasoning_started'
+		| 'done'
+		| 'usage';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -192,15 +235,17 @@ export interface StreamChunk {
 /**
  * Parse Server-Sent Events (SSE) stream
  */
-async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+async function* parseSSEStream(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+): AsyncGenerator<any, void, unknown> {
 	const decoder = new TextDecoder();
 	let buffer = '';
 
 	while (true) {
-		const { done, value } = await reader.read();
+		const {done, value} = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
+		buffer += decoder.decode(value, {stream: true});
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -208,16 +253,29 @@ async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>):
 			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith(':')) continue;
 
-			if (trimmed === 'data: [DONE]') {
+			if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
 				return;
 			}
 
-			if (trimmed.startsWith('data: ')) {
-				const data = trimmed.slice(6);
-				try {
-					yield JSON.parse(data);
-				} catch (e) {
-					console.error('Failed to parse SSE data:', data);
+			// Handle both "event: " and "event:" formats
+			if (trimmed.startsWith('event:')) {
+				// Event type, will be followed by data
+				continue;
+			}
+
+			// Handle both "data: " and "data:" formats
+			if (trimmed.startsWith('data:')) {
+				const data = trimmed.startsWith('data: ')
+					? trimmed.slice(6)
+					: trimmed.slice(5);
+				const parseResult = parseJsonWithFix(data, {
+					toolName: 'SSE stream',
+					logWarning: false,
+					logError: true,
+				});
+
+				if (parseResult.success) {
+					yield parseResult.data;
 				}
 			}
 		}
@@ -231,7 +289,7 @@ async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>):
 export async function* createStreamingChatCompletion(
 	options: ChatCompletionOptions,
 	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<StreamChunk, void, unknown> {
 	const config = getOpenAIConfig();
 
@@ -242,165 +300,170 @@ export async function* createStreamingChatCompletion(
 				model: options.model,
 				messages: convertToOpenAIMessages(options.messages),
 				stream: true,
-				stream_options: { include_usage: true },
+				stream_options: {include_usage: true},
 				temperature: options.temperature || 0.7,
 				max_tokens: options.max_tokens,
 				tools: options.tools,
 				tool_choice: options.tool_choice,
 			};
 
-			const response = await fetch(`${config.baseUrl}/chat/completions`, {
+			const url = `${config.baseUrl}/chat/completions`;
+			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${config.apiKey}`,
-					...config.customHeaders
+					...config.customHeaders,
 				},
 				body: JSON.stringify(requestBody),
-				signal: abortSignal
+				signal: abortSignal,
 			});
+
+			const response = await fetch(url, fetchOptions);
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+				throw new Error(
+					`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`,
+				);
 			}
 
 			if (!response.body) {
 				throw new Error('No response body from OpenAI API');
 			}
 
-		let contentBuffer = '';
-		let toolCallsBuffer: { [index: number]: any } = {};
-		let hasToolCalls = false;
-		let usageData: UsageInfo | undefined;
-		let reasoningStarted = false; // Track if reasoning has started
+			let contentBuffer = '';
+			let toolCallsBuffer: {[index: number]: any} = {};
+			let hasToolCalls = false;
+			let usageData: UsageInfo | undefined;
+			let reasoningStarted = false; // Track if reasoning has started
 
-		for await (const chunk of parseSSEStream(response.body.getReader())) {
-			if (abortSignal?.aborted) {
-				return;
-			}
+			for await (const chunk of parseSSEStream(response.body.getReader())) {
+				if (abortSignal?.aborted) {
+					return;
+				}
 
-			// Capture usage information if available (usually in the last chunk)
-			const usageValue = (chunk as any).usage;
-			if (usageValue !== null && usageValue !== undefined) {
-				usageData = {
-					prompt_tokens: usageValue.prompt_tokens || 0,
-					completion_tokens: usageValue.completion_tokens || 0,
-					total_tokens: usageValue.total_tokens || 0,
-					// OpenAI Chat API: cached_tokens in prompt_tokens_details
-					cached_tokens: usageValue.prompt_tokens_details?.cached_tokens
-				};
-			}
+				// Capture usage information if available (usually in the last chunk)
+				const usageValue = (chunk as any).usage;
+				if (usageValue !== null && usageValue !== undefined) {
+					usageData = {
+						prompt_tokens: usageValue.prompt_tokens || 0,
+						completion_tokens: usageValue.completion_tokens || 0,
+						total_tokens: usageValue.total_tokens || 0,
+						// OpenAI Chat API: cached_tokens in prompt_tokens_details
+						cached_tokens: usageValue.prompt_tokens_details?.cached_tokens,
+					};
+				}
 
-			// Skip content processing if no choices (but usage is already captured above)
-			const choice = chunk.choices[0];
-			if (!choice) {
-				continue;
-			}
+				// Skip content processing if no choices (but usage is already captured above)
+				const choice = chunk.choices[0];
+				if (!choice) {
+					continue;
+				}
 
-			// Stream content chunks
-			const content = choice.delta?.content;
-			if (content) {
-				contentBuffer += content;
-				yield {
-					type: 'content',
-					content
-				};
-			}
+				// Stream content chunks
+				const content = choice.delta?.content;
+				if (content) {
+					contentBuffer += content;
+					yield {
+						type: 'content',
+						content,
+					};
+				}
 
-		// Stream reasoning content (for o1 models, etc.)
-		// Note: reasoning_content is NOT included in the response, only counted for tokens
-		const reasoningContent = (choice.delta as any)?.reasoning_content;
-		if (reasoningContent) {
-			// Emit reasoning_started event on first reasoning content
-			if (!reasoningStarted) {
-				reasoningStarted = true;
-				yield {
-					type: 'reasoning_started'
-				};
-			}
-			yield {
-				type: 'reasoning_delta',
-				delta: reasoningContent
-			};
-		}
-
-			// Accumulate tool calls and stream deltas
-			const deltaToolCalls = choice.delta?.tool_calls;
-			if (deltaToolCalls) {
-				hasToolCalls = true;
-				for (const deltaCall of deltaToolCalls) {
-					const index = deltaCall.index ?? 0;
-
-					if (!toolCallsBuffer[index]) {
-						toolCallsBuffer[index] = {
-							id: '',
-							type: 'function',
-							function: {
-								name: '',
-								arguments: ''
-							}
-						};
-					}
-
-					if (deltaCall.id) {
-						toolCallsBuffer[index].id = deltaCall.id;
-					}
-
-					// Yield tool call deltas for token counting
-					let deltaText = '';
-					if (deltaCall.function?.name) {
-						toolCallsBuffer[index].function.name += deltaCall.function.name;
-						deltaText += deltaCall.function.name;
-					}
-					if (deltaCall.function?.arguments) {
-						toolCallsBuffer[index].function.arguments += deltaCall.function.arguments;
-						deltaText += deltaCall.function.arguments;
-					}
-
-					// Stream the delta to frontend for real-time token counting
-					if (deltaText) {
+				// Stream reasoning content (for o1 models, etc.)
+				// Note: reasoning_content is NOT included in the response, only counted for tokens
+				const reasoningContent = (choice.delta as any)?.reasoning_content;
+				if (reasoningContent) {
+					// Emit reasoning_started event on first reasoning content
+					if (!reasoningStarted) {
+						reasoningStarted = true;
 						yield {
-							type: 'tool_call_delta',
-							delta: deltaText
+							type: 'reasoning_started',
 						};
 					}
+					yield {
+						type: 'reasoning_delta',
+						delta: reasoningContent,
+					};
+				}
+
+				// Accumulate tool calls and stream deltas
+				const deltaToolCalls = choice.delta?.tool_calls;
+				if (deltaToolCalls) {
+					hasToolCalls = true;
+					for (const deltaCall of deltaToolCalls) {
+						const index = deltaCall.index ?? 0;
+
+						if (!toolCallsBuffer[index]) {
+							toolCallsBuffer[index] = {
+								id: '',
+								type: 'function',
+								function: {
+									name: '',
+									arguments: '',
+								},
+							};
+						}
+
+						if (deltaCall.id) {
+							toolCallsBuffer[index].id = deltaCall.id;
+						}
+
+						// Yield tool call deltas for token counting
+						let deltaText = '';
+						if (deltaCall.function?.name) {
+							toolCallsBuffer[index].function.name += deltaCall.function.name;
+							deltaText += deltaCall.function.name;
+						}
+						if (deltaCall.function?.arguments) {
+							toolCallsBuffer[index].function.arguments +=
+								deltaCall.function.arguments;
+							deltaText += deltaCall.function.arguments;
+						}
+
+						// Stream the delta to frontend for real-time token counting
+						if (deltaText) {
+							yield {
+								type: 'tool_call_delta',
+								delta: deltaText,
+							};
+						}
+					}
+				}
+
+				if (choice.finish_reason) {
+					break;
 				}
 			}
 
-			if (choice.finish_reason) {
-				break;
+			// If there are tool calls, yield them
+			if (hasToolCalls) {
+				yield {
+					type: 'tool_calls',
+					tool_calls: Object.values(toolCallsBuffer),
+				};
 			}
-		}
 
-		// If there are tool calls, yield them
-		if (hasToolCalls) {
-			yield {
-				type: 'tool_calls',
-				tool_calls: Object.values(toolCallsBuffer)
-			};
-		}
-
-		// Yield usage information if available
-		if (usageData) {
-			yield {
-				type: 'usage',
-				usage: usageData
-			};
-		}
+			// Yield usage information if available
+			if (usageData) {
+				yield {
+					type: 'usage',
+					usage: usageData,
+				};
+			}
 
 			// Signal completion
 			yield {
-				type: 'done'
+				type: 'done',
 			};
 		},
 		{
 			abortSignal,
-			onRetry
-		}
+			onRetry,
+		},
 	);
 }
-
 
 export function validateChatOptions(options: ChatCompletionOptions): string[] {
 	const errors: string[] = [];
@@ -414,7 +477,10 @@ export function validateChatOptions(options: ChatCompletionOptions): string[] {
 	}
 
 	for (const message of options.messages || []) {
-		if (!message.role || !['system', 'user', 'assistant', 'tool'].includes(message.role)) {
+		if (
+			!message.role ||
+			!['system', 'user', 'assistant', 'tool'].includes(message.role)
+		) {
 			errors.push('Invalid message role');
 		}
 
@@ -424,7 +490,10 @@ export function validateChatOptions(options: ChatCompletionOptions): string[] {
 		}
 
 		// Content can be empty for tool calls
-		if (message.role !== 'tool' && (!message.content || message.content.trim().length === 0)) {
+		if (
+			message.role !== 'tool' &&
+			(!message.content || message.content.trim().length === 0)
+		) {
 			errors.push('Message content cannot be empty (except for tool messages)');
 		}
 	}

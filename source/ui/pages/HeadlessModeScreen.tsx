@@ -7,6 +7,8 @@ import {handleConversationWithTools} from '../../hooks/useConversation.js';
 import {useStreamingState} from '../../hooks/useStreamingState.js';
 import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
 import {useVSCodeState} from '../../hooks/useVSCodeState.js';
+import {useUsagePersistence} from '../../hooks/useUsagePersistence.js';
+import {getOpenAiConfig} from '../../utils/apiConfig.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -256,6 +258,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	// Use custom hooks
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
+	const {createUsageSaver} = useUsagePersistence();
 
 	// Use tool confirmation hook
 	const {
@@ -440,6 +443,10 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				// In headless mode, we don't need to save messages
 			};
 
+			// Get model name for usage tracking
+			const config = getOpenAiConfig();
+			const modelName = config.advancedModel || config.basicModel || 'unknown';
+
 			// Start conversation with tool support
 			await handleConversationWithTools({
 				userContent: messageForAI,
@@ -461,6 +468,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
+				onUsageUpdate: createUsageSaver(modelName), // Save usage after each round
 			});
 		} catch (error) {
 			console.error(
