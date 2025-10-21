@@ -1,27 +1,27 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Box, Text } from 'ink';
-import { Viewport } from '../../utils/textBuffer.js';
-import { cpSlice, cpLen } from '../../utils/textUtils.js';
+import React, {useCallback, useEffect, useRef} from 'react';
+import {Box, Text} from 'ink';
+import {Viewport} from '../../utils/textBuffer.js';
+import {cpSlice, cpLen} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
-import { useInputBuffer } from '../../hooks/useInputBuffer.js';
-import { useCommandPanel } from '../../hooks/useCommandPanel.js';
-import { useFilePicker } from '../../hooks/useFilePicker.js';
-import { useHistoryNavigation } from '../../hooks/useHistoryNavigation.js';
-import { useClipboard } from '../../hooks/useClipboard.js';
-import { useKeyboardInput } from '../../hooks/useKeyboardInput.js';
-import { useTerminalSize } from '../../hooks/useTerminalSize.js';
-import { useTerminalFocus } from '../../hooks/useTerminalFocus.js';
+import {useInputBuffer} from '../../hooks/useInputBuffer.js';
+import {useCommandPanel} from '../../hooks/useCommandPanel.js';
+import {useFilePicker} from '../../hooks/useFilePicker.js';
+import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
+import {useClipboard} from '../../hooks/useClipboard.js';
+import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
 
 type Props = {
 	onSubmit: (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
-	chatHistory?: Array<{ role: string; content: string }>;
+	chatHistory?: Array<{role: string; content: string}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -33,6 +33,7 @@ type Props = {
 		// OpenAI caching
 		cachedTokens?: number;
 	};
+	initialContent?: string | null;
 };
 
 export default function ChatInput({
@@ -44,13 +45,14 @@ export default function ChatInput({
 	onHistorySelect,
 	yoloMode = false,
 	contextUsage,
+	initialContent = null,
 }: Props) {
 	// Use terminal size hook to listen for resize events
-	const { columns: terminalWidth } = useTerminalSize();
+	const {columns: terminalWidth} = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
 
 	// Use terminal focus hook to detect focus state
-	const { hasFocus, ensureFocus } = useTerminalFocus();
+	const {hasFocus, ensureFocus} = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -61,7 +63,7 @@ export default function ChatInput({
 	};
 
 	// Use input buffer hook
-	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
+	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
 
 	// Use command panel hook
 	const {
@@ -104,7 +106,7 @@ export default function ChatInput({
 	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
 
 	// Use clipboard hook
-	const { pasteFromClipboard } = useClipboard(
+	const {pasteFromClipboard} = useClipboard(
 		buffer,
 		updateCommandPanelState,
 		updateFilePickerState,
@@ -149,6 +151,14 @@ export default function ChatInput({
 		onSubmit,
 		ensureFocus,
 	});
+
+	// Set initial content when provided (e.g., when rolling back to first message)
+	useEffect(() => {
+		if (initialContent) {
+			buffer.setText(initialContent);
+			triggerUpdate();
+		}
+	}, [initialContent, buffer, triggerUpdate]);
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
 	useEffect(() => {
@@ -309,11 +319,7 @@ export default function ChatInput({
 	return (
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
 			{showHistoryMenu && (
-				<Box
-					flexDirection="column"
-					marginBottom={1}
-					width={terminalWidth - 2}
-				>
+				<Box flexDirection="column" marginBottom={1} width={terminalWidth - 2}>
 					<Box flexDirection="column">
 						{(() => {
 							const userMessages = getUserMessages();
@@ -323,12 +329,21 @@ export default function ChatInput({
 							let startIndex = 0;
 							if (userMessages.length > maxVisibleItems) {
 								// Keep selected item in the middle of the view when possible
-								startIndex = Math.max(0, historySelectedIndex - Math.floor(maxVisibleItems / 2));
+								startIndex = Math.max(
+									0,
+									historySelectedIndex - Math.floor(maxVisibleItems / 2),
+								);
 								// Adjust if we're near the end
-								startIndex = Math.min(startIndex, userMessages.length - maxVisibleItems);
+								startIndex = Math.min(
+									startIndex,
+									userMessages.length - maxVisibleItems,
+								);
 							}
 
-							const endIndex = Math.min(userMessages.length, startIndex + maxVisibleItems);
+							const endIndex = Math.min(
+								userMessages.length,
+								startIndex + maxVisibleItems,
+							);
 							const visibleMessages = userMessages.slice(startIndex, endIndex);
 
 							const hasMoreAbove = startIndex > 0;
@@ -431,7 +446,7 @@ export default function ChatInput({
 						/>
 					</Box>
 					{yoloMode && (
-						<Box marginTop={1} paddingX={1}>
+						<Box marginTop={1}>
 							<Text color="yellow" dimColor>
 								❁ YOLO MODE ACTIVE - All tools will be auto-approved without
 								confirmation
@@ -439,7 +454,7 @@ export default function ChatInput({
 						</Box>
 					)}
 					{contextUsage && (
-						<Box marginTop={1} paddingX={1}>
+						<Box marginTop={1}>
 							<Text color="gray" dimColor>
 								{(() => {
 									// Determine which caching system is being used
@@ -452,8 +467,8 @@ export default function ChatInput({
 									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 									const totalInputTokens = isAnthropic
 										? contextUsage.inputTokens +
-										(contextUsage.cacheCreationTokens || 0) +
-										(contextUsage.cacheReadTokens || 0)
+										  (contextUsage.cacheCreationTokens || 0) +
+										  (contextUsage.cacheReadTokens || 0)
 										: contextUsage.inputTokens;
 
 									const percentage = Math.min(
@@ -534,12 +549,12 @@ export default function ChatInput({
 							{showCommands && getFilteredCommands().length > 0
 								? 'Type to filter commands'
 								: showFilePicker
-									? 'Type to filter files • Tab/Enter to select • ESC to cancel'
-									: (() => {
+								? 'Type to filter files • Tab/Enter to select • ESC to cancel'
+								: (() => {
 										const pasteKey =
 											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
-									})()}
+								  })()}
 						</Text>
 					</Box>
 				</>

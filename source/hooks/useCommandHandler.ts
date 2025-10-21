@@ -175,7 +175,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (result.success && result.action === 'goHome') {
+			} else if (result.success && result.action === 'home') {
+				// Reset terminal before navigating to welcome screen
+				resetTerminal(stdout);
 				navigateTo('welcome');
 			} else if (result.success && result.action === 'toggleYolo') {
 				// Toggle YOLO mode without adding command message
@@ -195,6 +197,30 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 				// Auto-send the prompt using basicModel, hide the prompt from UI
 				options.processMessage(result.prompt, undefined, true, true);
+			} else if (
+				result.success &&
+				result.action === 'review' &&
+				result.prompt
+			) {
+				// Clear current session and start new one for code review
+				sessionManager.clearCurrentSession();
+				options.clearSavedMessages();
+				options.setMessages([]);
+				options.setRemountKey(prev => prev + 1);
+				// Reset context usage (token statistics)
+				options.setContextUsage(null);
+				// Reset system info flag to include in next message
+				options.setShouldIncludeSystemInfo(true);
+
+				// Add command execution feedback
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages([commandMessage]);
+				// Auto-send the review prompt using advanced model (not basic model), hide the prompt from UI
+				options.processMessage(result.prompt, undefined, false, true);
 			}
 		},
 		[stdout, options],

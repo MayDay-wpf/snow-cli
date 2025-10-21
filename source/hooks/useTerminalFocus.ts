@@ -31,6 +31,8 @@ export function useTerminalFocus(): {
 	const [hasFocus, setHasFocus] = useState(true); // Default to focused
 
 	useEffect(() => {
+		let syncTimer: NodeJS.Timeout | null = null;
+
 		// Set up listener first
 		const handleData = (data: Buffer) => {
 			const str = data.toString();
@@ -66,19 +68,29 @@ export function useTerminalFocus(): {
 
 		// Enable focus reporting AFTER listener is set up
 		// Add a small delay to ensure listener is fully registered
-		const timer = setTimeout(() => {
+		const enableTimer = setTimeout(() => {
 			// ESC[?1004h - Enable focus events
 			process.stdout.write('\x1b[?1004h');
+
+			// After enabling focus reporting, assume terminal has focus
+			// This ensures cursor is visible after component remount (e.g., after /clear)
+			// The terminal will send ESC[O if it doesn't have focus
+			syncTimer = setTimeout(() => {
+				setHasFocus(true);
+			}, 100);
 		}, 50);
 
 		return () => {
-			clearTimeout(timer);
+			clearTimeout(enableTimer);
+			if (syncTimer) {
+				clearTimeout(syncTimer);
+			}
 			// Disable focus reporting on cleanup
 			// ESC[?1004l - Disable focus events
 			process.stdout.write('\x1b[?1004l');
 			process.stdin.off('data', handleData);
 		};
-	}, [hasFocus]); // Add hasFocus to dependencies to access current state
+	}, []); // Remove hasFocus from dependencies to avoid re-running effect
 
 	// Helper function to check if input is a focus event
 	const isFocusEvent = (input: string): boolean => {

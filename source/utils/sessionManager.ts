@@ -1,10 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import {randomUUID} from 'crypto';
-import type {ChatMessage as APIChatMessage} from '../api/chat.js';
-import {summaryAgent} from '../agents/summaryAgent.js';
-import {getTodoService} from './mcpToolsManager.js';
+import { randomUUID } from 'crypto';
+import type { ChatMessage as APIChatMessage } from '../api/chat.js';
+import { summaryAgent } from '../agents/summaryAgent.js';
+import { getTodoService } from './mcpToolsManager.js';
+import { logger } from './logger.js';
 
 // Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
@@ -42,12 +43,12 @@ class SessionManager {
 
 	private async ensureSessionsDir(date?: Date): Promise<void> {
 		try {
-			await fs.mkdir(this.sessionsDir, {recursive: true});
+			await fs.mkdir(this.sessionsDir, { recursive: true });
 
 			if (date) {
 				const dateFolder = this.formatDateForFolder(date);
 				const sessionDir = path.join(this.sessionsDir, dateFolder);
-				await fs.mkdir(sessionDir, {recursive: true});
+				await fs.mkdir(sessionDir, { recursive: true });
 			}
 		} catch (error) {
 			// Directory already exists or other error
@@ -65,6 +66,16 @@ class SessionManager {
 		const month = String(date.getMonth() + 1).padStart(2, '0');
 		const day = String(date.getDate()).padStart(2, '0');
 		return `${year}-${month}-${day}`;
+	}
+
+	/**
+	 * Clean title by removing newlines and extra spaces
+	 */
+	private cleanTitle(title: string): string {
+		return title
+			.replace(/[\r\n]+/g, ' ') // Replace newlines with space
+			.replace(/\s+/g, ' ') // Replace multiple spaces with single space
+			.trim(); // Remove leading/trailing spaces
 	}
 
 	/**
@@ -188,7 +199,7 @@ class SessionManager {
 
 						sessions.push({
 							id: session.id,
-							title: session.title,
+							title: this.cleanTitle(session.title),
 							summary: session.summary,
 							createdAt: session.createdAt,
 							updatedAt: session.updatedAt,
@@ -224,7 +235,7 @@ class SessionManager {
 
 						sessions.push({
 							id: session.id,
-							title: session.title,
+							title: this.cleanTitle(session.title),
 							summary: session.summary,
 							createdAt: session.createdAt,
 							updatedAt: session.updatedAt,
@@ -305,7 +316,7 @@ class SessionManager {
 			// Set timeout to cancel summary generation after 30 seconds (防呆机制)
 			this.summaryTimeoutId = setTimeout(() => {
 				if (this.summaryAbortController) {
-					console.warn('Summary generation timeout after 30s, aborting...');
+					logger.warn('Summary generation timeout after 30s, aborting...');
 					this.summaryAbortController.abort();
 					this.summaryAbortController = null;
 				}
@@ -326,7 +337,7 @@ class SessionManager {
 						this.currentSession.title = summary;
 						this.currentSession.summary = summary;
 						this.saveSession(this.currentSession).catch(error => {
-							console.error(
+							logger.error(
 								'Failed to save session with generated summary:',
 								error,
 							);
@@ -341,12 +352,12 @@ class SessionManager {
 
 					// Silently fail if aborted (expected behavior)
 					if (error.name === 'AbortError' || abortSignal.aborted) {
-						console.log('Summary generation cancelled (expected)');
+						logger.warn('Summary generation cancelled (expected)');
 						return;
 					}
 
 					// Log other errors - we already have a fallback title/summary
-					console.warn('Summary generation failed, using fallback:', error);
+					logger.warn('Using fallback title/summary:' + error);
 				});
 		} else if (this.currentSession.messageCount > 1) {
 			// 防呆机制：如果不是第一条消息，取消任何正在进行的摘要生成
@@ -418,7 +429,7 @@ class SessionManager {
 				await todoService.deleteTodoList(sessionId);
 			} catch (error) {
 				// TODO删除失败不影响会话删除结果
-				console.warn(
+				logger.warn(
 					`Failed to delete TODO list for session ${sessionId}:`,
 					error,
 				);

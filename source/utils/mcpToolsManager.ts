@@ -9,7 +9,10 @@ import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
 import {TodoService} from '../mcp/todo.js';
-import {getMCPTools as getSubAgentTools, subAgentService} from '../mcp/subagent.js';
+import {
+	getMCPTools as getSubAgentTools,
+	subAgentService,
+} from '../mcp/subagent.js';
 import {sessionManager} from './sessionManager.js';
 import {logger} from './logger.js';
 import {resourceMonitor} from './resourceMonitor.js';
@@ -112,7 +115,7 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in filesystem tools (always available)
 	const filesystemServiceTools = filesystemTools.map(tool => ({
-		name: tool.name.replace('filesystem_', ''),
+		name: tool.name.replace('filesystem-', ''),
 		description: tool.description,
 		inputSchema: tool.inputSchema,
 	}));
@@ -128,7 +131,7 @@ async function refreshToolsCache(): Promise<void> {
 		allTools.push({
 			type: 'function',
 			function: {
-				name: `filesystem-${tool.name.replace('filesystem_', '')}`,
+				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -137,7 +140,7 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in terminal tools (always available)
 	const terminalServiceTools = terminalTools.map(tool => ({
-		name: tool.name.replace('terminal_', ''),
+		name: tool.name.replace('terminal-', ''),
 		description: tool.description,
 		inputSchema: tool.inputSchema,
 	}));
@@ -153,7 +156,7 @@ async function refreshToolsCache(): Promise<void> {
 		allTools.push({
 			type: 'function',
 			function: {
-				name: `terminal-${tool.name.replace('terminal_', '')}`,
+				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -189,7 +192,7 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in ACE Code Search tools (always available)
 	const aceServiceTools = aceCodeSearchTools.map(tool => ({
-		name: tool.name.replace('ace_', ''),
+		name: tool.name.replace('ace-', ''),
 		description: tool.description,
 		inputSchema: tool.inputSchema,
 	}));
@@ -205,7 +208,7 @@ async function refreshToolsCache(): Promise<void> {
 		allTools.push({
 			type: 'function',
 			function: {
-				name: `ace-${tool.name.replace('ace_', '')}`,
+				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -214,7 +217,7 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in Web Search tools (always available)
 	const websearchServiceTools = websearchTools.map(tool => ({
-		name: tool.name.replace('websearch_', ''),
+		name: tool.name.replace('websearch-', ''),
 		description: tool.description,
 		inputSchema: tool.inputSchema,
 	}));
@@ -230,7 +233,7 @@ async function refreshToolsCache(): Promise<void> {
 		allTools.push({
 			type: 'function',
 			function: {
-				name: `websearch-${tool.name.replace('websearch_', '')}`,
+				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -239,7 +242,7 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in IDE Diagnostics tools (always available)
 	const ideDiagnosticsServiceTools = ideDiagnosticsTools.map(tool => ({
-		name: tool.name.replace('ide_', ''),
+		name: tool.name.replace('ide-', ''),
 		description: tool.description,
 		inputSchema: tool.inputSchema,
 	}));
@@ -255,7 +258,7 @@ async function refreshToolsCache(): Promise<void> {
 		allTools.push({
 			type: 'function',
 			function: {
-				name: `ide-${tool.name.replace('ide_', '')}`,
+				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
 			},
@@ -726,7 +729,7 @@ export async function executeMCPTool(
 
 	if (serviceName === 'todo') {
 		// Handle built-in TODO tools (no connection needed)
-		return await todoService.executeTool(toolName, args);
+		return await todoService.executeTool(actualToolName, args);
 	} else if (serviceName === 'filesystem') {
 		// Handle built-in filesystem tools (no connection needed)
 		const {filesystemService} = await import('../mcp/filesystem.js');

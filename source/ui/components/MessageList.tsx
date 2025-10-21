@@ -1,6 +1,6 @@
-import React, {memo} from 'react';
-import {Box, Text} from 'ink';
-import {SelectedFile} from '../../utils/fileUtils.js';
+import React, { memo } from 'react';
+import { Box, Text } from 'ink';
+import { SelectedFile } from '../../utils/fileUtils.js';
 import MarkdownRenderer from './MarkdownRenderer.js';
 
 export interface Message {
@@ -27,7 +27,7 @@ export interface Message {
 	};
 	toolDisplay?: {
 		toolName: string;
-		args: Array<{key: string; value: string; isLast: boolean}>;
+		args: Array<{ key: string; value: string; isLast: boolean }>;
 	};
 	toolResult?: string; // Raw JSON string from tool execution for preview
 	toolCallId?: string; // Tool call ID for updating message in place
@@ -55,7 +55,7 @@ interface Props {
 const STREAM_COLORS = ['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'] as const;
 
 const MessageList = memo(
-	({messages, animationFrame, maxMessages = 6}: Props) => {
+	({ messages, animationFrame, maxMessages = 6 }: Props) => {
 		if (messages.length === 0) {
 			return null;
 		}
@@ -67,12 +67,12 @@ const MessageList = memo(
 						message.role === 'user'
 							? 'green'
 							: message.role === 'command'
-							? 'gray'
-							: message.role === 'subagent'
-							? 'magenta'
-							: message.streaming
-							? (STREAM_COLORS[animationFrame] as any)
-							: 'cyan';
+								? 'gray'
+								: message.role === 'subagent'
+									? 'magenta'
+									: message.streaming
+										? (STREAM_COLORS[animationFrame] as any)
+										: 'cyan';
 
 					return (
 						<Box key={index}>
@@ -80,12 +80,12 @@ const MessageList = memo(
 								{message.role === 'user'
 									? '⛇'
 									: message.role === 'command'
-									? '⌘'
-									: message.role === 'subagent'
-									? '◈'
-									: '❆'}
+										? '⌘'
+										: message.role === 'subagent'
+											? '◈'
+											: '❆'}
 							</Text>
-							<Box marginLeft={1} marginBottom={1} flexDirection="column">
+							<Box marginLeft={1} flexDirection="column">
 								{message.role === 'command' ? (
 									<Text color="gray">└─ {message.commandName}</Text>
 								) : message.role === 'subagent' ? (
@@ -95,63 +95,60 @@ const MessageList = memo(
 											{message.subAgent?.isComplete ? ' ✓' : ' ...'}
 										</Text>
 										<Box marginLeft={2}>
-											<MarkdownRenderer
-												content={message.content || ' '}
-												color="gray"
-											/>
+											<Text color="gray">{message.content || ' '}</Text>
 										</Box>
 									</>
 								) : (
 									<>
-										<MarkdownRenderer
-											content={message.content || ' '}
-											color={message.role === 'user' ? 'gray' : undefined}
-										/>
+										{message.role === 'user' ? (
+											<Text color="gray">{message.content || ' '}</Text>
+										) : (
+											<MarkdownRenderer content={message.content || ' '} />
+										)}
 										{(message.systemInfo ||
 											message.files ||
 											message.files ||
 											message.images) && (
-											<Box marginTop={1} flexDirection="column">
-												{message.systemInfo && (
-													<>
-														<Text color="gray" dimColor>
-															└─ Platform: {message.systemInfo.platform}
-														</Text>
-														<Text color="gray" dimColor>
-															└─ Shell: {message.systemInfo.shell}
-														</Text>
-														<Text color="gray" dimColor>
-															└─ Working Directory:{' '}
-															{message.systemInfo.workingDirectory}
-														</Text>
-													</>
-												)}
-												{message.files && message.files.length > 0 && (
-													<>
-														{message.files.map((file, fileIndex) => (
-															<Text key={fileIndex} color="gray" dimColor>
-																{file.isImage
-																	? `└─ [image #{fileIndex + 1}] ${file.path}`
-																	: `└─ Read \`${file.path}\`${
-																			file.exists
-																				? ` (total line ${file.lineCount})`
-																				: ' (file not found)'
-																	  }`}
+												<Box flexDirection="column">
+													{message.systemInfo && (
+														<>
+															<Text color="gray" dimColor>
+																└─ Platform: {message.systemInfo.platform}
 															</Text>
-														))}
-													</>
-												)}
-												{message.images && message.images.length > 0 && (
-													<>
-														{message.images.map((_image, imageIndex) => (
-															<Text key={imageIndex} color="gray" dimColor>
-																└─ [image #{imageIndex + 1}]
+															<Text color="gray" dimColor>
+																└─ Shell: {message.systemInfo.shell}
 															</Text>
-														))}
-													</>
-												)}
-											</Box>
-										)}
+															<Text color="gray" dimColor>
+																└─ Working Directory:{' '}
+																{message.systemInfo.workingDirectory}
+															</Text>
+														</>
+													)}
+													{message.files && message.files.length > 0 && (
+														<>
+															{message.files.map((file, fileIndex) => (
+																<Text key={fileIndex} color="gray" dimColor>
+																	{file.isImage
+																		? `└─ [image #{fileIndex + 1}] ${file.path}`
+																		: `└─ Read \`${file.path}\`${file.exists
+																			? ` (total line ${file.lineCount})`
+																			: ' (file not found)'
+																		}`}
+																</Text>
+															))}
+														</>
+													)}
+													{message.images && message.images.length > 0 && (
+														<>
+															{message.images.map((_image, imageIndex) => (
+																<Text key={imageIndex} color="gray" dimColor>
+																	└─ [image #{imageIndex + 1}]
+																</Text>
+															))}
+														</>
+													)}
+												</Box>
+											)}
 										{/* Show terminal execution result */}
 										{message.toolCall &&
 											message.toolCall.name === 'terminal-execute' &&
@@ -177,7 +174,7 @@ const MessageList = memo(
 													</Text>
 													{message.toolCall.arguments.stdout &&
 														message.toolCall.arguments.stdout.trim().length >
-															0 && (
+														0 && (
 															<Box flexDirection="column" marginTop={1}>
 																<Text color="green" dimColor>
 																	└─ stdout:
@@ -193,16 +190,16 @@ const MessageList = memo(
 																	{message.toolCall.arguments.stdout
 																		.trim()
 																		.split('\n').length > 20 && (
-																		<Text color="gray" dimColor>
-																			... (output truncated)
-																		</Text>
-																	)}
+																			<Text color="gray" dimColor>
+																				... (output truncated)
+																			</Text>
+																		)}
 																</Box>
 															</Box>
 														)}
 													{message.toolCall.arguments.stderr &&
 														message.toolCall.arguments.stderr.trim().length >
-															0 && (
+														0 && (
 															<Box flexDirection="column" marginTop={1}>
 																<Text color="red" dimColor>
 																	└─ stderr:
@@ -218,10 +215,10 @@ const MessageList = memo(
 																	{message.toolCall.arguments.stderr
 																		.trim()
 																		.split('\n').length > 10 && (
-																		<Text color="gray" dimColor>
-																			... (output truncated)
-																		</Text>
-																	)}
+																			<Text color="gray" dimColor>
+																				... (output truncated)
+																			</Text>
+																		)}
 																</Box>
 															</Box>
 														)}

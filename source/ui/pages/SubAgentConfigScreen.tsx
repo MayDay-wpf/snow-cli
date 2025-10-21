@@ -27,30 +27,30 @@ const toolCategories: ToolCategory[] = [
 	{
 		name: 'Filesystem Tools',
 		tools: [
-			'filesystem_read',
-			'filesystem_create',
-			'filesystem_edit',
-			'filesystem_edit_search',
-			'filesystem_delete',
-			'filesystem_list',
+			'filesystem-read',
+			'filesystem-create',
+			'filesystem-edit',
+			'filesystem-edit_search',
+			'filesystem-delete',
+			'filesystem-list',
 		],
 	},
 	{
 		name: 'ACE Code Search Tools',
 		tools: [
-			'ace_search_symbols',
-			'ace_find_definition',
-			'ace_find_references',
-			'ace_semantic_search',
-			'ace_text_search',
-			'ace_file_outline',
-			'ace_index_stats',
-			'ace_clear_cache',
+			'ace-search_symbols',
+			'ace-find_definition',
+			'ace-find_references',
+			'ace-semantic_search',
+			'ace-text_search',
+			'ace-file_outline',
+			'ace-index_stats',
+			'ace-clear_cache',
 		],
 	},
 	{
 		name: 'Terminal Tools',
-		tools: ['terminal_execute'],
+		tools: ['terminal-execute'],
 	},
 	{
 		name: 'TODO Management Tools',
@@ -64,11 +64,11 @@ const toolCategories: ToolCategory[] = [
 	},
 	{
 		name: 'Web Search Tools',
-		tools: ['websearch_search', 'websearch_fetch'],
+		tools: ['websearch-search', 'websearch-fetch'],
 	},
 	{
 		name: 'IDE Diagnostics Tools',
-		tools: ['ide_get_diagnostics'],
+		tools: ['ide-get_diagnostics'],
 	},
 ];
 

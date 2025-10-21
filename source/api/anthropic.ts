@@ -1,8 +1,12 @@
-import { createHash, randomUUID } from 'crypto';
-import { getOpenAiConfig, getCustomSystemPrompt, getCustomHeaders } from '../utils/apiConfig.js';
-import { SYSTEM_PROMPT } from './systemPrompt.js';
-import { withRetryGenerator } from '../utils/retryUtils.js';
-import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
+import {createHash, randomUUID} from 'crypto';
+import {
+	getOpenAiConfig,
+	getCustomSystemPrompt,
+	getCustomHeaders,
+} from '../utils/apiConfig.js';
+import {SYSTEM_PROMPT} from './systemPrompt.js';
+import {withRetryGenerator} from '../utils/retryUtils.js';
+import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -32,7 +36,7 @@ export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: { type: 'ephemeral' };
+	cache_control?: {type: 'ephemeral'};
 }
 
 export interface AnthropicMessageParam {
@@ -52,18 +56,21 @@ function getAnthropicConfig() {
 		const config = getOpenAiConfig();
 
 		if (!config.apiKey) {
-			throw new Error('Anthropic API configuration is incomplete. Please configure API key first.');
+			throw new Error(
+				'Anthropic API configuration is incomplete. Please configure API key first.',
+			);
 		}
 
 		const customHeaders = getCustomHeaders();
 
 		anthropicConfig = {
 			apiKey: config.apiKey,
-			baseUrl: config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-				? config.baseUrl
-				: 'https://api.anthropic.com/v1',
+			baseUrl:
+				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+					? config.baseUrl
+					: 'https://api.anthropic.com/v1',
 			customHeaders,
-			anthropicBeta: config.anthropicBeta
+			anthropicBeta: config.anthropicBeta,
 		};
 	}
 
@@ -92,7 +99,9 @@ function generateUserId(sessionId: string): string {
  * Convert OpenAI-style tools to Anthropic tool format
  * Adds cache_control to the last tool for prompt caching
  */
-function convertToolsToAnthropic(tools?: ChatCompletionTool[]): AnthropicTool[] | undefined {
+function convertToolsToAnthropic(
+	tools?: ChatCompletionTool[],
+): AnthropicTool[] | undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
 	}
@@ -104,7 +113,7 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): AnthropicTool[] 
 				return {
 					name: tool.function.name,
 					description: tool.function.description || '',
-					input_schema: tool.function.parameters as any
+					input_schema: tool.function.parameters as any,
 				};
 			}
 			throw new Error('Invalid tool format');
@@ -112,7 +121,7 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): AnthropicTool[] 
 
 	if (convertedTools.length > 0) {
 		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = { type: 'ephemeral' };
+		(lastTool as any).cache_control = {type: 'ephemeral'};
 	}
 
 	return convertedTools;
@@ -124,7 +133,7 @@ function convertToolsToAnthropic(tools?: ChatCompletionTool[]): AnthropicTool[] 
  */
 function convertToAnthropicMessages(messages: ChatMessage[]): {
 	system?: any;
-	messages: AnthropicMessageParam[]
+	messages: AnthropicMessageParam[];
 } {
 	const customSystemPrompt = getCustomSystemPrompt();
 	let systemContent: string | undefined;
@@ -139,11 +148,13 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		if (msg.role === 'tool' && msg.tool_call_id) {
 			anthropicMessages.push({
 				role: 'user',
-				content: [{
-					type: 'tool_result',
-					tool_use_id: msg.tool_call_id,
-					content: msg.content
-				}]
+				content: [
+					{
+						type: 'tool_result',
+						tool_use_id: msg.tool_call_id,
+						content: msg.content,
+					},
+				],
 			});
 			continue;
 		}
@@ -154,7 +165,7 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 			if (msg.content) {
 				content.push({
 					type: 'text',
-					text: msg.content
+					text: msg.content,
 				});
 			}
 
@@ -166,26 +177,30 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 						source: {
 							type: 'base64',
 							media_type: base64Match[1] || image.mimeType,
-							data: base64Match[2] || ''
-						}
+							data: base64Match[2] || '',
+						},
 					});
 				}
 			}
 
 			anthropicMessages.push({
 				role: 'user',
-				content
+				content,
 			});
 			continue;
 		}
 
-		if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+		if (
+			msg.role === 'assistant' &&
+			msg.tool_calls &&
+			msg.tool_calls.length > 0
+		) {
 			const content: any[] = [];
 
 			if (msg.content) {
 				content.push({
 					type: 'text',
-					text: msg.content
+					text: msg.content,
 				});
 			}
 
@@ -194,13 +209,13 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 					type: 'tool_use',
 					id: toolCall.id,
 					name: toolCall.function.name,
-					input: JSON.parse(toolCall.function.arguments)
+					input: JSON.parse(toolCall.function.arguments),
 				});
 			}
 
 			anthropicMessages.push({
 				role: 'assistant',
-				content
+				content,
 			});
 			continue;
 		}
@@ -208,7 +223,7 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		if (msg.role === 'user' || msg.role === 'assistant') {
 			anthropicMessages.push({
 				role: msg.role,
-				content: msg.content
+				content: msg.content,
 			});
 		}
 	}
@@ -217,11 +232,13 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		systemContent = customSystemPrompt;
 		anthropicMessages.unshift({
 			role: 'user',
-			content: [{
-				type: 'text',
-				text: SYSTEM_PROMPT,
-				cache_control: { type: 'ephemeral' }
-			}] as any
+			content: [
+				{
+					type: 'text',
+					text: SYSTEM_PROMPT,
+					cache_control: {type: 'ephemeral'},
+				},
+			] as any,
 		});
 	} else if (!systemContent) {
 		systemContent = SYSTEM_PROMPT;
@@ -242,42 +259,50 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		const lastMessage = anthropicMessages[lastUserMessageIndex];
 		if (lastMessage && lastMessage.role === 'user') {
 			if (typeof lastMessage.content === 'string') {
-				lastMessage.content = [{
-					type: 'text',
-					text: lastMessage.content,
-					cache_control: { type: 'ephemeral' }
-				} as any];
+				lastMessage.content = [
+					{
+						type: 'text',
+						text: lastMessage.content,
+						cache_control: {type: 'ephemeral'},
+					} as any,
+				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = { type: 'ephemeral' };
+					lastContent.cache_control = {type: 'ephemeral'};
 				}
 			}
 		}
 	}
 
-	const system = systemContent ? [{
-		type: 'text',
-		text: systemContent,
-		cache_control: { type: 'ephemeral' }
-	}] : undefined;
+	const system = systemContent
+		? [
+				{
+					type: 'text',
+					text: systemContent,
+					cache_control: {type: 'ephemeral'},
+				},
+		  ]
+		: undefined;
 
-	return { system, messages: anthropicMessages };
+	return {system, messages: anthropicMessages};
 }
 
 /**
  * Parse Server-Sent Events (SSE) stream
  */
-async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any, void, unknown> {
+async function* parseSSEStream(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+): AsyncGenerator<any, void, unknown> {
 	const decoder = new TextDecoder();
 	let buffer = '';
 
 	while (true) {
-		const { done, value } = await reader.read();
+		const {done, value} = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
+		buffer += decoder.decode(value, {stream: true});
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -312,12 +337,12 @@ async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>):
 export async function* createStreamingAnthropicCompletion(
 	options: AnthropicOptions,
 	abortSignal?: AbortSignal,
-	onRetry?: (error: Error, attempt: number, nextDelay: number) => void
+	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<AnthropicStreamChunk, void, unknown> {
 	yield* withRetryGenerator(
 		async function* () {
 			const config = getAnthropicConfig();
-			const { system, messages } = convertToAnthropicMessages(options.messages);
+			const {system, messages} = convertToAnthropicMessages(options.messages);
 
 			const sessionId = options.sessionId || randomUUID();
 			const userId = generateUserId(sessionId);
@@ -330,18 +355,18 @@ export async function* createStreamingAnthropicCompletion(
 				messages,
 				tools: convertToolsToAnthropic(options.tools),
 				metadata: {
-					user_id: userId
+					user_id: userId,
 				},
-				stream: true
+				stream: true,
 			};
 
 			// Prepare headers
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
 				'x-api-key': config.apiKey,
-				'authorization': `Bearer ${config.apiKey}`,
+				authorization: `Bearer ${config.apiKey}`,
 				'anthropic-version': '2023-06-01',
-				...config.customHeaders
+				...config.customHeaders,
 			};
 
 			// Add beta parameter if configured
@@ -357,12 +382,14 @@ export async function* createStreamingAnthropicCompletion(
 				method: 'POST',
 				headers,
 				body: JSON.stringify(requestBody),
-				signal: abortSignal
+				signal: abortSignal,
 			});
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
+				throw new Error(
+					`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`,
+				);
 			}
 
 			if (!response.body) {
@@ -370,14 +397,17 @@ export async function* createStreamingAnthropicCompletion(
 			}
 
 			let contentBuffer = '';
-			let toolCallsBuffer: Map<string, {
-				id: string;
-				type: 'function';
-				function: {
-					name: string;
-					arguments: string;
-				};
-			}> = new Map();
+			let toolCallsBuffer: Map<
+				string,
+				{
+					id: string;
+					type: 'function';
+					function: {
+						name: string;
+						arguments: string;
+					};
+				}
+			> = new Map();
 			let hasToolCalls = false;
 			let usageData: UsageInfo | undefined;
 			let blockIndexToId: Map<number, string> = new Map();
@@ -401,13 +431,13 @@ export async function* createStreamingAnthropicCompletion(
 							type: 'function',
 							function: {
 								name: block.name,
-								arguments: ''
-							}
+								arguments: '',
+							},
 						});
 
 						yield {
 							type: 'tool_call_delta',
-							delta: block.name
+							delta: block.name,
 						};
 					}
 				} else if (event.type === 'content_block_delta') {
@@ -418,7 +448,7 @@ export async function* createStreamingAnthropicCompletion(
 						contentBuffer += text;
 						yield {
 							type: 'content',
-							content: text
+							content: text,
 						};
 					}
 
@@ -432,14 +462,17 @@ export async function* createStreamingAnthropicCompletion(
 							if (toolCall) {
 								// Filter out any XML-like tags that might be mixed in the JSON delta
 								// This can happen when the model output contains XML that gets interpreted as JSON
-								const cleanedDelta = jsonDelta.replace(/<\/?parameter[^>]*>/g, '');
+								const cleanedDelta = jsonDelta.replace(
+									/<\/?parameter[^>]*>/g,
+									'',
+								);
 
 								if (cleanedDelta) {
 									toolCall.function.arguments += cleanedDelta;
 
 									yield {
 										type: 'tool_call_delta',
-										delta: cleanedDelta
+										delta: cleanedDelta,
 									};
 								}
 							}
@@ -457,9 +490,13 @@ export async function* createStreamingAnthropicCompletion(
 						usageData = {
 							prompt_tokens: event.message.usage.input_tokens || 0,
 							completion_tokens: event.message.usage.output_tokens || 0,
-							total_tokens: (event.message.usage.input_tokens || 0) + (event.message.usage.output_tokens || 0),
-							cache_creation_input_tokens: (event.message.usage as any).cache_creation_input_tokens,
-							cache_read_input_tokens: (event.message.usage as any).cache_read_input_tokens
+							total_tokens:
+								(event.message.usage.input_tokens || 0) +
+								(event.message.usage.output_tokens || 0),
+							cache_creation_input_tokens: (event.message.usage as any)
+								.cache_creation_input_tokens,
+							cache_read_input_tokens: (event.message.usage as any)
+								.cache_read_input_tokens,
 						};
 					}
 				} else if (event.type === 'message_delta') {
@@ -468,16 +505,23 @@ export async function* createStreamingAnthropicCompletion(
 							usageData = {
 								prompt_tokens: 0,
 								completion_tokens: 0,
-								total_tokens: 0
+								total_tokens: 0,
 							};
 						}
 						usageData.completion_tokens = event.usage.output_tokens || 0;
-						usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
-						if ((event.usage as any).cache_creation_input_tokens !== undefined) {
-							usageData.cache_creation_input_tokens = (event.usage as any).cache_creation_input_tokens;
+						usageData.total_tokens =
+							usageData.prompt_tokens + usageData.completion_tokens;
+						if (
+							(event.usage as any).cache_creation_input_tokens !== undefined
+						) {
+							usageData.cache_creation_input_tokens = (
+								event.usage as any
+							).cache_creation_input_tokens;
 						}
 						if ((event.usage as any).cache_read_input_tokens !== undefined) {
-							usageData.cache_read_input_tokens = (event.usage as any).cache_read_input_tokens;
+							usageData.cache_read_input_tokens = (
+								event.usage as any
+							).cache_read_input_tokens;
 						}
 					}
 				}
@@ -502,12 +546,95 @@ export async function* createStreamingAnthropicCompletion(
 						// Only throw error if this tool block was marked as completed
 						// This prevents errors from incomplete streaming
 						if (completedToolBlocks.has(toolCall.id)) {
-							const errorMsg = e instanceof Error ? e.message : 'Unknown error';
-							throw new Error(`Invalid tool call JSON for ${toolCall.function.name}: ${args} (${errorMsg})`);
+							// Try to fix common JSON errors before throwing
+							let fixedArgs = args;
+							let wasFixed = false;
+
+							// Fix 1: Remove malformed patterns like "endLine":685 ": ""
+							// This handles cases where there's an extra colon and quotes after a value
+							const malformedPattern =
+								/("[\w]+"\s*:\s*[^,}\]]+)\s*":\s*"[^"]*"/g;
+							if (malformedPattern.test(fixedArgs)) {
+								fixedArgs = fixedArgs.replace(malformedPattern, '$1');
+								wasFixed = true;
+							}
+
+							// Fix 2: Remove trailing commas before closing braces/brackets
+							if (/,(\s*[}\]])/.test(fixedArgs)) {
+								fixedArgs = fixedArgs.replace(/,(\s*[}\]])/g, '$1');
+								wasFixed = true;
+							}
+
+							// Fix 3: Fix missing quotes around property names
+							if (/{\s*\w+\s*:/.test(fixedArgs)) {
+								fixedArgs = fixedArgs.replace(/{\s*(\w+)\s*:/g, '{"$1":');
+								fixedArgs = fixedArgs.replace(/,\s*(\w+)\s*:/g, ',"$1":');
+								wasFixed = true;
+							}
+
+							// Fix 4: Add missing closing braces/brackets
+							const openBraces = (fixedArgs.match(/{/g) || []).length;
+							const closeBraces = (fixedArgs.match(/}/g) || []).length;
+							const openBrackets = (fixedArgs.match(/\[/g) || []).length;
+							const closeBrackets = (fixedArgs.match(/\]/g) || []).length;
+
+							if (openBraces > closeBraces) {
+								fixedArgs += '}'.repeat(openBraces - closeBraces);
+								wasFixed = true;
+							}
+							if (openBrackets > closeBrackets) {
+								fixedArgs += ']'.repeat(openBrackets - closeBrackets);
+								wasFixed = true;
+							}
+
+							// Fix 5: Remove extra closing braces/brackets
+							if (closeBraces > openBraces) {
+								const extraBraces = closeBraces - openBraces;
+								for (let i = 0; i < extraBraces; i++) {
+									fixedArgs = fixedArgs.replace(/}([^}]*)$/, '$1');
+								}
+								wasFixed = true;
+							}
+							if (closeBrackets > openBrackets) {
+								const extraBrackets = closeBrackets - openBrackets;
+								for (let i = 0; i < extraBrackets; i++) {
+									fixedArgs = fixedArgs.replace(/\]([^\]]*)$/, '$1');
+								}
+								wasFixed = true;
+							}
+
+							// Try parsing the fixed JSON
+							try {
+								JSON.parse(fixedArgs);
+								if (wasFixed) {
+									console.warn(
+										`Warning: Fixed malformed JSON for ${toolCall.function.name}`,
+									);
+								}
+								toolCall.function.arguments = fixedArgs;
+							} catch (fixError) {
+								// If fixing failed, use empty object and log warning
+								// This prevents the entire request from failing
+								console.error(
+									`Error: Failed to fix malformed JSON for ${toolCall.function.name}`,
+								);
+								console.error(`Original: ${args}`);
+								console.error(`After fixes: ${fixedArgs}`);
+								console.error(
+									`Parse error: ${
+										fixError instanceof Error ? fixError.message : 'Unknown'
+									}`,
+								);
+
+								// Use empty object as fallback instead of throwing
+								toolCall.function.arguments = '{}';
+							}
 						} else {
 							// Tool block wasn't completed, likely interrupted stream
 							// Use partial data or empty object
-							console.warn(`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using partial data.`);
+							console.warn(
+								`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using partial data.`,
+							);
 							toolCall.function.arguments = '{}';
 						}
 					}
@@ -515,24 +642,24 @@ export async function* createStreamingAnthropicCompletion(
 
 				yield {
 					type: 'tool_calls',
-					tool_calls: toolCalls
+					tool_calls: toolCalls,
 				};
 			}
 
 			if (usageData) {
 				yield {
 					type: 'usage',
-					usage: usageData
+					usage: usageData,
 				};
 			}
 
 			yield {
-				type: 'done'
+				type: 'done',
 			};
 		},
 		{
 			abortSignal,
-			onRetry
-		}
+			onRetry,
+		},
 	);
 }

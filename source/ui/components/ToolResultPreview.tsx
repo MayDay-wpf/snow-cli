@@ -120,7 +120,7 @@ function renderListPreview(data: string[] | any, maxLines: number) {
 
 function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	// Handle ace-text-search results
-	if (toolName === 'ace-text-search' || toolName === 'ace_text_search') {
+	if (toolName === 'ace-text-search' || toolName === 'ace-text_search') {
 		if (!data || data.length === 0) {
 			return (
 				<Box marginLeft={2}>
@@ -154,7 +154,7 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-search-symbols results
-	if (toolName === 'ace-search-symbols' || toolName === 'ace_search_symbols') {
+	if (toolName === 'ace-search-symbols' || toolName === 'ace-search_symbols') {
 		const symbols = data.symbols || [];
 		if (symbols.length === 0) {
 			return (
@@ -187,7 +187,7 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-find-references results
-	if (toolName === 'ace-find-references' || toolName === 'ace_find_references') {
+	if (toolName === 'ace-find-references' || toolName === 'ace-find_references') {
 		const references = Array.isArray(data) ? data : [];
 		if (references.length === 0) {
 			return (
@@ -220,7 +220,7 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-find-definition result
-	if (toolName === 'ace-find-definition' || toolName === 'ace_find_definition') {
+	if (toolName === 'ace-find-definition' || toolName === 'ace-find_definition') {
 		if (!data) {
 			return (
 				<Box marginLeft={2}>
@@ -241,7 +241,7 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-file-outline result
-	if (toolName === 'ace-file-outline' || toolName === 'ace_file_outline') {
+	if (toolName === 'ace-file-outline' || toolName === 'ace-file_outline') {
 		const symbols = Array.isArray(data) ? data : [];
 		if (symbols.length === 0) {
 			return (
@@ -274,7 +274,7 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-semantic-search result
-	if (toolName === 'ace-semantic-search' || toolName === 'ace_semantic_search') {
+	if (toolName === 'ace-semantic-search' || toolName === 'ace-semantic_search') {
 		const totalResults = (data.symbols?.length || 0) + (data.references?.length || 0);
 		if (totalResults === 0) {
 			return (

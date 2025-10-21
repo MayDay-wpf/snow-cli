@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
-import { TextBuffer } from '../utils/textBuffer.js';
+import {useState, useCallback} from 'react';
+import {TextBuffer} from '../utils/textBuffer.js';
 
 // Command Definition
 const commands = [
-	{ name: 'clear', description: 'Clear chat context and conversation history' },
-	{ name: 'resume', description: 'Resume a conversation' },
-	{ name: 'mcp', description: 'Show Model Context Protocol services and tools' },
+	{name: 'clear', description: 'Clear chat context and conversation history'},
+	{name: 'resume', description: 'Resume a conversation'},
+	{name: 'mcp', description: 'Show Model Context Protocol services and tools'},
 	{
 		name: 'yolo',
 		description: 'Toggle unattended mode (auto-approve all tools)',
@@ -14,10 +14,16 @@ const commands = [
 		name: 'init',
 		description: 'Analyze project and generate/update SNOW.md documentation',
 	},
-	{ name: 'ide', description: 'Connect to VSCode editor and sync context' },
+	{name: 'ide', description: 'Connect to VSCode editor and sync context'},
 	{
 		name: 'compact',
 		description: 'Compress conversation history using compact model',
+	},
+	{name: 'home', description: 'Return to welcome screen to modify settings'},
+	{
+		name: 'review',
+		description:
+			'Review git changes and identify potential issues. Usage: /review [optional note]',
 	},
 ];
 

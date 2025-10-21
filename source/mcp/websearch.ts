@@ -1,80 +1,15 @@
 import puppeteer, {type Browser, type Page} from 'puppeteer-core';
-import {getProxyConfig} from '../utils/apiConfig.js';
-import {execSync} from 'node:child_process';
 import {existsSync} from 'node:fs';
-import {platform} from 'node:os';
-
-interface SearchResult {
-	title: string;
-	url: string;
-	snippet: string;
-	displayUrl: string;
-}
-
-interface SearchResponse {
-	query: string;
-	results: SearchResult[];
-	totalResults: number;
-}
-
-interface WebPageContent {
-	url: string;
-	title: string;
-	content: string;
-	textLength: number;
-	contentPreview: string;
-}
-
-/**
- * Detect system Chrome/Edge browser executable path
- */
-function findBrowserExecutable(): string | null {
-	const os = platform();
-	const paths: string[] = [];
-
-	if (os === 'win32') {
-		// Windows: Prioritize Edge (built-in), then Chrome
-		const edgePaths = [
-			'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-		];
-		const chromePaths = [
-			'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-			'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-			process.env['LOCALAPPDATA'] + '\\Google\\Chrome\\Application\\chrome.exe',
-		];
-		paths.push(...edgePaths, ...chromePaths);
-	} else if (os === 'darwin') {
-		// macOS
-		paths.push(
-			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-			'/Applications/Chromium.app/Contents/MacOS/Chromium',
-			'/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-		);
-	} else {
-		// Linux
-		const binPaths = ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge'];
-		for (const bin of binPaths) {
-			try {
-				const path = execSync(`which ${bin}`, {encoding: 'utf8'}).trim();
-				if (path) {
-					return path;
-				}
-			} catch {
-				// Continue to next binary
-			}
-		}
-	}
-
-	// Check if any path exists
-	for (const path of paths) {
-		if (path && existsSync(path)) {
-			return path;
-		}
-	}
-
-	return null;
-}
+import {getProxyConfig} from '../utils/apiConfig.js';
+// Type definitions
+import type {
+	SearchResult,
+	SearchResponse,
+	WebPageContent,
+} from './types/websearch.types.js';
+// Utility functions
+import {findBrowserExecutable} from './utils/websearch/browser.utils.js';
+import {cleanText} from './utils/websearch/text.utils.js';
 
 /**
  * Web Search Service using DuckDuckGo Lite with Puppeteer Core
@@ -232,12 +167,17 @@ export class WebSearchService {
 					// Check if this row contains display URL
 					const displayUrlElement = row.querySelector('span.link-text');
 					if (displayUrlElement && currentResult.title) {
-						currentResult.displayUrl = displayUrlElement.textContent?.trim() || '';
+						currentResult.displayUrl =
+							displayUrlElement.textContent?.trim() || '';
 					}
 				}
 
 				// Add last result if exists
-				if (currentResult.title && currentResult.url && resultCount < maxLimit) {
+				if (
+					currentResult.title &&
+					currentResult.url &&
+					resultCount < maxLimit
+				) {
 					searchResults.push(currentResult as SearchResult);
 				}
 
@@ -246,10 +186,10 @@ export class WebSearchService {
 
 			// Clean text in results
 			const cleanedResults = results.map(result => ({
-				title: this.cleanText(result.title),
+				title: cleanText(result.title),
 				url: result.url,
-				snippet: this.cleanText(result.snippet),
-				displayUrl: this.cleanText(result.displayUrl),
+				snippet: cleanText(result.snippet),
+				displayUrl: cleanText(result.displayUrl),
 			}));
 
 			// Close the page
@@ -283,7 +223,13 @@ export class WebSearchService {
 	 * @param onTokenUpdate - Optional callback to update token count during compression
 	 * @returns Cleaned page content
 	 */
-	async fetchPage(url: string, maxLength: number = 50000, userQuery?: string, abortSignal?: AbortSignal, onTokenUpdate?: (tokenCount: number) => void): Promise<WebPageContent> {
+	async fetchPage(
+		url: string,
+		maxLength: number = 50000,
+		userQuery?: string,
+		abortSignal?: AbortSignal,
+		onTokenUpdate?: (tokenCount: number) => void,
+	): Promise<WebPageContent> {
 		let page: Page | null = null;
 
 		try {
@@ -372,11 +318,14 @@ export class WebSearchService {
 
 			// Limit content length
 			if (cleanedContent.length > maxLength) {
-				cleanedContent = cleanedContent.slice(0, maxLength) + '\n\n[Content truncated...]';
+				cleanedContent =
+					cleanedContent.slice(0, maxLength) + '\n\n[Content truncated...]';
 			}
 
 			// Create preview (first 500 characters)
-			const contentPreview = cleanedContent.slice(0, 500) + (cleanedContent.length > 500 ? '...' : '');
+			const contentPreview =
+				cleanedContent.slice(0, 500) +
+				(cleanedContent.length > 500 ? '...' : '');
 
 			// Close the page
 			await page.close();
@@ -396,7 +345,7 @@ export class WebSearchService {
 							userQuery,
 							url,
 							abortSignal,
-						onTokenUpdate
+							onTokenUpdate,
 						);
 					}
 				} catch (error: any) {
@@ -407,7 +356,7 @@ export class WebSearchService {
 
 			return {
 				url,
-				title: this.cleanText(pageData.title),
+				title: cleanText(pageData.title),
 				content: finalContent,
 				textLength: finalContent.length,
 				contentPreview,
@@ -425,47 +374,6 @@ export class WebSearchService {
 			throw new Error(`Failed to fetch page: ${error.message}`);
 		}
 	}
-
-	/**
-	 * Clean text by removing extra whitespace and HTML entities
-	 * @param text - Raw text to clean
-	 * @returns Cleaned text
-	 */
-	private cleanText(text: string): string {
-		return text
-			.replace(/\s+/g, ' ') // Replace multiple spaces with single space
-			.replace(/&quot;/g, '"')
-			.replace(/&amp;/g, '&')
-			.replace(/&lt;/g, '<')
-			.replace(/&gt;/g, '>')
-			.replace(/<b>/g, '')
-			.replace(/<\/b>/g, '')
-			.trim();
-	}
-
-	/**
-	 * Format search results as readable text for AI consumption
-	 * @param searchResponse - Search response object
-	 * @returns Formatted text representation
-	 */
-	formatResults(searchResponse: SearchResponse): string {
-		const {query, results, totalResults} = searchResponse;
-
-		let output = `Search Results for: "${query}"\n`;
-		output += `Found ${totalResults} results\n\n`;
-		output += '='.repeat(80) + '\n\n';
-
-		results.forEach((result, index) => {
-			output += `${index + 1}. ${result.title}\n`;
-			output += `   URL: ${result.url}\n`;
-			if (result.snippet) {
-				output += `   ${result.snippet}\n`;
-			}
-			output += '\n';
-		});
-
-		return output;
-	}
 }
 
 // Export a default instance
@@ -474,18 +382,21 @@ export const webSearchService = new WebSearchService();
 // MCP Tool definitions
 export const mcpTools = [
 	{
-		name: 'websearch_search',
-		description: 'Search the web using DuckDuckGo. Returns a list of search results with titles, URLs, and snippets. Best for finding current information, documentation, news, or general web content. **IMPORTANT WORKFLOW**: After getting search results, analyze them and choose ONLY ONE most credible and relevant page to fetch. Do NOT fetch multiple pages - reading one high-quality source is sufficient and more efficient.',
+		name: 'websearch-search',
+		description:
+			'Search the web using DuckDuckGo. Returns a list of search results with titles, URLs, and snippets. Best for finding current information, documentation, news, or general web content. **IMPORTANT WORKFLOW**: After getting search results, analyze them and choose ONLY ONE most credible and relevant page to fetch. Do NOT fetch multiple pages - reading one high-quality source is sufficient and more efficient.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				query: {
 					type: 'string',
-					description: 'Search query string (e.g., "Claude latest model", "TypeScript best practices")',
+					description:
+						'Search query string (e.g., "Claude latest model", "TypeScript best practices")',
 				},
 				maxResults: {
 					type: 'number',
-					description: 'Maximum number of results to return (default: 10, max: 20)',
+					description:
+						'Maximum number of results to return (default: 10, max: 20)',
 					default: 10,
 					minimum: 1,
 					maximum: 20,
@@ -495,25 +406,29 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'websearch_fetch',
-		description: 'Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **OPTIMIZATION**: ALWAYS provide the userQuery parameter with the user\'s original question. This enables automatic extraction of only relevant information using a compact AI model, which dramatically saves context and improves response quality.',
+		name: 'websearch-fetch',
+		description:
+			"Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **OPTIMIZATION**: ALWAYS provide the userQuery parameter with the user's original question. This enables automatic extraction of only relevant information using a compact AI model, which dramatically saves context and improves response quality.",
 		inputSchema: {
 			type: 'object',
 			properties: {
 				url: {
 					type: 'string',
-					description: 'Full URL of the web page to fetch (e.g., "https://example.com/article")',
+					description:
+						'Full URL of the web page to fetch (e.g., "https://example.com/article")',
 				},
 				maxLength: {
 					type: 'number',
-					description: 'Maximum content length in characters (default: 50000, max: 100000)',
+					description:
+						'Maximum content length in characters (default: 50000, max: 100000)',
 					default: 50000,
 					minimum: 1000,
 					maximum: 100000,
 				},
 				userQuery: {
 					type: 'string',
-					description: 'REQUIRED: User\'s original question or query. This is essential for intelligent content extraction - the compact AI model will extract only information relevant to this query, reducing content size by 80-95%. Always provide this parameter.',
+					description:
+						"REQUIRED: User's original question or query. This is essential for intelligent content extraction - the compact AI model will extract only information relevant to this query, reducing content size by 80-95%. Always provide this parameter.",
 				},
 			},
 			required: ['url'],

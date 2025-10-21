@@ -1,25 +1,14 @@
 import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import fs from 'fs/promises';
 import path from 'path';
-
-interface TodoItem {
-	id: string;
-	content: string;
-	status: 'pending' | 'completed';
-	createdAt: string;
-	updatedAt: string;
-	parentId?: string;
-}
-
-interface TodoList {
-	sessionId: string;
-	todos: TodoItem[];
-	createdAt: string;
-	updatedAt: string;
-}
-
-// 回调函数类型,用于获取当前 sessionId
-type GetCurrentSessionId = () => string | null;
+// Type definitions
+import type {
+	TodoItem,
+	TodoList,
+	GetCurrentSessionId,
+} from './types/todo.types.js';
+// Utility functions
+import {formatDateForFolder} from './utils/todo/date.utils.js';
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
@@ -39,16 +28,9 @@ export class TodoService {
 
 	private getTodoPath(sessionId: string, date?: Date): string {
 		const sessionDate = date || new Date();
-		const dateFolder = this.formatDateForFolder(sessionDate);
+		const dateFolder = formatDateForFolder(sessionDate);
 		const todoDir = path.join(this.todoDir, dateFolder);
 		return path.join(todoDir, `${sessionId}.json`);
-	}
-
-	private formatDateForFolder(date: Date): string {
-		const year = date.getFullYear();
-		const month = String(date.getMonth() + 1).padStart(2, '0');
-		const day = String(date.getDate()).padStart(2, '0');
-		return `${year}-${month}-${day}`;
 	}
 
 	private async ensureTodoDir(date?: Date): Promise<void> {
@@ -56,7 +38,7 @@ export class TodoService {
 			await fs.mkdir(this.todoDir, {recursive: true});
 
 			if (date) {
-				const dateFolder = this.formatDateForFolder(date);
+				const dateFolder = formatDateForFolder(date);
 				const todoDir = path.join(this.todoDir, dateFolder);
 				await fs.mkdir(todoDir, {recursive: true});
 			}
@@ -193,7 +175,7 @@ export class TodoService {
 		const now = new Date().toISOString();
 
 		const newTodo: TodoItem = {
-			id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+			id: `todo-${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
 			content,
 			status: 'pending',
 			createdAt: now,
@@ -489,7 +471,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 
 		try {
 			switch (toolName) {
-				case 'todo-create': {
+				case 'create': {
 					const {todos} = args as {
 						todos: Array<{content: string; parentId?: string}>;
 					};
@@ -497,7 +479,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					const todoItems: TodoItem[] = todos.map(t => {
 						const now = new Date().toISOString();
 						return {
-							id: `todo_${Date.now()}_${Math.random()
+							id: `todo-${Date.now()}_${Math.random()
 								.toString(36)
 								.slice(2, 9)}`,
 							content: t.content,
@@ -524,7 +506,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					};
 				}
 
-				case 'todo-get': {
+				case 'get': {
 					const result = await this.getTodoList(sessionId);
 					return {
 						content: [
@@ -538,7 +520,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					};
 				}
 
-				case 'todo-update': {
+				case 'update': {
 					const {todoId, status, content} = args as {
 						todoId: string;
 						status?: 'pending' | 'completed';
@@ -562,7 +544,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					};
 				}
 
-				case 'todo-add': {
+				case 'add': {
 					const {content, parentId} = args as {
 						content: string;
 						parentId?: string;
@@ -579,7 +561,7 @@ Deleting a parent task automatically deletes all its subtasks (parentId relation
 					};
 				}
 
-				case 'todo-delete': {
+				case 'delete': {
 					const {todoId} = args as {
 						todoId: string;
 					};

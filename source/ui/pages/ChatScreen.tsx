@@ -44,6 +44,8 @@ import '../../utils/commands/yolo.js';
 import '../../utils/commands/init.js';
 import '../../utils/commands/ide.js';
 import '../../utils/commands/compact.js';
+import '../../utils/commands/home.js';
+import '../../utils/commands/review.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -79,6 +81,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
+	const [restoreInputContent, setRestoreInputContent] = useState<string | null>(
+		null,
+	);
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
@@ -106,6 +111,18 @@ export default function ChatScreen({skipWelcome}: Props) {
 			// Ignore localStorage errors
 		}
 	}, [yoloMode]);
+
+	// Clear restore input content after it's been used
+	useEffect(() => {
+		if (restoreInputContent !== null) {
+			// Clear after a short delay to ensure ChatInput has processed it
+			const timer = setTimeout(() => {
+				setRestoreInputContent(null);
+			}, 100);
+			return () => clearTimeout(timer);
+		}
+		return undefined;
+	}, [restoreInputContent]);
 
 	// Auto-resume last session when skipWelcome is true
 	useEffect(() => {
@@ -320,8 +337,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	const handleHistorySelect = async (
 		selectedIndex: number,
-		_message: string,
+		message: string,
 	) => {
+		// If rolling back to the first message (index 0), save the message content to restore in input
+		if (selectedIndex === 0) {
+			setRestoreInputContent(message);
+		}
+
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
 		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
@@ -781,20 +803,25 @@ export default function ChatScreen({skipWelcome}: Props) {
 												<TodoTree todos={currentTodos} />
 											) : (
 												<>
-													<MarkdownRenderer
-														content={message.content || ' '}
-														color={
-															message.role === 'user'
-																? 'gray'
-																: isToolMessage
-																? message.content.startsWith('⚡')
+													{message.role === 'user' || isToolMessage ? (
+														<Text
+															color={
+																message.role === 'user'
+																	? 'gray'
+																	: message.content.startsWith('⚡')
 																	? 'yellow'
 																	: message.content.startsWith('✓')
 																	? 'green'
 																	: 'red'
-																: undefined
-														}
-													/>
+															}
+														>
+															{message.content || ' '}
+														</Text>
+													) : (
+														<MarkdownRenderer
+															content={message.content || ' '}
+														/>
+													)}
 													{message.toolDisplay &&
 														message.toolDisplay.args.length > 0 && (
 															<Box flexDirection="column">
@@ -1175,10 +1202,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 									  }
 									: undefined
 							}
+							initialContent={restoreInputContent}
 						/>
 						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
-							<Box marginTop={1}>
+							<Box marginTop={1} paddingX={1}>
 								<Text
 									color={
 										vscodeState.vscodeConnectionStatus === 'connecting'

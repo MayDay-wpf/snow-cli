@@ -350,6 +350,28 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (key.return) {
 			const message = buffer.getFullText().trim();
 			if (message) {
+				// Check if message is a command with arguments (e.g., /review [note])
+				if (message.startsWith('/')) {
+					const commandMatch = message.match(/^\/(\w+)(?:\s+(.+))?$/);
+					if (commandMatch && commandMatch[1]) {
+						const commandName = commandMatch[1];
+						const commandArgs = commandMatch[2];
+
+						// Execute command with arguments
+						executeCommand(commandName, commandArgs).then(result => {
+							if (onCommand) {
+								onCommand(commandName, result);
+							}
+						});
+
+						buffer.setText('');
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						triggerUpdate();
+						return;
+					}
+				}
+
 				// Get images data, but only include images whose placeholders still exist
 				const currentText = buffer.text; // Use internal text (includes placeholders)
 				const allImages = buffer.getImages();

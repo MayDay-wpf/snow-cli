@@ -10,33 +10,24 @@ import {
 	trimPairIfPossible,
 	isOverEscaped,
 } from '../utils/escapeHandler.js';
+// Type definitions
+import type {StructureAnalysis} from './types/filesystem.types.js';
+// Utility functions
+import {
+	calculateSimilarity,
+	normalizeForDisplay,
+} from './utils/filesystem/similarity.utils.js';
+import {
+	analyzeCodeStructure,
+	findSmartContextBoundaries,
+} from './utils/filesystem/code-analysis.utils.js';
+import {
+	findClosestMatches,
+	generateDiffMessage,
+} from './utils/filesystem/match-finder.utils.js';
+
 const {resolve, dirname, isAbsolute} = path;
 const execAsync = promisify(exec);
-
-interface StructureAnalysis {
-	bracketBalance: {
-		curly: {open: number; close: number; balanced: boolean};
-		round: {open: number; close: number; balanced: boolean};
-		square: {open: number; close: number; balanced: boolean};
-	};
-	htmlTags?: {
-		unclosedTags: string[];
-		unopenedTags: string[];
-		balanced: boolean;
-	};
-	indentationWarnings: string[];
-	codeBlockBoundary?: {
-		isInCompleteBlock: boolean;
-		suggestion?: string;
-	};
-}
-
-interface MatchCandidate {
-	startLine: number;
-	endLine: number;
-	similarity: number;
-	preview: string;
-}
 
 /**
  * Filesystem MCP Service
@@ -68,436 +59,6 @@ export class FilesystemMCPService {
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = resolve(basePath);
-	}
-
-	/**
-	 * Calculate similarity between two strings using a smarter algorithm
-	 * This normalizes whitespace first to avoid false negatives from spacing differences
-	 * Returns a value between 0 (completely different) and 1 (identical)
-	 */
-	private calculateSimilarity(str1: string, str2: string, threshold: number = 0): number {
-		// Normalize whitespace for comparison: collapse all whitespace to single spaces
-		const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
-		const norm1 = normalize(str1);
-		const norm2 = normalize(str2);
-
-		const len1 = norm1.length;
-		const len2 = norm2.length;
-
-		if (len1 === 0) return len2 === 0 ? 1 : 0;
-		if (len2 === 0) return 0;
-
-		// Quick length check - if lengths differ too much, similarity can't be above threshold
-		const maxLen = Math.max(len1, len2);
-		const minLen = Math.min(len1, len2);
-		const lengthRatio = minLen / maxLen;
-		if (threshold > 0 && lengthRatio < threshold) {
-			return lengthRatio; // Can't possibly meet threshold
-		}
-
-		// Use Levenshtein distance for better similarity calculation
-		const distance = this.levenshteinDistance(norm1, norm2, Math.ceil(maxLen * (1 - threshold)));
-
-		return 1 - distance / maxLen;
-	}
-
-	/**
-	 * Calculate Levenshtein distance between two strings with early termination
-	 * @param str1 First string
-	 * @param str2 Second string
-	 * @param maxDistance Maximum distance to compute (early exit if exceeded)
-	 * @returns Levenshtein distance, or maxDistance+1 if exceeded
-	 */
-	private levenshteinDistance(str1: string, str2: string, maxDistance: number = Infinity): number {
-		const len1 = str1.length;
-		const len2 = str2.length;
-
-		// Quick exit for identical strings
-		if (str1 === str2) return 0;
-
-		// Quick exit if length difference already exceeds maxDistance
-		if (Math.abs(len1 - len2) > maxDistance) {
-			return maxDistance + 1;
-		}
-
-		// Use single-row algorithm to save memory (only need previous row)
-		let prevRow: number[] = Array.from({length: len2 + 1}, (_, i) => i);
-
-		for (let i = 1; i <= len1; i++) {
-			const currRow: number[] = [i];
-			let minInRow = i; // Track minimum value in current row
-
-			for (let j = 1; j <= len2; j++) {
-				const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-				const val = Math.min(
-					prevRow[j]! + 1,      // deletion
-					currRow[j - 1]! + 1,  // insertion
-					prevRow[j - 1]! + cost // substitution
-				);
-				currRow[j] = val;
-				minInRow = Math.min(minInRow, val);
-			}
-
-			// Early termination: if minimum in this row exceeds maxDistance, we can stop
-			if (minInRow > maxDistance) {
-				return maxDistance + 1;
-			}
-
-			prevRow = currRow;
-		}
-
-		return prevRow[len2]!;
-	}
-
-	/**
-	 * Find the closest matching candidates in the file content
-	 * Returns top N candidates sorted by similarity
-	 * Optimized with safe pre-filtering and early exit
-	 * ASYNC to prevent terminal freeze during search
-	 */
-	private async findClosestMatches(
-		searchContent: string,
-		fileLines: string[],
-		topN: number = 3,
-	): Promise<MatchCandidate[]> {
-		const searchLines = searchContent.split('\n');
-		const candidates: MatchCandidate[] = [];
-
-		// Normalize whitespace for display only (makes preview more readable)
-		const normalizeForDisplay = (line: string) =>
-			line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-
-		// Fast pre-filter: use first line as anchor (only for multi-line searches)
-		const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
-		const threshold = 0.5;
-		const usePreFilter = searchLines.length >= 5; // Only for 5+ line searches
-		const preFilterThreshold = 0.2; // Very conservative - only skip completely unrelated lines
-
-		// Try to find candidates by sliding window with optimizations
-		const maxCandidates = topN * 3; // Collect more candidates, then pick best
-		const YIELD_INTERVAL = 100; // Yield control every 100 iterations
-
-		for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
-			// Yield control periodically to prevent UI freeze
-			if (i % YIELD_INTERVAL === 0) {
-				await new Promise(resolve => setImmediate(resolve));
-			}
-
-			// Quick pre-filter: check first line similarity (only for multi-line)
-			if (usePreFilter) {
-				const firstLineCandidate = fileLines[i]?.replace(/\s+/g, ' ').trim() || '';
-				const firstLineSimilarity = this.calculateSimilarity(
-					searchFirstLine,
-					firstLineCandidate,
-					preFilterThreshold,
-				);
-
-				// Skip only if first line is very different
-				if (firstLineSimilarity < preFilterThreshold) {
-					continue;
-				}
-			}
-
-			// Full candidate check
-			const candidateLines = fileLines.slice(i, i + searchLines.length);
-			const candidateContent = candidateLines.join('\n');
-
-			const similarity = this.calculateSimilarity(
-				searchContent,
-				candidateContent,
-				threshold,
-			);
-
-			// Only consider candidates with >50% similarity
-			if (similarity > threshold) {
-				candidates.push({
-					startLine: i + 1,
-					endLine: i + searchLines.length,
-					similarity,
-					preview: candidateLines
-						.map((line, idx) => `${i + idx + 1}→${normalizeForDisplay(line)}`)
-						.join('\n'),
-				});
-
-				// Early exit if we found a nearly perfect match
-				if (similarity >= 0.95) {
-					break;
-				}
-
-				// Limit candidates to avoid excessive computation
-				if (candidates.length >= maxCandidates) {
-					break;
-				}
-			}
-		}
-
-		// Sort by similarity descending and return top N
-		return candidates
-			.sort((a, b) => b.similarity - a.similarity)
-			.slice(0, topN);
-	}
-
-	/**
-	 * Generate a helpful diff message showing differences between search and actual content
-	 * Note: This is ONLY for display purposes. Tabs/spaces are normalized for better readability.
-	 */
-	private generateDiffMessage(
-		searchContent: string,
-		actualContent: string,
-		maxLines: number = 10,
-	): string {
-		const searchLines = searchContent.split('\n');
-		const actualLines = actualContent.split('\n');
-		const diffLines: string[] = [];
-
-		const maxLen = Math.max(searchLines.length, actualLines.length);
-
-		// Normalize whitespace for display only (makes diff more readable)
-		const normalizeForDisplay = (line: string) =>
-			line.replace(/\t/g, ' ').replace(/  +/g, ' ');
-
-		for (let i = 0; i < Math.min(maxLen, maxLines); i++) {
-			const searchLine = searchLines[i] || '';
-			const actualLine = actualLines[i] || '';
-
-			if (searchLine !== actualLine) {
-				diffLines.push(`Line ${i + 1}:`);
-				diffLines.push(
-					`  Search: ${JSON.stringify(normalizeForDisplay(searchLine))}`,
-				);
-				diffLines.push(
-					`  Actual: ${JSON.stringify(normalizeForDisplay(actualLine))}`,
-				);
-			}
-		}
-
-		if (maxLen > maxLines) {
-			diffLines.push(`... (${maxLen - maxLines} more lines)`);
-		}
-
-		return diffLines.join('\n');
-	}
-
-	/**
-	 * Analyze code structure for balance and completeness
-	 * Helps AI identify bracket mismatches, unclosed tags, and boundary issues
-	 */
-	private analyzeCodeStructure(
-		_content: string,
-		filePath: string,
-		editedLines: string[],
-	): StructureAnalysis {
-		const analysis: StructureAnalysis = {
-			bracketBalance: {
-				curly: {open: 0, close: 0, balanced: true},
-				round: {open: 0, close: 0, balanced: true},
-				square: {open: 0, close: 0, balanced: true},
-			},
-			indentationWarnings: [],
-		};
-
-		// Count brackets in the edited content
-		const editedContent = editedLines.join('\n');
-
-		// Remove string literals and comments to avoid false positives
-		const cleanContent = editedContent
-			.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '""') // Remove strings
-			.replace(/\/\/.*$/gm, '') // Remove single-line comments
-			.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove multi-line comments
-
-		// Count brackets
-		analysis.bracketBalance.curly.open = (
-			cleanContent.match(/\{/g) || []
-		).length;
-		analysis.bracketBalance.curly.close = (
-			cleanContent.match(/\}/g) || []
-		).length;
-		analysis.bracketBalance.curly.balanced =
-			analysis.bracketBalance.curly.open ===
-			analysis.bracketBalance.curly.close;
-
-		analysis.bracketBalance.round.open = (
-			cleanContent.match(/\(/g) || []
-		).length;
-		analysis.bracketBalance.round.close = (
-			cleanContent.match(/\)/g) || []
-		).length;
-		analysis.bracketBalance.round.balanced =
-			analysis.bracketBalance.round.open ===
-			analysis.bracketBalance.round.close;
-
-		analysis.bracketBalance.square.open = (
-			cleanContent.match(/\[/g) || []
-		).length;
-		analysis.bracketBalance.square.close = (
-			cleanContent.match(/\]/g) || []
-		).length;
-		analysis.bracketBalance.square.balanced =
-			analysis.bracketBalance.square.open ===
-			analysis.bracketBalance.square.close;
-
-		// HTML/JSX tag analysis (for .html, .jsx, .tsx, .vue files)
-		const isMarkupFile = /\.(html|jsx|tsx|vue)$/i.test(filePath);
-		if (isMarkupFile) {
-			const tagPattern = /<\/?([a-zA-Z][a-zA-Z0-9-]*)[^>]*>/g;
-			const selfClosingPattern = /<[a-zA-Z][a-zA-Z0-9-]*[^>]*\/>/g;
-
-			// Remove self-closing tags
-			const contentWithoutSelfClosing = cleanContent.replace(
-				selfClosingPattern,
-				'',
-			);
-
-			const tags: string[] = [];
-			const unclosedTags: string[] = [];
-			const unopenedTags: string[] = [];
-
-			let match;
-			while ((match = tagPattern.exec(contentWithoutSelfClosing)) !== null) {
-				const isClosing = match[0]?.startsWith('</');
-				const tagName = match[1]?.toLowerCase();
-
-				if (!tagName) continue;
-
-				if (isClosing) {
-					const lastOpenTag = tags.pop();
-					if (!lastOpenTag || lastOpenTag !== tagName) {
-						unopenedTags.push(tagName);
-						if (lastOpenTag) tags.push(lastOpenTag); // Put it back
-					}
-				} else {
-					tags.push(tagName);
-				}
-			}
-
-			unclosedTags.push(...tags);
-
-			analysis.htmlTags = {
-				unclosedTags,
-				unopenedTags,
-				balanced: unclosedTags.length === 0 && unopenedTags.length === 0,
-			};
-		}
-
-		// Check indentation consistency
-		const lines = editedContent.split('\n');
-		const indents = lines
-			.filter(line => line.trim().length > 0)
-			.map(line => {
-				const match = line.match(/^(\s*)/);
-				return match ? match[1] : '';
-			})
-			.filter((indent): indent is string => indent !== undefined);
-
-		// Detect mixed tabs/spaces
-		const hasTabs = indents.some(indent => indent.includes('\t'));
-		const hasSpaces = indents.some(indent => indent.includes(' '));
-		if (hasTabs && hasSpaces) {
-			analysis.indentationWarnings.push('Mixed tabs and spaces detected');
-		}
-
-		// Detect inconsistent indentation levels (spaces only)
-		if (!hasTabs && hasSpaces) {
-			const spaceCounts = indents
-				.filter(indent => indent.length > 0)
-				.map(indent => indent.length);
-
-			if (spaceCounts.length > 1) {
-				const gcd = spaceCounts.reduce((a, b) => {
-					while (b !== 0) {
-						const temp = b;
-						b = a % b;
-						a = temp;
-					}
-					return a;
-				});
-
-				const hasInconsistent = spaceCounts.some(
-					count => count % gcd !== 0 && gcd > 1,
-				);
-				if (hasInconsistent) {
-					analysis.indentationWarnings.push(
-						`Inconsistent indentation (expected multiples of ${gcd} spaces)`,
-					);
-				}
-			}
-		}
-
-		// Note: Boundary checking removed - AI should be free to edit partial code blocks
-		// The bracket balance check above is sufficient for detecting real issues
-
-		return analysis;
-	}
-
-	/**
-	 * Find smart context boundaries for editing
-	 * Expands context to include complete code blocks when possible
-	 */
-	private findSmartContextBoundaries(
-		lines: string[],
-		startLine: number,
-		endLine: number,
-		requestedContext: number,
-	): {start: number; end: number; extended: boolean} {
-		const totalLines = lines.length;
-		let contextStart = Math.max(1, startLine - requestedContext);
-		let contextEnd = Math.min(totalLines, endLine + requestedContext);
-		let extended = false;
-
-		// Try to find the start of the enclosing block
-		let bracketDepth = 0;
-		for (let i = startLine - 1; i >= Math.max(0, startLine - 50); i--) {
-			const line = lines[i];
-			if (!line) continue;
-
-			const trimmed = line.trim();
-
-			// Count brackets (simple approach)
-			const openBrackets = (line.match(/\{/g) || []).length;
-			const closeBrackets = (line.match(/\}/g) || []).length;
-			bracketDepth += closeBrackets - openBrackets;
-
-			// If we find a function/class/block definition with balanced brackets
-			if (
-				bracketDepth === 0 &&
-				(trimmed.match(
-					/^(function|class|const|let|var|if|for|while|async|export)\s/i,
-				) ||
-					trimmed.match(/=>\s*\{/) ||
-					trimmed.match(/^\w+\s*\(/))
-			) {
-				if (i + 1 < contextStart) {
-					contextStart = i + 1;
-					extended = true;
-				}
-				break;
-			}
-		}
-
-		// Try to find the end of the enclosing block
-		bracketDepth = 0;
-		for (let i = endLine - 1; i < Math.min(totalLines, endLine + 50); i++) {
-			const line = lines[i];
-			if (!line) continue;
-
-			const trimmed = line.trim();
-
-			// Count brackets
-			const openBrackets = (line.match(/\{/g) || []).length;
-			const closeBrackets = (line.match(/\}/g) || []).length;
-			bracketDepth += openBrackets - closeBrackets;
-
-			// If we find a closing bracket at depth 0
-			if (bracketDepth === 0 && trimmed.startsWith('}')) {
-				if (i + 1 > contextEnd) {
-					contextEnd = i + 1;
-					extended = true;
-				}
-				break;
-			}
-		}
-
-		return {start: contextStart, end: contextEnd, extended};
 	}
 
 	/**
@@ -963,8 +524,9 @@ export class FilesystemMCPService {
 
 				// Quick pre-filter: check first line similarity (only for multi-line searches)
 				if (usePreFilter) {
-					const firstLineCandidate = contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
-					const firstLineSimilarity = this.calculateSimilarity(
+					const firstLineCandidate =
+						contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
+					const firstLineSimilarity = calculateSimilarity(
 						searchFirstLine,
 						firstLineCandidate,
 						preFilterThreshold,
@@ -980,7 +542,7 @@ export class FilesystemMCPService {
 				// Full candidate check
 				const candidateLines = contentLines.slice(i, i + searchLines.length);
 				const candidateContent = candidateLines.join('\n');
-				const similarity = this.calculateSimilarity(
+				const similarity = calculateSimilarity(
 					normalizedSearch,
 					candidateContent,
 					threshold, // Pass threshold for early exit
@@ -1035,7 +597,7 @@ export class FilesystemMCPService {
 							i + correctedSearchLines.length,
 						);
 						const candidateContent = candidateLines.join('\n');
-						const similarity = this.calculateSimilarity(
+						const similarity = calculateSimilarity(
 							unescapeFix.correctedString,
 							candidateContent,
 						);
@@ -1074,7 +636,7 @@ export class FilesystemMCPService {
 				// If still no matches after unescape, provide detailed error
 				if (matches.length === 0) {
 					// Find closest matches for suggestions
-					const closestMatches = await this.findClosestMatches(
+					const closestMatches = await findClosestMatches(
 						normalizedSearch,
 						normalizedContent.split('\n'),
 						3,
@@ -1105,7 +667,7 @@ export class FilesystemMCPService {
 								bestMatch.endLine,
 							);
 							const bestMatchContent = bestMatchLines.join('\n');
-							const diffMsg = this.generateDiffMessage(
+							const diffMsg = generateDiffMessage(
 								normalizedSearch,
 								bestMatchContent,
 								5,
@@ -1115,21 +677,20 @@ export class FilesystemMCPService {
 							}
 						}
 						errorMessage += `💡 Suggestions:\n`;
-						errorMessage += `  • Make sure you copied content from filesystem_read (without "123→")\n`;
+						errorMessage += `  • Make sure you copied content from filesystem-read (without "123→")\n`;
 						errorMessage += `  • Whitespace differences are automatically handled\n`;
 						errorMessage += `  • Try copying a larger or smaller code block\n`;
-						errorMessage += `  • If multiple filesystem_edit_search attempts fail, use terminal_execute to edit via command line (e.g. sed, printf)\n`;
+						errorMessage += `  • If multiple filesystem-edit_search attempts fail, use terminal-execute to edit via command line (e.g. sed, printf)\n`;
 
 						errorMessage += `⚠️  No similar content found in the file.\n\n`;
 						errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
-						const normalizeForDisplay = (line: string) =>
-							line.replace(/\s+/g, ' ').trim();
+
 						searchLines.slice(0, 5).forEach((line, idx) => {
 							errorMessage += `${idx + 1}. ${JSON.stringify(
 								normalizeForDisplay(line),
 							)}\n`;
 						});
-						errorMessage += `\n💡 Copy exact content from filesystem_read (without line numbers)\n`;
+						errorMessage += `\n💡 Copy exact content from filesystem-read (without line numbers)\n`;
 					}
 
 					throw new Error(errorMessage);
@@ -1174,7 +735,7 @@ export class FilesystemMCPService {
 			const modifiedContent = modifiedLines.join('\n');
 
 			// Calculate replaced content for display (compress whitespace for readability)
-			const normalizeForDisplay = (line: string) => line.replace(/\s+/g, ' ');
+
 			const replacedLines = lines.slice(startLine - 1, endLine);
 			const replacedContent = replacedLines
 				.map((line, idx) => {
@@ -1186,7 +747,7 @@ export class FilesystemMCPService {
 			// Calculate context boundaries
 			const lineDifference = replaceLines.length - (endLine - startLine + 1);
 
-			const smartBoundaries = this.findSmartContextBoundaries(
+			const smartBoundaries = findSmartContextBoundaries(
 				lines,
 				startLine,
 				endLine,
@@ -1255,7 +816,7 @@ export class FilesystemMCPService {
 
 			// Analyze code structure
 			const editedContentLines = replaceLines;
-			const structureAnalysis = this.analyzeCodeStructure(
+			const structureAnalysis = analyzeCodeStructure(
 				finalContent,
 				filePath,
 				editedContentLines,
@@ -1389,7 +950,7 @@ export class FilesystemMCPService {
 			if (structureAnalysis.indentationWarnings.length > 0) {
 				structureWarnings.push(
 					...structureAnalysis.indentationWarnings.map(
-						w => `Indentation: ${w}`,
+						(w: string) => `Indentation: ${w}`,
 					),
 				);
 			}
@@ -1420,8 +981,8 @@ export class FilesystemMCPService {
 	 * For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit.
 	 *
 	 * @param filePath - Path to the file to edit
-	 * @param startLine - Starting line number (1-indexed, inclusive) - get from filesystem_read output
-	 * @param endLine - Ending line number (1-indexed, inclusive) - get from filesystem_read output
+	 * @param startLine - Starting line number (1-indexed, inclusive) - get from filesystem-read output
+	 * @param endLine - Ending line number (1-indexed, inclusive) - get from filesystem-read output
 	 * @param newContent - New content to replace the specified lines (WITHOUT line numbers)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
 	 * @returns Object containing success message, precise before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
@@ -1480,7 +1041,7 @@ export class FilesystemMCPService {
 
 			// Extract the lines that will be replaced (for comparison)
 			// Compress whitespace for display readability
-			const normalizeForDisplay = (line: string) => line.replace(/\s+/g, ' ');
+
 			const replacedLines = lines.slice(startLine - 1, adjustedEndLine);
 			const replacedContent = replacedLines
 				.map((line, idx) => {
@@ -1490,7 +1051,7 @@ export class FilesystemMCPService {
 				.join('\n');
 
 			// Calculate context range using smart boundary detection
-			const smartBoundaries = this.findSmartContextBoundaries(
+			const smartBoundaries = findSmartContextBoundaries(
 				lines,
 				startLine,
 				adjustedEndLine,
@@ -1588,7 +1149,7 @@ export class FilesystemMCPService {
 				startLine - 1,
 				startLine - 1 + newContentLines.length,
 			);
-			const structureAnalysis = this.analyzeCodeStructure(
+			const structureAnalysis = analyzeCodeStructure(
 				finalLines.join('\n'),
 				filePath,
 				editedContentLines,
@@ -1734,7 +1295,7 @@ export class FilesystemMCPService {
 			if (structureAnalysis.indentationWarnings.length > 0) {
 				structureWarnings.push(
 					...structureAnalysis.indentationWarnings.map(
-						w => `Indentation: ${w}`,
+						(w: string) => `Indentation: ${w}`,
 					),
 				);
 			}
@@ -1798,9 +1359,9 @@ export const filesystemService = new FilesystemMCPService();
 
 export const mcpTools = [
 	{
-		name: 'filesystem_read',
+		name: 'filesystem-read',
 		description:
-			'📖 Read file content with line numbers. **SUPPORTS MULTIPLE FILES**: Pass either a single file path (string) or multiple file paths (array of strings) to read in one call. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace_text_search/ace_search_symbols/ace_file_outline) to locate the relevant code, (2) ONLY use filesystem_read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **MULTI-FILE EXAMPLE**: filePath=["src/component.ts", "src/utils.ts"] reads both files together.',
+			'📖 Read file content with line numbers. **SUPPORTS MULTIPLE FILES**: Pass either a single file path (string) or multiple file paths (array of strings) to read in one call. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **MULTI-FILE EXAMPLE**: filePath=["src/component.ts", "src/utils.ts"] reads both files together.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1836,7 +1397,7 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem_create',
+		name: 'filesystem-create',
 		description:
 			'PREFERRED tool for file creation: Create a new file with specified content. More reliable than terminal commands like echo/cat with redirects. Automatically creates parent directories if needed. Terminal commands can be used as a fallback if needed.',
 		inputSchema: {
@@ -1861,7 +1422,7 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem_delete',
+		name: 'filesystem-delete',
 		description:
 			'Delete one or multiple files. Supports both single file and batch deletion.',
 		inputSchema: {
@@ -1893,7 +1454,7 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem_list',
+		name: 'filesystem-list',
 		description: 'List files in a directory',
 		inputSchema: {
 			type: 'object',
@@ -1907,9 +1468,9 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem_edit_search',
+		name: 'filesystem-edit_search',
 		description:
-			'🎯 **RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING that automatically handles whitespace differences. **WORKFLOW**: (1) Use ace_text_search/ace_search_symbols to locate code, (2) Use filesystem_read to view content, (3) Copy the code block you want to change (without line numbers), (4) Use THIS tool - whitespace will be normalized automatically. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BEST FOR**: Modifying functions, fixing bugs, updating logic.',
+			'🎯 **RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING that automatically handles whitespace differences. **WORKFLOW**: (1) Use ace-text_search/ace-search_symbols to locate code, (2) Use filesystem-read to view content, (3) Copy the code block you want to change (without line numbers), (4) Use THIS tool - whitespace will be normalized automatically. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BEST FOR**: Modifying functions, fixing bugs, updating logic.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1920,7 +1481,7 @@ export const mcpTools = [
 				searchContent: {
 					type: 'string',
 					description:
-						'Content to find and replace. Copy from filesystem_read output WITHOUT line numbers (e.g., "123→"). Whitespace differences are automatically handled - focus on getting the content right.',
+						'Content to find and replace. Copy from filesystem-read output WITHOUT line numbers (e.g., "123→"). Whitespace differences are automatically handled - focus on getting the content right.',
 				},
 				replaceContent: {
 					type: 'string',
@@ -1943,9 +1504,9 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem_edit',
+		name: 'filesystem-edit',
 		description:
-			"🔧 Line-based editing for precise control. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When search-replace is not suitable. **WORKFLOW**: (1) Use ace_text_search/ace_file_outline to locate relevant area, (2) Use filesystem_read to get exact line numbers, (3) Use THIS tool with precise line ranges. **RECOMMENDATION**: For modifying existing code, use filesystem_edit_search instead - it's safer. **BEST PRACTICES**: Keep edits small (≤15 lines), double-check line numbers, verify bracket closure.",
+			"🔧 Line-based editing for precise control. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When search-replace is not suitable. **WORKFLOW**: (1) Use ace-text_search/ace-file_outline to locate relevant area, (2) Use filesystem-read to get exact line numbers, (3) Use THIS tool with precise line ranges. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search instead - it's safer. **BEST PRACTICES**: Keep edits small (≤15 lines), double-check line numbers, verify bracket closure.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1956,12 +1517,12 @@ export const mcpTools = [
 				startLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Starting line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. Double-check this value!',
+						'⚠️  CRITICAL: Starting line number (1-indexed, inclusive). MUST match exact line number from filesystem-read output. Double-check this value!',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem_read output. 💡 TIP: Keep edits small (≤15 lines recommended) for better accuracy.',
+						'⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem-read output. 💡 TIP: Keep edits small (≤15 lines recommended) for better accuracy.',
 				},
 				newContent: {
 					type: 'string',

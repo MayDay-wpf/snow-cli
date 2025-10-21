@@ -1,6 +1,8 @@
-type WritableStreamLike = Pick<NodeJS.WriteStream, 'write'> | {
-	write: (data: string) => unknown;
-};
+type WritableStreamLike =
+	| Pick<NodeJS.WriteStream, 'write'>
+	| {
+			write: (data: string) => unknown;
+	  };
 
 export function resetTerminal(stream?: WritableStreamLike): void {
 	const target = stream ?? process.stdout;
@@ -13,7 +15,8 @@ export function resetTerminal(stream?: WritableStreamLike): void {
 	target.write('\x1bc');
 	target.write('\x1B[3J\x1B[2J\x1B[H');
 
-	// DO NOT re-enable focus reporting here
-	// Let useTerminalFocus handle it when ChatScreen mounts
-	// This avoids the race condition where focus event arrives before listener is ready
+	// Re-enable focus reporting immediately after terminal reset
+	// The RIS command (\x1bc) disables focus reporting, so we must re-enable it
+	// This ensures focus state tracking continues to work after /clear command
+	target.write('\x1b[?1004h');
 }

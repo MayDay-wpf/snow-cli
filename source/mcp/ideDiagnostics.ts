@@ -22,8 +22,7 @@ export class IdeDiagnosticsMCPService {
 			const diagnostics = await vscodeConnection.requestDiagnostics(filePath);
 			return diagnostics;
 		} catch (error) {
-			const message =
-				error instanceof Error ? error.message : 'Unknown error';
+			const message = error instanceof Error ? error.message : 'Unknown error';
 			throw new Error(`Failed to get diagnostics: ${message}`);
 		}
 	}
@@ -52,9 +51,7 @@ export class IdeDiagnosticsMCPService {
 		// Add summary
 		const counts = [
 			grouped.error.length > 0 ? `${grouped.error.length} errors` : null,
-			grouped.warning.length > 0
-				? `${grouped.warning.length} warnings`
-				: null,
+			grouped.warning.length > 0 ? `${grouped.warning.length} warnings` : null,
 			grouped.info.length > 0 ? `${grouped.info.length} info` : null,
 			grouped.hint.length > 0 ? `${grouped.hint.length} hints` : null,
 		].filter(Boolean);
@@ -62,11 +59,7 @@ export class IdeDiagnosticsMCPService {
 		lines.push(`Total: ${counts.join(', ')}\n`);
 
 		// Format each severity group
-		const formatGroup = (
-			items: Diagnostic[],
-			label: string,
-			icon: string,
-		) => {
+		const formatGroup = (items: Diagnostic[], label: string, icon: string) => {
 			if (items.length === 0) return;
 
 			lines.push(`\n${label}:`);
@@ -94,7 +87,7 @@ export const ideDiagnosticsService = new IdeDiagnosticsMCPService();
 // Export MCP tool definitions
 export const mcpTools = [
 	{
-		name: 'ide_get_diagnostics',
+		name: 'ide-get_diagnostics',
 		description:
 			'🔍 Get diagnostics (errors, warnings, hints) for a specific file from the connected IDE. Works with both VSCode and JetBrains IDEs. Returns array of diagnostic information including severity, line number, character position, message, and source. Requires IDE plugin to be installed and running.',
 		inputSchema: {
