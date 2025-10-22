@@ -54,7 +54,10 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            -- fix some bugs 
+            - Implemented UsagePanel component to display token usage statistics.
+            - Added functionality to load and aggregate usage data from JSONL files.
+            - Created commands for showing the usage panel and handling usage data.
+            - Refactored session management to simplify summary generation logic.
             ### Installation
             ```bash
             npm install -g snow-ai
