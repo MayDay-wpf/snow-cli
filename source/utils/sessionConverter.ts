@@ -172,6 +172,8 @@ export function convertSessionMessagesToUI(
 						completeOldContent?: string;
 						completeNewContent?: string;
 						contextStartLine?: number;
+						batchResults?: any[];
+						isBatch?: boolean;
 				  }
 				| undefined;
 			let terminalResultData:
@@ -209,6 +211,7 @@ export function convertSessionMessagesToUI(
 						) {
 							try {
 								const resultData = JSON.parse(msg.content);
+								// Handle single file edit
 								if (resultData.oldContent && resultData.newContent) {
 									editDiffData = {
 										oldContent: resultData.oldContent,
@@ -223,6 +226,18 @@ export function convertSessionMessagesToUI(
 									toolArgs.completeOldContent = resultData.completeOldContent;
 									toolArgs.completeNewContent = resultData.completeNewContent;
 									toolArgs.contextStartLine = resultData.contextStartLine;
+								}
+								// Handle batch edit
+								else if (
+									resultData.results &&
+									Array.isArray(resultData.results)
+								) {
+									editDiffData = {
+										batchResults: resultData.results,
+										isBatch: true,
+									} as any;
+									toolArgs.batchResults = resultData.results;
+									toolArgs.isBatch = true;
 								}
 							} catch (e) {
 								// Ignore parse errors

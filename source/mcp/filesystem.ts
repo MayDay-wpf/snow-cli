@@ -11,7 +11,16 @@ import {
 	isOverEscaped,
 } from '../utils/escapeHandler.js';
 // Type definitions
-import type {StructureAnalysis} from './types/filesystem.types.js';
+import type {
+	EditBySearchConfig,
+	EditByLineConfig,
+	EditBySearchResult,
+	EditByLineResult,
+	EditBySearchSingleResult,
+	EditByLineSingleResult,
+	EditBySearchBatchResultItem,
+	EditByLineBatchResultItem,
+} from './types/filesystem.types.js';
 // Utility functions
 import {
 	calculateSimilarity,
@@ -25,6 +34,11 @@ import {
 	findClosestMatches,
 	generateDiffMessage,
 } from './utils/filesystem/match-finder.utils.js';
+import {
+	parseEditBySearchParams,
+	parseEditByLineParams,
+	executeBatchOperation,
+} from './utils/filesystem/batch-operations.utils.js';
 
 const {resolve, dirname, isAbsolute} = path;
 const execAsync = promisify(exec);
@@ -63,14 +77,17 @@ export class FilesystemMCPService {
 
 	/**
 	 * Get the content of a file with optional line range
-	 * @param filePath - Path to the file (relative to base path or absolute) or array of file paths
-	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1)
-	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to 500 or file end)
+	 * @param filePath - Path to the file (relative to base path or absolute) or array of file paths or array of file config objects
+	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1). Used for single file or as default for array of strings
+	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to file end). Used for single file or as default for array of strings
 	 * @returns Object containing the requested content with line numbers and metadata
 	 * @throws Error if file doesn't exist or cannot be read
 	 */
 	async getFileContent(
-		filePath: string | string[],
+		filePath:
+			| string
+			| string[]
+			| Array<{path: string; startLine?: number; endLine?: number}>,
 		startLine?: number,
 		endLine?: number,
 	): Promise<
@@ -102,8 +119,25 @@ export class FilesystemMCPService {
 				}> = [];
 				const allContents: string[] = [];
 
-				for (const file of filePath) {
+				for (const fileItem of filePath) {
 					try {
+						// Support both string format and object format
+						let file: string;
+						let fileStartLine: number | undefined;
+						let fileEndLine: number | undefined;
+
+						if (typeof fileItem === 'string') {
+							// String format: use global startLine/endLine
+							file = fileItem;
+							fileStartLine = startLine;
+							fileEndLine = endLine;
+						} else {
+							// Object format: use per-file startLine/endLine
+							file = fileItem.path;
+							fileStartLine = fileItem.startLine ?? startLine;
+							fileEndLine = fileItem.endLine ?? endLine;
+						}
+
 						const fullPath = this.resolvePath(file);
 
 						// For absolute paths, skip validation to allow access outside base path
@@ -130,9 +164,9 @@ export class FilesystemMCPService {
 						const lines = content.split('\n');
 						const totalLines = lines.length;
 
-						// Default values and logic
-						const actualStartLine = startLine ?? 1;
-						const actualEndLine = endLine ?? totalLines;
+						// Default values and logic (use file-specific values)
+						const actualStartLine = fileStartLine ?? 1;
+						const actualEndLine = fileEndLine ?? totalLines;
 
 						// Validate and adjust line numbers
 						if (actualStartLine < 1) {
@@ -173,7 +207,10 @@ export class FilesystemMCPService {
 					} catch (error) {
 						const errorMsg =
 							error instanceof Error ? error.message : 'Unknown error';
-						allContents.push(`❌ ${file}: ${errorMsg}`);
+						// Extract file path for error message
+						const filePath =
+							typeof fileItem === 'string' ? fileItem : fileItem.path;
+						allContents.push(`❌ ${filePath}: ${errorMsg}`);
 					}
 				}
 
@@ -447,35 +484,74 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Edit a file by searching for exact content and replacing it
+	 * Edit file(s) by searching for exact content and replacing it
 	 * This method uses SMART MATCHING to handle whitespace differences automatically.
 	 *
-	 * @param filePath - Path to the file to edit
-	 * @param searchContent - Content to search for (whitespace will be normalized automatically)
-	 * @param replaceContent - New content to replace the search content with
+	 * @param filePath - Path to the file to edit, or array of file paths, or array of edit config objects
+	 * @param searchContent - Content to search for (for single file or unified mode)
+	 * @param replaceContent - New content to replace (for single file or unified mode)
 	 * @param occurrence - Which occurrence to replace (1-indexed, default: 1, use -1 for all)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
 	 * @returns Object containing success message, before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
 	 * @throws Error if search content is not found or multiple matches exist
 	 */
 	async editFileBySearch(
+		filePath: string | string[] | EditBySearchConfig[],
+		searchContent?: string,
+		replaceContent?: string,
+		occurrence: number = 1,
+		contextLines: number = 8,
+	): Promise<EditBySearchResult> {
+		// Handle array of files
+		if (Array.isArray(filePath)) {
+			return await executeBatchOperation<
+				EditBySearchConfig,
+				EditBySearchSingleResult,
+				EditBySearchBatchResultItem
+			>(
+				filePath,
+				fileItem =>
+					parseEditBySearchParams(
+						fileItem,
+						searchContent,
+						replaceContent,
+						occurrence,
+					),
+				(path, search, replace, occ) =>
+					this.editFileBySearchSingle(path, search, replace, occ, contextLines),
+				(path, result) => {
+					return {path, ...result};
+				},
+			);
+		}
+
+		// Single file mode
+		if (!searchContent || !replaceContent) {
+			throw new Error(
+				'searchContent and replaceContent are required for single file mode',
+			);
+		}
+
+		return await this.editFileBySearchSingle(
+			filePath,
+			searchContent,
+			replaceContent,
+			occurrence,
+			contextLines,
+		);
+	}
+
+	/**
+	 * Internal method: Edit a single file by search-replace
+	 * @private
+	 */
+	private async editFileBySearchSingle(
 		filePath: string,
 		searchContent: string,
 		replaceContent: string,
-		occurrence: number = 1,
-		contextLines: number = 8,
-	): Promise<{
-		message: string;
-		oldContent: string;
-		newContent: string;
-		replacedContent: string;
-		matchLocation: {startLine: number; endLine: number};
-		contextStartLine: number;
-		contextEndLine: number;
-		totalLines: number;
-		structureAnalysis?: StructureAnalysis;
-		diagnostics?: Diagnostic[];
-	}> {
+		occurrence: number,
+		contextLines: number,
+	): Promise<EditBySearchSingleResult> {
 		try {
 			const fullPath = this.resolvePath(filePath);
 
@@ -976,36 +1052,74 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Edit a file by replacing lines within a specified range
+	 * Edit file(s) by replacing lines within a specified range
 	 * BEST PRACTICE: Keep edits small and focused (≤15 lines recommended) for better accuracy.
 	 * For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit.
 	 *
-	 * @param filePath - Path to the file to edit
-	 * @param startLine - Starting line number (1-indexed, inclusive) - get from filesystem-read output
-	 * @param endLine - Ending line number (1-indexed, inclusive) - get from filesystem-read output
-	 * @param newContent - New content to replace the specified lines (WITHOUT line numbers)
+	 * @param filePath - Path to the file to edit, or array of file paths, or array of edit config objects
+	 * @param startLine - Starting line number (for single file or unified mode)
+	 * @param endLine - Ending line number (for single file or unified mode)
+	 * @param newContent - New content to replace (for single file or unified mode)
 	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
 	 * @returns Object containing success message, precise before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
 	 * @throws Error if file editing fails
 	 */
 	async editFile(
+		filePath: string | string[] | EditByLineConfig[],
+		startLine?: number,
+		endLine?: number,
+		newContent?: string,
+		contextLines: number = 8,
+	): Promise<EditByLineResult> {
+		// Handle array of files
+		if (Array.isArray(filePath)) {
+			return await executeBatchOperation<
+				EditByLineConfig,
+				EditByLineSingleResult,
+				EditByLineBatchResultItem
+			>(
+				filePath,
+				fileItem =>
+					parseEditByLineParams(fileItem, startLine, endLine, newContent),
+				(path, start, end, content) =>
+					this.editFileSingle(path, start, end, content, contextLines),
+				(path, result) => {
+					return {path, ...result};
+				},
+			);
+		}
+
+		// Single file mode
+		if (
+			startLine === undefined ||
+			endLine === undefined ||
+			newContent === undefined
+		) {
+			throw new Error(
+				'startLine, endLine, and newContent are required for single file mode',
+			);
+		}
+
+		return await this.editFileSingle(
+			filePath,
+			startLine,
+			endLine,
+			newContent,
+			contextLines,
+		);
+	}
+
+	/**
+	 * Internal method: Edit a single file by line range
+	 * @private
+	 */
+	private async editFileSingle(
 		filePath: string,
 		startLine: number,
 		endLine: number,
 		newContent: string,
-		contextLines: number = 8,
-	): Promise<{
-		message: string;
-		oldContent: string;
-		newContent: string;
-		replacedLines: string;
-		contextStartLine: number;
-		contextEndLine: number;
-		totalLines: number;
-		linesModified: number;
-		structureAnalysis?: StructureAnalysis;
-		diagnostics?: Diagnostic[];
-	}> {
+		contextLines: number,
+	): Promise<EditByLineSingleResult> {
 		try {
 			const fullPath = this.resolvePath(filePath);
 
@@ -1170,18 +1284,7 @@ export class FilesystemMCPService {
 				// Ignore diagnostics errors - they are optional
 			}
 
-			const result: {
-				message: string;
-				oldContent: string;
-				newContent: string;
-				replacedLines: string;
-				contextStartLine: number;
-				contextEndLine: number;
-				totalLines: number;
-				linesModified: number;
-				structureAnalysis?: StructureAnalysis;
-				diagnostics?: Diagnostic[];
-			} = {
+			const result: EditByLineSingleResult = {
 				message:
 					`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
 					`   Replaced: lines ${startLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
@@ -1361,7 +1464,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'📖 Read file content with line numbers. **SUPPORTS MULTIPLE FILES**: Pass either a single file path (string) or multiple file paths (array of strings) to read in one call. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **MULTI-FILE EXAMPLE**: filePath=["src/component.ts", "src/utils.ts"] reads both files together.',
+			'📖 Read file content with line numbers. **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=50 reads lines 1-50 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:30}, {path:"b.ts", startLine:100, endLine:150}] reads different ranges from each file.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1376,21 +1479,47 @@ export const mcpTools = [
 							items: {
 								type: 'string',
 							},
-							description: 'Array of file paths to read in one call',
+							description:
+								'Array of file paths to read in one call (uses unified startLine/endLine from top-level parameters)',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'File path',
+									},
+									startLine: {
+										type: 'number',
+										description:
+											'Optional: Starting line for this file (overrides top-level startLine)',
+									},
+									endLine: {
+										type: 'number',
+										description:
+											'Optional: Ending line for this file (overrides top-level endLine)',
+									},
+								},
+								required: ['path'],
+							},
+							description:
+								'Array of file config objects with per-file line ranges. Each file can have its own startLine/endLine.',
 						},
 					],
 					description:
-						'Path to the file(s) to read (single string or array of strings)',
+						'Path to the file(s) to read: string, array of strings, or array of {path, startLine?, endLine?} objects',
 				},
 				startLine: {
 					type: 'number',
 					description:
-						'Optional: Starting line number (1-indexed). Omit to read from line 1. Applied to all files.',
+						'Optional: Default starting line number (1-indexed) for all files. Omit to read from line 1. Can be overridden by per-file startLine in object format.',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'Optional: Ending line number (1-indexed). Omit to read to end of file. Applied to all files.',
+						'Optional: Default ending line number (1-indexed) for all files. Omit to read to end of file. Can be overridden by per-file endLine in object format.',
 				},
 			},
 			required: ['filePath'],
@@ -1470,23 +1599,64 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit_search',
 		description:
-			'🎯 **RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING that automatically handles whitespace differences. **WORKFLOW**: (1) Use ace-text_search/ace-search_symbols to locate code, (2) Use filesystem-read to view content, (3) Copy the code block you want to change (without line numbers), (4) Use THIS tool - whitespace will be normalized automatically. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BEST FOR**: Modifying functions, fixing bugs, updating logic.',
+			'🎯 **RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **WORKFLOW**: (1) Use ace-text_search/ace-search_symbols to locate code, (2) Use filesystem-read to view content, (3) Copy code blocks (without line numbers), (4) Use THIS tool. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
-					type: 'string',
-					description: 'Path to the file to edit',
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path to a single file to edit',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+							},
+							description:
+								'Array of file paths (uses unified searchContent/replaceContent from top-level)',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'File path',
+									},
+									searchContent: {
+										type: 'string',
+										description: 'Content to search for in this file',
+									},
+									replaceContent: {
+										type: 'string',
+										description: 'New content to replace with',
+									},
+									occurrence: {
+										type: 'number',
+										description:
+											'Which match to replace (1-indexed, default: 1)',
+									},
+								},
+								required: ['path', 'searchContent', 'replaceContent'],
+							},
+							description:
+								'Array of edit config objects for per-file search-replace operations',
+						},
+					],
+					description: 'File path(s) to edit',
 				},
 				searchContent: {
 					type: 'string',
 					description:
-						'Content to find and replace. Copy from filesystem-read output WITHOUT line numbers (e.g., "123→"). Whitespace differences are automatically handled - focus on getting the content right.',
+						'Content to find and replace (for single file or unified mode). Copy from filesystem-read WITHOUT line numbers.',
 				},
 				replaceContent: {
 					type: 'string',
 					description:
-						'New content to replace with. Indentation will be preserved automatically.',
+						'New content to replace with (for single file or unified mode)',
 				},
 				occurrence: {
 					type: 'number',
@@ -1500,34 +1670,75 @@ export const mcpTools = [
 					default: 8,
 				},
 			},
-			required: ['filePath', 'searchContent', 'replaceContent'],
+			required: ['filePath'],
 		},
 	},
 	{
 		name: 'filesystem-edit',
 		description:
-			"🔧 Line-based editing for precise control. **WHEN TO USE**: (1) Adding completely new code sections, (2) Deleting specific line ranges, (3) When search-replace is not suitable. **WORKFLOW**: (1) Use ace-text_search/ace-file_outline to locate relevant area, (2) Use filesystem-read to get exact line numbers, (3) Use THIS tool with precise line ranges. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search instead - it's safer. **BEST PRACTICES**: Keep edits small (≤15 lines), double-check line numbers, verify bracket closure.",
+			'🔧 Line-based editing for precise control. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **WORKFLOW**: (1) Use ace-text_search/ace-file_outline to locate area, (2) Use filesystem-read to get line numbers, (3) Use THIS tool. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
-					type: 'string',
-					description: 'Path to the file to edit (absolute or relative)',
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path to a single file to edit',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+							},
+							description:
+								'Array of file paths (uses unified startLine/endLine/newContent from top-level)',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'File path',
+									},
+									startLine: {
+										type: 'number',
+										description: 'Starting line number (1-indexed, inclusive)',
+									},
+									endLine: {
+										type: 'number',
+										description: 'Ending line number (1-indexed, inclusive)',
+									},
+									newContent: {
+										type: 'string',
+										description:
+											'New content to replace lines (without line numbers)',
+									},
+								},
+								required: ['path', 'startLine', 'endLine', 'newContent'],
+							},
+							description:
+								'Array of edit config objects for per-file line-based edits',
+						},
+					],
+					description: 'File path(s) to edit',
 				},
 				startLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Starting line number (1-indexed, inclusive). MUST match exact line number from filesystem-read output. Double-check this value!',
+						'⚠️  CRITICAL: Starting line number (1-indexed, inclusive) for single file or unified mode. MUST match filesystem-read output.',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Ending line number (1-indexed, inclusive). MUST match exact line number from filesystem-read output. 💡 TIP: Keep edits small (≤15 lines recommended) for better accuracy.',
+						'⚠️  CRITICAL: Ending line number (1-indexed, inclusive) for single file or unified mode. Keep edits small (≤15 lines).',
 				},
 				newContent: {
 					type: 'string',
 					description:
-						'New content to replace specified lines. ⚠️  Do NOT include line numbers. ⚠️  Ensure proper indentation and bracket closure. Keep changes MINIMAL and FOCUSED.',
+						'New content to replace specified lines (for single file or unified mode). ⚠️  Do NOT include line numbers. Ensure proper indentation.',
 				},
 				contextLines: {
 					type: 'number',
@@ -1536,7 +1747,7 @@ export const mcpTools = [
 					default: 8,
 				},
 			},
-			required: ['filePath', 'startLine', 'endLine', 'newContent'],
+			required: ['filePath'],
 		},
 	},
 ];

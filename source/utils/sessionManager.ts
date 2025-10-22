@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import type { ChatMessage as APIChatMessage } from '../api/chat.js';
 import { getTodoService } from './mcpToolsManager.js';
 import { logger } from './logger.js';
+import { summaryAgent } from '../agents/summaryAgent.js';
 
 // Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
@@ -291,7 +292,61 @@ class SessionManager {
 			this.currentSession.summary = this.cleanTitle(summary);
 		}
 
+		// After the first complete conversation exchange (user + assistant), generate AI summary
+		// Only run once when messageCount becomes 2 and the second message is from assistant
+		if (this.currentSession.messageCount === 2 && message.role === 'assistant') {
+			// Run summary generation in background without blocking
+			this.generateAndUpdateSummary().catch(error => {
+				logger.error('Failed to generate conversation summary:', error);
+			});
+		}
+
 		await this.saveSession(this.currentSession);
+	}
+
+	/**
+	 * Generate AI-powered summary for the first conversation exchange
+	 * This runs in the background without blocking the main flow
+	 */
+	private async generateAndUpdateSummary(): Promise<void> {
+		if (!this.currentSession || this.currentSession.messages.length < 2) {
+			return;
+		}
+
+		try {
+			// Extract first user and assistant messages
+			const firstUserMessage = this.currentSession.messages.find(m => m.role === 'user');
+			const firstAssistantMessage = this.currentSession.messages.find(m => m.role === 'assistant');
+
+			if (!firstUserMessage || !firstAssistantMessage) {
+				logger.warn('Summary agent: Could not find first user/assistant messages');
+				return;
+			}
+
+			// Generate summary using summary agent
+			const result = await summaryAgent.generateSummary(
+				firstUserMessage.content,
+				firstAssistantMessage.content
+			);
+
+			if (result) {
+				// Update session with generated summary
+				this.currentSession.title = result.title;
+				this.currentSession.summary = result.summary;
+
+				// Save updated session
+				await this.saveSession(this.currentSession);
+
+				logger.info('Summary agent: Successfully updated session summary', {
+					sessionId: this.currentSession.id,
+					title: result.title,
+					summary: result.summary
+				});
+			}
+		} catch (error) {
+			// Silently fail - don't disrupt main conversation flow
+			logger.error('Summary agent: Failed to generate summary', error);
+		}
 	}
 
 	getCurrentSession(): Session | null {

@@ -35,6 +35,7 @@ export interface ChatCompletionOptions {
 		| 'none'
 		| 'required'
 		| {type: 'function'; function: {name: string}};
+	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 }
 
 export interface ChatCompletionChunk {
@@ -80,10 +81,12 @@ export interface ChatCompletionMessageParam {
  * Logic:
  * 1. If custom system prompt exists: use custom as system, prepend default as first user message
  * 2. If no custom system prompt: use default as system
+ * @param messages - The messages to convert
+ * @param includeBuiltinSystemPrompt - Whether to include builtin system prompt (default true)
  */
 function convertToOpenAIMessages(
 	messages: ChatMessage[],
-	includeSystemPrompt: boolean = true,
+	includeBuiltinSystemPrompt: boolean = true,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompt = getCustomSystemPrompt();
 
@@ -143,15 +146,14 @@ function convertToOpenAIMessages(
 		return baseMessage as ChatCompletionMessageParam;
 	});
 
-	// 如果需要系统提示词
-	if (includeSystemPrompt) {
-		// 如果第一条消息已经是 system 消息，跳过
-		if (result.length > 0 && result[0]?.role === 'system') {
-			return result;
-		}
+	// 如果第一条消息已经是 system 消息，跳过
+	if (result.length > 0 && result[0]?.role === 'system') {
+		return result;
+	}
 
-		// 如果配置了自定义系统提示词
-		if (customSystemPrompt) {
+	// 如果配置了自定义系统提示词（最高优先级，始终添加）
+	if (customSystemPrompt) {
+		if (includeBuiltinSystemPrompt) {
 			// 自定义系统提示词作为 system 消息，默认系统提示词作为第一条 user 消息
 			result = [
 				{
@@ -165,15 +167,24 @@ function convertToOpenAIMessages(
 				...result,
 			];
 		} else {
-			// 没有自定义系统提示词，默认系统提示词作为 system 消息
+			// 只添加自定义系统提示词
 			result = [
 				{
 					role: 'system',
-					content: getSystemPrompt(),
+					content: customSystemPrompt,
 				} as ChatCompletionMessageParam,
 				...result,
 			];
 		}
+	} else if (includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
+		result = [
+			{
+				role: 'system',
+				content: getSystemPrompt(),
+			} as ChatCompletionMessageParam,
+			...result,
+		];
 	}
 
 	return result;
@@ -299,7 +310,10 @@ export async function* createStreamingChatCompletion(
 		async function* () {
 			const requestBody = {
 				model: options.model,
-				messages: convertToOpenAIMessages(options.messages),
+				messages: convertToOpenAIMessages(
+					options.messages,
+					options.includeBuiltinSystemPrompt !== false, // 默认为 true
+				),
 				stream: true,
 				stream_options: {include_usage: true},
 				temperature: options.temperature || 0.7,

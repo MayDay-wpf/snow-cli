@@ -97,6 +97,7 @@ export class CompactAgent {
 							model: this.modelName,
 							messages,
 							max_tokens: 4096,
+							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						},
 						abortSignal,
 					);
@@ -106,7 +107,8 @@ export class CompactAgent {
 					streamGenerator = createStreamingGeminiCompletion(
 						{
 							model: this.modelName,
-							messages
+							messages,
+							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						},
 						abortSignal,
 					);
@@ -117,7 +119,8 @@ export class CompactAgent {
 						{
 							model: this.modelName,
 							messages,
-							stream: true
+							stream: true,
+							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						},
 						abortSignal,
 					);
@@ -129,7 +132,8 @@ export class CompactAgent {
 						{
 							model: this.modelName,
 							messages,
-							stream: true
+							stream: true,
+							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						},
 						abortSignal,
 					);

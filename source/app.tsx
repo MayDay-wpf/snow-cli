@@ -35,6 +35,10 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 		'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders'
 	>(skipWelcome ? 'chat' : 'welcome');
 
+	// Add a key to force remount ChatScreen when returning from welcome screen
+	// This ensures configuration changes are picked up
+	const [chatScreenKey, setChatScreenKey] = useState(0);
+
 	const [exitNotification, setExitNotification] =
 		useState<ExitNotificationType>({
 			show: false,
@@ -50,10 +54,15 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	// Global navigation handler
 	useEffect(() => {
 		const unsubscribe = onNavigate(event => {
+			// When navigating to welcome from chat (e.g., /home command),
+			// increment key so next time chat is entered, it remounts with fresh config
+			if (event.destination === 'welcome' && currentView === 'chat') {
+				setChatScreenKey(prev => prev + 1);
+			}
 			setCurrentView(event.destination);
 		});
 		return unsubscribe;
-	}, []);
+	}, [currentView]);
 
 	const handleMenuSelect = (value: string) => {
 		if (
@@ -63,6 +72,11 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 			value === 'systemprompt' ||
 			value === 'customheaders'
 		) {
+			// When entering chat from welcome screen, increment key to force remount
+			// This ensures any configuration changes are picked up
+			if (value === 'chat' && currentView === 'welcome') {
+				setChatScreenKey(prev => prev + 1);
+			}
 			setCurrentView(value);
 		} else if (value === 'exit') {
 			process.exit(0);
@@ -76,7 +90,7 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
 				);
 			case 'chat':
-				return <ChatScreen skipWelcome={skipWelcome} />;
+				return <ChatScreen key={chatScreenKey} skipWelcome={skipWelcome} />;
 			case 'settings':
 				return (
 					<Box flexDirection="column">

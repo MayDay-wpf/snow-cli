@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import {Box, Text} from 'ink';
 
 interface ToolResultPreviewProps {
 	toolName: string;
@@ -11,7 +11,11 @@ interface ToolResultPreviewProps {
  * Display a compact preview of tool execution results
  * Shows a tree-like structure with limited content
  */
-export default function ToolResultPreview({ toolName, result, maxLines = 5 }: ToolResultPreviewProps) {
+export default function ToolResultPreview({
+	toolName,
+	result,
+	maxLines = 5,
+}: ToolResultPreviewProps) {
 	try {
 		// Try to parse JSON result
 		const data = JSON.parse(result);
@@ -23,7 +27,7 @@ export default function ToolResultPreview({ toolName, result, maxLines = 5 }: To
 			return renderReadPreview(data, maxLines);
 		} else if (toolName === 'filesystem-list') {
 			return renderListPreview(data, maxLines);
-		} else if (toolName === 'filesystem-create' || toolName === 'filesystem-write') {
+		} else if (toolName === 'filesystem-create') {
 			return renderCreatePreview(data);
 		} else if (toolName === 'filesystem-edit_search') {
 			return renderEditSearchPreview(data);
@@ -86,7 +90,8 @@ function renderReadPreview(data: any, maxLines: number) {
 			))}
 			{hasMore && (
 				<Text color="gray" dimColor>
-					└─ ... ({lines.length - maxLines} more lines, total {data.totalLines} lines)
+					└─ ... ({lines.length - maxLines} more lines, total {data.totalLines}{' '}
+					lines)
 				</Text>
 			)}
 		</Box>
@@ -95,7 +100,7 @@ function renderReadPreview(data: any, maxLines: number) {
 
 function renderListPreview(data: string[] | any, maxLines: number) {
 	// Handle both array and object response formats
-	const files = Array.isArray(data) ? data : (data.files || []);
+	const files = Array.isArray(data) ? data : data.files || [];
 	if (files.length === 0) return null;
 
 	const previewFiles = files.slice(0, maxLines);
@@ -111,7 +116,8 @@ function renderListPreview(data: string[] | any, maxLines: number) {
 			))}
 			{hasMore && (
 				<Text color="gray" dimColor>
-					└─ ... ({files.length - maxLines} more items, total {files.length} items)
+					└─ ... ({files.length - maxLines} more items, total {files.length}{' '}
+					items)
 				</Text>
 			)}
 		</Box>
@@ -187,7 +193,10 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-find-references results
-	if (toolName === 'ace-find-references' || toolName === 'ace-find_references') {
+	if (
+		toolName === 'ace-find-references' ||
+		toolName === 'ace-find_references'
+	) {
 		const references = Array.isArray(data) ? data : [];
 		if (references.length === 0) {
 			return (
@@ -220,7 +229,10 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-find-definition result
-	if (toolName === 'ace-find-definition' || toolName === 'ace-find_definition') {
+	if (
+		toolName === 'ace-find-definition' ||
+		toolName === 'ace-find_definition'
+	) {
 		if (!data) {
 			return (
 				<Box marginLeft={2}>
@@ -274,8 +286,12 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 	}
 
 	// Handle ace-semantic-search result
-	if (toolName === 'ace-semantic-search' || toolName === 'ace-semantic_search') {
-		const totalResults = (data.symbols?.length || 0) + (data.references?.length || 0);
+	if (
+		toolName === 'ace-semantic-search' ||
+		toolName === 'ace-semantic_search'
+	) {
+		const totalResults =
+			(data.symbols?.length || 0) + (data.references?.length || 0);
 		if (totalResults === 0) {
 			return (
 				<Box marginLeft={2}>
@@ -324,7 +340,8 @@ function renderEditSearchPreview(data: any) {
 			)}
 			{data.matchLocation && (
 				<Text color="gray" dimColor>
-					├─ Match: lines {data.matchLocation.startLine}-{data.matchLocation.endLine}
+					├─ Match: lines {data.matchLocation.startLine}-
+					{data.matchLocation.endLine}
 				</Text>
 			)}
 			{data.totalLines && (
@@ -361,13 +378,15 @@ function renderWebSearchPreview(data: any, maxLines: number) {
 			{previewResults.map((result: any, idx: number) => (
 				<Box key={idx} flexDirection="column">
 					<Text color="gray" dimColor>
-						{idx === previewResults.length - 1 && !hasMore ? '└─ ' : '├─ '}
-						[{idx + 1}] {result.title.slice(0, 20)}{result.title.length > 20 ? '...' : ''}
+						{idx === previewResults.length - 1 && !hasMore ? '└─ ' : '├─ '}[
+						{idx + 1}] {result.title.slice(0, 20)}
+						{result.title.length > 20 ? '...' : ''}
 					</Text>
 					{result.snippet && (
 						<Box marginLeft={3}>
 							<Text color="gray" dimColor>
-								{result.snippet.slice(0, 20)}{result.snippet.length > 20 ? '...' : ''}
+								{result.snippet.slice(0, 20)}
+								{result.snippet.length > 20 ? '...' : ''}
 							</Text>
 						</Box>
 					)}
@@ -389,13 +408,15 @@ function renderWebFetchPreview(data: any) {
 				├─ Page: {data.title || 'Untitled'}
 			</Text>
 			<Text color="cyan" dimColor>
-				├─ URL: {data.url.slice(0, 20)}{data.url.length > 20 ? '...' : ''}
+				├─ URL: {data.url.slice(0, 20)}
+				{data.url.length > 20 ? '...' : ''}
 			</Text>
 			<Text color="gray" dimColor>
 				├─ Content length: {data.textLength} characters
 			</Text>
 			<Text color="gray" dimColor>
-				└─ Preview: {data.contentPreview.slice(0, 20)}{data.contentPreview.length > 20 ? '...' : ''}
+				└─ Preview: {data.contentPreview.slice(0, 20)}
+				{data.contentPreview.length > 20 ? '...' : ''}
 			</Text>
 		</Box>
 	);
@@ -409,9 +430,10 @@ function renderGenericPreview(data: any, maxLines: number) {
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{entries.map(([key, value], idx) => {
-				const valueStr = typeof value === 'string'
-					? value.slice(0, 20) + (value.length > 20 ? '...' : '')
-					: JSON.stringify(value).slice(0, 60);
+				const valueStr =
+					typeof value === 'string'
+						? value.slice(0, 20) + (value.length > 20 ? '...' : '')
+						: JSON.stringify(value).slice(0, 60);
 
 				return (
 					<Text key={idx} color="gray" dimColor>

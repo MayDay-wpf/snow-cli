@@ -28,6 +28,7 @@ export interface ResponseOptions {
 	prompt_cache_key?: string;
 	store?: boolean;
 	include?: string[];
+	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 }
 
 /**
@@ -166,7 +167,10 @@ export function resetOpenAIClient(): void {
 	openaiConfig = null;
 }
 
-function convertToResponseInput(messages: ChatMessage[]): {
+function convertToResponseInput(
+	messages: ChatMessage[],
+	includeBuiltinSystemPrompt: boolean = true,
+): {
 	input: any[];
 	systemInstructions: string;
 } {
@@ -258,22 +262,29 @@ function convertToResponseInput(messages: ChatMessage[]): {
 
 	// 确定系统提示词：参考 anthropic.ts 的逻辑
 	let systemInstructions: string;
+	// 如果配置了自定义系统提示词（最高优先级，始终添加）
 	if (customSystemPrompt) {
-		// 有自定义系统提示词：自定义作为 instructions，默认作为第一条用户消息
+		// 有自定义系统提示词：自定义作为 instructions
 		systemInstructions = customSystemPrompt;
-		result.unshift({
-			type: 'message',
-			role: 'user',
-			content: [
-				{
-					type: 'input_text',
-					text: getSystemPrompt(),
-				},
-			],
-		});
-	} else {
-		// 没有自定义系统提示词：默认作为 instructions
+		if (includeBuiltinSystemPrompt) {
+			// 默认系统提示词作为第一条用户消息
+			result.unshift({
+				type: 'message',
+				role: 'user',
+				content: [
+					{
+						type: 'input_text',
+						text: getSystemPrompt(),
+					},
+				],
+			});
+		}
+	} else if (includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemInstructions = getSystemPrompt();
+	} else {
+		// 既没有自定义系统提示词，也不需要添加默认系统提示词
+		systemInstructions = 'You are a helpful assistant.';
 	}
 
 	return { input: result, systemInstructions };
@@ -342,6 +353,7 @@ export async function* createStreamingResponse(
 	// 提取系统提示词和转换后的消息
 	const { input: requestInput, systemInstructions } = convertToResponseInput(
 		options.messages,
+		options.includeBuiltinSystemPrompt !== false, // 默认为 true
 	);
 
 	// 使用重试包装生成器

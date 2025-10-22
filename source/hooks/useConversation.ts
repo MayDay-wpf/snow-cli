@@ -338,13 +338,15 @@ export async function handleConversationWithTools(
 							prompt_tokens: chunk.usage.prompt_tokens || 0,
 							completion_tokens: chunk.usage.completion_tokens || 0,
 							total_tokens: chunk.usage.total_tokens || 0,
-							cache_creation_input_tokens: chunk.usage.cache_creation_input_tokens,
+							cache_creation_input_tokens:
+								chunk.usage.cache_creation_input_tokens,
 							cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
 						};
 					} else {
 						// Add to existing usage for UI display
 						accumulatedUsage.prompt_tokens += chunk.usage.prompt_tokens || 0;
-						accumulatedUsage.completion_tokens += chunk.usage.completion_tokens || 0;
+						accumulatedUsage.completion_tokens +=
+							chunk.usage.completion_tokens || 0;
 						accumulatedUsage.total_tokens += chunk.usage.total_tokens || 0;
 
 						if (chunk.usage.cache_creation_input_tokens !== undefined) {
@@ -789,6 +791,8 @@ export async function handleConversationWithTools(
 									completeOldContent?: string;
 									completeNewContent?: string;
 									contextStartLine?: number;
+									batchResults?: any[];
+									isBatch?: boolean;
 							  }
 							| undefined;
 						if (
@@ -798,6 +802,7 @@ export async function handleConversationWithTools(
 						) {
 							try {
 								const resultData = JSON.parse(result.content);
+								// Handle single file edit
 								if (resultData.oldContent && resultData.newContent) {
 									editDiffData = {
 										oldContent: resultData.oldContent,
@@ -806,6 +811,16 @@ export async function handleConversationWithTools(
 										completeOldContent: resultData.completeOldContent,
 										completeNewContent: resultData.completeNewContent,
 										contextStartLine: resultData.contextStartLine,
+									};
+								}
+								// Handle batch edit
+								else if (
+									resultData.results &&
+									Array.isArray(resultData.results)
+								) {
+									editDiffData = {
+										batchResults: resultData.results,
+										isBatch: true,
 									};
 								}
 							} catch (e) {

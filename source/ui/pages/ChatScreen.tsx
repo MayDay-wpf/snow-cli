@@ -815,9 +815,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 														└─ {message.commandName}
 													</Text>
 													{message.content && (
-														<Text color="white">
-															{message.content}
-														</Text>
+														<Text color="white">{message.content}</Text>
 													)}
 												</>
 											) : message.showTodoTree ? (
@@ -857,8 +855,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 															</Box>
 														)}
 													{message.toolCall &&
-														(message.toolCall.name === 'filesystem-create' ||
-															message.toolCall.name === 'filesystem-write') &&
+														message.toolCall.name === 'filesystem-create' &&
 														message.toolCall.arguments.content && (
 															<Box marginTop={1}>
 																<DiffViewer
@@ -922,6 +919,57 @@ export default function ChatScreen({skipWelcome}: Props) {
 																		message.toolCall.arguments.contextStartLine
 																	}
 																/>
+															</Box>
+														)}
+													{/* Show batch edit results */}
+													{message.toolCall &&
+														(message.toolCall.name === 'filesystem-edit' ||
+															message.toolCall.name ===
+																'filesystem-edit_search') &&
+														message.toolCall.arguments.isBatch &&
+														message.toolCall.arguments.batchResults &&
+														Array.isArray(
+															message.toolCall.arguments.batchResults,
+														) && (
+															<Box marginTop={1} flexDirection="column">
+																{message.toolCall.arguments.batchResults.map(
+																	(fileResult: any, index: number) => {
+																		if (
+																			fileResult.success &&
+																			fileResult.oldContent &&
+																			fileResult.newContent
+																		) {
+																			return (
+																				<Box
+																					key={index}
+																					flexDirection="column"
+																					marginBottom={1}
+																				>
+																					<Text bold color="cyan">
+																						{`File ${index + 1}: ${
+																							fileResult.path
+																						}`}
+																					</Text>
+																					<DiffViewer
+																						oldContent={fileResult.oldContent}
+																						newContent={fileResult.newContent}
+																						filename={fileResult.path}
+																						completeOldContent={
+																							fileResult.completeOldContent
+																						}
+																						completeNewContent={
+																							fileResult.completeNewContent
+																						}
+																						startLineNumber={
+																							fileResult.contextStartLine
+																						}
+																					/>
+																				</Box>
+																			);
+																		}
+																		return null;
+																	},
+																)}
 															</Box>
 														)}
 													{/* Show terminal execution result */}

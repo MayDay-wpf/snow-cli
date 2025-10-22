@@ -14,6 +14,7 @@ export interface GeminiOptions {
 	messages: ChatMessage[];
 	temperature?: number;
 	tools?: ChatCompletionTool[];
+	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 }
 
 export interface GeminiStreamChunk {
@@ -99,8 +100,13 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 
 /**
  * Convert our ChatMessage format to Gemini's format
+ * @param messages - The messages to convert
+ * @param includeBuiltinSystemPrompt - Whether to include builtin system prompt (default true)
  */
-function convertToGeminiMessages(messages: ChatMessage[]): {
+function convertToGeminiMessages(
+	messages: ChatMessage[],
+	includeBuiltinSystemPrompt: boolean = true,
+): {
 	systemInstruction?: string;
 	contents: any[];
 } {
@@ -267,14 +273,18 @@ function convertToGeminiMessages(messages: ChatMessage[]): {
 	}
 
 	// Handle system instruction
+	// 如果配置了自定义系统提示词（最高优先级，始终添加）
 	if (customSystemPrompt) {
 		systemInstruction = customSystemPrompt;
-		// Prepend default system prompt as first user message
-		contents.unshift({
-			role: 'user',
-			parts: [{text: getSystemPrompt()}],
-		});
-	} else if (!systemInstruction) {
+		if (includeBuiltinSystemPrompt) {
+			// Prepend default system prompt as first user message
+			contents.unshift({
+				role: 'user',
+				parts: [{text: getSystemPrompt()}],
+			});
+		}
+	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemInstruction = getSystemPrompt();
 	}
 
@@ -296,6 +306,7 @@ export async function* createStreamingGeminiCompletion(
 		async function* () {
 			const {systemInstruction, contents} = convertToGeminiMessages(
 				options.messages,
+				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 			);
 
 			// Build request payload

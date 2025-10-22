@@ -22,5 +22,11 @@ export default function MarkdownRenderer({content}: Props) {
 		},
 	});
 
-	return <Text>{rendered}</Text>;
+	// Remove excessive trailing newlines and whitespace from cli-markdown output
+	// This prevents large blank spaces in the terminal
+	const trimmedRendered = rendered
+		.replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with 2 newlines
+		.trimEnd(); // Remove trailing whitespace
+
+	return <Text>{trimmedRendered}</Text>;
 }

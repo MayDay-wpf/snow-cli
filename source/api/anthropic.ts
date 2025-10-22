@@ -18,6 +18,7 @@ export interface AnthropicOptions {
 	max_tokens?: number;
 	tools?: ChatCompletionTool[];
 	sessionId?: string; // Session ID for user tracking and caching
+	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 }
 
 export interface AnthropicStreamChunk {
@@ -133,8 +134,13 @@ function convertToolsToAnthropic(
 /**
  * Convert our ChatMessage format to Anthropic's message format
  * Adds cache_control to system prompt and last user message for prompt caching
+ * @param messages - The messages to convert
+ * @param includeBuiltinSystemPrompt - Whether to include builtin system prompt (default true)
  */
-function convertToAnthropicMessages(messages: ChatMessage[]): {
+function convertToAnthropicMessages(
+	messages: ChatMessage[],
+	includeBuiltinSystemPrompt: boolean = true,
+): {
 	system?: any;
 	messages: AnthropicMessageParam[];
 } {
@@ -231,19 +237,24 @@ function convertToAnthropicMessages(messages: ChatMessage[]): {
 		}
 	}
 
+	// 如果配置了自定义系统提示词（最高优先级，始终添加）
 	if (customSystemPrompt) {
 		systemContent = customSystemPrompt;
-		anthropicMessages.unshift({
-			role: 'user',
-			content: [
-				{
-					type: 'text',
-					text: getSystemPrompt(),
-					cache_control: { type: 'ephemeral' },
-				},
-			] as any,
-		});
-	} else if (!systemContent) {
+		if (includeBuiltinSystemPrompt) {
+			// 将默认系统提示词作为第一条用户消息
+			anthropicMessages.unshift({
+				role: 'user',
+				content: [
+					{
+						type: 'text',
+						text: getSystemPrompt(),
+						cache_control: { type: 'ephemeral' },
+					},
+				] as any,
+			});
+		}
+	} else if (!systemContent && includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemContent = getSystemPrompt();
 	}
 
@@ -349,7 +360,10 @@ export async function* createStreamingAnthropicCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			const config = getAnthropicConfig();
-			const { system, messages } = convertToAnthropicMessages(options.messages);
+			const { system, messages } = convertToAnthropicMessages(
+				options.messages,
+				options.includeBuiltinSystemPrompt !== false, // 默认为 true
+			);
 
 			const sessionId = options.sessionId || randomUUID();
 			const userId = generateUserId(sessionId);

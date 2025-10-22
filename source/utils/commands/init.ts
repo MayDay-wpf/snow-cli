@@ -1,4 +1,4 @@
-import { registerCommand, type CommandResult } from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../commandExecutor.js';
 
 // Init command handler - Triggers AI to analyze current project and generate SNOW.md
 registerCommand('init', {
@@ -84,12 +84,12 @@ License information (check package.json or LICENSE file)
 - Be thorough but concise - focus on essential information
 - If SNOW.md already exists, read it first and UPDATE it rather than replace
 - Format with proper Markdown syntax
-- After generating content, use filesystem-write or filesystem-create to save SNOW.md in the project root
+- After generating content, use filesystem-create to save SNOW.md in the project root
 - Confirm completion with a brief summary
 
-Begin your analysis now. Use every tool at your disposal to understand this project completely.`
+Begin your analysis now. Use every tool at your disposal to understand this project completely.`,
 		};
-	}
+	},
 });
 
 export default {};
