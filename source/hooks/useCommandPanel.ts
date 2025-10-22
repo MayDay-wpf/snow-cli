@@ -23,11 +23,15 @@ const commands = [
 	{
 		name: 'review',
 		description:
-			'Review git changes and identify potential issues. Usage: /review [optional note]',
+			'Review git changes and identify potential issues. Support: /review [optional note]',
 	},
 	{
 		name: 'role',
 		description: 'Open or create ROLE.md file to customize AI assistant role',
+	},
+	{
+		name: 'usage',
+		description: 'View token usage statistics with interactive charts',
 	},
 ];
 

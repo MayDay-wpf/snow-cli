@@ -51,7 +51,6 @@ export type ConversationHandlerOptions = {
 			errorMessage?: string;
 		} | null>
 	>; // Retry status
-	onUsageUpdate?: (usage: any) => void; // Callback to save usage data after each round
 };
 
 /**
@@ -191,6 +190,13 @@ export async function handleConversationWithTools(
 
 			let streamedContent = '';
 			let receivedToolCalls: ToolCall[] | undefined;
+			let receivedReasoning:
+				| {
+						summary?: Array<{type: 'summary_text'; text: string}>;
+						content?: any;
+						encrypted_content?: string;
+				  }
+				| undefined;
 
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
@@ -246,6 +252,7 @@ export async function handleConversationWithTools(
 								messages: conversationMessages,
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								tool_choice: 'auto',
 								prompt_cache_key: cacheKey, // Use session ID as cache key
 							},
 							controller.signal,
@@ -315,16 +322,17 @@ export async function handleConversationWithTools(
 					}
 				} else if (chunk.type === 'tool_calls' && chunk.tool_calls) {
 					receivedToolCalls = chunk.tool_calls;
+				} else if (chunk.type === 'reasoning_data' && chunk.reasoning) {
+					// Capture reasoning data from Responses API
+					receivedReasoning = chunk.reasoning;
 				} else if (chunk.type === 'usage' && chunk.usage) {
 					// Capture usage information both in state and locally
 					setContextUsage(chunk.usage);
 
-					// Save usage data immediately for this round
-					if (options.onUsageUpdate) {
-						options.onUsageUpdate(chunk.usage);
-					}
+					// Note: Usage is now saved at API layer (chat.ts, anthropic.ts, etc.)
+					// No need to call onUsageUpdate here to avoid duplicate saves
 
-					// Also accumulate for final return (UI display purposes)
+					// Accumulate for final return (UI display purposes)
 					if (!accumulatedUsage) {
 						accumulatedUsage = {
 							prompt_tokens: chunk.usage.prompt_tokens || 0,
@@ -377,6 +385,7 @@ export async function handleConversationWithTools(
 							arguments: tc.function.arguments,
 						},
 					})),
+					reasoning: receivedReasoning, // Include reasoning data for caching
 				} as any;
 				conversationMessages.push(assistantMessage);
 
@@ -900,6 +909,7 @@ export async function handleConversationWithTools(
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
 					content: streamedContent.trim(),
+					reasoning: receivedReasoning, // Include reasoning data for caching
 				};
 				conversationMessages.push(assistantMessage);
 				saveMessage(assistantMessage).catch(error => {

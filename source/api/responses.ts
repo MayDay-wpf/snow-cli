@@ -3,16 +3,16 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import { getSystemPrompt } from './systemPrompt.js';
+import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
 import type {
 	ChatMessage,
 	ToolCall,
 	ChatCompletionTool,
 	UsageInfo,
 } from './types.js';
-import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
-
+import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
+import { saveUsageToFile } from '../utils/usageLogger.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -93,12 +93,12 @@ function ensureStrictSchema(
  */
 function convertToolsForResponses(tools?: ChatCompletionTool[]):
 	| Array<{
-			type: 'function';
-			name: string;
-			description?: string;
-			parameters?: Record<string, any>;
-			strict?: boolean;
-	  }>
+		type: 'function';
+		name: string;
+		description?: string;
+		strict?: boolean;
+		parameters?: Record<string, any>;
+	}>
 	| undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
@@ -108,24 +108,30 @@ function convertToolsForResponses(tools?: ChatCompletionTool[]):
 		type: 'function',
 		name: tool.function.name,
 		description: tool.function.description,
-		parameters: ensureStrictSchema(tool.function.parameters),
 		strict: false,
+		parameters: ensureStrictSchema(tool.function.parameters),
 	}));
 }
 
 export interface ResponseStreamChunk {
 	type:
-		| 'content'
-		| 'tool_calls'
-		| 'tool_call_delta'
-		| 'reasoning_delta'
-		| 'reasoning_started'
-		| 'done'
-		| 'usage';
+	| 'content'
+	| 'tool_calls'
+	| 'tool_call_delta'
+	| 'reasoning_delta'
+	| 'reasoning_started'
+	| 'reasoning_data'
+	| 'done'
+	| 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
 	usage?: UsageInfo;
+	reasoning?: {
+		summary?: Array<{ type: 'summary_text'; text: string }>;
+		content?: any;
+		encrypted_content?: string;
+	};
 }
 
 let openaiConfig: {
@@ -170,7 +176,7 @@ function convertToResponseInput(messages: ChatMessage[]): {
 	for (const msg of messages) {
 		if (!msg) continue;
 
-		// 跳过 system 消息（在 createResponse 中使用 instructions 字段）
+		// 跳过 system 消息（不放入 input，也不放入 instructions）
 		if (msg.role === 'system') {
 			continue;
 		}
@@ -212,27 +218,13 @@ function convertToResponseInput(messages: ChatMessage[]): {
 			msg.tool_calls &&
 			msg.tool_calls.length > 0
 		) {
-			// 添加 assistant 文本内容（如果有）
-			if (msg.content) {
-				result.push({
-					type: 'message',
-					role: 'assistant',
-					content: [
-						{
-							type: 'output_text',
-							text: msg.content,
-						},
-					],
-				});
-			}
-
 			// 为每个工具调用添加 function_call 项
 			for (const toolCall of msg.tool_calls) {
 				result.push({
 					type: 'function_call',
-					call_id: toolCall.id,
 					name: toolCall.function.name,
 					arguments: toolCall.function.arguments,
+					call_id: toolCall.id,
 				});
 			}
 			continue;
@@ -264,7 +256,7 @@ function convertToResponseInput(messages: ChatMessage[]): {
 		}
 	}
 
-	// 确定系统提示词
+	// 确定系统提示词：参考 anthropic.ts 的逻辑
 	let systemInstructions: string;
 	if (customSystemPrompt) {
 		// 有自定义系统提示词：自定义作为 instructions，默认作为第一条用户消息
@@ -284,7 +276,7 @@ function convertToResponseInput(messages: ChatMessage[]): {
 		systemInstructions = getSystemPrompt();
 	}
 
-	return {input: result, systemInstructions};
+	return { input: result, systemInstructions };
 }
 
 /**
@@ -297,10 +289,10 @@ async function* parseSSEStream(
 	let buffer = '';
 
 	while (true) {
-		const {done, value} = await reader.read();
+		const { done, value } = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, {stream: true});
+		buffer += decoder.decode(value, { stream: true });
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -348,7 +340,7 @@ export async function* createStreamingResponse(
 	const config = getOpenAIConfig();
 
 	// 提取系统提示词和转换后的消息
-	const {input: requestInput, systemInstructions} = convertToResponseInput(
+	const { input: requestInput, systemInstructions } = convertToResponseInput(
 		options.messages,
 	);
 
@@ -359,14 +351,15 @@ export async function* createStreamingResponse(
 				model: options.model,
 				instructions: systemInstructions,
 				input: requestInput,
-				stream: true,
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
-				reasoning: options.reasoning || {summary: 'auto', effort: 'high'},
-				store: options.store ?? false,
-				include: options.include || ['reasoning.encrypted_content'],
+				parallel_tool_calls: false,
+				reasoning: options.reasoning || { effort: 'high', summary: 'auto' },
+				store: false,
+				stream: true,
 				prompt_cache_key: options.prompt_cache_key,
 			};
+
 
 			const url = `${config.baseUrl}/responses`;
 			const fetchOptions = addProxyToFetchOptions(url, {
@@ -394,10 +387,15 @@ export async function* createStreamingResponse(
 			}
 
 			let contentBuffer = '';
-			let toolCallsBuffer: {[call_id: string]: any} = {};
+			let toolCallsBuffer: { [call_id: string]: any } = {};
 			let hasToolCalls = false;
 			let currentFunctionCallId: string | null = null;
 			let usageData: UsageInfo | undefined;
+			let reasoningData: {
+				summary?: Array<{ text: string; type: 'summary_text' }>;
+				content?: any;
+				encrypted_content?: string;
+			} | undefined;
 
 			for await (const chunk of parseSSEStream(response.body.getReader())) {
 				if (abortSignal?.aborted) {
@@ -472,6 +470,13 @@ export async function* createStreamingResponse(
 							toolCallsBuffer[callId].function.name = item.name;
 							toolCallsBuffer[callId].function.arguments = item.arguments;
 						}
+					} else if (item?.type === 'reasoning') {
+						// 捕获完整的 reasoning 对象（包括 encrypted_content）
+						reasoningData = {
+							summary: item.summary,
+							content: item.content,
+							encrypted_content: item.encrypted_content,
+						};
 					}
 					continue;
 				} else if (eventType === 'response.content_part.added') {
@@ -538,8 +543,19 @@ export async function* createStreamingResponse(
 				};
 			}
 
+			// Yield reasoning data if available
+			if (reasoningData) {
+				yield {
+					type: 'reasoning_data',
+					reasoning: reasoningData,
+				};
+			}
+
 			// Yield usage information if available
 			if (usageData) {
+				// Save usage to file system at API layer
+				saveUsageToFile(options.model, usageData);
+
 				yield {
 					type: 'usage',
 					usage: usageData,

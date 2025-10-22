@@ -17,6 +17,7 @@ type CommandHandlerOptions = {
 	setShowSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowMcpInfo: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setMcpPanelKey: React.Dispatch<React.SetStateAction<number>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
@@ -175,6 +176,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showUsagePanel') {
+				options.setShowUsagePanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'home') {
 				// Reset terminal before navigating to welcome screen
 				resetTerminal(stdout);
@@ -221,6 +230,15 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages([commandMessage]);
 				// Auto-send the review prompt using advanced model (not basic model), hide the prompt from UI
 				options.processMessage(result.prompt, undefined, false, true);
+			} else if (result.message) {
+				// For commands that just return a message (like /role, /init without SNOW.md, etc.)
+				// Display the message as a command message
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message,
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			}
 		},
 		[stdout, options],

@@ -24,6 +24,12 @@ export interface ChatMessage {
 	tool_calls?: ToolCall[];
 	images?: ImageContent[]; // 图片内容
 	subAgentInternal?: boolean; // Mark internal sub-agent messages (filtered from API requests)
+	reasoning?: {
+		// Reasoning data for Responses API caching
+		summary?: Array<{type: 'summary_text'; text: string}>;
+		content?: any;
+		encrypted_content?: string;
+	};
 }
 
 export interface ChatCompletionTool {

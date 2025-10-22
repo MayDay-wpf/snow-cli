@@ -360,27 +360,6 @@ export default function ConfigScreen({
 			return;
 		}
 
-		// Handle profile shortcuts (highest priority - works even in Select mode)
-		if (currentField === 'profile' && (input === 'n' || input === 'N')) {
-			// Handle profile creation (works in both normal and editing mode)
-			setProfileMode('creating');
-			setNewProfileName('');
-			setIsEditing(false); // Exit Select editing mode
-			return;
-		}
-
-		if (currentField === 'profile' && (input === 'd' || input === 'D')) {
-			// Handle profile deletion (works in both normal and editing mode)
-			if (activeProfile === 'default') {
-				setErrors(['Cannot delete the default profile']);
-				setIsEditing(false);
-				return;
-			}
-			setProfileMode('deleting');
-			setIsEditing(false); // Exit Select editing mode
-			return;
-		}
-
 		// Handle profile creation mode
 		if (profileMode === 'creating') {
 			if (key.return) {
@@ -401,6 +380,35 @@ export default function ConfigScreen({
 				setProfileMode('normal');
 				setErrors([]);
 			}
+			return;
+		}
+
+		// Handle profile shortcuts (only when in normal profile mode)
+		if (
+			profileMode === 'normal' &&
+			currentField === 'profile' &&
+			(input === 'n' || input === 'N')
+		) {
+			// Handle profile creation (works in both normal and editing mode)
+			setProfileMode('creating');
+			setNewProfileName('');
+			setIsEditing(false); // Exit Select editing mode
+			return;
+		}
+
+		if (
+			profileMode === 'normal' &&
+			currentField === 'profile' &&
+			(input === 'd' || input === 'D')
+		) {
+			// Handle profile deletion (works in both normal and editing mode)
+			if (activeProfile === 'default') {
+				setErrors(['Cannot delete the default profile']);
+				setIsEditing(false);
+				return;
+			}
+			setProfileMode('deleting');
+			setIsEditing(false); // Exit Select editing mode
 			return;
 		}
 

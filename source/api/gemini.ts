@@ -7,6 +7,7 @@ import {getSystemPrompt} from './systemPrompt.js';
 import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
 import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
+import {saveUsageToFile} from '../utils/usageLogger.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -466,13 +467,18 @@ export async function* createStreamingGeminiCompletion(
 
 			// Yield usage info
 			if (totalTokens.total > 0) {
+				const usageData = {
+					prompt_tokens: totalTokens.prompt,
+					completion_tokens: totalTokens.completion,
+					total_tokens: totalTokens.total,
+				};
+
+				// Save usage to file system at API layer
+				saveUsageToFile(options.model, usageData);
+
 				yield {
 					type: 'usage',
-					usage: {
-						prompt_tokens: totalTokens.prompt,
-						completion_tokens: totalTokens.completion,
-						total_tokens: totalTokens.total,
-					},
+					usage: usageData,
 				};
 			}
 

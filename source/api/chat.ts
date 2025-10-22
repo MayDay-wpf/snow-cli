@@ -13,6 +13,7 @@ import type {
 	ImageContent,
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
+import {saveUsageToFile} from '../utils/usageLogger.js';
 
 export type {
 	ChatMessage,
@@ -447,6 +448,9 @@ export async function* createStreamingChatCompletion(
 
 			// Yield usage information if available
 			if (usageData) {
+				// Save usage to file system at API layer
+				saveUsageToFile(options.model, usageData);
+
 				yield {
 					type: 'usage',
 					usage: usageData,

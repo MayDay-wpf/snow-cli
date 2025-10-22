@@ -9,6 +9,7 @@ import PendingMessages from '../components/PendingMessages.js';
 import MCPInfoScreen from '../components/MCPInfoScreen.js';
 import MCPInfoPanel from '../components/MCPInfoPanel.js';
 import SessionListPanel from '../components/SessionListPanel.js';
+import UsagePanel from '../components/UsagePanel.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
@@ -26,7 +27,6 @@ import {useSnapshotState} from '../../hooks/useSnapshotState.js';
 import {useStreamingState} from '../../hooks/useStreamingState.js';
 import {useCommandHandler} from '../../hooks/useCommandHandler.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
-import {useUsagePersistence} from '../../hooks/useUsagePersistence.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -48,6 +48,7 @@ import '../../utils/commands/compact.js';
 import '../../utils/commands/home.js';
 import '../../utils/commands/review.js';
 import '../../utils/commands/role.js';
+import '../../utils/commands/usage.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -82,6 +83,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
+	const [showUsagePanel, setShowUsagePanel] = useState(false);
 	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
 	const [restoreInputContent, setRestoreInputContent] = useState<string | null>(
 		null,
@@ -95,7 +97,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
 	const snapshotState = useSnapshotState(messages.length);
-	const {createUsageSaver} = useUsagePersistence();
 
 	// Use session save hook
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
@@ -224,6 +225,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		setShowSessionPanel,
 		setShowMcpInfo,
 		setShowMcpPanel,
+		setShowUsagePanel,
 		setMcpPanelKey,
 		setYoloMode,
 		setContextUsage: streamingState.setContextUsage,
@@ -298,6 +300,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 		if (showMcpPanel) {
 			if (key.escape) {
 				setShowMcpPanel(false);
+			}
+			return;
+		}
+
+		if (showUsagePanel) {
+			if (key.escape) {
+				setShowUsagePanel(false);
 			}
 			return;
 		}
@@ -542,12 +551,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
-			// Get model name for usage tracking
-			const config = getOpenAiConfig();
-			const modelName = useBasicModel
-				? config.basicModel || config.advancedModel || 'unknown'
-				: config.advancedModel || config.basicModel || 'unknown';
-
 			// Start conversation with tool support
 			await handleConversationWithTools({
 				userContent: messageForAI,
@@ -569,7 +572,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
-				onUsageUpdate: createUsageSaver(modelName), // Save usage after each round
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -655,10 +657,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
-			// Get model name for usage tracking
-			const config = getOpenAiConfig();
-			const modelName = config.advancedModel || config.basicModel || 'unknown';
-
 			// Use the same conversation handler
 			await handleConversationWithTools({
 				userContent: messageForAI,
@@ -679,7 +677,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
-				onUsageUpdate: createUsageSaver(modelName), // Save usage after each round
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -813,9 +810,16 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</Text>
 										<Box marginLeft={1} marginBottom={1} flexDirection="column">
 											{message.role === 'command' ? (
-												<Text color="gray" dimColor>
-													└─ {message.commandName}
-												</Text>
+												<>
+													<Text color="gray" dimColor>
+														└─ {message.commandName}
+													</Text>
+													{message.content && (
+														<Text color="white">
+															{message.content}
+														</Text>
+													)}
+												</>
 											) : message.showTodoTree ? (
 												<TodoTree todos={currentTodos} />
 											) : (
@@ -1181,6 +1185,18 @@ export default function ChatScreen({skipWelcome}: Props) {
 				</Box>
 			)}
 
+			{/* Show usage panel if active - replaces input */}
+			{showUsagePanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<UsagePanel />
+					<Box marginTop={1}>
+						<Text color="gray" dimColor>
+							Press ESC to close
+						</Text>
+					</Box>
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -1190,11 +1206,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or rollback confirmation */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or rollback confirmation */}
 			{!pendingToolConfirmation &&
 				!isCompressing &&
 				!showSessionPanel &&
 				!showMcpPanel &&
+				!showUsagePanel &&
 				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput

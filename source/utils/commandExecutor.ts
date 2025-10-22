@@ -11,6 +11,7 @@ export interface CommandResult {
 		| 'compact'
 		| 'showSessionPanel'
 		| 'showMcpPanel'
+		| 'showUsagePanel'
 		| 'home'
 		| 'review';
 	prompt?: string;

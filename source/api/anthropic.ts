@@ -9,6 +9,7 @@ import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
 import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
 import { logger } from '../utils/logger.js';
 import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
+import { saveUsageToFile } from '../utils/usageLogger.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -585,6 +586,9 @@ export async function* createStreamingAnthropicCompletion(
 			}
 
 			if (usageData) {
+				// Save usage to file system at API layer
+				saveUsageToFile(options.model, usageData);
+
 				yield {
 					type: 'usage',
 					usage: usageData,
