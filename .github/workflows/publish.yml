@@ -54,9 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Improved MarkdownRenderer to maintain single blank lines for better readability and removed excessive trailing whitespace.
-            - Refactored MessageList and PendingMessages components to remove unnecessary marginBottom properties.
-            - Added PendingToolCalls component to display ongoing tool calls with detailed arguments and results.
+            - fix some bugs
             ### Installation
             ```bash
             npm install -g snow-ai

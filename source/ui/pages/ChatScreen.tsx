@@ -333,6 +333,69 @@ export default function ChatScreen({skipWelcome}: Props) {
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
 
+			// Clean up incomplete conversation in session (handled in useConversation abort cleanup)
+			// This will remove:
+			// 1. User message without AI response (scenario 1)
+			// 2. Assistant message with tool_calls but no tool results (scenario 2)
+			const session = sessionManager.getCurrentSession();
+			if (session && session.messages.length > 0) {
+				// Use async cleanup to avoid blocking UI
+				(async () => {
+					try {
+						// Find the last complete conversation round
+						const messages = session.messages;
+						let truncateIndex = messages.length;
+
+						// Scan from the end to find incomplete round
+						for (let i = messages.length - 1; i >= 0; i--) {
+							const msg = messages[i];
+							if (!msg) continue;
+
+							// If last message is user message without assistant response, remove it
+							if (msg.role === 'user' && i === messages.length - 1) {
+								truncateIndex = i;
+								break;
+							}
+
+							// If assistant message has tool_calls, verify all tool results exist
+							if (
+								msg.role === 'assistant' &&
+								msg.tool_calls &&
+								msg.tool_calls.length > 0
+							) {
+								const toolCallIds = new Set(msg.tool_calls.map(tc => tc.id));
+								// Check if all tool results exist after this assistant message
+								for (let j = i + 1; j < messages.length; j++) {
+									const followMsg = messages[j];
+									if (followMsg && followMsg.role === 'tool' && followMsg.tool_call_id) {
+										toolCallIds.delete(followMsg.tool_call_id);
+									}
+								}
+								// If some tool results are missing, remove from this assistant message onwards
+								if (toolCallIds.size > 0) {
+									truncateIndex = i;
+									break;
+								}
+							}
+
+							// If we found a complete assistant response without tool calls, we're done
+							if (msg.role === 'assistant' && !msg.tool_calls) {
+								break;
+							}
+						}
+
+						// Truncate session if needed
+						if (truncateIndex < messages.length) {
+							await sessionManager.truncateMessages(truncateIndex);
+							// Also clear from saved messages tracking
+							clearSavedMessages();
+						}
+					} catch (error) {
+						console.error('Failed to clean up incomplete conversation:', error);
+					}
+				})();
+			}
+
 			// Add discontinued message
 			setMessages(prev => [
 				...prev,
