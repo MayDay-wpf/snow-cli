@@ -8,6 +8,7 @@ export function useSnapshotState(messagesLength: number) {
 		messageIndex: number;
 		fileCount: number;
 		filePaths?: string[];
+		message?: string;
 	} | null>(null);
 
 	// Load snapshot file counts when session changes

@@ -21,6 +21,7 @@ type Props = {
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
+	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
 	chatHistory?: Array<{role: string; content: string}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
@@ -41,6 +42,7 @@ export default function ChatInput({
 	onCommand,
 	placeholder = 'Type your message...',
 	disabled = false,
+	isProcessing = false,
 	chatHistory = [],
 	onHistorySelect,
 	yoloMode = false,
@@ -73,7 +75,8 @@ export default function ChatInput({
 		setCommandSelectedIndex,
 		getFilteredCommands,
 		updateCommandPanelState,
-	} = useCommandPanel(buffer);
+		isProcessing: commandPanelIsProcessing,
+	} = useCommandPanel(buffer, isProcessing);
 
 	// Use file picker hook
 	const {
@@ -433,6 +436,7 @@ export default function ChatInput({
 						selectedIndex={commandSelectedIndex}
 						query={buffer.getFullText().slice(1)}
 						visible={showCommands}
+						isProcessing={commandPanelIsProcessing}
 					/>
 					<Box>
 						<FileList

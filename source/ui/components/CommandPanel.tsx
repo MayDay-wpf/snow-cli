@@ -1,5 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { Box, Text } from 'ink';
+import { Alert } from '@inkjs/ui';
 
 interface Command {
 	name: string;
@@ -12,9 +13,10 @@ interface Props {
 	query: string;
 	visible: boolean;
 	maxHeight?: number;
+	isProcessing?: boolean;
 }
 
-const CommandPanel = memo(({ commands, selectedIndex, visible, maxHeight }: Props) => {
+const CommandPanel = memo(({ commands, selectedIndex, visible, maxHeight, isProcessing = false }: Props) => {
 	// Fixed maximum display items to prevent rendering issues
 	const MAX_DISPLAY_ITEMS = 5;
 	const effectiveMaxItems = maxHeight ? Math.min(maxHeight, MAX_DISPLAY_ITEMS) : MAX_DISPLAY_ITEMS;
@@ -46,8 +48,35 @@ const CommandPanel = memo(({ commands, selectedIndex, visible, maxHeight }: Prop
 		});
 	}, [displayedCommands, commands, selectedIndex]);
 
-	// Don't show panel if not visible or no commands found
-	if (!visible || commands.length === 0) {
+	// Don't show panel if not visible
+	if (!visible) {
+		return null;
+	}
+
+	// Show processing message if conversation is in progress
+	if (isProcessing) {
+		return (
+			<Box flexDirection="column">
+				<Box width="100%">
+					<Box flexDirection="column" width="100%">
+						<Box>
+							<Text color="yellow" bold>
+								Command Panel
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Alert variant="info">
+								Please wait for the conversation to complete before using commands
+							</Alert>
+						</Box>
+					</Box>
+				</Box>
+			</Box>
+		);
+	}
+
+	// Don't show panel if no commands found
+	if (commands.length === 0) {
 		return null;
 	}
 

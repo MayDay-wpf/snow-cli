@@ -33,9 +33,13 @@ const commands = [
 		name: 'usage',
 		description: 'View token usage statistics with interactive charts',
 	},
+	{
+		name: 'export',
+		description: 'Export chat conversation to text file with save dialog',
+	},
 ];
 
-export function useCommandPanel(buffer: TextBuffer) {
+export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
 
@@ -71,5 +75,6 @@ export function useCommandPanel(buffer: TextBuffer) {
 		getFilteredCommands,
 		updateCommandPanelState,
 		commands,
+		isProcessing, // Export isProcessing for CommandPanel to use
 	};
 }

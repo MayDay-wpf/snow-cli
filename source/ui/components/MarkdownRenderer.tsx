@@ -23,10 +23,14 @@ export default function MarkdownRenderer({content}: Props) {
 	});
 
 	// Remove excessive trailing newlines and whitespace from cli-markdown output
-	// This prevents large blank spaces in the terminal
+	// Keep single blank lines for paragraph spacing (better readability)
 	const trimmedRendered = rendered
-		.replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with 2 newlines
-		.trimEnd(); // Remove trailing whitespace
+		.split('\n')
+		.map((line: string) => line.trimEnd()) // Remove trailing spaces from each line
+		.join('\n')
+		.replace(/\n{3,}/g, '\n\n') // Replace 3+ consecutive newlines with 2 (paragraph spacing)
+		.replace(/^\n+/g, '') // Remove leading newlines
+		.replace(/\n+$/g, ''); // Remove trailing newlines
 
 	return <Text>{trimmedRendered}</Text>;
 }

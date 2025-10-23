@@ -220,9 +220,9 @@ export function createMessageWithFileInstructions(
 		if (editorContext.cursorPosition) {
 			editorLines.push(`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${editorContext.cursorPosition.character + 1}`);
 		}
-		// if (editorContext.selectedText) {
-		// 	editorLines.push(`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``);
-		// }
+		if (editorContext.selectedText) {
+			editorLines.push(`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``);
+		}
 		if (editorLines.length > 0) {
 			parts.push(editorLines.join('\n'));
 		}

@@ -61,7 +61,7 @@ const MessageList = memo(
 		}
 
 		return (
-			<Box marginBottom={1} flexDirection="column" overflow="hidden">
+			<Box flexDirection="column" overflow="hidden">
 				{messages.slice(-maxMessages).map((message, index) => {
 					const iconColor =
 						message.role === 'user'

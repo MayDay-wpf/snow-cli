@@ -6,6 +6,8 @@ import {compressContext} from '../utils/contextCompressor.js';
 import {navigateTo} from './useGlobalNavigation.js';
 import type {UsageInfo} from '../api/chat.js';
 import {resetTerminal} from '../utils/terminal.js';
+import {showSaveDialog, isFileDialogSupported} from '../utils/fileDialog.js';
+import {exportMessagesToFile} from '../utils/chatExporter.js';
 
 type CommandHandlerOptions = {
 	messages: Message[];
@@ -230,6 +232,66 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages([commandMessage]);
 				// Auto-send the review prompt using advanced model (not basic model), hide the prompt from UI
 				options.processMessage(result.prompt, undefined, false, true);
+			} else if (result.success && result.action === 'exportChat') {
+				// Handle export chat command
+				// Show loading message first
+				const loadingMessage: Message = {
+					role: 'command',
+					content: 'Opening file save dialog...',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, loadingMessage]);
+
+				try {
+					// Check if file dialog is supported
+					if (!isFileDialogSupported()) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: 'File dialog not supported on this platform. Export cancelled.',
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					// Generate default filename with timestamp
+					const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+					const defaultFilename = `snow-chat-${timestamp}.txt`;
+
+					// Show native save dialog
+					const filePath = await showSaveDialog(defaultFilename, 'Export Chat Conversation');
+
+					if (!filePath) {
+						// User cancelled
+						const cancelMessage: Message = {
+							role: 'command',
+							content: 'Export cancelled by user.',
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					// Export messages to file
+					await exportMessagesToFile(options.messages, filePath);
+
+					// Show success message
+					const successMessage: Message = {
+						role: 'command',
+						content: `✓ Chat exported successfully to:\n${filePath}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error) {
+					// Show error message
+					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					const errorMessage: Message = {
+						role: 'command',
+						content: `✗ Export failed: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (result.message) {
 				// For commands that just return a message (like /role, /init without SNOW.md, etc.)
 				// Display the message as a command message

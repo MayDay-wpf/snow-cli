@@ -13,7 +13,8 @@ export interface CommandResult {
 		| 'showMcpPanel'
 		| 'showUsagePanel'
 		| 'home'
-		| 'review';
+		| 'review'
+		| 'exportChat';
 	prompt?: string;
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }

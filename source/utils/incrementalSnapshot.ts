@@ -290,6 +290,44 @@ class IncrementalSnapshotManager {
 	}
 
 	/**
+	 * Delete all snapshots >= targetMessageIndex
+	 * This is used when user rolls back conversation to clean up snapshot files
+	 * @param sessionId Session ID
+	 * @param targetMessageIndex The message index to delete from (inclusive)
+	 */
+	async deleteSnapshotsFromIndex(sessionId: string, targetMessageIndex: number): Promise<number> {
+		await this.ensureSnapshotsDir();
+
+		try {
+			const files = await fs.readdir(this.snapshotsDir);
+			let deletedCount = 0;
+
+			for (const file of files) {
+				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+					const snapshotPath = path.join(this.snapshotsDir, file);
+					const content = await fs.readFile(snapshotPath, 'utf-8');
+					const metadata: SnapshotMetadata = JSON.parse(content);
+
+					// Delete snapshots with messageIndex >= targetMessageIndex
+					if (metadata.messageIndex >= targetMessageIndex) {
+						try {
+							await fs.unlink(snapshotPath);
+							deletedCount++;
+						} catch (error) {
+							console.error(`Failed to delete snapshot file ${snapshotPath}:`, error);
+						}
+					}
+				}
+			}
+
+			return deletedCount;
+		} catch (error) {
+			console.error('Failed to delete snapshots from index:', error);
+			return 0;
+		}
+	}
+
+	/**
 	 * Clear all snapshots for a session
 	 */
 	async clearAllSnapshots(sessionId: string): Promise<void> {

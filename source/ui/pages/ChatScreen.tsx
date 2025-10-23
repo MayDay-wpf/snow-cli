@@ -49,6 +49,7 @@ import '../../utils/commands/home.js';
 import '../../utils/commands/review.js';
 import '../../utils/commands/role.js';
 import '../../utils/commands/usage.js';
+import '../../utils/commands/export.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -326,6 +327,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 			// Abort the controller
 			streamingState.abortController.abort();
 
+			// Clear retry status immediately when user cancels
+			streamingState.setRetryStatus(null);
+
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
 
@@ -351,11 +355,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 		selectedIndex: number,
 		message: string,
 	) => {
-		// If rolling back to the first message (index 0), save the message content to restore in input
-		if (selectedIndex === 0) {
-			setRestoreInputContent(message);
-		}
-
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
 		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
@@ -379,10 +378,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length, // Use actual unique file count
 				filePaths,
+				message, // Save message for restore after rollback
 			});
 		} else {
 			// No files to rollback, just rollback conversation
-			performRollback(selectedIndex, false);
+			// Note: message is already in input buffer via useHistoryNavigation
+			await performRollback(selectedIndex, false);
 		}
 	};
 
@@ -390,23 +391,93 @@ export default function ChatScreen({skipWelcome}: Props) {
 		selectedIndex: number,
 		rollbackFiles: boolean,
 	) => {
+		const currentSession = sessionManager.getCurrentSession();
+
 		// Rollback workspace to checkpoint if requested
-		if (rollbackFiles) {
-			const currentSession = sessionManager.getCurrentSession();
-			if (currentSession) {
-				// Use rollbackToMessageIndex to rollback all snapshots >= selectedIndex
-				await incrementalSnapshotManager.rollbackToMessageIndex(
-					currentSession.id,
-					selectedIndex,
-				);
-			}
+		if (rollbackFiles && currentSession) {
+			// Use rollbackToMessageIndex to rollback all snapshots >= selectedIndex
+			await incrementalSnapshotManager.rollbackToMessageIndex(
+				currentSession.id,
+				selectedIndex,
+			);
 		}
 
-		// Truncate messages array to remove the selected user message and everything after it
-		setMessages(prev => prev.slice(0, selectedIndex));
+		// For session file: find the correct truncation point based on session messages
+		// We need to truncate to the same user message in the session file
+		if (currentSession) {
+			// Count how many user messages we're deleting (from selectedIndex onwards in UI)
+			const uiUserMessagesToDelete = messages
+				.slice(selectedIndex)
+				.filter(msg => msg.role === 'user').length;
 
-		// Truncate session messages to match the UI state
-		await sessionManager.truncateMessages(selectedIndex);
+			// Find the corresponding user message in session to delete
+			// We start from the end and count backwards
+			let sessionUserMessageCount = 0;
+			let sessionTruncateIndex = currentSession.messages.length;
+
+			for (let i = currentSession.messages.length - 1; i >= 0; i--) {
+				const msg = currentSession.messages[i];
+				if (msg && msg.role === 'user') {
+					sessionUserMessageCount++;
+					if (sessionUserMessageCount === uiUserMessagesToDelete) {
+						// We want to delete from this user message onwards
+						sessionTruncateIndex = i;
+						break;
+					}
+				}
+			}
+
+			// Special case: rolling back to index 0 means deleting the entire session
+			if (sessionTruncateIndex === 0 && currentSession) {
+				// Delete all snapshots for this session
+				await incrementalSnapshotManager.clearAllSnapshots(currentSession.id);
+
+				// Delete the session file
+				await sessionManager.deleteSession(currentSession.id);
+
+				// Clear current session
+				sessionManager.clearCurrentSession();
+
+				// Clear all messages
+				setMessages([]);
+
+				// Clear saved messages
+				clearSavedMessages();
+
+				// Clear snapshot state
+				snapshotState.setSnapshotFileCount(new Map());
+
+				// Clear pending rollback dialog
+				snapshotState.setPendingRollback(null);
+
+				// Trigger remount
+				setRemountKey(prev => prev + 1);
+
+				return;
+			}
+
+			// Delete snapshot files >= selectedIndex (regardless of whether files were rolled back)
+			await incrementalSnapshotManager.deleteSnapshotsFromIndex(
+				currentSession.id,
+				selectedIndex,
+			);
+
+			// Reload snapshot file counts from disk after deletion
+			const snapshots = await incrementalSnapshotManager.listSnapshots(
+				currentSession.id,
+			);
+			const counts = new Map<number, number>();
+			for (const snapshot of snapshots) {
+				counts.set(snapshot.messageIndex, snapshot.fileCount);
+			}
+			snapshotState.setSnapshotFileCount(counts);
+
+			// Truncate session messages
+			await sessionManager.truncateMessages(sessionTruncateIndex);
+		}
+
+		// Truncate UI messages array to remove the selected user message and everything after it
+		setMessages(prev => prev.slice(0, selectedIndex));
 
 		clearSavedMessages();
 		setRemountKey(prev => prev + 1);
@@ -415,7 +486,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		snapshotState.setPendingRollback(null);
 	};
 
-	const handleRollbackConfirm = (rollbackFiles: boolean | null) => {
+	const handleRollbackConfirm = async (rollbackFiles: boolean | null) => {
 		if (rollbackFiles === null) {
 			// User cancelled - just close the dialog without doing anything
 			snapshotState.setPendingRollback(null);
@@ -423,7 +494,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 		}
 
 		if (snapshotState.pendingRollback) {
-			performRollback(
+			// Restore message to input before rollback
+			if (snapshotState.pendingRollback.message) {
+				setRestoreInputContent(snapshotState.pendingRollback.message);
+			}
+
+			await performRollback(
 				snapshotState.pendingRollback.messageIndex,
 				rollbackFiles,
 			);
@@ -492,6 +568,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
+		// Clear any previous retry status when starting a new request
+		streamingState.setRetryStatus(null);
+
 		// Parse and validate file references
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 			message,
@@ -600,6 +679,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	const processPendingMessages = async () => {
 		if (pendingMessages.length === 0) return;
+
+		// Clear any previous retry status when starting a new request
+		streamingState.setRetryStatus(null);
 
 		// Get current pending messages and clear them immediately
 		const messagesToProcess = [...pendingMessages];
@@ -763,10 +845,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 					</Box>,
 					...messages
 						.filter(m => !m.streaming)
-						.map((message, index) => {
+						.map((message, index, filteredMessages) => {
 							// Determine tool message type and color
 							let toolStatusColor: string = 'cyan';
 							let isToolMessage = false;
+							const isLastMessage = index === filteredMessages.length - 1;
 
 							if (message.role === 'assistant') {
 								if (message.content.startsWith('⚡')) {
@@ -786,7 +869,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 							return (
 								<Box
 									key={`msg-${index}`}
-									marginBottom={isToolMessage ? 0 : 1}
+									marginTop={index > 0 ? 1 : 0}
+									marginBottom={isLastMessage ? 1 : 0}
 									paddingX={1}
 									flexDirection="column"
 									width={terminalWidth}
@@ -808,7 +892,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 												? '⌘'
 												: '❆'}
 										</Text>
-										<Box marginLeft={1} marginBottom={1} flexDirection="column">
+										<Box marginLeft={1} flexDirection="column">
 											{message.role === 'command' ? (
 												<>
 													<Text color="gray" dimColor>
@@ -972,85 +1056,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 																)}
 															</Box>
 														)}
-													{/* Show terminal execution result */}
-													{message.toolCall &&
-														message.toolCall.name === 'terminal-execute' &&
-														message.toolCall.arguments.command && (
-															<Box marginTop={1} flexDirection="column">
-																<Text color="gray" dimColor>
-																	└─ Command:{' '}
-																	<Text color="white">
-																		{message.toolCall.arguments.command}
-																	</Text>
-																</Text>
-																<Text color="gray" dimColor>
-																	└─ Exit Code:{' '}
-																	<Text
-																		color={
-																			message.toolCall.arguments.exitCode === 0
-																				? 'green'
-																				: 'red'
-																		}
-																	>
-																		{message.toolCall.arguments.exitCode}
-																	</Text>
-																</Text>
-																{message.toolCall.arguments.stdout &&
-																	message.toolCall.arguments.stdout.trim()
-																		.length > 0 && (
-																		<Box flexDirection="column" marginTop={1}>
-																			<Text color="green" dimColor>
-																				└─ stdout:
-																			</Text>
-																			<Box paddingLeft={2}>
-																				<Text color="white">
-																					{message.toolCall.arguments.stdout
-																						.trim()
-																						.split('\n')
-																						.slice(0, 20)
-																						.join('\n')}
-																				</Text>
-																				{message.toolCall.arguments.stdout
-																					.trim()
-																					.split('\n').length > 20 && (
-																					<Text color="gray" dimColor>
-																						... (output truncated)
-																					</Text>
-																				)}
-																			</Box>
-																		</Box>
-																	)}
-																{message.toolCall.arguments.stderr &&
-																	message.toolCall.arguments.stderr.trim()
-																		.length > 0 && (
-																		<Box flexDirection="column" marginTop={1}>
-																			<Text color="red" dimColor>
-																				└─ stderr:
-																			</Text>
-																			<Box paddingLeft={2}>
-																				<Text color="red">
-																					{message.toolCall.arguments.stderr
-																						.trim()
-																						.split('\n')
-																						.slice(0, 10)
-																						.join('\n')}
-																				</Text>
-																				{message.toolCall.arguments.stderr
-																					.trim()
-																					.split('\n').length > 10 && (
-																					<Text color="gray" dimColor>
-																						... (output truncated)
-																					</Text>
-																				)}
-																			</Box>
-																		</Box>
-																	)}
-															</Box>
-														)}
 													{/* Show tool result preview for successful tool executions */}
 													{message.content.startsWith('✓') &&
 														message.toolResult &&
-														!message.toolCall && (
+														// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
+														!(
+															message.toolCall &&
+															(message.toolCall.arguments?.oldContent ||
+																message.toolCall.arguments?.batchResults)
+														) && (
 															<ToolResultPreview
 																toolName={
 																	message.content
@@ -1267,6 +1281,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 							onCommand={handleCommandExecution}
 							placeholder="Ask me anything about coding..."
 							disabled={!!pendingToolConfirmation}
+							isProcessing={streamingState.isStreaming || isSaving}
 							chatHistory={messages}
 							onHistorySelect={handleHistorySelect}
 							yoloMode={yoloMode}

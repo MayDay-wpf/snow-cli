@@ -23,6 +23,8 @@ export default function ToolResultPreview({
 		// Handle different tool types
 		if (toolName.startsWith('subagent-')) {
 			return renderSubAgentPreview(data, maxLines);
+		} else if (toolName === 'terminal-execute') {
+			return renderTerminalExecutePreview(data);
 		} else if (toolName === 'filesystem-read') {
 			return renderReadPreview(data, maxLines);
 		} else if (toolName === 'filesystem-list') {
@@ -47,79 +49,124 @@ export default function ToolResultPreview({
 	}
 }
 
-function renderSubAgentPreview(data: any, maxLines: number) {
+function renderSubAgentPreview(data: any, _maxLines: number) {
 	// Sub-agent results have format: { success: boolean, result: string }
 	if (!data.result) return null;
 
-	// Split the result into lines
+	// 简洁显示子代理执行结果
 	const lines = data.result.split('\n').filter((line: string) => line.trim());
-	const previewLines = lines.slice(0, maxLines);
-	const hasMore = lines.length > maxLines;
+
+	return (
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ Sub-agent completed ({lines.length} {lines.length === 1 ? 'line' : 'lines'} output)
+			</Text>
+		</Box>
+	);
+}
+
+function renderTerminalExecutePreview(data: any) {
+	const hasError = data.exitCode !== 0;
+	const hasStdout = data.stdout && data.stdout.trim();
+	const hasStderr = data.stderr && data.stderr.trim();
 
 	return (
 		<Box flexDirection="column" marginLeft={2}>
-			{previewLines.map((line: string, idx: number) => (
-				<Text key={idx} color="gray" dimColor>
-					{idx === previewLines.length - 1 && !hasMore ? '└─ ' : '├─ '}
-					{line.length > 80 ? line.slice(0, 80) + '...' : line}
-				</Text>
-			))}
-			{hasMore && (
+			{/* Command */}
+			<Text color="gray" dimColor>
+				├─ command: {data.command}
+			</Text>
+
+			{/* Exit code with color indication */}
+			<Text color={hasError ? 'red' : 'green'} bold={hasError}>
+				├─ exitCode: {data.exitCode}
+				{hasError && ' ⚠️ FAILED'}
+			</Text>
+
+			{/* Stdout - show completely if present */}
+			{hasStdout && (
+				<Box flexDirection="column">
+					<Text color="gray" dimColor>
+						├─ stdout:
+					</Text>
+					<Box marginLeft={2} flexDirection="column">
+						{data.stdout.split('\n').map((line: string, idx: number) => (
+							<Text key={idx} color={hasError ? 'yellow' : 'white'}>
+								{line}
+							</Text>
+						))}
+					</Box>
+				</Box>
+			)}
+
+			{/* Stderr - show completely with red color if present */}
+			{hasStderr && (
+				<Box flexDirection="column">
+					<Text color="red" bold>
+						├─ stderr:
+					</Text>
+					<Box marginLeft={2} flexDirection="column">
+						{data.stderr.split('\n').map((line: string, idx: number) => (
+							<Text key={idx} color="red">
+								{line}
+							</Text>
+						))}
+					</Box>
+				</Box>
+			)}
+
+			{/* Execution time if available */}
+			{data.executedAt && (
 				<Text color="gray" dimColor>
-					└─ ... ({lines.length - maxLines} more lines)
+					└─ executedAt: {data.executedAt}
 				</Text>
 			)}
 		</Box>
 	);
 }
 
-function renderReadPreview(data: any, maxLines: number) {
+
+function renderReadPreview(data: any, _maxLines: number) {
 	if (!data.content) return null;
 
+	// 简洁显示：只显示读取的行数信息
 	const lines = data.content.split('\n');
-	const previewLines = lines.slice(0, maxLines);
-	const hasMore = lines.length > maxLines;
+	const readLineCount = lines.length;
+	const totalLines = data.totalLines || readLineCount;
+
+	// 如果是读取部分行，显示范围
+	const rangeInfo = data.startLine && data.endLine
+		? ` (lines ${data.startLine}-${data.endLine})`
+		: '';
 
 	return (
-		<Box flexDirection="column" marginLeft={2}>
-			{previewLines.map((line: string, idx: number) => (
-				<Text key={idx} color="gray" dimColor>
-					{idx === previewLines.length - 1 && !hasMore ? '└─ ' : '├─ '}
-					{line.length > 80 ? line.slice(0, 80) + '...' : line}
-				</Text>
-			))}
-			{hasMore && (
-				<Text color="gray" dimColor>
-					└─ ... ({lines.length - maxLines} more lines, total {data.totalLines}{' '}
-					lines)
-				</Text>
-			)}
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ Read {readLineCount} lines{rangeInfo}
+				{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
+			</Text>
 		</Box>
 	);
 }
 
-function renderListPreview(data: string[] | any, maxLines: number) {
+function renderListPreview(data: string[] | any, _maxLines: number) {
 	// Handle both array and object response formats
 	const files = Array.isArray(data) ? data : data.files || [];
-	if (files.length === 0) return null;
-
-	const previewFiles = files.slice(0, maxLines);
-	const hasMore = files.length > maxLines;
+	if (files.length === 0) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Empty directory
+				</Text>
+			</Box>
+		);
+	}
 
 	return (
-		<Box flexDirection="column" marginLeft={2}>
-			{previewFiles.map((file: string, idx: number) => (
-				<Text key={idx} color="gray" dimColor>
-					{idx === previewFiles.length - 1 && !hasMore ? '└─ ' : '├─ '}
-					{file}
-				</Text>
-			))}
-			{hasMore && (
-				<Text color="gray" dimColor>
-					└─ ... ({files.length - maxLines} more items, total {files.length}{' '}
-					items)
-				</Text>
-			)}
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ Found {files.length} {files.length === 1 ? 'item' : 'items'}
+			</Text>
 		</Box>
 	);
 }
@@ -138,23 +185,11 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		}
 
 		const results = Array.isArray(data) ? data : [];
-		const previewMatches = results.slice(0, maxLines);
-		const hasMore = results.length > maxLines;
-
 		return (
-			<Box flexDirection="column" marginLeft={2}>
-				{previewMatches.map((match: any, idx: number) => (
-					<Text key={idx} color="gray" dimColor>
-						{idx === previewMatches.length - 1 && !hasMore ? '└─ ' : '├─ '}
-						{match.filePath}:{match.line} - {match.content.slice(0, 60)}
-						{match.content.length > 60 ? '...' : ''}
-					</Text>
-				))}
-				{hasMore && (
-					<Text color="gray" dimColor>
-						└─ ... ({results.length - maxLines} more matches)
-					</Text>
-				)}
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Found {results.length} {results.length === 1 ? 'match' : 'matches'}
+				</Text>
 			</Box>
 		);
 	}
@@ -172,22 +207,11 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 			);
 		}
 
-		const previewSymbols = symbols.slice(0, maxLines);
-		const hasMore = symbols.length > maxLines;
-
 		return (
-			<Box flexDirection="column" marginLeft={2}>
-				{previewSymbols.map((symbol: any, idx: number) => (
-					<Text key={idx} color="gray" dimColor>
-						{idx === previewSymbols.length - 1 && !hasMore ? '└─ ' : '├─ '}
-						{symbol.type} {symbol.name} - {symbol.filePath}:{symbol.line}
-					</Text>
-				))}
-				{hasMore && (
-					<Text color="gray" dimColor>
-						└─ ... ({data.totalResults - maxLines} more symbols)
-					</Text>
-				)}
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Found {symbols.length} {symbols.length === 1 ? 'symbol' : 'symbols'}
+				</Text>
 			</Box>
 		);
 	}
@@ -208,22 +232,11 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 			);
 		}
 
-		const previewRefs = references.slice(0, maxLines);
-		const hasMore = references.length > maxLines;
-
 		return (
-			<Box flexDirection="column" marginLeft={2}>
-				{previewRefs.map((ref: any, idx: number) => (
-					<Text key={idx} color="gray" dimColor>
-						{idx === previewRefs.length - 1 && !hasMore ? '└─ ' : '├─ '}
-						{ref.referenceType} - {ref.filePath}:{ref.line}
-					</Text>
-				))}
-				{hasMore && (
-					<Text color="gray" dimColor>
-						└─ ... ({references.length - maxLines} more references)
-					</Text>
-				)}
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Found {references.length} {references.length === 1 ? 'reference' : 'references'}
+				</Text>
 			</Box>
 		);
 	}
@@ -244,9 +257,9 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		}
 
 		return (
-			<Box flexDirection="column" marginLeft={2}>
+			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ {data.type} {data.name} - {data.filePath}:{data.line}
+					└─ Found {data.type} {data.name} at {data.filePath}:{data.line}
 				</Text>
 			</Box>
 		);
@@ -265,22 +278,11 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 			);
 		}
 
-		const previewSymbols = symbols.slice(0, maxLines);
-		const hasMore = symbols.length > maxLines;
-
 		return (
-			<Box flexDirection="column" marginLeft={2}>
-				{previewSymbols.map((symbol: any, idx: number) => (
-					<Text key={idx} color="gray" dimColor>
-						{idx === previewSymbols.length - 1 && !hasMore ? '└─ ' : '├─ '}
-						{symbol.type} {symbol.name} (line {symbol.line})
-					</Text>
-				))}
-				{hasMore && (
-					<Text color="gray" dimColor>
-						└─ ... ({symbols.length - maxLines} more symbols)
-					</Text>
-				)}
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Found {symbols.length} {symbols.length === 1 ? 'symbol' : 'symbols'} in file
+				</Text>
 			</Box>
 		);
 	}
@@ -305,10 +307,10 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		return (
 			<Box flexDirection="column" marginLeft={2}>
 				<Text color="gray" dimColor>
-					├─ Symbols: {data.symbols?.length || 0}
+					├─ {data.symbols?.length || 0} {(data.symbols?.length || 0) === 1 ? 'symbol' : 'symbols'}
 				</Text>
 				<Text color="gray" dimColor>
-					└─ References: {data.references?.length || 0}
+					└─ {data.references?.length || 0} {(data.references?.length || 0) === 1 ? 'reference' : 'references'}
 				</Text>
 			</Box>
 		);
@@ -353,70 +355,32 @@ function renderEditSearchPreview(data: any) {
 	);
 }
 
-function renderWebSearchPreview(data: any, maxLines: number) {
+function renderWebSearchPreview(data: any, _maxLines: number) {
 	if (!data.results || data.results.length === 0) {
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ No search results found for "{data.query}"
+					└─ No results for "{data.query}"
 				</Text>
 			</Box>
 		);
 	}
 
-	const previewResults = data.results.slice(0, maxLines);
-	const hasMore = data.results.length > maxLines;
-
 	return (
-		<Box flexDirection="column" marginLeft={2}>
-			<Text color="cyan" dimColor>
-				├─ Query: {data.query}
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ Found {data.totalResults || data.results.length} results for "{data.query}"
 			</Text>
-			<Text color="cyan" dimColor>
-				├─ Found {data.totalResults} results
-			</Text>
-			{previewResults.map((result: any, idx: number) => (
-				<Box key={idx} flexDirection="column">
-					<Text color="gray" dimColor>
-						{idx === previewResults.length - 1 && !hasMore ? '└─ ' : '├─ '}[
-						{idx + 1}] {result.title.slice(0, 20)}
-						{result.title.length > 20 ? '...' : ''}
-					</Text>
-					{result.snippet && (
-						<Box marginLeft={3}>
-							<Text color="gray" dimColor>
-								{result.snippet.slice(0, 20)}
-								{result.snippet.length > 20 ? '...' : ''}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			))}
-			{hasMore && (
-				<Text color="gray" dimColor>
-					└─ ... ({data.results.length - maxLines} more results)
-				</Text>
-			)}
 		</Box>
 	);
 }
 
 function renderWebFetchPreview(data: any) {
+	const contentLength = data.textLength || data.content?.length || 0;
 	return (
-		<Box flexDirection="column" marginLeft={2}>
-			<Text color="cyan" dimColor>
-				├─ Page: {data.title || 'Untitled'}
-			</Text>
-			<Text color="cyan" dimColor>
-				├─ URL: {data.url.slice(0, 20)}
-				{data.url.length > 20 ? '...' : ''}
-			</Text>
+		<Box marginLeft={2}>
 			<Text color="gray" dimColor>
-				├─ Content length: {data.textLength} characters
-			</Text>
-			<Text color="gray" dimColor>
-				└─ Preview: {data.contentPreview.slice(0, 20)}
-				{data.contentPreview.length > 20 ? '...' : ''}
+				└─ Fetched {contentLength} characters from {data.title || 'page'}
 			</Text>
 		</Box>
 	);

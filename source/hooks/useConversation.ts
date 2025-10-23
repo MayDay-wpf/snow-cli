@@ -12,6 +12,7 @@ import {formatTodoContext} from '../utils/todoPreprocessor.js';
 import type {Message} from '../ui/components/MessageList.js';
 import {formatToolCallMessage} from '../utils/messageFormatter.js';
 import {resourceMonitor} from '../utils/resourceMonitor.js';
+import {isToolNeedTwoStepDisplay} from '../utils/toolDisplayConfig.js';
 
 export type ConversationHandlerOptions = {
 	userContent: string;
@@ -154,7 +155,7 @@ export async function handleConversationWithTools(
 	};
 
 	try {
-		encoder = encoding_for_model('gpt-4');
+		encoder = encoding_for_model('gpt-5');
 		resourceMonitor.trackEncoderCreated();
 	} catch (e) {
 		encoder = encoding_for_model('gpt-3.5-turbo');
@@ -164,8 +165,8 @@ export async function handleConversationWithTools(
 
 	const config = getOpenAiConfig();
 	const model = options.useBasicModel
-		? config.basicModel || config.advancedModel || 'gpt-4.1'
-		: config.advancedModel || 'gpt-4.1';
+		? config.basicModel || config.advancedModel || 'gpt-5'
+		: config.advancedModel || 'gpt-5';
 
 	// Tool calling loop (no limit on rounds)
 	let finalAssistantMessage: Message | null = null;
@@ -408,7 +409,7 @@ export async function handleConversationWithTools(
 					]);
 				}
 
-				// Display tool calls in UI with pending status
+				// Display tool calls in UI - 只有耗时工具才显示进行中状态
 				for (const toolCall of receivedToolCalls) {
 					const toolDisplay = formatToolCallMessage(toolCall);
 					let toolArgs;
@@ -418,21 +419,24 @@ export async function handleConversationWithTools(
 						toolArgs = {};
 					}
 
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: `⚡ ${toolDisplay.toolName}`,
-							streaming: false,
-							toolCall: {
-								name: toolCall.function.name,
-								arguments: toolArgs,
+					// 只有耗时工具才在动态区显示进行中状态
+					if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
+						setMessages(prev => [
+							...prev,
+							{
+								role: 'assistant',
+								content: `⚡ ${toolDisplay.toolName}`,
+								streaming: false,
+								toolCall: {
+									name: toolCall.function.name,
+									arguments: toolArgs,
+								},
+								toolDisplay,
+								toolCallId: toolCall.id, // Store tool call ID for later update
+								toolPending: true, // Mark as pending execution
 							},
-							toolDisplay,
-							toolCallId: toolCall.id, // Store tool call ID for later update
-							toolPending: true, // Mark as pending execution
-						},
-					]);
+						]);
+					}
 				}
 
 				// Filter tools that need confirmation (not in always-approved list OR session-approved list)
@@ -511,7 +515,7 @@ export async function handleConversationWithTools(
 					approvedTools.push(...toolsNeedingConfirmation);
 				}
 
-				// Execute approved tools with sub-agent message callback
+				// Execute approved tools with sub-agent message callback and terminal output callback
 				const toolResults = await executeToolCalls(
 					approvedTools,
 					controller.signal,
@@ -828,9 +832,13 @@ export async function handleConversationWithTools(
 							}
 						}
 
-						// Append completed message to static area (don't remove pending message)
-						// Static area doesn't support deletion, only append
-						// Completed message only shows diff data (for edit tools), no other parameters
+						// 处理工具执行结果的显示
+						// - 耗时工具(两步显示):完成消息追加到静态区，之前的进行中消息已包含参数
+						// - 普通工具(单步显示):完成消息需要包含参数和结果，使用 toolDisplay
+
+						// 获取工具参数的格式化信息
+						const toolDisplay = formatToolCallMessage(toolCall);
+
 						setMessages(prev => [
 							...prev,
 							// Add new completed message
@@ -843,7 +851,11 @@ export async function handleConversationWithTools(
 											name: toolCall.function.name,
 											arguments: editDiffData,
 									  }
-									: undefined, // Don't show arguments for completed tools (already shown in pending)
+									: undefined,
+								// 为普通工具添加参数显示（耗时工具在进行中状态已经显示过参数）
+								toolDisplay: !isToolNeedTwoStepDisplay(toolCall.function.name)
+									? toolDisplay
+									: undefined,
 								// Store tool result for preview rendering
 								toolResult: !isError ? result.content : undefined,
 							},

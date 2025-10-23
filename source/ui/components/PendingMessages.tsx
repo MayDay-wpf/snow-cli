@@ -11,7 +11,7 @@ export default function PendingMessages({ pendingMessages }: Props) {
 	}
 
 	return (
-		<Box marginBottom={1} flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+		<Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
 			<Text color="yellow" bold>
 				⬑ Pending Messages ({pendingMessages.length})
 			</Text>
