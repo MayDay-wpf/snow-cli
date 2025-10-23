@@ -36,6 +36,10 @@ import {executeCommand} from '../../utils/commandExecutor.js';
 import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
 import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
 import {formatElapsedTime} from '../../utils/textUtils.js';
+import {
+	shouldAutoCompress,
+	performAutoCompression,
+} from '../../utils/autoCompress.js';
 
 // Import commands to register them
 import '../../utils/commands/clear.js';
@@ -631,6 +635,50 @@ export default function ChatScreen({skipWelcome}: Props) {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
+		// 检查 token 占用，如果 >= 80% 先执行自动压缩
+		if (shouldAutoCompress(streamingState.contextUsage)) {
+			setIsCompressing(true);
+			setCompressionError(null);
+
+			try {
+				// 显示压缩提示消息
+				const compressingMessage: Message = {
+					role: 'assistant',
+					content: '✵ Auto-compressing context due to token limit...',
+					streaming: false,
+				};
+				setMessages(prev => [...prev, compressingMessage]);
+
+				const compressionResult = await performAutoCompression();
+
+				if (compressionResult) {
+					// 更新UI和token使用情况
+					clearSavedMessages();
+					setMessages(compressionResult.uiMessages);
+					setRemountKey(prev => prev + 1);
+					streamingState.setContextUsage(compressionResult.usage);
+					setShouldIncludeSystemInfo(true);
+				} else {
+					throw new Error('Compression failed');
+				}
+			} catch (error) {
+				const errorMsg =
+					error instanceof Error ? error.message : 'Unknown error';
+				setCompressionError(errorMsg);
+
+				const errorMessage: Message = {
+					role: 'assistant',
+					content: `**Auto-compression Failed**\n\n${errorMsg}`,
+					streaming: false,
+				};
+				setMessages(prev => [...prev, errorMessage]);
+				setIsCompressing(false);
+				return; // 停止处理，等待用户手动处理
+			} finally {
+				setIsCompressing(false);
+			}
+		}
+
 		// Clear any previous retry status when starting a new request
 		streamingState.setRetryStatus(null);
 
@@ -714,6 +762,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
+				clearSavedMessages,
+				setRemountKey,
+				setShouldIncludeSystemInfo,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -822,6 +873,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setIsStreaming: streamingState.setIsStreaming,
 				setIsReasoning: streamingState.setIsReasoning,
 				setRetryStatus: streamingState.setRetryStatus,
+				clearSavedMessages,
+				setRemountKey,
+				setShouldIncludeSystemInfo,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {

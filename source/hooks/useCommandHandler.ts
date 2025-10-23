@@ -9,6 +9,109 @@ import {resetTerminal} from '../utils/terminal.js';
 import {showSaveDialog, isFileDialogSupported} from '../utils/fileDialog.js';
 import {exportMessagesToFile} from '../utils/chatExporter.js';
 
+/**
+ * 执行上下文压缩
+ * @returns 返回压缩后的UI消息列表和token使用信息，如果失败返回null
+ */
+export async function executeContextCompression(): Promise<{
+	uiMessages: Message[];
+	usage: UsageInfo;
+} | null> {
+	try {
+		// 从会话文件读取真实的消息记录
+		const currentSession = sessionManager.getCurrentSession();
+		if (!currentSession || currentSession.messages.length === 0) {
+			throw new Error('No active session or no messages to compress');
+		}
+
+		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
+		const sessionMessages = currentSession.messages;
+
+		// 转换为 ChatMessage 格式（去掉 timestamp）
+		const chatMessages = sessionMessages.map(msg => ({
+			role: msg.role,
+			content: msg.content,
+			tool_call_id: msg.tool_call_id,
+			tool_calls: msg.tool_calls,
+			images: msg.images,
+		}));
+
+		// Compress the context (部分压缩：前50%压缩，后50%保留)
+		const compressionResult = await compressContext(chatMessages, true);
+
+		// 构建新的会话消息列表
+		const newSessionMessages: Array<any> = [];
+
+		// 添加压缩摘要到会话
+		newSessionMessages.push({
+			role: 'assistant',
+			content: compressionResult.summary,
+			timestamp: Date.now(),
+		});
+
+		// 添加保留的后50%原始消息到会话
+		if (compressionResult.preservedMessages && compressionResult.preservedMessages.length > 0) {
+			for (const msg of compressionResult.preservedMessages) {
+				newSessionMessages.push({
+					...msg,
+					timestamp: Date.now(),
+				});
+			}
+		}
+
+		// 更新当前会话的消息（不新建会话）
+		currentSession.messages = newSessionMessages;
+		currentSession.messageCount = newSessionMessages.length;
+		currentSession.updatedAt = Date.now();
+
+		// 保存更新后的会话文件
+		await sessionManager.saveSession(currentSession);
+
+		// 同步更新UI消息列表：从会话消息转换为UI Message格式
+		const newUIMessages: Message[] = [];
+
+		for (const sessionMsg of newSessionMessages) {
+			// 跳过 tool 角色的消息（工具执行结果），避免UI显示大量JSON
+			if (sessionMsg.role === 'tool') {
+				continue;
+			}
+
+			const uiMessage: Message = {
+				role: sessionMsg.role as any,
+				content: sessionMsg.content,
+				streaming: false,
+			};
+
+			// 如果有 tool_calls，显示工具调用信息（但不显示详细参数）
+			if (sessionMsg.tool_calls && sessionMsg.tool_calls.length > 0) {
+				// 在内容中添加简洁的工具调用摘要
+				const toolSummary = sessionMsg.tool_calls
+					.map((tc: any) => `[Tool: ${tc.function.name}]`)
+					.join(', ');
+
+				// 如果内容为空或很短，显示工具调用摘要
+				if (!uiMessage.content || uiMessage.content.length < 10) {
+					uiMessage.content = toolSummary;
+				}
+			}
+
+			newUIMessages.push(uiMessage);
+		}
+
+		return {
+			uiMessages: newUIMessages,
+			usage: {
+				prompt_tokens: compressionResult.usage.prompt_tokens,
+				completion_tokens: compressionResult.usage.completion_tokens,
+				total_tokens: compressionResult.usage.total_tokens,
+			},
+		};
+	} catch (error) {
+		console.error('Context compression failed:', error);
+		return null;
+	}
+}
+
 type CommandHandlerOptions = {
 	messages: Message[];
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -51,51 +154,23 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setCompressionError(null);
 
 				try {
-					// Convert messages to ChatMessage format for compression
-					const chatMessages = options.messages
-						.filter(msg => msg.role !== 'command')
-						.map(msg => ({
-							role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
-							content: msg.content,
-							tool_call_id: msg.toolCallId,
-						}));
+					// 使用提取的压缩函数
+					const compressionResult = await executeContextCompression();
 
-					// Compress the context
-					const result = await compressContext(chatMessages);
-
-					// Replace all messages with a summary message (不包含 "Context Compressed" 标题)
-					const summaryMessage: Message = {
-						role: 'assistant',
-						content: result.summary,
-						streaming: false,
-					};
-
-					// Clear session and create new session with compressed summary
-					sessionManager.clearCurrentSession();
-					const newSession = await sessionManager.createNewSession();
-
-					// Save the summary message to the new session so it's included in next API call
-					if (newSession) {
-						await sessionManager.addMessage({
-							role: 'assistant',
-							content: result.summary,
-							timestamp: Date.now(),
-						});
+					if (!compressionResult) {
+						throw new Error('Compression failed');
 					}
 
+					// 更新UI
 					options.clearSavedMessages();
-					options.setMessages([summaryMessage]);
+					options.setMessages(compressionResult.uiMessages);
 					options.setRemountKey(prev => prev + 1);
 
 					// Reset system info flag to include in next message
 					options.setShouldIncludeSystemInfo(true);
 
 					// Update token usage with compression result
-					options.setContextUsage({
-						prompt_tokens: result.usage.prompt_tokens,
-						completion_tokens: result.usage.completion_tokens,
-						total_tokens: result.usage.total_tokens,
-					});
+					options.setContextUsage(compressionResult.usage);
 				} catch (error) {
 					// Show error message
 					const errorMsg =

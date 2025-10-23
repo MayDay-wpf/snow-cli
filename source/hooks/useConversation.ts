@@ -13,6 +13,10 @@ import type {Message} from '../ui/components/MessageList.js';
 import {formatToolCallMessage} from '../utils/messageFormatter.js';
 import {resourceMonitor} from '../utils/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../utils/toolDisplayConfig.js';
+import {
+	shouldAutoCompress,
+	performAutoCompression,
+} from '../utils/autoCompress.js';
 
 export type ConversationHandlerOptions = {
 	userContent: string;
@@ -52,6 +56,9 @@ export type ConversationHandlerOptions = {
 			errorMessage?: string;
 		} | null>
 	>; // Retry status
+	clearSavedMessages?: () => void; // Clear saved messages for auto-compression
+	setRemountKey?: React.Dispatch<React.SetStateAction<number>>; // Remount key for auto-compression
+	setShouldIncludeSystemInfo?: React.Dispatch<React.SetStateAction<boolean>>; // System info flag for auto-compression
 };
 
 /**
@@ -719,6 +726,52 @@ export async function handleConversationWithTools(
 					freeEncoder();
 					break;
 				}
+
+				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
+				if (shouldAutoCompress(accumulatedUsage)) {
+					try {
+						// 显示压缩提示消息
+						const compressingMessage: Message = {
+							role: 'assistant',
+							content:
+								'✵ Auto-compressing context before sending tool results...',
+							streaming: false,
+						};
+						setMessages(prev => [...prev, compressingMessage]);
+
+						const compressionResult = await performAutoCompression();
+
+						if (compressionResult && options.clearSavedMessages) {
+							// 更新UI和token使用情况
+							options.clearSavedMessages();
+							setMessages(compressionResult.uiMessages);
+							if (options.setRemountKey) {
+								options.setRemountKey(prev => prev + 1);
+							}
+							options.setContextUsage(compressionResult.usage);
+							if (options.setShouldIncludeSystemInfo) {
+								options.setShouldIncludeSystemInfo(true);
+							}
+
+							// 更新累计的usage为压缩后的usage
+							accumulatedUsage = compressionResult.usage;
+
+							// 压缩后需要重新构建conversationMessages
+							conversationMessages = [];
+							const session = sessionManager.getCurrentSession();
+							if (session && session.messages.length > 0) {
+								conversationMessages.push(...session.messages);
+							}
+						}
+					} catch (error) {
+						console.error(
+							'Auto-compression after tool execution failed:',
+							error,
+						);
+						// 即使压缩失败也继续处理工具结果
+					}
+				}
+
 				// Check if there are TODO related tool calls, if yes refresh TODO list
 				const hasTodoTools = approvedTools.some(t =>
 					t.function.name.startsWith('todo-'),
@@ -888,6 +941,51 @@ export async function handleConversationWithTools(
 				if (options.getPendingMessages && options.clearPendingMessages) {
 					const pendingMessages = options.getPendingMessages();
 					if (pendingMessages.length > 0) {
+						// 检查 token 占用，如果 >= 80% 先执行自动压缩
+						if (shouldAutoCompress(accumulatedUsage)) {
+							try {
+								// 显示压缩提示消息
+								const compressingMessage: Message = {
+									role: 'assistant',
+									content:
+										'✵ Auto-compressing context before processing pending messages...',
+									streaming: false,
+								};
+								setMessages(prev => [...prev, compressingMessage]);
+
+								const compressionResult = await performAutoCompression();
+
+								if (compressionResult && options.clearSavedMessages) {
+									// 更新UI和token使用情况
+									options.clearSavedMessages();
+									setMessages(compressionResult.uiMessages);
+									if (options.setRemountKey) {
+										options.setRemountKey(prev => prev + 1);
+									}
+									options.setContextUsage(compressionResult.usage);
+									if (options.setShouldIncludeSystemInfo) {
+										options.setShouldIncludeSystemInfo(true);
+									}
+
+									// 更新累计的usage为压缩后的usage
+									accumulatedUsage = compressionResult.usage;
+
+									// 压缩后需要重新构建conversationMessages
+									conversationMessages = [];
+									const session = sessionManager.getCurrentSession();
+									if (session && session.messages.length > 0) {
+										conversationMessages.push(...session.messages);
+									}
+								}
+							} catch (error) {
+								console.error(
+									'Auto-compression before pending messages failed:',
+									error,
+								);
+								// 即使压缩失败也继续处理pending消息
+							}
+						}
+
 						// Clear pending messages
 						options.clearPendingMessages();
 
