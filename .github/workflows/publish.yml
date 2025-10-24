@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance context compression logic and improve context usage tracking
+            - fix Tool call rejected bugs
             ### Installation
             ```bash
             npm install -g snow-ai

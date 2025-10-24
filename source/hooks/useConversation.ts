@@ -496,6 +496,20 @@ export async function handleConversationWithTools(
 						// Remove pending tool messages
 						setMessages(prev => prev.filter(msg => !msg.toolPending));
 
+						// User rejected - need to save tool rejection messages to maintain conversation structure
+						// Add tool rejection responses for ALL tools that were rejected
+						for (const toolCall of toolsNeedingConfirmation) {
+							const rejectionMessage = {
+								role: 'tool' as const,
+								tool_call_id: toolCall.id,
+								content: 'Error: Tool execution rejected by user',
+							};
+							conversationMessages.push(rejectionMessage);
+							saveMessage(rejectionMessage).catch(error => {
+								console.error('Failed to save tool rejection message:', error);
+							});
+						}
+
 						// User rejected - end conversation
 						setMessages(prev => [
 							...prev,
