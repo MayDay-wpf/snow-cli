@@ -1,15 +1,16 @@
-import { createHash, randomUUID } from 'crypto';
+import {createHash, randomUUID} from 'crypto';
 import {
 	getOpenAiConfig,
 	getCustomSystemPrompt,
 	getCustomHeaders,
+	type ThinkingConfig,
 } from '../utils/apiConfig.js';
-import { getSystemPrompt } from './systemPrompt.js';
-import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
-import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
-import { logger } from '../utils/logger.js';
-import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
-import { saveUsageToFile } from '../utils/usageLogger.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
+import {logger} from '../utils/logger.js';
+import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
+import {saveUsageToFile} from '../utils/usageLogger.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -19,10 +20,18 @@ export interface AnthropicOptions {
 	tools?: ChatCompletionTool[];
 	sessionId?: string; // Session ID for user tracking and caching
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
 }
 
 export interface AnthropicStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'done' | 'usage';
+	type:
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'done'
+		| 'usage'
+		| 'reasoning_started'
+		| 'reasoning_delta';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -34,13 +43,18 @@ export interface AnthropicStreamChunk {
 	}>;
 	delta?: string;
 	usage?: UsageInfo;
+	thinking?: {
+		type: 'thinking';
+		thinking: string;
+		signature?: string;
+	};
 }
 
 export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: { type: 'ephemeral' };
+	cache_control?: {type: 'ephemeral'};
 }
 
 export interface AnthropicMessageParam {
@@ -53,6 +67,7 @@ let anthropicConfig: {
 	baseUrl: string;
 	customHeaders: Record<string, string>;
 	anthropicBeta?: boolean;
+	thinking?: ThinkingConfig;
 } | null = null;
 
 function getAnthropicConfig() {
@@ -75,6 +90,7 @@ function getAnthropicConfig() {
 					: 'https://api.anthropic.com/v1',
 			customHeaders,
 			anthropicBeta: config.anthropicBeta,
+			thinking: config.thinking,
 		};
 	}
 
@@ -125,7 +141,7 @@ function convertToolsToAnthropic(
 
 	if (convertedTools.length > 0) {
 		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = { type: 'ephemeral' };
+		(lastTool as any).cache_control = {type: 'ephemeral'};
 	}
 
 	return convertedTools;
@@ -206,6 +222,12 @@ function convertToAnthropicMessages(
 		) {
 			const content: any[] = [];
 
+			// When thinking is enabled, thinking block must come first
+			if (msg.thinking) {
+				// Use the complete thinking block object (includes signature)
+				content.push(msg.thinking);
+			}
+
 			if (msg.content) {
 				content.push({
 					type: 'text',
@@ -230,10 +252,31 @@ function convertToAnthropicMessages(
 		}
 
 		if (msg.role === 'user' || msg.role === 'assistant') {
-			anthropicMessages.push({
-				role: msg.role,
-				content: msg.content,
-			});
+			// For assistant messages with thinking, convert to structured format
+			if (msg.role === 'assistant' && msg.thinking) {
+				const content: any[] = [];
+
+				// Thinking block must come first - use complete block object (includes signature)
+				content.push(msg.thinking);
+
+				// Then text content
+				if (msg.content) {
+					content.push({
+						type: 'text',
+						text: msg.content,
+					});
+				}
+
+				anthropicMessages.push({
+					role: 'assistant',
+					content,
+				});
+			} else {
+				anthropicMessages.push({
+					role: msg.role,
+					content: msg.content,
+				});
+			}
 		}
 	}
 
@@ -248,7 +291,7 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: getSystemPrompt(),
-						cache_control: { type: 'ephemeral' },
+						cache_control: {type: 'ephemeral'},
 					},
 				] as any,
 			});
@@ -277,14 +320,14 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: lastMessage.content,
-						cache_control: { type: 'ephemeral' },
+						cache_control: {type: 'ephemeral'},
 					} as any,
 				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = { type: 'ephemeral' };
+					lastContent.cache_control = {type: 'ephemeral'};
 				}
 			}
 		}
@@ -292,15 +335,15 @@ function convertToAnthropicMessages(
 
 	const system = systemContent
 		? [
-			{
-				type: 'text',
-				text: systemContent,
-				cache_control: { type: 'ephemeral' },
-			},
-		]
+				{
+					type: 'text',
+					text: systemContent,
+					cache_control: {type: 'ephemeral'},
+				},
+		  ]
 		: undefined;
 
-	return { system, messages: anthropicMessages };
+	return {system, messages: anthropicMessages};
 }
 
 /**
@@ -313,10 +356,10 @@ async function* parseSSEStream(
 	let buffer = '';
 
 	while (true) {
-		const { done, value } = await reader.read();
+		const {done, value} = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
+		buffer += decoder.decode(value, {stream: true});
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -360,7 +403,7 @@ export async function* createStreamingAnthropicCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			const config = getAnthropicConfig();
-			const { system, messages } = convertToAnthropicMessages(
+			const {system, messages} = convertToAnthropicMessages(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 			);
@@ -371,7 +414,6 @@ export async function* createStreamingAnthropicCompletion(
 			const requestBody: any = {
 				model: options.model,
 				max_tokens: options.max_tokens || 4096,
-				temperature: options.temperature ?? 0.7,
 				system,
 				messages,
 				tools: convertToolsToAnthropic(options.tools),
@@ -381,11 +423,19 @@ export async function* createStreamingAnthropicCompletion(
 				stream: true,
 			};
 
+			// Add thinking configuration if enabled and not explicitly disabled
+			// When thinking is enabled, temperature must be 1
+			// Note: agents and other internal tools should set disableThinking=true
+			if (config.thinking && !options.disableThinking) {
+				requestBody.thinking = config.thinking;
+				requestBody.temperature = 1;
+			}
+
 			// Prepare headers
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
 				'x-api-key': config.apiKey,
-				'Authorization': `Bearer ${config.apiKey}`,
+				Authorization: `Bearer ${config.apiKey}`,
 				'anthropic-version': '2023-06-01',
 				...config.customHeaders,
 			};
@@ -420,6 +470,8 @@ export async function* createStreamingAnthropicCompletion(
 			}
 
 			let contentBuffer = '';
+			let thinkingTextBuffer = ''; // Accumulate thinking text content
+			let thinkingSignature = ''; // Accumulate thinking signature
 			let toolCallsBuffer: Map<
 				string,
 				{
@@ -434,6 +486,7 @@ export async function* createStreamingAnthropicCompletion(
 			let hasToolCalls = false;
 			let usageData: UsageInfo | undefined;
 			let blockIndexToId: Map<number, string> = new Map();
+			let blockIndexToType: Map<number, string> = new Map(); // Track block types (text, thinking, tool_use)
 			let completedToolBlocks = new Set<string>(); // Track which tool blocks have finished streaming
 
 			for await (const event of parseSSEStream(response.body.getReader())) {
@@ -443,10 +496,13 @@ export async function* createStreamingAnthropicCompletion(
 
 				if (event.type === 'content_block_start') {
 					const block = event.content_block;
+					const blockIndex = event.index;
+
+					// Track block type for later reference
+					blockIndexToType.set(blockIndex, block.type);
 
 					if (block.type === 'tool_use') {
 						hasToolCalls = true;
-						const blockIndex = event.index;
 						blockIndexToId.set(blockIndex, block.id);
 
 						toolCallsBuffer.set(block.id, {
@@ -463,6 +519,13 @@ export async function* createStreamingAnthropicCompletion(
 							delta: block.name,
 						};
 					}
+					// Handle thinking block start (Extended Thinking feature)
+					else if (block.type === 'thinking') {
+						// Thinking block started - emit reasoning_started event
+						yield {
+							type: 'reasoning_started',
+						};
+					}
 				} else if (event.type === 'content_block_delta') {
 					const delta = event.delta;
 
@@ -473,6 +536,23 @@ export async function* createStreamingAnthropicCompletion(
 							type: 'content',
 							content: text,
 						};
+					}
+
+					// Handle thinking_delta (Extended Thinking feature)
+					// Emit reasoning_delta event for thinking content
+					if (delta.type === 'thinking_delta') {
+						const thinkingText = delta.thinking;
+						thinkingTextBuffer += thinkingText; // Accumulate thinking text
+						yield {
+							type: 'reasoning_delta',
+							delta: thinkingText,
+						};
+					}
+
+					// Handle signature_delta (Extended Thinking feature)
+					// Signature is required for thinking blocks
+					if (delta.type === 'signature_delta') {
+						thinkingSignature += delta.signature; // Accumulate signature
 					}
 
 					if (delta.type === 'input_json_delta') {
@@ -608,9 +688,18 @@ export async function* createStreamingAnthropicCompletion(
 					usage: usageData,
 				};
 			}
+			// Return complete thinking block with signature if thinking content exists
+			const thinkingBlock = thinkingTextBuffer
+				? {
+						type: 'thinking' as const,
+						thinking: thinkingTextBuffer,
+						signature: thinkingSignature || undefined,
+				  }
+				: undefined;
 
 			yield {
 				type: 'done',
+				thinking: thinkingBlock,
 			};
 		},
 		{

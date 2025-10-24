@@ -207,6 +207,9 @@ export async function handleConversationWithTools(
 						encrypted_content?: string;
 				  }
 				| undefined;
+			let receivedThinking:
+				| {type: 'thinking'; thinking: string; signature?: string}
+				| undefined; // Accumulate thinking content from all platforms
 
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
@@ -309,6 +312,8 @@ export async function handleConversationWithTools(
 					}
 				} else if (chunk.type === 'tool_call_delta' && chunk.delta) {
 					// Accumulate tool call deltas and update token count in real-time
+					// When tool calls start, reasoning is done (OpenAI generally doesn't output text content during tool calls)
+					setIsReasoning?.(false);
 					toolCallAccumulator += chunk.delta;
 					try {
 						const tokens = encoder.encode(
@@ -335,6 +340,9 @@ export async function handleConversationWithTools(
 				} else if (chunk.type === 'reasoning_data' && chunk.reasoning) {
 					// Capture reasoning data from Responses API
 					receivedReasoning = chunk.reasoning;
+				} else if (chunk.type === 'done' && (chunk as any).thinking) {
+					// Capture thinking content from Anthropic only (includes signature)
+					receivedThinking = (chunk as any).thinking;
 				} else if (chunk.type === 'usage' && chunk.usage) {
 					// Capture usage information both in state and locally
 					setContextUsage(chunk.usage);
@@ -351,8 +359,8 @@ export async function handleConversationWithTools(
 							cache_creation_input_tokens:
 								chunk.usage.cache_creation_input_tokens,
 							cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
-					cached_tokens: chunk.usage.cached_tokens,
-				};
+							cached_tokens: chunk.usage.cached_tokens,
+						};
 					} else {
 						// Add to existing usage for UI display
 						accumulatedUsage.prompt_tokens += chunk.usage.prompt_tokens || 0;
@@ -370,11 +378,12 @@ export async function handleConversationWithTools(
 								(accumulatedUsage.cache_read_input_tokens || 0) +
 								chunk.usage.cache_read_input_tokens;
 						}
-				if (chunk.usage.cached_tokens !== undefined) {
-					accumulatedUsage.cached_tokens =
-						(accumulatedUsage.cached_tokens || 0) + chunk.usage.cached_tokens;
-				}
-			}
+						if (chunk.usage.cached_tokens !== undefined) {
+							accumulatedUsage.cached_tokens =
+								(accumulatedUsage.cached_tokens || 0) +
+								chunk.usage.cached_tokens;
+						}
+					}
 				}
 			}
 
@@ -402,7 +411,8 @@ export async function handleConversationWithTools(
 							arguments: tc.function.arguments,
 						},
 					})),
-					reasoning: receivedReasoning, // Include reasoning data for caching
+					reasoning: receivedReasoning, // Include reasoning data for caching (Responses API)
+					thinking: receivedThinking, // Include thinking content (Anthropic/OpenAI)
 				} as any;
 				conversationMessages.push(assistantMessage);
 
@@ -1061,7 +1071,8 @@ export async function handleConversationWithTools(
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
 					content: streamedContent.trim(),
-					reasoning: receivedReasoning, // Include reasoning data for caching
+					reasoning: receivedReasoning, // Include reasoning data for caching (Responses API)
+					thinking: receivedThinking, // Include thinking content (Anthropic/OpenAI)
 				};
 				conversationMessages.push(assistantMessage);
 				saveMessage(assistantMessage).catch(error => {

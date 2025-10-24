@@ -30,6 +30,12 @@ export interface ChatMessage {
 		content?: any;
 		encrypted_content?: string;
 	};
+	// Anthropic Extended Thinking - complete block with signature
+	thinking?: {
+		type: 'thinking';
+		thinking: string; // Accumulated thinking text
+		signature?: string; // Required signature for verification
+	};
 }
 
 export interface ChatCompletionTool {

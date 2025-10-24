@@ -243,7 +243,6 @@ export interface StreamChunk {
 	delta?: string; // For tool call streaming chunks or reasoning content
 	usage?: UsageInfo; // Token usage information
 }
-
 /**
  * Parse Server-Sent Events (SSE) stream
  */
@@ -327,7 +326,7 @@ export async function* createStreamingChatCompletion(
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${config.apiKey}`,
+					Authorization: `Bearer ${config.apiKey}`,
 					...config.customHeaders,
 				},
 				body: JSON.stringify(requestBody),
@@ -352,7 +351,6 @@ export async function* createStreamingChatCompletion(
 			let hasToolCalls = false;
 			let usageData: UsageInfo | undefined;
 			let reasoningStarted = false; // Track if reasoning has started
-
 			for await (const chunk of parseSSEStream(response.body.getReader())) {
 				if (abortSignal?.aborted) {
 					return;
@@ -402,7 +400,6 @@ export async function* createStreamingChatCompletion(
 						delta: reasoningContent,
 					};
 				}
-
 				// Accumulate tool calls and stream deltas
 				const deltaToolCalls = choice.delta?.tool_calls;
 				if (deltaToolCalls) {

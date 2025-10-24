@@ -88,7 +88,11 @@ function findPreserveStartIndex(messages: ChatMessage[]): number {
 		// 向前找对应的 assistant with tool_calls
 		for (let i = messages.length - 2; i >= 0; i--) {
 			const msg = messages[i];
-			if (msg?.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+			if (
+				msg?.role === 'assistant' &&
+				msg.tool_calls &&
+				msg.tool_calls.length > 0
+			) {
 				// 找到了，从这个 assistant 开始保留
 				return i;
 			}
@@ -98,7 +102,11 @@ function findPreserveStartIndex(messages: ChatMessage[]): number {
 	}
 
 	// Case 2: 最后是 assistant with tool_calls → 保留 assistant(tool_calls)
-	if (lastMsg?.role === 'assistant' && lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
+	if (
+		lastMsg?.role === 'assistant' &&
+		lastMsg.tool_calls &&
+		lastMsg.tool_calls.length > 0
+	) {
 		// 保留这个待处理的 tool_calls
 		return messages.length - 1;
 	}
@@ -319,6 +327,7 @@ async function compressWithAnthropic(
 		model: modelName,
 		messages,
 		max_tokens: 4096,
+		disableThinking: true, // Context compression 不使用 Extended Thinking
 	})) {
 		// Collect content
 		if (chunk.type === 'content' && chunk.content) {
@@ -376,7 +385,9 @@ export async function compressContext(
 	// 如果 preserveStartIndex 为 0，说明所有消息都需要保留（没有历史可压缩）
 	// 例如：整个对话只有一条 user→assistant(tool_calls)，无法压缩
 	if (preserveStartIndex === 0) {
-		console.warn('Cannot compress: all messages need to be preserved (no history)');
+		console.warn(
+			'Cannot compress: all messages need to be preserved (no history)',
+		);
 		return null;
 	}
 

@@ -3,16 +3,16 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/apiConfig.js';
-import { getSystemPrompt } from './systemPrompt.js';
-import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
 import type {
 	ChatMessage,
 	ToolCall,
 	ChatCompletionTool,
 	UsageInfo,
 } from './types.js';
-import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
-import { saveUsageToFile } from '../utils/usageLogger.js';
+import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
+import {saveUsageToFile} from '../utils/usageLogger.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -94,12 +94,12 @@ function ensureStrictSchema(
  */
 function convertToolsForResponses(tools?: ChatCompletionTool[]):
 	| Array<{
-		type: 'function';
-		name: string;
-		description?: string;
-		strict?: boolean;
-		parameters?: Record<string, any>;
-	}>
+			type: 'function';
+			name: string;
+			description?: string;
+			strict?: boolean;
+			parameters?: Record<string, any>;
+	  }>
 	| undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
@@ -116,20 +116,20 @@ function convertToolsForResponses(tools?: ChatCompletionTool[]):
 
 export interface ResponseStreamChunk {
 	type:
-	| 'content'
-	| 'tool_calls'
-	| 'tool_call_delta'
-	| 'reasoning_delta'
-	| 'reasoning_started'
-	| 'reasoning_data'
-	| 'done'
-	| 'usage';
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'reasoning_delta'
+		| 'reasoning_started'
+		| 'reasoning_data'
+		| 'done'
+		| 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
 	usage?: UsageInfo;
 	reasoning?: {
-		summary?: Array<{ type: 'summary_text'; text: string }>;
+		summary?: Array<{type: 'summary_text'; text: string}>;
 		content?: any;
 		encrypted_content?: string;
 	};
@@ -287,7 +287,7 @@ function convertToResponseInput(
 		systemInstructions = 'You are a helpful assistant.';
 	}
 
-	return { input: result, systemInstructions };
+	return {input: result, systemInstructions};
 }
 
 /**
@@ -300,10 +300,10 @@ async function* parseSSEStream(
 	let buffer = '';
 
 	while (true) {
-		const { done, value } = await reader.read();
+		const {done, value} = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
+		buffer += decoder.decode(value, {stream: true});
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -351,7 +351,7 @@ export async function* createStreamingResponse(
 	const config = getOpenAIConfig();
 
 	// 提取系统提示词和转换后的消息
-	const { input: requestInput, systemInstructions } = convertToResponseInput(
+	const {input: requestInput, systemInstructions} = convertToResponseInput(
 		options.messages,
 		options.includeBuiltinSystemPrompt !== false, // 默认为 true
 	);
@@ -366,19 +366,18 @@ export async function* createStreamingResponse(
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				parallel_tool_calls: false,
-				reasoning: options.reasoning || { effort: 'high', summary: 'auto' },
+				reasoning: options.reasoning || {effort: 'high', summary: 'auto'},
 				store: false,
 				stream: true,
 				prompt_cache_key: options.prompt_cache_key,
 			};
-
 
 			const url = `${config.baseUrl}/responses`;
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${config.apiKey}`,
+					Authorization: `Bearer ${config.apiKey}`,
 					...config.customHeaders,
 				},
 				body: JSON.stringify(requestPayload),
@@ -399,15 +398,17 @@ export async function* createStreamingResponse(
 			}
 
 			let contentBuffer = '';
-			let toolCallsBuffer: { [call_id: string]: any } = {};
+			let toolCallsBuffer: {[call_id: string]: any} = {};
 			let hasToolCalls = false;
 			let currentFunctionCallId: string | null = null;
 			let usageData: UsageInfo | undefined;
-			let reasoningData: {
-				summary?: Array<{ text: string; type: 'summary_text' }>;
-				content?: any;
-				encrypted_content?: string;
-			} | undefined;
+			let reasoningData:
+				| {
+						summary?: Array<{text: string; type: 'summary_text'}>;
+						content?: any;
+						encrypted_content?: string;
+				  }
+				| undefined;
 
 			for await (const chunk of parseSSEStream(response.body.getReader())) {
 				if (abortSignal?.aborted) {
@@ -574,7 +575,7 @@ export async function* createStreamingResponse(
 				};
 			}
 
-			// 发送完成信号
+			// 发送完成信号 - For Responses API, thinking content is in reasoning object, not separate thinking field
 			yield {
 				type: 'done',
 			};

@@ -1,10 +1,10 @@
-import { getOpenAiConfig } from '../utils/apiConfig.js';
-import { logger } from '../utils/logger.js';
-import { createStreamingChatCompletion, type ChatMessage } from '../api/chat.js';
-import { createStreamingResponse } from '../api/responses.js';
-import { createStreamingGeminiCompletion } from '../api/gemini.js';
-import { createStreamingAnthropicCompletion } from '../api/anthropic.js';
-import type { RequestMethod } from '../utils/apiConfig.js';
+import {getOpenAiConfig} from '../utils/apiConfig.js';
+import {logger} from '../utils/logger.js';
+import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
+import {createStreamingResponse} from '../api/responses.js';
+import {createStreamingGeminiCompletion} from '../api/gemini.js';
+import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
+import type {RequestMethod} from '../utils/apiConfig.js';
 
 /**
  * Compact Agent Service
@@ -73,7 +73,11 @@ export class CompactAgent {
 	 * @param abortSignal - Optional abort signal to cancel the request
 	 * @param onTokenUpdate - Optional callback to update token count during streaming
 	 */
-	private async callCompactModel(messages: ChatMessage[], abortSignal?: AbortSignal, onTokenUpdate?: (tokenCount: number) => void): Promise<string> {
+	private async callCompactModel(
+		messages: ChatMessage[],
+		abortSignal?: AbortSignal,
+		onTokenUpdate?: (tokenCount: number) => void,
+	): Promise<string> {
 		const config = getOpenAiConfig();
 
 		if (!config.basicModel) {
@@ -98,6 +102,7 @@ export class CompactAgent {
 							messages,
 							max_tokens: 4096,
 							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
+							disableThinking: true, // Agents 不使用 Extended Thinking
 						},
 						abortSignal,
 					);
@@ -204,13 +209,13 @@ export class CompactAgent {
 						stack: streamError.stack,
 						name: streamError.name,
 						chunkCount,
-						contentLength: completeContent.length
+						contentLength: completeContent.length,
 					});
 				} else {
 					logger.error('Compact agent: Unknown streaming error:', {
 						error: streamError,
 						chunkCount,
-						contentLength: completeContent.length
+						contentLength: completeContent.length,
 					});
 				}
 				throw streamError;
@@ -230,13 +235,13 @@ export class CompactAgent {
 					stack: error.stack,
 					name: error.name,
 					requestMethod: this.requestMethod,
-					modelName: this.modelName
+					modelName: this.modelName,
 				});
 			} else {
 				logger.error('Compact agent: Unknown API error:', {
 					error,
 					requestMethod: this.requestMethod,
-					modelName: this.modelName
+					modelName: this.modelName,
 				});
 			}
 			throw error;
@@ -256,7 +261,13 @@ export class CompactAgent {
 	 * @param onTokenUpdate - Optional callback to update token count during streaming
 	 * @returns Extracted key information relevant to the query
 	 */
-	async extractWebPageContent(content: string, userQuery: string, url: string, abortSignal?: AbortSignal, onTokenUpdate?: (tokenCount: number) => void): Promise<string> {
+	async extractWebPageContent(
+		content: string,
+		userQuery: string,
+		url: string,
+		abortSignal?: AbortSignal,
+		onTokenUpdate?: (tokenCount: number) => void,
+	): Promise<string> {
 		const available = await this.isAvailable();
 		if (!available) {
 			// If compact agent is not available, return original content
@@ -290,10 +301,16 @@ Provide the extracted content below:`;
 				},
 			];
 
-			const extractedContent = await this.callCompactModel(messages, abortSignal, onTokenUpdate);
+			const extractedContent = await this.callCompactModel(
+				messages,
+				abortSignal,
+				onTokenUpdate,
+			);
 
 			if (!extractedContent || extractedContent.trim().length === 0) {
-				logger.warn('Compact agent returned empty response, using original content');
+				logger.warn(
+					'Compact agent returned empty response, using original content',
+				);
 				return content;
 			}
 
@@ -301,18 +318,23 @@ Provide the extracted content below:`;
 		} catch (error) {
 			// Log detailed error information
 			if (error instanceof Error) {
-				logger.warn('Compact agent extraction failed, using original content:', {
-					error: error.message,
-					stack: error.stack,
-					name: error.name
-				});
+				logger.warn(
+					'Compact agent extraction failed, using original content:',
+					{
+						error: error.message,
+						stack: error.stack,
+						name: error.name,
+					},
+				);
 			} else {
-				logger.warn('Compact agent extraction failed with unknown error:', error);
+				logger.warn(
+					'Compact agent extraction failed with unknown error:',
+					error,
+				);
 			}
 			return content;
 		}
 	}
-
 }
 
 // Export singleton instance

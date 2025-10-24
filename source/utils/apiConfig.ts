@@ -8,6 +8,11 @@ export interface CompactModelConfig {
 	modelName: string;
 }
 
+export interface ThinkingConfig {
+	type: 'enabled';
+	budget_tokens: number;
+}
+
 export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
@@ -18,6 +23,7 @@ export interface ApiConfig {
 	maxTokens?: number; // Max tokens for single response (API request parameter)
 	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
+	thinking?: ThinkingConfig; // Anthropic thinking configuration
 }
 
 export interface MCPServer {
@@ -70,7 +76,12 @@ const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt');
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
-	if (method === 'chat' || method === 'responses' || method === 'gemini' || method === 'anthropic') {
+	if (
+		method === 'chat' ||
+		method === 'responses' ||
+		method === 'gemini' ||
+		method === 'anthropic'
+	) {
 		return method;
 	}
 
@@ -80,7 +91,6 @@ function normalizeRequestMethod(method: unknown): RequestMethod {
 
 	return DEFAULT_CONFIG.snowcfg.requestMethod;
 }
-
 
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
@@ -107,7 +117,9 @@ export function loadConfig(): AppConfig {
 
 	try {
 		const configData = readFileSync(CONFIG_FILE, 'utf8');
-		const parsedConfig = JSON.parse(configData) as Partial<AppConfig> & {mcp?: unknown};
+		const parsedConfig = JSON.parse(configData) as Partial<AppConfig> & {
+			mcp?: unknown;
+		};
 		const {mcp: legacyMcp, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
@@ -117,14 +129,18 @@ export function loadConfig(): AppConfig {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				...configWithoutMcp.snowcfg,
-				requestMethod: normalizeRequestMethod(configWithoutMcp.snowcfg.requestMethod),
+				requestMethod: normalizeRequestMethod(
+					configWithoutMcp.snowcfg.requestMethod,
+				),
 			};
 		} else if (configWithoutMcp.openai) {
 			// 向下兼容旧版本
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				...configWithoutMcp.openai,
-				requestMethod: normalizeRequestMethod(configWithoutMcp.openai.requestMethod),
+				requestMethod: normalizeRequestMethod(
+					configWithoutMcp.openai.requestMethod,
+				),
 			};
 		} else {
 			apiConfig = {
@@ -140,7 +156,10 @@ export function loadConfig(): AppConfig {
 		};
 
 		// 如果是从旧版本迁移过来的，保存新配置
-		if (legacyMcp !== undefined || (configWithoutMcp.openai && !configWithoutMcp.snowcfg)) {
+		if (
+			legacyMcp !== undefined ||
+			(configWithoutMcp.openai && !configWithoutMcp.snowcfg)
+		) {
 			saveConfig(mergedConfig);
 		}
 
@@ -268,30 +287,37 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 			if (!name.trim()) {
 				errors.push('Server name cannot be empty');
 			}
-			
+
 			if (server.url && !isValidUrl(server.url)) {
-				const urlWithEnvReplaced = server.url.replace(/\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*/g, 'placeholder');
+				const urlWithEnvReplaced = server.url.replace(
+					/\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*/g,
+					'placeholder',
+				);
 				if (!isValidUrl(urlWithEnvReplaced)) {
 					errors.push(`Invalid URL format for server "${name}"`);
 				}
 			}
-			
+
 			if (server.command && !server.command.trim()) {
 				errors.push(`Command cannot be empty for server "${name}"`);
 			}
-			
+
 			if (!server.url && !server.command) {
 				errors.push(`Server "${name}" must have either a URL or command`);
 			}
-			
+
 			// 验证环境变量格式
 			if (server.env) {
 				Object.entries(server.env).forEach(([envName, envValue]) => {
 					if (!envName.trim()) {
-						errors.push(`Environment variable name cannot be empty for server "${name}"`);
+						errors.push(
+							`Environment variable name cannot be empty for server "${name}"`,
+						);
 					}
 					if (typeof envValue !== 'string') {
-						errors.push(`Environment variable "${envName}" must be a string for server "${name}"`);
+						errors.push(
+							`Environment variable "${envName}" must be a string for server "${name}"`,
+						);
 					}
 				});
 			}
@@ -345,7 +371,11 @@ export function getCustomHeaders(): Record<string, string> {
 		const headers = JSON.parse(content);
 
 		// 验证格式：必须是对象，且所有值都是字符串
-		if (typeof headers !== 'object' || headers === null || Array.isArray(headers)) {
+		if (
+			typeof headers !== 'object' ||
+			headers === null ||
+			Array.isArray(headers)
+		) {
 			return {};
 		}
 
@@ -384,4 +414,3 @@ export function saveCustomHeaders(headers: Record<string, string>): void {
 		throw new Error(`Failed to save custom headers: ${error}`);
 	}
 }
-

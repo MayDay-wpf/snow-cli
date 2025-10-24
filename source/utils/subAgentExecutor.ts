@@ -119,7 +119,7 @@ export async function executeSubAgent(
 			// Get API configuration
 			const config = getOpenAiConfig();
 			const currentSession = sessionManager.getCurrentSession();
-			const model = config.advancedModel || 'claude-3-5-sonnet-20241022';
+			const model = config.advancedModel || 'gpt-5';
 
 			// Call API with sub-agent's tools - choose API based on config
 			const stream =
@@ -132,6 +132,7 @@ export async function executeSubAgent(
 								max_tokens: config.maxTokens || 4096,
 								tools: allowedTools,
 								sessionId: currentSession?.id,
+								disableThinking: true, // Sub-agents 不使用 Extended Thinking
 							},
 							abortSignal,
 					  )

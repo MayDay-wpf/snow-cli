@@ -37,6 +37,8 @@ type ConfigField =
 	| 'apiKey'
 	| 'requestMethod'
 	| 'anthropicBeta'
+	| 'thinkingEnabled'
+	| 'thinkingBudgetTokens'
 	| 'advancedModel'
 	| 'basicModel'
 	| 'compactModelName'
@@ -103,6 +105,8 @@ export default function ConfigScreen({
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
+	const [thinkingEnabled, setThinkingEnabled] = useState(false);
+	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
@@ -123,6 +127,9 @@ export default function ConfigScreen({
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [, forceUpdate] = useState(0);
 
+	// Scrolling configuration
+	const MAX_VISIBLE_FIELDS = 8;
+
 	const requestMethodOptions = [
 		{
 			label: 'Chat Completions - Modern chat API (GPT-4, GPT-3.5-turbo)',
@@ -142,9 +149,50 @@ export default function ConfigScreen({
 		},
 	];
 
+	// Get all available fields based on current request method
+	const getAllFields = (): ConfigField[] => {
+		return [
+			'profile',
+			'baseUrl',
+			'apiKey',
+			'requestMethod',
+			...(requestMethod === 'anthropic'
+				? [
+						'anthropicBeta' as ConfigField,
+						'thinkingEnabled' as ConfigField,
+						'thinkingBudgetTokens' as ConfigField,
+				  ]
+				: []),
+			'advancedModel',
+			'basicModel',
+			'compactModelName',
+			'maxContextTokens',
+			'maxTokens',
+		];
+	};
+
+	// Get current field index and total count
+	const allFields = getAllFields();
+	const currentFieldIndex = allFields.indexOf(currentField);
+	const totalFields = allFields.length;
+
 	useEffect(() => {
 		loadProfilesAndConfig();
 	}, []);
+
+	// Auto-adjust currentField when requestMethod changes
+	useEffect(() => {
+		// If requestMethod is not 'anthropic' and currentField is on Anthropic-specific fields,
+		// move to the next available field
+		if (
+			requestMethod !== 'anthropic' &&
+			(currentField === 'anthropicBeta' ||
+				currentField === 'thinkingEnabled' ||
+				currentField === 'thinkingBudgetTokens')
+		) {
+			setCurrentField('advancedModel');
+		}
+	}, [requestMethod, currentField]);
 
 	const loadProfilesAndConfig = () => {
 		// Load profiles
@@ -157,6 +205,8 @@ export default function ConfigScreen({
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
 		setAnthropicBeta(config.anthropicBeta || false);
+		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
+		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
@@ -211,6 +261,8 @@ export default function ConfigScreen({
 		if (currentField === 'basicModel') return basicModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
 		if (currentField === 'maxTokens') return maxTokens.toString();
+		if (currentField === 'thinkingBudgetTokens')
+			return thinkingBudgetTokens.toString();
 		if (currentField === 'compactModelName') return compactModelName;
 		return '';
 	};
@@ -231,6 +283,9 @@ export default function ConfigScreen({
 					apiKey,
 					requestMethod,
 					anthropicBeta,
+					thinking: thinkingEnabled
+						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
+						: undefined,
 					advancedModel,
 					basicModel,
 					maxContextTokens,
@@ -309,6 +364,17 @@ export default function ConfigScreen({
 				maxTokens,
 			};
 
+			// Save thinking configuration (always save to preserve settings)
+			if (thinkingEnabled) {
+				config.thinking = {
+					type: 'enabled',
+					budget_tokens: thinkingBudgetTokens,
+				};
+			} else {
+				// Explicitly set to undefined to clear it when disabled
+				config.thinking = undefined;
+			}
+
 			// Only save compactModel if modelName is provided (uses same baseUrl/apiKey)
 			if (compactModelName) {
 				config.compactModel = {
@@ -327,6 +393,9 @@ export default function ConfigScreen({
 						apiKey,
 						requestMethod,
 						anthropicBeta,
+						thinking: thinkingEnabled
+							? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
+							: undefined,
 						advancedModel,
 						basicModel,
 						maxContextTokens,
@@ -346,6 +415,229 @@ export default function ConfigScreen({
 		} else {
 			setErrors(validationErrors);
 			return false;
+		}
+	};
+
+	// Helper function to render a single field
+	const renderField = (field: ConfigField) => {
+		const isActive = field === currentField;
+		const isCurrentlyEditing = isEditing && isActive;
+
+		switch (field) {
+			case 'profile':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Profile:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{profiles.find(p => p.name === activeProfile)?.displayName ||
+										activeProfile}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'baseUrl':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Base URL:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={baseUrl}
+									onChange={value => setBaseUrl(stripFocusArtifacts(value))}
+									placeholder="https://api.openai.com/v1"
+								/>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{baseUrl || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'apiKey':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}API Key:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={apiKey}
+									onChange={value => setApiKey(stripFocusArtifacts(value))}
+									placeholder="sk-..."
+									mask="*"
+								/>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'requestMethod':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Request Method:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{requestMethodOptions.find(opt => opt.value === requestMethod)
+										?.label || 'Not set'}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'anthropicBeta':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Anthropic Beta:
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{anthropicBeta ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
+								toggle)
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'thinkingEnabled':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Thinking Enabled:
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{thinkingEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
+								toggle)
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'thinkingBudgetTokens':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Thinking Budget Tokens:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {thinkingBudgetTokens}</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{thinkingBudgetTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'advancedModel':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Advanced Model:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{advancedModel || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'basicModel':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Basic Model:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{basicModel || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'compactModelName':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Compact Model:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{compactModelName || 'Not set'}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'maxContextTokens':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Max Context Tokens:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {maxContextTokens}</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{maxContextTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'maxTokens':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Max Tokens:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {maxTokens}</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{maxTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			default:
+				return null;
 		}
 	};
 
@@ -476,38 +768,65 @@ export default function ConfigScreen({
 			}
 
 			// Handle numeric input for token fields
-			if (currentField === 'maxContextTokens' || currentField === 'maxTokens') {
+			if (
+				currentField === 'maxContextTokens' ||
+				currentField === 'maxTokens' ||
+				currentField === 'thinkingBudgetTokens'
+			) {
 				if (input && input.match(/[0-9]/)) {
 					const currentValue =
-						currentField === 'maxContextTokens' ? maxContextTokens : maxTokens;
+						currentField === 'maxContextTokens'
+							? maxContextTokens
+							: currentField === 'maxTokens'
+							? maxTokens
+							: thinkingBudgetTokens;
 					const newValue = parseInt(currentValue.toString() + input, 10);
 					if (!isNaN(newValue)) {
 						if (currentField === 'maxContextTokens') {
 							setMaxContextTokens(newValue);
-						} else {
+						} else if (currentField === 'maxTokens') {
 							setMaxTokens(newValue);
+						} else {
+							setThinkingBudgetTokens(newValue);
 						}
 					}
 				} else if (key.backspace || key.delete) {
 					const currentValue =
-						currentField === 'maxContextTokens' ? maxContextTokens : maxTokens;
+						currentField === 'maxContextTokens'
+							? maxContextTokens
+							: currentField === 'maxTokens'
+							? maxTokens
+							: thinkingBudgetTokens;
 					const currentStr = currentValue.toString();
 					const newStr = currentStr.slice(0, -1);
 					const newValue = parseInt(newStr, 10);
 					if (currentField === 'maxContextTokens') {
 						setMaxContextTokens(!isNaN(newValue) ? newValue : 0);
-					} else {
+					} else if (currentField === 'maxTokens') {
 						setMaxTokens(!isNaN(newValue) ? newValue : 0);
+					} else {
+						setThinkingBudgetTokens(!isNaN(newValue) ? newValue : 0);
 					}
 				} else if (key.return) {
-					const minValue = currentField === 'maxContextTokens' ? 4000 : 100;
+					const minValue =
+						currentField === 'maxContextTokens'
+							? 4000
+							: currentField === 'maxTokens'
+							? 100
+							: 1000;
 					const currentValue =
-						currentField === 'maxContextTokens' ? maxContextTokens : maxTokens;
+						currentField === 'maxContextTokens'
+							? maxContextTokens
+							: currentField === 'maxTokens'
+							? maxTokens
+							: thinkingBudgetTokens;
 					const finalValue = currentValue < minValue ? minValue : currentValue;
 					if (currentField === 'maxContextTokens') {
 						setMaxContextTokens(finalValue);
-					} else {
+					} else if (currentField === 'maxTokens') {
 						setMaxTokens(finalValue);
+					} else {
+						setThinkingBudgetTokens(finalValue);
 					}
 					setIsEditing(false);
 				}
@@ -538,9 +857,12 @@ export default function ConfigScreen({
 				// Enter edit mode
 				if (currentField === 'anthropicBeta') {
 					setAnthropicBeta(!anthropicBeta);
+				} else if (currentField === 'thinkingEnabled') {
+					setThinkingEnabled(!thinkingEnabled);
 				} else if (
 					currentField === 'maxContextTokens' ||
-					currentField === 'maxTokens'
+					currentField === 'maxTokens' ||
+					currentField === 'thinkingBudgetTokens'
 				) {
 					setIsEditing(true);
 				} else if (
@@ -574,35 +896,13 @@ export default function ConfigScreen({
 				setManualInputValue(getCurrentValue());
 			}
 		} else if (!isEditing && key.upArrow) {
-			const fields: ConfigField[] = [
-				'profile',
-				'baseUrl',
-				'apiKey',
-				'requestMethod',
-				'anthropicBeta',
-				'advancedModel',
-				'basicModel',
-				'compactModelName',
-				'maxContextTokens',
-				'maxTokens',
-			];
+			const fields = getAllFields();
 			const currentIndex = fields.indexOf(currentField);
 			if (currentIndex > 0) {
 				setCurrentField(fields[currentIndex - 1]!);
 			}
 		} else if (!isEditing && key.downArrow) {
-			const fields: ConfigField[] = [
-				'profile',
-				'baseUrl',
-				'apiKey',
-				'requestMethod',
-				'anthropicBeta',
-				'advancedModel',
-				'basicModel',
-				'compactModelName',
-				'maxContextTokens',
-				'maxTokens',
-			];
+			const fields = getAllFields();
 			const currentIndex = fields.indexOf(currentField);
 			if (currentIndex < fields.length - 1) {
 				setCurrentField(fields[currentIndex + 1]!);
@@ -812,6 +1112,19 @@ export default function ConfigScreen({
 				</Box>
 			)}
 
+			{/* Position indicator - always visible */}
+			<Box marginBottom={1}>
+				<Text color="yellow" bold>
+					Settings ({currentFieldIndex + 1}/{totalFields})
+				</Text>
+				{totalFields > MAX_VISIBLE_FIELDS && (
+					<Text color="gray" dimColor>
+						{' '}
+						· ↑↓ to scroll
+					</Text>
+				)}
+			</Box>
+
 			{/* When editing with Select, show simplified view */}
 			{isEditing &&
 			(currentField === 'profile' ||
@@ -898,161 +1211,30 @@ export default function ConfigScreen({
 				</Box>
 			) : (
 				<Box flexDirection="column">
-					{/* Profile Selection */}
-					<Box flexDirection="column">
-						<Text color={currentField === 'profile' ? 'green' : 'white'}>
-							{currentField === 'profile' ? '❯ ' : '  '}Profile:
-						</Text>
-						{(!isEditing || currentField !== 'profile') && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{profiles.find(p => p.name === activeProfile)?.displayName ||
-										activeProfile}
-								</Text>
-							</Box>
-						)}
-					</Box>
+					{/* Scrollable field list */}
+					{(() => {
+						// Calculate visible window
+						if (allFields.length <= MAX_VISIBLE_FIELDS) {
+							// Show all fields if less than max
+							return allFields.map(field => renderField(field));
+						}
 
-					{/* API Settings */}
-					<Box flexDirection="column">
-						<Text color={currentField === 'baseUrl' ? 'green' : 'white'}>
-							{currentField === 'baseUrl' ? '❯ ' : '  '}Base URL:
-						</Text>
-						{currentField === 'baseUrl' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={baseUrl}
-									onChange={value => setBaseUrl(stripFocusArtifacts(value))}
-									placeholder="https://api.openai.com/v1"
-								/>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'baseUrl') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{baseUrl || 'Not set'}</Text>
-							</Box>
-						)}
-					</Box>
+						// Calculate scroll window
+						const halfWindow = Math.floor(MAX_VISIBLE_FIELDS / 2);
+						let startIndex = Math.max(0, currentFieldIndex - halfWindow);
+						let endIndex = Math.min(
+							allFields.length,
+							startIndex + MAX_VISIBLE_FIELDS,
+						);
 
-					<Box flexDirection="column">
-						<Text color={currentField === 'apiKey' ? 'green' : 'white'}>
-							{currentField === 'apiKey' ? '❯ ' : '  '}API Key:
-						</Text>
-						{currentField === 'apiKey' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={apiKey}
-									onChange={value => setApiKey(stripFocusArtifacts(value))}
-									placeholder="sk-..."
-									mask="*"
-								/>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'apiKey') && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
-								</Text>
-							</Box>
-						)}
-					</Box>
+						// Adjust if we're near the end
+						if (endIndex - startIndex < MAX_VISIBLE_FIELDS) {
+							startIndex = Math.max(0, endIndex - MAX_VISIBLE_FIELDS);
+						}
 
-					<Box flexDirection="column">
-						<Text color={currentField === 'requestMethod' ? 'green' : 'white'}>
-							{currentField === 'requestMethod' ? '❯ ' : '  '}Request Method:
-						</Text>
-						{(!isEditing || currentField !== 'requestMethod') && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{requestMethodOptions.find(opt => opt.value === requestMethod)
-										?.label || 'Not set'}
-								</Text>
-							</Box>
-						)}
-					</Box>
-
-					<Box flexDirection="column">
-						<Text color={currentField === 'anthropicBeta' ? 'green' : 'white'}>
-							{currentField === 'anthropicBeta' ? '❯ ' : '  '}Anthropic Beta:
-						</Text>
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{anthropicBeta ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
-								toggle)
-							</Text>
-						</Box>
-					</Box>
-
-					{/* Model Settings */}
-					<Box flexDirection="column">
-						<Text color={currentField === 'advancedModel' ? 'green' : 'white'}>
-							{currentField === 'advancedModel' ? '❯ ' : '  '}Advanced Model:
-						</Text>
-						{(!isEditing || currentField !== 'advancedModel') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{advancedModel || 'Not set'}</Text>
-							</Box>
-						)}
-					</Box>
-
-					<Box flexDirection="column">
-						<Text color={currentField === 'basicModel' ? 'green' : 'white'}>
-							{currentField === 'basicModel' ? '❯ ' : '  '}Basic Model:
-						</Text>
-						{(!isEditing || currentField !== 'basicModel') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{basicModel || 'Not set'}</Text>
-							</Box>
-						)}
-					</Box>
-
-					<Box flexDirection="column">
-						<Text
-							color={currentField === 'compactModelName' ? 'green' : 'white'}
-						>
-							{currentField === 'compactModelName' ? '❯ ' : '  '}Compact Model:
-						</Text>
-						{(!isEditing || currentField !== 'compactModelName') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{compactModelName || 'Not set'}</Text>
-							</Box>
-						)}
-					</Box>
-
-					<Box flexDirection="column">
-						<Text
-							color={currentField === 'maxContextTokens' ? 'green' : 'white'}
-						>
-							{currentField === 'maxContextTokens' ? '❯ ' : '  '}Max Context
-							Tokens:
-						</Text>
-						{currentField === 'maxContextTokens' && isEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {maxContextTokens}</Text>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'maxContextTokens') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{maxContextTokens}</Text>
-							</Box>
-						)}
-					</Box>
-
-					<Box flexDirection="column">
-						<Text color={currentField === 'maxTokens' ? 'green' : 'white'}>
-							{currentField === 'maxTokens' ? '❯ ' : '  '}Max Tokens:
-						</Text>
-						{currentField === 'maxTokens' && isEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {maxTokens}</Text>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'maxTokens') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{maxTokens}</Text>
-							</Box>
-						)}
-					</Box>
+						const visibleFields = allFields.slice(startIndex, endIndex);
+						return visibleFields.map(field => renderField(field));
+					})()}
 				</Box>
 			)}
 

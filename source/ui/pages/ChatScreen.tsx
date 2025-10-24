@@ -378,7 +378,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 								// Check if all tool results exist after this assistant message
 								for (let j = i + 1; j < messages.length; j++) {
 									const followMsg = messages[j];
-									if (followMsg && followMsg.role === 'tool' && followMsg.tool_call_id) {
+									if (
+										followMsg &&
+										followMsg.role === 'tool' &&
+										followMsg.tool_call_id
+									) {
 										toolCallIds.delete(followMsg.tool_call_id);
 									}
 								}
@@ -772,7 +776,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				clearSavedMessages,
 				setRemountKey,
 				setShouldIncludeSystemInfo,
-			getCurrentContextPercentage: () => currentContextPercentageRef.current,
+				getCurrentContextPercentage: () => currentContextPercentageRef.current,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -883,7 +887,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setRetryStatus: streamingState.setRetryStatus,
 				clearSavedMessages,
 				setRemountKey,
-			getCurrentContextPercentage: () => currentContextPercentageRef.current,
+				getCurrentContextPercentage: () => currentContextPercentageRef.current,
 				setShouldIncludeSystemInfo,
 			});
 		} catch (error) {
@@ -1303,6 +1307,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 											text={
 												streamingState.isReasoning
 													? 'Deep thinking...'
+													: streamingState.streamTokenCount > 0
+													? 'Writing...'
 													: 'Thinking...'
 											}
 										/>{' '}
@@ -1426,7 +1432,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 									: undefined
 							}
 							initialContent={restoreInputContent}
-						onContextPercentageChange={setCurrentContextPercentage}
+							onContextPercentageChange={setCurrentContextPercentage}
 						/>
 						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
