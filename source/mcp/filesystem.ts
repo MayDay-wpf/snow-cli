@@ -595,7 +595,7 @@ export class FilesystemMCPService {
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
 				// Yield control periodically to prevent UI freeze
 				if (i % YIELD_INTERVAL === 0) {
-					await new Promise(resolve => setImmediate(resolve));
+					await new Promise(resolve => setTimeout(resolve, 0));
 				}
 
 				// Quick pre-filter: check first line similarity (only for multi-line searches)
@@ -665,7 +665,7 @@ export class FilesystemMCPService {
 					) {
 						// Yield control periodically to prevent UI freeze
 						if (i % YIELD_INTERVAL === 0) {
-							await new Promise(resolve => setImmediate(resolve));
+							await new Promise(resolve => setTimeout(resolve, 0));
 						}
 
 						const candidateLines = contentLines.slice(

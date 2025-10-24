@@ -37,7 +37,10 @@ export function calculateContextPercentage(contextUsage: {
 		  (contextUsage.cacheReadTokens || 0)
 		: contextUsage.inputTokens;
 
-	return Math.min(100, (totalInputTokens / contextUsage.maxContextTokens) * 100);
+	return Math.min(
+		100,
+		(totalInputTokens / contextUsage.maxContextTokens) * 100,
+	);
 }
 
 type Props = {
@@ -135,6 +138,11 @@ export default function ChatInput({
 		escapeKeyTimer,
 		getUserMessages,
 		handleHistorySelect,
+		currentHistoryIndex,
+		navigateHistoryUp,
+		navigateHistoryDown,
+		resetHistoryNavigation,
+		saveToHistory,
 	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
 
 	// Use clipboard hook
@@ -179,6 +187,11 @@ export default function ChatInput({
 		escapeKeyTimer,
 		getUserMessages,
 		handleHistorySelect,
+		currentHistoryIndex,
+		navigateHistoryUp,
+		navigateHistoryDown,
+		resetHistoryNavigation,
+		saveToHistory,
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
@@ -190,7 +203,9 @@ export default function ChatInput({
 			buffer.setText(initialContent);
 			triggerUpdate();
 		}
-	}, [initialContent, buffer, triggerUpdate]);
+		// Only run when initialContent changes
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [initialContent]);
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
 	useEffect(() => {
@@ -199,7 +214,7 @@ export default function ChatInput({
 			forceUpdate({});
 		}, 10);
 		return () => clearTimeout(timer);
-	}, [showFilePicker, forceUpdate]);
+	}, [showFilePicker]);
 
 	// Handle terminal width changes with debounce (like gemini-cli)
 	useEffect(() => {
@@ -217,7 +232,7 @@ export default function ChatInput({
 		}, 100);
 
 		return () => clearTimeout(timer);
-	}, [terminalWidth, forceUpdate]);
+	}, [terminalWidth]);
 
 	// Notify parent of context percentage changes
 	useEffect(() => {

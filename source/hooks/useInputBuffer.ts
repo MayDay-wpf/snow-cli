@@ -18,7 +18,7 @@ export function useInputBuffer(viewport: Viewport) {
 	useEffect(() => {
 		buffer.updateViewport(viewport);
 		triggerUpdate();
-	}, [viewport.width, viewport.height, buffer, triggerUpdate]);
+	}, [viewport.width, viewport.height, buffer]);
 
 	// Cleanup buffer on unmount
 	useEffect(() => {

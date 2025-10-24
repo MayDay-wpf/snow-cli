@@ -96,7 +96,7 @@ export function useStreamingState() {
 		}, 1000);
 
 		return () => clearInterval(interval);
-	}, [retryStatus]);
+	}, [retryStatus?.isRetrying, retryStatus?.remainingSeconds]);
 
 	return {
 		isStreaming,

@@ -539,6 +539,23 @@ export class ACECodeSearchService {
 	}
 
 	/**
+	 * Expand glob patterns with braces like "*.{ts,tsx}" into multiple patterns
+	 */
+	private expandGlobBraces(glob: string): string[] {
+		// Match {a,b,c} pattern
+		const braceMatch = glob.match(/^(.+)\{([^}]+)\}(.*)$/);
+		if (!braceMatch || !braceMatch[1] || !braceMatch[2] || braceMatch[3] === undefined) {
+			return [glob];
+		}
+
+		const prefix = braceMatch[1];
+		const alternatives = braceMatch[2].split(',');
+		const suffix = braceMatch[3];
+
+		return alternatives.map(alt => `${prefix}${alt}${suffix}`);
+	}
+
+	/**
 	 * Strategy 1: Use git grep for fast searching in Git repositories
 	 */
 	private async gitGrepSearch(
@@ -559,7 +576,9 @@ export class ACECodeSearchService {
 			];
 
 			if (fileGlob) {
-				args.push('--', fileGlob);
+				// Expand glob patterns with braces (e.g., "source/**/*.{ts,tsx}" -> ["source/**/*.ts", "source/**/*.tsx"])
+				const expandedGlobs = this.expandGlobBraces(fileGlob);
+				args.push('--', ...expandedGlobs);
 			}
 
 			const child = spawn('git', args, {

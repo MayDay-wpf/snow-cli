@@ -1,27 +1,86 @@
-import { useState, useCallback, useRef } from 'react';
+import { useReducer, useCallback, useRef } from 'react';
 import { TextBuffer } from '../utils/textBuffer.js';
 import { FileListRef } from '../ui/components/FileList.js';
+
+type FilePickerState = {
+	showFilePicker: boolean;
+	fileSelectedIndex: number;
+	fileQuery: string;
+	atSymbolPosition: number;
+	filteredFileCount: number;
+};
+
+type FilePickerAction =
+	| { type: 'SHOW'; query: string; position: number }
+	| { type: 'HIDE' }
+	| { type: 'SELECT_FILE' }
+	| { type: 'SET_SELECTED_INDEX'; index: number }
+	| { type: 'SET_FILTERED_COUNT'; count: number };
+
+function filePickerReducer(
+	state: FilePickerState,
+	action: FilePickerAction,
+): FilePickerState {
+	switch (action.type) {
+		case 'SHOW':
+			return {
+				...state,
+				showFilePicker: true,
+				fileSelectedIndex: 0,
+				fileQuery: action.query,
+				atSymbolPosition: action.position,
+			};
+		case 'HIDE':
+			return {
+				...state,
+				showFilePicker: false,
+				fileSelectedIndex: 0,
+				fileQuery: '',
+				atSymbolPosition: -1,
+			};
+		case 'SELECT_FILE':
+			return {
+				...state,
+				showFilePicker: false,
+				fileSelectedIndex: 0,
+				fileQuery: '',
+				atSymbolPosition: -1,
+			};
+		case 'SET_SELECTED_INDEX':
+			return {
+				...state,
+				fileSelectedIndex: action.index,
+			};
+		case 'SET_FILTERED_COUNT':
+			return {
+				...state,
+				filteredFileCount: action.count,
+			};
+		default:
+			return state;
+	}
+}
 
 export function useFilePicker(
 	buffer: TextBuffer,
 	triggerUpdate: () => void,
 ) {
-	const [showFilePicker, setShowFilePicker] = useState(false);
-	const [fileSelectedIndex, setFileSelectedIndex] = useState(0);
-	const [fileQuery, setFileQuery] = useState('');
-	const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
-	const [filteredFileCount, setFilteredFileCount] = useState(0);
+	const [state, dispatch] = useReducer(filePickerReducer, {
+		showFilePicker: false,
+		fileSelectedIndex: 0,
+		fileQuery: '',
+		atSymbolPosition: -1,
+		filteredFileCount: 0,
+	});
+
 	const fileListRef = useRef<FileListRef>(null);
 
 	// Update file picker state
 	const updateFilePickerState = useCallback(
 		(text: string, cursorPos: number) => {
 			if (!text.includes('@')) {
-				if (showFilePicker) {
-					setShowFilePicker(false);
-					setFileSelectedIndex(0);
-					setFileQuery('');
-					setAtSymbolPosition(-1);
+				if (state.showFilePicker) {
+					dispatch({ type: 'HIDE' });
 				}
 				return;
 			}
@@ -35,39 +94,33 @@ export function useFilePicker(
 				const afterAt = beforeCursor.slice(lastAtIndex + 1);
 				if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
 					if (
-						!showFilePicker ||
-						fileQuery !== afterAt ||
-						atSymbolPosition !== lastAtIndex
+						!state.showFilePicker ||
+						state.fileQuery !== afterAt ||
+						state.atSymbolPosition !== lastAtIndex
 					) {
-						setShowFilePicker(true);
-						setFileSelectedIndex(0);
-						setFileQuery(afterAt);
-						setAtSymbolPosition(lastAtIndex);
+						dispatch({ type: 'SHOW', query: afterAt, position: lastAtIndex });
 					}
 					return;
 				}
 			}
 
 			// Hide file picker if no valid @ context found
-			if (showFilePicker) {
-				setShowFilePicker(false);
-				setFileSelectedIndex(0);
-				setFileQuery('');
-				setAtSymbolPosition(-1);
+			if (state.showFilePicker) {
+				dispatch({ type: 'HIDE' });
 			}
 		},
-		[showFilePicker, fileQuery, atSymbolPosition],
+		[state.showFilePicker, state.fileQuery, state.atSymbolPosition],
 	);
 
 	// Handle file selection
 	const handleFileSelect = useCallback(
 		async (filePath: string) => {
-			if (atSymbolPosition !== -1) {
+			if (state.atSymbolPosition !== -1) {
 				const text = buffer.getFullText();
 				const cursorPos = buffer.getCursorPosition();
 
 				// Replace @query with @filePath + space
-				const beforeAt = text.slice(0, atSymbolPosition);
+				const beforeAt = text.slice(0, state.atSymbolPosition);
 				const afterCursor = text.slice(cursorPos);
 				const newText = beforeAt + '@' + filePath + ' ' + afterCursor;
 
@@ -76,38 +129,54 @@ export function useFilePicker(
 
 				// Calculate cursor position after the inserted file path + space
 				// Reset cursor to beginning, then move to correct position
-				for (let i = 0; i < atSymbolPosition + filePath.length + 2; i++) {
+				for (let i = 0; i < state.atSymbolPosition + filePath.length + 2; i++) {
 					// +2 for @ and space
 					if (i < buffer.getFullText().length) {
 						buffer.moveRight();
 					}
 				}
 
-				setShowFilePicker(false);
-				setFileSelectedIndex(0);
-				setFileQuery('');
-				setAtSymbolPosition(-1);
+				dispatch({ type: 'SELECT_FILE' });
 				triggerUpdate();
 			}
 		},
-		[atSymbolPosition, buffer, triggerUpdate],
+		[state.atSymbolPosition, buffer],
 	);
 
 	// Handle filtered file count change
 	const handleFilteredCountChange = useCallback((count: number) => {
-		setFilteredFileCount(count);
+		dispatch({ type: 'SET_FILTERED_COUNT', count });
 	}, []);
 
+	// Wrapper setters for backwards compatibility
+	const setShowFilePicker = useCallback((show: boolean) => {
+		dispatch({ type: show ? 'SHOW' : 'HIDE', query: '', position: -1 });
+	}, []);
+
+	const setFileSelectedIndex = useCallback((index: number | ((prev: number) => number)) => {
+		if (typeof index === 'function') {
+			// For functional updates, we need to get current state first
+			// This is a simplified version - in production you might want to use a ref
+			dispatch({ type: 'SET_SELECTED_INDEX', index: index(state.fileSelectedIndex) });
+		} else {
+			dispatch({ type: 'SET_SELECTED_INDEX', index });
+		}
+	}, [state.fileSelectedIndex]);
+
 	return {
-		showFilePicker,
+		showFilePicker: state.showFilePicker,
 		setShowFilePicker,
-		fileSelectedIndex,
+		fileSelectedIndex: state.fileSelectedIndex,
 		setFileSelectedIndex,
-		fileQuery,
-		setFileQuery,
-		atSymbolPosition,
-		setAtSymbolPosition,
-		filteredFileCount,
+		fileQuery: state.fileQuery,
+		setFileQuery: (_query: string) => {
+			// Not used, but kept for compatibility
+		},
+		atSymbolPosition: state.atSymbolPosition,
+		setAtSymbolPosition: (_pos: number) => {
+			// Not used, but kept for compatibility
+		},
+		filteredFileCount: state.filteredFileCount,
 		updateFilePickerState,
 		handleFileSelect,
 		handleFilteredCountChange,

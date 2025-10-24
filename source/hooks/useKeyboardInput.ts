@@ -43,6 +43,12 @@ type KeyboardInputOptions = {
 		infoText: string;
 	}>;
 	handleHistorySelect: (value: string) => void;
+	// Terminal-style history navigation
+	currentHistoryIndex: number;
+	navigateHistoryUp: () => boolean;
+	navigateHistoryDown: () => boolean;
+	resetHistoryNavigation: () => void;
+	saveToHistory: (content: string) => Promise<void>;
 	// Clipboard
 	pasteFromClipboard: () => Promise<void>;
 	// Submit
@@ -86,6 +92,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		escapeKeyTimer,
 		getUserMessages,
 		handleHistorySelect,
+		currentHistoryIndex,
+		navigateHistoryUp,
+		navigateHistoryDown,
+		resetHistoryNavigation,
+		saveToHistory,
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
@@ -239,9 +250,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+L - Delete from cursor to beginning
 		if (key.ctrl && input === 'l') {
-			const fullText = buffer.getFullText();
+			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
-			const afterCursor = fullText.slice(cursorPos);
+			const afterCursor = displayText.slice(cursorPos);
 
 			buffer.setText(afterCursor);
 			forceStateUpdate();
@@ -250,9 +261,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+R - Delete from cursor to end
 		if (key.ctrl && input === 'r') {
-			const fullText = buffer.getFullText();
+			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
-			const beforeCursor = fullText.slice(0, cursorPos);
+			const beforeCursor = displayText.slice(0, cursorPos);
 
 			buffer.setText(beforeCursor);
 			forceStateUpdate();
@@ -348,6 +359,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Enter - submit message
 		if (key.return) {
+			// Reset history navigation on submit
+			if (currentHistoryIndex !== -1) {
+				resetHistoryNavigation();
+			}
+
 			const message = buffer.getFullText().trim();
 			if (message) {
 				// Check if message is a command with arguments (e.g., /review [note])
@@ -384,6 +400,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 				buffer.setText('');
 				forceUpdate({});
+
+				// Save to persistent history
+				saveToHistory(message);
+
 				onSubmit(message, validImages.length > 0 ? validImages : undefined);
 			}
 			return;
@@ -409,25 +429,72 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		}
 
 		if (key.upArrow && !showCommands && !showFilePicker) {
-			buffer.moveUp();
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
+			const isEmpty = text.trim() === '';
+			const isAtStart = cursorPos === 0;
+			const hasNewline = text.includes('\n');
+
+			// Terminal-style history navigation:
+			// 1. Empty input box -> navigate history
+			// 2. Cursor at start of single line -> navigate history
+			// 3. Otherwise -> normal cursor movement
+			if (isEmpty || (!hasNewline && isAtStart)) {
+				const navigated = navigateHistoryUp();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
+			}
+
+			// Normal cursor movement
+			buffer.moveUp();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			triggerUpdate();
 			return;
 		}
 
 		if (key.downArrow && !showCommands && !showFilePicker) {
-			buffer.moveDown();
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
-			updateFilePickerState(text, cursorPos);
+			const isEmpty = text.trim() === '';
+			const isAtEnd = cursorPos === text.length;
+			const hasNewline = text.includes('\n');
+
+			// Terminal-style history navigation:
+			// 1. Empty input box -> navigate history (if in history mode)
+			// 2. Cursor at end of single line -> navigate history (if in history mode)
+			// 3. Otherwise -> normal cursor movement
+			if ((isEmpty || (!hasNewline && isAtEnd)) && currentHistoryIndex !== -1) {
+				const navigated = navigateHistoryDown();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
+			}
+
+			// Normal cursor movement
+			buffer.moveDown();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			triggerUpdate();
 			return;
 		}
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
+			// Reset history navigation when user starts typing
+			if (currentHistoryIndex !== -1) {
+				resetHistoryNavigation();
+			}
+
 			// Ensure focus is active when user is typing (handles delayed focus events)
 			// This is especially important for drag-and-drop operations where focus
 			// events may arrive out of order or be filtered by sanitizeInput

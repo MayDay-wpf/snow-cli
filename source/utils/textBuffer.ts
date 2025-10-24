@@ -160,18 +160,21 @@ export class TextBuffer {
 				clearTimeout(this.pasteTimer);
 			}
 
-			// 如果是第一批数据，记录插入位置
+			// 如果是第一批数据，记录插入位置并清空内容
 			const isFirstBatch = !this.pasteAccumulator;
 			if (isFirstBatch) {
 				this.pastePlaceholderPosition = this.cursorIndex;
+				// 保存粘贴位置前后的内容，避免后续计算错误
+				this.content = cpSlice(this.content, 0, this.pastePlaceholderPosition) +
+					cpSlice(this.content, this.pastePlaceholderPosition);
 			}
 
 			// 累积数据
 			this.pasteAccumulator += sanitized;
 
-			// 移除旧的临时占位符（如果存在）
+			// 移除所有旧的临时占位符（使用全局替换）
 			if (!isFirstBatch) {
-				const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/;
+				const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/g;
 				this.content = this.content.replace(tempPlaceholderPattern, '');
 			}
 
@@ -215,9 +218,9 @@ export class TextBuffer {
 
 		const totalChars = this.pasteAccumulator.length;
 
-		// 移除临时占位符（如果存在）
+		// 移除所有临时占位符（使用全局替换）
 		// 临时占位符格式: [Pasting... XXX chars]
-		const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/;
+		const tempPlaceholderPattern = /\[Pasting\.\.\. \d+ chars\]/g;
 		this.content = this.content.replace(tempPlaceholderPattern, '');
 
 		// 只有当累积的字符数超过300时才创建占位符
@@ -321,6 +324,15 @@ export class TextBuffer {
 			return;
 		}
 
+		// 检查是否只有单行（没有换行符）
+		const hasNewline = this.content.includes('\n');
+		if (!hasNewline && this.visualLines.length === 1) {
+			// 单行模式：移动到行首
+			this.cursorIndex = 0;
+			this.recomputeVisualCursorOnly();
+			return;
+		}
+
 		const currentRow = this.visualCursorPos[0];
 		if (currentRow <= 0) {
 			return;
@@ -331,6 +343,15 @@ export class TextBuffer {
 
 	moveDown(): void {
 		if (this.visualLines.length === 0) {
+			return;
+		}
+
+		// 检查是否只有单行（没有换行符）
+		const hasNewline = this.content.includes('\n');
+		if (!hasNewline && this.visualLines.length === 1) {
+			// 单行模式：移动到行尾
+			this.cursorIndex = cpLen(this.content);
+			this.recomputeVisualCursorOnly();
 			return;
 		}
 
