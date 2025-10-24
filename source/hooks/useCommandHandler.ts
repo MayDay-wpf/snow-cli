@@ -27,17 +27,25 @@ export async function executeContextCompression(): Promise<{
 		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
 		const sessionMessages = currentSession.messages;
 
-		// 转换为 ChatMessage 格式（去掉 timestamp）
+		// 转换为 ChatMessage 格式（保留所有关键字段）
 		const chatMessages = sessionMessages.map(msg => ({
 			role: msg.role,
 			content: msg.content,
 			tool_call_id: msg.tool_call_id,
 			tool_calls: msg.tool_calls,
 			images: msg.images,
+			reasoning: msg.reasoning,
+			subAgentInternal: msg.subAgentInternal,
 		}));
 
-		// Compress the context (部分压缩：前50%压缩，后50%保留)
-		const compressionResult = await compressContext(chatMessages, true);
+		// Compress the context (全量压缩，保留最后一轮完整对话)
+		const compressionResult = await compressContext(chatMessages);
+
+		// 如果返回null，说明无法安全压缩（历史不足或只有当前轮次）
+		if (!compressionResult) {
+			console.warn('Compression skipped: not enough history to compress');
+			return null;
+		}
 
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
@@ -49,12 +57,19 @@ export async function executeContextCompression(): Promise<{
 			timestamp: Date.now(),
 		});
 
-		// 添加保留的后50%原始消息到会话
+		// 添加保留的最后一轮完整对话（保留完整的消息结构）
 		if (compressionResult.preservedMessages && compressionResult.preservedMessages.length > 0) {
 			for (const msg of compressionResult.preservedMessages) {
+				// 保留完整的消息结构，包括所有关键字段
 				newSessionMessages.push({
-					...msg,
+					role: msg.role,
+					content: msg.content,
 					timestamp: Date.now(),
+					...(msg.tool_call_id && {tool_call_id: msg.tool_call_id}),
+					...(msg.tool_calls && {tool_calls: msg.tool_calls}),
+					...(msg.images && {images: msg.images}),
+					...(msg.reasoning && {reasoning: msg.reasoning}),
+					...(msg.subAgentInternal !== undefined && {subAgentInternal: msg.subAgentInternal}),
 				});
 			}
 		}

@@ -75,6 +75,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [remountKey, setRemountKey] = useState(0);
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
+	const [currentContextPercentage, setCurrentContextPercentage] = useState(0); // Track context percentage from ChatInput
+	const currentContextPercentageRef = useRef(0); // Use ref to avoid closure issues
+
+	// Sync state to ref
+	useEffect(() => {
+		currentContextPercentageRef.current = currentContextPercentage;
+	}, [currentContextPercentage]);
 	const [yoloMode, setYoloMode] = useState(() => {
 		// Load yolo mode from localStorage on initialization
 		try {
@@ -636,7 +643,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		hideUserMessage?: boolean,
 	) => {
 		// 检查 token 占用，如果 >= 80% 先执行自动压缩
-		if (shouldAutoCompress(streamingState.contextUsage)) {
+		if (shouldAutoCompress(currentContextPercentageRef.current)) {
 			setIsCompressing(true);
 			setCompressionError(null);
 
@@ -765,6 +772,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				clearSavedMessages,
 				setRemountKey,
 				setShouldIncludeSystemInfo,
+			getCurrentContextPercentage: () => currentContextPercentageRef.current,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -875,6 +883,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setRetryStatus: streamingState.setRetryStatus,
 				clearSavedMessages,
 				setRemountKey,
+			getCurrentContextPercentage: () => currentContextPercentageRef.current,
 				setShouldIncludeSystemInfo,
 			});
 		} catch (error) {
@@ -1417,6 +1426,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 									: undefined
 							}
 							initialContent={restoreInputContent}
+						onContextPercentageChange={setCurrentContextPercentage}
 						/>
 						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (

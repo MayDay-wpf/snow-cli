@@ -13,7 +13,7 @@ export interface CompressionResult {
 		completion_tokens: number;
 		total_tokens: number;
 	};
-	preservedMessages?: ChatMessage[]; // 保留的后50%原始消息
+	preservedMessages?: ChatMessage[];
 }
 
 /**
@@ -64,79 +64,53 @@ const COMPRESSION_PROMPT = `You are compressing a conversation history to save c
 - Prioritize actionable information over general descriptions`;
 
 /**
- * 智能找到对话的50%分割点，确保不破坏对话结构
+ * 找到需要保留的消息（最近的工具调用链）
  *
- * 严格的消息结构要求：
- * 1. user → assistant (可能包含 tool_calls)
- * 2. 如果 assistant 有 tool_calls → 必须跟随对应的 tool 结果消息
- * 3. tool 结果消息 → 必须跟随 assistant 的响应
+ * 保留策略：
+ * - 如果最后有未完成的工具调用（assistant with tool_calls 或 tool），保留这个链
+ * - 如果最后是普通 assistant 或 user，不需要保留（压缩全部）
  *
- * 安全分割点：user 消息之前（确保前一轮对话完全结束）
+ * 注意：不保留 user 消息，因为：
+ * 1. 压缩摘要已包含历史上下文
+ * 2. 下一轮对话会有新的 user 消息
+ *
+ * @returns 保留消息的起始索引，如果全部压缩则返回 messages.length
  */
-function findSplitPoint(messages: ChatMessage[]): number {
-	if (messages.length <= 2) {
-		return 0; // 消息太少，不分割
+function findPreserveStartIndex(messages: ChatMessage[]): number {
+	if (messages.length === 0) {
+		return 0;
 	}
 
-	// 计算中点位置（按消息数量）
-	const midPoint = Math.floor(messages.length / 2);
+	const lastMsg = messages[messages.length - 1];
 
-	// 从中点向后查找，找到下一个 user 消息
-	// 在 user 消息前分割，确保前一轮对话完全结束
-	for (let i = midPoint; i < messages.length; i++) {
-		const msg = messages[i];
-		if (!msg) continue;
-
-		if (msg.role === 'user') {
-			// 验证：确保前一条消息不是待处理的 tool_calls
-			if (i > 0) {
-				const prevMsg = messages[i - 1];
-				if (prevMsg && prevMsg.role === 'assistant' && prevMsg.tool_calls && prevMsg.tool_calls.length > 0) {
-					// 前一条是带 tool_calls 的 assistant，需要继续查找
-					continue;
-				}
-			}
-			// 安全的分割点：在 user 消息前分割
-			return i;
-		}
-	}
-
-	// 如果向后找不到 user 消息，向前查找
-	for (let i = midPoint - 1; i > 0; i--) {
-		const msg = messages[i];
-		if (!msg) continue;
-
-		if (msg.role === 'user') {
-			// 同样验证前一条消息
-			if (i > 0) {
-				const prevMsg = messages[i - 1];
-				if (prevMsg && prevMsg.role === 'assistant' && prevMsg.tool_calls && prevMsg.tool_calls.length > 0) {
-					// 前一条是带 tool_calls 的 assistant，继续向前查找
-					continue;
-				}
-			}
-			return i;
-		}
-	}
-
-	// 实在找不到安全的分割点，检查中点是否安全
-	// 如果中点不安全（在工具调用链中间），向前找到第一个 user 消息
-	for (let i = 1; i < messages.length; i++) {
-		const msg = messages[i];
-		if (msg && msg.role === 'user') {
-			const prevMsg = messages[i - 1];
-			if (!prevMsg || prevMsg.role !== 'assistant' || !prevMsg.tool_calls || prevMsg.tool_calls.length === 0) {
+	// Case 1: 最后是 tool 消息 → 保留 assistant(tool_calls) → tool
+	if (lastMsg?.role === 'tool') {
+		// 向前找对应的 assistant with tool_calls
+		for (let i = messages.length - 2; i >= 0; i--) {
+			const msg = messages[i];
+			if (msg?.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+				// 找到了，从这个 assistant 开始保留
 				return i;
 			}
 		}
+		// 如果找不到对应的 assistant，保留最后的 tool（虽然不太可能）
+		return messages.length - 1;
 	}
 
-	// 极端情况：整个对话都是连续的工具调用链，不分割
-	return 0;
+	// Case 2: 最后是 assistant with tool_calls → 保留 assistant(tool_calls)
+	if (lastMsg?.role === 'assistant' && lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
+		// 保留这个待处理的 tool_calls
+		return messages.length - 1;
+	}
+
+	// Case 3: 最后是普通 assistant 或 user → 全部压缩
+	// 因为没有未完成的工具调用链
+	return messages.length;
 }
 
 /**
  * Prepare messages for compression by adding system prompt and compression request
+ * Note: Only filters out system messages and tool messages, preserving user and assistant messages
  */
 function prepareMessagesForCompression(
 	conversationMessages: ChatMessage[],
@@ -154,9 +128,11 @@ function prepareMessagesForCompression(
 		messages.push({role: 'system', content: getSystemPrompt()});
 	}
 
-	// Add all conversation history (exclude system and tool messages)
+	// Add all conversation history for compression
+	// Filter out system messages (already added above) and tool messages (only needed for API, not for summary)
 	for (const msg of conversationMessages) {
 		if (msg.role !== 'system' && msg.role !== 'tool') {
+			// Only include user and assistant messages for compression
 			messages.push({
 				role: msg.role,
 				content: msg.content,
@@ -369,13 +345,11 @@ async function compressWithAnthropic(
 /**
  * Compress conversation history using the compact model
  * @param messages - Array of messages to compress
- * @param partialCompression - If true, only compress first 50% and preserve last 50%
- * @returns Compressed summary and token usage information
+ * @returns Compressed summary and token usage information, or null if compression should be skipped
  */
 export async function compressContext(
 	messages: ChatMessage[],
-	partialCompression: boolean = true,
-): Promise<CompressionResult> {
+): Promise<CompressionResult | null> {
 	const config = getOpenAiConfig();
 
 	// Check if compact model is configured
@@ -385,25 +359,30 @@ export async function compressContext(
 		);
 	}
 
+	if (messages.length === 0) {
+		console.warn('No messages to compress');
+		return null;
+	}
+
 	const modelName = config.compactModel.modelName;
 	const requestMethod = config.requestMethod;
 
 	// Get custom system prompt if configured
 	const customSystemPrompt = getCustomSystemPrompt();
 
-	let messagesToCompress = messages;
-	let preservedMessages: ChatMessage[] | undefined;
+	// 找到需要保留的消息起始位置
+	const preserveStartIndex = findPreserveStartIndex(messages);
 
-	// 如果启用部分压缩，只压缩前50%
-	if (partialCompression && messages.length > 2) {
-		const splitPoint = findSplitPoint(messages);
-
-		if (splitPoint > 0) {
-			// 分割消息：前半部分压缩，后半部分保留
-			messagesToCompress = messages.slice(0, splitPoint);
-			preservedMessages = messages.slice(splitPoint);
-		}
+	// 如果 preserveStartIndex 为 0，说明所有消息都需要保留（没有历史可压缩）
+	// 例如：整个对话只有一条 user→assistant(tool_calls)，无法压缩
+	if (preserveStartIndex === 0) {
+		console.warn('Cannot compress: all messages need to be preserved (no history)');
+		return null;
 	}
+
+	// 分离待压缩和待保留的消息
+	const messagesToCompress = messages.slice(0, preserveStartIndex);
+	const preservedMessages = messages.slice(preserveStartIndex);
 
 	try {
 		// Choose compression method based on request method
@@ -448,7 +427,7 @@ export async function compressContext(
 		}
 
 		// 添加保留的消息到结果中
-		if (preservedMessages && preservedMessages.length > 0) {
+		if (preservedMessages.length > 0) {
 			result.preservedMessages = preservedMessages;
 		}
 

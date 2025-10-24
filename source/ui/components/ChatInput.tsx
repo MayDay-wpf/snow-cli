@@ -13,6 +13,33 @@ import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
 
+/**
+ * Calculate context usage percentage
+ * This is the same logic used in ChatInput to display usage
+ */
+export function calculateContextPercentage(contextUsage: {
+	inputTokens: number;
+	maxContextTokens: number;
+	cacheCreationTokens?: number;
+	cacheReadTokens?: number;
+	cachedTokens?: number;
+}): number {
+	// Determine which caching system is being used
+	const isAnthropic =
+		(contextUsage.cacheCreationTokens || 0) > 0 ||
+		(contextUsage.cacheReadTokens || 0) > 0;
+
+	// For Anthropic: Total = inputTokens + cacheCreationTokens + cacheReadTokens
+	// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
+	const totalInputTokens = isAnthropic
+		? contextUsage.inputTokens +
+		  (contextUsage.cacheCreationTokens || 0) +
+		  (contextUsage.cacheReadTokens || 0)
+		: contextUsage.inputTokens;
+
+	return Math.min(100, (totalInputTokens / contextUsage.maxContextTokens) * 100);
+}
+
 type Props = {
 	onSubmit: (
 		message: string,
@@ -35,6 +62,7 @@ type Props = {
 		cachedTokens?: number;
 	};
 	initialContent?: string | null;
+	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
 };
 
 export default function ChatInput({
@@ -48,6 +76,7 @@ export default function ChatInput({
 	yoloMode = false,
 	contextUsage,
 	initialContent = null,
+	onContextPercentageChange,
 }: Props) {
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
@@ -189,6 +218,14 @@ export default function ChatInput({
 
 		return () => clearTimeout(timer);
 	}, [terminalWidth, forceUpdate]);
+
+	// Notify parent of context percentage changes
+	useEffect(() => {
+		if (contextUsage && onContextPercentageChange) {
+			const percentage = calculateContextPercentage(contextUsage);
+			onContextPercentageChange(percentage);
+		}
+	}, [contextUsage, onContextPercentageChange]);
 
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
@@ -467,18 +504,15 @@ export default function ChatInput({
 										(contextUsage.cacheReadTokens || 0) > 0;
 									const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
 
-									// For Anthropic: Total = inputTokens + cacheCreationTokens + cacheReadTokens
-									// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
+									// Use the exported function for consistent calculation
+									const percentage = calculateContextPercentage(contextUsage);
+
+									// Calculate total tokens for display
 									const totalInputTokens = isAnthropic
 										? contextUsage.inputTokens +
 										  (contextUsage.cacheCreationTokens || 0) +
 										  (contextUsage.cacheReadTokens || 0)
 										: contextUsage.inputTokens;
-
-									const percentage = Math.min(
-										100,
-										(totalInputTokens / contextUsage.maxContextTokens) * 100,
-									);
 									let color: string;
 									if (percentage < 50) color = 'green';
 									else if (percentage < 75) color = 'yellow';

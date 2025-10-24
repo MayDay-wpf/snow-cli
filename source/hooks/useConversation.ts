@@ -59,6 +59,7 @@ export type ConversationHandlerOptions = {
 	clearSavedMessages?: () => void; // Clear saved messages for auto-compression
 	setRemountKey?: React.Dispatch<React.SetStateAction<number>>; // Remount key for auto-compression
 	setShouldIncludeSystemInfo?: React.Dispatch<React.SetStateAction<boolean>>; // System info flag for auto-compression
+	getCurrentContextPercentage?: () => number; // Get current context percentage from ChatInput
 };
 
 /**
@@ -184,6 +185,7 @@ export async function handleConversationWithTools(
 		total_tokens: number;
 		cache_creation_input_tokens?: number;
 		cache_read_input_tokens?: number;
+		cached_tokens?: number; // Keep for UI display
 	} | null = null;
 
 	// Local set to track approved tools in this conversation (solves async setState issue)
@@ -349,7 +351,8 @@ export async function handleConversationWithTools(
 							cache_creation_input_tokens:
 								chunk.usage.cache_creation_input_tokens,
 							cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
-						};
+					cached_tokens: chunk.usage.cached_tokens,
+				};
 					} else {
 						// Add to existing usage for UI display
 						accumulatedUsage.prompt_tokens += chunk.usage.prompt_tokens || 0;
@@ -367,7 +370,11 @@ export async function handleConversationWithTools(
 								(accumulatedUsage.cache_read_input_tokens || 0) +
 								chunk.usage.cache_read_input_tokens;
 						}
-					}
+				if (chunk.usage.cached_tokens !== undefined) {
+					accumulatedUsage.cached_tokens =
+						(accumulatedUsage.cached_tokens || 0) + chunk.usage.cached_tokens;
+				}
+			}
 				}
 			}
 
@@ -728,7 +735,10 @@ export async function handleConversationWithTools(
 				}
 
 				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
-				if (shouldAutoCompress(accumulatedUsage)) {
+				if (
+					options.getCurrentContextPercentage &&
+					shouldAutoCompress(options.getCurrentContextPercentage())
+				) {
 					try {
 						// 显示压缩提示消息
 						const compressingMessage: Message = {
@@ -942,7 +952,10 @@ export async function handleConversationWithTools(
 					const pendingMessages = options.getPendingMessages();
 					if (pendingMessages.length > 0) {
 						// 检查 token 占用，如果 >= 80% 先执行自动压缩
-						if (shouldAutoCompress(accumulatedUsage)) {
+						if (
+							options.getCurrentContextPercentage &&
+							shouldAutoCompress(options.getCurrentContextPercentage())
+						) {
 							try {
 								// 显示压缩提示消息
 								const compressingMessage: Message = {
