@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance tool approval process and add sub-agent support for always-approved tools
+            - Enhance focus event handling and truncate text based on terminal width
             ### Installation
             ```bash
             npm install -g snow-ai

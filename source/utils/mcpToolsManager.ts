@@ -71,12 +71,16 @@ export function getTodoService(): TodoService {
 }
 
 /**
- * Generate a hash of the current MCP configuration
+ * Generate a hash of the current MCP configuration and sub-agents
  */
 function generateConfigHash(): string {
 	try {
 		const mcpConfig = getMCPConfig();
-		return JSON.stringify(mcpConfig.mcpServers);
+		const subAgents = getSubAgentTools(); // Include sub-agents in hash
+		return JSON.stringify({
+			mcpServers: mcpConfig.mcpServers,
+			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
+		});
 	} catch {
 		return '';
 	}

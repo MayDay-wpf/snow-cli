@@ -11,6 +11,49 @@ import {
 	validateSubAgent,
 } from '../../utils/subAgentConfig.js';
 
+// Focus event handling - prevent terminal focus events from appearing as input
+const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
+
+const isFocusEventInput = (value?: string) => {
+	if (!value) {
+		return false;
+	}
+
+	if (
+		value === '\x1b[I' ||
+		value === '\x1b[O' ||
+		value === '[I' ||
+		value === '[O'
+	) {
+		return true;
+	}
+
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return false;
+	}
+
+	const tokens = trimmed.match(focusEventTokenRegex);
+	if (!tokens) {
+		return false;
+	}
+
+	const normalized = trimmed.replace(/\s+/g, '');
+	const tokensCombined = tokens.join('');
+	return tokensCombined === normalized;
+};
+
+const stripFocusArtifacts = (value: string) => {
+	if (!value) {
+		return '';
+	}
+
+	return value
+		.replace(/\x1b\[[0-9;]*[IO]/g, '')
+		.replace(/\[[0-9;]*[IO]/g, '')
+		.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+};
+
 type Props = {
 	onBack: () => void;
 	onSave: () => void;
@@ -235,7 +278,18 @@ export default function SubAgentConfigScreen({
 		}
 	}, [agentName, description, selectedTools, onSave, isEditMode, agentId]);
 
-	useInput((input, key) => {
+	useInput((rawInput, key) => {
+		const input = stripFocusArtifacts(rawInput);
+
+		// Ignore focus events completely
+		if (!input && isFocusEventInput(rawInput)) {
+			return;
+		}
+
+		if (isFocusEventInput(rawInput)) {
+			return;
+		}
+
 		if (key.escape) {
 			onBack();
 			return;
@@ -430,7 +484,7 @@ export default function SubAgentConfigScreen({
 					<Box marginLeft={2}>
 						<TextInput
 							value={agentName}
-							onChange={setAgentName}
+							onChange={value => setAgentName(stripFocusArtifacts(value))}
 							placeholder="Enter agent name..."
 							focus={currentField === 'name'}
 						/>
@@ -445,7 +499,7 @@ export default function SubAgentConfigScreen({
 					<Box marginLeft={2}>
 						<TextInput
 							value={description}
-							onChange={setDescription}
+							onChange={value => setDescription(stripFocusArtifacts(value))}
 							placeholder="Enter agent description..."
 							focus={currentField === 'description'}
 						/>

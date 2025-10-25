@@ -6,6 +6,7 @@ import {
 	deleteSubAgent,
 	type SubAgent,
 } from '../../utils/subAgentConfig.js';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 
 type Props = {
 	onBack: () => void;
@@ -20,10 +21,23 @@ export default function SubAgentListScreen({
 	onEdit,
 	inlineMode = false,
 }: Props) {
+	const {columns} = useTerminalSize();
 	const [agents, setAgents] = useState<SubAgent[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteSuccess, setDeleteSuccess] = useState(false);
+
+	// Truncate text based on terminal width
+	const truncateText = useCallback(
+		(text: string, prefixLength: number = 0): string => {
+			if (!text) return text;
+			// Reserve space for indentation (3), prefix text, padding (5), and ellipsis (3)
+			const maxLength = Math.max(20, columns - prefixLength - 3 - 5 - 3);
+			if (text.length <= maxLength) return text;
+			return text.substring(0, maxLength) + '...';
+		},
+		[columns],
+	);
 
 	// Load agents on mount
 	useEffect(() => {
@@ -142,8 +156,14 @@ export default function SubAgentListScreen({
 										</Text>
 									</Box>
 									{isSelected && (
-										<Box flexDirection="column" marginLeft={2}>
-											<Text color="gray">{agent.description || 'No description'}</Text>
+										<Box flexDirection="column" marginLeft={3}>
+											<Text color="gray">
+												Description:{' '}
+												{truncateText(
+													agent.description || 'No description',
+													'Description: '.length,
+												)}
+											</Text>
 											<Text color="gray">
 												Tools: {agent.tools.length} selected
 											</Text>
