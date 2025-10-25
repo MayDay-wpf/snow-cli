@@ -30,6 +30,10 @@ export interface ToolApprovalChecker {
 	(toolName: string): boolean;
 }
 
+export interface AddToAlwaysApprovedCallback {
+	(toolName: string): void;
+}
+
 /**
  * Execute a sub-agent as a tool
  * @param agentId - The ID of the sub-agent to execute
@@ -49,6 +53,7 @@ export async function executeSubAgent(
 	requestToolConfirmation?: ToolConfirmationCallback,
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
+	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 ): Promise<SubAgentResult> {
 	try {
 		// Get sub-agent configuration
@@ -100,6 +105,10 @@ export async function executeSubAgent(
 		let finalResponse = '';
 		let hasError = false;
 		let errorMessage = '';
+
+		// Local session-approved tools for this sub-agent execution
+		// This ensures tools approved during execution are immediately recognized
+		const sessionApprovedTools = new Set<string>();
 
 		const maxIterations = 10; // Prevent infinite loops
 		let iteration = 0;
@@ -236,8 +245,11 @@ export async function executeSubAgent(
 				if (yoloMode) {
 					needsConfirmation = false;
 				}
-				// Check if tool is in auto-approved list
-				else if (isToolAutoApproved && isToolAutoApproved(toolName)) {
+				// Check if tool is in auto-approved list (global or session)
+				else if (
+					sessionApprovedTools.has(toolName) ||
+					(isToolAutoApproved && isToolAutoApproved(toolName))
+				) {
 					needsConfirmation = false;
 				}
 
@@ -249,8 +261,15 @@ export async function executeSubAgent(
 						rejectedToolCalls.push(toolCall);
 						continue;
 					}
-					// If approved or approved_always, continue execution
-					// (approved_always is handled by the main flow's session-approved list)
+					// If approve_always, add to both global and session lists
+					if (confirmation === 'approve_always') {
+						// Add to local session set (immediate effect)
+						sessionApprovedTools.add(toolName);
+						// Add to global list (persistent across sub-agent calls)
+						if (addToAlwaysApproved) {
+							addToAlwaysApproved(toolName);
+						}
+					}
 				}
 
 				approvedToolCalls.push(toolCall);

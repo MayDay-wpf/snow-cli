@@ -87,6 +87,11 @@ export async function handleConversationWithTools(
 		setRetryStatus,
 	} = options;
 
+	// Create a wrapper function for adding single tool to always-approved list
+	const addToAlwaysApproved = (toolName: string) => {
+		addMultipleToAlwaysApproved([toolName]);
+	};
+
 	// Step 1: Ensure session exists and get existing TODOs
 	let currentSession = sessionManager.getCurrentSession();
 	if (!currentSession) {
@@ -139,13 +144,17 @@ export async function handleConversationWithTools(
 	});
 
 	// Save user message (directly save API format message)
-	saveMessage({
-		role: 'user',
-		content: userContent,
-		images: imageContents,
-	}).catch(error => {
+	// IMPORTANT: await to ensure message is saved before continuing
+	// This prevents loss of user message if conversation is interrupted (ESC)
+	try {
+		await saveMessage({
+			role: 'user',
+			content: userContent,
+			images: imageContents,
+		});
+	} catch (error) {
 		console.error('Failed to save user message:', error);
-	});
+	}
 
 	// Initialize token encoder with proper cleanup tracking
 	let encoder: any;
@@ -243,6 +252,8 @@ export async function handleConversationWithTools(
 								max_tokens: config.maxTokens || 4096,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								sessionId: currentSession?.id,
+								// Disable thinking for basicModel (e.g., init command)
+								disableThinking: options.useBasicModel,
 							},
 							controller.signal,
 							onRetry,
@@ -267,6 +278,9 @@ export async function handleConversationWithTools(
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								tool_choice: 'auto',
 								prompt_cache_key: cacheKey, // Use session ID as cache key
+								// Don't pass reasoning for basicModel (small models may not support it)
+								// Pass null to explicitly disable reasoning in API call
+								reasoning: options.useBasicModel ? null : undefined,
 							},
 							controller.signal,
 							onRetry,
@@ -554,6 +568,8 @@ export async function handleConversationWithTools(
 				}
 
 				// Execute approved tools with sub-agent message callback and terminal output callback
+				// Track sub-agent content for token counting
+				let subAgentContentAccumulator = '';
 				const toolResults = await executeToolCalls(
 					approvedTools,
 					controller.signal,
@@ -696,8 +712,18 @@ export async function handleConversationWithTools(
 							let content = '';
 							if (subAgentMessage.message.type === 'content') {
 								content = subAgentMessage.message.content;
+								// Update token count for sub-agent content
+								subAgentContentAccumulator += content;
+								try {
+									const tokens = encoder.encode(subAgentContentAccumulator);
+									setStreamTokenCount(tokens.length);
+								} catch (e) {
+									// Ignore encoding errors
+								}
 							} else if (subAgentMessage.message.type === 'done') {
-								// Mark as complete
+								// Mark as complete and reset token counter
+								subAgentContentAccumulator = '';
+								setStreamTokenCount(0);
 								if (existingIndex !== -1) {
 									const updated = [...prev];
 									const existing = updated[existingIndex];
@@ -750,6 +776,7 @@ export async function handleConversationWithTools(
 					requestToolConfirmation,
 					isToolAutoApproved,
 					yoloMode,
+					addToAlwaysApproved,
 				);
 
 				// Check if aborted during tool execution

@@ -72,6 +72,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
 	const pendingMessagesRef = useRef<string[]>([]);
 	const hasAttemptedAutoVscodeConnect = useRef(false);
+	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
 	const [remountKey, setRemountKey] = useState(0);
 	const [showMcpInfo, setShowMcpInfo] = useState(false);
 	const [mcpPanelKey, setMcpPanelKey] = useState(0);
@@ -335,6 +336,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 			streamingState.isStreaming &&
 			streamingState.abortController
 		) {
+			// Mark that user manually interrupted
+			userInterruptedRef.current = true;
+
 			// Abort the controller
 			streamingState.abortController.abort();
 
@@ -344,88 +348,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
 
-			// Clean up incomplete conversation in session (handled in useConversation abort cleanup)
-			// This will remove:
-			// 1. User message without AI response (scenario 1)
-			// 2. Assistant message with tool_calls but no tool results (scenario 2)
-			const session = sessionManager.getCurrentSession();
-			if (session && session.messages.length > 0) {
-				// Use async cleanup to avoid blocking UI
-				(async () => {
-					try {
-						// Find the last complete conversation round
-						const messages = session.messages;
-						let truncateIndex = messages.length;
-
-						// Scan from the end to find incomplete round
-						for (let i = messages.length - 1; i >= 0; i--) {
-							const msg = messages[i];
-							if (!msg) continue;
-
-							// If last message is user message without assistant response, remove it
-							if (msg.role === 'user' && i === messages.length - 1) {
-								truncateIndex = i;
-								break;
-							}
-
-							// If assistant message has tool_calls, verify all tool results exist
-							if (
-								msg.role === 'assistant' &&
-								msg.tool_calls &&
-								msg.tool_calls.length > 0
-							) {
-								const toolCallIds = new Set(msg.tool_calls.map(tc => tc.id));
-								// Check if all tool results exist after this assistant message
-								for (let j = i + 1; j < messages.length; j++) {
-									const followMsg = messages[j];
-									if (
-										followMsg &&
-										followMsg.role === 'tool' &&
-										followMsg.tool_call_id
-									) {
-										toolCallIds.delete(followMsg.tool_call_id);
-									}
-								}
-								// If some tool results are missing, remove from this assistant message onwards
-								if (toolCallIds.size > 0) {
-									truncateIndex = i;
-									break;
-								}
-							}
-
-							// If we found a complete assistant response without tool calls, we're done
-							if (msg.role === 'assistant' && !msg.tool_calls) {
-								break;
-							}
-						}
-
-						// Truncate session if needed
-						if (truncateIndex < messages.length) {
-							await sessionManager.truncateMessages(truncateIndex);
-							// Also clear from saved messages tracking
-							clearSavedMessages();
-						}
-					} catch (error) {
-						console.error('Failed to clean up incomplete conversation:', error);
-					}
-				})();
-			}
-
-			// Add discontinued message
-			setMessages(prev => [
-				...prev,
-				{
-					role: 'assistant',
-					content: '',
-					streaming: false,
-					discontinued: true,
-				},
-			]);
-
-			// Stop streaming state
-			streamingState.setIsStreaming(false);
-			streamingState.setAbortController(null);
-			streamingState.setStreamTokenCount(0);
+			// Note: discontinued message will be added in processMessage/processPendingMessages finally block
+			// Note: session cleanup will be handled in processMessage/processPendingMessages finally block
 		}
 	});
 
@@ -487,6 +411,36 @@ export default function ChatScreen({skipWelcome}: Props) {
 			const uiUserMessagesToDelete = messages
 				.slice(selectedIndex)
 				.filter(msg => msg.role === 'user').length;
+
+			// Check if the selected message is a user message that might not be in session
+			// (e.g., interrupted before AI response)
+			const selectedMessage = messages[selectedIndex];
+			const isUncommittedUserMessage =
+				selectedMessage?.role === 'user' &&
+				uiUserMessagesToDelete === 1 &&
+				// Check if this is the last or second-to-last message (before discontinued)
+				(selectedIndex === messages.length - 1 ||
+					(selectedIndex === messages.length - 2 &&
+						messages[messages.length - 1]?.discontinued));
+
+			// If this is an uncommitted user message, just truncate UI and skip session modification
+			if (isUncommittedUserMessage) {
+				// Check if session ends with a complete assistant response
+				const lastSessionMsg =
+					currentSession.messages[currentSession.messages.length - 1];
+				const sessionEndsWithAssistant =
+					lastSessionMsg?.role === 'assistant' && !lastSessionMsg?.tool_calls;
+
+				if (sessionEndsWithAssistant) {
+					// Session is complete, this user message wasn't saved
+					// Just truncate UI, don't modify session
+					setMessages(prev => prev.slice(0, selectedIndex));
+					clearSavedMessages();
+					setRemountKey(prev => prev + 1);
+					snapshotState.setPendingRollback(null);
+					return;
+				}
+			}
 
 			// Find the corresponding user message in session to delete
 			// We start from the end and count backwards
@@ -793,6 +747,91 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setMessages(prev => [...prev, finalMessage]);
 			}
 		} finally {
+			// Handle user interruption uniformly
+			if (userInterruptedRef.current) {
+				// Clean up incomplete conversation in session
+				const session = sessionManager.getCurrentSession();
+				if (session && session.messages.length > 0) {
+					(async () => {
+						try {
+							// Find the last complete conversation round
+							const messages = session.messages;
+							let truncateIndex = messages.length;
+
+							// Scan from the end to find incomplete round
+							for (let i = messages.length - 1; i >= 0; i--) {
+								const msg = messages[i];
+								if (!msg) continue;
+
+								// If last message is user message without assistant response, remove it
+								// The user message was saved via await saveMessage() before interruption
+								// So it's safe to truncate it from session when incomplete
+								if (msg.role === 'user' && i === messages.length - 1) {
+									truncateIndex = i;
+									break;
+								}
+
+								// If assistant message has tool_calls, verify all tool results exist
+								if (
+									msg.role === 'assistant' &&
+									msg.tool_calls &&
+									msg.tool_calls.length > 0
+								) {
+									const toolCallIds = new Set(msg.tool_calls.map(tc => tc.id));
+									// Check if all tool results exist after this assistant message
+									for (let j = i + 1; j < messages.length; j++) {
+										const followMsg = messages[j];
+										if (
+											followMsg &&
+											followMsg.role === 'tool' &&
+											followMsg.tool_call_id
+										) {
+											toolCallIds.delete(followMsg.tool_call_id);
+										}
+									}
+									// If some tool results are missing, remove from this assistant message onwards
+									if (toolCallIds.size > 0) {
+										truncateIndex = i;
+										break;
+									}
+								}
+
+								// If we found a complete assistant response without tool calls, we're done
+								if (msg.role === 'assistant' && !msg.tool_calls) {
+									break;
+								}
+							}
+
+							// Truncate session if needed
+							if (truncateIndex < messages.length) {
+								await sessionManager.truncateMessages(truncateIndex);
+								// Also clear from saved messages tracking
+								clearSavedMessages();
+							}
+						} catch (error) {
+							console.error(
+								'Failed to clean up incomplete conversation:',
+								error,
+							);
+						}
+					})();
+				}
+
+				// Add discontinued message after all processing is done
+				setMessages(prev => [
+					...prev,
+					{
+						role: 'assistant',
+						content: '',
+						streaming: false,
+						discontinued: true,
+					},
+				]);
+
+				// Reset interruption flag
+				userInterruptedRef.current = false;
+			}
+
 			// End streaming
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
@@ -905,6 +944,89 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setMessages(prev => [...prev, finalMessage]);
 			}
 		} finally {
+			// Handle user interruption uniformly
+			if (userInterruptedRef.current) {
+				// Clean up incomplete conversation in session
+				const session = sessionManager.getCurrentSession();
+				if (session && session.messages.length > 0) {
+					(async () => {
+						try {
+							// Find the last complete conversation round
+							const messages = session.messages;
+							let truncateIndex = messages.length;
+
+							// Scan from the end to find incomplete round
+							for (let i = messages.length - 1; i >= 0; i--) {
+								const msg = messages[i];
+								if (!msg) continue;
+
+								// If last message is user message without assistant response, remove it
+								if (msg.role === 'user' && i === messages.length - 1) {
+									truncateIndex = i;
+									break;
+								}
+
+								// If assistant message has tool_calls, verify all tool results exist
+								if (
+									msg.role === 'assistant' &&
+									msg.tool_calls &&
+									msg.tool_calls.length > 0
+								) {
+									const toolCallIds = new Set(msg.tool_calls.map(tc => tc.id));
+									// Check if all tool results exist after this assistant message
+									for (let j = i + 1; j < messages.length; j++) {
+										const followMsg = messages[j];
+										if (
+											followMsg &&
+											followMsg.role === 'tool' &&
+											followMsg.tool_call_id
+										) {
+											toolCallIds.delete(followMsg.tool_call_id);
+										}
+									}
+									// If some tool results are missing, remove from this assistant message onwards
+									if (toolCallIds.size > 0) {
+										truncateIndex = i;
+										break;
+									}
+								}
+
+								// If we found a complete assistant response without tool calls, we're done
+								if (msg.role === 'assistant' && !msg.tool_calls) {
+									break;
+								}
+							}
+
+							// Truncate session if needed
+							if (truncateIndex < messages.length) {
+								await sessionManager.truncateMessages(truncateIndex);
+								// Also clear from saved messages tracking
+								clearSavedMessages();
+							}
+						} catch (error) {
+							console.error(
+								'Failed to clean up incomplete conversation:',
+								error,
+							);
+						}
+					})();
+				}
+
+				// Add discontinued message after all processing is done
+				setMessages(prev => [
+					...prev,
+					{
+						role: 'assistant',
+						content: '',
+						streaming: false,
+						discontinued: true,
+					},
+				]);
+
+				// Reset interruption flag
+				userInterruptedRef.current = false;
+			}
+
 			// End streaming
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
@@ -981,18 +1103,28 @@ export default function ChatScreen({skipWelcome}: Props) {
 							let isToolMessage = false;
 							const isLastMessage = index === filteredMessages.length - 1;
 
-							if (message.role === 'assistant') {
-								if (message.content.startsWith('⚡')) {
+							if (message.role === 'assistant' || message.role === 'subagent') {
+								if (
+									message.content.startsWith('⚡') ||
+									message.content.includes('⚇⚡')
+								) {
 									isToolMessage = true;
 									toolStatusColor = 'yellowBright';
-								} else if (message.content.startsWith('✓')) {
+								} else if (
+									message.content.startsWith('✓') ||
+									message.content.includes('⚇✓')
+								) {
 									isToolMessage = true;
 									toolStatusColor = 'green';
-								} else if (message.content.startsWith('✗')) {
+								} else if (
+									message.content.startsWith('✗') ||
+									message.content.includes('⚇✗')
+								) {
 									isToolMessage = true;
 									toolStatusColor = 'red';
 								} else {
-									toolStatusColor = 'blue';
+									toolStatusColor =
+										message.role === 'subagent' ? 'magenta' : 'blue';
 								}
 							}
 
@@ -1187,7 +1319,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 															</Box>
 														)}
 													{/* Show tool result preview for successful tool executions */}
-													{message.content.startsWith('✓') &&
+													{(message.content.startsWith('✓') ||
+														message.content.includes('⚇✓')) &&
 														message.toolResult &&
 														// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
 														!(
@@ -1199,6 +1332,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 																toolName={
 																	message.content
 																		.replace('✓ ', '')
+																		.replace(/.*⚇✓\s*/, '')
 																		.split('\n')[0] || ''
 																}
 																result={message.toolResult}

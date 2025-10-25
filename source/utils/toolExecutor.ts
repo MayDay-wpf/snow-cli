@@ -31,6 +31,10 @@ export interface ToolApprovalChecker {
 	(toolName: string): boolean;
 }
 
+export interface AddToAlwaysApprovedCallback {
+	(toolName: string): void;
+}
+
 /**
  * Execute a single tool call and return the result
  */
@@ -42,6 +46,7 @@ export async function executeToolCall(
 	requestToolConfirmation?: ToolConfirmationCallback,
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
+	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 ): Promise<ToolResult> {
 	try {
 		const args = JSON.parse(toolCall.function.arguments);
@@ -83,6 +88,7 @@ export async function executeToolCall(
 					: undefined,
 				isToolAutoApproved,
 				yoloMode,
+				addToAlwaysApproved,
 			});
 
 			return {
@@ -127,6 +133,7 @@ export async function executeToolCalls(
 	requestToolConfirmation?: ToolConfirmationCallback,
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
+	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 ): Promise<ToolResult[]> {
 	return Promise.all(
 		toolCalls.map(tc =>
@@ -138,6 +145,7 @@ export async function executeToolCalls(
 				requestToolConfirmation,
 				isToolAutoApproved,
 				yoloMode,
+				addToAlwaysApproved,
 			),
 		),
 	);

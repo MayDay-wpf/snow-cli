@@ -54,13 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Updated system prompt to simplify quality verification steps.
-            - Added `thinking` property to `ChatMessage` interface for capturing extended thinking data.
-            - Modified conversation handling to accumulate and process thinking content from Anthropic API.
-            - Enhanced UI components to include new configuration options for thinking features.
-            - Implemented logic to manage thinking budget tokens and enable/disable thinking features in the configuration screen.
-            - Updated API configuration to support new thinking settings.
-            - Adjusted context compression logic to disable thinking during compression.
+            - Enhance tool approval process and add sub-agent support for always-approved tools
             ### Installation
             ```bash
             npm install -g snow-ai

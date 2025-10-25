@@ -24,7 +24,7 @@ export interface ResponseOptions {
 	reasoning?: {
 		summary?: 'auto' | 'none';
 		effort?: 'low' | 'medium' | 'high';
-	};
+	} | null; // null means don't pass reasoning parameter (for small models)
 	prompt_cache_key?: string;
 	store?: boolean;
 	include?: string[];
@@ -366,7 +366,10 @@ export async function* createStreamingResponse(
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				parallel_tool_calls: false,
-				reasoning: options.reasoning || {effort: 'high', summary: 'auto'},
+				// Only add reasoning if not explicitly disabled (null means don't pass it)
+				...(options.reasoning !== null && {
+					reasoning: options.reasoning || {effort: 'high', summary: 'auto'},
+				}),
 				store: false,
 				stream: true,
 				prompt_cache_key: options.prompt_cache_key,
