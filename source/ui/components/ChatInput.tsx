@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useRef} from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
-import {cpSlice, cpLen} from '../../utils/textUtils.js';
+import {cpSlice} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
 import {useInputBuffer} from '../../hooks/useInputBuffer.js';
@@ -305,160 +305,22 @@ export default function ChatInput({
 		[hasFocus],
 	);
 
-	// Render content with cursor and paste placeholders
+	// Render content with cursor (treat all text including placeholders as plain text)
 	const renderContent = useCallback(() => {
 		if (buffer.text.length > 0) {
-			// 使用buffer的内部文本而不是getFullText()，这样可以显示占位符
+			// 使用buffer的内部文本,将占位符当作普通文本处理
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
+			const charInfo = buffer.getCharAtCursor();
+			const atCursor = charInfo.char === '\n' ? ' ' : charInfo.char;
 
-			const hasPastePlaceholder =
-				displayText.includes('[Paste ') &&
-				displayText.includes(' characters #');
-
-			const hasImagePlaceholder = displayText.includes('[image #');
-			const focusTokenPattern = /(\x1b)?\[[IO]/g;
-			const cleanedText = displayText.replace(focusTokenPattern, '').trim();
-			// 检查是否只有换行符或焦点标记
-			const hasOnlyNewlines = /^[\n\s]*$/.test(displayText.replace(focusTokenPattern, ''));
-			const isFocusNoise = cleanedText.length === 0 && !hasOnlyNewlines;
-
-			if (hasPastePlaceholder || hasImagePlaceholder || isFocusNoise) {
-				const atCursor = (() => {
-					const charInfo = buffer.getCharAtCursor();
-					return charInfo.char === '\n' ? ' ' : charInfo.char;
-				})();
-
-				// 分割文本并高亮占位符（粘贴和图片）
-				const parts = displayText.split(
-					/(\[Paste \d+ characters #\d+\]|\[image #\d+\])/,
-				);
-
-				// 先构建带位置信息的数据结构
-				const partsWithPosition: Array<{
-					part: string;
-					partStart: number;
-					partEnd: number;
-					isPastePlaceholder: boolean;
-					isImagePlaceholder: boolean;
-					originalIndex: number;
-				}> = [];
-
-				let processedLength = 0;
-				for (let i = 0; i < parts.length; i++) {
-					const part = parts[i] || '';
-					const isPastePlaceholder = !!part.match(/^\[Paste \d+ characters #\d+\]$/);
-					const isImagePlaceholder = !!part.match(/^\[image #\d+\]$/);
-					const partStart = processedLength;
-					const partEnd = processedLength + cpLen(part);
-					processedLength = partEnd;
-
-					if (part.length > 0) {
-						partsWithPosition.push({
-							part,
-							partStart,
-							partEnd,
-							isPastePlaceholder,
-							isImagePlaceholder,
-							originalIndex: i,
-						});
-					}
-				}
-
-				let cursorRendered = false;
-				const elements: Array<React.ReactNode> = [];
-				let elementKey = 0;
-
-				for (const item of partsWithPosition) {
-					const {part, partStart, partEnd, isPastePlaceholder, isImagePlaceholder, originalIndex} = item;
-					const isPlaceholder = isPastePlaceholder || isImagePlaceholder;
-
-					// 检查光标是否在这个部分
-					if (cursorPos >= partStart && cursorPos < partEnd) {
-						cursorRendered = true;
-						const beforeCursorInPart = cpSlice(part, 0, cursorPos - partStart);
-						const afterCursorInPart = cpSlice(part, cursorPos - partStart + 1);
-
-						if (isPlaceholder) {
-							if (beforeCursorInPart) {
-								elements.push(
-									<Text
-										key={`${originalIndex}-before`}
-										color={isImagePlaceholder ? 'magenta' : 'cyan'}
-										dimColor
-									>
-										{beforeCursorInPart}
-									</Text>
-								);
-							}
-							elements.push(
-								<React.Fragment key={`cursor-${elementKey++}`}>
-									{renderCursor(atCursor)}
-								</React.Fragment>
-							);
-							if (afterCursorInPart) {
-								elements.push(
-									<Text
-										key={`${originalIndex}-after`}
-										color={isImagePlaceholder ? 'magenta' : 'cyan'}
-										dimColor
-									>
-										{afterCursorInPart}
-									</Text>
-								);
-							}
-						} else {
-							if (beforeCursorInPart) {
-								elements.push(<Text key={`${originalIndex}-before`}>{beforeCursorInPart}</Text>);
-							}
-							elements.push(
-								<React.Fragment key={`cursor-${elementKey++}`}>
-									{renderCursor(atCursor)}
-								</React.Fragment>
-							);
-							if (afterCursorInPart) {
-								elements.push(<Text key={`${originalIndex}-after`}>{afterCursorInPart}</Text>);
-							}
-						}
-					} else {
-						if (isPlaceholder) {
-							elements.push(
-								<Text
-									key={originalIndex}
-									color={isImagePlaceholder ? 'magenta' : 'cyan'}
-									dimColor
-								>
-									{part}
-								</Text>
-							);
-						} else {
-							elements.push(<Text key={originalIndex}>{part}</Text>);
-						}
-					}
-				}
-
-				if (!cursorRendered) {
-					elements.push(
-						<React.Fragment key={`cursor-final`}>
-							{renderCursor(' ')}
-						</React.Fragment>
-					);
-				}
-
-				return <>{elements}</>;
-			} else {
-				// 普通文本渲染
-				const charInfo = buffer.getCharAtCursor();
-				const atCursor = charInfo.char === '\n' ? ' ' : charInfo.char;
-
-				return (
-					<Text>
-						{cpSlice(displayText, 0, cursorPos)}
-						{renderCursor(atCursor)}
-						{cpSlice(displayText, cursorPos + 1)}
-					</Text>
-				);
-			}
+			return (
+				<Text>
+					{cpSlice(displayText, 0, cursorPos)}
+					{renderCursor(atCursor)}
+					{cpSlice(displayText, cursorPos + 1)}
+				</Text>
+			);
 		} else {
 			return (
 				<>
