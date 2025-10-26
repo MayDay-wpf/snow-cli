@@ -17,14 +17,16 @@ export function useClipboard(
 				try {
 					const psScript = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $clipboard = [System.Windows.Forms.Clipboard]::GetImage(); if ($clipboard -ne $null) { $ms = New-Object System.IO.MemoryStream; $clipboard.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $bytes = $ms.ToArray(); $ms.Close(); [Convert]::ToBase64String($bytes) }`;
 
-					const base64 = execSync(`powershell -Command "${psScript}"`, {
+					const base64Raw = execSync(`powershell -Command "${psScript}"`, {
 						encoding: 'utf-8',
 						timeout: 5000,
-					}).trim();
+					});
+					// 清理所有空白字符（包括换行符）
+					const base64 = base64Raw.replace(/\s+/g, '');
 
 					if (base64 && base64.length > 100) {
-						const dataUrl = `data:image/png;base64,${base64}`;
-						buffer.insertImage(dataUrl, 'image/png');
+						// 直接传入 base64 数据，不需要 data URL 前缀
+						buffer.insertImage(base64, 'image/png');
 						const text = buffer.getFullText();
 						const cursorPos = buffer.getCursorPosition();
 						updateCommandPanelState(text);
@@ -62,10 +64,12 @@ end try'`;
 						});
 
 						// Read the file as base64
-						const base64 = execSync(`base64 -i "${tmpFile}"`, {
+						const base64Raw = execSync(`base64 -i "${tmpFile}"`, {
 							encoding: 'utf-8',
 							timeout: 2000,
-						}).trim();
+						});
+						// 清理所有空白字符（包括换行符）
+						const base64 = base64Raw.replace(/\s+/g, '');
 
 						// Clean up temp file
 						try {
@@ -75,8 +79,8 @@ end try'`;
 						}
 
 						if (base64 && base64.length > 100) {
-							const dataUrl = `data:image/png;base64,${base64}`;
-							buffer.insertImage(dataUrl, 'image/png');
+							// 直接传入 base64 数据，不需要 data URL 前缀
+							buffer.insertImage(base64, 'image/png');
 							const text = buffer.getFullText();
 							const cursorPos = buffer.getCursorPosition();
 							updateCommandPanelState(text);

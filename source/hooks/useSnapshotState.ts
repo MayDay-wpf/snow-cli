@@ -9,6 +9,7 @@ export function useSnapshotState(messagesLength: number) {
 		fileCount: number;
 		filePaths?: string[];
 		message?: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null>(null);
 
 	// Load snapshot file counts when session changes

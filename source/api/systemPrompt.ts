@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 /**
  * Get the system prompt, dynamically reading from ROLE.md if it exists
@@ -31,6 +32,41 @@ function getSystemPromptWithRole(): string {
 	}
 
 	return SYSTEM_PROMPT_TEMPLATE;
+}
+
+// Get system environment info
+function getSystemEnvironmentInfo(): string {
+	const platform = (() => {
+		const platformType = os.platform();
+		switch (platformType) {
+			case 'win32':
+				return 'Windows';
+			case 'darwin':
+				return 'macOS';
+			case 'linux':
+				return 'Linux';
+			default:
+				return platformType;
+		}
+	})();
+
+	const shell = (() => {
+		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
+		const shellName = path.basename(shellPath).toLowerCase();
+		if (shellName.includes('cmd')) return 'cmd.exe';
+		if (shellName.includes('powershell') || shellName.includes('pwsh')) return 'PowerShell';
+		if (shellName.includes('zsh')) return 'zsh';
+		if (shellName.includes('bash')) return 'bash';
+		if (shellName.includes('fish')) return 'fish';
+		if (shellName.includes('sh')) return 'sh';
+		return shellName || 'shell';
+	})();
+
+	const workingDirectory = process.cwd();
+
+	return `Platform: ${platform}
+Shell: ${shell}
+Working Directory: ${workingDirectory}`;
 }
 
 const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line assistant.
@@ -152,5 +188,11 @@ Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked
 
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
 export function getSystemPrompt(): string {
-	return getSystemPromptWithRole();
+	const basePrompt = getSystemPromptWithRole();
+	const systemEnv = getSystemEnvironmentInfo();
+	return `${basePrompt}
+
+## 💻 System Environment
+
+${systemEnv}`;
 }

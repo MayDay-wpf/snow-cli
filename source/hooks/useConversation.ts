@@ -43,7 +43,7 @@ export type ConversationHandlerOptions = {
 	yoloMode: boolean;
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
-	getPendingMessages?: () => string[]; // Get pending user messages
+	getPendingMessages?: () => Array<{text: string; images?: Array<{data: string; mimeType: string}>}>; // Get pending user messages
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
 	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>; // Control reasoning state (Responses API only)
@@ -58,7 +58,6 @@ export type ConversationHandlerOptions = {
 	>; // Retry status
 	clearSavedMessages?: () => void; // Clear saved messages for auto-compression
 	setRemountKey?: React.Dispatch<React.SetStateAction<number>>; // Remount key for auto-compression
-	setShouldIncludeSystemInfo?: React.Dispatch<React.SetStateAction<boolean>>; // System info flag for auto-compression
 	getCurrentContextPercentage?: () => number; // Get current context percentage from ChatInput
 };
 
@@ -810,9 +809,6 @@ export async function handleConversationWithTools(
 								options.setRemountKey(prev => prev + 1);
 							}
 							options.setContextUsage(compressionResult.usage);
-							if (options.setShouldIncludeSystemInfo) {
-								options.setShouldIncludeSystemInfo(true);
-							}
 
 							// 更新累计的usage为压缩后的usage
 							accumulatedUsage = compressionResult.usage;
@@ -1027,9 +1023,6 @@ export async function handleConversationWithTools(
 										options.setRemountKey(prev => prev + 1);
 									}
 									options.setContextUsage(compressionResult.usage);
-									if (options.setShouldIncludeSystemInfo) {
-										options.setShouldIncludeSystemInfo(true);
-									}
 
 									// 更新累计的usage为压缩后的usage
 									accumulatedUsage = compressionResult.usage;
@@ -1054,25 +1047,37 @@ export async function handleConversationWithTools(
 						options.clearPendingMessages();
 
 						// Combine multiple pending messages into one
-						const combinedMessage = pendingMessages.join('\n\n');
+						const combinedMessage = pendingMessages.map(m => m.text).join('\n\n');
+
+						// Collect all images from pending messages
+						const allPendingImages = pendingMessages
+							.flatMap(m => m.images || [])
+							.map(img => ({
+								type: 'image' as const,
+								data: img.data,
+								mimeType: img.mimeType,
+							}));
 
 						// Add user message to UI
 						const userMessage: Message = {
 							role: 'user',
 							content: combinedMessage,
+							images: allPendingImages.length > 0 ? allPendingImages : undefined,
 						};
 						setMessages(prev => [...prev, userMessage]);
 
-						// Add user message to conversation history
+						// Add user message to conversation history (using images field for image data)
 						conversationMessages.push({
 							role: 'user',
 							content: combinedMessage,
+							images: allPendingImages.length > 0 ? allPendingImages : undefined,
 						});
 
 						// Save user message
 						saveMessage({
 							role: 'user',
 							content: combinedMessage,
+							images: allPendingImages.length > 0 ? allPendingImages : undefined,
 						}).catch(error => {
 							console.error('Failed to save pending user message:', error);
 						});

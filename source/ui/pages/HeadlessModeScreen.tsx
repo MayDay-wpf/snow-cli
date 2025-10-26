@@ -11,7 +11,6 @@ import {useSessionSave} from '../../hooks/useSessionSave.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
-	getSystemInfo,
 } from '../../utils/fileUtils.js';
 
 type Props = {
@@ -368,15 +367,11 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 			);
 			const regularFiles = validFiles.filter(f => !f.isImage);
 
-			// Get system information
-			const systemInfo = getSystemInfo();
-
 			// Add user message to UI
 			const userMessage: Message = {
 				role: 'user',
 				content: cleanContent,
 				files: validFiles.length > 0 ? validFiles : undefined,
-				systemInfo,
 			};
 			setMessages([userMessage]);
 
@@ -419,24 +414,12 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				});
 			}
 
-			if (systemInfo) {
-				console.log(`\x1b[36m├─ System Context\x1b[0m`);
-				console.log(
-					`\x1b[90m│  └─ Platform: \x1b[33m${systemInfo.platform}\x1b[0m`,
-				);
-				console.log(`\x1b[90m│  └─ Shell: \x1b[33m${systemInfo.shell}\x1b[0m`);
-				console.log(
-					`\x1b[90m│  └─ Working Directory: \x1b[33m${systemInfo.workingDirectory}\x1b[0m`,
-				);
-			}
-
 			console.log(`\x1b[36m└─ Assistant Response\x1b[0m`);
 
 			// Create message for AI
 			const messageForAI = createMessageWithFileInstructions(
 				cleanContent,
 				regularFiles,
-				systemInfo,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 

@@ -141,7 +141,6 @@ type CommandHandlerOptions = {
 	setMcpPanelKey: React.Dispatch<React.SetStateAction<number>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
-	setShouldIncludeSystemInfo: React.Dispatch<React.SetStateAction<boolean>>;
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
 	>;
@@ -180,9 +179,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					options.clearSavedMessages();
 					options.setMessages(compressionResult.uiMessages);
 					options.setRemountKey(prev => prev + 1);
-
-					// Reset system info flag to include in next message
-					options.setShouldIncludeSystemInfo(true);
 
 					// Update token usage with compression result
 					options.setContextUsage(compressionResult.usage);
@@ -232,8 +228,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setRemountKey(prev => prev + 1);
 				// Reset context usage (token statistics)
 				options.setContextUsage(null);
-				// Reset system info flag to include in next message
-				options.setShouldIncludeSystemInfo(true);
 				// Note: yoloMode is preserved via localStorage (lines 68-76, 104-111)
 				// Note: VSCode connection is preserved and managed by vscodeConnection utility
 				// Add command execution feedback
@@ -310,8 +304,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setRemountKey(prev => prev + 1);
 				// Reset context usage (token statistics)
 				options.setContextUsage(null);
-				// Reset system info flag to include in next message
-				options.setShouldIncludeSystemInfo(true);
 
 				// Add command execution feedback
 				const commandMessage: Message = {

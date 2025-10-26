@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 
 export interface SelectedFile {
 	path: string;
@@ -193,20 +192,9 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 export function createMessageWithFileInstructions(
 	content: string,
 	files: SelectedFile[],
-	systemInfo?: {platform: string; shell: string; workingDirectory: string},
 	editorContext?: {activeFile?: string; selectedText?: string; cursorPosition?: {line: number; character: number}; workspaceFolder?: string}
 ): string {
 	const parts: string[] = [content];
-
-	// Add system info if provided
-	if (systemInfo) {
-		const systemInfoLines = [
-			`└─ Platform: ${systemInfo.platform}`,
-			`└─ Shell: ${systemInfo.shell}`,
-			`└─ Working Directory: ${systemInfo.workingDirectory}`
-		];
-		parts.push(systemInfoLines.join('\n'));
-	}
 
 	// Add editor context if provided (from VSCode connection)
 	if (editorContext) {
@@ -239,47 +227,3 @@ export function createMessageWithFileInstructions(
 	return parts.join('\n');
 }
 
-/**
- * Get system information (OS, shell, working directory)
- */
-export function getSystemInfo(): {platform: string; shell: string; workingDirectory: string} {
-	// Get OS platform
-	const platform = (() => {
-		const platformType = os.platform();
-		switch (platformType) {
-			case 'win32':
-				return 'Windows';
-			case 'darwin':
-				return 'macOS';
-			case 'linux':
-				return 'Linux';
-			default:
-				return platformType;
-		}
-	})();
-
-	// Get shell type
-	const shell = (() => {
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-
-		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell')) return 'PowerShell';
-		if (shellName.includes('pwsh')) return 'PowerShell';
-		if (shellName.includes('zsh')) return 'zsh';
-		if (shellName.includes('bash')) return 'bash';
-		if (shellName.includes('fish')) return 'fish';
-		if (shellName.includes('sh')) return 'sh';
-
-		return shellName || 'shell';
-	})();
-
-	// Get working directory
-	const workingDirectory = process.cwd();
-
-	return {
-		platform,
-		shell,
-		workingDirectory
-	};
-}

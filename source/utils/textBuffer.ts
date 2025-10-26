@@ -24,30 +24,37 @@ function sanitizeInput(str: string): string {
 	);
 }
 
-export interface PastePlaceholder {
+/**
+ * 统一的占位符类型，用于大文本粘贴和图片
+ */
+export interface Placeholder {
 	id: string;
-	content: string; // 原始粘贴内容
+	content: string; // 原始内容（文本或 base64）
+	type: 'text' | 'image'; // 类型
 	charCount: number; // 字符数
-	index: number; // 第几次粘贴
+	index: number; // 序号（第几个）
 	placeholder: string; // 显示的占位符文本
+	mimeType?: string; // 图片 MIME 类型（仅图片类型有值）
 }
 
+/**
+ * 图片数据类型（向后兼容）
+ */
 export interface ImageData {
 	id: string;
-	data: string; // Base64 编码的图片数据
-	mimeType: string; // 图片 MIME 类型 (e.g., image/png, image/jpeg)
-	index: number; // 第几张图片
-	placeholder: string; // 显示的占位符文本 [image #xxx]
+	data: string;
+	mimeType: string;
+	index: number;
+	placeholder: string;
 }
 
 export class TextBuffer {
 	private content = '';
 	private cursorIndex = 0;
 	private viewport: Viewport;
-	private pasteStorage: Map<string, PastePlaceholder> = new Map();
-	private pasteCounter = 0;
-	private imageStorage: Map<string, ImageData> = new Map();
-	private imageCounter = 0;
+	private placeholderStorage: Map<string, Placeholder> = new Map(); // 统一的占位符存储
+	private textPlaceholderCounter = 0; // 文本占位符计数器
+	private imagePlaceholderCounter = 0; // 图片占位符计数器
 	private pasteAccumulator: string = ''; // 累积粘贴内容
 	private pasteTimer: NodeJS.Timeout | null = null; // 粘贴完成检测定时器
 	private pastePlaceholderPosition: number = -1; // 占位符插入位置
@@ -74,8 +81,7 @@ export class TextBuffer {
 			clearTimeout(this.pasteTimer);
 			this.pasteTimer = null;
 		}
-		this.pasteStorage.clear();
-		this.imageStorage.clear();
+		this.placeholderStorage.clear();
 		this.onUpdateCallback = undefined;
 	}
 
@@ -84,13 +90,14 @@ export class TextBuffer {
 	}
 
 	/**
-	 * 获取完整文本，包括替换占位符为原始内容
+	 * 获取完整文本，包括替换占位符为原始内容（仅文本类型）
 	 */
 	getFullText(): string {
 		let fullText = this.content;
 
-		for (const placeholder of this.pasteStorage.values()) {
-			if (placeholder.placeholder) {
+		for (const placeholder of this.placeholderStorage.values()) {
+			// 只替换文本类型的占位符
+			if (placeholder.type === 'text' && placeholder.placeholder) {
 				fullText = fullText
 					.split(placeholder.placeholder)
 					.join(placeholder.content);
@@ -129,10 +136,9 @@ export class TextBuffer {
 		this.clampCursorIndex();
 
 		if (sanitized === '') {
-			this.pasteStorage.clear();
-			this.pasteCounter = 0;
-			this.imageStorage.clear();
-			this.imageCounter = 0;
+			this.placeholderStorage.clear();
+			this.textPlaceholderCounter = 0;
+			this.imagePlaceholderCounter = 0;
 			this.pasteAccumulator = '';
 			if (this.pasteTimer) {
 				clearTimeout(this.pasteTimer);
@@ -225,15 +231,16 @@ export class TextBuffer {
 
 		// 只有当累积的字符数超过300时才创建占位符
 		if (totalChars > 300) {
-			this.pasteCounter++;
-			const pasteId = `paste_${Date.now()}_${this.pasteCounter}`;
-			const placeholderText = `[Paste ${totalChars} characters #${this.pasteCounter}]`;
+			this.textPlaceholderCounter++;
+			const pasteId = `paste_${Date.now()}_${this.textPlaceholderCounter}`;
+			const placeholderText = `[Paste ${totalChars} characters #${this.textPlaceholderCounter}]`;
 
-			this.pasteStorage.set(pasteId, {
+			this.placeholderStorage.set(pasteId, {
 				id: pasteId,
+				type: 'text',
 				content: this.pasteAccumulator,
 				charCount: totalChars,
-				index: this.pasteCounter,
+				index: this.textPlaceholderCounter,
 				placeholder: placeholderText,
 			});
 
@@ -538,19 +545,25 @@ export class TextBuffer {
 	}
 
 	/**
-	 * 插入图片数据
+	 * 插入图片数据（使用统一的占位符系统）
 	 */
 	insertImage(base64Data: string, mimeType: string): void {
-		this.imageCounter++;
-		const imageId = `image_${Date.now()}_${this.imageCounter}`;
-		const placeholderText = `[image #${this.imageCounter}]`;
+		// 清理 base64 数据：移除所有空白字符（包括换行符）
+		// PowerShell/macOS 的 base64 编码可能包含换行符
+		const cleanedBase64 = base64Data.replace(/\s+/g, '');
 
-		this.imageStorage.set(imageId, {
+		this.imagePlaceholderCounter++;
+		const imageId = `image_${Date.now()}_${this.imagePlaceholderCounter}`;
+		const placeholderText = `[image #${this.imagePlaceholderCounter}]`;
+
+		this.placeholderStorage.set(imageId, {
 			id: imageId,
-			data: base64Data,
-			mimeType: mimeType,
-			index: this.imageCounter,
+			type: 'image',
+			content: cleanedBase64,
+			charCount: cleanedBase64.length,
+			index: this.imagePlaceholderCounter,
 			placeholder: placeholderText,
+			mimeType: mimeType,
 		});
 
 		this.insertPlainText(placeholderText);
@@ -558,19 +571,36 @@ export class TextBuffer {
 	}
 
 	/**
-	 * 获取所有图片数据
+	 * 获取所有图片数据（还原为 data URL 格式）
 	 */
 	getImages(): ImageData[] {
-		return Array.from(this.imageStorage.values()).sort(
-			(a, b) => a.index - b.index,
-		);
+		return Array.from(this.placeholderStorage.values())
+			.filter((p) => p.type === 'image')
+			.map((p) => {
+				const mimeType = p.mimeType || 'image/png';
+				// 还原为 data URL 格式
+				const dataUrl = `data:${mimeType};base64,${p.content}`;
+				return {
+					id: p.id,
+					data: dataUrl,
+					mimeType: mimeType,
+					index: p.index,
+					placeholder: p.placeholder,
+				};
+			})
+			.sort((a, b) => a.index - b.index);
 	}
 
 	/**
 	 * 清除所有图片
 	 */
 	clearImages(): void {
-		this.imageStorage.clear();
-		this.imageCounter = 0;
+		// 只清除图片类型的占位符
+		for (const [id, placeholder] of this.placeholderStorage.entries()) {
+			if (placeholder.type === 'image') {
+				this.placeholderStorage.delete(id);
+			}
+		}
+		this.imagePlaceholderCounter = 0;
 	}
 }

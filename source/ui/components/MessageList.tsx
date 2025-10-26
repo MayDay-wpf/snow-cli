@@ -16,11 +16,6 @@ export interface Message {
 		data: string;
 		mimeType: string;
 	}>;
-	systemInfo?: {
-		platform: string;
-		shell: string;
-		workingDirectory: string;
-	};
 	toolCall?: {
 		name: string;
 		arguments: any;
@@ -105,25 +100,9 @@ const MessageList = memo(
 										) : (
 											<MarkdownRenderer content={message.content || ' '} />
 										)}
-										{(message.systemInfo ||
-											message.files ||
-											message.files ||
+										{(message.files ||
 											message.images) && (
 												<Box flexDirection="column">
-													{message.systemInfo && (
-														<>
-															<Text color="gray" dimColor>
-																└─ Platform: {message.systemInfo.platform}
-															</Text>
-															<Text color="gray" dimColor>
-																└─ Shell: {message.systemInfo.shell}
-															</Text>
-															<Text color="gray" dimColor>
-																└─ Working Directory:{' '}
-																{message.systemInfo.workingDirectory}
-															</Text>
-														</>
-													)}
 													{message.files && message.files.length > 0 && (
 														<>
 															{message.files.map((file, fileIndex) => (

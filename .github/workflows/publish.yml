@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance focus event handling and truncate text based on terminal width
+            - Enhance system information retrieval and image handling
             ### Installation
             ```bash
             npm install -g snow-ai

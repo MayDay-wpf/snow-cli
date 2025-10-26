@@ -30,7 +30,6 @@ import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
-	getSystemInfo,
 } from '../../utils/fileUtils.js';
 import {executeCommand} from '../../utils/commandExecutor.js';
 import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
@@ -69,8 +68,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 			status: 'pending' | 'completed';
 		}>
 	>([]);
-	const [pendingMessages, setPendingMessages] = useState<string[]>([]);
-	const pendingMessagesRef = useRef<string[]>([]);
+	const [pendingMessages, setPendingMessages] = useState<Array<{text: string; images?: Array<{data: string; mimeType: string}>}>>([]);
+	const pendingMessagesRef = useRef<Array<{text: string; images?: Array<{data: string; mimeType: string}>}>>([]);
 	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
 	const [remountKey, setRemountKey] = useState(0);
@@ -97,10 +96,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
-	const [shouldIncludeSystemInfo, setShouldIncludeSystemInfo] = useState(true); // Include on first message
-	const [restoreInputContent, setRestoreInputContent] = useState<string | null>(
-		null,
-	);
+	const [restoreInputContent, setRestoreInputContent] = useState<{
+		text: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	} | null>(null);
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
@@ -242,7 +241,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 		setMcpPanelKey,
 		setYoloMode,
 		setContextUsage: streamingState.setContextUsage,
-		setShouldIncludeSystemInfo,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
 			processMessageRef.current?.(
@@ -356,6 +354,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const handleHistorySelect = async (
 		selectedIndex: number,
 		message: string,
+		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => {
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
@@ -381,10 +380,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 				fileCount: filePaths.length, // Use actual unique file count
 				filePaths,
 				message, // Save message for restore after rollback
+				images, // Save images for restore after rollback
 			});
 		} else {
 			// No files to rollback, just rollback conversation
-			// Note: message is already in input buffer via useHistoryNavigation
+			// Restore message to input buffer (with or without images)
+			setRestoreInputContent({
+				text: message,
+				images: images,
+			});
 			await performRollback(selectedIndex, false);
 		}
 	};
@@ -526,9 +530,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 		}
 
 		if (snapshotState.pendingRollback) {
-			// Restore message to input before rollback
+			// Restore message and images to input before rollback
 			if (snapshotState.pendingRollback.message) {
-				setRestoreInputContent(snapshotState.pendingRollback.message);
+				setRestoreInputContent({
+					text: snapshotState.pendingRollback.message,
+					images: snapshotState.pendingRollback.images,
+				});
 			}
 
 			await performRollback(
@@ -573,7 +580,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	) => {
 		// If streaming, add to pending messages instead of sending immediately
 		if (streamingState.isStreaming) {
-			setPendingMessages(prev => [...prev, message]);
+			setPendingMessages(prev => [...prev, {text: message, images}]);
 			return;
 		}
 
@@ -622,7 +629,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 					setMessages(compressionResult.uiMessages);
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
-					setShouldIncludeSystemInfo(true);
 				} else {
 					throw new Error('Compression failed');
 				}
@@ -672,9 +678,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 			})),
 		];
 
-		// Get system information only if needed
-		const systemInfo = shouldIncludeSystemInfo ? getSystemInfo() : undefined;
-
 		// Only add user message to UI if not hidden
 		if (!hideUserMessage) {
 			const userMessage: Message = {
@@ -682,14 +685,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 				content: cleanContent,
 				files: validFiles.length > 0 ? validFiles : undefined,
 				images: imageContents.length > 0 ? imageContents : undefined,
-				systemInfo,
 			};
 			setMessages(prev => [...prev, userMessage]);
-
-			// After including system info once, don't include it again
-			if (shouldIncludeSystemInfo) {
-				setShouldIncludeSystemInfo(false);
-			}
 		}
 		streamingState.setIsStreaming(true);
 
@@ -698,11 +695,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 		streamingState.setAbortController(controller);
 
 		try {
-			// Create message for AI with file read instructions, system info, and editor context
+			// Create message for AI with file read instructions and editor context
 			const messageForAI = createMessageWithFileInstructions(
 				cleanContent,
 				regularFiles,
-				systemInfo,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
@@ -729,7 +725,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setRetryStatus: streamingState.setRetryStatus,
 				clearSavedMessages,
 				setRemountKey,
-				setShouldIncludeSystemInfo,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
 			});
 		} catch (error) {
@@ -853,7 +848,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		setPendingMessages([]);
 
 		// Combine multiple pending messages into one
-		const combinedMessage = messagesToProcess.join('\n\n');
+		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
 		// Parse and validate file references (same as processMessage)
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
@@ -866,18 +861,25 @@ export default function ChatScreen({skipWelcome}: Props) {
 		);
 		const regularFiles = validFiles.filter(f => !f.isImage);
 
-		// Convert image files to image content format
+		// Collect all images from pending messages
+		const allImages = messagesToProcess
+			.flatMap(m => m.images || [])
+			.concat(
+				imageFiles.map(f => ({
+					data: f.imageData!,
+					mimeType: f.mimeType!,
+				}))
+			);
+
+		// Convert to image content format
 		const imageContents =
-			imageFiles.length > 0
-				? imageFiles.map(f => ({
+			allImages.length > 0
+				? allImages.map(img => ({
 						type: 'image' as const,
-						data: f.imageData!,
-						mimeType: f.mimeType!,
+						data: img.data,
+						mimeType: img.mimeType,
 				  }))
 				: undefined;
-
-		// Get system information (not needed for pending messages - they are follow-ups)
-		const systemInfo = undefined;
 
 		// Add user message to chat with file references and images
 		const userMessage: Message = {
@@ -896,11 +898,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 		streamingState.setAbortController(controller);
 
 		try {
-			// Create message for AI with file read instructions, and editor context
+			// Create message for AI with file read instructions and editor context
 			const messageForAI = createMessageWithFileInstructions(
 				cleanContent,
 				regularFiles,
-				systemInfo,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
@@ -927,7 +928,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				clearSavedMessages,
 				setRemountKey,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
-				setShouldIncludeSystemInfo,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -1339,21 +1339,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 																maxLines={5}
 															/>
 														)}
-													{/* System info for user messages */}
-													{message.role === 'user' && message.systemInfo && (
-														<Box marginTop={1} flexDirection="column">
-															<Text color="gray" dimColor>
-																└─ Platform: {message.systemInfo.platform}
-															</Text>
-															<Text color="gray" dimColor>
-																└─ Shell: {message.systemInfo.shell}
-															</Text>
-															<Text color="gray" dimColor>
-																└─ Working Directory:{' '}
-																{message.systemInfo.workingDirectory}
-															</Text>
-														</Box>
-													)}
 													{message.files && message.files.length > 0 && (
 														<Box flexDirection="column">
 															{message.files.map((file, fileIndex) => (

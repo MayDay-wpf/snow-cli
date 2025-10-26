@@ -5,13 +5,14 @@ import {historyManager, type HistoryEntry} from '../utils/historyManager.js';
 type ChatMessage = {
 	role: string;
 	content: string;
+	images?: Array<{type: 'image'; data: string; mimeType: string}>;
 };
 
 export function useHistoryNavigation(
 	buffer: TextBuffer,
 	triggerUpdate: () => void,
 	chatHistory: ChatMessage[],
-	onHistorySelect?: (selectedIndex: number, message: string) => void,
+	onHistorySelect?: (selectedIndex: number, message: string, images?: Array<{type: 'image'; data: string; mimeType: string}>) => void,
 ) {
 	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
 	const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
@@ -68,14 +69,13 @@ export function useHistoryNavigation(
 			const selectedIndex = parseInt(value, 10);
 			const selectedMessage = chatHistory[selectedIndex];
 			if (selectedMessage && onHistorySelect) {
-				// Put the message content in the input buffer
-				buffer.setText(selectedMessage.content);
+				// Don't modify buffer here - let ChatInput handle everything via initialContent
+				// This prevents duplicate image placeholders
 				setShowHistoryMenu(false);
-				triggerUpdate();
-				onHistorySelect(selectedIndex, selectedMessage.content);
+				onHistorySelect(selectedIndex, selectedMessage.content, selectedMessage.images);
 			}
 		},
-		[chatHistory, onHistorySelect, buffer],
+		[chatHistory, onHistorySelect],
 	);
 
 	// Terminal-style history navigation: navigate up (older)

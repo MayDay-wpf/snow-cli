@@ -64,7 +64,10 @@ type Props = {
 		// OpenAI caching
 		cachedTokens?: number;
 	};
-	initialContent?: string | null;
+	initialContent?: {
+		text: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
 };
 
@@ -200,7 +203,49 @@ export default function ChatInput({
 	// Set initial content when provided (e.g., when rolling back to first message)
 	useEffect(() => {
 		if (initialContent) {
-			buffer.setText(initialContent);
+			// Always do full restore to avoid duplicate placeholders
+			buffer.setText('');
+
+			const text = initialContent.text;
+			const images = initialContent.images || [];
+
+			if (images.length === 0) {
+				// No images, just set the text
+				if (text) {
+					buffer.insert(text);
+				}
+			} else {
+				// Split text by image placeholders and reconstruct with actual images
+				// Placeholder format: [image #N]
+				const imagePlaceholderPattern = /\[image #\d+\]/g;
+				const parts = text.split(imagePlaceholderPattern);
+
+				// Interleave text parts with images
+				for (let i = 0; i < parts.length; i++) {
+					// Insert text part
+					const part = parts[i];
+					if (part) {
+						buffer.insert(part);
+					}
+
+					// Insert image after this text part (if exists)
+					if (i < images.length) {
+						const img = images[i];
+						if (img) {
+							// Extract base64 data from data URL if present
+							let base64Data = img.data;
+							if (base64Data.startsWith('data:')) {
+								const base64Index = base64Data.indexOf('base64,');
+								if (base64Index !== -1) {
+									base64Data = base64Data.substring(base64Index + 7);
+								}
+							}
+							buffer.insertImage(base64Data, img.mimeType);
+						}
+					}
+				}
+			}
+
 			triggerUpdate();
 		}
 		// Only run when initialContent changes
@@ -274,7 +319,9 @@ export default function ChatInput({
 			const hasImagePlaceholder = displayText.includes('[image #');
 			const focusTokenPattern = /(\x1b)?\[[IO]/g;
 			const cleanedText = displayText.replace(focusTokenPattern, '').trim();
-			const isFocusNoise = cleanedText.length === 0;
+			// 检查是否只有换行符或焦点标记
+			const hasOnlyNewlines = /^[\n\s]*$/.test(displayText.replace(focusTokenPattern, ''));
+			const isFocusNoise = cleanedText.length === 0 && !hasOnlyNewlines;
 
 			if (hasPastePlaceholder || hasImagePlaceholder || isFocusNoise) {
 				const atCursor = (() => {
@@ -286,18 +333,45 @@ export default function ChatInput({
 				const parts = displayText.split(
 					/(\[Paste \d+ characters #\d+\]|\[image #\d+\])/,
 				);
-				let processedLength = 0;
-				let cursorRendered = false;
 
-				const elements = parts.map((part, partIndex) => {
-					const isPastePlaceholder = part.match(
-						/^\[Paste \d+ characters #\d+\]$/,
-					);
-					const isImagePlaceholder = part.match(/^\[image #\d+\]$/);
-					const isPlaceholder = isPastePlaceholder || isImagePlaceholder;
+				// 先构建带位置信息的数据结构
+				const partsWithPosition: Array<{
+					part: string;
+					partStart: number;
+					partEnd: number;
+					isPastePlaceholder: boolean;
+					isImagePlaceholder: boolean;
+					originalIndex: number;
+				}> = [];
+
+				let processedLength = 0;
+				for (let i = 0; i < parts.length; i++) {
+					const part = parts[i] || '';
+					const isPastePlaceholder = !!part.match(/^\[Paste \d+ characters #\d+\]$/);
+					const isImagePlaceholder = !!part.match(/^\[image #\d+\]$/);
 					const partStart = processedLength;
 					const partEnd = processedLength + cpLen(part);
 					processedLength = partEnd;
+
+					if (part.length > 0) {
+						partsWithPosition.push({
+							part,
+							partStart,
+							partEnd,
+							isPastePlaceholder,
+							isImagePlaceholder,
+							originalIndex: i,
+						});
+					}
+				}
+
+				let cursorRendered = false;
+				const elements: Array<React.ReactNode> = [];
+				let elementKey = 0;
+
+				for (const item of partsWithPosition) {
+					const {part, partStart, partEnd, isPastePlaceholder, isImagePlaceholder, originalIndex} = item;
+					const isPlaceholder = isPastePlaceholder || isImagePlaceholder;
 
 					// 检查光标是否在这个部分
 					if (cursorPos >= partStart && cursorPos < partEnd) {
@@ -305,47 +379,73 @@ export default function ChatInput({
 						const beforeCursorInPart = cpSlice(part, 0, cursorPos - partStart);
 						const afterCursorInPart = cpSlice(part, cursorPos - partStart + 1);
 
-						return (
-							<React.Fragment key={partIndex}>
-								{isPlaceholder ? (
+						if (isPlaceholder) {
+							if (beforeCursorInPart) {
+								elements.push(
 									<Text
+										key={`${originalIndex}-before`}
 										color={isImagePlaceholder ? 'magenta' : 'cyan'}
 										dimColor
 									>
 										{beforeCursorInPart}
-										{renderCursor(atCursor)}
+									</Text>
+								);
+							}
+							elements.push(
+								<React.Fragment key={`cursor-${elementKey++}`}>
+									{renderCursor(atCursor)}
+								</React.Fragment>
+							);
+							if (afterCursorInPart) {
+								elements.push(
+									<Text
+										key={`${originalIndex}-after`}
+										color={isImagePlaceholder ? 'magenta' : 'cyan'}
+										dimColor
+									>
 										{afterCursorInPart}
 									</Text>
-								) : (
-									<>
-										{beforeCursorInPart}
-										{renderCursor(atCursor)}
-										{afterCursorInPart}
-									</>
-								)}
-							</React.Fragment>
-						);
+								);
+							}
+						} else {
+							if (beforeCursorInPart) {
+								elements.push(<Text key={`${originalIndex}-before`}>{beforeCursorInPart}</Text>);
+							}
+							elements.push(
+								<React.Fragment key={`cursor-${elementKey++}`}>
+									{renderCursor(atCursor)}
+								</React.Fragment>
+							);
+							if (afterCursorInPart) {
+								elements.push(<Text key={`${originalIndex}-after`}>{afterCursorInPart}</Text>);
+							}
+						}
 					} else {
-						return isPlaceholder ? (
-							<Text
-								key={partIndex}
-								color={isImagePlaceholder ? 'magenta' : 'cyan'}
-								dimColor
-							>
-								{part}
-							</Text>
-						) : (
-							<Text key={partIndex}>{part}</Text>
-						);
+						if (isPlaceholder) {
+							elements.push(
+								<Text
+									key={originalIndex}
+									color={isImagePlaceholder ? 'magenta' : 'cyan'}
+									dimColor
+								>
+									{part}
+								</Text>
+							);
+						} else {
+							elements.push(<Text key={originalIndex}>{part}</Text>);
+						}
 					}
-				});
+				}
 
-				return (
-					<Text>
-						{elements}
-						{!cursorRendered && renderCursor(' ')}
-					</Text>
-				);
+				if (!cursorRendered) {
+					elements.push(
+						<React.Fragment key={`cursor-final`}>
+							{renderCursor(' ')}
+						</React.Fragment>
+					);
+				}
+
+				return <>{elements}</>;
 			} else {
 				// 普通文本渲染
 				const charInfo = buffer.getCharAtCursor();
@@ -369,7 +469,7 @@ export default function ChatInput({
 				</>
 			);
 		}
-	}, [buffer, disabled, placeholder, renderCursor]);
+	}, [buffer, disabled, placeholder, renderCursor, buffer.text]);
 
 	return (
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>

@@ -100,15 +100,6 @@ export function formatMessagesAsText(messages: Message[]): string {
 			lines.push(`[${message.images.length} image(s) attached]`);
 		}
 
-		// Add system info if present
-		if (message.systemInfo) {
-			lines.push('');
-			lines.push('[SYSTEM INFO]');
-			lines.push(`Platform: ${message.systemInfo.platform}`);
-			lines.push(`Shell: ${message.systemInfo.shell}`);
-			lines.push(`Working Directory: ${message.systemInfo.workingDirectory}`);
-		}
-
 		// Add files information if present
 		if (message.files && message.files.length > 0) {
 			lines.push('');
