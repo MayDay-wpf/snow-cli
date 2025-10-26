@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance system information retrieval and image handling
+            - Simplify content rendering in ChatInput by treating placeholders as plain text
             ### Installation
             ```bash
             npm install -g snow-ai
