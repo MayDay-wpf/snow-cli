@@ -37,6 +37,14 @@ const commands = [
 		name: 'export',
 		description: 'Export chat conversation to text file with save dialog',
 	},
+	{
+		name: 'agent-',
+		description: 'Select and use a sub-agent to handle specific tasks',
+	},
+	{
+		name: 'todo-',
+		description: 'Search and select TODO comments from project files',
+	},
 ];
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {

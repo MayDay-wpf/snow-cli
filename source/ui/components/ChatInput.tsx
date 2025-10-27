@@ -4,6 +4,8 @@ import {Viewport} from '../../utils/textBuffer.js';
 import {cpSlice} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
+import AgentPickerPanel from './AgentPickerPanel.js';
+import TodoPickerPanel from './TodoPickerPanel.js';
 import {useInputBuffer} from '../../hooks/useInputBuffer.js';
 import {useCommandPanel} from '../../hooks/useCommandPanel.js';
 import {useFilePicker} from '../../hooks/useFilePicker.js';
@@ -12,6 +14,8 @@ import {useClipboard} from '../../hooks/useClipboard.js';
 import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
+import {useAgentPicker} from '../../hooks/useAgentPicker.js';
+import {useTodoPicker} from '../../hooks/useTodoPicker.js';
 
 /**
  * Calculate context usage percentage
@@ -124,6 +128,7 @@ export default function ChatInput({
 		atSymbolPosition,
 		setAtSymbolPosition,
 		filteredFileCount,
+		searchMode,
 		updateFilePickerState,
 		handleFileSelect,
 		handleFilteredCountChange,
@@ -147,6 +152,32 @@ export default function ChatInput({
 		resetHistoryNavigation,
 		saveToHistory,
 	} = useHistoryNavigation(buffer, triggerUpdate, chatHistory, onHistorySelect);
+
+	// Use agent picker hook
+	const {
+		showAgentPicker,
+		setShowAgentPicker,
+		agentSelectedIndex,
+		setAgentSelectedIndex,
+		agents,
+		handleAgentSelect,
+	} = useAgentPicker(buffer, triggerUpdate);
+
+	// Use todo picker hook
+	const {
+		showTodoPicker,
+		setShowTodoPicker,
+		todoSelectedIndex,
+		setTodoSelectedIndex,
+		todos,
+		selectedTodos,
+		toggleTodoSelection,
+		confirmTodoSelection,
+		isLoading: todoIsLoading,
+		searchQuery: todoSearchQuery,
+		setSearchQuery: setTodoSearchQuery,
+		totalTodoCount,
+	} = useTodoPicker(buffer, triggerUpdate, process.cwd());
 
 	// Use clipboard hook
 	const {pasteFromClipboard} = useClipboard(
@@ -198,6 +229,22 @@ export default function ChatInput({
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
+		showAgentPicker,
+		setShowAgentPicker,
+		agentSelectedIndex,
+		setAgentSelectedIndex,
+		agents,
+		handleAgentSelect,
+		showTodoPicker,
+		setShowTodoPicker,
+		todoSelectedIndex,
+		setTodoSelectedIndex,
+		todos,
+		selectedTodos,
+		toggleTodoSelection,
+		confirmTodoSelection,
+		todoSearchQuery,
+		setTodoSearchQuery,
 	});
 
 	// Set initial content when provided (e.g., when rolling back to first message)
@@ -461,8 +508,24 @@ export default function ChatInput({
 							maxItems={10}
 							rootPath={process.cwd()}
 							onFilteredCountChange={handleFilteredCountChange}
+							searchMode={searchMode}
 						/>
 					</Box>
+					<AgentPickerPanel
+						selectedIndex={agentSelectedIndex}
+						visible={showAgentPicker}
+						maxHeight={5}
+					/>
+					<TodoPickerPanel
+						todos={todos}
+						selectedIndex={todoSelectedIndex}
+						selectedTodos={selectedTodos}
+						visible={showTodoPicker}
+						maxHeight={5}
+						isLoading={todoIsLoading}
+						searchQuery={todoSearchQuery}
+						totalCount={totalTodoCount}
+					/>
 					{yoloMode && (
 						<Box marginTop={1}>
 							<Text color="yellow" dimColor>
@@ -564,11 +627,13 @@ export default function ChatInput({
 							{showCommands && getFilteredCommands().length > 0
 								? 'Type to filter commands'
 								: showFilePicker
-								? 'Type to filter files • Tab/Enter to select • ESC to cancel'
+								? searchMode === 'content'
+									? 'Content search • Tab/Enter to select • ESC to cancel'
+									: 'Type to filter files • Tab/Enter to select • ESC to cancel'
 								: (() => {
 										const pasteKey =
 											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
-										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '/': commands`;
+										return `Ctrl+L: delete to start • Ctrl+R: delete to end • ${pasteKey}: paste images • '@': files • '@@': search content • '/': commands`;
 								  })()}
 						</Text>
 					</Box>

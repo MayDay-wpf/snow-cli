@@ -53,6 +53,8 @@ import '../../utils/commands/review.js';
 import '../../utils/commands/role.js';
 import '../../utils/commands/usage.js';
 import '../../utils/commands/export.js';
+import '../../utils/commands/agent.js';
+import '../../utils/commands/todoPicker.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -68,8 +70,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 			status: 'pending' | 'completed';
 		}>
 	>([]);
-	const [pendingMessages, setPendingMessages] = useState<Array<{text: string; images?: Array<{data: string; mimeType: string}>}>>([]);
-	const pendingMessagesRef = useRef<Array<{text: string; images?: Array<{data: string; mimeType: string}>}>>([]);
+	const [pendingMessages, setPendingMessages] = useState<
+		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
+	>([]);
+	const pendingMessagesRef = useRef<
+		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
+	>([]);
 	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
 	const [remountKey, setRemountKey] = useState(0);
@@ -868,7 +874,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				imageFiles.map(f => ({
 					data: f.imageData!,
 					mimeType: f.mimeType!,
-				}))
+				})),
 			);
 
 		// Convert to image content format

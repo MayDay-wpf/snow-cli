@@ -110,12 +110,8 @@ export async function executeSubAgent(
 		// This ensures tools approved during execution are immediately recognized
 		const sessionApprovedTools = new Set<string>();
 
-		const maxIterations = 10; // Prevent infinite loops
-		let iteration = 0;
-
-		while (iteration < maxIterations) {
-			iteration++;
-
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
 			// Check abort signal
 			if (abortSignal?.aborted) {
 				return {
@@ -353,15 +349,7 @@ export async function executeSubAgent(
 			messages.push(...toolResults);
 
 			// Continue to next iteration if there were tool calls
-			// The loop will continue until no more tool calls or max iterations
-		}
-
-		if (iteration >= maxIterations) {
-			return {
-				success: false,
-				result: finalResponse,
-				error: 'Sub-agent exceeded maximum iterations',
-			};
+			// The loop will continue until no more tool calls
 		}
 
 		return {

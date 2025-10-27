@@ -13,7 +13,8 @@ export function useStreamingState() {
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
 	const [isReasoning, setIsReasoning] = useState(false);
-	const [abortController, setAbortController] = useState<AbortController | null>(null);
+	const [abortController, setAbortController] =
+		useState<AbortController | null>(null);
 	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
@@ -58,22 +59,26 @@ export function useStreamingState() {
 		return () => clearInterval(interval);
 	}, [timerStartTime]);
 
+	// Initialize remaining seconds when retry starts
+	useEffect(() => {
+		if (!retryStatus || !retryStatus.isRetrying) return;
+		if (retryStatus.remainingSeconds !== undefined) return;
+
+		// Initialize remaining seconds from nextDelay (only once)
+		setRetryStatus(prev =>
+			prev
+				? {
+						...prev,
+						remainingSeconds: Math.ceil(prev.nextDelay / 1000),
+				  }
+				: null,
+		);
+	}, [retryStatus?.isRetrying, retryStatus?.nextDelay]);
+
 	// Countdown timer for retry delays
 	useEffect(() => {
 		if (!retryStatus || !retryStatus.isRetrying) return;
-
-		// Initialize remaining seconds from nextDelay
-		if (retryStatus.remainingSeconds === undefined) {
-			setRetryStatus(prev =>
-				prev
-					? {
-							...prev,
-							remainingSeconds: Math.ceil(prev.nextDelay / 1000),
-					  }
-					: null,
-			);
-			return;
-		}
+		if (retryStatus.remainingSeconds === undefined) return;
 
 		// Countdown every second
 		const interval = setInterval(() => {
@@ -96,7 +101,7 @@ export function useStreamingState() {
 		}, 1000);
 
 		return () => clearInterval(interval);
-	}, [retryStatus?.isRetrying, retryStatus?.remainingSeconds]);
+	}, [retryStatus?.isRetrying]); // ✅ 移除 remainingSeconds 避免循环
 
 	return {
 		isStreaming,

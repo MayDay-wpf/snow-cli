@@ -7,14 +7,18 @@ import React, {
 	useImperativeHandle,
 	memo,
 } from 'react';
-import { Box, Text } from 'ink';
+import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 
 type FileItem = {
 	name: string;
 	path: string;
 	isDirectory: boolean;
+	// For content search mode
+	lineNumber?: number;
+	lineContent?: string;
 };
 
 type Props = {
@@ -24,6 +28,7 @@ type Props = {
 	maxItems?: number;
 	rootPath?: string;
 	onFilteredCountChange?: (count: number) => void;
+	searchMode?: 'file' | 'content';
 };
 
 export type FileListRef = {
@@ -40,11 +45,15 @@ const FileList = memo(
 				maxItems = 10,
 				rootPath = process.cwd(),
 				onFilteredCountChange,
+				searchMode = 'file',
 			},
 			ref,
 		) => {
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
+
+			// Get terminal size for dynamic content display
+			const {columns: terminalWidth} = useTerminalSize();
 
 			// Fixed maximum display items to prevent rendering issues
 			const MAX_DISPLAY_ITEMS = 5;
@@ -153,6 +162,146 @@ const FileList = memo(
 				setIsLoading(false);
 			}, [rootPath]);
 
+			// Search file content for content search mode
+			const searchFileContent = useCallback(
+				async (query: string): Promise<FileItem[]> => {
+					if (!query.trim()) {
+						return [];
+					}
+
+					const results: FileItem[] = [];
+					const queryLower = query.toLowerCase();
+					const maxResults = 100; // Limit results for performance
+
+					// Text file extensions to search
+					const textExtensions = new Set([
+						'.js',
+						'.jsx',
+						'.ts',
+						'.tsx',
+						'.py',
+						'.java',
+						'.c',
+						'.cpp',
+						'.h',
+						'.hpp',
+						'.cs',
+						'.go',
+						'.rs',
+						'.rb',
+						'.php',
+						'.swift',
+						'.kt',
+						'.scala',
+						'.sh',
+						'.bash',
+						'.zsh',
+						'.fish',
+						'.ps1',
+						'.html',
+						'.css',
+						'.scss',
+						'.sass',
+						'.less',
+						'.xml',
+						'.json',
+						'.yaml',
+						'.yml',
+						'.toml',
+						'.ini',
+						'.conf',
+						'.config',
+						'.txt',
+						'.md',
+						'.markdown',
+						'.rst',
+						'.tex',
+						'.sql',
+						'.graphql',
+						'.proto',
+						'.vue',
+						'.svelte',
+					]);
+
+					// Filter to only text files
+					const filesToSearch = files.filter(f => {
+						if (f.isDirectory) return false;
+						const ext = path.extname(f.path).toLowerCase();
+						return textExtensions.has(ext);
+					});
+
+					// Process files in batches to avoid blocking
+					const batchSize = 10;
+
+					for (
+						let batchStart = 0;
+						batchStart < filesToSearch.length;
+						batchStart += batchSize
+					) {
+						if (results.length >= maxResults) {
+							break;
+						}
+
+						const batch = filesToSearch.slice(
+							batchStart,
+							batchStart + batchSize,
+						);
+
+						// Process batch files concurrently but with limit
+						const batchPromises = batch.map(async file => {
+							const fileResults: FileItem[] = [];
+
+							try {
+								const fullPath = path.join(rootPath, file.path);
+								const content = await fs.promises.readFile(fullPath, 'utf-8');
+								const lines = content.split('\n');
+
+								// Search each line for the query
+								for (let i = 0; i < lines.length; i++) {
+									if (fileResults.length >= 10) {
+										// Max 10 results per file
+										break;
+									}
+
+									const line = lines[i];
+									if (line && line.toLowerCase().includes(queryLower)) {
+										const maxLineLength = Math.max(40, terminalWidth - 10);
+
+										fileResults.push({
+											name: file.name,
+											path: file.path,
+											isDirectory: false,
+											lineNumber: i + 1,
+											lineContent: line.trim().slice(0, maxLineLength),
+										});
+									}
+								}
+							} catch (error) {
+								// Skip files that can't be read (binary or encoding issues)
+							}
+
+							return fileResults;
+						});
+
+						// Wait for batch to complete
+						const batchResults = await Promise.all(batchPromises);
+
+						// Flatten and add to results
+						for (const fileResults of batchResults) {
+							if (results.length >= maxResults) {
+								break;
+							}
+							results.push(
+								...fileResults.slice(0, maxResults - results.length),
+							);
+						}
+					}
+
+					return results;
+				},
+				[files, rootPath, terminalWidth],
+			);
+
 			// Load files on mount - only once when visible
 			useEffect(() => {
 				if (visible && files.length === 0) {
@@ -160,32 +309,56 @@ const FileList = memo(
 				}
 			}, [visible, loadFiles]);
 
-			// Filter files based on query (no limit here, we'll slice for display)
-			const allFilteredFiles = useMemo(() => {
-				if (!query.trim()) {
-					return files;
-				}
+			// State for filtered files (needed for async content search)
+			const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
 
-				const queryLower = query.toLowerCase();
-				const filtered = files.filter(file => {
-					const fileName = file.name.toLowerCase();
-					const filePath = file.path.toLowerCase();
-					return fileName.includes(queryLower) || filePath.includes(queryLower);
-				});
+			// Filter files based on query and search mode with debounce
+			useEffect(() => {
+				const performSearch = async () => {
+					if (!query.trim()) {
+						setAllFilteredFiles(files);
+						return;
+					}
 
-				// Sort by relevance (exact name matches first, then path matches)
-				filtered.sort((a, b) => {
-					const aNameMatch = a.name.toLowerCase().startsWith(queryLower);
-					const bNameMatch = b.name.toLowerCase().startsWith(queryLower);
+					if (searchMode === 'content') {
+						// Content search mode (@@)
+						const results = await searchFileContent(query);
+						setAllFilteredFiles(results);
+					} else {
+						// File name search mode (@)
+						const queryLower = query.toLowerCase();
+						const filtered = files.filter(file => {
+							const fileName = file.name.toLowerCase();
+							const filePath = file.path.toLowerCase();
+							return (
+								fileName.includes(queryLower) || filePath.includes(queryLower)
+							);
+						});
 
-					if (aNameMatch && !bNameMatch) return -1;
-					if (!aNameMatch && bNameMatch) return 1;
+						// Sort by relevance (exact name matches first, then path matches)
+						filtered.sort((a, b) => {
+							const aNameMatch = a.name.toLowerCase().startsWith(queryLower);
+							const bNameMatch = b.name.toLowerCase().startsWith(queryLower);
 
-					return a.name.localeCompare(b.name);
-				});
+							if (aNameMatch && !bNameMatch) return -1;
+							if (!aNameMatch && bNameMatch) return 1;
 
-				return filtered;
-			}, [files, query]);
+							return a.name.localeCompare(b.name);
+						});
+
+						setAllFilteredFiles(filtered);
+					}
+				};
+
+				// Debounce search to avoid excessive updates during fast typing
+				// Use shorter delay for file search (150ms) and longer for content search (500ms)
+				const debounceDelay = searchMode === 'content' ? 500 : 150;
+				const timer = setTimeout(() => {
+					performSearch();
+				}, debounceDelay);
+
+				return () => clearTimeout(timer);
+			}, [files, query, searchMode, searchFileContent]);
 
 			// Display with scrolling window
 			const filteredFiles = useMemo(() => {
@@ -226,7 +399,12 @@ const FileList = memo(
 							selectedIndex < allFilteredFiles.length &&
 							allFilteredFiles[selectedIndex]
 						) {
-							return allFilteredFiles[selectedIndex].path;
+							const selectedFile = allFilteredFiles[selectedIndex];
+							// For content search mode, include line number
+							if (selectedFile.lineNumber !== undefined) {
+								return `${selectedFile.path}:${selectedFile.lineNumber}`;
+							}
+							return selectedFile.path;
 						}
 						return null;
 					},
@@ -249,26 +427,20 @@ const FileList = memo(
 
 			if (isLoading) {
 				return (
-					<Box
-						borderStyle="round"
-						borderColor="blue"
-						paddingX={1}
-						marginTop={1}
-					>
-						<Text color="blue">Loading files...</Text>
+					<Box paddingX={1} marginTop={1}>
+						<Text color="blue" dimColor>
+							Loading files...
+						</Text>
 					</Box>
 				);
 			}
 
 			if (filteredFiles.length === 0) {
 				return (
-					<Box
-						borderStyle="round"
-						borderColor="gray"
-						paddingX={1}
-						marginTop={1}
-					>
-						<Text color="gray">No files found</Text>
+					<Box paddingX={1} marginTop={1}>
+						<Text color="gray" dimColor>
+							No files found
+						</Text>
 					</Box>
 				);
 			}
@@ -277,13 +449,17 @@ const FileList = memo(
 				<Box paddingX={1} marginTop={1} flexDirection="column">
 					<Box marginBottom={1}>
 						<Text color="blue" bold>
-							≡ Files{' '}
+							{searchMode === 'content' ? '≡ Content Search' : '≡ Files'}{' '}
 							{allFilteredFiles.length > effectiveMaxItems &&
 								`(${selectedIndex + 1}/${allFilteredFiles.length})`}
 						</Text>
 					</Box>
 					{filteredFiles.map((file, index) => (
-						<Box key={file.path}>
+						<Box
+							key={`${file.path}-${file.lineNumber || 0}`}
+							flexDirection="column"
+						>
+							{/* First line: file path and line number (for content search) or file path (for file search) */}
 							<Text
 								backgroundColor={
 									index === displaySelectedIndex ? '#1E3A8A' : undefined
@@ -292,12 +468,29 @@ const FileList = memo(
 									index === displaySelectedIndex
 										? '#FFFFFF'
 										: file.isDirectory
-											? 'yellow'
-											: 'white'
+										? 'yellow'
+										: 'white'
 								}
 							>
-								{file.isDirectory ? '◇ ' + file.path : '◆ ' + file.path}
+								{searchMode === 'content' && file.lineNumber !== undefined
+									? `${file.path}:${file.lineNumber}`
+									: file.isDirectory
+									? '◇ ' + file.path
+									: '◆ ' + file.path}
 							</Text>
+							{/* Second line: code content (only for content search) */}
+							{searchMode === 'content' && file.lineContent && (
+								<Text
+									backgroundColor={
+										index === displaySelectedIndex ? '#1E3A8A' : undefined
+									}
+									color={index === displaySelectedIndex ? '#D1D5DB' : 'gray'}
+									dimColor
+								>
+									{'  '}
+									{file.lineContent}
+								</Text>
+							)}
 						</Box>
 					))}
 					{allFilteredFiles.length > effectiveMaxItems && (

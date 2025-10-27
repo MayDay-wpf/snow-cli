@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Simplify content rendering in ChatInput by treating placeholders as plain text
+            - Implement agent and todo picker functionality
             ### Installation
             ```bash
             npm install -g snow-ai

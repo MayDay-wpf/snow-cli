@@ -2,6 +2,7 @@ import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
 import {TextBuffer} from '../utils/textBuffer.js';
 import {executeCommand} from '../utils/commandExecutor.js';
+import type {SubAgent} from '../utils/subAgentConfig.js';
 
 type KeyboardInputOptions = {
 	buffer: TextBuffer;
@@ -58,6 +59,24 @@ type KeyboardInputOptions = {
 	) => void;
 	// Focus management
 	ensureFocus: () => void;
+	// Agent picker
+	showAgentPicker: boolean;
+	setShowAgentPicker: (show: boolean) => void;
+	agentSelectedIndex: number;
+	setAgentSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	agents: SubAgent[];
+	handleAgentSelect: (agent: SubAgent) => void;
+	// Todo picker
+	showTodoPicker: boolean;
+	setShowTodoPicker: (show: boolean) => void;
+	todoSelectedIndex: number;
+	setTodoSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	todos: Array<{id: string; file: string; line: number; content: string}>;
+	selectedTodos: Set<string>;
+	toggleTodoSelection: () => void;
+	confirmTodoSelection: () => void;
+	todoSearchQuery: string;
+	setTodoSearchQuery: (query: string) => void;
 };
 
 export function useKeyboardInput(options: KeyboardInputOptions) {
@@ -100,7 +119,27 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
+		showAgentPicker,
+		setShowAgentPicker,
+		agentSelectedIndex,
+		setAgentSelectedIndex,
+		agents,
+		handleAgentSelect,
+		showTodoPicker,
+		setShowTodoPicker,
+		todoSelectedIndex,
+		setTodoSelectedIndex,
+		todos,
+		selectedTodos,
+		toggleTodoSelection,
+		confirmTodoSelection,
+		todoSearchQuery,
+		setTodoSearchQuery,
 	} = options;
+
+	// Mark variables as used (they are used in useInput closure below)
+	void todoSelectedIndex;
+	void selectedTodos;
 
 	// Track paste detection
 	const inputBuffer = useRef<string>('');
@@ -161,6 +200,20 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
+			// Close todo picker if open
+			if (showTodoPicker) {
+				setShowTodoPicker(false);
+				setTodoSelectedIndex(0);
+				return;
+			}
+
+			// Close agent picker if open
+			if (showAgentPicker) {
+				setShowAgentPicker(false);
+				setAgentSelectedIndex(0);
+				return;
+			}
+
 			// Close file picker if open
 			if (showFilePicker) {
 				setShowFilePicker(false);
@@ -210,6 +263,93 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					}
 				}
 			}
+			return;
+		}
+
+		// Handle todo picker navigation
+		if (showTodoPicker) {
+			// Up arrow in todo picker
+			if (key.upArrow) {
+				setTodoSelectedIndex(prev => Math.max(0, prev - 1));
+				return;
+			}
+
+			// Down arrow in todo picker
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, todos.length - 1);
+				setTodoSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+
+			// Space - toggle selection
+			if (input === ' ') {
+				toggleTodoSelection();
+				return;
+			}
+
+			// Enter - confirm selection
+			if (key.return) {
+				confirmTodoSelection();
+				return;
+			}
+
+			// Backspace - remove last character from search
+			if (key.backspace || key.delete) {
+				if (todoSearchQuery.length > 0) {
+					setTodoSearchQuery(todoSearchQuery.slice(0, -1));
+					setTodoSelectedIndex(0); // Reset to first item
+					triggerUpdate();
+				}
+				return;
+			}
+
+			// Type to search - alphanumeric and common characters
+			if (
+				input &&
+				input.length === 1 &&
+				!key.ctrl &&
+				!key.meta &&
+				input !== '\x1b' // Ignore escape sequences
+			) {
+				setTodoSearchQuery(todoSearchQuery + input);
+				setTodoSelectedIndex(0); // Reset to first item
+				triggerUpdate();
+				return;
+			}
+
+			// For any other key in todo picker, just return to prevent interference
+			return;
+		}
+
+		// Handle agent picker navigation
+		if (showAgentPicker) {
+			// Up arrow in agent picker
+			if (key.upArrow) {
+				setAgentSelectedIndex(prev => Math.max(0, prev - 1));
+				return;
+			}
+
+			// Down arrow in agent picker
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, agents.length - 1);
+				setAgentSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+
+			// Enter - select agent
+			if (key.return) {
+				if (agents.length > 0 && agentSelectedIndex < agents.length) {
+					const selectedAgent = agents[agentSelectedIndex];
+					if (selectedAgent) {
+						handleAgentSelect(selectedAgent);
+						setShowAgentPicker(false);
+						setAgentSelectedIndex(0);
+					}
+				}
+				return;
+			}
+
+			// For any other key in agent picker, just return to prevent interference
 			return;
 		}
 
@@ -340,6 +480,24 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				) {
 					const selectedCommand = filteredCommands[commandSelectedIndex];
 					if (selectedCommand) {
+						// Special handling for todo- command
+						if (selectedCommand.name === 'todo-') {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowTodoPicker(true);
+							triggerUpdate();
+							return;
+						}
+						// Special handling for agent- command
+						if (selectedCommand.name === 'agent-') {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowAgentPicker(true);
+							triggerUpdate();
+							return;
+						}
 						// Execute command instead of inserting text
 						executeCommand(selectedCommand.name).then(result => {
 							if (onCommand) {
