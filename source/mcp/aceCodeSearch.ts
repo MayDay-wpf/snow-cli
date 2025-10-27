@@ -2,6 +2,7 @@ import {promises as fs} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
 import {type FzfResultItem, AsyncFzf} from 'fzf';
+import {processManager} from '../utils/processManager.js';
 // Type definitions
 import type {
 	CodeSymbol,
@@ -544,7 +545,12 @@ export class ACECodeSearchService {
 	private expandGlobBraces(glob: string): string[] {
 		// Match {a,b,c} pattern
 		const braceMatch = glob.match(/^(.+)\{([^}]+)\}(.*)$/);
-		if (!braceMatch || !braceMatch[1] || !braceMatch[2] || braceMatch[3] === undefined) {
+		if (
+			!braceMatch ||
+			!braceMatch[1] ||
+			!braceMatch[2] ||
+			braceMatch[3] === undefined
+		) {
 			return [glob];
 		}
 
@@ -585,6 +591,9 @@ export class ACECodeSearchService {
 				cwd: this.basePath,
 				windowsHide: true,
 			});
+
+			// Register child process for cleanup
+			processManager.register(child);
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
@@ -664,6 +673,9 @@ export class ACECodeSearchService {
 				cwd: this.basePath,
 				windowsHide: true,
 			});
+
+			// Register child process for cleanup
+			processManager.register(child);
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];

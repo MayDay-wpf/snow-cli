@@ -1,5 +1,4 @@
 import {exec} from 'child_process';
-import {promisify} from 'util';
 // Type definitions
 import type {CommandExecutionResult} from './types/bash.types.js';
 // Utility functions
@@ -7,8 +6,7 @@ import {
 	isDangerousCommand,
 	truncateOutput,
 } from './utils/bash/security.utils.js';
-
-const execAsync = promisify(exec);
+import {processManager} from '../utils/processManager.js';
 
 /**
  * Terminal Command Execution Service
@@ -47,8 +45,8 @@ export class TerminalCommandService {
 				);
 			}
 
-			// Execute command using system default shell
-			const {stdout, stderr} = await execAsync(command, {
+			// Execute command using system default shell and register the process
+			const childProcess = exec(command, {
 				cwd: this.workingDirectory,
 				timeout,
 				maxBuffer: this.maxOutputLength,
@@ -59,6 +57,42 @@ export class TerminalCommandService {
 						LC_ALL: 'en_US.UTF-8',
 					}),
 				},
+			});
+
+			// Register child process for cleanup
+			processManager.register(childProcess);
+
+			// Convert to promise
+			const {stdout, stderr} = await new Promise<{
+				stdout: string;
+				stderr: string;
+			}>((resolve, reject) => {
+				let stdoutData = '';
+				let stderrData = '';
+
+				childProcess.stdout?.on('data', chunk => {
+					stdoutData += chunk;
+				});
+
+				childProcess.stderr?.on('data', chunk => {
+					stderrData += chunk;
+				});
+
+				childProcess.on('error', reject);
+
+				childProcess.on('close', (code, signal) => {
+					if (signal) {
+						reject(new Error(`Process killed by signal ${signal}`));
+					} else if (code === 0) {
+						resolve({stdout: stdoutData, stderr: stderrData});
+					} else {
+						const error: any = new Error(`Process exited with code ${code}`);
+						error.code = code;
+						error.stdout = stdoutData;
+						error.stderr = stderrData;
+						reject(error);
+					}
+				});
 			});
 
 			// Truncate output if too long

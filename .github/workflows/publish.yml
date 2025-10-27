@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Implement agent and todo picker functionality
+            - Add ProcessManager for tracking and managing child processes
             ### Installation
             ```bash
             npm install -g snow-ai

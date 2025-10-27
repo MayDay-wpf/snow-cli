@@ -9,6 +9,7 @@ import App from './app.js';
 import {vscodeConnection} from './utils/vscodeConnection.js';
 import {resourceMonitor} from './utils/resourceMonitor.js';
 import {initializeProfiles} from './utils/configManager.js';
+import {processManager} from './utils/processManager.js';
 
 const execAsync = promisify(exec);
 
@@ -166,6 +167,8 @@ process.stdout.write('\x1b[?2004l');
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {
 	process.stdout.write('\x1b[?2004l');
+	// Kill all child processes first
+	processManager.killAll();
 	// Stop resource monitoring
 	resourceMonitor.stopMonitoring();
 	// Disconnect VSCode connection before exit
