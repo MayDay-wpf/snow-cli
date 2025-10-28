@@ -493,7 +493,6 @@ export async function* createStreamingAnthropicCompletion(
 				if (abortSignal?.aborted) {
 					return;
 				}
-
 				if (event.type === 'content_block_start') {
 					const block = event.content_block;
 					const blockIndex = event.index;
@@ -610,6 +609,10 @@ export async function* createStreamingAnthropicCompletion(
 								completion_tokens: 0,
 								total_tokens: 0,
 							};
+						}
+						// Update prompt_tokens if present in message_delta
+						if (event.usage.input_tokens !== undefined) {
+							usageData.prompt_tokens = event.usage.input_tokens;
 						}
 						usageData.completion_tokens = event.usage.output_tokens || 0;
 						usageData.total_tokens =
