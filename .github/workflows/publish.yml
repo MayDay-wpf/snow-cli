@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Add ProcessManager for tracking and managing child processes
+            - bug fixes
             ### Installation
             ```bash
             npm install -g snow-ai
