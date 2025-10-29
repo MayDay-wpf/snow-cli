@@ -418,10 +418,24 @@ export default function ChatScreen({skipWelcome}: Props) {
 		// We need to truncate to the same user message in the session file
 		if (currentSession) {
 			// Count how many user messages we're deleting (from selectedIndex onwards in UI)
-			const uiUserMessagesToDelete = messages
-				.slice(selectedIndex)
-				.filter(msg => msg.role === 'user').length;
+			// But exclude any uncommitted user messages that weren't saved to session
+			const messagesAfterSelected = messages.slice(selectedIndex);
+			const hasDiscontinuedMessage = messagesAfterSelected.some(
+				msg => msg.discontinued,
+			);
 
+			let uiUserMessagesToDelete = 0;
+			if (hasDiscontinuedMessage) {
+				// If there's a discontinued message, it means all messages from selectedIndex onwards
+				// (including user messages) were not saved to session
+				// So we don't need to delete any user messages from session
+				uiUserMessagesToDelete = 0;
+			} else {
+				// Normal case: count all user messages from selectedIndex onwards
+				uiUserMessagesToDelete = messagesAfterSelected.filter(
+					msg => msg.role === 'user',
+				).length;
+			}
 			// Check if the selected message is a user message that might not be in session
 			// (e.g., interrupted before AI response)
 			const selectedMessage = messages[selectedIndex];
@@ -791,9 +805,28 @@ export default function ChatScreen({skipWelcome}: Props) {
 										}
 									}
 									// If some tool results are missing, remove from this assistant message onwards
+									// But only if this is the last assistant message with tool_calls in the entire conversation
 									if (toolCallIds.size > 0) {
-										truncateIndex = i;
-										break;
+										// Additional check: ensure this is the last assistant message with tool_calls
+										let hasLaterAssistantWithTools = false;
+										for (let k = i + 1; k < messages.length; k++) {
+											const laterMsg = messages[k];
+											if (
+												laterMsg?.role === 'assistant' &&
+												laterMsg?.tool_calls &&
+												laterMsg.tool_calls.length > 0
+											) {
+												hasLaterAssistantWithTools = true;
+												break;
+											}
+										}
+
+										// Only truncate if no later assistant messages have tool_calls
+										// This preserves complete historical conversations
+										if (!hasLaterAssistantWithTools) {
+											truncateIndex = i;
+											break;
+										}
 									}
 								}
 
