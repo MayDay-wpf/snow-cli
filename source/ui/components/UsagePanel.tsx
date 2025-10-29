@@ -271,7 +271,11 @@ function formatTokens(tokens: number, compact = false): string {
 	return String(tokens);
 }
 
-function renderStackedBarChart(stats: AggregatedStats, terminalWidth: number) {
+function renderStackedBarChart(
+	stats: AggregatedStats,
+	terminalWidth: number,
+	scrollOffset: number,
+) {
 	if (stats.models.size === 0) {
 		return (
 			<Text color="gray" dimColor>
@@ -284,6 +288,16 @@ function renderStackedBarChart(stats: AggregatedStats, terminalWidth: number) {
 		(a, b) => b[1].total - a[1].total,
 	);
 	const isNarrow = terminalWidth < 100;
+
+	// Show maximum 2 models at a time for better readability
+	const maxVisibleModels = 2;
+
+	// Calculate visible range
+	const startIdx = scrollOffset;
+	const endIdx = Math.min(startIdx + maxVisibleModels, sortedModels.length);
+	const visibleModels = sortedModels.slice(startIdx, endIdx);
+	const hasMoreAbove = startIdx > 0;
+	const hasMoreBelow = endIdx < sortedModels.length;
 
 	// Calculate max total (including cache) for scaling
 	const maxTotal = Math.max(
@@ -316,7 +330,16 @@ function renderStackedBarChart(stats: AggregatedStats, terminalWidth: number) {
 				</Text>
 			</Box>
 
-			{sortedModels.map(([modelName, modelStats]) => {
+			{/* Scroll indicator - more above */}
+			{hasMoreAbove && (
+				<Box marginBottom={1}>
+					<Text color="yellow" dimColor>
+						↑ {startIdx} more above (use ↑ arrow)
+					</Text>
+				</Box>
+			)}
+
+			{visibleModels.map(([modelName, modelStats]) => {
 				const shortName = getModelShortName(modelName, 30);
 
 				// Calculate segment lengths based on proportion
@@ -463,6 +486,15 @@ function renderStackedBarChart(stats: AggregatedStats, terminalWidth: number) {
 					</Box>
 				</Box>
 			)}
+
+			{/* Scroll indicator - more below */}
+			{hasMoreBelow && (
+				<Box marginTop={1}>
+					<Text color="yellow" dimColor>
+						↓ {sortedModels.length - endIdx} more below (use ↓ arrow)
+					</Text>
+				</Box>
+			)}
 		</Box>
 	);
 }
@@ -475,6 +507,7 @@ export default function UsagePanel() {
 	});
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [scrollOffset, setScrollOffset] = useState(0);
 	const {columns: terminalWidth} = useTerminalSize();
 
 	useEffect(() => {
@@ -498,12 +531,32 @@ export default function UsagePanel() {
 		load();
 	}, [granularity]);
 
+	// Reset scroll when changing granularity
+	useEffect(() => {
+		setScrollOffset(0);
+	}, [granularity]);
+
 	useInput((_input, key) => {
 		if (key.tab) {
 			const granularities: Granularity[] = ['hour', 'day', 'week', 'month'];
 			const currentIdx = granularities.indexOf(granularity);
 			const nextIdx = (currentIdx + 1) % granularities.length;
 			setGranularity(granularities[nextIdx]!);
+		}
+
+		// Calculate available space for scrolling
+		const sortedModels = Array.from(stats.models.entries()).sort(
+			(a, b) => b[1].total - a[1].total,
+		);
+		const totalModels = sortedModels.length;
+
+		if (key.upArrow) {
+			setScrollOffset(prev => Math.max(0, prev - 1));
+		}
+		if (key.downArrow) {
+			// Reserve space for header, legend, total summary
+			const maxScroll = Math.max(0, totalModels - 1);
+			setScrollOffset(prev => Math.min(maxScroll, prev + 1));
 		}
 	});
 
@@ -548,7 +601,7 @@ export default function UsagePanel() {
 					No usage data for this period
 				</Text>
 			) : (
-				renderStackedBarChart(stats, terminalWidth)
+				renderStackedBarChart(stats, terminalWidth, scrollOffset)
 			)}
 		</Box>
 	);

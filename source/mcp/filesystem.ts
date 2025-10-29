@@ -526,7 +526,12 @@ export class FilesystemMCPService {
 		}
 
 		// Single file mode
-		if (!searchContent || !replaceContent) {
+		if (
+			searchContent === undefined ||
+			searchContent === null ||
+			replaceContent === undefined ||
+			replaceContent === null
+		) {
 			throw new Error(
 				'searchContent and replaceContent are required for single file mode',
 			);
