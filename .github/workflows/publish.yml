@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - bug fixes
+            - enhance the error handling of the file system service and the scrolling function of the panel
             ### Installation
             ```bash
             npm install -g snow-ai
