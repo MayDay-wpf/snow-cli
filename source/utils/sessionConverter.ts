@@ -1,6 +1,7 @@
 import type {ChatMessage} from '../api/chat.js';
 import type {Message} from '../ui/components/MessageList.js';
 import {formatToolCallMessage} from './messageFormatter.js';
+import {isToolNeedTwoStepDisplay} from './toolDisplayConfig.js';
 
 /**
  * Convert API format session messages to UI format messages
@@ -138,17 +139,21 @@ export function convertSessionMessagesToUI(
 					toolArgs = {};
 				}
 
-				// Add tool call message
-				uiMessages.push({
-					role: 'assistant',
-					content: `⚡ ${toolDisplay.toolName}`,
-					streaming: false,
-					toolCall: {
-						name: toolCall.function.name,
-						arguments: toolArgs,
-					},
-					toolDisplay,
-				});
+				// Only add "in progress" message for tools that need two-step display
+				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
+				if (needTwoSteps) {
+					// Add tool call message (in progress)
+					uiMessages.push({
+						role: 'assistant',
+						content: `⚡ ${toolDisplay.toolName}`,
+						streaming: false,
+						toolCall: {
+							name: toolCall.function.name,
+							arguments: toolArgs,
+						},
+						toolDisplay,
+					});
+				}
 
 				processedToolCalls.add(toolCall.id);
 			}

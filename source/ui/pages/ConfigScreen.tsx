@@ -39,6 +39,10 @@ type ConfigField =
 	| 'anthropicBeta'
 	| 'thinkingEnabled'
 	| 'thinkingBudgetTokens'
+	| 'geminiThinkingEnabled'
+	| 'geminiThinkingBudget'
+	| 'responsesReasoningEnabled'
+	| 'responsesReasoningEffort'
 	| 'advancedModel'
 	| 'basicModel'
 	| 'compactModelName'
@@ -107,6 +111,10 @@ export default function ConfigScreen({
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
+	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
+	const [geminiThinkingBudget, setGeminiThinkingBudget] = useState(1024);
+	const [responsesReasoningEnabled, setResponsesReasoningEnabled] = useState(false);
+	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<'low' | 'medium' | 'high'>('high');
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
@@ -162,6 +170,16 @@ export default function ConfigScreen({
 						'thinkingEnabled' as ConfigField,
 						'thinkingBudgetTokens' as ConfigField,
 				  ]
+				: requestMethod === 'gemini'
+				? [
+						'geminiThinkingEnabled' as ConfigField,
+						'geminiThinkingBudget' as ConfigField,
+				  ]
+				: requestMethod === 'responses'
+				? [
+						'responsesReasoningEnabled' as ConfigField,
+						'responsesReasoningEffort' as ConfigField,
+				  ]
 				: []),
 			'advancedModel',
 			'basicModel',
@@ -192,6 +210,24 @@ export default function ConfigScreen({
 		) {
 			setCurrentField('advancedModel');
 		}
+		// If requestMethod is not 'gemini' and currentField is on Gemini-specific fields,
+		// move to the next available field
+		if (
+			requestMethod !== 'gemini' &&
+			(currentField === 'geminiThinkingEnabled' ||
+				currentField === 'geminiThinkingBudget')
+		) {
+			setCurrentField('advancedModel');
+		}
+		// If requestMethod is not 'responses' and currentField is on Responses-specific fields,
+		// move to the next available field
+		if (
+			requestMethod !== 'responses' &&
+			(currentField === 'responsesReasoningEnabled' ||
+				currentField === 'responsesReasoningEffort')
+		) {
+			setCurrentField('advancedModel');
+		}
 	}, [requestMethod, currentField]);
 
 	const loadProfilesAndConfig = () => {
@@ -207,6 +243,10 @@ export default function ConfigScreen({
 		setAnthropicBeta(config.anthropicBeta || false);
 		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
 		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
+		setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
+		setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
+		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
+		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
@@ -263,6 +303,9 @@ export default function ConfigScreen({
 		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
+		if (currentField === 'geminiThinkingBudget')
+			return geminiThinkingBudget.toString();
+		if (currentField === 'responsesReasoningEffort') return responsesReasoningEffort;
 		if (currentField === 'compactModelName') return compactModelName;
 		return '';
 	};
@@ -375,6 +418,26 @@ export default function ConfigScreen({
 				config.thinking = undefined;
 			}
 
+			// Save Gemini thinking configuration
+			if (geminiThinkingEnabled) {
+				(config as any).geminiThinking = {
+					enabled: true,
+					budget: geminiThinkingBudget,
+				};
+			} else {
+				(config as any).geminiThinking = undefined;
+			}
+
+			// Save Responses reasoning configuration
+			if (responsesReasoningEnabled) {
+				(config as any).responsesReasoning = {
+					enabled: true,
+					effort: responsesReasoningEffort,
+				};
+			} else {
+				(config as any).responsesReasoning = undefined;
+			}
+
 			// Only save compactModel if modelName is provided (uses same baseUrl/apiKey)
 			if (compactModelName) {
 				config.compactModel = {
@@ -395,6 +458,12 @@ export default function ConfigScreen({
 						anthropicBeta,
 						thinking: thinkingEnabled
 							? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
+							: undefined,
+						geminiThinking: geminiThinkingEnabled
+							? {enabled: true, budget: geminiThinkingBudget}
+							: undefined,
+						responsesReasoning: responsesReasoningEnabled
+							? {enabled: true, effort: responsesReasoningEffort}
 							: undefined,
 						advancedModel,
 						basicModel,
@@ -551,6 +620,85 @@ export default function ConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color="gray">{thinkingBudgetTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'geminiThinkingEnabled':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Gemini Thinking Enabled:
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{geminiThinkingEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
+								toggle)
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'geminiThinkingBudget':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Gemini Thinking Budget:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">Enter value: {geminiThinkingBudget}</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{geminiThinkingBudget}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'responsesReasoningEnabled':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Responses Reasoning Enabled:
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{responsesReasoningEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
+								toggle)
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'responsesReasoningEffort':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Responses Reasoning Effort:
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{responsesReasoningEffort.toUpperCase()}</Text>
+							</Box>
+						)}
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Select
+									options={[
+										{label: 'Low', value: 'low'},
+										{label: 'Medium', value: 'medium'},
+										{label: 'High', value: 'high'},
+									]}
+									defaultValue={responsesReasoningEffort}
+									onChange={value => {
+										setResponsesReasoningEffort(value as 'low' | 'medium' | 'high');
+										setIsEditing(false);
+									}}
+								/>
 							</Box>
 						)}
 					</Box>
@@ -747,7 +895,8 @@ export default function ConfigScreen({
 				currentField === 'requestMethod' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
-				currentField === 'compactModelName') &&
+				currentField === 'compactModelName' ||
+				currentField === 'responsesReasoningEffort') &&
 			key.escape
 		) {
 			setIsEditing(false);
@@ -771,7 +920,8 @@ export default function ConfigScreen({
 			if (
 				currentField === 'maxContextTokens' ||
 				currentField === 'maxTokens' ||
-				currentField === 'thinkingBudgetTokens'
+				currentField === 'thinkingBudgetTokens' ||
+				currentField === 'geminiThinkingBudget'
 			) {
 				if (input && input.match(/[0-9]/)) {
 					const currentValue =
@@ -779,15 +929,19 @@ export default function ConfigScreen({
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
-							: thinkingBudgetTokens;
+							: currentField === 'thinkingBudgetTokens'
+							? thinkingBudgetTokens
+							: geminiThinkingBudget;
 					const newValue = parseInt(currentValue.toString() + input, 10);
 					if (!isNaN(newValue)) {
 						if (currentField === 'maxContextTokens') {
 							setMaxContextTokens(newValue);
 						} else if (currentField === 'maxTokens') {
 							setMaxTokens(newValue);
-						} else {
+						} else if (currentField === 'thinkingBudgetTokens') {
 							setThinkingBudgetTokens(newValue);
+						} else {
+							setGeminiThinkingBudget(newValue);
 						}
 					}
 				} else if (key.backspace || key.delete) {
@@ -796,7 +950,9 @@ export default function ConfigScreen({
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
-							: thinkingBudgetTokens;
+							: currentField === 'thinkingBudgetTokens'
+							? thinkingBudgetTokens
+							: geminiThinkingBudget;
 					const currentStr = currentValue.toString();
 					const newStr = currentStr.slice(0, -1);
 					const newValue = parseInt(newStr, 10);
@@ -804,8 +960,10 @@ export default function ConfigScreen({
 						setMaxContextTokens(!isNaN(newValue) ? newValue : 0);
 					} else if (currentField === 'maxTokens') {
 						setMaxTokens(!isNaN(newValue) ? newValue : 0);
-					} else {
+					} else if (currentField === 'thinkingBudgetTokens') {
 						setThinkingBudgetTokens(!isNaN(newValue) ? newValue : 0);
+					} else {
+						setGeminiThinkingBudget(!isNaN(newValue) ? newValue : 0);
 					}
 				} else if (key.return) {
 					const minValue =
@@ -813,20 +971,26 @@ export default function ConfigScreen({
 							? 4000
 							: currentField === 'maxTokens'
 							? 100
-							: 1000;
+							: currentField === 'thinkingBudgetTokens'
+							? 1000
+							: 1;
 					const currentValue =
 						currentField === 'maxContextTokens'
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
-							: thinkingBudgetTokens;
+							: currentField === 'thinkingBudgetTokens'
+							? thinkingBudgetTokens
+							: geminiThinkingBudget;
 					const finalValue = currentValue < minValue ? minValue : currentValue;
 					if (currentField === 'maxContextTokens') {
 						setMaxContextTokens(finalValue);
 					} else if (currentField === 'maxTokens') {
 						setMaxTokens(finalValue);
-					} else {
+					} else if (currentField === 'thinkingBudgetTokens') {
 						setThinkingBudgetTokens(finalValue);
+					} else {
+						setGeminiThinkingBudget(finalValue);
 					}
 					setIsEditing(false);
 				}
@@ -859,11 +1023,18 @@ export default function ConfigScreen({
 					setAnthropicBeta(!anthropicBeta);
 				} else if (currentField === 'thinkingEnabled') {
 					setThinkingEnabled(!thinkingEnabled);
+				} else if (currentField === 'geminiThinkingEnabled') {
+					setGeminiThinkingEnabled(!geminiThinkingEnabled);
+				} else if (currentField === 'responsesReasoningEnabled') {
+					setResponsesReasoningEnabled(!responsesReasoningEnabled);
 				} else if (
 					currentField === 'maxContextTokens' ||
 					currentField === 'maxTokens' ||
-					currentField === 'thinkingBudgetTokens'
+					currentField === 'thinkingBudgetTokens' ||
+					currentField === 'geminiThinkingBudget'
 				) {
+					setIsEditing(true);
+				} else if (currentField === 'responsesReasoningEffort') {
 					setIsEditing(true);
 				} else if (
 					currentField === 'advancedModel' ||
@@ -1131,14 +1302,16 @@ export default function ConfigScreen({
 				currentField === 'requestMethod' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
-				currentField === 'compactModelName') ? (
+				currentField === 'compactModelName' ||
+				currentField === 'responsesReasoningEffort') ? (
 				<Box flexDirection="column">
 					<Text color="green">
 						❯ {currentField === 'profile' && 'Profile'}
 						{currentField === 'requestMethod' && 'Request Method'}
 						{currentField === 'advancedModel' && 'Advanced Model'}
 						{currentField === 'basicModel' && 'Basic Model'}
-						{currentField === 'compactModelName' && 'Compact Model'}:
+						{currentField === 'compactModelName' && 'Compact Model'}
+						{currentField === 'responsesReasoningEffort' && 'Responses Reasoning Effort'}:
 					</Text>
 					<Box marginLeft={3} marginTop={1}>
 						{currentField === 'profile' && (
@@ -1195,6 +1368,20 @@ export default function ConfigScreen({
 								/>
 							</Box>
 						)}
+						{currentField === 'responsesReasoningEffort' && (
+							<Select
+								options={[
+									{label: 'Low', value: 'low'},
+									{label: 'Medium', value: 'medium'},
+									{label: 'High', value: 'high'},
+								]}
+								defaultValue={responsesReasoningEffort}
+								onChange={value => {
+									setResponsesReasoningEffort(value as 'low' | 'medium' | 'high');
+									setIsEditing(false);
+								}}
+							/>
+						)}
 					</Box>
 					<Box marginTop={1}>
 						<Alert variant="info">
@@ -1202,6 +1389,8 @@ export default function ConfigScreen({
 								currentField === 'basicModel' ||
 								currentField === 'compactModelName') &&
 								'Type to filter, ↑↓ to select, Enter to confirm, Esc to cancel'}
+							{currentField === 'responsesReasoningEffort' &&
+								'↑↓ to select, Enter to confirm, Esc to cancel'}
 							{currentField === 'profile' &&
 								'↑↓ to select profile, N to create new, D to delete, Enter to confirm, Esc to cancel'}
 							{currentField === 'requestMethod' &&
@@ -1258,7 +1447,8 @@ export default function ConfigScreen({
 					currentField === 'requestMethod' ||
 					currentField === 'advancedModel' ||
 					currentField === 'basicModel' ||
-					currentField === 'compactModelName')
+					currentField === 'compactModelName' ||
+					currentField === 'responsesReasoningEffort')
 			) && (
 				<Box flexDirection="column" marginTop={1}>
 					{isEditing ? (

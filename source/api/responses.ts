@@ -163,6 +163,25 @@ function getOpenAIConfig() {
 	return openaiConfig;
 }
 
+function getResponsesReasoningConfig(): {
+	effort?: 'low' | 'medium' | 'high';
+	summary?: 'auto' | 'none';
+} | null {
+	const config = getOpenAiConfig();
+	const reasoningConfig = config.responsesReasoning;
+
+	// 如果 reasoning 未启用，返回 null
+	if (!reasoningConfig?.enabled) {
+		return null;
+	}
+
+	// 返回配置，summary 永远默认为 'auto'
+	return {
+		effort: reasoningConfig.effort || 'high',
+		summary: 'auto',
+	};
+}
+
 export function resetOpenAIClient(): void {
 	openaiConfig = null;
 }
@@ -356,6 +375,9 @@ export async function* createStreamingResponse(
 		options.includeBuiltinSystemPrompt !== false, // 默认为 true
 	);
 
+	// 获取配置的 reasoning 设置
+	const configuredReasoning = getResponsesReasoningConfig();
+
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
@@ -366,9 +388,9 @@ export async function* createStreamingResponse(
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				parallel_tool_calls: false,
-				// Only add reasoning if not explicitly disabled (null means don't pass it)
-				...(options.reasoning !== null && {
-					reasoning: options.reasoning || {effort: 'high', summary: 'auto'},
+				// 只有当 reasoning 启用时才添加 reasoning 字段
+				...(configuredReasoning && {
+					reasoning: configuredReasoning,
 				}),
 				store: false,
 				stream: true,

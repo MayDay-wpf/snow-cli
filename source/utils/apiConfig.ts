@@ -13,6 +13,16 @@ export interface ThinkingConfig {
 	budget_tokens: number;
 }
 
+export interface GeminiThinkingConfig {
+	enabled: boolean;
+	budget: number;
+}
+
+export interface ResponsesReasoningConfig {
+	enabled: boolean;
+	effort: 'low' | 'medium' | 'high';
+}
+
 export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
@@ -24,6 +34,8 @@ export interface ApiConfig {
 	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
+	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
+	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
 }
 
 export interface MCPServer {

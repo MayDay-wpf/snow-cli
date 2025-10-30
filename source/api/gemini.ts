@@ -18,7 +18,7 @@ export interface GeminiOptions {
 }
 
 export interface GeminiStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'done' | 'usage';
+	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'done' | 'usage' | 'reasoning_started' | 'reasoning_delta';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -30,12 +30,20 @@ export interface GeminiStreamChunk {
 	}>;
 	delta?: string;
 	usage?: UsageInfo;
+	thinking?: {
+		type: 'thinking';
+		thinking: string;
+	};
 }
 
 let geminiConfig: {
 	apiKey: string;
 	baseUrl: string;
 	customHeaders: Record<string, string>;
+	geminiThinking?: {
+		enabled: boolean;
+		budget: number;
+	};
 } | null = null;
 
 function getGeminiConfig() {
@@ -57,6 +65,7 @@ function getGeminiConfig() {
 					? config.baseUrl
 					: 'https://generativelanguage.googleapis.com/v1beta',
 			customHeaders,
+			geminiThinking: config.geminiThinking,
 		};
 	}
 
@@ -315,10 +324,17 @@ export async function* createStreamingGeminiCompletion(
 				systemInstruction: systemInstruction
 					? {parts: [{text: systemInstruction}]}
 					: undefined,
-				generationConfig: {
-					temperature: options.temperature ?? 0.7,
-				},
 			};
+
+			// Add thinking configuration if enabled
+			// Only include generationConfig when thinking is enabled
+			if (config.geminiThinking?.enabled) {
+				requestBody.generationConfig = {
+					thinkingConfig: {
+						thinkingBudget: config.geminiThinking.budget,
+					},
+				};
+			}
 
 			// Add tools if provided
 			const geminiTools = convertToolsToGemini(options.tools);
@@ -358,6 +374,7 @@ export async function* createStreamingGeminiCompletion(
 			}
 
 			let contentBuffer = '';
+			let thinkingTextBuffer = ''; // Accumulate thinking text content
 			let toolCallsBuffer: Array<{
 				id: string;
 				type: 'function';
@@ -420,8 +437,17 @@ export async function* createStreamingGeminiCompletion(
 								const candidate = chunk.candidates[0];
 								if (candidate.content && candidate.content.parts) {
 									for (const part of candidate.content.parts) {
-										// Process text content
-										if (part.text) {
+										// Process thought content (Gemini thinking)
+										// When part.thought === true, the text field contains thinking content
+										if (part.thought === true && part.text) {
+											thinkingTextBuffer += part.text;
+											yield {
+												type: 'reasoning_delta',
+												delta: part.text,
+											};
+										}
+										// Process regular text content (when thought is not true)
+										else if (part.text) {
 											contentBuffer += part.text;
 											yield {
 												type: 'content',
@@ -493,9 +519,18 @@ export async function* createStreamingGeminiCompletion(
 				};
 			}
 
+			// Return complete thinking block if thinking content exists
+			const thinkingBlock = thinkingTextBuffer
+				? {
+						type: 'thinking' as const,
+						thinking: thinkingTextBuffer,
+				  }
+				: undefined;
+
 			// Signal completion
 			yield {
 				type: 'done',
+				thinking: thinkingBlock,
 			};
 		},
 		{

@@ -332,7 +332,7 @@ export default function ChatInput({
 			const percentage = calculateContextPercentage(contextUsage);
 			onContextPercentageChange(percentage);
 		}
-	}, [contextUsage, onContextPercentageChange]);
+	}, [contextUsage]); // 移除 onContextPercentageChange 避免循环依赖
 
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
@@ -378,7 +378,7 @@ export default function ChatInput({
 				</>
 			);
 		}
-	}, [buffer, disabled, placeholder, renderCursor, buffer.text]);
+	}, [buffer, disabled, placeholder, renderCursor]); // 移除 buffer.text 避免循环依赖，buffer 变化时会自然触发重渲染
 
 	return (
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
@@ -430,8 +430,9 @@ export default function ChatInput({
 									{visibleMessages.map((message, displayIndex) => {
 										const actualIndex = startIndex + displayIndex;
 
-										// Remove all newlines and extra spaces from label to ensure single line
+										// Ensure single line by removing all newlines and control characters
 										const singleLineLabel = message.label
+											.replace(/[\r\n\t\v\f\u0000-\u001F\u007F-\u009F]+/g, ' ')
 											.replace(/\s+/g, ' ')
 											.trim();
 										// Calculate available width for the message
@@ -451,6 +452,7 @@ export default function ChatInput({
 															: 'white'
 													}
 													bold
+													wrap="truncate"
 												>
 													{actualIndex === historySelectedIndex ? '❯  ' : '  '}
 													{truncatedLabel}

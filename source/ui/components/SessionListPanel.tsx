@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { sessionManager, type SessionListItem } from '../../utils/sessionManager.js';
+import React, {useState, useEffect, useCallback} from 'react';
+import {Box, Text, useInput} from 'ink';
+import {
+	sessionManager,
+	type SessionListItem,
+} from '../../utils/sessionManager.js';
 
 type Props = {
 	onSelectSession: (sessionId: string) => void;
 	onClose: () => void;
 };
 
-export default function SessionListPanel({ onSelectSession, onClose }: Props) {
+export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -47,7 +50,7 @@ export default function SessionListPanel({ onSelectSession, onClose }: Props) {
 		if (diffMinutes < 60) return `${diffMinutes}m`;
 		if (diffHours < 24) return `${diffHours}h`;
 		if (diffDays < 7) return `${diffDays}d`;
-		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+		return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
 	}, []);
 
 	// Handle keyboard input
@@ -132,7 +135,9 @@ export default function SessionListPanel({ onSelectSession, onClose }: Props) {
 	if (loading) {
 		return (
 			<Box borderStyle="round" borderColor="cyan" paddingX={1}>
-				<Text color="gray" dimColor>Loading sessions...</Text>
+				<Text color="gray" dimColor>
+					Loading sessions...
+				</Text>
 			</Box>
 		);
 	}
@@ -140,38 +145,59 @@ export default function SessionListPanel({ onSelectSession, onClose }: Props) {
 	if (sessions.length === 0) {
 		return (
 			<Box borderStyle="round" borderColor="yellow" paddingX={1}>
-				<Text color="gray" dimColor>No conversations found • Press ESC to close</Text>
+				<Text color="gray" dimColor>
+					No conversations found • Press ESC to close
+				</Text>
 			</Box>
 		);
 	}
 
 	// Calculate visible sessions based on scroll offset
-	const visibleSessions = sessions.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS);
+	const visibleSessions = sessions.slice(
+		scrollOffset,
+		scrollOffset + VISIBLE_ITEMS,
+	);
 	const hasMore = sessions.length > scrollOffset + VISIBLE_ITEMS;
 	const hasPrevious = scrollOffset > 0;
 	const currentSession = sessions[selectedIndex];
 
 	return (
-		<Box borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
+		<Box
+			borderStyle="round"
+			borderColor="cyan"
+			paddingX={1}
+			flexDirection="column"
+		>
 			<Box flexDirection="column">
 				<Text color="cyan" dimColor>
-					Resume ({selectedIndex + 1}/{sessions.length}){currentSession && ` • ${currentSession.messageCount} msgs`}
-					{markedSessions.size > 0 && <Text color="yellow"> • {markedSessions.size} marked</Text>}
+					Resume ({selectedIndex + 1}/{sessions.length})
+					{currentSession && ` • ${currentSession.messageCount} msgs`}
+					{markedSessions.size > 0 && (
+						<Text color="yellow"> • {markedSessions.size} marked</Text>
+					)}
 				</Text>
 				<Text color="gray" dimColor>
 					↑↓ navigate • Space mark • D delete • Enter select • ESC close
 				</Text>
 			</Box>
 			{hasPrevious && (
-				<Text color="gray" dimColor>  ↑ {scrollOffset} more above</Text>
+				<Text color="gray" dimColor>
+					{' '}
+					↑ {scrollOffset} more above
+				</Text>
 			)}
 			{visibleSessions.map((session, index) => {
 				const actualIndex = scrollOffset + index;
 				const isSelected = actualIndex === selectedIndex;
 				const isMarked = markedSessions.has(session.id);
-				const title = session.title || 'Untitled';
+				// Remove newlines and other whitespace characters from title
+				const cleanTitle = (session.title || 'Untitled').replace(
+					/[\r\n\t]+/g,
+					' ',
+				);
 				const timeStr = formatDate(session.updatedAt);
-				const truncatedLabel = title.length > 50 ? title.slice(0, 47) + '...' : title;
+				const truncatedLabel =
+					cleanTitle.length > 50 ? cleanTitle.slice(0, 47) + '...' : cleanTitle;
 
 				return (
 					<Box key={session.id}>
@@ -184,12 +210,18 @@ export default function SessionListPanel({ onSelectSession, onClose }: Props) {
 						<Text color={isSelected ? 'cyan' : isMarked ? 'green' : 'white'}>
 							{truncatedLabel}
 						</Text>
-						<Text color="gray" dimColor> • {timeStr}</Text>
+						<Text color="gray" dimColor>
+							{' '}
+							• {timeStr}
+						</Text>
 					</Box>
 				);
 			})}
 			{hasMore && (
-				<Text color="gray" dimColor>  ↓ {sessions.length - scrollOffset - VISIBLE_ITEMS} more below</Text>
+				<Text color="gray" dimColor>
+					{' '}
+					↓ {sessions.length - scrollOffset - VISIBLE_ITEMS} more below
+				</Text>
 			)}
 		</Box>
 	);

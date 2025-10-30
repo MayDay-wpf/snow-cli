@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import TodoTree from './TodoTree.js';
 
 interface ToolResultPreviewProps {
 	toolName: string;
@@ -39,6 +40,8 @@ export default function ToolResultPreview({
 			return renderWebFetchPreview(data);
 		} else if (toolName.startsWith('ace-')) {
 			return renderACEPreview(toolName, data, maxLines);
+		} else if (toolName.startsWith('todo-')) {
+			return renderTodoPreview(toolName, data, maxLines);
 		} else {
 			// Generic preview for unknown tools
 			return renderGenericPreview(data, maxLines);
@@ -59,7 +62,8 @@ function renderSubAgentPreview(data: any, _maxLines: number) {
 	return (
 		<Box marginLeft={2}>
 			<Text color="gray" dimColor>
-				└─ Sub-agent completed ({lines.length} {lines.length === 1 ? 'line' : 'lines'} output)
+				└─ Sub-agent completed ({lines.length}{' '}
+				{lines.length === 1 ? 'line' : 'lines'} output)
 			</Text>
 		</Box>
 	);
@@ -125,7 +129,6 @@ function renderTerminalExecutePreview(data: any) {
 	);
 }
 
-
 function renderReadPreview(data: any, _maxLines: number) {
 	if (!data.content) return null;
 
@@ -135,9 +138,10 @@ function renderReadPreview(data: any, _maxLines: number) {
 	const totalLines = data.totalLines || readLineCount;
 
 	// 如果是读取部分行，显示范围
-	const rangeInfo = data.startLine && data.endLine
-		? ` (lines ${data.startLine}-${data.endLine})`
-		: '';
+	const rangeInfo =
+		data.startLine && data.endLine
+			? ` (lines ${data.startLine}-${data.endLine})`
+			: '';
 
 	return (
 		<Box marginLeft={2}>
@@ -210,7 +214,8 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {symbols.length} {symbols.length === 1 ? 'symbol' : 'symbols'}
+					└─ Found {symbols.length}{' '}
+					{symbols.length === 1 ? 'symbol' : 'symbols'}
 				</Text>
 			</Box>
 		);
@@ -235,7 +240,8 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {references.length} {references.length === 1 ? 'reference' : 'references'}
+					└─ Found {references.length}{' '}
+					{references.length === 1 ? 'reference' : 'references'}
 				</Text>
 			</Box>
 		);
@@ -281,7 +287,8 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {symbols.length} {symbols.length === 1 ? 'symbol' : 'symbols'} in file
+					└─ Found {symbols.length}{' '}
+					{symbols.length === 1 ? 'symbol' : 'symbols'} in file
 				</Text>
 			</Box>
 		);
@@ -307,10 +314,12 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 		return (
 			<Box flexDirection="column" marginLeft={2}>
 				<Text color="gray" dimColor>
-					├─ {data.symbols?.length || 0} {(data.symbols?.length || 0) === 1 ? 'symbol' : 'symbols'}
+					├─ {data.symbols?.length || 0}{' '}
+					{(data.symbols?.length || 0) === 1 ? 'symbol' : 'symbols'}
 				</Text>
 				<Text color="gray" dimColor>
-					└─ {data.references?.length || 0} {(data.references?.length || 0) === 1 ? 'reference' : 'references'}
+					└─ {data.references?.length || 0}{' '}
+					{(data.references?.length || 0) === 1 ? 'reference' : 'references'}
 				</Text>
 			</Box>
 		);
@@ -369,7 +378,8 @@ function renderWebSearchPreview(data: any, _maxLines: number) {
 	return (
 		<Box marginLeft={2}>
 			<Text color="gray" dimColor>
-				└─ Found {data.totalResults || data.results.length} results for "{data.query}"
+				└─ Found {data.totalResults || data.results.length} results for "
+				{data.query}"
 			</Text>
 		</Box>
 	);
@@ -408,4 +418,34 @@ function renderGenericPreview(data: any, maxLines: number) {
 			})}
 		</Box>
 	);
+}
+
+function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
+	// Handle todo-create, todo-get, todo-update, todo-add, todo-delete
+
+	// Debug: Check if data is actually the stringified result that needs parsing again
+	// Some tools might return the result wrapped in content[0].text
+	let todoData = data;
+
+	// If data has content array (MCP format), extract the text
+	if (data.content && Array.isArray(data.content) && data.content[0]?.text) {
+		try {
+			todoData = JSON.parse(data.content[0].text);
+		} catch (e) {
+			// If parsing fails, just use original data
+		}
+	}
+
+	if (!todoData.todos) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ {todoData.message || 'No TODO list'}
+				</Text>
+			</Box>
+		);
+	}
+
+	// Use the TodoTree component to display the TODO list
+	return <TodoTree todos={todoData.todos} />;
 }

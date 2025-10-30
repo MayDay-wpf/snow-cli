@@ -193,7 +193,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		return () => {
 			clearTimeout(handler);
 		};
-	}, [terminalWidth, stdout]);
+	}, [terminalWidth]); // stdout 对象可能在每次渲染时变化，移除以避免循环
 
 	// Reload messages from session when remountKey changes (to restore sub-agent messages)
 	useEffect(() => {
@@ -466,19 +466,27 @@ export default function ChatScreen({skipWelcome}: Props) {
 				}
 			}
 
-			// Find the corresponding user message in session to delete
-			// We start from the end and count backwards
-			let sessionUserMessageCount = 0;
+			// Special case: if rolling back to index 0 (first message), always delete entire session
+			// This handles the case where user interrupts the first conversation
 			let sessionTruncateIndex = currentSession.messages.length;
 
-			for (let i = currentSession.messages.length - 1; i >= 0; i--) {
-				const msg = currentSession.messages[i];
-				if (msg && msg.role === 'user') {
-					sessionUserMessageCount++;
-					if (sessionUserMessageCount === uiUserMessagesToDelete) {
-						// We want to delete from this user message onwards
-						sessionTruncateIndex = i;
-						break;
+			if (selectedIndex === 0) {
+				// Rolling back to the very first message means deleting entire session
+				sessionTruncateIndex = 0;
+			} else {
+				// Find the corresponding user message in session to delete
+				// We start from the end and count backwards
+				let sessionUserMessageCount = 0;
+
+				for (let i = currentSession.messages.length - 1; i >= 0; i--) {
+					const msg = currentSession.messages[i];
+					if (msg && msg.role === 'user') {
+						sessionUserMessageCount++;
+						if (sessionUserMessageCount === uiUserMessagesToDelete) {
+							// We want to delete from this user message onwards
+							sessionTruncateIndex = i;
+							break;
+						}
 					}
 				}
 			}

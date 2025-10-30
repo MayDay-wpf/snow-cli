@@ -12,7 +12,11 @@ export function useHistoryNavigation(
 	buffer: TextBuffer,
 	triggerUpdate: () => void,
 	chatHistory: ChatMessage[],
-	onHistorySelect?: (selectedIndex: number, message: string, images?: Array<{type: 'image'; data: string; mimeType: string}>) => void,
+	onHistorySelect?: (
+		selectedIndex: number,
+		message: string,
+		images?: Array<{type: 'image'; data: string; mimeType: string}>,
+	) => void,
 ) {
 	const [showHistoryMenu, setShowHistoryMenu] = useState(false);
 	const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
@@ -55,13 +59,20 @@ export function useHistoryNavigation(
 			.filter(msg => msg.role === 'user' && msg.content.trim());
 
 		// Keep original order (oldest first, newest last) and map with display numbers
-		return userMessages.map((msg, index) => ({
-			label: `${index + 1}. ${msg.content.slice(0, 50)}${
-				msg.content.length > 50 ? '...' : ''
-			}`,
-			value: msg.originalIndex.toString(),
-			infoText: msg.content,
-		}));
+		return userMessages.map((msg, index) => {
+			// Remove all newlines, control characters and extra whitespace to ensure single line display
+			const cleanContent = msg.content
+				.replace(/[\r\n\t\v\f\u0000-\u001F\u007F-\u009F]+/g, ' ')
+				.replace(/\s+/g, ' ')
+				.trim();
+			return {
+				label: `${index + 1}. ${cleanContent.slice(0, 50)}${
+					cleanContent.length > 50 ? '...' : ''
+				}`,
+				value: msg.originalIndex.toString(),
+				infoText: msg.content,
+			};
+		});
 	}, [chatHistory]);
 	// Handle history selection
 	const handleHistorySelect = useCallback(
@@ -72,7 +83,11 @@ export function useHistoryNavigation(
 				// Don't modify buffer here - let ChatInput handle everything via initialContent
 				// This prevents duplicate image placeholders
 				setShowHistoryMenu(false);
-				onHistorySelect(selectedIndex, selectedMessage.content, selectedMessage.images);
+				onHistorySelect(
+					selectedIndex,
+					selectedMessage.content,
+					selectedMessage.images,
+				);
 			}
 		},
 		[chatHistory, onHistorySelect],
@@ -101,7 +116,7 @@ export function useHistoryNavigation(
 			triggerUpdate();
 		}
 		return true;
-	}, [currentHistoryIndex, buffer]);
+	}, [currentHistoryIndex]); // 移除 buffer 避免循环依赖
 
 	// Terminal-style history navigation: navigate down (newer)
 	const navigateHistoryDown = useCallback(() => {
@@ -124,7 +139,7 @@ export function useHistoryNavigation(
 		}
 		triggerUpdate();
 		return true;
-	}, [currentHistoryIndex, buffer]);
+	}, [currentHistoryIndex]); // 移除 buffer 避免循环依赖
 
 	// Reset history navigation state
 	const resetHistoryNavigation = useCallback(() => {

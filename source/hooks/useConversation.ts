@@ -218,6 +218,7 @@ export async function handleConversationWithTools(
 			let receivedThinking:
 				| {type: 'thinking'; thinking: string; signature?: string}
 				| undefined; // Accumulate thinking content from all platforms
+			let hasStartedReasoning = false; // Track if reasoning has started (for Gemini thinking)
 
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
@@ -310,6 +311,23 @@ export async function handleConversationWithTools(
 				if (chunk.type === 'reasoning_started') {
 					// Reasoning started (Responses API only) - set reasoning state
 					setIsReasoning?.(true);
+				} else if (chunk.type === 'reasoning_delta' && chunk.delta) {
+					// Handle reasoning delta from Gemini thinking
+					// When reasoning_delta is received, set reasoning state if not already set
+					if (!hasStartedReasoning) {
+						setIsReasoning?.(true);
+						hasStartedReasoning = true;
+					}
+					// Note: reasoning content is NOT sent back to AI, only counted for display
+					reasoningAccumulator += chunk.delta;
+					try {
+						const tokens = encoder.encode(
+							streamedContent + toolCallAccumulator + reasoningAccumulator,
+						);
+						setStreamTokenCount(tokens.length);
+					} catch (e) {
+						// Ignore encoding errors
+					}
 				} else if (chunk.type === 'content' && chunk.content) {
 					// Accumulate content and update token count
 					// When content starts, reasoning is done
@@ -328,18 +346,6 @@ export async function handleConversationWithTools(
 					// When tool calls start, reasoning is done (OpenAI generally doesn't output text content during tool calls)
 					setIsReasoning?.(false);
 					toolCallAccumulator += chunk.delta;
-					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
-					} catch (e) {
-						// Ignore encoding errors
-					}
-				} else if (chunk.type === 'reasoning_delta' && chunk.delta) {
-					// Accumulate reasoning summary deltas for token counting (Responses API only)
-					// Note: reasoning content is NOT sent back to AI, only counted for display
-					reasoningAccumulator += chunk.delta;
 					try {
 						const tokens = encoder.encode(
 							streamedContent + toolCallAccumulator + reasoningAccumulator,

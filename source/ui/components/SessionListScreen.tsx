@@ -79,7 +79,8 @@ export default function SessionListScreen({onBack, onSelectSession}: Props) {
 
 		return sessions.map(session => {
 			const timeString = formatDate(session.updatedAt);
-			const title = session.title || 'Untitled';
+			// Remove newlines and other whitespace characters from title
+			const title = (session.title || 'Untitled').replace(/[\r\n\t]+/g, ' ');
 
 			// Format: "Title • 5 msgs • 2h ago"
 			const messageInfo = `${session.messageCount} msg${
