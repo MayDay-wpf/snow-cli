@@ -82,8 +82,13 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 	// Update file picker state
 	const updateFilePickerState = useCallback(
-		(text: string, cursorPos: number) => {
-			if (!text.includes('@')) {
+		(_text: string, cursorPos: number) => {
+			// Use display text (with placeholders) instead of full text (expanded)
+			// to ensure cursor position matches text content
+			// Note: _text parameter is ignored, we use buffer.text instead
+			const displayText = buffer.text;
+
+			if (!displayText.includes('@')) {
 				if (state.showFilePicker) {
 					dispatch({type: 'HIDE'});
 				}
@@ -91,7 +96,7 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 			}
 
 			// Find the last '@' or '@@' symbol before the cursor
-			const beforeCursor = text.slice(0, cursorPos);
+			const beforeCursor = displayText.slice(0, cursorPos);
 
 			// Look for @@ first (content search), then @ (file search)
 			let searchMode: 'file' | 'content' = 'file';
@@ -164,6 +169,7 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 			}
 		},
 		[
+			buffer,
 			state.showFilePicker,
 			state.fileQuery,
 			state.atSymbolPosition,
@@ -175,14 +181,15 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 	const handleFileSelect = useCallback(
 		async (filePath: string) => {
 			if (state.atSymbolPosition !== -1) {
-				const text = buffer.getFullText();
+				// Use display text (with placeholders) for position calculations
+				const displayText = buffer.text;
 				const cursorPos = buffer.getCursorPosition();
 
 				// Replace query with selected file path
 				// For content search (@@), the filePath already includes line number
 				// For file search (@), just the file path
-				const beforeAt = text.slice(0, state.atSymbolPosition);
-				const afterCursor = text.slice(cursorPos);
+				const beforeAt = displayText.slice(0, state.atSymbolPosition);
+				const afterCursor = displayText.slice(cursorPos);
 
 				// Construct the replacement based on search mode
 				const prefix = state.searchMode === 'content' ? '@@' : '@';
@@ -198,7 +205,7 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 				// Reset cursor to beginning, then move to correct position
 				for (let i = 0; i < targetPos; i++) {
-					if (i < buffer.getFullText().length) {
+					if (i < buffer.text.length) {
 						buffer.moveRight();
 					}
 				}

@@ -61,7 +61,7 @@ export function useStreamingState() {
 
 	// Initialize remaining seconds when retry starts
 	useEffect(() => {
-		if (!retryStatus || !retryStatus.isRetrying) return;
+		if (!retryStatus?.isRetrying) return;
 		if (retryStatus.remainingSeconds !== undefined) return;
 
 		// Initialize remaining seconds from nextDelay (only once)
@@ -73,7 +73,7 @@ export function useStreamingState() {
 				  }
 				: null,
 		);
-	}, [retryStatus?.isRetrying, retryStatus?.nextDelay]);
+	}, [retryStatus?.isRetrying]); // Only depend on isRetrying flag
 
 	// Countdown timer for retry delays
 	useEffect(() => {

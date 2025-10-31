@@ -28,11 +28,6 @@ export type ConversationHandlerOptions = {
 	saveMessage: (message: any) => Promise<void>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
-	setCurrentTodos: React.Dispatch<
-		React.SetStateAction<
-			Array<{id: string; content: string; status: 'pending' | 'completed'}>
-		>
-	>;
 	requestToolConfirmation: (
 		toolCall: ToolCall,
 		batchToolNames?: string,
@@ -43,7 +38,10 @@ export type ConversationHandlerOptions = {
 	yoloMode: boolean;
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
-	getPendingMessages?: () => Array<{text: string; images?: Array<{data: string; mimeType: string}>}>; // Get pending user messages
+	getPendingMessages?: () => Array<{
+		text: string;
+		images?: Array<{data: string; mimeType: string}>;
+	}>; // Get pending user messages
 	clearPendingMessages?: () => void; // Clear pending messages after insertion
 	setIsStreaming?: React.Dispatch<React.SetStateAction<boolean>>; // Control streaming state
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>; // Control reasoning state (Responses API only)
@@ -76,7 +74,6 @@ export async function handleConversationWithTools(
 		saveMessage,
 		setMessages,
 		setStreamTokenCount,
-		setCurrentTodos,
 		requestToolConfirmation,
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
@@ -100,11 +97,6 @@ export async function handleConversationWithTools(
 
 	// Get existing TODO list
 	const existingTodoList = await todoService.getTodoList(currentSession.id);
-
-	// Update UI state
-	if (existingTodoList) {
-		setCurrentTodos(existingTodoList.todos);
-	}
 
 	// Collect all MCP tools
 	const mcpTools = await collectAllMCPTools();
@@ -488,10 +480,31 @@ export async function handleConversationWithTools(
 
 				for (const toolCall of receivedToolCalls) {
 					// Check both global approved list and session-approved list
-					if (
+					const isApproved =
 						isToolAutoApproved(toolCall.function.name) ||
-						sessionApprovedTools.has(toolCall.function.name)
-					) {
+						sessionApprovedTools.has(toolCall.function.name);
+
+					// Check if this is a sensitive command (terminal-execute with sensitive pattern)
+					let isSensitiveCommand = false;
+					if (toolCall.function.name === 'terminal-execute') {
+						try {
+							const args = JSON.parse(toolCall.function.arguments);
+							const {isSensitiveCommand: checkSensitiveCommand} = await import(
+								'../utils/sensitiveCommandManager.js'
+							).then(m => ({
+								isSensitiveCommand: m.isSensitiveCommand,
+							}));
+							const sensitiveCheck = checkSensitiveCommand(args.command);
+							isSensitiveCommand = sensitiveCheck.isSensitive;
+						} catch {
+							// If parsing fails, treat as normal command
+						}
+					}
+
+					// If sensitive command, always require confirmation regardless of approval status
+					if (isSensitiveCommand) {
+						toolsNeedingConfirmation.push(toolCall);
+					} else if (isApproved) {
 						autoApprovedTools.push(toolCall);
 					} else {
 						toolsNeedingConfirmation.push(toolCall);
@@ -501,20 +514,94 @@ export async function handleConversationWithTools(
 				// Request confirmation only once for all tools needing confirmation
 				let approvedTools: ToolCall[] = [...autoApprovedTools];
 
-				// In YOLO mode, auto-approve all tools
+				// In YOLO mode, auto-approve all tools EXCEPT sensitive commands
 				if (yoloMode) {
-					approvedTools.push(...toolsNeedingConfirmation);
-				} else if (toolsNeedingConfirmation.length > 0) {
-					const firstTool = toolsNeedingConfirmation[0]!; // Safe: length > 0 guarantees this exists
+					// Filter out sensitive commands from auto-approval
+					const nonSensitiveTools: ToolCall[] = [];
+					const sensitiveTools: ToolCall[] = [];
 
-					// Use regular CLI confirmation
-					// Pass all tools for proper display in confirmation UI
+					for (const toolCall of toolsNeedingConfirmation) {
+						if (toolCall.function.name === 'terminal-execute') {
+							try {
+								const args = JSON.parse(toolCall.function.arguments);
+								const {isSensitiveCommand: checkSensitiveCommand} =
+									await import(
+										'../utils/sensitiveCommandManager.js'
+									).then(m => ({
+										isSensitiveCommand: m.isSensitiveCommand,
+									}));
+								const sensitiveCheck = checkSensitiveCommand(args.command);
+								if (sensitiveCheck.isSensitive) {
+									sensitiveTools.push(toolCall);
+								} else {
+									nonSensitiveTools.push(toolCall);
+								}
+							} catch {
+								nonSensitiveTools.push(toolCall);
+							}
+						} else {
+							nonSensitiveTools.push(toolCall);
+						}
+					}
+
+					approvedTools.push(...nonSensitiveTools);
+
+					// If there are sensitive tools, still need confirmation even in YOLO mode
+					if (sensitiveTools.length > 0) {
+						const firstTool = sensitiveTools[0]!;
+						const allTools =
+							sensitiveTools.length > 1 ? sensitiveTools : undefined;
+
+						const confirmation = await requestToolConfirmation(
+							firstTool,
+							undefined,
+							allTools,
+						);
+
+						if (confirmation === 'reject') {
+							setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+							for (const toolCall of sensitiveTools) {
+								const rejectionMessage = {
+									role: 'tool' as const,
+									tool_call_id: toolCall.id,
+									content: 'Error: Tool execution rejected by user',
+								};
+								conversationMessages.push(rejectionMessage);
+								saveMessage(rejectionMessage).catch(error => {
+									console.error(
+										'Failed to save tool rejection message:',
+										error,
+									);
+								});
+							}
+
+							setMessages(prev => [
+								...prev,
+								{
+									role: 'assistant',
+									content: 'Tool call rejected, session ended',
+									streaming: false,
+								},
+							]);
+
+							if (options.setIsStreaming) {
+								options.setIsStreaming(false);
+							}
+							freeEncoder();
+							return {usage: accumulatedUsage};
+						}
+
+						// Approved, add sensitive tools to approved list
+						approvedTools.push(...sensitiveTools);
+					}
+				} else if (toolsNeedingConfirmation.length > 0) {
+					const firstTool = toolsNeedingConfirmation[0]!;
 					const allTools =
 						toolsNeedingConfirmation.length > 1
 							? toolsNeedingConfirmation
 							: undefined;
 
-					// Use first tool for confirmation UI, but apply result to all
 					const confirmation = await requestToolConfirmation(
 						firstTool,
 						undefined,
@@ -522,11 +609,8 @@ export async function handleConversationWithTools(
 					);
 
 					if (confirmation === 'reject') {
-						// Remove pending tool messages
 						setMessages(prev => prev.filter(msg => !msg.toolPending));
 
-						// User rejected - need to save tool rejection messages to maintain conversation structure
-						// Add tool rejection responses for ALL tools that were rejected
 						for (const toolCall of toolsNeedingConfirmation) {
 							const rejectionMessage = {
 								role: 'tool' as const,
@@ -539,7 +623,6 @@ export async function handleConversationWithTools(
 							});
 						}
 
-						// User rejected - end conversation
 						setMessages(prev => [
 							...prev,
 							{
@@ -549,12 +632,11 @@ export async function handleConversationWithTools(
 							},
 						]);
 
-						// End streaming immediately
 						if (options.setIsStreaming) {
 							options.setIsStreaming(false);
 						}
 						freeEncoder();
-						return {usage: accumulatedUsage}; // Exit the conversation loop
+						return {usage: accumulatedUsage};
 					}
 
 					// If approved_always, add ALL these tools to both global and session-approved sets
@@ -579,6 +661,7 @@ export async function handleConversationWithTools(
 					approvedTools,
 					controller.signal,
 					setStreamTokenCount,
+
 					async subAgentMessage => {
 						// Handle sub-agent messages - display and save to session
 						setMessages(prev => {
@@ -835,24 +918,6 @@ export async function handleConversationWithTools(
 					}
 				}
 
-				// Check if there are TODO related tool calls, if yes refresh TODO list
-				const hasTodoTools = approvedTools.some(t =>
-					t.function.name.startsWith('todo-'),
-				);
-				const hasTodoUpdateTools = approvedTools.some(
-					t => t.function.name === 'todo-update',
-				);
-
-				if (hasTodoTools) {
-					const session = sessionManager.getCurrentSession();
-					if (session) {
-						const updatedTodoList = await todoService.getTodoList(session.id);
-						if (updatedTodoList) {
-							setCurrentTodos(updatedTodoList.todos);
-						}
-					}
-				}
-
 				// Remove only streaming sub-agent content messages (not tool-related messages)
 				// Keep sub-agent tool call and tool result messages for display
 				setMessages(prev =>
@@ -987,19 +1052,6 @@ export async function handleConversationWithTools(
 					}
 				}
 
-				// After all tool results are processed, show TODO panel if there were todo-update calls
-				if (hasTodoUpdateTools) {
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: '',
-							streaming: false,
-							showTodoTree: true,
-						},
-					]);
-				}
-
 				// Check if there are pending user messages to insert
 				if (options.getPendingMessages && options.clearPendingMessages) {
 					const pendingMessages = options.getPendingMessages();
@@ -1053,7 +1105,9 @@ export async function handleConversationWithTools(
 						options.clearPendingMessages();
 
 						// Combine multiple pending messages into one
-						const combinedMessage = pendingMessages.map(m => m.text).join('\n\n');
+						const combinedMessage = pendingMessages
+							.map(m => m.text)
+							.join('\n\n');
 
 						// Collect all images from pending messages
 						const allPendingImages = pendingMessages
@@ -1068,7 +1122,8 @@ export async function handleConversationWithTools(
 						const userMessage: Message = {
 							role: 'user',
 							content: combinedMessage,
-							images: allPendingImages.length > 0 ? allPendingImages : undefined,
+							images:
+								allPendingImages.length > 0 ? allPendingImages : undefined,
 						};
 						setMessages(prev => [...prev, userMessage]);
 
@@ -1076,14 +1131,16 @@ export async function handleConversationWithTools(
 						conversationMessages.push({
 							role: 'user',
 							content: combinedMessage,
-							images: allPendingImages.length > 0 ? allPendingImages : undefined,
+							images:
+								allPendingImages.length > 0 ? allPendingImages : undefined,
 						});
 
 						// Save user message
 						saveMessage({
 							role: 'user',
 							content: combinedMessage,
-							images: allPendingImages.length > 0 ? allPendingImages : undefined,
+							images:
+								allPendingImages.length > 0 ? allPendingImages : undefined,
 						}).catch(error => {
 							console.error('Failed to save pending user message:', error);
 						});

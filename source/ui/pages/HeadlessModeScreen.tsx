@@ -432,7 +432,6 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				saveMessage,
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
-				setCurrentTodos: () => {}, // No-op in headless mode
 				requestToolConfirmation,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,

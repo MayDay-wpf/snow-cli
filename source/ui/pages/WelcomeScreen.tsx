@@ -9,6 +9,7 @@ import ConfigScreen from './ConfigScreen.js';
 import ProxyConfigScreen from './ProxyConfigScreen.js';
 import SubAgentConfigScreen from './SubAgentConfigScreen.js';
 import SubAgentListScreen from './SubAgentListScreen.js';
+import SensitiveCommandConfigScreen from './SensitiveCommandConfigScreen.js';
 
 type Props = {
 	version?: string;
@@ -21,7 +22,8 @@ type InlineView =
 	| 'proxy-config'
 	| 'subagent-list'
 	| 'subagent-add'
-	| 'subagent-edit';
+	| 'subagent-edit'
+	| 'sensitive-commands';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -74,6 +76,12 @@ export default function WelcomeScreen({
 				infoText: 'Configure sub-agents with custom tool permissions',
 			},
 			{
+				label: 'Sensitive Commands',
+				value: 'sensitive-commands',
+				infoText:
+					'Configure commands that require confirmation even in YOLO mode',
+			},
+			{
 				label: 'Exit',
 				value: 'exit',
 				color: 'rgb(232, 131, 136)',
@@ -96,6 +104,8 @@ export default function WelcomeScreen({
 				setInlineView('proxy-config');
 			} else if (value === 'subagent') {
 				setInlineView('subagent-list');
+			} else if (value === 'sensitive-commands') {
+				setInlineView('sensitive-commands');
 			} else {
 				// Pass through to parent for other actions (chat, exit, etc.)
 				onMenuSelect?.(value);
@@ -137,12 +147,12 @@ export default function WelcomeScreen({
 		const handler = setTimeout(() => {
 			stdout.write(ansiEscapes.clearTerminal);
 			setRemountKey(prev => prev + 1); // Force re-render
-		}, 0); // Wait for resize to stabilize
+		}, 200); // Add debounce delay to avoid rapid re-renders
 
 		return () => {
 			clearTimeout(handler);
 		};
-	}, [terminalWidth, stdout]);
+	}, [terminalWidth]); // Remove stdout from dependencies to avoid loops
 
 	return (
 		<Box flexDirection="column" width={terminalWidth}>
@@ -233,6 +243,14 @@ export default function WelcomeScreen({
 						onBack={() => setInlineView('subagent-list')}
 						onSave={handleSubAgentSave}
 						agentId={editingAgentId}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'sensitive-commands' && (
+				<Box paddingX={1}>
+					<SensitiveCommandConfigScreen
+						onBack={handleBackToMenu}
 						inlineMode={true}
 					/>
 				</Box>

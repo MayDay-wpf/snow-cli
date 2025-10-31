@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Box, Text } from 'ink';
+import React, {useState, useMemo} from 'react';
+import {Box, Text} from 'ink';
 import SelectInput from 'ink-select-input';
+import {isSensitiveCommand} from '../../utils/sensitiveCommandManager.js';
 
 export type ConfirmationResult = 'approve' | 'approve_always' | 'reject';
 
@@ -36,7 +37,10 @@ function formatArgumentValue(value: any, maxLength: number = 100): string {
 }
 
 // Helper function to convert parsed arguments to tree display format
-function formatArgumentsAsTree(args: Record<string, any>, toolName?: string): Array<{ key: string; value: string; isLast: boolean }> {
+function formatArgumentsAsTree(
+	args: Record<string, any>,
+	toolName?: string,
+): Array<{key: string; value: string; isLast: boolean}> {
 	// For filesystem-create and filesystem-edit, exclude content fields
 	const excludeFields = new Set<string>();
 
@@ -61,12 +65,36 @@ function formatArgumentsAsTree(args: Record<string, any>, toolName?: string): Ar
 	return keys.map((key, index) => ({
 		key,
 		value: formatArgumentValue(args[key]),
-		isLast: index === keys.length - 1
+		isLast: index === keys.length - 1,
 	}));
 }
 
-export default function ToolConfirmation({ toolName, toolArguments, allTools, onConfirm }: Props) {
+export default function ToolConfirmation({
+	toolName,
+	toolArguments,
+	allTools,
+	onConfirm,
+}: Props) {
 	const [hasSelected, setHasSelected] = useState(false);
+
+	// Check if this is a sensitive command (for terminal-execute)
+	const sensitiveCommandCheck = useMemo(() => {
+		if (toolName !== 'terminal-execute' || !toolArguments) {
+			return {isSensitive: false};
+		}
+
+		try {
+			const parsed = JSON.parse(toolArguments);
+			const command = parsed.command;
+			if (command && typeof command === 'string') {
+				return isSensitiveCommand(command);
+			}
+		} catch {
+			// Ignore parse errors
+		}
+
+		return {isSensitive: false};
+	}, [toolName, toolArguments]);
 
 	// Parse and format tool arguments for display (single tool)
 	const formattedArgs = useMemo(() => {
@@ -89,33 +117,43 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 				const parsed = JSON.parse(tool.function.arguments);
 				return {
 					name: tool.function.name,
-					args: formatArgumentsAsTree(parsed, tool.function.name)
+					args: formatArgumentsAsTree(parsed, tool.function.name),
 				};
 			} catch {
 				return {
 					name: tool.function.name,
-					args: []
+					args: [],
 				};
 			}
 		});
 	}, [allTools]);
 
-	const items = [
-		{
-			label: 'Approve (once)',
-			value: 'approve' as ConfirmationResult
-		},
-		{
-			label: 'Always approve this tool',
-			value: 'approve_always' as ConfirmationResult
-		},
-		{
-			label: 'Reject (end session)',
-			value: 'reject' as ConfirmationResult
-		}
-	];
+	// Conditionally show "Always approve" based on sensitive command check
+	const items = useMemo(() => {
+		const baseItems = [
+			{
+				label: 'Approve (once)',
+				value: 'approve' as ConfirmationResult,
+			},
+		];
 
-	const handleSelect = (item: { label: string; value: ConfirmationResult }) => {
+		// Only show "Always approve" if NOT a sensitive command
+		if (!sensitiveCommandCheck.isSensitive) {
+			baseItems.push({
+				label: 'Always approve this tool',
+				value: 'approve_always' as ConfirmationResult,
+			});
+		}
+
+		baseItems.push({
+			label: 'Reject (end session)',
+			value: 'reject' as ConfirmationResult,
+		});
+
+		return baseItems;
+	}, [sensitiveCommandCheck.isSensitive]);
+
+	const handleSelect = (item: {label: string; value: ConfirmationResult}) => {
 		if (!hasSelected) {
 			setHasSelected(true);
 			onConfirm(item.value);
@@ -123,7 +161,14 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 	};
 
 	return (
-		<Box flexDirection="column" marginX={1} marginY={1} borderStyle={'round'} borderColor={'yellow'} paddingX={1}>
+		<Box
+			flexDirection="column"
+			marginX={1}
+			marginY={1}
+			borderStyle={'round'}
+			borderColor={'yellow'}
+			paddingX={1}
+		>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">
 					[Tool Confirmation]
@@ -135,9 +180,49 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 				<>
 					<Box marginBottom={1}>
 						<Text>
-							Tool: <Text bold color="cyan">{toolName}</Text>
+							Tool:{' '}
+							<Text bold color="cyan">
+								{toolName}
+							</Text>
 						</Text>
 					</Box>
+
+					{/* Display sensitive command warning */}
+					{sensitiveCommandCheck.isSensitive && (
+						<Box
+							flexDirection="column"
+							marginBottom={1}
+						>
+							<Box marginBottom={1}>
+								<Text bold color="red">
+									SENSITIVE COMMAND DETECTED
+								</Text>
+							</Box>
+
+							<Box flexDirection="column" gap={0}>
+								<Box>
+									<Text dimColor>Pattern: </Text>
+									<Text color="magenta" bold>
+										{sensitiveCommandCheck.matchedCommand?.pattern}
+									</Text>
+								</Box>
+
+								<Box marginTop={0}>
+									<Text dimColor>Reason: </Text>
+									<Text color="white">
+										{sensitiveCommandCheck.matchedCommand?.description}
+									</Text>
+								</Box>
+							</Box>
+
+							<Box marginTop={1} paddingX={1} paddingY={0}>
+								<Text color="yellow" italic>
+									This command requires confirmation even in
+									YOLO/Always-Approved mode
+								</Text>
+							</Box>
+						</Box>
+					)}
 
 					{/* Display tool arguments in tree format */}
 					{formattedArgs && formattedArgs.length > 0 && (
@@ -146,7 +231,8 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 							{formattedArgs.map((arg, index) => (
 								<Box key={index} flexDirection="column">
 									<Text color="gray" dimColor>
-										{arg.isLast ? '└─' : '├─'} {arg.key}: <Text color="white">{arg.value}</Text>
+										{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+										<Text color="white">{arg.value}</Text>
 									</Text>
 								</Box>
 							))}
@@ -160,12 +246,19 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 				<Box flexDirection="column" marginBottom={1}>
 					<Box marginBottom={1}>
 						<Text>
-							Tools: <Text bold color="cyan">{formattedAllTools.length} tools in parallel</Text>
+							Tools:{' '}
+							<Text bold color="cyan">
+								{formattedAllTools.length} tools in parallel
+							</Text>
 						</Text>
 					</Box>
 
 					{formattedAllTools.map((tool, toolIndex) => (
-						<Box key={toolIndex} flexDirection="column" marginBottom={toolIndex < formattedAllTools.length - 1 ? 1 : 0}>
+						<Box
+							key={toolIndex}
+							flexDirection="column"
+							marginBottom={toolIndex < formattedAllTools.length - 1 ? 1 : 0}
+						>
 							<Text color="cyan" bold>
 								{toolIndex + 1}. {tool.name}
 							</Text>
@@ -173,7 +266,8 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 								<Box flexDirection="column" paddingLeft={2}>
 									{tool.args.map((arg, argIndex) => (
 										<Text key={argIndex} color="gray" dimColor>
-											{arg.isLast ? '└─' : '├─'} {arg.key}: <Text color="white">{arg.value}</Text>
+											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+											<Text color="white">{arg.value}</Text>
 										</Text>
 									))}
 								</Box>
@@ -187,9 +281,7 @@ export default function ToolConfirmation({ toolName, toolArguments, allTools, on
 				<Text dimColor>Select action:</Text>
 			</Box>
 
-			{!hasSelected && (
-				<SelectInput items={items} onSelect={handleSelect} />
-			)}
+			{!hasSelected && <SelectInput items={items} onSelect={handleSelect} />}
 
 			{hasSelected && (
 				<Box>

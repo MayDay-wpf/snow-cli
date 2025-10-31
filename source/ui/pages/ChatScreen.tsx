@@ -14,7 +14,6 @@ import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
-import TodoTree from '../components/TodoTree.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
 import {getOpenAiConfig} from '../../utils/apiConfig.js';
@@ -63,13 +62,6 @@ type Props = {
 export default function ChatScreen({skipWelcome}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
-	const [currentTodos, setCurrentTodos] = useState<
-		Array<{
-			id: string;
-			content: string;
-			status: 'pending' | 'completed';
-		}>
-	>([]);
 	const [pendingMessages, setPendingMessages] = useState<
 		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>([]);
@@ -739,7 +731,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				saveMessage,
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
-				setCurrentTodos,
 				requestToolConfirmation,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
@@ -961,7 +952,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 				saveMessage,
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
-				setCurrentTodos,
 				requestToolConfirmation,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
@@ -1211,8 +1201,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 														<Text color="white">{message.content}</Text>
 													)}
 												</>
-											) : message.showTodoTree ? (
-												<TodoTree todos={currentTodos} />
 											) : (
 												<>
 													{message.role === 'user' || isToolMessage ? (

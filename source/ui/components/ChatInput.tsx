@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef} from 'react';
+import React, {useCallback, useEffect, useRef, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
 import {cpSlice} from '../../utils/textUtils.js';
@@ -98,10 +98,13 @@ export default function ChatInput({
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
 	const viewportWidth = Math.max(40, terminalWidth - uiOverhead);
-	const viewport: Viewport = {
-		width: viewportWidth,
-		height: 1,
-	};
+	const viewport: Viewport = useMemo(
+		() => ({
+			width: viewportWidth,
+			height: 1,
+		}),
+		[viewportWidth],
+	); // Memoize viewport to prevent unnecessary re-renders
 
 	// Use input buffer hook
 	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
@@ -303,10 +306,10 @@ export default function ChatInput({
 	useEffect(() => {
 		// Use a small delay to ensure the component tree has updated
 		const timer = setTimeout(() => {
-			forceUpdate({});
+			forceUpdate();
 		}, 10);
 		return () => clearTimeout(timer);
-	}, [showFilePicker]);
+	}, [showFilePicker, forceUpdate]);
 
 	// Handle terminal width changes with debounce (like gemini-cli)
 	useEffect(() => {
@@ -320,19 +323,24 @@ export default function ChatInput({
 
 		// Debounce the re-render to avoid flickering during resize
 		const timer = setTimeout(() => {
-			forceUpdate({});
+			forceUpdate();
 		}, 100);
 
 		return () => clearTimeout(timer);
-	}, [terminalWidth]);
+	}, [terminalWidth, forceUpdate]);
 
 	// Notify parent of context percentage changes
+	const lastPercentageRef = useRef<number>(0);
 	useEffect(() => {
 		if (contextUsage && onContextPercentageChange) {
 			const percentage = calculateContextPercentage(contextUsage);
-			onContextPercentageChange(percentage);
+			// Only call callback if percentage has actually changed
+			if (percentage !== lastPercentageRef.current) {
+				lastPercentageRef.current = percentage;
+				onContextPercentageChange(percentage);
+			}
 		}
-	}, [contextUsage]); // 移除 onContextPercentageChange 避免循环依赖
+	}, [contextUsage, onContextPercentageChange]);
 
 	// Render cursor based on focus state
 	const renderCursor = useCallback(

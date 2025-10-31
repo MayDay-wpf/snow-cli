@@ -2,24 +2,42 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { TextBuffer, Viewport } from '../utils/textBuffer.js';
 
 export function useInputBuffer(viewport: Viewport) {
-	const [, forceUpdate] = useState({});
+	const [, setForceUpdateState] = useState({});
 	const lastUpdateTime = useRef<number>(0);
+	const bufferRef = useRef<TextBuffer | null>(null);
 
-	// Force re-render when buffer changes
-	const triggerUpdate = useCallback(() => {
+	// Stable forceUpdate function using useRef
+	const forceUpdateRef = useRef(() => {
+		setForceUpdateState({});
+	});
+
+	// Stable triggerUpdate function using useRef
+	const triggerUpdateRef = useRef(() => {
 		const now = Date.now();
 		lastUpdateTime.current = now;
-		forceUpdate({});
-	}, []); // 空依赖项确保函数稳定
+		forceUpdateRef.current();
+	});
 
-	const [buffer] = useState(() => new TextBuffer(viewport, triggerUpdate));
+	// Initialize buffer once
+	if (!bufferRef.current) {
+		bufferRef.current = new TextBuffer(viewport, triggerUpdateRef.current);
+	}
+	const buffer = bufferRef.current;
+
+	// Expose stable callback functions
+	const forceUpdate = useCallback(() => {
+		forceUpdateRef.current();
+	}, []);
+
+	const triggerUpdate = useCallback(() => {
+		triggerUpdateRef.current();
+	}, []);
 
 	// Update buffer viewport when viewport changes
 	useEffect(() => {
 		buffer.updateViewport(viewport);
-		// 直接调用 forceUpdate 而不是 triggerUpdate，避免依赖问题
-		forceUpdate({});
-	}, [viewport.width, viewport.height]); // 移除 buffer 和 triggerUpdate 避免循环依赖
+		forceUpdateRef.current();
+	}, [viewport.width, viewport.height, buffer]);
 
 	// Cleanup buffer on unmount
 	useEffect(() => {

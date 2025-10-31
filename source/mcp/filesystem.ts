@@ -1533,7 +1533,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'PREFERRED tool for file creation: Create a new file with specified content. More reliable than terminal commands like echo/cat with redirects. Automatically creates parent directories if needed. Terminal commands can be used as a fallback if needed.',
+			'Preferred tool for creating files: Use specified content to create a new file. Before creating the file, you need to determine if the file already exists; if it does, your creation will fail. You should use editing instead of creation, as this tool is more reliable than terminal commands like echo/cat with redirection. If necessary, automatically create the parent directory. If necessary, terminal commands can be used as a fallback.',
 		inputSchema: {
 			type: 'object',
 			properties: {
