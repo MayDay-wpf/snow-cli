@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance Gemini and Responses APIs
+            - Fixed an issue where large text could not be selected after pasting, fixed a performance issue that could occur in JetBrains, and added a terminal command sensitive word system
             ### Installation
             ```bash
             npm install -g snow-ai

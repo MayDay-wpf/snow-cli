@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Newline, Text, useInput } from 'ink';
+import React, {useState, useEffect} from 'react';
+import {Box, Newline, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
-import { Alert } from '@inkjs/ui';
+import {Alert} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
 import {
 	getProxyConfig,
@@ -15,11 +15,17 @@ type Props = {
 	inlineMode?: boolean;
 };
 
-export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }: Props) {
+export default function ProxyConfigScreen({
+	onBack,
+	onSave,
+	inlineMode = false,
+}: Props) {
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
 	const [browserPath, setBrowserPath] = useState('');
-	const [currentField, setCurrentField] = useState<'enabled' | 'port' | 'browserPath'>('enabled');
+	const [currentField, setCurrentField] = useState<
+		'enabled' | 'port' | 'browserPath'
+	>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
 
@@ -97,11 +103,15 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 	return (
 		<Box flexDirection="column" padding={1}>
 			{!inlineMode && (
-				<Box marginBottom={1} borderStyle="double" borderColor={"cyan"} paddingX={2} paddingY={1}>
+				<Box
+					marginBottom={1}
+					borderStyle="double"
+					borderColor={'cyan'}
+					paddingX={2}
+					paddingY={1}
+				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">
-							Proxy Configuration
-						</Gradient>
+						<Gradient name="rainbow">Proxy Configuration</Gradient>
 						<Text color="gray" dimColor>
 							Configure system proxy for web search and fetch
 						</Text>
@@ -117,7 +127,8 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{enabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to toggle)
+								{enabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
+								toggle)
 							</Text>
 						</Box>
 					</Box>
@@ -130,11 +141,7 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 						</Text>
 						{currentField === 'port' && isEditing && (
 							<Box marginLeft={3}>
-								<TextInput
-									value={port}
-									onChange={setPort}
-									placeholder="7890"
-								/>
+								<TextInput value={port} onChange={setPort} placeholder="7890" />
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'port') && (
@@ -148,7 +155,8 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'browserPath' ? 'green' : 'white'}>
-							{currentField === 'browserPath' ? '❯ ' : '  '}Browser Path (Optional):
+							{currentField === 'browserPath' ? '❯ ' : '  '}Browser Path
+							(Optional):
 						</Text>
 						{currentField === 'browserPath' && isEditing && (
 							<Box marginLeft={3}>
@@ -185,15 +193,15 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 				{isEditing ? (
 					<>
 						<Alert variant="info">
-							Editing mode: Press Enter to save and exit editing
-							(Make your changes and press Enter when done)
+							Editing mode: Press Enter to save and exit editing (Make your
+							changes and press Enter when done)
 						</Alert>
 					</>
 				) : (
 					<>
 						<Alert variant="info">
-							Use ↑↓ to navigate between fields, press Enter to edit/toggle,
-							and press Ctrl+S or Esc to save and return
+							Use ↑↓ to navigate between fields, press Enter to edit/toggle, and
+							press Ctrl+S or Esc to save and return
 						</Alert>
 					</>
 				)}
@@ -202,9 +210,18 @@ export default function ProxyConfigScreen({ onBack, onSave, inlineMode = false }
 			<Box flexDirection="column" marginTop={1}>
 				<Alert variant="info">
 					Browser Path Examples: <Newline />
-					<Text color={'blue'}>• Windows: C:\Program Files(x86)\Microsoft\Edge\Application\msedge.exe</Text> <Newline />
-					<Text color={'green'}>• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome</Text> <Newline />
-					<Text color={'yellow'}>• Linux: /usr/bin/chromium-browser</Text> <Newline />
+					<Text color={'blue'}>
+						• Windows: C:\Program
+						Files(x86)\Microsoft\Edge\Application\msedge.exe
+					</Text>{' '}
+					<Newline />
+					<Text color={'green'}>
+						• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google
+						Chrome
+					</Text>{' '}
+					<Newline />
+					<Text color={'yellow'}>• Linux: /usr/bin/chromium-browser</Text>{' '}
+					<Newline />
 					Leave empty to auto-detect system browser (Edge/Chrome)
 				</Alert>
 			</Box>

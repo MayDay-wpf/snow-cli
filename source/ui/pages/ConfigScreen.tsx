@@ -113,8 +113,11 @@ export default function ConfigScreen({
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
 	const [geminiThinkingBudget, setGeminiThinkingBudget] = useState(1024);
-	const [responsesReasoningEnabled, setResponsesReasoningEnabled] = useState(false);
-	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<'low' | 'medium' | 'high'>('high');
+	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
+		useState(false);
+	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<
+		'low' | 'medium' | 'high'
+	>('high');
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
@@ -305,7 +308,8 @@ export default function ConfigScreen({
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'geminiThinkingBudget')
 			return geminiThinkingBudget.toString();
-		if (currentField === 'responsesReasoningEffort') return responsesReasoningEffort;
+		if (currentField === 'responsesReasoningEffort')
+			return responsesReasoningEffort;
 		if (currentField === 'compactModelName') return compactModelName;
 		return '';
 	};
@@ -584,7 +588,7 @@ export default function ConfigScreen({
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{anthropicBeta ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
+								{anthropicBeta ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
 								toggle)
 							</Text>
 						</Box>
@@ -599,8 +603,8 @@ export default function ConfigScreen({
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{thinkingEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
-								toggle)
+								{thinkingEnabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter
+								to toggle)
 							</Text>
 						</Box>
 					</Box>
@@ -633,8 +637,8 @@ export default function ConfigScreen({
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{geminiThinkingEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
-								toggle)
+								{geminiThinkingEnabled ? '[✓] Enabled' : '[ ] Disabled'} (Press
+								Enter to toggle)
 							</Text>
 						</Box>
 					</Box>
@@ -667,8 +671,8 @@ export default function ConfigScreen({
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{responsesReasoningEnabled ? '☒ Enabled' : '☐ Disabled'} (Press Enter to
-								toggle)
+								{responsesReasoningEnabled ? '[✓] Enabled' : '[ ] Disabled'}{' '}
+								(Press Enter to toggle)
 							</Text>
 						</Box>
 					</Box>
@@ -682,7 +686,9 @@ export default function ConfigScreen({
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{responsesReasoningEffort.toUpperCase()}</Text>
+								<Text color="gray">
+									{responsesReasoningEffort.toUpperCase()}
+								</Text>
 							</Box>
 						)}
 						{isCurrentlyEditing && (
@@ -695,7 +701,9 @@ export default function ConfigScreen({
 									]}
 									defaultValue={responsesReasoningEffort}
 									onChange={value => {
-										setResponsesReasoningEffort(value as 'low' | 'medium' | 'high');
+										setResponsesReasoningEffort(
+											value as 'low' | 'medium' | 'high',
+										);
 										setIsEditing(false);
 									}}
 								/>
@@ -1311,7 +1319,9 @@ export default function ConfigScreen({
 						{currentField === 'advancedModel' && 'Advanced Model'}
 						{currentField === 'basicModel' && 'Basic Model'}
 						{currentField === 'compactModelName' && 'Compact Model'}
-						{currentField === 'responsesReasoningEffort' && 'Responses Reasoning Effort'}:
+						{currentField === 'responsesReasoningEffort' &&
+							'Responses Reasoning Effort'}
+						:
 					</Text>
 					<Box marginLeft={3} marginTop={1}>
 						{currentField === 'profile' && (
@@ -1377,7 +1387,9 @@ export default function ConfigScreen({
 								]}
 								defaultValue={responsesReasoningEffort}
 								onChange={value => {
-									setResponsesReasoningEffort(value as 'low' | 'medium' | 'high');
+									setResponsesReasoningEffort(
+										value as 'low' | 'medium' | 'high',
+									);
 									setIsEditing(false);
 								}}
 							/>

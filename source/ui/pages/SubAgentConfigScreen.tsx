@@ -433,7 +433,7 @@ export default function SubAgentConfigScreen({
 													bold={isCurrentTool}
 												>
 													{isCurrentTool ? '❯ ' : '  '}
-													{selectedTools.has(tool) ? '☒' : '☐'} {tool}
+													{selectedTools.has(tool) ? '[✓]' : '[ ]'} {tool}
 												</Text>
 											</Box>
 										);
