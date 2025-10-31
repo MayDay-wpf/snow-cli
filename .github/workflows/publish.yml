@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Fixed an issue where large text could not be selected after pasting, fixed a performance issue that could occur in JetBrains, and added a terminal command sensitive word system
+            - Added syntax highlighting for unknown languages to ensure patches are loaded before using cli-highlight
             ### Installation
             ```bash
             npm install -g snow-ai

@@ -1,6 +1,5 @@
 import React from 'react';
 import {Text} from 'ink';
-import {highlight} from 'cli-highlight';
 // @ts-expect-error - cli-markdown doesn't have TypeScript definitions
 import cliMarkdown from 'cli-markdown';
 
@@ -10,17 +9,8 @@ interface Props {
 
 export default function MarkdownRenderer({content}: Props) {
 	// Use cli-markdown for elegant markdown rendering with syntax highlighting
-	const rendered = cliMarkdown(content, {
-		// Enable syntax highlighting for code blocks
-		code: (code: string, language?: string) => {
-			if (!language) return code;
-			try {
-				return highlight(code, {language, ignoreIllegals: true});
-			} catch {
-				return code;
-			}
-		},
-	});
+	// The patched highlight function will gracefully handle unknown languages
+	const rendered = cliMarkdown(content);
 
 	// Remove excessive trailing newlines and whitespace from cli-markdown output
 	// Keep single blank lines for paragraph spacing (better readability)

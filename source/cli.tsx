@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+
+// CRITICAL: Patch cli-highlight BEFORE any other imports
+// This must be the first import to ensure the patch is applied before cli-markdown loads
+import './utils/patch-highlight.js';
+
 import React from 'react';
 import {render, Text, Box} from 'ink';
 import Spinner from 'ink-spinner';
