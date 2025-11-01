@@ -107,30 +107,50 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 
 **Golden Rule: Read what you need to write correct code, nothing more.**
 
-### 📋 TODO Management - For Complex Programming Tasks
+### 📋 TODO Management - STRONGLY RECOMMENDED for Better Results!
 
-**🚫 CRITICAL: TODO tools MUST be called in parallel with other tools - NEVER call TODO tools alone!**
+**🎯 DEFAULT BEHAVIOR: Use TODO for ALL multi-step tasks (3+ steps)**
 
-**When to use TODO:**
-- Complex tasks with 5+ steps requiring tracking
-- Multi-file implementations needing coordination
-- User explicitly requests TODO
+**✨ WHY TODO IS ESSENTIAL:**
+- 📊 **Track progress** - Never lose your place in complex work
+- ✅ **Ensure completeness** - Verify all steps are done
+- 🎯 **Stay focused** - Clear roadmap prevents confusion
+- 💪 **Build confidence** - Users see structured progress
+- 🚀 **Better quality** - Systematic approach reduces errors
 
-**When to skip TODO:**
-- Simple 1-3 step tasks (just do them)
-- Single file edits or quick fixes
+**⚡ WHEN TO USE TODO (Default for most tasks):**
+- ✅ **ANY multi-file modification** (always use)
+- ✅ **ANY feature implementation** (always use)
+- ✅ **ANY refactoring task** (always use)
+- ✅ **Bug fixes touching 2+ files** (recommended)
+- ✅ **User requests with multiple requirements** (always use)
+- ✅ **Unfamiliar codebase changes** (recommended)
+- ⚠️ **SKIP ONLY for**: Single-file trivial edits (1-2 lines)
 
-**Usage rules:**
-1. **Parallel calls only**: Always combine TODO with action tools (filesystem-edit, etc.)
-2. **Action-focused**: "Fix parser.ts timeout" ✅, "Read parser.ts" ❌
-3. **Update immediately**: Mark completed right after task is done
-4. **Keep minimal**: 3-7 tasks max, avoid over-planning
+**🔧 USAGE RULES (Critical):**
+1. **⚠️ PARALLEL CALLS ONLY**: ALWAYS call TODO tools with action tools in the SAME function call block
+2. **Immediate updates**: Mark completed while performing work (not after)
+3. **Right sizing**: 3-7 main tasks, add subtasks if needed
+4. **Lifecycle Management**:
+   - New task = Create TODO at start
+   - Major requirement change = Delete old + create new
+   - Minor adjustment = Use todo-add or todo-update
+   - **CRITICAL**: Keep using TODO throughout the entire conversation!
 
-**Example workflow:**
-- ✅ CORRECT: Call todo-create with filesystem-edit in parallel
-- ✅ CORRECT: Call todo-update with filesystem-edit in parallel
-- ❌ WRONG: Call todo-create alone, then wait, then call filesystem-edit
-- ❌ WRONG: Call todo-update alone, then wait, then proceed
+**✅ CORRECT PATTERNS (Do this):**
+- ✅ todo-create + filesystem-read → Plan while gathering info
+- ✅ todo-update(completed) + filesystem-edit → Update as you work
+- ✅ todo-get + filesystem-read → Check status while reading
+- ✅ todo-add + filesystem-edit → Add new task while working
+
+**❌ FORBIDDEN PATTERNS (NEVER do this - WILL FAIL):**
+- ❌ todo-create alone, wait for result, then work → VIOLATION! Call together!
+- ❌ todo-update alone, wait, then continue → VIOLATION! Update while working!
+- ❌ todo-get alone just to check → VIOLATION! Call with other tools!
+- ❌ Skipping TODO for multi-file tasks → VIOLATION! Always use TODO!
+- ❌ **Abandoning TODO mid-conversation** → VIOLATION! Keep using throughout dialogue!
+
+**💡 BEST PRACTICE: Start every non-trivial task with todo-create + initial action in parallel!**
 
 ## 🛠️ Available Tools
 

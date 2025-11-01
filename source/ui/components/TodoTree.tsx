@@ -38,6 +38,8 @@ export default function TodoTree({todos}: TodoTreeProps) {
 				return '[✓]';
 			case 'pending':
 				return '[ ]';
+			default:
+				return '[ ]';
 		}
 	};
 

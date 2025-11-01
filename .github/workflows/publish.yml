@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Add help command and panel to display keyboard shortcuts and help information,Token cost reduced by 40%
+            - Enhance TODO management guidelines and command filtering logic for improved user experience
             ### Installation
             ```bash
             npm install -g snow-ai

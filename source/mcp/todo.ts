@@ -252,36 +252,43 @@ export class TodoService {
 		return [
 			{
 				name: 'todo-create',
-				description: `Create a TODO list for complex multi-step tasks (optional planning tool).
+				description: `✅ RECOMMENDED: Create TODO list for structured task execution. Use this for ALL multi-step tasks!
 
-## CORE PRINCIPLE - FOCUS ON EXECUTION:
-TODO lists are OPTIONAL helpers for complex tasks. Your PRIMARY goal is COMPLETING THE WORK, not maintaining perfect TODO lists. Use this tool only when it genuinely helps organize complex work - don't let TODO management slow you down.
+⚠️ MANDATORY RULE - PARALLEL CALLS ONLY:
+🚫 NEVER call todo-create alone! MUST call with other tools in the SAME function call block.
+✅ ALWAYS: todo-create + filesystem-read (or other action tool) in parallel
+❌ FORBIDDEN: Call todo-create, wait for result, then call other tools
 
-## WHEN TO USE (Optional):
-- Complex tasks with 5+ distinct steps that benefit from tracking
-- Long-running tasks where progress visibility helps the user
-- Tasks with multiple dependencies that need careful ordering
-- User explicitly requests a TODO list
+## 🎯 DEFAULT USAGE - Use TODO by default for:
+✅ ANY multi-file changes (always create TODO first)
+✅ ANY feature implementation (plan with TODO)
+✅ ANY refactoring work (track with TODO)
+✅ Bug fixes involving 2+ files (use TODO)
+✅ Tasks with 3+ distinct steps (create TODO)
+⚠️ SKIP ONLY: Single-file trivial edits (1-2 lines)
 
-## WHEN TO SKIP:
-- Simple 1-3 step tasks (just do the work directly)
-- Straightforward file edits or single-function changes
-- Quick fixes or minor modifications
-- When TODO creation takes longer than just doing the task
+## 🚀 WHY CREATE TODO:
+- Ensures all requirements are addressed
+- Prevents missing critical steps
+- Provides clear progress tracking
+- Improves code quality through systematic approach
+- Builds user confidence with visible structure
 
-## LIFECYCLE MANAGEMENT:
-1. **NEW REQUEST = NEW TODO LIST**: Completely new requirement? Delete old todos first, then create new list.
-2. **INCREMENTAL REQUEST = USE TODO-ADD**: Adding to existing requirement? Use "todo-add" instead.
-3. Use this tool ONLY when starting fresh (new session or new requirement after cleanup).
+## 📋 WHEN TO CALL:
+1. **NEW TASK**: Create TODO immediately when starting work (with parallel action)
+2. **NEW REQUIREMENT**: Delete old todos, create fresh list (with parallel action)
+3. **BEST PRACTICE**: Call todo-create + filesystem-read in parallel
 
-## CREATION GUIDELINES:
-- Keep it simple and actionable
-- 3-7 main tasks is usually sufficient (don't over-plan)
-- Include verification steps only if critical
-- Order by dependencies
+## ⚡ CREATION GUIDELINES:
+- Break work into 3-7 clear, actionable tasks
+- Order by logical dependencies
+- Be specific (e.g., "Modify validateInput in form.ts" not "fix validation")
+- Include verification step if critical
 
-## WARNING:
-This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo-add" instead.`,
+## ⚠️ LIFECYCLE:
+This REPLACES the entire TODO list. For adding tasks to existing list, use "todo-add" instead.
+
+## 💡 REMEMBER: MUST call with other tools - never alone!`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -312,7 +319,19 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 			},
 			{
 				name: 'todo-get',
-				description: `Get current TODO list with task IDs, status, and hierarchy. Call with other tools in parallel when needed.`,
+				description: `Get current TODO list with task IDs, status, and hierarchy.
+
+⚠️ MANDATORY RULE - PARALLEL CALLS ONLY:
+🚫 NEVER call todo-get alone! MUST call with other tools in the SAME function call block.
+✅ ALWAYS: todo-get + filesystem-read/terminal-execute/etc in parallel
+❌ FORBIDDEN: Call todo-get alone to check status
+
+## 🔄 WHEN TO USE IN DIALOGUE:
+- **User provides additional info**: Use todo-get + filesystem-read to check what's done
+- **User requests modifications**: Check current progress before adding/updating tasks
+- **Continuing work**: Always check status first to avoid redoing completed tasks
+
+USAGE: Combine with filesystem-read, terminal-execute, or other actions to check progress while working.`,
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -320,7 +339,17 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 			},
 			{
 				name: 'todo-update',
-				description: `Update TODO status/content. MUST call with other tools - mark "completed" ONLY after task is verified and done.`,
+				description: `Update TODO status/content - USE THIS FREQUENTLY to track progress!
+
+⚠️ MANDATORY RULE - PARALLEL CALLS ONLY:
+🚫 NEVER call todo-update alone! MUST call with other tools in the SAME function call block.
+✅ ALWAYS: todo-update + filesystem-edit/terminal-execute/etc in parallel
+❌ FORBIDDEN: Call todo-update, wait for result, then proceed
+
+BEST PRACTICE: Mark "completed" ONLY after task is verified.
+Example: todo-update(task1, completed) + filesystem-edit(task2) → Update while working!
+
+💡 This ensures efficient workflow and prevents unnecessary wait times.`,
 
 				inputSchema: {
 					type: 'object',
@@ -348,7 +377,19 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 			},
 			{
 				name: 'todo-add',
-				description: `Add task to existing TODO (rare use). MUST call with other tools. Only for user-requested or complex tasks, not small steps.`,
+				description: `Add new task to existing TODO list when requirements expand.
+
+⚠️ MANDATORY RULE - PARALLEL CALLS ONLY:
+🚫 NEVER call todo-add alone! MUST call with other tools in the SAME function call block.
+✅ ALWAYS: todo-add + filesystem-edit/filesystem-read/etc in parallel
+❌ FORBIDDEN: Call todo-add alone to add task
+
+USE WHEN:
+- User adds new requirements during work
+- You discover additional necessary steps
+- Breaking down a complex task into subtasks
+
+DO NOT use for initial planning - use todo-create instead.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -368,7 +409,14 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 			},
 			{
 				name: 'todo-delete',
-				description: `Delete TODO item. MUST call with other tools. Deleting parent auto-deletes children (cascade).`,
+				description: `Delete TODO item from the list.
+
+⚠️ MANDATORY RULE - PARALLEL CALLS ONLY:
+🚫 NEVER call todo-delete alone! MUST call with other tools in the SAME function call block.
+✅ ALWAYS: todo-delete + filesystem-edit/todo-get/etc in parallel
+❌ FORBIDDEN: Call todo-delete alone
+
+NOTE: Deleting a parent task will cascade delete all its children automatically.`,
 				inputSchema: {
 					type: 'object',
 					properties: {

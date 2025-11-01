@@ -58,11 +58,46 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		if (!text.startsWith('/')) return [];
 
 		const query = text.slice(1).toLowerCase();
-		return commands.filter(
-			command =>
-				command.name.toLowerCase().includes(query) ||
-				command.description.toLowerCase().includes(query),
-		);
+
+		// Filter and sort commands by priority
+		// Priority order:
+		// 1. Command starts with query (highest)
+		// 2. Command contains query
+		// 3. Description starts with query
+		// 4. Description contains query (lowest)
+		const filtered = commands
+			.filter(
+				command =>
+					command.name.toLowerCase().includes(query) ||
+					command.description.toLowerCase().includes(query),
+			)
+			.map(command => {
+				const nameLower = command.name.toLowerCase();
+				const descLower = command.description.toLowerCase();
+
+				let priority = 4; // Default: description contains query
+
+				if (nameLower.startsWith(query)) {
+					priority = 1; // Command starts with query
+				} else if (nameLower.includes(query)) {
+					priority = 2; // Command contains query
+				} else if (descLower.startsWith(query)) {
+					priority = 3; // Description starts with query
+				}
+
+				return {command, priority};
+			})
+			.sort((a, b) => {
+				// Sort by priority (lower number = higher priority)
+				if (a.priority !== b.priority) {
+					return a.priority - b.priority;
+				}
+				// If same priority, sort alphabetically by name
+				return a.command.name.localeCompare(b.command.name);
+			})
+			.map(item => item.command);
+
+		return filtered;
 	}, [buffer]);
 
 	// Update command panel state
