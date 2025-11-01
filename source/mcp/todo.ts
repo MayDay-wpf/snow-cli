@@ -312,15 +312,7 @@ This REPLACES the entire TODO list. Never use it to "add more tasks" - use "todo
 			},
 			{
 				name: 'todo-get',
-				description: `Get the current TODO list for this session.
-
-## WHEN TO USE:
-- Before making any updates to check current task status and IDs
-- To verify what tasks exist before deciding to add/delete/update
-- To inspect the TODO structure before planning next steps
-
-## RETURNS:
-Complete TODO list with all task IDs, content, status, and hierarchy.`,
+				description: `Get current TODO list with task IDs, status, and hierarchy. Call with other tools in parallel when needed.`,
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -328,26 +320,7 @@ Complete TODO list with all task IDs, content, status, and hierarchy.`,
 			},
 			{
 				name: 'todo-update',
-				description: `Update TODO status or content - USE ONLY WHEN COMPLETING TASKS.
-
-## CORE PRINCIPLE - WORK FIRST, completed in an orderly manner:
-
-## STATUS MODEL:
-- **pending**: Task not yet completed (default)
-- **completed**: Task is 100% finished and verified
-
-## WHEN TO UPDATE:
-✅ **Mark "completed"** ONLY when:
-  - When completing a task in the List
-  - No errors or blockers
-  - You've actually verified it works
-
-## WHEN NOT TO UPDATE:
-❌ Don't update status to track "in progress" - just do the work
-❌ Don't update before verifying the work is complete
-
-## BEST PRACTICE:
-Every time you complete a task in Task, it will be updated to "Completed" immediately.`,
+				description: `Update TODO status/content. MUST call with other tools - mark "completed" ONLY after task is verified and done.`,
 
 				inputSchema: {
 					type: 'object',
@@ -375,24 +348,7 @@ Every time you complete a task in Task, it will be updated to "Completed" immedi
 			},
 			{
 				name: 'todo-add',
-				description: `Add tasks to existing TODO list (use sparingly).
-
-## CORE PRINCIPLE - AVOID TODO BLOAT:
-Don't constantly add TODO items while working. If you discover small steps during execution, JUST DO THEM instead of creating TODO items. Only add to TODO if it's genuinely complex or user-requested.
-
-## WHEN TO USE (Rare):
-1. **User Adds Requirements**: User explicitly requests additional tasks
-2. **Major Discovery**: You find a significant, complex step that wasn't initially planned
-3. **Blocking Issue**: You discover a prerequisite that requires substantial separate work
-
-## WHEN NOT TO USE (Common):
-- ❌ Discovered a small 5-minute task while working (just do it, don't track it)
-- ❌ Breaking down an existing task into micro-steps (over-planning)
-- ❌ "Organizing" or "clarifying" existing tasks (maintain original structure)
-- ❌ New unrelated requirement (use todo-delete + todo-create instead)
-
-## GUIDELINE:
-If a task takes less than 10 minutes, just do it instead of adding it to TODO. The goal is progress, not perfect tracking.`,
+				description: `Add task to existing TODO (rare use). MUST call with other tools. Only for user-requested or complex tasks, not small steps.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -412,27 +368,7 @@ If a task takes less than 10 minutes, just do it instead of adding it to TODO. T
 			},
 			{
 				name: 'todo-delete',
-				description: `Delete TODO items from the current session.
-
-## WHEN TO USE:
-1. **Task No Longer Needed**: Requirement changed, task became irrelevant
-2. **Mistake Correction**: Task was added by error or duplicated
-3. **Clearing for New Requirement**: User provides COMPLETELY NEW requirement - delete all old todos first, then create new list
-4. **Cascade Deletion**: Delete parent task with subtasks (automatically removes children)
-
-## LIFECYCLE PATTERN FOR NEW REQUIREMENTS:
-When user asks for something completely different:
-1. Use todo-get to see current list
-2. Use todo-delete on root items (children auto-delete via parentId cascade)
-3. Use todo-create for the new requirement
-
-## WHEN NOT TO USE:
-- Do NOT delete completed tasks just for "cleanup" (keep as history)
-- Do NOT delete in-progress tasks unless requirement truly changed
-- Do NOT use for "reorganizing" (maintain original structure)
-
-## CASCADE BEHAVIOR:
-Deleting a parent task automatically deletes all its subtasks (parentId relationship).`,
+				description: `Delete TODO item. MUST call with other tools. Deleting parent auto-deletes children (cascade).`,
 				inputSchema: {
 					type: 'object',
 					properties: {

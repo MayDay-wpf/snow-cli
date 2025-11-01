@@ -3,6 +3,7 @@ import {TextBuffer} from '../utils/textBuffer.js';
 
 // Command Definition
 const commands = [
+	{name: 'help', description: 'Show keyboard shortcuts and help information'},
 	{name: 'clear', description: 'Clear chat context and conversation history'},
 	{name: 'resume', description: 'Resume a conversation'},
 	{name: 'mcp', description: 'Show Model Context Protocol services and tools'},

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import {Box, Text} from 'ink';
 
 interface TodoItem {
 	id: string;
@@ -15,7 +15,7 @@ interface TodoTreeProps {
 /**
  * TODO Tree 组件 - 显示带复选框的任务树
  */
-export default function TodoTree({ todos }: TodoTreeProps) {
+export default function TodoTree({todos}: TodoTreeProps) {
 	if (todos.length === 0) {
 		return null;
 	}
@@ -35,7 +35,7 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 	const getStatusIcon = (status: TodoItem['status']) => {
 		switch (status) {
 			case 'completed':
-				return '[x]';
+				return '[✓]';
 			case 'pending':
 				return '[ ]';
 		}
@@ -60,7 +60,8 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 			<Box key={todo.id} flexDirection="column">
 				<Box>
 					<Text color={statusColor}>
-						{indent}{statusIcon} {todo.content}
+						{indent}
+						{statusIcon} {todo.content}
 					</Text>
 				</Box>
 				{children.map(child => renderTodo(child, depth + 1))}
@@ -69,7 +70,13 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 	};
 
 	return (
-		<Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} marginBottom={1}>
+		<Box
+			flexDirection="column"
+			borderStyle="round"
+			borderColor="cyan"
+			paddingX={1}
+			marginBottom={1}
+		>
 			<Box marginBottom={0}>
 				<Text bold color="cyan">
 					TODO List
@@ -78,7 +85,7 @@ export default function TodoTree({ todos }: TodoTreeProps) {
 			{rootTodos.map(todo => renderTodo(todo))}
 			<Box marginTop={0}>
 				<Text dimColor color="gray">
-					[ ] Pending · [x] Completed
+					[ ] Pending · [✓] Completed
 				</Text>
 			</Box>
 		</Box>

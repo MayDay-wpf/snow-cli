@@ -1,7 +1,8 @@
 import React from 'react';
-import {Text} from 'ink';
+import {Text, Box} from 'ink';
 // @ts-expect-error - cli-markdown doesn't have TypeScript definitions
 import cliMarkdown from 'cli-markdown';
+import logger from '../../utils/logger.js';
 
 interface Props {
 	content: string;
@@ -12,15 +13,31 @@ export default function MarkdownRenderer({content}: Props) {
 	// The patched highlight function will gracefully handle unknown languages
 	const rendered = cliMarkdown(content);
 
-	// Remove excessive trailing newlines and whitespace from cli-markdown output
-	// Keep single blank lines for paragraph spacing (better readability)
-	const trimmedRendered = rendered
-		.split('\n')
-		.map((line: string) => line.trimEnd()) // Remove trailing spaces from each line
-		.join('\n')
-		.replace(/\n{3,}/g, '\n\n') // Replace 3+ consecutive newlines with 2 (paragraph spacing)
-		.replace(/^\n+/g, '') // Remove leading newlines
-		.replace(/\n+$/g, ''); // Remove trailing newlines
+	// Split into lines and render each separately
+	// This prevents Ink's Text component from creating mysterious whitespace
+	// when handling multi-line content with \n characters
+	const lines = rendered.split('\n');
 
-	return <Text>{trimmedRendered}</Text>;
+	// Safety check: prevent rendering issues with excessively long output
+	if (lines.length > 500) {
+		logger.warn('[MarkdownRenderer] Rendered output has too many lines', {
+			totalLines: lines.length,
+			truncatedTo: 500,
+		});
+		return (
+			<Box flexDirection="column">
+				{lines.slice(0, 500).map((line: string, index: number) => (
+					<Text key={index}>{line}</Text>
+				))}
+			</Box>
+		);
+	}
+
+	return (
+		<Box flexDirection="column">
+			{lines.map((line: string, index: number) => (
+				<Text key={index}>{line}</Text>
+			))}
+		</Box>
+	);
 }

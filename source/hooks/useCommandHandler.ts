@@ -58,7 +58,10 @@ export async function executeContextCompression(): Promise<{
 		});
 
 		// 添加保留的最后一轮完整对话（保留完整的消息结构）
-		if (compressionResult.preservedMessages && compressionResult.preservedMessages.length > 0) {
+		if (
+			compressionResult.preservedMessages &&
+			compressionResult.preservedMessages.length > 0
+		) {
 			for (const msg of compressionResult.preservedMessages) {
 				// 保留完整的消息结构，包括所有关键字段
 				newSessionMessages.push({
@@ -69,7 +72,9 @@ export async function executeContextCompression(): Promise<{
 					...(msg.tool_calls && {tool_calls: msg.tool_calls}),
 					...(msg.images && {images: msg.images}),
 					...(msg.reasoning && {reasoning: msg.reasoning}),
-					...(msg.subAgentInternal !== undefined && {subAgentInternal: msg.subAgentInternal}),
+					...(msg.subAgentInternal !== undefined && {
+						subAgentInternal: msg.subAgentInternal,
+					}),
 				});
 			}
 		}
@@ -138,6 +143,7 @@ type CommandHandlerOptions = {
 	setShowMcpInfo: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setMcpPanelKey: React.Dispatch<React.SetStateAction<number>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
@@ -270,6 +276,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showHelpPanel') {
+				options.setShowHelpPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'home') {
 				// Reset terminal before navigating to welcome screen
 				resetTerminal(stdout);
@@ -329,7 +343,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					if (!isFileDialogSupported()) {
 						const errorMessage: Message = {
 							role: 'command',
-							content: 'File dialog not supported on this platform. Export cancelled.',
+							content:
+								'File dialog not supported on this platform. Export cancelled.',
 							commandName: commandName,
 						};
 						options.setMessages(prev => [...prev, errorMessage]);
@@ -337,11 +352,17 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 
 					// Generate default filename with timestamp
-					const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+					const timestamp = new Date()
+						.toISOString()
+						.replace(/[:.]/g, '-')
+						.split('.')[0];
 					const defaultFilename = `snow-chat-${timestamp}.txt`;
 
 					// Show native save dialog
-					const filePath = await showSaveDialog(defaultFilename, 'Export Chat Conversation');
+					const filePath = await showSaveDialog(
+						defaultFilename,
+						'Export Chat Conversation',
+					);
 
 					if (!filePath) {
 						// User cancelled
@@ -366,7 +387,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					options.setMessages(prev => [...prev, successMessage]);
 				} catch (error) {
 					// Show error message
-					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					const errorMsg =
+						error instanceof Error ? error.message : 'Unknown error';
 					const errorMessage: Message = {
 						role: 'command',
 						content: `✗ Export failed: ${errorMsg}`,

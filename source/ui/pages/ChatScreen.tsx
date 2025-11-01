@@ -10,6 +10,7 @@ import MCPInfoScreen from '../components/MCPInfoScreen.js';
 import MCPInfoPanel from '../components/MCPInfoPanel.js';
 import SessionListPanel from '../components/SessionListPanel.js';
 import UsagePanel from '../components/UsagePanel.js';
+import HelpPanel from '../components/HelpPanel.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
@@ -54,6 +55,7 @@ import '../../utils/commands/usage.js';
 import '../../utils/commands/export.js';
 import '../../utils/commands/agent.js';
 import '../../utils/commands/todoPicker.js';
+import '../../utils/commands/help.js';
 
 type Props = {
 	skipWelcome?: boolean;
@@ -94,6 +96,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
+	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -236,6 +239,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		setShowMcpInfo,
 		setShowMcpPanel,
 		setShowUsagePanel,
+		setShowHelpPanel,
 		setMcpPanelKey,
 		setYoloMode,
 		setContextUsage: streamingState.setContextUsage,
@@ -316,6 +320,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 		if (showUsagePanel) {
 			if (key.escape) {
 				setShowUsagePanel(false);
+			}
+			return;
+		}
+
+		if (showHelpPanel) {
+			if (key.escape) {
+				setShowHelpPanel(false);
 			}
 			return;
 		}
@@ -1128,7 +1139,16 @@ export default function ChatScreen({skipWelcome}: Props) {
 								<Text>• Ask for code explanations and debugging help</Text>
 								<Text>• Press ESC during response to interrupt</Text>
 								<Text>• Press Shift+Tab: toggle YOLO</Text>
-								<Text>• Working directory: {workingDirectory}</Text>
+								<Text>
+									{(() => {
+										const pasteKey =
+											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+										return `• Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • ${pasteKey} (paste images) • '@' (files) • '@@' (search content) • '/' (commands)`;
+									})()}
+								</Text>
+								<Text color="gray" dimColor>
+									• Working directory: {workingDirectory}
+								</Text>
 							</Box>
 						</Box>
 					</Box>,
@@ -1545,6 +1565,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 				</Box>
 			)}
 
+			{/* Show help panel if active - replaces input */}
+			{showHelpPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<HelpPanel />
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -1554,12 +1581,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or rollback confirmation */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or rollback confirmation */}
 			{!pendingToolConfirmation &&
 				!isCompressing &&
 				!showSessionPanel &&
 				!showMcpPanel &&
 				!showUsagePanel &&
+				!showHelpPanel &&
 				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput

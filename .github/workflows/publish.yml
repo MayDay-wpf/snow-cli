@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Added syntax highlighting for unknown languages to ensure patches are loaded before using cli-highlight
+            - Add help command and panel to display keyboard shortcuts and help information,Token cost reduced by 40%
             ### Installation
             ```bash
             npm install -g snow-ai

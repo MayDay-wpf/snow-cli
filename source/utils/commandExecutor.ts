@@ -16,7 +16,8 @@ export interface CommandResult {
 		| 'review'
 		| 'exportChat'
 		| 'showAgentPicker'
-		| 'showTodoPicker';
+		| 'showTodoPicker'
+		| 'showHelpPanel';
 	prompt?: string;
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }
