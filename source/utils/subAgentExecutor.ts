@@ -94,10 +94,16 @@ export async function executeSubAgent(
 		}
 
 		// Build conversation history for sub-agent
+		// Append role to prompt if configured
+		let finalPrompt = prompt;
+		if (agent.role) {
+			finalPrompt = `${prompt}\n\n${agent.role}`;
+		}
+
 		const messages: ChatMessage[] = [
 			{
 				role: 'user',
-				content: prompt,
+				content: finalPrompt,
 			},
 		];
 

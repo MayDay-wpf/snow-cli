@@ -6,6 +6,7 @@ export interface SubAgent {
 	id: string;
 	name: string;
 	description: string;
+	role?: string;
 	tools: string[];
 	createdAt: string;
 	updatedAt: string;
@@ -77,6 +78,7 @@ export function createSubAgent(
 	name: string,
 	description: string,
 	tools: string[],
+	role?: string,
 ): SubAgent {
 	const agents = getSubAgents();
 	const now = new Date().toISOString();
@@ -85,6 +87,7 @@ export function createSubAgent(
 		id: generateId(),
 		name,
 		description,
+		role,
 		tools,
 		createdAt: now,
 		updatedAt: now,
@@ -104,6 +107,7 @@ export function updateSubAgent(
 	updates: {
 		name?: string;
 		description?: string;
+		role?: string;
 		tools?: string[];
 	},
 ): SubAgent | null {
@@ -123,6 +127,7 @@ export function updateSubAgent(
 		id: existingAgent.id,
 		name: updates.name ?? existingAgent.name,
 		description: updates.description ?? existingAgent.description,
+		role: updates.role ?? existingAgent.role,
 		tools: updates.tools ?? existingAgent.tools,
 		createdAt: existingAgent.createdAt,
 		updatedAt: new Date().toISOString(),

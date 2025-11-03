@@ -25,27 +25,30 @@ export function convertSessionMessagesToUI(
 		// Handle sub-agent internal tool call messages
 		if (msg.subAgentInternal && msg.role === 'assistant' && msg.tool_calls) {
 			for (const toolCall of msg.tool_calls) {
-				const toolDisplay = formatToolCallMessage(toolCall as any);
-				let toolArgs;
-				try {
-					toolArgs = JSON.parse(toolCall.function.arguments);
-				} catch (e) {
-					toolArgs = {};
-				}
+				// 只有耗时工具才创建"进行中"消息
+				if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
+					const toolDisplay = formatToolCallMessage(toolCall as any);
+					let toolArgs;
+					try {
+						toolArgs = JSON.parse(toolCall.function.arguments);
+					} catch (e) {
+						toolArgs = {};
+					}
 
-				uiMessages.push({
-					role: 'subagent',
-					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
-					streaming: false,
-					toolCall: {
-						name: toolCall.function.name,
-						arguments: toolArgs,
-					},
-					toolDisplay,
-					toolCallId: toolCall.id,
-					toolPending: false,
-					subAgentInternal: true,
-				});
+					uiMessages.push({
+						role: 'subagent',
+						content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+						streaming: false,
+						toolCall: {
+							name: toolCall.function.name,
+							arguments: toolArgs,
+						},
+						toolDisplay,
+						toolCallId: toolCall.id,
+						toolPending: false,
+						subAgentInternal: true,
+					});
+				}
 				processedToolCalls.add(toolCall.id);
 			}
 			continue;

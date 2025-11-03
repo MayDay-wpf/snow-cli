@@ -677,48 +677,57 @@ export async function handleConversationWithTools(
 							if (subAgentMessage.message.type === 'tool_calls') {
 								const toolCalls = subAgentMessage.message.tool_calls;
 								if (toolCalls && toolCalls.length > 0) {
-									// Add tool call messages for each tool
-									const toolMessages = toolCalls.map((toolCall: any) => {
-										const toolDisplay = formatToolCallMessage(toolCall);
-										let toolArgs;
-										try {
-											toolArgs = JSON.parse(toolCall.function.arguments);
-										} catch (e) {
-											toolArgs = {};
-										}
+									// Add tool call messages for each tool (only for time-consuming tools)
+									const toolMessages = toolCalls
+										.filter((toolCall: any) =>
+											isToolNeedTwoStepDisplay(toolCall.function.name),
+										)
+										.map((toolCall: any) => {
+											const toolDisplay = formatToolCallMessage(toolCall);
+											let toolArgs;
+											try {
+												toolArgs = JSON.parse(toolCall.function.arguments);
+											} catch (e) {
+												toolArgs = {};
+											}
 
-										const uiMsg = {
-											role: 'subagent' as const,
-											content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
-											streaming: false,
-											toolCall: {
-												name: toolCall.function.name,
-												arguments: toolArgs,
-											},
-											toolDisplay,
-											toolCallId: toolCall.id,
-											toolPending: true,
-											subAgent: {
-												agentId: subAgentMessage.agentId,
-												agentName: subAgentMessage.agentName,
-												isComplete: false,
-											},
-											subAgentInternal: true, // Mark as internal sub-agent message
-										};
+											const uiMsg = {
+												role: 'subagent' as const,
+												content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+												streaming: false,
+												toolCall: {
+													name: toolCall.function.name,
+													arguments: toolArgs,
+												},
+												toolDisplay,
+												toolCallId: toolCall.id,
+												toolPending: true,
+												subAgent: {
+													agentId: subAgentMessage.agentId,
+													agentName: subAgentMessage.agentName,
+													isComplete: false,
+												},
+												subAgentInternal: true, // Mark as internal sub-agent message
+											};
 
-										// Save to session as 'assistant' role for API compatibility
-										const sessionMsg = {
-											role: 'assistant' as const,
-											content: `⚇⚡ ${toolDisplay.toolName}`,
-											subAgentInternal: true,
-											tool_calls: [toolCall],
-										};
-										saveMessage(sessionMsg).catch(err =>
-											console.error('Failed to save sub-agent tool call:', err),
-										);
+											return uiMsg;
+										});
 
-										return uiMsg;
-									});
+									// Save all tool calls to session (regardless of display type)
+									const sessionMsg = {
+										role: 'assistant' as const,
+										content: toolCalls
+											.map((tc: any) => {
+												const display = formatToolCallMessage(tc);
+												return `⚇⚡ ${display.toolName}`;
+											})
+											.join(', '),
+										subAgentInternal: true,
+										tool_calls: toolCalls,
+									};
+									saveMessage(sessionMsg).catch(err =>
+										console.error('Failed to save sub-agent tool call:', err),
+									);
 
 									return [...prev, ...toolMessages];
 								}

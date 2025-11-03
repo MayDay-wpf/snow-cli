@@ -39,6 +39,9 @@ import {
 	parseEditByLineParams,
 	executeBatchOperation,
 } from './utils/filesystem/batch-operations.utils.js';
+// ACE Code Search utilities for symbol parsing
+import {parseFileSymbols} from './utils/aceCodeSearch/symbol.utils.js';
+import type {CodeSymbol} from './types/aceCodeSearch.types.js';
 
 const {resolve, dirname, isAbsolute} = path;
 const execAsync = promisify(exec);
@@ -76,7 +79,100 @@ export class FilesystemMCPService {
 	}
 
 	/**
+	 * Extract relevant symbol information for a specific line range
+	 * This provides context that helps AI make more accurate modifications
+	 * @param symbols - All symbols in the file
+	 * @param startLine - Start line of the range
+	 * @param endLine - End line of the range
+	 * @param _totalLines - Total lines in the file (reserved for future use)
+	 * @returns Formatted string with relevant symbol information
+	 */
+	private extractRelevantSymbols(
+		symbols: CodeSymbol[],
+		startLine: number,
+		endLine: number,
+		_totalLines: number,
+	): string {
+		if (symbols.length === 0) {
+			return '';
+		}
+
+		// Categorize symbols
+		const imports = symbols.filter(s => s.type === 'import');
+		const exports = symbols.filter(s => s.type === 'export');
+
+		// Symbols within the requested range
+		const symbolsInRange = symbols.filter(
+			s => s.line >= startLine && s.line <= endLine,
+		);
+
+		// Symbols defined before the range that might be referenced
+		const symbolsBeforeRange = symbols.filter(s => s.line < startLine);
+
+		// Build context information
+		const parts: string[] = [];
+
+		// Always include imports (crucial for understanding dependencies)
+		if (imports.length > 0) {
+			const importList = imports
+				.slice(0, 10) // Limit to avoid excessive tokens
+				.map(s => `  • ${s.name} (line ${s.line})`)
+				.join('\n');
+			parts.push(`📦 Imports:\n${importList}`);
+		}
+
+		// Symbols defined in the current range
+		if (symbolsInRange.length > 0) {
+			const rangeSymbols = symbolsInRange
+				.slice(0, 15)
+				.map(
+					s =>
+						`  • ${s.type}: ${s.name} (line ${s.line})${
+							s.signature ? ` - ${s.signature.slice(0, 60)}` : ''
+						}`,
+				)
+				.join('\n');
+			parts.push(`🎯 Symbols in this range:\n${rangeSymbols}`);
+		}
+
+		// Key definitions before this range (that might be referenced)
+		if (symbolsBeforeRange.length > 0 && startLine > 1) {
+			const relevantBefore = symbolsBeforeRange
+				.filter(s => s.type === 'function' || s.type === 'class')
+				.slice(-5) // Last 5 before the range
+				.map(s => `  • ${s.type}: ${s.name} (line ${s.line})`)
+				.join('\n');
+			if (relevantBefore) {
+				parts.push(`⬆️ Key definitions above:\n${relevantBefore}`);
+			}
+		}
+
+		// Exports (important for understanding module interface)
+		if (exports.length > 0) {
+			const exportList = exports
+				.slice(0, 10)
+				.map(s => `  • ${s.name} (line ${s.line})`)
+				.join('\n');
+			parts.push(`📤 Exports:\n${exportList}`);
+		}
+
+		if (parts.length === 0) {
+			return '';
+		}
+
+		return (
+			'\n\n' +
+			'='.repeat(60) +
+			'\n📚 SYMBOL INDEX & DEFINITIONS:\n' +
+			'='.repeat(60) +
+			'\n' +
+			parts.join('\n\n')
+		);
+	}
+
+	/**
 	 * Get the content of a file with optional line range
+	 * Enhanced with symbol information for better AI context
 	 * @param filePath - Path to the file (relative to base path or absolute) or array of file paths or array of file config objects
 	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1). Used for single file or as default for array of strings
 	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to file end). Used for single file or as default for array of strings
@@ -193,9 +289,30 @@ export class FilesystemMCPService {
 							return `${lineNum}→${line}`;
 						});
 
-						const fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})\n${numberedLines.join(
+						let fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})\n${numberedLines.join(
 							'\n',
 						)}`;
+
+						// Parse and append symbol information
+						try {
+							const symbols = await parseFileSymbols(
+								fullPath,
+								content,
+								this.basePath,
+							);
+							const symbolInfo = this.extractRelevantSymbols(
+								symbols,
+								start,
+								end,
+								totalLines,
+							);
+							if (symbolInfo) {
+								fileContent += symbolInfo;
+							}
+						} catch {
+							// Silently fail symbol parsing
+						}
+
 						allContents.push(fileContent);
 
 						filesData.push({
@@ -281,7 +398,28 @@ export class FilesystemMCPService {
 				return `${lineNum}→${line}`;
 			});
 
-			const partialContent = numberedLines.join('\n');
+			let partialContent = numberedLines.join('\n');
+
+			// Parse and append symbol information to provide better context for AI
+			try {
+				const symbols = await parseFileSymbols(
+					fullPath,
+					content,
+					this.basePath,
+				);
+				const symbolInfo = this.extractRelevantSymbols(
+					symbols,
+					start,
+					end,
+					totalLines,
+				);
+				if (symbolInfo) {
+					partialContent += symbolInfo;
+				}
+			} catch (error) {
+				// Silently fail symbol parsing - don't block file reading
+				// This is optional context enhancement, not critical
+			}
 
 			return {
 				content: partialContent,

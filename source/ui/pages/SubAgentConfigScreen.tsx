@@ -115,7 +115,7 @@ const toolCategories: ToolCategory[] = [
 	},
 ];
 
-type FormField = 'name' | 'description' | 'tools';
+type FormField = 'name' | 'description' | 'role' | 'tools';
 
 export default function SubAgentConfigScreen({
 	onBack,
@@ -125,6 +125,7 @@ export default function SubAgentConfigScreen({
 }: Props) {
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
+	const [role, setRole] = useState('');
 	const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
 	const [currentField, setCurrentField] = useState<FormField>('name');
 	const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
@@ -143,6 +144,7 @@ export default function SubAgentConfigScreen({
 			if (agent) {
 				setAgentName(agent.name);
 				setDescription(agent.description);
+				setRole(agent.role || '');
 				setSelectedTools(new Set(agent.tools));
 			}
 		}
@@ -259,11 +261,17 @@ export default function SubAgentConfigScreen({
 				updateSubAgent(agentId, {
 					name: agentName,
 					description: description,
+					role: role || undefined,
 					tools: Array.from(selectedTools),
 				});
 			} else {
 				// Create new agent
-				createSubAgent(agentName, description, Array.from(selectedTools));
+				createSubAgent(
+					agentName,
+					description,
+					Array.from(selectedTools),
+					role || undefined,
+				);
 			}
 
 			setShowSuccess(true);
@@ -276,7 +284,15 @@ export default function SubAgentConfigScreen({
 				error instanceof Error ? error.message : 'Failed to save sub-agent',
 			);
 		}
-	}, [agentName, description, selectedTools, onSave, isEditMode, agentId]);
+	}, [
+		agentName,
+		description,
+		role,
+		selectedTools,
+		onSave,
+		isEditMode,
+		agentId,
+	]);
 
 	useInput((rawInput, key) => {
 		const input = stripFocusArtifacts(rawInput);
@@ -303,6 +319,9 @@ export default function SubAgentConfigScreen({
 			} else if (currentField === 'description') {
 				setCurrentField('name');
 				return;
+			} else if (currentField === 'role') {
+				setCurrentField('description');
+				return;
 			} else if (currentField === 'tools') {
 				// Navigate within tools
 				if (selectedToolIndex > 0) {
@@ -314,8 +333,8 @@ export default function SubAgentConfigScreen({
 						prevCategory ? prevCategory.tools.length - 1 : 0,
 					);
 				} else {
-					// At top of tools, go to description
-					setCurrentField('description');
+					// At top of tools, go to role
+					setCurrentField('role');
 				}
 				return;
 			}
@@ -326,6 +345,9 @@ export default function SubAgentConfigScreen({
 				setCurrentField('description');
 				return;
 			} else if (currentField === 'description') {
+				setCurrentField('role');
+				return;
+			} else if (currentField === 'role') {
 				setCurrentField('tools');
 				setSelectedCategoryIndex(0);
 				setSelectedToolIndex(0);
@@ -502,6 +524,21 @@ export default function SubAgentConfigScreen({
 							onChange={value => setDescription(stripFocusArtifacts(value))}
 							placeholder="Enter agent description..."
 							focus={currentField === 'description'}
+						/>
+					</Box>
+				</Box>
+
+				{/* Role */}
+				<Box flexDirection="column">
+					<Text bold color={currentField === 'role' ? 'green' : 'white'}>
+						Role (Optional):
+					</Text>
+					<Box marginLeft={2}>
+						<TextInput
+							value={role}
+							onChange={value => setRole(stripFocusArtifacts(value))}
+							placeholder="Specify agent role to guide output and focus..."
+							focus={currentField === 'role'}
 						/>
 					</Box>
 				</Box>
