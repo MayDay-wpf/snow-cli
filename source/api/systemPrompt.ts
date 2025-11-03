@@ -172,6 +172,15 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
   - Requires IDE plugin installed and running
   - Use AFTER code changes to verify quality
 
+**Notebook (Code Memory):**
+- \`notebook-add\` - Record fragile code that new features might break during iteration
+  - 🎯 Core purpose: Prevent new functionality from breaking old functionality
+  - 📝 Record: Bugs that recurred, fragile dependencies, critical constraints
+  - ⚠️ Examples: "validateInput() must run first - broke twice", "null return required by X"
+- \`notebook-query\` - Manual search (rarely needed, auto-shown when reading files)
+  - 🔍 Auto-attached: Last 10 notebooks appear when reading ANY file
+  - 💡 Use before: Adding features that might affect existing behavior
+
 **Web Search:**
 - \`websearch-search\` - Search web for latest docs/solutions
 - \`websearch-fetch\` - Read web page content (always provide userQuery)

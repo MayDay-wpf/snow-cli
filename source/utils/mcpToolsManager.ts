@@ -10,6 +10,10 @@ import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
 import {TodoService} from '../mcp/todo.js';
 import {
+	mcpTools as notebookTools,
+	executeNotebookTool,
+} from '../mcp/notebook.js';
+import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
 } from '../mcp/subagent.js';
@@ -184,6 +188,31 @@ async function refreshToolsCache(): Promise<void> {
 	});
 
 	for (const tool of todoTools) {
+		allTools.push({
+			type: 'function',
+			function: {
+				name: tool.name,
+				description: tool.description || '',
+				parameters: tool.inputSchema,
+			},
+		});
+	}
+
+	// Add built-in Notebook tools (always available)
+	const notebookServiceTools = notebookTools.map(tool => ({
+		name: tool.name.replace('notebook-', ''),
+		description: tool.description || '',
+		inputSchema: tool.inputSchema,
+	}));
+
+	servicesInfo.push({
+		serviceName: 'notebook',
+		tools: notebookServiceTools,
+		isBuiltIn: true,
+		connected: true,
+	});
+
+	for (const tool of notebookTools) {
 		allTools.push({
 			type: 'function',
 			function: {
@@ -690,6 +719,9 @@ export async function executeMCPTool(
 	if (toolName.startsWith('todo-')) {
 		serviceName = 'todo';
 		actualToolName = toolName.substring('todo-'.length);
+	} else if (toolName.startsWith('notebook-')) {
+		serviceName = 'notebook';
+		actualToolName = toolName.substring('notebook-'.length);
 	} else if (toolName.startsWith('filesystem-')) {
 		serviceName = 'filesystem';
 		actualToolName = toolName.substring('filesystem-'.length);
@@ -734,6 +766,9 @@ export async function executeMCPTool(
 	if (serviceName === 'todo') {
 		// Handle built-in TODO tools (no connection needed)
 		return await todoService.executeTool(actualToolName, args);
+	} else if (serviceName === 'notebook') {
+		// Handle built-in Notebook tools (no connection needed)
+		return await executeNotebookTool(toolName, args);
 	} else if (serviceName === 'filesystem') {
 		// Handle built-in filesystem tools (no connection needed)
 		const {filesystemService} = await import('../mcp/filesystem.js');

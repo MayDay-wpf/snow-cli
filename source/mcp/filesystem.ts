@@ -42,6 +42,8 @@ import {
 // ACE Code Search utilities for symbol parsing
 import {parseFileSymbols} from './utils/aceCodeSearch/symbol.utils.js';
 import type {CodeSymbol} from './types/aceCodeSearch.types.js';
+// Notebook utilities for automatic note retrieval
+import {queryNotebook} from '../utils/notebookManager.js';
 
 const {resolve, dirname, isAbsolute} = path;
 const execAsync = promisify(exec);
@@ -168,6 +170,41 @@ export class FilesystemMCPService {
 			'\n' +
 			parts.join('\n\n')
 		);
+	}
+
+	/**
+	 * Get notebook entries for a file
+	 * @param filePath - Path to the file
+	 * @returns Formatted notebook entries string, or empty if none found
+	 */
+	private getNotebookEntries(filePath: string): string {
+		try {
+			const entries = queryNotebook(filePath, 10);
+			if (entries.length === 0) {
+				return '';
+			}
+
+			const notesText = entries
+				.map((entry, index) => {
+					// createdAt 已经是本地时间格式: "YYYY-MM-DDTHH:mm:ss.SSS"
+					// 提取日期和时间部分: "YYYY-MM-DD HH:mm"
+					const dateStr = entry.createdAt.substring(0, 16).replace('T', ' ');
+					return `  ${index + 1}. [${dateStr}] ${entry.note}`;
+				})
+				.join('\n');
+
+			return (
+				'\n\n' +
+				'='.repeat(60) +
+				'\n📝 CODE NOTEBOOKS (Latest 10):\n' +
+				'='.repeat(60) +
+				'\n' +
+				notesText
+			);
+		} catch {
+			// Silently fail notebook retrieval - don't block file reading
+			return '';
+		}
 	}
 
 	/**
@@ -313,6 +350,12 @@ export class FilesystemMCPService {
 							// Silently fail symbol parsing
 						}
 
+						// Append notebook entries
+						const notebookInfo = this.getNotebookEntries(file);
+						if (notebookInfo) {
+							fileContent += notebookInfo;
+						}
+
 						allContents.push(fileContent);
 
 						filesData.push({
@@ -419,6 +462,12 @@ export class FilesystemMCPService {
 			} catch (error) {
 				// Silently fail symbol parsing - don't block file reading
 				// This is optional context enhancement, not critical
+			}
+
+			// Append notebook entries
+			const notebookInfo = this.getNotebookEntries(filePath);
+			if (notebookInfo) {
+				partialContent += notebookInfo;
 			}
 
 			return {
