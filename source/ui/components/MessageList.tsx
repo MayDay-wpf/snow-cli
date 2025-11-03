@@ -38,6 +38,7 @@ export interface Message {
 		isComplete?: boolean;
 	};
 	subAgentInternal?: boolean; // Mark internal sub-agent messages to filter from API requests
+	parallelGroup?: string; // Group ID for parallel tool execution (same ID = executed together)
 }
 
 interface Props {

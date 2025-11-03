@@ -127,6 +127,16 @@ export function convertSessionMessagesToUI(
 			msg.tool_calls.length > 0 &&
 			!msg.subAgentInternal
 		) {
+			// Generate parallel group ID for non-time-consuming tools
+			const hasMultipleTools = msg.tool_calls.length > 1;
+			const hasNonTimeConsumingTool = msg.tool_calls.some(
+				tc => !isToolNeedTwoStepDisplay(tc.function.name),
+			);
+			const parallelGroupId =
+				hasMultipleTools && hasNonTimeConsumingTool
+					? `parallel-${i}-${Math.random()}`
+					: undefined;
+
 			for (const toolCall of msg.tool_calls) {
 				// Skip if already processed
 				if (processedToolCalls.has(toolCall.id)) continue;
@@ -155,7 +165,14 @@ export function convertSessionMessagesToUI(
 					});
 				}
 
-				processedToolCalls.add(toolCall.id);
+				// Store parallel group info for this tool call
+				if (parallelGroupId && !needTwoSteps) {
+					processedToolCalls.add(toolCall.id);
+					// Mark this tool call with parallel group (will be used when processing tool results)
+					(toolCall as any).parallelGroupId = parallelGroupId;
+				} else {
+					processedToolCalls.add(toolCall.id);
+				}
 			}
 			continue;
 		}
@@ -274,6 +291,27 @@ export function convertSessionMessagesToUI(
 				}
 			}
 
+			// Check if this tool result is part of a parallel group
+			let parallelGroupId: string | undefined;
+			for (let j = i - 1; j >= 0; j--) {
+				const prevMsg = sessionMessages[j];
+				if (!prevMsg) continue;
+
+				if (
+					prevMsg.role === 'assistant' &&
+					prevMsg.tool_calls &&
+					!prevMsg.subAgentInternal
+				) {
+					const tc = prevMsg.tool_calls.find(t => t.id === msg.tool_call_id);
+					if (tc) {
+						parallelGroupId = (tc as any).parallelGroupId;
+						break;
+					}
+				}
+			}
+
+			const isNonTimeConsuming = !isToolNeedTwoStepDisplay(toolName);
+
 			uiMessages.push({
 				role: 'assistant',
 				content: `${statusIcon} ${toolName}${statusText}`,
@@ -287,6 +325,21 @@ export function convertSessionMessagesToUI(
 						  }
 						: undefined,
 				terminalResult: terminalResultData,
+				// Add toolDisplay for non-time-consuming tools
+				toolDisplay:
+					isNonTimeConsuming && !editDiffData
+						? formatToolCallMessage({
+								id: msg.tool_call_id || '',
+								type: 'function' as const,
+								function: {
+									name: toolName,
+									arguments: JSON.stringify(toolArgs),
+								},
+						  } as any)
+						: undefined,
+				// Mark parallel group for non-time-consuming tools
+				parallelGroup:
+					isNonTimeConsuming && parallelGroupId ? parallelGroupId : undefined,
 			});
 			continue;
 		}

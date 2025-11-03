@@ -445,6 +445,12 @@ export async function handleConversationWithTools(
 				}
 
 				// Display tool calls in UI - 只有耗时工具才显示进行中状态
+				// Generate parallel group ID when there are multiple tools
+				const parallelGroupId =
+					receivedToolCalls.length > 1
+						? `parallel-${Date.now()}-${Math.random()}`
+						: undefined;
+
 				for (const toolCall of receivedToolCalls) {
 					const toolDisplay = formatToolCallMessage(toolCall);
 					let toolArgs;
@@ -469,6 +475,8 @@ export async function handleConversationWithTools(
 								toolDisplay,
 								toolCallId: toolCall.id, // Store tool call ID for later update
 								toolPending: true, // Mark as pending execution
+								// Mark parallel group for ALL tools (time-consuming or not)
+								parallelGroup: parallelGroupId,
 							},
 						]);
 					}
@@ -525,11 +533,11 @@ export async function handleConversationWithTools(
 							try {
 								const args = JSON.parse(toolCall.function.arguments);
 								const {isSensitiveCommand: checkSensitiveCommand} =
-									await import(
-										'../utils/sensitiveCommandManager.js'
-									).then(m => ({
-										isSensitiveCommand: m.isSensitiveCommand,
-									}));
+									await import('../utils/sensitiveCommandManager.js').then(
+										m => ({
+											isSensitiveCommand: m.isSensitiveCommand,
+										}),
+									);
 								const sensitiveCheck = checkSensitiveCommand(args.command);
 								if (sensitiveCheck.isSensitive) {
 									sensitiveTools.push(toolCall);
@@ -931,6 +939,9 @@ export async function handleConversationWithTools(
 				);
 
 				// Update existing tool call messages with results
+				// Collect all result messages first, then add them in batch
+				const resultMessages: any[] = [];
+
 				for (const result of toolResults) {
 					const toolCall = receivedToolCalls.find(
 						tc => tc.id === result.tool_call_id,
@@ -943,17 +954,13 @@ export async function handleConversationWithTools(
 							const statusIcon = isError ? '✗' : '✓';
 							const statusText = isError ? `\n  └─ ${result.content}` : '';
 
-							// Display subagent completion message in main flow
-							setMessages(prev => [
-								...prev,
-								{
-									role: 'assistant',
-									content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-									streaming: false,
-									// Pass the full result.content for ToolResultPreview to parse
-									toolResult: !isError ? result.content : undefined,
-								},
-							]);
+							resultMessages.push({
+								role: 'assistant',
+								content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+								streaming: false,
+								// Pass the full result.content for ToolResultPreview to parse
+								toolResult: !isError ? result.content : undefined,
+							});
 
 							// Save the tool result to conversation history
 							conversationMessages.push(result as any);
@@ -1019,28 +1026,27 @@ export async function handleConversationWithTools(
 
 						// 获取工具参数的格式化信息
 						const toolDisplay = formatToolCallMessage(toolCall);
+						const isNonTimeConsuming = !isToolNeedTwoStepDisplay(
+							toolCall.function.name,
+						);
 
-						setMessages(prev => [
-							...prev,
-							// Add new completed message
-							{
-								role: 'assistant',
-								content: `${statusIcon} ${toolCall.function.name}${statusText}`,
-								streaming: false,
-								toolCall: editDiffData
-									? {
-											name: toolCall.function.name,
-											arguments: editDiffData,
-									  }
-									: undefined,
-								// 为普通工具添加参数显示（耗时工具在进行中状态已经显示过参数）
-								toolDisplay: !isToolNeedTwoStepDisplay(toolCall.function.name)
-									? toolDisplay
-									: undefined,
-								// Store tool result for preview rendering
-								toolResult: !isError ? result.content : undefined,
-							},
-						]);
+						resultMessages.push({
+							role: 'assistant',
+							content: `${statusIcon} ${toolCall.function.name}${statusText}`,
+							streaming: false,
+							toolCall: editDiffData
+								? {
+										name: toolCall.function.name,
+										arguments: editDiffData,
+								  }
+								: undefined,
+							// 为普通工具添加参数显示（耗时工具在进行中状态已经显示过参数）
+							toolDisplay: isNonTimeConsuming ? toolDisplay : undefined,
+							// Store tool result for preview rendering
+							toolResult: !isError ? result.content : undefined,
+							// Mark parallel group for ALL tools (time-consuming or not)
+							parallelGroup: parallelGroupId,
+						});
 					}
 
 					// Add tool result to conversation history and save (skip if already saved above)
@@ -1050,6 +1056,11 @@ export async function handleConversationWithTools(
 							console.error('Failed to save tool result:', error);
 						});
 					}
+				}
+
+				// Add all result messages in batch to avoid intermediate renders
+				if (resultMessages.length > 0) {
+					setMessages(prev => [...prev, ...resultMessages]);
 				}
 
 				// Check if there are pending user messages to insert

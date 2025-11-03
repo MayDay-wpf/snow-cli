@@ -54,7 +54,7 @@ jobs:
             ## 🚀 Snow CLI ${{ github.ref_name }}
             
             ### What's New
-            - Enhance TODO management guidelines and command filtering logic for improved user experience
+            - Enhance parallel tool execution and message display functions
             ### Installation
             ```bash
             npm install -g snow-ai

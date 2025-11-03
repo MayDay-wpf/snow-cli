@@ -1,10 +1,10 @@
-import React, {useState, useEffect, useRef} from 'react';
-import {Box, Text, useInput, Static, useStdout} from 'ink';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text, useInput, Static, useStdout } from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import ChatInput from '../components/ChatInput.js';
-import {type Message} from '../components/MessageList.js';
+import { type Message } from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import MCPInfoScreen from '../components/MCPInfoScreen.js';
 import MCPInfoPanel from '../components/MCPInfoPanel.js';
@@ -17,24 +17,24 @@ import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
-import {getOpenAiConfig} from '../../utils/apiConfig.js';
-import {sessionManager} from '../../utils/sessionManager.js';
-import {useSessionSave} from '../../hooks/useSessionSave.js';
-import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
-import {handleConversationWithTools} from '../../hooks/useConversation.js';
-import {useVSCodeState} from '../../hooks/useVSCodeState.js';
-import {useSnapshotState} from '../../hooks/useSnapshotState.js';
-import {useStreamingState} from '../../hooks/useStreamingState.js';
-import {useCommandHandler} from '../../hooks/useCommandHandler.js';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import { getOpenAiConfig } from '../../utils/apiConfig.js';
+import { sessionManager } from '../../utils/sessionManager.js';
+import { useSessionSave } from '../../hooks/useSessionSave.js';
+import { useToolConfirmation } from '../../hooks/useToolConfirmation.js';
+import { handleConversationWithTools } from '../../hooks/useConversation.js';
+import { useVSCodeState } from '../../hooks/useVSCodeState.js';
+import { useSnapshotState } from '../../hooks/useSnapshotState.js';
+import { useStreamingState } from '../../hooks/useStreamingState.js';
+import { useCommandHandler } from '../../hooks/useCommandHandler.js';
+import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
 } from '../../utils/fileUtils.js';
-import {executeCommand} from '../../utils/commandExecutor.js';
-import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
-import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
-import {formatElapsedTime} from '../../utils/textUtils.js';
+import { executeCommand } from '../../utils/commandExecutor.js';
+import { convertSessionMessagesToUI } from '../../utils/sessionConverter.js';
+import { incrementalSnapshotManager } from '../../utils/incrementalSnapshot.js';
+import { formatElapsedTime } from '../../utils/textUtils.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
@@ -61,14 +61,14 @@ type Props = {
 	skipWelcome?: boolean;
 };
 
-export default function ChatScreen({skipWelcome}: Props) {
+export default function ChatScreen({ skipWelcome }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
-		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
+		Array<{ text: string; images?: Array<{ data: string; mimeType: string }> }>
 	>([]);
 	const pendingMessagesRef = useRef<
-		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
+		Array<{ text: string; images?: Array<{ data: string; mimeType: string }> }>
 	>([]);
 	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
@@ -99,10 +99,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
-		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		images?: Array<{ type: 'image'; data: string; mimeType: string }>;
 	} | null>(null);
-	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
-	const {stdout} = useStdout();
+	const { columns: terminalWidth, rows: terminalHeight } = useTerminalSize();
+	const { stdout } = useStdout();
 	const workingDirectory = process.cwd();
 	const isInitialMount = useRef(true);
 
@@ -112,7 +112,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const snapshotState = useSnapshotState(messages.length);
 
 	// Use session save hook
-	const {saveMessage, clearSavedMessages, initializeFromSession} =
+	const { saveMessage, clearSavedMessages, initializeFromSession } =
 		useSessionSave();
 
 	// Sync pendingMessages to ref for real-time access in callbacks
@@ -222,13 +222,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 		useRef<
 			(
 				message: string,
-				images?: Array<{data: string; mimeType: string}>,
+				images?: Array<{ data: string; mimeType: string }>,
 				useBasicModel?: boolean,
 				hideUserMessage?: boolean,
 			) => Promise<void>
 		>();
 	// Use command handler hook
-	const {handleCommandExecution} = useCommandHandler({
+	const { handleCommandExecution } = useCommandHandler({
 		messages,
 		setMessages,
 		setRemountKey,
@@ -363,7 +363,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 	const handleHistorySelect = async (
 		selectedIndex: number,
 		message: string,
-		images?: Array<{type: 'image'; data: string; mimeType: string}>,
+		images?: Array<{ type: 'image'; data: string; mimeType: string }>,
 	) => {
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
@@ -379,9 +379,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 			const currentSession = sessionManager.getCurrentSession();
 			const filePaths = currentSession
 				? await incrementalSnapshotManager.getFilesToRollback(
-						currentSession.id,
-						selectedIndex,
-				  )
+					currentSession.id,
+					selectedIndex,
+				)
 				: [];
 
 			snapshotState.setPendingRollback({
@@ -607,11 +607,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	const handleMessageSubmit = async (
 		message: string,
-		images?: Array<{data: string; mimeType: string}>,
+		images?: Array<{ data: string; mimeType: string }>,
 	) => {
 		// If streaming, add to pending messages instead of sending immediately
 		if (streamingState.isStreaming) {
-			setPendingMessages(prev => [...prev, {text: message, images}]);
+			setPendingMessages(prev => [...prev, { text: message, images }]);
 			return;
 		}
 
@@ -634,7 +634,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	const processMessage = async (
 		message: string,
-		images?: Array<{data: string; mimeType: string}>,
+		images?: Array<{ data: string; mimeType: string }>,
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
@@ -685,7 +685,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		streamingState.setRetryStatus(null);
 
 		// Parse and validate file references
-		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
+		const { cleanContent, validFiles } = await parseAndValidateFileReferences(
 			message,
 		);
 
@@ -900,7 +900,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
 		// Parse and validate file references (same as processMessage)
-		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
+		const { cleanContent, validFiles } = await parseAndValidateFileReferences(
 			combinedMessage,
 		);
 
@@ -924,10 +924,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 		const imageContents =
 			allImages.length > 0
 				? allImages.map(img => ({
-						type: 'image' as const,
-						data: img.data,
-						mimeType: img.mimeType,
-				  }))
+					type: 'image' as const,
+					data: img.data,
+					mimeType: img.mimeType,
+				}))
 				: undefined;
 
 		// Add user message to chat with file references and images
@@ -1160,6 +1160,46 @@ export default function ChatScreen({skipWelcome}: Props) {
 							let isToolMessage = false;
 							const isLastMessage = index === filteredMessages.length - 1;
 
+							// Check if this message is part of a parallel group
+							const isInParallelGroup =
+								message.parallelGroup !== undefined &&
+								message.parallelGroup !== null;
+
+							// Check if this is a time-consuming tool (has toolPending or starts with ⚡)
+							// Time-consuming tools should not show parallel group indicators
+							const isTimeConsumingTool =
+								message.toolPending ||
+								(message.role === 'assistant' &&
+									(message.content.startsWith('⚡') ||
+										message.content.includes('⚇⚡')));
+
+							// Only show parallel group indicators for non-time-consuming tools
+							const shouldShowParallelIndicator =
+								isInParallelGroup && !isTimeConsumingTool;
+
+							const isFirstInGroup =
+								shouldShowParallelIndicator &&
+								(index === 0 ||
+									filteredMessages[index - 1]?.parallelGroup !==
+									message.parallelGroup ||
+									// Previous message is time-consuming tool, so this is the first non-time-consuming one
+									filteredMessages[index - 1]?.toolPending ||
+									filteredMessages[index - 1]?.content.startsWith('⚡'));
+
+							// Check if this is the last message in the parallel group
+							// Only show end indicator if:
+							// 1. This is truly the last message, OR
+							// 2. Next message has a DIFFERENT non-null parallelGroup (not just undefined)
+							const nextMessage = filteredMessages[index + 1];
+							const nextHasDifferentGroup =
+								nextMessage &&
+								nextMessage.parallelGroup !== undefined &&
+								nextMessage.parallelGroup !== null &&
+								nextMessage.parallelGroup !== message.parallelGroup;
+							const isLastInGroup =
+								shouldShowParallelIndicator &&
+								(!nextMessage || nextHasDifferentGroup);
+
 							if (message.role === 'assistant' || message.role === 'subagent') {
 								if (
 									message.content.startsWith('⚡') ||
@@ -1188,28 +1228,40 @@ export default function ChatScreen({skipWelcome}: Props) {
 							return (
 								<Box
 									key={`msg-${index}`}
-									marginTop={index > 0 ? 1 : 0}
+									marginTop={index > 0 && !shouldShowParallelIndicator ? 1 : 0}
 									marginBottom={isLastMessage ? 1 : 0}
 									paddingX={1}
 									flexDirection="column"
 									width={terminalWidth}
 								>
+									{/* Show parallel group indicator */}
+									{isFirstInGroup && (
+										<Box marginBottom={0}>
+											<Text color="#FF6EBF" dimColor>
+												┌─ Parallel execution
+											</Text>
+										</Box>
+									)}
+
 									<Box>
 										<Text
 											color={
 												message.role === 'user'
 													? 'green'
 													: message.role === 'command'
-													? 'gray'
-													: toolStatusColor
+														? 'gray'
+														: toolStatusColor
 											}
 											bold
 										>
+											{shouldShowParallelIndicator && !isFirstInGroup
+												? '│'
+												: ''}
 											{message.role === 'user'
 												? '⛇'
 												: message.role === 'command'
-												? '⌘'
-												: '❆'}
+													? '⌘'
+													: '❆'}
 										</Text>
 										<Box marginLeft={1} flexDirection="column">
 											{message.role === 'command' ? (
@@ -1229,10 +1281,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 																message.role === 'user'
 																	? 'gray'
 																	: message.content.startsWith('⚡')
-																	? 'yellow'
-																	: message.content.startsWith('✓')
-																	? 'green'
-																	: 'red'
+																		? 'yellow'
+																		: message.content.startsWith('✓')
+																			? 'green'
+																			: 'red'
 															}
 														>
 															{message.content || ' '}
@@ -1296,7 +1348,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 														)}
 													{message.toolCall &&
 														message.toolCall.name ===
-															'filesystem-edit_search' &&
+														'filesystem-edit_search' &&
 														message.toolCall.arguments.oldContent &&
 														message.toolCall.arguments.newContent && (
 															<Box marginTop={1}>
@@ -1326,7 +1378,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 													{message.toolCall &&
 														(message.toolCall.name === 'filesystem-edit' ||
 															message.toolCall.name ===
-																'filesystem-edit_search') &&
+															'filesystem-edit_search') &&
 														message.toolCall.arguments.isBatch &&
 														message.toolCall.arguments.batchResults &&
 														Array.isArray(
@@ -1347,9 +1399,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 																					marginBottom={1}
 																				>
 																					<Text bold color="cyan">
-																						{`File ${index + 1}: ${
-																							fileResult.path
-																						}`}
+																						{`File ${index + 1}: ${fileResult.path
+																							}`}
 																					</Text>
 																					<DiffViewer
 																						oldContent={fileResult.oldContent}
@@ -1427,6 +1478,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 											)}
 										</Box>
 									</Box>
+
+									{/* Show parallel group end indicator */}
+									{isLastInGroup && (
+										<Box marginTop={0}>
+											<Text color="#FF6EBF" dimColor>
+												└─ End parallel execution
+											</Text>
+										</Box>
+									)}
 								</Box>
 							);
 						}),
@@ -1441,7 +1501,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 					<Text
 						color={
 							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
-								streamingState.animationFrame
+							streamingState.animationFrame
 							] as any
 						}
 						bold
@@ -1452,7 +1512,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 						{streamingState.isStreaming ? (
 							<>
 								{streamingState.retryStatus &&
-								streamingState.retryStatus.isRetrying ? (
+									streamingState.retryStatus.isRetrying ? (
 									// Retry status display - hide "Thinking" and show retry info
 									<Box flexDirection="column">
 										{streamingState.retryStatus.errorMessage && (
@@ -1462,7 +1522,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 										)}
 										{streamingState.retryStatus.remainingSeconds !==
 											undefined &&
-										streamingState.retryStatus.remainingSeconds > 0 ? (
+											streamingState.retryStatus.remainingSeconds > 0 ? (
 											<Text color="yellow" dimColor>
 												⟳ Retry {streamingState.retryStatus.attempt}/5 in{' '}
 												{streamingState.retryStatus.remainingSeconds}s...
@@ -1482,8 +1542,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 												streamingState.isReasoning
 													? 'Deep thinking...'
 													: streamingState.streamTokenCount > 0
-													? 'Writing...'
-													: 'Thinking...'
+														? 'Writing...'
+														: 'Thinking...'
 											}
 										/>{' '}
 										({formatElapsedTime(streamingState.elapsedSeconds)}
@@ -1492,8 +1552,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 											↓{' '}
 											{streamingState.streamTokenCount >= 1000
 												? `${(streamingState.streamTokenCount / 1000).toFixed(
-														1,
-												  )}k`
+													1,
+												)}k`
 												: streamingState.streamTokenCount}{' '}
 											tokens
 										</Text>
@@ -1602,15 +1662,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 							contextUsage={
 								streamingState.contextUsage
 									? {
-											inputTokens: streamingState.contextUsage.prompt_tokens,
-											maxContextTokens:
-												getOpenAiConfig().maxContextTokens || 4000,
-											cacheCreationTokens:
-												streamingState.contextUsage.cache_creation_input_tokens,
-											cacheReadTokens:
-												streamingState.contextUsage.cache_read_input_tokens,
-											cachedTokens: streamingState.contextUsage.cached_tokens,
-									  }
+										inputTokens: streamingState.contextUsage.prompt_tokens,
+										maxContextTokens:
+											getOpenAiConfig().maxContextTokens || 4000,
+										cacheCreationTokens:
+											streamingState.contextUsage.cache_creation_input_tokens,
+										cacheReadTokens:
+											streamingState.contextUsage.cache_read_input_tokens,
+										cachedTokens: streamingState.contextUsage.cached_tokens,
+									}
 									: undefined
 							}
 							initialContent={restoreInputContent}
@@ -1624,10 +1684,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 										vscodeState.vscodeConnectionStatus === 'connecting'
 											? 'yellow'
 											: vscodeState.vscodeConnectionStatus === 'connected'
-											? 'green'
-											: vscodeState.vscodeConnectionStatus === 'error'
-											? 'red'
-											: 'gray'
+												? 'green'
+												: vscodeState.vscodeConnectionStatus === 'error'
+													? 'red'
+													: 'gray'
 									}
 									dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
 								>
@@ -1635,10 +1695,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 									{vscodeState.vscodeConnectionStatus === 'connecting'
 										? 'Connecting to IDE...'
 										: vscodeState.vscodeConnectionStatus === 'connected'
-										? 'IDE Connected'
-										: vscodeState.vscodeConnectionStatus === 'error'
-										? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
-										: 'IDE'}
+											? 'IDE Connected'
+											: vscodeState.vscodeConnectionStatus === 'error'
+												? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
+												: 'IDE'}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.activeFile &&
 										` | ${vscodeState.editorContext.activeFile}`}

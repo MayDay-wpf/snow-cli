@@ -35,6 +35,7 @@ export async function executeContextCompression(): Promise<{
 			tool_calls: msg.tool_calls,
 			images: msg.images,
 			reasoning: msg.reasoning,
+			thinking: msg.thinking, // 保留 thinking 字段（Anthropic Extended Thinking）
 			subAgentInternal: msg.subAgentInternal,
 		}));
 
@@ -50,10 +51,10 @@ export async function executeContextCompression(): Promise<{
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
 
-		// 添加压缩摘要到会话
+		// 添加压缩摘要到会话（使用 user 角色，因为 Extended Thinking 模式下所有 assistant 消息都需要 thinking 块）
 		newSessionMessages.push({
-			role: 'assistant',
-			content: compressionResult.summary,
+			role: 'user',
+			content: `[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`,
 			timestamp: Date.now(),
 		});
 
@@ -72,6 +73,7 @@ export async function executeContextCompression(): Promise<{
 					...(msg.tool_calls && {tool_calls: msg.tool_calls}),
 					...(msg.images && {images: msg.images}),
 					...(msg.reasoning && {reasoning: msg.reasoning}),
+					...(msg.thinking && {thinking: msg.thinking}), // 保留 thinking 字段（Anthropic Extended Thinking）
 					...(msg.subAgentInternal !== undefined && {
 						subAgentInternal: msg.subAgentInternal,
 					}),

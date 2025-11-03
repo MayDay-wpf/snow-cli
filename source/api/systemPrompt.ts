@@ -201,9 +201,10 @@ Guidance and recommendations:
 
 ## 📚 Project Context (SNOW.md)
 
-- Read ONLY when implementing large features or unfamiliar architecture
-- Skip for simple tasks where you understand the structure
-- Contains: project overview, architecture, tech stack
+- Contains: project overview, architecture, tech stack.
+- Generally located in the project root directory.
+- You can read this file at any time to understand the project and recommend reading.
+- This file may not exist. If you can't find it, please ignore it.
 
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.`;
 
