@@ -8,6 +8,8 @@ registerCommand('ide', {
 		if (vscodeConnection.isConnected()) {
 			vscodeConnection.stop();
 			vscodeConnection.resetReconnectAttempts();
+			// Wait a bit for cleanup to complete
+			await new Promise(resolve => setTimeout(resolve, 100));
 		}
 
 		// Try to connect to IDE plugin server

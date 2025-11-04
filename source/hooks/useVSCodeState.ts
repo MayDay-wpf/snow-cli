@@ -28,7 +28,7 @@ export function useVSCodeState() {
 				lastStatusRef.current = 'disconnected';
 				setVscodeConnectionStatus('disconnected');
 			}
-		}, 1000);
+		}, 1000); // Check every second
 
 		const unsubscribe = vscodeConnection.onContextUpdate(context => {
 			// Only update state if context has actually changed
@@ -63,7 +63,7 @@ export function useVSCodeState() {
 			return;
 		}
 
-		// Set timeout for connecting state (30 seconds to allow for IDE plugin reconnection)
+		// Set timeout for connecting state (15 seconds to allow for port scanning and connection)
 		const connectingTimeout = setTimeout(() => {
 			const isConnected = vscodeConnection.isConnected();
 			const isClientRunning = vscodeConnection.isClientRunning();
@@ -77,8 +77,9 @@ export function useVSCodeState() {
 					// Client not running - go back to disconnected
 					setVscodeConnectionStatus('disconnected');
 				}
+				lastStatusRef.current = isClientRunning ? 'error' : 'disconnected';
 			}
-		}, 30000); // Increased to 30 seconds
+		}, 15000); // 15 seconds: 10s for connection timeout + 5s buffer
 
 		return () => {
 			clearTimeout(connectingTimeout);

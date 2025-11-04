@@ -213,13 +213,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			// Handle /ide command
 			if (commandName === 'ide') {
 				if (result.success) {
-					// If already connected, set status to connected immediately
-					// Otherwise, set to connecting and wait for VSCode extension
-					if (result.alreadyConnected) {
-						options.setVscodeConnectionStatus('connected');
-					} else {
-						options.setVscodeConnectionStatus('connecting');
-					}
+					// Connection successful, set status to connected immediately
+					// The轮询 mechanism will also update the status, but we do it here for immediate feedback
+					options.setVscodeConnectionStatus('connected');
 					// Don't add command message to keep UI clean
 				} else {
 					options.setVscodeConnectionStatus('error');

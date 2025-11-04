@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.30
+
+- Update system prompt guidelines and improve VSCode connection handling
+
+## v0.3.29
+
 Enhance language configuration and symbol patterns
 
 - Updated TypeScript and JavaScript symbol patterns to support additional syntax and constructs.
@@ -14,6 +20,12 @@ Enhance language configuration and symbol patterns
 ```bash
 $ npm install --global snow-ai
 ```
+### Update
+
+```bash
+$ snow --update
+```
+
 
 ### Usage
 

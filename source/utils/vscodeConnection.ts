@@ -56,13 +56,23 @@ class VSCodeConnectionManager {
 
 		// Create a new connection promise and store it
 		this.connectingPromise = new Promise((resolve, reject) => {
+			let isSettled = false; // Prevent double resolve/reject
+
 			// Set connection timeout
 			this.connectionTimeout = setTimeout(() => {
-				this.cleanupConnection();
-				reject(new Error('Connection timeout after 10 seconds'));
+				if (!isSettled) {
+					isSettled = true;
+					this.cleanupConnection();
+					reject(new Error('Connection timeout after 10 seconds'));
+				}
 			}, this.CONNECTION_TIMEOUT);
 
 			const tryConnect = (port: number) => {
+				// If already settled (resolved or rejected), stop trying
+				if (isSettled) {
+					return;
+				}
+
 				// Check both VSCode and JetBrains port ranges
 				if (port > this.VSCODE_MAX_PORT && port < this.JETBRAINS_BASE_PORT) {
 					// Jump from VSCode range to JetBrains range
@@ -70,12 +80,15 @@ class VSCodeConnectionManager {
 					return;
 				}
 				if (port > this.JETBRAINS_MAX_PORT) {
-					this.cleanupConnection();
-					reject(
-						new Error(
-							`Failed to connect: no IDE server found on ports ${this.VSCODE_BASE_PORT}-${this.VSCODE_MAX_PORT} or ${this.JETBRAINS_BASE_PORT}-${this.JETBRAINS_MAX_PORT}`,
-						),
-					);
+					if (!isSettled) {
+						isSettled = true;
+						this.cleanupConnection();
+						reject(
+							new Error(
+								`Failed to connect: no IDE server found on ports ${this.VSCODE_BASE_PORT}-${this.VSCODE_MAX_PORT} or ${this.JETBRAINS_BASE_PORT}-${this.JETBRAINS_MAX_PORT}`,
+							),
+						);
+					}
 					return;
 				}
 
@@ -83,16 +96,19 @@ class VSCodeConnectionManager {
 					this.client = new WebSocket(`ws://localhost:${port}`);
 
 					this.client.on('open', () => {
-						// Reset reconnect attempts on successful connection
-						this.reconnectAttempts = 0;
-						this.port = port;
-						// Clear connection state
-						if (this.connectionTimeout) {
-							clearTimeout(this.connectionTimeout);
-							this.connectionTimeout = null;
+						if (!isSettled) {
+							isSettled = true;
+							// Reset reconnect attempts on successful connection
+							this.reconnectAttempts = 0;
+							this.port = port;
+							// Clear connection state
+							if (this.connectionTimeout) {
+								clearTimeout(this.connectionTimeout);
+								this.connectionTimeout = null;
+							}
+							this.connectingPromise = null;
+							resolve();
 						}
-						this.connectingPromise = null;
-						resolve();
 					});
 
 					this.client.on('message', message => {
@@ -110,19 +126,25 @@ class VSCodeConnectionManager {
 
 					this.client.on('close', () => {
 						this.client = null;
-						this.scheduleReconnect();
+						// Only schedule reconnect if this was an established connection (not initial scan)
+						if (this.reconnectAttempts > 0 || isSettled) {
+							this.scheduleReconnect();
+						}
 					});
 
 					this.client.on('error', _error => {
 						// On initial connection, try next port
-						if (this.reconnectAttempts === 0) {
+						if (this.reconnectAttempts === 0 && !isSettled) {
 							this.client = null;
-							tryConnect(port + 1);
+							// Small delay before trying next port to avoid rapid fire
+							setTimeout(() => tryConnect(port + 1), 50);
 						}
 						// For reconnections, silently handle and let close event trigger reconnect
 					});
 				} catch (error) {
-					tryConnect(port + 1);
+					if (!isSettled) {
+						setTimeout(() => tryConnect(port + 1), 50);
+					}
 				}
 			};
 
@@ -261,7 +283,7 @@ class VSCodeConnectionManager {
 			this.connectionTimeout = null;
 		}
 
-		// Clear connecting promise
+		// Clear connecting promise - this is critical for restart
 		this.connectingPromise = null;
 
 		if (this.client) {
