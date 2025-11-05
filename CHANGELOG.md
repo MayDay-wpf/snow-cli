@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.31
+
+- Add notebook management features for updating, deleting, and listing notes; enhance sub-agent execution handling
+
 ## v0.3.30
 
 - Update system prompt guidelines and improve VSCode connection handling

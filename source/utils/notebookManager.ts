@@ -184,6 +184,45 @@ export function getNotebooksByFile(filePath: string): NotebookEntry[] {
 }
 
 /**
+ * 更新备忘录内容
+ * @param notebookId 备忘录ID
+ * @param newNote 新的备忘说明
+ * @returns 更新后的备忘录条目，如果未找到则返回null
+ */
+export function updateNotebook(
+	notebookId: string,
+	newNote: string,
+): NotebookEntry | null {
+	const data = readNotebookData();
+	let updatedEntry: NotebookEntry | null = null;
+
+	for (const [, entries] of Object.entries(data)) {
+		const entry = entries.find(e => e.id === notebookId);
+		if (entry) {
+			// 更新笔记内容和更新时间
+			entry.note = newNote;
+			const now = new Date();
+			entry.updatedAt = `${now.getFullYear()}-${String(
+				now.getMonth() + 1,
+			).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(
+				now.getHours(),
+			).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(
+				now.getSeconds(),
+			).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+
+			updatedEntry = entry;
+			break;
+		}
+	}
+
+	if (updatedEntry) {
+		saveNotebookData(data);
+	}
+
+	return updatedEntry;
+}
+
+/**
  * 删除备忘录
  * @param notebookId 备忘录ID
  * @returns 是否删除成功

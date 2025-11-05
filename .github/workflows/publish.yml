@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Update system prompt guidelines and improve VSCode connection handling
+            - Add notebook management features for updating, deleting, and listing notes; enhance sub-agent execution handling
             
             ### Installation
             ```bash

@@ -118,8 +118,19 @@ export async function executeSubAgent(
 
 		// eslint-disable-next-line no-constant-condition
 		while (true) {
-			// Check abort signal
+			// Check abort signal before streaming
 			if (abortSignal?.aborted) {
+				// Send done message to mark completion (like normal tool abort)
+				if (onMessage) {
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: agent.id,
+						agentName: agent.name,
+						message: {
+							type: 'done',
+						},
+					});
+				}
 				return {
 					success: false,
 					result: finalResponse,
@@ -279,6 +290,17 @@ export async function executeSubAgent(
 
 			// Handle rejected tools
 			if (rejectedToolCalls.length > 0) {
+				// Send done message to mark completion when tools are rejected
+				if (onMessage) {
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: agent.id,
+						agentName: agent.name,
+						message: {
+							type: 'done',
+						},
+					});
+				}
 				return {
 					success: false,
 					result: finalResponse,
@@ -291,6 +313,26 @@ export async function executeSubAgent(
 			// Execute approved tool calls
 			const toolResults: ChatMessage[] = [];
 			for (const toolCall of approvedToolCalls) {
+				// Check abort signal before executing each tool
+				if (abortSignal?.aborted) {
+					// Send done message to mark completion
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'done',
+							},
+						});
+					}
+					return {
+						success: false,
+						result: finalResponse,
+						error: 'Sub-agent execution aborted during tool execution',
+					};
+				}
+
 				try {
 					const args = JSON.parse(toolCall.function.arguments);
 					const result = await executeMCPTool(

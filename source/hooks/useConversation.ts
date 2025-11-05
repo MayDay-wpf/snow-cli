@@ -886,6 +886,21 @@ export async function handleConversationWithTools(
 
 				// Check if aborted during tool execution
 				if (controller.signal.aborted) {
+					// Need to add tool results for all pending tool calls to complete conversation history
+					// This is critical for sub-agents and any tools that were being executed
+					if (receivedToolCalls && receivedToolCalls.length > 0) {
+						for (const toolCall of receivedToolCalls) {
+							const abortedResult = {
+								role: 'tool' as const,
+								tool_call_id: toolCall.id,
+								content: 'Error: Tool execution aborted by user',
+							};
+							conversationMessages.push(abortedResult);
+							saveMessage(abortedResult).catch(error => {
+								console.error('Failed to save aborted tool result:', error);
+							});
+						}
+					}
 					freeEncoder();
 					break;
 				}
