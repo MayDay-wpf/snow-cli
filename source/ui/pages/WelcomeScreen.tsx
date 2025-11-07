@@ -10,6 +10,7 @@ import ProxyConfigScreen from './ProxyConfigScreen.js';
 import SubAgentConfigScreen from './SubAgentConfigScreen.js';
 import SubAgentListScreen from './SubAgentListScreen.js';
 import SensitiveCommandConfigScreen from './SensitiveCommandConfigScreen.js';
+import CodeBaseConfigScreen from './CodeBaseConfigScreen.js';
 
 type Props = {
 	version?: string;
@@ -20,6 +21,7 @@ type InlineView =
 	| 'menu'
 	| 'config'
 	| 'proxy-config'
+	| 'codebase-config'
 	| 'subagent-list'
 	| 'subagent-add'
 	| 'subagent-edit'
@@ -54,6 +56,11 @@ export default function WelcomeScreen({
 				label: 'Proxy & Browser Settings',
 				value: 'proxy',
 				infoText: 'Configure system proxy and browser for web search and fetch',
+			},
+			{
+				label: 'CodeBase Settings',
+				value: 'codebase',
+				infoText: 'Configure codebase indexing with embedding and LLM models',
 			},
 			{
 				label: 'System Prompt Settings',
@@ -97,11 +104,13 @@ export default function WelcomeScreen({
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {
-			// Handle inline views (config, proxy, subagent) or pass through to parent
+			// Handle inline views (config, proxy, codebase, subagent) or pass through to parent
 			if (value === 'config') {
 				setInlineView('config');
 			} else if (value === 'proxy') {
 				setInlineView('proxy-config');
+			} else if (value === 'codebase') {
+				setInlineView('codebase-config');
 			} else if (value === 'subagent') {
 				setInlineView('subagent-list');
 			} else if (value === 'sensitive-commands') {
@@ -212,6 +221,15 @@ export default function WelcomeScreen({
 			{inlineView === 'proxy-config' && (
 				<Box paddingX={1}>
 					<ProxyConfigScreen
+						onBack={handleBackToMenu}
+						onSave={handleConfigSave}
+						inlineMode={true}
+					/>
+				</Box>
+			)}
+			{inlineView === 'codebase-config' && (
+				<Box paddingX={1}>
+					<CodeBaseConfigScreen
 						onBack={handleBackToMenu}
 						onSave={handleConfigSave}
 						inlineMode={true}

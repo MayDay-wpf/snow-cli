@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text, useInput, Static, useStdout } from 'ink';
+import React, {useState, useEffect, useRef} from 'react';
+import {Box, Text, useInput, Static, useStdout} from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import ChatInput from '../components/ChatInput.js';
-import { type Message } from '../components/MessageList.js';
+import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import MCPInfoScreen from '../components/MCPInfoScreen.js';
 import MCPInfoPanel from '../components/MCPInfoPanel.js';
@@ -17,28 +17,31 @@ import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
-import { getOpenAiConfig } from '../../utils/apiConfig.js';
-import { sessionManager } from '../../utils/sessionManager.js';
-import { useSessionSave } from '../../hooks/useSessionSave.js';
-import { useToolConfirmation } from '../../hooks/useToolConfirmation.js';
-import { handleConversationWithTools } from '../../hooks/useConversation.js';
-import { useVSCodeState } from '../../hooks/useVSCodeState.js';
-import { useSnapshotState } from '../../hooks/useSnapshotState.js';
-import { useStreamingState } from '../../hooks/useStreamingState.js';
-import { useCommandHandler } from '../../hooks/useCommandHandler.js';
-import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import {getOpenAiConfig} from '../../utils/apiConfig.js';
+import {sessionManager} from '../../utils/sessionManager.js';
+import {useSessionSave} from '../../hooks/useSessionSave.js';
+import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
+import {handleConversationWithTools} from '../../hooks/useConversation.js';
+import {useVSCodeState} from '../../hooks/useVSCodeState.js';
+import {useSnapshotState} from '../../hooks/useSnapshotState.js';
+import {useStreamingState} from '../../hooks/useStreamingState.js';
+import {useCommandHandler} from '../../hooks/useCommandHandler.js';
+import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
 } from '../../utils/fileUtils.js';
-import { executeCommand } from '../../utils/commandExecutor.js';
-import { convertSessionMessagesToUI } from '../../utils/sessionConverter.js';
-import { incrementalSnapshotManager } from '../../utils/incrementalSnapshot.js';
-import { formatElapsedTime } from '../../utils/textUtils.js';
+import {executeCommand} from '../../utils/commandExecutor.js';
+import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
+import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
+import {formatElapsedTime} from '../../utils/textUtils.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
 } from '../../utils/autoCompress.js';
+import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
+import {loadCodebaseConfig} from '../../utils/codebaseConfig.js';
+import {logger} from '../../utils/logger.js';
 
 // Import commands to register them
 import '../../utils/commands/clear.js';
@@ -61,14 +64,14 @@ type Props = {
 	skipWelcome?: boolean;
 };
 
-export default function ChatScreen({ skipWelcome }: Props) {
+export default function ChatScreen({skipWelcome}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
-		Array<{ text: string; images?: Array<{ data: string; mimeType: string }> }>
+		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>([]);
 	const pendingMessagesRef = useRef<
-		Array<{ text: string; images?: Array<{ data: string; mimeType: string }> }>
+		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>([]);
 	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
@@ -99,12 +102,28 @@ export default function ChatScreen({ skipWelcome }: Props) {
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
-		images?: Array<{ type: 'image'; data: string; mimeType: string }>;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null>(null);
-	const { columns: terminalWidth, rows: terminalHeight } = useTerminalSize();
-	const { stdout } = useStdout();
+	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
+	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
 	const isInitialMount = useRef(true);
+
+	// Codebase indexing state
+	const [codebaseIndexing, setCodebaseIndexing] = useState(false);
+	const [codebaseProgress, setCodebaseProgress] = useState<{
+		totalFiles: number;
+		processedFiles: number;
+		totalChunks: number;
+		currentFile: string;
+		status: string;
+	} | null>(null);
+	const [watcherEnabled, setWatcherEnabled] = useState(false);
+	const [fileUpdateNotification, setFileUpdateNotification] = useState<{
+		file: string;
+		timestamp: number;
+	} | null>(null);
+	const codebaseAgentRef = useRef<CodebaseIndexAgent | null>(null);
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -112,13 +131,163 @@ export default function ChatScreen({ skipWelcome }: Props) {
 	const snapshotState = useSnapshotState(messages.length);
 
 	// Use session save hook
-	const { saveMessage, clearSavedMessages, initializeFromSession } =
+	const {saveMessage, clearSavedMessages, initializeFromSession} =
 		useSessionSave();
 
 	// Sync pendingMessages to ref for real-time access in callbacks
 	useEffect(() => {
 		pendingMessagesRef.current = pendingMessages;
 	}, [pendingMessages]);
+
+	// Auto-start codebase indexing on mount if enabled
+	useEffect(() => {
+		const startCodebaseIndexing = async () => {
+			try {
+				const config = loadCodebaseConfig();
+
+				// Only start if enabled and not already indexing
+				if (!config.enabled || codebaseIndexing) {
+					return;
+				}
+
+				// Initialize agent
+				const agent = new CodebaseIndexAgent(workingDirectory);
+				codebaseAgentRef.current = agent;
+
+				// Check if indexing is needed
+				const progress = agent.getProgress();
+
+				// Check if watcher was enabled before (auto-resume)
+				const wasWatcherEnabled = agent.isWatcherEnabled();
+				if (wasWatcherEnabled) {
+					logger.info('Restoring file watcher from previous session');
+					agent.startWatching(progressData => {
+						setCodebaseProgress({
+							totalFiles: progressData.totalFiles,
+							processedFiles: progressData.processedFiles,
+							totalChunks: progressData.totalChunks,
+							currentFile: progressData.currentFile,
+							status: progressData.status,
+						});
+
+						// Handle file update notifications
+						if (progressData.totalFiles === 0 && progressData.currentFile) {
+							setFileUpdateNotification({
+								file: progressData.currentFile,
+								timestamp: Date.now(),
+							});
+
+							// Clear notification after 3 seconds
+							setTimeout(() => {
+								setFileUpdateNotification(null);
+							}, 3000);
+						}
+					});
+					setWatcherEnabled(true);
+				}
+
+				// Skip if already completed
+				if (progress.status === 'completed' && progress.totalChunks > 0) {
+					return;
+				}
+
+				// Start or resume indexing in background
+				setCodebaseIndexing(true);
+
+				agent.start(progressData => {
+					setCodebaseProgress({
+						totalFiles: progressData.totalFiles,
+						processedFiles: progressData.processedFiles,
+						totalChunks: progressData.totalChunks,
+						currentFile: progressData.currentFile,
+						status: progressData.status,
+					});
+
+					// Handle file update notifications (when totalFiles is 0, it's a file update)
+					if (progressData.totalFiles === 0 && progressData.currentFile) {
+						setFileUpdateNotification({
+							file: progressData.currentFile,
+							timestamp: Date.now(),
+						});
+
+						// Clear notification after 3 seconds
+						setTimeout(() => {
+							setFileUpdateNotification(null);
+						}, 3000);
+					}
+
+					// Stop indexing when completed or error
+					if (
+						progressData.status === 'completed' ||
+						progressData.status === 'error'
+					) {
+						setCodebaseIndexing(false);
+
+						// Start file watcher after initial indexing is completed
+						if (progressData.status === 'completed' && agent) {
+							agent.startWatching(watcherProgressData => {
+								setCodebaseProgress({
+									totalFiles: watcherProgressData.totalFiles,
+									processedFiles: watcherProgressData.processedFiles,
+									totalChunks: watcherProgressData.totalChunks,
+									currentFile: watcherProgressData.currentFile,
+									status: watcherProgressData.status,
+								});
+
+								// Handle file update notifications
+								if (
+									watcherProgressData.totalFiles === 0 &&
+									watcherProgressData.currentFile
+								) {
+									setFileUpdateNotification({
+										file: watcherProgressData.currentFile,
+										timestamp: Date.now(),
+									});
+
+									// Clear notification after 3 seconds
+									setTimeout(() => {
+										setFileUpdateNotification(null);
+									}, 3000);
+								}
+							});
+							setWatcherEnabled(true);
+						}
+					}
+				});
+			} catch (error) {
+				console.error('Failed to start codebase indexing:', error);
+				setCodebaseIndexing(false);
+			}
+		};
+
+		startCodebaseIndexing();
+
+		// Cleanup on unmount - just stop indexing, don't close database
+		// This allows resuming when returning to chat screen
+		return () => {
+			if (codebaseAgentRef.current) {
+				codebaseAgentRef.current.stop();
+				codebaseAgentRef.current.stopWatching();
+				setWatcherEnabled(false);
+				// Don't call close() - let it resume when returning
+			}
+		};
+	}, []); // Only run once on mount
+
+	// Export stop function for use in commands (like /home)
+	useEffect(() => {
+		// Store global reference to stop function for /home command
+		(global as any).__stopCodebaseIndexing = async () => {
+			if (codebaseAgentRef.current) {
+				await codebaseAgentRef.current.stop();
+				setCodebaseIndexing(false);
+			}
+		};
+
+		return () => {
+			delete (global as any).__stopCodebaseIndexing;
+		};
+	}, []);
 
 	// Persist yolo mode to localStorage
 	useEffect(() => {
@@ -222,13 +391,13 @@ export default function ChatScreen({ skipWelcome }: Props) {
 		useRef<
 			(
 				message: string,
-				images?: Array<{ data: string; mimeType: string }>,
+				images?: Array<{data: string; mimeType: string}>,
 				useBasicModel?: boolean,
 				hideUserMessage?: boolean,
 			) => Promise<void>
 		>();
 	// Use command handler hook
-	const { handleCommandExecution } = useCommandHandler({
+	const {handleCommandExecution} = useCommandHandler({
 		messages,
 		setMessages,
 		setRemountKey,
@@ -363,7 +532,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 	const handleHistorySelect = async (
 		selectedIndex: number,
 		message: string,
-		images?: Array<{ type: 'image'; data: string; mimeType: string }>,
+		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => {
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
@@ -379,9 +548,9 @@ export default function ChatScreen({ skipWelcome }: Props) {
 			const currentSession = sessionManager.getCurrentSession();
 			const filePaths = currentSession
 				? await incrementalSnapshotManager.getFilesToRollback(
-					currentSession.id,
-					selectedIndex,
-				)
+						currentSession.id,
+						selectedIndex,
+				  )
 				: [];
 
 			snapshotState.setPendingRollback({
@@ -607,11 +776,11 @@ export default function ChatScreen({ skipWelcome }: Props) {
 
 	const handleMessageSubmit = async (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 	) => {
 		// If streaming, add to pending messages instead of sending immediately
 		if (streamingState.isStreaming) {
-			setPendingMessages(prev => [...prev, { text: message, images }]);
+			setPendingMessages(prev => [...prev, {text: message, images}]);
 			return;
 		}
 
@@ -634,7 +803,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 
 	const processMessage = async (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
@@ -685,7 +854,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 		streamingState.setRetryStatus(null);
 
 		// Parse and validate file references
-		const { cleanContent, validFiles } = await parseAndValidateFileReferences(
+		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 			message,
 		);
 
@@ -900,7 +1069,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
 		// Parse and validate file references (same as processMessage)
-		const { cleanContent, validFiles } = await parseAndValidateFileReferences(
+		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 			combinedMessage,
 		);
 
@@ -924,10 +1093,10 @@ export default function ChatScreen({ skipWelcome }: Props) {
 		const imageContents =
 			allImages.length > 0
 				? allImages.map(img => ({
-					type: 'image' as const,
-					data: img.data,
-					mimeType: img.mimeType,
-				}))
+						type: 'image' as const,
+						data: img.data,
+						mimeType: img.mimeType,
+				  }))
 				: undefined;
 
 		// Add user message to chat with file references and images
@@ -1181,7 +1350,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 								shouldShowParallelIndicator &&
 								(index === 0 ||
 									filteredMessages[index - 1]?.parallelGroup !==
-									message.parallelGroup ||
+										message.parallelGroup ||
 									// Previous message is time-consuming tool, so this is the first non-time-consuming one
 									filteredMessages[index - 1]?.toolPending ||
 									filteredMessages[index - 1]?.content.startsWith('⚡'));
@@ -1249,8 +1418,8 @@ export default function ChatScreen({ skipWelcome }: Props) {
 												message.role === 'user'
 													? 'green'
 													: message.role === 'command'
-														? 'gray'
-														: toolStatusColor
+													? 'gray'
+													: toolStatusColor
 											}
 											bold
 										>
@@ -1260,8 +1429,8 @@ export default function ChatScreen({ skipWelcome }: Props) {
 											{message.role === 'user'
 												? '⛇'
 												: message.role === 'command'
-													? '⌘'
-													: '❆'}
+												? '⌘'
+												: '❆'}
 										</Text>
 										<Box marginLeft={1} flexDirection="column">
 											{message.role === 'command' ? (
@@ -1281,10 +1450,10 @@ export default function ChatScreen({ skipWelcome }: Props) {
 																message.role === 'user'
 																	? 'gray'
 																	: message.content.startsWith('⚡')
-																		? 'yellow'
-																		: message.content.startsWith('✓')
-																			? 'green'
-																			: 'red'
+																	? 'yellow'
+																	: message.content.startsWith('✓')
+																	? 'green'
+																	: 'red'
 															}
 														>
 															{message.content || ' '}
@@ -1348,7 +1517,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 														)}
 													{message.toolCall &&
 														message.toolCall.name ===
-														'filesystem-edit_search' &&
+															'filesystem-edit_search' &&
 														message.toolCall.arguments.oldContent &&
 														message.toolCall.arguments.newContent && (
 															<Box marginTop={1}>
@@ -1378,7 +1547,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 													{message.toolCall &&
 														(message.toolCall.name === 'filesystem-edit' ||
 															message.toolCall.name ===
-															'filesystem-edit_search') &&
+																'filesystem-edit_search') &&
 														message.toolCall.arguments.isBatch &&
 														message.toolCall.arguments.batchResults &&
 														Array.isArray(
@@ -1399,8 +1568,9 @@ export default function ChatScreen({ skipWelcome }: Props) {
 																					marginBottom={1}
 																				>
 																					<Text bold color="cyan">
-																						{`File ${index + 1}: ${fileResult.path
-																							}`}
+																						{`File ${index + 1}: ${
+																							fileResult.path
+																						}`}
 																					</Text>
 																					<DiffViewer
 																						oldContent={fileResult.oldContent}
@@ -1501,7 +1671,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 					<Text
 						color={
 							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
-							streamingState.animationFrame
+								streamingState.animationFrame
 							] as any
 						}
 						bold
@@ -1512,7 +1682,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 						{streamingState.isStreaming ? (
 							<>
 								{streamingState.retryStatus &&
-									streamingState.retryStatus.isRetrying ? (
+								streamingState.retryStatus.isRetrying ? (
 									// Retry status display - hide "Thinking" and show retry info
 									<Box flexDirection="column">
 										{streamingState.retryStatus.errorMessage && (
@@ -1522,7 +1692,7 @@ export default function ChatScreen({ skipWelcome }: Props) {
 										)}
 										{streamingState.retryStatus.remainingSeconds !==
 											undefined &&
-											streamingState.retryStatus.remainingSeconds > 0 ? (
+										streamingState.retryStatus.remainingSeconds > 0 ? (
 											<Text color="yellow" dimColor>
 												⟳ Retry {streamingState.retryStatus.attempt}/5 in{' '}
 												{streamingState.retryStatus.remainingSeconds}s...
@@ -1542,8 +1712,8 @@ export default function ChatScreen({ skipWelcome }: Props) {
 												streamingState.isReasoning
 													? 'Deep thinking...'
 													: streamingState.streamTokenCount > 0
-														? 'Writing...'
-														: 'Thinking...'
+													? 'Writing...'
+													: 'Thinking...'
 											}
 										/>{' '}
 										({formatElapsedTime(streamingState.elapsedSeconds)}
@@ -1552,8 +1722,8 @@ export default function ChatScreen({ skipWelcome }: Props) {
 											↓{' '}
 											{streamingState.streamTokenCount >= 1000
 												? `${(streamingState.streamTokenCount / 1000).toFixed(
-													1,
-												)}k`
+														1,
+												  )}k`
 												: streamingState.streamTokenCount}{' '}
 											tokens
 										</Text>
@@ -1662,15 +1832,15 @@ export default function ChatScreen({ skipWelcome }: Props) {
 							contextUsage={
 								streamingState.contextUsage
 									? {
-										inputTokens: streamingState.contextUsage.prompt_tokens,
-										maxContextTokens:
-											getOpenAiConfig().maxContextTokens || 4000,
-										cacheCreationTokens:
-											streamingState.contextUsage.cache_creation_input_tokens,
-										cacheReadTokens:
-											streamingState.contextUsage.cache_read_input_tokens,
-										cachedTokens: streamingState.contextUsage.cached_tokens,
-									}
+											inputTokens: streamingState.contextUsage.prompt_tokens,
+											maxContextTokens:
+												getOpenAiConfig().maxContextTokens || 4000,
+											cacheCreationTokens:
+												streamingState.contextUsage.cache_creation_input_tokens,
+											cacheReadTokens:
+												streamingState.contextUsage.cache_read_input_tokens,
+											cachedTokens: streamingState.contextUsage.cached_tokens,
+									  }
 									: undefined
 							}
 							initialContent={restoreInputContent}
@@ -1684,10 +1854,10 @@ export default function ChatScreen({ skipWelcome }: Props) {
 										vscodeState.vscodeConnectionStatus === 'connecting'
 											? 'yellow'
 											: vscodeState.vscodeConnectionStatus === 'connected'
-												? 'green'
-												: vscodeState.vscodeConnectionStatus === 'error'
-													? 'red'
-													: 'gray'
+											? 'green'
+											: vscodeState.vscodeConnectionStatus === 'error'
+											? 'red'
+											: 'gray'
 									}
 									dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
 								>
@@ -1695,16 +1865,44 @@ export default function ChatScreen({ skipWelcome }: Props) {
 									{vscodeState.vscodeConnectionStatus === 'connecting'
 										? 'Connecting to IDE...'
 										: vscodeState.vscodeConnectionStatus === 'connected'
-											? 'IDE Connected'
-											: vscodeState.vscodeConnectionStatus === 'error'
-												? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
-												: 'IDE'}
+										? 'IDE Connected'
+										: vscodeState.vscodeConnectionStatus === 'error'
+										? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
+										: 'IDE'}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.activeFile &&
 										` | ${vscodeState.editorContext.activeFile}`}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.selectedText &&
 										` | ${vscodeState.editorContext.selectedText.length} chars selected`}
+								</Text>
+							</Box>
+						)}
+						{/* Codebase indexing status indicator */}
+						{codebaseIndexing && codebaseProgress && (
+							<Box marginTop={1} paddingX={1}>
+								<Text color="cyan" dimColor>
+									<Spinner type="dots" /> Indexing codebase...{' '}
+									{codebaseProgress.processedFiles}/
+									{codebaseProgress.totalFiles} files
+									{codebaseProgress.totalChunks > 0 &&
+										` (${codebaseProgress.totalChunks} chunks)`}
+								</Text>
+							</Box>
+						)}
+						{/* File watcher status indicator */}
+						{!codebaseIndexing && watcherEnabled && (
+							<Box marginTop={1} paddingX={1}>
+								<Text color="green" dimColor>
+									☉ File watcher active - monitoring code changes
+								</Text>
+							</Box>
+						)}
+						{/* File update notification */}
+						{fileUpdateNotification && (
+							<Box marginTop={1} paddingX={1}>
+								<Text color="yellow" dimColor>
+									⛁ Updated: {fileUpdateNotification.file}
 								</Text>
 							</Box>
 						)}

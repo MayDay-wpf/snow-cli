@@ -8,6 +8,7 @@ import {mcpTools as terminalTools} from '../mcp/bash.js';
 import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
+import {mcpTools as codebaseSearchTools} from '../mcp/codebaseSearch.js';
 import {TodoService} from '../mcp/todo.js';
 import {
 	mcpTools as notebookTools,
@@ -321,6 +322,53 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	}
 
+	// Add built-in Codebase Search tools (conditionally loaded if index is available)
+	try {
+		const projectRoot = process.cwd();
+		const dbPath = path.join(projectRoot, '.snow', 'codebase', 'embeddings.db');
+		const fs = await import('node:fs');
+
+		// Only add if database file exists
+		if (fs.existsSync(dbPath)) {
+			// Check if database has data by importing CodebaseDatabase
+			const {CodebaseDatabase} = await import('./codebaseDatabase.js');
+			const db = new CodebaseDatabase(projectRoot);
+			db.initialize();
+			const totalChunks = db.getTotalChunks();
+			db.close();
+
+			// Only add tool if database has actual data
+			if (totalChunks > 0) {
+				const codebaseSearchServiceTools = codebaseSearchTools.map(tool => ({
+					name: tool.name.replace('codebase-', ''),
+					description: tool.description,
+					inputSchema: tool.inputSchema,
+				}));
+
+				servicesInfo.push({
+					serviceName: 'codebase',
+					tools: codebaseSearchServiceTools,
+					isBuiltIn: true,
+					connected: true,
+				});
+
+				for (const tool of codebaseSearchTools) {
+					allTools.push({
+						type: 'function',
+						function: {
+							name: tool.name,
+							description: tool.description,
+							parameters: tool.inputSchema,
+						},
+					});
+				}
+			}
+		}
+	} catch (error) {
+		// Silently ignore if codebase search tools are not available
+		logger.debug('Codebase search tools not available:', error);
+	}
+
 	// Add user-configured MCP server tools (probe for availability but don't maintain connections)
 	try {
 		const mcpConfig = getMCPConfig();
@@ -393,6 +441,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		serviceName === 'todo' ||
 		serviceName === 'ace' ||
 		serviceName === 'websearch' ||
+		serviceName === 'codebase' ||
 		serviceName === 'subagent'
 	) {
 		return;
@@ -737,6 +786,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('ide-')) {
 		serviceName = 'ide';
 		actualToolName = toolName.substring('ide-'.length);
+	} else if (toolName.startsWith('codebase-')) {
+		serviceName = 'codebase';
+		actualToolName = toolName.substring('codebase-'.length);
 	} else if (toolName.startsWith('subagent-')) {
 		serviceName = 'subagent';
 		actualToolName = toolName.substring('subagent-'.length);
@@ -921,6 +973,16 @@ export async function executeMCPTool(
 				};
 			default:
 				throw new Error(`Unknown IDE tool: ${actualToolName}`);
+		}
+	} else if (serviceName === 'codebase') {
+		// Handle built-in Codebase Search tools (no connection needed)
+		const {codebaseSearchService} = await import('../mcp/codebaseSearch.js');
+
+		switch (actualToolName) {
+			case 'search':
+				return await codebaseSearchService.search(args.query, args.topN);
+			default:
+				throw new Error(`Unknown codebase tool: ${actualToolName}`);
 		}
 	} else if (serviceName === 'subagent') {
 		// Handle sub-agent tools

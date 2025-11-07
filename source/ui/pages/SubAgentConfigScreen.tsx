@@ -92,6 +92,10 @@ const toolCategories: ToolCategory[] = [
 		],
 	},
 	{
+		name: 'Codebase Search Tools',
+		tools: ['codebase-search'],
+	},
+	{
 		name: 'Terminal Tools',
 		tools: ['terminal-execute'],
 	},
