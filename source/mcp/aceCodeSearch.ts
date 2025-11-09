@@ -1055,45 +1055,6 @@ export class ACECodeSearchService {
 			searchTime,
 		};
 	}
-
-	/**
-	 * Clear the symbol index cache and force full re-index on next search
-	 */
-	clearCache(): void {
-		this.indexCache.clear();
-		this.fileModTimes.clear();
-		this.allIndexedFiles.clear();
-		this.fileContentCache.clear();
-		this.lastIndexTime = 0;
-	}
-
-	/**
-	 * Get index statistics
-	 */
-	getIndexStats(): {
-		totalFiles: number;
-		totalSymbols: number;
-		languageBreakdown: Record<string, number>;
-		cacheAge: number;
-	} {
-		let totalSymbols = 0;
-		const languageBreakdown: Record<string, number> = {};
-
-		for (const symbols of this.indexCache.values()) {
-			totalSymbols += symbols.length;
-			for (const symbol of symbols) {
-				languageBreakdown[symbol.language] =
-					(languageBreakdown[symbol.language] || 0) + 1;
-			}
-		}
-
-		return {
-			totalFiles: this.indexCache.size,
-			totalSymbols,
-			languageBreakdown,
-			cacheAge: Date.now() - this.lastIndexTime,
-		};
-	}
 }
 
 // Export a default instance
@@ -1277,24 +1238,6 @@ export const mcpTools = [
 				},
 			},
 			required: ['pattern'],
-		},
-	},
-	{
-		name: 'ace-index_stats',
-		description:
-			'ACE Code Search: Get statistics about the code index. Shows number of indexed files, symbols, language breakdown, and cache status. Useful for understanding search coverage.',
-		inputSchema: {
-			type: 'object',
-			properties: {},
-		},
-	},
-	{
-		name: 'ace-clear_cache',
-		description:
-			'ACE Code Search: Clear the symbol index cache and force a full re-index on next search. Use when codebase has changed significantly or search results seem stale.',
-		inputSchema: {
-			type: 'object',
-			properties: {},
 		},
 	},
 ];

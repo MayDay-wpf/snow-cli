@@ -157,7 +157,35 @@ export default function ChatScreen({skipWelcome}: Props) {
 				// Check if indexing is needed
 				const progress = agent.getProgress();
 
-				// Check if watcher was enabled before (auto-resume)
+				// If indexing is already completed, start watcher and return early
+				if (progress.status === 'completed' && progress.totalChunks > 0) {
+					agent.startWatching(progressData => {
+						setCodebaseProgress({
+							totalFiles: progressData.totalFiles,
+							processedFiles: progressData.processedFiles,
+							totalChunks: progressData.totalChunks,
+							currentFile: progressData.currentFile,
+							status: progressData.status,
+						});
+
+						// Handle file update notifications
+						if (progressData.totalFiles === 0 && progressData.currentFile) {
+							setFileUpdateNotification({
+								file: progressData.currentFile,
+								timestamp: Date.now(),
+							});
+
+							// Clear notification after 3 seconds
+							setTimeout(() => {
+								setFileUpdateNotification(null);
+							}, 3000);
+						}
+					});
+					setWatcherEnabled(true);
+					return;
+				}
+
+				// If watcher was enabled before but indexing not completed, restore it
 				const wasWatcherEnabled = agent.isWatcherEnabled();
 				if (wasWatcherEnabled) {
 					logger.info('Restoring file watcher from previous session');
@@ -184,11 +212,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 						}
 					});
 					setWatcherEnabled(true);
-				}
-
-				// Skip if already completed
-				if (progress.status === 'completed' && progress.totalChunks > 0) {
-					return;
 				}
 
 				// Start or resume indexing in background

@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Add notebook management features for updating, deleting, and listing notes; enhance sub-agent execution handling
+            - enhance system prompt and codebase configuration; add embedding dimensions validation and dynamic workflow generation
             
             ### Installation
             ```bash

@@ -96,15 +96,7 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 - "Add validation to form" → Read form component + related validation utils → Add code → Done
 - "Refactor error handling" → Read error handler + callers → Refactor → Done
 
-**Your workflow:**
-1. Read the primary file(s) mentioned
-2. Check dependencies/imports that directly impact the change
-3. Read related files ONLY if they're critical to understanding the task
-4. Write/modify code with proper context
-5. Verify with build
-6. ❌ NO excessive exploration beyond what's needed
-7. ❌ NO reading entire modules "for reference"
-8. ❌ NO over-planning multi-step workflows for simple tasks
+PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **Golden Rule: Read what you need to write correct code, nothing more.**
 
@@ -160,11 +152,8 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 - \`filesystem-edit\` - Modify existing files
 - \`filesystem-create\` - Create new files
 
-**Code Search (ACE):**
-- \`ace-search-symbols\` - Find functions/classes/variables
-- \`ace-find-definition\` - Go to definition
-- \`ace-find-references\` - Find all usages
-- \`ace-text-search\` - Fast text/regex search
+**Code Search:**
+PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 
 **IDE Diagnostics:**
 - \`ide-get_diagnostics\` - Get real-time diagnostics (errors, warnings, hints) from connected IDE
@@ -321,11 +310,99 @@ Guidance and recommendations:
 
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.`;
 
+/**
+ * Check if codebase-search tool is available
+ */
+function hasCodebaseSearchTool(
+	tools?: Array<{function: {name: string}}>,
+): boolean {
+	if (!tools) return false;
+	return tools.some(tool => tool.function.name === 'codebase-search');
+}
+
+/**
+ * Generate workflow section based on available tools
+ */
+function getWorkflowSection(hasCodebase: boolean): string {
+	if (hasCodebase) {
+		return `**Your workflow:**
+1. **Understand the task** - For conceptual questions, try \\\`codebase-search\\\` FIRST (semantic search)
+2. Read the primary file(s) mentioned (or files found by codebase search)
+3. Check dependencies/imports that directly impact the change
+4. For precise symbol lookup, use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\`
+5. Read related files ONLY if they're critical to understanding the task
+6. Write/modify code with proper context
+7. Verify with build
+8. ❌ NO excessive exploration beyond what's needed
+9. ❌ NO reading entire modules "for reference"
+10. ❌ NO over-planning multi-step workflows for simple tasks`;
+	} else {
+		return `**Your workflow:**
+1. Read the primary file(s) mentioned
+2. Use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\` to find related code
+3. Check dependencies/imports that directly impact the change
+4. Read related files ONLY if they're critical to understanding the task
+5. Write/modify code with proper context
+6. Verify with build
+7. ❌ NO excessive exploration beyond what's needed
+8. ❌ NO reading entire modules "for reference"
+9. ❌ NO over-planning multi-step workflows for simple tasks`;
+	}
+}
+
+/**
+ * Generate code search section based on available tools
+ */
+function getCodeSearchSection(hasCodebase: boolean): string {
+	if (hasCodebase) {
+		// When codebase tool is available, prioritize it
+		return `**Code Search:**
+
+🎯 **Priority Order (use in this sequence):**
+
+1. **Codebase Semantic Search** (⚡ HIGHEST PRIORITY):
+   - \\\`codebase-search\\\` - Semantic search using embeddings
+     - 🔍 Find code by MEANING, not just keywords
+     - 🎯 Best for: "how is authentication handled", "error handling patterns"
+     - 📊 Returns: Full code content + similarity scores + file locations
+     - 💡 **IMPORTANT**: Always try this FIRST for conceptual queries!
+     - 🚀 **When to use**: Understanding concepts, finding similar code, pattern discovery
+     - ❌ **When to skip**: Exact symbol names, file-specific searches (use ACE instead)
+
+2. **ACE Code Search** (Fallback for precise lookups):
+   - \\\`ace-search-symbols\\\` - Find functions/classes/variables by exact name
+   - \\\`ace-find-definition\\\` - Go to definition of a symbol
+   - \\\`ace-find-references\\\` - Find all usages of a symbol
+   - \\\`ace-text-search\\\` - Fast text/regex search across files
+   - 💡 **When to use**: Exact symbol lookup, reference finding, regex patterns`;
+	} else {
+		// When codebase tool is NOT available, only show ACE
+		return `**Code Search (ACE):**
+- \\\`ace-search-symbols\\\` - Find functions/classes/variables by exact name
+- \\\`ace-find-definition\\\` - Go to definition of a symbol
+- \\\`ace-find-references\\\` - Find all usages of a symbol
+- \\\`ace-text-search\\\` - Fast text/regex search across files`;
+	}
+}
+
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
-export function getSystemPrompt(): string {
+export function getSystemPrompt(
+	tools?: Array<{function: {name: string}}>,
+): string {
 	const basePrompt = getSystemPromptWithRole();
 	const systemEnv = getSystemEnvironmentInfo();
-	return `${basePrompt}
+	const hasCodebase = hasCodebaseSearchTool(tools);
+
+	// Generate dynamic sections
+	const workflowSection = getWorkflowSection(hasCodebase);
+	const codeSearchSection = getCodeSearchSection(hasCodebase);
+
+	// Replace placeholders with actual content
+	let finalPrompt = basePrompt
+		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
+		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
+
+	return `${finalPrompt}
 
 ## 💻 System Environment
 

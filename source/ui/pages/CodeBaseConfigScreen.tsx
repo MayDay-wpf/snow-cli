@@ -20,6 +20,7 @@ type ConfigField =
 	| 'embeddingModelName'
 	| 'embeddingBaseUrl'
 	| 'embeddingApiKey'
+	| 'embeddingDimensions'
 	| 'batchMaxLines'
 	| 'batchConcurrency';
 
@@ -92,6 +93,7 @@ export default function CodeBaseConfigScreen({
 		'embeddingModelName',
 		'embeddingBaseUrl',
 		'embeddingApiKey',
+		'embeddingDimensions',
 		'batchMaxLines',
 		'batchConcurrency',
 	];
@@ -128,6 +130,9 @@ export default function CodeBaseConfigScreen({
 			}
 			if (!embeddingApiKey.trim()) {
 				validationErrors.push('Embedding API key is required when enabled');
+			}
+			if (embeddingDimensions <= 0) {
+				validationErrors.push('Embedding dimensions must be greater than 0');
 			}
 
 			// Batch configuration validation
@@ -168,6 +173,12 @@ export default function CodeBaseConfigScreen({
 
 			saveCodebaseConfig(config);
 			setErrors([]);
+
+			// Trigger codebase config reload in ChatScreen
+			if ((global as any).__reloadCodebaseConfig) {
+				(global as any).__reloadCodebaseConfig();
+			}
+
 			onSave?.();
 		} catch (error) {
 			setErrors([
@@ -275,6 +286,36 @@ export default function CodeBaseConfigScreen({
 								<Text color="gray">
 									{embeddingApiKey ? '••••••••' : 'Not set'}
 								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'embeddingDimensions':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Embedding Dimensions:
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="cyan">
+									<TextInput
+										value={embeddingDimensions.toString()}
+										onChange={value => {
+											const num = parseInt(stripFocusArtifacts(value) || '0');
+											if (!isNaN(num)) {
+												setEmbeddingDimensions(num);
+											}
+										}}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color="gray">{embeddingDimensions}</Text>
 							</Box>
 						)}
 					</Box>

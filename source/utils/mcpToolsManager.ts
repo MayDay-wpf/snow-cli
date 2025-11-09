@@ -78,13 +78,19 @@ export function getTodoService(): TodoService {
 /**
  * Generate a hash of the current MCP configuration and sub-agents
  */
-function generateConfigHash(): string {
+async function generateConfigHash(): Promise<string> {
 	try {
 		const mcpConfig = getMCPConfig();
 		const subAgents = getSubAgentTools(); // Include sub-agents in hash
+
+		// 🔥 CRITICAL: Include codebase enabled status in hash
+		const {loadCodebaseConfig} = await import('./codebaseConfig.js');
+		const codebaseConfig = loadCodebaseConfig();
+
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
 			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
+			codebaseEnabled: codebaseConfig.enabled, // 🔥 Must include to invalidate cache on enable/disable
 		});
 	} catch {
 		return '';
@@ -94,12 +100,13 @@ function generateConfigHash(): string {
 /**
  * Check if the cache is valid and not expired
  */
-function isCacheValid(): boolean {
+async function isCacheValid(): Promise<boolean> {
 	if (!toolsCache) return false;
 
 	const now = Date.now();
 	const isExpired = now - toolsCache.lastUpdate > CACHE_DURATION;
-	const configChanged = toolsCache.configHash !== generateConfigHash();
+	const configHash = await generateConfigHash();
+	const configChanged = toolsCache.configHash !== configHash;
 
 	return !isExpired && !configChanged;
 }
@@ -108,7 +115,7 @@ function isCacheValid(): boolean {
  * Get cached tools or build cache if needed
  */
 async function getCachedTools(): Promise<MCPTool[]> {
-	if (isCacheValid()) {
+	if (await isCacheValid()) {
 		return toolsCache!.tools;
 	}
 	await refreshToolsCache();
@@ -322,45 +329,56 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	}
 
-	// Add built-in Codebase Search tools (conditionally loaded if index is available)
+	// Add built-in Codebase Search tools (conditionally loaded if enabled and index is available)
 	try {
-		const projectRoot = process.cwd();
-		const dbPath = path.join(projectRoot, '.snow', 'codebase', 'embeddings.db');
-		const fs = await import('node:fs');
+		// First check if codebase feature is enabled in config
+		const {loadCodebaseConfig} = await import('./codebaseConfig.js');
+		const codebaseConfig = loadCodebaseConfig();
 
-		// Only add if database file exists
-		if (fs.existsSync(dbPath)) {
-			// Check if database has data by importing CodebaseDatabase
-			const {CodebaseDatabase} = await import('./codebaseDatabase.js');
-			const db = new CodebaseDatabase(projectRoot);
-			db.initialize();
-			const totalChunks = db.getTotalChunks();
-			db.close();
+		// Only proceed if feature is enabled
+		if (codebaseConfig.enabled) {
+			const projectRoot = process.cwd();
+			const dbPath = path.join(
+				projectRoot,
+				'.snow',
+				'codebase',
+				'embeddings.db',
+			);
+			const fs = await import('node:fs');
 
-			// Only add tool if database has actual data
-			if (totalChunks > 0) {
-				const codebaseSearchServiceTools = codebaseSearchTools.map(tool => ({
-					name: tool.name.replace('codebase-', ''),
-					description: tool.description,
-					inputSchema: tool.inputSchema,
-				}));
+			// Only add if database file exists
+			if (fs.existsSync(dbPath)) {
+				// Check if database has data by importing CodebaseDatabase
+				const {CodebaseDatabase} = await import('./codebaseDatabase.js');
+				const db = new CodebaseDatabase(projectRoot);
+				db.initialize();
+				const totalChunks = db.getTotalChunks();
+				db.close();
 
-				servicesInfo.push({
-					serviceName: 'codebase',
-					tools: codebaseSearchServiceTools,
-					isBuiltIn: true,
-					connected: true,
-				});
+				if (totalChunks > 0) {
+					const codebaseSearchServiceTools = codebaseSearchTools.map(tool => ({
+						name: tool.name.replace('codebase-', ''),
+						description: tool.description,
+						inputSchema: tool.inputSchema,
+					}));
 
-				for (const tool of codebaseSearchTools) {
-					allTools.push({
-						type: 'function',
-						function: {
-							name: tool.name,
-							description: tool.description,
-							parameters: tool.inputSchema,
-						},
+					servicesInfo.push({
+						serviceName: 'codebase',
+						tools: codebaseSearchServiceTools,
+						isBuiltIn: true,
+						connected: true,
 					});
+
+					for (const tool of codebaseSearchTools) {
+						allTools.push({
+							type: 'function',
+							function: {
+								name: tool.name,
+								description: tool.description,
+								parameters: tool.inputSchema,
+							},
+						});
+					}
 				}
 			}
 		}
@@ -411,7 +429,7 @@ async function refreshToolsCache(): Promise<void> {
 		tools: allTools,
 		servicesInfo,
 		lastUpdate: Date.now(),
-		configHash: generateConfigHash(),
+		configHash: await generateConfigHash(),
 	};
 }
 
@@ -919,11 +937,6 @@ export async function executeMCPTool(
 					args.isRegex,
 					args.maxResults,
 				);
-			case 'index_stats':
-				return aceCodeSearchService.getIndexStats();
-			case 'clear_cache':
-				aceCodeSearchService.clearCache();
-				return {message: 'ACE Code Search cache cleared successfully'};
 			default:
 				throw new Error(`Unknown ACE tool: ${actualToolName}`);
 		}

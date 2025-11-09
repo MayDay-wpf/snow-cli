@@ -102,7 +102,7 @@ export async function handleConversationWithTools(
 	const mcpTools = await collectAllMCPTools();
 	// Build conversation history with TODO context as pinned user message
 	let conversationMessages: ChatMessage[] = [
-		{role: 'system', content: getSystemPrompt()},
+		{role: 'system', content: getSystemPrompt(mcpTools)},
 	];
 
 	// If there are TODOs, add pinned context message at the front
