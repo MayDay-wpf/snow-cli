@@ -1749,12 +1749,6 @@ export default function ChatScreen({skipWelcome}: Props) {
 												  )}k`
 												: streamingState.streamTokenCount}{' '}
 											tokens
-											{streamingState.tokenSpeed > 0 && (
-												<Text color="green">
-													{' · '}
-													{streamingState.tokenSpeed.toFixed(1)} t/s
-												</Text>
-											)}
 										</Text>
 										)
 									</Text>

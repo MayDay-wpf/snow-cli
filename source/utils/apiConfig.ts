@@ -419,7 +419,7 @@ function migrateSystemPromptFromTxt(): void {
 		// 删除旧文件
 		unlinkSync(SYSTEM_PROMPT_FILE);
 
-		console.log('✅ Migrated system prompt from txt to json format.');
+		// console.log('✅ Migrated system prompt from txt to json format.');
 	} catch (error) {
 		console.error('Failed to migrate system prompt:', error);
 	}
