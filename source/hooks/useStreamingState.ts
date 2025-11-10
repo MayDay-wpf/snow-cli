@@ -20,6 +20,11 @@ export function useStreamingState() {
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
 	const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null);
 	const [animationFrame, setAnimationFrame] = useState(0);
+	const [tokenSpeed, setTokenSpeed] = useState(0);
+	const [lastTokenCount, setLastTokenCount] = useState(0);
+	const [lastSpeedUpdateTime, setLastSpeedUpdateTime] = useState<number | null>(
+		null,
+	);
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
@@ -58,6 +63,42 @@ export function useStreamingState() {
 
 		return () => clearInterval(interval);
 	}, [timerStartTime]);
+
+	// Calculate instantaneous token speed (based on recent changes)
+	useEffect(() => {
+		if (!isStreaming) {
+			setTokenSpeed(0);
+			setLastTokenCount(0);
+			setLastSpeedUpdateTime(null);
+			return;
+		}
+
+		// Update speed calculation on token count change
+		const now = Date.now();
+
+		if (lastSpeedUpdateTime === null) {
+			// Initialize tracking
+			setLastSpeedUpdateTime(now);
+			setLastTokenCount(streamTokenCount);
+			setTokenSpeed(0);
+			return;
+		}
+
+		const timeDiff = now - lastSpeedUpdateTime;
+
+		// Only update if at least 300ms passed (avoid too frequent updates)
+		if (timeDiff >= 300) {
+			const tokenDiff = streamTokenCount - lastTokenCount;
+
+			if (tokenDiff > 0) {
+				const speed = (tokenDiff / timeDiff) * 1000; // tokens per second
+				setTokenSpeed(speed);
+			}
+
+			setLastTokenCount(streamTokenCount);
+			setLastSpeedUpdateTime(now);
+		}
+	}, [isStreaming, streamTokenCount, lastSpeedUpdateTime, lastTokenCount]);
 
 	// Initialize remaining seconds when retry starts
 	useEffect(() => {
@@ -118,5 +159,6 @@ export function useStreamingState() {
 		retryStatus,
 		setRetryStatus,
 		animationFrame,
+		tokenSpeed,
 	};
 }
