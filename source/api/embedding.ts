@@ -47,9 +47,10 @@ export async function createEmbeddings(
 	if (!baseUrl) {
 		throw new Error('Embedding base URL is required');
 	}
-	if (!apiKey) {
-		throw new Error('Embedding API key is required');
-	}
+	// API key is optional for local deployments (e.g., Ollama)
+	// if (!apiKey) {
+	// 	throw new Error('Embedding API key is required');
+	// }
 	if (!input || input.length === 0) {
 		throw new Error('Input texts are required');
 	}
@@ -78,12 +79,17 @@ export async function createEmbeddings(
 		? baseUrl
 		: `${baseUrl.replace(/\/$/, '')}/embeddings`;
 
+	// Build headers - only include Authorization if API key is provided
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+	};
+	if (apiKey) {
+		headers['Authorization'] = `Bearer ${apiKey}`;
+	}
+
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`,
-		},
+		headers,
 		body: JSON.stringify(requestBody),
 	});
 
@@ -91,9 +97,7 @@ export async function createEmbeddings(
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new Error(
-			`Embedding API error (${response.status}): ${errorText}`,
-		);
+		throw new Error(`Embedding API error (${response.status}): ${errorText}`);
 	}
 
 	const data = await response.json();

@@ -326,10 +326,14 @@ function hasCodebaseSearchTool(
 function getWorkflowSection(hasCodebase: boolean): string {
 	if (hasCodebase) {
 		return `**Your workflow:**
-1. **Understand the task** - For conceptual questions, try \\\`codebase-search\\\` FIRST (semantic search)
+1. **🚀 START WITH SEMANTIC SEARCH** - Use \\\`codebase-search\\\` as your PRIMARY exploration tool
+   - 🎯 ALWAYS try \\\`codebase-search\\\` FIRST for ANY code understanding task
+   - 💡 Examples: "authentication logic", "error handling", "user validation", "database queries"
+   - ⚡ Dramatically faster than reading multiple files manually
+   - 📊 Returns relevant code snippets with context - read results to understand the codebase
 2. Read the primary file(s) mentioned (or files found by codebase search)
 3. Check dependencies/imports that directly impact the change
-4. For precise symbol lookup, use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\`
+4. For precise symbol lookup AFTER understanding context, use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\`
 5. Read related files ONLY if they're critical to understanding the task
 6. Write/modify code with proper context
 7. Verify with build
@@ -360,16 +364,17 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 
 🎯 **Priority Order (use in this sequence):**
 
-1. **Codebase Semantic Search** (⚡ HIGHEST PRIORITY):
+1. **Codebase Semantic Search** (⚡ ALWAYS TRY THIS FIRST!):
    - \\\`codebase-search\\\` - Semantic search using embeddings
      - 🔍 Find code by MEANING, not just keywords
-     - 🎯 Best for: "how is authentication handled", "error handling patterns"
+     - 🎯 Best for: "how is authentication handled", "error handling patterns", "validation logic"
      - 📊 Returns: Full code content + similarity scores + file locations
-     - 💡 **IMPORTANT**: Always try this FIRST for conceptual queries!
-     - 🚀 **When to use**: Understanding concepts, finding similar code, pattern discovery
-     - ❌ **When to skip**: Exact symbol names, file-specific searches (use ACE instead)
+     - 💡 **CRITICAL**: Use this as your PRIMARY tool for understanding codebase
+     - 🚀 **When to use**: ANY code understanding task, finding implementations, pattern discovery
+     - ⚡ **Example queries**: "user authentication", "database connection", "API error handling"
+     - ❌ **When to skip**: ONLY skip if you need exact symbol names or regex patterns
 
-2. **ACE Code Search** (Fallback for precise lookups):
+2. **ACE Code Search** (Use AFTER semantic search for precise lookups):
    - \\\`ace-search-symbols\\\` - Find functions/classes/variables by exact name
    - \\\`ace-find-definition\\\` - Go to definition of a symbol
    - \\\`ace-find-references\\\` - Find all usages of a symbol

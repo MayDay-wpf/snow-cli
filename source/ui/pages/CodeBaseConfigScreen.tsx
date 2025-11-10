@@ -127,9 +127,10 @@ export default function CodeBaseConfigScreen({
 			}
 			if (!embeddingBaseUrl.trim()) {
 				validationErrors.push('Embedding base URL is required when enabled');
-			}
-			if (!embeddingApiKey.trim()) {
-				validationErrors.push('Embedding API key is required when enabled');
+				// Embedding API key is optional (for local deployments like Ollama)
+				// if (!embeddingApiKey.trim()) {
+				// 	validationErrors.push('Embedding API key is required when enabled');
+				// }
 			}
 			if (embeddingDimensions <= 0) {
 				validationErrors.push('Embedding dimensions must be greater than 0');
@@ -265,7 +266,7 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Embedding API Key:
+							{isActive ? '❯ ' : '  '}Embedding API Key (Optional for local):
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>

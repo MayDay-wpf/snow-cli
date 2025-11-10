@@ -64,7 +64,7 @@ export default function WelcomeScreen({
 			{
 				label: 'CodeBase Settings',
 				value: 'codebase',
-				infoText: 'Configure codebase indexing with embedding and LLM models',
+				infoText: 'Configure codebase indexing with embedding models',
 			},
 			{
 				label: 'System Prompt Settings',
