@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.33
+- Added SystemPromptConfigScreen for managing system prompts,including add, edit, activate, and delete functionalities.
+- Integrated system prompt management into the WelcomeScreen foreasy access.
+- Migrated system prompt storage from a text file to a structuredJSON format for better management.
+- Introduced CustomHeadersScreen for managing custom request headerswith similar functionalities.
+- Enhanced apiConfig utility to support new system prompt and customheaders configurations.
+- Improved error handling and user feedback in the UI.
+- Ensured backward compatibility with existing system prompt data.
+
+## v0.3.32
+- Add support for CodeBase
+
 ## v0.3.31
 
 - Add notebook management features for updating, deleting, and listing notes; enhance sub-agent execution handling

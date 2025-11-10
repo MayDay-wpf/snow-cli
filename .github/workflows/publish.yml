@@ -55,7 +55,13 @@ jobs:
             
             ### What's New
 
-            - enhance system prompt and codebase configuration; add embedding dimensions validation and dynamic workflow generation
+            - Added SystemPromptConfigScreen for managing system prompts, including add, edit, activate, and delete functionalities.
+            - Integrated system prompt management into the WelcomeScreen for easy access.
+            - Migrated system prompt storage from a text file to a structured JSON format for better management.
+            - Introduced CustomHeadersScreen for managing custom request headers with similar functionalities.
+            - Enhanced apiConfig utility to support new system prompt and custom headers configurations.
+            - Improved error handling and user feedback in the UI.
+            - Ensured backward compatibility with existing system prompt data.
             
             ### Installation
             ```bash

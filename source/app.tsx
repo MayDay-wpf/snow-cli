@@ -109,18 +109,10 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 				);
 			case 'systemprompt':
 				return (
-					<SystemPromptConfigScreen
-						onBack={() => setCurrentView('welcome')}
-						onSave={() => setCurrentView('welcome')}
-					/>
+					<SystemPromptConfigScreen onBack={() => setCurrentView('welcome')} />
 				);
 			case 'customheaders':
-				return (
-					<CustomHeadersScreen
-						onBack={() => setCurrentView('welcome')}
-						onSave={() => setCurrentView('welcome')}
-					/>
-				);
+				return <CustomHeadersScreen onBack={() => setCurrentView('welcome')} />;
 			default:
 				return (
 					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />

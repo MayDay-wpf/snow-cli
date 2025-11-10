@@ -11,6 +11,8 @@ import SubAgentConfigScreen from './SubAgentConfigScreen.js';
 import SubAgentListScreen from './SubAgentListScreen.js';
 import SensitiveCommandConfigScreen from './SensitiveCommandConfigScreen.js';
 import CodeBaseConfigScreen from './CodeBaseConfigScreen.js';
+import SystemPromptConfigScreen from './SystemPromptConfigScreen.js';
+import CustomHeadersScreen from './CustomHeadersScreen.js';
 
 type Props = {
 	version?: string;
@@ -25,7 +27,9 @@ type InlineView =
 	| 'subagent-list'
 	| 'subagent-add'
 	| 'subagent-edit'
-	| 'sensitive-commands';
+	| 'sensitive-commands'
+	| 'systemprompt'
+	| 'customheaders';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -115,6 +119,10 @@ export default function WelcomeScreen({
 				setInlineView('subagent-list');
 			} else if (value === 'sensitive-commands') {
 				setInlineView('sensitive-commands');
+			} else if (value === 'systemprompt') {
+				setInlineView('systemprompt');
+			} else if (value === 'customheaders') {
+				setInlineView('customheaders');
 			} else {
 				// Pass through to parent for other actions (chat, exit, etc.)
 				onMenuSelect?.(value);
@@ -271,6 +279,16 @@ export default function WelcomeScreen({
 						onBack={handleBackToMenu}
 						inlineMode={true}
 					/>
+				</Box>
+			)}
+			{inlineView === 'systemprompt' && (
+				<Box paddingX={1}>
+					<SystemPromptConfigScreen onBack={handleBackToMenu} />
+				</Box>
+			)}
+			{inlineView === 'customheaders' && (
+				<Box paddingX={1}>
+					<CustomHeadersScreen onBack={handleBackToMenu} />
 				</Box>
 			)}
 		</Box>

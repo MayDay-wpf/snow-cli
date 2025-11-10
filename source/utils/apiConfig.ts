@@ -1,6 +1,12 @@
 import {homedir} from 'os';
 import {join} from 'path';
-import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
+import {
+	readFileSync,
+	writeFileSync,
+	existsSync,
+	mkdirSync,
+	unlinkSync,
+} from 'fs';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 
@@ -61,6 +67,42 @@ export interface AppConfig {
 	proxy?: ProxyConfig; // Proxy configuration
 }
 
+/**
+ * 系统提示词配置项
+ */
+export interface SystemPromptItem {
+	id: string; // 唯一标识
+	name: string; // 名称
+	content: string; // 提示词内容
+	createdAt: string; // 创建时间
+}
+
+/**
+ * 系统提示词配置
+ */
+export interface SystemPromptConfig {
+	active: string; // 当前激活的提示词 ID
+	prompts: SystemPromptItem[]; // 提示词列表
+}
+
+/**
+ * 自定义请求头方案项
+ */
+export interface CustomHeadersItem {
+	id: string; // 唯一标识
+	name: string; // 方案名称
+	headers: Record<string, string>; // 请求头键值对
+	createdAt: string; // 创建时间
+}
+
+/**
+ * 自定义请求头配置
+ */
+export interface CustomHeadersConfig {
+	active: string; // 当前激活的方案 ID
+	schemes: CustomHeadersItem[]; // 方案列表
+}
+
 const DEFAULT_CONFIG: AppConfig = {
 	snowcfg: {
 		baseUrl: 'https://api.openai.com/v1',
@@ -84,7 +126,8 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 
 const CONFIG_DIR = join(homedir(), '.snow');
 
-const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt');
+const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本，保留用于迁移
+const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新版本
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
@@ -340,30 +383,111 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 }
 
 /**
- * 读取自定义系统提示词
- * 如果 system-prompt.txt 文件存在且不为空，返回其内容
- * 否则返回 undefined (使用默认系统提示词)
+ * 从旧版本 system-prompt.txt 迁移到新版本 system-prompt.json
  */
-export function getCustomSystemPrompt(): string | undefined {
+function migrateSystemPromptFromTxt(): void {
+	if (!existsSync(SYSTEM_PROMPT_FILE)) {
+		return;
+	}
+
+	try {
+		const txtContent = readFileSync(SYSTEM_PROMPT_FILE, 'utf8');
+		if (txtContent.trim().length === 0) {
+			return;
+		}
+
+		// 创建默认配置，将旧内容作为默认项
+		const config: SystemPromptConfig = {
+			active: 'default',
+			prompts: [
+				{
+					id: 'default',
+					name: 'Default',
+					content: txtContent,
+					createdAt: new Date().toISOString(),
+				},
+			],
+		};
+
+		// 保存到新文件
+		writeFileSync(
+			SYSTEM_PROMPT_JSON_FILE,
+			JSON.stringify(config, null, 2),
+			'utf8',
+		);
+
+		// 删除旧文件
+		unlinkSync(SYSTEM_PROMPT_FILE);
+
+		console.log('✅ Migrated system prompt from txt to json format.');
+	} catch (error) {
+		console.error('Failed to migrate system prompt:', error);
+	}
+}
+
+/**
+ * 读取系统提示词配置
+ */
+export function getSystemPromptConfig(): SystemPromptConfig | undefined {
 	ensureConfigDirectory();
 
-	if (!existsSync(SYSTEM_PROMPT_FILE)) {
+	// 先尝试迁移旧版本
+	if (existsSync(SYSTEM_PROMPT_FILE) && !existsSync(SYSTEM_PROMPT_JSON_FILE)) {
+		migrateSystemPromptFromTxt();
+	}
+
+	// 读取 JSON 配置
+	if (!existsSync(SYSTEM_PROMPT_JSON_FILE)) {
 		return undefined;
 	}
 
 	try {
-		const content = readFileSync(SYSTEM_PROMPT_FILE, 'utf8');
-
-		// 只有当文件完全为空时才返回 undefined
-		if (content.length === 0) {
+		const content = readFileSync(SYSTEM_PROMPT_JSON_FILE, 'utf8');
+		if (content.trim().length === 0) {
 			return undefined;
 		}
 
-		// 返回原始内容，不做任何处理
-		return content;
-	} catch {
+		const config: SystemPromptConfig = JSON.parse(content);
+		return config;
+	} catch (error) {
+		console.error('Failed to read system prompt config:', error);
 		return undefined;
 	}
+}
+
+/**
+ * 保存系统提示词配置
+ */
+export function saveSystemPromptConfig(config: SystemPromptConfig): void {
+	ensureConfigDirectory();
+
+	try {
+		writeFileSync(
+			SYSTEM_PROMPT_JSON_FILE,
+			JSON.stringify(config, null, 2),
+			'utf8',
+		);
+	} catch (error) {
+		console.error('Failed to save system prompt config:', error);
+		throw error;
+	}
+}
+
+/**
+ * 读取自定义系统提示词（当前激活的）
+ * 兼容旧版本 system-prompt.txt
+ * 新版本从 system-prompt.json 读取当前激活的提示词
+ */
+export function getCustomSystemPrompt(): string | undefined {
+	const config = getSystemPromptConfig();
+
+	if (!config || !config.active) {
+		return undefined;
+	}
+
+	// 查找当前激活的提示词
+	const activePrompt = config.prompts.find(p => p.id === config.active);
+	return activePrompt?.content;
 }
 
 /**
@@ -374,39 +498,19 @@ export function getCustomSystemPrompt(): string | undefined {
 export function getCustomHeaders(): Record<string, string> {
 	ensureConfigDirectory();
 
-	if (!existsSync(CUSTOM_HEADERS_FILE)) {
+	const config = getCustomHeadersConfig();
+	if (!config || !config.active) {
 		return {};
 	}
 
-	try {
-		const content = readFileSync(CUSTOM_HEADERS_FILE, 'utf8');
-		const headers = JSON.parse(content);
-
-		// 验证格式：必须是对象，且所有值都是字符串
-		if (
-			typeof headers !== 'object' ||
-			headers === null ||
-			Array.isArray(headers)
-		) {
-			return {};
-		}
-
-		// 过滤掉非字符串的值
-		const validHeaders: Record<string, string> = {};
-		for (const [key, value] of Object.entries(headers)) {
-			if (typeof value === 'string') {
-				validHeaders[key] = value;
-			}
-		}
-
-		return validHeaders;
-	} catch {
-		return {};
-	}
+	// 查找当前激活的方案
+	const activeScheme = config.schemes.find(s => s.id === config.active);
+	return activeScheme?.headers || {};
 }
 
 /**
  * 保存自定义请求头配置
+ * @deprecated 使用 saveCustomHeadersConfig 替代
  */
 export function saveCustomHeaders(headers: Record<string, string>): void {
 	ensureConfigDirectory();
@@ -424,5 +528,84 @@ export function saveCustomHeaders(headers: Record<string, string>): void {
 		writeFileSync(CUSTOM_HEADERS_FILE, content, 'utf8');
 	} catch (error) {
 		throw new Error(`Failed to save custom headers: ${error}`);
+	}
+}
+
+/**
+ * 获取自定义请求头配置（多方案）
+ */
+export function getCustomHeadersConfig(): CustomHeadersConfig | null {
+	ensureConfigDirectory();
+
+	if (!existsSync(CUSTOM_HEADERS_FILE)) {
+		return null;
+	}
+
+	try {
+		const content = readFileSync(CUSTOM_HEADERS_FILE, 'utf8');
+		const data = JSON.parse(content);
+
+		// 兼容旧版本格式 (直接是 Record<string, string>)
+		if (
+			typeof data === 'object' &&
+			data !== null &&
+			!Array.isArray(data) &&
+			!('active' in data) &&
+			!('schemes' in data)
+		) {
+			// 旧格式：转换为新格式
+			const headers: Record<string, string> = {};
+			for (const [key, value] of Object.entries(data)) {
+				if (typeof value === 'string') {
+					headers[key] = value;
+				}
+			}
+
+			if (Object.keys(headers).length > 0) {
+				// 创建默认方案
+				const defaultScheme: CustomHeadersItem = {
+					id: Date.now().toString(),
+					name: 'Default Headers',
+					headers,
+					createdAt: new Date().toISOString(),
+				};
+
+				return {
+					active: defaultScheme.id,
+					schemes: [defaultScheme],
+				};
+			}
+
+			return null;
+		}
+
+		// 新格式：验证结构
+		if (
+			typeof data === 'object' &&
+			data !== null &&
+			'active' in data &&
+			'schemes' in data &&
+			Array.isArray(data.schemes)
+		) {
+			return data as CustomHeadersConfig;
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * 保存自定义请求头配置（多方案）
+ */
+export function saveCustomHeadersConfig(config: CustomHeadersConfig): void {
+	ensureConfigDirectory();
+
+	try {
+		const content = JSON.stringify(config, null, 2);
+		writeFileSync(CUSTOM_HEADERS_FILE, content, 'utf8');
+	} catch (error) {
+		throw new Error(`Failed to save custom headers config: ${error}`);
 	}
 }

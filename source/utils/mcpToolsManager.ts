@@ -552,7 +552,8 @@ export async function getMCPServicesInfo(): Promise<MCPServiceTools[]> {
 	if (!isCacheValid()) {
 		await refreshToolsCache();
 	}
-	return toolsCache!.servicesInfo;
+	// Ensure toolsCache is not null before accessing
+	return toolsCache?.servicesInfo || [];
 }
 
 /**
