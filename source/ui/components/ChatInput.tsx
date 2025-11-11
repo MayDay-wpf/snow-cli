@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useRef, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
-import {cpSlice} from '../../utils/textUtils.js';
+import {cpSlice, cpLen} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
 import AgentPickerPanel from './AgentPickerPanel.js';
@@ -369,13 +369,38 @@ export default function ChatInput({
 			const charInfo = buffer.getCharAtCursor();
 			const atCursor = charInfo.char === '\n' ? ' ' : charInfo.char;
 
-			return (
-				<Text>
-					{cpSlice(displayText, 0, cursorPos)}
-					{renderCursor(atCursor)}
-					{cpSlice(displayText, cursorPos + 1)}
-				</Text>
-			);
+			// Split text into lines for proper multi-line rendering
+			const lines = displayText.split('\n');
+			const renderedLines: React.ReactNode[] = [];
+			let currentPos = 0;
+
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i] || '';
+				const lineStart = currentPos;
+				const lineEnd = lineStart + cpLen(line);
+
+				// Check if cursor is in this line
+				if (cursorPos >= lineStart && cursorPos <= lineEnd) {
+					const beforeCursor = cpSlice(line, 0, cursorPos - lineStart);
+					const afterCursor = cpSlice(line, cursorPos - lineStart + 1);
+
+					renderedLines.push(
+						<Text key={i}>
+							{beforeCursor}
+							{renderCursor(atCursor)}
+							{afterCursor}
+						</Text>,
+					);
+				} else {
+					// No cursor in this line
+					renderedLines.push(<Text key={i}>{line || ' '}</Text>);
+				}
+
+				// Account for newline character
+				currentPos = lineEnd + 1;
+			}
+
+			return <Box flexDirection="column">{renderedLines}</Box>;
 		} else {
 			return (
 				<>

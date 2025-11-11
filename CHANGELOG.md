@@ -1,9 +1,15 @@
 # Changelog
 
+## v0.3.35
+
+- Enhance text input handling with improved paste detection and rendering
+
 ## v0.3.34
+
 - Make API key optional for local deployments in embedding functions and update validation messages
 
 ## v0.3.33
+
 - Added SystemPromptConfigScreen for managing system prompts,including add, edit, activate, and delete functionalities.
 - Integrated system prompt management into the WelcomeScreen foreasy access.
 - Migrated system prompt storage from a text file to a structuredJSON format for better management.
@@ -13,6 +19,7 @@
 - Ensured backward compatibility with existing system prompt data.
 
 ## v0.3.32
+
 - Add support for CodeBase
 
 ## v0.3.31

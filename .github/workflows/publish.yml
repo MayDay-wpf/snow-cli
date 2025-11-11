@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Make API key optional for local deployments in embedding functions and update validation messages
+            - Enhance text input handling with improved paste detection and rendering
             
             ### Installation
             ```bash

@@ -19,6 +19,10 @@ const TWO_STEP_TOOLS = new Set([
 	// 代码库搜索工具 - 需要生成 embedding 和搜索，耗时较长
 	'codebase-search',
 
+	// 联网搜索工具 - 需要启动浏览器、网络请求、内容处理，耗时较长
+	'websearch-search',
+	'websearch-fetch',
+
 	// 子代理工具 - 执行复杂任务，需要显示进度
 	// 所有以 'subagent-' 开头的工具都需要两步显示
 ]);

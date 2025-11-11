@@ -144,6 +144,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Track paste detection
 	const inputBuffer = useRef<string>('');
 	const inputTimer = useRef<NodeJS.Timeout | null>(null);
+	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
 
 	// Cleanup timer on unmount
 	useEffect(() => {
@@ -666,12 +667,32 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				clearTimeout(inputTimer.current);
 			}
 
+			// Detect large paste: if accumulated buffer is getting large, extend timeout
+			// This prevents splitting large pastes into multiple insert() calls
+			const currentLength = inputBuffer.current.length;
+			const timeoutDelay = currentLength > 200 ? 150 : 10;
+
+			// Show pasting indicator for large text (>300 chars)
+			// Simple static message - no progress animation
+			if (currentLength > 300 && !isPasting.current) {
+				isPasting.current = true;
+				buffer.insertPastingIndicator();
+				// Trigger UI update to show the indicator
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				triggerUpdate();
+			}
+
 			// Set timer to process accumulated input
 			inputTimer.current = setTimeout(() => {
 				const accumulated = inputBuffer.current;
 				inputBuffer.current = '';
+				isPasting.current = false; // Reset pasting state
 
-				// If we accumulated input, it's likely a paste
+				// If we accumulated input, insert it as a single operation
+				// The insert() method will automatically remove the pasting indicator
 				if (accumulated) {
 					buffer.insert(accumulated);
 					const text = buffer.getFullText();
@@ -680,7 +701,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					updateFilePickerState(text, cursorPos);
 					triggerUpdate();
 				}
-			}, 10); // Short delay to accumulate rapid input
+			}, timeoutDelay); // Extended delay for large pastes to ensure complete accumulation
 		}
 	});
 }
