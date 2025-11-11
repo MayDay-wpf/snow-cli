@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useRef, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
-import {cpSlice, cpLen} from '../../utils/textUtils.js';
+import {cpSlice} from '../../utils/textUtils.js';
 import CommandPanel from './CommandPanel.js';
 import FileList from './FileList.js';
 import AgentPickerPanel from './AgentPickerPanel.js';
@@ -361,43 +361,33 @@ export default function ChatInput({
 	);
 
 	// Render content with cursor (treat all text including placeholders as plain text)
-	const renderContent = useCallback(() => {
+	const renderContent = () => {
 		if (buffer.text.length > 0) {
-			// 使用buffer的内部文本,将占位符当作普通文本处理
-			const displayText = buffer.text;
-			const cursorPos = buffer.getCursorPosition();
-			const charInfo = buffer.getCharAtCursor();
-			const atCursor = charInfo.char === '\n' ? ' ' : charInfo.char;
-
-			// Split text into lines for proper multi-line rendering
-			const lines = displayText.split('\n');
+			// Use visual lines for proper wrapping and multi-line support
+			const visualLines = buffer.viewportVisualLines;
+			const [cursorRow, cursorCol] = buffer.visualCursor;
 			const renderedLines: React.ReactNode[] = [];
-			let currentPos = 0;
 
-			for (let i = 0; i < lines.length; i++) {
-				const line = lines[i] || '';
-				const lineStart = currentPos;
-				const lineEnd = lineStart + cpLen(line);
+			for (let i = 0; i < visualLines.length; i++) {
+				const line = visualLines[i] || '';
 
-				// Check if cursor is in this line
-				if (cursorPos >= lineStart && cursorPos <= lineEnd) {
-					const beforeCursor = cpSlice(line, 0, cursorPos - lineStart);
-					const afterCursor = cpSlice(line, cursorPos - lineStart + 1);
+				if (i === cursorRow) {
+					// This line contains the cursor
+					const beforeCursor = cpSlice(line, 0, cursorCol);
+					const atCursor = cpSlice(line, cursorCol, cursorCol + 1) || ' ';
+					const afterCursor = cpSlice(line, cursorCol + 1);
 
 					renderedLines.push(
-						<Text key={i}>
-							{beforeCursor}
+						<Box key={i} flexDirection="row">
+							<Text>{beforeCursor}</Text>
 							{renderCursor(atCursor)}
-							{afterCursor}
-						</Text>,
+							<Text>{afterCursor}</Text>
+						</Box>,
 					);
 				} else {
 					// No cursor in this line
 					renderedLines.push(<Text key={i}>{line || ' '}</Text>);
 				}
-
-				// Account for newline character
-				currentPos = lineEnd + 1;
 			}
 
 			return <Box flexDirection="column">{renderedLines}</Box>;
@@ -411,7 +401,7 @@ export default function ChatInput({
 				</>
 			);
 		}
-	}, [buffer, disabled, placeholder, renderCursor]); // 移除 buffer.text 避免循环依赖，buffer 变化时会自然触发重渲染
+	};
 
 	return (
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>

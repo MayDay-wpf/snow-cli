@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.36
+
+- Improve batch operations in filesystem tools and enhance keyboard input handling for better paste management
+
 ## v0.3.35
 
 - Enhance text input handling with improved paste detection and rendering

@@ -145,6 +145,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const inputBuffer = useRef<string>('');
 	const inputTimer = useRef<NodeJS.Timeout | null>(null);
 	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
+	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
 
 	// Cleanup timer on unmount
 	useEffect(() => {
@@ -570,6 +571,25 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Arrow keys for cursor movement
 		if (key.leftArrow) {
+			// If there's accumulated input, process it immediately before moving cursor
+			if (inputBuffer.current) {
+				if (inputTimer.current) {
+					clearTimeout(inputTimer.current);
+					inputTimer.current = null;
+				}
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				inputBuffer.current = '';
+				isPasting.current = false;
+
+				// Insert at saved position
+				buffer.setCursorPosition(savedCursorPosition);
+				buffer.insert(accumulated);
+
+				// Reset inputStartCursorPos after processing
+				inputStartCursorPos.current = buffer.getCursorPosition();
+			}
+
 			buffer.moveLeft();
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
@@ -579,6 +599,25 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		}
 
 		if (key.rightArrow) {
+			// If there's accumulated input, process it immediately before moving cursor
+			if (inputBuffer.current) {
+				if (inputTimer.current) {
+					clearTimeout(inputTimer.current);
+					inputTimer.current = null;
+				}
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				inputBuffer.current = '';
+				isPasting.current = false;
+
+				// Insert at saved position
+				buffer.setCursorPosition(savedCursorPosition);
+				buffer.insert(accumulated);
+
+				// Reset inputStartCursorPos after processing
+				inputStartCursorPos.current = buffer.getCursorPosition();
+			}
+
 			buffer.moveRight();
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
@@ -588,6 +627,25 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		}
 
 		if (key.upArrow && !showCommands && !showFilePicker) {
+			// If there's accumulated input, process it immediately before moving cursor
+			if (inputBuffer.current) {
+				if (inputTimer.current) {
+					clearTimeout(inputTimer.current);
+					inputTimer.current = null;
+				}
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				inputBuffer.current = '';
+				isPasting.current = false;
+
+				// Insert at saved position
+				buffer.setCursorPosition(savedCursorPosition);
+				buffer.insert(accumulated);
+
+				// Reset inputStartCursorPos after processing
+				inputStartCursorPos.current = buffer.getCursorPosition();
+			}
+
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
@@ -618,6 +676,25 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		}
 
 		if (key.downArrow && !showCommands && !showFilePicker) {
+			// If there's accumulated input, process it immediately before moving cursor
+			if (inputBuffer.current) {
+				if (inputTimer.current) {
+					clearTimeout(inputTimer.current);
+					inputTimer.current = null;
+				}
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				inputBuffer.current = '';
+				isPasting.current = false;
+
+				// Insert at saved position
+				buffer.setCursorPosition(savedCursorPosition);
+				buffer.insert(accumulated);
+
+				// Reset inputStartCursorPos after processing
+				inputStartCursorPos.current = buffer.getCursorPosition();
+			}
+
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
@@ -659,49 +736,95 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// events may arrive out of order or be filtered by sanitizeInput
 			ensureFocus();
 
-			// Accumulate input for paste detection
-			inputBuffer.current += input;
+			// Detect if this is a single character input (normal typing) or multi-character (paste)
+			const isSingleCharInput = input.length === 1;
 
-			// Clear existing timer
-			if (inputTimer.current) {
-				clearTimeout(inputTimer.current);
-			}
-
-			// Detect large paste: if accumulated buffer is getting large, extend timeout
-			// This prevents splitting large pastes into multiple insert() calls
-			const currentLength = inputBuffer.current.length;
-			const timeoutDelay = currentLength > 200 ? 150 : 10;
-
-			// Show pasting indicator for large text (>300 chars)
-			// Simple static message - no progress animation
-			if (currentLength > 300 && !isPasting.current) {
-				isPasting.current = true;
-				buffer.insertPastingIndicator();
-				// Trigger UI update to show the indicator
+			if (isSingleCharInput) {
+				// For single character input (normal typing), insert immediately
+				// This prevents the "disappearing text" issue at line start
+				buffer.insert(input);
 				const text = buffer.getFullText();
 				const cursorPos = buffer.getCursorPosition();
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				triggerUpdate();
-			}
+			} else {
+				// For multi-character input (paste), use the buffering mechanism
+				// Save cursor position when starting new input accumulation
+				const isStartingNewInput = inputBuffer.current === '';
+				if (isStartingNewInput) {
+					inputStartCursorPos.current = buffer.getCursorPosition();
+				}
 
-			// Set timer to process accumulated input
-			inputTimer.current = setTimeout(() => {
-				const accumulated = inputBuffer.current;
-				inputBuffer.current = '';
-				isPasting.current = false; // Reset pasting state
+				// Accumulate input for paste detection
+				inputBuffer.current += input;
 
-				// If we accumulated input, insert it as a single operation
-				// The insert() method will automatically remove the pasting indicator
-				if (accumulated) {
-					buffer.insert(accumulated);
+				// Clear existing timer
+				if (inputTimer.current) {
+					clearTimeout(inputTimer.current);
+				}
+
+				// Detect large paste: if accumulated buffer is getting large, extend timeout
+				// This prevents splitting large pastes into multiple insert() calls
+				const currentLength = inputBuffer.current.length;
+				const timeoutDelay = currentLength > 200 ? 150 : 10;
+
+				// Show pasting indicator for large text (>300 chars)
+				// Simple static message - no progress animation
+				if (currentLength > 300 && !isPasting.current) {
+					isPasting.current = true;
+					buffer.insertPastingIndicator();
+					// Trigger UI update to show the indicator
 					const text = buffer.getFullText();
 					const cursorPos = buffer.getCursorPosition();
 					updateCommandPanelState(text);
 					updateFilePickerState(text, cursorPos);
 					triggerUpdate();
 				}
-			}, timeoutDelay); // Extended delay for large pastes to ensure complete accumulation
+
+				// Set timer to process accumulated input
+				inputTimer.current = setTimeout(() => {
+					const accumulated = inputBuffer.current;
+					const savedCursorPosition = inputStartCursorPos.current;
+					const wasPasting = isPasting.current; // Save pasting state before clearing
+					inputBuffer.current = '';
+					isPasting.current = false; // Reset pasting state
+
+					// If we accumulated input, insert it at the saved cursor position
+					// The insert() method will automatically remove the pasting indicator
+					if (accumulated) {
+						// Get current cursor position to calculate if user moved cursor during input
+						const currentCursor = buffer.getCursorPosition();
+
+						// If cursor hasn't moved from where we started (or only moved due to pasting indicator),
+						// insert at the saved position
+						// Otherwise, insert at current position (user deliberately moved cursor)
+						// Note: wasPasting check uses saved state, not current isPasting.current
+						if (
+							currentCursor === savedCursorPosition ||
+							(wasPasting && currentCursor > savedCursorPosition)
+						) {
+							// Temporarily set cursor to saved position for insertion
+							// This is safe because we're in a timeout, not during active cursor movement
+							buffer.setCursorPosition(savedCursorPosition);
+							buffer.insert(accumulated);
+							// No need to restore cursor - insert() moves it naturally
+						} else {
+							// User moved cursor during input, insert at current position
+							buffer.insert(accumulated);
+						}
+
+						// Reset inputStartCursorPos after processing to prevent stale position
+						inputStartCursorPos.current = buffer.getCursorPosition();
+
+						const text = buffer.getFullText();
+						const cursorPos = buffer.getCursorPosition();
+						updateCommandPanelState(text);
+						updateFilePickerState(text, cursorPos);
+						triggerUpdate();
+					}
+				}, timeoutDelay); // Extended delay for large pastes to ensure complete accumulation
+			}
 		}
 	});
 }

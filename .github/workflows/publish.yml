@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Enhance text input handling with improved paste detection and rendering
+            - Improve batch operations in filesystem tools and enhance keyboard input handling for better paste management
             
             ### Installation
             ```bash

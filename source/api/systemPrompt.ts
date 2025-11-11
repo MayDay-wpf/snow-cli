@@ -147,46 +147,32 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 ## Available Tools
 
-**Filesystem:**
-- \`filesystem-read\` - Read files before editing
-- \`filesystem-edit\` - Modify existing files
-- \`filesystem-create\` - Create new files
+**Filesystem (SUPPORTS BATCH OPERATIONS):**
+- Read first and then modify to avoid grammatical errors caused by boundary judgment errors**
+
+**BATCH EDITING WORKFLOW - HIGH EFFICIENCY:**
+When modifying multiple files (extremely common in real projects):
+1. Use filesystem-read with array of files to read them ALL at once
+2. Use filesystem-edit or filesystem-edit_search with array config to modify ALL at once
+3. This saves multiple round trips and dramatically improves efficiency
+
+**BATCH EXAMPLES:**
+- Read multiple: \`filesystem-read(filePath=["a.ts", "b.ts", "c.ts"])\`
+- Edit multiple with same change: \`filesystem-edit_search(filePath=["a.ts", "b.ts"], searchContent="old", replaceContent="new")\`
+- Edit multiple with different changes: \`filesystem-edit_search(filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}])\`
+- Per-file line ranges: \`filesystem-edit(filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}])\`
+
+**CRITICAL EFFICIENCY RULE:**
+When you need to modify 2+ files, ALWAYS use batch operations instead of calling tools multiple times. This is faster, cleaner, and more reliable.
 
 **Code Search:**
 PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 
 **IDE Diagnostics:**
-- \`ide-get_diagnostics\` - Get real-time diagnostics (errors, warnings, hints) from connected IDE
-  - Supports VSCode and JetBrains IDEs
-  - Returns diagnostic info: severity, line/column, message, source
-  - Requires IDE plugin installed and running
-  - Use AFTER code changes to verify quality
+- After completing all tasks, it is recommended that you use this tool to check the error message in the IDE to avoid missing anything
 
 **Notebook (Code Memory):**
-- \`notebook-add\` - Record fragile code that new features might break during iteration
-  - Core purpose: Prevent new functionality from breaking old functionality
-  - Record: Bugs that recurred, fragile dependencies, critical constraints
-  - Examples: "validateInput() must run first - broke twice", "null return required by X"
-  - **IMPORTANT**: Use notebook for documentation, NOT separate .md files
-- \`notebook-query\` - Manual search (rarely needed, auto-shown when reading files)
-  - Auto-attached: Last 10 notebooks appear when reading ANY file
-  - Use before: Adding features that might affect existing behavior
-- \`notebook-update\` - Update existing note to fix mistakes or refine information
-  - Fix errors in previously recorded notes
-  - Clarify or improve wording after better understanding
-  - Update note when code changes but constraint still applies
-- \`notebook-delete\` - Remove outdated or incorrect notes
-  - Delete when code is refactored and note is obsolete
-  - Remove notes recorded by mistake
-  - Clean up after workarounds are properly fixed
-- \`notebook-list\` - View all notes for a specific file
-  - List all constraints for a file before making changes
-  - Find note IDs for update/delete operations
-  - Review all warnings before refactoring
-
-**Web Search:**
-- \`websearch-search\` - Search web for latest docs/solutions
-- \`websearch-fetch\` - Read web page content (always provide userQuery)
+- Instead of adding md instructions to your project too often, you should use this NoteBook tool for documentation
 
 **Terminal:**
 - \`terminal-execute\` - You have a comprehensive understanding of terminal pipe mechanisms and can help users 
@@ -238,12 +224,7 @@ system administration and data processing challenges.
 
 **PRACTICAL EXAMPLES:**
 
-**BAD - Doing everything in main agent:**
-- User: "Add user authentication"
-- Main: *reads 20 files, analyzes auth patterns, plans implementation, writes code*
-- Result: Main context bloated with analysis that won't be reused
-
-**GOOD - Aggressive delegation:**
+**Best - Aggressive delegation:**
 - User: "Add user authentication"
 - Main: Delegate to sub-agent → "Analyze current auth patterns and create implementation plan"
 - Sub-agent: *analyzes, returns concise plan*
@@ -342,18 +323,25 @@ function getWorkflowSection(hasCodebase: boolean): string {
 10. NO over-planning multi-step workflows for simple tasks`;
 	} else {
 		return `**Your workflow:**
-1. Read the primary file(s) mentioned
+1. Read the primary file(s) mentioned - USE BATCH READ if multiple files
 2. Use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\` to find related code
 3. Check dependencies/imports that directly impact the change
 4. Read related files ONLY if they're critical to understanding the task
-5. Write/modify code with proper context
+5. Write/modify code with proper context - USE BATCH EDIT if modifying 2+ files
 6. Verify with build
 7. NO excessive exploration beyond what's needed
 8. NO reading entire modules "for reference"
-9. NO over-planning multi-step workflows for simple tasks`;
+9. NO over-planning multi-step workflows for simple tasks
+
+**Golden Rule: Read what you need to write correct code, nothing more.**
+
+**BATCH OPERATIONS RULE:**
+When dealing with 2+ files, ALWAYS prefer batch operations:
+- Multiple reads? Use \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\` in ONE call
+- Multiple edits? Use \\\`filesystem-edit_search(filePath=[{...}, {...}])\\\` in ONE call
+- This is NOT optional for efficiency - batch operations are the EXPECTED workflow`;
 	}
 }
-
 /**
  * Generate code search section based on available tools
  */

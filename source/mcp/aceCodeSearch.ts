@@ -23,7 +23,6 @@ import {
 import {
 	isCommandAvailable,
 	parseGrepOutput,
-	globToRegex,
 } from './utils/aceCodeSearch/search.utils.js';
 
 export class ACECodeSearchService {
@@ -192,10 +191,11 @@ export class ACECodeSearchService {
 			try {
 				await fs.access(cachedPath);
 			} catch {
-				// File no longer exists, remove from cache
+				// File no longer exists, remove from all caches
 				this.indexCache.delete(cachedPath);
 				this.fileModTimes.delete(cachedPath);
 				this.allIndexedFiles.delete(cachedPath);
+				this.fileContentCache.delete(cachedPath);
 			}
 		}
 
@@ -418,6 +418,12 @@ export class ACECodeSearchService {
 	): Promise<CodeReference[]> {
 		const references: CodeReference[] = [];
 
+		// Load exclusion patterns
+		await this.loadExclusionPatterns();
+
+		// Escape special regex characters to prevent ReDoS
+		const escapedSymbol = symbolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 		const searchInDirectory = async (dirPath: string): Promise<void> => {
 			try {
 				const entries = await fs.readdir(dirPath, {withFileTypes: true});
@@ -428,12 +434,15 @@ export class ACECodeSearchService {
 					const fullPath = path.join(dirPath, entry.name);
 
 					if (entry.isDirectory()) {
+						// Use configurable exclusion check
 						if (
-							entry.name === 'node_modules' ||
-							entry.name === '.git' ||
-							entry.name === 'dist' ||
-							entry.name === 'build' ||
-							entry.name.startsWith('.')
+							shouldExcludeDirectory(
+								entry.name,
+								fullPath,
+								this.basePath,
+								this.customExcludes,
+								this.regexCache,
+							)
 						) {
 							continue;
 						}
@@ -445,11 +454,15 @@ export class ACECodeSearchService {
 								const content = await fs.readFile(fullPath, 'utf-8');
 								const lines = content.split('\n');
 
-								// Search for symbol usage
+								// Search for symbol usage with escaped symbol name
+								const regex = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
+
 								for (let i = 0; i < lines.length; i++) {
 									const line = lines[i];
 									if (!line) continue;
-									const regex = new RegExp(`\\b${symbolName}\\b`, 'g');
+
+									// Reset regex for each line
+									regex.lastIndex = 0;
 									let match;
 
 									while ((match = regex.exec(line)) !== null) {
@@ -460,11 +473,9 @@ export class ACECodeSearchService {
 										if (line.includes('import') && line.includes(symbolName)) {
 											referenceType = 'import';
 										} else if (
-											line.match(
-												new RegExp(
-													`(?:function|class|const|let|var)\\s+${symbolName}`,
-												),
-											)
+											new RegExp(
+												`(?:function|class|const|let|var)\\s+${escapedSymbol}`,
+											).test(line)
 										) {
 											referenceType = 'definition';
 										} else if (
@@ -568,22 +579,30 @@ export class ACECodeSearchService {
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
+		isRegex: boolean = false,
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		return new Promise((resolve, reject) => {
-			const args = [
-				'grep',
-				'--untracked',
-				'-n',
-				'-E',
-				'--ignore-case',
-				pattern,
-			];
+			const args = ['grep', '--untracked', '-n', '--ignore-case'];
+
+			// Use fixed-strings for literal search, extended regex for pattern search
+			if (isRegex) {
+				args.push('-E'); // Extended regex
+			} else {
+				args.push('--fixed-strings'); // Literal string matching
+			}
+
+			args.push(pattern);
 
 			if (fileGlob) {
-				// Expand glob patterns with braces (e.g., "source/**/*.{ts,tsx}" -> ["source/**/*.ts", "source/**/*.tsx"])
-				const expandedGlobs = this.expandGlobBraces(fileGlob);
+				// Normalize path separators for Windows compatibility
+				let gitGlob = fileGlob.replace(/\\/g, '/');
+				// Convert ** to * as git grep has limited ** support
+				gitGlob = gitGlob.replace(/\*\*/g, '*');
+
+				// Expand glob patterns with braces (e.g., "source/*.{ts,tsx}" -> ["source/*.ts", "source/*.tsx"])
+				const expandedGlobs = this.expandGlobBraces(gitGlob);
 				args.push('--', ...expandedGlobs);
 			}
 
@@ -658,13 +677,21 @@ export class ACECodeSearchService {
 				// Ripgrep uses --glob for filtering
 				excludeDirs.forEach(dir => args.push('--glob', `!${dir}/`));
 				if (fileGlob) {
-					args.push('--glob', fileGlob);
+					// Normalize path separators for Windows compatibility
+					const normalizedGlob = fileGlob.replace(/\\/g, '/');
+					// Expand glob patterns with braces
+					const expandedGlobs = this.expandGlobBraces(normalizedGlob);
+					expandedGlobs.forEach(glob => args.push('--glob', glob));
 				}
 			} else {
 				// System grep uses --exclude-dir
 				excludeDirs.forEach(dir => args.push(`--exclude-dir=${dir}`));
 				if (fileGlob) {
-					args.push(`--include=${fileGlob}`);
+					// Normalize path separators for Windows compatibility
+					const normalizedGlob = fileGlob.replace(/\\/g, '/');
+					// Expand glob patterns with braces
+					const expandedGlobs = this.expandGlobBraces(normalizedGlob);
+					expandedGlobs.forEach(glob => args.push(`--include=${glob}`));
 				}
 				args.push(pattern, '.');
 			}
@@ -719,6 +746,33 @@ export class ACECodeSearchService {
 	}
 
 	/**
+	 * Convert a glob pattern to a RegExp that matches full paths
+	 * Supports: *, **, ?, {a,b}, [abc]
+	 */
+	private globPatternToRegex(globPattern: string): RegExp {
+		// Normalize path separators
+		const normalizedGlob = globPattern.replace(/\\/g, '/');
+
+		// First, temporarily replace glob special patterns with placeholders
+		// to prevent them from being escaped
+		let regexStr = normalizedGlob
+			.replace(/\*\*/g, '\x00DOUBLESTAR\x00') // ** -> placeholder
+			.replace(/\*/g, '\x00STAR\x00') // * -> placeholder
+			.replace(/\?/g, '\x00QUESTION\x00'); // ? -> placeholder
+
+		// Now escape all special regex characters
+		regexStr = regexStr.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+
+		// Replace placeholders with actual regex patterns
+		regexStr = regexStr
+			.replace(/\x00DOUBLESTAR\x00/g, '.*') // ** -> .* (match any path segments)
+			.replace(/\x00STAR\x00/g, '[^/]*') // * -> [^/]* (match within single segment)
+			.replace(/\x00QUESTION\x00/g, '.'); // ? -> . (match single character)
+
+		return new RegExp(regexStr, 'i');
+	}
+
+	/**
 	 * Strategy 3: Pure JavaScript fallback search
 	 */
 	private async jsTextSearch(
@@ -736,6 +790,9 @@ export class ACECodeSearchService {
 			content: string;
 		}> = [];
 
+		// Load exclusion patterns
+		await this.loadExclusionPatterns();
+
 		// Compile search pattern
 		let searchRegex: RegExp;
 		try {
@@ -750,8 +807,43 @@ export class ACECodeSearchService {
 			throw new Error(`Invalid regex pattern: ${pattern}`);
 		}
 
-		// Parse glob pattern if provided
-		const globRegex = fileGlob ? globToRegex(fileGlob) : null;
+		// Parse glob pattern if provided using improved glob parser
+		const globRegex = fileGlob ? this.globPatternToRegex(fileGlob) : null;
+
+		// Binary file extensions (using Set for O(1) lookup)
+		const binaryExts = new Set([
+			'.jpg',
+			'.jpeg',
+			'.png',
+			'.gif',
+			'.bmp',
+			'.ico',
+			'.svg',
+			'.pdf',
+			'.zip',
+			'.tar',
+			'.gz',
+			'.rar',
+			'.7z',
+			'.exe',
+			'.dll',
+			'.so',
+			'.dylib',
+			'.mp3',
+			'.mp4',
+			'.avi',
+			'.mov',
+			'.woff',
+			'.woff2',
+			'.ttf',
+			'.eot',
+			'.class',
+			'.jar',
+			'.war',
+			'.o',
+			'.a',
+			'.lib',
+		]);
 
 		// Search recursively
 		const searchInDirectory = async (dirPath: string): Promise<void> => {
@@ -766,64 +858,34 @@ export class ACECodeSearchService {
 					const fullPath = path.join(dirPath, entry.name);
 
 					if (entry.isDirectory()) {
-						// Skip ignored directories
+						// Use configurable exclusion check
 						if (
-							entry.name === 'node_modules' ||
-							entry.name === '.git' ||
-							entry.name === 'dist' ||
-							entry.name === 'build' ||
-							entry.name === '__pycache__' ||
-							entry.name === 'target' ||
-							entry.name === '.next' ||
-							entry.name === '.nuxt' ||
-							entry.name === 'coverage' ||
-							entry.name.startsWith('.')
+							shouldExcludeDirectory(
+								entry.name,
+								fullPath,
+								this.basePath,
+								this.customExcludes,
+								this.regexCache,
+							)
 						) {
 							continue;
 						}
 						await searchInDirectory(fullPath);
 					} else if (entry.isFile()) {
 						// Filter by glob if specified
-						if (globRegex && !globRegex.test(fullPath)) {
-							continue;
+						if (globRegex) {
+							// Use relative path from basePath for glob matching
+							const relativePath = path
+								.relative(this.basePath, fullPath)
+								.replace(/\\/g, '/');
+							if (!globRegex.test(relativePath)) {
+								continue;
+							}
 						}
 
-						// Skip binary files
+						// Skip binary files (using Set for fast lookup)
 						const ext = path.extname(entry.name).toLowerCase();
-						const binaryExts = [
-							'.jpg',
-							'.jpeg',
-							'.png',
-							'.gif',
-							'.bmp',
-							'.ico',
-							'.svg',
-							'.pdf',
-							'.zip',
-							'.tar',
-							'.gz',
-							'.rar',
-							'.7z',
-							'.exe',
-							'.dll',
-							'.so',
-							'.dylib',
-							'.mp3',
-							'.mp4',
-							'.avi',
-							'.mov',
-							'.woff',
-							'.woff2',
-							'.ttf',
-							'.eot',
-							'.class',
-							'.jar',
-							'.war',
-							'.o',
-							'.a',
-							'.lib',
-						];
-						if (binaryExts.includes(ext)) {
+						if (binaryExts.has(ext)) {
 							continue;
 						}
 
@@ -888,10 +950,9 @@ export class ACECodeSearchService {
 						pattern,
 						fileGlob,
 						maxResults,
+						isRegex,
 					);
-					if (results.length > 0 || !isRegex) {
-						// git grep doesn't support all regex features,
-						// fall back if pattern is complex regex and no results
+					if (results.length > 0) {
 						return await this.sortResultsByRecency(results);
 					}
 				}
@@ -931,6 +992,7 @@ export class ACECodeSearchService {
 	/**
 	 * Sort search results by file modification time (recent files first)
 	 * Files modified within last 24 hours are prioritized
+	 * Uses parallel stat calls for better performance
 	 */
 	private async sortResultsByRecency(
 		results: Array<{
@@ -947,20 +1009,28 @@ export class ACECodeSearchService {
 		const now = Date.now();
 		const recentThreshold = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-		// Get file modification times
-		const fileModTimes = new Map<string, number>();
-		for (const result of results) {
-			if (fileModTimes.has(result.filePath)) continue;
+		// Get unique file paths
+		const uniqueFiles = Array.from(new Set(results.map(r => r.filePath)));
 
-			try {
-				const fullPath = path.resolve(this.basePath, result.filePath);
+		// Fetch file modification times in parallel using Promise.allSettled
+		const statResults = await Promise.allSettled(
+			uniqueFiles.map(async filePath => {
+				const fullPath = path.resolve(this.basePath, filePath);
 				const stats = await fs.stat(fullPath);
-				fileModTimes.set(result.filePath, stats.mtimeMs);
-			} catch {
+				return {filePath, mtimeMs: stats.mtimeMs};
+			}),
+		);
+
+		// Build map of file modification times
+		const fileModTimes = new Map<string, number>();
+		statResults.forEach((result, index) => {
+			if (result.status === 'fulfilled') {
+				fileModTimes.set(result.value.filePath, result.value.mtimeMs);
+			} else {
 				// If we can't get stats, treat as old file
-				fileModTimes.set(result.filePath, 0);
+				fileModTimes.set(uniqueFiles[index]!, 0);
 			}
-		}
+		});
 
 		// Sort results: recent files first, then by original order
 		return results.sort((a, b) => {

@@ -109,6 +109,12 @@ export class TextBuffer {
 		return this.cursorIndex;
 	}
 
+	setCursorPosition(position: number): void {
+		this.cursorIndex = position;
+		this.clampCursorIndex();
+		this.recomputeVisualCursorOnly();
+	}
+
 	get viewportVisualLines(): string[] {
 		return this.visualLines;
 	}
@@ -147,9 +153,23 @@ export class TextBuffer {
 
 		const charCount = sanitized.length;
 
-		// 如果存在临时"粘贴中"占位符，先移除它
+		// 如果存在临时"粘贴中"占位符，先移除它，并调整光标位置
 		if (this.tempPastingPlaceholder) {
-			this.content = this.content.replace(this.tempPastingPlaceholder, '');
+			const placeholderIndex = this.content.indexOf(this.tempPastingPlaceholder);
+			if (placeholderIndex !== -1) {
+				// 找到占位符的位置
+				const placeholderLength = cpLen(this.tempPastingPlaceholder);
+
+				// 移除占位符
+				this.content =
+					this.content.slice(0, placeholderIndex) +
+					this.content.slice(placeholderIndex + this.tempPastingPlaceholder.length);
+
+				// 调整光标位置:如果光标在占位符之后,需要向前移动
+				if (this.cursorIndex > placeholderIndex) {
+					this.cursorIndex = Math.max(placeholderIndex, this.cursorIndex - placeholderLength);
+				}
+			}
 			this.tempPastingPlaceholder = null;
 		}
 
@@ -392,12 +412,69 @@ export class TextBuffer {
 		const segments: string[] = [];
 		let start = 0;
 
+		// Helper function to find placeholder at given position
+		const findPlaceholderAt = (pos: number): {start: number; end: number} | null => {
+			// Look backwards to find the opening bracket
+			let openPos = pos;
+			while (openPos >= 0 && codePoints[openPos] !== '[') {
+				openPos--;
+			}
+
+			if (openPos >= 0 && codePoints[openPos] === '[') {
+				// Look forward to find the closing bracket
+				let closePos = openPos + 1;
+				while (closePos < codePoints.length && codePoints[closePos] !== ']') {
+					closePos++;
+				}
+
+				if (closePos < codePoints.length && codePoints[closePos] === ']') {
+					const placeholderText = codePoints.slice(openPos, closePos + 1).join('');
+					// Check if it's a valid placeholder
+					if (
+						placeholderText.match(/^\[Paste \d+ lines #\d+\]$/) ||
+						placeholderText.match(/^\[image #\d+\]$/) ||
+						placeholderText === '[Pasting...]'
+					) {
+						return {start: openPos, end: closePos + 1};
+					}
+				}
+			}
+
+			return null;
+		};
+
 		while (start < codePoints.length) {
 			let currentWidth = 0;
 			let end = start;
 			let lastBreak = -1;
 
 			while (end < codePoints.length) {
+				// Check if current position is start of a placeholder
+				if (codePoints[end] === '[') {
+					const placeholder = findPlaceholderAt(end);
+					if (placeholder && placeholder.start === end) {
+						const placeholderText = codePoints.slice(placeholder.start, placeholder.end).join('');
+						const placeholderWidth = Array.from(placeholderText).reduce(
+							(sum, c) => sum + visualWidth(c),
+							0
+						);
+
+						// If placeholder fits on current line, include it
+						if (currentWidth + placeholderWidth <= width) {
+							currentWidth += placeholderWidth;
+							end = placeholder.end;
+							continue;
+						} else if (currentWidth === 0) {
+							// Placeholder doesn't fit but we're at line start, force it on this line
+							end = placeholder.end;
+							break;
+						} else {
+							// Placeholder doesn't fit, break before it
+							break;
+						}
+					}
+				}
+
 				const char = codePoints[end] || '';
 				const charWidth = visualWidth(char);
 
@@ -500,8 +577,8 @@ export class TextBuffer {
 	 */
 	getImages(): ImageData[] {
 		return Array.from(this.placeholderStorage.values())
-			.filter((p) => p.type === 'image')
-			.map((p) => {
+			.filter(p => p.type === 'image')
+			.map(p => {
 				const mimeType = p.mimeType || 'image/png';
 				// 还原为 data URL 格式
 				const dataUrl = `data:${mimeType};base64,${p.content}`;
