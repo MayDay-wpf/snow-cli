@@ -20,9 +20,23 @@ let writeQueue = Promise.resolve();
 async function getActiveProfile(): Promise<string> {
 	try {
 		const homeDir = os.homedir();
-		const profilePath = path.join(homeDir, '.snow', 'active-profile.txt');
-		const profileName = await fs.readFile(profilePath, 'utf-8');
-		return profileName.trim();
+		const jsonPath = path.join(homeDir, '.snow', 'active-profile.json');
+		const legacyPath = path.join(homeDir, '.snow', 'active-profile.txt');
+
+		// Try JSON format first
+		try {
+			const fileContent = await fs.readFile(jsonPath, 'utf-8');
+			const data = JSON.parse(fileContent.trim());
+			return data.activeProfile || 'default';
+		} catch {
+			// Fallback to legacy .txt format if JSON doesn't exist
+			try {
+				const profileName = await fs.readFile(legacyPath, 'utf-8');
+				return profileName.trim() || 'default';
+			} catch {
+				return 'default';
+			}
+		}
 	} catch (error) {
 		return 'default';
 	}

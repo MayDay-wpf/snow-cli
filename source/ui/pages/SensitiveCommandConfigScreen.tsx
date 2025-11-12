@@ -10,6 +10,7 @@ import {
 	resetToDefaults,
 	type SensitiveCommand,
 } from '../../utils/sensitiveCommandManager.js';
+import {useI18n} from '../../i18n/index.js';
 
 // Focus event handling
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -52,6 +53,7 @@ export default function SensitiveCommandConfigScreen({
 	onBack,
 	inlineMode = false,
 }: Props) {
+	const {t} = useI18n();
 	const [commands, setCommands] = useState<SensitiveCommand[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -109,11 +111,10 @@ export default function SensitiveCommandConfigScreen({
 				if (cmd) {
 					toggleSensitiveCommand(cmd.id);
 					loadCommands();
-					setSuccessMessage(
-						cmd.enabled
-							? `Disabled: ${cmd.pattern}`
-							: `Enabled: ${cmd.pattern}`,
-					);
+					const message = cmd.enabled
+						? t.sensitiveCommandConfig.disabledMessage
+						: t.sensitiveCommandConfig.enabledMessage;
+					setSuccessMessage(message.replace('{pattern}', cmd.pattern));
 					setShowSuccess(true);
 					setTimeout(() => setShowSuccess(false), 2000);
 				}
@@ -136,7 +137,12 @@ export default function SensitiveCommandConfigScreen({
 						removeSensitiveCommand(cmd.id);
 						loadCommands();
 						setSelectedIndex(prev => Math.min(prev, commands.length - 2));
-						setSuccessMessage(`Deleted: ${cmd.pattern}`);
+						setSuccessMessage(
+							t.sensitiveCommandConfig.deletedMessage.replace(
+								'{pattern}',
+								cmd.pattern,
+							),
+						);
 						setShowSuccess(true);
 						setTimeout(() => setShowSuccess(false), 2000);
 						setConfirmDelete(false);
@@ -153,7 +159,7 @@ export default function SensitiveCommandConfigScreen({
 					resetToDefaults();
 					loadCommands();
 					setSelectedIndex(0);
-					setSuccessMessage('Reset to default commands');
+					setSuccessMessage(t.sensitiveCommandConfig.resetMessage);
 					setShowSuccess(true);
 					setTimeout(() => setShowSuccess(false), 2000);
 					setConfirmReset(false);
@@ -167,6 +173,7 @@ export default function SensitiveCommandConfigScreen({
 			loadCommands,
 			confirmDelete,
 			confirmReset,
+			t,
 		],
 	);
 
@@ -219,7 +226,12 @@ export default function SensitiveCommandConfigScreen({
 					addSensitiveCommand(customPattern.trim(), customDescription.trim());
 					loadCommands();
 					setViewMode('list');
-					setSuccessMessage(`Added: ${customPattern}`);
+					setSuccessMessage(
+						t.sensitiveCommandConfig.addedMessage.replace(
+							'{pattern}',
+							customPattern,
+						),
+					);
 					setShowSuccess(true);
 					setTimeout(() => setShowSuccess(false), 2000);
 				} catch (error: any) {
@@ -227,17 +239,17 @@ export default function SensitiveCommandConfigScreen({
 				}
 			}
 		}
-	}, [addField, customPattern, customDescription, loadCommands]);
+	}, [addField, customPattern, customDescription, loadCommands, t]);
 
 	if (viewMode === 'add') {
 		return (
 			<Box flexDirection="column" paddingX={inlineMode ? 0 : 2} paddingY={1}>
 				<Text bold color="cyan">
-					Add Custom Sensitive Command
+					{t.sensitiveCommandConfig.addTitle}
 				</Text>
 				<Box marginTop={1} />
 
-				<Text dimColor>Pattern (supports wildcards, e.g., "rm*"):</Text>
+				<Text dimColor>{t.sensitiveCommandConfig.patternLabel}</Text>
 				<Box>
 					<Text color={addField === 'pattern' ? 'cyan' : 'gray'}>❯ </Text>
 					<TextInput
@@ -245,11 +257,12 @@ export default function SensitiveCommandConfigScreen({
 						onChange={handlePatternChange}
 						onSubmit={handleAddSubmit}
 						focus={addField === 'pattern'}
+						placeholder={t.sensitiveCommandConfig.patternPlaceholder}
 					/>
 				</Box>
 
 				<Box marginTop={1} />
-				<Text dimColor>Description:</Text>
+				<Text dimColor>{t.sensitiveCommandConfig.descriptionLabel}</Text>
 				<Box>
 					<Text color={addField === 'description' ? 'cyan' : 'gray'}>❯ </Text>
 					<TextInput
@@ -261,7 +274,7 @@ export default function SensitiveCommandConfigScreen({
 				</Box>
 
 				<Box marginTop={1} />
-				<Text dimColor>Tab: Switch • Enter: Submit • Esc: Cancel</Text>
+				<Text dimColor>{t.sensitiveCommandConfig.addEditingHint}</Text>
 			</Box>
 		);
 	}
@@ -280,12 +293,9 @@ export default function SensitiveCommandConfigScreen({
 	return (
 		<Box flexDirection="column" paddingX={inlineMode ? 0 : 2} paddingY={1}>
 			<Text bold color="cyan">
-				Sensitive Command Protection
+				{t.sensitiveCommandConfig.title}
 			</Text>
-			<Text dimColor>
-				Configure commands that require confirmation even in
-				YOLO/Always-Approved mode
-			</Text>
+			<Text dimColor>{t.sensitiveCommandConfig.subtitle}</Text>
 
 			{showSuccess && (
 				<Box marginTop={1}>
@@ -296,7 +306,7 @@ export default function SensitiveCommandConfigScreen({
 			<Box marginTop={1} />
 
 			{commands.length === 0 ? (
-				<Text dimColor>No commands configured</Text>
+				<Text dimColor>{t.sensitiveCommandConfig.noCommands}</Text>
 			) : (
 				commands.map((cmd, index) => {
 					// Only render items in the visible viewport
@@ -319,7 +329,9 @@ export default function SensitiveCommandConfigScreen({
 						>
 							{selectedIndex === index ? '❯ ' : '  '}[{cmd.enabled ? '✓' : ' '}]{' '}
 							{cmd.pattern}
-							{!cmd.isPreset && <Text color="yellow"> (custom)</Text>}
+							{!cmd.isPreset && (
+								<Text color="yellow"> ({t.sensitiveCommandConfig.custom})</Text>
+							)}
 						</Text>
 					);
 				})
@@ -329,28 +341,35 @@ export default function SensitiveCommandConfigScreen({
 			{selectedCmd && !confirmDelete && !confirmReset && (
 				<Text dimColor>
 					{selectedCmd.description} (
-					{selectedCmd.enabled ? 'Enabled' : 'Disabled'})
-					{!selectedCmd.isPreset && ' [Custom]'}
+					{selectedCmd.enabled
+						? t.sensitiveCommandConfig.enabled
+						: t.sensitiveCommandConfig.disabled}
+					)
+					{!selectedCmd.isPreset &&
+						` [${t.sensitiveCommandConfig.customLabel}]`}
 				</Text>
 			)}
 
 			{confirmDelete && selectedCmd && (
 				<Text bold color="yellow">
-					⚠️ Press D again to confirm deletion of "{selectedCmd.pattern}"
+					{t.sensitiveCommandConfig.confirmDeleteMessage.replace(
+						'{pattern}',
+						selectedCmd.pattern,
+					)}
 				</Text>
 			)}
 
 			{confirmReset && (
 				<Text bold color="yellow">
-					⚠️ Press R again to confirm reset to default commands
+					{t.sensitiveCommandConfig.confirmResetMessage}
 				</Text>
 			)}
 
 			<Box marginTop={1} />
 			<Text dimColor>
 				{confirmDelete || confirmReset
-					? 'Press the same key again to confirm • Esc: Cancel'
-					: '↑↓: Navigate • Space: Toggle • A: Add • D: Delete • R: Reset • Esc: Back'}
+					? t.sensitiveCommandConfig.confirmHint
+					: t.sensitiveCommandConfig.listNavigationHint}
 			</Text>
 		</Box>
 	);

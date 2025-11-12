@@ -8,6 +8,7 @@ import {
 	updateProxyConfig,
 	type ProxyConfig,
 } from '../../utils/apiConfig.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -20,6 +21,7 @@ export default function ProxyConfigScreen({
 	onSave,
 	inlineMode = false,
 }: Props) {
+	const {t} = useI18n();
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
 	const [browserPath, setBrowserPath] = useState('');
@@ -41,7 +43,7 @@ export default function ProxyConfigScreen({
 		const portNum = parseInt(port, 10);
 
 		if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-			validationErrors.push('Port must be a number between 1 and 65535');
+			validationErrors.push(t.proxyConfig.portValidationError);
 		}
 
 		return validationErrors;
@@ -111,9 +113,9 @@ export default function ProxyConfigScreen({
 					paddingY={1}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">Proxy Configuration</Gradient>
+						<Gradient name="rainbow">{t.proxyConfig.title}</Gradient>
 						<Text color="gray" dimColor>
-							Configure system proxy for web search and fetch
+							{t.proxyConfig.subtitle}
 						</Text>
 					</Box>
 				</Box>
@@ -123,12 +125,13 @@ export default function ProxyConfigScreen({
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'enabled' ? 'green' : 'white'}>
-							{currentField === 'enabled' ? '❯ ' : '  '}Enable Proxy:
+							{currentField === 'enabled' ? '❯ ' : '  '}
+							{t.proxyConfig.enableProxy}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{enabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
-								toggle)
+								{enabled ? t.proxyConfig.enabled : t.proxyConfig.disabled}{' '}
+								{t.proxyConfig.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -137,16 +140,21 @@ export default function ProxyConfigScreen({
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'port' ? 'green' : 'white'}>
-							{currentField === 'port' ? '❯ ' : '  '}Proxy Port:
+							{currentField === 'port' ? '❯ ' : '  '}
+							{t.proxyConfig.proxyPort}
 						</Text>
 						{currentField === 'port' && isEditing && (
 							<Box marginLeft={3}>
-								<TextInput value={port} onChange={setPort} placeholder="7890" />
+								<TextInput
+									value={port}
+									onChange={setPort}
+									placeholder={t.proxyConfig.portPlaceholder}
+								/>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'port') && (
 							<Box marginLeft={3}>
-								<Text color="gray">{port || 'Not set'}</Text>
+								<Text color="gray">{port || t.proxyConfig.notSet}</Text>
 							</Box>
 						)}
 					</Box>
@@ -155,21 +163,23 @@ export default function ProxyConfigScreen({
 				<Box marginBottom={1}>
 					<Box flexDirection="column">
 						<Text color={currentField === 'browserPath' ? 'green' : 'white'}>
-							{currentField === 'browserPath' ? '❯ ' : '  '}Browser Path
-							(Optional):
+							{currentField === 'browserPath' ? '❯ ' : '  '}
+							{t.proxyConfig.browserPath}
 						</Text>
 						{currentField === 'browserPath' && isEditing && (
 							<Box marginLeft={3}>
 								<TextInput
 									value={browserPath}
 									onChange={setBrowserPath}
-									placeholder="Leave empty for auto-detect"
+									placeholder={t.proxyConfig.browserPathPlaceholder}
 								/>
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'browserPath') && (
 							<Box marginLeft={3}>
-								<Text color="gray">{browserPath || 'Auto-detect'}</Text>
+								<Text color="gray">
+									{browserPath || t.proxyConfig.autoDetect}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -179,7 +189,7 @@ export default function ProxyConfigScreen({
 			{errors.length > 0 && (
 				<Box flexDirection="column" marginBottom={2}>
 					<Text color="red" bold>
-						Errors:
+						{t.proxyConfig.errors}
 					</Text>
 					{errors.map((error, index) => (
 						<Text key={index} color="red">
@@ -192,37 +202,22 @@ export default function ProxyConfigScreen({
 			<Box flexDirection="column">
 				{isEditing ? (
 					<>
-						<Alert variant="info">
-							Editing mode: Press Enter to save and exit editing (Make your
-							changes and press Enter when done)
-						</Alert>
+						<Alert variant="info">{t.proxyConfig.editingHint}</Alert>
 					</>
 				) : (
 					<>
-						<Alert variant="info">
-							Use ↑↓ to navigate between fields, press Enter to edit/toggle, and
-							press Ctrl+S or Esc to save and return
-						</Alert>
+						<Alert variant="info">{t.proxyConfig.navigationHint}</Alert>
 					</>
 				)}
 			</Box>
 
 			<Box flexDirection="column" marginTop={1}>
 				<Alert variant="info">
-					Browser Path Examples: <Newline />
-					<Text color={'blue'}>
-						• Windows: C:\Program
-						Files(x86)\Microsoft\Edge\Application\msedge.exe
-					</Text>{' '}
-					<Newline />
-					<Text color={'green'}>
-						• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google
-						Chrome
-					</Text>{' '}
-					<Newline />
-					<Text color={'yellow'}>• Linux: /usr/bin/chromium-browser</Text>{' '}
-					<Newline />
-					Leave empty to auto-detect system browser (Edge/Chrome)
+					{t.proxyConfig.browserExamplesTitle} <Newline />
+					<Text color={'blue'}>{t.proxyConfig.windowsExample}</Text> <Newline />
+					<Text color={'green'}>{t.proxyConfig.macosExample}</Text> <Newline />
+					<Text color={'yellow'}>{t.proxyConfig.linuxExample}</Text> <Newline />
+					{t.proxyConfig.browserExamplesFooter}
 				</Alert>
 			</Box>
 		</Box>

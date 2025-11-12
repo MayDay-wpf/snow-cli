@@ -10,6 +10,7 @@ export interface SubAgent {
 	tools: string[];
 	createdAt: string;
 	updatedAt: string;
+	builtin?: boolean; // Mark if this is a built-in agent
 }
 
 export interface SubAgentsConfig {
@@ -18,6 +19,81 @@ export interface SubAgentsConfig {
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const SUB_AGENTS_CONFIG_FILE = join(CONFIG_DIR, 'sub-agents.json');
+
+/**
+ * Built-in sub-agents (hardcoded, always available)
+ */
+const BUILTIN_AGENTS: SubAgent[] = [
+	{
+		id: 'agent_explore',
+		name: 'Explore Agent',
+		description:
+			'Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and dependencies. Read-only operations.',
+		role: 'You are a specialized code exploration agent. Your task is to help users understand codebase structure, locate specific code, and analyze dependencies. Use search and analysis tools to explore code, but do not modify any files or execute commands. Focus on code discovery and understanding.',
+		tools: [
+			'filesystem-read',
+			'ace-find_definition',
+			'ace-find_references',
+			'ace-semantic_search',
+			'ace-text_search',
+			'ace-file_outline',
+			'codebase-search',
+			'websearch-search',
+			'websearch-fetch',
+		],
+		createdAt: '2024-01-01T00:00:00.000Z',
+		updatedAt: '2024-01-01T00:00:00.000Z',
+		builtin: true,
+	},
+	{
+		id: 'agent_plan',
+		name: 'Plan Agent',
+		description:
+			'Specialized for planning complex tasks. Analyzes requirements, explores code, identifies relevant files, and creates detailed implementation plans. Read-only operations.',
+		role: 'You are a specialized task planning agent. Your task is to analyze user requirements, explore existing codebase, identify relevant files and dependencies, and then create detailed implementation plans. Use search and analysis tools to gather information, check diagnostics to understand current state, but do not execute actual modifications. Output clear step-by-step plans including files to modify, suggested implementation approaches, and important considerations.',
+		tools: [
+			'filesystem-read',
+			'ace-find_definition',
+			'ace-find_references',
+			'ace-semantic_search',
+			'ace-text_search',
+			'ace-file_outline',
+			'ide-get_diagnostics',
+			'codebase-search',
+			'websearch-search',
+			'websearch-fetch',
+		],
+		createdAt: '2024-01-01T00:00:00.000Z',
+		updatedAt: '2024-01-01T00:00:00.000Z',
+		builtin: true,
+	},
+	{
+		id: 'agent_general',
+		name: 'General Purpose Agent',
+		description:
+			'General-purpose multi-step task execution agent. Has complete tool access for searching, modifying files, and executing commands. Best for complex tasks requiring actual operations.',
+		role: 'You are a general-purpose task execution agent. You can perform various complex multi-step tasks, including searching code, modifying files, executing commands, etc. When given a task, systematically break it down and execute. You have access to all tools and should select appropriate tools as needed to complete tasks efficiently.',
+		tools: [
+			'filesystem-read',
+			'filesystem-create',
+			'filesystem-edit',
+			'filesystem-edit_search',
+			'terminal-execute',
+			'ace-find_definition',
+			'ace-find_references',
+			'ace-semantic_search',
+			'ace-text_search',
+			'ace-file_outline',
+			'websearch-search',
+			'websearch-fetch',
+			'ide-get_diagnostics',
+			'codebase-search',
+		],
+		createdAt: '2024-01-01T00:00:00.000Z',
+		updatedAt: '2024-01-01T00:00:00.000Z',
+		builtin: true,
+	},
+];
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
@@ -30,9 +106,9 @@ function generateId(): string {
 }
 
 /**
- * Get all sub-agents
+ * Get user-configured sub-agents only (exported for MCP tool generation)
  */
-export function getSubAgents(): SubAgent[] {
+export function getUserSubAgents(): SubAgent[] {
 	try {
 		ensureConfigDirectory();
 
@@ -50,7 +126,16 @@ export function getSubAgents(): SubAgent[] {
 }
 
 /**
- * Get a sub-agent by ID
+ * Get all sub-agents (built-in + user-configured)
+ */
+export function getSubAgents(): SubAgent[] {
+	const userAgents = getUserSubAgents();
+	// Return built-in agents first, then user-configured agents
+	return [...BUILTIN_AGENTS, ...userAgents];
+}
+
+/**
+ * Get a sub-agent by ID (checks both built-in and user-configured)
  */
 export function getSubAgent(id: string): SubAgent | null {
 	const agents = getSubAgents();
@@ -58,12 +143,14 @@ export function getSubAgent(id: string): SubAgent | null {
 }
 
 /**
- * Save all sub-agents
+ * Save user-configured sub-agents only (never saves built-in agents)
  */
 function saveSubAgents(agents: SubAgent[]): void {
 	try {
 		ensureConfigDirectory();
-		const config: SubAgentsConfig = {agents};
+		// Filter out built-in agents (should never be saved to config)
+		const userAgents = agents.filter(agent => !agent.builtin);
+		const config: SubAgentsConfig = {agents: userAgents};
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(SUB_AGENTS_CONFIG_FILE, configData, 'utf8');
 	} catch (error) {
@@ -72,7 +159,7 @@ function saveSubAgents(agents: SubAgent[]): void {
 }
 
 /**
- * Create a new sub-agent
+ * Create a new sub-agent (user-configured only)
  */
 export function createSubAgent(
 	name: string,
@@ -80,7 +167,7 @@ export function createSubAgent(
 	tools: string[],
 	role?: string,
 ): SubAgent {
-	const agents = getSubAgents();
+	const userAgents = getUserSubAgents();
 	const now = new Date().toISOString();
 
 	const newAgent: SubAgent = {
@@ -91,16 +178,17 @@ export function createSubAgent(
 		tools,
 		createdAt: now,
 		updatedAt: now,
+		builtin: false,
 	};
 
-	agents.push(newAgent);
-	saveSubAgents(agents);
+	userAgents.push(newAgent);
+	saveSubAgents(userAgents);
 
 	return newAgent;
 }
 
 /**
- * Update an existing sub-agent
+ * Update an existing sub-agent (only user-configured agents can be updated)
  */
 export function updateSubAgent(
 	id: string,
@@ -111,14 +199,20 @@ export function updateSubAgent(
 		tools?: string[];
 	},
 ): SubAgent | null {
-	const agents = getSubAgents();
-	const index = agents.findIndex(agent => agent.id === id);
+	// Prevent updating built-in agents
+	const agent = getSubAgent(id);
+	if (agent?.builtin) {
+		throw new Error('Cannot update built-in agents');
+	}
+
+	const userAgents = getUserSubAgents();
+	const index = userAgents.findIndex(agent => agent.id === id);
 
 	if (index === -1) {
 		return null;
 	}
 
-	const existingAgent = agents[index];
+	const existingAgent = userAgents[index];
 	if (!existingAgent) {
 		return null;
 	}
@@ -131,22 +225,29 @@ export function updateSubAgent(
 		tools: updates.tools ?? existingAgent.tools,
 		createdAt: existingAgent.createdAt,
 		updatedAt: new Date().toISOString(),
+		builtin: false,
 	};
 
-	agents[index] = updatedAgent;
-	saveSubAgents(agents);
+	userAgents[index] = updatedAgent;
+	saveSubAgents(userAgents);
 
 	return updatedAgent;
 }
 
 /**
- * Delete a sub-agent
+ * Delete a sub-agent (only user-configured agents can be deleted)
  */
 export function deleteSubAgent(id: string): boolean {
-	const agents = getSubAgents();
-	const filteredAgents = agents.filter(agent => agent.id !== id);
+	// Prevent deleting built-in agents
+	const agent = getSubAgent(id);
+	if (agent?.builtin) {
+		throw new Error('Cannot delete built-in agents');
+	}
 
-	if (filteredAgents.length === agents.length) {
+	const userAgents = getUserSubAgents();
+	const filteredAgents = userAgents.filter(agent => agent.id !== id);
+
+	if (filteredAgents.length === userAgents.length) {
 		return false; // Agent not found
 	}
 

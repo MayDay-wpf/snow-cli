@@ -857,15 +857,6 @@ export async function executeMCPTool(
 					args.content,
 					args.createDirectories,
 				);
-			case 'delete':
-				// Support both filePath (legacy) and filePaths (new) parameters
-				const pathsToDelete = args.filePaths || args.filePath;
-				if (!pathsToDelete) {
-					throw new Error('Missing required parameter: filePath or filePaths');
-				}
-				return await filesystemService.deleteFile(pathsToDelete);
-			case 'list':
-				return await filesystemService.listFiles(args.dirPath);
 			case 'exists':
 				return await filesystemService.exists(args.filePath);
 			case 'info':

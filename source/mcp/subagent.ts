@@ -1,5 +1,5 @@
 import {executeSubAgent} from '../utils/subAgentExecutor.js';
-import {getSubAgents} from '../utils/subAgentConfig.js';
+import {getUserSubAgents} from '../utils/subAgentConfig.js';
 import type {SubAgentMessage} from '../utils/subAgentExecutor.js';
 import type {ToolCall} from '../utils/toolExecutor.js';
 import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
@@ -84,22 +84,79 @@ export class SubAgentService {
 		description: string;
 		inputSchema: any;
 	}> {
-		const subAgents = getSubAgents();
+		// Get only user-configured agents (built-in agents are hardcoded below)
+		const userAgents = getUserSubAgents();
 
-		return subAgents.map(agent => ({
-			name: agent.id,
-			description: `${agent.name}: ${agent.description}`,
-			inputSchema: {
-				type: 'object',
-				properties: {
-					prompt: {
-						type: 'string',
-						description: 'The task prompt to send to the sub-agent',
+		// Built-in agents (hardcoded, always available)
+		const tools = [
+			{
+				name: 'agent_explore',
+				description:
+					'Explore Agent: Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and dependencies. Read-only operations, will not modify files or execute commands.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description:
+								'Description of the exploration task (e.g., find implementation of a feature, analyze module dependencies)',
+						},
 					},
+					required: ['prompt'],
 				},
-				required: ['prompt'],
 			},
-		}));
+			{
+				name: 'agent_plan',
+				description:
+					'Plan Agent: Specialized for planning complex tasks. Analyzes requirements, explores code, identifies relevant files, and creates detailed implementation plans. Read-only operations, outputs structured implementation proposals.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description:
+								'Description of the task to plan (e.g., how to implement a new feature, how to refactor a module)',
+						},
+					},
+					required: ['prompt'],
+				},
+			},
+			{
+				name: 'agent_general',
+				description:
+					'General Purpose Agent: General-purpose multi-step task execution agent. Has full tool access for searching, modifying files, and executing commands. Best for complex tasks requiring actual operations.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description: 'Description of the general task to execute',
+						},
+					},
+					required: ['prompt'],
+				},
+			},
+		];
+
+		// Add user-configured agents (avoid duplicates with built-in)
+		tools.push(
+			...userAgents.map(agent => ({
+				name: agent.id,
+				description: `${agent.name}: ${agent.description}`,
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description: 'The task prompt to send to the sub-agent',
+						},
+					},
+					required: ['prompt'],
+				},
+			})),
+		);
+
+		return tools;
 	}
 }
 

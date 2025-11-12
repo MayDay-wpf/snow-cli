@@ -13,6 +13,8 @@ import SensitiveCommandConfigScreen from './SensitiveCommandConfigScreen.js';
 import CodeBaseConfigScreen from './CodeBaseConfigScreen.js';
 import SystemPromptConfigScreen from './SystemPromptConfigScreen.js';
 import CustomHeadersScreen from './CustomHeadersScreen.js';
+import LanguageSettingsScreen from './LanguageSettingsScreen.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	version?: string;
@@ -29,78 +31,84 @@ type InlineView =
 	| 'subagent-edit'
 	| 'sensitive-commands'
 	| 'systemprompt'
-	| 'customheaders';
+	| 'customheaders'
+	| 'language-settings';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
 	onMenuSelect,
 }: Props) {
-	const [infoText, setInfoText] = useState('Start a new chat conversation');
+	const {t} = useI18n();
+	const [infoText, setInfoText] = useState(t.welcome.startChatInfo);
 	const [inlineView, setInlineView] = useState<InlineView>('menu');
 	const [editingAgentId, setEditingAgentId] = useState<string | undefined>();
 	const {columns: terminalWidth} = useTerminalSize();
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
-	const [remountKey, setRemountKey] = useState(0);
-
 	const menuOptions = useMemo(
 		() => [
 			{
-				label: 'Start',
+				label: t.welcome.startChat,
 				value: 'chat',
-				infoText: 'Start a new chat conversation',
+				infoText: t.welcome.startChatInfo,
 				clearTerminal: true,
 			},
 			{
-				label: 'API & Model Settings',
+				label: t.welcome.apiSettings,
 				value: 'config',
-				infoText: 'Configure API settings, AI models, and manage profiles',
+				infoText: t.welcome.apiSettingsInfo,
 			},
 			{
-				label: 'Proxy & Browser Settings',
+				label: t.welcome.proxySettings,
 				value: 'proxy',
-				infoText: 'Configure system proxy and browser for web search and fetch',
+				infoText: t.welcome.proxySettingsInfo,
 			},
 			{
-				label: 'CodeBase Settings',
+				label: t.welcome.codebaseSettings,
 				value: 'codebase',
-				infoText: 'Configure codebase indexing with embedding models',
+				infoText: t.welcome.codebaseSettingsInfo,
 			},
 			{
-				label: 'System Prompt Settings',
+				label: t.welcome.systemPromptSettings,
 				value: 'systemprompt',
-				infoText: 'Configure custom system prompt (overrides default)',
+				infoText: t.welcome.systemPromptSettingsInfo,
 			},
 			{
-				label: 'Custom Headers Settings',
+				label: t.welcome.customHeadersSettings,
 				value: 'customheaders',
-				infoText: 'Configure custom HTTP headers for API requests',
+				infoText: t.welcome.customHeadersSettingsInfo,
 			},
 			{
-				label: 'MCP Settings',
+				label: t.welcome.mcpSettings,
 				value: 'mcp',
-				infoText: 'Configure Model Context Protocol servers',
+				infoText: t.welcome.mcpSettingsInfo,
 			},
 			{
-				label: 'Sub-Agent Settings',
+				label: t.welcome.subAgentSettings,
 				value: 'subagent',
-				infoText: 'Configure sub-agents with custom tool permissions',
+				infoText: t.welcome.subAgentSettingsInfo,
 			},
 			{
-				label: 'Sensitive Commands',
+				label: t.welcome.sensitiveCommands,
 				value: 'sensitive-commands',
-				infoText:
-					'Configure commands that require confirmation even in YOLO mode',
+				infoText: t.welcome.sensitiveCommandsInfo,
 			},
 			{
-				label: 'Exit',
+				label: t.welcome.languageSettings,
+				value: 'language',
+				infoText: t.welcome.languageSettingsInfo,
+			},
+			{
+				label: t.welcome.exit,
 				value: 'exit',
 				color: 'rgb(232, 131, 136)',
-				infoText: 'Exit the application',
+				infoText: t.welcome.exitInfo,
 			},
 		],
-		[],
+		[t],
 	);
+
+	const [remountKey, setRemountKey] = useState(0);
 
 	const handleSelectionChange = useCallback((newInfoText: string) => {
 		setInfoText(newInfoText);
@@ -123,6 +131,8 @@ export default function WelcomeScreen({
 				setInlineView('systemprompt');
 			} else if (value === 'customheaders') {
 				setInlineView('customheaders');
+			} else if (value === 'language') {
+				setInlineView('language-settings');
 			} else {
 				// Pass through to parent for other actions (chat, exit, etc.)
 				onMenuSelect?.(value);
@@ -186,10 +196,10 @@ export default function WelcomeScreen({
 					>
 						<Box flexDirection="column" justifyContent="center">
 							<Text bold>
-								<Gradient name="rainbow">❆ SNOW AI CLI</Gradient>
+								<Gradient name="rainbow">{t.welcome.title}</Gradient>
 							</Text>
 							<Text color="gray" dimColor>
-								v{version} • Intelligent Command Line Assistant
+								v{version} • {t.welcome.subtitle}
 							</Text>
 						</Box>
 					</Box>,
@@ -289,6 +299,11 @@ export default function WelcomeScreen({
 			{inlineView === 'customheaders' && (
 				<Box paddingX={1}>
 					<CustomHeadersScreen onBack={handleBackToMenu} />
+				</Box>
+			)}
+			{inlineView === 'language-settings' && (
+				<Box paddingX={1}>
+					<LanguageSettingsScreen onBack={handleBackToMenu} />
 				</Box>
 			)}
 		</Box>

@@ -3,6 +3,7 @@ import {Box, Text, useInput, Static, useStdout} from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
+import {useI18n} from '../../i18n/I18nContext.js';
 import ChatInput from '../components/ChatInput.js';
 import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
@@ -66,6 +67,7 @@ type Props = {
 };
 
 export default function ChatScreen({skipWelcome}: Props) {
+	const {t} = useI18n();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
@@ -1321,18 +1323,19 @@ export default function ChatScreen({skipWelcome}: Props) {
 			<Box flexDirection="column" padding={2}>
 				<Box borderStyle="round" borderColor="red" padding={1}>
 					<Text color="red" bold>
-						⚠ Terminal Too Small
+						{t.chatScreen.terminalTooSmall}
 					</Text>
 				</Box>
 				<Box marginTop={1}>
 					<Text color="yellow">
-						Your terminal height is {terminalHeight} lines, but at least{' '}
-						{MIN_TERMINAL_HEIGHT} lines are required.
+						{t.chatScreen.terminalResizePrompt
+							.replace('{current}', terminalHeight.toString())
+							.replace('{required}', MIN_TERMINAL_HEIGHT.toString())}
 					</Text>
 				</Box>
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						Please resize your terminal window to continue.
+						{t.chatScreen.terminalMinHeight}
 					</Text>
 				</Box>
 			</Box>
@@ -1355,23 +1358,28 @@ export default function ChatScreen({skipWelcome}: Props) {
 							<Box flexDirection="column">
 								<Text color="white" bold>
 									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">
-										Programming efficiency x10!
-									</Gradient>
+									<Gradient name="rainbow">{t.chatScreen.headerTitle}</Gradient>
 									<Text color="white"> ⛇</Text>
 								</Text>
-								<Text>• Ask for code explanations and debugging help</Text>
-								<Text>• Press ESC during response to interrupt</Text>
-								<Text>• Press Shift+Tab: toggle YOLO</Text>
+								<Text>• {t.chatScreen.headerExplanations}</Text>
+								<Text>• {t.chatScreen.headerInterrupt}</Text>
+								<Text>• {t.chatScreen.headerYolo}</Text>
 								<Text>
 									{(() => {
 										const pasteKey =
 											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
-										return `• Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • ${pasteKey} (paste images) • '@' (files) • '@@' (search content) • '/' (commands)`;
+										return `• ${t.chatScreen.headerShortcuts.replace(
+											'{pasteKey}',
+											pasteKey,
+										)}`;
 									})()}
 								</Text>
 								<Text color="gray" dimColor>
-									• Working directory: {workingDirectory}
+									•{' '}
+									{t.chatScreen.headerWorkingDirectory.replace(
+										'{directory}',
+										workingDirectory,
+									)}
 								</Text>
 							</Box>
 						</Box>
@@ -1800,10 +1808,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 										<ShimmerText
 											text={
 												streamingState.isReasoning
-													? 'Deep thinking...'
+													? t.chatScreen.statusDeepThinking
 													: streamingState.streamTokenCount > 0
-													? 'Writing...'
-													: 'Thinking...'
+													? t.chatScreen.statusWriting
+													: t.chatScreen.statusThinking
 											}
 										/>{' '}
 										({formatElapsedTime(streamingState.elapsedSeconds)}
@@ -1823,7 +1831,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 							</>
 						) : (
 							<Text color="gray" dimColor>
-								Create the first dialogue record file...
+								{t.chatScreen.sessionCreating}
 							</Text>
 						)}
 					</Box>
@@ -1867,7 +1875,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 					<MCPInfoPanel />
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
-							Press ESC to close
+							{t.chatScreen.pressEscToClose}
 						</Text>
 					</Box>
 				</Box>
@@ -1879,7 +1887,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 					<UsagePanel />
 					<Box marginTop={1}>
 						<Text color="gray" dimColor>
-							Press ESC to close
+							{t.chatScreen.pressEscToClose}
 						</Text>
 					</Box>
 				</Box>
@@ -1913,7 +1921,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 						<ChatInput
 							onSubmit={handleMessageSubmit}
 							onCommand={handleCommandExecution}
-							placeholder="Ask me anything about coding..."
+							placeholder={t.chatScreen.inputPlaceholder}
 							disabled={!!pendingToolConfirmation}
 							isProcessing={streamingState.isStreaming || isSaving}
 							chatHistory={messages}
@@ -1953,18 +1961,24 @@ export default function ChatScreen({skipWelcome}: Props) {
 								>
 									●{' '}
 									{vscodeState.vscodeConnectionStatus === 'connecting'
-										? 'Connecting to IDE...'
+										? t.chatScreen.ideConnecting
 										: vscodeState.vscodeConnectionStatus === 'connected'
-										? 'IDE Connected'
+										? t.chatScreen.ideConnected
 										: vscodeState.vscodeConnectionStatus === 'error'
-										? 'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE'
+										? t.chatScreen.ideError
 										: 'IDE'}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.activeFile &&
-										` | ${vscodeState.editorContext.activeFile}`}
+										t.chatScreen.ideActiveFile.replace(
+											'{file}',
+											vscodeState.editorContext.activeFile,
+										)}
 									{vscodeState.vscodeConnectionStatus === 'connected' &&
 										vscodeState.editorContext.selectedText &&
-										` | ${vscodeState.editorContext.selectedText.length} chars selected`}
+										t.chatScreen.ideSelectedText.replace(
+											'{count}',
+											vscodeState.editorContext.selectedText.length.toString(),
+										)}
 								</Text>
 							</Box>
 						)}
@@ -1972,11 +1986,18 @@ export default function ChatScreen({skipWelcome}: Props) {
 						{codebaseIndexing && codebaseProgress && (
 							<Box marginTop={1} paddingX={1}>
 								<Text color="cyan" dimColor>
-									<Spinner type="dots" /> Indexing codebase...{' '}
-									{codebaseProgress.processedFiles}/
-									{codebaseProgress.totalFiles} files
+									<Spinner type="dots" />{' '}
+									{t.chatScreen.codebaseIndexing
+										.replace(
+											'{processed}',
+											codebaseProgress.processedFiles.toString(),
+										)
+										.replace('{total}', codebaseProgress.totalFiles.toString())}
 									{codebaseProgress.totalChunks > 0 &&
-										` (${codebaseProgress.totalChunks} chunks)`}
+										` (${t.chatScreen.codebaseProgress.replace(
+											'{chunks}',
+											codebaseProgress.totalChunks.toString(),
+										)})`}
 								</Text>
 							</Box>
 						)}
@@ -1984,7 +2005,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 						{!codebaseIndexing && watcherEnabled && (
 							<Box marginTop={1} paddingX={1}>
 								<Text color="green" dimColor>
-									☉ File watcher active - monitoring code changes
+									☉ {t.chatScreen.statusWatcherActive}
 								</Text>
 							</Box>
 						)}
@@ -1992,7 +2013,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 						{fileUpdateNotification && (
 							<Box marginTop={1} paddingX={1}>
 								<Text color="yellow" dimColor>
-									⛁ Updated: {fileUpdateNotification.file}
+									⛁{' '}
+									{t.chatScreen.statusFileUpdated.replace(
+										'{file}',
+										fileUpdateNotification.file,
+									)}
 								</Text>
 							</Box>
 						)}
@@ -2003,7 +2028,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 			{isCompressing && (
 				<Box marginTop={1}>
 					<Text color="cyan">
-						<Spinner type="dots" /> Compressing conversation history...
+						<Spinner type="dots" /> {t.chatScreen.compressionInProgress}
 					</Text>
 				</Box>
 			)}
@@ -2011,7 +2036,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 			{/* Compression error indicator */}
 			{compressionError && (
 				<Box marginTop={1}>
-					<Text color="red">✗ Compression failed: {compressionError}</Text>
+					<Text color="red">
+						{t.chatScreen.compressionFailed.replace(
+							'{error}',
+							compressionError,
+						)}
+					</Text>
 				</Box>
 			)}
 		</Box>

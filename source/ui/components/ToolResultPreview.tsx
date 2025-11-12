@@ -28,8 +28,6 @@ export default function ToolResultPreview({
 			return renderTerminalExecutePreview(data);
 		} else if (toolName === 'filesystem-read') {
 			return renderReadPreview(data, maxLines);
-		} else if (toolName === 'filesystem-list') {
-			return renderListPreview(data, maxLines);
 		} else if (toolName === 'filesystem-create') {
 			return renderCreatePreview(data);
 		} else if (toolName === 'filesystem-edit_search') {
@@ -148,28 +146,6 @@ function renderReadPreview(data: any, _maxLines: number) {
 			<Text color="gray" dimColor>
 				└─ Read {readLineCount} lines{rangeInfo}
 				{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
-			</Text>
-		</Box>
-	);
-}
-
-function renderListPreview(data: string[] | any, _maxLines: number) {
-	// Handle both array and object response formats
-	const files = Array.isArray(data) ? data : data.files || [];
-	if (files.length === 0) {
-		return (
-			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
-					└─ Empty directory
-				</Text>
-			</Box>
-		);
-	}
-
-	return (
-		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
-				└─ Found {files.length} {files.length === 1 ? 'item' : 'items'}
 			</Text>
 		</Box>
 	);

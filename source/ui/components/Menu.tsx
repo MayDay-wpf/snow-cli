@@ -1,6 +1,7 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
 import {resetTerminal} from '../../utils/terminal.js';
+import {useI18n} from '../../i18n/index.js';
 
 type MenuOption = {
 	label: string;
@@ -21,7 +22,8 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const {stdout} = useStdout();
-	
+	const {t} = useI18n();
+
 	// Calculate available height
 	const terminalHeight = stdout?.rows || 24;
 	const headerHeight = 8; // Space for header, borders, etc.
@@ -48,26 +50,32 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 		resetTerminal(stdout);
 	}, [stdout]);
 
-	const handleInput = useCallback((_input: string, key: any) => {
-		if (key.upArrow) {
-			setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
-		} else if (key.downArrow) {
-			setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
-		} else if (key.return) {
-			const selectedOption = options[selectedIndex];
-			if (selectedOption) {
-				if (selectedOption.clearTerminal) {
-					clearTerminal();
+	const handleInput = useCallback(
+		(_input: string, key: any) => {
+			if (key.upArrow) {
+				setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
+			} else if (key.downArrow) {
+				setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
+			} else if (key.return) {
+				const selectedOption = options[selectedIndex];
+				if (selectedOption) {
+					if (selectedOption.clearTerminal) {
+						clearTerminal();
+					}
+					onSelect(selectedOption.value);
 				}
-				onSelect(selectedOption.value);
 			}
-		}
-	}, [options, selectedIndex, onSelect, clearTerminal]);
+		},
+		[options, selectedIndex, onSelect, clearTerminal],
+	);
 
 	useInput(handleInput);
 
 	// Calculate visible options and "more" counts
-	const visibleOptions = options.slice(scrollOffset, scrollOffset + visibleItemCount);
+	const visibleOptions = options.slice(
+		scrollOffset,
+		scrollOffset + visibleItemCount,
+	);
 	const hasMoreAbove = scrollOffset > 0;
 	const hasMoreBelow = scrollOffset + visibleItemCount < options.length;
 	const moreAboveCount = scrollOffset;
@@ -76,25 +84,27 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	return (
 		<Box flexDirection="column" width={'100%'} padding={1}>
 			<Box marginBottom={1}>
-				<Text color="cyan">
-					Use ↑↓ keys to navigate, press Enter to select:
-				</Text>
+				<Text color="cyan">{t.menu.navigate}</Text>
 			</Box>
-			
+
 			{hasMoreAbove && (
 				<Box>
 					<Text color="gray" dimColor>
-						  ↑ +{moreAboveCount} more above
+						↑ +{moreAboveCount} more above
 					</Text>
 				</Box>
 			)}
-			
+
 			{visibleOptions.map((option, index) => {
 				const actualIndex = scrollOffset + index;
 				return (
 					<Box key={option.value}>
 						<Text
-							color={actualIndex === selectedIndex ? 'green' : option.color || 'white'}
+							color={
+								actualIndex === selectedIndex
+									? 'green'
+									: option.color || 'white'
+							}
 							bold
 						>
 							{actualIndex === selectedIndex ? '❯ ' : '  '}
@@ -103,11 +113,11 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 					</Box>
 				);
 			})}
-			
+
 			{hasMoreBelow && (
 				<Box>
 					<Text color="gray" dimColor>
-						  ↓ +{moreBelowCount} more below
+						↓ +{moreBelowCount} more below
 					</Text>
 				</Box>
 			)}

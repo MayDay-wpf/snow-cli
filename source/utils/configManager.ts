@@ -12,7 +12,8 @@ import {loadConfig, saveConfig, type AppConfig} from './apiConfig.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const PROFILES_DIR = join(CONFIG_DIR, 'profiles');
-const ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.txt');
+const ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.json');
+const LEGACY_ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.txt');
 const LEGACY_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 export interface ConfigProfile {
@@ -41,13 +42,35 @@ function ensureProfilesDirectory(): void {
 export function getActiveProfileName(): string {
 	ensureProfilesDirectory();
 
+	// Auto-migrate from legacy .txt format to new .json format
+	if (
+		!existsSync(ACTIVE_PROFILE_FILE) &&
+		existsSync(LEGACY_ACTIVE_PROFILE_FILE)
+	) {
+		try {
+			const legacyProfileName = readFileSync(
+				LEGACY_ACTIVE_PROFILE_FILE,
+				'utf8',
+			).trim();
+			const profileName = legacyProfileName || 'default';
+			// Save in new JSON format
+			setActiveProfileName(profileName);
+			// Delete old .txt file
+			unlinkSync(LEGACY_ACTIVE_PROFILE_FILE);
+			return profileName;
+		} catch {
+			// If migration fails, continue with default
+		}
+	}
+
 	if (!existsSync(ACTIVE_PROFILE_FILE)) {
 		return 'default';
 	}
 
 	try {
-		const profileName = readFileSync(ACTIVE_PROFILE_FILE, 'utf8').trim();
-		return profileName || 'default';
+		const fileContent = readFileSync(ACTIVE_PROFILE_FILE, 'utf8').trim();
+		const data = JSON.parse(fileContent);
+		return data.activeProfile || 'default';
 	} catch {
 		return 'default';
 	}
@@ -60,7 +83,8 @@ function setActiveProfileName(profileName: string): void {
 	ensureProfilesDirectory();
 
 	try {
-		writeFileSync(ACTIVE_PROFILE_FILE, profileName, 'utf8');
+		const data = {activeProfile: profileName};
+		writeFileSync(ACTIVE_PROFILE_FILE, JSON.stringify(data, null, 2), 'utf8');
 	} catch (error) {
 		throw new Error(`Failed to set active profile: ${error}`);
 	}
@@ -220,14 +244,15 @@ export function switchProfile(profileName: string): void {
 /**
  * Create a new profile
  */
-export function createProfile(
-	profileName: string,
-	config?: AppConfig,
-): void {
+export function createProfile(profileName: string, config?: AppConfig): void {
 	ensureProfilesDirectory();
 
 	// Validate profile name
-	if (!profileName.trim() || profileName.includes('/') || profileName.includes('\\')) {
+	if (
+		!profileName.trim() ||
+		profileName.includes('/') ||
+		profileName.includes('\\')
+	) {
 		throw new Error('Invalid profile name');
 	}
 

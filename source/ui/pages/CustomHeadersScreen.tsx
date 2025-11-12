@@ -9,6 +9,7 @@ import {
 	type CustomHeadersConfig,
 	type CustomHeadersItem,
 } from '../../utils/apiConfig.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -24,6 +25,7 @@ type ListAction =
 	| 'back';
 
 export default function CustomHeadersScreen({onBack}: Props) {
+	const {t} = useI18n();
 	const [config, setConfig] = useState<CustomHeadersConfig>(() => {
 		return (
 			getCustomHeadersConfig() || {
@@ -73,7 +75,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 			setError('');
 			return true;
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to save');
+			setError(err instanceof Error ? err.message : t.customHeaders.saveError);
 			return false;
 		}
 	};
@@ -411,9 +413,9 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					paddingY={1}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">Custom Headers Management</Gradient>
+						<Gradient name="rainbow">{t.customHeaders.title}</Gradient>
 						<Text color="gray" dimColor>
-							Manage multiple header schemes and switch between them
+							{t.customHeaders.subtitle}
 						</Text>
 					</Box>
 				</Box>
@@ -426,21 +428,21 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 				<Box marginBottom={1}>
 					<Text bold>
-						Active Scheme:{' '}
-						<Text color="green">{activeScheme?.name || 'None'}</Text>
+						{t.customHeaders.activeScheme}{' '}
+						<Text color="green">
+							{activeScheme?.name || t.customHeaders.none}
+						</Text>
 					</Text>
 				</Box>
 
 				{config.schemes.length === 0 ? (
 					<Box marginBottom={1}>
-						<Text color="yellow">
-							No header schemes configured. Press Enter to add one.
-						</Text>
+						<Text color="yellow">{t.customHeaders.noSchemesConfigured}</Text>
 					</Box>
 				) : (
 					<Box flexDirection="column" marginBottom={1}>
 						<Text bold color="cyan">
-							Available Schemes:
+							{t.customHeaders.availableSchemes}
 						</Text>
 						{config.schemes.map((scheme, index) => {
 							const headerCount = Object.keys(scheme.headers).length;
@@ -482,7 +484,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 				<Box marginBottom={1}>
 					<Text bold color="cyan">
-						Actions:
+						{t.customHeaders.actions}
 					</Text>
 				</Box>
 				<Box flexDirection="column" marginBottom={1} marginLeft={2}>
@@ -493,19 +495,19 @@ export default function CustomHeadersScreen({onBack}: Props) {
 							bold={currentAction === action}
 						>
 							{currentAction === action ? '❯ ' : '  '}
-							{action === 'activate' && 'Activate'}
-							{action === 'deactivate' && 'Deactivate'}
-							{action === 'edit' && 'Edit'}
-							{action === 'delete' && 'Delete'}
-							{action === 'add' && 'Add New'}
-							{action === 'back' && '[ESC] Back'}
+							{action === 'activate' && t.customHeaders.activate}
+							{action === 'deactivate' && t.customHeaders.deactivate}
+							{action === 'edit' && t.customHeaders.edit}
+							{action === 'delete' && t.customHeaders.delete}
+							{action === 'add' && t.customHeaders.addNew}
+							{action === 'back' && t.customHeaders.escBack}
 						</Text>
 					))}
 				</Box>
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						Use ↑↓ to select scheme, ←→ to select action, Enter to confirm
+						{t.customHeaders.navigationHint}
 					</Text>
 				</Box>
 			</Box>
@@ -521,7 +523,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						.slice(0, 3)
 						.map(([k, v]) => `${k}: ${v}`)
 						.join(', ')
-				: 'Not set';
+				: t.customHeaders.notSet;
 
 		return (
 			<Box flexDirection="column" padding={1}>
@@ -533,7 +535,9 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					paddingY={1}
 				>
 					<Gradient name="rainbow">
-						{view === 'add' ? 'Add New Header Scheme' : 'Edit Header Scheme'}
+						{view === 'add'
+							? t.customHeaders.addNewTitle
+							: t.customHeaders.editTitle}
 					</Gradient>
 				</Box>
 
@@ -543,56 +547,56 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					</Box>
 				)}
 
-				<Box flexDirection="column" marginBottom={1}>
-					<Box marginBottom={1}>
-						<Box flexDirection="column">
-							<Text color={editingField === 'name' ? 'green' : 'white'}>
-								{editingField === 'name' ? '❯ ' : '  '}Name:
-							</Text>
-							{editingField === 'name' && isEditing && (
-								<Box marginLeft={3}>
-									<TextInput
-										value={editName}
-										onChange={setEditName}
-										placeholder="Enter scheme name"
-									/>
-								</Box>
-							)}
-							{(!isEditing || editingField !== 'name') && (
-								<Box marginLeft={3}>
-									<Text color="gray">{editName || 'Not set'}</Text>
-								</Box>
-							)}
-						</Box>
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={editingField === 'name' ? 'green' : 'white'}>
+							{editingField === 'name' ? '❯ ' : '  '}
+							{t.customHeaders.nameLabel}
+						</Text>
+						{editingField === 'name' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={editName}
+									onChange={setEditName}
+									placeholder={t.customHeaders.enterSchemeName}
+								/>
+							</Box>
+						)}
+						{(!isEditing || editingField !== 'name') && (
+							<Box marginLeft={3}>
+								<Text color="gray">{editName || t.customHeaders.notSet}</Text>
+							</Box>
+						)}
 					</Box>
+				</Box>
 
-					<Box marginBottom={1}>
-						<Box flexDirection="column">
-							<Text color={editingField === 'headers' ? 'green' : 'white'}>
-								{editingField === 'headers' ? '❯ ' : '  '}Headers ({headerCount}{' '}
-								configured):
-							</Text>
-							{editingField === 'headers' && !isEditing ? (
-								<Box marginLeft={3}>
-									<Text color="cyan" dimColor>
-										Press Enter to edit headers →
-									</Text>
-								</Box>
-							) : (
-								<Box marginLeft={3}>
-									<Text color="gray">
-										{headerPreview.substring(0, 100)}
-										{headerPreview.length > 100 ? '...' : ''}
-									</Text>
-								</Box>
-							)}
-						</Box>
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={editingField === 'headers' ? 'green' : 'white'}>
+							{editingField === 'headers' ? '❯ ' : '  '}
+							{t.customHeaders.headersLabel} ({headerCount}{' '}
+							{t.customHeaders.headersConfigured}):
+						</Text>
+						{editingField === 'headers' && !isEditing ? (
+							<Box marginLeft={3}>
+								<Text color="cyan" dimColor>
+									{t.customHeaders.pressEnterToEdit}
+								</Text>
+							</Box>
+						) : (
+							<Box marginLeft={3}>
+								<Text color="gray">
+									{headerPreview.substring(0, 100)}
+									{headerPreview.length > 100 ? '...' : ''}
+								</Text>
+							</Box>
+						)}
 					</Box>
 				</Box>
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel
+						{t.customHeaders.editingHint}
 					</Text>
 				</Box>
 			</Box>
@@ -610,21 +614,23 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					paddingX={2}
 					paddingY={1}
 				>
-					<Gradient name="rainbow">Edit Headers - {editName}</Gradient>
+					<Gradient name="rainbow">
+						{t.customHeaders.editHeadersTitle} - {editName}
+					</Gradient>
 				</Box>
 
 				{headerEditingIndex === -1 ? (
 					<>
 						<Box marginBottom={1}>
 							<Text bold color="cyan">
-								Header List:
+								{t.customHeaders.headerList}
 							</Text>
 						</Box>
 
 						{headerKeys.length === 0 ? (
 							<Box marginBottom={1}>
 								<Text color="yellow">
-									No headers configured. Press Enter to add one.
+									{t.customHeaders.noHeadersConfigured}
 								</Text>
 							</Box>
 						) : (
@@ -653,72 +659,74 @@ export default function CustomHeadersScreen({onBack}: Props) {
 								}
 								bold={headerSelectedIndex === headerKeys.length}
 							>
-								{headerSelectedIndex === headerKeys.length ? '❯ ' : '  '}[+] Add
-								new header
+								{headerSelectedIndex === headerKeys.length ? '❯ ' : '  '}
+								{t.customHeaders.addNewHeader}
 							</Text>
 						</Box>
 
 						<Box marginTop={1}>
 							<Text color="gray" dimColor>
-								↑↓: Navigate | Enter: Edit/Add | D: Delete | ESC: Finish
+								{t.customHeaders.headerNavigationHint}
 							</Text>
 						</Box>
 					</>
 				) : (
 					<>
-						<Box flexDirection="column" marginBottom={1}>
-							<Box marginBottom={1}>
-								<Box flexDirection="column">
-									<Text
-										color={headerEditingField === 'key' ? 'green' : 'white'}
-									>
-										{headerEditingField === 'key' ? '❯ ' : '  '}Key:
-									</Text>
-									{headerEditingField === 'key' && isEditing && (
-										<Box marginLeft={3}>
-											<TextInput
-												value={headerEditKey}
-												onChange={setHeaderEditKey}
-												placeholder="Header key (e.g., X-API-Key)"
-											/>
-										</Box>
-									)}
-									{(!isEditing || headerEditingField !== 'key') && (
-										<Box marginLeft={3}>
-											<Text color="gray">{headerEditKey || 'Not set'}</Text>
-										</Box>
-									)}
-								</Box>
+						<Box marginBottom={1}>
+							<Box flexDirection="column">
+								<Text color={headerEditingField === 'key' ? 'green' : 'white'}>
+									{headerEditingField === 'key' ? '❯ ' : '  '}
+									{t.customHeaders.keyLabel}
+								</Text>
+								{headerEditingField === 'key' && isEditing && (
+									<Box marginLeft={3}>
+										<TextInput
+											value={headerEditKey}
+											onChange={setHeaderEditKey}
+											placeholder={t.customHeaders.headerKeyPlaceholder}
+										/>
+									</Box>
+								)}
+								{(!isEditing || headerEditingField !== 'key') && (
+									<Box marginLeft={3}>
+										<Text color="gray">
+											{headerEditKey || t.customHeaders.notSet}
+										</Text>
+									</Box>
+								)}
 							</Box>
+						</Box>
 
-							<Box marginBottom={1}>
-								<Box flexDirection="column">
-									<Text
-										color={headerEditingField === 'value' ? 'green' : 'white'}
-									>
-										{headerEditingField === 'value' ? '❯ ' : '  '}Value:
-									</Text>
-									{headerEditingField === 'value' && isEditing && (
-										<Box marginLeft={3}>
-											<TextInput
-												value={headerEditValue}
-												onChange={setHeaderEditValue}
-												placeholder="Header value"
-											/>
-										</Box>
-									)}
-									{(!isEditing || headerEditingField !== 'value') && (
-										<Box marginLeft={3}>
-											<Text color="gray">{headerEditValue || 'Not set'}</Text>
-										</Box>
-									)}
-								</Box>
+						<Box marginBottom={1}>
+							<Box flexDirection="column">
+								<Text
+									color={headerEditingField === 'value' ? 'green' : 'white'}
+								>
+									{headerEditingField === 'value' ? '❯ ' : '  '}
+									{t.customHeaders.valueLabel}
+								</Text>
+								{headerEditingField === 'value' && isEditing && (
+									<Box marginLeft={3}>
+										<TextInput
+											value={headerEditValue}
+											onChange={setHeaderEditValue}
+											placeholder={t.customHeaders.headerValuePlaceholder}
+										/>
+									</Box>
+								)}
+								{(!isEditing || headerEditingField !== 'value') && (
+									<Box marginLeft={3}>
+										<Text color="gray">
+											{headerEditValue || t.customHeaders.notSet}
+										</Text>
+									</Box>
+								)}
 							</Box>
 						</Box>
 
 						<Box marginTop={1}>
 							<Text color="gray" dimColor>
-								↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel
+								{t.customHeaders.headerEditingHint}
 							</Text>
 						</Box>
 					</>
@@ -734,11 +742,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Alert variant="warning">Confirm Delete</Alert>
+				<Alert variant="warning">{t.customHeaders.confirmDelete}</Alert>
 
 				<Box marginBottom={1}>
 					<Text>
-						Are you sure you want to delete "
+						{t.customHeaders.deleteConfirmMessage} "
 						<Text bold color="yellow">
 							{schemeToDelete?.name}
 						</Text>
@@ -748,7 +756,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						Press Y to confirm, N or ESC to cancel
+						{t.customHeaders.confirmHint}
 					</Text>
 				</Box>
 			</Box>

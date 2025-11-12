@@ -57,14 +57,96 @@ export async function executeSubAgent(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 ): Promise<SubAgentResult> {
 	try {
-		// Get sub-agent configuration
-		const agent = getSubAgent(agentId);
-		if (!agent) {
-			return {
-				success: false,
-				result: '',
-				error: `Sub-agent with ID "${agentId}" not found`,
+		// Handle built-in agents (hardcoded)
+		let agent: any;
+		if (agentId === 'agent_explore') {
+			agent = {
+				id: 'agent_explore',
+				name: 'Explore Agent',
+				description:
+					'Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and semantic understanding.',
+				role: 'You are a specialized code exploration agent. Your task is to help users understand codebase structure, locate specific code, and analyze dependencies. Use search and analysis tools to explore code, but do not modify any files or execute commands. Focus on code discovery and understanding.',
+				tools: [
+					// Filesystem read-only tools
+					'filesystem-read',
+					// ACE code search tools (core tools)
+					'ace-find_definition',
+					'ace-find_references',
+					'ace-semantic_search',
+					'ace-text_search',
+					'ace-file_outline',
+					// Codebase search tools
+					'codebase-search',
+					// Web search for documentation
+					'websearch-search',
+					'websearch-fetch',
+				],
 			};
+		} else if (agentId === 'agent_plan') {
+			agent = {
+				id: 'agent_plan',
+				name: 'Plan Agent',
+				description:
+					'Specialized for planning complex tasks. Excels at analyzing requirements, exploring existing code, and creating detailed implementation plans.',
+				role: 'You are a specialized task planning agent. Your task is to analyze user requirements, explore existing codebase, identify relevant files and dependencies, and then create detailed implementation plans. Use search and analysis tools to gather information, check diagnostics to understand current state, but do not execute actual modifications. Output clear step-by-step plans including files to modify, suggested implementation approaches, and important considerations.',
+				tools: [
+					// Filesystem read-only tools
+					'filesystem-read',
+					// ACE code search tools (planning requires code understanding)
+					'ace-find_definition',
+					'ace-find_references',
+					'ace-semantic_search',
+					'ace-text_search',
+					'ace-file_outline',
+					// IDE diagnostics (understand current issues)
+					'ide-get_diagnostics',
+					// Codebase search
+					'codebase-search',
+					// Web search for reference
+					'websearch-search',
+					'websearch-fetch',
+				],
+			};
+		} else if (agentId === 'agent_general') {
+			agent = {
+				id: 'agent_general',
+				name: 'General Purpose Agent',
+				description:
+					'General-purpose multi-step task execution agent. Has complete tool access for code search, file modification, command execution, and various operations.',
+				role: 'You are a general-purpose task execution agent. You can perform various complex multi-step tasks, including searching code, modifying files, executing commands, etc. When given a task, systematically break it down and execute. You have access to all tools and should select appropriate tools as needed to complete tasks efficiently.',
+				tools: [
+					// Filesystem tools (complete access)
+					'filesystem-read',
+					'filesystem-create',
+					'filesystem-edit',
+					'filesystem-edit_search',
+					// Terminal tools
+					'terminal-execute',
+					// ACE code search tools
+					'ace-find_definition',
+					'ace-find_references',
+					'ace-semantic_search',
+					'ace-text_search',
+					'ace-file_outline',
+					// Web search tools
+					'websearch-search',
+					'websearch-fetch',
+					// IDE diagnostics tools
+					'ide-get_diagnostics',
+					// Codebase search tools
+					'codebase-search',
+				],
+			};
+		} else {
+			// Get user-configured sub-agent
+			agent = getSubAgent(agentId);
+			if (!agent) {
+				return {
+					success: false,
+					result: '',
+					error: `Sub-agent with ID "${agentId}" not found`,
+				};
+			}
 		}
 
 		// Get all available tools
@@ -73,7 +155,7 @@ export async function executeSubAgent(
 		// Filter tools based on sub-agent's allowed tools
 		const allowedTools = allTools.filter((tool: MCPTool) => {
 			const toolName = tool.function.name;
-			return agent.tools.some(allowedTool => {
+			return agent.tools.some((allowedTool: string) => {
 				// Normalize both tool names: replace underscores with hyphens for comparison
 				const normalizedToolName = toolName.replace(/_/g, '-');
 				const normalizedAllowedTool = allowedTool.replace(/_/g, '-');

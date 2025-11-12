@@ -78,7 +78,7 @@ License information (check package.json or LICENSE file)
 ---
 
 **Important instructions:**
-- Use filesystem-list to explore directories recursively
+- Use filesystem-read to explore directories (it automatically lists contents when path is a directory)
 - Use filesystem-read to read important files
 - Use terminal-execute to run commands like 'npm run' to discover available scripts
 - Be thorough but concise - focus on essential information

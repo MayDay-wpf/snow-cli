@@ -1077,6 +1077,7 @@ export class ACECodeSearchService {
 		query: string,
 		searchType: 'definition' | 'usage' | 'implementation' | 'all' = 'all',
 		language?: string,
+		symbolType?: CodeSymbol['type'],
 		maxResults: number = 50,
 	): Promise<SemanticSearchResult> {
 		const startTime = Date.now();
@@ -1084,7 +1085,7 @@ export class ACECodeSearchService {
 		// Get symbol search results
 		const symbolResults = await this.searchSymbols(
 			query,
-			undefined,
+			symbolType,
 			language,
 			maxResults,
 		);
@@ -1133,56 +1134,6 @@ export const aceCodeSearchService = new ACECodeSearchService();
 // MCP Tool definitions for integration
 export const mcpTools = [
 	{
-		name: 'ace-search_symbols',
-		description:
-			'ACE Code Search: Intelligent symbol search across the codebase. Finds functions, classes, variables, and other code symbols with fuzzy matching. Supports multiple programming languages (TypeScript, JavaScript, Python, Go, Rust, Java, C#). Returns precise file locations with line numbers and context.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				query: {
-					type: 'string',
-					description:
-						'Symbol name to search for (supports fuzzy matching, e.g., "gfc" can match "getFileContent")',
-				},
-				symbolType: {
-					type: 'string',
-					enum: [
-						'function',
-						'class',
-						'method',
-						'variable',
-						'constant',
-						'interface',
-						'type',
-						'enum',
-						'import',
-						'export',
-					],
-					description: 'Filter by specific symbol type (optional)',
-				},
-				language: {
-					type: 'string',
-					enum: [
-						'typescript',
-						'javascript',
-						'python',
-						'go',
-						'rust',
-						'java',
-						'csharp',
-					],
-					description: 'Filter by programming language (optional)',
-				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of results to return (default: 100)',
-					default: 100,
-				},
-			},
-			required: ['query'],
-		},
-	},
-	{
 		name: 'ace-find_definition',
 		description:
 			'ACE Code Search: Find the definition of a symbol (Go to Definition). Locates where a function, class, or variable is defined in the codebase. Returns precise location with full signature and context.',
@@ -1225,20 +1176,36 @@ export const mcpTools = [
 	{
 		name: 'ace-semantic_search',
 		description:
-			'ACE Code Search: Advanced semantic search with context understanding. Searches for symbols with intelligent filtering by search type (definition, usage, implementation, all). Combines symbol search with cross-reference analysis.',
+			'ACE Code Search: 智能符号搜索与语义分析。支持多种搜索模式：(1) definition - 查找符号定义(函数/类/接口)；(2) usage - 查找符号引用位置；(3) implementation - 查找具体实现；(4) all - 综合搜索。支持模糊匹配、按语言和符号类型过滤。💡 提示：如果只需要查看单个文件的符号大纲，使用 ace-file_outline 更快。',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				query: {
 					type: 'string',
-					description: 'Search query (symbol name or pattern)',
+					description: '搜索查询 (符号名称或模式，支持模糊匹配如 "gfc" 匹配 "getFileContent")',
 				},
 				searchType: {
 					type: 'string',
 					enum: ['definition', 'usage', 'implementation', 'all'],
 					description:
-						'Type of search: definition (find declarations), usage (find usages), implementation (find implementations), all (comprehensive search)',
+						'搜索类型：definition (查找声明)、usage (查找使用)、implementation (查找实现)、all (全面搜索)',
 					default: 'all',
+				},
+				symbolType: {
+					type: 'string',
+					enum: [
+						'function',
+						'class',
+						'method',
+						'variable',
+						'constant',
+						'interface',
+						'type',
+						'enum',
+						'import',
+						'export',
+					],
+					description: '可选：按符号类型筛选 (function, class, variable等)',
 				},
 				language: {
 					type: 'string',
@@ -1251,11 +1218,11 @@ export const mcpTools = [
 						'java',
 						'csharp',
 					],
-					description: 'Filter by programming language (optional)',
+					description: '可选：按编程语言筛选',
 				},
 				maxResults: {
 					type: 'number',
-					description: 'Maximum number of results to return (default: 50)',
+					description: '最大返回结果数 (默认: 50)',
 					default: 50,
 				},
 			},

@@ -533,70 +533,13 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Delete one or multiple files
-	 * @param filePaths - Single file path or array of file paths to delete
-	 * @returns Success message with details
-	 * @throws Error if file deletion fails
-	 */
-	async deleteFile(filePaths: string | string[]): Promise<string> {
-		try {
-			const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-			const results: string[] = [];
-			const errors: string[] = [];
-
-			for (const filePath of paths) {
-				try {
-					const fullPath = this.resolvePath(filePath);
-					await this.validatePath(fullPath);
-
-					const stats = await fs.stat(fullPath);
-					if (!stats.isFile()) {
-						throw new Error(`Path is not a file: ${filePath}`);
-					}
-
-					// Backup file before deletion
-					await incrementalSnapshotManager.backupFile(fullPath);
-
-					await fs.unlink(fullPath);
-					results.push(`✅ ${filePath}`);
-				} catch (error) {
-					const errorMsg =
-						error instanceof Error ? error.message : 'Unknown error';
-					errors.push(`❌ ${filePath}: ${errorMsg}`);
-				}
-			}
-
-			const summary = [];
-			if (results.length > 0) {
-				summary.push(
-					`Successfully deleted ${results.length} file(s):\n${results.join(
-						'\n',
-					)}`,
-				);
-			}
-			if (errors.length > 0) {
-				summary.push(
-					`Failed to delete ${errors.length} file(s):\n${errors.join('\n')}`,
-				);
-			}
-
-			return summary.join('\n\n');
-		} catch (error) {
-			throw new Error(
-				`Failed to delete files: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-			);
-		}
-	}
-
-	/**
-	 * List files in a directory
+	 * List files in a directory (internal use for read tool)
 	 * @param dirPath - Directory path relative to base path or absolute path
 	 * @returns Array of file names
 	 * @throws Error if directory cannot be read
+	 * @private
 	 */
-	async listFiles(dirPath: string = '.'): Promise<string[]> {
+	private async listFiles(dirPath: string = '.'): Promise<string[]> {
 		try {
 			const fullPath = this.resolvePath(dirPath);
 
@@ -1656,7 +1599,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers. **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=50 reads lines 1-50 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:30}, {path:"b.ts", startLine:100, endLine:150}] reads different ranges from each file.',
+			'Read file content with line numbers. **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=50 reads lines 1-50 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:30}, {path:"b.ts", startLine:100, endLine:150}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1664,7 +1607,8 @@ export const mcpTools = [
 					oneOf: [
 						{
 							type: 'string',
-							description: 'Path to a single file to read',
+							description:
+								'Path to a single file to read or directory to list',
 						},
 						{
 							type: 'array',
@@ -1701,7 +1645,7 @@ export const mcpTools = [
 						},
 					],
 					description:
-						'Path to the file(s) to read: string, array of strings, or array of {path, startLine?, endLine?} objects',
+						'Path to the file(s) to read or directory to list: string, array of strings, or array of {path, startLine?, endLine?} objects',
 				},
 				startLine: {
 					type: 'number',
@@ -1743,55 +1687,9 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem-delete',
-		description:
-			'Delete one or multiple files. Supports both single file and batch deletion.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				filePath: {
-					type: 'string',
-					description:
-						'Path to a single file to delete (deprecated: use filePaths for single or multiple files)',
-				},
-				filePaths: {
-					oneOf: [
-						{
-							type: 'string',
-							description: 'Path to a single file to delete',
-						},
-						{
-							type: 'array',
-							items: {
-								type: 'string',
-							},
-							description: 'Array of file paths to delete',
-						},
-					],
-					description: 'Single file path or array of file paths to delete',
-				},
-			},
-			// Make both optional, but at least one is required (validated in code)
-		},
-	},
-	{
-		name: 'filesystem-list',
-		description: 'List files in a directory',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				dirPath: {
-					type: 'string',
-					description: 'Directory path to list files from',
-					default: '.',
-				},
-			},
-		},
-	},
-	{
 		name: 'filesystem-edit_search',
 		description:
-			'**RECOMMENDED** for most edits: Search-and-replace with SMART FUZZY MATCHING. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **WORKFLOW**: (1) Use ace-text_search/ace-search_symbols to locate code, (2) Use filesystem-read to view content, (3) Copy code blocks (without line numbers), (4) Use THIS tool. **WHY**: No line tracking, auto-handles spacing/tabs, finds best match. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}] **It is very important to use the filesystem-read tool to determine the code boundaries of the area that need to be modified first to avoid syntactic errors**',
+			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. SUPPORTS BATCH EDITING: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. CRITICAL WORKFLOW FOR CODE SAFETY: (1) Use ace-text_search/ace-search_symbols to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries (entire function body with all braces, complete markup tags with opening/closing pairs, full code blocks), (3) Copy the COMPLETE code block (without line numbers), (4) Verify boundaries are intact (matching braces/brackets/tags), (5) Use THIS tool. WHY: No line tracking, auto-handles spacing/tabs, finds best match. COMMON ERRORS TO AVOID: Modifying only part of a function (missing closing brace), incomplete markup tags (HTML/Vue/JSX), partial code blocks. Always include complete syntactic units. BATCH EXAMPLE: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1868,7 +1766,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit',
 		description:
-			'Line-based editing for precise control. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **WORKFLOW**: (1) Use ace-text_search/ace-file_outline to locate area, (2) Use filesystem-read to get line numbers, (3) Use THIS tool. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}] **It is very important to use the filesystem-read tool to determine the code boundaries of the area that need to be modified first to avoid syntactic errors**',
+			'Line-based editing for precise control. SUPPORTS BATCH EDITING: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. WHEN TO USE: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. CRITICAL WORKFLOW FOR CODE SAFETY: (1) Use ace-text_search/ace-file_outline to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries - for functions: include opening line to closing brace; for markup tags (HTML/Vue/JSX): include opening tag to closing tag; for code blocks: include all braces/brackets, (3) Verify line range covers the ENTIRE syntactic unit (check indentation levels, matching pairs), (4) Use THIS tool with exact startLine/endLine. RECOMMENDATION: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. COMMON ERRORS TO AVOID: Line range stops mid-function (missing closing brace), partial markup tags, incomplete code blocks. Always verify boundaries with filesystem-read first. BATCH EXAMPLE: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
 		inputSchema: {
 			type: 'object',
 			properties: {

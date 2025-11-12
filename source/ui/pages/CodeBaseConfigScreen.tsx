@@ -8,6 +8,7 @@ import {
 	saveCodebaseConfig,
 	type CodebaseConfig,
 } from '../../utils/codebaseConfig.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -72,6 +73,7 @@ export default function CodeBaseConfigScreen({
 	onSave,
 	inlineMode = false,
 }: Props) {
+	const {t} = useI18n();
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
@@ -127,25 +129,25 @@ export default function CodeBaseConfigScreen({
 		if (enabled) {
 			// Embedding configuration is required
 			if (!embeddingModelName.trim()) {
-				validationErrors.push('Embedding model name is required when enabled');
+				validationErrors.push(t.codebaseConfig.validationModelNameRequired);
 			}
 			if (!embeddingBaseUrl.trim()) {
-				validationErrors.push('Embedding base URL is required when enabled');
+				validationErrors.push(t.codebaseConfig.validationBaseUrlRequired);
 				// Embedding API key is optional (for local deployments like Ollama)
 				// if (!embeddingApiKey.trim()) {
 				// 	validationErrors.push('Embedding API key is required when enabled');
 				// }
 			}
 			if (embeddingDimensions <= 0) {
-				validationErrors.push('Embedding dimensions must be greater than 0');
+				validationErrors.push(t.codebaseConfig.validationDimensionsPositive);
 			}
 
 			// Batch configuration validation
 			if (batchMaxLines <= 0) {
-				validationErrors.push('Batch max lines must be greater than 0');
+				validationErrors.push(t.codebaseConfig.validationMaxLinesPositive);
 			}
 			if (batchConcurrency <= 0) {
-				validationErrors.push('Batch concurrency must be greater than 0');
+				validationErrors.push(t.codebaseConfig.validationConcurrencyPositive);
 			}
 
 			// LLM is optional - no validation needed
@@ -183,7 +185,7 @@ export default function CodeBaseConfigScreen({
 			onSave?.();
 		} catch (error) {
 			setErrors([
-				error instanceof Error ? error.message : 'Failed to save configuration',
+				error instanceof Error ? error.message : t.codebaseConfig.saveError,
 			]);
 		}
 	};
@@ -197,12 +199,13 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}CodeBase Enabled:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.codebaseEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{enabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
-								toggle)
+								{enabled ? t.codebaseConfig.enabled : t.codebaseConfig.disabled}{' '}
+								{t.codebaseConfig.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -212,12 +215,15 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Agent Review:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.agentReview}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{enableAgentReview ? '[✓] Enabled' : '[ ] Disabled'} (Press
-								Enter to toggle)
+								{enableAgentReview
+									? t.codebaseConfig.enabled
+									: t.codebaseConfig.disabled}{' '}
+								{t.codebaseConfig.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -227,7 +233,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Embedding Model Name:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingModelName}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -244,7 +251,9 @@ export default function CodeBaseConfigScreen({
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{embeddingModelName || 'Not set'}</Text>
+								<Text color="gray">
+									{embeddingModelName || t.codebaseConfig.notSet}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -254,7 +263,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Embedding Base URL:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingBaseUrl}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -271,7 +281,9 @@ export default function CodeBaseConfigScreen({
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{embeddingBaseUrl || 'Not set'}</Text>
+								<Text color="gray">
+									{embeddingBaseUrl || t.codebaseConfig.notSet}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -281,7 +293,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Embedding API Key (Optional for local):
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingApiKeyOptional}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -300,7 +313,9 @@ export default function CodeBaseConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color="gray">
-									{embeddingApiKey ? '••••••••' : 'Not set'}
+									{embeddingApiKey
+										? t.codebaseConfig.masked
+										: t.codebaseConfig.notSet}
 								</Text>
 							</Box>
 						)}
@@ -311,7 +326,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Embedding Dimensions:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingDimensions}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -341,7 +357,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Batch Max Lines:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.batchMaxLines}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -371,7 +388,8 @@ export default function CodeBaseConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Batch Concurrency:
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.batchConcurrency}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -483,9 +501,9 @@ export default function CodeBaseConfigScreen({
 					paddingX={2}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">CodeBase Configuration</Gradient>
+						<Gradient name="rainbow">{t.codebaseConfig.title}</Gradient>
 						<Text color="gray" dimColor>
-							Configure codebase indexing and search settings
+							{t.codebaseConfig.subtitle}
 						</Text>
 					</Box>
 				</Box>
@@ -494,12 +512,13 @@ export default function CodeBaseConfigScreen({
 			{/* Position indicator - always visible */}
 			<Box marginBottom={1}>
 				<Text color="yellow" bold>
-					Settings ({currentFieldIndex + 1}/{totalFields})
+					{t.codebaseConfig.settingsPosition} ({currentFieldIndex + 1}/
+					{totalFields})
 				</Text>
 				{totalFields > MAX_VISIBLE_FIELDS && (
 					<Text color="gray" dimColor>
 						{' '}
-						· ↑↓ to scroll
+						{t.codebaseConfig.scrollHint}
 					</Text>
 				)}
 			</Box>
@@ -534,7 +553,7 @@ export default function CodeBaseConfigScreen({
 			{errors.length > 0 && (
 				<Box flexDirection="column" marginTop={1}>
 					<Text color="red" bold>
-						Errors:
+						{t.codebaseConfig.errors}
 					</Text>
 					{errors.map((error, index) => (
 						<Text key={index} color="red">
@@ -547,13 +566,9 @@ export default function CodeBaseConfigScreen({
 			{/* Navigation hints */}
 			<Box flexDirection="column" marginTop={1}>
 				{isEditing ? (
-					<Alert variant="info">
-						Editing mode: Type to edit, Enter to save, Esc to cancel
-					</Alert>
+					<Alert variant="info">{t.codebaseConfig.editingHint}</Alert>
 				) : (
-					<Alert variant="info">
-						Use ↑↓ to navigate, Enter to edit/toggle, Ctrl+S or Esc to save
-					</Alert>
+					<Alert variant="info">{t.codebaseConfig.navigationHint}</Alert>
 				)}
 			</Box>
 		</Box>

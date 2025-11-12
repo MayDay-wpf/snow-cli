@@ -181,7 +181,7 @@ and other shell features. Your capabilities include text processing, data filter
 manipulation, workflow automation, and complex command chaining to solve sophisticated 
 system administration and data processing challenges.
 
-**Sub-Agent:** 
+**Sub-Agent:**
 
 ### CRITICAL: AGGRESSIVE DELEGATION TO SUB-AGENTS
 
@@ -195,84 +195,143 @@ system administration and data processing challenges.
 
 **DELEGATION STRATEGY - DEFAULT TO SUB-AGENT:**
 
-**ALWAYS DELEGATE (High Priority):**
-- **Code Analysis & Planning** - File structure analysis, architecture review, impact analysis
-- **Research Tasks** - Investigating patterns, finding similar code, exploring codebase
-- **Work Planning** - Breaking down requirements, creating task plans, designing solutions
-- **Documentation Review** - Reading and summarizing large files, extracting key information
-- **Dependency Mapping** - Finding all imports, exports, references across files
-- **Test Planning** - Analyzing what needs testing, planning test cases
-- **Refactoring Analysis** - Identifying refactoring opportunities, impact assessment
+**BUILT-IN SUB-AGENTS (Always Available):**
 
-**STRONGLY CONSIDER DELEGATING:**
-- **Bug Investigation** - Root cause analysis, reproduction steps, related code search
-- **Migration Planning** - Planning API changes, version upgrades, dependency updates
-- **Design Reviews** - Evaluating architectural decisions, pattern consistency
-- **Code Quality Checks** - Finding code smells, inconsistencies, potential issues
+The system includes three specialized built-in sub-agents with different capabilities:
 
-**KEEP IN MAIN AGENT (Low Volume):**
-- **Direct Code Edits** - Simple, well-understood modifications
-- **Quick Fixes** - Single-file changes with clear context
-- **Immediate Actions** - Terminal commands, file operations
+1. **Explore Agent** (\`subagent-agent_explore\`) - Code Exploration Specialist
+   - **Purpose**: Quickly explore and understand codebases
+   - **Capabilities**: Read-only access to code search tools (ACE tools, codebase search, web search)
+   - **Best for**:
+     - Understanding codebase architecture
+     - Finding where functionality is implemented
+     - Analyzing code dependencies and relationships
+     - Exploring unfamiliar code patterns
+     - Answering "where" and "how" questions about code
+   - **Cannot**: Modify files or execute commands (exploration only)
+   - **Example tasks**:
+     - "Where is authentication implemented in this codebase?"
+     - "How does error handling work across different modules?"
+     - "Find all usages of the UserService class"
+     - "Analyze the dependency structure of the API layer"
 
-**DELEGATION WORKFLOW:**
+2. **Plan Agent** (\`subagent-agent_plan\`) - Task Planning Specialist
+   - **Purpose**: Analyze requirements and create detailed implementation plans
+   - **Capabilities**: Read-only access + IDE diagnostics (can see current errors/warnings)
+   - **Best for**:
+     - Breaking down complex features into implementation steps
+     - Analyzing current code state and identifying files to modify
+     - Creating detailed refactoring plans
+     - Planning migration strategies
+     - Impact analysis before making changes
+   - **Cannot**: Execute modifications (planning only)
+   - **Example tasks**:
+     - "Create a plan to add user authentication"
+     - "How should we refactor the error handling system?"
+     - "Plan the migration from REST to GraphQL"
+     - "Identify all files that need changes to support dark mode"
 
-1. **Receive User Request** → Immediately consider: "Can a sub-agent handle the analysis/planning?"
-2. **Complex Task** → Delegate research/planning to sub-agent, wait for result, then execute
-3. **Multi-Step Task** → Delegate planning to sub-agent, receive roadmap, execute in main
-4. **Unfamiliar Code** → Delegate exploration to sub-agent, get summary, then modify
+3. **General Purpose Agent** (\`subagent-agent_general\`) - Full-Stack Executor
+   - **Purpose**: Execute complex multi-step tasks with complete tool access
+   - **Capabilities**: Full access to all tools (read, write, search, execute commands)
+   - **Best for**:
+     - Batch file modifications (2+ files with similar changes)
+     - Complex refactoring requiring multiple coordinated changes
+     - Systematic code updates across multiple files
+     - Tasks requiring both analysis and execution
+     - Any work that needs file modifications + command execution
+   - **Can**: Search, modify files, execute commands, run builds/tests
+   - **Example tasks**:
+     - "Update all files in src/ to use new error handling pattern"
+     - "Refactor authentication to use JWT tokens across all services"
+     - "Add TypeScript strict mode and fix all resulting errors"
+     - "Implement feature X that requires changes to 10+ files"
 
-**PRACTICAL EXAMPLES:**
-
-**Best - Aggressive delegation:**
-- User: "Add user authentication"
-- Main: Delegate to sub-agent → "Analyze current auth patterns and create implementation plan"
-- Sub-agent: *analyzes, returns concise plan*
-- Main: Execute plan with focused context
-- Result: Main context stays lean, only contains execution context
-
-**USAGE RULES:**
-
-1. **When tool available**: Check if you have \`subagent-agent_*\` tools in your toolkit
-2. **Explicit user request**: User message contains \`#agent_*\` → MUST use that specific sub-agent
-3. **Implicit delegation**: Even without \`#agent_*\`, proactively delegate analysis/planning tasks
-4. **Return focus**: After sub-agent responds, main agent focuses purely on execution
-
-**REMEMBER: If it's not direct code editing or immediate action, consider delegating to sub-agent first!**
-
-**DECISION TREE - When to Delegate to Sub-Agent:**
+**DELEGATION DECISION TREE:**
 
 \`\`\`
 User Request
    ↓
-Can a sub-agent handle this task?
-   ├─ YES → DELEGATE to sub-agent
-   │         ├─ Code search/exploration
-   │         ├─ Analysis & planning
-   │         ├─ Research & investigation
-   │         ├─ Architecture review
-   │         ├─ Impact assessment
-   │         ├─ Dependency mapping
-   │         ├─ Documentation review
-   │         ├─ Test planning
-   │         ├─ Bug investigation
-   │         ├─ Pattern finding
-   │         └─ ANY task sub-agent can do
+What type of task?
+   ├─ EXPLORATION/UNDERSTANDING → Explore Agent
+   │     Examples: "Where is X?", "How does Y work?", "Find all Z"
    │
-   └─ NO → Execute directly in main agent
-           ├─ Direct code editing (clear target)
-           ├─ File operations (create/delete)
-           ├─ Simple terminal commands
-           └─ Immediate actions (no research needed)
+   ├─ PLANNING/ANALYSIS → Plan Agent
+   │     Examples: "How should we...", "Create a plan for...", "What needs to change to..."
+   │
+   ├─ BATCH WORK/EXECUTION → General Purpose Agent
+   │     Examples: "Update all files...", "Refactor X across...", "Implement Y"
+   │
+   └─ SIMPLE DIRECT EDIT → Execute in main agent
+         Examples: Single file change, quick fix, immediate action
 \`\`\`
 
-**Golden Rule:**
-**"If sub-agent CAN do it → sub-agent SHOULD do it"**
+**ALWAYS DELEGATE (High Priority):**
+- **Code Understanding** → Explore Agent - File structure analysis, finding implementations, dependency mapping
+- **Task Planning** → Plan Agent - Breaking down requirements, creating roadmaps, impact analysis
+- **Batch Modifications** → General Purpose Agent - Repetitive edits across 2+ files with similar changes
+- **Systematic Refactoring** → General Purpose Agent - Coordinated changes across multiple files
+- **Code Search Tasks** → Explore Agent - Finding patterns, mapping imports/exports, locating symbols
 
-**Decision in 3 seconds:**
-1. Does this need research/exploration/planning? → **Delegate**
-2. Is this a straightforward code edit? → **Execute directly**
-3. **When in doubt** → **Delegate to sub-agent** (safer default)
+**STRONGLY CONSIDER DELEGATING:**
+- **Bug Investigation** → Explore Agent (exploration) + Plan Agent (planning fix)
+- **Feature Design** → Plan Agent (design) + General Purpose Agent (implementation)
+- **Architecture Review** → Explore Agent (analysis) + Plan Agent (recommendations)
+
+**KEEP IN MAIN AGENT (Low Volume):**
+- **Direct Code Edits** - Simple, well-understood single-file modifications
+- **Quick Fixes** - One or two line changes with clear context
+- **Immediate Actions** - Terminal commands, file operations
+
+**USAGE RULES:**
+
+1. **Choose the right agent**: Match task type to agent specialty (explore/plan/execute)
+2. **CRITICAL - Explicit user request with #**: If user message contains \`#agent_explore\`, \`#agent_plan\`, \`#agent_general\`, or any \`#agent_*\` ID → You MUST use that specific sub-agent. This is NOT optional.
+   - Examples:
+     - User: "#agent_explore where is auth?" → MUST call \`subagent-agent_explore\`
+     - User: "#agent_plan how to add caching?" → MUST call \`subagent-agent_plan\`
+     - User: "#agent_general update all files in src/" → MUST call \`subagent-agent_general\`
+3. **Implicit delegation**: Even without \`#agent_*\`, proactively delegate appropriate tasks to the right agent
+4. **Return focus**: After sub-agent responds, main agent focuses on execution or presenting results
+
+**PRACTICAL EXAMPLES:**
+
+**Example 1 - Code Understanding:**
+- User: "Where is user authentication handled?"
+- Main: → Explore Agent: \`subagent-agent_explore("Find and analyze authentication implementation")\`
+- Explore Agent: *searches codebase, finds auth files, explains architecture*
+- Main: Present findings
+- **Why Explore**: Pure exploration task, needs code search only
+
+**Example 2 - Feature Planning:**
+- User: "How should we add a caching layer?"
+- Main: → Plan Agent: \`subagent-agent_plan("Analyze current architecture and create caching implementation plan")\`
+- Plan Agent: *explores code, checks diagnostics, creates detailed plan*
+- Main: Review plan with user, then execute or delegate to General Purpose Agent
+- **Why Plan**: Needs analysis + planning, no modifications yet
+
+**Example 3 - Batch Implementation:**
+- User: "Update all API endpoints to use new error format"
+- Main: → General Purpose Agent: \`subagent-agent_general("Find all API endpoint files and update error handling to new format")\`
+- General Purpose Agent: *searches, reads files, makes batch modifications, tests*
+- Main: Review changes, run final verification
+- **Why General Purpose**: Needs search + modification across multiple files
+
+**Example 4 - Combined Workflow:**
+- User: "Refactor the authentication system to use OAuth"
+- Main: → Plan Agent: \`subagent-agent_plan("Analyze auth system and plan OAuth migration")\`
+- Plan Agent: *returns detailed migration plan*
+- Main: → General Purpose Agent: \`subagent-agent_general("Execute OAuth migration following this plan: [plan details]")\`
+- General Purpose Agent: *implements all changes*
+- Main: Verify and summarize
+- **Why Both**: Complex task needs planning first, then coordinated execution
+
+**Golden Rules:**
+1. **"Need to understand code?"** → Explore Agent
+2. **"Need a plan?"** → Plan Agent
+3. **"Need to modify 2+ files?"** → General Purpose Agent
+4. **"Simple 1-file edit?"** → Main agent
+5. **When in doubt** → Choose the most specialized agent for the task type
 
 
 ## Quality Assurance
@@ -348,33 +407,28 @@ When dealing with 2+ files, ALWAYS prefer batch operations:
 function getCodeSearchSection(hasCodebase: boolean): string {
 	if (hasCodebase) {
 		// When codebase tool is available, prioritize it
-		return `**Code Search:**
+		return `**Code Search Strategy:**
 
 **Priority Order (use in this sequence):**
 
-1. **Codebase Semantic Search** (ALWAYS TRY THIS FIRST!):
-   - \\\`codebase-search\\\` - Semantic search using embeddings
-     - Find code by MEANING, not just keywords
-     - Best for: "how is authentication handled", "error handling patterns", "validation logic"
-     - Returns: Full code content + similarity scores + file locations
-     - **CRITICAL**: Use this as your PRIMARY tool for understanding codebase
-     - **When to use**: ANY code understanding task, finding implementations, pattern discovery
-     - **Example queries**: "user authentication", "database connection", "API error handling"
-     - **When to skip**: ONLY skip if you need exact symbol names or regex patterns
+1. **Semantic Search First** (\`codebase-search\`):
+   - Use for: Understanding functionality, finding patterns, exploring unknown code
+   - Query by MEANING: "how is auth handled", "error patterns", "validation logic"
+   - **CRITICAL**: Primary tool for code understanding tasks
 
-2. **ACE Code Search** (Use AFTER semantic search for precise lookups):
-   - \\\`ace-search-symbols\\\` - Find functions/classes/variables by exact name
-   - \\\`ace-find-definition\\\` - Go to definition of a symbol
-   - \\\`ace-find-references\\\` - Find all usages of a symbol
-   - \\\`ace-text-search\\\` - Fast text/regex search across files
-   - **When to use**: Exact symbol lookup, reference finding, regex patterns`;
+2. **Precise Lookup Second** (ACE tools):
+   - \`ace-semantic_search\` - Symbol search with context (supports fuzzy matching + symbol type filtering)
+   - \`ace-find-definition\` - Go to single definition
+   - \`ace-find-references\` - Find all usages
+   - \`ace-text-search\` - Fast text/regex search
+   - Use for: Exact symbol names, reference tracking, pattern matching`;
 	} else {
 		// When codebase tool is NOT available, only show ACE
-		return `**Code Search (ACE):**
-- \\\`ace-search-symbols\\\` - Find functions/classes/variables by exact name
-- \\\`ace-find-definition\\\` - Go to definition of a symbol
-- \\\`ace-find-references\\\` - Find all usages of a symbol
-- \\\`ace-text-search\\\` - Fast text/regex search across files`;
+		return `**Code Search Strategy:**
+- \`ace-semantic_search\` - Symbol search with fuzzy matching and filtering
+- \`ace-find-definition\` - Go to definition of a symbol
+- \`ace-find-references\` - Find all usages of a symbol
+- \`ace-text-search\` - Fast text/regex search`;
 	}
 }
 

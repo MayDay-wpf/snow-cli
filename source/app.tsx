@@ -13,6 +13,7 @@ import {
 } from './hooks/useGlobalExit.js';
 import {onNavigate} from './hooks/useGlobalNavigation.js';
 import {useTerminalSize} from './hooks/useTerminalSize.js';
+import {I18nProvider} from './i18n/index.js';
 
 type Props = {
 	version?: string;
@@ -121,13 +122,15 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	};
 
 	return (
-		<Box flexDirection="column" width={terminalWidth}>
-			{renderView()}
-			{exitNotification.show && (
-				<Box paddingX={1} flexShrink={0}>
-					<Alert variant="warning">{exitNotification.message}</Alert>
-				</Box>
-			)}
-		</Box>
+		<I18nProvider>
+			<Box flexDirection="column" width={terminalWidth}>
+				{renderView()}
+				{exitNotification.show && (
+					<Box paddingX={1} flexShrink={0}>
+						<Alert variant="warning">{exitNotification.message}</Alert>
+					</Box>
+				)}
+			</Box>
+		</I18nProvider>
 	);
 }

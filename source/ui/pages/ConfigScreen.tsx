@@ -24,6 +24,7 @@ import {
 	saveProfile,
 	type ConfigProfile,
 } from '../../utils/configManager.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -98,6 +99,8 @@ export default function ConfigScreen({
 	onSave,
 	inlineMode = false,
 }: Props) {
+	const {t} = useI18n();
+
 	// Profile management
 	const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
 	const [activeProfile, setActiveProfile] = useState('');
@@ -143,19 +146,19 @@ export default function ConfigScreen({
 
 	const requestMethodOptions = [
 		{
-			label: 'Chat Completions - Modern chat API (GPT-4, GPT-3.5-turbo)',
+			label: t.configScreen.requestMethodChat,
 			value: 'chat' as RequestMethod,
 		},
 		{
-			label: 'Responses - New responses API (2025, with built-in tools)',
+			label: t.configScreen.requestMethodResponses,
 			value: 'responses' as RequestMethod,
 		},
 		{
-			label: 'Gemini - Google Gemini API',
+			label: t.configScreen.requestMethodGemini,
 			value: 'gemini' as RequestMethod,
 		},
 		{
-			label: 'Anthropic - Claude API',
+			label: t.configScreen.requestMethodAnthropic,
 			value: 'anthropic' as RequestMethod,
 		},
 	];
@@ -291,7 +294,7 @@ export default function ConfigScreen({
 		}));
 
 		return [
-			{label: 'Manual Input (Enter model name)', value: '__MANUAL_INPUT__'},
+			{label: t.configScreen.manualInputOption, value: '__MANUAL_INPUT__'},
 			...modelOptions,
 		];
 	};
@@ -318,7 +321,7 @@ export default function ConfigScreen({
 		const cleaned = stripFocusArtifacts(newProfileName).trim();
 
 		if (!cleaned) {
-			setErrors(['Profile name cannot be empty']);
+			setErrors([t.configScreen.profileNameEmpty]);
 			return;
 		}
 
@@ -501,7 +504,7 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Profile:
+							{isActive ? '❯ ' : '  '}{t.configScreen.profile}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -518,7 +521,7 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Base URL:
+							{isActive ? '❯ ' : '  '}{t.configScreen.baseUrl}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -531,7 +534,7 @@ export default function ConfigScreen({
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{baseUrl || 'Not set'}</Text>
+								<Text color="gray">{baseUrl || t.configScreen.notSet}</Text>
 							</Box>
 						)}
 					</Box>
@@ -541,7 +544,7 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}API Key:
+							{isActive ? '❯ ' : '  '}{t.configScreen.apiKey}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -556,7 +559,7 @@ export default function ConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color="gray">
-									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : 'Not set'}
+									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : t.configScreen.notSet}
 								</Text>
 							</Box>
 						)}
@@ -567,13 +570,13 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Request Method:
+							{isActive ? '❯ ' : '  '}{t.configScreen.requestMethod}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color="gray">
 									{requestMethodOptions.find(opt => opt.value === requestMethod)
-										?.label || 'Not set'}
+										?.label || t.configScreen.notSet}
 								</Text>
 							</Box>
 						)}
@@ -584,12 +587,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Anthropic Beta:
+							{isActive ? '❯ ' : '  '}{t.configScreen.anthropicBeta}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{anthropicBeta ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
-								toggle)
+								{anthropicBeta ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -599,12 +601,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Thinking Enabled:
+							{isActive ? '❯ ' : '  '}{t.configScreen.thinkingEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{thinkingEnabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter
-								to toggle)
+								{thinkingEnabled ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -614,11 +615,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Thinking Budget Tokens:
+							{isActive ? '❯ ' : '  '}{t.configScreen.thinkingBudgetTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {thinkingBudgetTokens}</Text>
+								<Text color="cyan">{t.configScreen.enterValue} {thinkingBudgetTokens}</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
@@ -633,12 +634,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Gemini Thinking Enabled:
+							{isActive ? '❯ ' : '  '}{t.configScreen.geminiThinkingEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{geminiThinkingEnabled ? '[✓] Enabled' : '[ ] Disabled'} (Press
-								Enter to toggle)
+								{geminiThinkingEnabled ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -648,11 +648,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Gemini Thinking Budget:
+							{isActive ? '❯ ' : '  '}{t.configScreen.geminiThinkingBudget}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {geminiThinkingBudget}</Text>
+								<Text color="cyan">{t.configScreen.enterValue} {geminiThinkingBudget}</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
@@ -667,12 +667,12 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Responses Reasoning Enabled:
+							{isActive ? '❯ ' : '  '}{t.configScreen.responsesReasoningEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color="gray">
-								{responsesReasoningEnabled ? '[✓] Enabled' : '[ ] Disabled'}{' '}
-								(Press Enter to toggle)
+								{responsesReasoningEnabled ? t.configScreen.enabled : t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -682,7 +682,7 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Responses Reasoning Effort:
+							{isActive ? '❯ ' : '  '}{t.configScreen.responsesReasoningEffort}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -695,9 +695,9 @@ export default function ConfigScreen({
 							<Box marginLeft={3}>
 								<Select
 									options={[
-										{label: 'Low', value: 'low'},
-										{label: 'Medium', value: 'medium'},
-										{label: 'High', value: 'high'},
+										{label: t.configScreen.low, value: 'low'},
+										{label: t.configScreen.medium, value: 'medium'},
+										{label: t.configScreen.high, value: 'high'},
 									]}
 									defaultValue={responsesReasoningEffort}
 									onChange={value => {
@@ -716,11 +716,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Advanced Model:
+							{isActive ? '❯ ' : '  '}{t.configScreen.advancedModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{advancedModel || 'Not set'}</Text>
+								<Text color="gray">{advancedModel || t.configScreen.notSet}</Text>
 							</Box>
 						)}
 					</Box>
@@ -730,11 +730,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Basic Model:
+							{isActive ? '❯ ' : '  '}{t.configScreen.basicModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{basicModel || 'Not set'}</Text>
+								<Text color="gray">{basicModel || t.configScreen.notSet}</Text>
 							</Box>
 						)}
 					</Box>
@@ -744,11 +744,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Compact Model:
+							{isActive ? '❯ ' : '  '}{t.configScreen.compactModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="gray">{compactModelName || 'Not set'}</Text>
+								<Text color="gray">{compactModelName || t.configScreen.notSet}</Text>
 							</Box>
 						)}
 					</Box>
@@ -758,11 +758,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Max Context Tokens:
+							{isActive ? '❯ ' : '  '}{t.configScreen.maxContextTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {maxContextTokens}</Text>
+								<Text color="cyan">{t.configScreen.enterValue} {maxContextTokens}</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
@@ -777,11 +777,11 @@ export default function ConfigScreen({
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}Max Tokens:
+							{isActive ? '❯ ' : '  '}{t.configScreen.maxTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color="cyan">Enter value: {maxTokens}</Text>
+								<Text color="cyan">{t.configScreen.enterValue} {maxTokens}</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
@@ -851,7 +851,7 @@ export default function ConfigScreen({
 		) {
 			// Handle profile deletion (works in both normal and editing mode)
 			if (activeProfile === 'default') {
-				setErrors(['Cannot delete the default profile']);
+				setErrors([t.configScreen.cannotDeleteDefault]);
 				setIsEditing(false);
 				return;
 			}
@@ -1101,9 +1101,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">Create New Profile</Gradient>
+							<Gradient name="rainbow">{t.configScreen.createNewProfile}</Gradient>
 							<Text color="gray" dimColor>
-								Enter a name for the new configuration profile
+								{t.configScreen.enterProfileName}
 							</Text>
 						</Box>
 					</Box>
@@ -1115,7 +1115,7 @@ export default function ConfigScreen({
 						<TextInput
 							value={newProfileName}
 							onChange={value => setNewProfileName(stripFocusArtifacts(value))}
-							placeholder="e.g., work, personal, test"
+							placeholder={t.configScreen.profileNamePlaceholder}
 						/>
 					</Box>
 				</Box>
@@ -1127,7 +1127,7 @@ export default function ConfigScreen({
 				)}
 
 				<Box marginTop={1}>
-					<Alert variant="info">Press Enter to create, Esc to cancel</Alert>
+					<Alert variant="info">{t.configScreen.createHint}</Alert>
 				</Box>
 			</Box>
 		);
@@ -1145,9 +1145,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">Delete Profile</Gradient>
+							<Gradient name="rainbow">{t.configScreen.deleteProfile}</Gradient>
 							<Text color="gray" dimColor>
-								Confirm profile deletion
+								{t.configScreen.confirmDelete}
 							</Text>
 						</Box>
 					</Box>
@@ -1159,8 +1159,7 @@ export default function ConfigScreen({
 						&quot;?
 					</Text>
 					<Text color="gray" dimColor>
-						This action cannot be undone. You will be switched to the default
-						profile.
+						{t.configScreen.deleteWarning}
 					</Text>
 				</Box>
 
@@ -1172,7 +1171,7 @@ export default function ConfigScreen({
 
 				<Box marginTop={1}>
 					<Alert variant="warning">
-						Press Y to confirm, N or Esc to cancel
+						{t.configScreen.confirmHint}
 					</Alert>
 				</Box>
 			</Box>
@@ -1190,9 +1189,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">API & Model Configuration</Gradient>
+							<Gradient name="rainbow">{t.configScreen.title}</Gradient>
 							<Text color="gray" dimColor>
-								Loading available models...
+								{t.configScreen.loadingMessage}
 							</Text>
 						</Box>
 					</Box>
@@ -1201,18 +1200,18 @@ export default function ConfigScreen({
 				<Box flexDirection="column">
 					<Box>
 						<Spinner type="dots" />
-						<Text color="cyan"> Fetching models from API...</Text>
+						<Text color="cyan"> {t.configScreen.fetchingModels}</Text>
 					</Box>
 					<Box marginLeft={2}>
 						<Text color="gray" dimColor>
-							This may take a few seconds depending on your network connection
+							{t.configScreen.fetchingHint}
 						</Text>
 					</Box>
 				</Box>
 
 				<Box flexDirection="column" marginTop={1}>
 					<Alert variant="info">
-						Press Esc to cancel and return to configuration
+						{t.configScreen.loadingCancelHint}
 					</Alert>
 				</Box>
 			</Box>
@@ -1230,9 +1229,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">Manual Input Model</Gradient>
+							<Gradient name="rainbow">{t.configScreen.manualInputTitle}</Gradient>
 							<Text color="gray" dimColor>
-								Enter model name manually
+								{t.configScreen.manualInputSubtitle}
 							</Text>
 						</Box>
 					</Box>
@@ -1240,7 +1239,7 @@ export default function ConfigScreen({
 
 				{loadError && (
 					<Box flexDirection="column" marginBottom={1}>
-						<Text color="yellow">⚠ Failed to load models from API</Text>
+						<Text color="yellow">{t.configScreen.loadingError}</Text>
 						<Text color="gray" dimColor>
 							{loadError}
 						</Text>
@@ -1249,9 +1248,9 @@ export default function ConfigScreen({
 
 				<Box flexDirection="column">
 					<Text color="cyan">
-						{currentField === 'advancedModel' && 'Advanced Model'}
-						{currentField === 'basicModel' && 'Basic Model'}
-						{currentField === 'compactModelName' && 'Compact Model'}:
+						{currentField === 'advancedModel' && t.configScreen.advancedModel}
+						{currentField === 'basicModel' && t.configScreen.basicModel}
+						{currentField === 'compactModelName' && t.configScreen.compactModel}
 					</Text>
 					<Box marginLeft={2}>
 						<Text color="green">
@@ -1262,7 +1261,7 @@ export default function ConfigScreen({
 				</Box>
 
 				<Box flexDirection="column" marginTop={1}>
-					<Alert variant="info">Press Enter to confirm, Esc to cancel</Alert>
+					<Alert variant="info">{t.configScreen.manualInputHint}</Alert>
 				</Box>
 			</Box>
 		);
@@ -1278,13 +1277,13 @@ export default function ConfigScreen({
 					paddingX={2}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">API & Model Configuration</Gradient>
+						<Gradient name="rainbow">{t.configScreen.title}</Gradient>
 						<Text color="gray" dimColor>
-							Configure your API settings and AI models
+							{t.configScreen.subtitle}
 						</Text>
 						{activeProfile && (
 							<Text color="cyan" dimColor>
-								Active Profile: {activeProfile}
+								{t.configScreen.activeProfile} {activeProfile}
 							</Text>
 						)}
 					</Box>
@@ -1294,12 +1293,11 @@ export default function ConfigScreen({
 			{/* Position indicator - always visible */}
 			<Box marginBottom={1}>
 				<Text color="yellow" bold>
-					Settings ({currentFieldIndex + 1}/{totalFields})
+					{t.configScreen.settingsPosition} ({currentFieldIndex + 1}/{totalFields})
 				</Text>
 				{totalFields > MAX_VISIBLE_FIELDS && (
 					<Text color="gray" dimColor>
-						{' '}
-						· ↑↓ to scroll
+						{t.configScreen.scrollHint}
 					</Text>
 				)}
 			</Box>
@@ -1314,14 +1312,13 @@ export default function ConfigScreen({
 				currentField === 'responsesReasoningEffort') ? (
 				<Box flexDirection="column">
 					<Text color="green">
-						❯ {currentField === 'profile' && 'Profile'}
-						{currentField === 'requestMethod' && 'Request Method'}
-						{currentField === 'advancedModel' && 'Advanced Model'}
-						{currentField === 'basicModel' && 'Basic Model'}
-						{currentField === 'compactModelName' && 'Compact Model'}
+						❯ {currentField === 'profile' && t.configScreen.profile.replace(':', '')}
+						{currentField === 'requestMethod' && t.configScreen.requestMethod.replace(':', '')}
+						{currentField === 'advancedModel' && t.configScreen.advancedModel.replace(':', '')}
+						{currentField === 'basicModel' && t.configScreen.basicModel.replace(':', '')}
+						{currentField === 'compactModelName' && t.configScreen.compactModel.replace(':', '')}
 						{currentField === 'responsesReasoningEffort' &&
-							'Responses Reasoning Effort'}
-						:
+							t.configScreen.responsesReasoningEffort.replace(':', '')}
 					</Text>
 					<Box marginLeft={3} marginTop={1}>
 						{currentField === 'profile' && (
@@ -1346,11 +1343,11 @@ export default function ConfigScreen({
 								/>
 								<Box flexDirection="row" marginTop={1}>
 									<Box marginRight={2}>
-										<Text color="green">+ New</Text>
+										<Text color="green">{t.configScreen.newProfile}</Text>
 										<Text color="gray"> (n)</Text>
 									</Box>
 									<Box>
-										<Text color="red">🆇 Delete</Text>
+										<Text color="red">{t.configScreen.deleteProfileShort}</Text>
 										<Text color="gray"> (d)</Text>
 									</Box>
 								</Box>
@@ -1381,9 +1378,9 @@ export default function ConfigScreen({
 						{currentField === 'responsesReasoningEffort' && (
 							<Select
 								options={[
-									{label: 'Low', value: 'low'},
-									{label: 'Medium', value: 'medium'},
-									{label: 'High', value: 'high'},
+									{label: t.configScreen.low, value: 'low'},
+									{label: t.configScreen.medium, value: 'medium'},
+									{label: t.configScreen.high, value: 'high'},
 								]}
 								defaultValue={responsesReasoningEffort}
 								onChange={value => {
@@ -1400,13 +1397,13 @@ export default function ConfigScreen({
 							{(currentField === 'advancedModel' ||
 								currentField === 'basicModel' ||
 								currentField === 'compactModelName') &&
-								'Type to filter, ↑↓ to select, Enter to confirm, Esc to cancel'}
+								t.configScreen.modelFilterHint}
 							{currentField === 'responsesReasoningEffort' &&
-								'↑↓ to select, Enter to confirm, Esc to cancel'}
+								t.configScreen.effortSelectHint}
 							{currentField === 'profile' &&
-								'↑↓ to select profile, N to create new, D to delete, Enter to confirm, Esc to cancel'}
+								t.configScreen.profileSelectHint}
 							{currentField === 'requestMethod' &&
-								'↑↓ to select, Enter to confirm, Esc to cancel'}
+								t.configScreen.requestMethodSelectHint}
 						</Alert>
 					</Box>
 				</Box>
@@ -1442,7 +1439,7 @@ export default function ConfigScreen({
 			{errors.length > 0 && (
 				<Box flexDirection="column" marginTop={1}>
 					<Text color="red" bold>
-						Errors:
+						{t.configScreen.errors}
 					</Text>
 					{errors.map((error, index) => (
 						<Text key={index} color="red">
@@ -1465,17 +1462,14 @@ export default function ConfigScreen({
 				<Box flexDirection="column" marginTop={1}>
 					{isEditing ? (
 						<Alert variant="info">
-							Editing mode:{' '}
 							{currentField === 'maxContextTokens' ||
 							currentField === 'maxTokens'
-								? 'Type to edit, Enter to save'
-								: 'Press Enter to save and exit editing'}
+								? t.configScreen.editingHintNumeric
+								: t.configScreen.editingHintGeneral}
 						</Alert>
 					) : (
 						<Alert variant="info">
-							{currentField === 'profile'
-								? 'Use ↑↓ to navigate, N to create new profile, D to delete profile, Ctrl+S or Esc to save'
-								: 'Use ↑↓ to navigate, Enter to edit, M for manual input, Ctrl+S or Esc to save'}
+							{t.configScreen.navigationHint}
 						</Alert>
 					)}
 				</Box>

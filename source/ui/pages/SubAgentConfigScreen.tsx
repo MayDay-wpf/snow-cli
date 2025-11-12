@@ -10,6 +10,7 @@ import {
 	getSubAgent,
 	validateSubAgent,
 } from '../../utils/subAgentConfig.js';
+import {useI18n} from '../../i18n/index.js';
 
 // Focus event handling - prevent terminal focus events from appearing as input
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -66,59 +67,6 @@ type ToolCategory = {
 	tools: string[];
 };
 
-const toolCategories: ToolCategory[] = [
-	{
-		name: 'Filesystem Tools',
-		tools: [
-			'filesystem-read',
-			'filesystem-create',
-			'filesystem-edit',
-			'filesystem-edit_search',
-			'filesystem-delete',
-			'filesystem-list',
-		],
-	},
-	{
-		name: 'ACE Code Search Tools',
-		tools: [
-			'ace-search_symbols',
-			'ace-find_definition',
-			'ace-find_references',
-			'ace-semantic_search',
-			'ace-text_search',
-			'ace-file_outline',
-			'ace-index_stats',
-			'ace-clear_cache',
-		],
-	},
-	{
-		name: 'Codebase Search Tools',
-		tools: ['codebase-search'],
-	},
-	{
-		name: 'Terminal Tools',
-		tools: ['terminal-execute'],
-	},
-	{
-		name: 'TODO Management Tools',
-		tools: [
-			'todo-create',
-			'todo-get',
-			'todo-update',
-			'todo-add',
-			'todo-delete',
-		],
-	},
-	{
-		name: 'Web Search Tools',
-		tools: ['websearch-search', 'websearch-fetch'],
-	},
-	{
-		name: 'IDE Diagnostics Tools',
-		tools: ['ide-get_diagnostics'],
-	},
-];
-
 type FormField = 'name' | 'description' | 'role' | 'tools';
 
 export default function SubAgentConfigScreen({
@@ -127,6 +75,7 @@ export default function SubAgentConfigScreen({
 	inlineMode = false,
 	agentId,
 }: Props) {
+	const {t} = useI18n();
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
 	const [role, setRole] = useState('');
@@ -140,6 +89,57 @@ export default function SubAgentConfigScreen({
 	const [mcpServices, setMcpServices] = useState<MCPServiceTools[]>([]);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const isEditMode = !!agentId;
+
+	// Tool categories with translations
+	const toolCategories: ToolCategory[] = [
+		{
+			name: t.subAgentConfig.filesystemTools,
+			tools: [
+				'filesystem-read',
+				'filesystem-create',
+				'filesystem-edit',
+				'filesystem-edit_search',
+			],
+		},
+		{
+			name: t.subAgentConfig.aceTools,
+			tools: [
+				'ace-find_definition',
+				'ace-find_references',
+				'ace-semantic_search',
+				'ace-text_search',
+				'ace-file_outline',
+				'ace-index_stats',
+				'ace-clear_cache',
+			],
+		},
+		{
+			name: t.subAgentConfig.codebaseTools,
+			tools: ['codebase-search'],
+		},
+		{
+			name: t.subAgentConfig.terminalTools,
+			tools: ['terminal-execute'],
+		},
+		{
+			name: t.subAgentConfig.todoTools,
+			tools: [
+				'todo-create',
+				'todo-get',
+				'todo-update',
+				'todo-add',
+				'todo-delete',
+			],
+		},
+		{
+			name: t.subAgentConfig.webSearchTools,
+			tools: ['websearch-search', 'websearch-fetch'],
+		},
+		{
+			name: t.subAgentConfig.ideTools,
+			tools: ['ide-get_diagnostics'],
+		},
+	];
 
 	// Load existing agent data in edit mode
 	useEffect(() => {
@@ -184,14 +184,14 @@ export default function SubAgentConfigScreen({
 		for (const service of mcpServices) {
 			if (!service.isBuiltIn && service.connected && service.tools.length > 0) {
 				categories.push({
-					name: `${service.serviceName} (MCP)`,
+					name: `${service.serviceName} ${t.subAgentConfig.categoryMCP}`,
 					tools: service.tools.map(t => t.name),
 				});
 			}
 		}
 
 		return categories;
-	}, [mcpServices]);
+	}, [mcpServices, toolCategories, t]);
 
 	// Get all available tools
 	const allTools = useMemo(
@@ -255,7 +255,7 @@ export default function SubAgentConfigScreen({
 			tools: Array.from(selectedTools),
 		});
 		if (errors.length > 0) {
-			setSaveError(errors[0] || 'Validation failed');
+			setSaveError(errors[0] || t.subAgentConfig.validationFailed);
 			return;
 		}
 
@@ -285,7 +285,7 @@ export default function SubAgentConfigScreen({
 			}, 1500);
 		} catch (error) {
 			setSaveError(
-				error instanceof Error ? error.message : 'Failed to save sub-agent',
+				error instanceof Error ? error.message : t.subAgentConfig.saveError,
 			);
 		}
 	}, [
@@ -296,6 +296,7 @@ export default function SubAgentConfigScreen({
 		onSave,
 		isEditMode,
 		agentId,
+		t,
 	]);
 
 	useInput((rawInput, key) => {
@@ -413,18 +414,20 @@ export default function SubAgentConfigScreen({
 		return (
 			<Box flexDirection="column">
 				<Text bold color="cyan">
-					Tool Selection:
+					{t.subAgentConfig.toolSelection}
 				</Text>
 
 				{isLoadingMCP && (
 					<Box>
-						<Spinner label="Loading MCP services..." />
+						<Spinner label={t.subAgentConfig.loadingMCP} />
 					</Box>
 				)}
 
 				{loadError && (
 					<Box>
-						<Text color="yellow">⚠ {loadError}</Text>
+						<Text color="yellow">
+							{t.subAgentConfig.mcpLoadError} {loadError}
+						</Text>
 					</Box>
 				)}
 
@@ -471,7 +474,8 @@ export default function SubAgentConfigScreen({
 				})}
 
 				<Text color="gray" dimColor>
-					Selected: {selectedTools.size} / {allTools.length} tools
+					{t.subAgentConfig.selectedTools} {selectedTools.size} /{' '}
+					{allTools.length} {t.subAgentConfig.toolsCount}
 				</Text>
 			</Box>
 		);
@@ -482,7 +486,11 @@ export default function SubAgentConfigScreen({
 			{!inlineMode && (
 				<Box marginBottom={1}>
 					<Text bold color="cyan">
-						❆ {isEditMode ? 'Edit' : 'New'} Sub-Agent
+						❆{' '}
+						{isEditMode
+							? t.subAgentConfig.titleEdit
+							: t.subAgentConfig.titleNew}{' '}
+						{t.subAgentConfig.title}
 					</Text>
 				</Box>
 			)}
@@ -490,7 +498,11 @@ export default function SubAgentConfigScreen({
 			{showSuccess && (
 				<Box marginBottom={1}>
 					<Alert variant="success">
-						Sub-agent {isEditMode ? 'updated' : 'created'} successfully!
+						Sub-agent{' '}
+						{isEditMode
+							? t.subAgentConfig.saveSuccessEdit
+							: t.subAgentConfig.saveSuccessCreate}{' '}
+						successfully!
 					</Alert>
 				</Box>
 			)}
@@ -505,13 +517,13 @@ export default function SubAgentConfigScreen({
 				{/* Agent Name */}
 				<Box flexDirection="column">
 					<Text bold color={currentField === 'name' ? 'green' : 'white'}>
-						Agent Name:
+						{t.subAgentConfig.agentName}
 					</Text>
 					<Box marginLeft={2}>
 						<TextInput
 							value={agentName}
 							onChange={value => setAgentName(stripFocusArtifacts(value))}
-							placeholder="Enter agent name..."
+							placeholder={t.subAgentConfig.agentNamePlaceholder}
 							focus={currentField === 'name'}
 						/>
 					</Box>
@@ -520,13 +532,13 @@ export default function SubAgentConfigScreen({
 				{/* Description */}
 				<Box flexDirection="column">
 					<Text bold color={currentField === 'description' ? 'green' : 'white'}>
-						Description:
+						{t.subAgentConfig.description}
 					</Text>
 					<Box marginLeft={2}>
 						<TextInput
 							value={description}
 							onChange={value => setDescription(stripFocusArtifacts(value))}
-							placeholder="Enter agent description..."
+							placeholder={t.subAgentConfig.descriptionPlaceholder}
 							focus={currentField === 'description'}
 						/>
 					</Box>
@@ -535,13 +547,13 @@ export default function SubAgentConfigScreen({
 				{/* Role */}
 				<Box flexDirection="column">
 					<Text bold color={currentField === 'role' ? 'green' : 'white'}>
-						Role (Optional):
+						{t.subAgentConfig.roleOptional}
 					</Text>
 					<Box marginLeft={2}>
 						<TextInput
 							value={role}
 							onChange={value => setRole(stripFocusArtifacts(value))}
-							placeholder="Specify agent role to guide output and focus..."
+							placeholder={t.subAgentConfig.rolePlaceholder}
 							focus={currentField === 'role'}
 						/>
 					</Box>
@@ -553,8 +565,7 @@ export default function SubAgentConfigScreen({
 				{/* Instructions */}
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						↑↓: Navigate | ←→: Switch category | Space: Toggle | A: Toggle all |
-						Enter: Save | Esc: Back
+						{t.subAgentConfig.navigationHint}
 					</Text>
 				</Box>
 			</Box>

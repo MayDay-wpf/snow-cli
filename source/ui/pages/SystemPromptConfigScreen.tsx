@@ -9,6 +9,7 @@ import {
 	type SystemPromptConfig,
 	type SystemPromptItem,
 } from '../../utils/apiConfig.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -24,6 +25,7 @@ type ListAction =
 	| 'back';
 
 export default function SystemPromptConfigScreen({onBack}: Props) {
+	const {t} = useI18n();
 	const [config, setConfig] = useState<SystemPromptConfig>(() => {
 		return (
 			getSystemPromptConfig() || {
@@ -64,7 +66,9 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 			setError('');
 			return true;
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to save');
+			setError(
+				err instanceof Error ? err.message : t.systemPromptConfig.saveError,
+			);
 			return false;
 		}
 	};
@@ -290,9 +294,9 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					paddingY={1}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">System Prompt Management</Gradient>
+						<Gradient name="rainbow">{t.systemPromptConfig.title}</Gradient>
 						<Text color="gray" dimColor>
-							Manage multiple system prompts and switch between them
+							{t.systemPromptConfig.subtitle}
 						</Text>
 					</Box>
 				</Box>
@@ -305,21 +309,23 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 				<Box marginBottom={1}>
 					<Text bold>
-						Active Prompt:{' '}
-						<Text color="green">{activePrompt?.name || 'None'}</Text>
+						{t.systemPromptConfig.activePrompt}{' '}
+						<Text color="green">
+							{activePrompt?.name || t.systemPromptConfig.none}
+						</Text>
 					</Text>
 				</Box>
 
 				{config.prompts.length === 0 ? (
 					<Box marginBottom={1}>
 						<Text color="yellow">
-							No system prompts configured. Press Enter to add one.
+							{t.systemPromptConfig.noPromptsConfigured}
 						</Text>
 					</Box>
 				) : (
 					<Box flexDirection="column" marginBottom={1}>
 						<Text bold color="cyan">
-							Available Prompts:
+							{t.systemPromptConfig.availablePrompts}
 						</Text>
 						{config.prompts.map((prompt, index) => (
 							<Box key={prompt.id} marginLeft={2}>
@@ -350,7 +356,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 				<Box marginBottom={1}>
 					<Text bold color="cyan">
-						Actions:
+						{t.systemPromptConfig.actions}
 					</Text>
 				</Box>
 				<Box flexDirection="column" marginBottom={1} marginLeft={2}>
@@ -361,19 +367,19 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 							bold={currentAction === action}
 						>
 							{currentAction === action ? '❯ ' : '  '}
-							{action === 'activate' && 'Activate'}
-							{action === 'deactivate' && 'Deactivate'}
-							{action === 'edit' && 'Edit'}
-							{action === 'delete' && 'Delete'}
-							{action === 'add' && 'Add New'}
-							{action === 'back' && '[ESC] Back'}
+							{action === 'activate' && t.systemPromptConfig.activate}
+							{action === 'deactivate' && t.systemPromptConfig.deactivate}
+							{action === 'edit' && t.systemPromptConfig.edit}
+							{action === 'delete' && t.systemPromptConfig.delete}
+							{action === 'add' && t.systemPromptConfig.addNew}
+							{action === 'back' && t.systemPromptConfig.escBack}
 						</Text>
 					))}
 				</Box>
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						Use ↑↓ to select prompt, ←→ to select action, Enter to confirm
+						{t.systemPromptConfig.navigationHint}
 					</Text>
 				</Box>
 			</Box>
@@ -392,7 +398,9 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					paddingY={1}
 				>
 					<Gradient name="rainbow">
-						{view === 'add' ? 'Add New System Prompt' : 'Edit System Prompt'}
+						{view === 'add'
+							? t.systemPromptConfig.addNewTitle
+							: t.systemPromptConfig.editTitle}
 					</Gradient>
 				</Box>
 
@@ -406,20 +414,23 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					<Box marginBottom={1}>
 						<Box flexDirection="column">
 							<Text color={editingField === 'name' ? 'green' : 'white'}>
-								{editingField === 'name' ? '❯ ' : '  '}Name:
+								{editingField === 'name' ? '❯ ' : '  '}
+								{t.systemPromptConfig.nameLabel}
 							</Text>
 							{editingField === 'name' && isEditing && (
 								<Box marginLeft={3}>
 									<TextInput
 										value={editName}
 										onChange={setEditName}
-										placeholder="Enter prompt name"
+										placeholder={t.systemPromptConfig.enterPromptName}
 									/>
 								</Box>
 							)}
 							{(!isEditing || editingField !== 'name') && (
 								<Box marginLeft={3}>
-									<Text color="gray">{editName || 'Not set'}</Text>
+									<Text color="gray">
+										{editName || t.systemPromptConfig.notSet}
+									</Text>
 								</Box>
 							)}
 						</Box>
@@ -428,14 +439,15 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					<Box marginBottom={1}>
 						<Box flexDirection="column">
 							<Text color={editingField === 'content' ? 'green' : 'white'}>
-								{editingField === 'content' ? '❯ ' : '  '}Content:
+								{editingField === 'content' ? '❯ ' : '  '}
+								{t.systemPromptConfig.contentLabel}
 							</Text>
 							{editingField === 'content' && isEditing && (
 								<Box marginLeft={3}>
 									<TextInput
 										value={editContent}
 										onChange={setEditContent}
-										placeholder="Enter prompt content"
+										placeholder={t.systemPromptConfig.enterPromptContent}
 									/>
 								</Box>
 							)}
@@ -445,7 +457,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 										{editContent
 											? editContent.substring(0, 100) +
 											  (editContent.length > 100 ? '...' : '')
-											: 'Not set'}
+											: t.systemPromptConfig.notSet}
 									</Text>
 								</Box>
 							)}
@@ -455,7 +467,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel
+						{t.systemPromptConfig.editingHint}
 					</Text>
 				</Box>
 			</Box>
@@ -469,11 +481,11 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Alert variant="warning">Confirm Delete</Alert>
+				<Alert variant="warning">{t.systemPromptConfig.confirmDelete}</Alert>
 
 				<Box marginBottom={1}>
 					<Text>
-						Are you sure you want to delete "
+						{t.systemPromptConfig.deleteConfirmMessage} "
 						<Text bold color="yellow">
 							{promptToDelete?.name}
 						</Text>
@@ -483,7 +495,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 				<Box marginTop={1}>
 					<Text color="gray" dimColor>
-						Press Y to confirm, N or ESC to cancel
+						{t.systemPromptConfig.confirmHint}
 					</Text>
 				</Box>
 			</Box>
