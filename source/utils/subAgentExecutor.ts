@@ -8,6 +8,7 @@ import {getOpenAiConfig} from './apiConfig.js';
 import {sessionManager} from './sessionManager.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import type {ChatMessage} from '../api/types.js';
+import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -23,7 +24,7 @@ export interface SubAgentResult {
 }
 
 export interface ToolConfirmationCallback {
-	(toolName: string, toolArgs: any): Promise<string>;
+	(toolName: string, toolArgs: any): Promise<ConfirmationResult>;
 }
 
 export interface ToolApprovalChecker {
@@ -270,7 +271,11 @@ export async function executeSubAgent(
 					// Request confirmation from user
 					const confirmation = await requestToolConfirmation(toolName, args);
 
-					if (confirmation === 'reject') {
+					if (
+						confirmation === 'reject' ||
+						(typeof confirmation === 'object' &&
+							confirmation.type === 'reject_with_reply')
+					) {
 						rejectedToolCalls.push(toolCall);
 						continue;
 					}

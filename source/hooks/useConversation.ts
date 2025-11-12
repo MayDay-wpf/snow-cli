@@ -13,6 +13,7 @@ import type {Message} from '../ui/components/MessageList.js';
 import {formatToolCallMessage} from '../utils/messageFormatter.js';
 import {resourceMonitor} from '../utils/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../utils/toolDisplayConfig.js';
+import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
@@ -32,7 +33,7 @@ export type ConversationHandlerOptions = {
 		toolCall: ToolCall,
 		batchToolNames?: string,
 		allTools?: ToolCall[],
-	) => Promise<string>;
+	) => Promise<ConfirmationResult>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
@@ -566,14 +567,26 @@ export async function handleConversationWithTools(
 							allTools,
 						);
 
-						if (confirmation === 'reject') {
+						if (
+							confirmation === 'reject' ||
+							(typeof confirmation === 'object' &&
+								confirmation.type === 'reject_with_reply')
+						) {
 							setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+							const rejectMessage =
+								typeof confirmation === 'object'
+									? `Tool execution rejected by user: ${confirmation.reason}`
+									: 'Error: Tool execution rejected by user';
+
+							// Create UI messages for rejected tools
+							const rejectedToolUIMessages: Message[] = [];
 
 							for (const toolCall of sensitiveTools) {
 								const rejectionMessage = {
 									role: 'tool' as const,
 									tool_call_id: toolCall.id,
-									content: 'Error: Tool execution rejected by user',
+									content: rejectMessage,
 								};
 								conversationMessages.push(rejectionMessage);
 								saveMessage(rejectionMessage).catch(error => {
@@ -582,22 +595,54 @@ export async function handleConversationWithTools(
 										error,
 									);
 								});
-							}
 
-							setMessages(prev => [
-								...prev,
-								{
-									role: 'assistant',
-									content: 'Tool call rejected, session ended',
+								// Add UI message for each rejected tool
+								const toolDisplay = formatToolCallMessage(toolCall);
+								const statusIcon = '✗';
+								let statusText = '';
+
+								if (typeof confirmation === 'object' && confirmation.reason) {
+									statusText = `\n  └─ Rejection reason: ${confirmation.reason}`;
+								} else {
+									statusText = `\n  └─ ${rejectMessage}`;
+								}
+
+								rejectedToolUIMessages.push({
+									role: 'assistant' as const,
+									content: `${statusIcon} ${toolDisplay.toolName}${statusText}`,
 									streaming: false,
-								},
-							]);
-
-							if (options.setIsStreaming) {
-								options.setIsStreaming(false);
+								});
 							}
-							freeEncoder();
-							return {usage: accumulatedUsage};
+
+							// Add rejected tool messages to UI
+							if (rejectedToolUIMessages.length > 0) {
+								setMessages(prev => [...prev, ...rejectedToolUIMessages]);
+							}
+
+							// If reject_with_reply, continue the conversation instead of ending
+							if (
+								typeof confirmation === 'object' &&
+								confirmation.type === 'reject_with_reply'
+							) {
+								// Continue to next iteration - AI will see the rejection message and respond
+								continue;
+							} else {
+								// Original reject behavior - end session
+								setMessages(prev => [
+									...prev,
+									{
+										role: 'assistant',
+										content: 'Tool call rejected, session ended',
+										streaming: false,
+									},
+								]);
+
+								if (options.setIsStreaming) {
+									options.setIsStreaming(false);
+								}
+								freeEncoder();
+								return {usage: accumulatedUsage};
+							}
 						}
 
 						// Approved, add sensitive tools to approved list
@@ -616,35 +661,79 @@ export async function handleConversationWithTools(
 						allTools,
 					);
 
-					if (confirmation === 'reject') {
+					if (
+						confirmation === 'reject' ||
+						(typeof confirmation === 'object' &&
+							confirmation.type === 'reject_with_reply')
+					) {
 						setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+						const rejectMessage =
+							typeof confirmation === 'object'
+								? `Tool execution rejected by user: ${confirmation.reason}`
+								: 'Error: Tool execution rejected by user';
+
+						// Create UI messages for rejected tools
+						const rejectedToolUIMessages: Message[] = [];
 
 						for (const toolCall of toolsNeedingConfirmation) {
 							const rejectionMessage = {
 								role: 'tool' as const,
 								tool_call_id: toolCall.id,
-								content: 'Error: Tool execution rejected by user',
+								content: rejectMessage,
 							};
 							conversationMessages.push(rejectionMessage);
 							saveMessage(rejectionMessage).catch(error => {
 								console.error('Failed to save tool rejection message:', error);
 							});
-						}
 
-						setMessages(prev => [
-							...prev,
-							{
-								role: 'assistant',
-								content: 'Tool call rejected, session ended',
+							// Add UI message for each rejected tool
+							const toolDisplay = formatToolCallMessage(toolCall);
+							const statusIcon = '✗';
+							let statusText = '';
+
+							if (typeof confirmation === 'object' && confirmation.reason) {
+								statusText = `\n  └─ Rejection reason: ${confirmation.reason}`;
+							} else {
+								statusText = `\n  └─ ${rejectMessage}`;
+							}
+
+							rejectedToolUIMessages.push({
+								role: 'assistant' as const,
+								content: `${statusIcon} ${toolDisplay.toolName}${statusText}`,
 								streaming: false,
-							},
-						]);
-
-						if (options.setIsStreaming) {
-							options.setIsStreaming(false);
+							});
 						}
-						freeEncoder();
-						return {usage: accumulatedUsage};
+
+						// Add rejected tool messages to UI
+						if (rejectedToolUIMessages.length > 0) {
+							setMessages(prev => [...prev, ...rejectedToolUIMessages]);
+						}
+
+						// If reject_with_reply, continue the conversation instead of ending
+						if (
+							typeof confirmation === 'object' &&
+							confirmation.type === 'reject_with_reply'
+						) {
+							// Continue to next iteration - AI will see the rejection message and respond
+							continue;
+						} else {
+							// Original reject behavior - end session
+							setMessages(prev => [
+								...prev,
+								{
+									role: 'assistant',
+									content: 'Tool call rejected, session ended',
+									streaming: false,
+								},
+							]);
+
+							if (options.setIsStreaming) {
+								options.setIsStreaming(false);
+							}
+							freeEncoder();
+							return {usage: accumulatedUsage};
+						}
 					}
 
 					// If approved_always, add ALL these tools to both global and session-approved sets

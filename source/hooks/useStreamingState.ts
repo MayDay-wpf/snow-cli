@@ -9,6 +9,14 @@ export type RetryStatus = {
 	errorMessage?: string;
 };
 
+export type CodebaseSearchStatus = {
+	isSearching: boolean;
+	attempt: number;
+	maxAttempts: number;
+	currentTopN: number;
+	message: string;
+};
+
 export function useStreamingState() {
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
@@ -20,6 +28,8 @@ export function useStreamingState() {
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
 	const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null);
 	const [animationFrame, setAnimationFrame] = useState(0);
+	const [codebaseSearchStatus, setCodebaseSearchStatus] =
+		useState<CodebaseSearchStatus | null>(null);
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
@@ -118,5 +128,7 @@ export function useStreamingState() {
 		retryStatus,
 		setRetryStatus,
 		animationFrame,
+		codebaseSearchStatus,
+		setCodebaseSearchStatus,
 	};
 }

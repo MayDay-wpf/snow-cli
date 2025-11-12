@@ -1,9 +1,14 @@
 import React, {useState, useMemo} from 'react';
 import {Box, Text} from 'ink';
+import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../utils/sensitiveCommandManager.js';
 
-export type ConfirmationResult = 'approve' | 'approve_always' | 'reject';
+export type ConfirmationResult =
+	| 'approve'
+	| 'approve_always'
+	| 'reject'
+	| {type: 'reject_with_reply'; reason: string};
 
 export interface ToolCall {
 	id: string;
@@ -76,6 +81,8 @@ export default function ToolConfirmation({
 	onConfirm,
 }: Props) {
 	const [hasSelected, setHasSelected] = useState(false);
+	const [showRejectInput, setShowRejectInput] = useState(false);
+	const [rejectReason, setRejectReason] = useState('');
 
 	// Check if this is a sensitive command (for terminal-execute)
 	const sensitiveCommandCheck = useMemo(() => {
@@ -130,10 +137,10 @@ export default function ToolConfirmation({
 
 	// Conditionally show "Always approve" based on sensitive command check
 	const items = useMemo(() => {
-		const baseItems = [
+		const baseItems: Array<{label: string; value: string}> = [
 			{
 				label: 'Approve (once)',
-				value: 'approve' as ConfirmationResult,
+				value: 'approve',
 			},
 		];
 
@@ -141,22 +148,38 @@ export default function ToolConfirmation({
 		if (!sensitiveCommandCheck.isSensitive) {
 			baseItems.push({
 				label: 'Always approve this tool',
-				value: 'approve_always' as ConfirmationResult,
+				value: 'approve_always',
 			});
 		}
 
 		baseItems.push({
+			label: 'Reject with reply',
+			value: 'reject_with_reply',
+		});
+
+		baseItems.push({
 			label: 'Reject (end session)',
-			value: 'reject' as ConfirmationResult,
+			value: 'reject',
 		});
 
 		return baseItems;
 	}, [sensitiveCommandCheck.isSensitive]);
 
-	const handleSelect = (item: {label: string; value: ConfirmationResult}) => {
+	const handleSelect = (item: {label: string; value: string}) => {
 		if (!hasSelected) {
+			if (item.value === 'reject_with_reply') {
+				setShowRejectInput(true);
+			} else {
+				setHasSelected(true);
+				onConfirm(item.value as ConfirmationResult);
+			}
+		}
+	};
+
+	const handleRejectReasonSubmit = () => {
+		if (!hasSelected && rejectReason.trim()) {
 			setHasSelected(true);
-			onConfirm(item.value);
+			onConfirm({type: 'reject_with_reply', reason: rejectReason.trim()});
 		}
 	};
 
@@ -189,10 +212,7 @@ export default function ToolConfirmation({
 
 					{/* Display sensitive command warning */}
 					{sensitiveCommandCheck.isSensitive && (
-						<Box
-							flexDirection="column"
-							marginBottom={1}
-						>
+						<Box flexDirection="column" marginBottom={1}>
 							<Box marginBottom={1}>
 								<Text bold color="red">
 									SENSITIVE COMMAND DETECTED
@@ -281,7 +301,28 @@ export default function ToolConfirmation({
 				<Text dimColor>Select action:</Text>
 			</Box>
 
-			{!hasSelected && <SelectInput items={items} onSelect={handleSelect} />}
+			{!hasSelected && !showRejectInput && (
+				<SelectInput items={items} onSelect={handleSelect} />
+			)}
+
+			{showRejectInput && !hasSelected && (
+				<Box flexDirection="column">
+					<Box marginBottom={1}>
+						<Text color="yellow">Enter rejection reason:</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color="cyan">&gt; </Text>
+						<TextInput
+							value={rejectReason}
+							onChange={setRejectReason}
+							onSubmit={handleRejectReasonSubmit}
+						/>
+					</Box>
+					<Box>
+						<Text dimColor>Press Enter to submit</Text>
+					</Box>
+				</Box>
+			)}
 
 			{hasSelected && (
 				<Box>

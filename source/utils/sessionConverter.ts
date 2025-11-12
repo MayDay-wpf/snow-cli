@@ -183,8 +183,21 @@ export function convertSessionMessagesToUI(
 		// Handle regular tool result messages (non-subagent)
 		if (msg.role === 'tool' && msg.tool_call_id && !msg.subAgentInternal) {
 			const isError = msg.content.startsWith('Error:');
-			const statusIcon = isError ? '✗' : '✓';
-			const statusText = isError ? `\n  └─ ${msg.content}` : '';
+			const isRejectedWithReply = msg.content.includes(
+				'Tool execution rejected by user:',
+			);
+			const statusIcon = isError || isRejectedWithReply ? '✗' : '✓';
+
+			let statusText = '';
+			if (isError) {
+				statusText = `\n  └─ ${msg.content}`;
+			} else if (isRejectedWithReply) {
+				// Extract rejection reason
+				const reason =
+					msg.content.split('Tool execution rejected by user:')[1]?.trim() ||
+					'';
+				statusText = reason ? `\n  └─ Rejection reason: ${reason}` : '';
+			}
 
 			// Find tool name and args from previous assistant message
 			let toolName = 'tool';

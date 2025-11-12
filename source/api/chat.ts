@@ -327,6 +327,7 @@ export async function* createStreamingChatCompletion(
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
+					'x-snow': 'true',
 					...config.customHeaders,
 				},
 				body: JSON.stringify(requestBody),

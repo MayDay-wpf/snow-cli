@@ -18,7 +18,14 @@ export interface GeminiOptions {
 }
 
 export interface GeminiStreamChunk {
-	type: 'content' | 'tool_calls' | 'tool_call_delta' | 'done' | 'usage' | 'reasoning_started' | 'reasoning_delta';
+	type:
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'done'
+		| 'usage'
+		| 'reasoning_started'
+		| 'reasoning_delta';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -353,7 +360,8 @@ export async function* createStreamingGeminiCompletion(
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${config.apiKey}`,
+					Authorization: `Bearer ${config.apiKey}`,
+					'x-snow': 'true',
 					...config.customHeaders,
 				},
 				body: JSON.stringify(requestBody),

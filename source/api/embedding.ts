@@ -82,6 +82,7 @@ export async function createEmbeddings(
 	// Build headers - only include Authorization if API key is provided
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
+		'x-snow': 'true',
 	};
 	if (apiKey) {
 		headers['Authorization'] = `Bearer ${apiKey}`;

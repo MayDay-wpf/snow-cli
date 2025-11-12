@@ -1,6 +1,7 @@
 import {executeMCPTool} from './mcpToolsManager.js';
 import {subAgentService} from '../mcp/subagent.js';
 import type {SubAgentMessage} from './subAgentExecutor.js';
+import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 
 export interface ToolCall {
 	id: string;
@@ -24,7 +25,7 @@ export interface ToolConfirmationCallback {
 		toolCall: ToolCall,
 		batchToolNames?: string,
 		allTools?: ToolCall[],
-	): Promise<string>;
+	): Promise<ConfirmationResult>;
 }
 
 export interface ToolApprovalChecker {

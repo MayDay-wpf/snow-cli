@@ -17,6 +17,7 @@ type Props = {
 
 type ConfigField =
 	| 'enabled'
+	| 'enableAgentReview'
 	| 'embeddingModelName'
 	| 'embeddingBaseUrl'
 	| 'embeddingApiKey'
@@ -73,6 +74,7 @@ export default function CodeBaseConfigScreen({
 }: Props) {
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
+	const [enableAgentReview, setEnableAgentReview] = useState(true);
 	const [embeddingModelName, setEmbeddingModelName] = useState('');
 	const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState('');
 	const [embeddingApiKey, setEmbeddingApiKey] = useState('');
@@ -90,6 +92,7 @@ export default function CodeBaseConfigScreen({
 
 	const allFields: ConfigField[] = [
 		'enabled',
+		'enableAgentReview',
 		'embeddingModelName',
 		'embeddingBaseUrl',
 		'embeddingApiKey',
@@ -108,6 +111,7 @@ export default function CodeBaseConfigScreen({
 	const loadConfiguration = () => {
 		const config = loadCodebaseConfig();
 		setEnabled(config.enabled);
+		setEnableAgentReview(config.enableAgentReview);
 		setEmbeddingModelName(config.embedding.modelName);
 		setEmbeddingBaseUrl(config.embedding.baseUrl);
 		setEmbeddingApiKey(config.embedding.apiKey);
@@ -155,16 +159,12 @@ export default function CodeBaseConfigScreen({
 		try {
 			const config: CodebaseConfig = {
 				enabled,
+				enableAgentReview,
 				embedding: {
 					modelName: embeddingModelName,
 					baseUrl: embeddingBaseUrl,
 					apiKey: embeddingApiKey,
 					dimensions: embeddingDimensions,
-				},
-				llm: {
-					modelName: '',
-					baseUrl: '',
-					apiKey: '',
 				},
 				batch: {
 					maxLines: batchMaxLines,
@@ -203,6 +203,21 @@ export default function CodeBaseConfigScreen({
 							<Text color="gray">
 								{enabled ? '[✓] Enabled' : '[ ] Disabled'} (Press Enter to
 								toggle)
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'enableAgentReview':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={isActive ? 'green' : 'white'}>
+							{isActive ? '❯ ' : '  '}Agent Review:
+						</Text>
+						<Box marginLeft={3}>
+							<Text color="gray">
+								{enableAgentReview ? '[✓] Enabled' : '[ ] Disabled'} (Press
+								Enter to toggle)
 							</Text>
 						</Box>
 					</Box>
@@ -432,8 +447,18 @@ export default function CodeBaseConfigScreen({
 			return;
 		}
 
+		// Toggle enableAgentReview field
+		if (key.return && currentField === 'enableAgentReview') {
+			setEnableAgentReview(!enableAgentReview);
+			return;
+		}
+
 		// Enter editing mode for text fields
-		if (key.return && currentField !== 'enabled') {
+		if (
+			key.return &&
+			currentField !== 'enabled' &&
+			currentField !== 'enableAgentReview'
+		) {
 			setIsEditing(true);
 			return;
 		}

@@ -1,0 +1,384 @@
+import {getOpenAiConfig} from '../utils/apiConfig.js';
+import {logger} from '../utils/logger.js';
+import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
+import {createStreamingResponse} from '../api/responses.js';
+import {createStreamingGeminiCompletion} from '../api/gemini.js';
+import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
+import type {RequestMethod} from '../utils/apiConfig.js';
+
+/**
+ * Codebase Review Agent Service
+ *
+ * Reviews codebase search results to filter out irrelevant items.
+ * Uses basicModel for efficient, low-cost relevance checking.
+ * Can also suggest better search keywords if results are not relevant.
+ */
+export class CodebaseReviewAgent {
+	private modelName: string = '';
+	private requestMethod: RequestMethod = 'chat';
+	private initialized: boolean = false;
+	private readonly MAX_RETRIES = 3;
+
+	/**
+	 * Initialize the review agent with current configuration
+	 */
+	private async initialize(): Promise<boolean> {
+		try {
+			const config = getOpenAiConfig();
+
+			if (!config.basicModel) {
+				logger.warn(
+					'Codebase review agent: Basic model not configured, using advanced model as fallback',
+				);
+				if (!config.advancedModel) {
+					logger.warn('Codebase review agent: No model configured');
+					return false;
+				}
+				this.modelName = config.advancedModel;
+			} else {
+				this.modelName = config.basicModel;
+			}
+
+			this.requestMethod = config.requestMethod;
+			this.initialized = true;
+
+			return true;
+		} catch (error) {
+			logger.warn('Codebase review agent: Failed to initialize:', error);
+			return false;
+		}
+	}
+
+	/**
+	 * Check if review agent is available
+	 */
+	async isAvailable(): Promise<boolean> {
+		if (!this.initialized) {
+			return await this.initialize();
+		}
+		return true;
+	}
+
+	/**
+	 * Call the model with streaming API and assemble complete response
+	 */
+	private async callModel(
+		messages: ChatMessage[],
+		abortSignal?: AbortSignal,
+	): Promise<string> {
+		let streamGenerator: AsyncGenerator<any, void, unknown>;
+
+		switch (this.requestMethod) {
+			case 'anthropic':
+				streamGenerator = createStreamingAnthropicCompletion(
+					{
+						model: this.modelName,
+						messages,
+						includeBuiltinSystemPrompt: false,
+						disableThinking: true,
+					},
+					abortSignal,
+				);
+				break;
+
+			case 'gemini':
+				streamGenerator = createStreamingGeminiCompletion(
+					{
+						model: this.modelName,
+						messages,
+						includeBuiltinSystemPrompt: false,
+					},
+					abortSignal,
+				);
+				break;
+
+			case 'responses':
+				streamGenerator = createStreamingResponse(
+					{
+						model: this.modelName,
+						messages,
+						stream: true,
+						includeBuiltinSystemPrompt: false,
+					},
+					abortSignal,
+				);
+				break;
+
+			case 'chat':
+			default:
+				streamGenerator = createStreamingChatCompletion(
+					{
+						model: this.modelName,
+						messages,
+						stream: true,
+						includeBuiltinSystemPrompt: false,
+					},
+					abortSignal,
+				);
+				break;
+		}
+
+		let completeContent = '';
+
+		try {
+			for await (const chunk of streamGenerator) {
+				if (abortSignal?.aborted) {
+					throw new Error('Request aborted');
+				}
+
+				if (this.requestMethod === 'chat') {
+					if (chunk.choices && chunk.choices[0]?.delta?.content) {
+						completeContent += chunk.choices[0].delta.content;
+					}
+				} else {
+					if (chunk.type === 'content' && chunk.content) {
+						completeContent += chunk.content;
+					}
+				}
+			}
+		} catch (streamError) {
+			logger.error('Codebase review agent: Streaming error:', streamError);
+			throw streamError;
+		}
+
+		return completeContent;
+	}
+
+	/**
+	 * Try to parse JSON response with retry logic
+	 */
+	private tryParseJSON(response: string): any | null {
+		try {
+			// Extract JSON from markdown code blocks if present
+			let jsonStr = response.trim();
+			const jsonMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+			if (jsonMatch) {
+				jsonStr = jsonMatch[1]!.trim();
+			}
+
+			const parsed = JSON.parse(jsonStr);
+
+			// Validate structure
+			if (!Array.isArray(parsed.relevantIndices)) {
+				logger.warn(
+					'Codebase review agent: Invalid JSON structure - missing relevantIndices array',
+				);
+				return null;
+			}
+
+			return parsed;
+		} catch (error) {
+			logger.warn('Codebase review agent: JSON parse error:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Review search results with retry mechanism
+	 */
+	private async reviewWithRetry(
+		query: string,
+		results: Array<{
+			rank: number;
+			filePath: string;
+			startLine: number;
+			endLine: number;
+			content: string;
+			similarityScore: string;
+			location: string;
+		}>,
+		abortSignal?: AbortSignal,
+	): Promise<{parsed: any; attempt: number} | null> {
+		const reviewPrompt = `You are a code search result reviewer. Your task is to analyze search results and determine which ones are truly relevant to the user's query.
+
+Search Query: "${query}"
+
+Search Results (${results.length} items):
+${results
+	.map(
+		(r, idx) =>
+			`\n[Result ${idx + 1}]
+File: ${r.filePath}
+Lines: ${r.startLine}-${r.endLine}
+Similarity Score: ${r.similarityScore}%
+Code:
+\`\`\`
+${r.content}
+\`\`\``,
+	)
+	.join('\n---')}
+
+Your Tasks:
+1. Identify which results are RELEVANT to the search query
+2. Mark irrelevant results for removal
+3. If most results are irrelevant, suggest better search keywords
+
+Output in JSON format:
+{
+  "relevantIndices": [1, 3, 5],
+  "removedIndices": [2, 4],
+  "suggestions": ["keyword1", "keyword2"]
+}
+
+Guidelines:
+- Be strict but fair: code doesn't need to match exactly, but should be semantically related
+- Consider file paths, code content, and context
+- If a result is marginally relevant, keep it
+- Only suggest new keywords if >50% of results are irrelevant
+- Return ONLY valid JSON, no other text or explanation`;
+
+		const messages: ChatMessage[] = [
+			{
+				role: 'user',
+				content: reviewPrompt,
+			},
+		];
+
+		// Retry loop
+		for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+			try {
+				logger.info(
+					`Codebase review agent: Attempt ${attempt}/${this.MAX_RETRIES}`,
+				);
+
+				const response = await this.callModel(messages, abortSignal);
+
+				if (!response || response.trim().length === 0) {
+					logger.warn(
+						`Codebase review agent: Empty response on attempt ${attempt}`,
+					);
+					if (attempt < this.MAX_RETRIES) {
+						await this.sleep(500 * attempt); // Exponential backoff
+						continue;
+					}
+					return null;
+				}
+
+				// Try to parse JSON
+				const parsed = this.tryParseJSON(response);
+				if (parsed) {
+					logger.info(
+						`Codebase review agent: Successfully parsed on attempt ${attempt}`,
+					);
+					return {parsed, attempt};
+				}
+
+				// If parse failed and we have retries left
+				if (attempt < this.MAX_RETRIES) {
+					logger.warn(
+						`Codebase review agent: Parse failed on attempt ${attempt}, retrying...`,
+					);
+					await this.sleep(500 * attempt); // Exponential backoff
+					continue;
+				}
+
+				return null;
+			} catch (error) {
+				logger.error(
+					`Codebase review agent: Error on attempt ${attempt}:`,
+					error,
+				);
+				if (attempt < this.MAX_RETRIES) {
+					await this.sleep(500 * attempt); // Exponential backoff
+					continue;
+				}
+				return null;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Sleep utility for retry backoff
+	 */
+	private sleep(ms: number): Promise<void> {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * Review search results and filter out irrelevant ones
+	 * With retry mechanism and graceful degradation
+	 *
+	 * @param query - Original search query
+	 * @param results - Search results to review
+	 * @param abortSignal - Optional abort signal
+	 * @returns Object with filtered results and optional suggestions
+	 */
+	async reviewResults(
+		query: string,
+		results: Array<{
+			rank: number;
+			filePath: string;
+			startLine: number;
+			endLine: number;
+			content: string;
+			similarityScore: string;
+			location: string;
+		}>,
+		abortSignal?: AbortSignal,
+	): Promise<{
+		filteredResults: typeof results;
+		removedCount: number;
+		suggestions?: string[];
+		reviewFailed?: boolean;
+	}> {
+		const available = await this.isAvailable();
+		if (!available) {
+			logger.warn(
+				'Codebase review agent: Not available, returning original results',
+			);
+			return {
+				filteredResults: results,
+				removedCount: 0,
+				reviewFailed: true,
+			};
+		}
+
+		// Attempt review with retry
+		const reviewResult = await this.reviewWithRetry(
+			query,
+			results,
+			abortSignal,
+		);
+
+		// If all retries failed, gracefully degrade
+		if (!reviewResult) {
+			logger.warn(
+				'Codebase review agent: All retry attempts failed, returning original results',
+			);
+			return {
+				filteredResults: results,
+				removedCount: 0,
+				reviewFailed: true,
+			};
+		}
+
+		// Success - filter results
+		const {parsed, attempt} = reviewResult;
+
+		const filteredResults = results.filter((_, idx) =>
+			parsed.relevantIndices.includes(idx + 1),
+		);
+
+		const removedCount = results.length - filteredResults.length;
+
+		logger.info('Codebase review agent: Review completed', {
+			originalCount: results.length,
+			filteredCount: filteredResults.length,
+			removedCount,
+			attempts: attempt,
+			hasSuggestions: !!parsed.suggestions?.length,
+		});
+
+		return {
+			filteredResults,
+			removedCount,
+			suggestions: parsed.suggestions || undefined,
+			reviewFailed: false,
+		};
+	}
+}
+
+// Export singleton instance
+export const codebaseReviewAgent = new CodebaseReviewAgent();

@@ -41,6 +41,7 @@ import {
 } from '../../utils/autoCompress.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {loadCodebaseConfig} from '../../utils/codebaseConfig.js';
+import {codebaseSearchEvents} from '../../utils/codebaseSearchEvents.js';
 import {logger} from '../../utils/logger.js';
 
 // Import commands to register them
@@ -485,6 +486,37 @@ export default function ChatScreen({skipWelcome}: Props) {
 		}
 		return undefined;
 	}, [streamingState.isStreaming, pendingMessages.length]);
+
+	// Listen to codebase search events
+	useEffect(() => {
+		const handleSearchEvent = (event: {
+			type: 'search-start' | 'search-retry' | 'search-complete';
+			attempt: number;
+			maxAttempts: number;
+			currentTopN: number;
+			message: string;
+		}) => {
+			if (event.type === 'search-complete') {
+				// Clear status after completion
+				streamingState.setCodebaseSearchStatus(null);
+			} else {
+				// Update search status
+				streamingState.setCodebaseSearchStatus({
+					isSearching: true,
+					attempt: event.attempt,
+					maxAttempts: event.maxAttempts,
+					currentTopN: event.currentTopN,
+					message: event.message,
+				});
+			}
+		};
+
+		codebaseSearchEvents.onSearchEvent(handleSearchEvent);
+
+		return () => {
+			codebaseSearchEvents.removeSearchEventListener(handleSearchEvent);
+		};
+	}, [streamingState]);
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
@@ -1471,12 +1503,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 														<Text
 															color={
 																message.role === 'user'
-																	? 'gray'
+																	? 'white'
 																	: message.content.startsWith('⚡')
 																	? 'yellow'
 																	: message.content.startsWith('✓')
 																	? 'green'
 																	: 'red'
+															}
+															backgroundColor={
+																message.role === 'user' ? '#4a4a4a' : undefined
 															}
 														>
 															{message.content || ' '}
@@ -1638,6 +1673,26 @@ export default function ChatScreen({skipWelcome}: Props) {
 																maxLines={5}
 															/>
 														)}
+													{/* Show rejection reason for rejected tools with reply */}
+													{(message.content.startsWith('✗') ||
+														message.content.includes('⚇✗')) &&
+														message.content.includes(
+															'Tool execution rejected by user:',
+														) && (
+															<Box flexDirection="column" marginTop={1}>
+																<Text color="yellow" dimColor>
+																	Rejection reason:
+																</Text>
+																<Text color="gray" dimColor>
+																	└─{' '}
+																	{message.content
+																		.split(
+																			'Tool execution rejected by user:',
+																		)[1]
+																		?.trim() || 'No reason provided'}
+																</Text>
+															</Box>
+														)}
 													{message.files && message.files.length > 0 && (
 														<Box flexDirection="column">
 															{message.files.map((file, fileIndex) => (
@@ -1726,6 +1781,18 @@ export default function ChatScreen({skipWelcome}: Props) {
 												{streamingState.retryStatus.attempt}/5)
 											</Text>
 										)}
+									</Box>
+								) : streamingState.codebaseSearchStatus?.isSearching ? (
+									// Codebase search retry status
+									<Box flexDirection="column">
+										<Text color="cyan" dimColor>
+											⏏ Codebase Search (Attempt{' '}
+											{streamingState.codebaseSearchStatus.attempt}/
+											{streamingState.codebaseSearchStatus.maxAttempts})
+										</Text>
+										<Text color="gray" dimColor>
+											{streamingState.codebaseSearchStatus.message}
+										</Text>
 									</Box>
 								) : (
 									// Normal thinking status

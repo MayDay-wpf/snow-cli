@@ -2,6 +2,7 @@ import {executeSubAgent} from '../utils/subAgentExecutor.js';
 import {getSubAgents} from '../utils/subAgentConfig.js';
 import type {SubAgentMessage} from '../utils/subAgentExecutor.js';
 import type {ToolCall} from '../utils/toolExecutor.js';
+import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 
 export interface SubAgentToolExecutionOptions {
 	agentId: string;
@@ -12,7 +13,7 @@ export interface SubAgentToolExecutionOptions {
 		toolCall: ToolCall,
 		batchToolNames?: string,
 		allTools?: ToolCall[],
-	) => Promise<string>;
+	) => Promise<ConfirmationResult>;
 	isToolAutoApproved?: (toolName: string) => boolean;
 	yoloMode?: boolean;
 	addToAlwaysApproved?: (toolName: string) => void;

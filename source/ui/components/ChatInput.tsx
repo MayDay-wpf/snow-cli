@@ -517,6 +517,20 @@ export default function ChatInput({
 						</Box>
 						<Text color="gray">{'─'.repeat(terminalWidth - 2)}</Text>
 					</Box>
+					{(showCommands && getFilteredCommands().length > 0) ||
+					showFilePicker ? (
+						<Box marginTop={1}>
+							<Text>
+								{showCommands && getFilteredCommands().length > 0
+									? 'Type to filter commands'
+									: showFilePicker
+									? searchMode === 'content'
+										? 'Content search • Tab/Enter to select • ESC to cancel'
+										: 'Type to filter files • Tab/Enter to select • ESC to cancel'
+									: ''}
+							</Text>
+						</Box>
+					) : null}
 					<CommandPanel
 						commands={getFilteredCommands()}
 						selectedIndex={commandSelectedIndex}
@@ -647,20 +661,6 @@ export default function ChatInput({
 							</Text>
 						</Box>
 					)}
-					{(showCommands && getFilteredCommands().length > 0) ||
-					showFilePicker ? (
-						<Box marginTop={1}>
-							<Text>
-								{showCommands && getFilteredCommands().length > 0
-									? 'Type to filter commands'
-									: showFilePicker
-									? searchMode === 'content'
-										? 'Content search • Tab/Enter to select • ESC to cancel'
-										: 'Type to filter files • Tab/Enter to select • ESC to cancel'
-									: ''}
-							</Text>
-						</Box>
-					) : null}
 				</>
 			)}
 		</Box>

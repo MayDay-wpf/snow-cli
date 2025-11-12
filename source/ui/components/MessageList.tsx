@@ -96,7 +96,9 @@ const MessageList = memo(
 								) : (
 									<>
 										{message.role === 'user' ? (
-											<Text color="gray">{message.content || ' '}</Text>
+											<Text color="white" backgroundColor="#4a4a4a">
+												{message.content || ' '}
+											</Text>
 										) : (
 											<MarkdownRenderer content={message.content || ' '} />
 										)}

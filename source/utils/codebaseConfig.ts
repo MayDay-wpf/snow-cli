@@ -4,16 +4,12 @@ import os from 'os';
 
 export interface CodebaseConfig {
 	enabled: boolean;
+	enableAgentReview: boolean;
 	embedding: {
 		modelName: string;
 		baseUrl: string;
 		apiKey: string;
 		dimensions: number;
-	};
-	llm: {
-		modelName: string;
-		baseUrl: string;
-		apiKey: string;
 	};
 	batch: {
 		maxLines: number;
@@ -23,16 +19,12 @@ export interface CodebaseConfig {
 
 const DEFAULT_CONFIG: CodebaseConfig = {
 	enabled: false,
+	enableAgentReview: true,
 	embedding: {
 		modelName: '',
 		baseUrl: '',
 		apiKey: '',
 		dimensions: 1536,
-	},
-	llm: {
-		modelName: '',
-		baseUrl: '',
-		apiKey: '',
 	},
 	batch: {
 		maxLines: 10,
@@ -66,6 +58,8 @@ export const loadCodebaseConfig = (): CodebaseConfig => {
 		// Merge with defaults to ensure all fields exist
 		return {
 			enabled: config.enabled ?? DEFAULT_CONFIG.enabled,
+			enableAgentReview:
+				config.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
 			embedding: {
 				modelName:
 					config.embedding?.modelName ?? DEFAULT_CONFIG.embedding.modelName,
@@ -73,11 +67,6 @@ export const loadCodebaseConfig = (): CodebaseConfig => {
 				apiKey: config.embedding?.apiKey ?? DEFAULT_CONFIG.embedding.apiKey,
 				dimensions:
 					config.embedding?.dimensions ?? DEFAULT_CONFIG.embedding.dimensions,
-			},
-			llm: {
-				modelName: config.llm?.modelName ?? DEFAULT_CONFIG.llm.modelName,
-				baseUrl: config.llm?.baseUrl ?? DEFAULT_CONFIG.llm.baseUrl,
-				apiKey: config.llm?.apiKey ?? DEFAULT_CONFIG.llm.apiKey,
 			},
 			batch: {
 				maxLines: config.batch?.maxLines ?? DEFAULT_CONFIG.batch.maxLines,
