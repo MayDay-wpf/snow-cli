@@ -17,10 +17,18 @@ export interface SubAgentMessage {
 	message: any; // Stream event from anthropic API
 }
 
+export interface TokenUsage {
+	inputTokens: number;
+	outputTokens: number;
+	cacheCreationInputTokens?: number;
+	cacheReadInputTokens?: number;
+}
+
 export interface SubAgentResult {
 	success: boolean;
 	result: string;
 	error?: string;
+	usage?: TokenUsage;
 }
 
 export interface ToolConfirmationCallback {
@@ -65,7 +73,7 @@ export async function executeSubAgent(
 				name: 'Explore Agent',
 				description:
 					'Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and semantic understanding.',
-				role: 'You are a specialized code exploration agent. Your task is to help users understand codebase structure, locate specific code, and analyze dependencies. Use search and analysis tools to explore code, but do not modify any files or execute commands. Focus on code discovery and understanding.',
+				role: 'You are a specialized code exploration agent. Your task is to help users understand codebase structure, locate specific code, and analyze dependencies. Use search and analysis tools to explore code, but do not modify any files or execute commands. Focus on code discovery and understanding.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all file locations, business requirements, constraints, and discovered information are included in the prompt. Do not assume any additional context.',
 				tools: [
 					// Filesystem read-only tools
 					'filesystem-read',
@@ -88,7 +96,7 @@ export async function executeSubAgent(
 				name: 'Plan Agent',
 				description:
 					'Specialized for planning complex tasks. Excels at analyzing requirements, exploring existing code, and creating detailed implementation plans.',
-				role: 'You are a specialized task planning agent. Your task is to analyze user requirements, explore existing codebase, identify relevant files and dependencies, and then create detailed implementation plans. Use search and analysis tools to gather information, check diagnostics to understand current state, but do not execute actual modifications. Output clear step-by-step plans including files to modify, suggested implementation approaches, and important considerations.',
+				role: 'You are a specialized task planning agent. Your task is to analyze user requirements, explore existing codebase, identify relevant files and dependencies, and then create detailed implementation plans. Use search and analysis tools to gather information, check diagnostics to understand current state, but do not execute actual modifications. Output clear step-by-step plans including files to modify, suggested implementation approaches, and important considerations.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all requirements, architecture understanding, file locations, constraints, and user preferences are included in the prompt. Do not assume any additional context.',
 				tools: [
 					// Filesystem read-only tools
 					'filesystem-read',
@@ -113,7 +121,7 @@ export async function executeSubAgent(
 				name: 'General Purpose Agent',
 				description:
 					'General-purpose multi-step task execution agent. Has complete tool access for code search, file modification, command execution, and various operations.',
-				role: 'You are a general-purpose task execution agent. You can perform various complex multi-step tasks, including searching code, modifying files, executing commands, etc. When given a task, systematically break it down and execute. You have access to all tools and should select appropriate tools as needed to complete tasks efficiently.',
+				role: 'You are a general-purpose task execution agent. You can perform various complex multi-step tasks, including searching code, modifying files, executing commands, etc. When given a task, systematically break it down and execute. You have access to all tools and should select appropriate tools as needed to complete tasks efficiently.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all task requirements, file paths, code patterns, dependencies, business logic, constraints, and testing requirements are included in the prompt. Do not assume any additional context.',
 				tools: [
 					// Filesystem tools (complete access)
 					'filesystem-read',
@@ -194,6 +202,7 @@ export async function executeSubAgent(
 		let finalResponse = '';
 		let hasError = false;
 		let errorMessage = '';
+		let totalUsage: TokenUsage | undefined;
 
 		// Local session-approved tools for this sub-agent execution
 		// This ensures tools approved during execution are immediately recognized
@@ -284,6 +293,33 @@ export async function executeSubAgent(
 						agentName: agent.name,
 						message: event,
 					});
+				}
+
+				// Capture usage from stream events
+				if (event.type === 'usage' && event.usage) {
+					const eventUsage = event.usage;
+					if (!totalUsage) {
+						totalUsage = {
+							inputTokens: eventUsage.prompt_tokens || 0,
+							outputTokens: eventUsage.completion_tokens || 0,
+							cacheCreationInputTokens: eventUsage.cache_creation_input_tokens,
+							cacheReadInputTokens: eventUsage.cache_read_input_tokens,
+						};
+					} else {
+						// Accumulate usage if there are multiple rounds
+						totalUsage.inputTokens += eventUsage.prompt_tokens || 0;
+						totalUsage.outputTokens += eventUsage.completion_tokens || 0;
+						if (eventUsage.cache_creation_input_tokens) {
+							totalUsage.cacheCreationInputTokens =
+								(totalUsage.cacheCreationInputTokens || 0) +
+								eventUsage.cache_creation_input_tokens;
+						}
+						if (eventUsage.cache_read_input_tokens) {
+							totalUsage.cacheReadInputTokens =
+								(totalUsage.cacheReadInputTokens || 0) +
+								eventUsage.cache_read_input_tokens;
+						}
+					}
 				}
 
 				if (event.type === 'content' && event.content) {
@@ -490,6 +526,7 @@ export async function executeSubAgent(
 		return {
 			success: true,
 			result: finalResponse,
+			usage: totalUsage,
 		};
 	} catch (error) {
 		return {

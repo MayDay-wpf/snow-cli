@@ -1,54 +1,56 @@
 import {useState, useCallback} from 'react';
 import {TextBuffer} from '../utils/textBuffer.js';
-
-// Command Definition
-const commands = [
-	{name: 'help', description: 'Show keyboard shortcuts and help information'},
-	{name: 'clear', description: 'Clear chat context and conversation history'},
-	{name: 'resume', description: 'Resume a conversation'},
-	{name: 'mcp', description: 'Show Model Context Protocol services and tools'},
-	{
-		name: 'yolo',
-		description: 'Toggle unattended mode (auto-approve all tools)',
-	},
-	{
-		name: 'init',
-		description: 'Analyze project and generate/update SNOW.md documentation',
-	},
-	{name: 'ide', description: 'Connect to VSCode editor and sync context'},
-	{
-		name: 'compact',
-		description: 'Compress conversation history using compact model',
-	},
-	{name: 'home', description: 'Return to welcome screen to modify settings'},
-	{
-		name: 'review',
-		description:
-			'Review git changes and identify potential issues. Support: /review [optional note]',
-	},
-	{
-		name: 'role',
-		description: 'Open or create ROLE.md file to customize AI assistant role',
-	},
-	{
-		name: 'usage',
-		description: 'View token usage statistics with interactive charts',
-	},
-	{
-		name: 'export',
-		description: 'Export chat conversation to text file with save dialog',
-	},
-	{
-		name: 'agent-',
-		description: 'Select and use a sub-agent to handle specific tasks',
-	},
-	{
-		name: 'todo-',
-		description: 'Search and select TODO comments from project files',
-	},
-];
+import {useI18n} from '../i18n/index.js';
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
+	const {t} = useI18n();
+
+	// Command Definition
+	const commands = [
+		{name: 'help', description: t.commandPanel.commands.help},
+		{name: 'clear', description: t.commandPanel.commands.clear},
+		{name: 'resume', description: t.commandPanel.commands.resume},
+		{name: 'mcp', description: t.commandPanel.commands.mcp},
+		{
+			name: 'yolo',
+			description: t.commandPanel.commands.yolo,
+		},
+		{
+			name: 'init',
+			description: t.commandPanel.commands.init,
+		},
+		{name: 'ide', description: t.commandPanel.commands.ide},
+		{
+			name: 'compact',
+			description: t.commandPanel.commands.compact,
+		},
+		{name: 'home', description: t.commandPanel.commands.home},
+		{
+			name: 'review',
+			description: t.commandPanel.commands.review,
+		},
+		{
+			name: 'role',
+			description: t.commandPanel.commands.role,
+		},
+		{
+			name: 'usage',
+			description: t.commandPanel.commands.usage,
+		},
+		{
+			name: 'export',
+			description: t.commandPanel.commands.export,
+		},
+		{
+			name: 'agent-',
+			description: t.commandPanel.commands.agent,
+		},
+		{
+			name: 'todo-',
+			description: t.commandPanel.commands.todo,
+		},
+	];
+
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
 
@@ -98,7 +100,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer]);
+	}, [buffer, commands]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {

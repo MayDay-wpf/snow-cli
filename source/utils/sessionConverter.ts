@@ -43,7 +43,7 @@ export function convertSessionMessagesToUI(
 							name: toolCall.function.name,
 							arguments: toolArgs,
 						},
-						toolDisplay,
+						// Don't include toolDisplay for sub-agent tools to avoid showing parameters
 						toolCallId: toolCall.id,
 						toolPending: false,
 						subAgentInternal: true,

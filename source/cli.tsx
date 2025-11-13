@@ -151,7 +151,7 @@ const Startup = ({
 					<Text color="cyan">
 						<Spinner type="dots" />
 					</Text>
-					<Text> Checking for updates...</Text>
+					<Text> Loading...</Text>
 				</Box>
 			</Box>
 		);

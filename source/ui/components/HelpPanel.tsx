@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {useI18n} from '../../i18n/index.js';
 
 // Get platform-specific paste key
 const getPasteKey = () => {
@@ -8,6 +9,7 @@ const getPasteKey = () => {
 
 export default function HelpPanel() {
 	const pasteKey = getPasteKey();
+	const {t} = useI18n();
 
 	return (
 		<Box
@@ -19,50 +21,53 @@ export default function HelpPanel() {
 		>
 			<Box marginBottom={1}>
 				<Text bold color="cyan">
-					🔰 Keyboard Shortcuts & Help
+					{t.helpPanel.title}
 				</Text>
 			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="yellow">
-					📝 Text Editing:
+					{t.helpPanel.textEditingTitle}
 				</Text>
-				<Text>  • Ctrl+L - Delete from cursor to start</Text>
-				<Text>  • Ctrl+R - Delete from cursor to end</Text>
-				<Text>  • {pasteKey} - Paste images from clipboard</Text>
+				<Text> • {t.helpPanel.deleteToStart}</Text>
+				<Text> • {t.helpPanel.deleteToEnd}</Text>
+				<Text>
+					{' '}
+					• {t.helpPanel.pasteImages.replace('{pasteKey}', pasteKey)}
+				</Text>
 			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="green">
-					🔍 Quick Access:
+					{t.helpPanel.quickAccessTitle}
 				</Text>
-				<Text>  • @ - Insert files from project</Text>
-				<Text>  • @@ - Search file content</Text>
-				<Text>  • / - Show available commands</Text>
+				<Text> • {t.helpPanel.insertFiles}</Text>
+				<Text> • {t.helpPanel.searchContent}</Text>
+				<Text> • {t.helpPanel.showCommands}</Text>
 			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="blue">
-					📋 Navigation:
+					{t.helpPanel.navigationTitle}
 				</Text>
-				<Text>  • ↑/↓ - Navigate command/message history</Text>
-				<Text>  • Tab/Enter - Select item in pickers</Text>
-				<Text>  • ESC - Cancel/close pickers or interrupt AI response</Text>
-				<Text>  • Shift+Tab - Toggle YOLO mode (auto-approve tools)</Text>
+				<Text> • {t.helpPanel.navigateHistory}</Text>
+				<Text> • {t.helpPanel.selectItem}</Text>
+				<Text> • {t.helpPanel.cancelClose}</Text>
+				<Text> • {t.helpPanel.toggleYolo}</Text>
 			</Box>
 
 			<Box flexDirection="column">
 				<Text bold color="magenta">
-					💡 Tips:
+					{t.helpPanel.tipsTitle}
 				</Text>
-				<Text>  • Use /help anytime to see this information</Text>
-				<Text>  • Type / to see all available commands</Text>
-				<Text>  • Press ESC during AI response to interrupt</Text>
+				<Text> • {t.helpPanel.tipUseHelp}</Text>
+				<Text> • {t.helpPanel.tipShowCommands}</Text>
+				<Text> • {t.helpPanel.tipInterrupt}</Text>
 			</Box>
 
 			<Box marginTop={1}>
 				<Text dimColor color="gray">
-					Press ESC to close this help panel
+					{t.helpPanel.closeHint}
 				</Text>
 			</Box>
 		</Box>

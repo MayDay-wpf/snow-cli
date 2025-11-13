@@ -103,7 +103,7 @@ export async function handleConversationWithTools(
 	const mcpTools = await collectAllMCPTools();
 	// Build conversation history with TODO context as pinned user message
 	let conversationMessages: ChatMessage[] = [
-		{role: 'system', content: getSystemPrompt(mcpTools)},
+		{role: 'system', content: getSystemPrompt()},
 	];
 
 	// If there are TODOs, add pinned context message at the front
@@ -788,7 +788,7 @@ export async function handleConversationWithTools(
 													name: toolCall.function.name,
 													arguments: toolArgs,
 												},
-												toolDisplay,
+												// Don't include toolDisplay for sub-agent tools to avoid showing parameters
 												toolCallId: toolCall.id,
 												toolPending: true,
 												subAgent: {
@@ -1067,12 +1067,24 @@ export async function handleConversationWithTools(
 							const statusIcon = isError ? '✗' : '✓';
 							const statusText = isError ? `\n  └─ ${result.content}` : '';
 
+							// Parse sub-agent result to extract usage information
+							let usage: any = undefined;
+							if (!isError) {
+								try {
+									const subAgentResult = JSON.parse(result.content);
+									usage = subAgentResult.usage;
+								} catch (e) {
+									// Ignore parsing errors
+								}
+							}
+
 							resultMessages.push({
 								role: 'assistant',
 								content: `${statusIcon} ${toolCall.function.name}${statusText}`,
 								streaming: false,
 								// Pass the full result.content for ToolResultPreview to parse
 								toolResult: !isError ? result.content : undefined,
+								subAgentUsage: usage,
 							});
 
 							// Save the tool result to conversation history

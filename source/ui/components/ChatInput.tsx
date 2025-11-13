@@ -16,6 +16,7 @@ import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
 import {useAgentPicker} from '../../hooks/useAgentPicker.js';
 import {useTodoPicker} from '../../hooks/useTodoPicker.js';
+import {useI18n} from '../../i18n/index.js';
 
 /**
  * Calculate context usage percentage
@@ -88,6 +89,9 @@ export default function ChatInput({
 	initialContent = null,
 	onContextPercentageChange,
 }: Props) {
+	// Use i18n hook for translations
+	const {t} = useI18n();
+
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
@@ -396,7 +400,7 @@ export default function ChatInput({
 				<>
 					{renderCursor(' ')}
 					<Text color={disabled ? 'darkGray' : 'gray'} dimColor>
-						{disabled ? 'Waiting for response...' : placeholder}
+						{disabled ? t.chatScreen.waitingForResponse : placeholder}
 					</Text>
 				</>
 			);
@@ -442,7 +446,10 @@ export default function ChatInput({
 									<Box height={1}>
 										{hasMoreAbove ? (
 											<Text color="gray" dimColor>
-												↑ {startIndex} more above...
+												{t.chatScreen.moreAbove.replace(
+													'{count}',
+													startIndex.toString(),
+												)}
 											</Text>
 										) : (
 											<Text> </Text>
@@ -488,7 +495,10 @@ export default function ChatInput({
 									<Box height={1}>
 										{hasMoreBelow ? (
 											<Text color="gray" dimColor>
-												↓ {userMessages.length - endIndex} more below...
+												{t.chatScreen.moreBelow.replace(
+													'{count}',
+													(userMessages.length - endIndex).toString(),
+												)}
 											</Text>
 										) : (
 											<Text> </Text>
@@ -500,7 +510,7 @@ export default function ChatInput({
 					</Box>
 					<Box marginBottom={1}>
 						<Text color="cyan" dimColor>
-							↑↓ navigate · Enter select · ESC close
+							{t.chatScreen.historyNavigateHint}
 						</Text>
 					</Box>
 				</Box>
@@ -522,11 +532,11 @@ export default function ChatInput({
 						<Box marginTop={1}>
 							<Text>
 								{showCommands && getFilteredCommands().length > 0
-									? 'Type to filter commands'
+									? t.chatScreen.typeToFilterCommands
 									: showFilePicker
 									? searchMode === 'content'
-										? 'Content search • Tab/Enter to select • ESC to cancel'
-										: 'Type to filter files • Tab/Enter to select • ESC to cancel'
+										? t.chatScreen.contentSearchHint
+										: t.chatScreen.fileSearchHint
 									: ''}
 							</Text>
 						</Box>
@@ -568,8 +578,7 @@ export default function ChatInput({
 					{yoloMode && (
 						<Box marginTop={1}>
 							<Text color="yellow" dimColor>
-								❁ YOLO MODE ACTIVE - All tools will be auto-approved without
-								confirmation
+								{t.chatScreen.yoloModeActive}
 							</Text>
 						</Box>
 					)}
@@ -608,11 +617,11 @@ export default function ChatInput({
 									return (
 										<>
 											<Text color={color}>{percentage.toFixed(1)}%</Text>
-											<Text> · </Text>
+											<Text> </Text>
 											<Text color={color}>
 												{formatNumber(totalInputTokens)}
 											</Text>
-											<Text> tokens</Text>
+											<Text>{t.chatScreen.tokens}</Text>
 											{hasCacheMetrics && (
 												<>
 													<Text> · </Text>
@@ -626,7 +635,7 @@ export default function ChatInput({
 																		{formatNumber(
 																			contextUsage.cacheReadTokens || 0,
 																		)}{' '}
-																		cached
+																		{t.chatScreen.cached}
 																	</Text>
 																</>
 															)}
@@ -640,7 +649,7 @@ export default function ChatInput({
 																		{formatNumber(
 																			contextUsage.cacheCreationTokens || 0,
 																		)}{' '}
-																		new cache
+																		{t.chatScreen.newCache}
 																	</Text>
 																</>
 															)}
@@ -650,7 +659,7 @@ export default function ChatInput({
 													{isOpenAI && (
 														<Text color="cyan">
 															↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-															cached
+															{t.chatScreen.cached}
 														</Text>
 													)}
 												</>

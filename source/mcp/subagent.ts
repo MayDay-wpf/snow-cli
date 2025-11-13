@@ -73,6 +73,7 @@ export class SubAgentService {
 		return {
 			success: true,
 			result: result.result,
+			usage: result.usage,
 		};
 	}
 
@@ -99,7 +100,7 @@ export class SubAgentService {
 						prompt: {
 							type: 'string',
 							description:
-								'Description of the exploration task (e.g., find implementation of a feature, analyze module dependencies)',
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) Full task description with business requirements, (2) Known file locations and code paths, (3) Relevant code snippets or patterns already discovered, (4) Any constraints or important context. Example: "Explore authentication implementation. Main flow uses OAuth in src/auth/oauth.ts, need to find all related error handling. User mentioned JWT tokens are validated in middleware."',
 						},
 					},
 					required: ['prompt'],
@@ -115,7 +116,7 @@ export class SubAgentService {
 						prompt: {
 							type: 'string',
 							description:
-								'Description of the task to plan (e.g., how to implement a new feature, how to refactor a module)',
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) Full requirement details and business objectives, (2) Current architecture/file structure understanding, (3) Known dependencies and constraints, (4) Files/modules already identified that need changes, (5) User preferences or specific implementation approaches mentioned. Example: "Plan caching implementation. Current API uses Express in src/server.ts, data layer in src/models/. Need Redis caching, user wants minimal changes to existing controllers in src/controllers/."',
 						},
 					},
 					required: ['prompt'],
@@ -130,7 +131,8 @@ export class SubAgentService {
 					properties: {
 						prompt: {
 							type: 'string',
-							description: 'Description of the general task to execute',
+							description:
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) Full task description with step-by-step requirements, (2) Exact file paths and locations to modify, (3) Code patterns/snippets to follow or replicate, (4) Dependencies between files/changes, (5) Testing/verification requirements, (6) Any business logic or constraints discovered in main session. Example: "Update error handling across API. Files: src/api/users.ts, src/api/posts.ts, src/api/comments.ts. Replace old pattern try-catch with new ErrorHandler class from src/utils/errorHandler.ts. Must preserve existing error codes. Run npm test after changes."',
 						},
 					},
 					required: ['prompt'],
@@ -148,7 +150,8 @@ export class SubAgentService {
 					properties: {
 						prompt: {
 							type: 'string',
-							description: 'The task prompt to send to the sub-agent',
+							description:
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include all relevant: (1) Task requirements and objectives, (2) Known file locations and code structure, (3) Business logic and constraints, (4) Code patterns or examples, (5) Dependencies and relationships. Be specific and comprehensive - sub-agent cannot ask for clarification from main session.',
 						},
 					},
 					required: ['prompt'],

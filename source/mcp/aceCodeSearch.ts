@@ -1248,7 +1248,7 @@ export const mcpTools = [
 	{
 		name: 'ace-text_search',
 		description:
-			'ACE Code Search: Fast text search across the entire codebase using Node.js built-in features (no external dependencies required). Search for exact patterns or regex across all files. Useful for finding strings, comments, TODOs, or any text patterns. Supports glob filtering.',
+			'ACE Code Search: Literal text/regex pattern matching (grep-style search). Best for finding exact strings: TODOs, comments, log messages, error strings, string constants. NOT recommended for code understanding or exploring functionality - use semantic search tools for that. Use when you know the exact text pattern you are looking for.',
 		inputSchema: {
 			type: 'object',
 			properties: {

@@ -1529,8 +1529,45 @@ export default function ChatScreen({skipWelcome}: Props) {
 															content={message.content || ' '}
 														/>
 													)}
+													{/* Show sub-agent token usage */}
+													{message.subAgentUsage &&
+														(() => {
+															const formatTokens = (num: number) => {
+																if (num >= 1000)
+																	return `${(num / 1000).toFixed(1)}K`;
+																return num.toString();
+															};
+
+															return (
+																<Text color="gray" dimColor>
+																	└─ Usage: In=
+																	{formatTokens(
+																		message.subAgentUsage.inputTokens,
+																	)}
+																	, Out=
+																	{formatTokens(
+																		message.subAgentUsage.outputTokens,
+																	)}
+																	{message.subAgentUsage.cacheReadInputTokens
+																		? `, Cache Read=${formatTokens(
+																				message.subAgentUsage
+																					.cacheReadInputTokens,
+																		  )}`
+																		: ''}
+																	{message.subAgentUsage
+																		.cacheCreationInputTokens
+																		? `, Cache Create=${formatTokens(
+																				message.subAgentUsage
+																					.cacheCreationInputTokens,
+																		  )}`
+																		: ''}
+																</Text>
+															);
+														})()}
 													{message.toolDisplay &&
-														message.toolDisplay.args.length > 0 && (
+														message.toolDisplay.args.length > 0 &&
+														// Hide tool arguments for sub-agent internal tools
+														!message.subAgentInternal && (
 															<Box flexDirection="column">
 																{message.toolDisplay.args.map(
 																	(arg, argIndex) => (
@@ -1672,13 +1709,20 @@ export default function ChatScreen({skipWelcome}: Props) {
 														) && (
 															<ToolResultPreview
 																toolName={
-																	message.content
-																		.replace('✓ ', '')
-																		.replace(/.*⚇✓\s*/, '')
-																		.split('\n')[0] || ''
+																	(message.content || '')
+																		.replace(/^✓\s*/, '') // Remove leading ✓
+																		.replace(/^⚇✓\s*/, '') // Remove leading ⚇✓
+																		.replace(/.*⚇✓\s*/, '') // Remove any prefix before ⚇✓
+																		.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI color codes
+																		.split('\n')[0]
+																		?.trim() || ''
 																}
 																result={message.toolResult}
 																maxLines={5}
+																isSubAgentInternal={
+																	message.role === 'subagent' ||
+																	message.subAgentInternal === true
+																}
 															/>
 														)}
 													{/* Show rejection reason for rejected tools with reply */}

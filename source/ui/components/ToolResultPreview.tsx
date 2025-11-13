@@ -6,6 +6,7 @@ interface ToolResultPreviewProps {
 	toolName: string;
 	result: string;
 	maxLines?: number;
+	isSubAgentInternal?: boolean; // Whether this is a sub-agent internal tool
 }
 
 /**
@@ -16,6 +17,7 @@ export default function ToolResultPreview({
 	toolName,
 	result,
 	maxLines = 5,
+	isSubAgentInternal = false,
 }: ToolResultPreviewProps) {
 	try {
 		// Try to parse JSON result
@@ -25,9 +27,9 @@ export default function ToolResultPreview({
 		if (toolName.startsWith('subagent-')) {
 			return renderSubAgentPreview(data, maxLines);
 		} else if (toolName === 'terminal-execute') {
-			return renderTerminalExecutePreview(data);
+			return renderTerminalExecutePreview(data, isSubAgentInternal);
 		} else if (toolName === 'filesystem-read') {
-			return renderReadPreview(data, maxLines);
+			return renderReadPreview(data, isSubAgentInternal);
 		} else if (toolName === 'filesystem-create') {
 			return renderCreatePreview(data);
 		} else if (toolName === 'filesystem-edit_search') {
@@ -67,11 +69,27 @@ function renderSubAgentPreview(data: any, _maxLines: number) {
 	);
 }
 
-function renderTerminalExecutePreview(data: any) {
+function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 	const hasError = data.exitCode !== 0;
 	const hasStdout = data.stdout && data.stdout.trim();
 	const hasStderr = data.stderr && data.stderr.trim();
 
+	// For sub-agent internal tools, show minimal info
+	if (isSubAgentInternal) {
+		return (
+			<Box marginLeft={2}>
+				<Text color={hasError ? 'red' : 'gray'} dimColor>
+					└─ Exit code: {data.exitCode}
+					{hasStdout &&
+						` (${data.stdout.trim().split('\n').length} lines output)`}
+					{hasStderr &&
+						` (${data.stderr.trim().split('\n').length} lines stderr)`}
+				</Text>
+			</Box>
+		);
+	}
+
+	// For main flow tools, show detailed info as before
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
@@ -127,13 +145,25 @@ function renderTerminalExecutePreview(data: any) {
 	);
 }
 
-function renderReadPreview(data: any, _maxLines: number) {
+function renderReadPreview(data: any, isSubAgentInternal: boolean) {
 	if (!data.content) return null;
 
 	// 简洁显示：只显示读取的行数信息
 	const lines = data.content.split('\n');
 	const readLineCount = lines.length;
 	const totalLines = data.totalLines || readLineCount;
+
+	// For sub-agent internal tools, show even more minimal info
+	if (isSubAgentInternal) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Read {readLineCount} lines
+					{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
+				</Text>
+			</Box>
+		);
+	}
 
 	// 如果是读取部分行，显示范围
 	const rangeInfo =

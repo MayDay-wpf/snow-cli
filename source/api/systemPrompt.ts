@@ -5,67 +5,68 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import {loadCodebaseConfig} from '../utils/codebaseConfig.js';
 
 /**
  * Get the system prompt, dynamically reading from ROLE.md if it exists
  * This function is called to get the current system prompt with ROLE.md content if available
  */
 function getSystemPromptWithRole(): string {
-	try {
-		const cwd = process.cwd();
-		const roleFilePath = path.join(cwd, 'ROLE.md');
+   try {
+      const cwd = process.cwd();
+      const roleFilePath = path.join(cwd, 'ROLE.md');
 
-		// Check if ROLE.md exists and is not empty
-		if (fs.existsSync(roleFilePath)) {
-			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
-			if (roleContent) {
-				// Replace the default role description with ROLE.md content
-				return SYSTEM_PROMPT_TEMPLATE.replace(
-					'You are Snow AI CLI, an intelligent command-line assistant.',
-					roleContent,
-				);
-			}
-		}
-	} catch (error) {
-		// If reading fails, fall back to default
-		console.error('Failed to read ROLE.md:', error);
-	}
+      // Check if ROLE.md exists and is not empty
+      if (fs.existsSync(roleFilePath)) {
+         const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
+         if (roleContent) {
+            // Replace the default role description with ROLE.md content
+            return SYSTEM_PROMPT_TEMPLATE.replace(
+               'You are Snow AI CLI, an intelligent command-line assistant.',
+               roleContent,
+            );
+         }
+      }
+   } catch (error) {
+      // If reading fails, fall back to default
+      console.error('Failed to read ROLE.md:', error);
+   }
 
-	return SYSTEM_PROMPT_TEMPLATE;
+   return SYSTEM_PROMPT_TEMPLATE;
 }
 
 // Get system environment info
 function getSystemEnvironmentInfo(): string {
-	const platform = (() => {
-		const platformType = os.platform();
-		switch (platformType) {
-			case 'win32':
-				return 'Windows';
-			case 'darwin':
-				return 'macOS';
-			case 'linux':
-				return 'Linux';
-			default:
-				return platformType;
-		}
-	})();
+   const platform = (() => {
+      const platformType = os.platform();
+      switch (platformType) {
+         case 'win32':
+            return 'Windows';
+         case 'darwin':
+            return 'macOS';
+         case 'linux':
+            return 'Linux';
+         default:
+            return platformType;
+      }
+   })();
 
-	const shell = (() => {
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell') || shellName.includes('pwsh'))
-			return 'PowerShell';
-		if (shellName.includes('zsh')) return 'zsh';
-		if (shellName.includes('bash')) return 'bash';
-		if (shellName.includes('fish')) return 'fish';
-		if (shellName.includes('sh')) return 'sh';
-		return shellName || 'shell';
-	})();
+   const shell = (() => {
+      const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
+      const shellName = path.basename(shellPath).toLowerCase();
+      if (shellName.includes('cmd')) return 'cmd.exe';
+      if (shellName.includes('powershell') || shellName.includes('pwsh'))
+         return 'PowerShell';
+      if (shellName.includes('zsh')) return 'zsh';
+      if (shellName.includes('bash')) return 'bash';
+      if (shellName.includes('fish')) return 'fish';
+      if (shellName.includes('sh')) return 'sh';
+      return shellName || 'shell';
+   })();
 
-	const workingDirectory = process.cwd();
+   const workingDirectory = process.cwd();
 
-	return `Platform: ${platform}
+   return `Platform: ${platform}
 Shell: ${shell}
 Working Directory: ${workingDirectory}`;
 }
@@ -78,7 +79,8 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 2. **ACTION FIRST**: Write code immediately when task is clear - stop overthinking
 3. **Smart Context**: Read what's needed for correctness, skip excessive exploration
 4. **Quality Verification**: run build/test after changes
-5. **NO Documentation Files**: NEVER create summary .md files after tasks - use \`notebook-add\` for important notes instead
+5. **NO Documentation Files**: NEVER create summary .md files after tasks - use \`notebook-add\` for important notes instead,And whenever you find that the notes are wrong or outdated, you need to take the initiative to modify them immediately, and do not leave invalid or wrong notes.
+6. **Principle of Rigor**: If the user mentions file or folder paths, you must read them first, you are not allowed to guess, and you are not allowed to assume anything about files, results, or parameters.
 
 ## Execution Strategy - BALANCE ACTION & ANALYSIS
 
@@ -201,7 +203,7 @@ The system includes three specialized built-in sub-agents with different capabil
 
 1. **Explore Agent** (\`subagent-agent_explore\`) - Code Exploration Specialist
    - **Purpose**: Quickly explore and understand codebases
-   - **Capabilities**: Read-only access to code search tools (ACE tools, codebase search, web search)
+   - **Capabilities**: Read-only access to code search tools
    - **Best for**:
      - Understanding codebase architecture
      - Finding where functionality is implemented
@@ -351,21 +353,25 @@ Guidance and recommendations:
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.`;
 
 /**
- * Check if codebase-search tool is available
+ * Check if codebase functionality is enabled
+ * Directly reads from codebase config instead of checking tools parameter
  */
-function hasCodebaseSearchTool(
-	tools?: Array<{function: {name: string}}>,
-): boolean {
-	if (!tools) return false;
-	return tools.some(tool => tool.function.name === 'codebase-search');
+function isCodebaseEnabled(): boolean {
+   try {
+      const config = loadCodebaseConfig();
+      return config.enabled;
+   } catch (error) {
+      // If config fails to load, assume disabled
+      return false;
+   }
 }
 
 /**
  * Generate workflow section based on available tools
  */
 function getWorkflowSection(hasCodebase: boolean): string {
-	if (hasCodebase) {
-		return `**Your workflow:**
+   if (hasCodebase) {
+      return `**Your workflow:**
 1. **START WITH SEMANTIC SEARCH** - Use \\\`codebase-search\\\` as your PRIMARY exploration tool
    - ALWAYS try \\\`codebase-search\\\` FIRST for ANY code understanding task
    - Examples: "authentication logic", "error handling", "user validation", "database queries"
@@ -373,17 +379,17 @@ function getWorkflowSection(hasCodebase: boolean): string {
    - Returns relevant code snippets with context - read results to understand the codebase
 2. Read the primary file(s) mentioned (or files found by codebase search)
 3. Check dependencies/imports that directly impact the change
-4. For precise symbol lookup AFTER understanding context, use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\`
+4. For precise symbol lookup AFTER understanding context, use \\\`ace-search_symbols\\\`, \\\`ace-find_definition\\\`, or \\\`ace-find_references\\\`
 5. Read related files ONLY if they're critical to understanding the task
 6. Write/modify code with proper context
 7. Verify with build
 8. NO excessive exploration beyond what's needed
 9. NO reading entire modules "for reference"
 10. NO over-planning multi-step workflows for simple tasks`;
-	} else {
-		return `**Your workflow:**
+   } else {
+      return `**Your workflow:**
 1. Read the primary file(s) mentioned - USE BATCH READ if multiple files
-2. Use \\\`ace-search-symbols\\\`, \\\`ace-find-definition\\\`, or \\\`ace-find-references\\\` to find related code
+2. Use \\\`ace-search_symbols\\\`, \\\`ace-find_definition\\\`, or \\\`ace-find_references\\\` to find related code
 3. Check dependencies/imports that directly impact the change
 4. Read related files ONLY if they're critical to understanding the task
 5. Write/modify code with proper context - USE BATCH EDIT if modifying 2+ files
@@ -399,57 +405,60 @@ When dealing with 2+ files, ALWAYS prefer batch operations:
 - Multiple reads? Use \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\` in ONE call
 - Multiple edits? Use \\\`filesystem-edit_search(filePath=[{...}, {...}])\\\` in ONE call
 - This is NOT optional for efficiency - batch operations are the EXPECTED workflow`;
-	}
+   }
 }
 /**
  * Generate code search section based on available tools
  */
 function getCodeSearchSection(hasCodebase: boolean): string {
-	if (hasCodebase) {
-		// When codebase tool is available, prioritize it
-		return `**Code Search Strategy:**
+   if (hasCodebase) {
+      // When codebase tool is available, prioritize it
+      return `**Code Search Strategy:**
 
 **Priority Order (use in this sequence):**
 
 1. **Semantic Search First** (\`codebase-search\`):
-   - Use for: Understanding functionality, finding patterns, exploring unknown code
-   - Query by MEANING: "how is auth handled", "error patterns", "validation logic"
-   - **CRITICAL**: Primary tool for code understanding tasks
+   - **ALWAYS START HERE** for code understanding and exploration tasks
+   - Query by MEANING: "how is auth handled", "error patterns", "validation logic", "where is X implemented"
+   - Returns semantically relevant code with context
+   - **CRITICAL**: Primary tool for code understanding - do NOT skip this!
+   - Example: "find authentication logic" → use codebase-search first
 
-2. **Precise Lookup Second** (ACE tools):
-   - \`ace-semantic_search\` - Symbol search with context (supports fuzzy matching + symbol type filtering)
-   - \`ace-find-definition\` - Go to single definition
-   - \`ace-find-references\` - Find all usages
-   - \`ace-text-search\` - Fast text/regex search
-   - Use for: Exact symbol names, reference tracking, pattern matching`;
-	} else {
-		// When codebase tool is NOT available, only show ACE
-		return `**Code Search Strategy:**
+2. **Precise Lookup Second** (ACE tools - AFTER understanding context):
+   - \`ace-semantic_search\` - Symbol search with context (fuzzy matching + symbol type filtering)
+   - \`ace-find_definition\` - Go to single definition of a known symbol
+   - \`ace-find_references\` - Find all usages of a known symbol
+   - Use for: Known exact symbol names, reference tracking after exploration
+
+3. **Literal Text Search Last** (\`ace-text_search\`):
+   - ONLY for literal string matching (TODOs, log messages, error strings, constants)
+   - NOT for code understanding or exploration
+   - Use AFTER semantic search when you need exact string patterns`;
+   } else {
+      // When codebase tool is NOT available, only show ACE
+      return `**Code Search Strategy:**
 - \`ace-semantic_search\` - Symbol search with fuzzy matching and filtering
-- \`ace-find-definition\` - Go to definition of a symbol
-- \`ace-find-references\` - Find all usages of a symbol
-- \`ace-text-search\` - Fast text/regex search`;
-	}
+- \`ace-find_definition\` - Go to definition of a symbol
+- \`ace-find_references\` - Find all usages of a symbol
+- \`ace-text_search\` - Literal text/regex search (for strings, comments, TODOs)`;
+   }
 }
 
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
-export function getSystemPrompt(
-	tools?: Array<{function: {name: string}}>,
-): string {
-	const basePrompt = getSystemPromptWithRole();
-	const systemEnv = getSystemEnvironmentInfo();
-	const hasCodebase = hasCodebaseSearchTool(tools);
+export function getSystemPrompt(): string {
+   const basePrompt = getSystemPromptWithRole();
+   const systemEnv = getSystemEnvironmentInfo();
+   const hasCodebase = isCodebaseEnabled();
+   // Generate dynamic sections
+   const workflowSection = getWorkflowSection(hasCodebase);
+   const codeSearchSection = getCodeSearchSection(hasCodebase);
 
-	// Generate dynamic sections
-	const workflowSection = getWorkflowSection(hasCodebase);
-	const codeSearchSection = getCodeSearchSection(hasCodebase);
+   // Replace placeholders with actual content
+   const finalPrompt = basePrompt
+      .replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
+      .replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
 
-	// Replace placeholders with actual content
-	let finalPrompt = basePrompt
-		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
-		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
-
-	return `${finalPrompt}
+   return `${finalPrompt}
 
 ## System Environment
 

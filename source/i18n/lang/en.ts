@@ -303,6 +303,56 @@ export const en: TranslationKeys = {
 		listNavigationHint:
 			'↑↓: Navigate • Space: Toggle • A: Add • D: Delete • R: Reset • Esc: Back',
 	},
+	helpPanel: {
+		title: '🔰 Keyboard Shortcuts & Help',
+		textEditingTitle: '📝 Text Editing:',
+		deleteToStart: 'Ctrl+L - Delete from cursor to start',
+		deleteToEnd: 'Ctrl+R - Delete from cursor to end',
+		pasteImages: '{pasteKey} - Paste images from clipboard',
+		quickAccessTitle: '🔍 Quick Access:',
+		insertFiles: '@ - Insert files from project',
+		searchContent: '@@ - Search file content',
+		showCommands: '/ - Show available commands',
+		navigationTitle: '📋 Navigation:',
+		navigateHistory: '↑/↓ - Navigate command/message history',
+		selectItem: 'Tab/Enter - Select item in pickers',
+		cancelClose: 'ESC - Cancel/close pickers or interrupt AI response',
+		toggleYolo: 'Shift+Tab - Toggle YOLO mode (auto-approve tools)',
+		tipsTitle: '💡 Tips:',
+		tipUseHelp: 'Use /help anytime to see this information',
+		tipShowCommands: 'Type / to see all available commands',
+		tipInterrupt: 'Press ESC during AI response to interrupt',
+		closeHint: 'Press ESC to close this help panel',
+	},
+	commandPanel: {
+		title: 'Command Panel',
+		availableCommands: 'Available Commands',
+		processingMessage:
+			'Please wait for the conversation to complete before using commands',
+		scrollHint: '↑↓ to scroll',
+		moreHidden: '{count} more hidden',
+		commands: {
+			help: 'Show keyboard shortcuts and help information',
+			clear: 'Clear chat context and conversation history',
+			resume: 'Resume a conversation',
+			mcp: 'Show Model Context Protocol services and tools',
+			yolo: 'Toggle unattended mode (auto-approve all tools)',
+			init: 'Analyze project and generate/update SNOW.md documentation',
+			ide: 'Connect to VSCode editor and sync context',
+			compact: 'Compress conversation history using compact model',
+			home: 'Return to welcome screen to modify settings',
+			review:
+				'Review git changes and identify potential issues. Support: /review [optional note]',
+			role: 'Open or create ROLE.md file to customize AI assistant role',
+			usage: 'View token usage statistics with interactive charts',
+			export: 'Export chat conversation to text file with save dialog',
+			agent: 'Select and use a sub-agent to handle specific tasks',
+			todo: 'Search and select TODO comments from project files',
+		},
+	},
+	hooks: {
+		pressCtrlCAgain: 'Press Ctrl+C again to exit',
+	},
 	chatScreen: {
 		// Header
 		headerTitle: 'Programming efficiency x10!',
@@ -452,5 +502,19 @@ export const en: TranslationKeys = {
 		contextUsage: 'Context usage: {percentage}%',
 		contextPercentage: '{percentage}%',
 		contextLimit: 'Token limit reached',
+		// ChatInput
+		waitingForResponse: 'Waiting for response...',
+		moreAbove: '↑ {count} more above...',
+		moreBelow: '↓ {count} more below...',
+		historyNavigateHint: '↑↓ navigate · Enter select · ESC close',
+		typeToFilterCommands: 'Type to filter commands',
+		contentSearchHint: 'Content search • Tab/Enter to select • ESC to cancel',
+		fileSearchHint:
+			'Type to filter files • Tab/Enter to select • ESC to cancel',
+		yoloModeActive:
+			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
+		tokens: ' tokens',
+		cached: 'cached',
+		newCache: 'new cache',
 	},
 };

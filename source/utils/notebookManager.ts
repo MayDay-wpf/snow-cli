@@ -87,8 +87,13 @@ function normalizePath(filePath: string): string {
 		return path.relative(projectRoot, filePath).replace(/\\/g, '/');
 	}
 
-	// 已经是相对路径，规范化斜杠
-	return filePath.replace(/\\/g, '/');
+	// 已经是相对路径，规范化斜杠并移除 ./ 前缀
+	let normalized = filePath.replace(/\\/g, '/');
+	// 移除开头的 ./ 前缀
+	if (normalized.startsWith('./')) {
+		normalized = normalized.substring(2);
+	}
+	return normalized;
 }
 
 /**
@@ -149,8 +154,10 @@ export function queryNotebook(
 	const data = readNotebookData();
 	const results: NotebookEntry[] = [];
 
-	// 规范化搜索模式
-	const normalizedPattern = filePathPattern.toLowerCase().replace(/\\/g, '/');
+	// 规范化搜索模式（移除 ./ 前缀等）
+	const normalizedPattern = filePathPattern
+		? normalizePath(filePathPattern).toLowerCase()
+		: '';
 
 	// 遍历所有文件路径
 	for (const [filePath, entries] of Object.entries(data)) {

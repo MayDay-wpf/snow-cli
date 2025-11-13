@@ -303,7 +303,7 @@ export default function WelcomeScreen({
 			)}
 			{inlineView === 'language-settings' && (
 				<Box paddingX={1}>
-					<LanguageSettingsScreen onBack={handleBackToMenu} />
+					<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
 				</Box>
 			)}
 		</Box>

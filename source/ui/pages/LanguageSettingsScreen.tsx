@@ -1,14 +1,18 @@
 import React, {useState, useCallback} from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import Menu from '../components/Menu.js';
 import {useI18n} from '../../i18n/index.js';
 import type {Language} from '../../utils/languageConfig.js';
 
 type Props = {
 	onBack: () => void;
+	inlineMode?: boolean;
 };
 
-export default function LanguageSettingsScreen({onBack}: Props) {
+export default function LanguageSettingsScreen({
+	onBack,
+	inlineMode = false,
+}: Props) {
 	const {language, setLanguage} = useI18n();
 	const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
 
@@ -22,6 +26,26 @@ export default function LanguageSettingsScreen({onBack}: Props) {
 			label: '简体中文',
 			value: 'zh',
 			infoText: '切换到简体中文',
+		},
+		{
+			label: '繁體中文',
+			value: 'zh-TW',
+			infoText: '切換到繁體中文',
+		},
+		{
+			label: '日本語',
+			value: 'ja',
+			infoText: '日本語に切り替え',
+		},
+		{
+			label: '한국어',
+			value: 'ko',
+			infoText: '한국어로 전환',
+		},
+		{
+			label: 'Español',
+			value: 'es',
+			infoText: 'Cambiar a Español',
 		},
 		{
 			label: '← Back',
@@ -52,26 +76,51 @@ export default function LanguageSettingsScreen({onBack}: Props) {
 		// Could update some info display here if needed
 	}, []);
 
+	useInput((_input, key) => {
+		if (key.escape) {
+			onBack();
+		}
+	});
+
 	return (
 		<Box flexDirection="column" paddingX={1}>
-			<Box borderStyle="round" borderColor="cyan" paddingX={1}>
-				<Box flexDirection="column" width="100%">
-					<Box paddingX={1} paddingY={1}>
+			{!inlineMode && (
+				<Box
+					borderStyle="round"
+					borderColor="cyan"
+					paddingX={1}
+					marginBottom={1}
+				>
+					<Box flexDirection="column">
 						<Text bold color="cyan">
 							Language Settings / 语言设置
 						</Text>
 					</Box>
-					<Box paddingX={1}>
-						<Text color="gray" dimColor>
-							Current: {selectedLanguage === 'en' ? 'English' : '简体中文'}
-						</Text>
-					</Box>
-					<Menu
-						options={languageOptions}
-						onSelect={handleSelect}
-						onSelectionChange={handleSelectionChange}
-					/>
 				</Box>
+			)}
+
+			<Box flexDirection="column">
+				<Box paddingX={1}>
+					<Text color="gray" dimColor>
+						Current:{' '}
+						{selectedLanguage === 'en'
+							? 'English'
+							: selectedLanguage === 'zh'
+							? '简体中文'
+							: selectedLanguage === 'zh-TW'
+							? '繁體中文'
+							: selectedLanguage === 'ja'
+							? '日本語'
+							: selectedLanguage === 'ko'
+							? '한국어'
+							: 'Español'}
+					</Text>
+				</Box>
+				<Menu
+					options={languageOptions}
+					onSelect={handleSelect}
+					onSelectionChange={handleSelectionChange}
+				/>
 			</Box>
 		</Box>
 	);

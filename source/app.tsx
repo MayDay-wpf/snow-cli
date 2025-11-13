@@ -21,17 +21,14 @@ type Props = {
 	headlessPrompt?: string;
 };
 
-export default function App({version, skipWelcome, headlessPrompt}: Props) {
-	// If headless prompt is provided, use headless mode
-	if (headlessPrompt) {
-		return (
-			<HeadlessModeScreen
-				prompt={headlessPrompt}
-				onComplete={() => process.exit(0)}
-			/>
-		);
-	}
-
+// Inner component that uses I18n context
+function AppContent({
+	version,
+	skipWelcome,
+}: {
+	version?: string;
+	skipWelcome?: boolean;
+}) {
 	const [currentView, setCurrentView] = useState<
 		'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders'
 	>(skipWelcome ? 'chat' : 'welcome');
@@ -49,7 +46,7 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	// Get terminal size for proper width calculation
 	const {columns: terminalWidth} = useTerminalSize();
 
-	// Global exit handler
+	// Global exit handler (must be inside I18nProvider)
 	useGlobalExit(setExitNotification);
 
 	// Global navigation handler
@@ -122,15 +119,34 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	};
 
 	return (
+		<Box flexDirection="column" width={terminalWidth}>
+			{renderView()}
+			{exitNotification.show && (
+				<Box paddingX={1} flexShrink={0}>
+					<Alert variant="warning">{exitNotification.message}</Alert>
+				</Box>
+			)}
+		</Box>
+	);
+}
+
+export default function App({version, skipWelcome, headlessPrompt}: Props) {
+	// If headless prompt is provided, use headless mode
+	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
+	if (headlessPrompt) {
+		return (
+			<I18nProvider>
+				<HeadlessModeScreen
+					prompt={headlessPrompt}
+					onComplete={() => process.exit(0)}
+				/>
+			</I18nProvider>
+		);
+	}
+
+	return (
 		<I18nProvider>
-			<Box flexDirection="column" width={terminalWidth}>
-				{renderView()}
-				{exitNotification.show && (
-					<Box paddingX={1} flexShrink={0}>
-						<Alert variant="warning">{exitNotification.message}</Alert>
-					</Box>
-				)}
-			</Box>
+			<AppContent version={version} skipWelcome={skipWelcome} />
 		</I18nProvider>
 	);
 }

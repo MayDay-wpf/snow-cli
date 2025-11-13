@@ -1,16 +1,16 @@
-import {createHash, randomUUID} from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
 	getOpenAiConfig,
 	getCustomSystemPrompt,
 	getCustomHeaders,
 	type ThinkingConfig,
 } from '../utils/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
-import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
-import {logger} from '../utils/logger.js';
-import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
-import {saveUsageToFile} from '../utils/usageLogger.js';
+import { getSystemPrompt } from './systemPrompt.js';
+import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
+import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
+import { logger } from '../utils/logger.js';
+import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
+import { saveUsageToFile } from '../utils/usageLogger.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -25,13 +25,13 @@ export interface AnthropicOptions {
 
 export interface AnthropicStreamChunk {
 	type:
-		| 'content'
-		| 'tool_calls'
-		| 'tool_call_delta'
-		| 'done'
-		| 'usage'
-		| 'reasoning_started'
-		| 'reasoning_delta';
+	| 'content'
+	| 'tool_calls'
+	| 'tool_call_delta'
+	| 'done'
+	| 'usage'
+	| 'reasoning_started'
+	| 'reasoning_delta';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -54,7 +54,7 @@ export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: {type: 'ephemeral'};
+	cache_control?: { type: 'ephemeral' };
 }
 
 export interface AnthropicMessageParam {
@@ -141,7 +141,7 @@ function convertToolsToAnthropic(
 
 	if (convertedTools.length > 0) {
 		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = {type: 'ephemeral'};
+		(lastTool as any).cache_control = { type: 'ephemeral' };
 	}
 
 	return convertedTools;
@@ -291,7 +291,7 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: getSystemPrompt(),
-						cache_control: {type: 'ephemeral'},
+						cache_control: { type: 'ephemeral' },
 					},
 				] as any,
 			});
@@ -320,14 +320,14 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: lastMessage.content,
-						cache_control: {type: 'ephemeral'},
+						cache_control: { type: 'ephemeral' },
 					} as any,
 				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = {type: 'ephemeral'};
+					lastContent.cache_control = { type: 'ephemeral' };
 				}
 			}
 		}
@@ -335,15 +335,15 @@ function convertToAnthropicMessages(
 
 	const system = systemContent
 		? [
-				{
-					type: 'text',
-					text: systemContent,
-					cache_control: {type: 'ephemeral'},
-				},
-		  ]
+			{
+				type: 'text',
+				text: systemContent,
+				cache_control: { type: 'ephemeral' },
+			},
+		]
 		: undefined;
 
-	return {system, messages: anthropicMessages};
+	return { system, messages: anthropicMessages };
 }
 
 /**
@@ -356,10 +356,10 @@ async function* parseSSEStream(
 	let buffer = '';
 
 	while (true) {
-		const {done, value} = await reader.read();
+		const { done, value } = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, {stream: true});
+		buffer += decoder.decode(value, { stream: true });
 		const lines = buffer.split('\n');
 		buffer = lines.pop() || '';
 
@@ -403,7 +403,7 @@ export async function* createStreamingAnthropicCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			const config = getAnthropicConfig();
-			const {system, messages} = convertToAnthropicMessages(
+			const { system, messages } = convertToAnthropicMessages(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 			);
@@ -695,10 +695,10 @@ export async function* createStreamingAnthropicCompletion(
 			// Return complete thinking block with signature if thinking content exists
 			const thinkingBlock = thinkingTextBuffer
 				? {
-						type: 'thinking' as const,
-						thinking: thinkingTextBuffer,
-						signature: thinkingSignature || undefined,
-				  }
+					type: 'thinking' as const,
+					thinking: thinkingTextBuffer,
+					signature: thinkingSignature || undefined,
+				}
 				: undefined;
 
 			yield {

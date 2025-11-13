@@ -61,6 +61,7 @@ export class CodebaseIndexAgent {
 		'.kt',
 		'.scala',
 		'.m',
+		'.md',
 		'.mm',
 		'.sh',
 		'.bash',

@@ -282,6 +282,57 @@ export type TranslationKeys = {
 		// Navigation hints
 		listNavigationHint: string;
 	};
+	// Help Panel
+	helpPanel: {
+		title: string;
+		textEditingTitle: string;
+		deleteToStart: string;
+		deleteToEnd: string;
+		pasteImages: string;
+		quickAccessTitle: string;
+		insertFiles: string;
+		searchContent: string;
+		showCommands: string;
+		navigationTitle: string;
+		navigateHistory: string;
+		selectItem: string;
+		cancelClose: string;
+		toggleYolo: string;
+		tipsTitle: string;
+		tipUseHelp: string;
+		tipShowCommands: string;
+		tipInterrupt: string;
+		closeHint: string;
+	};
+	// Command Panel
+	commandPanel: {
+		title: string;
+		availableCommands: string;
+		processingMessage: string;
+		scrollHint: string;
+		moreHidden: string;
+		commands: {
+			help: string;
+			clear: string;
+			resume: string;
+			mcp: string;
+			yolo: string;
+			init: string;
+			ide: string;
+			compact: string;
+			home: string;
+			review: string;
+			role: string;
+			usage: string;
+			export: string;
+			agent: string;
+			todo: string;
+		};
+	};
+	// Hooks
+	hooks: {
+		pressCtrlCAgain: string;
+	};
 	// Chat Screen
 	chatScreen: {
 		// Header
@@ -428,6 +479,18 @@ export type TranslationKeys = {
 		contextUsage: string;
 		contextPercentage: string;
 		contextLimit: string;
+		// ChatInput
+		waitingForResponse: string;
+		moreAbove: string;
+		moreBelow: string;
+		historyNavigateHint: string;
+		typeToFilterCommands: string;
+		contentSearchHint: string;
+		fileSearchHint: string;
+		yoloModeActive: string;
+		tokens: string;
+		cached: string;
+		newCache: string;
 	};
 };
 

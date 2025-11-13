@@ -130,7 +130,7 @@ function prepareMessagesForCompression(
 	if (customSystemPrompt) {
 		// If custom system prompt exists: custom as system, default as first user message
 		messages.push({role: 'system', content: customSystemPrompt});
-		messages.push({role: 'user', content: getSystemPrompt()});
+		// messages.push({role: 'user', content: getSystemPrompt()});
 	} else {
 		// No custom system prompt: default as system
 		messages.push({role: 'system', content: getSystemPrompt()});

@@ -55,7 +55,12 @@ jobs:
             
             ### What's New
 
-            - Improve batch operations in filesystem tools and enhance keyboard input handling for better paste management
+            - Added complete Spanish and more translation file with all UI texts
+            - Updated command panel to use localized command descriptions
+            - Localized global exit notification message
+            - Enhanced help panel with translated keyboard shortcuts
+            - Added translations for chat screen elements and hints
+            - Fixed localization integration in various components
             
             ### Installation
             ```bash

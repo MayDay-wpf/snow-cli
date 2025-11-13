@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.37
+
+- Added complete Spanish and more translation file with all UI texts
+- Updated command panel to use localized commanddescriptions
+- Localized global exit notification message
+- Enhanced help panel with translated keyboardshortcuts
+- Added translations for chat screen elements andhints
+- Fixed localization integration in variouscomponents
+
 ## v0.3.36
 
 - Improve batch operations in filesystem tools and enhance keyboard input handling for better paste management
