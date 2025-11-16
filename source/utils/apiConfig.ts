@@ -42,6 +42,8 @@ export interface ApiConfig {
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
 	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
+	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
+	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 }
 
 export interface MCPServer {

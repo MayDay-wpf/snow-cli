@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Text } from 'ink';
+import React, {useMemo} from 'react';
+import {Box, Text} from 'ink';
 import * as Diff from 'diff';
 
 interface Props {
@@ -56,7 +56,9 @@ export default function DiffViewer({
 	// If no old content, show as new file creation
 	const isNewFile = !diffOldContent || diffOldContent.trim() === '';
 
-	if (isNewFile) {
+	// Memoize new file rendering to avoid re-splitting lines on every render
+	const newFileContent = useMemo(() => {
+		if (!isNewFile) return null;
 		const allLines = diffNewContent.split('\n');
 
 		return (
@@ -65,12 +67,7 @@ export default function DiffViewer({
 					<Text bold color="green">
 						[New File]
 					</Text>
-					{filename && (
-						<Text color="cyan">
-							{' '}
-							{filename}
-						</Text>
-					)}
+					{filename && <Text color="cyan"> {filename}</Text>}
 				</Box>
 				<Box flexDirection="column">
 					{allLines.map((line, index) => (
@@ -81,114 +78,123 @@ export default function DiffViewer({
 				</Box>
 			</Box>
 		);
+	}, [isNewFile, diffNewContent, filename]);
+
+	if (isNewFile) {
+		return newFileContent;
 	}
 
-	// Generate line-by-line diff
-	const diffResult = Diff.diffLines(diffOldContent, diffNewContent);
+	// Memoize expensive diff calculation - only recompute when content changes
+	const hunks = useMemo(() => {
+		// Generate line-by-line diff
+		const diffResult = Diff.diffLines(diffOldContent, diffNewContent);
 
-	// Build all changes with line numbers
-	interface Change {
-		type: 'added' | 'removed' | 'unchanged';
-		content: string;
-		oldLineNum: number | null;
-		newLineNum: number | null;
-	}
+		// Build all changes with line numbers
+		interface Change {
+			type: 'added' | 'removed' | 'unchanged';
+			content: string;
+			oldLineNum: number | null;
+			newLineNum: number | null;
+		}
 
-	const allChanges: Change[] = [];
-	let oldLineNum = startLineNumber;
-	let newLineNum = startLineNumber;
+		const allChanges: Change[] = [];
+		let oldLineNum = startLineNumber;
+		let newLineNum = startLineNumber;
 
-	diffResult.forEach((part) => {
-		const lines = part.value.replace(/\n$/, '').split('\n');
+		diffResult.forEach(part => {
+			const lines = part.value.replace(/\n$/, '').split('\n');
 
-		lines.forEach((line) => {
-			if (part.added) {
-				allChanges.push({
-					type: 'added',
-					content: line,
-					oldLineNum: null,
-					newLineNum: newLineNum++,
-				});
-			} else if (part.removed) {
-				allChanges.push({
-					type: 'removed',
-					content: line,
-					oldLineNum: oldLineNum++,
-					newLineNum: null,
-				});
-			} else {
-				allChanges.push({
-					type: 'unchanged',
-					content: line,
-					oldLineNum: oldLineNum++,
-					newLineNum: newLineNum++,
-				});
-			}
-		});
-	});
-
-	// Find diff hunks (groups of changes with context)
-	const hunks: DiffHunk[] = [];
-	const contextLines = 3; // Number of context lines before and after changes
-
-	for (let i = 0; i < allChanges.length; i++) {
-		const change = allChanges[i];
-		if (change?.type !== 'unchanged') {
-			// Found a change, create a hunk
-			const hunkStart = Math.max(0, i - contextLines);
-			let hunkEnd = i;
-
-			// Extend the hunk to include all consecutive changes
-			while (hunkEnd < allChanges.length - 1) {
-				const nextChange = allChanges[hunkEnd + 1];
-				if (!nextChange) break;
-
-				// If next line is a change, extend the hunk
-				if (nextChange.type !== 'unchanged') {
-					hunkEnd++;
-					continue;
+			lines.forEach(line => {
+				if (part.added) {
+					allChanges.push({
+						type: 'added',
+						content: line,
+						oldLineNum: null,
+						newLineNum: newLineNum++,
+					});
+				} else if (part.removed) {
+					allChanges.push({
+						type: 'removed',
+						content: line,
+						oldLineNum: oldLineNum++,
+						newLineNum: null,
+					});
+				} else {
+					allChanges.push({
+						type: 'unchanged',
+						content: line,
+						oldLineNum: oldLineNum++,
+						newLineNum: newLineNum++,
+					});
 				}
+			});
+		});
 
-				// If there are more changes within context distance, extend the hunk
-				let hasMoreChanges = false;
-				for (
-					let j = hunkEnd + 1;
-					j < Math.min(allChanges.length, hunkEnd + 1 + contextLines * 2);
-					j++
-				) {
-					if (allChanges[j]?.type !== 'unchanged') {
-						hasMoreChanges = true;
+		// Find diff hunks (groups of changes with context)
+		const computedHunks: DiffHunk[] = [];
+		const contextLines = 3; // Number of context lines before and after changes
+
+		for (let i = 0; i < allChanges.length; i++) {
+			const change = allChanges[i];
+			if (change?.type !== 'unchanged') {
+				// Found a change, create a hunk
+				const hunkStart = Math.max(0, i - contextLines);
+				let hunkEnd = i;
+
+				// Extend the hunk to include all consecutive changes
+				while (hunkEnd < allChanges.length - 1) {
+					const nextChange = allChanges[hunkEnd + 1];
+					if (!nextChange) break;
+
+					// If next line is a change, extend the hunk
+					if (nextChange.type !== 'unchanged') {
+						hunkEnd++;
+						continue;
+					}
+
+					// If there are more changes within context distance, extend the hunk
+					let hasMoreChanges = false;
+					for (
+						let j = hunkEnd + 1;
+						j < Math.min(allChanges.length, hunkEnd + 1 + contextLines * 2);
+						j++
+					) {
+						if (allChanges[j]?.type !== 'unchanged') {
+							hasMoreChanges = true;
+							break;
+						}
+					}
+
+					if (hasMoreChanges) {
+						hunkEnd++;
+					} else {
 						break;
 					}
 				}
 
-				if (hasMoreChanges) {
-					hunkEnd++;
-				} else {
-					break;
+				// Add context lines after the hunk
+				hunkEnd = Math.min(allChanges.length - 1, hunkEnd + contextLines);
+
+				// Extract the hunk
+				const hunkChanges = allChanges.slice(hunkStart, hunkEnd + 1);
+				const firstChange = hunkChanges[0];
+				const lastChange = hunkChanges[hunkChanges.length - 1];
+
+				if (firstChange && lastChange) {
+					computedHunks.push({
+						startLine: firstChange.oldLineNum || firstChange.newLineNum || 1,
+						endLine: lastChange.oldLineNum || lastChange.newLineNum || 1,
+						changes: hunkChanges,
+					});
 				}
+
+				// Skip to the end of this hunk
+				i = hunkEnd;
 			}
-
-			// Add context lines after the hunk
-			hunkEnd = Math.min(allChanges.length - 1, hunkEnd + contextLines);
-
-			// Extract the hunk
-			const hunkChanges = allChanges.slice(hunkStart, hunkEnd + 1);
-			const firstChange = hunkChanges[0];
-			const lastChange = hunkChanges[hunkChanges.length - 1];
-
-			if (firstChange && lastChange) {
-				hunks.push({
-					startLine: firstChange.oldLineNum || firstChange.newLineNum || 1,
-					endLine: lastChange.oldLineNum || lastChange.newLineNum || 1,
-					changes: hunkChanges,
-				});
-			}
-
-			// Skip to the end of this hunk
-			i = hunkEnd;
 		}
-	}
+
+		return computedHunks;
+	}, [diffOldContent, diffNewContent, startLineNumber]);
 
 	return (
 		<Box flexDirection="column">
@@ -196,12 +202,7 @@ export default function DiffViewer({
 				<Text bold color="yellow">
 					[File Modified]
 				</Text>
-				{filename && (
-					<Text color="cyan">
-						{' '}
-						{filename}
-					</Text>
-				)}
+				{filename && <Text color="cyan"> {filename}</Text>}
 			</Box>
 			<Box flexDirection="column">
 				{hunks.map((hunk, hunkIndex) => (
@@ -213,14 +214,19 @@ export default function DiffViewer({
 						{/* Hunk changes */}
 						{hunk.changes.map((change, changeIndex) => {
 							// Calculate line number to display
-							const lineNum = change.type === 'added'
-								? change.newLineNum
-								: change.oldLineNum;
-							const lineNumStr = lineNum ? String(lineNum).padStart(4, ' ') : '    ';
+							const lineNum =
+								change.type === 'added' ? change.newLineNum : change.oldLineNum;
+							const lineNumStr = lineNum
+								? String(lineNum).padStart(4, ' ')
+								: '    ';
 
 							if (change.type === 'added') {
 								return (
-									<Text key={changeIndex} color="white" backgroundColor="#006400">
+									<Text
+										key={changeIndex}
+										color="white"
+										backgroundColor="#006400"
+									>
 										{lineNumStr} + {change.content}
 									</Text>
 								);
@@ -228,7 +234,11 @@ export default function DiffViewer({
 
 							if (change.type === 'removed') {
 								return (
-									<Text key={changeIndex} color="white" backgroundColor="#8B0000">
+									<Text
+										key={changeIndex}
+										color="white"
+										backgroundColor="#8B0000"
+									>
 										{lineNumStr} - {change.content}
 									</Text>
 								);
@@ -237,7 +247,7 @@ export default function DiffViewer({
 							// Unchanged lines (context)
 							return (
 								<Text key={changeIndex} dimColor>
-									{lineNumStr}   {change.content}
+									{lineNumStr} {change.content}
 								</Text>
 							);
 						})}

@@ -1,7 +1,6 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
-import {exec} from 'child_process';
-import {promisify} from 'util';
+import * as prettier from 'prettier';
 // IDE connection supports both VSCode and JetBrains IDEs
 import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
@@ -46,7 +45,6 @@ import type {CodeSymbol} from './types/aceCodeSearch.types.js';
 import {queryNotebook} from '../utils/notebookManager.js';
 
 const {resolve, dirname, isAbsolute} = path;
-const execAsync = promisify(exec);
 
 /**
  * Filesystem MCP Service
@@ -995,12 +993,15 @@ export class FilesystemMCPService {
 
 			if (shouldFormat) {
 				try {
-					await execAsync(`npx prettier --write "${fullPath}"`, {
-						encoding: 'utf-8',
+					// Use Prettier API for better performance (avoids npx overhead)
+					const prettierConfig = await prettier.resolveConfig(fullPath);
+					finalContent = await prettier.format(modifiedContent, {
+						filepath: fullPath,
+						...prettierConfig,
 					});
 
-					// Re-read the file after formatting
-					finalContent = await fs.readFile(fullPath, 'utf-8');
+					// Write formatted content back to file
+					await fs.writeFile(fullPath, finalContent, 'utf-8');
 					finalLines = finalContent.split('\n');
 					finalTotalLines = finalLines.length;
 
@@ -1361,12 +1362,16 @@ export class FilesystemMCPService {
 
 			if (shouldFormat) {
 				try {
-					await execAsync(`npx prettier --write "${fullPath}"`, {
-						encoding: 'utf-8',
+					// Use Prettier API for better performance (avoids npx overhead)
+					const prettierConfig = await prettier.resolveConfig(fullPath);
+					const newContent = modifiedLines.join('\n');
+					const formattedContent = await prettier.format(newContent, {
+						filepath: fullPath,
+						...prettierConfig,
 					});
 
-					// Re-read the file after formatting to get the formatted content
-					const formattedContent = await fs.readFile(fullPath, 'utf-8');
+					// Write formatted content back to file
+					await fs.writeFile(fullPath, formattedContent, 'utf-8');
 					finalLines = formattedContent.split('\n');
 					finalTotalLines = finalLines.length;
 
@@ -1599,7 +1604,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers. **Read only when the actual file or folder path is found or provided by the user, do not make random guesses.** **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=500 reads lines 1-500 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:300}, {path:"b.ts", startLine:100, endLine:550}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/.',
+			'Read file content with line numbers. **Read only when the actual file or folder path is found or provided by the user, do not make random guesses,Search for specific documents or line numbers before reading more accurately** **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=500 reads lines 1-500 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:300}, {path:"b.ts", startLine:100, endLine:550}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1607,8 +1612,7 @@ export const mcpTools = [
 					oneOf: [
 						{
 							type: 'string',
-							description:
-								'Path to a single file to read or directory to list',
+							description: 'Path to a single file to read or directory to list',
 						},
 						{
 							type: 'array',

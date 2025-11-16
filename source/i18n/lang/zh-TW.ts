@@ -124,6 +124,8 @@ export const zhTW: TranslationKeys = {
 		apiKey: 'API 金鑰:',
 		requestMethod: '請求方式:',
 		anthropicBeta: 'Anthropic Beta:',
+		enablePromptOptimization: '啟用提示詞優化:',
+		enableAutoCompress: '啟用自動壓縮:',
 		thinkingEnabled: '啟用思考模式:',
 		thinkingBudgetTokens: '思考預算令牌數:',
 		geminiThinkingEnabled: '啟用 Gemini 思考:',

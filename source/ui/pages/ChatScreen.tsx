@@ -23,6 +23,7 @@ import {sessionManager} from '../../utils/sessionManager.js';
 import {useSessionSave} from '../../hooks/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
 import {handleConversationWithTools} from '../../hooks/useConversation.js';
+import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
 import {useVSCodeState} from '../../hooks/useVSCodeState.js';
 import {useSnapshotState} from '../../hooks/useSnapshotState.js';
 import {useStreamingState} from '../../hooks/useStreamingState.js';
@@ -864,8 +865,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
-		// 检查 token 占用，如果 >= 80% 先执行自动压缩
-		if (shouldAutoCompress(currentContextPercentageRef.current)) {
+		// 检查 token 占用，如果 >= 80% 且配置启用了自动压缩，先执行自动压缩
+		const autoCompressConfig = getOpenAiConfig();
+		if (autoCompressConfig.enableAutoCompress !== false && shouldAutoCompress(currentContextPercentageRef.current)) {
 			setIsCompressing(true);
 			setCompressionError(null);
 
@@ -907,13 +909,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 			}
 		}
 
-		// Clear any previous retry status when starting a new request
-		streamingState.setRetryStatus(null);
+	// Clear any previous retry status when starting a new request
+	streamingState.setRetryStatus(null);
 
-		// Parse and validate file references
-		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			message,
-		);
+	// Parse and validate file references (use original message for immediate UI display)
+	const {cleanContent, validFiles} = await parseAndValidateFileReferences(
+		message,
+	);
 
 		// Separate image files from regular files
 		const imageFiles = validFiles.filter(
@@ -935,54 +937,104 @@ export default function ChatScreen({skipWelcome}: Props) {
 			})),
 		];
 
-		// Only add user message to UI if not hidden
-		if (!hideUserMessage) {
-			const userMessage: Message = {
-				role: 'user',
-				content: cleanContent,
-				files: validFiles.length > 0 ? validFiles : undefined,
-				images: imageContents.length > 0 ? imageContents : undefined,
-			};
-			setMessages(prev => [...prev, userMessage]);
-		}
-		streamingState.setIsStreaming(true);
+	// Only add user message to UI if not hidden (显示原始用户消息)
+	if (!hideUserMessage) {
+		const userMessage: Message = {
+			role: 'user',
+			content: cleanContent,
+			files: validFiles.length > 0 ? validFiles : undefined,
+			images: imageContents.length > 0 ? imageContents : undefined,
+		};
+		setMessages(prev => [...prev, userMessage]);
+	}
+	streamingState.setIsStreaming(true);
 
-		// Create new abort controller for this request
-		const controller = new AbortController();
-		streamingState.setAbortController(controller);
+	// Create new abort controller for this request
+	const controller = new AbortController();
+	streamingState.setAbortController(controller);
 
+	// Optimize user prompt in the background (silent execution)
+	let originalMessage = message;
+	let optimizedMessage = message;
+	let optimizedCleanContent = cleanContent;
+	
+	// Check if prompt optimization is enabled in config
+	const config = getOpenAiConfig();
+	const isOptimizationEnabled = config.enablePromptOptimization !== false; // Default to true
+	
+	if (isOptimizationEnabled) {
 		try {
-			// Create message for AI with file read instructions and editor context
-			const messageForAI = createMessageWithFileInstructions(
-				cleanContent,
-				regularFiles,
-				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
+			// Convert current UI messages to ChatMessage format for context
+			const conversationHistory = messages
+				.filter(m => m.role === 'user' || m.role === 'assistant')
+				.map(m => ({
+					role: m.role as 'user' | 'assistant',
+					content: typeof m.content === 'string' ? m.content : '',
+				}));
+
+			// Try to optimize the prompt (background execution)
+			optimizedMessage = await promptOptimizeAgent.optimizePrompt(
+				message,
+				conversationHistory,
+				controller.signal,
 			);
 
-			// Start conversation with tool support
-			await handleConversationWithTools({
-				userContent: messageForAI,
-				imageContents,
-				controller,
-				messages,
-				saveMessage,
-				setMessages,
-				setStreamTokenCount: streamingState.setStreamTokenCount,
-				requestToolConfirmation,
-				isToolAutoApproved,
-				addMultipleToAlwaysApproved,
-				yoloMode,
-				setContextUsage: streamingState.setContextUsage,
-				useBasicModel,
-				getPendingMessages: () => pendingMessagesRef.current,
-				clearPendingMessages: () => setPendingMessages([]),
-				setIsStreaming: streamingState.setIsStreaming,
-				setIsReasoning: streamingState.setIsReasoning,
-				setRetryStatus: streamingState.setRetryStatus,
-				clearSavedMessages,
-				setRemountKey,
-				getCurrentContextPercentage: () => currentContextPercentageRef.current,
-			});
+			// Re-parse the optimized message to get clean content for AI
+			if (optimizedMessage !== originalMessage) {
+				const optimizedParsed = await parseAndValidateFileReferences(optimizedMessage);
+				optimizedCleanContent = optimizedParsed.cleanContent;
+			}
+		} catch (error) {
+			// If optimization fails, silently fall back to original message
+			logger.warn('Prompt optimization failed, using original:', error);
+		}
+	}
+
+	try {
+		// Create message for AI with file read instructions and editor context (使用优化后的内容)
+		const messageForAI = createMessageWithFileInstructions(
+			optimizedCleanContent,
+			regularFiles,
+			vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
+		);
+
+		// Wrap saveMessage to add originalContent for user messages
+		const saveMessageWithOriginal = async (msg: any) => {
+			// If this is a user message and we have an optimized version, add originalContent
+			if (msg.role === 'user' && optimizedMessage !== originalMessage) {
+				await saveMessage({
+					...msg,
+					originalContent: originalMessage,
+				});
+			} else {
+				await saveMessage(msg);
+			}
+		};
+
+		// Start conversation with tool support
+		await handleConversationWithTools({
+			userContent: messageForAI,
+			imageContents,
+			controller,
+			messages,
+			saveMessage: saveMessageWithOriginal,
+			setMessages,
+			setStreamTokenCount: streamingState.setStreamTokenCount,
+			requestToolConfirmation,
+			isToolAutoApproved,
+			addMultipleToAlwaysApproved,
+			yoloMode,
+			setContextUsage: streamingState.setContextUsage,
+			useBasicModel,
+			getPendingMessages: () => pendingMessagesRef.current,
+			clearPendingMessages: () => setPendingMessages([]),
+			setIsStreaming: streamingState.setIsStreaming,
+			setIsReasoning: streamingState.setIsReasoning,
+			setRetryStatus: streamingState.setRetryStatus,
+			clearSavedMessages,
+			setRemountKey,
+			getCurrentContextPercentage: () => currentContextPercentageRef.current,
+		});
 		} catch (error) {
 			if (controller.signal.aborted) {
 				// Don't return here - let finally block execute

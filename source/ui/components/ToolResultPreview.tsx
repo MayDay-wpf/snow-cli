@@ -89,7 +89,24 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 		);
 	}
 
-	// For main flow tools, show detailed info as before
+	// For main flow tools, show summary unless there's an error
+	// Only show full output when exitCode !== 0 or has stderr
+	const showFullOutput = hasError || hasStderr;
+
+	if (!showFullOutput) {
+		// Success case - show compact summary
+		const stdoutLines = hasStdout ? data.stdout.trim().split('\n').length : 0;
+		return (
+			<Box marginLeft={2}>
+				<Text color="green" dimColor>
+					└─ ✓ Exit code: {data.exitCode}
+					{hasStdout && ` (${stdoutLines} ${stdoutLines === 1 ? 'line' : 'lines'} output)`}
+				</Text>
+			</Box>
+		);
+	}
+
+	// Error case - show full details
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
@@ -98,9 +115,8 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 			</Text>
 
 			{/* Exit code with color indication */}
-			<Text color={hasError ? 'red' : 'green'} bold={hasError}>
-				├─ exitCode: {data.exitCode}
-				{hasError && ' ⚠️ FAILED'}
+			<Text color="red" bold>
+				├─ exitCode: {data.exitCode} ⚠️ FAILED
 			</Text>
 
 			{/* Stdout - show completely if present */}
@@ -111,7 +127,7 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
 						{data.stdout.split('\n').map((line: string, idx: number) => (
-							<Text key={idx} color={hasError ? 'yellow' : 'white'}>
+							<Text key={idx} color="yellow">
 								{line}
 							</Text>
 						))}

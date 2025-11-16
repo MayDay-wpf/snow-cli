@@ -617,7 +617,7 @@ export default function ChatInput({
 									return (
 										<>
 											<Text color={color}>{percentage.toFixed(1)}%</Text>
-											<Text> </Text>
+											<Text> · </Text>
 											<Text color={color}>
 												{formatNumber(totalInputTokens)}
 											</Text>

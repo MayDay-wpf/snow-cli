@@ -992,13 +992,15 @@ export async function handleConversationWithTools(
 					}
 					freeEncoder();
 					break;
-				}
+			}
 
-				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
-				if (
-					options.getCurrentContextPercentage &&
-					shouldAutoCompress(options.getCurrentContextPercentage())
-				) {
+			// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
+			const config = getOpenAiConfig();
+			if (
+				config.enableAutoCompress !== false &&
+				options.getCurrentContextPercentage &&
+				shouldAutoCompress(options.getCurrentContextPercentage())
+			) {
 					try {
 						// 显示压缩提示消息
 						const compressingMessage: Message = {
@@ -1190,13 +1192,15 @@ export async function handleConversationWithTools(
 
 				// Check if there are pending user messages to insert
 				if (options.getPendingMessages && options.clearPendingMessages) {
-					const pendingMessages = options.getPendingMessages();
-					if (pendingMessages.length > 0) {
-						// 检查 token 占用，如果 >= 80% 先执行自动压缩
-						if (
-							options.getCurrentContextPercentage &&
-							shouldAutoCompress(options.getCurrentContextPercentage())
-						) {
+				const pendingMessages = options.getPendingMessages();
+				if (pendingMessages.length > 0) {
+					// 检查 token 占用，如果 >= 80% 先执行自动压缩
+					const config = getOpenAiConfig();
+					if (
+						config.enableAutoCompress !== false &&
+						options.getCurrentContextPercentage &&
+						shouldAutoCompress(options.getCurrentContextPercentage())
+					) {
 							try {
 								// 显示压缩提示消息
 								const compressingMessage: Message = {

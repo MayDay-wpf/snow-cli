@@ -80,19 +80,26 @@ export class TerminalCommandService {
 
 				childProcess.on('error', reject);
 
-				childProcess.on('close', (code, signal) => {
-					if (signal) {
-						reject(new Error(`Process killed by signal ${signal}`));
-					} else if (code === 0) {
-						resolve({stdout: stdoutData, stderr: stderrData});
-					} else {
-						const error: any = new Error(`Process exited with code ${code}`);
-						error.code = code;
-						error.stdout = stdoutData;
-						error.stderr = stderrData;
-						reject(error);
-					}
-				});
+			childProcess.on('close', (code, signal) => {
+				if (signal) {
+					// Process was killed by signal (e.g., timeout, manual kill)
+					// CRITICAL: Still preserve stdout/stderr for debugging
+					const error: any = new Error(`Process killed by signal ${signal}`);
+					error.code = code || 1;
+					error.stdout = stdoutData;
+					error.stderr = stderrData;
+					error.signal = signal;
+					reject(error);
+				} else if (code === 0) {
+					resolve({stdout: stdoutData, stderr: stderrData});
+				} else {
+					const error: any = new Error(`Process exited with code ${code}`);
+					error.code = code;
+					error.stdout = stdoutData;
+					error.stderr = stderrData;
+					reject(error);
+				}
+			});
 			});
 
 			// Truncate output if too long

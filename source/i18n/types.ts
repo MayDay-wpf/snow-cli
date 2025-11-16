@@ -127,6 +127,8 @@ export type TranslationKeys = {
 		apiKey: string;
 		requestMethod: string;
 		anthropicBeta: string;
+		enablePromptOptimization: string;
+		enableAutoCompress: string;
 		thinkingEnabled: string;
 		thinkingBudgetTokens: string;
 		geminiThinkingEnabled: string;

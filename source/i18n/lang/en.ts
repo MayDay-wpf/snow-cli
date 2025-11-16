@@ -134,6 +134,8 @@ export const en: TranslationKeys = {
 		apiKey: 'API Key:',
 		requestMethod: 'Request Method:',
 		anthropicBeta: 'Anthropic Beta:',
+		enablePromptOptimization: 'Enable Prompt Optimization:',
+		enableAutoCompress: 'Enable Auto Compression:',
 		thinkingEnabled: 'Thinking Enabled:',
 		thinkingBudgetTokens: 'Thinking Budget Tokens:',
 		geminiThinkingEnabled: 'Gemini Thinking Enabled:',

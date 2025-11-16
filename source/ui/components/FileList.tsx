@@ -63,104 +63,115 @@ const FileList = memo(
 					: MAX_DISPLAY_ITEMS;
 			}, [maxItems]);
 
-			// Get files from directory - optimized for performance with no depth limit
-			const loadFiles = useCallback(async () => {
-				const getFilesRecursively = async (
-					dir: string,
-					depth: number = 0,
-				): Promise<FileItem[]> => {
-					try {
-						const entries = await fs.promises.readdir(dir, {
-							withFileTypes: true,
-						});
-						let result: FileItem[] = [];
+	// Get files from directory - optimized for performance with depth limit
+	const loadFiles = useCallback(async () => {
+		const MAX_DEPTH = 5; // Limit recursion depth to prevent performance issues
+		const MAX_FILES = 1000; // Reduced from 2000 for better performance
 
-						// Common ignore patterns for better performance
-						const ignorePatterns = [
-							'node_modules',
-							'dist',
-							'build',
-							'coverage',
-							'.git',
-							'.vscode',
-							'.idea',
-							'out',
-							'target',
-							'bin',
-							'obj',
-							'.next',
-							'.nuxt',
-							'vendor',
-							'__pycache__',
-							'.pytest_cache',
-							'.mypy_cache',
-							'venv',
-							'.venv',
-							'env',
-							'.env',
-						];
+		const getFilesRecursively = async (
+			dir: string,
+			depth: number = 0,
+		): Promise<FileItem[]> => {
+			// Stop recursion if depth limit reached
+			if (depth > MAX_DEPTH) {
+				return [];
+			}
 
-						for (const entry of entries) {
-							// Skip hidden files and ignore patterns
-							if (
-								entry.name.startsWith('.') ||
-								ignorePatterns.includes(entry.name)
-							) {
-								continue;
-							}
+			try {
+				const entries = await fs.promises.readdir(dir, {
+					withFileTypes: true,
+				});
+				let result: FileItem[] = [];
 
-							const fullPath = path.join(dir, entry.name);
+				// Common ignore patterns for better performance
+				const ignorePatterns = [
+					'node_modules',
+					'dist',
+					'build',
+					'coverage',
+					'.git',
+					'.vscode',
+					'.idea',
+					'out',
+					'target',
+					'bin',
+					'obj',
+					'.next',
+					'.nuxt',
+					'vendor',
+					'__pycache__',
+					'.pytest_cache',
+					'.mypy_cache',
+					'venv',
+					'.venv',
+					'env',
+					'.env',
+				];
 
-							// Skip if file is too large (> 10MB) for performance
-							try {
-								const stats = await fs.promises.stat(fullPath);
-								if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
-									continue;
-								}
-							} catch {
-								continue;
-							}
-
-							let relativePath = path.relative(rootPath, fullPath);
-
-							// Ensure relative paths start with ./ for consistency
-							if (
-								!relativePath.startsWith('.') &&
-								!path.isAbsolute(relativePath)
-							) {
-								relativePath = './' + relativePath;
-							}
-
-							result.push({
-								name: entry.name,
-								path: relativePath,
-								isDirectory: entry.isDirectory(),
-							});
-
-							// Recursively get files from subdirectories (no depth limit)
-							if (entry.isDirectory()) {
-								const subFiles = await getFilesRecursively(fullPath, depth + 1);
-								result = result.concat(subFiles);
-							}
-
-							// Limit total files for performance (increased from 500 to 2000)
-							if (result.length > 2000) {
-								break;
-							}
-						}
-
-						return result;
-					} catch (error) {
-						return [];
+				for (const entry of entries) {
+					// Early exit if we've collected enough files
+					if (result.length >= MAX_FILES) {
+						break;
 					}
-				};
 
-				// Batch all state updates together
-				setIsLoading(true);
-				const fileList = await getFilesRecursively(rootPath);
-				setFiles(fileList);
-				setIsLoading(false);
-			}, [rootPath]);
+					// Skip hidden files and ignore patterns
+					if (
+						entry.name.startsWith('.') ||
+						ignorePatterns.includes(entry.name)
+					) {
+						continue;
+					}
+
+					const fullPath = path.join(dir, entry.name);
+
+					// Skip if file is too large (> 10MB) for performance
+					try {
+						const stats = await fs.promises.stat(fullPath);
+						if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
+							continue;
+						}
+					} catch {
+						continue;
+					}
+
+				let relativePath = path.relative(rootPath, fullPath);
+
+				// Ensure relative paths start with ./ for consistency
+				if (
+					!relativePath.startsWith('.') &&
+					!path.isAbsolute(relativePath)
+				) {
+					relativePath = './' + relativePath;
+				}
+
+				// Normalize to forward slashes for cross-platform consistency
+				relativePath = relativePath.replace(/\\/g, '/');
+
+				result.push({
+					name: entry.name,
+					path: relativePath,
+					isDirectory: entry.isDirectory(),
+				});
+
+					// Recursively get files from subdirectories with depth limit
+					if (entry.isDirectory() && depth < MAX_DEPTH) {
+						const subFiles = await getFilesRecursively(fullPath, depth + 1);
+						result = result.concat(subFiles);
+					}
+				}
+
+				return result;
+			} catch (error) {
+				return [];
+			}
+		};
+
+		// Batch all state updates together
+		setIsLoading(true);
+		const fileList = await getFilesRecursively(rootPath);
+		setFiles(fileList);
+		setIsLoading(false);
+	}, [rootPath]);
 
 			// Search file content for content search mode
 			const searchFileContent = useCallback(
@@ -297,20 +308,24 @@ const FileList = memo(
 						}
 					}
 
-					return results;
-				},
-				[files, rootPath, terminalWidth],
-			);
+			return results;
+		},
+		[files, rootPath, terminalWidth],
+	);
 
-			// Load files on mount - only once when visible
-			useEffect(() => {
-				if (visible && files.length === 0) {
-					loadFiles();
-				}
-			}, [visible, loadFiles]);
+	// Load files when component becomes visible
+	// This ensures the file list is always fresh without complex file watching
+	useEffect(() => {
+		if (!visible) {
+			return;
+		}
 
-			// State for filtered files (needed for async content search)
-			const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
+		// Always reload when becoming visible to ensure fresh data
+		loadFiles();
+	}, [visible, rootPath, loadFiles]);
+
+	// State for filtered files (needed for async content search)
+	const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
 
 			// Filter files based on query and search mode with debounce
 			useEffect(() => {

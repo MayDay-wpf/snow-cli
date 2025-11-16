@@ -6,10 +6,11 @@ import type { ChatMessage as APIChatMessage } from '../api/chat.js';
 import { getTodoService } from './mcpToolsManager.js';
 import { logger } from './logger.js';
 import { summaryAgent } from '../agents/summaryAgent.js';
-
-// Session 中直接使用 API 的消息格式，额外添加 timestamp 用于会话管理
+// Session 中直接使用 API 的消息格式,额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
 	timestamp: number;
+	// 存储用户的原始消息(在提示词优化之前),仅用于显示,不影响API请求
+	originalContent?: string;
 }
 
 export interface Session {

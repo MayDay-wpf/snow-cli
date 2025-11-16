@@ -38,6 +38,8 @@ type ConfigField =
 	| 'apiKey'
 	| 'requestMethod'
 	| 'anthropicBeta'
+	| 'enablePromptOptimization'
+	| 'enableAutoCompress'
 	| 'thinkingEnabled'
 	| 'thinkingBudgetTokens'
 	| 'geminiThinkingEnabled'
@@ -112,6 +114,8 @@ export default function ConfigScreen({
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
+	const [enablePromptOptimization, setEnablePromptOptimization] = useState(true);
+	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
@@ -167,10 +171,12 @@ export default function ConfigScreen({
 	const getAllFields = (): ConfigField[] => {
 		return [
 			'profile',
-			'baseUrl',
-			'apiKey',
-			'requestMethod',
-			...(requestMethod === 'anthropic'
+		'baseUrl',
+		'apiKey',
+		'requestMethod',
+		'enablePromptOptimization',
+		'enableAutoCompress',
+		...(requestMethod === 'anthropic'
 				? [
 						'anthropicBeta' as ConfigField,
 						'thinkingEnabled' as ConfigField,
@@ -241,21 +247,23 @@ export default function ConfigScreen({
 		const loadedProfiles = getAllProfiles();
 		setProfiles(loadedProfiles);
 
-		// Load current config
-		const config = getOpenAiConfig();
-		setBaseUrl(config.baseUrl);
-		setApiKey(config.apiKey);
-		setRequestMethod(config.requestMethod || 'chat');
-		setAnthropicBeta(config.anthropicBeta || false);
-		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
-		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
-		setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
-		setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
-		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
-		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
-		setAdvancedModel(config.advancedModel || '');
-		setBasicModel(config.basicModel || '');
-		setMaxContextTokens(config.maxContextTokens || 4000);
+	// Load current config
+	const config = getOpenAiConfig();
+	setBaseUrl(config.baseUrl);
+	setApiKey(config.apiKey);
+	setRequestMethod(config.requestMethod || 'chat');
+	setAnthropicBeta(config.anthropicBeta || false);
+	setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
+	setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
+	setThinkingEnabled(config.thinking?.type === 'enabled' || false);
+	setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
+	setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
+	setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
+	setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
+	setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
+	setAdvancedModel(config.advancedModel || '');
+	setBasicModel(config.basicModel || '');
+	setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setCompactModelName(config.compactModel?.modelName || '');
 		setActiveProfile(getActiveProfileName());
@@ -403,16 +411,18 @@ export default function ConfigScreen({
 			requestMethod,
 		});
 		if (validationErrors.length === 0) {
-			const config: Partial<ApiConfig> = {
-				baseUrl,
-				apiKey,
-				requestMethod,
-				anthropicBeta,
-				advancedModel,
-				basicModel,
-				maxContextTokens,
-				maxTokens,
-			};
+		const config: Partial<ApiConfig> = {
+			baseUrl,
+			apiKey,
+			requestMethod,
+			anthropicBeta,
+			enablePromptOptimization,
+			enableAutoCompress,
+			advancedModel,
+			basicModel,
+			maxContextTokens,
+			maxTokens,
+		};
 
 			// Save thinking configuration (always save to preserve settings)
 			if (thinkingEnabled) {
@@ -457,30 +467,32 @@ export default function ConfigScreen({
 
 			// Also save to the current profile
 			try {
-				const fullConfig = {
-					snowcfg: {
-						baseUrl,
-						apiKey,
-						requestMethod,
-						anthropicBeta,
-						thinking: thinkingEnabled
-							? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
-							: undefined,
-						geminiThinking: geminiThinkingEnabled
-							? {enabled: true, budget: geminiThinkingBudget}
-							: undefined,
-						responsesReasoning: responsesReasoningEnabled
-							? {enabled: true, effort: responsesReasoningEffort}
-							: undefined,
-						advancedModel,
-						basicModel,
-						maxContextTokens,
-						maxTokens,
-						compactModel: compactModelName
-							? {modelName: compactModelName}
-							: undefined,
-					},
-				};
+			const fullConfig = {
+			snowcfg: {
+				baseUrl,
+				apiKey,
+				requestMethod,
+				anthropicBeta,
+				enablePromptOptimization,
+				enableAutoCompress,
+				thinking: thinkingEnabled
+						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
+						: undefined,
+					geminiThinking: geminiThinkingEnabled
+						? {enabled: true, budget: geminiThinkingBudget}
+						: undefined,
+					responsesReasoning: responsesReasoningEnabled
+						? {enabled: true, effort: responsesReasoningEffort}
+						: undefined,
+					advancedModel,
+					basicModel,
+					maxContextTokens,
+					maxTokens,
+					compactModel: compactModelName
+						? {modelName: compactModelName}
+						: undefined,
+				},
+			};
 				saveProfile(activeProfile, fullConfig as any);
 			} catch (err) {
 				console.error('Failed to save profile:', err);
@@ -583,21 +595,49 @@ export default function ConfigScreen({
 					</Box>
 				);
 
-			case 'anthropicBeta':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.anthropicBeta}
+		case 'anthropicBeta':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? 'green' : 'white'}>
+						{isActive ? '❯ ' : '  '}{t.configScreen.anthropicBeta}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color="gray">
+							{anthropicBeta ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
 						</Text>
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{anthropicBeta ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
-							</Text>
-						</Box>
 					</Box>
-				);
+				</Box>
+			);
 
-			case 'thinkingEnabled':
+		case 'enablePromptOptimization':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? 'green' : 'white'}>
+						{isActive ? '❯ ' : '  '}{t.configScreen.enablePromptOptimization}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color="gray">
+							{enablePromptOptimization ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'enableAutoCompress':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? 'green' : 'white'}>
+						{isActive ? '❯ ' : '  '}{t.configScreen.enableAutoCompress}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color="gray">
+							{enableAutoCompress ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'thinkingEnabled':
 				return (
 					<Box key={field} flexDirection="column">
 						<Text color={isActive ? 'green' : 'white'}>
@@ -1029,6 +1069,10 @@ export default function ConfigScreen({
 				// Enter edit mode
 				if (currentField === 'anthropicBeta') {
 					setAnthropicBeta(!anthropicBeta);
+				} else if (currentField === 'enablePromptOptimization') {
+					setEnablePromptOptimization(!enablePromptOptimization);
+				} else if (currentField === 'enableAutoCompress') {
+					setEnableAutoCompress(!enableAutoCompress);
 				} else if (currentField === 'thinkingEnabled') {
 					setThinkingEnabled(!thinkingEnabled);
 				} else if (currentField === 'geminiThinkingEnabled') {
