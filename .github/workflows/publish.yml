@@ -55,12 +55,8 @@ jobs:
             
             ### What's New
 
-            - Added complete Spanish and more translation file with all UI texts
-            - Updated command panel to use localized command descriptions
-            - Localized global exit notification message
-            - Enhanced help panel with translated keyboard shortcuts
-            - Added translations for chat screen elements and hints
-            - Fixed localization integration in various components
+            - Added New Agent
+            - fix some bugs
             
             ### Installation
             ```bash

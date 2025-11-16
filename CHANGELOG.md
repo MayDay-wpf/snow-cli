@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.0
+
+- Added New Agent(Prompt optimization)
+- fix some bugs
+- Supports turning off automatic compression
+- Optimize file search and run performance
+
 ## v0.3.37
 
 - Added complete Spanish and more translation file with all UI texts
