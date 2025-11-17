@@ -70,6 +70,9 @@ let anthropicConfig: {
 	thinking?: ThinkingConfig;
 } | null = null;
 
+// Persistent userId that remains the same until application restart
+let persistentUserId: string | null = null;
+
 function getAnthropicConfig() {
 	if (!anthropicConfig) {
 		const config = getOpenAiConfig();
@@ -96,23 +99,25 @@ function getAnthropicConfig() {
 
 	return anthropicConfig;
 }
-
 export function resetAnthropicClient(): void {
 	anthropicConfig = null;
+	persistentUserId = null; // Reset userId on client reset
 }
 
 /**
- * Generate a user_id in the format: user_<hash>_account__session_<uuid>
+ * Generate a persistent user_id that remains the same until application restart
+ * Format: user_<hash>_account__session_<uuid>
  * This matches Anthropic's expected format for tracking and caching
- * The hash is based on sessionId only to keep it consistent within the same session
  */
-function generateUserId(sessionId: string): string {
-	// Generate a 64-character hash (consistent for the same session)
-	const hash = createHash('sha256')
-		.update(`anthropic_user_${sessionId}`)
-		.digest('hex');
-
-	return `user_${hash}_account__session_${sessionId}`;
+function getPersistentUserId(): string {
+	if (!persistentUserId) {
+		const sessionId = randomUUID();
+		const hash = createHash('sha256')
+			.update(`anthropic_user_${sessionId}`)
+			.digest('hex');
+		persistentUserId = `user_${hash}_account__session_${sessionId}`;
+	}
+	return persistentUserId;
 }
 
 /**
@@ -408,8 +413,8 @@ export async function* createStreamingAnthropicCompletion(
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 			);
 
-			const sessionId = options.sessionId || randomUUID();
-			const userId = generateUserId(sessionId);
+			// Use persistent userId that remains the same until application restart
+			const userId = getPersistentUserId();
 
 			const requestBody: any = {
 				model: options.model,
