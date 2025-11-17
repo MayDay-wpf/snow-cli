@@ -395,14 +395,25 @@ export async function* createStreamingGeminiCompletion(
 			let toolCallIndex = 0;
 			let totalTokens = {prompt: 0, completion: 0, total: 0};
 
-			// Parse SSE stream
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = '';
+		// Parse SSE stream
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
 
+		try {
 			while (true) {
 				const {done, value} = await reader.read();
-				if (done) break;
+
+				if (done) {
+					// ✅ 关键修复：检查buffer是否有残留数据
+					if (buffer.trim()) {
+						// 连接异常中断，抛出明确错误
+						throw new Error(
+							`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
+						);
+					}
+					break; // 正常结束
+				}
 
 				if (abortSignal?.aborted) {
 					return;
@@ -501,6 +512,16 @@ export async function* createStreamingGeminiCompletion(
 					}
 				}
 			}
+		} catch (error) {
+			const {logger} = await import('../utils/logger.js');
+			logger.error('Gemini SSE stream parsing error:', {
+				error: error instanceof Error ? error.message : 'Unknown error',
+				remainingBuffer: buffer.substring(0, 200),
+			});
+			throw error;
+		}
+
+
 
 			// Yield tool calls if any
 			if (hasToolCalls && toolCallsBuffer.length > 0) {

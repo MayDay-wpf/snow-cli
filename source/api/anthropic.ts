@@ -360,46 +360,65 @@ async function* parseSSEStream(
 	const decoder = new TextDecoder();
 	let buffer = '';
 
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
+	try {
+		while (true) {
+			const {done, value} = await reader.read();
 
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split('\n');
-		buffer = lines.pop() || '';
-
-		for (const line of lines) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith(':')) continue;
-
-			if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
-				return;
+			if (done) {
+				// ✅ 关键修复：检查buffer是否有残留数据
+				if (buffer.trim()) {
+					// 连接异常中断，抛出明确错误
+					throw new Error(
+						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
+					);
+				}
+				break; // 正常结束
 			}
 
-			// Handle both "event: " and "event:" formats
-			if (trimmed.startsWith('event:')) {
-				// Event type, will be followed by data
-				continue;
-			}
+			buffer += decoder.decode(value, {stream: true});
+			const lines = buffer.split('\n');
+			buffer = lines.pop() || '';
 
-			// Handle both "data: " and "data:" formats
-			if (trimmed.startsWith('data:')) {
-				const data = trimmed.startsWith('data: ')
-					? trimmed.slice(6)
-					: trimmed.slice(5);
-				try {
-					yield JSON.parse(data);
-				} catch (e) {
-					logger.error('Failed to parse SSE data:', data);
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (!trimmed || trimmed.startsWith(':')) continue;
+
+				if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
+					return;
+				}
+
+				// Handle both "event: " and "event:" formats
+				if (trimmed.startsWith('event:')) {
+					// Event type, will be followed by data
+					continue;
+				}
+
+				// Handle both "data: " and "data:" formats
+				if (trimmed.startsWith('data:')) {
+					const data = trimmed.startsWith('data: ')
+						? trimmed.slice(6)
+						: trimmed.slice(5);
+					const parseResult = parseJsonWithFix(data, {
+						toolName: 'SSE stream',
+						logWarning: false,
+						logError: true,
+					});
+
+					if (parseResult.success) {
+						yield parseResult.data;
+					}
 				}
 			}
 		}
+	} catch (error) {
+		const {logger} = await import('../utils/logger.js');
+		logger.error('SSE stream parsing error:', {
+			error: error instanceof Error ? error.message : 'Unknown error',
+			remainingBuffer: buffer.substring(0, 200),
+		});
+		throw error;
 	}
 }
-
-/**
- * Create streaming chat completion using Anthropic API
- */
 export async function* createStreamingAnthropicCompletion(
 	options: AnthropicOptions,
 	abortSignal?: AbortSignal,

@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - fix some bugs (prettier)
+            - Add disconnection retry
             
             ### Installation
             ```bash

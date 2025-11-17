@@ -1319,13 +1319,15 @@ export async function handleConversationWithTools(
 			break;
 		}
 
-		// Free encoder
-		freeEncoder();
-	} catch (error) {
-		freeEncoder();
-		throw error;
-	}
+	// Free encoder
+	freeEncoder();
+} catch (error) {
+	throw error;
+} finally {
+	// ✅ 确保总是释放encoder资源，避免资源泄漏
+	freeEncoder();
+}
 
-	// Return the accumulated usage data
-	return {usage: accumulatedUsage};
+// Return the accumulated usage data
+return {usage: accumulatedUsage};
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.4
+
+- Add disconnection retry
+
 ## v0.4.0
 
 - Added New Agent(Prompt optimization)
