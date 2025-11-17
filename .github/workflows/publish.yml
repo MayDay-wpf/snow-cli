@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - fix some bugs
+            - fix some bugs (prettier)
             
             ### Installation
             ```bash
