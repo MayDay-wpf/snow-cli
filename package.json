@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.4",
+	"version": "0.4.5",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -44,8 +44,9 @@
 		"@types/better-sqlite3": "^7.6.13",
 		"better-sqlite3": "^12.4.1",
 		"cli-highlight": "^2.1.11",
-		"cli-markdown": "^3.5.1",
 		"diff": "^8.0.2",
+		"marked": "^15.0.6",
+		"marked-terminal": "^7.3.0",
 		"fzf": "^0.5.2",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
@@ -66,6 +67,7 @@
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
+		"@types/marked-terminal": "^6.1.1",
 		"@types/prettier": "^2.7.3",
 		"@types/react": "^18.0.32",
 		"@types/ws": "^8.5.8",

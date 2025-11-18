@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 
-// CRITICAL: Patch cli-highlight BEFORE any other imports
-// This must be the first import to ensure the patch is applied before cli-markdown loads
-import './utils/patch-highlight.js';
-
 import React from 'react';
 import {render, Text, Box} from 'ink';
 import Spinner from 'ink-spinner';
@@ -15,6 +11,7 @@ import {vscodeConnection} from './utils/vscodeConnection.js';
 import {resourceMonitor} from './utils/resourceMonitor.js';
 import {initializeProfiles} from './utils/configManager.js';
 import {processManager} from './utils/processManager.js';
+import {enableDevMode, getDevUserId} from './utils/devMode.js';
 
 const execAsync = promisify(exec);
 
@@ -49,6 +46,7 @@ Options
 		--update   Update to latest version
 		-c         Skip welcome screen and resume last conversation
 		--ask      Quick question mode (headless mode with single prompt)
+		--dev      Enable developer mode with persistent userId for testing
 `,
 	{
 		importMeta: import.meta,
@@ -63,6 +61,10 @@ Options
 			},
 			ask: {
 				type: 'string',
+			},
+			dev: {
+				type: 'boolean',
+				default: false,
 			},
 		},
 	},
@@ -82,6 +84,15 @@ if (cli.flags.update) {
 		);
 		process.exit(1);
 	}
+}
+
+// Handle dev mode flag
+if (cli.flags.dev) {
+	enableDevMode();
+	const userId = getDevUserId();
+	console.log('🔧 Developer mode enabled');
+	console.log(`📝 Using persistent userId: ${userId}`);
+	console.log(`📂 Stored in: ~/.snow/dev-user-id\n`);
 }
 
 // Start resource monitoring in development/debug mode

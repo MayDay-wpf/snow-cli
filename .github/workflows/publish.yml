@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Add disconnection retry
+            - Markdown rendering part change library
             
             ### Installation
             ```bash

@@ -11,6 +11,7 @@ import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
 import { logger } from '../utils/logger.js';
 import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
 import { saveUsageToFile } from '../utils/usageLogger.js';
+import { isDevMode, getDevUserId } from '../utils/devMode.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -108,8 +109,17 @@ export function resetAnthropicClient(): void {
  * Generate a persistent user_id that remains the same until application restart
  * Format: user_<hash>_account__session_<uuid>
  * This matches Anthropic's expected format for tracking and caching
+ * 
+ * In dev mode (--dev flag), uses a persistent userId from ~/.snow/dev-user-id
+ * instead of generating a new one each session
  */
 function getPersistentUserId(): string {
+	// Check if dev mode is enabled
+	if (isDevMode()) {
+		return getDevUserId();
+	}
+
+	// Normal mode: generate userId per session
 	if (!persistentUserId) {
 		const sessionId = randomUUID();
 		const hash = createHash('sha256')

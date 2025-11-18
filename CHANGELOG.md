@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.5
+
+- Markdown rendering part change library
+
 ## v0.4.4
 
 - Add disconnection retry
