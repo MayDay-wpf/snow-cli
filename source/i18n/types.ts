@@ -284,7 +284,6 @@ export type TranslationKeys = {
 		// Navigation hints
 		listNavigationHint: string;
 	};
-	// Help Panel
 	helpPanel: {
 		title: string;
 		textEditingTitle: string;
@@ -294,6 +293,7 @@ export type TranslationKeys = {
 		quickAccessTitle: string;
 		insertFiles: string;
 		searchContent: string;
+		selectAgent: string;
 		showCommands: string;
 		navigationTitle: string;
 		navigateHistory: string;

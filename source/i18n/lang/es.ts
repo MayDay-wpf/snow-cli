@@ -290,6 +290,7 @@ export const es: TranslationKeys = {
 		quickAccessTitle: '🔍 Acceso Rápido:',
 		insertFiles: '@ - Insertar archivos del proyecto',
 		searchContent: '@@ - Buscar contenido de archivos',
+		selectAgent: '# - Seleccionar sub-agente para ejecutar tarea',
 		showCommands: '/ - Mostrar comandos disponibles',
 		navigationTitle: '📋 Navegación:',
 		navigateHistory: '↑/↓ - Navegar por el historial de comandos/mensajes',
@@ -337,7 +338,7 @@ export const es: TranslationKeys = {
 		headerInterrupt: 'Presiona ESC durante la respuesta para interrumpir',
 		headerYolo: 'Presiona Shift+Tab: Alternar YOLO',
 		headerShortcuts:
-			"Atajos: Ctrl+L (eliminar hasta inicio) • Ctrl+R (eliminar hasta final) • {pasteKey} (pegar imagen) • '@' (archivo) • '@@' (buscar contenido) • '/' (comando)",
+			"Atajos: Ctrl+L (eliminar hasta inicio) • Ctrl+R (eliminar hasta final) • {pasteKey} (pegar imagen) • '@' (archivo) • '@@' (buscar contenido) • '#' (sub-agentes) • '/' (comando)",
 		headerWorkingDirectory: 'Directorio de Trabajo: {directory}',
 		// Status messages
 		statusThinking: 'Pensando...',

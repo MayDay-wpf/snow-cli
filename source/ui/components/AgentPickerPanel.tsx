@@ -1,23 +1,21 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import {getSubAgents} from '../../utils/subAgentConfig.js';
+import type {SubAgent} from '../../utils/subAgentConfig.js';
 
 interface Props {
+	agents: SubAgent[];
 	selectedIndex: number;
 	visible: boolean;
 	maxHeight?: number;
 }
 
-const AgentPickerPanel = memo(({selectedIndex, visible, maxHeight}: Props) => {
+const AgentPickerPanel = memo(({agents, selectedIndex, visible, maxHeight}: Props) => {
 	// Fixed maximum display items to prevent rendering issues
 	const MAX_DISPLAY_ITEMS = 5;
 	const effectiveMaxItems = maxHeight
 		? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
 		: MAX_DISPLAY_ITEMS;
-
-	// Load sub-agents
-	const agents = useMemo(() => getSubAgents(), []);
 
 	// Limit displayed agents
 	const displayedAgents = useMemo(() => {
@@ -83,6 +81,9 @@ const AgentPickerPanel = memo(({selectedIndex, visible, maxHeight}: Props) => {
 							{agents.length > effectiveMaxItems &&
 								`(${selectedIndex + 1}/${agents.length})`}
 						</Text>
+						<Text color="gray" dimColor>
+						(Press ESC to close)
+					</Text>
 					</Box>
 					{displayedAgents.map((agent, index) => (
 						<Box key={agent.id} flexDirection="column" width="100%">
@@ -102,17 +103,17 @@ const AgentPickerPanel = memo(({selectedIndex, visible, maxHeight}: Props) => {
 							</Box>
 						</Box>
 					))}
-					{agents.length > effectiveMaxItems && (
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
-								↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
-							</Text>
-						</Box>
-					)}
-				</Box>
+				{agents.length > effectiveMaxItems && (
+					<Box marginTop={1}>
+						<Text color="gray" dimColor>
+							↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
+						</Text>
+					</Box>
+				)}
 			</Box>
 		</Box>
-	);
+	</Box>
+);
 });
 
 AgentPickerPanel.displayName = 'AgentPickerPanel';

@@ -37,14 +37,15 @@ export default function HelpPanel() {
 				</Text>
 			</Box>
 
-			<Box flexDirection="column" marginBottom={1}>
-				<Text bold color="green">
-					{t.helpPanel.quickAccessTitle}
-				</Text>
-				<Text> • {t.helpPanel.insertFiles}</Text>
-				<Text> • {t.helpPanel.searchContent}</Text>
-				<Text> • {t.helpPanel.showCommands}</Text>
-			</Box>
+		<Box flexDirection="column" marginBottom={1}>
+			<Text bold color="green">
+				{t.helpPanel.quickAccessTitle}
+			</Text>
+			<Text> • {t.helpPanel.insertFiles}</Text>
+			<Text> • {t.helpPanel.searchContent}</Text>
+			<Text> • {t.helpPanel.selectAgent}</Text>
+			<Text> • {t.helpPanel.showCommands}</Text>
+		</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="blue">

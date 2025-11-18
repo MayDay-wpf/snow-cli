@@ -166,7 +166,8 @@ export default function ChatInput({
 		setShowAgentPicker,
 		agentSelectedIndex,
 		setAgentSelectedIndex,
-		agents,
+		updateAgentPickerState,
+		getFilteredAgents,
 		handleAgentSelect,
 	} = useAgentPicker(buffer, triggerUpdate);
 
@@ -236,13 +237,14 @@ export default function ChatInput({
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
-		showAgentPicker,
-		setShowAgentPicker,
-		agentSelectedIndex,
-		setAgentSelectedIndex,
-		agents,
-		handleAgentSelect,
-		showTodoPicker,
+	showAgentPicker,
+	setShowAgentPicker,
+	agentSelectedIndex,
+	setAgentSelectedIndex,
+	updateAgentPickerState,
+	getFilteredAgents,
+	handleAgentSelect,
+	showTodoPicker,
 		setShowTodoPicker,
 		todoSelectedIndex,
 		setTodoSelectedIndex,
@@ -560,11 +562,12 @@ export default function ChatInput({
 							searchMode={searchMode}
 						/>
 					</Box>
-					<AgentPickerPanel
-						selectedIndex={agentSelectedIndex}
-						visible={showAgentPicker}
-						maxHeight={5}
-					/>
+				<AgentPickerPanel
+					agents={getFilteredAgents()}
+					selectedIndex={agentSelectedIndex}
+					visible={showAgentPicker}
+					maxHeight={5}
+				/>
 					<TodoPickerPanel
 						todos={todos}
 						selectedIndex={todoSelectedIndex}

@@ -314,6 +314,7 @@ export const en: TranslationKeys = {
 		quickAccessTitle: '🔍 Quick Access:',
 		insertFiles: '@ - Insert files from project',
 		searchContent: '@@ - Search file content',
+		selectAgent: '# - Select sub-agent for task execution',
 		showCommands: '/ - Show available commands',
 		navigationTitle: '📋 Navigation:',
 		navigateHistory: '↑/↓ - Navigate command/message history',
@@ -363,7 +364,7 @@ export const en: TranslationKeys = {
 		headerInterrupt: 'Press ESC during response to interrupt',
 		headerYolo: 'Press Shift+Tab: toggle YOLO',
 		headerShortcuts:
-			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '/' (commands)",
+			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerWorkingDirectory: 'Working directory: {directory}',
 		// Status messages
 		statusThinking: 'Thinking...',

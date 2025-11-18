@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Markdown rendering part change library
+            - fix some bugs
             
             ### Installation
             ```bash

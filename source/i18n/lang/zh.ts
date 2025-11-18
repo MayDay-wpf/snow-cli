@@ -290,6 +290,7 @@ export const zh: TranslationKeys = {
 		quickAccessTitle: '🔍 快速访问:',
 		insertFiles: '@ - 从项目插入文件',
 		searchContent: '@@ - 搜索文件内容',
+		selectAgent: '# - 选择子代理执行任务',
 		showCommands: '/ - 显示可用命令',
 		navigationTitle: '📋 导航:',
 		navigateHistory: '↑/↓ - 导航命令/消息历史',
@@ -337,7 +338,7 @@ export const zh: TranslationKeys = {
 		headerInterrupt: '在响应期间按 ESC 中断',
 		headerYolo: '按 Shift+Tab: 切换 YOLO',
 		headerShortcuts:
-			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '/' (命令)",
+			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目录: {directory}',
 		// Status messages
 		statusThinking: '思考中...',

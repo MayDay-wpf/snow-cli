@@ -290,6 +290,7 @@ export const ko: TranslationKeys = {
 		quickAccessTitle: '🔍 빠른 접근:',
 		insertFiles: '@ - 프로젝트에서 파일 삽입',
 		searchContent: '@@ - 파일 내용 검색',
+		selectAgent: '# - 작업 실행을 위한 하위 에이전트 선택',
 		showCommands: '/ - 사용 가능한 명령 표시',
 		navigationTitle: '📋 탐색:',
 		navigateHistory: '↑/↓ - 명령/메시지 기록 탐색',
@@ -337,7 +338,7 @@ export const ko: TranslationKeys = {
 		headerInterrupt: '응답 중 ESC로 중단',
 		headerYolo: 'Shift+Tab 누르기: YOLO 토글',
 		headerShortcuts:
-			"단축키: Ctrl+L (시작까지 삭제) • Ctrl+R (끝까지 삭제) • {pasteKey} (이미지 붙여넣기) • '@' (파일) • '@@' (내용 검색) • '/' (명령)",
+			"단축키: Ctrl+L (시작까지 삭제) • Ctrl+R (끝까지 삭제) • {pasteKey} (이미지 붙여넣기) • '@' (파일) • '@@' (내용 검색) • '#' (하위 에이전트) • '/' (명령)",
 		headerWorkingDirectory: '작업 디렉토리: {directory}',
 		// Status messages
 		statusThinking: '생각 중...',
