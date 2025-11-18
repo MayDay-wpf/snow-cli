@@ -592,6 +592,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 		message: string,
 		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => {
+		// Clear context percentage and usage when user performs history rollback
+		setCurrentContextPercentage(0);
+		currentContextPercentageRef.current = 0;
+		streamingState.setContextUsage(null);
+
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
 		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {

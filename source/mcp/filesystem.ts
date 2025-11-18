@@ -19,7 +19,12 @@ import type {
 	EditByLineSingleResult,
 	EditBySearchBatchResultItem,
 	EditByLineBatchResultItem,
+	SingleFileReadResult,
+	MultipleFilesReadResult,
+	MultimodalContent,
+	ImageContent,
 } from './types/filesystem.types.js';
+import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
 // Utility functions
 import {
 	calculateSimilarity,
@@ -39,13 +44,14 @@ import {
 	executeBatchOperation,
 } from './utils/filesystem/batch-operations.utils.js';
 import {tryFixPath} from './utils/filesystem/path-fixer.utils.js';
+import {readOfficeDocument} from './utils/filesystem/office-parser.utils.js';
 // ACE Code Search utilities for symbol parsing
 import {parseFileSymbols} from './utils/aceCodeSearch/symbol.utils.js';
 import type {CodeSymbol} from './types/aceCodeSearch.types.js';
 // Notebook utilities for automatic note retrieval
 import {queryNotebook} from '../utils/notebookManager.js';
 
-const {resolve, dirname, isAbsolute} = path;
+const {resolve, dirname, isAbsolute, extname} = path;
 
 /**
  * Filesystem MCP Service
@@ -77,6 +83,64 @@ export class FilesystemMCPService {
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = resolve(basePath);
+	}
+
+	/**
+	 * Check if a file is an image based on extension
+	 * @param filePath - Path to the file
+	 * @returns True if the file is an image
+	 */
+	private isImageFile(filePath: string): boolean {
+		const ext = extname(filePath).toLowerCase();
+		return ext in IMAGE_MIME_TYPES;
+	}
+
+	/**
+	 * Check if a file is an Office document based on extension
+	 * @param filePath - Path to the file
+	 * @returns True if the file is an Office document
+	 */
+	private isOfficeFile(filePath: string): boolean {
+		const ext = extname(filePath).toLowerCase();
+		return ext in OFFICE_FILE_TYPES;
+	}
+
+	/**
+	 * Get MIME type for an image file
+	 * @param filePath - Path to the file
+	 * @returns MIME type or undefined if not an image
+	 */
+	private getImageMimeType(filePath: string): string | undefined {
+		const ext = extname(filePath).toLowerCase();
+		return IMAGE_MIME_TYPES[ext as keyof typeof IMAGE_MIME_TYPES];
+	}
+
+	/**
+	 * Read image file and convert to base64
+	 * @param fullPath - Full path to the image file
+	 * @returns ImageContent object with base64 data
+	 */
+	private async readImageAsBase64(
+		fullPath: string,
+	): Promise<ImageContent | null> {
+		try {
+			const mimeType = this.getImageMimeType(fullPath);
+			if (!mimeType) {
+				return null;
+			}
+
+			const buffer = await fs.readFile(fullPath);
+			const base64Data = buffer.toString('base64');
+
+			return {
+				type: 'image',
+				data: base64Data,
+				mimeType,
+			};
+		} catch (error) {
+			console.error(`Failed to read image ${fullPath}:`, error);
+			return null;
+		}
 	}
 
 	/**
@@ -209,10 +273,11 @@ export class FilesystemMCPService {
 	/**
 	 * Get the content of a file with optional line range
 	 * Enhanced with symbol information for better AI context
+	 * Supports multimodal content (text + images)
 	 * @param filePath - Path to the file (relative to base path or absolute) or array of file paths or array of file config objects
 	 * @param startLine - Starting line number (1-indexed, inclusive, optional - defaults to 1). Used for single file or as default for array of strings
 	 * @param endLine - Ending line number (1-indexed, inclusive, optional - defaults to file end). Used for single file or as default for array of strings
-	 * @returns Object containing the requested content with line numbers and metadata
+	 * @returns Object containing the requested content with line numbers and metadata (supports multimodal content)
 	 * @throws Error if file doesn't exist or cannot be read
 	 */
 	async getFileContent(
@@ -222,34 +287,21 @@ export class FilesystemMCPService {
 			| Array<{path: string; startLine?: number; endLine?: number}>,
 		startLine?: number,
 		endLine?: number,
-	): Promise<
-		| {
-				content: string;
-				startLine: number;
-				endLine: number;
-				totalLines: number;
-		  }
-		| {
-				content: string;
-				files: Array<{
-					path: string;
-					startLine: number;
-					endLine: number;
-					totalLines: number;
-				}>;
-				totalFiles: number;
-		  }
-	> {
+	): Promise<SingleFileReadResult | MultipleFilesReadResult> {
 		try {
 			// Handle array of files
 			if (Array.isArray(filePath)) {
 				const filesData: Array<{
 					path: string;
-					startLine: number;
-					endLine: number;
-					totalLines: number;
+					startLine?: number;
+					endLine?: number;
+					totalLines?: number;
+					isImage?: boolean;
+					isDocument?: boolean;
+					fileType?: 'pdf' | 'word' | 'excel' | 'powerpoint';
+					mimeType?: string;
 				}> = [];
-				const allContents: string[] = [];
+				const multimodalContent: MultimodalContent = [];
 
 				for (const fileItem of filePath) {
 					try {
@@ -282,7 +334,10 @@ export class FilesystemMCPService {
 						if (stats.isDirectory()) {
 							const dirFiles = await this.listFiles(file);
 							const fileList = dirFiles.join('\n');
-							allContents.push(`📁 Directory: ${file}\n${fileList}`);
+							multimodalContent.push({
+								type: 'text',
+								text: `📁 Directory: ${file}\n${fileList}`,
+							});
 							filesData.push({
 								path: file,
 								startLine: 1,
@@ -290,6 +345,48 @@ export class FilesystemMCPService {
 								totalLines: dirFiles.length,
 							});
 							continue;
+						}
+
+						// Check if this is an image file
+						if (this.isImageFile(fullPath)) {
+							const imageContent = await this.readImageAsBase64(fullPath);
+							if (imageContent) {
+								// Add text description first
+								multimodalContent.push({
+									type: 'text',
+									text: `🖼️  Image: ${file} (${imageContent.mimeType})`,
+								});
+								// Add image content
+								multimodalContent.push(imageContent);
+
+								filesData.push({
+									path: file,
+									isImage: true,
+									mimeType: imageContent.mimeType,
+								});
+								continue;
+							}
+						}
+
+						// Check if this is an Office document file
+						if (this.isOfficeFile(fullPath)) {
+							const docContent = await readOfficeDocument(fullPath);
+							if (docContent) {
+								// Add text description first
+								multimodalContent.push({
+									type: 'text',
+									text: `📄 ${docContent.fileType.toUpperCase()} Document: ${file}`,
+								});
+								// Add document content
+								multimodalContent.push(docContent);
+
+								filesData.push({
+									path: file,
+									isDocument: true,
+									fileType: docContent.fileType,
+								});
+								continue;
+							}
 						}
 
 						const content = await fs.readFile(fullPath, 'utf-8');
@@ -350,7 +447,10 @@ export class FilesystemMCPService {
 							fileContent += notebookInfo;
 						}
 
-						allContents.push(fileContent);
+						multimodalContent.push({
+							type: 'text',
+							text: fileContent,
+						});
 
 						filesData.push({
 							path: file,
@@ -364,12 +464,15 @@ export class FilesystemMCPService {
 						// Extract file path for error message
 						const filePath =
 							typeof fileItem === 'string' ? fileItem : fileItem.path;
-						allContents.push(`❌ ${filePath}: ${errorMsg}`);
+						multimodalContent.push({
+							type: 'text',
+							text: `❌ ${filePath}: ${errorMsg}`,
+						});
 					}
 				}
 
 				return {
-					content: allContents.join('\n\n'),
+					content: multimodalContent,
 					files: filesData,
 					totalFiles: filePath.length,
 				};
@@ -397,6 +500,43 @@ export class FilesystemMCPService {
 				};
 			}
 
+			// Check if this is an image file
+			if (this.isImageFile(fullPath)) {
+				const imageContent = await this.readImageAsBase64(fullPath);
+				if (imageContent) {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `🖼️  Image: ${filePath} (${imageContent.mimeType})`,
+							},
+							imageContent,
+						],
+						isImage: true,
+						mimeType: imageContent.mimeType,
+					};
+				}
+			}
+
+			// Check if this is an Office document file
+			if (this.isOfficeFile(fullPath)) {
+				const docContent = await readOfficeDocument(fullPath);
+				if (docContent) {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `📄 ${docContent.fileType.toUpperCase()} Document: ${filePath}`,
+							},
+							docContent,
+						],
+						isDocument: true,
+						fileType: docContent.fileType,
+					};
+				}
+			}
+
+			// Text file processing
 			const content = await fs.readFile(fullPath, 'utf-8');
 
 			// Parse lines
@@ -1615,7 +1755,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers. **Read only when the actual file or folder path is found or provided by the user, do not make random guesses,Search for specific documents or line numbers before reading more accurately** **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for precise editing. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=500 reads lines 1-500 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:300}, {path:"b.ts", startLine:100, endLine:550}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/.',
+			'Read file content with line numbers and multimodal support (text + images + Office documents). **MULTIMODAL SUPPORT**: Automatically detects and processes: (1) Image files (.png, .jpg, .jpeg, .gif, .webp, .bmp, .svg) - returns base64-encoded image data, (2) Office documents (.pdf, .docx, .doc, .xlsx, .xls, .pptx, .ppt) - extracts and returns readable text content. All returned in MCP content format for AI analysis. **Read only when the actual file or folder path is found or provided by the user, do not make random guesses,Search for specific documents or line numbers before reading more accurately** **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for text files or multimodal content array for images/documents. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=500 reads lines 1-500 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:300}, {path:"b.ts", startLine:100, endLine:550}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/. (D) Image: filePath="screenshot.png" returns multimodal content with base64 image data. (E) Office: filePath="report.pdf" or "data.xlsx" extracts and returns document text.',
 		inputSchema: {
 			type: 'object',
 			properties: {

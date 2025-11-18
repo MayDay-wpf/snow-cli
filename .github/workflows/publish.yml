@@ -55,7 +55,9 @@ jobs:
             
             ### What's New
 
-            - fix some bugs
+            - Support for multi-modal file reading (images and Office documents)
+            - Added automatic detection and base64 encoding support for image files (PNG, JPG, GIF, etc.)
+            - Added parsing and text extraction functions for Office documents (PDF, Word, Excel, PPT)
             
             ### Installation
             ```bash

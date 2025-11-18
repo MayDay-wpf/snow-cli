@@ -270,11 +270,40 @@ function convertToResponseInput(
 
 		// Tool 消息：转换为 function_call_output
 		if (msg.role === 'tool' && msg.tool_call_id) {
-			result.push({
-				type: 'function_call_output',
-				call_id: msg.tool_call_id,
-				output: msg.content,
-			});
+			// Handle multimodal tool results with images
+			if (msg.images && msg.images.length > 0) {
+				// For Responses API, we need to include images in a structured way
+				// The output can be an array of content items
+				const outputContent: any[] = [];
+
+				// Add text content
+				if (msg.content) {
+					outputContent.push({
+						type: 'input_text',
+						text: msg.content,
+					});
+				}
+
+				// Add images as base64 data URLs (Responses API format)
+				for (const image of msg.images) {
+					outputContent.push({
+						type: 'input_image',
+						image_url: `data:${image.mimeType};base64,${image.data}`,
+					});
+				}
+
+				result.push({
+					type: 'function_call_output',
+					call_id: msg.tool_call_id,
+					output: outputContent,
+				});
+			} else {
+				result.push({
+					type: 'function_call_output',
+					call_id: msg.tool_call_id,
+					output: msg.content,
+				});
+			}
 			continue;
 		}
 	}

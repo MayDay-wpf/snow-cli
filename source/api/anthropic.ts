@@ -186,13 +186,46 @@ function convertToAnthropicMessages(
 		}
 
 		if (msg.role === 'tool' && msg.tool_call_id) {
+			// Build tool_result content - can be text or array with images
+			let toolResultContent: string | any[];
+
+			if (msg.images && msg.images.length > 0) {
+				// Multimodal tool result with images
+				const contentArray: any[] = [];
+
+				// Add text content first
+				if (msg.content) {
+					contentArray.push({
+						type: 'text',
+						text: msg.content,
+					});
+				}
+
+				// Add images
+				for (const image of msg.images) {
+					contentArray.push({
+						type: 'image',
+						source: {
+							type: 'base64',
+							media_type: image.mimeType,
+							data: image.data,
+						},
+					});
+				}
+
+				toolResultContent = contentArray;
+			} else {
+				// Text-only tool result
+				toolResultContent = msg.content;
+			}
+
 			anthropicMessages.push({
 				role: 'user',
 				content: [
 					{
 						type: 'tool_result',
 						tool_use_id: msg.tool_call_id,
-						content: msg.content,
+						content: toolResultContent,
 					},
 				],
 			});

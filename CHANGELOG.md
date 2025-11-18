@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.7
+
+- Support for multi-modal file reading (images and Office documents)
+- Added automatic detection and base64 encoding support for image files (PNG, JPG,GIF, etc.)
+- Added parsing and text extraction functions for Office documents (PDF, Word, Excel,PPT)
+
 ## v0.4.5
 
 - Markdown rendering part change library

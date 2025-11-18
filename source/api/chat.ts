@@ -136,6 +136,35 @@ function convertToOpenAIMessages(
 		}
 
 		if (msg.role === 'tool' && msg.tool_call_id) {
+			// Handle multimodal tool results with images
+			if (msg.images && msg.images.length > 0) {
+				const content: Array<{type: 'text' | 'image_url'; text?: string; image_url?: {url: string}}> = [];
+
+				// Add text content
+				if (msg.content) {
+					content.push({
+						type: 'text',
+						text: msg.content,
+					});
+				}
+
+				// Add images as base64 data URLs
+				for (const image of msg.images) {
+					content.push({
+						type: 'image_url',
+						image_url: {
+							url: `data:${image.mimeType};base64,${image.data}`,
+						},
+					});
+				}
+
+				return {
+					role: 'tool',
+					content,
+					tool_call_id: msg.tool_call_id,
+				} as ChatCompletionMessageParam;
+			}
+
 			return {
 				role: 'tool',
 				content: msg.content,

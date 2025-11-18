@@ -161,6 +161,19 @@ function convertToGeminiMessages(
 			// Tool response must be a valid object for Gemini API
 			// If content is a JSON string, parse it; otherwise wrap it in an object
 			let responseData: any;
+			const imageParts: any[] = [];
+
+			// Handle images from tool result
+			if (msg.images && msg.images.length > 0) {
+				for (const image of msg.images) {
+					imageParts.push({
+						inlineData: {
+							mimeType: image.mimeType,
+							data: image.data,
+						},
+					});
+				}
+			}
 
 			if (!msg.content) {
 				responseData = {};
@@ -209,16 +222,24 @@ function convertToGeminiMessages(
 				}
 			}
 
+			// Build parts array with functionResponse and optional images
+			const parts: any[] = [
+				{
+					functionResponse: {
+						name: functionName,
+						response: responseData,
+					},
+				},
+			];
+
+			// Add images as inline data parts
+			if (imageParts.length > 0) {
+				parts.push(...imageParts);
+			}
+
 			contents.push({
 				role: 'user',
-				parts: [
-					{
-						functionResponse: {
-							name: functionName,
-							response: responseData,
-						},
-					},
-				],
+				parts,
 			});
 			continue;
 		}
