@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.7",
+	"version": "0.4.8",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -86,6 +86,10 @@
 		"ts-node": "^10.9.1",
 		"typescript": "^5.0.3",
 		"xo": "^0.53.1"
+	},
+	"overrides": {
+		"glob": "^10.0.0",
+		"rimraf": "^5.0.0"
 	},
 	"ava": {
 		"extensions": {

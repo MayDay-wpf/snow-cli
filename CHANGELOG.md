@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.8
+
+- Update some outdated dependencies
+
 ## v0.4.7
 
 - Support for multi-modal file reading (images and Office documents)
