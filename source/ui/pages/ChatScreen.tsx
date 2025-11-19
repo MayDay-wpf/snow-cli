@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 import ChatInput from '../components/ChatInput.js';
 import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
@@ -69,6 +70,7 @@ type Props = {
 
 export default function ChatScreen({skipWelcome}: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
@@ -1391,7 +1393,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 					</Text>
 				</Box>
 				<Box marginTop={1}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.terminalMinHeight}
 					</Text>
 				</Box>
@@ -1431,13 +1433,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 										)}`;
 									})()}
 								</Text>
-								<Text color="gray" dimColor>
-									•{' '}
-									{t.chatScreen.headerWorkingDirectory.replace(
-										'{directory}',
-										workingDirectory,
-									)}
-								</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					•{' '}
+					{t.chatScreen.headerWorkingDirectory.replace(
+						'{directory}',
+						workingDirectory,
+					)}
+				</Text>
 							</Box>
 						</Box>
 					</Box>,
@@ -1523,26 +1525,26 @@ export default function ChatScreen({skipWelcome}: Props) {
 									flexDirection="column"
 									width={terminalWidth}
 								>
-									{/* Show parallel group indicator */}
-									{isFirstInGroup && (
-										<Box marginBottom={0}>
-											<Text color="#FF6EBF" dimColor>
-												┌─ Parallel execution
-											</Text>
-										</Box>
-									)}
+					{/* Show parallel group indicator */}
+					{isFirstInGroup && (
+						<Box marginBottom={0}>
+							<Text color={theme.colors.menuInfo} dimColor>
+								┌─ Parallel execution
+							</Text>
+						</Box>
+					)}
 
 									<Box>
-										<Text
-											color={
-												message.role === 'user'
-													? 'green'
-													: message.role === 'command'
-													? 'gray'
-													: toolStatusColor
-											}
-											bold
-										>
+				<Text
+					color={
+						message.role === 'user'
+							? 'green'
+							: message.role === 'command'
+							? theme.colors.menuSecondary
+							: toolStatusColor
+					}
+					bold
+				>
 											{shouldShowParallelIndicator && !isFirstInGroup
 												? '│'
 												: ''}
@@ -1554,33 +1556,33 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</Text>
 										<Box marginLeft={1} flexDirection="column">
 											{message.role === 'command' ? (
-												<>
-													<Text color="gray" dimColor>
-														└─ {message.commandName}
-													</Text>
+							<>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									└─ {message.commandName}
+								</Text>
 													{message.content && (
 														<Text color="white">{message.content}</Text>
 													)}
 												</>
 											) : (
 												<>
-													{message.role === 'user' || isToolMessage ? (
-														<Text
-															color={
-																message.role === 'user'
-																	? 'white'
-																	: message.content.startsWith('⚡')
-																	? 'yellow'
-																	: message.content.startsWith('✓')
-																	? 'green'
-																	: 'red'
-															}
-															backgroundColor={
-																message.role === 'user' ? '#4a4a4a' : undefined
-															}
-														>
-															{message.content || ' '}
-														</Text>
+							{message.role === 'user' || isToolMessage ? (
+								<Text
+									color={
+										message.role === 'user'
+											? 'white'
+											: message.content.startsWith('⚡')
+											? 'yellow'
+											: message.content.startsWith('✓')
+											? 'green'
+											: 'red'
+									}
+									backgroundColor={
+										message.role === 'user' ? theme.colors.border : undefined
+									}
+								>
+									{message.content || ' '}
+								</Text>
 													) : (
 														<MarkdownRenderer
 															content={message.content || ' '}
@@ -1595,45 +1597,45 @@ export default function ChatScreen({skipWelcome}: Props) {
 																return num.toString();
 															};
 
-															return (
-																<Text color="gray" dimColor>
-																	└─ Usage: In=
-																	{formatTokens(
-																		message.subAgentUsage.inputTokens,
-																	)}
-																	, Out=
-																	{formatTokens(
-																		message.subAgentUsage.outputTokens,
-																	)}
-																	{message.subAgentUsage.cacheReadInputTokens
-																		? `, Cache Read=${formatTokens(
-																				message.subAgentUsage
-																					.cacheReadInputTokens,
-																		  )}`
-																		: ''}
-																	{message.subAgentUsage
-																		.cacheCreationInputTokens
-																		? `, Cache Create=${formatTokens(
-																				message.subAgentUsage
-																					.cacheCreationInputTokens,
-																		  )}`
-																		: ''}
-																</Text>
-															);
+							return (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									└─ Usage: In=
+									{formatTokens(
+										message.subAgentUsage.inputTokens,
+									)}
+									, Out=
+									{formatTokens(
+										message.subAgentUsage.outputTokens,
+									)}
+									{message.subAgentUsage.cacheReadInputTokens
+										? `, Cache Read=${formatTokens(
+												message.subAgentUsage
+													.cacheReadInputTokens,
+										  )}`
+										: ''}
+									{message.subAgentUsage
+										.cacheCreationInputTokens
+										? `, Cache Create=${formatTokens(
+												message.subAgentUsage
+													.cacheCreationInputTokens,
+										  )}`
+										: ''}
+								</Text>
+							);
 														})()}
 													{message.toolDisplay &&
 														message.toolDisplay.args.length > 0 &&
 														// Hide tool arguments for sub-agent internal tools
 														!message.subAgentInternal && (
 															<Box flexDirection="column">
-																{message.toolDisplay.args.map(
-																	(arg, argIndex) => (
-																		<Text key={argIndex} color="gray" dimColor>
-																			{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-																			{arg.value}
-																		</Text>
-																	),
-																)}
+								{message.toolDisplay.args.map(
+									(arg, argIndex) => (
+										<Text key={argIndex} color={theme.colors.menuSecondary} dimColor>
+											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+											{arg.value}
+										</Text>
+									),
+								)}
 															</Box>
 														)}
 													{message.toolCall &&
@@ -1788,44 +1790,44 @@ export default function ChatScreen({skipWelcome}: Props) {
 														message.content.includes(
 															'Tool execution rejected by user:',
 														) && (
-															<Box flexDirection="column" marginTop={1}>
-																<Text color="yellow" dimColor>
-																	Rejection reason:
-																</Text>
-																<Text color="gray" dimColor>
-																	└─{' '}
-																	{message.content
-																		.split(
-																			'Tool execution rejected by user:',
-																		)[1]
-																		?.trim() || 'No reason provided'}
-																</Text>
-															</Box>
+							<Box flexDirection="column" marginTop={1}>
+								<Text color="yellow" dimColor>
+									Rejection reason:
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									└─{' '}
+									{message.content
+										.split(
+											'Tool execution rejected by user:',
+										)[1]
+										?.trim() || 'No reason provided'}
+								</Text>
+							</Box>
 														)}
-													{message.files && message.files.length > 0 && (
-														<Box flexDirection="column">
-															{message.files.map((file, fileIndex) => (
-																<Text key={fileIndex} color="gray" dimColor>
-																	└─ {file.path}
-																	{file.exists
-																		? ` (total line ${file.lineCount})`
-																		: ' (file not found)'}
-																</Text>
-															))}
-														</Box>
-													)}
-													{/* Images for user messages */}
-													{message.role === 'user' &&
-														message.images &&
-														message.images.length > 0 && (
-															<Box marginTop={1} flexDirection="column">
-																{message.images.map((_image, imageIndex) => (
-																	<Text key={imageIndex} color="gray" dimColor>
-																		└─ [image #{imageIndex + 1}]
-																	</Text>
-																))}
-															</Box>
-														)}
+						{message.files && message.files.length > 0 && (
+							<Box flexDirection="column">
+								{message.files.map((file, fileIndex) => (
+									<Text key={fileIndex} color={theme.colors.menuSecondary} dimColor>
+										└─ {file.path}
+										{file.exists
+											? ` (total line ${file.lineCount})`
+											: ' (file not found)'}
+									</Text>
+								))}
+							</Box>
+						)}
+						{/* Images for user messages */}
+						{message.role === 'user' &&
+						message.images &&
+						message.images.length > 0 && (
+							<Box marginTop={1} flexDirection="column">
+								{message.images.map((_image, imageIndex) => (
+									<Text key={imageIndex} color={theme.colors.menuSecondary} dimColor>
+										└─ [image #{imageIndex + 1}]
+									</Text>
+								))}
+							</Box>
+						)}
 													{message.discontinued && (
 														<Text color="red" bold>
 															└─ user discontinue
@@ -1836,14 +1838,14 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</Box>
 									</Box>
 
-									{/* Show parallel group end indicator */}
-									{isLastInGroup && (
-										<Box marginTop={0}>
-											<Text color="#FF6EBF" dimColor>
-												└─ End parallel execution
-											</Text>
-										</Box>
-									)}
+				{/* Show parallel group end indicator */}
+				{isLastInGroup && (
+					<Box marginTop={0}>
+						<Text color={theme.colors.menuInfo} dimColor>
+							└─ End parallel execution
+						</Text>
+					</Box>
+				)}
 								</Box>
 							);
 						}),
@@ -1852,19 +1854,19 @@ export default function ChatScreen({skipWelcome}: Props) {
 				{item => item}
 			</Static>
 
-			{/* Show loading indicator when streaming or saving */}
-			{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
-				<Box marginBottom={1} paddingX={1} width={terminalWidth}>
-					<Text
-						color={
-							['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'][
-								streamingState.animationFrame
-							] as any
-						}
-						bold
-					>
-						❆
-					</Text>
+		{/* Show loading indicator when streaming or saving */}
+		{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
+			<Box marginBottom={1} paddingX={1} width={terminalWidth}>
+				<Text
+					color={
+						[theme.colors.menuInfo, theme.colors.success, theme.colors.menuSelected, theme.colors.menuInfo, theme.colors.menuSecondary][
+							streamingState.animationFrame
+						] as any
+					}
+					bold
+				>
+					❆
+				</Text>
 					<Box marginLeft={1} marginBottom={1} flexDirection="column">
 						{streamingState.isStreaming ? (
 							<>
@@ -1895,27 +1897,27 @@ export default function ChatScreen({skipWelcome}: Props) {
 									// Codebase search retry status
 									<Box flexDirection="column">
 										<Text color="cyan" dimColor>
-											⏏ Codebase Search (Attempt{' '}
-											{streamingState.codebaseSearchStatus.attempt}/
-											{streamingState.codebaseSearchStatus.maxAttempts})
-										</Text>
-										<Text color="gray" dimColor>
-											{streamingState.codebaseSearchStatus.message}
-										</Text>
-									</Box>
-								) : (
-									// Normal thinking status
-									<Text color="gray" dimColor>
-										<ShimmerText
-											text={
-												streamingState.isReasoning
-													? t.chatScreen.statusDeepThinking
-													: streamingState.streamTokenCount > 0
-													? t.chatScreen.statusWriting
-													: t.chatScreen.statusThinking
-											}
-										/>{' '}
-										({formatElapsedTime(streamingState.elapsedSeconds)}
+							⏏ Codebase Search (Attempt{' '}
+							{streamingState.codebaseSearchStatus.attempt}/
+							{streamingState.codebaseSearchStatus.maxAttempts})
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{streamingState.codebaseSearchStatus.message}
+						</Text>
+					</Box>
+				) : (
+					// Normal thinking status
+					<Text color={theme.colors.menuSecondary} dimColor>
+						<ShimmerText
+							text={
+								streamingState.isReasoning
+									? t.chatScreen.statusDeepThinking
+									: streamingState.streamTokenCount > 0
+									? t.chatScreen.statusWriting
+									: t.chatScreen.statusThinking
+							}
+						/>{' '}
+						({formatElapsedTime(streamingState.elapsedSeconds)}
 										{' · '}
 										<Text color="cyan">
 											↓{' '}
@@ -1930,10 +1932,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 									</Text>
 								)}
 							</>
-						) : (
-							<Text color="gray" dimColor>
-								{t.chatScreen.sessionCreating}
-							</Text>
+				) : (
+			<Text color={theme.colors.menuSecondary} dimColor>
+				{t.chatScreen.sessionCreating}
+			</Text>
 						)}
 					</Box>
 				</Box>
@@ -1970,29 +1972,29 @@ export default function ChatScreen({skipWelcome}: Props) {
 				</Box>
 			)}
 
-			{/* Show MCP info panel if active - replaces input */}
-			{showMcpPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<MCPInfoPanel />
-					<Box marginTop={1}>
-						<Text color="gray" dimColor>
-							{t.chatScreen.pressEscToClose}
-						</Text>
-					</Box>
+		{/* Show MCP info panel if active - replaces input */}
+		{showMcpPanel && (
+			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+				<MCPInfoPanel />
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.chatScreen.pressEscToClose}
+					</Text>
 				</Box>
-			)}
+			</Box>
+		)}
 
-			{/* Show usage panel if active - replaces input */}
-			{showUsagePanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<UsagePanel />
-					<Box marginTop={1}>
-						<Text color="gray" dimColor>
-							{t.chatScreen.pressEscToClose}
-						</Text>
-					</Box>
+		{/* Show usage panel if active - replaces input */}
+		{showUsagePanel && (
+			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+				<UsagePanel />
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.chatScreen.pressEscToClose}
+					</Text>
 				</Box>
-			)}
+			</Box>
+		)}
 
 			{/* Show help panel if active - replaces input */}
 			{showHelpPanel && (
@@ -2048,18 +2050,18 @@ export default function ChatScreen({skipWelcome}: Props) {
 						{/* IDE connection status indicator */}
 						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
 							<Box marginTop={1} paddingX={1}>
-								<Text
-									color={
-										vscodeState.vscodeConnectionStatus === 'connecting'
-											? 'yellow'
-											: vscodeState.vscodeConnectionStatus === 'connected'
-											? 'green'
-											: vscodeState.vscodeConnectionStatus === 'error'
-											? 'red'
-											: 'gray'
-									}
-									dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
-								>
+			<Text
+				color={
+					vscodeState.vscodeConnectionStatus === 'connecting'
+						? 'yellow'
+						: vscodeState.vscodeConnectionStatus === 'connected'
+						? 'green'
+						: vscodeState.vscodeConnectionStatus === 'error'
+						? 'red'
+						: theme.colors.menuSecondary
+				}
+				dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
+			>
 									●{' '}
 									{vscodeState.vscodeConnectionStatus === 'connecting'
 										? t.chatScreen.ideConnecting

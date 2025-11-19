@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../utils/sensitiveCommandManager.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 export type ConfirmationResult =
 	| 'approve'
@@ -80,6 +81,7 @@ export default function ToolConfirmation({
 	allTools,
 	onConfirm,
 }: Props) {
+	const {theme} = useTheme();
 	const [hasSelected, setHasSelected] = useState(false);
 	const [showRejectInput, setShowRejectInput] = useState(false);
 	const [rejectReason, setRejectReason] = useState('');
@@ -189,11 +191,11 @@ export default function ToolConfirmation({
 			marginX={1}
 			marginY={1}
 			borderStyle={'round'}
-			borderColor={'yellow'}
+			borderColor={theme.colors.warning}
 			paddingX={1}
 		>
 			<Box marginBottom={1}>
-				<Text bold color="yellow">
+				<Text bold color={theme.colors.warning}>
 					[Tool Confirmation]
 				</Text>
 			</Box>
@@ -201,23 +203,23 @@ export default function ToolConfirmation({
 			{/* Display single tool */}
 			{!formattedAllTools && (
 				<>
+			<Box marginBottom={1}>
+				<Text>
+					Tool:{' '}
+					<Text bold color={theme.colors.menuInfo}>
+						{toolName}
+					</Text>
+				</Text>
+			</Box>
+
+			{/* Display sensitive command warning */}
+			{sensitiveCommandCheck.isSensitive && (
+				<Box flexDirection="column" marginBottom={1}>
 					<Box marginBottom={1}>
-						<Text>
-							Tool:{' '}
-							<Text bold color="cyan">
-								{toolName}
-							</Text>
+						<Text bold color={theme.colors.error}>
+							SENSITIVE COMMAND DETECTED
 						</Text>
 					</Box>
-
-					{/* Display sensitive command warning */}
-					{sensitiveCommandCheck.isSensitive && (
-						<Box flexDirection="column" marginBottom={1}>
-							<Box marginBottom={1}>
-								<Text bold color="red">
-									SENSITIVE COMMAND DETECTED
-								</Text>
-							</Box>
 
 							<Box flexDirection="column" gap={0}>
 								<Box>
@@ -235,67 +237,67 @@ export default function ToolConfirmation({
 								</Box>
 							</Box>
 
-							<Box marginTop={1} paddingX={1} paddingY={0}>
-								<Text color="yellow" italic>
-									This command requires confirmation even in
-									YOLO/Always-Approved mode
-								</Text>
-							</Box>
-						</Box>
-					)}
-
-					{/* Display tool arguments in tree format */}
-					{formattedArgs && formattedArgs.length > 0 && (
-						<Box flexDirection="column" marginBottom={1}>
-							<Text dimColor>Arguments:</Text>
-							{formattedArgs.map((arg, index) => (
-								<Box key={index} flexDirection="column">
-									<Text color="gray" dimColor>
-										{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-										<Text color="white">{arg.value}</Text>
-									</Text>
-								</Box>
-							))}
-						</Box>
-					)}
-				</>
-			)}
-
-			{/* Display multiple tools */}
-			{formattedAllTools && (
-				<Box flexDirection="column" marginBottom={1}>
-					<Box marginBottom={1}>
-						<Text>
-							Tools:{' '}
-							<Text bold color="cyan">
-								{formattedAllTools.length} tools in parallel
-							</Text>
+					<Box marginTop={1} paddingX={1} paddingY={0}>
+						<Text color={theme.colors.warning} italic>
+							This command requires confirmation even in
+							YOLO/Always-Approved mode
 						</Text>
 					</Box>
+						</Box>
+					)}
 
-					{formattedAllTools.map((tool, toolIndex) => (
-						<Box
-							key={toolIndex}
-							flexDirection="column"
-							marginBottom={toolIndex < formattedAllTools.length - 1 ? 1 : 0}
-						>
-							<Text color="cyan" bold>
-								{toolIndex + 1}. {tool.name}
+			{/* Display tool arguments in tree format */}
+			{formattedArgs && formattedArgs.length > 0 && (
+				<Box flexDirection="column" marginBottom={1}>
+					<Text dimColor>Arguments:</Text>
+					{formattedArgs.map((arg, index) => (
+						<Box key={index} flexDirection="column">
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+								<Text color="white">{arg.value}</Text>
 							</Text>
-							{tool.args.length > 0 && (
-								<Box flexDirection="column" paddingLeft={2}>
-									{tool.args.map((arg, argIndex) => (
-										<Text key={argIndex} color="gray" dimColor>
-											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-											<Text color="white">{arg.value}</Text>
-										</Text>
-									))}
-								</Box>
-							)}
 						</Box>
 					))}
 				</Box>
 			)}
+				</>
+			)}
+
+		{/* Display multiple tools */}
+		{formattedAllTools && (
+			<Box flexDirection="column" marginBottom={1}>
+				<Box marginBottom={1}>
+					<Text>
+						Tools:{' '}
+						<Text bold color={theme.colors.menuInfo}>
+							{formattedAllTools.length} tools in parallel
+						</Text>
+					</Text>
+				</Box>
+
+				{formattedAllTools.map((tool, toolIndex) => (
+					<Box
+						key={toolIndex}
+						flexDirection="column"
+						marginBottom={toolIndex < formattedAllTools.length - 1 ? 1 : 0}
+					>
+						<Text color={theme.colors.menuInfo} bold>
+							{toolIndex + 1}. {tool.name}
+						</Text>
+						{tool.args.length > 0 && (
+							<Box flexDirection="column" paddingLeft={2}>
+								{tool.args.map((arg, argIndex) => (
+									<Text key={argIndex} color={theme.colors.menuSecondary} dimColor>
+										{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+										<Text color="white">{arg.value}</Text>
+									</Text>
+								))}
+							</Box>
+						)}
+					</Box>
+				))}
+			</Box>
+		)}
 
 			<Box marginBottom={1}>
 				<Text dimColor>Select action:</Text>
@@ -305,30 +307,30 @@ export default function ToolConfirmation({
 				<SelectInput items={items} onSelect={handleSelect} />
 			)}
 
-			{showRejectInput && !hasSelected && (
-				<Box flexDirection="column">
-					<Box marginBottom={1}>
-						<Text color="yellow">Enter rejection reason:</Text>
-					</Box>
-					<Box marginBottom={1}>
-						<Text color="cyan">&gt; </Text>
-						<TextInput
-							value={rejectReason}
-							onChange={setRejectReason}
-							onSubmit={handleRejectReasonSubmit}
-						/>
-					</Box>
-					<Box>
-						<Text dimColor>Press Enter to submit</Text>
-					</Box>
+		{showRejectInput && !hasSelected && (
+			<Box flexDirection="column">
+				<Box marginBottom={1}>
+					<Text color={theme.colors.warning}>Enter rejection reason:</Text>
 				</Box>
-			)}
-
-			{hasSelected && (
+				<Box marginBottom={1}>
+					<Text color={theme.colors.menuInfo}>&gt; </Text>
+					<TextInput
+						value={rejectReason}
+						onChange={setRejectReason}
+						onSubmit={handleRejectReasonSubmit}
+					/>
+				</Box>
 				<Box>
-					<Text color="green">Confirmed</Text>
+					<Text dimColor>Press Enter to submit</Text>
 				</Box>
-			)}
+			</Box>
+		)}
+
+		{hasSelected && (
+			<Box>
+				<Text color={theme.colors.success}>Confirmed</Text>
+			</Box>
+		)}
 		</Box>
 	);
 }

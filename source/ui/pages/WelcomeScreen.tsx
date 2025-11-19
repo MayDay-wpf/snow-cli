@@ -14,6 +14,7 @@ import CodeBaseConfigScreen from './CodeBaseConfigScreen.js';
 import SystemPromptConfigScreen from './SystemPromptConfigScreen.js';
 import CustomHeadersScreen from './CustomHeadersScreen.js';
 import LanguageSettingsScreen from './LanguageSettingsScreen.js';
+import ThemeSettingsScreen from './ThemeSettingsScreen.js';
 import {useI18n} from '../../i18n/index.js';
 
 type Props = {
@@ -32,7 +33,8 @@ type InlineView =
 	| 'sensitive-commands'
 	| 'systemprompt'
 	| 'customheaders'
-	| 'language-settings';
+	| 'language-settings'
+	| 'theme-settings';
 
 export default function WelcomeScreen({
 	version = '1.0.0',
@@ -93,17 +95,22 @@ export default function WelcomeScreen({
 				value: 'sensitive-commands',
 				infoText: t.welcome.sensitiveCommandsInfo,
 			},
-			{
-				label: t.welcome.languageSettings,
-				value: 'language',
-				infoText: t.welcome.languageSettingsInfo,
-			},
-			{
-				label: t.welcome.exit,
-				value: 'exit',
-				color: 'rgb(232, 131, 136)',
-				infoText: t.welcome.exitInfo,
-			},
+		{
+			label: t.welcome.languageSettings,
+			value: 'language',
+			infoText: t.welcome.languageSettingsInfo,
+		},
+		{
+			label: t.welcome.themeSettings,
+			value: 'theme',
+			infoText: t.welcome.themeSettingsInfo,
+		},
+		{
+			label: t.welcome.exit,
+			value: 'exit',
+			color: 'rgb(232, 131, 136)',
+			infoText: t.welcome.exitInfo,
+		},
 		],
 		[t],
 	);
@@ -131,12 +138,14 @@ export default function WelcomeScreen({
 				setInlineView('systemprompt');
 			} else if (value === 'customheaders') {
 				setInlineView('customheaders');
-			} else if (value === 'language') {
-				setInlineView('language-settings');
-			} else {
-				// Pass through to parent for other actions (chat, exit, etc.)
-				onMenuSelect?.(value);
-			}
+		} else if (value === 'language') {
+			setInlineView('language-settings');
+		} else if (value === 'theme') {
+			setInlineView('theme-settings');
+		} else {
+			// Pass through to parent for other actions (chat, exit, etc.)
+			onMenuSelect?.(value);
+		}
 		},
 		[onMenuSelect],
 	);
@@ -301,11 +310,14 @@ export default function WelcomeScreen({
 					<CustomHeadersScreen onBack={handleBackToMenu} />
 				</Box>
 			)}
-			{inlineView === 'language-settings' && (
-				<Box paddingX={1}>
-					<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
-				</Box>
-			)}
+	{inlineView === 'language-settings' && (
+		<Box paddingX={1}>
+			<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
 		</Box>
+	)}
+	{inlineView === 'theme-settings' && (
+		<ThemeSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
+	)}
+</Box>
 	);
 }

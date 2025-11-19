@@ -14,6 +14,7 @@ import {
 import {onNavigate} from './hooks/useGlobalNavigation.js';
 import {useTerminalSize} from './hooks/useTerminalSize.js';
 import {I18nProvider} from './i18n/index.js';
+import {ThemeProvider} from './ui/contexts/ThemeContext.js';
 
 type Props = {
 	version?: string;
@@ -136,17 +137,21 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	if (headlessPrompt) {
 		return (
 			<I18nProvider>
-				<HeadlessModeScreen
-					prompt={headlessPrompt}
-					onComplete={() => process.exit(0)}
-				/>
+				<ThemeProvider>
+					<HeadlessModeScreen
+						prompt={headlessPrompt}
+						onComplete={() => process.exit(0)}
+					/>
+				</ThemeProvider>
 			</I18nProvider>
 		);
 	}
 
 	return (
 		<I18nProvider>
-			<AppContent version={version} skipWelcome={skipWelcome} />
+			<ThemeProvider>
+				<AppContent version={version} skipWelcome={skipWelcome} />
+			</ThemeProvider>
 		</I18nProvider>
 	);
 }

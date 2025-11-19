@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import Menu from '../components/Menu.js';
 import {useI18n} from '../../i18n/index.js';
 import type {Language} from '../../utils/languageConfig.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {
 	onBack: () => void;
@@ -14,6 +15,7 @@ export default function LanguageSettingsScreen({
 	inlineMode = false,
 }: Props) {
 	const {language, setLanguage} = useI18n();
+	const {theme} = useTheme();
 	const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
 
 	const languageOptions = [
@@ -47,13 +49,13 @@ export default function LanguageSettingsScreen({
 			value: 'es',
 			infoText: 'Cambiar a Español',
 		},
-		{
-			label: '← Back',
-			value: 'back',
-			color: 'gray',
-			infoText: 'Return to main menu',
-		},
-	];
+	{
+		label: '← Back',
+		value: 'back',
+		color: theme.colors.menuSecondary,
+		infoText: 'Return to main menu',
+	},
+];
 
 	const handleSelect = useCallback(
 		(value: string) => {
@@ -84,25 +86,25 @@ export default function LanguageSettingsScreen({
 
 	return (
 		<Box flexDirection="column" paddingX={1}>
-			{!inlineMode && (
-				<Box
-					borderStyle="round"
-					borderColor="cyan"
-					paddingX={1}
-					marginBottom={1}
-				>
-					<Box flexDirection="column">
-						<Text bold color="cyan">
-							Language Settings / 语言设置
-						</Text>
-					</Box>
-				</Box>
-			)}
+	{!inlineMode && (
+		<Box
+			borderStyle="round"
+			borderColor={theme.colors.menuInfo}
+			paddingX={1}
+			marginBottom={1}
+		>
+			<Box flexDirection="column">
+				<Text bold color={theme.colors.menuInfo}>
+					Language Settings / 语言设置
+				</Text>
+			</Box>
+		</Box>
+	)}
 
 			<Box flexDirection="column">
-				<Box paddingX={1}>
-					<Text color="gray" dimColor>
-						Current:{' '}
+		<Box paddingX={1}>
+			<Text color={theme.colors.menuSecondary} dimColor>
+				Current:{' '}
 						{selectedLanguage === 'en'
 							? 'English'
 							: selectedLanguage === 'zh'

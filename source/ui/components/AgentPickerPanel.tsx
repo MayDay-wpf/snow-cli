@@ -2,6 +2,7 @@ import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {SubAgent} from '../../utils/subAgentConfig.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 interface Props {
 	agents: SubAgent[];
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const AgentPickerPanel = memo(({agents, selectedIndex, visible, maxHeight}: Props) => {
+	const {theme} = useTheme();
 	// Fixed maximum display items to prevent rendering issues
 	const MAX_DISPLAY_ITEMS = 5;
 	const effectiveMaxItems = maxHeight
@@ -55,11 +57,11 @@ const AgentPickerPanel = memo(({agents, selectedIndex, visible, maxHeight}: Prop
 			<Box flexDirection="column">
 				<Box width="100%">
 					<Box flexDirection="column" width="100%">
-						<Box>
-							<Text color="yellow" bold>
-								Sub-Agent Selection
-							</Text>
-						</Box>
+				<Box>
+					<Text color={theme.colors.warning} bold>
+						Sub-Agent Selection
+					</Text>
+				</Box>
 						<Box marginTop={1}>
 							<Alert variant="warning">
 								No sub-agents configured. Please configure sub-agents first.
@@ -75,41 +77,41 @@ const AgentPickerPanel = memo(({agents, selectedIndex, visible, maxHeight}: Prop
 		<Box flexDirection="column">
 			<Box width="100%">
 				<Box flexDirection="column" width="100%">
-					<Box>
-						<Text color="yellow" bold>
-							Select Sub-Agent{' '}
-							{agents.length > effectiveMaxItems &&
-								`(${selectedIndex + 1}/${agents.length})`}
-						</Text>
-						<Text color="gray" dimColor>
-						(Press ESC to close)
-					</Text>
-					</Box>
+			<Box>
+				<Text color={theme.colors.warning} bold>
+					Select Sub-Agent{' '}
+					{agents.length > effectiveMaxItems &&
+						`(${selectedIndex + 1}/${agents.length})`}
+				</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
+				(Press ESC to close)
+			</Text>
+			</Box>
 					{displayedAgents.map((agent, index) => (
 						<Box key={agent.id} flexDirection="column" width="100%">
-							<Text
-								color={index === displayedSelectedIndex ? 'green' : 'gray'}
-								bold
-							>
-								{index === displayedSelectedIndex ? '❯ ' : '  '}#{agent.name}
-							</Text>
-							<Box marginLeft={3}>
-								<Text
-									color={index === displayedSelectedIndex ? 'green' : 'gray'}
-									dimColor
-								>
-									└─ {agent.description || 'No description'}
-								</Text>
-							</Box>
+				<Text
+					color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
+					bold
+				>
+					{index === displayedSelectedIndex ? '❯ ' : '  '}#{agent.name}
+				</Text>
+				<Box marginLeft={3}>
+					<Text
+						color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
+						dimColor
+					>
+						└─ {agent.description || 'No description'}
+					</Text>
+				</Box>
 						</Box>
 					))}
-				{agents.length > effectiveMaxItems && (
-					<Box marginTop={1}>
-						<Text color="gray" dimColor>
-							↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
-						</Text>
-					</Box>
-				)}
+		{agents.length > effectiveMaxItems && (
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
+				</Text>
+			</Box>
+		)}
 			</Box>
 		</Box>
 	</Box>

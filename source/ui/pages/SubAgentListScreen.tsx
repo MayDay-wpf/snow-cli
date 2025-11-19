@@ -7,6 +7,7 @@ import {
 	type SubAgent,
 } from '../../utils/subAgentConfig.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {
 	onBack: () => void;
@@ -21,6 +22,7 @@ export default function SubAgentListScreen({
 	onEdit,
 	inlineMode = false,
 }: Props) {
+	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
 	const [agents, setAgents] = useState<SubAgent[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -108,13 +110,13 @@ export default function SubAgentListScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{!inlineMode && (
-				<Box marginBottom={1}>
-					<Text bold color="cyan">
-						❆ Sub-Agent Management
-					</Text>
-				</Box>
-			)}
+		{!inlineMode && (
+			<Box marginBottom={1}>
+				<Text bold color={theme.colors.menuInfo}>
+					❆ Sub-Agent Management
+				</Text>
+			</Box>
+		)}
 
 			{deleteSuccess && (
 				<Box marginBottom={1}>
@@ -131,58 +133,58 @@ export default function SubAgentListScreen({
 			)}
 
 			<Box flexDirection="column">
-				{agents.length === 0 ? (
-					<Box flexDirection="column">
-						<Text color="gray">No sub-agents configured yet.</Text>
-						<Text color="gray">Press 'A' to add a new sub-agent.</Text>
-					</Box>
-				) : (
-					<Box flexDirection="column">
-						<Text bold color="cyan">
-							Sub-Agents ({agents.length}):
-						</Text>
+			{agents.length === 0 ? (
+				<Box flexDirection="column">
+					<Text color={theme.colors.menuSecondary}>No sub-agents configured yet.</Text>
+					<Text color={theme.colors.menuSecondary}>Press 'A' to add a new sub-agent.</Text>
+				</Box>
+			) : (
+				<Box flexDirection="column">
+					<Text bold color={theme.colors.menuInfo}>
+						Sub-Agents ({agents.length}):
+					</Text>
 
-						{agents.map((agent, index) => {
-							const isSelected = index === selectedIndex;
-							return (
-								<Box key={agent.id} flexDirection="column">
-									<Box>
-										<Text
-											color={isSelected ? 'green' : 'white'}
-											bold={isSelected}
-										>
-											{isSelected ? '❯ ' : '  '}
-											{agent.name}
+					{agents.map((agent, index) => {
+						const isSelected = index === selectedIndex;
+						return (
+							<Box key={agent.id} flexDirection="column">
+								<Box>
+									<Text
+										color={isSelected ? theme.colors.menuSelected : theme.colors.menuNormal}
+										bold={isSelected}
+									>
+										{isSelected ? '❯ ' : '  '}
+										{agent.name}
+									</Text>
+								</Box>
+								{isSelected && (
+									<Box flexDirection="column" marginLeft={3}>
+										<Text color={theme.colors.menuSecondary}>
+											Description:{' '}
+											{truncateText(
+												agent.description || 'No description',
+												'Description: '.length,
+											)}
+										</Text>
+										<Text color={theme.colors.menuSecondary}>
+											Tools: {agent.tools.length} selected
+										</Text>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											Updated: {new Date(agent.updatedAt).toLocaleString()}
 										</Text>
 									</Box>
-									{isSelected && (
-										<Box flexDirection="column" marginLeft={3}>
-											<Text color="gray">
-												Description:{' '}
-												{truncateText(
-													agent.description || 'No description',
-													'Description: '.length,
-												)}
-											</Text>
-											<Text color="gray">
-												Tools: {agent.tools.length} selected
-											</Text>
-											<Text color="gray" dimColor>
-												Updated: {new Date(agent.updatedAt).toLocaleString()}
-											</Text>
-										</Box>
-									)}
-								</Box>
-							);
-						})}
+								)}
+							</Box>
+						);
+					})}
 					</Box>
 				)}
 
-				<Box marginTop={1}>
-					<Text color="gray" dimColor>
-						↑↓: Navigate | Enter: Edit | A: Add New | D: Delete | Esc: Back
-					</Text>
-				</Box>
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					↑↓: Navigate | Enter: Edit | A: Add New | D: Delete | Esc: Back
+				</Text>
+			</Box>
 			</Box>
 		</Box>
 	);

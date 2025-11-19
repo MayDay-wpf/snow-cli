@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {Box, Text} from 'ink';
 import * as Diff from 'diff';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 interface Props {
 	oldContent?: string;
@@ -44,6 +45,8 @@ export default function DiffViewer({
 	completeNewContent,
 	startLineNumber = 1,
 }: Props) {
+	const {theme} = useTheme();
+
 	// If complete file contents are provided, use them for intelligent diff
 	const useCompleteContent = completeOldContent && completeNewContent;
 	const diffOldContent = useCompleteContent
@@ -70,15 +73,15 @@ export default function DiffViewer({
 					{filename && <Text color="cyan"> {filename}</Text>}
 				</Box>
 				<Box flexDirection="column">
-					{allLines.map((line, index) => (
-						<Text key={index} color="white" backgroundColor="#006400">
-							+ {line}
-						</Text>
-					))}
+			{allLines.map((line, index) => (
+				<Text key={index} color="white" backgroundColor={theme.colors.diffAdded}>
+					+ {line}
+				</Text>
+			))}
 				</Box>
 			</Box>
 		);
-	}, [isNewFile, diffNewContent, filename]);
+	}, [isNewFile, diffNewContent, filename, theme.colors.text, theme.colors.diffAdded]);
 
 	if (isNewFile) {
 		return newFileContent;
@@ -220,29 +223,29 @@ export default function DiffViewer({
 								? String(lineNum).padStart(4, ' ')
 								: '    ';
 
-							if (change.type === 'added') {
-								return (
-									<Text
-										key={changeIndex}
-										color="white"
-										backgroundColor="#006400"
-									>
-										{lineNumStr} + {change.content}
-									</Text>
-								);
-							}
+				if (change.type === 'added') {
+					return (
+						<Text
+							key={changeIndex}
+							color="white"
+							backgroundColor={theme.colors.diffAdded}
+						>
+							{lineNumStr} + {change.content}
+						</Text>
+					);
+				}
 
-							if (change.type === 'removed') {
-								return (
-									<Text
-										key={changeIndex}
-										color="white"
-										backgroundColor="#8B0000"
-									>
-										{lineNumStr} - {change.content}
-									</Text>
-								);
-							}
+				if (change.type === 'removed') {
+					return (
+						<Text
+							key={changeIndex}
+							color="white"
+							backgroundColor={theme.colors.diffRemoved}
+						>
+							{lineNumStr} - {change.content}
+						</Text>
+					);
+				}
 
 							// Unchanged lines (context)
 							return (

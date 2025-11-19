@@ -2,6 +2,7 @@ import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {TodoItem} from '../../utils/todoScanner.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 interface Props {
 	todos: TodoItem[];
@@ -25,6 +26,7 @@ const TodoPickerPanel = memo(
 		searchQuery = '',
 		totalCount = 0,
 	}: Props) => {
+		const {theme} = useTheme();
 		// Fixed maximum display items to prevent rendering issues
 		const MAX_DISPLAY_ITEMS = 5;
 		const effectiveMaxItems = maxHeight
@@ -70,9 +72,9 @@ const TodoPickerPanel = memo(
 					<Box width="100%">
 						<Box flexDirection="column" width="100%">
 							<Box>
-								<Text color="yellow" bold>
-									TODO Selection
-								</Text>
+					<Text color={theme.colors.warning} bold>
+						TODO Selection
+					</Text>
 							</Box>
 							<Box marginTop={1}>
 								<Alert variant="info">
@@ -91,16 +93,16 @@ const TodoPickerPanel = memo(
 				<Box flexDirection="column">
 					<Box width="100%">
 						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color="yellow" bold>
-									TODO Selection
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="info">
-									No TODO comments found in the project
-								</Alert>
-							</Box>
+				<Box>
+					<Text color={theme.colors.warning} bold>
+						TODO Selection
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Alert variant="info">
+						No TODO comments found in the project
+					</Alert>
+				</Box>
 						</Box>
 					</Box>
 				</Box>
@@ -113,21 +115,21 @@ const TodoPickerPanel = memo(
 				<Box flexDirection="column">
 					<Box width="100%">
 						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color="yellow" bold>
-									TODO Selection
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="warning">
-									No TODOs match "{searchQuery}" (Total: {totalCount})
-								</Alert>
-							</Box>
-							<Box marginTop={1}>
-								<Text color="gray" dimColor>
-									Type to filter · Backspace to clear search
-								</Text>
-							</Box>
+				<Box>
+					<Text color={theme.colors.warning} bold>
+						TODO Selection
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Alert variant="warning">
+						No TODOs match "{searchQuery}" (Total: {totalCount})
+					</Alert>
+				</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						Type to filter · Backspace to clear search
+					</Text>
+				</Box>
 						</Box>
 					</Box>
 				</Box>
@@ -138,57 +140,57 @@ const TodoPickerPanel = memo(
 			<Box flexDirection="column">
 				<Box width="100%">
 					<Box flexDirection="column" width="100%">
-						<Box>
-							<Text color="yellow" bold>
-								Select TODOs{' '}
-								{todos.length > effectiveMaxItems &&
-									`(${selectedIndex + 1}/${todos.length})`}
-								{searchQuery && ` - Filtering: "${searchQuery}"`}
-								{searchQuery &&
-									totalCount > todos.length &&
-									` (${todos.length}/${totalCount})`}
-							</Text>
-						</Box>
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
-								{searchQuery
-									? 'Type to filter · Backspace to clear · Space: toggle · Enter: confirm'
-									: 'Type to search · Space: toggle · Enter: confirm · Esc: cancel'}
-							</Text>
-						</Box>
+			<Box>
+				<Text color={theme.colors.warning} bold>
+					Select TODOs{' '}
+					{todos.length > effectiveMaxItems &&
+						`(${selectedIndex + 1}/${todos.length})`}
+					{searchQuery && ` - Filtering: "${searchQuery}"`}
+					{searchQuery &&
+						totalCount > todos.length &&
+						` (${todos.length}/${totalCount})`}
+				</Text>
+			</Box>
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{searchQuery
+						? 'Type to filter · Backspace to clear · Space: toggle · Enter: confirm'
+						: 'Type to search · Space: toggle · Enter: confirm · Esc: cancel'}
+				</Text>
+			</Box>
 						{displayedTodos.map((todo, index) => {
 							const isSelected = index === displayedSelectedIndex;
 							const isChecked = selectedTodos.has(todo.id);
 
-							return (
-								<Box key={todo.id} flexDirection="column" width="100%">
-									<Text color={isSelected ? 'green' : 'gray'} bold>
-										{isSelected ? '❯ ' : '  '}
-										{isChecked ? '[✓]' : '[ ]'} {todo.file}:{todo.line}
-									</Text>
-									<Box marginLeft={5}>
-										<Text
-											color={isSelected ? 'green' : 'gray'}
-											dimColor={!isSelected}
-										>
-											└─ {todo.content}
-										</Text>
-									</Box>
-								</Box>
-							);
+			return (
+				<Box key={todo.id} flexDirection="column" width="100%">
+					<Text color={isSelected ? theme.colors.success : theme.colors.menuSecondary} bold>
+						{isSelected ? '❯ ' : '  '}
+						{isChecked ? '[✓]' : '[ ]'} {todo.file}:{todo.line}
+					</Text>
+					<Box marginLeft={5}>
+						<Text
+							color={isSelected ? theme.colors.success : theme.colors.menuSecondary}
+							dimColor={!isSelected}
+						>
+							└─ {todo.content}
+						</Text>
+					</Box>
+				</Box>
+			);
 						})}
-						{todos.length > effectiveMaxItems && (
-							<Box marginTop={1}>
-								<Text color="gray" dimColor>
-									↑↓ to scroll · {todos.length - effectiveMaxItems} more hidden
-								</Text>
-							</Box>
-						)}
-						{selectedTodos.size > 0 && (
-							<Box marginTop={1}>
-								<Text color="cyan">{selectedTodos.size} TODO(s) selected</Text>
-							</Box>
-						)}
+		{todos.length > effectiveMaxItems && (
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					↑↓ to scroll · {todos.length - effectiveMaxItems} more hidden
+				</Text>
+			</Box>
+		)}
+		{selectedTodos.size > 0 && (
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuInfo}>{selectedTodos.size} TODO(s) selected</Text>
+			</Box>
+		)}
 					</Box>
 				</Box>
 			</Box>

@@ -451,14 +451,36 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 
 	// If data has content array (MCP format), extract the text
 	if (data.content && Array.isArray(data.content) && data.content[0]?.text) {
+		const textContent = data.content[0].text;
+		
+		// Skip parsing if it's a plain message string
+		if (textContent === 'No TODO list found' || textContent === 'TODO item not found') {
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ {textContent}
+					</Text>
+				</Box>
+			);
+		}
+		
+		// Try to parse JSON
 		try {
-			todoData = JSON.parse(data.content[0].text);
+			todoData = JSON.parse(textContent);
 		} catch (e) {
-			// If parsing fails, just use original data
+			// If parsing fails, show the raw text
+			return (
+				<Box marginLeft={2}>
+					<Text color="gray" dimColor>
+						└─ {textContent}
+					</Text>
+				</Box>
+			);
 		}
 	}
 
-	if (!todoData.todos) {
+	// Check if we have valid todo data
+	if (!todoData.todos || !Array.isArray(todoData.todos)) {
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>

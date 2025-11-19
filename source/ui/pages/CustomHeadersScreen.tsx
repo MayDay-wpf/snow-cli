@@ -10,6 +10,7 @@ import {
 	type CustomHeadersItem,
 } from '../../utils/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {
 	onBack: () => void;
@@ -26,6 +27,7 @@ type ListAction =
 
 export default function CustomHeadersScreen({onBack}: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [config, setConfig] = useState<CustomHeadersConfig>(() => {
 		return (
 			getCustomHeadersConfig() || {
@@ -405,20 +407,20 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box
-					marginBottom={1}
-					borderStyle="round"
-					borderColor="cyan"
-					paddingX={2}
-					paddingY={1}
-				>
-					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.customHeaders.title}</Gradient>
-						<Text color="gray" dimColor>
-							{t.customHeaders.subtitle}
-						</Text>
-					</Box>
+			<Box
+				marginBottom={1}
+				borderStyle="round"
+				borderColor={theme.colors.menuInfo}
+				paddingX={2}
+				paddingY={1}
+			>
+				<Box flexDirection="column">
+					<Gradient name="rainbow">{t.customHeaders.title}</Gradient>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.customHeaders.subtitle}
+					</Text>
 				</Box>
+			</Box>
 
 				{error && (
 					<Box marginBottom={1}>
@@ -426,24 +428,24 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					</Box>
 				)}
 
-				<Box marginBottom={1}>
-					<Text bold>
-						{t.customHeaders.activeScheme}{' '}
-						<Text color="green">
-							{activeScheme?.name || t.customHeaders.none}
-						</Text>
+			<Box marginBottom={1}>
+				<Text bold>
+					{t.customHeaders.activeScheme}{' '}
+					<Text color={theme.colors.success}>
+						{activeScheme?.name || t.customHeaders.none}
 					</Text>
-				</Box>
+				</Text>
+			</Box>
 
-				{config.schemes.length === 0 ? (
-					<Box marginBottom={1}>
-						<Text color="yellow">{t.customHeaders.noSchemesConfigured}</Text>
-					</Box>
-				) : (
-					<Box flexDirection="column" marginBottom={1}>
-						<Text bold color="cyan">
-							{t.customHeaders.availableSchemes}
-						</Text>
+			{config.schemes.length === 0 ? (
+				<Box marginBottom={1}>
+					<Text color={theme.colors.warning}>{t.customHeaders.noSchemesConfigured}</Text>
+				</Box>
+			) : (
+				<Box flexDirection="column" marginBottom={1}>
+					<Text bold color={theme.colors.menuInfo}>
+						{t.customHeaders.availableSchemes}
+					</Text>
 						{config.schemes.map((scheme, index) => {
 							const headerCount = Object.keys(scheme.headers).length;
 							const headerPreview =
@@ -456,15 +458,15 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 							return (
 								<Box key={scheme.id} marginLeft={2}>
-									<Text
-										color={
-											index === selectedIndex
-												? 'green'
-												: scheme.id === config.active
-												? 'cyan'
-												: 'white'
-										}
-									>
+					<Text
+						color={
+							index === selectedIndex
+								? theme.colors.menuSelected
+								: scheme.id === config.active
+								? theme.colors.menuInfo
+								: theme.colors.menuNormal
+						}
+					>
 										{index === selectedIndex ? '❯ ' : '  '}
 										{scheme.id === config.active ? '✓ ' : '  '}
 										{scheme.name}
@@ -482,18 +484,18 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					</Box>
 				)}
 
-				<Box marginBottom={1}>
-					<Text bold color="cyan">
-						{t.customHeaders.actions}
-					</Text>
-				</Box>
-				<Box flexDirection="column" marginBottom={1} marginLeft={2}>
-					{actions.map(action => (
-						<Text
-							key={action}
-							color={currentAction === action ? 'green' : 'gray'}
-							bold={currentAction === action}
-						>
+			<Box marginBottom={1}>
+				<Text bold color={theme.colors.menuInfo}>
+					{t.customHeaders.actions}
+				</Text>
+			</Box>
+			<Box flexDirection="column" marginBottom={1} marginLeft={2}>
+				{actions.map(action => (
+					<Text
+						key={action}
+						color={currentAction === action ? theme.colors.menuSelected : theme.colors.menuSecondary}
+						bold={currentAction === action}
+					>
 							{currentAction === action ? '❯ ' : '  '}
 							{action === 'activate' && t.customHeaders.activate}
 							{action === 'deactivate' && t.customHeaders.deactivate}
@@ -505,11 +507,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					))}
 				</Box>
 
-				<Box marginTop={1}>
-					<Text color="gray" dimColor>
-						{t.customHeaders.navigationHint}
-					</Text>
-				</Box>
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{t.customHeaders.navigationHint}
+				</Text>
+			</Box>
 			</Box>
 		);
 	}
@@ -530,7 +532,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 				<Box
 					marginBottom={1}
 					borderStyle="round"
-					borderColor="cyan"
+					borderColor={theme.colors.menuInfo}
 					paddingX={2}
 					paddingY={1}
 				>
@@ -547,12 +549,12 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					</Box>
 				)}
 
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={editingField === 'name' ? 'green' : 'white'}>
-							{editingField === 'name' ? '❯ ' : '  '}
-							{t.customHeaders.nameLabel}
-						</Text>
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text color={editingField === 'name' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{editingField === 'name' ? '❯ ' : '  '}
+						{t.customHeaders.nameLabel}
+					</Text>
 						{editingField === 'name' && isEditing && (
 							<Box marginLeft={3}>
 								<TextInput
@@ -562,43 +564,43 @@ export default function CustomHeadersScreen({onBack}: Props) {
 								/>
 							</Box>
 						)}
-						{(!isEditing || editingField !== 'name') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{editName || t.customHeaders.notSet}</Text>
-							</Box>
-						)}
+				{(!isEditing || editingField !== 'name') && (
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>{editName || t.customHeaders.notSet}</Text>
+					</Box>
+				)}
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={editingField === 'headers' ? 'green' : 'white'}>
-							{editingField === 'headers' ? '❯ ' : '  '}
-							{t.customHeaders.headersLabel} ({headerCount}{' '}
-							{t.customHeaders.headersConfigured}):
-						</Text>
-						{editingField === 'headers' && !isEditing ? (
-							<Box marginLeft={3}>
-								<Text color="cyan" dimColor>
-									{t.customHeaders.pressEnterToEdit}
-								</Text>
-							</Box>
-						) : (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{headerPreview.substring(0, 100)}
-									{headerPreview.length > 100 ? '...' : ''}
-								</Text>
-							</Box>
-						)}
-					</Box>
-				</Box>
-
-				<Box marginTop={1}>
-					<Text color="gray" dimColor>
-						{t.customHeaders.editingHint}
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text color={editingField === 'headers' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{editingField === 'headers' ? '❯ ' : '  '}
+						{t.customHeaders.headersLabel} ({headerCount}{' '}
+						{t.customHeaders.headersConfigured}):
 					</Text>
+					{editingField === 'headers' && !isEditing ? (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo} dimColor>
+								{t.customHeaders.pressEnterToEdit}
+							</Text>
+						</Box>
+					) : (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{headerPreview.substring(0, 100)}
+								{headerPreview.length > 100 ? '...' : ''}
+							</Text>
+						</Box>
+					)}
 				</Box>
+			</Box>
+
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{t.customHeaders.editingHint}
+				</Text>
+			</Box>
 			</Box>
 		);
 	}
@@ -607,42 +609,42 @@ export default function CustomHeadersScreen({onBack}: Props) {
 	if (view === 'editHeaders') {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box
-					marginBottom={1}
-					borderStyle="round"
-					borderColor="cyan"
-					paddingX={2}
-					paddingY={1}
-				>
-					<Gradient name="rainbow">
-						{t.customHeaders.editHeadersTitle} - {editName}
-					</Gradient>
-				</Box>
+			<Box
+				marginBottom={1}
+				borderStyle="round"
+				borderColor={theme.colors.menuInfo}
+				paddingX={2}
+				paddingY={1}
+			>
+				<Gradient name="rainbow">
+					{t.customHeaders.editHeadersTitle} - {editName}
+				</Gradient>
+			</Box>
 
-				{headerEditingIndex === -1 ? (
-					<>
+			{headerEditingIndex === -1 ? (
+				<>
+					<Box marginBottom={1}>
+						<Text bold color={theme.colors.menuInfo}>
+							{t.customHeaders.headerList}
+						</Text>
+					</Box>
+
+					{headerKeys.length === 0 ? (
 						<Box marginBottom={1}>
-							<Text bold color="cyan">
-								{t.customHeaders.headerList}
+							<Text color={theme.colors.warning}>
+								{t.customHeaders.noHeadersConfigured}
 							</Text>
 						</Box>
-
-						{headerKeys.length === 0 ? (
-							<Box marginBottom={1}>
-								<Text color="yellow">
-									{t.customHeaders.noHeadersConfigured}
-								</Text>
-							</Box>
-						) : (
-							<Box flexDirection="column" marginBottom={1}>
-								{headerKeys.map((key, index) => {
-									const isSelected = index === headerSelectedIndex;
-									return (
-										<Box key={index} marginLeft={2}>
-											<Text
-												color={isSelected ? 'green' : 'white'}
-												bold={isSelected}
-											>
+					) : (
+						<Box flexDirection="column" marginBottom={1}>
+							{headerKeys.map((key, index) => {
+								const isSelected = index === headerSelectedIndex;
+								return (
+									<Box key={index} marginLeft={2}>
+										<Text
+											color={isSelected ? theme.colors.menuSelected : theme.colors.menuNormal}
+											bold={isSelected}
+										>
 												{isSelected ? '❯ ' : '  '}
 												{key}: {editHeaders[key]}
 											</Text>
@@ -652,83 +654,83 @@ export default function CustomHeadersScreen({onBack}: Props) {
 							</Box>
 						)}
 
-						<Box marginLeft={2} marginBottom={1}>
-							<Text
-								color={
-									headerSelectedIndex === headerKeys.length ? 'green' : 'gray'
-								}
-								bold={headerSelectedIndex === headerKeys.length}
-							>
-								{headerSelectedIndex === headerKeys.length ? '❯ ' : '  '}
-								{t.customHeaders.addNewHeader}
-							</Text>
-						</Box>
+				<Box marginLeft={2} marginBottom={1}>
+					<Text
+						color={
+							headerSelectedIndex === headerKeys.length ? theme.colors.menuSelected : theme.colors.menuSecondary
+						}
+						bold={headerSelectedIndex === headerKeys.length}
+					>
+						{headerSelectedIndex === headerKeys.length ? '❯ ' : '  '}
+						{t.customHeaders.addNewHeader}
+					</Text>
+				</Box>
 
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
-								{t.customHeaders.headerNavigationHint}
-							</Text>
-						</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.customHeaders.headerNavigationHint}
+					</Text>
+				</Box>
 					</>
 				) : (
 					<>
-						<Box marginBottom={1}>
-							<Box flexDirection="column">
-								<Text color={headerEditingField === 'key' ? 'green' : 'white'}>
-									{headerEditingField === 'key' ? '❯ ' : '  '}
-									{t.customHeaders.keyLabel}
-								</Text>
-								{headerEditingField === 'key' && isEditing && (
-									<Box marginLeft={3}>
-										<TextInput
-											value={headerEditKey}
-											onChange={setHeaderEditKey}
-											placeholder={t.customHeaders.headerKeyPlaceholder}
-										/>
-									</Box>
-								)}
-								{(!isEditing || headerEditingField !== 'key') && (
-									<Box marginLeft={3}>
-										<Text color="gray">
-											{headerEditKey || t.customHeaders.notSet}
-										</Text>
-									</Box>
-								)}
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text color={headerEditingField === 'key' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+							{headerEditingField === 'key' ? '❯ ' : '  '}
+							{t.customHeaders.keyLabel}
+						</Text>
+						{headerEditingField === 'key' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={headerEditKey}
+									onChange={setHeaderEditKey}
+									placeholder={t.customHeaders.headerKeyPlaceholder}
+								/>
 							</Box>
-						</Box>
-
-						<Box marginBottom={1}>
-							<Box flexDirection="column">
-								<Text
-									color={headerEditingField === 'value' ? 'green' : 'white'}
-								>
-									{headerEditingField === 'value' ? '❯ ' : '  '}
-									{t.customHeaders.valueLabel}
+						)}
+						{(!isEditing || headerEditingField !== 'key') && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{headerEditKey || t.customHeaders.notSet}
 								</Text>
-								{headerEditingField === 'value' && isEditing && (
-									<Box marginLeft={3}>
-										<TextInput
-											value={headerEditValue}
-											onChange={setHeaderEditValue}
-											placeholder={t.customHeaders.headerValuePlaceholder}
-										/>
-									</Box>
-								)}
-								{(!isEditing || headerEditingField !== 'value') && (
-									<Box marginLeft={3}>
-										<Text color="gray">
-											{headerEditValue || t.customHeaders.notSet}
-										</Text>
-									</Box>
-								)}
 							</Box>
-						</Box>
+						)}
+					</Box>
+				</Box>
 
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
-								{t.customHeaders.headerEditingHint}
-							</Text>
-						</Box>
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text
+							color={headerEditingField === 'value' ? theme.colors.menuSelected : theme.colors.menuNormal}
+						>
+							{headerEditingField === 'value' ? '❯ ' : '  '}
+							{t.customHeaders.valueLabel}
+						</Text>
+						{headerEditingField === 'value' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={headerEditValue}
+									onChange={setHeaderEditValue}
+									placeholder={t.customHeaders.headerValuePlaceholder}
+								/>
+							</Box>
+						)}
+						{(!isEditing || headerEditingField !== 'value') && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{headerEditValue || t.customHeaders.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.customHeaders.headerEditingHint}
+					</Text>
+				</Box>
 					</>
 				)}
 			</Box>
@@ -747,7 +749,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 				<Box marginBottom={1}>
 					<Text>
 						{t.customHeaders.deleteConfirmMessage} "
-						<Text bold color="yellow">
+						<Text bold color={theme.colors.warning}>
 							{schemeToDelete?.name}
 						</Text>
 						"?
@@ -755,7 +757,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 				</Box>
 
 				<Box marginTop={1}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.customHeaders.confirmHint}
 					</Text>
 				</Box>

@@ -1,4 +1,4 @@
-import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
+import { Tool, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import fs from 'fs/promises';
 import path from 'path';
 // Type definitions
@@ -8,7 +8,7 @@ import type {
 	GetCurrentSessionId,
 } from './types/todo.types.js';
 // Utility functions
-import {formatDateForFolder} from './utils/todo/date.utils.js';
+import { formatDateForFolder } from './utils/todo/date.utils.js';
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
@@ -23,7 +23,7 @@ export class TodoService {
 	}
 
 	async initialize(): Promise<void> {
-		await fs.mkdir(this.todoDir, {recursive: true});
+		await fs.mkdir(this.todoDir, { recursive: true });
 	}
 
 	private getTodoPath(sessionId: string, date?: Date): string {
@@ -35,12 +35,12 @@ export class TodoService {
 
 	private async ensureTodoDir(date?: Date): Promise<void> {
 		try {
-			await fs.mkdir(this.todoDir, {recursive: true});
+			await fs.mkdir(this.todoDir, { recursive: true });
 
 			if (date) {
 				const dateFolder = formatDateForFolder(date);
 				const todoDir = path.join(this.todoDir, dateFolder);
-				await fs.mkdir(todoDir, {recursive: true});
+				await fs.mkdir(todoDir, { recursive: true });
 			}
 		} catch (error) {
 			// Directory already exists or other error
@@ -308,7 +308,7 @@ This REPLACES the entire TODO list. For adding tasks to existing list, use "todo
 											'Parent TODO ID (optional, for creating subtasks in hierarchical structure)',
 									},
 								},
-								required: ['content'],
+								required: ['content','parentId'],
 							},
 							description:
 								'Complete list of TODO items. Each item must represent a discrete, verifiable unit of work. For programming tasks, typical structure: analyze code → implement changes → test functionality → verify build → commit (if requested).',
@@ -456,8 +456,8 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 		try {
 			switch (toolName) {
 				case 'create': {
-					const {todos} = args as {
-						todos: Array<{content: string; parentId?: string}>;
+					const { todos } = args as {
+						todos: Array<{ content: string; parentId?: string }>;
 					};
 
 					const todoItems: TodoItem[] = todos.map(t => {
@@ -505,7 +505,7 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 				}
 
 				case 'update': {
-					const {todoId, status, content} = args as {
+					const { todoId, status, content } = args as {
 						todoId: string;
 						status?: 'pending' | 'completed';
 						content?: string;
@@ -529,7 +529,7 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 				}
 
 				case 'add': {
-					const {content, parentId} = args as {
+					const { content, parentId } = args as {
 						content: string;
 						parentId?: string;
 					};
@@ -546,7 +546,7 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 				}
 
 				case 'delete': {
-					const {todoId} = args as {
+					const { todoId } = args as {
 						todoId: string;
 					};
 
@@ -579,9 +579,8 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 				content: [
 					{
 						type: 'text',
-						text: `Error executing ${toolName}: ${
-							error instanceof Error ? error.message : String(error)
-						}`,
+						text: `Error executing ${toolName}: ${error instanceof Error ? error.message : String(error)
+							}`,
 					},
 				],
 				isError: true,

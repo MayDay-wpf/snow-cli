@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.9
+
+- Update dependency package mirror source
+- Add multiple theme options
+- Optimize dependency download speed and stability
+
 ## v0.4.8
 
 - Update some outdated dependencies

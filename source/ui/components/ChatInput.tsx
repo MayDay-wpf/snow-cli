@@ -17,6 +17,7 @@ import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
 import {useAgentPicker} from '../../hooks/useAgentPicker.js';
 import {useTodoPicker} from '../../hooks/useTodoPicker.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 /**
  * Calculate context usage percentage
@@ -91,6 +92,7 @@ export default function ChatInput({
 }: Props) {
 	// Use i18n hook for translations
 	const {t} = useI18n();
+	const {theme} = useTheme();
 
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
@@ -351,19 +353,19 @@ export default function ChatInput({
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
 		(char: string) => {
-			if (hasFocus) {
-				// Focused: solid block cursor
-				return (
-					<Text backgroundColor="white" color="black">
-						{char}
-					</Text>
-				);
-			} else {
-				// Unfocused: no cursor, just render the character normally
-				return <Text>{char}</Text>;
-			}
+		if (hasFocus) {
+			// Focused: solid block cursor (use inverted colors)
+			return (
+				<Text backgroundColor={theme.colors.menuNormal} color={theme.colors.background}>
+					{char}
+				</Text>
+			);
+		} else {
+			// Unfocused: no cursor, just render the character normally
+			return <Text>{char}</Text>;
+		}
 		},
-		[hasFocus],
+		[hasFocus, theme],
 	);
 
 	// Render content with cursor (treat all text including placeholders as plain text)
@@ -401,7 +403,7 @@ export default function ChatInput({
 			return (
 				<>
 					{renderCursor(' ')}
-					<Text color={disabled ? 'darkGray' : 'gray'} dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{disabled ? t.chatScreen.waitingForResponse : placeholder}
 					</Text>
 				</>
@@ -446,16 +448,16 @@ export default function ChatInput({
 								<>
 									{/* Top scroll indicator - always reserve space */}
 									<Box height={1}>
-										{hasMoreAbove ? (
-											<Text color="gray" dimColor>
-												{t.chatScreen.moreAbove.replace(
-													'{count}',
-													startIndex.toString(),
-												)}
-											</Text>
-										) : (
-											<Text> </Text>
-										)}
+					{hasMoreAbove ? (
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.moreAbove.replace(
+								'{count}',
+								startIndex.toString(),
+							)}
+						</Text>
+					) : (
+						<Text> </Text>
+					)}
 									</Box>
 
 									{/* Message list - each item fixed to 1 line */}
@@ -477,58 +479,58 @@ export default function ChatInput({
 
 										return (
 											<Box key={message.value} height={1}>
-												<Text
-													color={
-														actualIndex === historySelectedIndex
-															? 'green'
-															: 'white'
-													}
-													bold
-													wrap="truncate"
-												>
-													{actualIndex === historySelectedIndex ? '❯  ' : '  '}
-													{truncatedLabel}
-												</Text>
+					<Text
+						color={
+							actualIndex === historySelectedIndex
+								? theme.colors.menuSelected
+								: theme.colors.menuNormal
+						}
+						bold
+						wrap="truncate"
+					>
+						{actualIndex === historySelectedIndex ? '❯  ' : '  '}
+						{truncatedLabel}
+					</Text>
 											</Box>
 										);
 									})}
 
 									{/* Bottom scroll indicator - always reserve space */}
 									<Box height={1}>
-										{hasMoreBelow ? (
-											<Text color="gray" dimColor>
-												{t.chatScreen.moreBelow.replace(
-													'{count}',
-													(userMessages.length - endIndex).toString(),
-												)}
-											</Text>
-										) : (
-											<Text> </Text>
-										)}
+					{hasMoreBelow ? (
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.moreBelow.replace(
+								'{count}',
+								(userMessages.length - endIndex).toString(),
+							)}
+						</Text>
+					) : (
+						<Text> </Text>
+					)}
 									</Box>
 								</>
 							);
 						})()}
 					</Box>
-					<Box marginBottom={1}>
-						<Text color="cyan" dimColor>
-							{t.chatScreen.historyNavigateHint}
-						</Text>
-					</Box>
+				<Box marginBottom={1}>
+					<Text color={theme.colors.menuInfo} dimColor>
+						{t.chatScreen.historyNavigateHint}
+					</Text>
+				</Box>
 				</Box>
 			)}
 			{!showHistoryMenu && (
 				<>
-					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text color="gray">{'─'.repeat(terminalWidth - 2)}</Text>
-						<Box flexDirection="row">
-							<Text color="cyan" bold>
-								❯{' '}
-							</Text>
-							<Box flexGrow={1}>{renderContent()}</Box>
-						</Box>
-						<Text color="gray">{'─'.repeat(terminalWidth - 2)}</Text>
-					</Box>
+			<Box flexDirection="column" width={terminalWidth - 2}>
+				<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+				<Box flexDirection="row">
+					<Text color={theme.colors.menuInfo} bold>
+						❯{' '}
+					</Text>
+					<Box flexGrow={1}>{renderContent()}</Box>
+				</Box>
+				<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+			</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
 					showFilePicker ? (
 						<Box marginTop={1}>
@@ -578,16 +580,16 @@ export default function ChatInput({
 						searchQuery={todoSearchQuery}
 						totalCount={totalTodoCount}
 					/>
-					{yoloMode && (
-						<Box marginTop={1}>
-							<Text color="yellow" dimColor>
-								{t.chatScreen.yoloModeActive}
-							</Text>
-						</Box>
-					)}
-					{contextUsage && (
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
+				{yoloMode && (
+					<Box marginTop={1}>
+						<Text color={theme.colors.warning} dimColor>
+							{t.chatScreen.yoloModeActive}
+						</Text>
+					</Box>
+				)}
+				{contextUsage && (
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
 								{(() => {
 									// Determine which caching system is being used
 									const isAnthropic =
@@ -603,12 +605,12 @@ export default function ChatInput({
 										? contextUsage.inputTokens +
 										  (contextUsage.cacheCreationTokens || 0) +
 										  (contextUsage.cacheReadTokens || 0)
-										: contextUsage.inputTokens;
-									let color: string;
-									if (percentage < 50) color = 'green';
-									else if (percentage < 75) color = 'yellow';
-									else if (percentage < 90) color = 'orange';
-									else color = 'red';
+					: contextUsage.inputTokens;
+				let color: string;
+				if (percentage < 50) color = theme.colors.success;
+				else if (percentage < 75) color = theme.colors.warning;
+				else if (percentage < 90) color = theme.colors.warning;
+				else color = theme.colors.error;
 
 									const formatNumber = (num: number) => {
 										if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
@@ -631,40 +633,40 @@ export default function ChatInput({
 													{/* Anthropic caching display */}
 													{isAnthropic && (
 														<>
-															{(contextUsage.cacheReadTokens || 0) > 0 && (
-																<>
-																	<Text color="cyan">
-																		↯{' '}
-																		{formatNumber(
-																			contextUsage.cacheReadTokens || 0,
-																		)}{' '}
-																		{t.chatScreen.cached}
-																	</Text>
-																</>
-															)}
+								{(contextUsage.cacheReadTokens || 0) > 0 && (
+									<>
+										<Text color={theme.colors.menuInfo}>
+											↯{' '}
+											{formatNumber(
+												contextUsage.cacheReadTokens || 0,
+											)}{' '}
+											{t.chatScreen.cached}
+										</Text>
+									</>
+								)}
 															{(contextUsage.cacheCreationTokens || 0) > 0 && (
 																<>
 																	{(contextUsage.cacheReadTokens || 0) > 0 && (
 																		<Text> · </Text>
 																	)}
-																	<Text color="magenta">
-																		◆{' '}
-																		{formatNumber(
-																			contextUsage.cacheCreationTokens || 0,
-																		)}{' '}
-																		{t.chatScreen.newCache}
-																	</Text>
+									<Text color={theme.colors.warning}>
+										◆{' '}
+										{formatNumber(
+											contextUsage.cacheCreationTokens || 0,
+										)}{' '}
+										{t.chatScreen.newCache}
+									</Text>
 																</>
 															)}
 														</>
 													)}
-													{/* OpenAI caching display */}
-													{isOpenAI && (
-														<Text color="cyan">
-															↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-															{t.chatScreen.cached}
-														</Text>
-													)}
+						{/* OpenAI caching display */}
+						{isOpenAI && (
+							<Text color={theme.colors.menuInfo}>
+								↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
+								{t.chatScreen.cached}
+							</Text>
+						)}
 												</>
 											)}
 										</>

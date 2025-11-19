@@ -11,6 +11,7 @@ import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type FileItem = {
 	name: string;
@@ -49,6 +50,7 @@ const FileList = memo(
 			},
 			ref,
 		) => {
+			const { theme } = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
 
@@ -450,15 +452,15 @@ const FileList = memo(
 				);
 			}
 
-			if (filteredFiles.length === 0) {
-				return (
-					<Box paddingX={1} marginTop={1}>
-						<Text color="gray" dimColor>
-							No files found
-						</Text>
-					</Box>
-				);
-			}
+		if (filteredFiles.length === 0) {
+			return (
+				<Box paddingX={1} marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						No files found
+					</Text>
+				</Box>
+			);
+		}
 
 			return (
 				<Box paddingX={1} marginTop={1} flexDirection="column">
@@ -474,48 +476,48 @@ const FileList = memo(
 							key={`${file.path}-${file.lineNumber || 0}`}
 							flexDirection="column"
 						>
-							{/* First line: file path and line number (for content search) or file path (for file search) */}
-							<Text
-								backgroundColor={
-									index === displaySelectedIndex ? '#1E3A8A' : undefined
-								}
-								color={
-									index === displaySelectedIndex
-										? '#FFFFFF'
-										: file.isDirectory
-										? 'yellow'
-										: 'white'
-								}
-							>
-								{searchMode === 'content' && file.lineNumber !== undefined
-									? `${file.path}:${file.lineNumber}`
-									: file.isDirectory
-									? '◇ ' + file.path
-									: '◆ ' + file.path}
-							</Text>
-							{/* Second line: code content (only for content search) */}
-							{searchMode === 'content' && file.lineContent && (
-								<Text
-									backgroundColor={
-										index === displaySelectedIndex ? '#1E3A8A' : undefined
-									}
-									color={index === displaySelectedIndex ? '#D1D5DB' : 'gray'}
-									dimColor
-								>
-									{'  '}
-									{file.lineContent}
-								</Text>
-							)}
+				{/* First line: file path and line number (for content search) or file path (for file search) */}
+				<Text
+					backgroundColor={
+						index === displaySelectedIndex ? theme.colors.menuSelected : undefined
+					}
+					color={
+						index === displaySelectedIndex
+							? theme.colors.menuNormal
+							: file.isDirectory
+							? theme.colors.warning
+							: 'white'
+					}
+				>
+					{searchMode === 'content' && file.lineNumber !== undefined
+						? `${file.path}:${file.lineNumber}`
+						: file.isDirectory
+						? '◇ ' + file.path
+						: '◆ ' + file.path}
+				</Text>
+				{/* Second line: code content (only for content search) */}
+				{searchMode === 'content' && file.lineContent && (
+					<Text
+						backgroundColor={
+							index === displaySelectedIndex ? theme.colors.menuSelected : undefined
+						}
+						color={index === displaySelectedIndex ? theme.colors.menuSecondary : theme.colors.menuSecondary}
+						dimColor
+					>
+						{'  '}
+						{file.lineContent}
+					</Text>
+				)}
 						</Box>
 					))}
-					{allFilteredFiles.length > effectiveMaxItems && (
-						<Box marginTop={1}>
-							<Text color="gray" dimColor>
-								↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems}{' '}
-								more hidden
-							</Text>
-						</Box>
-					)}
+			{allFilteredFiles.length > effectiveMaxItems && (
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems}{' '}
+						more hidden
+					</Text>
+				</Box>
+			)}
 				</Box>
 			);
 		},

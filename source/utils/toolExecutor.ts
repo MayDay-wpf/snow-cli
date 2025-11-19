@@ -88,13 +88,25 @@ function extractMultimodalContent(result: any): {
 
 		// If we extracted the content, we need to rebuild the result
 		if (result && typeof result === 'object' && result.content === contentToCheck) {
-			// Create a new result object with text content instead of multimodal array
+			// Check if result has only 'content' field (pure MCP response)
+			// In this case, return the extracted text directly without wrapping
+			const resultKeys = Object.keys(result);
+			if (resultKeys.length === 1 && resultKeys[0] === 'content') {
+				// Pure MCP response - return extracted text directly
+				return {
+					textContent: textParts.join('\n\n'),
+					images: images.length > 0 ? images : undefined,
+				};
+			}
+			
+			// Result has additional fields (e.g., files, totalFiles) - preserve them
 			const newResult = {...result, content: textParts.join('\n\n')};
 			return {
 				textContent: JSON.stringify(newResult),
 				images: images.length > 0 ? images : undefined,
 			};
 		}
+
 
 		return {
 			textContent: textParts.join('\n\n'),

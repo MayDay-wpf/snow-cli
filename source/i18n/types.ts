@@ -23,11 +23,13 @@ export type TranslationKeys = {
 		subAgentSettingsInfo: string;
 		sensitiveCommands: string;
 		sensitiveCommandsInfo: string;
-		languageSettings: string;
-		languageSettingsInfo: string;
-		exit: string;
-		exitInfo: string;
-	};
+	languageSettings: string;
+	languageSettingsInfo: string;
+	themeSettings: string;
+	themeSettingsInfo: string;
+	exit: string;
+	exitInfo: string;
+};
 	// Menu
 	menu: {
 		navigate: string;
@@ -283,6 +285,25 @@ export type TranslationKeys = {
 		confirmHint: string;
 		// Navigation hints
 		listNavigationHint: string;
+	};
+	themeSettings: {
+		title: string;
+		current: string;
+		preview: string;
+		back: string;
+		backInfo: string;
+		darkTheme: string;
+		darkThemeInfo: string;
+		lightTheme: string;
+		lightThemeInfo: string;
+		githubDark: string;
+		githubDarkInfo: string;
+		rainbow: string;
+		rainbowInfo: string;
+		solarizedDark: string;
+		solarizedDarkInfo: string;
+		nord: string;
+		nordInfo: string;
 	};
 	helpPanel: {
 		title: string;

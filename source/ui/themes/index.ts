@@ -1,0 +1,166 @@
+export type ThemeType = 'dark' | 'light' | 'github-dark' | 'rainbow' | 'solarized-dark' | 'nord';
+
+export interface Theme {
+	name: string;
+	type: ThemeType;
+	colors: {
+		background: string;
+		text: string;
+		border: string;
+		diffAdded: string;
+		diffRemoved: string;
+		diffModified: string;
+		lineNumber: string;
+		lineNumberBorder: string;
+		// Menu colors
+		menuSelected: string;
+		menuNormal: string;
+		menuInfo: string;
+		menuSecondary: string;
+		// Status colors
+		error: string;
+		warning: string;
+		success: string;
+	};
+}
+
+export const themes: Record<ThemeType, Theme> = {
+	dark: {
+		name: 'Dark',
+		type: 'dark',
+		colors: {
+			background: '#1e1e1e',
+			text: '#d4d4d4',
+			border: '#3e3e3e',
+			diffAdded: '#0d4d3d',
+			diffRemoved: '#5a1f1f',
+			diffModified: '#dcdcaa',
+			lineNumber: '#858585',
+			lineNumberBorder: '#3e3e3e',
+			// Menu colors
+			menuSelected: 'green',
+			menuNormal: 'white',
+			menuInfo: 'cyan',
+			menuSecondary: 'gray',
+			// Status colors
+			error: 'red',
+			warning: 'yellow',
+			success: 'green',
+		},
+	},
+	light: {
+		name: 'Light',
+		type: 'light',
+		colors: {
+			background: '#ffffff',
+			text: '#ffffff',
+			border: '#e0e0e0',
+			diffAdded: '#006400',
+			diffRemoved: '#8B0000',
+			diffModified: '#0000ff',
+			lineNumber: '#6e6e6e',
+			lineNumberBorder: '#e0e0e0',
+			// Menu colors - darker for better visibility
+			menuSelected: '#006400',
+			menuNormal: '#000000',
+			menuInfo: '#0066cc',
+			menuSecondary: '#666666',
+			// Status colors - darker for better visibility on white background
+			error: '#cc0000',
+			warning: '#cc6600',
+			success: '#006400',
+		},
+	},
+	'github-dark': {
+		name: 'GitHub Dark',
+		type: 'github-dark',
+		colors: {
+			background: '#0d1117',
+			text: '#c9d1d9',
+			border: '#30363d',
+			diffAdded: '#1a4d2e',
+			diffRemoved: '#6e1a1a',
+			diffModified: '#9e6a03',
+			lineNumber: '#6e7681',
+			lineNumberBorder: '#21262d',
+			// Menu colors
+			menuSelected: '#58a6ff',
+			menuNormal: '#c9d1d9',
+			menuInfo: '#58a6ff',
+			menuSecondary: '#8b949e',
+			// Status colors
+			error: '#f85149',
+			warning: '#d29922',
+			success: '#3fb950',
+		},
+	},
+	rainbow: {
+		name: 'Rainbow',
+		type: 'rainbow',
+		colors: {
+			background: '#1a1a2e',
+			text: '#ffffff',
+			border: '#ff6b9d',
+			diffAdded: '#16697a',
+			diffRemoved: '#82204a',
+			diffModified: '#5f4b8b',
+			lineNumber: '#ffa07a',
+			lineNumberBorder: '#ff6b9d',
+			// Menu colors - vibrant rainbow colors
+			menuSelected: '#ff006e',
+			menuNormal: '#00f5ff',
+			menuInfo: '#ffbe0b',
+			menuSecondary: '#8338ec',
+			// Status colors - bright and colorful
+			error: '#ff006e',
+			warning: '#ffbe0b',
+			success: '#06ffa5',
+		},
+	},
+	'solarized-dark': {
+		name: 'Solarized Dark',
+		type: 'solarized-dark',
+		colors: {
+			background: '#002b36',
+			text: '#839496',
+			border: '#073642',
+			diffAdded: '#0a3d2c',
+			diffRemoved: '#5c1f1f',
+			diffModified: '#5d4f1a',
+			lineNumber: '#586e75',
+			lineNumberBorder: '#073642',
+			// Menu colors
+			menuSelected: '#2aa198',
+			menuNormal: '#93a1a1',
+			menuInfo: '#268bd2',
+			menuSecondary: '#657b83',
+			// Status colors
+			error: '#dc322f',
+			warning: '#b58900',
+			success: '#859900',
+		},
+	},
+	nord: {
+		name: 'Nord',
+		type: 'nord',
+		colors: {
+			background: '#2e3440',
+			text: '#d8dee9',
+			border: '#3b4252',
+			diffAdded: '#1d3a2f',
+			diffRemoved: '#5c2a2a',
+			diffModified: '#5a4d2f',
+			lineNumber: '#4c566a',
+			lineNumberBorder: '#3b4252',
+			// Menu colors
+			menuSelected: '#88c0d0',
+			menuNormal: '#d8dee9',
+			menuInfo: '#81a1c1',
+			menuSecondary: '#616e88',
+			// Status colors
+			error: '#bf616a',
+			warning: '#ebcb8b',
+			success: '#a3be8c',
+		},
+	},
+};

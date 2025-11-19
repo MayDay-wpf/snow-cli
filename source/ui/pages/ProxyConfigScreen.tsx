@@ -9,6 +9,7 @@ import {
 	type ProxyConfig,
 } from '../../utils/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {
 	onBack: () => void;
@@ -22,6 +23,7 @@ export default function ProxyConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
 	const [browserPath, setBrowserPath] = useState('');
@@ -104,100 +106,100 @@ export default function ProxyConfigScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{!inlineMode && (
-				<Box
-					marginBottom={1}
-					borderStyle="double"
-					borderColor={'cyan'}
-					paddingX={2}
-					paddingY={1}
-				>
-					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.proxyConfig.title}</Gradient>
-						<Text color="gray" dimColor>
-							{t.proxyConfig.subtitle}
-						</Text>
-					</Box>
+		{!inlineMode && (
+			<Box
+				marginBottom={1}
+				borderStyle="double"
+				borderColor={theme.colors.menuInfo}
+				paddingX={2}
+				paddingY={1}
+			>
+				<Box flexDirection="column">
+					<Gradient name="rainbow">{t.proxyConfig.title}</Gradient>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.proxyConfig.subtitle}
+					</Text>
 				</Box>
-			)}
+			</Box>
+		)}
 
 			<Box flexDirection="column" marginBottom={1}>
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={currentField === 'enabled' ? 'green' : 'white'}>
-							{currentField === 'enabled' ? '❯ ' : '  '}
-							{t.proxyConfig.enableProxy}
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text color={currentField === 'enabled' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{currentField === 'enabled' ? '❯ ' : '  '}
+						{t.proxyConfig.enableProxy}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{enabled ? t.proxyConfig.enabled : t.proxyConfig.disabled}{' '}
+							{t.proxyConfig.toggleHint}
 						</Text>
-						<Box marginLeft={3}>
-							<Text color="gray">
-								{enabled ? t.proxyConfig.enabled : t.proxyConfig.disabled}{' '}
-								{t.proxyConfig.toggleHint}
-							</Text>
-						</Box>
-					</Box>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={currentField === 'port' ? 'green' : 'white'}>
-							{currentField === 'port' ? '❯ ' : '  '}
-							{t.proxyConfig.proxyPort}
-						</Text>
-						{currentField === 'port' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={port}
-									onChange={setPort}
-									placeholder={t.proxyConfig.portPlaceholder}
-								/>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'port') && (
-							<Box marginLeft={3}>
-								<Text color="gray">{port || t.proxyConfig.notSet}</Text>
-							</Box>
-						)}
-					</Box>
-				</Box>
-
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={currentField === 'browserPath' ? 'green' : 'white'}>
-							{currentField === 'browserPath' ? '❯ ' : '  '}
-							{t.proxyConfig.browserPath}
-						</Text>
-						{currentField === 'browserPath' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={browserPath}
-									onChange={setBrowserPath}
-									placeholder={t.proxyConfig.browserPathPlaceholder}
-								/>
-							</Box>
-						)}
-						{(!isEditing || currentField !== 'browserPath') && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{browserPath || t.proxyConfig.autoDetect}
-								</Text>
-							</Box>
-						)}
 					</Box>
 				</Box>
 			</Box>
 
-			{errors.length > 0 && (
-				<Box flexDirection="column" marginBottom={2}>
-					<Text color="red" bold>
-						{t.proxyConfig.errors}
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text color={currentField === 'port' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{currentField === 'port' ? '❯ ' : '  '}
+						{t.proxyConfig.proxyPort}
 					</Text>
-					{errors.map((error, index) => (
-						<Text key={index} color="red">
-							• {error}
-						</Text>
-					))}
+					{currentField === 'port' && isEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={port}
+								onChange={setPort}
+								placeholder={t.proxyConfig.portPlaceholder}
+							/>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'port') && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>{port || t.proxyConfig.notSet}</Text>
+						</Box>
+					)}
 				</Box>
-			)}
+			</Box>
+
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text color={currentField === 'browserPath' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{currentField === 'browserPath' ? '❯ ' : '  '}
+						{t.proxyConfig.browserPath}
+					</Text>
+					{currentField === 'browserPath' && isEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={browserPath}
+								onChange={setBrowserPath}
+								placeholder={t.proxyConfig.browserPathPlaceholder}
+							/>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'browserPath') && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{browserPath || t.proxyConfig.autoDetect}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			</Box>
+			</Box>
+
+		{errors.length > 0 && (
+			<Box flexDirection="column" marginBottom={2}>
+				<Text color={theme.colors.error} bold>
+					{t.proxyConfig.errors}
+				</Text>
+				{errors.map((error, index) => (
+					<Text key={index} color={theme.colors.error}>
+						• {error}
+					</Text>
+				))}
+			</Box>
+		)}
 
 			<Box flexDirection="column">
 				{isEditing ? (
@@ -211,15 +213,15 @@ export default function ProxyConfigScreen({
 				)}
 			</Box>
 
-			<Box flexDirection="column" marginTop={1}>
-				<Alert variant="info">
-					{t.proxyConfig.browserExamplesTitle} <Newline />
-					<Text color={'blue'}>{t.proxyConfig.windowsExample}</Text> <Newline />
-					<Text color={'green'}>{t.proxyConfig.macosExample}</Text> <Newline />
-					<Text color={'yellow'}>{t.proxyConfig.linuxExample}</Text> <Newline />
-					{t.proxyConfig.browserExamplesFooter}
-				</Alert>
-			</Box>
+		<Box flexDirection="column" marginTop={1}>
+			<Alert variant="info">
+				{t.proxyConfig.browserExamplesTitle} <Newline />
+				<Text color={theme.colors.menuInfo}>{t.proxyConfig.windowsExample}</Text> <Newline />
+				<Text color={theme.colors.success}>{t.proxyConfig.macosExample}</Text> <Newline />
+				<Text color={theme.colors.warning}>{t.proxyConfig.linuxExample}</Text> <Newline />
+				{t.proxyConfig.browserExamplesFooter}
+			</Alert>
+		</Box>
 		</Box>
 	);
 }

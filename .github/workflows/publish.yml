@@ -55,7 +55,9 @@ jobs:
             
             ### What's New
 
-            - Update some outdated dependencies
+            - Update dependency package mirror source
+            - Add multiple theme options
+            - Optimize dependency download speed and stability
             
             ### Installation
             ```bash

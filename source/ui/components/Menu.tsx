@@ -2,6 +2,7 @@ import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
 import {resetTerminal} from '../../utils/terminal.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type MenuOption = {
 	label: string;
@@ -14,7 +15,7 @@ type MenuOption = {
 type Props = {
 	options: MenuOption[];
 	onSelect: (value: string) => void;
-	onSelectionChange?: (infoText: string) => void;
+	onSelectionChange?: (infoText: string, value: string) => void;
 	maxHeight?: number; // Maximum number of visible items
 };
 
@@ -23,6 +24,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const {stdout} = useStdout();
 	const {t} = useI18n();
+	const {theme} = useTheme();
 
 	// Calculate available height
 	const terminalHeight = stdout?.rows || 24;
@@ -33,7 +35,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	React.useEffect(() => {
 		const currentOption = options[selectedIndex];
 		if (onSelectionChange && currentOption?.infoText) {
-			onSelectionChange(currentOption.infoText);
+			onSelectionChange(currentOption.infoText, currentOption.value);
 		}
 	}, [selectedIndex, options, onSelectionChange]);
 
@@ -84,12 +86,12 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 	return (
 		<Box flexDirection="column" width={'100%'} padding={1}>
 			<Box marginBottom={1}>
-				<Text color="cyan">{t.menu.navigate}</Text>
+				<Text color={theme.colors.menuInfo}>{t.menu.navigate}</Text>
 			</Box>
 
 			{hasMoreAbove && (
 				<Box>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						↑ +{moreAboveCount} more above
 					</Text>
 				</Box>
@@ -102,8 +104,8 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 						<Text
 							color={
 								actualIndex === selectedIndex
-									? 'green'
-									: option.color || 'white'
+									? theme.colors.menuSelected
+									: option.color || theme.colors.menuNormal
 							}
 							bold
 						>
@@ -116,7 +118,7 @@ function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
 
 			{hasMoreBelow && (
 				<Box>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						↓ +{moreBelowCount} more below
 					</Text>
 				</Box>

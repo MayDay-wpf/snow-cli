@@ -9,6 +9,7 @@ import {
 	type CodebaseConfig,
 } from '../../utils/codebaseConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {
 	onBack: () => void;
@@ -74,6 +75,7 @@ export default function CodeBaseConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
@@ -195,225 +197,225 @@ export default function CodeBaseConfigScreen({
 		const isCurrentlyEditing = isActive && isEditing;
 
 		switch (field) {
-			case 'enabled':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.codebaseEnabled}
+		case 'enabled':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.codebaseEnabled}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{enabled ? t.codebaseConfig.enabled : t.codebaseConfig.disabled}{' '}
+							{t.codebaseConfig.toggleHint}
 						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'enableAgentReview':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.agentReview}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{enableAgentReview
+								? t.codebaseConfig.enabled
+								: t.codebaseConfig.disabled}{' '}
+							{t.codebaseConfig.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'embeddingModelName':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.embeddingModelName}
+					</Text>
+					{isCurrentlyEditing && (
 						<Box marginLeft={3}>
-							<Text color="gray">
-								{enabled ? t.codebaseConfig.enabled : t.codebaseConfig.disabled}{' '}
-								{t.codebaseConfig.toggleHint}
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={embeddingModelName}
+									onChange={value =>
+										setEmbeddingModelName(stripFocusArtifacts(value))
+									}
+									onSubmit={() => setIsEditing(false)}
+								/>
 							</Text>
 						</Box>
-					</Box>
-				);
-
-			case 'enableAgentReview':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.agentReview}
-						</Text>
+					)}
+					{!isCurrentlyEditing && (
 						<Box marginLeft={3}>
-							<Text color="gray">
-								{enableAgentReview
-									? t.codebaseConfig.enabled
-									: t.codebaseConfig.disabled}{' '}
-								{t.codebaseConfig.toggleHint}
+							<Text color={theme.colors.menuSecondary}>
+								{embeddingModelName || t.codebaseConfig.notSet}
 							</Text>
 						</Box>
-					</Box>
-				);
+					)}
+				</Box>
+			);
 
-			case 'embeddingModelName':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.embeddingModelName}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={embeddingModelName}
-										onChange={value =>
-											setEmbeddingModelName(stripFocusArtifacts(value))
+		case 'embeddingBaseUrl':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.embeddingBaseUrl}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={embeddingBaseUrl}
+									onChange={value =>
+										setEmbeddingBaseUrl(stripFocusArtifacts(value))
+									}
+									onSubmit={() => setIsEditing(false)}
+								/>
+							</Text>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{embeddingBaseUrl || t.codebaseConfig.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'embeddingApiKey':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.embeddingApiKeyOptional}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={embeddingApiKey}
+									onChange={value =>
+										setEmbeddingApiKey(stripFocusArtifacts(value))
+									}
+									onSubmit={() => setIsEditing(false)}
+									mask="*"
+								/>
+							</Text>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{embeddingApiKey
+									? t.codebaseConfig.masked
+									: t.codebaseConfig.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'embeddingDimensions':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.embeddingDimensions}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={embeddingDimensions.toString()}
+									onChange={value => {
+										const num = parseInt(stripFocusArtifacts(value) || '0');
+										if (!isNaN(num)) {
+											setEmbeddingDimensions(num);
 										}
-										onSubmit={() => setIsEditing(false)}
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{embeddingModelName || t.codebaseConfig.notSet}
-								</Text>
-							</Box>
-						)}
-					</Box>
-				);
+									}}
+									onSubmit={() => setIsEditing(false)}
+								/>
+							</Text>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>{embeddingDimensions}</Text>
+						</Box>
+					)}
+				</Box>
+			);
 
-			case 'embeddingBaseUrl':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.embeddingBaseUrl}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={embeddingBaseUrl}
-										onChange={value =>
-											setEmbeddingBaseUrl(stripFocusArtifacts(value))
+		case 'batchMaxLines':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.batchMaxLines}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={batchMaxLines.toString()}
+									onChange={value => {
+										const num = parseInt(stripFocusArtifacts(value) || '0');
+										if (!isNaN(num)) {
+											setBatchMaxLines(num);
 										}
-										onSubmit={() => setIsEditing(false)}
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{embeddingBaseUrl || t.codebaseConfig.notSet}
-								</Text>
-							</Box>
-						)}
-					</Box>
-				);
+									}}
+									onSubmit={() => setIsEditing(false)}
+								/>
+							</Text>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>{batchMaxLines}</Text>
+						</Box>
+					)}
+				</Box>
+			);
 
-			case 'embeddingApiKey':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.embeddingApiKeyOptional}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={embeddingApiKey}
-										onChange={value =>
-											setEmbeddingApiKey(stripFocusArtifacts(value))
+		case 'batchConcurrency':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
+						{isActive ? '❯ ' : '  '}
+						{t.codebaseConfig.batchConcurrency}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo}>
+								<TextInput
+									value={batchConcurrency.toString()}
+									onChange={value => {
+										const num = parseInt(stripFocusArtifacts(value) || '0');
+										if (!isNaN(num)) {
+											setBatchConcurrency(num);
 										}
-										onSubmit={() => setIsEditing(false)}
-										mask="*"
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">
-									{embeddingApiKey
-										? t.codebaseConfig.masked
-										: t.codebaseConfig.notSet}
-								</Text>
-							</Box>
-						)}
-					</Box>
-				);
-
-			case 'embeddingDimensions':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.embeddingDimensions}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={embeddingDimensions.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setEmbeddingDimensions(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">{embeddingDimensions}</Text>
-							</Box>
-						)}
-					</Box>
-				);
-
-			case 'batchMaxLines':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.batchMaxLines}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={batchMaxLines.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setBatchMaxLines(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">{batchMaxLines}</Text>
-							</Box>
-						)}
-					</Box>
-				);
-
-			case 'batchConcurrency':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text color={isActive ? 'green' : 'white'}>
-							{isActive ? '❯ ' : '  '}
-							{t.codebaseConfig.batchConcurrency}
-						</Text>
-						{isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="cyan">
-									<TextInput
-										value={batchConcurrency.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setBatchConcurrency(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
-								</Text>
-							</Box>
-						)}
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color="gray">{batchConcurrency}</Text>
-							</Box>
-						)}
-					</Box>
-				);
+									}}
+									onSubmit={() => setIsEditing(false)}
+								/>
+							</Text>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>{batchConcurrency}</Text>
+						</Box>
+					)}
+				</Box>
+			);
 
 			default:
 				return null;
@@ -493,35 +495,35 @@ export default function CodeBaseConfigScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{!inlineMode && (
-				<Box
-					marginBottom={1}
-					borderStyle="double"
-					borderColor={'cyan'}
-					paddingX={2}
-				>
-					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.codebaseConfig.title}</Gradient>
-						<Text color="gray" dimColor>
-							{t.codebaseConfig.subtitle}
-						</Text>
-					</Box>
-				</Box>
-			)}
-
-			{/* Position indicator - always visible */}
-			<Box marginBottom={1}>
-				<Text color="yellow" bold>
-					{t.codebaseConfig.settingsPosition} ({currentFieldIndex + 1}/
-					{totalFields})
-				</Text>
-				{totalFields > MAX_VISIBLE_FIELDS && (
-					<Text color="gray" dimColor>
-						{' '}
-						{t.codebaseConfig.scrollHint}
+		{!inlineMode && (
+			<Box
+				marginBottom={1}
+				borderStyle="double"
+				borderColor={theme.colors.menuInfo}
+				paddingX={2}
+			>
+				<Box flexDirection="column">
+					<Gradient name="rainbow">{t.codebaseConfig.title}</Gradient>
+					<Text color={theme.colors.menuSecondary}>
+						{t.codebaseConfig.subtitle}
 					</Text>
-				)}
+				</Box>
 			</Box>
+		)}
+
+		{/* Position indicator - always visible */}
+		<Box marginBottom={1}>
+			<Text color={theme.colors.warning} bold>
+				{t.codebaseConfig.settingsPosition} ({currentFieldIndex + 1}/
+				{totalFields})
+			</Text>
+			{totalFields > MAX_VISIBLE_FIELDS && (
+				<Text color={theme.colors.menuSecondary}>
+					{' '}
+					{t.codebaseConfig.scrollHint}
+				</Text>
+			)}
+		</Box>
 
 			{/* Scrollable field list */}
 			<Box flexDirection="column">
@@ -550,18 +552,18 @@ export default function CodeBaseConfigScreen({
 				})()}
 			</Box>
 
-			{errors.length > 0 && (
-				<Box flexDirection="column" marginTop={1}>
-					<Text color="red" bold>
-						{t.codebaseConfig.errors}
+		{errors.length > 0 && (
+			<Box flexDirection="column" marginTop={1}>
+				<Text color={theme.colors.error} bold>
+					{t.codebaseConfig.errors}
+				</Text>
+				{errors.map((error, index) => (
+					<Text key={index} color={theme.colors.error}>
+						• {error}
 					</Text>
-					{errors.map((error, index) => (
-						<Text key={index} color="red">
-							• {error}
-						</Text>
-					))}
-				</Box>
-			)}
+				))}
+			</Box>
+		)}
 
 			{/* Navigation hints */}
 			<Box flexDirection="column" marginTop={1}>

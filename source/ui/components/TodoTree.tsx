@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 interface TodoItem {
 	id: string;
@@ -16,6 +17,8 @@ interface TodoTreeProps {
  * TODO Tree 组件 - 显示带复选框的任务树
  */
 export default function TodoTree({todos}: TodoTreeProps) {
+	const {theme} = useTheme();
+
 	if (todos.length === 0) {
 		return null;
 	}
@@ -46,9 +49,9 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	const getStatusColor = (status: TodoItem['status']) => {
 		switch (status) {
 			case 'completed':
-				return 'green';
+				return theme.colors.success;
 			case 'pending':
-				return 'gray';
+				return theme.colors.menuSecondary;
 		}
 	};
 
@@ -75,18 +78,18 @@ export default function TodoTree({todos}: TodoTreeProps) {
 		<Box
 			flexDirection="column"
 			borderStyle="round"
-			borderColor="cyan"
+			borderColor={theme.colors.menuInfo}
 			paddingX={1}
 			marginBottom={1}
 		>
 			<Box marginBottom={0}>
-				<Text bold color="cyan">
+				<Text bold color={theme.colors.menuInfo}>
 					TODO List
 				</Text>
 			</Box>
 			{rootTodos.map(todo => renderTodo(todo))}
 			<Box marginTop={0}>
-				<Text dimColor color="gray">
+				<Text dimColor color={theme.colors.menuSecondary}>
 					[ ] Pending · [✓] Completed
 				</Text>
 			</Box>

@@ -11,6 +11,7 @@ import {
 	validateSubAgent,
 } from '../../utils/subAgentConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 // Focus event handling - prevent terminal focus events from appearing as input
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -75,6 +76,7 @@ export default function SubAgentConfigScreen({
 	inlineMode = false,
 	agentId,
 }: Props) {
+	const {theme} = useTheme();
 	const {t} = useI18n();
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
@@ -413,7 +415,7 @@ export default function SubAgentConfigScreen({
 	const renderToolSelection = () => {
 		return (
 			<Box flexDirection="column">
-				<Text bold color="cyan">
+				<Text bold color={theme.colors.menuInfo}>
 					{t.subAgentConfig.toolSelection}
 				</Text>
 
@@ -425,7 +427,7 @@ export default function SubAgentConfigScreen({
 
 				{loadError && (
 					<Box>
-						<Text color="yellow">
+						<Text color={theme.colors.warning}>
 							{t.subAgentConfig.mcpLoadError} {loadError}
 						</Text>
 					</Box>
@@ -437,63 +439,63 @@ export default function SubAgentConfigScreen({
 						selectedTools.has(tool),
 					).length;
 
-					return (
-						<Box key={category.name} flexDirection="column">
-							<Box>
-								<Text
-									color={
-										isCurrent && currentField === 'tools' ? 'green' : 'white'
-									}
-									bold={isCurrent && currentField === 'tools'}
-								>
-									{isCurrent && currentField === 'tools' ? '▶ ' : '  '}
-									{category.name} ({selectedInCategory}/{category.tools.length})
-								</Text>
-							</Box>
-
-							{isCurrent && currentField === 'tools' && (
-								<Box flexDirection="column" marginLeft={2}>
-									{category.tools.map((tool, toolIndex) => {
-										const isCurrentTool = toolIndex === selectedToolIndex;
-										return (
-											<Box key={tool}>
-												<Text
-													color={isCurrentTool ? 'cyan' : 'white'}
-													bold={isCurrentTool}
-												>
-													{isCurrentTool ? '❯ ' : '  '}
-													{selectedTools.has(tool) ? '[✓]' : '[ ]'} {tool}
-												</Text>
-											</Box>
-										);
-									})}
-								</Box>
-							)}
+				return (
+					<Box key={category.name} flexDirection="column">
+						<Box>
+							<Text
+								color={
+									isCurrent && currentField === 'tools' ? theme.colors.menuSelected : theme.colors.menuNormal
+								}
+								bold={isCurrent && currentField === 'tools'}
+							>
+								{isCurrent && currentField === 'tools' ? '▶ ' : '  '}
+								{category.name} ({selectedInCategory}/{category.tools.length})
+							</Text>
 						</Box>
-					);
-				})}
 
-				<Text color="gray" dimColor>
-					{t.subAgentConfig.selectedTools} {selectedTools.size} /{' '}
-					{allTools.length} {t.subAgentConfig.toolsCount}
-				</Text>
+						{isCurrent && currentField === 'tools' && (
+							<Box flexDirection="column" marginLeft={2}>
+								{category.tools.map((tool, toolIndex) => {
+									const isCurrentTool = toolIndex === selectedToolIndex;
+									return (
+										<Box key={tool}>
+											<Text
+												color={isCurrentTool ? theme.colors.menuInfo : theme.colors.menuNormal}
+												bold={isCurrentTool}
+											>
+												{isCurrentTool ? '❯ ' : '  '}
+												{selectedTools.has(tool) ? '[✓]' : '[ ]'} {tool}
+											</Text>
+										</Box>
+									);
+								})}
+							</Box>
+						)}
+					</Box>
+				);
+			})}
+
+			<Text color={theme.colors.menuSecondary} dimColor>
+				{t.subAgentConfig.selectedTools} {selectedTools.size} /{' '}
+				{allTools.length} {t.subAgentConfig.toolsCount}
+			</Text>
 			</Box>
 		);
 	};
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			{!inlineMode && (
-				<Box marginBottom={1}>
-					<Text bold color="cyan">
-						❆{' '}
-						{isEditMode
-							? t.subAgentConfig.titleEdit
-							: t.subAgentConfig.titleNew}{' '}
-						{t.subAgentConfig.title}
-					</Text>
-				</Box>
-			)}
+		{!inlineMode && (
+			<Box marginBottom={1}>
+				<Text bold color={theme.colors.menuInfo}>
+					❆{' '}
+					{isEditMode
+						? t.subAgentConfig.titleEdit
+						: t.subAgentConfig.titleNew}{' '}
+					{t.subAgentConfig.title}
+				</Text>
+			</Box>
+		)}
 
 			{showSuccess && (
 				<Box marginBottom={1}>
@@ -514,60 +516,60 @@ export default function SubAgentConfigScreen({
 			)}
 
 			<Box flexDirection="column">
-				{/* Agent Name */}
-				<Box flexDirection="column">
-					<Text bold color={currentField === 'name' ? 'green' : 'white'}>
-						{t.subAgentConfig.agentName}
-					</Text>
-					<Box marginLeft={2}>
-						<TextInput
-							value={agentName}
-							onChange={value => setAgentName(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.agentNamePlaceholder}
-							focus={currentField === 'name'}
-						/>
-					</Box>
+			{/* Agent Name */}
+			<Box flexDirection="column">
+				<Text bold color={currentField === 'name' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+					{t.subAgentConfig.agentName}
+				</Text>
+				<Box marginLeft={2}>
+					<TextInput
+						value={agentName}
+						onChange={value => setAgentName(stripFocusArtifacts(value))}
+						placeholder={t.subAgentConfig.agentNamePlaceholder}
+						focus={currentField === 'name'}
+					/>
 				</Box>
+			</Box>
 
-				{/* Description */}
-				<Box flexDirection="column">
-					<Text bold color={currentField === 'description' ? 'green' : 'white'}>
-						{t.subAgentConfig.description}
-					</Text>
-					<Box marginLeft={2}>
-						<TextInput
-							value={description}
-							onChange={value => setDescription(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.descriptionPlaceholder}
-							focus={currentField === 'description'}
-						/>
-					</Box>
+			{/* Description */}
+			<Box flexDirection="column">
+				<Text bold color={currentField === 'description' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+					{t.subAgentConfig.description}
+				</Text>
+				<Box marginLeft={2}>
+					<TextInput
+						value={description}
+						onChange={value => setDescription(stripFocusArtifacts(value))}
+						placeholder={t.subAgentConfig.descriptionPlaceholder}
+						focus={currentField === 'description'}
+					/>
 				</Box>
+			</Box>
 
-				{/* Role */}
-				<Box flexDirection="column">
-					<Text bold color={currentField === 'role' ? 'green' : 'white'}>
-						{t.subAgentConfig.roleOptional}
-					</Text>
-					<Box marginLeft={2}>
-						<TextInput
-							value={role}
-							onChange={value => setRole(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.rolePlaceholder}
-							focus={currentField === 'role'}
-						/>
-					</Box>
+			{/* Role */}
+			<Box flexDirection="column">
+				<Text bold color={currentField === 'role' ? theme.colors.menuSelected : theme.colors.menuNormal}>
+					{t.subAgentConfig.roleOptional}
+				</Text>
+				<Box marginLeft={2}>
+					<TextInput
+						value={role}
+						onChange={value => setRole(stripFocusArtifacts(value))}
+						placeholder={t.subAgentConfig.rolePlaceholder}
+						focus={currentField === 'role'}
+					/>
 				</Box>
+			</Box>
 
 				{/* Tool Selection */}
 				{renderToolSelection()}
 
-				{/* Instructions */}
-				<Box marginTop={1}>
-					<Text color="gray" dimColor>
-						{t.subAgentConfig.navigationHint}
-					</Text>
-				</Box>
+			{/* Instructions */}
+			<Box marginTop={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{t.subAgentConfig.navigationHint}
+				</Text>
+			</Box>
 			</Box>
 		</Box>
 	);
