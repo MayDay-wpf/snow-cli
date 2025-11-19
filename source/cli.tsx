@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// Show loading indicator immediately before any imports
+process.stdout.write('\x1b[?25l'); // Hide cursor
+process.stdout.write('⠋ Loading...\r');
+
 import React from 'react';
 import {render, Text, Box} from 'ink';
 import Spinner from 'ink-spinner';
@@ -179,6 +183,9 @@ const Startup = ({
 
 // Disable bracketed paste mode on startup
 process.stdout.write('\x1b[?2004l');
+// Clear the early loading indicator and show cursor
+process.stdout.write('\x1b[2K\r'); // Clear line
+process.stdout.write('\x1b[?25h'); // Show cursor
 
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {

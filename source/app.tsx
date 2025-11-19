@@ -1,12 +1,15 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
+import Spinner from 'ink-spinner';
 import WelcomeScreen from './ui/pages/WelcomeScreen.js';
-import MCPConfigScreen from './ui/pages/MCPConfigScreen.js';
-import SystemPromptConfigScreen from './ui/pages/SystemPromptConfigScreen.js';
-import CustomHeadersScreen from './ui/pages/CustomHeadersScreen.js';
-import ChatScreen from './ui/pages/ChatScreen.js';
-import HeadlessModeScreen from './ui/pages/HeadlessModeScreen.js';
+// Lazy load heavy components to improve startup time
+const ChatScreen = React.lazy(() => import('./ui/pages/ChatScreen.js'));
+const HeadlessModeScreen = React.lazy(() => import('./ui/pages/HeadlessModeScreen.js'));
+const MCPConfigScreen = React.lazy(() => import('./ui/pages/MCPConfigScreen.js'));
+const SystemPromptConfigScreen = React.lazy(() => import('./ui/pages/SystemPromptConfigScreen.js'));
+const CustomHeadersScreen = React.lazy(() => import('./ui/pages/CustomHeadersScreen.js'));
+
 import {
 	useGlobalExit,
 	ExitNotification as ExitNotificationType,
@@ -83,13 +86,26 @@ function AppContent({
 	};
 
 	const renderView = () => {
+		const loadingFallback = (
+			<Box>
+				<Text color="cyan">
+					<Spinner type="dots" />
+				</Text>
+				<Text> Loading...</Text>
+			</Box>
+		);
+
 		switch (currentView) {
 			case 'welcome':
 				return (
 					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
 				);
 			case 'chat':
-				return <ChatScreen key={chatScreenKey} skipWelcome={skipWelcome} />;
+				return (
+					<Suspense fallback={loadingFallback}>
+						<ChatScreen key={chatScreenKey} skipWelcome={skipWelcome} />
+					</Suspense>
+				);
 			case 'settings':
 				return (
 					<Box flexDirection="column">
@@ -101,17 +117,25 @@ function AppContent({
 				);
 			case 'mcp':
 				return (
-					<MCPConfigScreen
-						onBack={() => setCurrentView('welcome')}
-						onSave={() => setCurrentView('welcome')}
-					/>
+					<Suspense fallback={loadingFallback}>
+						<MCPConfigScreen
+							onBack={() => setCurrentView('welcome')}
+							onSave={() => setCurrentView('welcome')}
+						/>
+					</Suspense>
 				);
 			case 'systemprompt':
 				return (
-					<SystemPromptConfigScreen onBack={() => setCurrentView('welcome')} />
+					<Suspense fallback={loadingFallback}>
+						<SystemPromptConfigScreen onBack={() => setCurrentView('welcome')} />
+					</Suspense>
 				);
 			case 'customheaders':
-				return <CustomHeadersScreen onBack={() => setCurrentView('welcome')} />;
+				return (
+					<Suspense fallback={loadingFallback}>
+						<CustomHeadersScreen onBack={() => setCurrentView('welcome')} />
+					</Suspense>
+				);
 			default:
 				return (
 					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
@@ -135,13 +159,24 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	// If headless prompt is provided, use headless mode
 	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
 	if (headlessPrompt) {
+		const loadingFallback = (
+			<Box>
+				<Text color="cyan">
+					<Spinner type="dots" />
+				</Text>
+				<Text> Loading...</Text>
+			</Box>
+		);
+
 		return (
 			<I18nProvider>
 				<ThemeProvider>
-					<HeadlessModeScreen
-						prompt={headlessPrompt}
-						onComplete={() => process.exit(0)}
-					/>
+					<Suspense fallback={loadingFallback}>
+						<HeadlessModeScreen
+							prompt={headlessPrompt}
+							onComplete={() => process.exit(0)}
+						/>
+					</Suspense>
 				</ThemeProvider>
 			</I18nProvider>
 		);

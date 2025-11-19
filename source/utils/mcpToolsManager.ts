@@ -62,16 +62,19 @@ interface MCPToolsCache {
 let toolsCache: MCPToolsCache | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Initialize TODO service with sessionManager accessor
-const todoService = new TodoService(path.join(os.homedir(), '.snow'), () => {
-	const session = sessionManager.getCurrentSession();
-	return session ? session.id : null;
-});
+// Lazy initialization of TODO service to avoid circular dependencies
+let todoService: TodoService | null = null;
 
 /**
- * Get the TODO service instance
+ * Get the TODO service instance (lazy initialization)
  */
 export function getTodoService(): TodoService {
+	if (!todoService) {
+		todoService = new TodoService(path.join(os.homedir(), '.snow'), () => {
+			const session = sessionManager.getCurrentSession();
+			return session ? session.id : null;
+		});
+	}
 	return todoService;
 }
 
@@ -180,8 +183,9 @@ async function refreshToolsCache(): Promise<void> {
 	}
 
 	// Add built-in TODO tools (always available)
-	await todoService.initialize();
-	const todoTools = todoService.getTools();
+	const todoSvc = getTodoService(); // This will never return null after lazy init
+	await todoSvc.initialize();
+	const todoTools = todoSvc.getTools();
 	const todoServiceTools = todoTools.map(tool => ({
 		name: tool.name.replace('todo-', ''),
 		description: tool.description || '',
@@ -836,7 +840,7 @@ export async function executeMCPTool(
 
 	if (serviceName === 'todo') {
 		// Handle built-in TODO tools (no connection needed)
-		return await todoService.executeTool(actualToolName, args);
+		return await getTodoService().executeTool(actualToolName, args);
 	} else if (serviceName === 'notebook') {
 		// Handle built-in Notebook tools (no connection needed)
 		return await executeNotebookTool(toolName, args);

@@ -109,7 +109,34 @@ export class Logger {
 	}
 }
 
-const defaultLogger = new Logger();
+// Lazy initialization to avoid blocking startup
+let _defaultLogger: Logger | null = null;
 
-export default defaultLogger;
-export {defaultLogger as logger};
+function getDefaultLogger(): Logger {
+	if (!_defaultLogger) {
+		_defaultLogger = new Logger();
+	}
+	return _defaultLogger;
+}
+
+// Create a proxy object that lazily initializes the logger
+const logger = {
+	error(message: string, meta?: any): void {
+		getDefaultLogger().error(message, meta);
+	},
+	warn(message: string, meta?: any): void {
+		getDefaultLogger().warn(message, meta);
+	},
+	info(message: string, meta?: any): void {
+		getDefaultLogger().info(message, meta);
+	},
+	debug(message: string, meta?: any): void {
+		getDefaultLogger().debug(message, meta);
+	},
+	log(level: LogLevel, message: string, meta?: any): void {
+		getDefaultLogger().log(level, message, meta);
+	},
+};
+
+export default logger;
+export {logger};

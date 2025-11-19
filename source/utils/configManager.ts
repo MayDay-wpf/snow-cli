@@ -353,13 +353,22 @@ export function initializeProfiles(): void {
 
 	// Ensure the active profile exists and is loaded to config.json
 	const activeProfile = getActiveProfileName();
-	const profileConfig = loadProfile(activeProfile);
+	let profileConfig = loadProfile(activeProfile);
 
 	if (profileConfig) {
 		// Sync the active profile to config.json
 		saveConfig(profileConfig);
 	} else {
-		// If active profile doesn't exist, switch to default
-		switchProfile('default');
+		// If active profile doesn't exist, create it first
+		// This is especially important for first-time installations
+		const defaultConfig = loadConfig();
+		saveProfile(activeProfile, defaultConfig);
+		setActiveProfileName(activeProfile);
+
+		// Now load and sync the newly created profile
+		profileConfig = loadProfile(activeProfile);
+		if (profileConfig) {
+			saveConfig(profileConfig);
+		}
 	}
 }

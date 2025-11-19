@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.10
+
+- Optimize startup speed and initialization exceptions
+
 ## v0.4.9
 
 - Update dependency package mirror source

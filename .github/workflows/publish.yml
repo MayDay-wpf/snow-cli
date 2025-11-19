@@ -55,9 +55,7 @@ jobs:
             
             ### What's New
 
-            - Update dependency package mirror source
-            - Add multiple theme options
-            - Optimize dependency download speed and stability
+            - Optimize startup speed and initialization exceptions
             
             ### Installation
             ```bash
