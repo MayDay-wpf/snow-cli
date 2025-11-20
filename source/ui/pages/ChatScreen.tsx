@@ -47,22 +47,7 @@ import {loadCodebaseConfig} from '../../utils/codebaseConfig.js';
 import {codebaseSearchEvents} from '../../utils/codebaseSearchEvents.js';
 import {logger} from '../../utils/logger.js';
 
-// Import commands to register them
-import '../../utils/commands/clear.js';
-import '../../utils/commands/resume.js';
-import '../../utils/commands/mcp.js';
-import '../../utils/commands/yolo.js';
-import '../../utils/commands/init.js';
-import '../../utils/commands/ide.js';
-import '../../utils/commands/compact.js';
-import '../../utils/commands/home.js';
-import '../../utils/commands/review.js';
-import '../../utils/commands/role.js';
-import '../../utils/commands/usage.js';
-import '../../utils/commands/export.js';
-import '../../utils/commands/agent.js';
-import '../../utils/commands/todoPicker.js';
-import '../../utils/commands/help.js';
+// Commands will be loaded dynamically after mount to avoid blocking initial render
 
 type Props = {
 	skipWelcome?: boolean;
@@ -145,6 +130,30 @@ export default function ChatScreen({skipWelcome}: Props) {
 		pendingMessagesRef.current = pendingMessages;
 	}, [pendingMessages]);
 
+	// Load commands dynamically to avoid blocking initial render
+	useEffect(() => {
+		// Use Promise.all to load all commands in parallel
+		Promise.all([
+			import('../../utils/commands/clear.js'),
+			import('../../utils/commands/resume.js'),
+			import('../../utils/commands/mcp.js'),
+			import('../../utils/commands/yolo.js'),
+			import('../../utils/commands/init.js'),
+			import('../../utils/commands/ide.js'),
+			import('../../utils/commands/compact.js'),
+			import('../../utils/commands/home.js'),
+			import('../../utils/commands/review.js'),
+			import('../../utils/commands/role.js'),
+			import('../../utils/commands/usage.js'),
+			import('../../utils/commands/export.js'),
+			import('../../utils/commands/agent.js'),
+			import('../../utils/commands/todoPicker.js'),
+			import('../../utils/commands/help.js'),
+		]).catch(error => {
+			console.error('Failed to load commands:', error);
+		});
+	}, []);
+
 	// Auto-start codebase indexing on mount if enabled
 	useEffect(() => {
 		const startCodebaseIndexing = async () => {
@@ -163,62 +172,64 @@ export default function ChatScreen({skipWelcome}: Props) {
 				// Check if indexing is needed
 				const progress = agent.getProgress();
 
-				// If indexing is already completed, start watcher and return early
-				if (progress.status === 'completed' && progress.totalChunks > 0) {
-					agent.startWatching(progressData => {
-						setCodebaseProgress({
-							totalFiles: progressData.totalFiles,
-							processedFiles: progressData.processedFiles,
-							totalChunks: progressData.totalChunks,
-							currentFile: progressData.currentFile,
-							status: progressData.status,
-						});
+		// If indexing is already completed, start watcher and return early
+		if (progress.status === 'completed' && progress.totalChunks > 0) {
+			agent.startWatching(progressData => {
+				setCodebaseProgress({
+					totalFiles: progressData.totalFiles,
+					processedFiles: progressData.processedFiles,
+					totalChunks: progressData.totalChunks,
+					currentFile: progressData.currentFile,
+					status: progressData.status,
+				});
 
-						// Handle file update notifications
-						if (progressData.totalFiles === 0 && progressData.currentFile) {
-							setFileUpdateNotification({
-								file: progressData.currentFile,
-								timestamp: Date.now(),
-							});
-
-							// Clear notification after 3 seconds
-							setTimeout(() => {
-								setFileUpdateNotification(null);
-							}, 3000);
-						}
+				// Handle file update notifications
+				if (progressData.totalFiles === 0 && progressData.currentFile) {
+					setFileUpdateNotification({
+						file: progressData.currentFile,
+						timestamp: Date.now(),
 					});
-					setWatcherEnabled(true);
-					return;
+
+					// Clear notification after 3 seconds
+					setTimeout(() => {
+						setFileUpdateNotification(null);
+					}, 3000);
 				}
+			});
+			setWatcherEnabled(true);
+			setCodebaseIndexing(false); // Ensure loading UI is hidden
+			return;
+		}
 
-				// If watcher was enabled before but indexing not completed, restore it
-				const wasWatcherEnabled = agent.isWatcherEnabled();
-				if (wasWatcherEnabled) {
-					logger.info('Restoring file watcher from previous session');
-					agent.startWatching(progressData => {
-						setCodebaseProgress({
-							totalFiles: progressData.totalFiles,
-							processedFiles: progressData.processedFiles,
-							totalChunks: progressData.totalChunks,
-							currentFile: progressData.currentFile,
-							status: progressData.status,
-						});
+		// If watcher was enabled before but indexing not completed, restore it
+		const wasWatcherEnabled = agent.isWatcherEnabled();
+		if (wasWatcherEnabled) {
+			logger.info('Restoring file watcher from previous session');
+			agent.startWatching(progressData => {
+				setCodebaseProgress({
+					totalFiles: progressData.totalFiles,
+					processedFiles: progressData.processedFiles,
+					totalChunks: progressData.totalChunks,
+					currentFile: progressData.currentFile,
+					status: progressData.status,
+				});
 
-						// Handle file update notifications
-						if (progressData.totalFiles === 0 && progressData.currentFile) {
-							setFileUpdateNotification({
-								file: progressData.currentFile,
-								timestamp: Date.now(),
-							});
-
-							// Clear notification after 3 seconds
-							setTimeout(() => {
-								setFileUpdateNotification(null);
-							}, 3000);
-						}
+				// Handle file update notifications
+				if (progressData.totalFiles === 0 && progressData.currentFile) {
+					setFileUpdateNotification({
+						file: progressData.currentFile,
+						timestamp: Date.now(),
 					});
-					setWatcherEnabled(true);
+
+					// Clear notification after 3 seconds
+					setTimeout(() => {
+						setFileUpdateNotification(null);
+					}, 3000);
 				}
+			});
+			setWatcherEnabled(true);
+			setCodebaseIndexing(false); // Ensure loading UI is hidden when restoring watcher
+		}
 
 				// Start or resume indexing in background
 				setCodebaseIndexing(true);
