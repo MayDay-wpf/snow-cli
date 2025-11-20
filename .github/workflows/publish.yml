@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Codex XHIGH
+            - Check whether the command has been loaded before automatically connecting to VS Code
             
             ### Installation
             ```bash

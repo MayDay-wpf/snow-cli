@@ -130,6 +130,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 		pendingMessagesRef.current = pendingMessages;
 	}, [pendingMessages]);
 
+	// Track if commands are loaded
+	const [commandsLoaded, setCommandsLoaded] = useState(false);
+
 	// Load commands dynamically to avoid blocking initial render
 	useEffect(() => {
 		// Use Promise.all to load all commands in parallel
@@ -149,9 +152,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 			import('../../utils/commands/agent.js'),
 			import('../../utils/commands/todoPicker.js'),
 			import('../../utils/commands/help.js'),
-		]).catch(error => {
-			console.error('Failed to load commands:', error);
-		});
+		])
+			.then(() => {
+				setCommandsLoaded(true);
+			})
+			.catch(error => {
+				console.error('Failed to load commands:', error);
+				// Still mark as loaded to allow app to continue
+				setCommandsLoaded(true);
+			});
 	}, []);
 
 	// Auto-start codebase indexing on mount if enabled
@@ -463,6 +472,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 	});
 
 	useEffect(() => {
+		// Wait for commands to be loaded before attempting auto-connect
+		if (!commandsLoaded) {
+			return;
+		}
+
 		if (hasAttemptedAutoVscodeConnect.current) {
 			return;
 		}
@@ -489,7 +503,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				});
 			}
 		})();
-	}, [handleCommandExecution, vscodeState.vscodeConnectionStatus]);
+	}, [commandsLoaded, handleCommandExecution, vscodeState.vscodeConnectionStatus]);
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)

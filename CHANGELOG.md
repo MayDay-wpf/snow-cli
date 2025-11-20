@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.15
+
+- Check whether the command has been loaded before automatically connecting to VS Code
+
 ## v0.4.12
 
 - Codex XHIGH
