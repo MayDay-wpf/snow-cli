@@ -1,0 +1,24 @@
+# CI 环境专用配置
+# 必须使用官方 npm registry 才能发布
+
+# 保持对等依赖兼容性
+legacy-peer-deps=true
+
+# 使用官方 npm registry
+registry=https://registry.npmjs.org
+
+# 并行安装配置
+fetch-retries=3
+fetch-retry-mintimeout=10000
+fetch-retry-maxtimeout=60000
+
+# 网络超时设置
+fetch-timeout=300000
+
+# 缓存配置优化
+prefer-offline=false
+audit=false
+fund=false
+
+# 并行下载数
+maxsockets=10
