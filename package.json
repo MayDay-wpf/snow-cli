@@ -1,10 +1,10 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.16",
+	"version": "0.4.17",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
-		"snow": "dist/cli.js"
+		"snow": "bundle/cli.mjs"
 	},
 	"type": "module",
 	"keywords": [
@@ -28,9 +28,13 @@
 		"npm": ">=8.3.0"
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && node build.mjs",
+		"build:ts": "tsc",
+		"build:bundle": "node build.mjs",
 		"dev": "tsc --watch",
-		"start": "node dist/cli.js",
+		"start": "node bundle/cli.mjs",
+		"link": "npm run build && npm link",
+		"unlink": "npm unlink -g snow-ai",
 		"prepublishOnly": "npm run build",
 		"postinstall": "node scripts/postinstall.cjs",
 		"test": "prettier --check . && xo && ava",
@@ -38,16 +42,31 @@
 		"format": "prettier --write ."
 	},
 	"files": [
-		"dist",
+		"bundle",
 		"scripts"
 	],
-	"dependencies": {
+	"devDependencies": {
 		"@inkjs/ui": "^2.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
-		"@types/better-sqlite3": "^7.6.13",
-		"better-sqlite3": "^12.4.1",
+		"@sindresorhus/tsconfig": "^3.0.1",
+		"@types/diff": "^7.0.2",
+		"@types/marked-terminal": "^6.1.1",
+		"@types/pdf-parse": "^1.1.5",
+		"@types/prettier": "^2.7.3",
+		"@types/react": "^18.0.32",
+		"@types/sql.js": "^1.4.9",
+		"@types/ws": "^8.5.8",
+		"@vdemedes/prettier-config": "^2.0.1",
+		"@vercel/ncc": "^0.38.4",
+		"ava": "^5.2.0",
+		"chalk": "^5.2.0",
 		"cli-highlight": "^2.1.11",
 		"diff": "^8.0.2",
+		"esbuild": "^0.27.0",
+		"esbuild-plugin-copy": "^2.1.1",
+		"eslint-config-xo-react": "^0.27.0",
+		"eslint-plugin-react": "^7.32.2",
+		"eslint-plugin-react-hooks": "^4.6.0",
 		"fzf": "^0.5.2",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
@@ -56,6 +75,7 @@
 		"ink-gradient": "^3.0.0",
 		"ink-select-input": "^6.2.0",
 		"ink-spinner": "^5.0.0",
+		"ink-testing-library": "^3.0.0",
 		"ink-text-input": "^6.0.0",
 		"mammoth": "^1.11.0",
 		"marked": "^15.0.6",
@@ -66,28 +86,13 @@
 		"prettier": "^2.8.7",
 		"puppeteer-core": "^24.25.0",
 		"react": "^18.2.0",
+		"sql.js": "^1.13.0",
 		"string-width": "^7.2.0",
 		"tiktoken": "^1.0.22",
-		"ws": "^8.14.2",
-		"xlsx": "^0.18.5"
-	},
-	"devDependencies": {
-		"@sindresorhus/tsconfig": "^3.0.1",
-		"@types/diff": "^7.0.2",
-		"@types/marked-terminal": "^6.1.1",
-		"@types/pdf-parse": "^1.1.5",
-		"@types/prettier": "^2.7.3",
-		"@types/react": "^18.0.32",
-		"@types/ws": "^8.5.8",
-		"@vdemedes/prettier-config": "^2.0.1",
-		"ava": "^5.2.0",
-		"chalk": "^5.2.0",
-		"eslint-config-xo-react": "^0.27.0",
-		"eslint-plugin-react": "^7.32.2",
-		"eslint-plugin-react-hooks": "^4.6.0",
-		"ink-testing-library": "^3.0.0",
 		"ts-node": "^10.9.1",
 		"typescript": "^5.0.3",
+		"ws": "^8.14.2",
+		"xlsx": "^0.18.5",
 		"xo": "^0.53.1"
 	},
 	"overrides": {

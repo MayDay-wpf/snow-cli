@@ -1,25 +1,25 @@
-import React, {useCallback, useEffect, useRef, useMemo, lazy, Suspense} from 'react';
-import {Box, Text} from 'ink';
-import {Viewport} from '../../utils/textBuffer.js';
-import {cpSlice} from '../../utils/textUtils.js';
+import React, { useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { Box, Text } from 'ink';
+import { Viewport } from '../../utils/textBuffer.js';
+import { cpSlice } from '../../utils/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('./CommandPanel.js'));
 const FileList = lazy(() => import('./FileList.js'));
 const AgentPickerPanel = lazy(() => import('./AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('./TodoPickerPanel.js'));
-import {useInputBuffer} from '../../hooks/useInputBuffer.js';
-import {useCommandPanel} from '../../hooks/useCommandPanel.js';
-import {useFilePicker} from '../../hooks/useFilePicker.js';
-import {useHistoryNavigation} from '../../hooks/useHistoryNavigation.js';
-import {useClipboard} from '../../hooks/useClipboard.js';
-import {useKeyboardInput} from '../../hooks/useKeyboardInput.js';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
-import {useTerminalFocus} from '../../hooks/useTerminalFocus.js';
-import {useAgentPicker} from '../../hooks/useAgentPicker.js';
-import {useTodoPicker} from '../../hooks/useTodoPicker.js';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+import { useInputBuffer } from '../../hooks/useInputBuffer.js';
+import { useCommandPanel } from '../../hooks/useCommandPanel.js';
+import { useFilePicker } from '../../hooks/useFilePicker.js';
+import { useHistoryNavigation } from '../../hooks/useHistoryNavigation.js';
+import { useClipboard } from '../../hooks/useClipboard.js';
+import { useKeyboardInput } from '../../hooks/useKeyboardInput.js';
+import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import { useTerminalFocus } from '../../hooks/useTerminalFocus.js';
+import { useAgentPicker } from '../../hooks/useAgentPicker.js';
+import { useTodoPicker } from '../../hooks/useTodoPicker.js';
+import { useI18n } from '../../i18n/index.js';
+import { useTheme } from '../contexts/ThemeContext.js';
 
 /**
  * Calculate context usage percentage
@@ -41,8 +41,8 @@ export function calculateContextPercentage(contextUsage: {
 	// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 	const totalInputTokens = isAnthropic
 		? contextUsage.inputTokens +
-		  (contextUsage.cacheCreationTokens || 0) +
-		  (contextUsage.cacheReadTokens || 0)
+		(contextUsage.cacheCreationTokens || 0) +
+		(contextUsage.cacheReadTokens || 0)
 		: contextUsage.inputTokens;
 
 	return Math.min(
@@ -54,13 +54,13 @@ export function calculateContextPercentage(contextUsage: {
 type Props = {
 	onSubmit: (
 		message: string,
-		images?: Array<{data: string; mimeType: string}>,
+		images?: Array<{ data: string; mimeType: string }>,
 	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
 	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
-	chatHistory?: Array<{role: string; content: string}>;
+	chatHistory?: Array<{ role: string; content: string }>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	contextUsage?: {
@@ -74,7 +74,7 @@ type Props = {
 	};
 	initialContent?: {
 		text: string;
-		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		images?: Array<{ type: 'image'; data: string; mimeType: string }>;
 	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
 };
@@ -93,15 +93,15 @@ export default function ChatInput({
 	onContextPercentageChange,
 }: Props) {
 	// Use i18n hook for translations
-	const {t} = useI18n();
-	const {theme} = useTheme();
+	const { t } = useI18n();
+	const { theme } = useTheme();
 
 	// Use terminal size hook to listen for resize events
-	const {columns: terminalWidth} = useTerminalSize();
+	const { columns: terminalWidth } = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
 
 	// Use terminal focus hook to detect focus state
-	const {hasFocus, ensureFocus} = useTerminalFocus();
+	const { hasFocus, ensureFocus } = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -115,7 +115,7 @@ export default function ChatInput({
 	); // Memoize viewport to prevent unnecessary re-renders
 
 	// Use input buffer hook
-	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
+	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
 
 	// Use command panel hook
 	const {
@@ -192,7 +192,7 @@ export default function ChatInput({
 	} = useTodoPicker(buffer, triggerUpdate, process.cwd());
 
 	// Use clipboard hook
-	const {pasteFromClipboard} = useClipboard(
+	const { pasteFromClipboard } = useClipboard(
 		buffer,
 		updateCommandPanelState,
 		updateFilePickerState,
@@ -241,14 +241,14 @@ export default function ChatInput({
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
-	showAgentPicker,
-	setShowAgentPicker,
-	agentSelectedIndex,
-	setAgentSelectedIndex,
-	updateAgentPickerState,
-	getFilteredAgents,
-	handleAgentSelect,
-	showTodoPicker,
+		showAgentPicker,
+		setShowAgentPicker,
+		agentSelectedIndex,
+		setAgentSelectedIndex,
+		updateAgentPickerState,
+		getFilteredAgents,
+		handleAgentSelect,
+		showTodoPicker,
 		setShowTodoPicker,
 		todoSelectedIndex,
 		setTodoSelectedIndex,
@@ -355,17 +355,17 @@ export default function ChatInput({
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
 		(char: string) => {
-		if (hasFocus) {
-			// Focused: solid block cursor (use inverted colors)
-			return (
-				<Text backgroundColor={theme.colors.menuNormal} color={theme.colors.background}>
-					{char}
-				</Text>
-			);
-		} else {
-			// Unfocused: no cursor, just render the character normally
-			return <Text>{char}</Text>;
-		}
+			if (hasFocus) {
+				// Focused: solid block cursor (use inverted colors)
+				return (
+					<Text backgroundColor={theme.colors.menuNormal} color={theme.colors.background}>
+						{char}
+					</Text>
+				);
+			} else {
+				// Unfocused: no cursor, just render the character normally
+				return <Text>{char}</Text>;
+			}
 		},
 		[hasFocus, theme],
 	);
@@ -450,16 +450,16 @@ export default function ChatInput({
 								<>
 									{/* Top scroll indicator - always reserve space */}
 									<Box height={1}>
-					{hasMoreAbove ? (
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.chatScreen.moreAbove.replace(
-								'{count}',
-								startIndex.toString(),
-							)}
-						</Text>
-					) : (
-						<Text> </Text>
-					)}
+										{hasMoreAbove ? (
+											<Text color={theme.colors.menuSecondary} dimColor>
+												{t.chatScreen.moreAbove.replace(
+													'{count}',
+													startIndex.toString(),
+												)}
+											</Text>
+										) : (
+											<Text> </Text>
+										)}
 									</Box>
 
 									{/* Message list - each item fixed to 1 line */}
@@ -481,69 +481,69 @@ export default function ChatInput({
 
 										return (
 											<Box key={message.value} height={1}>
-					<Text
-						color={
-							actualIndex === historySelectedIndex
-								? theme.colors.menuSelected
-								: theme.colors.menuNormal
-						}
-						bold
-						wrap="truncate"
-					>
-						{actualIndex === historySelectedIndex ? '❯  ' : '  '}
-						{truncatedLabel}
-					</Text>
+												<Text
+													color={
+														actualIndex === historySelectedIndex
+															? theme.colors.menuSelected
+															: theme.colors.menuNormal
+													}
+													bold
+													wrap="truncate"
+												>
+													{actualIndex === historySelectedIndex ? '❯  ' : '  '}
+													{truncatedLabel}
+												</Text>
 											</Box>
 										);
 									})}
 
 									{/* Bottom scroll indicator - always reserve space */}
 									<Box height={1}>
-					{hasMoreBelow ? (
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.chatScreen.moreBelow.replace(
-								'{count}',
-								(userMessages.length - endIndex).toString(),
-							)}
-						</Text>
-					) : (
-						<Text> </Text>
-					)}
+										{hasMoreBelow ? (
+											<Text color={theme.colors.menuSecondary} dimColor>
+												{t.chatScreen.moreBelow.replace(
+													'{count}',
+													(userMessages.length - endIndex).toString(),
+												)}
+											</Text>
+										) : (
+											<Text> </Text>
+										)}
 									</Box>
 								</>
 							);
 						})()}
 					</Box>
-				<Box marginBottom={1}>
-					<Text color={theme.colors.menuInfo} dimColor>
-						{t.chatScreen.historyNavigateHint}
-					</Text>
-				</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{t.chatScreen.historyNavigateHint}
+						</Text>
+					</Box>
 				</Box>
 			)}
 			{!showHistoryMenu && (
 				<>
-			<Box flexDirection="column" width={terminalWidth - 2}>
-				<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
-				<Box flexDirection="row">
-					<Text color={theme.colors.menuInfo} bold>
-						❯{' '}
-					</Text>
-					<Box flexGrow={1}>{renderContent()}</Box>
-				</Box>
-				<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
-			</Box>
+					<Box flexDirection="column" width={terminalWidth - 2}>
+						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+						<Box flexDirection="row">
+							<Text color={theme.colors.menuInfo} bold>
+								❯{' '}
+							</Text>
+							<Box flexGrow={1}>{renderContent()}</Box>
+						</Box>
+						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+					</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
-					showFilePicker ? (
+						showFilePicker ? (
 						<Box marginTop={1}>
 							<Text>
 								{showCommands && getFilteredCommands().length > 0
 									? t.chatScreen.typeToFilterCommands
 									: showFilePicker
-									? searchMode === 'content'
-										? t.chatScreen.contentSearchHint
-										: t.chatScreen.fileSearchHint
-									: ''}
+										? searchMode === 'content'
+											? t.chatScreen.contentSearchHint
+											: t.chatScreen.fileSearchHint
+										: ''}
 							</Text>
 						</Box>
 					) : null}
@@ -570,36 +570,36 @@ export default function ChatInput({
 							/>
 						</Suspense>
 					</Box>
-				<Suspense fallback={null}>
-					<AgentPickerPanel
-						agents={getFilteredAgents()}
-						selectedIndex={agentSelectedIndex}
-						visible={showAgentPicker}
-						maxHeight={5}
-					/>
-				</Suspense>
-				<Suspense fallback={null}>
-					<TodoPickerPanel
-						todos={todos}
-						selectedIndex={todoSelectedIndex}
-						selectedTodos={selectedTodos}
-						visible={showTodoPicker}
-						maxHeight={5}
-						isLoading={todoIsLoading}
-						searchQuery={todoSearchQuery}
-						totalCount={totalTodoCount}
-					/>
-				</Suspense>
-				{yoloMode && (
-					<Box marginTop={1}>
-						<Text color={theme.colors.warning} dimColor>
-							{t.chatScreen.yoloModeActive}
-						</Text>
-					</Box>
-				)}
-				{contextUsage && (
-					<Box marginTop={1}>
-						<Text color={theme.colors.menuSecondary} dimColor>
+					<Suspense fallback={null}>
+						<AgentPickerPanel
+							agents={getFilteredAgents()}
+							selectedIndex={agentSelectedIndex}
+							visible={showAgentPicker}
+							maxHeight={5}
+						/>
+					</Suspense>
+					<Suspense fallback={null}>
+						<TodoPickerPanel
+							todos={todos}
+							selectedIndex={todoSelectedIndex}
+							selectedTodos={selectedTodos}
+							visible={showTodoPicker}
+							maxHeight={5}
+							isLoading={todoIsLoading}
+							searchQuery={todoSearchQuery}
+							totalCount={totalTodoCount}
+						/>
+					</Suspense>
+					{yoloMode && (
+						<Box marginTop={1}>
+							<Text color={theme.colors.warning} dimColor>
+								{t.chatScreen.yoloModeActive}
+							</Text>
+						</Box>
+					)}
+					{contextUsage && (
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
 								{(() => {
 									// Determine which caching system is being used
 									const isAnthropic =
@@ -613,14 +613,14 @@ export default function ChatInput({
 									// Calculate total tokens for display
 									const totalInputTokens = isAnthropic
 										? contextUsage.inputTokens +
-										  (contextUsage.cacheCreationTokens || 0) +
-										  (contextUsage.cacheReadTokens || 0)
-					: contextUsage.inputTokens;
-				let color: string;
-				if (percentage < 50) color = theme.colors.success;
-				else if (percentage < 75) color = theme.colors.warning;
-				else if (percentage < 90) color = theme.colors.warning;
-				else color = theme.colors.error;
+										(contextUsage.cacheCreationTokens || 0) +
+										(contextUsage.cacheReadTokens || 0)
+										: contextUsage.inputTokens;
+									let color: string;
+									if (percentage < 50) color = theme.colors.success;
+									else if (percentage < 75) color = theme.colors.warning;
+									else if (percentage < 90) color = theme.colors.warning;
+									else color = theme.colors.error;
 
 									const formatNumber = (num: number) => {
 										if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
@@ -643,40 +643,40 @@ export default function ChatInput({
 													{/* Anthropic caching display */}
 													{isAnthropic && (
 														<>
-								{(contextUsage.cacheReadTokens || 0) > 0 && (
-									<>
-										<Text color={theme.colors.menuInfo}>
-											↯{' '}
-											{formatNumber(
-												contextUsage.cacheReadTokens || 0,
-											)}{' '}
-											{t.chatScreen.cached}
-										</Text>
-									</>
-								)}
+															{(contextUsage.cacheReadTokens || 0) > 0 && (
+																<>
+																	<Text color={theme.colors.menuInfo}>
+																		↯{' '}
+																		{formatNumber(
+																			contextUsage.cacheReadTokens || 0,
+																		)}{' '}
+																		{t.chatScreen.cached}
+																	</Text>
+																</>
+															)}
 															{(contextUsage.cacheCreationTokens || 0) > 0 && (
 																<>
 																	{(contextUsage.cacheReadTokens || 0) > 0 && (
 																		<Text> · </Text>
 																	)}
-									<Text color={theme.colors.warning}>
-										◆{' '}
-										{formatNumber(
-											contextUsage.cacheCreationTokens || 0,
-										)}{' '}
-										{t.chatScreen.newCache}
-									</Text>
+																	<Text color={theme.colors.warning}>
+																		◆{' '}
+																		{formatNumber(
+																			contextUsage.cacheCreationTokens || 0,
+																		)}{' '}
+																		{t.chatScreen.newCache}
+																	</Text>
 																</>
 															)}
 														</>
 													)}
-						{/* OpenAI caching display */}
-						{isOpenAI && (
-							<Text color={theme.colors.menuInfo}>
-								↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-								{t.chatScreen.cached}
-							</Text>
-						)}
+													{/* OpenAI caching display */}
+													{isOpenAI && (
+														<Text color={theme.colors.menuInfo}>
+															↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
+															{t.chatScreen.cached}
+														</Text>
+													)}
 												</>
 											)}
 										</>

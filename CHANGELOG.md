@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.17
+
+- Add a new build script to support packaging the CLI tool
+
 ## v0.4.16
 
 - Implement component lazy loading and IDE connection optimization

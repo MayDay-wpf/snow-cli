@@ -15,7 +15,10 @@ class CodebaseSearchService {
 	/**
 	 * Check if codebase index is available and has data
 	 */
-	private isCodebaseIndexAvailable(): {available: boolean; reason?: string} {
+	private async isCodebaseIndexAvailable(): Promise<{
+		available: boolean;
+		reason?: string;
+	}> {
 		try {
 			const projectRoot = process.cwd();
 			const dbPath = path.join(
@@ -36,7 +39,7 @@ class CodebaseSearchService {
 
 			// Initialize database and check for data
 			const db = new CodebaseDatabase(projectRoot);
-			db.initialize();
+			await db.initialize();
 
 			const totalChunks = db.getTotalChunks();
 			db.close();
@@ -91,7 +94,7 @@ class CodebaseSearchService {
 		const enableAgentReview = config.enableAgentReview;
 
 		// Check if codebase index is available
-		const {available, reason} = this.isCodebaseIndexAvailable();
+		const {available, reason} = await this.isCodebaseIndexAvailable();
 		if (!available) {
 			return {
 				error: reason,
@@ -106,7 +109,7 @@ class CodebaseSearchService {
 		try {
 			const projectRoot = process.cwd();
 			const db = new CodebaseDatabase(projectRoot);
-			db.initialize();
+			await db.initialize();
 
 			const totalChunks = db.getTotalChunks();
 

@@ -114,7 +114,7 @@ export class CodebaseIndexAgent {
 
 		try {
 			// Initialize database
-			this.db.initialize();
+			await this.db.initialize();
 
 			// Check if stopped before starting
 			if (this.shouldStop) {
@@ -256,12 +256,12 @@ export class CodebaseIndexAgent {
 	/**
 	 * Get current progress
 	 */
-	getProgress() {
+	async getProgress() {
 		// Initialize database if not already done
 		if (!this.db) {
 			this.db = new CodebaseDatabase(this.projectRoot);
 		}
-		this.db.initialize();
+		await this.db.initialize();
 		return this.db.getProgress();
 	}
 
@@ -283,9 +283,9 @@ export class CodebaseIndexAgent {
 	/**
 	 * Check if watcher is enabled in database
 	 */
-	isWatcherEnabled(): boolean {
+	async isWatcherEnabled(): Promise<boolean> {
 		try {
-			this.db.initialize();
+			await this.db.initialize();
 			return this.db.isWatcherEnabled();
 		} catch (error) {
 			return false;

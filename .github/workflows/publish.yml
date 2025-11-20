@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Implement component lazy loading and IDE connection optimization
+            - Add a new build script to support packaging the CLI tool
             
             ### Installation
             ```bash

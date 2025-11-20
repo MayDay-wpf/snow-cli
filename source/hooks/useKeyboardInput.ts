@@ -786,7 +786,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				// Detect large paste: if accumulated buffer is getting large, extend timeout
 				// This prevents splitting large pastes into multiple insert() calls
 				const currentLength = inputBuffer.current.length;
-				const timeoutDelay = currentLength > 200 ? 150 : 10;
 
 				// Show pasting indicator for large text (>300 chars)
 				// Simple static message - no progress animation
@@ -802,7 +801,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				triggerUpdate();
 				}
 
-				// Set timer to process accumulated input
+				// Set timer to process accumulated input - fixed 100ms
 				inputTimer.current = setTimeout(() => {
 					const accumulated = inputBuffer.current;
 					const savedCursorPosition = inputStartCursorPos.current;
@@ -844,7 +843,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateAgentPickerState(text, cursorPos);
 				triggerUpdate();
 			}
-				}, timeoutDelay); // Extended delay for large pastes to ensure complete accumulation
+				}, 100); // Fixed 100ms
 			}
 		}
 	});

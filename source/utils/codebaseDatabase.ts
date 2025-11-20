@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import initSqlJs, {type Database} from 'sql.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import {logger} from './logger.js';
@@ -37,7 +37,7 @@ export interface IndexProgress {
  * Handles embedding storage with vector support
  */
 export class CodebaseDatabase {
-	private db: Database.Database | null = null;
+	private db: Database | null = null;
 	private dbPath: string;
 	private initialized: boolean = false;
 
@@ -53,15 +53,19 @@ export class CodebaseDatabase {
 	/**
 	 * Initialize database and create tables
 	 */
-	initialize(): void {
+	async initialize(): Promise<void> {
 		if (this.initialized) return;
 
 		try {
-			// Open database with better-sqlite3
-			this.db = new Database(this.dbPath);
+			const SQL = await initSqlJs();
 
-			// Enable WAL mode for better concurrency
-			this.db.pragma('journal_mode = WAL');
+			// Load existing database if it exists
+			if (fs.existsSync(this.dbPath)) {
+				const buffer = fs.readFileSync(this.dbPath);
+				this.db = new SQL.Database(buffer);
+			} else {
+				this.db = new SQL.Database();
+			}
 
 			// Create tables
 			this.createTables();
@@ -93,7 +97,7 @@ export class CodebaseDatabase {
 				created_at INTEGER NOT NULL,
 				updated_at INTEGER NOT NULL
 			);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_file_path ON code_chunks(file_path);
 			CREATE INDEX IF NOT EXISTS idx_file_hash ON code_chunks(file_hash);
 		`);
@@ -113,10 +117,22 @@ export class CodebaseDatabase {
 				updated_at INTEGER NOT NULL,
 				watcher_enabled INTEGER NOT NULL DEFAULT 0
 			);
-			
-			-- Initialize progress record if not exists
-			INSERT OR IGNORE INTO index_progress (id, updated_at) VALUES (1, ${Date.now()});
 		`);
+
+		// Initialize progress record if not exists
+		this.db.run(
+			'INSERT OR IGNORE INTO index_progress (id, updated_at) VALUES (?, ?)',
+			[1, Date.now()],
+		);
+	}
+
+	/**
+	 * Save database to disk
+	 */
+	private save(): void {
+		if (!this.db) return;
+		const data = this.db.export();
+		fs.writeFileSync(this.dbPath, data);
 	}
 
 	/**
@@ -125,21 +141,18 @@ export class CodebaseDatabase {
 	insertChunks(chunks: CodeChunk[]): void {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const insert = this.db.prepare(`
-			INSERT INTO code_chunks (
-				file_path, content, start_line, end_line, 
-				embedding, file_hash, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`);
+		for (const chunk of chunks) {
+			// Convert embedding array to Buffer for storage
+			const embeddingBuffer = Buffer.from(
+				new Float32Array(chunk.embedding).buffer,
+			);
 
-		const transaction = this.db.transaction((chunks: CodeChunk[]) => {
-			for (const chunk of chunks) {
-				// Convert embedding array to Buffer for storage
-				const embeddingBuffer = Buffer.from(
-					new Float32Array(chunk.embedding).buffer,
-				);
-
-				insert.run(
+			this.db.run(
+				`INSERT INTO code_chunks (
+					file_path, content, start_line, end_line,
+					embedding, file_hash, created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
 					chunk.filePath,
 					chunk.content,
 					chunk.startLine,
@@ -148,11 +161,11 @@ export class CodebaseDatabase {
 					chunk.fileHash,
 					chunk.createdAt,
 					chunk.updatedAt,
-				);
-			}
-		});
+				],
+			);
+		}
 
-		transaction(chunks);
+		this.save();
 	}
 
 	/**
@@ -161,8 +174,8 @@ export class CodebaseDatabase {
 	deleteChunksByFile(filePath: string): void {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare('DELETE FROM code_chunks WHERE file_path = ?');
-		stmt.run(filePath);
+		this.db.run('DELETE FROM code_chunks WHERE file_path = ?', [filePath]);
+		this.save();
 	}
 
 	/**
@@ -171,11 +184,14 @@ export class CodebaseDatabase {
 	getChunksByFile(filePath: string): CodeChunk[] {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare(
+		const results = this.db.exec(
 			'SELECT * FROM code_chunks WHERE file_path = ?',
+			[filePath],
 		);
-		const rows = stmt.all(filePath) as any[];
 
+		if (results.length === 0) return [];
+
+		const rows = this.resultsToObjects(results[0]!);
 		return rows.map(row => this.rowToChunk(row));
 	}
 
@@ -185,12 +201,14 @@ export class CodebaseDatabase {
 	hasFileHash(fileHash: string): boolean {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare(
+		const results = this.db.exec(
 			'SELECT COUNT(*) as count FROM code_chunks WHERE file_hash = ?',
+			[fileHash],
 		);
-		const result = stmt.get(fileHash) as {count: number};
 
-		return result.count > 0;
+		if (results.length === 0) return false;
+		const count = results[0]!.values[0]![0] as number;
+		return count > 0;
 	}
 
 	/**
@@ -199,10 +217,9 @@ export class CodebaseDatabase {
 	getTotalChunks(): number {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare('SELECT COUNT(*) as count FROM code_chunks');
-		const result = stmt.get() as {count: number};
-
-		return result.count;
+		const results = this.db.exec('SELECT COUNT(*) as count FROM code_chunks');
+		if (results.length === 0) return 0;
+		return results[0]!.values[0]![0] as number;
 	}
 
 	/**
@@ -213,20 +230,22 @@ export class CodebaseDatabase {
 		if (!this.db) throw new Error('Database not initialized');
 
 		// Get all chunks (in production, use approximate nearest neighbor)
-		const stmt = this.db.prepare('SELECT * FROM code_chunks');
-		const rows = stmt.all() as any[];
+		const results = this.db.exec('SELECT * FROM code_chunks');
+		if (results.length === 0) return [];
+
+		const rows = this.resultsToObjects(results[0]!);
 
 		// Calculate cosine similarity for each chunk
-		const results = rows.map(row => {
+		const scored = rows.map(row => {
 			const chunk = this.rowToChunk(row);
 			const similarity = this.cosineSimilarity(queryEmbedding, chunk.embedding);
 			return {chunk, similarity};
 		});
 
 		// Sort by similarity and return top N
-		results.sort((a, b) => b.similarity - a.similarity);
+		scored.sort((a, b) => b.similarity - a.similarity);
 
-		return results.slice(0, limit).map(r => r.chunk);
+		return scored.slice(0, limit).map(r => r.chunk);
 	}
 
 	/**
@@ -278,7 +297,8 @@ export class CodebaseDatabase {
 		values.push(Date.now());
 
 		const sql = `UPDATE index_progress SET ${fields.join(', ')} WHERE id = 1`;
-		this.db.prepare(sql).run(...values);
+		this.db.run(sql, values);
+		this.save();
 	}
 
 	/**
@@ -287,18 +307,30 @@ export class CodebaseDatabase {
 	getProgress(): IndexProgress {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare('SELECT * FROM index_progress WHERE id = 1');
-		const row = stmt.get() as any;
+		const results = this.db.exec(
+			'SELECT * FROM index_progress WHERE id = 1',
+		);
+
+		if (results.length === 0) {
+			return {
+				totalFiles: 0,
+				processedFiles: 0,
+				totalChunks: 0,
+				status: 'idle',
+			};
+		}
+
+		const row = this.resultsToObjects(results[0]!)[0]!;
 
 		return {
-			totalFiles: row.total_files,
-			processedFiles: row.processed_files,
-			totalChunks: row.total_chunks,
-			status: row.status,
-			lastError: row.last_error,
-			lastProcessedFile: row.last_processed_file,
-			startedAt: row.started_at,
-			completedAt: row.completed_at,
+			totalFiles: row['total_files'] as number,
+			processedFiles: row['processed_files'] as number,
+			totalChunks: row['total_chunks'] as number,
+			status: row['status'] as IndexProgress['status'],
+			lastError: row['last_error'] as string | undefined,
+			lastProcessedFile: row['last_processed_file'] as string | undefined,
+			startedAt: row['started_at'] as number | undefined,
+			completedAt: row['completed_at'] as number | undefined,
 		};
 	}
 
@@ -308,9 +340,11 @@ export class CodebaseDatabase {
 	setWatcherEnabled(enabled: boolean): void {
 		if (!this.db) throw new Error('Database not initialized');
 
-		this.db
-			.prepare('UPDATE index_progress SET watcher_enabled = ? WHERE id = 1')
-			.run(enabled ? 1 : 0);
+		this.db.run(
+			'UPDATE index_progress SET watcher_enabled = ? WHERE id = 1',
+			[enabled ? 1 : 0],
+		);
+		this.save();
 	}
 
 	/**
@@ -319,12 +353,12 @@ export class CodebaseDatabase {
 	isWatcherEnabled(): boolean {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const stmt = this.db.prepare(
+		const results = this.db.exec(
 			'SELECT watcher_enabled FROM index_progress WHERE id = 1',
 		);
-		const result = stmt.get() as {watcher_enabled: number};
 
-		return result.watcher_enabled === 1;
+		if (results.length === 0) return false;
+		return (results[0]!.values[0]![0] as number) === 1;
 	}
 
 	/**
@@ -334,19 +368,21 @@ export class CodebaseDatabase {
 		if (!this.db) throw new Error('Database not initialized');
 
 		this.db.exec('DELETE FROM code_chunks');
-		this.db.exec(`
-			UPDATE index_progress 
-			SET total_files = 0, 
-				processed_files = 0, 
-				total_chunks = 0, 
-				status = 'idle',
+		this.db.run(
+			`UPDATE index_progress
+			SET total_files = ?,
+				processed_files = ?,
+				total_chunks = ?,
+				status = ?,
 				last_error = NULL,
 				last_processed_file = NULL,
 				started_at = NULL,
 				completed_at = NULL,
-				updated_at = ${Date.now()}
-			WHERE id = 1
-		`);
+				updated_at = ?
+			WHERE id = 1`,
+			[0, 0, 0, 'idle', Date.now()],
+		);
+		this.save();
 	}
 
 	/**
@@ -354,6 +390,7 @@ export class CodebaseDatabase {
 	 */
 	close(): void {
 		if (this.db) {
+			this.save();
 			this.db.close();
 			this.db = null;
 			this.initialized = false;
@@ -361,16 +398,31 @@ export class CodebaseDatabase {
 	}
 
 	/**
+	 * Convert sql.js query results to objects
+	 */
+	private resultsToObjects(
+		result: {columns: string[]; values: any[][]},
+	): Record<string, any>[] {
+		return result.values.map(row => {
+			const obj: Record<string, any> = {};
+			for (let i = 0; i < result.columns.length; i++) {
+				obj[result.columns[i]!] = row[i];
+			}
+			return obj;
+		});
+	}
+
+	/**
 	 * Convert database row to CodeChunk
 	 */
 	private rowToChunk(row: any): CodeChunk {
-		// Convert Buffer back to number array
-		const embeddingBuffer = row.embedding as Buffer;
+		// Convert Uint8Array back to number array
+		const embeddingData = row.embedding as Uint8Array;
 		const embedding = Array.from(
 			new Float32Array(
-				embeddingBuffer.buffer,
-				embeddingBuffer.byteOffset,
-				embeddingBuffer.byteLength / 4,
+				embeddingData.buffer,
+				embeddingData.byteOffset,
+				embeddingData.byteLength / 4,
 			),
 		);
 

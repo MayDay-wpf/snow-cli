@@ -153,6 +153,9 @@ export class TextBuffer {
 
 		const charCount = sanitized.length;
 
+		// 检查是否存在临时"粘贴中"占位符
+		const hasPastingIndicator = this.tempPastingPlaceholder !== null;
+
 		// 如果存在临时"粘贴中"占位符，先移除它，并调整光标位置
 		if (this.tempPastingPlaceholder) {
 			const placeholderIndex = this.content.indexOf(this.tempPastingPlaceholder);
@@ -173,13 +176,14 @@ export class TextBuffer {
 			this.tempPastingPlaceholder = null;
 		}
 
-		// 如果是大文本（>300字符），直接创建占位符
-		if (charCount > 300) {
+		// 如果之前显示了"粘贴中"占位符，或者是大文本（>300字符），创建占位符
+		// 使用 || 确保只要显示过"粘贴中"就一定创建占位符，防止sanitize后长度变化导致不一致
+		if (hasPastingIndicator || charCount > 300) {
 			this.textPlaceholderCounter++;
 			const pasteId = `paste_${Date.now()}_${this.textPlaceholderCounter}`;
 			// 计算行数
 			const lineCount = (sanitized.match(/\n/g) || []).length + 1;
-			const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}]`;
+			const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
 
 			this.placeholderStorage.set(pasteId, {
 				id: pasteId,
@@ -556,7 +560,7 @@ export class TextBuffer {
 
 		this.imagePlaceholderCounter++;
 		const imageId = `image_${Date.now()}_${this.imagePlaceholderCounter}`;
-		const placeholderText = `[image #${this.imagePlaceholderCounter}]`;
+		const placeholderText = `[image #${this.imagePlaceholderCounter}] `;
 
 		this.placeholderStorage.set(imageId, {
 			id: imageId,

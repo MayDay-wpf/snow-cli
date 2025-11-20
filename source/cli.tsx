@@ -1,8 +1,27 @@
 #!/usr/bin/env node
 
-// Show loading indicator immediately before any imports
-process.stdout.write('\x1b[?25l'); // Hide cursor
-process.stdout.write('⠋ Loading...\r');
+// Suppress DEP0169 warning from dependencies
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function (warning: any, ...args: any[]) {
+	// Check if this is the DEP0169 warning
+	if (args[1] === 'DEP0169') return;
+	return (originalEmitWarning as any).apply(process, [warning, ...args]);
+};
+
+// Check if this is a quick command that doesn't need loading indicator
+const args = process.argv.slice(2);
+const isQuickCommand = args.some(arg =>
+	arg === '--version' ||
+	arg === '-v' ||
+	arg === '--help' ||
+	arg === '-h'
+);
+
+// Show loading indicator only for non-quick commands
+if (!isQuickCommand) {
+	process.stdout.write('\x1b[?25l'); // Hide cursor
+	process.stdout.write('⠋ Loading...\r');
+}
 
 // Import only critical dependencies synchronously
 import React from 'react';
@@ -10,6 +29,16 @@ import {render, Text, Box} from 'ink';
 import Spinner from 'ink-spinner';
 import meow from 'meow';
 import {execSync} from 'child_process';
+import {readFileSync} from 'fs';
+import {join} from 'path';
+import {fileURLToPath} from 'url';
+
+// Read version from package.json
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const packageJson = JSON.parse(
+	readFileSync(join(__dirname, '../package.json'), 'utf-8')
+);
+const VERSION = packageJson.version;
 
 // Load heavy dependencies asynchronously
 async function loadDependencies() {
@@ -179,8 +208,8 @@ const Startup = ({
 			(global as any).__deps = deps;
 
 			// Check for updates with timeout
-			const updateCheckPromise = version
-				? checkForUpdates(version)
+			const updateCheckPromise = VERSION
+				? checkForUpdates(VERSION)
 				: Promise.resolve();
 
 			// Race between update check and 3-second timeout
@@ -256,7 +285,7 @@ process.on('SIGTERM', () => {
 });
 render(
 	<Startup
-		version={cli.pkg.version}
+		version={VERSION}
 		skipWelcome={cli.flags.c}
 		headlessPrompt={cli.flags.ask}
 		isDevMode={cli.flags.dev}

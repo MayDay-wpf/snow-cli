@@ -355,7 +355,7 @@ async function refreshToolsCache(): Promise<void> {
 				// Check if database has data by importing CodebaseDatabase
 				const {CodebaseDatabase} = await import('./codebaseDatabase.js');
 				const db = new CodebaseDatabase(projectRoot);
-				db.initialize();
+				await db.initialize();
 				const totalChunks = db.getTotalChunks();
 				db.close();
 

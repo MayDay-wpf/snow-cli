@@ -181,7 +181,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				codebaseAgentRef.current = agent;
 
 				// Check if indexing is needed
-				const progress = agent.getProgress();
+				const progress = await agent.getProgress();
 
 		// If indexing is already completed, start watcher and return early
 		if (progress.status === 'completed' && progress.totalChunks > 0) {
@@ -213,7 +213,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 		}
 
 		// If watcher was enabled before but indexing not completed, restore it
-		const wasWatcherEnabled = agent.isWatcherEnabled();
+		const wasWatcherEnabled = await agent.isWatcherEnabled();
 		if (wasWatcherEnabled) {
 			logger.info('Restoring file watcher from previous session');
 			agent.startWatching(progressData => {

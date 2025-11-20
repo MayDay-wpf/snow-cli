@@ -1,7 +1,6 @@
 import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import Spinner from 'ink-spinner';
 
 // Lazy load all page components to improve startup time
 // Only load components when they are actually needed
@@ -88,14 +87,7 @@ function AppContent({
 	};
 
 	const renderView = () => {
-		const loadingFallback = (
-			<Box>
-				<Text color="cyan">
-					<Spinner type="dots" />
-				</Text>
-				<Text> Loading...</Text>
-			</Box>
-		);
+		const loadingFallback = null;
 
 		switch (currentView) {
 			case 'welcome':
@@ -165,14 +157,7 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	// If headless prompt is provided, use headless mode
 	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
 	if (headlessPrompt) {
-		const loadingFallback = (
-			<Box>
-				<Text color="cyan">
-					<Spinner type="dots" />
-				</Text>
-				<Text> Loading...</Text>
-			</Box>
-		);
+		const loadingFallback = null;
 
 		return (
 			<I18nProvider>
