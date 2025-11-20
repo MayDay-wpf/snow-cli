@@ -4,20 +4,49 @@
 process.stdout.write('\x1b[?25l'); // Hide cursor
 process.stdout.write('⠋ Loading...\r');
 
+// Import only critical dependencies synchronously
 import React from 'react';
 import {render, Text, Box} from 'ink';
 import Spinner from 'ink-spinner';
 import meow from 'meow';
-import {exec, execSync} from 'child_process';
-import {promisify} from 'util';
-import App from './app.js';
-import {vscodeConnection} from './utils/vscodeConnection.js';
-import {resourceMonitor} from './utils/resourceMonitor.js';
-import {initializeProfiles} from './utils/configManager.js';
-import {processManager} from './utils/processManager.js';
-import {enableDevMode, getDevUserId} from './utils/devMode.js';
+import {execSync} from 'child_process';
 
-const execAsync = promisify(exec);
+// Load heavy dependencies asynchronously
+async function loadDependencies() {
+	const [
+		appModule,
+		vscodeModule,
+		resourceModule,
+		configModule,
+		processModule,
+		devModeModule,
+		childProcessModule,
+		utilModule,
+	] = await Promise.all([
+		import('./app.js'),
+		import('./utils/vscodeConnection.js'),
+		import('./utils/resourceMonitor.js'),
+		import('./utils/configManager.js'),
+		import('./utils/processManager.js'),
+		import('./utils/devMode.js'),
+		import('child_process'),
+		import('util'),
+	]);
+
+	return {
+		App: appModule.default,
+		vscodeConnection: vscodeModule.vscodeConnection,
+		resourceMonitor: resourceModule.resourceMonitor,
+		initializeProfiles: configModule.initializeProfiles,
+		processManager: processModule.processManager,
+		enableDevMode: devModeModule.enableDevMode,
+		getDevUserId: devModeModule.getDevUserId,
+		exec: childProcessModule.exec,
+		promisify: utilModule.promisify,
+	};
+}
+
+let execAsync: any;
 
 // Check for updates asynchronously
 async function checkForUpdates(currentVersion: string): Promise<void> {
@@ -91,51 +120,63 @@ if (cli.flags.update) {
 	}
 }
 
-// Handle dev mode flag
-if (cli.flags.dev) {
-	enableDevMode();
-	const userId = getDevUserId();
-	console.log('🔧 Developer mode enabled');
-	console.log(`📝 Using persistent userId: ${userId}`);
-	console.log(`📂 Stored in: ~/.snow/dev-user-id\n`);
-}
-
-// Start resource monitoring in development/debug mode
-if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
-	resourceMonitor.startMonitoring(30000); // Monitor every 30 seconds
-
-	// Check for leaks every 5 minutes
-	setInterval(() => {
-		const {hasLeak, reasons} = resourceMonitor.checkForLeaks();
-		if (hasLeak) {
-			console.error('⚠️ Potential memory leak detected:');
-			reasons.forEach(reason => console.error(`  - ${reason}`));
-		}
-	}, 5 * 60 * 1000);
-}
+// Dev mode and resource monitoring will be initialized in Startup component
 
 // Startup component that shows loading spinner during update check
 const Startup = ({
 	version,
 	skipWelcome,
 	headlessPrompt,
+	isDevMode,
 }: {
 	version: string | undefined;
 	skipWelcome: boolean;
 	headlessPrompt?: string;
+	isDevMode: boolean;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
+	const [AppComponent, setAppComponent] = React.useState<any>(null);
 
 	React.useEffect(() => {
 		let mounted = true;
 
 		const init = async () => {
-			// Initialize profiles system first
+			// Load all dependencies in parallel
+			const deps = await loadDependencies();
+			
+			// Setup execAsync for checkForUpdates
+			execAsync = deps.promisify(deps.exec);
+
+			// Initialize profiles system
 			try {
-				initializeProfiles();
+				deps.initializeProfiles();
 			} catch (error) {
 				console.error('Failed to initialize profiles:', error);
 			}
+
+			// Handle dev mode
+			if (isDevMode) {
+				deps.enableDevMode();
+				const userId = deps.getDevUserId();
+				console.log('🔧 Developer mode enabled');
+				console.log(`📝 Using persistent userId: ${userId}`);
+				console.log(`📂 Stored in: ~/.snow/dev-user-id\n`);
+			}
+
+			// Start resource monitoring in development/debug mode
+			if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
+				deps.resourceMonitor.startMonitoring(30000);
+				setInterval(() => {
+					const {hasLeak, reasons} = deps.resourceMonitor.checkForLeaks();
+					if (hasLeak) {
+						console.error('⚠️ Potential memory leak detected:');
+						reasons.forEach((reason: string) => console.error(`  - ${reason}`));
+					}
+				}, 5 * 60 * 1000);
+			}
+
+			// Store for cleanup
+			(global as any).__deps = deps;
 
 			// Check for updates with timeout
 			const updateCheckPromise = version
@@ -149,6 +190,7 @@ const Startup = ({
 			]);
 
 			if (mounted) {
+				setAppComponent(() => deps.App);
 				setAppReady(true);
 			}
 		};
@@ -158,9 +200,9 @@ const Startup = ({
 		return () => {
 			mounted = false;
 		};
-	}, [version]);
+	}, [version, isDevMode]);
 
-	if (!appReady) {
+	if (!appReady || !AppComponent) {
 		return (
 			<Box flexDirection="column">
 				<Box>
@@ -174,7 +216,7 @@ const Startup = ({
 	}
 
 	return (
-		<App
+		<AppComponent
 			version={version}
 			skipWelcome={skipWelcome}
 			headlessPrompt={headlessPrompt}
@@ -191,12 +233,16 @@ process.stdout.write('\x1b[?25h'); // Show cursor
 // Re-enable on exit to avoid polluting parent shell
 const cleanup = () => {
 	process.stdout.write('\x1b[?2004l');
-	// Kill all child processes first
-	processManager.killAll();
-	// Stop resource monitoring
-	resourceMonitor.stopMonitoring();
-	// Disconnect VSCode connection before exit
-	vscodeConnection.stop();
+	// Cleanup loaded dependencies if available
+	const deps = (global as any).__deps;
+	if (deps) {
+		// Kill all child processes first
+		deps.processManager.killAll();
+		// Stop resource monitoring
+		deps.resourceMonitor.stopMonitoring();
+		// Disconnect VSCode connection before exit
+		deps.vscodeConnection.stop();
+	}
 };
 
 process.on('exit', cleanup);
@@ -213,6 +259,7 @@ render(
 		version={cli.pkg.version}
 		skipWelcome={cli.flags.c}
 		headlessPrompt={cli.flags.ask}
+		isDevMode={cli.flags.dev}
 	/>,
 	{
 		exitOnCtrlC: false,
