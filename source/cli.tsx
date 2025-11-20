@@ -22,17 +22,18 @@ const execAsync = promisify(exec);
 // Check for updates asynchronously
 async function checkForUpdates(currentVersion: string): Promise<void> {
 	try {
-		const {stdout} = await execAsync('npm view snow-ai version', {
+		const {stdout} = await execAsync('npm view snow-ai version --registry https://registry.npmjs.org', {
 			encoding: 'utf8',
 		});
-		const latestVersion = stdout.trim();
+	const latestVersion = stdout.trim();
 
-		if (latestVersion && latestVersion !== currentVersion) {
-			console.log('\n🔔 Update available!');
-			console.log(`   Current version: ${currentVersion}`);
-			console.log(`   Latest version:  ${latestVersion}`);
-			console.log('   Run "snow --update" to update\n');
-		}
+	// Simple string comparison - force registry fetch ensures no cache issues
+	if (latestVersion && latestVersion !== currentVersion) {
+		console.log('\n🔔 Update available!');
+		console.log(`   Current version: ${currentVersion}`);
+		console.log(`   Latest version:  ${latestVersion}`);
+		console.log('   Run "snow --update" to update\n');
+	}
 	} catch (error) {
 		// Silently fail - don't interrupt user experience
 	}
