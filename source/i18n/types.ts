@@ -147,9 +147,6 @@ export type TranslationKeys = {
 		disabled: string;
 		toggleHint: string;
 		enterValue: string;
-		low: string;
-		medium: string;
-		high: string;
 		createNewProfile: string;
 		enterProfileName: string;
 		profileNamePlaceholder: string;

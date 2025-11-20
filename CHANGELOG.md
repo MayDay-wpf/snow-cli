@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.12
+
+- Codex XHIGH
+
 ## v0.4.11
 
 - Lazy loading import

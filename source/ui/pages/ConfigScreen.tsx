@@ -125,7 +125,7 @@ export default function ConfigScreen({
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<
-		'low' | 'medium' | 'high'
+		'low' | 'medium' | 'high' | 'xhigh'
 	>('high');
 
 	// Model settings
@@ -735,20 +735,21 @@ export default function ConfigScreen({
 						)}
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Select
-									options={[
-										{label: t.configScreen.low, value: 'low'},
-										{label: t.configScreen.medium, value: 'medium'},
-										{label: t.configScreen.high, value: 'high'},
-									]}
-									defaultValue={responsesReasoningEffort}
-									onChange={value => {
-										setResponsesReasoningEffort(
-											value as 'low' | 'medium' | 'high',
-										);
-										setIsEditing(false);
-									}}
-								/>
+					<Select
+						options={[
+							{label: 'LOW', value: 'low'},
+							{label: 'MEDIUM', value: 'medium'},
+							{label: 'HIGH', value: 'high'},
+							{label: 'XHIGH', value: 'xhigh'},
+						]}
+						defaultValue={responsesReasoningEffort}
+						onChange={value => {
+							setResponsesReasoningEffort(
+								value as 'low' | 'medium' | 'high' | 'xhigh',
+							);
+							setIsEditing(false);
+						}}
+					/>
 							</Box>
 						)}
 					</Box>
@@ -1421,22 +1422,23 @@ export default function ConfigScreen({
 								/>
 							</Box>
 						)}
-						{currentField === 'responsesReasoningEffort' && (
-							<Select
-								options={[
-									{label: t.configScreen.low, value: 'low'},
-									{label: t.configScreen.medium, value: 'medium'},
-									{label: t.configScreen.high, value: 'high'},
-								]}
-								defaultValue={responsesReasoningEffort}
-								onChange={value => {
-									setResponsesReasoningEffort(
-										value as 'low' | 'medium' | 'high',
-									);
-									setIsEditing(false);
-								}}
-							/>
-						)}
+					{currentField === 'responsesReasoningEffort' && (
+						<Select
+							options={[
+								{label: 'LOW', value: 'low'},
+								{label: 'MEDIUM', value: 'medium'},
+								{label: 'HIGH', value: 'high'},
+								{label: 'XHIGH', value: 'xhigh'},
+							]}
+							defaultValue={responsesReasoningEffort}
+							onChange={value => {
+								setResponsesReasoningEffort(
+									value as 'low' | 'medium' | 'high' | 'xhigh',
+								);
+								setIsEditing(false);
+							}}
+						/>
+					)}
 					</Box>
 					<Box marginTop={1}>
 						<Alert variant="info">
