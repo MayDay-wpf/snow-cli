@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, lazy, Suspense} from 'react';
 import {Box, Text, useInput, Static, useStdout} from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
@@ -8,17 +8,19 @@ import {useTheme} from '../contexts/ThemeContext.js';
 import ChatInput from '../components/ChatInput.js';
 import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
-import MCPInfoScreen from '../components/MCPInfoScreen.js';
-import MCPInfoPanel from '../components/MCPInfoPanel.js';
-import SessionListPanel from '../components/SessionListPanel.js';
-import UsagePanel from '../components/UsagePanel.js';
-import HelpPanel from '../components/HelpPanel.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
 import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
+
+// Lazy load panel components to reduce initial bundle size
+const MCPInfoScreen = lazy(() => import('../components/MCPInfoScreen.js'));
+const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
+const SessionListPanel = lazy(() => import('../components/SessionListPanel.js'));
+const UsagePanel = lazy(() => import('../components/UsagePanel.js'));
+const HelpPanel = lazy(() => import('../components/HelpPanel.js'));
 import {getOpenAiConfig} from '../../utils/apiConfig.js';
 import {sessionManager} from '../../utils/sessionManager.js';
 import {useSessionSave} from '../../hooks/useSessionSave.js';
@@ -34,7 +36,7 @@ import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
 } from '../../utils/fileUtils.js';
-import {executeCommand} from '../../utils/commandExecutor.js';
+import {vscodeConnection} from '../../utils/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
 import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
 import {formatElapsedTime} from '../../utils/textUtils.js';
@@ -488,22 +490,36 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 		hasAttemptedAutoVscodeConnect.current = true;
 
-		(async () => {
-			try {
-				const result = await executeCommand('ide');
-				await handleCommandExecution('ide', result);
-			} catch (error) {
-				console.error('Failed to auto-connect VSCode:', error);
-				await handleCommandExecution('ide', {
-					success: false,
-					message:
-						error instanceof Error
-							? error.message
-							: 'Failed to start VSCode connection',
-				});
-			}
-		})();
-	}, [commandsLoaded, handleCommandExecution, vscodeState.vscodeConnectionStatus]);
+		// Auto-connect IDE in background without blocking UI
+		// Use setTimeout to defer execution and make it fully async
+		const timer = setTimeout(() => {
+			// Fire and forget - don't wait for result
+			(async () => {
+				try {
+					// Clean up any existing connection state first (like manual /ide does)
+					if (vscodeConnection.isConnected() || vscodeConnection.isClientRunning()) {
+						vscodeConnection.stop();
+						vscodeConnection.resetReconnectAttempts();
+						await new Promise(resolve => setTimeout(resolve, 100));
+					}
+
+					// Set connecting status after cleanup
+					vscodeState.setVscodeConnectionStatus('connecting');
+
+					// Now try to connect
+					await vscodeConnection.start();
+
+					// If we get here, connection succeeded
+					// Status will be updated by useVSCodeState hook monitoring
+				} catch (error) {
+					console.error('Background VSCode auto-connect failed:', error);
+					// Let useVSCodeState handle the timeout and error state
+				}
+			})();
+		}, 0);
+
+		return () => clearTimeout(timer);
+	}, [commandsLoaded, vscodeState]);
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
@@ -1394,10 +1410,12 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	if (showMcpInfo) {
 		return (
-			<MCPInfoScreen
-				onClose={() => setShowMcpInfo(false)}
-				panelKey={mcpPanelKey}
-			/>
+			<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+				<MCPInfoScreen
+					onClose={() => setShowMcpInfo(false)}
+					panelKey={mcpPanelKey}
+				/>
+			</Suspense>
 		);
 	}
 
@@ -1990,17 +2008,21 @@ export default function ChatScreen({skipWelcome}: Props) {
 			{/* Show session list panel if active - replaces input */}
 			{showSessionPanel && (
 				<Box paddingX={1} width={terminalWidth}>
-					<SessionListPanel
-						onSelectSession={handleSessionPanelSelect}
-						onClose={() => setShowSessionPanel(false)}
-					/>
+					<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+						<SessionListPanel
+							onSelectSession={handleSessionPanelSelect}
+							onClose={() => setShowSessionPanel(false)}
+						/>
+					</Suspense>
 				</Box>
 			)}
 
 		{/* Show MCP info panel if active - replaces input */}
 		{showMcpPanel && (
 			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-				<MCPInfoPanel />
+				<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+					<MCPInfoPanel />
+				</Suspense>
 				<Box marginTop={1}>
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.pressEscToClose}
@@ -2012,7 +2034,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 		{/* Show usage panel if active - replaces input */}
 		{showUsagePanel && (
 			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-				<UsagePanel />
+				<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+					<UsagePanel />
+				</Suspense>
 				<Box marginTop={1}>
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.pressEscToClose}
@@ -2024,7 +2048,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 			{/* Show help panel if active - replaces input */}
 			{showHelpPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<HelpPanel />
+					<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+						<HelpPanel />
+					</Suspense>
 				</Box>
 			)}
 
@@ -2073,40 +2099,36 @@ export default function ChatScreen({skipWelcome}: Props) {
 							onContextPercentageChange={setCurrentContextPercentage}
 						/>
 						{/* IDE connection status indicator */}
-						{vscodeState.vscodeConnectionStatus !== 'disconnected' && (
+						{(vscodeState.vscodeConnectionStatus === 'connecting' ||
+							vscodeState.vscodeConnectionStatus === 'connected') && (
 							<Box marginTop={1} paddingX={1}>
-			<Text
-				color={
-					vscodeState.vscodeConnectionStatus === 'connecting'
-						? 'yellow'
-						: vscodeState.vscodeConnectionStatus === 'connected'
-						? 'green'
-						: vscodeState.vscodeConnectionStatus === 'error'
-						? 'red'
-						: theme.colors.menuSecondary
-				}
-				dimColor={vscodeState.vscodeConnectionStatus !== 'error'}
-			>
-									●{' '}
-									{vscodeState.vscodeConnectionStatus === 'connecting'
-										? t.chatScreen.ideConnecting
-										: vscodeState.vscodeConnectionStatus === 'connected'
-										? t.chatScreen.ideConnected
-										: vscodeState.vscodeConnectionStatus === 'error'
-										? t.chatScreen.ideError
-										: 'IDE'}
-									{vscodeState.vscodeConnectionStatus === 'connected' &&
-										vscodeState.editorContext.activeFile &&
-										t.chatScreen.ideActiveFile.replace(
-											'{file}',
-											vscodeState.editorContext.activeFile,
-										)}
-									{vscodeState.vscodeConnectionStatus === 'connected' &&
-										vscodeState.editorContext.selectedText &&
-										t.chatScreen.ideSelectedText.replace(
-											'{count}',
-											vscodeState.editorContext.selectedText.length.toString(),
-										)}
+								<Text
+									color={
+										vscodeState.vscodeConnectionStatus === 'connecting'
+											? 'yellow'
+											: 'green'
+									}
+									dimColor
+								>
+									{vscodeState.vscodeConnectionStatus === 'connecting' ? (
+										<>
+											<Spinner type="dots" /> {t.chatScreen.ideConnecting}
+										</>
+									) : (
+										<>
+											●{' '}{t.chatScreen.ideConnected}
+											{vscodeState.editorContext.activeFile &&
+												t.chatScreen.ideActiveFile.replace(
+													'{file}',
+													vscodeState.editorContext.activeFile,
+												)}
+											{vscodeState.editorContext.selectedText &&
+												t.chatScreen.ideSelectedText.replace(
+													'{count}',
+													vscodeState.editorContext.selectedText.length.toString(),
+												)}
+										</>
+									)}
 								</Text>
 							</Box>
 						)}

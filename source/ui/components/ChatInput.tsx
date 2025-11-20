@@ -1,11 +1,13 @@
-import React, {useCallback, useEffect, useRef, useMemo} from 'react';
+import React, {useCallback, useEffect, useRef, useMemo, lazy, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../utils/textBuffer.js';
 import {cpSlice} from '../../utils/textUtils.js';
-import CommandPanel from './CommandPanel.js';
-import FileList from './FileList.js';
-import AgentPickerPanel from './AgentPickerPanel.js';
-import TodoPickerPanel from './TodoPickerPanel.js';
+
+// Lazy load panel components to reduce initial bundle size
+const CommandPanel = lazy(() => import('./CommandPanel.js'));
+const FileList = lazy(() => import('./FileList.js'));
+const AgentPickerPanel = lazy(() => import('./AgentPickerPanel.js'));
+const TodoPickerPanel = lazy(() => import('./TodoPickerPanel.js'));
 import {useInputBuffer} from '../../hooks/useInputBuffer.js';
 import {useCommandPanel} from '../../hooks/useCommandPanel.js';
 import {useFilePicker} from '../../hooks/useFilePicker.js';
@@ -545,31 +547,38 @@ export default function ChatInput({
 							</Text>
 						</Box>
 					) : null}
-					<CommandPanel
-						commands={getFilteredCommands()}
-						selectedIndex={commandSelectedIndex}
-						query={buffer.getFullText().slice(1)}
-						visible={showCommands}
-						isProcessing={commandPanelIsProcessing}
-					/>
-					<Box>
-						<FileList
-							ref={fileListRef}
-							query={fileQuery}
-							selectedIndex={fileSelectedIndex}
-							visible={showFilePicker}
-							maxItems={10}
-							rootPath={process.cwd()}
-							onFilteredCountChange={handleFilteredCountChange}
-							searchMode={searchMode}
+					<Suspense fallback={null}>
+						<CommandPanel
+							commands={getFilteredCommands()}
+							selectedIndex={commandSelectedIndex}
+							query={buffer.getFullText().slice(1)}
+							visible={showCommands}
+							isProcessing={commandPanelIsProcessing}
 						/>
+					</Suspense>
+					<Box>
+						<Suspense fallback={null}>
+							<FileList
+								ref={fileListRef}
+								query={fileQuery}
+								selectedIndex={fileSelectedIndex}
+								visible={showFilePicker}
+								maxItems={10}
+								rootPath={process.cwd()}
+								onFilteredCountChange={handleFilteredCountChange}
+								searchMode={searchMode}
+							/>
+						</Suspense>
 					</Box>
-				<AgentPickerPanel
-					agents={getFilteredAgents()}
-					selectedIndex={agentSelectedIndex}
-					visible={showAgentPicker}
-					maxHeight={5}
-				/>
+				<Suspense fallback={null}>
+					<AgentPickerPanel
+						agents={getFilteredAgents()}
+						selectedIndex={agentSelectedIndex}
+						visible={showAgentPicker}
+						maxHeight={5}
+					/>
+				</Suspense>
+				<Suspense fallback={null}>
 					<TodoPickerPanel
 						todos={todos}
 						selectedIndex={todoSelectedIndex}
@@ -580,6 +589,7 @@ export default function ChatInput({
 						searchQuery={todoSearchQuery}
 						totalCount={totalTodoCount}
 					/>
+				</Suspense>
 				{yoloMode && (
 					<Box marginTop={1}>
 						<Text color={theme.colors.warning} dimColor>
