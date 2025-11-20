@@ -55,7 +55,7 @@ jobs:
             
             ### What's New
 
-            - Optimize startup speed and initialization exceptions
+            - Lazy loading import
             
             ### Installation
             ```bash

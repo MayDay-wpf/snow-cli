@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.10",
+	"version": "0.4.11",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -32,12 +32,14 @@
 		"dev": "tsc --watch",
 		"start": "node dist/cli.js",
 		"prepublishOnly": "npm run build",
+		"postinstall": "node scripts/postinstall.cjs",
 		"test": "prettier --check . && xo && ava",
 		"lint": "xo",
 		"format": "prettier --write ."
 	},
 	"files": [
-		"dist"
+		"dist",
+		"scripts"
 	],
 	"dependencies": {
 		"@inkjs/ui": "^2.0.0",

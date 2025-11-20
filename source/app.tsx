@@ -2,8 +2,10 @@ import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import Spinner from 'ink-spinner';
-import WelcomeScreen from './ui/pages/WelcomeScreen.js';
-// Lazy load heavy components to improve startup time
+
+// Lazy load all page components to improve startup time
+// Only load components when they are actually needed
+const WelcomeScreen = React.lazy(() => import('./ui/pages/WelcomeScreen.js'));
 const ChatScreen = React.lazy(() => import('./ui/pages/ChatScreen.js'));
 const HeadlessModeScreen = React.lazy(() => import('./ui/pages/HeadlessModeScreen.js'));
 const MCPConfigScreen = React.lazy(() => import('./ui/pages/MCPConfigScreen.js'));
@@ -98,7 +100,9 @@ function AppContent({
 		switch (currentView) {
 			case 'welcome':
 				return (
-					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+					<Suspense fallback={loadingFallback}>
+						<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+					</Suspense>
 				);
 			case 'chat':
 				return (
@@ -138,7 +142,9 @@ function AppContent({
 				);
 			default:
 				return (
-					<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+					<Suspense fallback={loadingFallback}>
+						<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+					</Suspense>
 				);
 		}
 	};

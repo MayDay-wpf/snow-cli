@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.11
+
+- Lazy loading import
+
 ## v0.4.10
 
 - Optimize startup speed and initialization exceptions

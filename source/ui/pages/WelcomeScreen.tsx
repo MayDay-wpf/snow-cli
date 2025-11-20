@@ -1,21 +1,24 @@
-import React, {useState, useMemo, useCallback, useEffect, useRef} from 'react';
+import React, {useState, useMemo, useCallback, useEffect, useRef, Suspense} from 'react';
 import {Box, Text, useStdout, Static} from 'ink';
 import {Alert} from '@inkjs/ui';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
+import Spinner from 'ink-spinner';
 import Menu from '../components/Menu.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
-import ConfigScreen from './ConfigScreen.js';
-import ProxyConfigScreen from './ProxyConfigScreen.js';
-import SubAgentConfigScreen from './SubAgentConfigScreen.js';
-import SubAgentListScreen from './SubAgentListScreen.js';
-import SensitiveCommandConfigScreen from './SensitiveCommandConfigScreen.js';
-import CodeBaseConfigScreen from './CodeBaseConfigScreen.js';
-import SystemPromptConfigScreen from './SystemPromptConfigScreen.js';
-import CustomHeadersScreen from './CustomHeadersScreen.js';
-import LanguageSettingsScreen from './LanguageSettingsScreen.js';
-import ThemeSettingsScreen from './ThemeSettingsScreen.js';
 import {useI18n} from '../../i18n/index.js';
+
+// Lazy load all configuration screens for better startup performance
+const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
+const ProxyConfigScreen = React.lazy(() => import('./ProxyConfigScreen.js'));
+const SubAgentConfigScreen = React.lazy(() => import('./SubAgentConfigScreen.js'));
+const SubAgentListScreen = React.lazy(() => import('./SubAgentListScreen.js'));
+const SensitiveCommandConfigScreen = React.lazy(() => import('./SensitiveCommandConfigScreen.js'));
+const CodeBaseConfigScreen = React.lazy(() => import('./CodeBaseConfigScreen.js'));
+const SystemPromptConfigScreen = React.lazy(() => import('./SystemPromptConfigScreen.js'));
+const CustomHeadersScreen = React.lazy(() => import('./CustomHeadersScreen.js'));
+const LanguageSettingsScreen = React.lazy(() => import('./LanguageSettingsScreen.js'));
+const ThemeSettingsScreen = React.lazy(() => import('./ThemeSettingsScreen.js'));
 
 type Props = {
 	version?: string;
@@ -190,6 +193,16 @@ export default function WelcomeScreen({
 		};
 	}, [terminalWidth]); // Remove stdout from dependencies to avoid loops
 
+	// Loading fallback component for lazy-loaded screens
+	const loadingFallback = (
+		<Box paddingX={1}>
+			<Text color="cyan">
+				<Spinner type="dots" />
+			</Text>
+			<Text> Loading...</Text>
+		</Box>
+	);
+
 	return (
 		<Box flexDirection="column" width={terminalWidth}>
 			<Static
@@ -237,87 +250,109 @@ export default function WelcomeScreen({
 				</Box>
 			)}
 			{inlineView === 'config' && (
-				<Box paddingX={1}>
-					<ConfigScreen
-						onBack={handleBackToMenu}
-						onSave={handleConfigSave}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<ConfigScreen
+							onBack={handleBackToMenu}
+							onSave={handleConfigSave}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'proxy-config' && (
-				<Box paddingX={1}>
-					<ProxyConfigScreen
-						onBack={handleBackToMenu}
-						onSave={handleConfigSave}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<ProxyConfigScreen
+							onBack={handleBackToMenu}
+							onSave={handleConfigSave}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'codebase-config' && (
-				<Box paddingX={1}>
-					<CodeBaseConfigScreen
-						onBack={handleBackToMenu}
-						onSave={handleConfigSave}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<CodeBaseConfigScreen
+							onBack={handleBackToMenu}
+							onSave={handleConfigSave}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'subagent-list' && (
-				<Box paddingX={1}>
-					<SubAgentListScreen
-						onBack={handleBackToMenu}
-						onAdd={handleSubAgentAdd}
-						onEdit={handleSubAgentEdit}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<SubAgentListScreen
+							onBack={handleBackToMenu}
+							onAdd={handleSubAgentAdd}
+							onEdit={handleSubAgentEdit}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'subagent-add' && (
-				<Box paddingX={1}>
-					<SubAgentConfigScreen
-						onBack={() => setInlineView('subagent-list')}
-						onSave={handleSubAgentSave}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<SubAgentConfigScreen
+							onBack={() => setInlineView('subagent-list')}
+							onSave={handleSubAgentSave}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'subagent-edit' && (
-				<Box paddingX={1}>
-					<SubAgentConfigScreen
-						onBack={() => setInlineView('subagent-list')}
-						onSave={handleSubAgentSave}
-						agentId={editingAgentId}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<SubAgentConfigScreen
+							onBack={() => setInlineView('subagent-list')}
+							onSave={handleSubAgentSave}
+							agentId={editingAgentId}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'sensitive-commands' && (
-				<Box paddingX={1}>
-					<SensitiveCommandConfigScreen
-						onBack={handleBackToMenu}
-						inlineMode={true}
-					/>
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<SensitiveCommandConfigScreen
+							onBack={handleBackToMenu}
+							inlineMode={true}
+						/>
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'systemprompt' && (
-				<Box paddingX={1}>
-					<SystemPromptConfigScreen onBack={handleBackToMenu} />
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<SystemPromptConfigScreen onBack={handleBackToMenu} />
+					</Box>
+				</Suspense>
 			)}
 			{inlineView === 'customheaders' && (
-				<Box paddingX={1}>
-					<CustomHeadersScreen onBack={handleBackToMenu} />
-				</Box>
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<CustomHeadersScreen onBack={handleBackToMenu} />
+					</Box>
+				</Suspense>
 			)}
-	{inlineView === 'language-settings' && (
-		<Box paddingX={1}>
-			<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
+			{inlineView === 'language-settings' && (
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
+					</Box>
+				</Suspense>
+			)}
+			{inlineView === 'theme-settings' && (
+				<Suspense fallback={loadingFallback}>
+					<ThemeSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
+				</Suspense>
+			)}
 		</Box>
-	)}
-	{inlineView === 'theme-settings' && (
-		<ThemeSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
-	)}
-</Box>
 	);
 }
