@@ -47,10 +47,14 @@ const __dirname = _fileURLToPath(new URL('.', import.meta.url));`,
 	logLevel: 'info',
 });
 
-// Copy WASM file
+// Copy WASM files
 copyFileSync(
 	'node_modules/sql.js/dist/sql-wasm.wasm',
 	'bundle/sql-wasm.wasm',
+);
+copyFileSync(
+	'node_modules/tiktoken/tiktoken_bg.wasm',
+	'bundle/tiktoken_bg.wasm',
 );
 
 console.log('✓ Bundle created successfully');

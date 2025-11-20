@@ -2,7 +2,7 @@
 
 ## v0.4.17
 
-- Add a new build script to support packaging the CLI tool
+- Add and copy the tiktoken_bg.wasm file to the bundle directory
 
 ## v0.4.16
 

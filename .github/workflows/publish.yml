@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add a new build script to support packaging the CLI tool
+            - Add and copy the tiktoken_bg.wasm file to the bundle directory
             
             ### Installation
             ```bash
