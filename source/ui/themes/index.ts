@@ -1,4 +1,70 @@
-export type ThemeType = 'dark' | 'light' | 'github-dark' | 'rainbow' | 'solarized-dark' | 'nord';
+import {existsSync, readFileSync} from 'fs';
+import {homedir} from 'os';
+import {join} from 'path';
+
+export type ThemeType =
+	| 'dark'
+	| 'light'
+	| 'github-dark'
+	| 'rainbow'
+	| 'solarized-dark'
+	| 'nord'
+	| 'custom';
+
+export interface ThemeColors {
+	background: string;
+	text: string;
+	border: string;
+	diffAdded: string;
+	diffRemoved: string;
+	diffModified: string;
+	lineNumber: string;
+	lineNumberBorder: string;
+	// Menu colors
+	menuSelected: string;
+	menuNormal: string;
+	menuInfo: string;
+	menuSecondary: string;
+	// Status colors
+	error: string;
+	warning: string;
+	success: string;
+}
+
+export const defaultCustomColors: ThemeColors = {
+	background: '#1e1e1e',
+	text: '#d4d4d4',
+	border: '#3e3e3e',
+	diffAdded: '#0d4d3d',
+	diffRemoved: '#5a1f1f',
+	diffModified: '#dcdcaa',
+	lineNumber: '#858585',
+	lineNumberBorder: '#3e3e3e',
+	menuSelected: '#5e0691ff',
+	menuNormal: 'white',
+	menuInfo: 'cyan',
+	menuSecondary: 'gray',
+	error: 'red',
+	warning: 'yellow',
+	success: 'green',
+};
+
+function loadCustomThemeColors(): ThemeColors {
+	const configPath = join(homedir(), '.snow', 'theme.json');
+	if (!existsSync(configPath)) {
+		return defaultCustomColors;
+	}
+	try {
+		const data = readFileSync(configPath, 'utf-8');
+		const config = JSON.parse(data);
+		if (config.customColors) {
+			return {...defaultCustomColors, ...config.customColors};
+		}
+	} catch {
+		// ignore
+	}
+	return defaultCustomColors;
+}
 
 export interface Theme {
 	name: string;
@@ -38,7 +104,7 @@ export const themes: Record<ThemeType, Theme> = {
 			lineNumber: '#858585',
 			lineNumberBorder: '#3e3e3e',
 			// Menu colors
-			menuSelected: 'green',
+			menuSelected: '#930093ff',
 			menuNormal: 'white',
 			menuInfo: 'cyan',
 			menuSecondary: 'gray',
@@ -163,4 +229,17 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#a3be8c',
 		},
 	},
+	custom: {
+		name: 'Custom',
+		type: 'custom',
+		colors: loadCustomThemeColors(),
+	},
 };
+
+export function getCustomTheme(): Theme {
+	return {
+		name: 'Custom',
+		type: 'custom',
+		colors: loadCustomThemeColors(),
+	};
+}

@@ -89,24 +89,49 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 		);
 	}
 
-	// For main flow tools, show summary unless there's an error
-	// Only show full output when exitCode !== 0 or has stderr
-	const showFullOutput = hasError || hasStderr;
+	// Simplified display: only show full output when exitCode !== 0
+	const showFullOutput = hasError;
 
 	if (!showFullOutput) {
-		// Success case - show compact summary
-		const stdoutLines = hasStdout ? data.stdout.trim().split('\n').length : 0;
+		// Success case - show stdout directly
+		if (!hasStdout) {
+			return (
+				<Box marginLeft={2}>
+					<Text color="green" dimColor>
+						└─ ✓ Exit code: {data.exitCode}
+					</Text>
+				</Box>
+			);
+		}
+
 		return (
-			<Box marginLeft={2}>
+			<Box flexDirection="column" marginLeft={2}>
 				<Text color="green" dimColor>
-					└─ ✓ Exit code: {data.exitCode}
-					{hasStdout && ` (${stdoutLines} ${stdoutLines === 1 ? 'line' : 'lines'} output)`}
+					├─ command: {data.command}
+				</Text>
+				<Text color="green" dimColor>
+					├─ exitCode: {data.exitCode} ✓
+				</Text>
+				<Box flexDirection="column">
+					<Text color="gray" dimColor>
+						├─ stdout:
+					</Text>
+					<Box marginLeft={2} flexDirection="column">
+						{data.stdout.split('\n').map((line: string, idx: number) => (
+							<Text key={idx} color="white">
+								{line}
+							</Text>
+						))}
+					</Box>
+				</Box>
+				<Text color="gray" dimColor>
+					└─ executedAt: {data.executedAt}
 				</Text>
 			</Box>
 		);
 	}
 
-	// Error case - show full details
+	// Error case - show full details including stderr
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
@@ -138,7 +163,7 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 			{/* Stderr - show completely with red color if present */}
 			{hasStderr && (
 				<Box flexDirection="column">
-					<Text color="red" bold>
+					<Text color="red" dimColor>
 						├─ stderr:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
@@ -452,9 +477,12 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 	// If data has content array (MCP format), extract the text
 	if (data.content && Array.isArray(data.content) && data.content[0]?.text) {
 		const textContent = data.content[0].text;
-		
+
 		// Skip parsing if it's a plain message string
-		if (textContent === 'No TODO list found' || textContent === 'TODO item not found') {
+		if (
+			textContent === 'No TODO list found' ||
+			textContent === 'TODO item not found'
+		) {
 			return (
 				<Box marginLeft={2}>
 					<Text color="gray" dimColor>
@@ -463,7 +491,7 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 				</Box>
 			);
 		}
-		
+
 		// Try to parse JSON
 		try {
 			todoData = JSON.parse(textContent);

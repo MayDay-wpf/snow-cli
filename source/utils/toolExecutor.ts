@@ -39,6 +39,13 @@ export interface AddToAlwaysApprovedCallback {
 	(toolName: string): void;
 }
 
+export interface UserInteractionCallback {
+	(question: string, options: string[]): Promise<{
+		selected: string;
+		customInput?: string;
+	}>;
+}
+
 /**
  * Check if a value is a multimodal content array
  */
@@ -87,7 +94,11 @@ function extractMultimodalContent(result: any): {
 		}
 
 		// If we extracted the content, we need to rebuild the result
-		if (result && typeof result === 'object' && result.content === contentToCheck) {
+		if (
+			result &&
+			typeof result === 'object' &&
+			result.content === contentToCheck
+		) {
 			// Check if result has only 'content' field (pure MCP response)
 			// In this case, return the extracted text directly without wrapping
 			const resultKeys = Object.keys(result);
@@ -98,7 +109,7 @@ function extractMultimodalContent(result: any): {
 					images: images.length > 0 ? images : undefined,
 				};
 			}
-			
+
 			// Result has additional fields (e.g., files, totalFiles) - preserve them
 			const newResult = {...result, content: textParts.join('\n\n')};
 			return {
@@ -106,7 +117,6 @@ function extractMultimodalContent(result: any): {
 				images: images.length > 0 ? images : undefined,
 			};
 		}
-
 
 		return {
 			textContent: textParts.join('\n\n'),
@@ -132,6 +142,7 @@ export async function executeToolCall(
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
+	onUserInteractionNeeded?: UserInteractionCallback,
 ): Promise<ToolResult> {
 	try {
 		const args = JSON.parse(toolCall.function.arguments);
@@ -201,6 +212,40 @@ export async function executeToolCall(
 			images,
 		};
 	} catch (error) {
+		// Check if this is a user interaction needed error
+		const {UserInteractionNeededError} = await import(
+			'./userInteractionError.js'
+		);
+
+		if (error instanceof UserInteractionNeededError) {
+			// Call the user interaction callback if provided
+			if (onUserInteractionNeeded) {
+				const response = await onUserInteractionNeeded(
+					error.question,
+					error.options,
+				);
+
+				// Return the user's response as the tool result
+				const resultContent = response.customInput
+					? `User response: ${response.customInput}`
+					: `User selected: ${response.selected}`;
+
+				return {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: resultContent,
+				};
+			} else {
+				// No callback provided, return error
+				return {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: 'Error: User interaction needed but no callback provided',
+				};
+			}
+		}
+
+		// Regular error handling
 		return {
 			tool_call_id: toolCall.id,
 			role: 'tool',
@@ -294,6 +339,7 @@ export async function executeToolCalls(
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
+	onUserInteractionNeeded?: UserInteractionCallback,
 ): Promise<ToolResult[]> {
 	// Group tool calls by their resource identifier
 	const resourceGroups = new Map<string, ToolCall[]>();
@@ -320,6 +366,7 @@ export async function executeToolCalls(
 					isToolAutoApproved,
 					yoloMode,
 					addToAlwaysApproved,
+					onUserInteractionNeeded,
 				);
 				groupResults.push(result);
 			}

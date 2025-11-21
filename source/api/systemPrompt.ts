@@ -310,7 +310,8 @@ Guidance and recommendations:
 - You can read this file at any time to understand the project and recommend reading.
 - This file may not exist. If you can't find it, please ignore it.
 
-Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.`;
+Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.
+You need to run in a Node.js, If the user wants to close the Node.js process, you need to explain this fact to the user and ask the user to confirm it for the second time.`;
 
 /**
  * Check if codebase functionality is enabled

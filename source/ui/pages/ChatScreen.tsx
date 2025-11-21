@@ -10,6 +10,7 @@ import {type Message} from '../components/MessageList.js';
 import PendingMessages from '../components/PendingMessages.js';
 import MarkdownRenderer from '../components/MarkdownRenderer.js';
 import ToolConfirmation from '../components/ToolConfirmation.js';
+import AskUserQuestion from '../components/AskUserQuestion.js';
 import DiffViewer from '../components/DiffViewer.js';
 import ToolResultPreview from '../components/ToolResultPreview.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
@@ -18,7 +19,9 @@ import ShimmerText from '../components/ShimmerText.js';
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoScreen = lazy(() => import('../components/MCPInfoScreen.js'));
 const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
-const SessionListPanel = lazy(() => import('../components/SessionListPanel.js'));
+const SessionListPanel = lazy(
+	() => import('../components/SessionListPanel.js'),
+);
 const UsagePanel = lazy(() => import('../components/UsagePanel.js'));
 const HelpPanel = lazy(() => import('../components/HelpPanel.js'));
 import {getOpenAiConfig} from '../../utils/apiConfig.js';
@@ -183,64 +186,64 @@ export default function ChatScreen({skipWelcome}: Props) {
 				// Check if indexing is needed
 				const progress = await agent.getProgress();
 
-		// If indexing is already completed, start watcher and return early
-		if (progress.status === 'completed' && progress.totalChunks > 0) {
-			agent.startWatching(progressData => {
-				setCodebaseProgress({
-					totalFiles: progressData.totalFiles,
-					processedFiles: progressData.processedFiles,
-					totalChunks: progressData.totalChunks,
-					currentFile: progressData.currentFile,
-					status: progressData.status,
-				});
+				// If indexing is already completed, start watcher and return early
+				if (progress.status === 'completed' && progress.totalChunks > 0) {
+					agent.startWatching(progressData => {
+						setCodebaseProgress({
+							totalFiles: progressData.totalFiles,
+							processedFiles: progressData.processedFiles,
+							totalChunks: progressData.totalChunks,
+							currentFile: progressData.currentFile,
+							status: progressData.status,
+						});
 
-				// Handle file update notifications
-				if (progressData.totalFiles === 0 && progressData.currentFile) {
-					setFileUpdateNotification({
-						file: progressData.currentFile,
-						timestamp: Date.now(),
+						// Handle file update notifications
+						if (progressData.totalFiles === 0 && progressData.currentFile) {
+							setFileUpdateNotification({
+								file: progressData.currentFile,
+								timestamp: Date.now(),
+							});
+
+							// Clear notification after 3 seconds
+							setTimeout(() => {
+								setFileUpdateNotification(null);
+							}, 3000);
+						}
 					});
-
-					// Clear notification after 3 seconds
-					setTimeout(() => {
-						setFileUpdateNotification(null);
-					}, 3000);
+					setWatcherEnabled(true);
+					setCodebaseIndexing(false); // Ensure loading UI is hidden
+					return;
 				}
-			});
-			setWatcherEnabled(true);
-			setCodebaseIndexing(false); // Ensure loading UI is hidden
-			return;
-		}
 
-		// If watcher was enabled before but indexing not completed, restore it
-		const wasWatcherEnabled = await agent.isWatcherEnabled();
-		if (wasWatcherEnabled) {
-			logger.info('Restoring file watcher from previous session');
-			agent.startWatching(progressData => {
-				setCodebaseProgress({
-					totalFiles: progressData.totalFiles,
-					processedFiles: progressData.processedFiles,
-					totalChunks: progressData.totalChunks,
-					currentFile: progressData.currentFile,
-					status: progressData.status,
-				});
+				// If watcher was enabled before but indexing not completed, restore it
+				const wasWatcherEnabled = await agent.isWatcherEnabled();
+				if (wasWatcherEnabled) {
+					logger.info('Restoring file watcher from previous session');
+					agent.startWatching(progressData => {
+						setCodebaseProgress({
+							totalFiles: progressData.totalFiles,
+							processedFiles: progressData.processedFiles,
+							totalChunks: progressData.totalChunks,
+							currentFile: progressData.currentFile,
+							status: progressData.status,
+						});
 
-				// Handle file update notifications
-				if (progressData.totalFiles === 0 && progressData.currentFile) {
-					setFileUpdateNotification({
-						file: progressData.currentFile,
-						timestamp: Date.now(),
+						// Handle file update notifications
+						if (progressData.totalFiles === 0 && progressData.currentFile) {
+							setFileUpdateNotification({
+								file: progressData.currentFile,
+								timestamp: Date.now(),
+							});
+
+							// Clear notification after 3 seconds
+							setTimeout(() => {
+								setFileUpdateNotification(null);
+							}, 3000);
+						}
 					});
-
-					// Clear notification after 3 seconds
-					setTimeout(() => {
-						setFileUpdateNotification(null);
-					}, 3000);
+					setWatcherEnabled(true);
+					setCodebaseIndexing(false); // Ensure loading UI is hidden when restoring watcher
 				}
-			});
-			setWatcherEnabled(true);
-			setCodebaseIndexing(false); // Ensure loading UI is hidden when restoring watcher
-		}
 
 				// Start or resume indexing in background
 				setCodebaseIndexing(true);
@@ -434,6 +437,41 @@ export default function ChatScreen({skipWelcome}: Props) {
 		addMultipleToAlwaysApproved,
 	} = useToolConfirmation();
 
+	// State for askuser tool interaction
+	const [pendingUserQuestion, setPendingUserQuestion] = useState<{
+		question: string;
+		options: string[];
+		toolCall: any;
+		resolve: (result: {selected: string; customInput?: string}) => void;
+	} | null>(null);
+
+	// Request user question callback for askuser tool
+	const requestUserQuestion = async (
+		question: string,
+		options: string[],
+		toolCall: any,
+	): Promise<{selected: string; customInput?: string}> => {
+		return new Promise(resolve => {
+			setPendingUserQuestion({
+				question,
+				options,
+				toolCall,
+				resolve,
+			});
+		});
+	};
+
+	// Handle user question answer
+	const handleUserQuestionAnswer = (result: {
+		selected: string;
+		customInput?: string;
+	}) => {
+		if (pendingUserQuestion) {
+			pendingUserQuestion.resolve(result);
+			setPendingUserQuestion(null);
+		}
+	};
+
 	// Minimum terminal height required for proper rendering
 	const MIN_TERMINAL_HEIGHT = 10;
 
@@ -497,7 +535,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 			(async () => {
 				try {
 					// Clean up any existing connection state first (like manual /ide does)
-					if (vscodeConnection.isConnected() || vscodeConnection.isClientRunning()) {
+					if (
+						vscodeConnection.isConnected() ||
+						vscodeConnection.isClientRunning()
+					) {
 						vscodeConnection.stop();
 						vscodeConnection.resetReconnectAttempts();
 						await new Promise(resolve => setTimeout(resolve, 100));
@@ -915,7 +956,10 @@ export default function ChatScreen({skipWelcome}: Props) {
 	) => {
 		// 检查 token 占用，如果 >= 80% 且配置启用了自动压缩，先执行自动压缩
 		const autoCompressConfig = getOpenAiConfig();
-		if (autoCompressConfig.enableAutoCompress !== false && shouldAutoCompress(currentContextPercentageRef.current)) {
+		if (
+			autoCompressConfig.enableAutoCompress !== false &&
+			shouldAutoCompress(currentContextPercentageRef.current)
+		) {
 			setIsCompressing(true);
 			setCompressionError(null);
 
@@ -957,13 +1001,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 			}
 		}
 
-	// Clear any previous retry status when starting a new request
-	streamingState.setRetryStatus(null);
+		// Clear any previous retry status when starting a new request
+		streamingState.setRetryStatus(null);
 
-	// Parse and validate file references (use original message for immediate UI display)
-	const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-		message,
-	);
+		// Parse and validate file references (use original message for immediate UI display)
+		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
+			message,
+		);
 
 		// Separate image files from regular files
 		const imageFiles = validFiles.filter(
@@ -985,104 +1029,107 @@ export default function ChatScreen({skipWelcome}: Props) {
 			})),
 		];
 
-	// Only add user message to UI if not hidden (显示原始用户消息)
-	if (!hideUserMessage) {
-		const userMessage: Message = {
-			role: 'user',
-			content: cleanContent,
-			files: validFiles.length > 0 ? validFiles : undefined,
-			images: imageContents.length > 0 ? imageContents : undefined,
-		};
-		setMessages(prev => [...prev, userMessage]);
-	}
-	streamingState.setIsStreaming(true);
+		// Only add user message to UI if not hidden (显示原始用户消息)
+		if (!hideUserMessage) {
+			const userMessage: Message = {
+				role: 'user',
+				content: cleanContent,
+				files: validFiles.length > 0 ? validFiles : undefined,
+				images: imageContents.length > 0 ? imageContents : undefined,
+			};
+			setMessages(prev => [...prev, userMessage]);
+		}
+		streamingState.setIsStreaming(true);
 
-	// Create new abort controller for this request
-	const controller = new AbortController();
-	streamingState.setAbortController(controller);
+		// Create new abort controller for this request
+		const controller = new AbortController();
+		streamingState.setAbortController(controller);
 
-	// Optimize user prompt in the background (silent execution)
-	let originalMessage = message;
-	let optimizedMessage = message;
-	let optimizedCleanContent = cleanContent;
-	
-	// Check if prompt optimization is enabled in config
-	const config = getOpenAiConfig();
-	const isOptimizationEnabled = config.enablePromptOptimization !== false; // Default to true
-	
-	if (isOptimizationEnabled) {
+		// Optimize user prompt in the background (silent execution)
+		let originalMessage = message;
+		let optimizedMessage = message;
+		let optimizedCleanContent = cleanContent;
+
+		// Check if prompt optimization is enabled in config
+		const config = getOpenAiConfig();
+		const isOptimizationEnabled = config.enablePromptOptimization !== false; // Default to true
+
+		if (isOptimizationEnabled) {
+			try {
+				// Convert current UI messages to ChatMessage format for context
+				const conversationHistory = messages
+					.filter(m => m.role === 'user' || m.role === 'assistant')
+					.map(m => ({
+						role: m.role as 'user' | 'assistant',
+						content: typeof m.content === 'string' ? m.content : '',
+					}));
+
+				// Try to optimize the prompt (background execution)
+				optimizedMessage = await promptOptimizeAgent.optimizePrompt(
+					message,
+					conversationHistory,
+					controller.signal,
+				);
+
+				// Re-parse the optimized message to get clean content for AI
+				if (optimizedMessage !== originalMessage) {
+					const optimizedParsed = await parseAndValidateFileReferences(
+						optimizedMessage,
+					);
+					optimizedCleanContent = optimizedParsed.cleanContent;
+				}
+			} catch (error) {
+				// If optimization fails, silently fall back to original message
+				logger.warn('Prompt optimization failed, using original:', error);
+			}
+		}
+
 		try {
-			// Convert current UI messages to ChatMessage format for context
-			const conversationHistory = messages
-				.filter(m => m.role === 'user' || m.role === 'assistant')
-				.map(m => ({
-					role: m.role as 'user' | 'assistant',
-					content: typeof m.content === 'string' ? m.content : '',
-				}));
-
-			// Try to optimize the prompt (background execution)
-			optimizedMessage = await promptOptimizeAgent.optimizePrompt(
-				message,
-				conversationHistory,
-				controller.signal,
+			// Create message for AI with file read instructions and editor context (使用优化后的内容)
+			const messageForAI = createMessageWithFileInstructions(
+				optimizedCleanContent,
+				regularFiles,
+				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
-			// Re-parse the optimized message to get clean content for AI
-			if (optimizedMessage !== originalMessage) {
-				const optimizedParsed = await parseAndValidateFileReferences(optimizedMessage);
-				optimizedCleanContent = optimizedParsed.cleanContent;
-			}
-		} catch (error) {
-			// If optimization fails, silently fall back to original message
-			logger.warn('Prompt optimization failed, using original:', error);
-		}
-	}
+			// Wrap saveMessage to add originalContent for user messages
+			const saveMessageWithOriginal = async (msg: any) => {
+				// If this is a user message and we have an optimized version, add originalContent
+				if (msg.role === 'user' && optimizedMessage !== originalMessage) {
+					await saveMessage({
+						...msg,
+						originalContent: originalMessage,
+					});
+				} else {
+					await saveMessage(msg);
+				}
+			};
 
-	try {
-		// Create message for AI with file read instructions and editor context (使用优化后的内容)
-		const messageForAI = createMessageWithFileInstructions(
-			optimizedCleanContent,
-			regularFiles,
-			vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
-		);
-
-		// Wrap saveMessage to add originalContent for user messages
-		const saveMessageWithOriginal = async (msg: any) => {
-			// If this is a user message and we have an optimized version, add originalContent
-			if (msg.role === 'user' && optimizedMessage !== originalMessage) {
-				await saveMessage({
-					...msg,
-					originalContent: originalMessage,
-				});
-			} else {
-				await saveMessage(msg);
-			}
-		};
-
-		// Start conversation with tool support
-		await handleConversationWithTools({
-			userContent: messageForAI,
-			imageContents,
-			controller,
-			messages,
-			saveMessage: saveMessageWithOriginal,
-			setMessages,
-			setStreamTokenCount: streamingState.setStreamTokenCount,
-			requestToolConfirmation,
-			isToolAutoApproved,
-			addMultipleToAlwaysApproved,
-			yoloMode,
-			setContextUsage: streamingState.setContextUsage,
-			useBasicModel,
-			getPendingMessages: () => pendingMessagesRef.current,
-			clearPendingMessages: () => setPendingMessages([]),
-			setIsStreaming: streamingState.setIsStreaming,
-			setIsReasoning: streamingState.setIsReasoning,
-			setRetryStatus: streamingState.setRetryStatus,
-			clearSavedMessages,
-			setRemountKey,
-			getCurrentContextPercentage: () => currentContextPercentageRef.current,
-		});
+			// Start conversation with tool support
+			await handleConversationWithTools({
+				userContent: messageForAI,
+				imageContents,
+				controller,
+				messages,
+				saveMessage: saveMessageWithOriginal,
+				setMessages,
+				setStreamTokenCount: streamingState.setStreamTokenCount,
+				requestToolConfirmation,
+				requestUserQuestion,
+				isToolAutoApproved,
+				addMultipleToAlwaysApproved,
+				yoloMode,
+				setContextUsage: streamingState.setContextUsage,
+				useBasicModel,
+				getPendingMessages: () => pendingMessagesRef.current,
+				clearPendingMessages: () => setPendingMessages([]),
+				setIsStreaming: streamingState.setIsStreaming,
+				setIsReasoning: streamingState.setIsReasoning,
+				setRetryStatus: streamingState.setRetryStatus,
+				clearSavedMessages,
+				setRemountKey,
+				getCurrentContextPercentage: () => currentContextPercentageRef.current,
+			});
 		} catch (error) {
 			if (controller.signal.aborted) {
 				// Don't return here - let finally block execute
@@ -1290,6 +1337,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
 				requestToolConfirmation,
+				requestUserQuestion,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
@@ -1410,7 +1458,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 
 	if (showMcpInfo) {
 		return (
-			<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+			<Suspense
+				fallback={
+					<Box>
+						<Text>
+							<Spinner type="dots" /> Loading...
+						</Text>
+					</Box>
+				}
+			>
 				<MCPInfoScreen
 					onClose={() => setShowMcpInfo(false)}
 					panelKey={mcpPanelKey}
@@ -1476,13 +1532,13 @@ export default function ChatScreen({skipWelcome}: Props) {
 										)}`;
 									})()}
 								</Text>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					•{' '}
-					{t.chatScreen.headerWorkingDirectory.replace(
-						'{directory}',
-						workingDirectory,
-					)}
-				</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									•{' '}
+									{t.chatScreen.headerWorkingDirectory.replace(
+										'{directory}',
+										workingDirectory,
+									)}
+								</Text>
 							</Box>
 						</Box>
 					</Box>,
@@ -1568,26 +1624,26 @@ export default function ChatScreen({skipWelcome}: Props) {
 									flexDirection="column"
 									width={terminalWidth}
 								>
-					{/* Show parallel group indicator */}
-					{isFirstInGroup && (
-						<Box marginBottom={0}>
-							<Text color={theme.colors.menuInfo} dimColor>
-								┌─ Parallel execution
-							</Text>
-						</Box>
-					)}
+									{/* Show parallel group indicator */}
+									{isFirstInGroup && (
+										<Box marginBottom={0}>
+											<Text color={theme.colors.menuInfo} dimColor>
+												┌─ Parallel execution
+											</Text>
+										</Box>
+									)}
 
 									<Box>
-				<Text
-					color={
-						message.role === 'user'
-							? 'green'
-							: message.role === 'command'
-							? theme.colors.menuSecondary
-							: toolStatusColor
-					}
-					bold
-				>
+										<Text
+											color={
+												message.role === 'user'
+													? 'green'
+													: message.role === 'command'
+													? theme.colors.menuSecondary
+													: toolStatusColor
+											}
+											bold
+										>
 											{shouldShowParallelIndicator && !isFirstInGroup
 												? '│'
 												: ''}
@@ -1599,33 +1655,35 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</Text>
 										<Box marginLeft={1} flexDirection="column">
 											{message.role === 'command' ? (
-							<>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									└─ {message.commandName}
-								</Text>
+												<>
+													<Text color={theme.colors.menuSecondary} dimColor>
+														└─ {message.commandName}
+													</Text>
 													{message.content && (
 														<Text color="white">{message.content}</Text>
 													)}
 												</>
 											) : (
 												<>
-							{message.role === 'user' || isToolMessage ? (
-								<Text
-									color={
-										message.role === 'user'
-											? 'white'
-											: message.content.startsWith('⚡')
-											? 'yellow'
-											: message.content.startsWith('✓')
-											? 'green'
-											: 'red'
-									}
-									backgroundColor={
-										message.role === 'user' ? theme.colors.border : undefined
-									}
-								>
-									{message.content || ' '}
-								</Text>
+													{message.role === 'user' || isToolMessage ? (
+														<Text
+															color={
+																message.role === 'user'
+																	? 'white'
+																	: message.content.startsWith('⚡')
+																	? 'yellow'
+																	: message.content.startsWith('✓')
+																	? 'green'
+																	: 'red'
+															}
+															backgroundColor={
+																message.role === 'user'
+																	? theme.colors.border
+																	: undefined
+															}
+														>
+															{message.content || ' '}
+														</Text>
 													) : (
 														<MarkdownRenderer
 															content={message.content || ' '}
@@ -1640,45 +1698,52 @@ export default function ChatScreen({skipWelcome}: Props) {
 																return num.toString();
 															};
 
-							return (
-								<Text color={theme.colors.menuSecondary} dimColor>
-									└─ Usage: In=
-									{formatTokens(
-										message.subAgentUsage.inputTokens,
-									)}
-									, Out=
-									{formatTokens(
-										message.subAgentUsage.outputTokens,
-									)}
-									{message.subAgentUsage.cacheReadInputTokens
-										? `, Cache Read=${formatTokens(
-												message.subAgentUsage
-													.cacheReadInputTokens,
-										  )}`
-										: ''}
-									{message.subAgentUsage
-										.cacheCreationInputTokens
-										? `, Cache Create=${formatTokens(
-												message.subAgentUsage
-													.cacheCreationInputTokens,
-										  )}`
-										: ''}
-								</Text>
-							);
+															return (
+																<Text
+																	color={theme.colors.menuSecondary}
+																	dimColor
+																>
+																	└─ Usage: In=
+																	{formatTokens(
+																		message.subAgentUsage.inputTokens,
+																	)}
+																	, Out=
+																	{formatTokens(
+																		message.subAgentUsage.outputTokens,
+																	)}
+																	{message.subAgentUsage.cacheReadInputTokens
+																		? `, Cache Read=${formatTokens(
+																				message.subAgentUsage
+																					.cacheReadInputTokens,
+																		  )}`
+																		: ''}
+																	{message.subAgentUsage
+																		.cacheCreationInputTokens
+																		? `, Cache Create=${formatTokens(
+																				message.subAgentUsage
+																					.cacheCreationInputTokens,
+																		  )}`
+																		: ''}
+																</Text>
+															);
 														})()}
 													{message.toolDisplay &&
 														message.toolDisplay.args.length > 0 &&
 														// Hide tool arguments for sub-agent internal tools
 														!message.subAgentInternal && (
 															<Box flexDirection="column">
-								{message.toolDisplay.args.map(
-									(arg, argIndex) => (
-										<Text key={argIndex} color={theme.colors.menuSecondary} dimColor>
-											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-											{arg.value}
-										</Text>
-									),
-								)}
+																{message.toolDisplay.args.map(
+																	(arg, argIndex) => (
+																		<Text
+																			key={argIndex}
+																			color={theme.colors.menuSecondary}
+																			dimColor
+																		>
+																			{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+																			{arg.value}
+																		</Text>
+																	),
+																)}
 															</Box>
 														)}
 													{message.toolCall &&
@@ -1833,44 +1898,55 @@ export default function ChatScreen({skipWelcome}: Props) {
 														message.content.includes(
 															'Tool execution rejected by user:',
 														) && (
-							<Box flexDirection="column" marginTop={1}>
-								<Text color="yellow" dimColor>
-									Rejection reason:
-								</Text>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									└─{' '}
-									{message.content
-										.split(
-											'Tool execution rejected by user:',
-										)[1]
-										?.trim() || 'No reason provided'}
-								</Text>
-							</Box>
+															<Box flexDirection="column" marginTop={1}>
+																<Text color="yellow" dimColor>
+																	Rejection reason:
+																</Text>
+																<Text
+																	color={theme.colors.menuSecondary}
+																	dimColor
+																>
+																	└─{' '}
+																	{message.content
+																		.split(
+																			'Tool execution rejected by user:',
+																		)[1]
+																		?.trim() || 'No reason provided'}
+																</Text>
+															</Box>
 														)}
-						{message.files && message.files.length > 0 && (
-							<Box flexDirection="column">
-								{message.files.map((file, fileIndex) => (
-									<Text key={fileIndex} color={theme.colors.menuSecondary} dimColor>
-										└─ {file.path}
-										{file.exists
-											? ` (total line ${file.lineCount})`
-											: ' (file not found)'}
-									</Text>
-								))}
-							</Box>
-						)}
-						{/* Images for user messages */}
-						{message.role === 'user' &&
-						message.images &&
-						message.images.length > 0 && (
-							<Box marginTop={1} flexDirection="column">
-								{message.images.map((_image, imageIndex) => (
-									<Text key={imageIndex} color={theme.colors.menuSecondary} dimColor>
-										└─ [image #{imageIndex + 1}]
-									</Text>
-								))}
-							</Box>
-						)}
+													{message.files && message.files.length > 0 && (
+														<Box flexDirection="column">
+															{message.files.map((file, fileIndex) => (
+																<Text
+																	key={fileIndex}
+																	color={theme.colors.menuSecondary}
+																	dimColor
+																>
+																	└─ {file.path}
+																	{file.exists
+																		? ` (total line ${file.lineCount})`
+																		: ' (file not found)'}
+																</Text>
+															))}
+														</Box>
+													)}
+													{/* Images for user messages */}
+													{message.role === 'user' &&
+														message.images &&
+														message.images.length > 0 && (
+															<Box marginTop={1} flexDirection="column">
+																{message.images.map((_image, imageIndex) => (
+																	<Text
+																		key={imageIndex}
+																		color={theme.colors.menuSecondary}
+																		dimColor
+																	>
+																		└─ [image #{imageIndex + 1}]
+																	</Text>
+																))}
+															</Box>
+														)}
 													{message.discontinued && (
 														<Text color="red" bold>
 															└─ user discontinue
@@ -1881,14 +1957,14 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</Box>
 									</Box>
 
-				{/* Show parallel group end indicator */}
-				{isLastInGroup && (
-					<Box marginTop={0}>
-						<Text color={theme.colors.menuInfo} dimColor>
-							└─ End parallel execution
-						</Text>
-					</Box>
-				)}
+									{/* Show parallel group end indicator */}
+									{isLastInGroup && (
+										<Box marginTop={0}>
+											<Text color={theme.colors.menuInfo} dimColor>
+												└─ End parallel execution
+											</Text>
+										</Box>
+									)}
 								</Box>
 							);
 						}),
@@ -1897,92 +1973,98 @@ export default function ChatScreen({skipWelcome}: Props) {
 				{item => item}
 			</Static>
 
-		{/* Show loading indicator when streaming or saving */}
-		{(streamingState.isStreaming || isSaving) && !pendingToolConfirmation && (
-			<Box marginBottom={1} paddingX={1} width={terminalWidth}>
-				<Text
-					color={
-						[theme.colors.menuInfo, theme.colors.success, theme.colors.menuSelected, theme.colors.menuInfo, theme.colors.menuSecondary][
-							streamingState.animationFrame
-						] as any
-					}
-					bold
-				>
-					❆
-				</Text>
-					<Box marginLeft={1} marginBottom={1} flexDirection="column">
-						{streamingState.isStreaming ? (
-							<>
-								{streamingState.retryStatus &&
-								streamingState.retryStatus.isRetrying ? (
-									// Retry status display - hide "Thinking" and show retry info
-									<Box flexDirection="column">
-										{streamingState.retryStatus.errorMessage && (
-											<Text color="red" dimColor>
-												✗ Error: {streamingState.retryStatus.errorMessage}
-											</Text>
-										)}
-										{streamingState.retryStatus.remainingSeconds !==
-											undefined &&
-										streamingState.retryStatus.remainingSeconds > 0 ? (
-											<Text color="yellow" dimColor>
-												⟳ Retry {streamingState.retryStatus.attempt}/5 in{' '}
-												{streamingState.retryStatus.remainingSeconds}s...
-											</Text>
-										) : (
-											<Text color="yellow" dimColor>
-												⟳ Resending... (Attempt{' '}
-												{streamingState.retryStatus.attempt}/5)
-											</Text>
-										)}
-									</Box>
-								) : streamingState.codebaseSearchStatus?.isSearching ? (
-									// Codebase search retry status
-									<Box flexDirection="column">
-										<Text color="cyan" dimColor>
-							⏏ Codebase Search (Attempt{' '}
-							{streamingState.codebaseSearchStatus.attempt}/
-							{streamingState.codebaseSearchStatus.maxAttempts})
-						</Text>
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{streamingState.codebaseSearchStatus.message}
-						</Text>
-					</Box>
-				) : (
-					// Normal thinking status
-					<Text color={theme.colors.menuSecondary} dimColor>
-						<ShimmerText
-							text={
-								streamingState.isReasoning
-									? t.chatScreen.statusDeepThinking
-									: streamingState.streamTokenCount > 0
-									? t.chatScreen.statusWriting
-									: t.chatScreen.statusThinking
+			{/* Show loading indicator when streaming or saving */}
+			{(streamingState.isStreaming || isSaving) &&
+				!pendingToolConfirmation &&
+				!pendingUserQuestion && (
+					<Box marginBottom={1} paddingX={1} width={terminalWidth}>
+						<Text
+							color={
+								[
+									theme.colors.menuInfo,
+									theme.colors.success,
+									theme.colors.menuSelected,
+									theme.colors.menuInfo,
+									theme.colors.menuSecondary,
+								][streamingState.animationFrame] as any
 							}
-						/>{' '}
-						({formatElapsedTime(streamingState.elapsedSeconds)}
-										{' · '}
-										<Text color="cyan">
-											↓{' '}
-											{streamingState.streamTokenCount >= 1000
-												? `${(streamingState.streamTokenCount / 1000).toFixed(
-														1,
-												  )}k`
-												: streamingState.streamTokenCount}{' '}
-											tokens
+							bold
+						>
+							❆
+						</Text>
+						<Box marginLeft={1} marginBottom={1} flexDirection="column">
+							{streamingState.isStreaming ? (
+								<>
+									{streamingState.retryStatus &&
+									streamingState.retryStatus.isRetrying ? (
+										// Retry status display - hide "Thinking" and show retry info
+										<Box flexDirection="column">
+											{streamingState.retryStatus.errorMessage && (
+												<Text color="red" dimColor>
+													✗ Error: {streamingState.retryStatus.errorMessage}
+												</Text>
+											)}
+											{streamingState.retryStatus.remainingSeconds !==
+												undefined &&
+											streamingState.retryStatus.remainingSeconds > 0 ? (
+												<Text color="yellow" dimColor>
+													⟳ Retry {streamingState.retryStatus.attempt}/5 in{' '}
+													{streamingState.retryStatus.remainingSeconds}s...
+												</Text>
+											) : (
+												<Text color="yellow" dimColor>
+													⟳ Resending... (Attempt{' '}
+													{streamingState.retryStatus.attempt}/5)
+												</Text>
+											)}
+										</Box>
+									) : streamingState.codebaseSearchStatus?.isSearching ? (
+										// Codebase search retry status
+										<Box flexDirection="column">
+											<Text color="cyan" dimColor>
+												⏏ Codebase Search (Attempt{' '}
+												{streamingState.codebaseSearchStatus.attempt}/
+												{streamingState.codebaseSearchStatus.maxAttempts})
+											</Text>
+											<Text color={theme.colors.menuSecondary} dimColor>
+												{streamingState.codebaseSearchStatus.message}
+											</Text>
+										</Box>
+									) : (
+										// Normal thinking status
+										<Text color={theme.colors.menuSecondary} dimColor>
+											<ShimmerText
+												text={
+													streamingState.isReasoning
+														? t.chatScreen.statusDeepThinking
+														: streamingState.streamTokenCount > 0
+														? t.chatScreen.statusWriting
+														: t.chatScreen.statusThinking
+												}
+											/>{' '}
+											({formatElapsedTime(streamingState.elapsedSeconds)}
+											{' · '}
+											<Text color="cyan">
+												↓{' '}
+												{streamingState.streamTokenCount >= 1000
+													? `${(streamingState.streamTokenCount / 1000).toFixed(
+															1,
+													  )}k`
+													: streamingState.streamTokenCount}{' '}
+												tokens
+											</Text>
+											)
 										</Text>
-										)
-									</Text>
-								)}
-							</>
-				) : (
-			<Text color={theme.colors.menuSecondary} dimColor>
-				{t.chatScreen.sessionCreating}
-			</Text>
-						)}
+									)}
+								</>
+							) : (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.chatScreen.sessionCreating}
+								</Text>
+							)}
+						</Box>
 					</Box>
-				</Box>
-			)}
+				)}
 
 			<Box paddingX={1} width={terminalWidth}>
 				<PendingMessages pendingMessages={pendingMessages} />
@@ -2005,10 +2087,27 @@ export default function ChatScreen({skipWelcome}: Props) {
 				/>
 			)}
 
+			{/* Show user question panel if askuser tool is called */}
+			{pendingUserQuestion && (
+				<AskUserQuestion
+					question={pendingUserQuestion.question}
+					options={pendingUserQuestion.options}
+					onAnswer={handleUserQuestionAnswer}
+				/>
+			)}
+
 			{/* Show session list panel if active - replaces input */}
 			{showSessionPanel && (
 				<Box paddingX={1} width={terminalWidth}>
-					<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
 						<SessionListPanel
 							onSelectSession={handleSessionPanelSelect}
 							onClose={() => setShowSessionPanel(false)}
@@ -2017,38 +2116,62 @@ export default function ChatScreen({skipWelcome}: Props) {
 				</Box>
 			)}
 
-		{/* Show MCP info panel if active - replaces input */}
-		{showMcpPanel && (
-			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-				<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
-					<MCPInfoPanel />
-				</Suspense>
-				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.chatScreen.pressEscToClose}
-					</Text>
+			{/* Show MCP info panel if active - replaces input */}
+			{showMcpPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<MCPInfoPanel />
+					</Suspense>
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.pressEscToClose}
+						</Text>
+					</Box>
 				</Box>
-			</Box>
-		)}
+			)}
 
-		{/* Show usage panel if active - replaces input */}
-		{showUsagePanel && (
-			<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-				<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
-					<UsagePanel />
-				</Suspense>
-				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.chatScreen.pressEscToClose}
-					</Text>
+			{/* Show usage panel if active - replaces input */}
+			{showUsagePanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<UsagePanel />
+					</Suspense>
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.pressEscToClose}
+						</Text>
+					</Box>
 				</Box>
-			</Box>
-		)}
+			)}
 
 			{/* Show help panel if active - replaces input */}
 			{showHelpPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<Suspense fallback={<Box><Text><Spinner type="dots" /> Loading...</Text></Box>}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
 						<HelpPanel />
 					</Suspense>
 				</Box>
@@ -2063,8 +2186,9 @@ export default function ChatScreen({skipWelcome}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or rollback confirmation */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or rollback confirmation or user question */}
 			{!pendingToolConfirmation &&
+				!pendingUserQuestion &&
 				!isCompressing &&
 				!showSessionPanel &&
 				!showMcpPanel &&
@@ -2116,7 +2240,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 										</>
 									) : (
 										<>
-											●{' '}{t.chatScreen.ideConnected}
+											● {t.chatScreen.ideConnected}
 											{vscodeState.editorContext.activeFile &&
 												t.chatScreen.ideActiveFile.replace(
 													'{file}',

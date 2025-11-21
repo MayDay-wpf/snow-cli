@@ -23,13 +23,13 @@ export type TranslationKeys = {
 		subAgentSettingsInfo: string;
 		sensitiveCommands: string;
 		sensitiveCommandsInfo: string;
-	languageSettings: string;
-	languageSettingsInfo: string;
-	themeSettings: string;
-	themeSettingsInfo: string;
-	exit: string;
-	exitInfo: string;
-};
+		languageSettings: string;
+		languageSettingsInfo: string;
+		themeSettings: string;
+		themeSettingsInfo: string;
+		exit: string;
+		exitInfo: string;
+	};
 	// Menu
 	menu: {
 		navigate: string;
@@ -254,6 +254,7 @@ export type TranslationKeys = {
 		todoTools: string;
 		webSearchTools: string;
 		ideTools: string;
+		userInteractionTools: string;
 	};
 	// Sensitive Command Config Screen
 	sensitiveCommandConfig: {
@@ -301,6 +302,27 @@ export type TranslationKeys = {
 		solarizedDarkInfo: string;
 		nord: string;
 		nordInfo: string;
+		custom: string;
+		customInfo: string;
+		editCustom: string;
+		editCustomInfo: string;
+	};
+	customTheme: {
+		title: string;
+		save: string;
+		saveInfo: string;
+		reset: string;
+		resetInfo: string;
+		back: string;
+		backInfo: string;
+		editColor: string;
+		currentValue: string;
+		newValue: string;
+		colorFormat: string;
+		cancel: string;
+		confirm: string;
+		preview: string;
+		colorHint: string;
 	};
 	helpPanel: {
 		title: string;

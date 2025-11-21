@@ -74,9 +74,9 @@ const CommandPanel = memo(
 					<Box width="100%">
 						<Box flexDirection="column" width="100%">
 							<Box>
-					<Text color={theme.colors.warning} bold>
-						{t.commandPanel.title}
-					</Text>
+								<Text color={theme.colors.warning} bold>
+									{t.commandPanel.title}
+								</Text>
 							</Box>
 							<Box marginTop={1}>
 								<Alert variant="info">{t.commandPanel.processingMessage}</Alert>
@@ -97,42 +97,50 @@ const CommandPanel = memo(
 				<Box width="100%">
 					<Box flexDirection="column" width="100%">
 						<Box>
-				<Text color={theme.colors.warning} bold>
-					{t.commandPanel.availableCommands}{' '}
-					{commands.length > effectiveMaxItems &&
-						`(${selectedIndex + 1}/${commands.length})`}
-				</Text>
+							<Text color={theme.colors.warning} bold>
+								{t.commandPanel.availableCommands}{' '}
+								{commands.length > effectiveMaxItems &&
+									`(${selectedIndex + 1}/${commands.length})`}
+							</Text>
 						</Box>
 						{displayedCommands.map((command, index) => (
 							<Box key={command.name} flexDirection="column" width="100%">
-				<Text
-					color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
-					bold
-				>
-					{index === displayedSelectedIndex ? '❯ ' : '  '}/
-					{command.name}
-				</Text>
-				<Box marginLeft={3}>
-					<Text
-						color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
-						dimColor
-					>
-						└─ {command.description}
-					</Text>
-				</Box>
+								<Text
+									color={
+										index === displayedSelectedIndex
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									bold
+								>
+									{index === displayedSelectedIndex ? '❯ ' : '  '}/
+									{command.name}
+								</Text>
+								<Box marginLeft={3}>
+									<Text
+										color={
+											index === displayedSelectedIndex
+												? theme.colors.menuSelected
+												: theme.colors.menuNormal
+										}
+										dimColor
+									>
+										└─ {command.description}
+									</Text>
+								</Box>
 							</Box>
 						))}
-			{commands.length > effectiveMaxItems && (
-				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.commandPanel.scrollHint} ·{' '}
-						{t.commandPanel.moreHidden.replace(
-							'{count}',
-							(commands.length - effectiveMaxItems).toString(),
+						{commands.length > effectiveMaxItems && (
+							<Box marginTop={1}>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.commandPanel.scrollHint} ·{' '}
+									{t.commandPanel.moreHidden.replace(
+										'{count}',
+										(commands.length - effectiveMaxItems).toString(),
+									)}
+								</Text>
+							</Box>
 						)}
-					</Text>
-				</Box>
-			)}
 					</Box>
 				</Box>
 			</Box>

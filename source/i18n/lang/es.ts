@@ -7,30 +7,39 @@ export const es: TranslationKeys = {
 		startChat: 'Comenzar',
 		startChatInfo: 'Iniciar una nueva conversación de chat',
 		apiSettings: 'Configuración de API y Modelo',
-		apiSettingsInfo: 'Configurar ajustes de API, modelos de IA y gestionar perfiles',
+		apiSettingsInfo:
+			'Configurar ajustes de API, modelos de IA y gestionar perfiles',
 		proxySettings: 'Configuración de Proxy y Navegador',
-		proxySettingsInfo: 'Configurar proxy del sistema y navegador para búsqueda y obtención web',
+		proxySettingsInfo:
+			'Configurar proxy del sistema y navegador para búsqueda y obtención web',
 		codebaseSettings: 'Configuración de Base de Código',
-		codebaseSettingsInfo: 'Configurar indexación de base de código con modelos de incrustación',
+		codebaseSettingsInfo:
+			'Configurar indexación de base de código con modelos de incrustación',
 		systemPromptSettings: 'Configuración de Prompt del Sistema',
-		systemPromptSettingsInfo: 'Configurar prompt del sistema personalizado (anula el predeterminado)',
+		systemPromptSettingsInfo:
+			'Configurar prompt del sistema personalizado (anula el predeterminado)',
 		customHeadersSettings: 'Configuración de Encabezados Personalizados',
-		customHeadersSettingsInfo: 'Configurar encabezados HTTP personalizados para solicitudes API',
+		customHeadersSettingsInfo:
+			'Configurar encabezados HTTP personalizados para solicitudes API',
 		mcpSettings: 'Configuración MCP',
 		mcpSettingsInfo: 'Configurar servidores de Protocolo de Contexto de Modelo',
 		subAgentSettings: 'Configuración de Sub-Agentes',
-		subAgentSettingsInfo: 'Configurar sub-agentes con permisos de herramientas personalizados',
+		subAgentSettingsInfo:
+			'Configurar sub-agentes con permisos de herramientas personalizados',
 		sensitiveCommands: 'Comandos Sensibles',
-		sensitiveCommandsInfo: 'Configurar comandos que requieren confirmación incluso en modo YOLO',
+		sensitiveCommandsInfo:
+			'Configurar comandos que requieren confirmación incluso en modo YOLO',
 		languageSettings: 'Configuración de Idioma',
 		languageSettingsInfo: 'Cambiar el idioma de la aplicación',
 		themeSettings: 'Configuración de Tema',
-		themeSettingsInfo: 'Configurar tema y vista previa del visor de diferencias',
+		themeSettingsInfo:
+			'Configurar tema y vista previa del visor de diferencias',
 		exit: 'Salir',
 		exitInfo: 'Salir de la aplicación',
 	},
 	menu: {
-		navigate: 'Usa las teclas ↑↓ para navegar, presiona Enter para seleccionar:',
+		navigate:
+			'Usa las teclas ↑↓ para navegar, presiona Enter para seleccionar:',
 	},
 	proxyConfig: {
 		title: 'Configuración de Proxy',
@@ -44,11 +53,13 @@ export const es: TranslationKeys = {
 		browserPath: 'Ruta del Navegador (Opcional):',
 		autoDetect: 'Detección automática',
 		errors: 'Errores:',
-		editingHint: 'Modo de edición: Presiona Enter para guardar y salir de la edición (Presiona Enter cuando termines los cambios)',
+		editingHint:
+			'Modo de edición: Presiona Enter para guardar y salir de la edición (Presiona Enter cuando termines los cambios)',
 		navigationHint:
 			'Usa ↑↓ para navegar entre campos, Enter para editar/alternar, Ctrl+S o Esc para guardar y volver',
 		browserExamplesTitle: 'Ejemplos de Ruta del Navegador:',
-		browserExamplesFooter: 'Dejar vacío para detectar automáticamente el navegador del sistema (Edge/Chrome)',
+		browserExamplesFooter:
+			'Dejar vacío para detectar automáticamente el navegador del sistema (Edge/Chrome)',
 		portValidationError: 'El puerto debe ser un número entre 1 y 65535',
 		portPlaceholder: '7890',
 		browserPathPlaceholder: 'Dejar vacío para detección automática',
@@ -71,20 +82,28 @@ export const es: TranslationKeys = {
 		embeddingModelName: 'Nombre del Modelo de Incrustación:',
 		embeddingBaseUrl: 'URL Base de Incrustación:',
 		embeddingApiKey: 'Clave API de Incrustación:',
-		embeddingApiKeyOptional: 'Clave API de Incrustación (opcional para implementación local):',
+		embeddingApiKeyOptional:
+			'Clave API de Incrustación (opcional para implementación local):',
 		embeddingDimensions: 'Dimensiones de Incrustación:',
 		batchMaxLines: 'Máximo de Líneas por Lote:',
 		batchConcurrency: 'Concurrencia de Lote:',
 		notSet: 'No configurado',
 		masked: '••••••••',
 		errors: 'Errores:',
-		editingHint: 'Modo de edición: Escribe para editar, Enter para guardar, Esc para cancelar',
-		navigationHint: 'Usa ↑↓ para navegar, Enter para editar/alternar, Ctrl+S o Esc para guardar',
-		validationModelNameRequired: 'Se requiere el nombre del modelo de incrustación cuando está habilitado',
-		validationBaseUrlRequired: 'Se requiere la URL base de incrustación cuando está habilitado',
-		validationDimensionsPositive: 'Las dimensiones de incrustación deben ser mayores que 0',
-		validationMaxLinesPositive: 'El máximo de líneas por lote debe ser mayor que 0',
-		validationConcurrencyPositive: 'La concurrencia de lote debe ser mayor que 0',
+		editingHint:
+			'Modo de edición: Escribe para editar, Enter para guardar, Esc para cancelar',
+		navigationHint:
+			'Usa ↑↓ para navegar, Enter para editar/alternar, Ctrl+S o Esc para guardar',
+		validationModelNameRequired:
+			'Se requiere el nombre del modelo de incrustación cuando está habilitado',
+		validationBaseUrlRequired:
+			'Se requiere la URL base de incrustación cuando está habilitado',
+		validationDimensionsPositive:
+			'Las dimensiones de incrustación deben ser mayores que 0',
+		validationMaxLinesPositive:
+			'El máximo de líneas por lote debe ser mayor que 0',
+		validationConcurrencyPositive:
+			'La concurrencia de lote debe ser mayor que 0',
 		saveError: 'Error al guardar la configuración',
 	},
 	systemPromptConfig: {
@@ -92,7 +111,8 @@ export const es: TranslationKeys = {
 		subtitle: 'Gestionar múltiples prompts del sistema y alternar entre ellos',
 		activePrompt: 'Prompt Activo:',
 		none: 'Ninguno',
-		noPromptsConfigured: 'No hay prompts del sistema configurados. Presiona Enter para agregar uno.',
+		noPromptsConfigured:
+			'No hay prompts del sistema configurados. Presiona Enter para agregar uno.',
 		availablePrompts: 'Prompts Disponibles:',
 		actions: 'Acciones:',
 		activate: 'Activar',
@@ -101,7 +121,8 @@ export const es: TranslationKeys = {
 		delete: 'Eliminar',
 		addNew: 'Agregar Nuevo Prompt',
 		escBack: '[ESC] Volver',
-		navigationHint: 'Usa ↑↓ para seleccionar prompt, ←→ para seleccionar acción, Enter para confirmar',
+		navigationHint:
+			'Usa ↑↓ para seleccionar prompt, ←→ para seleccionar acción, Enter para confirmar',
 		addNewTitle: 'Agregar Nuevo Prompt del Sistema',
 		editTitle: 'Editar Prompt del Sistema',
 		nameLabel: 'Nombre:',
@@ -109,7 +130,8 @@ export const es: TranslationKeys = {
 		enterPromptName: 'Ingresa el nombre del prompt',
 		enterPromptContent: 'Ingresa el contenido del prompt',
 		notSet: 'No configurado',
-		editingHint: '↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
+		editingHint:
+			'↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
 		confirmDelete: 'Confirmar Eliminación',
 		deleteConfirmMessage: '¿Estás seguro de que deseas eliminar',
 		confirmHint: 'Presiona Y para confirmar, N o ESC para cancelar',
@@ -150,7 +172,8 @@ export const es: TranslationKeys = {
 		createHint: 'Presiona Enter para crear, Esc para cancelar',
 		deleteProfile: 'Eliminar Perfil',
 		confirmDelete: 'Confirmar Eliminación de Perfil',
-		deleteWarning: 'Esta acción no se puede deshacer. Cambiarás al perfil predeterminado.',
+		deleteWarning:
+			'Esta acción no se puede deshacer. Cambiarás al perfil predeterminado.',
 		confirmHint: 'Presiona Y para confirmar, N o Esc para cancelar',
 		loadingModels: 'Configuración de API y Modelo',
 		loadingMessage: 'Cargando modelos disponibles...',
@@ -159,32 +182,42 @@ export const es: TranslationKeys = {
 		manualInputSubtitle: 'Ingresa manualmente el nombre del modelo',
 		manualInputHint: 'Presiona Enter para confirmar, Esc para cancelar',
 		loadingError: '⚠ No se pueden cargar modelos desde la API',
-		requestMethodChat: 'Chat Completions - API de chat moderna (GPT-4, GPT-3.5-turbo)',
-		requestMethodResponses: 'Responses - Nueva API Responses (2025, herramientas integradas)',
+		requestMethodChat:
+			'Chat Completions - API de chat moderna (GPT-4, GPT-3.5-turbo)',
+		requestMethodResponses:
+			'Responses - Nueva API Responses (2025, herramientas integradas)',
 		requestMethodGemini: 'Gemini - API de Google Gemini',
 		requestMethodAnthropic: 'Anthropic - API de Claude',
 		manualInputOption: 'Entrada Manual (ingresa el nombre del modelo)',
 		errors: 'Errores:',
 		cannotDeleteDefault: 'No se puede eliminar el perfil predeterminado',
 		profileNameEmpty: 'El nombre del perfil no puede estar vacío',
-		navigationHint: 'Usa ↑↓ para navegar, Enter para editar, M para entrada manual, Ctrl+S o Esc para guardar',
+		navigationHint:
+			'Usa ↑↓ para navegar, Enter para editar, M para entrada manual, Ctrl+S o Esc para guardar',
 		editingHintNumeric: 'Ingresa número para editar, Enter para guardar',
 		editingHintGeneral: 'Presiona Enter para guardar y salir de la edición',
-		modelFilterHint: 'Escribe para filtrar, ↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
-		effortSelectHint: '↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
-		profileSelectHint: '↑↓ para seleccionar perfil, N para crear nuevo, D para eliminar, Enter para confirmar, Esc para cancelar',
-		requestMethodSelectHint: '↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
+		modelFilterHint:
+			'Escribe para filtrar, ↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
+		effortSelectHint:
+			'↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
+		profileSelectHint:
+			'↑↓ para seleccionar perfil, N para crear nuevo, D para eliminar, Enter para confirmar, Esc para cancelar',
+		requestMethodSelectHint:
+			'↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
 		newProfile: '+ Nuevo',
 		deleteProfileShort: '🆇 Eliminar',
 		fetchingModels: 'Obteniendo modelos desde la API...',
-		fetchingHint: 'Esto puede tardar unos segundos dependiendo de la conexión de red',
+		fetchingHint:
+			'Esto puede tardar unos segundos dependiendo de la conexión de red',
 	},
 	customHeaders: {
 		title: 'Gestión de Encabezados Personalizados',
-		subtitle: 'Gestionar múltiples esquemas de encabezados y alternar entre ellos',
+		subtitle:
+			'Gestionar múltiples esquemas de encabezados y alternar entre ellos',
 		activeScheme: 'Esquema Activo:',
 		none: 'Ninguno',
-		noSchemesConfigured: 'No hay esquemas de encabezados configurados. Presiona Enter para agregar uno.',
+		noSchemesConfigured:
+			'No hay esquemas de encabezados configurados. Presiona Enter para agregar uno.',
 		availableSchemes: 'Esquemas Disponibles:',
 		actions: 'Acciones:',
 		activate: 'Activar',
@@ -193,7 +226,8 @@ export const es: TranslationKeys = {
 		delete: 'Eliminar',
 		addNew: 'Agregar Nuevo Esquema',
 		escBack: '[ESC] Volver',
-		navigationHint: 'Usa ↑↓ para seleccionar esquema, ←→ para seleccionar acción, Enter para confirmar',
+		navigationHint:
+			'Usa ↑↓ para seleccionar esquema, ←→ para seleccionar acción, Enter para confirmar',
 		addNewTitle: 'Agregar Nuevo Esquema de Encabezados',
 		editTitle: 'Editar Esquema de Encabezados',
 		nameLabel: 'Nombre:',
@@ -202,27 +236,32 @@ export const es: TranslationKeys = {
 		enterSchemeName: 'Ingresa el nombre del esquema',
 		notSet: 'No configurado',
 		pressEnterToEdit: 'Presiona Enter para editar encabezados →',
-		editingHint: '↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
+		editingHint:
+			'↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
 		confirmDelete: 'Confirmar Eliminación',
 		deleteConfirmMessage: '¿Estás seguro de que deseas eliminar',
 		confirmHint: 'Presiona Y para confirmar, N o ESC para cancelar',
 		saveError: 'Error al guardar',
 		editHeadersTitle: 'Editar Encabezados',
 		headerList: 'Lista de Encabezados:',
-		noHeadersConfigured: 'No hay encabezados configurados. Presiona Enter para agregar uno.',
+		noHeadersConfigured:
+			'No hay encabezados configurados. Presiona Enter para agregar uno.',
 		addNewHeader: '[+] Agregar Nuevo Encabezado',
-		headerNavigationHint: '↑↓: Navegar | Enter: Editar/Agregar | D: Eliminar | ESC: Completar',
+		headerNavigationHint:
+			'↑↓: Navegar | Enter: Editar/Agregar | D: Eliminar | ESC: Completar',
 		keyLabel: 'Clave:',
 		valueLabel: 'Valor:',
 		headerKeyPlaceholder: 'Clave del encabezado (ej: X-API-Key)',
 		headerValuePlaceholder: 'Valor del encabezado',
-		headerEditingHint: '↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
+		headerEditingHint:
+			'↑↓: Navegar campos | Enter: Editar | Ctrl+S: Guardar | ESC: Cancelar',
 	},
 	subAgentConfig: {
 		title: 'Configuración de Sub-Agentes',
 		titleEdit: 'Editar',
 		titleNew: 'Nuevo',
-		subtitle: 'Configurar sub-agentes con permisos de herramientas personalizados',
+		subtitle:
+			'Configurar sub-agentes con permisos de herramientas personalizados',
 		agentName: 'Nombre del Agente:',
 		description: 'Descripción:',
 		role: 'Rol:',
@@ -230,7 +269,8 @@ export const es: TranslationKeys = {
 		toolSelection: 'Selección de Herramientas:',
 		agentNamePlaceholder: 'Ingresa el nombre del agente...',
 		descriptionPlaceholder: 'Ingresa la descripción del agente...',
-		rolePlaceholder: 'Especifica el rol del agente para guiar la salida y el enfoque...',
+		rolePlaceholder:
+			'Especifica el rol del agente para guiar la salida y el enfoque...',
 		selectedTools: 'Seleccionados:',
 		toolsCount: 'herramientas',
 		loadingMCP: 'Cargando servicios MCP...',
@@ -251,10 +291,12 @@ export const es: TranslationKeys = {
 		todoTools: 'Herramientas de Gestión TODO',
 		webSearchTools: 'Herramientas de Búsqueda Web',
 		ideTools: 'Herramientas de Diagnóstico IDE',
+		userInteractionTools: 'Herramientas de Interacción del Usuario',
 	},
 	sensitiveCommandConfig: {
 		title: 'Protección de Comandos Sensibles',
-		subtitle: 'Configurar comandos que requieren confirmación incluso en modo YOLO/aprobación automática',
+		subtitle:
+			'Configurar comandos que requieren confirmación incluso en modo YOLO/aprobación automática',
 		noCommands: 'No hay comandos configurados',
 		custom: 'Personalizado',
 		enabled: 'Habilitado',
@@ -273,9 +315,12 @@ export const es: TranslationKeys = {
 		deletedMessage: 'Eliminado: {pattern}',
 		resetMessage: 'Restablecido a comandos predeterminados',
 		// Confirmation messages
-		confirmDeleteMessage: '⚠️ Presiona D nuevamente para confirmar la eliminación de "{pattern}"',
-		confirmResetMessage: '⚠️ Presiona R nuevamente para confirmar el restablecimiento a comandos predeterminados',
-		confirmHint: 'Presiona la misma tecla nuevamente para confirmar • Esc: Cancelar',
+		confirmDeleteMessage:
+			'⚠️ Presiona D nuevamente para confirmar la eliminación de "{pattern}"',
+		confirmResetMessage:
+			'⚠️ Presiona R nuevamente para confirmar el restablecimiento a comandos predeterminados',
+		confirmHint:
+			'Presiona la misma tecla nuevamente para confirmar • Esc: Cancelar',
 		// Navigation hints
 		listNavigationHint:
 			'↑↓: Navegar • Espacio: Alternar • A: Agregar • D: Eliminar • R: Restablecer • Esc: Volver',
@@ -293,11 +338,33 @@ export const es: TranslationKeys = {
 		githubDark: 'GitHub Oscuro',
 		githubDarkInfo: 'Tema oscuro inspirado en GitHub',
 		rainbow: 'Arcoíris',
-		rainbowInfo: 'Colores vibrantes del arcoíris para una experiencia divertida',
+		rainbowInfo:
+			'Colores vibrantes del arcoíris para una experiencia divertida',
 		solarizedDark: 'Solarized Oscuro',
 		solarizedDarkInfo: 'Tema oscuro Solarized con colores precisos',
 		nord: 'Nord',
 		nordInfo: 'Paleta de colores ártica y azulada del norte',
+		custom: 'Personalizado',
+		customInfo: 'Usa tus propios colores personalizados',
+		editCustom: 'Editar Tema Personalizado...',
+		editCustomInfo: 'Personalizar colores del tema',
+	},
+	customTheme: {
+		title: 'Editor de Tema Personalizado',
+		save: 'Guardar',
+		saveInfo: 'Guardar colores del tema personalizado',
+		reset: 'Restablecer a Predeterminado',
+		resetInfo: 'Restablecer todos los colores a predeterminado',
+		back: '← Atrás',
+		backInfo: 'Volver a la configuración de tema',
+		editColor: 'Editar Color',
+		currentValue: 'Actual',
+		newValue: 'Nuevo valor',
+		colorFormat: 'Formato: #RRGGBB o nombre de color (red, blue, etc.)',
+		cancel: 'Cancelar',
+		confirm: 'Confirmar',
+		preview: 'Vista previa',
+		colorHint: 'Presiona Enter para editar este color',
 	},
 	helpPanel: {
 		title: '🔰 Atajos de Teclado y Ayuda',
@@ -314,7 +381,8 @@ export const es: TranslationKeys = {
 		navigateHistory: '↑/↓ - Navegar por el historial de comandos/mensajes',
 		selectItem: 'Tab/Enter - Seleccionar elemento en el selector',
 		cancelClose: 'ESC - Cancelar/Cerrar selector o interrumpir respuesta de IA',
-		toggleYolo: 'Shift+Tab - Alternar modo YOLO (aprobación automática de herramientas)',
+		toggleYolo:
+			'Shift+Tab - Alternar modo YOLO (aprobación automática de herramientas)',
 		tipsTitle: '💡 Consejos:',
 		tipUseHelp: 'Usa /help en cualquier momento para ver esta información',
 		tipShowCommands: 'Escribe / para ver todos los comandos disponibles',
@@ -324,7 +392,8 @@ export const es: TranslationKeys = {
 	commandPanel: {
 		title: 'Panel de Comandos',
 		availableCommands: 'Comandos Disponibles',
-		processingMessage: 'Por favor espera a que la conversación termine antes de usar comandos',
+		processingMessage:
+			'Por favor espera a que la conversación termine antes de usar comandos',
 		scrollHint: '↑↓ Desplazar',
 		moreHidden: '{count} ocultos',
 		commands: {
@@ -337,10 +406,12 @@ export const es: TranslationKeys = {
 			ide: 'Conectar al editor VSCode y sincronizar contexto',
 			compact: 'Comprimir historial de conversación usando modelo compacto',
 			home: 'Volver a la pantalla de bienvenida para modificar configuración',
-			review: 'Revisar cambios de git e identificar posibles problemas. Soporta: /review [nota opcional]',
+			review:
+				'Revisar cambios de git e identificar posibles problemas. Soporta: /review [nota opcional]',
 			role: 'Abrir o crear archivo ROLE.md para personalizar el rol del asistente IA',
 			usage: 'Ver estadísticas de uso de tokens con gráficos interactivos',
-			export: 'Exportar conversación de chat a archivo de texto con diálogo de guardado',
+			export:
+				'Exportar conversación de chat a archivo de texto con diálogo de guardado',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
 		},
@@ -352,7 +423,8 @@ export const es: TranslationKeys = {
 		// Header
 		headerTitle: '¡Eficiencia de Programación x10!',
 		headerSubtitle: '❆ SNOW AI CLI',
-		headerExplanations: 'Solicita explicaciones de código y ayuda de depuración',
+		headerExplanations:
+			'Solicita explicaciones de código y ayuda de depuración',
 		headerInterrupt: 'Presiona ESC durante la respuesta para interrumpir',
 		headerYolo: 'Presiona Shift+Tab: Alternar YOLO',
 		headerShortcuts:
@@ -365,7 +437,8 @@ export const es: TranslationKeys = {
 		statusStreaming: 'Transmitiendo',
 		statusWorking: 'Trabajando',
 		statusIndexing: 'Indexando base de código...',
-		statusWatcherActive: 'Observador de archivos activo - monitoreando cambios de código',
+		statusWatcherActive:
+			'Observador de archivos activo - monitoreando cambios de código',
 		statusFileUpdated: 'Actualizado: {file}',
 		statusCreating: 'Creando...',
 		statusSaving: 'Guardando...',
@@ -428,9 +501,11 @@ export const es: TranslationKeys = {
 		terminalTooSmall: '⚠ Terminal demasiado pequeña',
 		terminalResizePrompt:
 			'Tu terminal tiene una altura de {current} líneas, pero se requieren al menos {required} líneas.',
-		terminalMinHeight: 'Por favor ajusta el tamaño de la ventana de la terminal para continuar.',
+		terminalMinHeight:
+			'Por favor ajusta el tamaño de la ventana de la terminal para continuar.',
 		// Compression
-		compressionAuto: '✵ Comprimiendo contexto automáticamente debido al límite de tokens...',
+		compressionAuto:
+			'✵ Comprimiendo contexto automáticamente debido al límite de tokens...',
 		compressionInProgress: 'Comprimiendo historial de conversación...',
 		compressionSuccess: 'Compresión completada',
 		compressionFailed: '✗ Compresión fallida: {error}',
@@ -440,7 +515,8 @@ export const es: TranslationKeys = {
 		retryResending: '⟳ Reenviando... (intento {current}/{max})',
 		retryError: '✗ Error: {message}',
 		// Codebase
-		codebaseIndexing: 'Indexando base de código... {processed}/{total} archivos',
+		codebaseIndexing:
+			'Indexando base de código... {processed}/{total} archivos',
 		codebaseProgress: '{chunks} fragmentos',
 		codebaseChunks: 'fragmentos',
 		codebaseSearching: '⏏ Búsqueda en base de código (intento {current}/{max})',
@@ -450,7 +526,8 @@ export const es: TranslationKeys = {
 		ideConnecting: 'Conectando al IDE...',
 		ideConnected: 'IDE conectado',
 		ideDisconnected: 'IDE desconectado',
-		ideError: 'Conexión fallida - Por favor asegúrate de que el plugin Snow CLI esté instalado y activado en tu IDE',
+		ideError:
+			'Conexión fallida - Por favor asegúrate de que el plugin Snow CLI esté instalado y activado en tu IDE',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count} caracteres seleccionados',
 		// Input
@@ -502,9 +579,12 @@ export const es: TranslationKeys = {
 		moreBelow: '↓ {count} más abajo...',
 		historyNavigateHint: '↑↓ Navegar · Enter Seleccionar · ESC Cerrar',
 		typeToFilterCommands: 'Escribe para filtrar comandos',
-		contentSearchHint: 'Búsqueda de contenido • Tab/Enter Seleccionar • ESC Cancelar',
-		fileSearchHint: 'Escribe para filtrar archivos • Tab/Enter Seleccionar • ESC Cancelar',
-		yoloModeActive: '❁ Modo YOLO activo - todas las herramientas se aprobarán automáticamente sin confirmación',
+		contentSearchHint:
+			'Búsqueda de contenido • Tab/Enter Seleccionar • ESC Cancelar',
+		fileSearchHint:
+			'Escribe para filtrar archivos • Tab/Enter Seleccionar • ESC Cancelar',
+		yoloModeActive:
+			'❁ Modo YOLO activo - todas las herramientas se aprobarán automáticamente sin confirmación',
 		tokens: ' tokens',
 		cached: 'en caché',
 		newCache: 'nuevo caché',

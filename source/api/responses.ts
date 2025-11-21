@@ -3,16 +3,16 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import { getSystemPrompt } from './systemPrompt.js';
+import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
 import type {
 	ChatMessage,
 	ToolCall,
 	ChatCompletionTool,
 	UsageInfo,
 } from './types.js';
-import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
-import {saveUsageToFile} from '../utils/usageLogger.js';
+import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
+import { saveUsageToFile } from '../utils/usageLogger.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -94,12 +94,12 @@ function ensureStrictSchema(
  */
 function convertToolsForResponses(tools?: ChatCompletionTool[]):
 	| Array<{
-			type: 'function';
-			name: string;
-			description?: string;
-			strict?: boolean;
-			parameters?: Record<string, any>;
-	  }>
+		type: 'function';
+		name: string;
+		description?: string;
+		strict?: boolean;
+		parameters?: Record<string, any>;
+	}>
 	| undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
@@ -116,20 +116,20 @@ function convertToolsForResponses(tools?: ChatCompletionTool[]):
 
 export interface ResponseStreamChunk {
 	type:
-		| 'content'
-		| 'tool_calls'
-		| 'tool_call_delta'
-		| 'reasoning_delta'
-		| 'reasoning_started'
-		| 'reasoning_data'
-		| 'done'
-		| 'usage';
+	| 'content'
+	| 'tool_calls'
+	| 'tool_call_delta'
+	| 'reasoning_delta'
+	| 'reasoning_started'
+	| 'reasoning_data'
+	| 'done'
+	| 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
 	usage?: UsageInfo;
 	reasoning?: {
-		summary?: Array<{type: 'summary_text'; text: string}>;
+		summary?: Array<{ type: 'summary_text'; text: string }>;
 		content?: any;
 		encrypted_content?: string;
 	};
@@ -335,7 +335,7 @@ function convertToResponseInput(
 		systemInstructions = 'You are a helpful assistant.';
 	}
 
-	return {input: result, systemInstructions};
+	return { input: result, systemInstructions };
 }
 
 /**
@@ -349,20 +349,23 @@ async function* parseSSEStream(
 
 	try {
 		while (true) {
-			const {done, value} = await reader.read();
+			const { done, value } = await reader.read();
 
 			if (done) {
 				// ✅ 关键修复：检查buffer是否有残留数据
 				if (buffer.trim()) {
 					// 连接异常中断，抛出明确错误
 					throw new Error(
-						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
+						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(
+							0,
+							100,
+						)}...`,
 					);
 				}
 				break; // 正常结束
 			}
 
-			buffer += decoder.decode(value, {stream: true});
+			buffer += decoder.decode(value, { stream: true });
 			const lines = buffer.split('\n');
 			buffer = lines.pop() || '';
 
@@ -398,7 +401,7 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/logger.js');
+		const { logger } = await import('../utils/logger.js');
 		logger.error('Responses API SSE stream parsing error:', {
 			error: error instanceof Error ? error.message : 'Unknown error',
 			remainingBuffer: buffer.substring(0, 200),
@@ -406,7 +409,6 @@ async function* parseSSEStream(
 		throw error;
 	}
 }
-
 
 /**
  * 使用 Responses API 创建流式响应（带自动工具调用）
@@ -419,7 +421,7 @@ export async function* createStreamingResponse(
 	const config = getOpenAIConfig();
 
 	// 提取系统提示词和转换后的消息
-	const {input: requestInput, systemInstructions} = convertToResponseInput(
+	const { input: requestInput, systemInstructions } = convertToResponseInput(
 		options.messages,
 		options.includeBuiltinSystemPrompt !== false, // 默认为 true
 	);
@@ -443,6 +445,9 @@ export async function* createStreamingResponse(
 				}),
 				store: false,
 				stream: true,
+				include: [
+					'reasoning.encrypted_content'
+				],
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
@@ -453,6 +458,10 @@ export async function* createStreamingResponse(
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
 					'x-snow': 'true',
+					...(options.prompt_cache_key && {
+						conversation_id: options.prompt_cache_key,
+						session_id: options.prompt_cache_key,
+					}),
 					...config.customHeaders,
 				},
 				body: JSON.stringify(requestPayload),
@@ -473,16 +482,16 @@ export async function* createStreamingResponse(
 			}
 
 			let contentBuffer = '';
-			let toolCallsBuffer: {[call_id: string]: any} = {};
+			let toolCallsBuffer: { [call_id: string]: any } = {};
 			let hasToolCalls = false;
 			let currentFunctionCallId: string | null = null;
 			let usageData: UsageInfo | undefined;
 			let reasoningData:
 				| {
-						summary?: Array<{text: string; type: 'summary_text'}>;
-						content?: any;
-						encrypted_content?: string;
-				  }
+					summary?: Array<{ text: string; type: 'summary_text' }>;
+					content?: any;
+					encrypted_content?: string;
+				}
 				| undefined;
 
 			for await (const chunk of parseSSEStream(response.body.getReader())) {

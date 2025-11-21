@@ -11,9 +11,11 @@ export const ja: TranslationKeys = {
 		proxySettings: 'プロキシ・ブラウザ設定',
 		proxySettingsInfo: 'Web検索とフェッチ用のシステムプロキシとブラウザを構成',
 		codebaseSettings: 'コードベース設定',
-		codebaseSettingsInfo: '埋め込みモデルを使用してコードベースのインデックスを構成',
+		codebaseSettingsInfo:
+			'埋め込みモデルを使用してコードベースのインデックスを構成',
 		systemPromptSettings: 'システムプロンプト設定',
-		systemPromptSettingsInfo: 'カスタムシステムプロンプトを構成（デフォルトを上書き）',
+		systemPromptSettingsInfo:
+			'カスタムシステムプロンプトを構成（デフォルトを上書き）',
 		customHeadersSettings: 'カスタムヘッダー設定',
 		customHeadersSettingsInfo: 'APIリクエスト用のカスタムHTTPヘッダーを構成',
 		mcpSettings: 'MCP設定',
@@ -44,7 +46,8 @@ export const ja: TranslationKeys = {
 		browserPath: 'ブラウザパス(オプション):',
 		autoDetect: '自動検出',
 		errors: 'エラー:',
-		editingHint: '編集モード: Enterキーで保存して編集を終了(変更後Enterキーを押す)',
+		editingHint:
+			'編集モード: Enterキーで保存して編集を終了(変更後Enterキーを押す)',
 		navigationHint:
 			'↑↓でフィールド間を移動、Enterで編集/切り替え、Ctrl+SまたはEscで保存して戻る',
 		browserExamplesTitle: 'ブラウザパスの例:',
@@ -92,7 +95,8 @@ export const ja: TranslationKeys = {
 		subtitle: '複数のシステムプロンプトを管理して切り替え',
 		activePrompt: 'アクティブなプロンプト:',
 		none: 'なし',
-		noPromptsConfigured: 'システムプロンプトが構成されていません。Enterで追加。',
+		noPromptsConfigured:
+			'システムプロンプトが構成されていません。Enterで追加。',
 		availablePrompts: '利用可能なプロンプト:',
 		actions: 'アクション:',
 		activate: '有効化',
@@ -109,7 +113,8 @@ export const ja: TranslationKeys = {
 		enterPromptName: 'プロンプト名を入力',
 		enterPromptContent: 'プロンプト内容を入力',
 		notSet: '未設定',
-		editingHint: '↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
+		editingHint:
+			'↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
 		confirmDelete: '削除確認',
 		deleteConfirmMessage: '削除してよろしいですか',
 		confirmHint: 'Yで確認、NまたはESCでキャンセル',
@@ -150,7 +155,8 @@ export const ja: TranslationKeys = {
 		createHint: 'Enterで作成、Escでキャンセル',
 		deleteProfile: 'プロファイルを削除',
 		confirmDelete: 'プロファイル削除の確認',
-		deleteWarning: 'この操作は元に戻せません。デフォルトプロファイルに切り替わります。',
+		deleteWarning:
+			'この操作は元に戻せません。デフォルトプロファイルに切り替わります。',
 		confirmHint: 'Yで確認、NまたはEscでキャンセル',
 		loadingModels: 'API・モデル構成',
 		loadingMessage: '利用可能なモデルを読み込み中...',
@@ -159,8 +165,10 @@ export const ja: TranslationKeys = {
 		manualInputSubtitle: 'モデル名を手動入力',
 		manualInputHint: 'Enterで確認、Escでキャンセル',
 		loadingError: '⚠ APIからモデルを読み込めません',
-		requestMethodChat: 'Chat Completions - モダンチャットAPI (GPT-4, GPT-3.5-turbo)',
-		requestMethodResponses: 'Responses - 新しいResponses API (2025、組み込みツール)',
+		requestMethodChat:
+			'Chat Completions - モダンチャットAPI (GPT-4, GPT-3.5-turbo)',
+		requestMethodResponses:
+			'Responses - 新しいResponses API (2025、組み込みツール)',
 		requestMethodGemini: 'Gemini - Google Gemini API',
 		requestMethodAnthropic: 'Anthropic - Claude API',
 		manualInputOption: '手動入力(モデル名を入力)',
@@ -172,7 +180,8 @@ export const ja: TranslationKeys = {
 		editingHintGeneral: 'Enterで保存して編集を終了',
 		modelFilterHint: '入力でフィルタ、↑↓で選択、Enterで確認、Escでキャンセル',
 		effortSelectHint: '↑↓で選択、Enterで確認、Escでキャンセル',
-		profileSelectHint: '↑↓でプロファイル選択、Nで新規作成、Dで削除、Enterで確認、Escでキャンセル',
+		profileSelectHint:
+			'↑↓でプロファイル選択、Nで新規作成、Dで削除、Enterで確認、Escでキャンセル',
 		requestMethodSelectHint: '↑↓で選択、Enterで確認、Escでキャンセル',
 		newProfile: '+ 新規',
 		deleteProfileShort: '🆇 削除',
@@ -202,7 +211,8 @@ export const ja: TranslationKeys = {
 		enterSchemeName: 'スキーム名を入力',
 		notSet: '未設定',
 		pressEnterToEdit: 'Enterでヘッダーを編集 →',
-		editingHint: '↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
+		editingHint:
+			'↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
 		confirmDelete: '削除確認',
 		deleteConfirmMessage: '削除してよろしいですか',
 		confirmHint: 'Yで確認、NまたはESCでキャンセル',
@@ -216,7 +226,8 @@ export const ja: TranslationKeys = {
 		valueLabel: '値:',
 		headerKeyPlaceholder: 'ヘッダーキー (例: X-API-Key)',
 		headerValuePlaceholder: 'ヘッダー値',
-		headerEditingHint: '↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
+		headerEditingHint:
+			'↑↓: フィールド移動 | Enter: 編集 | Ctrl+S: 保存 | ESC: キャンセル',
 	},
 	subAgentConfig: {
 		title: 'サブエージェント構成',
@@ -230,7 +241,8 @@ export const ja: TranslationKeys = {
 		toolSelection: 'ツール選択:',
 		agentNamePlaceholder: 'エージェント名を入力...',
 		descriptionPlaceholder: 'エージェントの説明を入力...',
-		rolePlaceholder: 'エージェントのロールを指定して出力とフォーカスをガイド...',
+		rolePlaceholder:
+			'エージェントのロールを指定して出力とフォーカスをガイド...',
 		selectedTools: '選択済み:',
 		toolsCount: '個のツール',
 		loadingMCP: 'MCPサービスを読み込み中...',
@@ -251,6 +263,7 @@ export const ja: TranslationKeys = {
 		todoTools: 'TODO管理ツール',
 		webSearchTools: 'Web検索ツール',
 		ideTools: 'IDE診断ツール',
+		userInteractionTools: 'ユーザー対話ツール',
 	},
 	sensitiveCommandConfig: {
 		title: '機密コマンド保護',
@@ -274,7 +287,8 @@ export const ja: TranslationKeys = {
 		resetMessage: 'デフォルトコマンドにリセットしました',
 		// Confirmation messages
 		confirmDeleteMessage: '⚠️ もう一度Dを押して"{pattern}"の削除を確認',
-		confirmResetMessage: '⚠️ もう一度Rを押してデフォルトコマンドへのリセットを確認',
+		confirmResetMessage:
+			'⚠️ もう一度Rを押してデフォルトコマンドへのリセットを確認',
 		confirmHint: '同じキーをもう一度押して確認 • Esc: キャンセル',
 		// Navigation hints
 		listNavigationHint:
@@ -298,6 +312,27 @@ export const ja: TranslationKeys = {
 		solarizedDarkInfo: '精密な色を持つ Solarized ダークテーマ',
 		nord: 'Nord',
 		nordInfo: '北極、北方の青みがかった色パレット',
+		custom: 'カスタム',
+		customInfo: '独自のカスタムカラーを使用',
+		editCustom: 'カスタムテーマを編集...',
+		editCustomInfo: 'テーマカラーをカスタマイズ',
+	},
+	customTheme: {
+		title: 'カスタムテーマエディター',
+		save: '保存',
+		saveInfo: 'カスタムテーマカラーを保存',
+		reset: 'デフォルトにリセット',
+		resetInfo: 'すべての色をデフォルトにリセット',
+		back: '← 戻る',
+		backInfo: 'テーマ設定に戻る',
+		editColor: '色を編集',
+		currentValue: '現在',
+		newValue: '新しい値',
+		colorFormat: '形式: #RRGGBB またはカラー名 (red, blue など)',
+		cancel: 'キャンセル',
+		confirm: '確認',
+		preview: 'プレビュー',
+		colorHint: 'Enterで色を編集',
 	},
 	helpPanel: {
 		title: '🔰 キーボードショートカットとヘルプ',
@@ -337,10 +372,12 @@ export const ja: TranslationKeys = {
 			ide: 'VSCodeエディタに接続してコンテキストを同期',
 			compact: 'コンパクトモデルを使用して会話履歴を圧縮',
 			home: 'ウェルカム画面に戻って設定を変更',
-			review: 'git変更をレビューして潜在的な問題を特定。サポート: /review [オプションのメモ]',
+			review:
+				'git変更をレビューして潜在的な問題を特定。サポート: /review [オプションのメモ]',
 			role: 'ROLE.mdファイルを開くまたは作成してAIアシスタントのロールをカスタマイズ',
 			usage: 'インタラクティブグラフ付きのトークン使用統計を表示',
-			export: 'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
+			export:
+				'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
 			agent: 'サブエージェントを選択して特定のタスクを処理',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
 		},
@@ -428,7 +465,8 @@ export const ja: TranslationKeys = {
 		terminalTooSmall: '⚠ ターミナルが小さすぎます',
 		terminalResizePrompt:
 			'ターミナルの高さは{current}行ですが、少なくとも{required}行必要です。',
-		terminalMinHeight: '続行するにはターミナルウィンドウのサイズを調整してください。',
+		terminalMinHeight:
+			'続行するにはターミナルウィンドウのサイズを調整してください。',
 		// Compression
 		compressionAuto: '✵ トークン制限により自動的にコンテキストを圧縮中...',
 		compressionInProgress: '会話履歴を圧縮中...',
@@ -440,7 +478,8 @@ export const ja: TranslationKeys = {
 		retryResending: '⟳ 再送信中... (試行 {current}/{max})',
 		retryError: '✗ エラー: {message}',
 		// Codebase
-		codebaseIndexing: 'コードベースをインデックス中... {processed}/{total}個のファイル',
+		codebaseIndexing:
+			'コードベースをインデックス中... {processed}/{total}個のファイル',
 		codebaseProgress: '{chunks}個のチャンク',
 		codebaseChunks: '個のチャンク',
 		codebaseSearching: '⏏ コードベース検索 (試行 {current}/{max})',
@@ -450,7 +489,8 @@ export const ja: TranslationKeys = {
 		ideConnecting: 'IDEに接続中...',
 		ideConnected: 'IDE接続済み',
 		ideDisconnected: 'IDE切断',
-		ideError: '接続に失敗 - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
+		ideError:
+			'接続に失敗 - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count}文字選択済み',
 		// Input
@@ -503,8 +543,10 @@ export const ja: TranslationKeys = {
 		historyNavigateHint: '↑↓ 移動 · Enter 選択 · ESC 閉じる',
 		typeToFilterCommands: '入力してコマンドをフィルタ',
 		contentSearchHint: '内容検索 • Tab/Enter 選択 • ESC キャンセル',
-		fileSearchHint: '入力してファイルをフィルタ • Tab/Enter 選択 • ESC キャンセル',
-		yoloModeActive: '❁ YOLOモード有効 - すべてのツールが確認なしで自動承認されます',
+		fileSearchHint:
+			'入力してファイルをフィルタ • Tab/Enter 選択 • ESC キャンセル',
+		yoloModeActive:
+			'❁ YOLOモード有効 - すべてのツールが確認なしで自動承認されます',
 		tokens: 'トークン',
 		cached: 'キャッシュ済み',
 		newCache: '新規キャッシュ',

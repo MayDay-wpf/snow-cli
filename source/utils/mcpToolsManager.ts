@@ -9,6 +9,7 @@ import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
 import {mcpTools as websearchTools} from '../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
 import {mcpTools as codebaseSearchTools} from '../mcp/codebaseSearch.js';
+import {mcpTools as askUserQuestionTools} from '../mcp/askUserQuestion.js';
 import {TodoService} from '../mcp/todo.js';
 import {
 	mcpTools as notebookTools,
@@ -306,6 +307,31 @@ async function refreshToolsCache(): Promise<void> {
 				name: tool.name,
 				description: tool.description,
 				parameters: tool.inputSchema,
+			},
+		});
+	}
+
+	// Add built-in Ask User Question tools (always available)
+	const askUserQuestionServiceTools = askUserQuestionTools.map(tool => ({
+		name: tool.function.name.replace('askuser-', ''),
+		description: tool.function.description,
+		inputSchema: tool.function.parameters,
+	}));
+
+	servicesInfo.push({
+		serviceName: 'askuser',
+		tools: askUserQuestionServiceTools,
+		isBuiltIn: true,
+		connected: true,
+	});
+
+	for (const tool of askUserQuestionTools) {
+		allTools.push({
+			type: 'function',
+			function: {
+				name: tool.function.name,
+				description: tool.function.description,
+				parameters: tool.function.parameters,
 			},
 		});
 	}
@@ -812,6 +838,9 @@ export async function executeMCPTool(
 	} else if (toolName.startsWith('codebase-')) {
 		serviceName = 'codebase';
 		actualToolName = toolName.substring('codebase-'.length);
+	} else if (toolName.startsWith('askuser-')) {
+		serviceName = 'askuser';
+		actualToolName = toolName.substring('askuser-'.length);
 	} else if (toolName.startsWith('subagent-')) {
 		serviceName = 'subagent';
 		actualToolName = toolName.substring('subagent-'.length);
@@ -992,6 +1021,19 @@ export async function executeMCPTool(
 				return await codebaseSearchService.search(args.query, args.topN);
 			default:
 				throw new Error(`Unknown codebase tool: ${actualToolName}`);
+		}
+	} else if (serviceName === 'askuser') {
+		// Handle Ask User Question tool - returns special marker for UI handling
+		switch (actualToolName) {
+			case 'ask_question':
+				// Return a special response that indicates user interaction is needed
+				return {
+					_userInteractionNeeded: true,
+					question: args.question,
+					options: args.options,
+				};
+			default:
+				throw new Error(`Unknown askuser tool: ${actualToolName}`);
 		}
 	} else if (serviceName === 'subagent') {
 		// Handle sub-agent tools

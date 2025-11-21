@@ -2,18 +2,17 @@ import React, {
 	createContext,
 	useContext,
 	useState,
+	useCallback,
 	ReactNode,
 } from 'react';
-import {ThemeType, themes, Theme} from '../themes/index.js';
-import {
-	getCurrentTheme,
-	setCurrentTheme,
-} from '../../utils/themeConfig.js';
+import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
+import {getCurrentTheme, setCurrentTheme} from '../../utils/themeConfig.js';
 
 interface ThemeContextType {
 	theme: Theme;
 	themeType: ThemeType;
 	setThemeType: (type: ThemeType) => void;
+	refreshCustomTheme?: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -27,6 +26,7 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 		// Load initial theme from config
 		return getCurrentTheme();
 	});
+	const [customThemeVersion, setCustomThemeVersion] = useState(0);
 
 	const setThemeType = (type: ThemeType) => {
 		setThemeTypeState(type);
@@ -34,10 +34,24 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 		setCurrentTheme(type);
 	};
 
+	const refreshCustomTheme = useCallback(() => {
+		setCustomThemeVersion(v => v + 1);
+	}, []);
+
+	const getTheme = useCallback((): Theme => {
+		if (themeType === 'custom') {
+			// Force re-read custom theme when version changes
+			void customThemeVersion;
+			return getCustomTheme();
+		}
+		return themes[themeType];
+	}, [themeType, customThemeVersion]);
+
 	const value: ThemeContextType = {
-		theme: themes[themeType],
+		theme: getTheme(),
 		themeType,
 		setThemeType,
+		refreshCustomTheme,
 	};
 
 	return (

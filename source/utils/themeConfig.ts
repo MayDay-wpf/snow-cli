@@ -1,13 +1,14 @@
 import {homedir} from 'os';
 import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
-import type {ThemeType} from '../ui/themes/index.js';
+import type {ThemeType, ThemeColors} from '../ui/themes/index.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');
 
 interface ThemeConfig {
 	theme: ThemeType;
+	customColors?: ThemeColors;
 }
 
 const DEFAULT_CONFIG: ThemeConfig = {
@@ -70,5 +71,22 @@ export function getCurrentTheme(): ThemeType {
  * Set theme and persist to file system
  */
 export function setCurrentTheme(theme: ThemeType): void {
-	saveThemeConfig({theme});
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, theme});
+}
+
+/**
+ * Get custom theme colors
+ */
+export function getCustomColors(): ThemeColors | undefined {
+	const config = loadThemeConfig();
+	return config.customColors;
+}
+
+/**
+ * Save custom theme colors
+ */
+export function saveCustomColors(colors: ThemeColors): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, customColors: colors});
 }

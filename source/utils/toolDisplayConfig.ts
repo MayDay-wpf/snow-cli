@@ -23,6 +23,9 @@ const TWO_STEP_TOOLS = new Set([
 	'websearch-search',
 	'websearch-fetch',
 
+	// 用户交互工具 - 需要等待用户输入，耗时不确定
+	'askuser-ask_question',
+
 	// 子代理工具 - 执行复杂任务，需要显示进度
 	// 所有以 'subagent-' 开头的工具都需要两步显示
 ]);

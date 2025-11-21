@@ -433,6 +433,9 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
 				requestToolConfirmation,
+				requestUserQuestion: async () => {
+					throw new Error('askuser tool is not supported in headless mode');
+				},
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode: true, // Always use YOLO mode in headless

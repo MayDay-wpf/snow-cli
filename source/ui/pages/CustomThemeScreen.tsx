@@ -1,0 +1,197 @@
+import React, {useState, useCallback, useMemo} from 'react';
+import {Box, Text, useInput} from 'ink';
+import TextInput from 'ink-text-input';
+import Menu from '../components/Menu.js';
+import DiffViewer from '../components/DiffViewer.js';
+import {useTheme} from '../contexts/ThemeContext.js';
+import {
+	ThemeColors,
+	defaultCustomColors,
+	getCustomTheme,
+} from '../themes/index.js';
+import {saveCustomColors} from '../../utils/themeConfig.js';
+import {useI18n} from '../../i18n/index.js';
+
+type Props = {
+	onBack: () => void;
+};
+
+type ColorKey = keyof ThemeColors;
+
+const colorKeys: ColorKey[] = [
+	'background',
+	'text',
+	'border',
+	'diffAdded',
+	'diffRemoved',
+	'diffModified',
+	'lineNumber',
+	'lineNumberBorder',
+	'menuSelected',
+	'menuNormal',
+	'menuInfo',
+	'menuSecondary',
+	'error',
+	'warning',
+	'success',
+];
+
+const sampleOldCode = `function greet(name) {
+  console.log("Hello " + name);
+  return "Welcome!";
+}`;
+
+const sampleNewCode = `function greet(name: string): string {
+  console.log(\`Hello \${name}\`);
+  return \`Welcome, \${name}!\`;
+}`;
+
+export default function CustomThemeScreen({onBack}: Props) {
+	const {setThemeType, refreshCustomTheme} = useTheme();
+	const {t} = useI18n();
+	const [colors, setColors] = useState<ThemeColors>(() => {
+		const custom = getCustomTheme();
+		return custom.colors;
+	});
+	const [editingKey, setEditingKey] = useState<ColorKey | null>(null);
+	const [editValue, setEditValue] = useState('');
+	const [infoText, setInfoText] = useState('');
+
+	const menuOptions = useMemo(() => {
+		const options: Array<{label: string; value: string; infoText: string}> =
+			colorKeys.map(key => ({
+				label: `${key}: ${colors[key]}`,
+				value: key,
+				infoText: t.customTheme?.colorHint || 'Press Enter to edit this color',
+			}));
+		options.push({
+			label: t.customTheme?.save || 'Save',
+			value: 'save',
+			infoText: t.customTheme?.saveInfo || 'Save custom theme colors',
+		});
+		options.push({
+			label: t.customTheme?.reset || 'Reset to Default',
+			value: 'reset',
+			infoText: t.customTheme?.resetInfo || 'Reset all colors to default',
+		});
+		options.push({
+			label: t.customTheme?.back || '← Back',
+			value: 'back',
+			infoText: t.customTheme?.backInfo || 'Return to theme settings',
+		});
+		return options;
+	}, [colors, t]);
+
+	const handleSelect = useCallback(
+		(value: string) => {
+			if (value === 'back') {
+				onBack();
+			} else if (value === 'save') {
+				saveCustomColors(colors);
+				refreshCustomTheme?.();
+				setThemeType('custom');
+				onBack();
+			} else if (value === 'reset') {
+				setColors({...defaultCustomColors});
+			} else {
+				const key = value as ColorKey;
+				setEditingKey(key);
+				setEditValue(colors[key]);
+			}
+		},
+		[colors, onBack, setThemeType, refreshCustomTheme],
+	);
+
+	const handleSelectionChange = useCallback((newInfoText: string) => {
+		setInfoText(newInfoText);
+	}, []);
+
+	const handleEditSubmit = useCallback(() => {
+		if (editingKey && editValue.trim()) {
+			setColors(prev => ({
+				...prev,
+				[editingKey]: editValue.trim(),
+			}));
+		}
+		setEditingKey(null);
+		setEditValue('');
+	}, [editingKey, editValue]);
+
+	useInput((_input, key) => {
+		if (key.escape) {
+			if (editingKey) {
+				setEditingKey(null);
+				setEditValue('');
+			} else {
+				onBack();
+			}
+		}
+	});
+
+	if (editingKey) {
+		return (
+			<Box flexDirection="column" padding={1}>
+				<Text bold color="cyan">
+					{t.customTheme?.editColor || 'Edit Color'}: {editingKey}
+				</Text>
+				<Box marginTop={1}>
+					<Text>{t.customTheme?.currentValue || 'Current'}: </Text>
+					<Text color={colors[editingKey]}>{colors[editingKey]}</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text>{t.customTheme?.newValue || 'New value'}: </Text>
+					<TextInput
+						value={editValue}
+						onChange={setEditValue}
+						onSubmit={handleEditSubmit}
+					/>
+				</Box>
+				<Box marginTop={1}>
+					<Text dimColor>
+						{t.customTheme?.colorFormat ||
+							'Format: #RRGGBB or color name (red, blue, etc.)'}
+					</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text dimColor>
+						ESC: {t.customTheme?.cancel || 'Cancel'} | Enter:{' '}
+						{t.customTheme?.confirm || 'Confirm'}
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
+	return (
+		<Box flexDirection="column">
+			<Box borderStyle="round" borderColor="cyan" paddingX={1}>
+				<Text bold color="cyan">
+					{t.customTheme?.title || 'Custom Theme Editor'}
+				</Text>
+			</Box>
+
+			<Menu
+				options={menuOptions}
+				onSelect={handleSelect}
+				onSelectionChange={handleSelectionChange}
+			/>
+
+			<Box flexDirection="column" paddingX={1} marginTop={1}>
+				<Text color="gray" dimColor>
+					{t.customTheme?.preview || 'Preview'}:
+				</Text>
+				<DiffViewer
+					oldContent={sampleOldCode}
+					newContent={sampleNewCode}
+					filename="example.ts"
+				/>
+			</Box>
+
+			{infoText && (
+				<Box paddingX={1} marginTop={1}>
+					<Text color="gray">{infoText}</Text>
+				</Box>
+			)}
+		</Box>
+	);
+}

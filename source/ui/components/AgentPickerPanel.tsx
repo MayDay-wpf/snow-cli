@@ -11,112 +11,122 @@ interface Props {
 	maxHeight?: number;
 }
 
-const AgentPickerPanel = memo(({agents, selectedIndex, visible, maxHeight}: Props) => {
-	const {theme} = useTheme();
-	// Fixed maximum display items to prevent rendering issues
-	const MAX_DISPLAY_ITEMS = 5;
-	const effectiveMaxItems = maxHeight
-		? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
-		: MAX_DISPLAY_ITEMS;
+const AgentPickerPanel = memo(
+	({agents, selectedIndex, visible, maxHeight}: Props) => {
+		const {theme} = useTheme();
+		// Fixed maximum display items to prevent rendering issues
+		const MAX_DISPLAY_ITEMS = 5;
+		const effectiveMaxItems = maxHeight
+			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
+			: MAX_DISPLAY_ITEMS;
 
-	// Limit displayed agents
-	const displayedAgents = useMemo(() => {
-		if (agents.length <= effectiveMaxItems) {
-			return agents;
+		// Limit displayed agents
+		const displayedAgents = useMemo(() => {
+			if (agents.length <= effectiveMaxItems) {
+				return agents;
+			}
+
+			// Show agents around the selected index
+			const halfWindow = Math.floor(effectiveMaxItems / 2);
+			let startIndex = Math.max(0, selectedIndex - halfWindow);
+			let endIndex = Math.min(agents.length, startIndex + effectiveMaxItems);
+
+			// Adjust if we're near the end
+			if (endIndex - startIndex < effectiveMaxItems) {
+				startIndex = Math.max(0, endIndex - effectiveMaxItems);
+			}
+
+			return agents.slice(startIndex, endIndex);
+		}, [agents, selectedIndex, effectiveMaxItems]);
+
+		// Calculate actual selected index in the displayed subset
+		const displayedSelectedIndex = useMemo(() => {
+			return displayedAgents.findIndex(agent => {
+				const originalIndex = agents.indexOf(agent);
+				return originalIndex === selectedIndex;
+			});
+		}, [displayedAgents, agents, selectedIndex]);
+
+		// Don't show panel if not visible
+		if (!visible) {
+			return null;
 		}
 
-		// Show agents around the selected index
-		const halfWindow = Math.floor(effectiveMaxItems / 2);
-		let startIndex = Math.max(0, selectedIndex - halfWindow);
-		let endIndex = Math.min(agents.length, startIndex + effectiveMaxItems);
-
-		// Adjust if we're near the end
-		if (endIndex - startIndex < effectiveMaxItems) {
-			startIndex = Math.max(0, endIndex - effectiveMaxItems);
+		// Show message if no agents configured
+		if (agents.length === 0) {
+			return (
+				<Box flexDirection="column">
+					<Box width="100%">
+						<Box flexDirection="column" width="100%">
+							<Box>
+								<Text color={theme.colors.warning} bold>
+									Sub-Agent Selection
+								</Text>
+							</Box>
+							<Box marginTop={1}>
+								<Alert variant="warning">
+									No sub-agents configured. Please configure sub-agents first.
+								</Alert>
+							</Box>
+						</Box>
+					</Box>
+				</Box>
+			);
 		}
 
-		return agents.slice(startIndex, endIndex);
-	}, [agents, selectedIndex, effectiveMaxItems]);
-
-	// Calculate actual selected index in the displayed subset
-	const displayedSelectedIndex = useMemo(() => {
-		return displayedAgents.findIndex(agent => {
-			const originalIndex = agents.indexOf(agent);
-			return originalIndex === selectedIndex;
-		});
-	}, [displayedAgents, agents, selectedIndex]);
-
-	// Don't show panel if not visible
-	if (!visible) {
-		return null;
-	}
-
-	// Show message if no agents configured
-	if (agents.length === 0) {
 		return (
 			<Box flexDirection="column">
 				<Box width="100%">
 					<Box flexDirection="column" width="100%">
-				<Box>
-					<Text color={theme.colors.warning} bold>
-						Sub-Agent Selection
-					</Text>
-				</Box>
-						<Box marginTop={1}>
-							<Alert variant="warning">
-								No sub-agents configured. Please configure sub-agents first.
-							</Alert>
+						<Box>
+							<Text color={theme.colors.warning} bold>
+								Select Sub-Agent{' '}
+								{agents.length > effectiveMaxItems &&
+									`(${selectedIndex + 1}/${agents.length})`}
+							</Text>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								(Press ESC to close)
+							</Text>
 						</Box>
+						{displayedAgents.map((agent, index) => (
+							<Box key={agent.id} flexDirection="column" width="100%">
+								<Text
+									color={
+										index === displayedSelectedIndex
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									bold
+								>
+									{index === displayedSelectedIndex ? '❯ ' : '  '}#{agent.name}
+								</Text>
+								<Box marginLeft={3}>
+									<Text
+										color={
+											index === displayedSelectedIndex
+												? theme.colors.menuSelected
+												: theme.colors.menuNormal
+										}
+										dimColor
+									>
+										└─ {agent.description || 'No description'}
+									</Text>
+								</Box>
+							</Box>
+						))}
+						{agents.length > effectiveMaxItems && (
+							<Box marginTop={1}>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
+								</Text>
+							</Box>
+						)}
 					</Box>
 				</Box>
 			</Box>
 		);
-	}
-
-	return (
-		<Box flexDirection="column">
-			<Box width="100%">
-				<Box flexDirection="column" width="100%">
-			<Box>
-				<Text color={theme.colors.warning} bold>
-					Select Sub-Agent{' '}
-					{agents.length > effectiveMaxItems &&
-						`(${selectedIndex + 1}/${agents.length})`}
-				</Text>
-				<Text color={theme.colors.menuSecondary} dimColor>
-				(Press ESC to close)
-			</Text>
-			</Box>
-					{displayedAgents.map((agent, index) => (
-						<Box key={agent.id} flexDirection="column" width="100%">
-				<Text
-					color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
-					bold
-				>
-					{index === displayedSelectedIndex ? '❯ ' : '  '}#{agent.name}
-				</Text>
-				<Box marginLeft={3}>
-					<Text
-						color={index === displayedSelectedIndex ? theme.colors.success : theme.colors.menuSecondary}
-						dimColor
-					>
-						└─ {agent.description || 'No description'}
-					</Text>
-				</Box>
-						</Box>
-					))}
-		{agents.length > effectiveMaxItems && (
-			<Box marginTop={1}>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					↑↓ to scroll · {agents.length - effectiveMaxItems} more hidden
-				</Text>
-			</Box>
-		)}
-			</Box>
-		</Box>
-	</Box>
+	},
 );
-});
 
 AgentPickerPanel.displayName = 'AgentPickerPanel';
 

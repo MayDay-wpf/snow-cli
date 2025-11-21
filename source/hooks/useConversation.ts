@@ -19,6 +19,11 @@ import {
 	performAutoCompression,
 } from '../utils/autoCompress.js';
 
+export type UserQuestionResult = {
+	selected: string;
+	customInput?: string;
+};
+
 export type ConversationHandlerOptions = {
 	userContent: string;
 	imageContents:
@@ -34,6 +39,11 @@ export type ConversationHandlerOptions = {
 		batchToolNames?: string,
 		allTools?: ToolCall[],
 	) => Promise<ConfirmationResult>;
+	requestUserQuestion: (
+		question: string,
+		options: string[],
+		toolCall: ToolCall,
+	) => Promise<UserQuestionResult>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
@@ -76,6 +86,7 @@ export async function handleConversationWithTools(
 		setMessages,
 		setStreamTokenCount,
 		requestToolConfirmation,
+		requestUserQuestion,
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
 		yoloMode,
@@ -481,6 +492,87 @@ export async function handleConversationWithTools(
 							},
 						]);
 					}
+				}
+
+				// Check if there are any askuser tools - they need special handling
+				const askUserTool = receivedToolCalls.find(tc =>
+					tc.function.name.startsWith('askuser-'),
+				);
+
+				// If there's an askuser tool, intercept and handle with UI component
+				if (askUserTool) {
+					// Remove pending messages
+					setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+					// Parse tool arguments to get question and options
+					let question = 'Please select an option:';
+					let options: string[] = ['Yes', 'No'];
+
+					try {
+						const args = JSON.parse(askUserTool.function.arguments);
+						if (args.question) question = args.question;
+						if (args.options && Array.isArray(args.options)) {
+							options = args.options;
+						}
+					} catch (error) {
+						console.error('Failed to parse askuser tool arguments:', error);
+					}
+
+					// Request user input via UI component
+					const userAnswer = await requestUserQuestion(
+						question,
+						options,
+						askUserTool,
+					);
+
+					// Format the user's answer as tool result
+					const answerText = userAnswer.customInput
+						? `${userAnswer.selected}: ${userAnswer.customInput}`
+						: userAnswer.selected;
+
+					// Create tool result message and add to conversation
+					const toolResultMessage: ChatMessage = {
+						role: 'tool',
+						tool_call_id: askUserTool.id,
+						content: JSON.stringify({
+							answer: answerText,
+							selected: userAnswer.selected,
+							customInput: userAnswer.customInput,
+						}),
+					};
+
+					conversationMessages.push(toolResultMessage);
+
+					// Save tool result to session
+					await saveMessage(toolResultMessage);
+
+					// Display user's answer in UI
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: `✓ ${askUserTool.function.name}\n  └─ User answered: ${answerText}`,
+							streaming: false,
+							toolResult: answerText,
+						},
+					]);
+
+					// Now filter out the askuser tool from receivedToolCalls
+					// so it doesn't get executed again below
+					const remainingTools = receivedToolCalls.filter(
+						tc => tc.id !== askUserTool.id,
+					);
+
+					// If there are no more tools to execute, continue to next AI turn
+					// The askuser tool result is already in the conversation
+					// AI will receive it in the next iteration of the while loop
+					if (remainingTools.length === 0) {
+						continue;
+					}
+
+					// Otherwise, continue with remaining tools
+					// Update receivedToolCalls to exclude askuser
+					receivedToolCalls = remainingTools;
 				}
 
 				// Filter tools that need confirmation (not in always-approved list OR session-approved list)
@@ -992,15 +1084,15 @@ export async function handleConversationWithTools(
 					}
 					freeEncoder();
 					break;
-			}
+				}
 
-			// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
-			const config = getOpenAiConfig();
-			if (
-				config.enableAutoCompress !== false &&
-				options.getCurrentContextPercentage &&
-				shouldAutoCompress(options.getCurrentContextPercentage())
-			) {
+				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
+				const config = getOpenAiConfig();
+				if (
+					config.enableAutoCompress !== false &&
+					options.getCurrentContextPercentage &&
+					shouldAutoCompress(options.getCurrentContextPercentage())
+				) {
 					try {
 						// 显示压缩提示消息
 						const compressingMessage: Message = {
@@ -1192,15 +1284,15 @@ export async function handleConversationWithTools(
 
 				// Check if there are pending user messages to insert
 				if (options.getPendingMessages && options.clearPendingMessages) {
-				const pendingMessages = options.getPendingMessages();
-				if (pendingMessages.length > 0) {
-					// 检查 token 占用，如果 >= 80% 先执行自动压缩
-					const config = getOpenAiConfig();
-					if (
-						config.enableAutoCompress !== false &&
-						options.getCurrentContextPercentage &&
-						shouldAutoCompress(options.getCurrentContextPercentage())
-					) {
+					const pendingMessages = options.getPendingMessages();
+					if (pendingMessages.length > 0) {
+						// 检查 token 占用，如果 >= 80% 先执行自动压缩
+						const config = getOpenAiConfig();
+						if (
+							config.enableAutoCompress !== false &&
+							options.getCurrentContextPercentage &&
+							shouldAutoCompress(options.getCurrentContextPercentage())
+						) {
 							try {
 								// 显示压缩提示消息
 								const compressingMessage: Message = {
@@ -1319,15 +1411,15 @@ export async function handleConversationWithTools(
 			break;
 		}
 
-	// Free encoder
-	freeEncoder();
-} catch (error) {
-	throw error;
-} finally {
-	// ✅ 确保总是释放encoder资源，避免资源泄漏
-	freeEncoder();
-}
+		// Free encoder
+		freeEncoder();
+	} catch (error) {
+		throw error;
+	} finally {
+		// ✅ 确保总是释放encoder资源，避免资源泄漏
+		freeEncoder();
+	}
 
-// Return the accumulated usage data
-return {usage: accumulatedUsage};
+	// Return the accumulated usage data
+	return {usage: accumulatedUsage};
 }
