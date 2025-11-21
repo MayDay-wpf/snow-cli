@@ -322,7 +322,7 @@ function convertToResponseInput(
 				content: [
 					{
 						type: 'input_text',
-						text: getSystemPrompt(),
+						text: '<environment_context>' + getSystemPrompt() + '</environment_context>',
 					},
 				],
 			});

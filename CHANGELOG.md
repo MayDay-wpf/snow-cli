@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.19
+
+- Custom theme, fix some display bugs
+
 ## v0.4.17
 
 - Add and copy the tiktoken_bg.wasm file to the bundle directory

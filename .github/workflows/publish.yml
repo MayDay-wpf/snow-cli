@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add and copy the tiktoken_bg.wasm file to the bundle directory
+            - Custom theme, fix some display bugs
             
             ### Installation
             ```bash
