@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Improve the file monitoring event handling logic
+            - fix(utils): Optimize placeholder processing logic in text buffer
             ### Installation
             ```bash
             npm install -g snow-ai

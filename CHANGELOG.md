@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.21
+
+- fix(utils): Optimize placeholder processing logic in text buffer
+
 ## v0.4.20
 
 - Improve the file monitoring event handling logic

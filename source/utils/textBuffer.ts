@@ -158,7 +158,9 @@ export class TextBuffer {
 
 		// 如果存在临时"粘贴中"占位符，先移除它，并调整光标位置
 		if (this.tempPastingPlaceholder) {
-			const placeholderIndex = this.content.indexOf(this.tempPastingPlaceholder);
+			const placeholderIndex = this.content.indexOf(
+				this.tempPastingPlaceholder,
+			);
 			if (placeholderIndex !== -1) {
 				// 找到占位符的位置
 				const placeholderLength = cpLen(this.tempPastingPlaceholder);
@@ -166,11 +168,16 @@ export class TextBuffer {
 				// 移除占位符
 				this.content =
 					this.content.slice(0, placeholderIndex) +
-					this.content.slice(placeholderIndex + this.tempPastingPlaceholder.length);
+					this.content.slice(
+						placeholderIndex + this.tempPastingPlaceholder.length,
+					);
 
 				// 调整光标位置:如果光标在占位符之后,需要向前移动
 				if (this.cursorIndex > placeholderIndex) {
-					this.cursorIndex = Math.max(placeholderIndex, this.cursorIndex - placeholderLength);
+					this.cursorIndex = Math.max(
+						placeholderIndex,
+						this.cursorIndex - placeholderLength,
+					);
 				}
 			}
 			this.tempPastingPlaceholder = null;
@@ -263,7 +270,8 @@ export class TextBuffer {
 		}
 
 		this.cursorIndex -= 1;
-		this.recomputeVisualCursorOnly();
+		this.recalculateVisualState();
+		this.scheduleUpdate();
 	}
 
 	moveRight(): void {
@@ -272,7 +280,8 @@ export class TextBuffer {
 		}
 
 		this.cursorIndex += 1;
-		this.recomputeVisualCursorOnly();
+		this.recalculateVisualState();
+		this.scheduleUpdate();
 	}
 
 	moveUp(): void {
@@ -417,7 +426,9 @@ export class TextBuffer {
 		let start = 0;
 
 		// Helper function to find placeholder at given position
-		const findPlaceholderAt = (pos: number): {start: number; end: number} | null => {
+		const findPlaceholderAt = (
+			pos: number,
+		): {start: number; end: number} | null => {
 			// Look backwards to find the opening bracket
 			let openPos = pos;
 			while (openPos >= 0 && codePoints[openPos] !== '[') {
@@ -432,7 +443,9 @@ export class TextBuffer {
 				}
 
 				if (closePos < codePoints.length && codePoints[closePos] === ']') {
-					const placeholderText = codePoints.slice(openPos, closePos + 1).join('');
+					const placeholderText = codePoints
+						.slice(openPos, closePos + 1)
+						.join('');
 					// Check if it's a valid placeholder
 					if (
 						placeholderText.match(/^\[Paste \d+ lines #\d+\]$/) ||
@@ -457,10 +470,12 @@ export class TextBuffer {
 				if (codePoints[end] === '[') {
 					const placeholder = findPlaceholderAt(end);
 					if (placeholder && placeholder.start === end) {
-						const placeholderText = codePoints.slice(placeholder.start, placeholder.end).join('');
+						const placeholderText = codePoints
+							.slice(placeholder.start, placeholder.end)
+							.join('');
 						const placeholderWidth = Array.from(placeholderText).reduce(
 							(sum, c) => sum + visualWidth(c),
-							0
+							0,
 						);
 
 						// If placeholder fits on current line, include it
