@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.22
+
+- Silently handle VS Code connection failures and update status indicators
+- Adjust maxContextTokens in the default configuration from 4000 to 120000, and adjust maxTokenfrom 4096 to 32000 to adapt to larger model context and output requirements.
+            
+
 ## v0.4.21
 
 - fix(utils): Optimize placeholder processing logic in text buffer

@@ -553,8 +553,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 					// If we get here, connection succeeded
 					// Status will be updated by useVSCodeState hook monitoring
 				} catch (error) {
-					console.error('Background VSCode auto-connect failed:', error);
-					// Let useVSCodeState handle the timeout and error state
+					// Silently handle connection failure - set error status instead of throwing
+					vscodeState.setVscodeConnectionStatus('error');
 				}
 			})();
 		}, 0);
@@ -2224,12 +2224,15 @@ export default function ChatScreen({skipWelcome}: Props) {
 						/>
 						{/* IDE connection status indicator */}
 						{(vscodeState.vscodeConnectionStatus === 'connecting' ||
-							vscodeState.vscodeConnectionStatus === 'connected') && (
+							vscodeState.vscodeConnectionStatus === 'connected' ||
+							vscodeState.vscodeConnectionStatus === 'error') && (
 							<Box marginTop={1} paddingX={1}>
 								<Text
 									color={
 										vscodeState.vscodeConnectionStatus === 'connecting'
 											? 'yellow'
+											: vscodeState.vscodeConnectionStatus === 'error'
+											? 'red'
 											: 'green'
 									}
 									dimColor
@@ -2238,6 +2241,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 										<>
 											<Spinner type="dots" /> {t.chatScreen.ideConnecting}
 										</>
+									) : vscodeState.vscodeConnectionStatus === 'error' ? (
+										<>✗ {t.chatScreen.ideError}</>
 									) : (
 										<>
 											● {t.chatScreen.ideConnected}

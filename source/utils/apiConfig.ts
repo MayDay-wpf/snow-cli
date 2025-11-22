@@ -112,8 +112,8 @@ const DEFAULT_CONFIG: AppConfig = {
 		requestMethod: 'chat',
 		advancedModel: '',
 		basicModel: '',
-		maxContextTokens: 4000,
-		maxTokens: 4096,
+		maxContextTokens: 120000,
+		maxTokens: 32000,
 		anthropicBeta: false,
 	},
 	proxy: {

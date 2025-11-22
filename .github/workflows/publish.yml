@@ -58,7 +58,9 @@ jobs:
             
             ### What's New
 
-            - fix(utils): Optimize placeholder processing logic in text buffer
+            - Silently handle VS Code connection failures and update status indicators
+            - Adjust maxContextTokens in the default configuration from 4000 to 120000, and adjust maxTokens from 4096 to 32000 to adapt to larger model context and output requirements.
+            
             ### Installation
             ```bash
             npm install -g snow-ai
