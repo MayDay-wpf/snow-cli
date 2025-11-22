@@ -58,8 +58,7 @@ jobs:
             
             ### What's New
 
-            - Custom theme, fix some display bugs
-            
+            - Improve the file monitoring event handling logic
             ### Installation
             ```bash
             npm install -g snow-ai

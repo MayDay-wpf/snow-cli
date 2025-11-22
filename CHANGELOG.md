@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.20
+
+- Improve the file monitoring event handling logic
+
 ## v0.4.19
 
 - Custom theme, fix some display bugs

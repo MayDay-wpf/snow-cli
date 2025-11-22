@@ -315,7 +315,7 @@ export class CodebaseIndexAgent {
 			this.fileWatcher = fs.watch(
 				this.projectRoot,
 				{recursive: true},
-				(_eventType, filename) => {
+				(eventType, filename) => {
 					if (!filename) return;
 
 					// Convert to absolute path
@@ -333,15 +333,32 @@ export class CodebaseIndexAgent {
 						return;
 					}
 
-					// Check if file exists (might be deleted)
-					if (!fs.existsSync(filePath)) {
-						logger.debug(`File deleted, removing from index: ${relativePath}`);
-						this.db.deleteChunksByFile(relativePath);
-						return;
-					}
+					// Handle different event types:
+					// - 'rename': file created, deleted, or renamed
+					// - 'change': file content modified
+					const fileExists = fs.existsSync(filePath);
 
-					// Debounce file changes
-					this.debounceFileChange(filePath, relativePath);
+					if (eventType === 'rename') {
+						if (fileExists) {
+							// File was created or renamed (new file appeared)
+							logger.debug(`File created/renamed, indexing: ${relativePath}`);
+							this.debounceFileChange(filePath, relativePath);
+						} else {
+							// File was deleted or renamed away
+							logger.debug(
+								`File deleted/renamed away, removing from index: ${relativePath}`,
+							);
+							this.db.deleteChunksByFile(relativePath);
+						}
+					} else if (eventType === 'change') {
+						// File content was modified
+						if (fileExists) {
+							logger.debug(`File modified, reindexing: ${relativePath}`);
+							this.debounceFileChange(filePath, relativePath);
+						}
+						// If file doesn't exist during 'change' event, it's likely a race condition
+						// The 'rename' event should handle the deletion
+					}
 				},
 			);
 
