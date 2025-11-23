@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.23
+
+- Improve navigation and status management of custom request header interface
+
 ## v0.4.22
 
 - Silently handle VS Code connection failures and update status indicators
