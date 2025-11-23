@@ -55,9 +55,37 @@ function getCurrentRegistry() {
 }
 
 /**
+ * Check Node.js version compatibility
+ */
+function checkNodeVersion() {
+	const currentVersion = process.version;
+	const major = parseInt(currentVersion.slice(1).split('.')[0], 10);
+	const minVersion = 16;
+
+	if (major < minVersion) {
+		console.error(`\n${colors.bright}${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+		console.error(`${colors.bright}${colors.yellow}  ⚠️  Node.js Version Compatibility Error${colors.reset}`);
+		console.error(`${colors.bright}${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}\n`);
+		console.error(`${colors.yellow}Current Node.js version: ${currentVersion}${colors.reset}`);
+		console.error(`${colors.yellow}Required: Node.js >= ${minVersion}.x${colors.reset}\n`);
+		console.error(`${colors.green}Please upgrade Node.js to continue:${colors.reset}\n`);
+		console.error(`${colors.cyan}# Using nvm (recommended):${colors.reset}`);
+		console.error(`  nvm install ${minVersion}`);
+		console.error(`  nvm use ${minVersion}\n`);
+		console.error(`${colors.cyan}# Or download from official website:${colors.reset}`);
+		console.error(`  https://nodejs.org/\n`);
+		console.error(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}\n`);
+		process.exit(1);
+	}
+}
+
+/**
  * Main function
  */
 async function main() {
+	// Check Node.js version first
+	checkNodeVersion();
+
 	// Skip if running in CI environment
 	if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) {
 		return;

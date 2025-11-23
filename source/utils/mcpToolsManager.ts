@@ -579,7 +579,7 @@ export async function collectAllMCPTools(): Promise<MCPTool[]> {
  * Uses cached data when available
  */
 export async function getMCPServicesInfo(): Promise<MCPServiceTools[]> {
-	if (!isCacheValid()) {
+	if (!(await isCacheValid())) {
 		await refreshToolsCache();
 	}
 	// Ensure toolsCache is not null before accessing

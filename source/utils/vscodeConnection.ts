@@ -172,8 +172,20 @@ class VSCodeConnectionManager {
 		}
 		if (this.client) {
 			try {
-				this.client.removeAllListeners();
-				this.client.close();
+				// Add error handler before closing to prevent unhandled error events
+				this.client.on('error', () => {
+					// Silently ignore errors during cleanup
+				});
+				this.client.removeAllListeners('open');
+				this.client.removeAllListeners('message');
+				this.client.removeAllListeners('close');
+				// Only close if connection is open or connecting
+				if (
+					this.client.readyState !== WebSocket.CLOSED &&
+					this.client.readyState !== WebSocket.CLOSING
+				) {
+					this.client.close();
+				}
 			} catch (error) {
 				// Ignore errors during cleanup
 			}

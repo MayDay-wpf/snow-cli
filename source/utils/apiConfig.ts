@@ -331,6 +331,18 @@ export function updateProxyConfig(proxyConfig: ProxyConfig): void {
 		const {openai, ...configWithoutOpenai} = fullConfig;
 		const configData = JSON.stringify(configWithoutOpenai, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
+
+		// Also save to the active profile if profiles system is initialized
+		try {
+			// Dynamic import to avoid circular dependencies
+			const {getActiveProfileName, saveProfile} = require('./configManager.js');
+			const activeProfileName = getActiveProfileName();
+			if (activeProfileName) {
+				saveProfile(activeProfileName, fullConfig);
+			}
+		} catch {
+			// Profiles system not available yet (during initialization), skip sync
+		}
 	} catch (error) {
 		throw new Error(`Failed to save proxy configuration: ${error}`);
 	}

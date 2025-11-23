@@ -485,7 +485,19 @@ export class CodebaseIndexAgent {
 		const files: string[] = [];
 
 		const scanDir = (dir: string) => {
-			const entries = fs.readdirSync(dir, {withFileTypes: true});
+			let entries: fs.Dirent[];
+			try {
+				entries = fs.readdirSync(dir, {withFileTypes: true});
+			} catch (error: any) {
+				// 处理权限不足等错误，跳过该目录而不是崩溃
+				if (error.code === 'EPERM' || error.code === 'EACCES') {
+					logger.warn(`跳过无权限访问的目录: ${dir}`);
+					return;
+				}
+				// 其他错误也记录但不中断扫描
+				logger.warn(`扫描目录失败 (${error.code || 'unknown'}): ${dir}`);
+				return;
+			}
 
 			for (const entry of entries) {
 				if (this.shouldStop) break;

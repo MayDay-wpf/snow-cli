@@ -1,5 +1,26 @@
 #!/usr/bin/env node
 
+// Check Node.js version before anything else
+const MIN_NODE_VERSION = 16;
+const currentVersion = process.version;
+const major = parseInt(currentVersion.slice(1).split('.')[0] || '0', 10);
+
+if (major < MIN_NODE_VERSION) {
+	console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+	console.error('  ⚠️  Node.js Version Compatibility Error');
+	console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+	console.error(`Current Node.js version: ${currentVersion}`);
+	console.error(`Required: Node.js >= ${MIN_NODE_VERSION}.x\n`);
+	console.error('Please upgrade Node.js to continue:\n');
+	console.error('# Using nvm (recommended):');
+	console.error(`  nvm install ${MIN_NODE_VERSION}`);
+	console.error(`  nvm use ${MIN_NODE_VERSION}\n`);
+	console.error('# Or download from official website:');
+	console.error('  https://nodejs.org/\n');
+	console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+	process.exit(1);
+}
+
 // Suppress DEP0169 warning from dependencies
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function (warning: any, ...args: any[]) {
@@ -10,11 +31,9 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 
 // Check if this is a quick command that doesn't need loading indicator
 const args = process.argv.slice(2);
-const isQuickCommand = args.some(arg =>
-	arg === '--version' ||
-	arg === '-v' ||
-	arg === '--help' ||
-	arg === '-h'
+const isQuickCommand = args.some(
+	arg =>
+		arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h',
 );
 
 // Show loading indicator only for non-quick commands
@@ -36,7 +55,7 @@ import {fileURLToPath} from 'url';
 // Read version from package.json
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const packageJson = JSON.parse(
-	readFileSync(join(__dirname, '../package.json'), 'utf-8')
+	readFileSync(join(__dirname, '../package.json'), 'utf-8'),
 );
 const VERSION = packageJson.version;
 
@@ -80,18 +99,21 @@ let execAsync: any;
 // Check for updates asynchronously
 async function checkForUpdates(currentVersion: string): Promise<void> {
 	try {
-		const {stdout} = await execAsync('npm view snow-ai version --registry https://registry.npmjs.org', {
-			encoding: 'utf8',
-		});
-	const latestVersion = stdout.trim();
+		const {stdout} = await execAsync(
+			'npm view snow-ai version --registry https://registry.npmjs.org',
+			{
+				encoding: 'utf8',
+			},
+		);
+		const latestVersion = stdout.trim();
 
-	// Simple string comparison - force registry fetch ensures no cache issues
-	if (latestVersion && latestVersion !== currentVersion) {
-		console.log('\n🔔 Update available!');
-		console.log(`   Current version: ${currentVersion}`);
-		console.log(`   Latest version:  ${latestVersion}`);
-		console.log('   Run "snow --update" to update\n');
-	}
+		// Simple string comparison - force registry fetch ensures no cache issues
+		if (latestVersion && latestVersion !== currentVersion) {
+			console.log('\n🔔 Update available!');
+			console.log(`   Current version: ${currentVersion}`);
+			console.log(`   Latest version:  ${latestVersion}`);
+			console.log('   Run "snow --update" to update\n');
+		}
 	} catch (error) {
 		// Silently fail - don't interrupt user experience
 	}
@@ -172,7 +194,7 @@ const Startup = ({
 		const init = async () => {
 			// Load all dependencies in parallel
 			const deps = await loadDependencies();
-			
+
 			// Setup execAsync for checkForUpdates
 			execAsync = deps.promisify(deps.exec);
 

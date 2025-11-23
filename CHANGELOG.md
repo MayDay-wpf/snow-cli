@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.24
+
+- Fix MCP configuration errors and fix uncaught exceptions when using in non-IDE environments
+
 ## v0.4.23
 
 - Improve navigation and status management of custom request header interface

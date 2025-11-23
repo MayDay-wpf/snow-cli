@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Improve navigation and status management of custom request header interface
+            - Fix MCP configuration errors and fix uncaught exceptions when using in non-IDE environments
             
             ### Installation
             ```bash

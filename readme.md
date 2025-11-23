@@ -12,6 +12,28 @@ _An intelligent AI-powered CLI tool for developers_
 
 ---
 
+## Requirements
+
+- **Node.js >= 16.x** (Required for ES2020 features)
+- npm >= 8.3.0
+
+### Check Your Node.js Version
+
+```bash
+$ node --version
+```
+
+If your version is below 16.x, please upgrade:
+
+```bash
+# Using nvm (recommended)
+$ nvm install 16
+$ nvm use 16
+
+# Or download from official website
+# https://nodejs.org/
+```
+
 ## Installation
 
 ```bash
