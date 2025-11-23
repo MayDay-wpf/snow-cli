@@ -395,7 +395,7 @@ export const zh: TranslationKeys = {
 		statusConnecting: '连接到 IDE...',
 		statusConnected: 'IDE 已连接',
 		statusConnectionFailed:
-			'连接失败 - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
+			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		// Tool execution
 		toolCall: '工具调用',
 		toolThinking: '思考',
@@ -472,7 +472,7 @@ export const zh: TranslationKeys = {
 		ideConnecting: '连接到 IDE...',
 		ideConnected: 'IDE 已连接',
 		ideDisconnected: 'IDE 已断开',
-		ideError: '连接失败 - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
+		ideError: '连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已选择 {count} 个字符',
 		// Input

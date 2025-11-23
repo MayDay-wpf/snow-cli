@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.25
+
+- Updated the multilingual copy to explain that connection failures do not affect usage
+
 ## 0.4.24
 
 - Fix MCP configuration errors and fix uncaught exceptions when using in non-IDE environments

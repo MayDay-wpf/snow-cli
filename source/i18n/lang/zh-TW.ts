@@ -395,7 +395,7 @@ export const zhTW: TranslationKeys = {
 		statusConnecting: '連線到 IDE...',
 		statusConnected: 'IDE 已連線',
 		statusConnectionFailed:
-			'連線失敗 - 請確保在你的 IDE 中安裝並啟用了 Snow CLI 外掛',
+			'連線失敗（這不會影響任何使用） - 請確保在你的 IDE 中安裝並啟用了 Snow CLI 外掛',
 		// Tool execution
 		toolCall: '工具呼叫',
 		toolThinking: '思考',
@@ -472,7 +472,8 @@ export const zhTW: TranslationKeys = {
 		ideConnecting: '連線到 IDE...',
 		ideConnected: 'IDE 已連線',
 		ideDisconnected: 'IDE 已斷開',
-		ideError: '連線失敗 - 請確保在你的 IDE 中安裝並啟用了 Snow CLI 外掛',
+		ideError:
+			'連線失敗（這不會影響任何使用） - 請確保在你的 IDE 中安裝並啟用了 Snow CLI 外掛',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已選擇 {count} 個字元',
 		// Input

@@ -421,7 +421,7 @@ export const en: TranslationKeys = {
 		statusConnecting: 'Connecting to IDE...',
 		statusConnected: 'IDE Connected',
 		statusConnectionFailed:
-			'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE',
+			'Connection Failed (this will not affect any usage) - Make sure Snow CLI plugin is installed and active in your IDE',
 		// Tool execution
 		toolCall: 'Tool call',
 		toolThinking: 'Thinking',
@@ -499,7 +499,7 @@ export const en: TranslationKeys = {
 		ideConnected: 'IDE Connected',
 		ideDisconnected: 'IDE Disconnected',
 		ideError:
-			'Connection Failed - Make sure Snow CLI plugin is installed and active in your IDE',
+			'Connection Failed (this will not affect any usage) - Make sure Snow CLI plugin is installed and active in your IDE',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count} chars selected',
 		// Input

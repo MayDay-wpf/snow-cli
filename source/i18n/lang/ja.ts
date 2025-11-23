@@ -410,7 +410,7 @@ export const ja: TranslationKeys = {
 		statusConnecting: 'IDEに接続中...',
 		statusConnected: 'IDE接続済み',
 		statusConnectionFailed:
-			'接続に失敗 - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
+			'接続に失敗（これは使用に影響しません） - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
 		// Tool execution
 		toolCall: 'ツール呼び出し',
 		toolThinking: '思考',
@@ -490,7 +490,7 @@ export const ja: TranslationKeys = {
 		ideConnected: 'IDE接続済み',
 		ideDisconnected: 'IDE切断',
 		ideError:
-			'接続に失敗 - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
+			'接続に失敗（これは使用に影響しません） - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count}文字選択済み',
 		// Input

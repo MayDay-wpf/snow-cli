@@ -2232,7 +2232,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 										vscodeState.vscodeConnectionStatus === 'connecting'
 											? 'yellow'
 											: vscodeState.vscodeConnectionStatus === 'error'
-											? 'red'
+											? 'gray'
 											: 'green'
 									}
 									dimColor
@@ -2242,7 +2242,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 											<Spinner type="dots" /> {t.chatScreen.ideConnecting}
 										</>
 									) : vscodeState.vscodeConnectionStatus === 'error' ? (
-										<>✗ {t.chatScreen.ideError}</>
+										<>○ {t.chatScreen.ideError}</>
 									) : (
 										<>
 											● {t.chatScreen.ideConnected}

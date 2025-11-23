@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Fix MCP configuration errors and fix uncaught exceptions when using in non-IDE environments
+            - Updated the multilingual copy to explain that connection failures do not affect usage
             
             ### Installation
             ```bash
