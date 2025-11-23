@@ -23,7 +23,7 @@ export interface ResponseOptions {
 	tool_choice?: 'auto' | 'none' | 'required';
 	reasoning?: {
 		summary?: 'auto' | 'none';
-		effort?: 'low' | 'medium' | 'high';
+		effort?: 'low' | 'medium' | 'high' | 'xhigh';
 	} | null; // null means don't pass reasoning parameter (for small models)
 	prompt_cache_key?: string;
 	store?: boolean;
@@ -164,7 +164,7 @@ function getOpenAIConfig() {
 }
 
 function getResponsesReasoningConfig(): {
-	effort?: 'low' | 'medium' | 'high';
+	effort?: 'low' | 'medium' | 'high' | 'xhigh';
 	summary?: 'auto' | 'none';
 } | null {
 	const config = getOpenAiConfig();

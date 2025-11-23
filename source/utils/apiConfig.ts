@@ -26,7 +26,7 @@ export interface GeminiThinkingConfig {
 
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
-	effort: 'low' | 'medium' | 'high';
+	effort: 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 export interface ApiConfig {
