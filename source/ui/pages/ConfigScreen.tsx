@@ -150,6 +150,12 @@ export default function ConfigScreen({
 	// Scrolling configuration
 	const MAX_VISIBLE_FIELDS = 8;
 
+	// Responses reasoning effort options (xhigh only on supported model)
+	const supportsXHigh =
+		requestMethod === 'responses' &&
+		(advancedModel === 'gpt-5.1-codex-max' ||
+			basicModel === 'gpt-5.1-codex-max');
+
 	const requestMethodOptions = [
 		{
 			label: t.configScreen.requestMethodChat,
@@ -243,6 +249,19 @@ export default function ConfigScreen({
 			setCurrentField('advancedModel');
 		}
 	}, [requestMethod, currentField]);
+
+	// Auto-downgrade xhigh effort when unsupported (e.g., switching requestMethod or model)
+	useEffect(() => {
+		if (responsesReasoningEffort === 'xhigh' && !supportsXHigh) {
+			setResponsesReasoningEffort('high');
+		}
+	}, [
+		requestMethod,
+		advancedModel,
+		basicModel,
+		responsesReasoningEffort,
+		supportsXHigh,
+	]);
 
 	const loadProfilesAndConfig = () => {
 		// Load profiles
@@ -395,13 +414,30 @@ export default function ConfigScreen({
 			return;
 		}
 
+		// Track next model values for correct supportsXHigh evaluation
+		let nextAdvancedModel = advancedModel;
+		let nextBasicModel = basicModel;
+
 		if (currentField === 'advancedModel') {
+			nextAdvancedModel = value;
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
+			nextBasicModel = value;
 			setBasicModel(value);
 		} else if (currentField === 'compactModelName') {
 			setCompactModelName(value);
 		}
+
+		// If current effort is xhigh but new selection no longer supports it, downgrade to high
+		const nextSupportsXHigh =
+			requestMethod === 'responses' &&
+			(nextAdvancedModel === 'gpt-5.1-codex-max' ||
+				nextBasicModel === 'gpt-5.1-codex-max');
+
+		if (responsesReasoningEffort === 'xhigh' && !nextSupportsXHigh) {
+			setResponsesReasoningEffort('high');
+		}
+
 		setIsEditing(false);
 		setSearchTerm('');
 	};
@@ -447,15 +483,11 @@ export default function ConfigScreen({
 				(config as any).geminiThinking = undefined;
 			}
 
-			// Save Responses reasoning configuration
-			if (responsesReasoningEnabled) {
-				(config as any).responsesReasoning = {
-					enabled: true,
-					effort: responsesReasoningEffort,
-				};
-			} else {
-				(config as any).responsesReasoning = undefined;
-			}
+			// Save Responses reasoning configuration (persist effort even when disabled)
+			(config as any).responsesReasoning = {
+				enabled: responsesReasoningEnabled,
+				effort: responsesReasoningEffort,
+			};
 
 			// Only save compactModel if modelName is provided (uses same baseUrl/apiKey)
 			if (compactModelName) {
@@ -483,10 +515,10 @@ export default function ConfigScreen({
 					geminiThinking: geminiThinkingEnabled
 						? {enabled: true, budget: geminiThinkingBudget}
 						: undefined,
-					responsesReasoning: responsesReasoningEnabled
-						? {enabled: true, effort: responsesReasoningEffort}
-						: undefined,
-					advancedModel,
+					responsesReasoning: {
+						enabled: responsesReasoningEnabled,
+						effort: responsesReasoningEffort,
+					},
 					basicModel,
 					maxContextTokens,
 					maxTokens,
@@ -735,21 +767,22 @@ export default function ConfigScreen({
 						)}
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-					<Select
-						options={[
-							{label: 'LOW', value: 'low'},
-							{label: 'MEDIUM', value: 'medium'},
-							{label: 'HIGH', value: 'high'},
-							{label: 'XHIGH', value: 'xhigh'},
-						]}
-						defaultValue={responsesReasoningEffort}
-						onChange={value => {
-							setResponsesReasoningEffort(
-								value as 'low' | 'medium' | 'high' | 'xhigh',
-							);
-							setIsEditing(false);
-						}}
-					/>
+								<Select
+									options={[
+										{label: 'LOW', value: 'low'},
+										{label: 'MEDIUM', value: 'medium'},
+										{label: 'HIGH', value: 'high'},
+										...(supportsXHigh
+											? [{label: 'XHIGH', value: 'xhigh'}]
+											: []),
+									]}
+									onChange={value => {
+										setResponsesReasoningEffort(
+											value as 'low' | 'medium' | 'high' | 'xhigh',
+										);
+										setIsEditing(false);
+									}}
+								/>
 							</Box>
 						)}
 					</Box>
@@ -1422,23 +1455,31 @@ export default function ConfigScreen({
 								/>
 							</Box>
 						)}
-					{currentField === 'responsesReasoningEffort' && (
-						<Select
-							options={[
-								{label: 'LOW', value: 'low'},
-								{label: 'MEDIUM', value: 'medium'},
-								{label: 'HIGH', value: 'high'},
-								{label: 'XHIGH', value: 'xhigh'},
-							]}
-							defaultValue={responsesReasoningEffort}
-							onChange={value => {
-								setResponsesReasoningEffort(
-									value as 'low' | 'medium' | 'high' | 'xhigh',
-								);
-								setIsEditing(false);
-							}}
-						/>
-					)}
+						{currentField === 'responsesReasoningEffort' && (
+							<Select
+								options={[
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
+								]}
+								defaultValue={responsesReasoningEffort}
+								onChange={value => {
+									// If xhigh selected but unsupported, force reset to high
+									const nextEffort = value as
+										| 'low'
+										| 'medium'
+										| 'high'
+										| 'xhigh';
+									setResponsesReasoningEffort(
+										nextEffort === 'xhigh' && !supportsXHigh
+											? 'high'
+											: nextEffort,
+									);
+									setIsEditing(false);
+								}}
+							/>
+						)}
 					</Box>
 					<Box marginTop={1}>
 						<Alert variant="info">
