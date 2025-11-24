@@ -1063,6 +1063,17 @@ export async function handleConversationWithTools(
 					isToolAutoApproved,
 					yoloMode,
 					addToAlwaysApproved,
+					// Add onUserInteractionNeeded callback for sub-agent askuser tool
+					async (question: string, options: string[]) => {
+						return await requestUserQuestion(question, options, {
+							id: 'fake-tool-call',
+							type: 'function' as const,
+							function: {
+								name: 'askuser',
+								arguments: '{}',
+							},
+						});
+					},
 				);
 
 				// Check if aborted during tool execution
