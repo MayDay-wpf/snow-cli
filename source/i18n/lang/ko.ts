@@ -371,6 +371,8 @@ export const ko: TranslationKeys = {
 			export: '채팅 대화를 저장 대화상자가 있는 텍스트 파일로 내보내기',
 			agent: '하위 에이전트를 선택하고 특정 작업 처리',
 			todo: '프로젝트 파일에서 TODO 주석 검색 및 선택',
+			quit: 'Snow AI 애플리케이션 종료',
+			exit: 'Snow AI 애플리케이션 종료',
 		},
 	},
 	hooks: {

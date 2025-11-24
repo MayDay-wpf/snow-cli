@@ -157,6 +157,7 @@ export default function ChatScreen({skipWelcome}: Props) {
 			import('../../utils/commands/agent.js'),
 			import('../../utils/commands/todoPicker.js'),
 			import('../../utils/commands/help.js'),
+			import('../../utils/commands/quit.js'),
 		])
 			.then(() => {
 				setCommandsLoaded(true);

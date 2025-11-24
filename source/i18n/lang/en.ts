@@ -391,6 +391,8 @@ export const en: TranslationKeys = {
 			export: 'Export chat conversation to text file with save dialog',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
+			quit: 'Exit Snow AI application',
+			exit: 'Exit Snow AI application',
 		},
 	},
 	hooks: {

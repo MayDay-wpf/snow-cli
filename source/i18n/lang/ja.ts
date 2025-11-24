@@ -380,6 +380,8 @@ export const ja: TranslationKeys = {
 				'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
 			agent: 'サブエージェントを選択して特定のタスクを処理',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
+			quit: 'Snow AI アプリケーションを終了',
+			exit: 'Snow AI アプリケーションを終了',
 		},
 	},
 	hooks: {

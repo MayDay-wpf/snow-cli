@@ -414,6 +414,8 @@ export const es: TranslationKeys = {
 				'Exportar conversación de chat a archivo de texto con diálogo de guardado',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
+			quit: 'Salir de la aplicación Snow AI',
+			exit: 'Salir de la aplicación Snow AI',
 		},
 	},
 	hooks: {

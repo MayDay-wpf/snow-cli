@@ -286,6 +286,18 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Reset terminal before navigating to welcome screen
 				resetTerminal(stdout);
 				navigateTo('welcome');
+			} else if (result.success && result.action === 'quit') {
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message ?? '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+
+				// Use setTimeout to allow the message to be displayed
+				setTimeout(() => {
+					process.exit(0);
+				}, 500);
 			} else if (result.success && result.action === 'toggleYolo') {
 				// Toggle YOLO mode without adding command message
 				options.setYoloMode(prev => !prev);

@@ -365,6 +365,8 @@ export const zhTW: TranslationKeys = {
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
 			agent: '選擇並使用子代理處理特定任務',
 			todo: '從專案檔案搜尋並選擇 TODO 註解',
+			quit: '退出 Snow AI 應用程式',
+			exit: '退出 Snow AI 應用程式',
 		},
 	},
 	hooks: {
