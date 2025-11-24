@@ -241,9 +241,46 @@ export function saveConfig(config: AppConfig): void {
 
 export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
 	const currentConfig = loadConfig();
+
+	// Create a new snowcfg object that explicitly includes all fields from apiConfig
+	// This ensures that empty string values (like for advancedModel) are preserved
+	const updatedSnowcfg = {
+		...currentConfig.snowcfg,
+	};
+
+	// Explicitly copy each field from apiConfig to ensure empty values are preserved
+	if (apiConfig.baseUrl !== undefined)
+		updatedSnowcfg.baseUrl = apiConfig.baseUrl;
+	if (apiConfig.apiKey !== undefined) updatedSnowcfg.apiKey = apiConfig.apiKey;
+	if (apiConfig.requestMethod !== undefined)
+		updatedSnowcfg.requestMethod = apiConfig.requestMethod;
+	if (apiConfig.advancedModel !== undefined)
+		updatedSnowcfg.advancedModel = apiConfig.advancedModel;
+	if (apiConfig.basicModel !== undefined)
+		updatedSnowcfg.basicModel = apiConfig.basicModel;
+	if (apiConfig.maxContextTokens !== undefined)
+		updatedSnowcfg.maxContextTokens = apiConfig.maxContextTokens;
+	if (apiConfig.maxTokens !== undefined)
+		updatedSnowcfg.maxTokens = apiConfig.maxTokens;
+	if (apiConfig.anthropicBeta !== undefined)
+		updatedSnowcfg.anthropicBeta = apiConfig.anthropicBeta;
+	if (apiConfig.enablePromptOptimization !== undefined)
+		updatedSnowcfg.enablePromptOptimization =
+			apiConfig.enablePromptOptimization;
+	if (apiConfig.enableAutoCompress !== undefined)
+		updatedSnowcfg.enableAutoCompress = apiConfig.enableAutoCompress;
+	if (apiConfig.thinking !== undefined)
+		updatedSnowcfg.thinking = apiConfig.thinking;
+	if (apiConfig.geminiThinking !== undefined)
+		updatedSnowcfg.geminiThinking = apiConfig.geminiThinking;
+	if (apiConfig.responsesReasoning !== undefined)
+		updatedSnowcfg.responsesReasoning = apiConfig.responsesReasoning;
+	if (apiConfig.compactModel !== undefined)
+		updatedSnowcfg.compactModel = apiConfig.compactModel;
+
 	const updatedConfig: AppConfig = {
 		...currentConfig,
-		snowcfg: {...currentConfig.snowcfg, ...apiConfig},
+		snowcfg: updatedSnowcfg,
 	};
 	saveConfig(updatedConfig);
 
