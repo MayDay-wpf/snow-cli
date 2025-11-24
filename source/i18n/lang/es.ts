@@ -293,6 +293,20 @@ export const es: TranslationKeys = {
 		ideTools: 'Herramientas de Diagnóstico IDE',
 		userInteractionTools: 'Herramientas de Interacción del Usuario',
 	},
+	subAgentList: {
+		title: 'Gestión de Sub-Agentes',
+		noAgents: 'No hay sub-agentes configurados.',
+		noAgentsHint: 'Presiona "A" para agregar un nuevo sub-agente.',
+		agentsCount: 'Sub-Agentes ({count}):',
+		description: 'Descripción:',
+		noDescription: 'Sin descripción',
+		toolsCount: 'Herramientas: {count} seleccionadas',
+		updated: 'Actualizado:',
+		deleteConfirm: '¿Eliminar "{name}"? (Y/N)',
+		deleteSuccess: '¡Sub-agente eliminado exitosamente!',
+		navigationHint:
+			'↑↓: Navegar | Enter: Editar | A: Agregar Nuevo | D: Eliminar | Esc: Volver',
+	},
 	sensitiveCommandConfig: {
 		title: 'Protección de Comandos Sensibles',
 		subtitle:

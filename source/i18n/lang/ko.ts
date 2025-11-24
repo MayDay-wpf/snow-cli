@@ -258,6 +258,20 @@ export const ko: TranslationKeys = {
 		ideTools: 'IDE 진단 도구',
 		userInteractionTools: '사용자 상호작용 도구',
 	},
+	subAgentList: {
+		title: '하위 에이전트 관리',
+		noAgents: '하위 에이전트가 구성되지 않았습니다.',
+		noAgentsHint: '"A"를 눌러 새 하위 에이전트를 추가하세요.',
+		agentsCount: '하위 에이전트 ({count}):',
+		description: '설명:',
+		noDescription: '설명 없음',
+		toolsCount: '도구: {count}개 선택됨',
+		updated: '업데이트:',
+		deleteConfirm: '"{name}"을(를) 삭제하시겠습니까? (Y/N)',
+		deleteSuccess: '하위 에이전트가 삭제되었습니다!',
+		navigationHint:
+			'↑↓: 이동 | Enter: 편집 | A: 새 에이전트 추가 | D: 삭제 | Esc: 뒤로',
+	},
 	sensitiveCommandConfig: {
 		title: '민감한 명령 보호',
 		subtitle: 'YOLO/자동 승인 모드에서도 확인이 필요한 명령 구성',

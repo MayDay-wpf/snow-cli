@@ -253,6 +253,20 @@ export const zhTW: TranslationKeys = {
 		ideTools: 'IDE 診斷工具',
 		userInteractionTools: '用戶交互工具',
 	},
+	subAgentList: {
+		title: '子代理管理',
+		noAgents: '尚未配置子代理。',
+		noAgentsHint: '按 "A" 新增新的子代理。',
+		agentsCount: '子代理 ({count}):',
+		description: '描述:',
+		noDescription: '無描述',
+		toolsCount: '工具: {count} 個已選擇',
+		updated: '更新時間:',
+		deleteConfirm: '刪除 "{name}"? (Y/N)',
+		deleteSuccess: '子代理刪除成功!',
+		navigationHint:
+			'↑↓: 導航 | Enter: 編輯 | A: 新增新代理 | D: 刪除 | Esc: 返回',
+	},
 	sensitiveCommandConfig: {
 		title: '敏感命令保護',
 		subtitle: '配置即使在 YOLO/自動批准模式下也需要確認的命令',
