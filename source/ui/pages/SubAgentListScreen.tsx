@@ -8,6 +8,7 @@ import {
 } from '../../utils/subAgentConfig.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useI18n} from '../../i18n/index.js';
 
 type Props = {
 	onBack: () => void;
@@ -24,6 +25,7 @@ export default function SubAgentListScreen({
 }: Props) {
 	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
+	const {t} = useI18n();
 	const [agents, setAgents] = useState<SubAgent[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -110,81 +112,99 @@ export default function SubAgentListScreen({
 
 	return (
 		<Box flexDirection="column" padding={1}>
-		{!inlineMode && (
-			<Box marginBottom={1}>
-				<Text bold color={theme.colors.menuInfo}>
-					❆ Sub-Agent Management
-				</Text>
-			</Box>
-		)}
+			{!inlineMode && (
+				<Box marginBottom={1}>
+					<Text bold color={theme.colors.menuInfo}>
+						❆ {t.subAgentList.title}
+					</Text>
+				</Box>
+			)}
 
 			{deleteSuccess && (
 				<Box marginBottom={1}>
-					<Alert variant="success">Sub-agent deleted successfully!</Alert>
+					<Alert variant="success">{t.subAgentList.deleteSuccess}</Alert>
 				</Box>
 			)}
 
 			{showDeleteConfirm && agents[selectedIndex] && (
 				<Box marginBottom={1}>
 					<Alert variant="warning">
-						Delete "{agents[selectedIndex].name}"? (Y/N)
+						{t.subAgentList.deleteConfirm.replace(
+							'{name}',
+							agents[selectedIndex].name,
+						)}
 					</Alert>
 				</Box>
 			)}
 
 			<Box flexDirection="column">
-			{agents.length === 0 ? (
-				<Box flexDirection="column">
-					<Text color={theme.colors.menuSecondary}>No sub-agents configured yet.</Text>
-					<Text color={theme.colors.menuSecondary}>Press 'A' to add a new sub-agent.</Text>
-				</Box>
-			) : (
-				<Box flexDirection="column">
-					<Text bold color={theme.colors.menuInfo}>
-						Sub-Agents ({agents.length}):
-					</Text>
+				{agents.length === 0 ? (
+					<Box flexDirection="column">
+						<Text color={theme.colors.menuSecondary}>
+							{t.subAgentList.noAgents}
+						</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{t.subAgentList.noAgentsHint}
+						</Text>
+					</Box>
+				) : (
+					<Box flexDirection="column">
+						<Text bold color={theme.colors.menuInfo}>
+							{t.subAgentList.agentsCount.replace(
+								'{count}',
+								agents.length.toString(),
+							)}
+						</Text>
 
-					{agents.map((agent, index) => {
-						const isSelected = index === selectedIndex;
-						return (
-							<Box key={agent.id} flexDirection="column">
-								<Box>
-									<Text
-										color={isSelected ? theme.colors.menuSelected : theme.colors.menuNormal}
-										bold={isSelected}
-									>
-										{isSelected ? '❯ ' : '  '}
-										{agent.name}
-									</Text>
-								</Box>
-								{isSelected && (
-									<Box flexDirection="column" marginLeft={3}>
-										<Text color={theme.colors.menuSecondary}>
-											Description:{' '}
-											{truncateText(
-												agent.description || 'No description',
-												'Description: '.length,
-											)}
-										</Text>
-										<Text color={theme.colors.menuSecondary}>
-											Tools: {agent.tools.length} selected
-										</Text>
-										<Text color={theme.colors.menuSecondary} dimColor>
-											Updated: {new Date(agent.updatedAt).toLocaleString()}
+						{agents.map((agent, index) => {
+							const isSelected = index === selectedIndex;
+							return (
+								<Box key={agent.id} flexDirection="column">
+									<Box>
+										<Text
+											color={
+												isSelected
+													? theme.colors.menuSelected
+													: theme.colors.menuNormal
+											}
+											bold={isSelected}
+										>
+											{isSelected ? '❯ ' : '  '}
+											{agent.name}
 										</Text>
 									</Box>
-								)}
-							</Box>
-						);
-					})}
+									{isSelected && (
+										<Box flexDirection="column" marginLeft={3}>
+											<Text color={theme.colors.menuSecondary}>
+												{t.subAgentList.description}{' '}
+												{truncateText(
+													agent.description || t.subAgentList.noDescription,
+													t.subAgentList.description.length,
+												)}
+											</Text>
+											<Text color={theme.colors.menuSecondary}>
+												{t.subAgentList.toolsCount.replace(
+													'{count}',
+													agent.tools.length.toString(),
+												)}
+											</Text>
+											<Text color={theme.colors.menuSecondary} dimColor>
+												{t.subAgentList.updated}{' '}
+												{new Date(agent.updatedAt).toLocaleString()}
+											</Text>
+										</Box>
+									)}
+								</Box>
+							);
+						})}
 					</Box>
 				)}
 
-			<Box marginTop={1}>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					↑↓: Navigate | Enter: Edit | A: Add New | D: Delete | Esc: Back
-				</Text>
-			</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.subAgentList.navigationHint}
+					</Text>
+				</Box>
 			</Box>
 		</Box>
 	);
