@@ -120,13 +120,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		pasteFromClipboard,
 		onSubmit,
 		ensureFocus,
-	showAgentPicker,
-	setShowAgentPicker,
-	agentSelectedIndex,
-	setAgentSelectedIndex,
-	updateAgentPickerState,
-	getFilteredAgents,
-	handleAgentSelect,
+		showAgentPicker,
+		setShowAgentPicker,
+		agentSelectedIndex,
+		setAgentSelectedIndex,
+		updateAgentPickerState,
+		getFilteredAgents,
+		handleAgentSelect,
 		showTodoPicker,
 		setShowTodoPicker,
 		todoSelectedIndex,
@@ -195,6 +195,16 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Shift+Tab - Toggle YOLO mode
 		if (key.shift && key.tab) {
+			executeCommand('yolo').then(result => {
+				if (onCommand) {
+					onCommand('yolo', result);
+				}
+			});
+			return;
+		}
+
+		// Ctrl+Y - Toggle YOLO mode
+		if (key.ctrl && input === 'y') {
 			executeCommand('yolo').then(result => {
 				if (onCommand) {
 					onCommand('yolo', result);
@@ -326,40 +336,43 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-	// Handle agent picker navigation
-	if (showAgentPicker) {
-		const filteredAgents = getFilteredAgents();
+		// Handle agent picker navigation
+		if (showAgentPicker) {
+			const filteredAgents = getFilteredAgents();
 
-		// Up arrow in agent picker
-		if (key.upArrow) {
-			setAgentSelectedIndex(prev => Math.max(0, prev - 1));
-			return;
-		}
-
-		// Down arrow in agent picker
-		if (key.downArrow) {
-			const maxIndex = Math.max(0, filteredAgents.length - 1);
-			setAgentSelectedIndex(prev => Math.min(maxIndex, prev + 1));
-			return;
-		}
-
-		// Enter - select agent
-		if (key.return) {
-			if (filteredAgents.length > 0 && agentSelectedIndex < filteredAgents.length) {
-				const selectedAgent = filteredAgents[agentSelectedIndex];
-				if (selectedAgent) {
-					handleAgentSelect(selectedAgent);
-					setShowAgentPicker(false);
-					setAgentSelectedIndex(0);
-				}
+			// Up arrow in agent picker
+			if (key.upArrow) {
+				setAgentSelectedIndex(prev => Math.max(0, prev - 1));
+				return;
 			}
-			return;
-		}
 
-		// Allow typing to filter - don't block regular input
-		// The input will be processed below and updateAgentPickerState will be called
-		// which will update the filter automatically
-	}
+			// Down arrow in agent picker
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, filteredAgents.length - 1);
+				setAgentSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				return;
+			}
+
+			// Enter - select agent
+			if (key.return) {
+				if (
+					filteredAgents.length > 0 &&
+					agentSelectedIndex < filteredAgents.length
+				) {
+					const selectedAgent = filteredAgents[agentSelectedIndex];
+					if (selectedAgent) {
+						handleAgentSelect(selectedAgent);
+						setShowAgentPicker(false);
+						setAgentSelectedIndex(0);
+					}
+				}
+				return;
+			}
+
+			// Allow typing to filter - don't block regular input
+			// The input will be processed below and updateAgentPickerState will be called
+			// which will update the filter automatically
+		}
 
 		// Handle history menu navigation
 		if (showHistoryMenu) {
@@ -596,12 +609,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				inputStartCursorPos.current = buffer.getCursorPosition();
 			}
 
-		buffer.moveLeft();
-		const text = buffer.getFullText();
-		const cursorPos = buffer.getCursorPosition();
-		updateFilePickerState(text, cursorPos);
-		updateAgentPickerState(text, cursorPos);
-		triggerUpdate();
+			buffer.moveLeft();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
+			updateAgentPickerState(text, cursorPos);
+			triggerUpdate();
 			return;
 		}
 
@@ -625,12 +638,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				inputStartCursorPos.current = buffer.getCursorPosition();
 			}
 
-		buffer.moveRight();
-		const text = buffer.getFullText();
-		const cursorPos = buffer.getCursorPosition();
-		updateFilePickerState(text, cursorPos);
-		updateAgentPickerState(text, cursorPos);
-		triggerUpdate();
+			buffer.moveRight();
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateFilePickerState(text, cursorPos);
+			updateAgentPickerState(text, cursorPos);
+			triggerUpdate();
 			return;
 		}
 
@@ -665,26 +678,26 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// 2. Cursor at start of single line -> navigate history
 			// 3. Otherwise -> normal cursor movement
 			if (isEmpty || (!hasNewline && isAtStart)) {
-			const navigated = navigateHistoryUp();
-			if (navigated) {
-				updateFilePickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateAgentPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				triggerUpdate();
-				return;
+				const navigated = navigateHistoryUp();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateAgentPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
 			}
-		}
 
-		// Normal cursor movement
-		buffer.moveUp();
-		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		triggerUpdate();
+			// Normal cursor movement
+			buffer.moveUp();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			triggerUpdate();
 			return;
 		}
 
@@ -718,27 +731,27 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// 1. Empty input box -> navigate history (if in history mode)
 			// 2. Cursor at end of single line -> navigate history (if in history mode)
 			// 3. Otherwise -> normal cursor movement
-		if ((isEmpty || (!hasNewline && isAtEnd)) && currentHistoryIndex !== -1) {
-			const navigated = navigateHistoryDown();
-			if (navigated) {
-				updateFilePickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateAgentPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				triggerUpdate();
-				return;
+			if ((isEmpty || (!hasNewline && isAtEnd)) && currentHistoryIndex !== -1) {
+				const navigated = navigateHistoryDown();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateAgentPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
 			}
-		}
 
-		// Normal cursor movement
-		buffer.moveDown();
-		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		triggerUpdate();
+			// Normal cursor movement
+			buffer.moveDown();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			triggerUpdate();
 			return;
 		}
 
@@ -758,15 +771,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const isSingleCharInput = input.length === 1;
 
 			if (isSingleCharInput) {
-			// For single character input (normal typing), insert immediately
-			// This prevents the "disappearing text" issue at line start
-			buffer.insert(input);
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateCommandPanelState(text);
-			updateFilePickerState(text, cursorPos);
-			updateAgentPickerState(text, cursorPos);
-			triggerUpdate();
+				// For single character input (normal typing), insert immediately
+				// This prevents the "disappearing text" issue at line start
+				buffer.insert(input);
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
+				triggerUpdate();
 			} else {
 				// For multi-character input (paste), use the buffering mechanism
 				// Save cursor position when starting new input accumulation
@@ -791,14 +804,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				// Simple static message - no progress animation
 				if (currentLength > 300 && !isPasting.current) {
 					isPasting.current = true;
-				buffer.insertPastingIndicator();
-				// Trigger UI update to show the indicator
-				const text = buffer.getFullText();
-				const cursorPos = buffer.getCursorPosition();
-				updateCommandPanelState(text);
-				updateFilePickerState(text, cursorPos);
-				updateAgentPickerState(text, cursorPos);
-				triggerUpdate();
+					buffer.insertPastingIndicator();
+					// Trigger UI update to show the indicator
+					const text = buffer.getFullText();
+					const cursorPos = buffer.getCursorPosition();
+					updateCommandPanelState(text);
+					updateFilePickerState(text, cursorPos);
+					updateAgentPickerState(text, cursorPos);
+					triggerUpdate();
 				}
 
 				// Set timer to process accumulated input - fixed 100ms
@@ -836,13 +849,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						// Reset inputStartCursorPos after processing to prevent stale position
 						inputStartCursorPos.current = buffer.getCursorPosition();
 
-				const text = buffer.getFullText();
-				const cursorPos = buffer.getCursorPosition();
-				updateCommandPanelState(text);
-				updateFilePickerState(text, cursorPos);
-				updateAgentPickerState(text, cursorPos);
-				triggerUpdate();
-			}
+						const text = buffer.getFullText();
+						const cursorPos = buffer.getCursorPosition();
+						updateCommandPanelState(text);
+						updateFilePickerState(text, cursorPos);
+						updateAgentPickerState(text, cursorPos);
+						triggerUpdate();
+					}
 				}, 100); // Fixed 100ms
 			}
 		}

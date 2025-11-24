@@ -336,7 +336,7 @@ export const zh: TranslationKeys = {
 		navigateHistory: '↑/↓ - 导航命令/消息历史',
 		selectItem: 'Tab/Enter - 在选择器中选择项目',
 		cancelClose: 'ESC - 取消/关闭选择器或中断 AI 响应',
-		toggleYolo: 'Shift+Tab - 切换 YOLO 模式(自动批准工具)',
+		toggleYolo: 'Shift+Tab/Ctrl+Y - 切换 YOLO 模式(自动批准工具)',
 		tipsTitle: '💡 提示:',
 		tipUseHelp: '随时使用 /help 查看此信息',
 		tipShowCommands: '输入 / 查看所有可用命令',
@@ -376,7 +376,7 @@ export const zh: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: '询问代码说明和调试帮助',
 		headerInterrupt: '在响应期间按 ESC 中断',
-		headerYolo: '按 Shift+Tab: 切换 YOLO',
+		headerYolo: '按 Shift+Tab/Ctrl+Y: 切换 YOLO',
 		headerShortcuts:
 			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目录: {directory}',
@@ -472,7 +472,8 @@ export const zh: TranslationKeys = {
 		ideConnecting: '连接到 IDE...',
 		ideConnected: 'IDE 已连接',
 		ideDisconnected: 'IDE 已断开',
-		ideError: '连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
+		ideError:
+			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已选择 {count} 个字符',
 		// Input
@@ -488,7 +489,7 @@ export const zh: TranslationKeys = {
 		shortcutDeleteToEnd: '删除至末尾',
 		shortcutCancel: '取消 (ESC)',
 		shortcutRegenerate: '重新生成 (Ctrl+R)',
-		shortcutToggleYolo: '切换 YOLO (Shift+Tab)',
+		shortcutToggleYolo: '切换 YOLO (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '确认回滚',
 		rollbackFiles: '回滚文件',

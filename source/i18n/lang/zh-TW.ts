@@ -336,7 +336,7 @@ export const zhTW: TranslationKeys = {
 		navigateHistory: '↑/↓ - 導航命令/訊息歷史',
 		selectItem: 'Tab/Enter - 在選擇器中選擇項目',
 		cancelClose: 'ESC - 取消/關閉選擇器或中斷 AI 回應',
-		toggleYolo: 'Shift+Tab - 切換 YOLO 模式(自動批准工具)',
+		toggleYolo: 'Shift+Tab/Ctrl+Y - 切換 YOLO 模式(自動批准工具)',
 		tipsTitle: '💡 提示:',
 		tipUseHelp: '隨時使用 /help 查看此資訊',
 		tipShowCommands: '輸入 / 查看所有可用命令',
@@ -376,7 +376,7 @@ export const zhTW: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: '詢問程式碼說明和偵錯協助',
 		headerInterrupt: '在回應期間按 ESC 中斷',
-		headerYolo: '按 Shift+Tab: 切換 YOLO',
+		headerYolo: '按 Shift+Tab/Ctrl+Y: 切換 YOLO',
 		headerShortcuts:
 			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目錄: {directory}',
@@ -489,7 +489,7 @@ export const zhTW: TranslationKeys = {
 		shortcutDeleteToEnd: '刪除至末尾',
 		shortcutCancel: '取消 (ESC)',
 		shortcutRegenerate: '重新產生 (Ctrl+R)',
-		shortcutToggleYolo: '切換 YOLO (Shift+Tab)',
+		shortcutToggleYolo: '切換 YOLO (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '確認回復',
 		rollbackFiles: '回復檔案',
