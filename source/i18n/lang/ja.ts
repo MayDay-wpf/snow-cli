@@ -506,7 +506,7 @@ export const ja: TranslationKeys = {
 		shortcutDeleteToEnd: '末尾まで削除',
 		shortcutCancel: 'キャンセル (ESC)',
 		shortcutRegenerate: '再生成 (Ctrl+R)',
-		shortcutToggleYolo: 'YOLOを切替 (Shift+Tab)',
+		shortcutToggleYolo: 'YOLOを切替 (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'ロールバックを確認',
 		rollbackFiles: 'ファイルをロールバック',

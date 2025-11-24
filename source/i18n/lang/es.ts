@@ -543,7 +543,7 @@ export const es: TranslationKeys = {
 		shortcutDeleteToEnd: 'Eliminar hasta final',
 		shortcutCancel: 'Cancelar (ESC)',
 		shortcutRegenerate: 'Regenerar (Ctrl+R)',
-		shortcutToggleYolo: 'Alternar YOLO (Shift+Tab)',
+		shortcutToggleYolo: 'Alternar YOLO (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirmar Reversión',
 		rollbackFiles: 'Revertir Archivos',

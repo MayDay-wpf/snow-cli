@@ -495,7 +495,7 @@ export const ko: TranslationKeys = {
 		shortcutDeleteToEnd: '끝까지 삭제',
 		shortcutCancel: '취소 (ESC)',
 		shortcutRegenerate: '재생성 (Ctrl+R)',
-		shortcutToggleYolo: 'YOLO 토글 (Shift+Tab)',
+		shortcutToggleYolo: 'YOLO 토글 (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '롤백 확인',
 		rollbackFiles: '파일 롤백',
