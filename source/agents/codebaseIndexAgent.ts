@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import ignore, {type Ignore} from 'ignore';
+import chokidar from 'chokidar';
 import {logger} from '../utils/logger.js';
 import {CodebaseDatabase, type CodeChunk} from '../utils/codebaseDatabase.js';
 import {createEmbeddings} from '../api/embedding.js';
@@ -37,7 +38,7 @@ export class CodebaseIndexAgent {
 	private progressCallback?: ProgressCallback;
 	private consecutiveFailures: number = 0;
 	private readonly MAX_CONSECUTIVE_FAILURES = 3;
-	private fileWatcher: fs.FSWatcher | null = null;
+	private fileWatcher: any | null = null;
 	private watchDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
 	// Supported code file extensions
@@ -103,6 +104,8 @@ export class CodebaseIndexAgent {
 			return;
 		}
 
+		// Reload config to check if it was changed
+		this.config = loadCodebaseConfig();
 		if (!this.config.enabled) {
 			logger.info('Codebase indexing is disabled');
 			return;
@@ -240,6 +243,9 @@ export class CodebaseIndexAgent {
 		logger.info('Stopping indexing...');
 		this.shouldStop = true;
 
+		// Also stop file watcher to ensure everything is stopped
+		this.stopWatching();
+
 		// Wait for current operation to finish
 		while (this.isRunning) {
 			await new Promise(resolve => setTimeout(resolve, 100));
@@ -301,6 +307,8 @@ export class CodebaseIndexAgent {
 			return;
 		}
 
+		// Reload config to check if it was changed
+		this.config = loadCodebaseConfig();
 		if (!this.config.enabled) {
 			logger.info('Codebase indexing is disabled, not starting watcher');
 			return;
@@ -312,55 +320,59 @@ export class CodebaseIndexAgent {
 		}
 
 		try {
-			this.fileWatcher = fs.watch(
-				this.projectRoot,
-				{recursive: true},
-				(eventType, filename) => {
-					if (!filename) return;
-
-					// Convert to absolute path
-					const filePath = path.join(this.projectRoot, filename);
+			// Use chokidar for better cross-platform performance and reliability
+			// Reuse existing ignoreFilter to keep consistency with scanFiles
+			this.fileWatcher = chokidar.watch(this.projectRoot, {
+				ignored: (filePath: string) => {
 					const relativePath = path.relative(this.projectRoot, filePath);
-
-					// Check if file should be ignored
-					if (this.ignoreFilter.ignores(relativePath)) {
-						return;
+					// Skip empty paths (the root directory itself) and check ignore filter
+					if (!relativePath || relativePath === '.') {
+						return false;
 					}
-
-					// Check if it's a code file
-					const ext = path.extname(filename);
-					if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
-						return;
-					}
-
-					// Handle different event types:
-					// - 'rename': file created, deleted, or renamed
-					// - 'change': file content modified
-					const fileExists = fs.existsSync(filePath);
-
-					if (eventType === 'rename') {
-						if (fileExists) {
-							// File was created or renamed (new file appeared)
-							logger.debug(`File created/renamed, indexing: ${relativePath}`);
-							this.debounceFileChange(filePath, relativePath);
-						} else {
-							// File was deleted or renamed away
-							logger.debug(
-								`File deleted/renamed away, removing from index: ${relativePath}`,
-							);
-							this.db.deleteChunksByFile(relativePath);
-						}
-					} else if (eventType === 'change') {
-						// File content was modified
-						if (fileExists) {
-							logger.debug(`File modified, reindexing: ${relativePath}`);
-							this.debounceFileChange(filePath, relativePath);
-						}
-						// If file doesn't exist during 'change' event, it's likely a race condition
-						// The 'rename' event should handle the deletion
-					}
+					return this.ignoreFilter.ignores(relativePath);
 				},
-			);
+				ignoreInitial: true, // Don't trigger events for initial scan
+				awaitWriteFinish: {
+					stabilityThreshold: 1000, // Wait 1s after last change
+					pollInterval: 100,
+				},
+				persistent: true,
+			});
+
+			// Handle file added or changed
+			this.fileWatcher.on('add', (filePath: string) => {
+				const ext = path.extname(filePath);
+				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+					return;
+				}
+
+				const relativePath = path.relative(this.projectRoot, filePath);
+				logger.debug(`File created, indexing: ${relativePath}`);
+				this.debounceFileChange(filePath, relativePath);
+			});
+
+			this.fileWatcher.on('change', (filePath: string) => {
+				const ext = path.extname(filePath);
+				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+					return;
+				}
+
+				const relativePath = path.relative(this.projectRoot, filePath);
+				logger.debug(`File modified, reindexing: ${relativePath}`);
+				this.debounceFileChange(filePath, relativePath);
+			});
+
+			// Handle file deleted
+			this.fileWatcher.on('unlink', (filePath: string) => {
+				const ext = path.extname(filePath);
+				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+					return;
+				}
+
+				const relativePath = path.relative(this.projectRoot, filePath);
+				logger.debug(`File deleted, removing from index: ${relativePath}`);
+				this.db.deleteChunksByFile(relativePath);
+			});
 
 			// Persist watcher state to database
 			this.db.setWatcherEnabled(true);
@@ -506,7 +518,8 @@ export class CodebaseIndexAgent {
 				const relativePath = path.relative(this.projectRoot, fullPath);
 
 				// Check if should be ignored
-				if (this.ignoreFilter.ignores(relativePath)) {
+				// Skip empty paths (should not happen, but defensive check)
+				if (relativePath && relativePath !== '.' && this.ignoreFilter.ignores(relativePath)) {
 					continue;
 				}
 
@@ -605,12 +618,27 @@ export class CodebaseIndexAgent {
 				if (this.shouldStop) break;
 
 				try {
+					// Check if codebase feature was disabled
+					this.config = loadCodebaseConfig();
+					if (!this.config.enabled) {
+						logger.info('Codebase feature disabled, stopping indexing');
+						this.shouldStop = true;
+						break;
+					}
+
 					// Extract text content for embedding
 					const texts = batch.map(chunk => chunk.content);
+
+					// Check again before making API call
+					if (this.shouldStop) break;
 
 					// Call embedding API with retry
 					const response = await withRetry(
 						async () => {
+							// Check if stopped during retry
+							if (this.shouldStop) {
+								throw new Error('Indexing stopped by user');
+							}
 							return await createEmbeddings({
 								input: texts,
 							});

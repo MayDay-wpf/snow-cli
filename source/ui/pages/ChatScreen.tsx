@@ -58,10 +58,11 @@ import {logger} from '../../utils/logger.js';
 // Commands will be loaded dynamically after mount to avoid blocking initial render
 
 type Props = {
-	skipWelcome?: boolean;
+	autoResume?: boolean;
+	enableYolo?: boolean;
 };
 
-export default function ChatScreen({skipWelcome}: Props) {
+export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
 	const [messages, setMessages] = useState<Message[]>([]);
@@ -85,7 +86,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 		currentContextPercentageRef.current = currentContextPercentage;
 	}, [currentContextPercentage]);
 	const [yoloMode, setYoloMode] = useState(() => {
-		// Load yolo mode from localStorage on initialization
+		// If enableYolo prop is provided (from --yolo flag), use it
+		if (enableYolo !== undefined) {
+			return enableYolo;
+		}
+		// Otherwise load yolo mode from localStorage on initialization
 		try {
 			const saved = localStorage.getItem('snow-yolo-mode');
 			return saved === 'true';
@@ -179,10 +184,20 @@ export default function ChatScreen({skipWelcome}: Props) {
 	useEffect(() => {
 		const startCodebaseIndexing = async () => {
 			try {
+				// Always reload config to check for changes (e.g., from /home command)
 				const config = loadCodebaseConfig();
 
 				// Only start if enabled and not already indexing
 				if (!config.enabled || codebaseIndexing) {
+					// If codebase was disabled and agent is running, stop it
+					if (!config.enabled && codebaseAgentRef.current) {
+						logger.info('Codebase feature disabled, stopping agent');
+						await codebaseAgentRef.current.stop();
+						codebaseAgentRef.current.stopWatching();
+						codebaseAgentRef.current = null;
+						setCodebaseIndexing(false);
+						setWatcherEnabled(false);
+					}
 					return;
 				}
 
@@ -371,11 +386,11 @@ export default function ChatScreen({skipWelcome}: Props) {
 		return undefined;
 	}, [restoreInputContent]);
 
-	// Auto-resume last session when skipWelcome is true
+	// Auto-resume last session when autoResume is true
 	useEffect(() => {
-		if (!skipWelcome) return;
+		if (!autoResume) return;
 
-		const autoResume = async () => {
+		const resumeSession = async () => {
 			try {
 				const sessions = await sessionManager.listSessions();
 				if (sessions.length > 0) {
@@ -399,8 +414,8 @@ export default function ChatScreen({skipWelcome}: Props) {
 			}
 		};
 
-		autoResume();
-	}, [skipWelcome, initializeFromSession]);
+		resumeSession();
+	}, [autoResume, initializeFromSession]);
 
 	// Clear terminal and remount on terminal width change (like gemini-cli)
 	// Use debounce to avoid flickering during continuous resize

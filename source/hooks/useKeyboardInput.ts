@@ -148,6 +148,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const inputTimer = useRef<NodeJS.Timeout | null>(null);
 	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
 	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
+	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
 
 	// Cleanup timer on unmount
 	useEffect(() => {
@@ -538,6 +539,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Enter - submit message
 		if (key.return) {
+			// Prevent submission if multi-char input (paste/IME) is still being processed
+			if (isProcessingInput.current) {
+				return; // Ignore Enter key while processing
+			}
+
 			// Reset history navigation on submit
 			if (currentHistoryIndex !== -1) {
 				resetHistoryNavigation();
@@ -614,7 +620,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
-			triggerUpdate();
+			// No need to call triggerUpdate() - buffer.moveLeft() already triggers update via scheduleUpdate()
 			return;
 		}
 
@@ -643,7 +649,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
-			triggerUpdate();
+			// No need to call triggerUpdate() - buffer.moveRight() already triggers update via scheduleUpdate()
 			return;
 		}
 
@@ -697,7 +703,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			buffer.moveUp();
 			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			triggerUpdate();
+			// No need to call triggerUpdate() - buffer.moveUp() already triggers update via scheduleUpdate()
 			return;
 		}
 
@@ -751,7 +757,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			buffer.moveDown();
 			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			triggerUpdate();
+			// No need to call triggerUpdate() - buffer.moveDown() already triggers update via scheduleUpdate()
 			return;
 		}
 
@@ -767,10 +773,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// events may arrive out of order or be filtered by sanitizeInput
 			ensureFocus();
 
-			// Detect if this is a single character input (normal typing) or multi-character (paste)
+			// Detect if this is a single character input (normal typing) or multi-character (paste/IME)
 			const isSingleCharInput = input.length === 1;
 
-			if (isSingleCharInput) {
+			// Check if we're currently processing multi-char input (IME/paste)
+			// If yes, queue single-char input to preserve order
+			if (isSingleCharInput && !isProcessingInput.current) {
 				// For single character input (normal typing), insert immediately
 				// This prevents the "disappearing text" issue at line start
 				buffer.insert(input);
@@ -779,13 +787,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
-				triggerUpdate();
+				// No need to call triggerUpdate() here - buffer.insert() already triggers update via scheduleUpdate()
 			} else {
-				// For multi-character input (paste), use the buffering mechanism
+				// For multi-character input (paste/IME), use the buffering mechanism
 				// Save cursor position when starting new input accumulation
 				const isStartingNewInput = inputBuffer.current === '';
 				if (isStartingNewInput) {
 					inputStartCursorPos.current = buffer.getCursorPosition();
+					isProcessingInput.current = true; // Mark that we're processing multi-char input
 				}
 
 				// Accumulate input for paste detection
@@ -821,6 +830,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					const wasPasting = isPasting.current; // Save pasting state before clearing
 					inputBuffer.current = '';
 					isPasting.current = false; // Reset pasting state
+					isProcessingInput.current = false; // Reset processing flag
 
 					// If we accumulated input, insert it at the saved cursor position
 					// The insert() method will automatically remove the pasting indicator

@@ -12,61 +12,61 @@ import {loadCodebaseConfig} from '../utils/codebaseConfig.js';
  * This function is called to get the current system prompt with ROLE.md content if available
  */
 function getSystemPromptWithRole(): string {
-   try {
-      const cwd = process.cwd();
-      const roleFilePath = path.join(cwd, 'ROLE.md');
+	try {
+		const cwd = process.cwd();
+		const roleFilePath = path.join(cwd, 'ROLE.md');
 
-      // Check if ROLE.md exists and is not empty
-      if (fs.existsSync(roleFilePath)) {
-         const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
-         if (roleContent) {
-            // Replace the default role description with ROLE.md content
-            return SYSTEM_PROMPT_TEMPLATE.replace(
-               'You are Snow AI CLI, an intelligent command-line assistant.',
-               roleContent,
-            );
-         }
-      }
-   } catch (error) {
-      // If reading fails, fall back to default
-      console.error('Failed to read ROLE.md:', error);
-   }
+		// Check if ROLE.md exists and is not empty
+		if (fs.existsSync(roleFilePath)) {
+			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
+			if (roleContent) {
+				// Replace the default role description with ROLE.md content
+				return SYSTEM_PROMPT_TEMPLATE.replace(
+					'You are Snow AI CLI, an intelligent command-line assistant.',
+					roleContent,
+				);
+			}
+		}
+	} catch (error) {
+		// If reading fails, fall back to default
+		console.error('Failed to read ROLE.md:', error);
+	}
 
-   return SYSTEM_PROMPT_TEMPLATE;
+	return SYSTEM_PROMPT_TEMPLATE;
 }
 
 // Get system environment info
 function getSystemEnvironmentInfo(): string {
-   const platform = (() => {
-      const platformType = os.platform();
-      switch (platformType) {
-         case 'win32':
-            return 'Windows';
-         case 'darwin':
-            return 'macOS';
-         case 'linux':
-            return 'Linux';
-         default:
-            return platformType;
-      }
-   })();
+	const platform = (() => {
+		const platformType = os.platform();
+		switch (platformType) {
+			case 'win32':
+				return 'Windows';
+			case 'darwin':
+				return 'macOS';
+			case 'linux':
+				return 'Linux';
+			default:
+				return platformType;
+		}
+	})();
 
-   const shell = (() => {
-      const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-      const shellName = path.basename(shellPath).toLowerCase();
-      if (shellName.includes('cmd')) return 'cmd.exe';
-      if (shellName.includes('powershell') || shellName.includes('pwsh'))
-         return 'PowerShell';
-      if (shellName.includes('zsh')) return 'zsh';
-      if (shellName.includes('bash')) return 'bash';
-      if (shellName.includes('fish')) return 'fish';
-      if (shellName.includes('sh')) return 'sh';
-      return shellName || 'shell';
-   })();
+	const shell = (() => {
+		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
+		const shellName = path.basename(shellPath).toLowerCase();
+		if (shellName.includes('cmd')) return 'cmd.exe';
+		if (shellName.includes('powershell') || shellName.includes('pwsh'))
+			return 'PowerShell';
+		if (shellName.includes('zsh')) return 'zsh';
+		if (shellName.includes('bash')) return 'bash';
+		if (shellName.includes('fish')) return 'fish';
+		if (shellName.includes('sh')) return 'sh';
+		return shellName || 'shell';
+	})();
 
-   const workingDirectory = process.cwd();
+	const workingDirectory = process.cwd();
 
-   return `Platform: ${platform}
+	return `Platform: ${platform}
 Shell: ${shell}
 Working Directory: ${workingDirectory}`;
 }
@@ -79,7 +79,7 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 2. **ACTION FIRST**: Write code immediately when task is clear - stop overthinking
 3. **Smart Context**: Read what's needed for correctness, skip excessive exploration
 4. **Quality Verification**: run build/test after changes
-5. **NO Documentation Files**: NEVER create summary .md files after tasks unless the user asks to do so. - use \`notebook-add\` for important notes instead,And whenever you find that the notes are wrong or outdated, you need to take the initiative to modify them immediately, and do not leave invalid or wrong notes.
+5. **Documentation Files**: Avoid auto-generating summary .md files after completing tasks - use \`notebook-add\` to record important notes instead. However, when users explicitly request documentation files (such as README, API documentation, guides, technical specifications, etc.), you should create them normally. And whenever you find that the notes are wrong or outdated, you need to take the initiative to modify them immediately, and do not leave invalid or wrong notes.
 6. **Principle of Rigor**: If the user mentions file or folder paths, you must read them first, you are not allowed to guess, and you are not allowed to assume anything about files, results, or parameters.
 
 ## Execution Strategy - BALANCE ACTION & ANALYSIS
@@ -318,21 +318,21 @@ You need to run in a Node.js, If the user wants to close the Node.js process, yo
  * Directly reads from codebase config instead of checking tools parameter
  */
 function isCodebaseEnabled(): boolean {
-   try {
-      const config = loadCodebaseConfig();
-      return config.enabled;
-   } catch (error) {
-      // If config fails to load, assume disabled
-      return false;
-   }
+	try {
+		const config = loadCodebaseConfig();
+		return config.enabled;
+	} catch (error) {
+		// If config fails to load, assume disabled
+		return false;
+	}
 }
 
 /**
  * Generate workflow section based on available tools
  */
 function getWorkflowSection(hasCodebase: boolean): string {
-   if (hasCodebase) {
-      return `**Your workflow:**
+	if (hasCodebase) {
+		return `**Your workflow:**
 1. **START WITH \`codebase-search\`** - Your PRIMARY tool for code exploration (use for 90% of understanding tasks)
    - Query by intent: "authentication logic", "error handling", "validation patterns"
    - Returns relevant code with full context - dramatically faster than manual file reading
@@ -343,8 +343,8 @@ function getWorkflowSection(hasCodebase: boolean): string {
 6. Verify with build
 
 **Key principle:** codebase-search first, ACE tools for precision only`;
-   } else {
-      return `**Your workflow:**
+	} else {
+		return `**Your workflow:**
 1. Read the primary file(s) mentioned - USE BATCH READ if multiple files
 2. Use \\\`ace-search_symbols\\\`, \\\`ace-find_definition\\\`, or \\\`ace-find_references\\\` to find related code
 3. Check dependencies/imports that directly impact the change
@@ -362,15 +362,15 @@ When dealing with 2+ files, ALWAYS prefer batch operations:
 - Multiple reads? Use \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\` in ONE call
 - Multiple edits? Use \\\`filesystem-edit_search(filePath=[{...}, {...}])\\\` in ONE call
 - This is NOT optional for efficiency - batch operations are the EXPECTED workflow`;
-   }
+	}
 }
 /**
  * Generate code search section based on available tools
  */
 function getCodeSearchSection(hasCodebase: boolean): string {
-   if (hasCodebase) {
-      // When codebase tool is available, prioritize it heavily
-      return `**Code Search Strategy:**
+	if (hasCodebase) {
+		// When codebase tool is available, prioritize it heavily
+		return `**Code Search Strategy:**
 
 **PRIMARY TOOL - \`codebase-search\` (Semantic Search):**
 - **USE THIS FIRST for 90% of code exploration tasks**
@@ -385,31 +385,31 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 - \`ace-text_search\` - Literal string search (TODOs, log messages, exact error strings)
 
 **Golden rule:** Try codebase-search first, use ACE tools only for precise symbol lookup`;
-   } else {
-      // When codebase tool is NOT available, only show ACE
-      return `**Code Search Strategy:**
+	} else {
+		// When codebase tool is NOT available, only show ACE
+		return `**Code Search Strategy:**
 - \`ace-semantic_search\` - Symbol search with fuzzy matching and filtering
 - \`ace-find_definition\` - Go to definition of a symbol
 - \`ace-find_references\` - Find all usages of a symbol
 - \`ace-text_search\` - Literal text/regex search (for strings, comments, TODOs)`;
-   }
+	}
 }
 
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
 export function getSystemPrompt(): string {
-   const basePrompt = getSystemPromptWithRole();
-   const systemEnv = getSystemEnvironmentInfo();
-   const hasCodebase = isCodebaseEnabled();
-   // Generate dynamic sections
-   const workflowSection = getWorkflowSection(hasCodebase);
-   const codeSearchSection = getCodeSearchSection(hasCodebase);
+	const basePrompt = getSystemPromptWithRole();
+	const systemEnv = getSystemEnvironmentInfo();
+	const hasCodebase = isCodebaseEnabled();
+	// Generate dynamic sections
+	const workflowSection = getWorkflowSection(hasCodebase);
+	const codeSearchSection = getCodeSearchSection(hasCodebase);
 
-   // Replace placeholders with actual content
-   const finalPrompt = basePrompt
-      .replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
-      .replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
+	// Replace placeholders with actual content
+	const finalPrompt = basePrompt
+		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
+		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
 
-   return `${finalPrompt}
+	return `${finalPrompt}
 
 ## System Environment
 

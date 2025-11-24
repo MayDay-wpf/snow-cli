@@ -295,6 +295,7 @@ export class TextBuffer {
 			// 单行模式：移动到行首
 			this.cursorIndex = 0;
 			this.recomputeVisualCursorOnly();
+			this.scheduleUpdate();
 			return;
 		}
 
@@ -304,6 +305,7 @@ export class TextBuffer {
 		}
 
 		this.moveCursorToVisualRow(currentRow - 1);
+		this.scheduleUpdate();
 	}
 
 	moveDown(): void {
@@ -317,6 +319,7 @@ export class TextBuffer {
 			// 单行模式：移动到行尾
 			this.cursorIndex = cpLen(this.content);
 			this.recomputeVisualCursorOnly();
+			this.scheduleUpdate();
 			return;
 		}
 
@@ -326,6 +329,7 @@ export class TextBuffer {
 		}
 
 		this.moveCursorToVisualRow(currentRow + 1);
+		this.scheduleUpdate();
 	}
 
 	/**

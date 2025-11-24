@@ -126,12 +126,14 @@ Usage
   $ snow --ask "your prompt"
 
 Options
-		--help     Show help
-		--version  Show version
-		--update   Update to latest version
-		-c         Skip welcome screen and resume last conversation
-		--ask      Quick question mode (headless mode with single prompt)
-		--dev      Enable developer mode with persistent userId for testing
+		--help        Show help
+		--version     Show version
+		--update      Update to latest version
+		-c            Skip welcome screen and resume last conversation
+		--ask         Quick question mode (headless mode with single prompt)
+		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
+		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
+		--dev         Enable developer mode with persistent userId for testing
 `,
 	{
 		importMeta: import.meta,
@@ -146,6 +148,15 @@ Options
 			},
 			ask: {
 				type: 'string',
+			},
+			yolo: {
+				type: 'boolean',
+				default: false,
+			},
+			cYolo: {
+				type: 'boolean',
+				default: false,
+				alias: 'c-yolo',
 			},
 			dev: {
 				type: 'boolean',
@@ -177,13 +188,17 @@ if (cli.flags.update) {
 const Startup = ({
 	version,
 	skipWelcome,
+	autoResume,
 	headlessPrompt,
 	isDevMode,
+	enableYolo,
 }: {
 	version: string | undefined;
 	skipWelcome: boolean;
+	autoResume: boolean;
 	headlessPrompt?: string;
 	isDevMode: boolean;
+	enableYolo: boolean;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
 	const [AppComponent, setAppComponent] = React.useState<any>(null);
@@ -270,7 +285,9 @@ const Startup = ({
 		<AppComponent
 			version={version}
 			skipWelcome={skipWelcome}
+			autoResume={autoResume}
 			headlessPrompt={headlessPrompt}
+			enableYolo={enableYolo}
 		/>
 	);
 };
@@ -308,9 +325,11 @@ process.on('SIGTERM', () => {
 render(
 	<Startup
 		version={VERSION}
-		skipWelcome={cli.flags.c}
+		skipWelcome={Boolean(cli.flags.c || cli.flags.yolo || cli.flags.cYolo)}
+		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
 		headlessPrompt={cli.flags.ask}
 		isDevMode={cli.flags.dev}
+		enableYolo={Boolean(cli.flags.yolo || cli.flags.cYolo)}
 	/>,
 	{
 		exitOnCtrlC: false,

@@ -116,7 +116,8 @@ export default function ConfigScreen({
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
-	const [enablePromptOptimization, setEnablePromptOptimization] = useState(true);
+	const [enablePromptOptimization, setEnablePromptOptimization] =
+		useState(true);
 	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
@@ -179,12 +180,12 @@ export default function ConfigScreen({
 	const getAllFields = (): ConfigField[] => {
 		return [
 			'profile',
-		'baseUrl',
-		'apiKey',
-		'requestMethod',
-		'enablePromptOptimization',
-		'enableAutoCompress',
-		...(requestMethod === 'anthropic'
+			'baseUrl',
+			'apiKey',
+			'requestMethod',
+			'enablePromptOptimization',
+			'enableAutoCompress',
+			...(requestMethod === 'anthropic'
 				? [
 						'anthropicBeta' as ConfigField,
 						'thinkingEnabled' as ConfigField,
@@ -268,23 +269,23 @@ export default function ConfigScreen({
 		const loadedProfiles = getAllProfiles();
 		setProfiles(loadedProfiles);
 
-	// Load current config
-	const config = getOpenAiConfig();
-	setBaseUrl(config.baseUrl);
-	setApiKey(config.apiKey);
-	setRequestMethod(config.requestMethod || 'chat');
-	setAnthropicBeta(config.anthropicBeta || false);
-	setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
-	setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
-	setThinkingEnabled(config.thinking?.type === 'enabled' || false);
-	setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
-	setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
-	setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
-	setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
-	setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
-	setAdvancedModel(config.advancedModel || '');
-	setBasicModel(config.basicModel || '');
-	setMaxContextTokens(config.maxContextTokens || 4000);
+		// Load current config
+		const config = getOpenAiConfig();
+		setBaseUrl(config.baseUrl);
+		setApiKey(config.apiKey);
+		setRequestMethod(config.requestMethod || 'chat');
+		setAnthropicBeta(config.anthropicBeta || false);
+		setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
+		setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
+		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
+		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
+		setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
+		setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
+		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
+		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
+		setAdvancedModel(config.advancedModel || '');
+		setBasicModel(config.basicModel || '');
+		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setCompactModelName(config.compactModel?.modelName || '');
 		setActiveProfile(getActiveProfileName());
@@ -449,18 +450,18 @@ export default function ConfigScreen({
 			requestMethod,
 		});
 		if (validationErrors.length === 0) {
-		const config: Partial<ApiConfig> = {
-			baseUrl,
-			apiKey,
-			requestMethod,
-			anthropicBeta,
-			enablePromptOptimization,
-			enableAutoCompress,
-			advancedModel,
-			basicModel,
-			maxContextTokens,
-			maxTokens,
-		};
+			const config: Partial<ApiConfig> = {
+				baseUrl,
+				apiKey,
+				requestMethod,
+				anthropicBeta,
+				enablePromptOptimization,
+				enableAutoCompress,
+				advancedModel,
+				basicModel,
+				maxContextTokens,
+				maxTokens,
+			};
 
 			// Save thinking configuration (always save to preserve settings)
 			if (thinkingEnabled) {
@@ -501,32 +502,33 @@ export default function ConfigScreen({
 
 			// Also save to the current profile
 			try {
-			const fullConfig = {
-			snowcfg: {
-				baseUrl,
-				apiKey,
-				requestMethod,
-				anthropicBeta,
-				enablePromptOptimization,
-				enableAutoCompress,
-				thinking: thinkingEnabled
-						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
-						: undefined,
-					geminiThinking: geminiThinkingEnabled
-						? {enabled: true, budget: geminiThinkingBudget}
-						: undefined,
-					responsesReasoning: {
-						enabled: responsesReasoningEnabled,
-						effort: responsesReasoningEffort,
+				const fullConfig = {
+					snowcfg: {
+						baseUrl,
+						apiKey,
+						requestMethod,
+						anthropicBeta,
+						enablePromptOptimization,
+						enableAutoCompress,
+						thinking: thinkingEnabled
+							? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
+							: undefined,
+						geminiThinking: geminiThinkingEnabled
+							? {enabled: true, budget: geminiThinkingBudget}
+							: undefined,
+						responsesReasoning: {
+							enabled: responsesReasoningEnabled,
+							effort: responsesReasoningEffort,
+						},
+						advancedModel,
+						basicModel,
+						maxContextTokens,
+						maxTokens,
+						compactModel: compactModelName
+							? {modelName: compactModelName}
+							: undefined,
 					},
-					basicModel,
-					maxContextTokens,
-					maxTokens,
-					compactModel: compactModelName
-						? {modelName: compactModelName}
-						: undefined,
-				},
-			};
+				};
 				saveProfile(activeProfile, fullConfig as any);
 			} catch (err) {
 				console.error('Failed to save profile:', err);
@@ -546,51 +548,68 @@ export default function ConfigScreen({
 		const isCurrentlyEditing = isEditing && isActive;
 
 		switch (field) {
-		case 'profile':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-						{isActive ? '❯ ' : '  '}{t.configScreen.profile}
-					</Text>
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{profiles.find(p => p.name === activeProfile)?.displayName ||
-									activeProfile}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
+			case 'profile':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.profile}
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{profiles.find(p => p.name === activeProfile)?.displayName ||
+										activeProfile}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
-		case 'baseUrl':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-						{isActive ? '❯ ' : '  '}{t.configScreen.baseUrl}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<TextInput
-								value={baseUrl}
-								onChange={value => setBaseUrl(stripFocusArtifacts(value))}
-								placeholder="https://api.openai.com/v1"
-							/>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>{baseUrl || t.configScreen.notSet}</Text>
-						</Box>
-					)}
-				</Box>
-			);
+			case 'baseUrl':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.baseUrl}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={baseUrl}
+									onChange={value => setBaseUrl(stripFocusArtifacts(value))}
+									placeholder="https://api.openai.com/v1"
+								/>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{baseUrl || t.configScreen.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
 			case 'apiKey':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.apiKey}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.apiKey}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -605,7 +624,9 @@ export default function ConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuSecondary}>
-									{apiKey ? '*'.repeat(Math.min(apiKey.length, 20)) : t.configScreen.notSet}
+									{apiKey
+										? '*'.repeat(Math.min(apiKey.length, 20))
+										: t.configScreen.notSet}
 								</Text>
 							</Box>
 						)}
@@ -615,8 +636,13 @@ export default function ConfigScreen({
 			case 'requestMethod':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.requestMethod}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.requestMethod}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -629,57 +655,89 @@ export default function ConfigScreen({
 					</Box>
 				);
 
-		case 'anthropicBeta':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-						{isActive ? '❯ ' : '  '}{t.configScreen.anthropicBeta}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{anthropicBeta ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
-						</Text>
-					</Box>
-				</Box>
-			);
-
-		case 'enablePromptOptimization':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-						{isActive ? '❯ ' : '  '}{t.configScreen.enablePromptOptimization}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{enablePromptOptimization ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
-						</Text>
-					</Box>
-				</Box>
-			);
-
-		case 'enableAutoCompress':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-						{isActive ? '❯ ' : '  '}{t.configScreen.enableAutoCompress}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{enableAutoCompress ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
-						</Text>
-					</Box>
-				</Box>
-			);
-
-		case 'thinkingEnabled':
+			case 'anthropicBeta':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.thinkingEnabled}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.anthropicBeta}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{thinkingEnabled ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
+								{anthropicBeta
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'enablePromptOptimization':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.enablePromptOptimization}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{enablePromptOptimization
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'enableAutoCompress':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.enableAutoCompress}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{enableAutoCompress
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'thinkingEnabled':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.thinkingEnabled}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{thinkingEnabled
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -688,17 +746,26 @@ export default function ConfigScreen({
 			case 'thinkingBudgetTokens':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.thinkingBudgetTokens}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.thinkingBudgetTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuInfo}>{t.configScreen.enterValue} {thinkingBudgetTokens}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {thinkingBudgetTokens}
+								</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{thinkingBudgetTokens}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{thinkingBudgetTokens}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -707,12 +774,20 @@ export default function ConfigScreen({
 			case 'geminiThinkingEnabled':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.geminiThinkingEnabled}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.geminiThinkingEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{geminiThinkingEnabled ? t.configScreen.enabled : t.configScreen.disabled} {t.configScreen.toggleHint}
+								{geminiThinkingEnabled
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
 							</Text>
 						</Box>
 					</Box>
@@ -721,17 +796,26 @@ export default function ConfigScreen({
 			case 'geminiThinkingBudget':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.geminiThinkingBudget}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.geminiThinkingBudget}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuInfo}>{t.configScreen.enterValue} {geminiThinkingBudget}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {geminiThinkingBudget}
+								</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{geminiThinkingBudget}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{geminiThinkingBudget}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -740,12 +824,19 @@ export default function ConfigScreen({
 			case 'responsesReasoningEnabled':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.responsesReasoningEnabled}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.responsesReasoningEnabled}
 						</Text>
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{responsesReasoningEnabled ? t.configScreen.enabled : t.configScreen.disabled}{' '}
+								{responsesReasoningEnabled
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
 								{t.configScreen.toggleHint}
 							</Text>
 						</Box>
@@ -755,8 +846,13 @@ export default function ConfigScreen({
 			case 'responsesReasoningEffort':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.responsesReasoningEffort}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.responsesReasoningEffort}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
@@ -791,12 +887,19 @@ export default function ConfigScreen({
 			case 'advancedModel':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.advancedModel}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.advancedModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{advancedModel || t.configScreen.notSet}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{advancedModel || t.configScreen.notSet}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -805,12 +908,19 @@ export default function ConfigScreen({
 			case 'basicModel':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.basicModel}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.basicModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{basicModel || t.configScreen.notSet}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{basicModel || t.configScreen.notSet}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -819,12 +929,19 @@ export default function ConfigScreen({
 			case 'compactModelName':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.compactModel}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.compactModel}
 						</Text>
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{compactModelName || t.configScreen.notSet}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{compactModelName || t.configScreen.notSet}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -833,17 +950,26 @@ export default function ConfigScreen({
 			case 'maxContextTokens':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.maxContextTokens}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.maxContextTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuInfo}>{t.configScreen.enterValue} {maxContextTokens}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {maxContextTokens}
+								</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>{maxContextTokens}</Text>
+								<Text color={theme.colors.menuSecondary}>
+									{maxContextTokens}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -852,12 +978,19 @@ export default function ConfigScreen({
 			case 'maxTokens':
 				return (
 					<Box key={field} flexDirection="column">
-						<Text color={isActive ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{isActive ? '❯ ' : '  '}{t.configScreen.maxTokens}
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.maxTokens}
 						</Text>
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
-								<Text color={theme.colors.menuInfo}>{t.configScreen.enterValue} {maxTokens}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {maxTokens}
+								</Text>
 							</Box>
 						)}
 						{!isCurrentlyEditing && (
@@ -1181,7 +1314,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">{t.configScreen.createNewProfile}</Gradient>
+							<Gradient name="rainbow">
+								{t.configScreen.createNewProfile}
+							</Gradient>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.configScreen.enterProfileName}
 							</Text>
@@ -1250,9 +1385,7 @@ export default function ConfigScreen({
 				)}
 
 				<Box marginTop={1}>
-					<Alert variant="warning">
-						{t.configScreen.confirmHint}
-					</Alert>
+					<Alert variant="warning">{t.configScreen.confirmHint}</Alert>
 				</Box>
 			</Box>
 		);
@@ -1280,7 +1413,10 @@ export default function ConfigScreen({
 				<Box flexDirection="column">
 					<Box>
 						<Spinner type="dots" />
-						<Text color={theme.colors.menuInfo}> {t.configScreen.fetchingModels}</Text>
+						<Text color={theme.colors.menuInfo}>
+							{' '}
+							{t.configScreen.fetchingModels}
+						</Text>
 					</Box>
 					<Box marginLeft={2}>
 						<Text color={theme.colors.menuSecondary} dimColor>
@@ -1290,9 +1426,7 @@ export default function ConfigScreen({
 				</Box>
 
 				<Box flexDirection="column" marginTop={1}>
-					<Alert variant="info">
-						{t.configScreen.loadingCancelHint}
-					</Alert>
+					<Alert variant="info">{t.configScreen.loadingCancelHint}</Alert>
 				</Box>
 			</Box>
 		);
@@ -1309,7 +1443,9 @@ export default function ConfigScreen({
 						paddingX={2}
 					>
 						<Box flexDirection="column">
-							<Gradient name="rainbow">{t.configScreen.manualInputTitle}</Gradient>
+							<Gradient name="rainbow">
+								{t.configScreen.manualInputTitle}
+							</Gradient>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.configScreen.manualInputSubtitle}
 							</Text>
@@ -1319,7 +1455,9 @@ export default function ConfigScreen({
 
 				{loadError && (
 					<Box flexDirection="column" marginBottom={1}>
-						<Text color={theme.colors.warning}>{t.configScreen.loadingError}</Text>
+						<Text color={theme.colors.warning}>
+							{t.configScreen.loadingError}
+						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
 							{loadError}
 						</Text>
@@ -1373,7 +1511,8 @@ export default function ConfigScreen({
 			{/* Position indicator - always visible */}
 			<Box marginBottom={1}>
 				<Text color={theme.colors.warning} bold>
-					{t.configScreen.settingsPosition} ({currentFieldIndex + 1}/{totalFields})
+					{t.configScreen.settingsPosition} ({currentFieldIndex + 1}/
+					{totalFields})
 				</Text>
 				{totalFields > MAX_VISIBLE_FIELDS && (
 					<Text color={theme.colors.menuSecondary} dimColor>
@@ -1392,11 +1531,17 @@ export default function ConfigScreen({
 				currentField === 'responsesReasoningEffort') ? (
 				<Box flexDirection="column">
 					<Text color={theme.colors.menuSelected}>
-						❯ {currentField === 'profile' && t.configScreen.profile.replace(':', '')}
-						{currentField === 'requestMethod' && t.configScreen.requestMethod.replace(':', '')}
-						{currentField === 'advancedModel' && t.configScreen.advancedModel.replace(':', '')}
-						{currentField === 'basicModel' && t.configScreen.basicModel.replace(':', '')}
-						{currentField === 'compactModelName' && t.configScreen.compactModel.replace(':', '')}
+						❯{' '}
+						{currentField === 'profile' &&
+							t.configScreen.profile.replace(':', '')}
+						{currentField === 'requestMethod' &&
+							t.configScreen.requestMethod.replace(':', '')}
+						{currentField === 'advancedModel' &&
+							t.configScreen.advancedModel.replace(':', '')}
+						{currentField === 'basicModel' &&
+							t.configScreen.basicModel.replace(':', '')}
+						{currentField === 'compactModelName' &&
+							t.configScreen.compactModel.replace(':', '')}
 						{currentField === 'responsesReasoningEffort' &&
 							t.configScreen.responsesReasoningEffort.replace(':', '')}
 					</Text>
@@ -1423,11 +1568,15 @@ export default function ConfigScreen({
 								/>
 								<Box flexDirection="row" marginTop={1}>
 									<Box marginRight={2}>
-										<Text color={theme.colors.menuSelected}>{t.configScreen.newProfile}</Text>
+										<Text color={theme.colors.menuSelected}>
+											{t.configScreen.newProfile}
+										</Text>
 										<Text color={theme.colors.menuSecondary}> (n)</Text>
 									</Box>
 									<Box>
-										<Text color={theme.colors.error}>{t.configScreen.deleteProfileShort}</Text>
+										<Text color={theme.colors.error}>
+											{t.configScreen.deleteProfileShort}
+										</Text>
 										<Text color={theme.colors.menuSecondary}> (d)</Text>
 									</Box>
 								</Box>
@@ -1447,7 +1596,11 @@ export default function ConfigScreen({
 							currentField === 'basicModel' ||
 							currentField === 'compactModelName') && (
 							<Box flexDirection="column">
-								{searchTerm && <Text color={theme.colors.menuInfo}>Filter: {searchTerm}</Text>}
+								{searchTerm && (
+									<Text color={theme.colors.menuInfo}>
+										Filter: {searchTerm}
+									</Text>
+								)}
 								<Select
 									options={getCurrentOptions()}
 									defaultValue={getCurrentValue()}
@@ -1489,8 +1642,7 @@ export default function ConfigScreen({
 								t.configScreen.modelFilterHint}
 							{currentField === 'responsesReasoningEffort' &&
 								t.configScreen.effortSelectHint}
-							{currentField === 'profile' &&
-								t.configScreen.profileSelectHint}
+							{currentField === 'profile' && t.configScreen.profileSelectHint}
 							{currentField === 'requestMethod' &&
 								t.configScreen.requestMethodSelectHint}
 						</Alert>
@@ -1557,9 +1709,7 @@ export default function ConfigScreen({
 								: t.configScreen.editingHintGeneral}
 						</Alert>
 					) : (
-						<Alert variant="info">
-							{t.configScreen.navigationHint}
-						</Alert>
+						<Alert variant="info">{t.configScreen.navigationHint}</Alert>
 					)}
 				</Box>
 			)}

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.26
+
+- Introduce chokidar to improve file monitoring performance and reliability, add --yolo and --c-yolo commands, and add custom commands
+
 ## v0.4.25
 
 - Updated the multilingual copy to explain that connection failures do not affect usage

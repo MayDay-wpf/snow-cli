@@ -1,14 +1,15 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { TextBuffer, Viewport } from '../utils/textBuffer.js';
+import {useReducer, useCallback, useEffect, useRef} from 'react';
+import {TextBuffer, Viewport} from '../utils/textBuffer.js';
 
 export function useInputBuffer(viewport: Viewport) {
-	const [, setForceUpdateState] = useState({});
+	// Use useReducer for faster synchronous updates
+	const [, forceRender] = useReducer((x: number) => x + 1, 0);
 	const lastUpdateTime = useRef<number>(0);
 	const bufferRef = useRef<TextBuffer | null>(null);
 
 	// Stable forceUpdate function using useRef
 	const forceUpdateRef = useRef(() => {
-		setForceUpdateState({});
+		forceRender();
 	});
 
 	// Stable triggerUpdate function using useRef

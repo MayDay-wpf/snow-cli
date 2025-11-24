@@ -981,6 +981,7 @@ export async function executeMCPTool(
 				const pageContent = await webSearchService.fetchPage(
 					args.url,
 					args.maxLength,
+					args.isUserProvided, // Pass isUserProvided parameter
 					args.userQuery, // Pass optional userQuery parameter
 					abortSignal, // Pass abort signal
 					onTokenUpdate, // Pass token update callback

@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.25",
+	"version": "0.4.26",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -60,6 +60,7 @@
 		"@vercel/ncc": "^0.38.4",
 		"ava": "^5.2.0",
 		"chalk": "^5.2.0",
+		"chokidar": "^4.0.3",
 		"cli-highlight": "^2.1.11",
 		"diff": "^8.0.2",
 		"esbuild": "^0.27.0",

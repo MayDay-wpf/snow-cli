@@ -218,6 +218,7 @@ export class WebSearchService {
 	 * Fetch and extract content from a web page
 	 * @param url - URL of the web page to fetch
 	 * @param maxLength - Maximum content length (default: 50000 characters)
+	 * @param isUserProvided - Whether the URL is user-provided (true) or from search results (false)
 	 * @param userQuery - Optional user query for content extraction using compact model agent
 	 * @param abortSignal - Optional abort signal from main flow
 	 * @param onTokenUpdate - Optional callback to update token count during compression
@@ -226,6 +227,7 @@ export class WebSearchService {
 	async fetchPage(
 		url: string,
 		maxLength: number = 50000,
+		isUserProvided: boolean = false,
 		userQuery?: string,
 		abortSignal?: AbortSignal,
 		onTokenUpdate?: (tokenCount: number) => void,
@@ -331,8 +333,9 @@ export class WebSearchService {
 			await page.close();
 
 			// Use compact agent to extract key information if userQuery is provided
+			// Skip compression for user-provided URLs - return full cleaned content
 			let finalContent = cleanedContent;
-			if (userQuery) {
+			if (userQuery && !isUserProvided) {
 				try {
 					const {compactAgent} = await import('../agents/compactAgent.js');
 					const isAvailable = await compactAgent.isAvailable();
@@ -408,7 +411,7 @@ export const mcpTools = [
 	{
 		name: 'websearch-fetch',
 		description:
-			"Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **OPTIMIZATION**: ALWAYS provide the userQuery parameter with the user's original question. This enables automatic extraction of only relevant information using a compact AI model, which dramatically saves context and improves response quality.",
+			'Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **IMPORTANT**: The isUserProvided parameter determines whether content is compressed - user-provided URLs return full cleaned content, while search result URLs use AI compression.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -425,13 +428,18 @@ export const mcpTools = [
 					minimum: 1000,
 					maximum: 100000,
 				},
+				isUserProvided: {
+					type: 'boolean',
+					description:
+						'REQUIRED: Whether the URL is directly provided by the user (true) or from search results (false). If true, returns full cleaned content without AI compression. If false, uses compact AI model to extract relevant information based on userQuery.',
+				},
 				userQuery: {
 					type: 'string',
 					description:
-						"REQUIRED: User's original question or query. This is essential for intelligent content extraction - the compact AI model will extract only information relevant to this query, reducing content size by 80-95%. Always provide this parameter.",
+						"Optional: User's original question or query. Only used when isUserProvided=false for intelligent content extraction - the compact AI model will extract only information relevant to this query, reducing content size by 80-95%.",
 				},
 			},
-			required: ['url'],
+			required: ['url', 'isUserProvided'],
 		},
 	},
 ];

@@ -6,10 +6,18 @@ import {Alert} from '@inkjs/ui';
 // Only load components when they are actually needed
 const WelcomeScreen = React.lazy(() => import('./ui/pages/WelcomeScreen.js'));
 const ChatScreen = React.lazy(() => import('./ui/pages/ChatScreen.js'));
-const HeadlessModeScreen = React.lazy(() => import('./ui/pages/HeadlessModeScreen.js'));
-const MCPConfigScreen = React.lazy(() => import('./ui/pages/MCPConfigScreen.js'));
-const SystemPromptConfigScreen = React.lazy(() => import('./ui/pages/SystemPromptConfigScreen.js'));
-const CustomHeadersScreen = React.lazy(() => import('./ui/pages/CustomHeadersScreen.js'));
+const HeadlessModeScreen = React.lazy(
+	() => import('./ui/pages/HeadlessModeScreen.js'),
+);
+const MCPConfigScreen = React.lazy(
+	() => import('./ui/pages/MCPConfigScreen.js'),
+);
+const SystemPromptConfigScreen = React.lazy(
+	() => import('./ui/pages/SystemPromptConfigScreen.js'),
+);
+const CustomHeadersScreen = React.lazy(
+	() => import('./ui/pages/CustomHeadersScreen.js'),
+);
 
 import {
 	useGlobalExit,
@@ -23,16 +31,22 @@ import {ThemeProvider} from './ui/contexts/ThemeContext.js';
 type Props = {
 	version?: string;
 	skipWelcome?: boolean;
+	autoResume?: boolean;
 	headlessPrompt?: string;
+	enableYolo?: boolean;
 };
 
 // Inner component that uses I18n context
 function AppContent({
 	version,
 	skipWelcome,
+	autoResume,
+	enableYolo,
 }: {
 	version?: string;
 	skipWelcome?: boolean;
+	autoResume?: boolean;
+	enableYolo?: boolean;
 }) {
 	const [currentView, setCurrentView] = useState<
 		'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders'
@@ -99,7 +113,11 @@ function AppContent({
 			case 'chat':
 				return (
 					<Suspense fallback={loadingFallback}>
-						<ChatScreen key={chatScreenKey} skipWelcome={skipWelcome} />
+						<ChatScreen
+							key={chatScreenKey}
+							autoResume={autoResume}
+							enableYolo={enableYolo}
+						/>
 					</Suspense>
 				);
 			case 'settings':
@@ -123,7 +141,9 @@ function AppContent({
 			case 'systemprompt':
 				return (
 					<Suspense fallback={loadingFallback}>
-						<SystemPromptConfigScreen onBack={() => setCurrentView('welcome')} />
+						<SystemPromptConfigScreen
+							onBack={() => setCurrentView('welcome')}
+						/>
 					</Suspense>
 				);
 			case 'customheaders':
@@ -153,7 +173,13 @@ function AppContent({
 	);
 }
 
-export default function App({version, skipWelcome, headlessPrompt}: Props) {
+export default function App({
+	version,
+	skipWelcome,
+	autoResume,
+	headlessPrompt,
+	enableYolo,
+}: Props) {
 	// If headless prompt is provided, use headless mode
 	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
 	if (headlessPrompt) {
@@ -176,7 +202,12 @@ export default function App({version, skipWelcome, headlessPrompt}: Props) {
 	return (
 		<I18nProvider>
 			<ThemeProvider>
-				<AppContent version={version} skipWelcome={skipWelcome} />
+				<AppContent
+					version={version}
+					skipWelcome={skipWelcome}
+					autoResume={autoResume}
+					enableYolo={enableYolo}
+				/>
 			</ThemeProvider>
 		</I18nProvider>
 	);
