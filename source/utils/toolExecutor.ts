@@ -185,6 +185,7 @@ export async function executeToolCall(
 				isToolAutoApproved,
 				yoloMode,
 				addToAlwaysApproved,
+				requestUserQuestion: onUserInteractionNeeded,
 			});
 
 			return {
