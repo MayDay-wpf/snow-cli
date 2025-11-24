@@ -1176,19 +1176,19 @@ export const mcpTools = [
 	{
 		name: 'ace-semantic_search',
 		description:
-			'ACE Code Search: 智能符号搜索与语义分析。支持多种搜索模式：(1) definition - 查找符号定义(函数/类/接口)；(2) usage - 查找符号引用位置；(3) implementation - 查找具体实现；(4) all - 综合搜索。支持模糊匹配、按语言和符号类型过滤。💡 提示：如果只需要查看单个文件的符号大纲，使用 ace-file_outline 更快。',
+			'ACE Code Search: Intelligent symbol search and semantic analysis. Supports multiple search modes: (1) definition - find symbol definitions (functions/classes/interfaces); (2) usage - find symbol reference locations; (3) implementation - find specific implementations; (4) all - comprehensive search. Supports fuzzy matching and filtering by language and symbol type. 💡 Tip: If you only need to view the symbol outline of a single file, use ace-file_outline for faster access.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				query: {
 					type: 'string',
-					description: '搜索查询 (符号名称或模式，支持模糊匹配如 "gfc" 匹配 "getFileContent")',
+					description: 'Search Query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent")',
 				},
 				searchType: {
 					type: 'string',
 					enum: ['definition', 'usage', 'implementation', 'all'],
 					description:
-						'搜索类型：definition (查找声明)、usage (查找使用)、implementation (查找实现)、all (全面搜索)',
+						'Search Types: definition (search for declarations), usage (search for usages), implementation (search for implementations), all (full search)',
 					default: 'all',
 				},
 				symbolType: {
@@ -1205,7 +1205,7 @@ export const mcpTools = [
 						'import',
 						'export',
 					],
-					description: '可选：按符号类型筛选 (function, class, variable等)',
+					description: 'Optionally, filter by symbol type (function, class, variable, etc.).',
 				},
 				language: {
 					type: 'string',
@@ -1218,11 +1218,11 @@ export const mcpTools = [
 						'java',
 						'csharp',
 					],
-					description: '可选：按编程语言筛选',
+					description: 'Optional: Filter by programming language',
 				},
 				maxResults: {
 					type: 'number',
-					description: '最大返回结果数 (默认: 50)',
+					description: 'Maximum number of returned results (default: 50)',
 					default: 50,
 				},
 			},

@@ -1,55 +1,72 @@
-import {useState, useCallback} from 'react';
+import {useState, useCallback, useMemo} from 'react';
 import {TextBuffer} from '../utils/textBuffer.js';
 import {useI18n} from '../i18n/index.js';
+import {getCustomCommands} from '../utils/commands/custom.js';
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
 
-	// Command Definition
-	const commands = [
-		{name: 'help', description: t.commandPanel.commands.help},
-		{name: 'clear', description: t.commandPanel.commands.clear},
-		{name: 'resume', description: t.commandPanel.commands.resume},
-		{name: 'mcp', description: t.commandPanel.commands.mcp},
-		{
-			name: 'yolo',
-			description: t.commandPanel.commands.yolo,
-		},
-		{
-			name: 'init',
-			description: t.commandPanel.commands.init,
-		},
-		{name: 'ide', description: t.commandPanel.commands.ide},
-		{
-			name: 'compact',
-			description: t.commandPanel.commands.compact,
-		},
-		{name: 'home', description: t.commandPanel.commands.home},
-		{
-			name: 'review',
-			description: t.commandPanel.commands.review,
-		},
-		{
-			name: 'role',
-			description: t.commandPanel.commands.role,
-		},
-		{
-			name: 'usage',
-			description: t.commandPanel.commands.usage,
-		},
-		{
-			name: 'export',
-			description: t.commandPanel.commands.export,
-		},
-		{
-			name: 'agent-',
-			description: t.commandPanel.commands.agent,
-		},
-		{
-			name: 'todo-',
-			description: t.commandPanel.commands.todo,
-		},
-	];
+	// Built-in commands - only depends on translation
+	const builtInCommands = useMemo(
+		() => [
+			{name: 'help', description: t.commandPanel.commands.help},
+			{name: 'clear', description: t.commandPanel.commands.clear},
+			{name: 'resume', description: t.commandPanel.commands.resume},
+			{name: 'mcp', description: t.commandPanel.commands.mcp},
+			{
+				name: 'yolo',
+				description: t.commandPanel.commands.yolo,
+			},
+			{
+				name: 'init',
+				description: t.commandPanel.commands.init,
+			},
+			{name: 'ide', description: t.commandPanel.commands.ide},
+			{
+				name: 'compact',
+				description: t.commandPanel.commands.compact,
+			},
+			{name: 'home', description: t.commandPanel.commands.home},
+			{
+				name: 'review',
+				description: t.commandPanel.commands.review,
+			},
+			{
+				name: 'role',
+				description: t.commandPanel.commands.role,
+			},
+			{
+				name: 'usage',
+				description: t.commandPanel.commands.usage,
+			},
+			{
+				name: 'export',
+				description: t.commandPanel.commands.export,
+			},
+			{
+				name: 'custom',
+				description: t.commandPanel.commands.custom || 'Add custom command',
+			},
+			{
+				name: 'agent-',
+				description: t.commandPanel.commands.agent,
+			},
+			{
+				name: 'todo-',
+				description: t.commandPanel.commands.todo,
+			},
+		],
+		[t],
+	);
+
+	// Get all commands (built-in + custom) - dynamically fetch custom commands
+	const getAllCommands = useCallback(() => {
+		const customCommands = getCustomCommands().map(cmd => ({
+			name: cmd.name,
+			description: cmd.description || cmd.command,
+		}));
+		return [...builtInCommands, ...customCommands];
+	}, [builtInCommands]);
 
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
@@ -61,13 +78,16 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 
 		const query = text.slice(1).toLowerCase();
 
+		// Get all commands (including latest custom commands)
+		const allCommands = getAllCommands();
+
 		// Filter and sort commands by priority
 		// Priority order:
 		// 1. Command starts with query (highest)
 		// 2. Command contains query
 		// 3. Description starts with query
 		// 4. Description contains query (lowest)
-		const filtered = commands
+		const filtered = allCommands
 			.filter(
 				command =>
 					command.name.toLowerCase().includes(query) ||
@@ -100,7 +120,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer, commands]);
+	}, [buffer, getAllCommands]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {
@@ -120,7 +140,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		setCommandSelectedIndex,
 		getFilteredCommands,
 		updateCommandPanelState,
-		commands,
+		getAllCommands, // Export function to get all commands dynamically
 		isProcessing, // Export isProcessing for CommandPanel to use
 	};
 }

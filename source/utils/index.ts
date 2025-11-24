@@ -3,6 +3,7 @@ import {Command} from '../types/index.js';
 // Import commands to register them
 import './commands/clear.js';
 import './commands/resume.js';
+import './commands/custom.js';
 
 // Export logger
 export {Logger, LogLevel, logger} from './logger.js';

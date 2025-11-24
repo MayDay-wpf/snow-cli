@@ -363,12 +363,27 @@ export const zhTW: TranslationKeys = {
 			role: '開啟或建立 ROLE.md 檔案以自訂 AI 助手角色',
 			usage: '查看帶有互動式圖表的令牌使用統計',
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
+			custom: '新增自訂命令並儲存到 ~/.snow/commands',
 			agent: '選擇並使用子代理處理特定任務',
 			todo: '從專案檔案搜尋並選擇 TODO 註解',
 		},
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
+	},
+	customCommand: {
+		title: 'Add Custom Command',
+		nameLabel: 'Command name:',
+		namePlaceholder: 'e.g., open',
+		commandLabel: 'Enter the command to execute:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: 'Select command type:',
+		typeExecute: 'Execute (run in terminal)',
+		typePrompt: 'Prompt (send to AI)',
+		confirmSave: 'Save this custom command? (y/n)',
+		confirmYes: 'Yes',
+		confirmNo: 'Cancel',
+		escCancel: 'Press ESC to cancel',
 	},
 	chatScreen: {
 		// Header

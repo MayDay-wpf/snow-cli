@@ -367,6 +367,7 @@ export type TranslationKeys = {
 			role: string;
 			usage: string;
 			export: string;
+			custom: string;
 			agent: string;
 			todo: string;
 		};
@@ -374,6 +375,21 @@ export type TranslationKeys = {
 	// Hooks
 	hooks: {
 		pressCtrlCAgain: string;
+	};
+	// Custom Command Config
+	customCommand: {
+		title: string;
+		nameLabel: string;
+		namePlaceholder: string;
+		commandLabel: string;
+		commandPlaceholder: string;
+		typeLabel: string;
+		typeExecute: string;
+		typePrompt: string;
+		confirmSave: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
 	};
 	// Chat Screen
 	chatScreen: {

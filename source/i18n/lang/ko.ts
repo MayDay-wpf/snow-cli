@@ -369,12 +369,27 @@ export const ko: TranslationKeys = {
 			role: 'ROLE.md 파일을 열거나 생성하여 AI 어시스턴트 역할 사용자 정의',
 			usage: '대화형 차트가 있는 토큰 사용 통계 보기',
 			export: '채팅 대화를 저장 대화상자가 있는 텍스트 파일로 내보내기',
+			custom: '사용자 정의 명령 추가 및 ~/.snow/commands에 저장',
 			agent: '하위 에이전트를 선택하고 특정 작업 처리',
 			todo: '프로젝트 파일에서 TODO 주석 검색 및 선택',
 		},
 	},
 	hooks: {
-		pressCtrlCAgain: 'Ctrl+C를 다시 눌러 종료',
+		pressCtrlCAgain: '再次按 Ctrl+C 退出',
+	},
+	customCommand: {
+		title: 'Add Custom Command',
+		nameLabel: 'Command name:',
+		namePlaceholder: 'e.g., open',
+		commandLabel: 'Enter the command to execute:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: 'Select command type:',
+		typeExecute: 'Execute (run in terminal)',
+		typePrompt: 'Prompt (send to AI)',
+		confirmSave: 'Save this custom command? (y/n)',
+		confirmYes: 'Yes',
+		confirmNo: 'Cancel',
+		escCancel: 'Press ESC to cancel',
 	},
 	chatScreen: {
 		// Header

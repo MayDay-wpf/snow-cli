@@ -146,6 +146,7 @@ type CommandHandlerOptions = {
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setMcpPanelKey: React.Dispatch<React.SetStateAction<number>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
@@ -282,6 +283,144 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showCustomCommandConfig'
+			) {
+				options.setShowCustomCommandConfig(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'executeCustomCommand' &&
+				result.prompt
+			) {
+				// Execute custom command (prompt type - send to AI)
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+				// Send command to AI for execution
+				options.processMessage(result.prompt, undefined, false, false);
+			} else if (
+				result.success &&
+				result.action === 'executeTerminalCommand' &&
+				result.prompt
+			) {
+				// Execute terminal command (execute type - run in terminal)
+				const {spawn} = require('child_process');
+
+				// Show executing status
+				const statusMessage: Message = {
+					role: 'command',
+					content: 'Executing...',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, statusMessage]);
+
+				// Use spawn for streaming output
+				const child = spawn('sh', ['-c', result.prompt], {
+					timeout: 30000,
+				});
+
+				let outputBuffer = '';
+
+				// Stream stdout
+				child.stdout.on('data', (data: Buffer) => {
+					const text = data.toString();
+					outputBuffer += text;
+
+					// Add new message for each chunk (plain output, no icons)
+					const chunkMessage: Message = {
+						role: 'assistant',
+						content: text,
+						plainOutput: true,
+					};
+					options.setMessages(prev => [...prev, chunkMessage]);
+				});
+
+				// Stream stderr
+				child.stderr.on('data', (data: Buffer) => {
+					const text = data.toString();
+					outputBuffer += text;
+
+					// Add new message for each chunk (plain output, no icons)
+					const chunkMessage: Message = {
+						role: 'assistant',
+						content: text,
+						plainOutput: true,
+					};
+					options.setMessages(prev => [...prev, chunkMessage]);
+				});
+
+				// Handle completion
+				child.on('close', () => {
+					// Remove executing status message
+					options.setMessages(prev =>
+						prev.filter(msg => msg !== statusMessage),
+					);
+
+					// If no output, add a message
+					if (!outputBuffer) {
+						const noOutputMessage: Message = {
+							role: 'command',
+							content: 'Command executed (no output)',
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, noOutputMessage]);
+					}
+				});
+
+				// Handle error
+				child.on('error', (error: any) => {
+					// Remove executing status message
+					options.setMessages(prev =>
+						prev.filter(msg => msg !== statusMessage),
+					);
+
+					// Add error message
+					const errorMessage: Message = {
+						role: 'command',
+						content: `Command failed: ${error.message}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				});
+			} else if (
+				result.success &&
+				result.action === 'deleteCustomCommand' &&
+				result.prompt
+			) {
+				// Delete custom command
+				const {
+					deleteCustomCommand,
+					registerCustomCommands,
+				} = require('../utils/commands/custom.js');
+
+				try {
+					await deleteCustomCommand(result.prompt);
+					await registerCustomCommands();
+
+					const successMessage: Message = {
+						role: 'command',
+						content: `Custom command '${result.prompt}' deleted successfully`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error: any) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: `Failed to delete command: ${error.message}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (result.success && result.action === 'home') {
 				// Reset terminal before navigating to welcome screen
 				resetTerminal(stdout);

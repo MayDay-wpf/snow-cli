@@ -28,6 +28,7 @@ import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
 // Utility functions
 import {
 	calculateSimilarity,
+	calculateSimilarityAsync,
 	normalizeForDisplay,
 } from './utils/filesystem/similarity.utils.js';
 import {
@@ -397,18 +398,18 @@ export class FilesystemMCPService {
 						const actualStartLine = fileStartLine ?? 1;
 						const actualEndLine = fileEndLine ?? totalLines;
 
-				// Validate and adjust line numbers
-				if (actualStartLine < 1) {
-					throw new Error(`Start line must be greater than 0 for ${file}`);
-				}
-				if (actualEndLine < actualStartLine) {
-					throw new Error(
-						`End line must be greater than or equal to start line for ${file}`,
-					);
-				}
-				// Auto-adjust if startLine exceeds file length
-				const start = Math.min(actualStartLine, totalLines);
-				const end = Math.min(totalLines, actualEndLine);
+						// Validate and adjust line numbers
+						if (actualStartLine < 1) {
+							throw new Error(`Start line must be greater than 0 for ${file}`);
+						}
+						if (actualEndLine < actualStartLine) {
+							throw new Error(
+								`End line must be greater than or equal to start line for ${file}`,
+							);
+						}
+						// Auto-adjust if startLine exceeds file length
+						const start = Math.min(actualStartLine, totalLines);
+						const end = Math.min(totalLines, actualEndLine);
 
 						// Extract specified lines
 						const selectedLines = lines.slice(start - 1, end);
@@ -550,16 +551,16 @@ export class FilesystemMCPService {
 			const actualStartLine = startLine ?? 1;
 			const actualEndLine = endLine ?? totalLines;
 
-		// Validate and adjust line numbers
-		if (actualStartLine < 1) {
-			throw new Error('Start line must be greater than 0');
-		}
-		if (actualEndLine < actualStartLine) {
-			throw new Error('End line must be greater than or equal to start line');
-		}
-		// Auto-adjust if startLine exceeds file length
-		const start = Math.min(actualStartLine, totalLines);
-		const end = Math.min(totalLines, actualEndLine);
+			// Validate and adjust line numbers
+			if (actualStartLine < 1) {
+				throw new Error('Start line must be greater than 0');
+			}
+			if (actualEndLine < actualStartLine) {
+				throw new Error('End line must be greater than or equal to start line');
+			}
+			// Auto-adjust if startLine exceeds file length
+			const start = Math.min(actualStartLine, totalLines);
+			const end = Math.min(totalLines, actualEndLine);
 
 			// Extract specified lines (convert to 0-indexed) and add line numbers
 			const selectedLines = lines.slice(start - 1, end);
@@ -605,37 +606,37 @@ export class FilesystemMCPService {
 				endLine: end,
 				totalLines,
 			};
-	} catch (error) {
-		// Try to fix common path issues if it's a file not found error
-		if (
-			error instanceof Error &&
-			error.message.includes('ENOENT') &&
-			typeof filePath === 'string'
-		) {
-			const fixedPath = await tryFixPath(filePath, this.basePath);
-			if (fixedPath && fixedPath !== filePath) {
-				// Verify the fixed path actually exists before suggesting
-				const fixedFullPath = this.resolvePath(fixedPath);
-				try {
-					await fs.access(fixedFullPath);
-					// File exists, provide helpful suggestion to AI
-					throw new Error(
-						`Failed to read file ${filePath}: ${
-							error instanceof Error ? error.message : 'Unknown error'
-						}\n💡 Tip: File not found. Did you mean "${fixedPath}"? Please use the correct path.`,
-					);
-				} catch {
-					// Fixed path also doesn't work, just throw original error
+		} catch (error) {
+			// Try to fix common path issues if it's a file not found error
+			if (
+				error instanceof Error &&
+				error.message.includes('ENOENT') &&
+				typeof filePath === 'string'
+			) {
+				const fixedPath = await tryFixPath(filePath, this.basePath);
+				if (fixedPath && fixedPath !== filePath) {
+					// Verify the fixed path actually exists before suggesting
+					const fixedFullPath = this.resolvePath(fixedPath);
+					try {
+						await fs.access(fixedFullPath);
+						// File exists, provide helpful suggestion to AI
+						throw new Error(
+							`Failed to read file ${filePath}: ${
+								error instanceof Error ? error.message : 'Unknown error'
+							}\n💡 Tip: File not found. Did you mean "${fixedPath}"? Please use the correct path.`,
+						);
+					} catch {
+						// Fixed path also doesn't work, just throw original error
+					}
 				}
 			}
-		}
 
-		throw new Error(
-			`Failed to read file ${filePath}: ${
-				error instanceof Error ? error.message : 'Unknown error'
-			}`,
-		);
-	}
+			throw new Error(
+				`Failed to read file ${filePath}: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
+		}
 	}
 
 	/**
@@ -870,23 +871,21 @@ export class FilesystemMCPService {
 				endLine: number;
 				similarity: number;
 			}> = [];
-			const threshold = 0.6; // Lowered to 60% to allow smaller partial edits (was 0.75)
+			// Original threshold - using async similarity for precision without UI freeze
+			const threshold = 0.6;
 
 			// Fast pre-filter: use first line as anchor to skip unlikely positions
 			// Only apply pre-filter for multi-line searches to avoid missing valid matches
-			const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
+			const searchFirstLine =
+				searchLines[0]?.replace(/\\s+/g, ' ').trim() || '';
 			const usePreFilter = searchLines.length >= 5; // Only pre-filter for 5+ line searches
-			const preFilterThreshold = 0.2; // Very low threshold - only skip completely unrelated lines
+			const preFilterThreshold = 0.2;
 			const maxMatches = 10; // Limit matches to avoid excessive computation
-			const YIELD_INTERVAL = 100; // Yield control every 100 iterations to prevent UI freeze
 
+			// Async similarity calculations yield to event loop automatically
 			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-				// Yield control periodically to prevent UI freeze
-				if (i % YIELD_INTERVAL === 0) {
-					await new Promise(resolve => setTimeout(resolve, 0));
-				}
-
 				// Quick pre-filter: check first line similarity (only for multi-line searches)
+				// Keep this synchronous as it's very fast
 				if (usePreFilter) {
 					const firstLineCandidate =
 						contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
@@ -896,20 +895,21 @@ export class FilesystemMCPService {
 						preFilterThreshold,
 					);
 
-					// Skip only if first line is very different (< 30% match)
+					// Skip only if first line is very different (< 20% match)
 					// This is safe because if first line differs this much, full match unlikely
 					if (firstLineSimilarity < preFilterThreshold) {
 						continue;
 					}
 				}
 
-				// Full candidate check
+				// Full candidate check - use async to prevent UI freeze
+				// The async similarity calculation yields to event loop, preventing UI freeze
 				const candidateLines = contentLines.slice(i, i + searchLines.length);
 				const candidateContent = candidateLines.join('\n');
-				const similarity = calculateSimilarity(
+				const similarity = await calculateSimilarityAsync(
 					normalizedSearch,
 					candidateContent,
-					threshold, // Pass threshold for early exit
+					threshold, // Pass threshold for early exit consideration
 				);
 
 				// Accept matches above threshold
@@ -944,24 +944,20 @@ export class FilesystemMCPService {
 					1,
 				);
 				if (unescapeFix) {
-					// Unescape succeeded! Re-run the matching with corrected content
+					// Unescape succeeded! Re-run the matching with corrected content using async
 					const correctedSearchLines = unescapeFix.correctedString.split('\n');
 					for (
 						let i = 0;
 						i <= contentLines.length - correctedSearchLines.length;
 						i++
 					) {
-						// Yield control periodically to prevent UI freeze
-						if (i % YIELD_INTERVAL === 0) {
-							await new Promise(resolve => setTimeout(resolve, 0));
-						}
-
 						const candidateLines = contentLines.slice(
 							i,
 							i + correctedSearchLines.length,
 						);
 						const candidateContent = candidateLines.join('\n');
-						const similarity = calculateSimilarity(
+						// Use async similarity to prevent UI freeze during unescape correction
+						const similarity = await calculateSimilarityAsync(
 							unescapeFix.correctedString,
 							candidateContent,
 						);
@@ -1424,40 +1420,40 @@ export class FilesystemMCPService {
 			const lines = content.split('\n');
 			const totalLines = lines.length;
 
-		// Validate line numbers
-		if (startLine < 1 || endLine < 1) {
-			throw new Error('Line numbers must be greater than 0');
-		}
-		if (startLine > endLine) {
-			throw new Error('Start line must be less than or equal to end line');
-		}
+			// Validate line numbers
+			if (startLine < 1 || endLine < 1) {
+				throw new Error('Line numbers must be greater than 0');
+			}
+			if (startLine > endLine) {
+				throw new Error('Start line must be less than or equal to end line');
+			}
 
-		// Adjust startLine and endLine if they exceed file length
-		const adjustedStartLine = Math.min(startLine, totalLines);
-		const adjustedEndLine = Math.min(endLine, totalLines);
-		const linesToModify = adjustedEndLine - adjustedStartLine + 1;
+			// Adjust startLine and endLine if they exceed file length
+			const adjustedStartLine = Math.min(startLine, totalLines);
+			const adjustedEndLine = Math.min(endLine, totalLines);
+			const linesToModify = adjustedEndLine - adjustedStartLine + 1;
 
-		// Backup file before editing
-		await incrementalSnapshotManager.backupFile(fullPath);
+			// Backup file before editing
+			await incrementalSnapshotManager.backupFile(fullPath);
 
-		// Extract the lines that will be replaced (for comparison)
-		// Compress whitespace for display readability
+			// Extract the lines that will be replaced (for comparison)
+			// Compress whitespace for display readability
 
-		const replacedLines = lines.slice(adjustedStartLine - 1, adjustedEndLine);
-		const replacedContent = replacedLines
-			.map((line, idx) => {
-				const lineNum = adjustedStartLine + idx;
-				return `${lineNum}→${normalizeForDisplay(line)}`;
-			})
-			.join('\n');
+			const replacedLines = lines.slice(adjustedStartLine - 1, adjustedEndLine);
+			const replacedContent = replacedLines
+				.map((line, idx) => {
+					const lineNum = adjustedStartLine + idx;
+					return `${lineNum}→${normalizeForDisplay(line)}`;
+				})
+				.join('\n');
 
-		// Calculate context range using smart boundary detection
-		const smartBoundaries = findSmartContextBoundaries(
-			lines,
-			adjustedStartLine,
-			adjustedEndLine,
-			contextLines,
-		);
+			// Calculate context range using smart boundary detection
+			const smartBoundaries = findSmartContextBoundaries(
+				lines,
+				adjustedStartLine,
+				adjustedEndLine,
+				contextLines,
+			);
 			const contextStart = smartBoundaries.start;
 			const contextEnd = smartBoundaries.end;
 
@@ -1470,16 +1466,16 @@ export class FilesystemMCPService {
 				})
 				.join('\n');
 
-		// Replace the specified lines
-		const newContentLines = newContent.split('\n');
-		const beforeLines = lines.slice(0, adjustedStartLine - 1);
-		const afterLines = lines.slice(adjustedEndLine);
-		const modifiedLines = [...beforeLines, ...newContentLines, ...afterLines];
+			// Replace the specified lines
+			const newContentLines = newContent.split('\n');
+			const beforeLines = lines.slice(0, adjustedStartLine - 1);
+			const afterLines = lines.slice(adjustedEndLine);
+			const modifiedLines = [...beforeLines, ...newContentLines, ...afterLines];
 
-		// Calculate new context range
-		const newTotalLines = modifiedLines.length;
-		const lineDifference =
-			newContentLines.length - (adjustedEndLine - adjustedStartLine + 1);
+			// Calculate new context range
+			const newTotalLines = modifiedLines.length;
+			const lineDifference =
+				newContentLines.length - (adjustedEndLine - adjustedStartLine + 1);
 			const newContextEnd = Math.min(
 				newTotalLines,
 				contextEnd + lineDifference,
@@ -1549,11 +1545,11 @@ export class FilesystemMCPService {
 				}
 			}
 
-		// Analyze code structure of the edited content (using formatted content if available)
-		const editedContentLines = finalLines.slice(
-			adjustedStartLine - 1,
-			adjustedStartLine - 1 + newContentLines.length,
-		);
+			// Analyze code structure of the edited content (using formatted content if available)
+			const editedContentLines = finalLines.slice(
+				adjustedStartLine - 1,
+				adjustedStartLine - 1 + newContentLines.length,
+			);
 			const structureAnalysis = analyzeCodeStructure(
 				finalLines.join('\n'),
 				filePath,
@@ -1575,14 +1571,14 @@ export class FilesystemMCPService {
 				// Ignore diagnostics errors - they are optional
 			}
 
-		const result: EditByLineSingleResult = {
-			message:
-				`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
-				`   Replaced: lines ${adjustedStartLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
-				`   Result: ${newContentLines.length} new lines` +
-				(smartBoundaries.extended
-					? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
-					: ''),
+			const result: EditByLineSingleResult = {
+				message:
+					`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
+					`   Replaced: lines ${adjustedStartLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
+					`   Result: ${newContentLines.length} new lines` +
+					(smartBoundaries.extended
+						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
+						: ''),
 				oldContent,
 				newContent: finalContextContent,
 				replacedLines: replacedContent,

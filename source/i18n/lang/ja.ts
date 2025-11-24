@@ -378,12 +378,27 @@ export const ja: TranslationKeys = {
 			usage: 'インタラクティブグラフ付きのトークン使用統計を表示',
 			export:
 				'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
+			custom: 'カスタムコマンドを追加して ~/.snow/commands に保存',
 			agent: 'サブエージェントを選択して特定のタスクを処理',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
 		},
 	},
 	hooks: {
-		pressCtrlCAgain: 'もう一度Ctrl+Cを押して終了',
+		pressCtrlCAgain: '再次按 Ctrl+C 退出',
+	},
+	customCommand: {
+		title: 'Add Custom Command',
+		nameLabel: 'Command name:',
+		namePlaceholder: 'e.g., open',
+		commandLabel: 'Enter the command to execute:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: 'Select command type:',
+		typeExecute: 'Execute (run in terminal)',
+		typePrompt: 'Prompt (send to AI)',
+		confirmSave: 'Save this custom command? (y/n)',
+		confirmYes: 'Yes',
+		confirmNo: 'Cancel',
+		escCancel: 'Press ESC to cancel',
 	},
 	chatScreen: {
 		// Header

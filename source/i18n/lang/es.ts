@@ -412,12 +412,27 @@ export const es: TranslationKeys = {
 			usage: 'Ver estadísticas de uso de tokens con gráficos interactivos',
 			export:
 				'Exportar conversación de chat a archivo de texto con diálogo de guardado',
+			custom: 'Agregar comando personalizado y guardar en ~/.snow/commands',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
 		},
 	},
 	hooks: {
 		pressCtrlCAgain: 'Presiona Ctrl+C nuevamente para salir',
+	},
+	customCommand: {
+		title: 'Agregar Comando Personalizado',
+		nameLabel: 'Nombre del comando:',
+		namePlaceholder: 'ej., open',
+		commandLabel: 'Ingrese el comando a ejecutar:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: 'Seleccionar tipo de comando:',
+		typeExecute: 'Ejecutar (ejecutar en terminal)',
+		typePrompt: 'Prompt (enviar a IA)',
+		confirmSave: '¿Guardar este comando personalizado? (y/n)',
+		confirmYes: 'Sí',
+		confirmNo: 'Cancelar',
+		escCancel: 'Presiona ESC para cancelar',
 	},
 	chatScreen: {
 		// Header

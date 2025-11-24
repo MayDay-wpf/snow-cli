@@ -9,6 +9,8 @@ export interface Message {
 	streaming?: boolean;
 	discontinued?: boolean;
 	commandName?: string;
+	hideCommandName?: boolean; // Don't show command name prefix for output chunks
+	plainOutput?: boolean; // Don't show any prefix/icon, just plain text
 	files?: SelectedFile[];
 	images?: Array<{
 		type: 'image';
@@ -26,6 +28,7 @@ export interface Message {
 	toolResult?: string; // Raw JSON string from tool execution for preview
 	toolCallId?: string; // Tool call ID for updating message in place
 	toolPending?: boolean; // Whether the tool is still executing
+	isExecuting?: boolean; // Whether a custom command is executing in terminal
 	terminalResult?: {
 		stdout?: string;
 		stderr?: string;

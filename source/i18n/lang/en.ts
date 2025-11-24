@@ -389,12 +389,27 @@ export const en: TranslationKeys = {
 			role: 'Open or create ROLE.md file to customize AI assistant role',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
+			custom: 'Add custom command and save to ~/.snow/commands',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
 		},
 	},
 	hooks: {
 		pressCtrlCAgain: 'Press Ctrl+C again to exit',
+	},
+	customCommand: {
+		title: 'Add Custom Command',
+		nameLabel: 'Command name:',
+		namePlaceholder: 'e.g., open',
+		commandLabel: 'Enter the command to execute:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: 'Select command type:',
+		typeExecute: 'Execute (run in terminal)',
+		typePrompt: 'Prompt (send to AI)',
+		confirmSave: 'Save this custom command? (y/n)',
+		confirmYes: 'Yes',
+		confirmNo: 'Cancel',
+		escCancel: 'Press ESC to cancel',
 	},
 	chatScreen: {
 		// Header

@@ -363,12 +363,27 @@ export const zh: TranslationKeys = {
 			role: '打开或创建 ROLE.md 文件以自定义 AI 助手角色',
 			usage: '查看带有交互式图表的令牌使用统计',
 			export: '将聊天对话导出到带保存对话框的文本文件',
+			custom: '添加自定义命令并保存到 ~/.snow/commands',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
 		},
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
+	},
+	customCommand: {
+		title: '添加自定义命令',
+		nameLabel: '命令名称:',
+		namePlaceholder: '例如: open',
+		commandLabel: '命令内容:',
+		commandPlaceholder: 'npm run build && npm run deploy...',
+		typeLabel: '选择命令类型:',
+		typeExecute: 'Execute (在终端执行)',
+		typePrompt: 'Prompt (发送给 AI)',
+		confirmSave: '保存此自定义命令? (y/n)',
+		confirmYes: 'Yes',
+		confirmNo: 'Cancel',
+		escCancel: '按 ESC 取消',
 	},
 	chatScreen: {
 		// Header
@@ -472,7 +487,8 @@ export const zh: TranslationKeys = {
 		ideConnecting: '连接到 IDE...',
 		ideConnected: 'IDE 已连接',
 		ideDisconnected: 'IDE 已断开',
-		ideError: '连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
+		ideError:
+			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已选择 {count} 个字符',
 		// Input
