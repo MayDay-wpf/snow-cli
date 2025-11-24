@@ -256,6 +256,20 @@ export type TranslationKeys = {
 		ideTools: string;
 		userInteractionTools: string;
 	};
+	// Sub-Agent List Screen
+	subAgentList: {
+		title: string;
+		noAgents: string;
+		noAgentsHint: string;
+		agentsCount: string;
+		description: string;
+		noDescription: string;
+		toolsCount: string;
+		updated: string;
+		deleteConfirm: string;
+		deleteSuccess: string;
+		navigationHint: string;
+	};
 	// Sensitive Command Config Screen
 	sensitiveCommandConfig: {
 		title: string;

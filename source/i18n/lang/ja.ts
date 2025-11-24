@@ -265,6 +265,20 @@ export const ja: TranslationKeys = {
 		ideTools: 'IDE診断ツール',
 		userInteractionTools: 'ユーザー対話ツール',
 	},
+	subAgentList: {
+		title: 'サブエージェント管理',
+		noAgents: 'サブエージェントが設定されていません。',
+		noAgentsHint: '"A" を押して新しいサブエージェントを追加。',
+		agentsCount: 'サブエージェント ({count}):',
+		description: '説明:',
+		noDescription: '説明なし',
+		toolsCount: 'ツール: {count} 個選択済み',
+		updated: '更新日時:',
+		deleteConfirm: '"{name}" を削除しますか? (Y/N)',
+		deleteSuccess: 'サブエージェントを削除しました!',
+		navigationHint:
+			'↑↓: 移動 | Enter: 編集 | A: 新規追加 | D: 削除 | Esc: 戻る',
+	},
 	sensitiveCommandConfig: {
 		title: '機密コマンド保護',
 		subtitle: 'YOLO/自動承認モードでも確認が必要なコマンドを構成',
