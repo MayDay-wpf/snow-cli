@@ -17,6 +17,10 @@ export interface SubAgentToolExecutionOptions {
 	isToolAutoApproved?: (toolName: string) => boolean;
 	yoloMode?: boolean;
 	addToAlwaysApproved?: (toolName: string) => void;
+	requestUserQuestion?: (
+		question: string,
+		options: string[],
+	) => Promise<{selected: string; customInput?: string}>;
 }
 
 /**
@@ -37,6 +41,7 @@ export class SubAgentService {
 			isToolAutoApproved,
 			yoloMode,
 			addToAlwaysApproved,
+			requestUserQuestion,
 		} = options;
 
 		// Create a tool confirmation adapter for sub-agent if needed
@@ -64,6 +69,7 @@ export class SubAgentService {
 			isToolAutoApproved,
 			yoloMode,
 			addToAlwaysApproved,
+			requestUserQuestion,
 		);
 
 		if (!result.success) {
