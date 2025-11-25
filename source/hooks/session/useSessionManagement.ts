@@ -1,7 +1,7 @@
 import {useState} from 'react';
-import {sessionManager} from '../utils/session/sessionManager.js';
-import type {Message} from '../ui/components/MessageList.js';
-import {convertSessionMessagesToUI} from '../utils/session/sessionConverter.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
+import type {Message} from '../../ui/components/MessageList.js';
+import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 
 /**
  * Hook for managing session list and session selection

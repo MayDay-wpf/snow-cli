@@ -1,8 +1,8 @@
 import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
-import {TextBuffer} from '../utils/ui/textBuffer.js';
-import {executeCommand} from '../utils/execution/commandExecutor.js';
-import type {SubAgent} from '../utils/config/subAgentConfig.js';
+import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {executeCommand} from '../../utils/execution/commandExecutor.js';
+import type {SubAgent} from '../../utils/config/subAgentConfig.js';
 
 type KeyboardInputOptions = {
 	buffer: TextBuffer;

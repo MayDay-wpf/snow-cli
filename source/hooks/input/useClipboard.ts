@@ -1,7 +1,7 @@
 import {useCallback} from 'react';
 import {execSync} from 'child_process';
-import {TextBuffer} from '../utils/ui/textBuffer.js';
-import {logger} from '../utils/core/logger.js';
+import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {logger} from '../../utils/core/logger.js';
 
 export function useClipboard(
 	buffer: TextBuffer,

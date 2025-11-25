@@ -2,7 +2,7 @@ import {useState, useEffect, useRef} from 'react';
 import {
 	vscodeConnection,
 	type EditorContext,
-} from '../utils/ui/vscodeConnection.js';
+} from '../../utils/ui/vscodeConnection.js';
 
 export type VSCodeConnectionStatus =
 	| 'disconnected'

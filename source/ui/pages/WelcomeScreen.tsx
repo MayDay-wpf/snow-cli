@@ -5,7 +5,7 @@ import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import Spinner from 'ink-spinner';
 import Menu from '../components/Menu.js';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../i18n/index.js';
 
 // Lazy load all configuration screens for better startup performance

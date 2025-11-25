@@ -1,6 +1,6 @@
 import {useInput} from 'ink';
 import {useState} from 'react';
-import {useI18n} from '../i18n/index.js';
+import {useI18n} from '../../i18n/index.js';
 
 export interface ExitNotification {
 	show: boolean;

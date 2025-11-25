@@ -1,6 +1,6 @@
 import {useState, useCallback, useEffect} from 'react';
-import {TextBuffer} from '../utils/ui/textBuffer.js';
-import {getSubAgents, type SubAgent} from '../utils/config/subAgentConfig.js';
+import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {getSubAgents, type SubAgent} from '../../utils/config/subAgentConfig.js';
 
 export function useAgentPicker(buffer: TextBuffer, triggerUpdate: () => void) {
 	const [showAgentPicker, setShowAgentPicker] = useState(false);

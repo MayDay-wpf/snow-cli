@@ -29,15 +29,15 @@ import {
 } from '../../utils/commands/custom.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
-import {useSessionSave} from '../../hooks/useSessionSave.js';
-import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
-import {handleConversationWithTools} from '../../hooks/useConversation.js';
+import {useSessionSave} from '../../hooks/session/useSessionSave.js';
+import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
+import {handleConversationWithTools} from '../../hooks/conversation/useConversation.js';
 import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
-import {useVSCodeState} from '../../hooks/useVSCodeState.js';
-import {useSnapshotState} from '../../hooks/useSnapshotState.js';
-import {useStreamingState} from '../../hooks/useStreamingState.js';
-import {useCommandHandler} from '../../hooks/useCommandHandler.js';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useVSCodeState} from '../../hooks/integration/useVSCodeState.js';
+import {useSnapshotState} from '../../hooks/session/useSnapshotState.js';
+import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
+import {useCommandHandler} from '../../hooks/conversation/useCommandHandler.js';
+import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,

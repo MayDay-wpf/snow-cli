@@ -1,6 +1,6 @@
 import {useState, useEffect} from 'react';
-import {sessionManager} from '../utils/session/sessionManager.js';
-import {incrementalSnapshotManager} from '../utils/codebase/incrementalSnapshot.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
+import {incrementalSnapshotManager} from '../../utils/codebase/incrementalSnapshot.js';
 
 export function useSnapshotState(messagesLength: number) {
 	const [snapshotFileCount, setSnapshotFileCount] = useState<

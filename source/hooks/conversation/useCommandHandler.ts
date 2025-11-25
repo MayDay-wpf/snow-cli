@@ -1,13 +1,16 @@
 import {useStdout} from 'ink';
 import {useCallback} from 'react';
-import type {Message} from '../ui/components/MessageList.js';
-import {sessionManager} from '../utils/session/sessionManager.js';
-import {compressContext} from '../utils/core/contextCompressor.js';
-import {navigateTo} from './useGlobalNavigation.js';
-import type {UsageInfo} from '../api/chat.js';
-import {resetTerminal} from '../utils/execution/terminal.js';
-import {showSaveDialog, isFileDialogSupported} from '../utils/ui/fileDialog.js';
-import {exportMessagesToFile} from '../utils/session/chatExporter.js';
+import type {Message} from '../../ui/components/MessageList.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
+import {compressContext} from '../../utils/core/contextCompressor.js';
+import {navigateTo} from '../integration/useGlobalNavigation.js';
+import type {UsageInfo} from '../../api/chat.js';
+import {resetTerminal} from '../../utils/execution/terminal.js';
+import {
+	showSaveDialog,
+	isFileDialogSupported,
+} from '../../utils/ui/fileDialog.js';
+import {exportMessagesToFile} from '../../utils/session/chatExporter.js';
 
 /**
  * 执行上下文压缩
@@ -402,7 +405,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				const {
 					deleteCustomCommand,
 					registerCustomCommands,
-				} = require('../utils/commands/custom.js');
+				} = require('../../utils/commands/custom.js');
 
 				try {
 					await deleteCustomCommand(result.prompt);

@@ -3,11 +3,11 @@ import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import {highlight} from 'cli-highlight';
 import {type Message} from '../components/MessageList.js';
-import {handleConversationWithTools} from '../../hooks/useConversation.js';
-import {useStreamingState} from '../../hooks/useStreamingState.js';
-import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
-import {useVSCodeState} from '../../hooks/useVSCodeState.js';
-import {useSessionSave} from '../../hooks/useSessionSave.js';
+import {handleConversationWithTools} from '../../hooks/conversation/useConversation.js';
+import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
+import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
+import {useVSCodeState} from '../../hooks/integration/useVSCodeState.js';
+import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,

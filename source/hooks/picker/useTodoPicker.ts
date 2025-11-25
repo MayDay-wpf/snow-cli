@@ -1,6 +1,6 @@
 import {useState, useCallback, useEffect, useMemo} from 'react';
-import {TextBuffer} from '../utils/ui/textBuffer.js';
-import {scanProjectTodos, type TodoItem} from '../utils/core/todoScanner.js';
+import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {scanProjectTodos, type TodoItem} from '../../utils/core/todoScanner.js';
 
 export function useTodoPicker(
 	buffer: TextBuffer,

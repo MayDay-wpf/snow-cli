@@ -22,9 +22,9 @@ const CustomHeadersScreen = React.lazy(
 import {
 	useGlobalExit,
 	ExitNotification as ExitNotificationType,
-} from './hooks/useGlobalExit.js';
-import {onNavigate} from './hooks/useGlobalNavigation.js';
-import {useTerminalSize} from './hooks/useTerminalSize.js';
+} from './hooks/integration/useGlobalExit.js';
+import {onNavigate} from './hooks/integration/useGlobalNavigation.js';
+import {useTerminalSize} from './hooks/ui/useTerminalSize.js';
 import {I18nProvider} from './i18n/index.js';
 import {ThemeProvider} from './ui/contexts/ThemeContext.js';
 

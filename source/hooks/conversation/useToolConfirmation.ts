@@ -1,6 +1,6 @@
 import {useState, useRef, useCallback} from 'react';
-import type {ToolCall} from '../utils/execution/toolExecutor.js';
-import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
+import type {ToolCall} from '../../utils/execution/toolExecutor.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
 
 export type PendingConfirmation = {
 	tool: ToolCall;

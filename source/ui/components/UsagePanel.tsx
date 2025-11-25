@@ -3,7 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import {useTerminalSize} from '../../hooks/useTerminalSize.js';
+import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 
 interface UsageLogEntry {
 	model: string;

@@ -1,5 +1,5 @@
 import {useReducer, useCallback, useEffect, useRef} from 'react';
-import {TextBuffer, Viewport} from '../utils/ui/textBuffer.js';
+import {TextBuffer, Viewport} from '../../utils/ui/textBuffer.js';
 
 export function useInputBuffer(viewport: Viewport) {
 	// Use useReducer for faster synchronous updates

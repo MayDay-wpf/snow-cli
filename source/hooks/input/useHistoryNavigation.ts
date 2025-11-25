@@ -1,9 +1,9 @@
 import {useState, useCallback, useRef, useEffect} from 'react';
-import {TextBuffer} from '../utils/ui/textBuffer.js';
+import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {
 	historyManager,
 	type HistoryEntry,
-} from '../utils/session/historyManager.js';
+} from '../../utils/session/historyManager.js';
 
 type ChatMessage = {
 	role: string;

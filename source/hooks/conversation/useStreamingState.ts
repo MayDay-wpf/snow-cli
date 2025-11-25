@@ -1,5 +1,5 @@
 import {useState, useEffect} from 'react';
-import type {UsageInfo} from '../api/chat.js';
+import type {UsageInfo} from '../../api/chat.js';
 
 export type RetryStatus = {
 	isRetrying: boolean;

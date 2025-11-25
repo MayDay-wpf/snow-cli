@@ -2,8 +2,8 @@ import {useCallback, useRef} from 'react';
 import {
 	sessionManager,
 	type ChatMessage as SessionChatMessage,
-} from '../utils/session/sessionManager.js';
-import type {ChatMessage as APIChatMessage} from '../api/chat.js';
+} from '../../utils/session/sessionManager.js';
+import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 
 export function useSessionSave() {
 	const savedMessagesRef = useRef<Set<string>>(new Set());
