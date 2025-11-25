@@ -2,7 +2,7 @@ import {promises as fs} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
 import {type FzfResultItem, AsyncFzf} from 'fzf';
-import {processManager} from '../utils/processManager.js';
+import {processManager} from '../utils/core/processManager.js';
 // Type definitions
 import type {
 	CodeSymbol,

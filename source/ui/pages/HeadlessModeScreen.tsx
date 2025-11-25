@@ -11,7 +11,7 @@ import {useSessionSave} from '../../hooks/useSessionSave.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
-} from '../../utils/fileUtils.js';
+} from '../../utils/core/fileUtils.js';
 
 type Props = {
 	prompt: string;

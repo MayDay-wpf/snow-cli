@@ -2,7 +2,7 @@ import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput} from 'ink';
 import Menu from '../components/Menu.js';
 import {useI18n} from '../../i18n/index.js';
-import type {Language} from '../../utils/languageConfig.js';
+import type {Language} from '../../utils/config/languageConfig.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 
 type Props = {

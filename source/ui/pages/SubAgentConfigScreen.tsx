@@ -2,14 +2,14 @@ import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import {Alert, Spinner} from '@inkjs/ui';
-import {getMCPServicesInfo} from '../../utils/mcpToolsManager.js';
-import type {MCPServiceTools} from '../../utils/mcpToolsManager.js';
+import {getMCPServicesInfo} from '../../utils/execution/mcpToolsManager.js';
+import type {MCPServiceTools} from '../../utils/execution/mcpToolsManager.js';
 import {
 	createSubAgent,
 	updateSubAgent,
 	getSubAgent,
 	validateSubAgent,
-} from '../../utils/subAgentConfig.js';
+} from '../../utils/config/subAgentConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

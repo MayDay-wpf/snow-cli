@@ -2,7 +2,7 @@
  * Type definitions for Filesystem MCP Service
  */
 
-import type {Diagnostic} from '../../utils/vscodeConnection.js';
+import type {Diagnostic} from '../../utils/ui/vscodeConnection.js';
 
 /**
  * MCP Content Types - supports multimodal content

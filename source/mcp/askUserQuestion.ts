@@ -1,4 +1,4 @@
-import type {MCPTool} from '../utils/mcpToolsManager.js';
+import type {MCPTool} from '../utils/execution/mcpToolsManager.js';
 
 export interface AskUserQuestionArgs {
 	question: string;

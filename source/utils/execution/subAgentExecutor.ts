@@ -1,14 +1,14 @@
-import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
-import {createStreamingResponse} from '../api/responses.js';
-import {createStreamingGeminiCompletion} from '../api/gemini.js';
-import {createStreamingChatCompletion} from '../api/chat.js';
-import {getSubAgent} from './subAgentConfig.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
+import {createStreamingChatCompletion} from '../../api/chat.js';
+import {getSubAgent} from '../config/subAgentConfig.js';
 import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
-import {getOpenAiConfig} from './apiConfig.js';
-import {sessionManager} from './sessionManager.js';
+import {getOpenAiConfig} from '../config/apiConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
 import type {MCPTool} from './mcpToolsManager.js';
-import type {ChatMessage} from '../api/types.js';
-import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
+import type {ChatMessage} from '../../api/types.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';

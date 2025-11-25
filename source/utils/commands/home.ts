@@ -1,4 +1,4 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
 import {resetAnthropicClient} from '../../api/anthropic.js';
 import {resetGeminiClient} from '../../api/gemini.js';
 import {resetOpenAIClient as resetChatClient} from '../../api/chat.js';

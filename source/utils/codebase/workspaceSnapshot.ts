@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { logger } from '../utils/logger.js';
+import { logger } from '../core/logger.js';
 
 /**
  * File state in workspace

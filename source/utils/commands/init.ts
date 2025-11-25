@@ -1,4 +1,4 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
 
 // Init command handler - Triggers AI to analyze current project and generate SNOW.md
 registerCommand('init', {

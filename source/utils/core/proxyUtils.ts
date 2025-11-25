@@ -1,4 +1,4 @@
-import { getProxyConfig } from './apiConfig.js';
+import { getProxyConfig } from '../config/apiConfig.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import type { Agent as HttpAgent } from 'http';

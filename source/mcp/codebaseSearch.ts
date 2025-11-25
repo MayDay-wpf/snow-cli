@@ -1,9 +1,9 @@
-import {CodebaseDatabase} from '../utils/codebaseDatabase.js';
+import {CodebaseDatabase} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbedding} from '../api/embedding.js';
-import {logger} from '../utils/logger.js';
+import {logger} from '../utils/core/logger.js';
 import {codebaseReviewAgent} from '../agents/codebaseReviewAgent.js';
-import {codebaseSearchEvents} from '../utils/codebaseSearchEvents.js';
-import {loadCodebaseConfig} from '../utils/codebaseConfig.js';
+import {codebaseSearchEvents} from '../utils/codebase/codebaseSearchEvents.js';
+import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import path from 'node:path';
 import fs from 'node:fs';
 

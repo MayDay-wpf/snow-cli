@@ -27,8 +27,8 @@ import {
 	saveCustomCommand,
 	registerCustomCommands,
 } from '../../utils/commands/custom.js';
-import {getOpenAiConfig} from '../../utils/apiConfig.js';
-import {sessionManager} from '../../utils/sessionManager.js';
+import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/useToolConfirmation.js';
 import {handleConversationWithTools} from '../../hooks/useConversation.js';
@@ -41,19 +41,19 @@ import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
-} from '../../utils/fileUtils.js';
-import {vscodeConnection} from '../../utils/vscodeConnection.js';
-import {convertSessionMessagesToUI} from '../../utils/sessionConverter.js';
-import {incrementalSnapshotManager} from '../../utils/incrementalSnapshot.js';
-import {formatElapsedTime} from '../../utils/textUtils.js';
+} from '../../utils/core/fileUtils.js';
+import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
+import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
+import {incrementalSnapshotManager} from '../../utils/codebase/incrementalSnapshot.js';
+import {formatElapsedTime} from '../../utils/core/textUtils.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
-} from '../../utils/autoCompress.js';
+} from '../../utils/core/autoCompress.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
-import {loadCodebaseConfig} from '../../utils/codebaseConfig.js';
-import {codebaseSearchEvents} from '../../utils/codebaseSearchEvents.js';
-import {logger} from '../../utils/logger.js';
+import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
+import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
+import {logger} from '../../utils/core/logger.js';
 
 // Commands will be loaded dynamically after mount to avoid blocking initial render
 

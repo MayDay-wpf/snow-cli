@@ -1,9 +1,9 @@
 import {executeMCPTool} from './mcpToolsManager.js';
-import {subAgentService} from '../mcp/subagent.js';
+import {subAgentService} from '../../mcp/subagent.js';
 import type {SubAgentMessage} from './subAgentExecutor.js';
-import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
-import type {ImageContent} from '../api/types.js';
-import type {MultimodalContent} from '../mcp/types/filesystem.types.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {ImageContent} from '../../api/types.js';
+import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
 
 export interface ToolCall {
 	id: string;
@@ -215,7 +215,7 @@ export async function executeToolCall(
 	} catch (error) {
 		// Check if this is a user interaction needed error
 		const {UserInteractionNeededError} = await import(
-			'./userInteractionError.js'
+			'../ui/userInteractionError.js'
 		);
 
 		if (error instanceof UserInteractionNeededError) {

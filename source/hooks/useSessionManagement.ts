@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { sessionManager } from '../utils/sessionManager.js';
-import type { Message } from '../ui/components/MessageList.js';
-import { convertSessionMessagesToUI } from '../utils/sessionConverter.js';
+import {useState} from 'react';
+import {sessionManager} from '../utils/session/sessionManager.js';
+import type {Message} from '../ui/components/MessageList.js';
+import {convertSessionMessagesToUI} from '../utils/session/sessionConverter.js';
 
 /**
  * Hook for managing session list and session selection
@@ -11,7 +11,7 @@ export function useSessionManagement(
 	setPendingMessages: React.Dispatch<React.SetStateAction<string[]>>,
 	setIsStreaming: React.Dispatch<React.SetStateAction<boolean>>,
 	setRemountKey: React.Dispatch<React.SetStateAction<number>>,
-	initializeFromSession: (messages: any[]) => void
+	initializeFromSession: (messages: any[]) => void,
 ) {
 	const [showSessionList, setShowSessionList] = useState(false);
 
@@ -50,6 +50,6 @@ export function useSessionManagement(
 		showSessionList,
 		setShowSessionList,
 		handleSessionSelect,
-		handleBackFromSessionList
+		handleBackFromSessionList,
 	};
 }

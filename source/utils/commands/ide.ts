@@ -1,5 +1,5 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
-import {vscodeConnection} from '../vscodeConnection.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {vscodeConnection} from '../ui/vscodeConnection.js';
 
 // IDE connection command handler
 registerCommand('ide', {

@@ -1,10 +1,10 @@
-import {getOpenAiConfig} from '../utils/apiConfig.js';
-import {logger} from '../utils/logger.js';
+import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
-import type {RequestMethod} from '../utils/apiConfig.js';
+import type {RequestMethod} from '../utils/config/apiConfig.js';
 
 /**
  * Prompt Optimization Agent Service

@@ -1,4 +1,4 @@
-import {cpLen, cpSlice, visualWidth, toCodePoints} from './textUtils.js';
+import {cpLen, cpSlice, visualWidth, toCodePoints} from '../core/textUtils.js';
 
 export interface Viewport {
 	width: number;

@@ -1,5 +1,5 @@
-import {loadCodebaseConfig} from '../utils/codebaseConfig.js';
-import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
+import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 
 export interface EmbeddingOptions {
 	model?: string;

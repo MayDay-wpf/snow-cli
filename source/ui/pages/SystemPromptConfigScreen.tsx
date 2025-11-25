@@ -8,7 +8,7 @@ import {
 	saveSystemPromptConfig,
 	type SystemPromptConfig,
 	type SystemPromptItem,
-} from '../../utils/apiConfig.js';
+} from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

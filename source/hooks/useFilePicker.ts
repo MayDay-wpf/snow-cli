@@ -1,5 +1,5 @@
 import {useReducer, useCallback, useRef} from 'react';
-import {TextBuffer} from '../utils/textBuffer.js';
+import {TextBuffer} from '../utils/ui/textBuffer.js';
 import {FileListRef} from '../ui/components/FileList.js';
 
 type FilePickerState = {

@@ -1,7 +1,7 @@
 import {homedir} from 'os';
 import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
-import type {ThemeType, ThemeColors} from '../ui/themes/index.js';
+import type {ThemeType, ThemeColors} from '../../ui/themes/index.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');

@@ -1,4 +1,4 @@
-import { registerCommand, type CommandResult } from '../commandExecutor.js';
+import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
 
 // Resume command handler - shows session panel instead of navigating to new page
 registerCommand('resume', {

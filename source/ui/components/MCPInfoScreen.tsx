@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
-import { getMCPServicesInfo, refreshMCPToolsCache, reconnectMCPService } from '../../utils/mcpToolsManager.js';
+import { getMCPServicesInfo, refreshMCPToolsCache, reconnectMCPService } from '../../utils/execution/mcpToolsManager.js';
 
 type Props = {
 	onClose: () => void;

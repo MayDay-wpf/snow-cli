@@ -1,4 +1,4 @@
-import { registerCommand, type CommandResult } from '../commandExecutor.js';
+import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
 
 // Clear command handler
 registerCommand('clear', {

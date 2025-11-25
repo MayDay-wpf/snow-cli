@@ -1,4 +1,4 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
 
 // Agent picker command handler - shows agent selection panel
 registerCommand('agent-', {

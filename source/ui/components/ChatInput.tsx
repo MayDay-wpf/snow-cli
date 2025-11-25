@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { Box, Text } from 'ink';
-import { Viewport } from '../../utils/textBuffer.js';
-import { cpSlice } from '../../utils/textUtils.js';
+import { Viewport } from '../../utils/ui/textBuffer.js';
+import { cpSlice } from '../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('./CommandPanel.js'));

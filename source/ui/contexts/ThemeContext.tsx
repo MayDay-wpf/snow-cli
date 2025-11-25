@@ -6,7 +6,7 @@ import React, {
 	ReactNode,
 } from 'react';
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
-import {getCurrentTheme, setCurrentTheme} from '../../utils/themeConfig.js';
+import {getCurrentTheme, setCurrentTheme} from '../../utils/config/themeConfig.js';
 
 interface ThemeContextType {
 	theme: Theme;

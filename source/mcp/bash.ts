@@ -6,7 +6,7 @@ import {
 	isDangerousCommand,
 	truncateOutput,
 } from './utils/bash/security.utils.js';
-import {processManager} from '../utils/processManager.js';
+import {processManager} from '../utils/core/processManager.js';
 
 /**
  * Terminal Command Execution Service

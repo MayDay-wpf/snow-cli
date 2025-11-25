@@ -1,4 +1,4 @@
-import type {ToolCall} from './toolExecutor.js';
+import type {ToolCall} from '../execution/toolExecutor.js';
 
 /**
  * Format tool call display information for UI rendering

@@ -1,4 +1,4 @@
-export type {Language} from '../utils/languageConfig.js';
+export type {Language} from '../utils/config/languageConfig.js';
 
 export type TranslationKeys = {
 	// Welcome Screen
@@ -567,7 +567,7 @@ export type TranslationKeys = {
 	};
 };
 
-import type {Language as Lang} from '../utils/languageConfig.js';
+import type {Language as Lang} from '../utils/config/languageConfig.js';
 
 export type Translations = {
 	[K in Lang]: TranslationKeys;

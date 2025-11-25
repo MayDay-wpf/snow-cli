@@ -7,7 +7,7 @@ import {
 	loadCodebaseConfig,
 	saveCodebaseConfig,
 	type CodebaseConfig,
-} from '../../utils/codebaseConfig.js';
+} from '../../utils/config/codebaseConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

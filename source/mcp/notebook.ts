@@ -5,7 +5,7 @@ import {
 	updateNotebook,
 	deleteNotebook,
 	getNotebooksByFile,
-} from '../utils/notebookManager.js';
+} from '../utils/core/notebookManager.js';
 
 /**
  * Notebook MCP 工具定义

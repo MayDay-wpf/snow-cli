@@ -1,4 +1,4 @@
-import { getOpenAiConfig, getCustomHeaders } from '../utils/apiConfig.js';
+import { getOpenAiConfig, getCustomHeaders } from '../utils/config/apiConfig.js';
 
 export interface Model {
 	id: string;

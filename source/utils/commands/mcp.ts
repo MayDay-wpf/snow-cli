@@ -1,4 +1,4 @@
-import { registerCommand, type CommandResult } from '../commandExecutor.js';
+import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
 
 // MCP info command handler - shows MCP panel in chat
 registerCommand('mcp', {

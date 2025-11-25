@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { logger } from '../utils/logger.js';
+import { logger } from '../core/logger.js';
 
 /**
  * File backup entry

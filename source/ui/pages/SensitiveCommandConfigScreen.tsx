@@ -9,7 +9,7 @@ import {
 	removeSensitiveCommand,
 	resetToDefaults,
 	type SensitiveCommand,
-} from '../../utils/sensitiveCommandManager.js';
+} from '../../utils/execution/sensitiveCommandManager.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

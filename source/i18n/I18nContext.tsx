@@ -4,7 +4,7 @@ import {translations} from './translations.js';
 import {
 	getCurrentLanguage,
 	setCurrentLanguage,
-} from '../utils/languageConfig.js';
+} from '../utils/config/languageConfig.js';
 
 type I18nContextType = {
 	language: Language;

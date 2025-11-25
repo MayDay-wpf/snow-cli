@@ -9,7 +9,7 @@ import {
 	defaultCustomColors,
 	getCustomTheme,
 } from '../themes/index.js';
-import {saveCustomColors} from '../../utils/themeConfig.js';
+import {saveCustomColors} from '../../utils/config/themeConfig.js';
 import {useI18n} from '../../i18n/index.js';
 
 type Props = {

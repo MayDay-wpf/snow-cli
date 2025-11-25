@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import type { Message } from '../ui/components/MessageList.js';
+import type { Message } from '../../ui/components/MessageList.js';
 
 /**
  * Format messages to plain text for export

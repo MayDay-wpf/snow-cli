@@ -6,7 +6,7 @@ import ScrollableSelectInput from './ScrollableSelectInput.js';
 import {
 	sessionManager,
 	type SessionListItem,
-} from '../../utils/sessionManager.js';
+} from '../../utils/session/sessionManager.js';
 
 type Props = {
 	onBack: () => void;

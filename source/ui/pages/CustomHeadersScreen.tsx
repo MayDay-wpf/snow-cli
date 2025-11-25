@@ -8,7 +8,7 @@ import {
 	saveCustomHeadersConfig,
 	type CustomHeadersConfig,
 	type CustomHeadersItem,
-} from '../../utils/apiConfig.js';
+} from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

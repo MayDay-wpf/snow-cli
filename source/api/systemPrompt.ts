@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {loadCodebaseConfig} from '../utils/codebaseConfig.js';
+import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 
 /**
  * Get the system prompt, dynamically reading from ROLE.md if it exists

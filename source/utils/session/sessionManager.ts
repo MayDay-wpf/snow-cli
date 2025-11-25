@@ -2,10 +2,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
-import type { ChatMessage as APIChatMessage } from '../api/chat.js';
-import { getTodoService } from './mcpToolsManager.js';
-import { logger } from './logger.js';
-import { summaryAgent } from '../agents/summaryAgent.js';
+import type { ChatMessage as APIChatMessage } from '../../api/chat.js';
+import { getTodoService } from '../execution/mcpToolsManager.js';
+import { logger } from '../core/logger.js';
+import { summaryAgent } from '../../agents/summaryAgent.js';
 // Session 中直接使用 API 的消息格式,额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
 	timestamp: number;

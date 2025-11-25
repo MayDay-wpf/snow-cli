@@ -9,7 +9,7 @@ import {
 	validateApiConfig,
 	type RequestMethod,
 	type ApiConfig,
-} from '../../utils/apiConfig.js';
+} from '../../utils/config/apiConfig.js';
 import {
 	fetchAvailableModels,
 	filterModels,
@@ -23,7 +23,7 @@ import {
 	deleteProfile,
 	saveProfile,
 	type ConfigProfile,
-} from '../../utils/configManager.js';
+} from '../../utils/config/configManager.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

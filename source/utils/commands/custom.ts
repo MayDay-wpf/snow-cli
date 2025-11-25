@@ -2,7 +2,7 @@ import {
 	registerCommand,
 	type CommandResult,
 	getAvailableCommands,
-} from '../commandExecutor.js';
+} from '../execution/commandExecutor.js';
 import {homedir} from 'os';
 import {join} from 'path';
 import {readdir, readFile, writeFile, mkdir} from 'fs/promises';

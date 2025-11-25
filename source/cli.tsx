@@ -72,11 +72,11 @@ async function loadDependencies() {
 		utilModule,
 	] = await Promise.all([
 		import('./app.js'),
-		import('./utils/vscodeConnection.js'),
-		import('./utils/resourceMonitor.js'),
-		import('./utils/configManager.js'),
-		import('./utils/processManager.js'),
-		import('./utils/devMode.js'),
+		import('./utils/ui/vscodeConnection.js'),
+		import('./utils/core/resourceMonitor.js'),
+		import('./utils/config/configManager.js'),
+		import('./utils/core/processManager.js'),
+		import('./utils/core/devMode.js'),
 		import('child_process'),
 		import('util'),
 	]);

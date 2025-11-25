@@ -1,4 +1,4 @@
-import { registerCommand, type CommandResult } from '../commandExecutor.js';
+import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
 
 // Export command handler - exports chat conversation to text file
 registerCommand('export', {

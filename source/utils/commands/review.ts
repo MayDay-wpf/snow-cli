@@ -1,4 +1,4 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 
 // Review command handler - review git changes

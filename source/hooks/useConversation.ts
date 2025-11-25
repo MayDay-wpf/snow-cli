@@ -4,20 +4,26 @@ import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
 import {getSystemPrompt} from '../api/systemPrompt.js';
-import {collectAllMCPTools, getTodoService} from '../utils/mcpToolsManager.js';
-import {executeToolCalls, type ToolCall} from '../utils/toolExecutor.js';
-import {getOpenAiConfig} from '../utils/apiConfig.js';
-import {sessionManager} from '../utils/sessionManager.js';
-import {formatTodoContext} from '../utils/todoPreprocessor.js';
+import {
+	collectAllMCPTools,
+	getTodoService,
+} from '../utils/execution/mcpToolsManager.js';
+import {
+	executeToolCalls,
+	type ToolCall,
+} from '../utils/execution/toolExecutor.js';
+import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {sessionManager} from '../utils/session/sessionManager.js';
+import {formatTodoContext} from '../utils/core/todoPreprocessor.js';
 import type {Message} from '../ui/components/MessageList.js';
-import {formatToolCallMessage} from '../utils/messageFormatter.js';
-import {resourceMonitor} from '../utils/resourceMonitor.js';
-import {isToolNeedTwoStepDisplay} from '../utils/toolDisplayConfig.js';
+import {formatToolCallMessage} from '../utils/ui/messageFormatter.js';
+import {resourceMonitor} from '../utils/core/resourceMonitor.js';
+import {isToolNeedTwoStepDisplay} from '../utils/config/toolDisplayConfig.js';
 import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
-} from '../utils/autoCompress.js';
+} from '../utils/core/autoCompress.js';
 
 export type UserQuestionResult = {
 	selected: string;
@@ -591,7 +597,7 @@ export async function handleConversationWithTools(
 						try {
 							const args = JSON.parse(toolCall.function.arguments);
 							const {isSensitiveCommand: checkSensitiveCommand} = await import(
-								'../utils/sensitiveCommandManager.js'
+								'../utils/execution/sensitiveCommandManager.js'
 							).then(m => ({
 								isSensitiveCommand: m.isSensitiveCommand,
 							}));
@@ -626,7 +632,7 @@ export async function handleConversationWithTools(
 							try {
 								const args = JSON.parse(toolCall.function.arguments);
 								const {isSensitiveCommand: checkSensitiveCommand} =
-									await import('../utils/sensitiveCommandManager.js').then(
+									await import('../utils/execution/sensitiveCommandManager.js').then(
 										m => ({
 											isSensitiveCommand: m.isSensitiveCommand,
 										}),

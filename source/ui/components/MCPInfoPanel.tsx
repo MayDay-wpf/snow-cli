@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
-import { getMCPServicesInfo, refreshMCPToolsCache, reconnectMCPService } from '../../utils/mcpToolsManager.js';
+import { getMCPServicesInfo, refreshMCPToolsCache, reconnectMCPService } from '../../utils/execution/mcpToolsManager.js';
 
 interface MCPConnectionStatus {
 	name: string;

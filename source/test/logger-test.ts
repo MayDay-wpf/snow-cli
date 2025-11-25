@@ -1,4 +1,4 @@
-import {logger} from '../utils/logger.js';
+import {logger} from '../utils/core/logger.js';
 
 // Test the logger
 logger.info('Logger service initialized successfully');

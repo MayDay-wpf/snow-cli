@@ -2,7 +2,7 @@ import React from 'react';
 import {Text, Box} from 'ink';
 import {marked} from 'marked';
 import TerminalRenderer from 'marked-terminal';
-import logger from '../../utils/logger.js';
+import logger from '../../utils/core/logger.js';
 
 // Configure marked to use terminal renderer
 marked.setOptions({

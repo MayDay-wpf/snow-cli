@@ -1,7 +1,7 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import type {SubAgent} from '../../utils/subAgentConfig.js';
+import type {SubAgent} from '../../utils/config/subAgentConfig.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 
 interface Props {

@@ -1,7 +1,7 @@
-import type {ChatMessage} from '../api/chat.js';
-import type {Message} from '../ui/components/MessageList.js';
-import {formatToolCallMessage} from './messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from './toolDisplayConfig.js';
+import type {ChatMessage} from '../../api/chat.js';
+import type {Message} from '../../ui/components/MessageList.js';
+import {formatToolCallMessage} from '../ui/messageFormatter.js';
+import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
 
 /**
  * Convert API format session messages to UI format messages

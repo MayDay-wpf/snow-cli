@@ -3,14 +3,14 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import ignore, {type Ignore} from 'ignore';
 import chokidar from 'chokidar';
-import {logger} from '../utils/logger.js';
-import {CodebaseDatabase, type CodeChunk} from '../utils/codebaseDatabase.js';
+import {logger} from '../utils/core/logger.js';
+import {CodebaseDatabase, type CodeChunk} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbeddings} from '../api/embedding.js';
 import {
 	loadCodebaseConfig,
 	type CodebaseConfig,
-} from '../utils/codebaseConfig.js';
-import {withRetry} from '../utils/retryUtils.js';
+} from '../utils/config/codebaseConfig.js';
+import {withRetry} from '../utils/core/retryUtils.js';
 
 /**
  * Progress callback for UI updates

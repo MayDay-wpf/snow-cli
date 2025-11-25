@@ -2,12 +2,12 @@ import {
 	getOpenAiConfig,
 	getCustomSystemPrompt,
 	getCustomHeaders,
-} from '../utils/apiConfig.js';
+} from '../utils/config/apiConfig.js';
 import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/retryUtils.js';
+import {withRetryGenerator, parseJsonWithFix} from '../utils/core/retryUtils.js';
 import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
-import {addProxyToFetchOptions} from '../utils/proxyUtils.js';
-import {saveUsageToFile} from '../utils/usageLogger.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {saveUsageToFile} from '../utils/core/usageLogger.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -534,7 +534,7 @@ export async function* createStreamingGeminiCompletion(
 				}
 			}
 		} catch (error) {
-			const {logger} = await import('../utils/logger.js');
+			const {logger} = await import('../utils/core/logger.js');
 			logger.error('Gemini SSE stream parsing error:', {
 				error: error instanceof Error ? error.message : 'Unknown error',
 				remainingBuffer: buffer.substring(0, 200),

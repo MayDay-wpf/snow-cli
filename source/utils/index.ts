@@ -6,8 +6,8 @@ import './commands/resume.js';
 import './commands/custom.js';
 
 // Export logger
-export {Logger, LogLevel, logger} from './logger.js';
-export {default as defaultLogger} from './logger.js';
+export {Logger, LogLevel, logger} from './core/logger.js';
+export {default as defaultLogger} from './core/logger.js';
 
 export function formatCommand(command: Command): string {
 	return `${command.name.padEnd(12)} ${command.description}`;

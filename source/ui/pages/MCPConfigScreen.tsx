@@ -4,7 +4,7 @@ import {spawn, execSync} from 'child_process';
 import {writeFileSync, readFileSync, existsSync} from 'fs';
 import {join} from 'path';
 import {homedir, platform} from 'os';
-import {getMCPConfig, validateMCPConfig} from '../../utils/apiConfig.js';
+import {getMCPConfig, validateMCPConfig} from '../../utils/config/apiConfig.js';
 
 type Props = {
 	onBack: () => void;

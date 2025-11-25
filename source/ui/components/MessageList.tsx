@@ -1,6 +1,6 @@
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
-import {SelectedFile} from '../../utils/fileUtils.js';
+import {SelectedFile} from '../../utils/core/fileUtils.js';
 import MarkdownRenderer from './MarkdownRenderer.js';
 
 export interface Message {

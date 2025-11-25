@@ -1,13 +1,13 @@
 import {useStdout} from 'ink';
 import {useCallback} from 'react';
 import type {Message} from '../ui/components/MessageList.js';
-import {sessionManager} from '../utils/sessionManager.js';
-import {compressContext} from '../utils/contextCompressor.js';
+import {sessionManager} from '../utils/session/sessionManager.js';
+import {compressContext} from '../utils/core/contextCompressor.js';
 import {navigateTo} from './useGlobalNavigation.js';
 import type {UsageInfo} from '../api/chat.js';
-import {resetTerminal} from '../utils/terminal.js';
-import {showSaveDialog, isFileDialogSupported} from '../utils/fileDialog.js';
-import {exportMessagesToFile} from '../utils/chatExporter.js';
+import {resetTerminal} from '../utils/execution/terminal.js';
+import {showSaveDialog, isFileDialogSupported} from '../utils/ui/fileDialog.js';
+import {exportMessagesToFile} from '../utils/session/chatExporter.js';
 
 /**
  * 执行上下文压缩

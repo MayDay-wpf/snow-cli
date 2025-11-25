@@ -1,7 +1,7 @@
 import initSqlJs, {type Database} from 'sql.js';
 import path from 'node:path';
 import fs from 'node:fs';
-import {logger} from './logger.js';
+import {logger} from '../core/logger.js';
 
 /**
  * Code chunk with embedding

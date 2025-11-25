@@ -2,7 +2,7 @@ import React, {useState, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
-import {isSensitiveCommand} from '../../utils/sensitiveCommandManager.js';
+import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 
 export type ConfirmationResult =

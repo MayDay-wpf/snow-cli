@@ -4,14 +4,14 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 	type ThinkingConfig,
-} from '../utils/apiConfig.js';
+} from '../utils/config/apiConfig.js';
 import { getSystemPrompt } from './systemPrompt.js';
-import { withRetryGenerator, parseJsonWithFix } from '../utils/retryUtils.js';
+import { withRetryGenerator, parseJsonWithFix } from '../utils/core/retryUtils.js';
 import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
-import { logger } from '../utils/logger.js';
-import { addProxyToFetchOptions } from '../utils/proxyUtils.js';
-import { saveUsageToFile } from '../utils/usageLogger.js';
-import { isDevMode, getDevUserId } from '../utils/devMode.js';
+import { logger } from '../utils/core/logger.js';
+import { addProxyToFetchOptions } from '../utils/core/proxyUtils.js';
+import { saveUsageToFile } from '../utils/core/usageLogger.js';
+import { isDevMode, getDevUserId } from '../utils/core/devMode.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -454,7 +454,7 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/logger.js');
+		const {logger} = await import('../utils/core/logger.js');
 		logger.error('SSE stream parsing error:', {
 			error: error instanceof Error ? error.message : 'Unknown error',
 			remainingBuffer: buffer.substring(0, 200),

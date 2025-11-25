@@ -1,5 +1,5 @@
 import {useState, useCallback, useMemo} from 'react';
-import {TextBuffer} from '../utils/textBuffer.js';
+import {TextBuffer} from '../utils/ui/textBuffer.js';
 import {useI18n} from '../i18n/index.js';
 import {getCustomCommands} from '../utils/commands/custom.js';
 

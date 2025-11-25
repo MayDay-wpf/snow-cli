@@ -1,7 +1,7 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import type {TodoItem} from '../../utils/todoScanner.js';
+import type {TodoItem} from '../../utils/core/todoScanner.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 
 interface Props {

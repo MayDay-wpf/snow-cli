@@ -1,6 +1,6 @@
 import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
-import {getProxyConfig} from '../utils/apiConfig.js';
+import {getProxyConfig} from '../utils/config/apiConfig.js';
 // Type definitions
 import type {
 	SearchResult,

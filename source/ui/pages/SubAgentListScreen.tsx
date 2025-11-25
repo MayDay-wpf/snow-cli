@@ -5,7 +5,7 @@ import {
 	getSubAgents,
 	deleteSubAgent,
 	type SubAgent,
-} from '../../utils/subAgentConfig.js';
+} from '../../utils/config/subAgentConfig.js';
 import {useTerminalSize} from '../../hooks/useTerminalSize.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useI18n} from '../../i18n/index.js';

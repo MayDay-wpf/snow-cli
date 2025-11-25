@@ -2,13 +2,13 @@ import {promises as fs} from 'fs';
 import * as path from 'path';
 import * as prettier from 'prettier';
 // IDE connection supports both VSCode and JetBrains IDEs
-import {vscodeConnection, type Diagnostic} from '../utils/vscodeConnection.js';
-import {incrementalSnapshotManager} from '../utils/incrementalSnapshot.js';
+import {vscodeConnection, type Diagnostic} from '../utils/ui/vscodeConnection.js';
+import {incrementalSnapshotManager} from '../utils/codebase/incrementalSnapshot.js';
 import {
 	tryUnescapeFix,
 	trimPairIfPossible,
 	isOverEscaped,
-} from '../utils/escapeHandler.js';
+} from '../utils/ui/escapeHandler.js';
 // Type definitions
 import type {
 	EditBySearchConfig,
@@ -50,7 +50,7 @@ import {readOfficeDocument} from './utils/filesystem/office-parser.utils.js';
 import {parseFileSymbols} from './utils/aceCodeSearch/symbol.utils.js';
 import type {CodeSymbol} from './types/aceCodeSearch.types.js';
 // Notebook utilities for automatic note retrieval
-import {queryNotebook} from '../utils/notebookManager.js';
+import {queryNotebook} from '../utils/core/notebookManager.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 

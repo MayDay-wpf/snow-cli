@@ -1,6 +1,6 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
-import {resetTerminal} from '../../utils/terminal.js';
+import {resetTerminal} from '../../utils/execution/terminal.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 

@@ -1,11 +1,19 @@
 import {useState, useEffect, useRef} from 'react';
-import {vscodeConnection, type EditorContext} from '../utils/vscodeConnection.js';
+import {
+	vscodeConnection,
+	type EditorContext,
+} from '../utils/ui/vscodeConnection.js';
 
-export type VSCodeConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type VSCodeConnectionStatus =
+	| 'disconnected'
+	| 'connecting'
+	| 'connected'
+	| 'error';
 
 export function useVSCodeState() {
 	const [vscodeConnected, setVscodeConnected] = useState(false);
-	const [vscodeConnectionStatus, setVscodeConnectionStatus] = useState<VSCodeConnectionStatus>('disconnected');
+	const [vscodeConnectionStatus, setVscodeConnectionStatus] =
+		useState<VSCodeConnectionStatus>('disconnected');
 	const [editorContext, setEditorContext] = useState<EditorContext>({});
 
 	// Use ref to track last status without causing re-renders
@@ -35,9 +43,12 @@ export function useVSCodeState() {
 			const hasChanged =
 				context.activeFile !== lastEditorContextRef.current.activeFile ||
 				context.selectedText !== lastEditorContextRef.current.selectedText ||
-				context.cursorPosition?.line !== lastEditorContextRef.current.cursorPosition?.line ||
-				context.cursorPosition?.character !== lastEditorContextRef.current.cursorPosition?.character ||
-				context.workspaceFolder !== lastEditorContextRef.current.workspaceFolder;
+				context.cursorPosition?.line !==
+					lastEditorContextRef.current.cursorPosition?.line ||
+				context.cursorPosition?.character !==
+					lastEditorContextRef.current.cursorPosition?.character ||
+				context.workspaceFolder !==
+					lastEditorContextRef.current.workspaceFolder;
 
 			if (hasChanged) {
 				lastEditorContextRef.current = context;

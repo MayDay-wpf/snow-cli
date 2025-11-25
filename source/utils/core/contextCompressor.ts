@@ -1,10 +1,10 @@
-import {getOpenAiConfig, getCustomSystemPrompt} from './apiConfig.js';
-import {getSystemPrompt} from '../api/systemPrompt.js';
-import type {ChatMessage} from '../api/types.js';
-import {createStreamingChatCompletion} from '../api/chat.js';
-import {createStreamingResponse} from '../api/responses.js';
-import {createStreamingGeminiCompletion} from '../api/gemini.js';
-import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
+import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
+import {getSystemPrompt} from '../../api/systemPrompt.js';
+import type {ChatMessage} from '../../api/types.js';
+import {createStreamingChatCompletion} from '../../api/chat.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 
 export interface CompressionResult {
 	summary: string;

@@ -1,4 +1,4 @@
-import {executeContextCompression} from '../hooks/useCommandHandler.js';
+import {executeContextCompression} from '../../hooks/useCommandHandler.js';
 
 /**
  * 检查 token 使用率是否达到阈值

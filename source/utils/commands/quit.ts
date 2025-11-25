@@ -1,4 +1,4 @@
-import {registerCommand, type CommandResult} from '../commandExecutor.js';
+import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
 
 // Quit command handler - exits the application cleanly
 registerCommand('quit', {

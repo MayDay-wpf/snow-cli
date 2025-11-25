@@ -1,7 +1,7 @@
-import {executeSubAgent} from '../utils/subAgentExecutor.js';
-import {getUserSubAgents} from '../utils/subAgentConfig.js';
-import type {SubAgentMessage} from '../utils/subAgentExecutor.js';
-import type {ToolCall} from '../utils/toolExecutor.js';
+import {executeSubAgent} from '../utils/execution/subAgentExecutor.js';
+import {getUserSubAgents} from '../utils/config/subAgentConfig.js';
+import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
+import type {ToolCall} from '../utils/execution/toolExecutor.js';
 import type {ConfirmationResult} from '../ui/components/ToolConfirmation.js';
 
 export interface SubAgentToolExecutionOptions {

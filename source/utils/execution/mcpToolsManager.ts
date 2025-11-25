@@ -2,26 +2,26 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
-import {getMCPConfig, type MCPServer} from './apiConfig.js';
-import {mcpTools as filesystemTools} from '../mcp/filesystem.js';
-import {mcpTools as terminalTools} from '../mcp/bash.js';
-import {mcpTools as aceCodeSearchTools} from '../mcp/aceCodeSearch.js';
-import {mcpTools as websearchTools} from '../mcp/websearch.js';
-import {mcpTools as ideDiagnosticsTools} from '../mcp/ideDiagnostics.js';
-import {mcpTools as codebaseSearchTools} from '../mcp/codebaseSearch.js';
-import {mcpTools as askUserQuestionTools} from '../mcp/askUserQuestion.js';
-import {TodoService} from '../mcp/todo.js';
+import {getMCPConfig, type MCPServer} from '../config/apiConfig.js';
+import {mcpTools as filesystemTools} from '../../mcp/filesystem.js';
+import {mcpTools as terminalTools} from '../../mcp/bash.js';
+import {mcpTools as aceCodeSearchTools} from '../../mcp/aceCodeSearch.js';
+import {mcpTools as websearchTools} from '../../mcp/websearch.js';
+import {mcpTools as ideDiagnosticsTools} from '../../mcp/ideDiagnostics.js';
+import {mcpTools as codebaseSearchTools} from '../../mcp/codebaseSearch.js';
+import {mcpTools as askUserQuestionTools} from '../../mcp/askUserQuestion.js';
+import {TodoService} from '../../mcp/todo.js';
 import {
 	mcpTools as notebookTools,
 	executeNotebookTool,
-} from '../mcp/notebook.js';
+} from '../../mcp/notebook.js';
 import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
-} from '../mcp/subagent.js';
-import {sessionManager} from './sessionManager.js';
-import {logger} from './logger.js';
-import {resourceMonitor} from './resourceMonitor.js';
+} from '../../mcp/subagent.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {logger} from '../core/logger.js';
+import {resourceMonitor} from '../core/resourceMonitor.js';
 import os from 'os';
 import path from 'path';
 
@@ -88,7 +88,7 @@ async function generateConfigHash(): Promise<string> {
 		const subAgents = getSubAgentTools(); // Include sub-agents in hash
 
 		// 🔥 CRITICAL: Include codebase enabled status in hash
-		const {loadCodebaseConfig} = await import('./codebaseConfig.js');
+		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
 		return JSON.stringify({
@@ -362,7 +362,7 @@ async function refreshToolsCache(): Promise<void> {
 	// Add built-in Codebase Search tools (conditionally loaded if enabled and index is available)
 	try {
 		// First check if codebase feature is enabled in config
-		const {loadCodebaseConfig} = await import('./codebaseConfig.js');
+		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
 		// Only proceed if feature is enabled
@@ -379,7 +379,7 @@ async function refreshToolsCache(): Promise<void> {
 			// Only add if database file exists
 			if (fs.existsSync(dbPath)) {
 				// Check if database has data by importing CodebaseDatabase
-				const {CodebaseDatabase} = await import('./codebaseDatabase.js');
+				const {CodebaseDatabase} = await import('../codebase/codebaseDatabase.js');
 				const db = new CodebaseDatabase(projectRoot);
 				await db.initialize();
 				const totalChunks = db.getTotalChunks();
@@ -875,7 +875,7 @@ export async function executeMCPTool(
 		return await executeNotebookTool(toolName, args);
 	} else if (serviceName === 'filesystem') {
 		// Handle built-in filesystem tools (no connection needed)
-		const {filesystemService} = await import('../mcp/filesystem.js');
+		const {filesystemService} = await import('../../mcp/filesystem.js');
 
 		switch (actualToolName) {
 			case 'read':
@@ -916,7 +916,7 @@ export async function executeMCPTool(
 		}
 	} else if (serviceName === 'terminal') {
 		// Handle built-in terminal tools (no connection needed)
-		const {terminalService} = await import('../mcp/bash.js');
+		const {terminalService} = await import('../../mcp/bash.js');
 
 		switch (actualToolName) {
 			case 'execute':
@@ -926,7 +926,7 @@ export async function executeMCPTool(
 		}
 	} else if (serviceName === 'ace') {
 		// Handle built-in ACE Code Search tools (no connection needed)
-		const {aceCodeSearchService} = await import('../mcp/aceCodeSearch.js');
+		const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
 
 		switch (actualToolName) {
 			case 'search_symbols':
@@ -967,7 +967,7 @@ export async function executeMCPTool(
 		}
 	} else if (serviceName === 'websearch') {
 		// Handle built-in Web Search tools (no connection needed)
-		const {webSearchService} = await import('../mcp/websearch.js');
+		const {webSearchService} = await import('../../mcp/websearch.js');
 
 		switch (actualToolName) {
 			case 'search':
@@ -993,7 +993,7 @@ export async function executeMCPTool(
 		}
 	} else if (serviceName === 'ide') {
 		// Handle built-in IDE Diagnostics tools (no connection needed)
-		const {ideDiagnosticsService} = await import('../mcp/ideDiagnostics.js');
+		const {ideDiagnosticsService} = await import('../../mcp/ideDiagnostics.js');
 
 		switch (actualToolName) {
 			case 'get_diagnostics':
@@ -1015,7 +1015,7 @@ export async function executeMCPTool(
 		}
 	} else if (serviceName === 'codebase') {
 		// Handle built-in Codebase Search tools (no connection needed)
-		const {codebaseSearchService} = await import('../mcp/codebaseSearch.js');
+		const {codebaseSearchService} = await import('../../mcp/codebaseSearch.js');
 
 		switch (actualToolName) {
 			case 'search':

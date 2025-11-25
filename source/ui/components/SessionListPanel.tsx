@@ -3,7 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import {
 	sessionManager,
 	type SessionListItem,
-} from '../../utils/sessionManager.js';
+} from '../../utils/session/sessionManager.js';
 
 type Props = {
 	onSelectSession: (sessionId: string) => void;
