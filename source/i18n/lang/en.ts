@@ -406,6 +406,7 @@ export const en: TranslationKeys = {
 			custom: 'Add custom command and save to ~/.snow/commands',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
+			quit: 'Exit the application',
 		},
 	},
 	hooks: {

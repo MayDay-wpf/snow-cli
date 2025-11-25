@@ -395,6 +395,7 @@ export const ja: TranslationKeys = {
 			custom: 'カスタムコマンドを追加して ~/.snow/commands に保存',
 			agent: 'サブエージェントを選択して特定のタスクを処理',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
+			quit: 'アプリケーションを終了',
 		},
 	},
 	hooks: {

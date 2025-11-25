@@ -55,6 +55,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'todo-',
 				description: t.commandPanel.commands.todo,
 			},
+			{
+				name: 'quit',
+				description: t.commandPanel.commands.quit,
+			},
 		],
 		[t],
 	);

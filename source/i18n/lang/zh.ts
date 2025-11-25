@@ -380,6 +380,7 @@ export const zh: TranslationKeys = {
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
+			quit: '退出应用程序',
 		},
 	},
 	hooks: {

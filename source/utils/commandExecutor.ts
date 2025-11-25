@@ -21,7 +21,8 @@ export interface CommandResult {
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'
 		| 'executeTerminalCommand'
-		| 'deleteCustomCommand';
+		| 'deleteCustomCommand'
+		| 'quit';
 	prompt?: string;
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }

@@ -386,6 +386,7 @@ export const ko: TranslationKeys = {
 			custom: '사용자 정의 명령 추가 및 ~/.snow/commands에 저장',
 			agent: '하위 에이전트를 선택하고 특정 작업 처리',
 			todo: '프로젝트 파일에서 TODO 주석 검색 및 선택',
+			quit: '애플리케이션 종료',
 		},
 	},
 	hooks: {

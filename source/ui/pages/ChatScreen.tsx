@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useRef, lazy, Suspense} from 'react';
-import {Box, Text, useInput, Static, useStdout} from 'ink';
+import {Box, Text, useInput, Static, useStdout, useApp} from 'ink';
 import Spinner from 'ink-spinner';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
@@ -65,6 +65,7 @@ type Props = {
 export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
+	const {exit} = useApp();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
@@ -167,6 +168,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/todoPicker.js'),
 			import('../../utils/commands/help.js'),
 			import('../../utils/commands/custom.js'),
+			import('../../utils/commands/quit.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -507,6 +509,23 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				hideUserMessage?: boolean,
 			) => Promise<void>
 		>();
+	// Handle quit command - clean up resources and exit application
+	const handleQuit = async () => {
+		// Stop codebase indexing agent
+		if (codebaseAgentRef.current) {
+			await codebaseAgentRef.current.stop();
+			codebaseAgentRef.current.stopWatching();
+		}
+
+		// Stop VSCode connection
+		if (vscodeConnection.isConnected() || vscodeConnection.isClientRunning()) {
+			vscodeConnection.stop();
+		}
+
+		// Exit the application
+		exit();
+	};
+
 	// Use command handler hook
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
@@ -532,6 +551,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				useBasicModel,
 				hideUserMessage,
 			) || Promise.resolve(),
+		onQuit: handleQuit,
 	});
 
 	useEffect(() => {

@@ -429,6 +429,7 @@ export const es: TranslationKeys = {
 			custom: 'Agregar comando personalizado y guardar en ~/.snow/commands',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
+			quit: 'Salir de la aplicación',
 		},
 	},
 	hooks: {

@@ -384,6 +384,7 @@ export type TranslationKeys = {
 			custom: string;
 			agent: string;
 			todo: string;
+			quit: string;
 		};
 	};
 	// Hooks

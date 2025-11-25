@@ -159,6 +159,7 @@ type CommandHandlerOptions = {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => Promise<void>;
+	onQuit?: () => void;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -532,6 +533,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (result.success && result.action === 'quit') {
+				// Handle quit command - exit the application cleanly
+				if (options.onQuit) {
+					options.onQuit();
 				}
 			} else if (result.message) {
 				// For commands that just return a message (like /role, /init without SNOW.md, etc.)
