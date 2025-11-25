@@ -214,13 +214,18 @@ export default function HooksConfigScreen({onBack}: Props) {
 
 		const rules = loadHookConfig(selectedHookType, selectedScope);
 
+		// 只有工具Hooks才显示matcher信息
+		const isToolHook =
+			selectedHookType === 'beforeToolCall' ||
+			selectedHookType === 'afterToolCall';
+
 		const options = rules.map((rule, index) => ({
 			label: `${t.hooksConfig.hookDetail.rule} ${index + 1}: ${
 				rule.description
 			}`,
 			value: `rule-${index}`,
 			infoText: `${rule.hooks.length} ${t.hooksConfig.hookDetail.actions}${
-				rule.matcher
+				isToolHook && rule.matcher
 					? ` | ${t.hooksConfig.hookDetail.matcher}: ${rule.matcher}`
 					: ''
 			}`,
@@ -337,6 +342,11 @@ export default function HooksConfigScreen({onBack}: Props) {
 			);
 		}
 
+		// 只有工具Hooks才需要matcher
+		const isToolHook =
+			selectedHookType === 'beforeToolCall' ||
+			selectedHookType === 'afterToolCall';
+
 		const options = [
 			{
 				label: `${t.hooksConfig.ruleEdit.editDescriptionLabel}: ${editingRule.description}`,
@@ -344,15 +354,19 @@ export default function HooksConfigScreen({onBack}: Props) {
 				infoText: t.hooksConfig.ruleEdit.clickToEdit,
 				color: theme.colors.menuInfo,
 			},
-			{
+		];
+
+		// 只有工具Hooks才显示matcher选项
+		if (isToolHook) {
+			options.push({
 				label: `${t.hooksConfig.ruleEdit.editMatcherLabel}: ${
 					editingRule.matcher || t.hooksConfig.actionEdit.commandNotSet
 				}`,
 				value: 'edit-matcher',
 				infoText: t.hooksConfig.ruleEdit.clickToEditMatcher,
 				color: theme.colors.menuInfo,
-			},
-		];
+			});
+		}
 
 		// 显示所有 actions
 		editingRule.hooks.forEach((action, index) => {

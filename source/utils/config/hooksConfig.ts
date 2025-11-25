@@ -40,7 +40,7 @@ export interface HookAction {
  * Hook 规则
  */
 export interface HookRule {
-	matcher?: string; // 匹配器（可选，多个用逗号分隔）
+	matcher?: string; // 匹配器（仅用于工具Hooks: beforeToolCall/afterToolCall，多个用逗号分隔）
 	description: string;
 	hooks: HookAction[];
 }
