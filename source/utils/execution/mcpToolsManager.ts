@@ -379,7 +379,9 @@ async function refreshToolsCache(): Promise<void> {
 			// Only add if database file exists
 			if (fs.existsSync(dbPath)) {
 				// Check if database has data by importing CodebaseDatabase
-				const {CodebaseDatabase} = await import('../codebase/codebaseDatabase.js');
+				const {CodebaseDatabase} = await import(
+					'../codebase/codebaseDatabase.js'
+				);
 				const db = new CodebaseDatabase(projectRoot);
 				await db.initialize();
 				const totalChunks = db.getTotalChunks();
@@ -748,6 +750,7 @@ async function connectAndGetTools(
 				command: server.command,
 				args: server.args || [],
 				env: processEnv,
+				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
 			});
 
 			await client.connect(transport);
@@ -1122,6 +1125,7 @@ async function executeOnExternalMCPService(
 				env: server.env
 					? ({...process.env, ...server.env} as Record<string, string>)
 					: (process.env as Record<string, string>),
+				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
 			});
 		}
 
