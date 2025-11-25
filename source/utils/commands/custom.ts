@@ -1,5 +1,6 @@
 import {
 	registerCommand,
+	unregisterCommand,
 	type CommandResult,
 	getAvailableCommands,
 } from '../execution/commandExecutor.js';
@@ -102,6 +103,12 @@ export async function deleteCustomCommand(name: string): Promise<void> {
 	const {unlink} = await import('fs/promises');
 	const filePath = join(CUSTOM_COMMANDS_DIR, `${name}.json`);
 	await unlink(filePath);
+
+	// Unregister the command from command executor
+	unregisterCommand(name);
+
+	// Update cache
+	customCommandsCache = customCommandsCache.filter(cmd => cmd.name !== name);
 }
 
 // Register dynamic custom commands

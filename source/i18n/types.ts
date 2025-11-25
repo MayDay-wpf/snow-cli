@@ -268,6 +268,7 @@ export type TranslationKeys = {
 		updated: string;
 		deleteConfirm: string;
 		deleteSuccess: string;
+		deleteFailed: string;
 		navigationHint: string;
 	};
 	// Sensitive Command Config Screen

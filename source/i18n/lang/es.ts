@@ -304,6 +304,7 @@ export const es: TranslationKeys = {
 		updated: 'Actualizado:',
 		deleteConfirm: '¿Eliminar "{name}"? (Y/N)',
 		deleteSuccess: '¡Sub-agente eliminado exitosamente!',
+		deleteFailed: 'No se pueden eliminar sub-agentes incorporados',
 		navigationHint:
 			'↑↓: Navegar | Enter: Editar | A: Agregar Nuevo | D: Eliminar | Esc: Volver',
 	},

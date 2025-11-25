@@ -61,6 +61,9 @@ export async function executeCommand(
 		};
 	}
 }
+export function unregisterCommand(name: string): void {
+	delete commandHandlers[name];
+}
 
 export function getAvailableCommands(): string[] {
 	return Object.keys(commandHandlers);

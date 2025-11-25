@@ -264,6 +264,7 @@ export const zh: TranslationKeys = {
 		updated: '更新时间:',
 		deleteConfirm: '删除 "{name}"? (Y/N)',
 		deleteSuccess: '子代理删除成功!',
+		deleteFailed: '无法删除系统内置子代理',
 		navigationHint:
 			'↑↓: 导航 | Enter: 编辑 | A: 添加新代理 | D: 删除 | Esc: 返回',
 	},

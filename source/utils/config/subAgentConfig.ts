@@ -241,7 +241,7 @@ export function deleteSubAgent(id: string): boolean {
 	// Prevent deleting built-in agents
 	const agent = getSubAgent(id);
 	if (agent?.builtin) {
-		throw new Error('Cannot delete built-in agents');
+		return false; // Cannot delete built-in agents
 	}
 
 	const userAgents = getUserSubAgents();

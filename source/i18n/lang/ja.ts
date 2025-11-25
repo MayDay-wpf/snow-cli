@@ -276,6 +276,7 @@ export const ja: TranslationKeys = {
 		updated: '更新日時:',
 		deleteConfirm: '"{name}" を削除しますか? (Y/N)',
 		deleteSuccess: 'サブエージェントを削除しました!',
+		deleteFailed: '組み込みサブエージェントは削除できません',
 		navigationHint:
 			'↑↓: 移動 | Enter: 編集 | A: 新規追加 | D: 削除 | Esc: 戻る',
 	},

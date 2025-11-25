@@ -286,6 +286,7 @@ export const en: TranslationKeys = {
 		updated: 'Updated:',
 		deleteConfirm: 'Delete "{name}"? (Y/N)',
 		deleteSuccess: 'Sub-agent deleted successfully!',
+		deleteFailed: 'Cannot delete built-in sub-agents',
 		navigationHint:
 			'↑↓: Navigate | Enter: Edit | A: Add New | D: Delete | Esc: Back',
 	},

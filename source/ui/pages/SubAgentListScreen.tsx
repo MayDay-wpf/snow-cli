@@ -30,6 +30,7 @@ export default function SubAgentListScreen({
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteSuccess, setDeleteSuccess] = useState(false);
+	const [deleteFailed, setDeleteFailed] = useState(false);
 
 	// Truncate text based on terminal width
 	const truncateText = useCallback(
@@ -67,6 +68,9 @@ export default function SubAgentListScreen({
 			setDeleteSuccess(true);
 			setTimeout(() => setDeleteSuccess(false), 2000);
 			loadAgents();
+		} else {
+			setDeleteFailed(true);
+			setTimeout(() => setDeleteFailed(false), 2000);
 		}
 		setShowDeleteConfirm(false);
 	}, [agents, selectedIndex, loadAgents]);
@@ -105,7 +109,14 @@ export default function SubAgentListScreen({
 			onAdd();
 		} else if (input === 'd' || input === 'D') {
 			if (agents.length > 0) {
-				setShowDeleteConfirm(true);
+				const agent = agents[selectedIndex];
+				if (agent?.builtin) {
+					// 系统内置子代理直接显示错误提示
+					setDeleteFailed(true);
+					setTimeout(() => setDeleteFailed(false), 2000);
+				} else {
+					setShowDeleteConfirm(true);
+				}
 			}
 		}
 	});
@@ -123,6 +134,12 @@ export default function SubAgentListScreen({
 			{deleteSuccess && (
 				<Box marginBottom={1}>
 					<Alert variant="success">{t.subAgentList.deleteSuccess}</Alert>
+				</Box>
+			)}
+
+			{deleteFailed && (
+				<Box marginBottom={1}>
+					<Alert variant="error">{t.subAgentList.deleteFailed}</Alert>
 				</Box>
 			)}
 
