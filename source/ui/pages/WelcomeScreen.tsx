@@ -1,4 +1,11 @@
-import React, {useState, useMemo, useCallback, useEffect, useRef, Suspense} from 'react';
+import React, {
+	useState,
+	useMemo,
+	useCallback,
+	useEffect,
+	useRef,
+	Suspense,
+} from 'react';
 import {Box, Text, useStdout, Static} from 'ink';
 import {Alert} from '@inkjs/ui';
 import Gradient from 'ink-gradient';
@@ -11,14 +18,29 @@ import {useI18n} from '../../i18n/index.js';
 // Lazy load all configuration screens for better startup performance
 const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
 const ProxyConfigScreen = React.lazy(() => import('./ProxyConfigScreen.js'));
-const SubAgentConfigScreen = React.lazy(() => import('./SubAgentConfigScreen.js'));
+const SubAgentConfigScreen = React.lazy(
+	() => import('./SubAgentConfigScreen.js'),
+);
 const SubAgentListScreen = React.lazy(() => import('./SubAgentListScreen.js'));
-const SensitiveCommandConfigScreen = React.lazy(() => import('./SensitiveCommandConfigScreen.js'));
-const CodeBaseConfigScreen = React.lazy(() => import('./CodeBaseConfigScreen.js'));
-const SystemPromptConfigScreen = React.lazy(() => import('./SystemPromptConfigScreen.js'));
-const CustomHeadersScreen = React.lazy(() => import('./CustomHeadersScreen.js'));
-const LanguageSettingsScreen = React.lazy(() => import('./LanguageSettingsScreen.js'));
-const ThemeSettingsScreen = React.lazy(() => import('./ThemeSettingsScreen.js'));
+const SensitiveCommandConfigScreen = React.lazy(
+	() => import('./SensitiveCommandConfigScreen.js'),
+);
+const CodeBaseConfigScreen = React.lazy(
+	() => import('./CodeBaseConfigScreen.js'),
+);
+const SystemPromptConfigScreen = React.lazy(
+	() => import('./SystemPromptConfigScreen.js'),
+);
+const CustomHeadersScreen = React.lazy(
+	() => import('./CustomHeadersScreen.js'),
+);
+const LanguageSettingsScreen = React.lazy(
+	() => import('./LanguageSettingsScreen.js'),
+);
+const ThemeSettingsScreen = React.lazy(
+	() => import('./ThemeSettingsScreen.js'),
+);
+const HooksConfigScreen = React.lazy(() => import('./HooksConfigScreen.js'));
 
 type Props = {
 	version?: string;
@@ -36,6 +58,7 @@ type InlineView =
 	| 'sensitive-commands'
 	| 'systemprompt'
 	| 'customheaders'
+	| 'hooks-config'
 	| 'language-settings'
 	| 'theme-settings';
 
@@ -98,22 +121,27 @@ export default function WelcomeScreen({
 				value: 'sensitive-commands',
 				infoText: t.welcome.sensitiveCommandsInfo,
 			},
-		{
-			label: t.welcome.languageSettings,
-			value: 'language',
-			infoText: t.welcome.languageSettingsInfo,
-		},
-		{
-			label: t.welcome.themeSettings,
-			value: 'theme',
-			infoText: t.welcome.themeSettingsInfo,
-		},
-		{
-			label: t.welcome.exit,
-			value: 'exit',
-			color: 'rgb(232, 131, 136)',
-			infoText: t.welcome.exitInfo,
-		},
+			{
+				label: t.welcome.hooksSettings,
+				value: 'hooks',
+				infoText: t.welcome.hooksSettingsInfo,
+			},
+			{
+				label: t.welcome.languageSettings,
+				value: 'language',
+				infoText: t.welcome.languageSettingsInfo,
+			},
+			{
+				label: t.welcome.themeSettings,
+				value: 'theme',
+				infoText: t.welcome.themeSettingsInfo,
+			},
+			{
+				label: t.welcome.exit,
+				value: 'exit',
+				color: 'rgb(232, 131, 136)',
+				infoText: t.welcome.exitInfo,
+			},
 		],
 		[t],
 	);
@@ -141,14 +169,16 @@ export default function WelcomeScreen({
 				setInlineView('systemprompt');
 			} else if (value === 'customheaders') {
 				setInlineView('customheaders');
-		} else if (value === 'language') {
-			setInlineView('language-settings');
-		} else if (value === 'theme') {
-			setInlineView('theme-settings');
-		} else {
-			// Pass through to parent for other actions (chat, exit, etc.)
-			onMenuSelect?.(value);
-		}
+			} else if (value === 'hooks') {
+				setInlineView('hooks-config');
+			} else if (value === 'language') {
+				setInlineView('language-settings');
+			} else if (value === 'theme') {
+				setInlineView('theme-settings');
+			} else {
+				// Pass through to parent for other actions (chat, exit, etc.)
+				onMenuSelect?.(value);
+			}
 		},
 		[onMenuSelect],
 	);
@@ -341,10 +371,20 @@ export default function WelcomeScreen({
 					</Box>
 				</Suspense>
 			)}
+			{inlineView === 'hooks-config' && (
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<HooksConfigScreen onBack={handleBackToMenu} />
+					</Box>
+				</Suspense>
+			)}
 			{inlineView === 'language-settings' && (
 				<Suspense fallback={loadingFallback}>
 					<Box paddingX={1}>
-						<LanguageSettingsScreen onBack={handleBackToMenu} inlineMode={true} />
+						<LanguageSettingsScreen
+							onBack={handleBackToMenu}
+							inlineMode={true}
+						/>
 					</Box>
 				</Suspense>
 			)}

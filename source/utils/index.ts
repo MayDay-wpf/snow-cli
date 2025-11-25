@@ -9,6 +9,16 @@ import './commands/custom.js';
 export {Logger, LogLevel, logger} from './core/logger.js';
 export {default as defaultLogger} from './core/logger.js';
 
+// Export unified hooks executor
+export {
+	UnifiedHooksExecutor,
+	unifiedHooksExecutor,
+	type UnifiedHookExecutionResult,
+	type HookActionResult,
+	type CommandHookResult,
+	type PromptHookResult,
+} from './execution/unifiedHooksExecutor.js';
+
 export function formatCommand(command: Command): string {
 	return `${command.name.padEnd(12)} ${command.description}`;
 }

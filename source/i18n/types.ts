@@ -27,6 +27,8 @@ export type TranslationKeys = {
 		languageSettingsInfo: string;
 		themeSettings: string;
 		themeSettingsInfo: string;
+		hooksSettings: string;
+		hooksSettingsInfo: string;
 		exit: string;
 		exitInfo: string;
 	};
@@ -400,6 +402,92 @@ export type TranslationKeys = {
 	// Hooks
 	hooks: {
 		pressCtrlCAgain: string;
+	};
+	// Hooks Config
+	hooksConfig: {
+		title: string;
+		scopeSelect: {
+			globalHooks: string;
+			globalInfo: string;
+			projectHooks: string;
+			projectInfo: string;
+			back: string;
+			backInfo: string;
+		};
+		hookTypes: {
+			onUserMessage: string;
+			beforeToolCall: string;
+			afterToolCall: string;
+			onSubAgentComplete: string;
+			beforeCompress: string;
+			onSessionStart: string;
+			onStop: string;
+		};
+		hookList: {
+			title: string;
+			global: string;
+			project: string;
+			configured: string;
+			rules: string;
+			back: string;
+			backInfo: string;
+		};
+		hookDetail: {
+			rule: string;
+			actions: string;
+			matcher: string;
+			addNewRule: string;
+			addNewRuleInfo: string;
+			deleteHook: string;
+			deleteHookInfo: string;
+			back: string;
+			backInfo: string;
+		};
+		ruleEdit: {
+			title: string;
+			editDescription: string;
+			editMatcher: string;
+			editDescriptionLabel: string;
+			editMatcherLabel: string;
+			matcherHint: string;
+			clickToEdit: string;
+			clickToEditMatcher: string;
+			enabled: string;
+			disabled: string;
+			addAction: string;
+			addActionInfo: string;
+			deleteRule: string;
+			deleteRuleInfo: string;
+			saveRule: string;
+			saveRuleInfo: string;
+			cancel: string;
+			cancelInfo: string;
+			hint: string;
+			enterToSave: string;
+		};
+		actionEdit: {
+			title: string;
+			enabled: string;
+			enabledInfo: string;
+			type: string;
+			typeInfo: string;
+			command: string;
+			commandInfo: string;
+			commandNotSet: string;
+			prompt: string;
+			promptInfo: string;
+			promptNotSet: string;
+			timeout: string;
+			timeoutInfo: string;
+			deleteAction: string;
+			deleteActionInfo: string;
+			saveAction: string;
+			saveActionInfo: string;
+			cancel: string;
+			cancelInfo: string;
+			hint: string;
+			enterToSave: string;
+		};
 	};
 	// Custom Command Config
 	customCommand: {
