@@ -344,6 +344,15 @@ export type TranslationKeys = {
 		deleteToStart: string;
 		deleteToEnd: string;
 		pasteImages: string;
+		readlineTitle: string;
+		moveToLineStart: string;
+		moveToLineEnd: string;
+		forwardWord: string;
+		backwardWord: string;
+		deleteToLineEnd: string;
+		deleteToLineStart: string;
+		deleteWord: string;
+		deleteChar: string;
 		quickAccessTitle: string;
 		insertFiles: string;
 		searchContent: string;

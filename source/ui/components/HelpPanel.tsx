@@ -37,15 +37,29 @@ export default function HelpPanel() {
 				</Text>
 			</Box>
 
-		<Box flexDirection="column" marginBottom={1}>
-			<Text bold color="green">
-				{t.helpPanel.quickAccessTitle}
-			</Text>
-			<Text> • {t.helpPanel.insertFiles}</Text>
-			<Text> • {t.helpPanel.searchContent}</Text>
-			<Text> • {t.helpPanel.selectAgent}</Text>
-			<Text> • {t.helpPanel.showCommands}</Text>
-		</Box>
+			<Box flexDirection="column" marginBottom={1}>
+				<Text bold color="cyan">
+					{t.helpPanel.readlineTitle}
+				</Text>
+				<Text> • {t.helpPanel.moveToLineStart}</Text>
+				<Text> • {t.helpPanel.moveToLineEnd}</Text>
+				<Text> • {t.helpPanel.forwardWord}</Text>
+				<Text> • {t.helpPanel.backwardWord}</Text>
+				<Text> • {t.helpPanel.deleteToLineEnd}</Text>
+				<Text> • {t.helpPanel.deleteToLineStart}</Text>
+				<Text> • {t.helpPanel.deleteWord}</Text>
+				<Text> • {t.helpPanel.deleteChar}</Text>
+			</Box>
+
+			<Box flexDirection="column" marginBottom={1}>
+				<Text bold color="green">
+					{t.helpPanel.quickAccessTitle}
+				</Text>
+				<Text> • {t.helpPanel.insertFiles}</Text>
+				<Text> • {t.helpPanel.searchContent}</Text>
+				<Text> • {t.helpPanel.selectAgent}</Text>
+				<Text> • {t.helpPanel.showCommands}</Text>
+			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="blue">

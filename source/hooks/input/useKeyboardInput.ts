@@ -410,7 +410,138 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Ctrl+L - Delete from cursor to beginning
+		// Helper function: find word boundaries (space and punctuation)
+		const findWordBoundary = (
+			text: string,
+			start: number,
+			direction: 'forward' | 'backward',
+		): number => {
+			if (direction === 'forward') {
+				// Skip current whitespace/punctuation
+				let pos = start;
+				while (pos < text.length && /[\s\p{P}]/u.test(text[pos] || '')) {
+					pos++;
+				}
+				// Find next whitespace/punctuation
+				while (pos < text.length && !/[\s\p{P}]/u.test(text[pos] || '')) {
+					pos++;
+				}
+				return pos;
+			} else {
+				// Skip current whitespace/punctuation
+				let pos = start;
+				while (pos > 0 && /[\s\p{P}]/u.test(text[pos - 1] || '')) {
+					pos--;
+				}
+				// Find previous whitespace/punctuation
+				while (pos > 0 && !/[\s\p{P}]/u.test(text[pos - 1] || '')) {
+					pos--;
+				}
+				return pos;
+			}
+		};
+
+		// Ctrl+A - Move to beginning of line
+		if (key.ctrl && input === 'a') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			// Find start of current line
+			const lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1;
+			buffer.setCursorPosition(lineStart);
+			triggerUpdate();
+			return;
+		}
+
+		// Ctrl+E - Move to end of line
+		if (key.ctrl && input === 'e') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			// Find end of current line
+			let lineEnd = text.indexOf('\n', cursorPos);
+			if (lineEnd === -1) lineEnd = text.length;
+			buffer.setCursorPosition(lineEnd);
+			triggerUpdate();
+			return;
+		}
+
+		// Alt+F - Forward one word
+		if (key.meta && input === 'f') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			const newPos = findWordBoundary(text, cursorPos, 'forward');
+			buffer.setCursorPosition(newPos);
+			triggerUpdate();
+			return;
+		}
+
+		// Alt+B - Backward one word
+		if (key.meta && input === 'b') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			const newPos = findWordBoundary(text, cursorPos, 'backward');
+			buffer.setCursorPosition(newPos);
+			triggerUpdate();
+			return;
+		}
+
+		// Ctrl+K - Delete from cursor to end of line (readline compatible)
+		if (key.ctrl && input === 'k') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			// Find end of current line
+			let lineEnd = text.indexOf('\n', cursorPos);
+			if (lineEnd === -1) lineEnd = text.length;
+			// Delete from cursor to end of line
+			const beforeCursor = text.slice(0, cursorPos);
+			const afterLine = text.slice(lineEnd);
+			buffer.setText(beforeCursor + afterLine);
+			forceStateUpdate();
+			return;
+		}
+
+		// Ctrl+U - Delete from cursor to beginning of line (readline compatible)
+		if (key.ctrl && input === 'u') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			// Find start of current line
+			const lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1;
+			// Delete from line start to cursor
+			const beforeLine = text.slice(0, lineStart);
+			const afterCursor = text.slice(cursorPos);
+			buffer.setText(beforeLine + afterCursor);
+			buffer.setCursorPosition(lineStart);
+			forceStateUpdate();
+			return;
+		}
+
+		// Ctrl+W - Delete word before cursor
+		if (key.ctrl && input === 'w') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			const wordStart = findWordBoundary(text, cursorPos, 'backward');
+			// Delete from word start to cursor
+			const beforeWord = text.slice(0, wordStart);
+			const afterCursor = text.slice(cursorPos);
+			buffer.setText(beforeWord + afterCursor);
+			buffer.setCursorPosition(wordStart);
+			forceStateUpdate();
+			return;
+		}
+
+		// Ctrl+D - Delete character at cursor (readline compatible)
+		if (key.ctrl && input === 'd') {
+			const text = buffer.text;
+			const cursorPos = buffer.getCursorPosition();
+			if (cursorPos < text.length) {
+				const beforeCursor = text.slice(0, cursorPos);
+				const afterChar = text.slice(cursorPos + 1);
+				buffer.setText(beforeCursor + afterChar);
+				forceStateUpdate();
+			}
+			return;
+		}
+
+		// Ctrl+L - Clear from cursor to beginning (legacy, kept for compatibility)
 		if (key.ctrl && input === 'l') {
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
@@ -421,7 +552,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Ctrl+R - Delete from cursor to end
+		// Ctrl+R - Clear from cursor to end (legacy, kept for compatibility)
 		if (key.ctrl && input === 'r') {
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
