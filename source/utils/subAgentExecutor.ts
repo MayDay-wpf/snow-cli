@@ -44,15 +44,31 @@ export interface AddToAlwaysApprovedCallback {
 }
 
 /**
- * Execute a sub-agent as a tool
- * @param agentId - The ID of the sub-agent to execute
- * @param prompt - The task prompt to send to the sub-agent
- * @param onMessage - Callback for streaming sub-agent messages (for UI display)
- * @param abortSignal - Optional abort signal
- * @param requestToolConfirmation - Callback to request tool confirmation from user
- * @param isToolAutoApproved - Function to check if a tool is auto-approved
- * @param yoloMode - Whether YOLO mode is enabled (auto-approve all tools)
- * @returns The final result from the sub-agent
+ * 用户问题回调接口
+ * 用于子智能体调用 askuser 工具时，请求主会话显示蓝色边框的 AskUserQuestion 组件
+ * @param question - 问题文本
+ * @param options - 选项列表
+ * @returns 用户选择的结果
+ */
+export interface UserQuestionCallback {
+	(question: string, options: string[]): Promise<{
+		selected: string;
+		customInput?: string;
+	}>;
+}
+
+/**
+ * 执行子智能体作为工具
+ * @param agentId - 子智能体 ID
+ * @param prompt - 发送给子智能体的任务提示
+ * @param onMessage - 流式消息回调（用于 UI 显示）
+ * @param abortSignal - 可选的中止信号
+ * @param requestToolConfirmation - 工具确认回调
+ * @param isToolAutoApproved - 检查工具是否自动批准
+ * @param yoloMode - 是否启用 YOLO 模式（自动批准所有工具）
+ * @param addToAlwaysApproved - 添加工具到始终批准列表的回调
+ * @param requestUserQuestion - 用户问题回调，用于子智能体调用 askuser 工具时显示主会话的蓝色边框 UI
+ * @returns 子智能体的最终结果
  */
 export async function executeSubAgent(
 	agentId: string,
@@ -63,6 +79,7 @@ export async function executeSubAgent(
 	isToolAutoApproved?: ToolApprovalChecker,
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
+	requestUserQuestion?: UserQuestionCallback,
 ): Promise<SubAgentResult> {
 	try {
 		// Handle built-in agents (hardcoded)
@@ -355,6 +372,72 @@ export async function executeSubAgent(
 			// If no tool calls, we're done
 			if (toolCalls.length === 0) {
 				break;
+			}
+
+			// 拦截 askuser 工具：子智能体调用时需要显示主会话的蓝色边框 UI，而不是工具确认界面
+			const askUserTool = toolCalls.find(tc =>
+				tc.function.name.startsWith('askuser-'),
+			);
+
+			if (askUserTool && requestUserQuestion) {
+				// 解析工具参数，失败时使用默认值
+				let question = 'Please select an option:';
+				let options: string[] = ['Yes', 'No'];
+
+				try {
+					const args = JSON.parse(askUserTool.function.arguments);
+					if (args.question) question = args.question;
+					if (args.options && Array.isArray(args.options)) {
+						options = args.options;
+					}
+				} catch (error) {
+					console.error('Failed to parse askuser tool arguments:', error);
+				}
+
+				const userAnswer = await requestUserQuestion(question, options);
+
+				const answerText = userAnswer.customInput
+					? `${userAnswer.selected}: ${userAnswer.customInput}`
+					: userAnswer.selected;
+
+				const toolResultMessage = {
+					role: 'tool' as const,
+					tool_call_id: askUserTool.id,
+					content: JSON.stringify({
+						answer: answerText,
+						selected: userAnswer.selected,
+						customInput: userAnswer.customInput,
+					}),
+				};
+
+				messages.push(toolResultMessage);
+
+				if (onMessage) {
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: agent.id,
+						agentName: agent.name,
+						message: {
+							type: 'tool_result',
+							tool_call_id: askUserTool.id,
+							tool_name: askUserTool.function.name,
+							content: JSON.stringify({
+								answer: answerText,
+								selected: userAnswer.selected,
+								customInput: userAnswer.customInput,
+							}),
+						} as any,
+					});
+				}
+
+				// 移除已处理的 askuser 工具，避免重复执行
+				const remainingTools = toolCalls.filter(tc => tc.id !== askUserTool.id);
+
+				if (remainingTools.length === 0) {
+					continue;
+				}
+
+				toolCalls = remainingTools;
 			}
 
 			// Check tool approvals before execution
