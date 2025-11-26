@@ -66,6 +66,20 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Lazy initialization of TODO service to avoid circular dependencies
 let todoService: TodoService | null = null;
 
+// 🔥 FIX: Persistent MCP client connections for services like Playwright
+// These services require long-lived connections to keep browser processes running
+interface PersistentMCPClient {
+	client: Client;
+	transport: any;
+	lastUsed: number;
+}
+
+const persistentClients = new Map<string, PersistentMCPClient>();
+const CLIENT_IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes idle timeout
+
+// Services that need persistent connections (don't close after each tool call)
+const PERSISTENT_SERVICES = ['playwright', 'browser', 'puppeteer'];
+
 /**
  * Get the TODO service instance (lazy initialization)
  */
@@ -803,6 +817,127 @@ async function connectAndGetTools(
 }
 
 /**
+ * Check if a service needs persistent connection
+ */
+function needsPersistentConnection(serviceName: string): boolean {
+	return PERSISTENT_SERVICES.some(persistent =>
+		serviceName.toLowerCase().includes(persistent),
+	);
+}
+
+/**
+ * Get or create a persistent MCP client for a service
+ */
+async function getPersistentClient(
+	serviceName: string,
+	server: MCPServer,
+): Promise<Client> {
+	// Check if we have an existing client
+	const existing = persistentClients.get(serviceName);
+	if (existing) {
+		existing.lastUsed = Date.now();
+		return existing.client;
+	}
+
+	// Create new persistent client
+	const client = new Client(
+		{
+			name: `snow-cli-${serviceName}`,
+			version: '1.0.0',
+		},
+		{
+			capabilities: {},
+		},
+	);
+
+	resourceMonitor.trackMCPConnectionOpened(serviceName);
+
+	let transport: any;
+
+	if (server.url) {
+		let urlString = server.url;
+		if (server.env) {
+			const allEnv = {...process.env, ...server.env};
+			urlString = urlString.replace(
+				/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+				(match, braced, simple) => {
+					const varName = braced || simple;
+					return allEnv[varName] || match;
+				},
+			);
+		}
+		const url = new URL(urlString);
+		transport = new StreamableHTTPClientTransport(url);
+	} else if (server.command) {
+		transport = new StdioClientTransport({
+			command: server.command,
+			args: server.args || [],
+			env: server.env
+				? ({...process.env, ...server.env} as Record<string, string>)
+				: (process.env as Record<string, string>),
+			stderr: 'pipe', // Persistent services need stderr for process communication
+		});
+	}
+
+	await client.connect(transport);
+
+	// Store the persistent client
+	persistentClients.set(serviceName, {
+		client,
+		transport,
+		lastUsed: Date.now(),
+	});
+
+	logger.info(`Created persistent MCP connection for ${serviceName}`);
+
+	return client;
+}
+
+/**
+ * Close idle persistent connections
+ */
+export async function cleanupIdleMCPConnections(): Promise<void> {
+	const now = Date.now();
+	const toClose: string[] = [];
+
+	for (const [serviceName, clientInfo] of persistentClients.entries()) {
+		if (now - clientInfo.lastUsed > CLIENT_IDLE_TIMEOUT) {
+			toClose.push(serviceName);
+		}
+	}
+
+	for (const serviceName of toClose) {
+		const clientInfo = persistentClients.get(serviceName);
+		if (clientInfo) {
+			try {
+				await clientInfo.client.close();
+				resourceMonitor.trackMCPConnectionClosed(serviceName);
+				logger.info(`Closed idle MCP connection for ${serviceName}`);
+			} catch (error) {
+				logger.warn(`Failed to close idle client for ${serviceName}:`, error);
+			}
+			persistentClients.delete(serviceName);
+		}
+	}
+}
+
+/**
+ * Close all persistent MCP connections
+ */
+export async function closeAllMCPConnections(): Promise<void> {
+	for (const [serviceName, clientInfo] of persistentClients.entries()) {
+		try {
+			await clientInfo.client.close();
+			resourceMonitor.trackMCPConnectionClosed(serviceName);
+			logger.info(`Closed MCP connection for ${serviceName}`);
+		} catch (error) {
+			logger.warn(`Failed to close client for ${serviceName}:`, error);
+		}
+	}
+	persistentClients.clear();
+}
+
+/**
  * Execute an MCP tool by parsing the prefixed tool name
  * Only connects to the service when actually needed
  */
@@ -1073,7 +1208,8 @@ export async function executeMCPTool(
 }
 
 /**
- * Execute a tool on an external MCP service - connects only when needed
+ * Execute a tool on an external MCP service
+ * Uses persistent connections for services like Playwright that need long-lived browser processes
  */
 async function executeOnExternalMCPService(
 	serviceName: string,
@@ -1081,6 +1217,28 @@ async function executeOnExternalMCPService(
 	toolName: string,
 	args: any,
 ): Promise<any> {
+	// 🔥 FIX: Use persistent connection for browser automation services
+	const isPersistent = needsPersistentConnection(serviceName);
+
+	if (isPersistent) {
+		// Get or create persistent client
+		const client = await getPersistentClient(serviceName, server);
+
+		logger.debug(
+			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
+		);
+
+		// Execute the tool with the original tool name (not prefixed)
+		const result = await client.callTool({
+			name: toolName,
+			arguments: args,
+		});
+		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
+
+		return result.content;
+	}
+
+	// Non-persistent services: connect, execute, disconnect
 	let client: Client | null = null;
 	logger.debug(
 		`Connecting to MCP service ${serviceName} to execute tool ${toolName}...`,
@@ -1099,7 +1257,7 @@ async function executeOnExternalMCPService(
 
 		resourceMonitor.trackMCPConnectionOpened(serviceName);
 
-		// Setup transport (similar to getServiceTools)
+		// Setup transport
 		let transport: any;
 
 		if (server.url) {
@@ -1125,7 +1283,7 @@ async function executeOnExternalMCPService(
 				env: server.env
 					? ({...process.env, ...server.env} as Record<string, string>)
 					: (process.env as Record<string, string>),
-				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
+				stderr: 'ignore', // Non-persistent services can ignore stderr
 			});
 		}
 

@@ -70,6 +70,7 @@ async function loadDependencies() {
 		devModeModule,
 		childProcessModule,
 		utilModule,
+		mcpModule,
 	] = await Promise.all([
 		import('./app.js'),
 		import('./utils/ui/vscodeConnection.js'),
@@ -79,6 +80,7 @@ async function loadDependencies() {
 		import('./utils/core/devMode.js'),
 		import('child_process'),
 		import('util'),
+		import('./utils/execution/mcpToolsManager.js'),
 	]);
 
 	return {
@@ -91,6 +93,7 @@ async function loadDependencies() {
 		getDevUserId: devModeModule.getDevUserId,
 		exec: childProcessModule.exec,
 		promisify: utilModule.promisify,
+		closeAllMCPConnections: mcpModule.closeAllMCPConnections,
 	};
 }
 
@@ -299,12 +302,14 @@ process.stdout.write('\x1b[2K\r'); // Clear line
 process.stdout.write('\x1b[?25h'); // Show cursor
 
 // Re-enable on exit to avoid polluting parent shell
-const cleanup = () => {
+const cleanup = async () => {
 	process.stdout.write('\x1b[?2004l');
 	// Cleanup loaded dependencies if available
 	const deps = (global as any).__deps;
 	if (deps) {
-		// Kill all child processes first
+		// Close all persistent MCP connections (Playwright, etc.)
+		await deps.closeAllMCPConnections?.();
+		// Kill all child processes
 		deps.processManager.killAll();
 		// Stop resource monitoring
 		deps.resourceMonitor.stopMonitoring();
