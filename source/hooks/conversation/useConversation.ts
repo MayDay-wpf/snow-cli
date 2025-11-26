@@ -1,5 +1,8 @@
 import {encoding_for_model} from 'tiktoken';
-import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
+import {
+	createStreamingChatCompletion,
+	type ChatMessage,
+} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
@@ -632,11 +635,11 @@ export async function handleConversationWithTools(
 							try {
 								const args = JSON.parse(toolCall.function.arguments);
 								const {isSensitiveCommand: checkSensitiveCommand} =
-									await import('../../utils/execution/sensitiveCommandManager.js').then(
-										m => ({
-											isSensitiveCommand: m.isSensitiveCommand,
-										}),
-									);
+									await import(
+										'../../utils/execution/sensitiveCommandManager.js'
+									).then(m => ({
+										isSensitiveCommand: m.isSensitiveCommand,
+									}));
 								const sensitiveCheck = checkSensitiveCommand(args.command);
 								if (sensitiveCheck.isSensitive) {
 									sensitiveTools.push(toolCall);
@@ -1103,6 +1106,36 @@ export async function handleConversationWithTools(
 					break;
 				}
 
+				// Check if any hook failed during tool execution
+				const hookFailedResult = toolResults.find(r => r.hookFailed);
+				if (hookFailedResult) {
+					// Add tool results to conversation and break the loop
+					for (const result of toolResults) {
+						const {hookFailed, ...resultWithoutFlag} = result;
+						conversationMessages.push(resultWithoutFlag);
+						saveMessage(resultWithoutFlag).catch(error => {
+							console.error('Failed to save tool result:', error);
+						});
+					}
+
+					// Display hook error using HookErrorDisplay component
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: '', // Content will be rendered by HookErrorDisplay
+							streaming: false,
+							hookError: hookFailedResult.hookErrorDetails,
+						},
+					]);
+
+					if (options.setIsStreaming) {
+						options.setIsStreaming(false);
+					}
+					freeEncoder();
+					break;
+				}
+
 				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
 				const config = getOpenAiConfig();
 				if (
@@ -1122,6 +1155,26 @@ export async function handleConversationWithTools(
 
 						const compressionResult = await performAutoCompression();
 
+						// Check if beforeCompress hook failed
+						if (compressionResult && (compressionResult as any).hookFailed) {
+							// Hook failed, display error and abort AI flow
+							setMessages(prev => [
+								...prev,
+								{
+									role: 'assistant',
+									content: '', // Content will be rendered by HookErrorDisplay
+									streaming: false,
+									hookError: (compressionResult as any).hookErrorDetails,
+								},
+							]);
+
+							if (options.setIsStreaming) {
+								options.setIsStreaming(false);
+							}
+							freeEncoder();
+							break; // Abort AI flow
+						}
+
 						if (compressionResult && options.clearSavedMessages) {
 							// 更新UI和token使用情况
 							options.clearSavedMessages();
@@ -1129,10 +1182,13 @@ export async function handleConversationWithTools(
 							if (options.setRemountKey) {
 								options.setRemountKey(prev => prev + 1);
 							}
-							options.setContextUsage(compressionResult.usage);
 
-							// 更新累计的usage为压缩后的usage
-							accumulatedUsage = compressionResult.usage;
+							// Only update usage if compressionResult has usage field
+							if (compressionResult.usage) {
+								options.setContextUsage(compressionResult.usage);
+								// 更新累计的usage为压缩后的usage
+								accumulatedUsage = compressionResult.usage;
+							}
 
 							// 压缩后需要重新构建conversationMessages
 							conversationMessages = [];
@@ -1322,6 +1378,29 @@ export async function handleConversationWithTools(
 
 								const compressionResult = await performAutoCompression();
 
+								// Check if beforeCompress hook failed
+								if (
+									compressionResult &&
+									(compressionResult as any).hookFailed
+								) {
+									// Hook failed, display error and abort AI flow
+									setMessages(prev => [
+										...prev,
+										{
+											role: 'assistant',
+											content: '', // Content will be rendered by HookErrorDisplay
+											streaming: false,
+											hookError: (compressionResult as any).hookErrorDetails,
+										},
+									]);
+
+									if (options.setIsStreaming) {
+										options.setIsStreaming(false);
+									}
+									freeEncoder();
+									break; // Abort AI flow
+								}
+
 								if (compressionResult && options.clearSavedMessages) {
 									// 更新UI和token使用情况
 									options.clearSavedMessages();
@@ -1329,10 +1408,13 @@ export async function handleConversationWithTools(
 									if (options.setRemountKey) {
 										options.setRemountKey(prev => prev + 1);
 									}
-									options.setContextUsage(compressionResult.usage);
 
-									// 更新累计的usage为压缩后的usage
-									accumulatedUsage = compressionResult.usage;
+									// Only update usage if compressionResult has usage field
+									if (compressionResult.usage) {
+										options.setContextUsage(compressionResult.usage);
+										// 更新累计的usage为压缩后的usage
+										accumulatedUsage = compressionResult.usage;
+									}
 
 									// 压缩后需要重新构建conversationMessages
 									conversationMessages = [];

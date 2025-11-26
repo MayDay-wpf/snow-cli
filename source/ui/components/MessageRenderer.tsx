@@ -5,6 +5,7 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from './MarkdownRenderer.js';
 import DiffViewer from './DiffViewer.js';
 import ToolResultPreview from './ToolResultPreview.js';
+import {HookErrorDisplay} from './HookErrorDisplay.js';
 
 type Props = {
 	message: Message;
@@ -23,9 +24,13 @@ export default function MessageRenderer({
 }: Props) {
 	const {theme} = useTheme();
 
+	// Helper function to remove ANSI escape codes
+	const removeAnsiCodes = (text: string): string => {
+		return text.replace(/\x1b\[[0-9;]*m/g, '');
+	};
+
 	// Determine tool message type and color
 	let toolStatusColor: string = 'cyan';
-	let isToolMessage = false;
 
 	// Check if this message is part of a parallel group
 	const isInParallelGroup =
@@ -64,19 +69,16 @@ export default function MessageRenderer({
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		if (message.content.startsWith('⚡') || message.content.includes('⚇⚡')) {
-			isToolMessage = true;
 			toolStatusColor = 'yellowBright';
 		} else if (
 			message.content.startsWith('✓') ||
 			message.content.includes('⚇✓')
 		) {
-			isToolMessage = true;
 			toolStatusColor = 'green';
 		} else if (
 			message.content.startsWith('✗') ||
 			message.content.includes('⚇✗')
 		) {
-			isToolMessage = true;
 			toolStatusColor = 'red';
 		} else {
 			toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
@@ -94,7 +96,9 @@ export default function MessageRenderer({
 		>
 			{/* Plain output - no icons or prefixes */}
 			{message.plainOutput ? (
-				<Text color="white">{message.content}</Text>
+				<Text color={message.role === 'user' ? 'white' : toolStatusColor}>
+					{removeAnsiCodes(message.content)}
+				</Text>
 			) : (
 				<>
 					{/* Show parallel group indicator */}
@@ -133,21 +137,17 @@ export default function MessageRenderer({
 										</Text>
 									)}
 									{message.content && (
-										<Text color="white">{message.content}</Text>
+										<Text color="white">
+											{removeAnsiCodes(message.content)}
+										</Text>
 									)}
 								</>
 							) : (
 								<>
-									{message.role === 'user' || isToolMessage ? (
+									{message.plainOutput ? (
 										<Text
 											color={
-												message.role === 'user'
-													? 'white'
-													: message.content.startsWith('⚡')
-													? 'yellow'
-													: message.content.startsWith('✓')
-													? 'green'
-													: 'red'
+												message.role === 'user' ? 'white' : toolStatusColor
 											}
 											backgroundColor={
 												message.role === 'user'
@@ -155,10 +155,41 @@ export default function MessageRenderer({
 													: undefined
 											}
 										>
-											{message.content || ' '}
+											{removeAnsiCodes(message.content || ' ')}
 										</Text>
 									) : (
-										<MarkdownRenderer content={message.content || ' '} />
+										(() => {
+											// Check if message has hookError field
+											if (message.hookError) {
+												return <HookErrorDisplay details={message.hookError} />;
+											}
+
+											// For tool messages (with status icons), render as plain text with color
+											// instead of using MarkdownRenderer which ignores the toolStatusColor
+											const hasToolStatusIcon =
+												message.content.includes('⚇⚡') ||
+												message.content.includes('⚇✓') ||
+												message.content.includes('⚇✗') ||
+												message.content.startsWith('⚡') ||
+												message.content.startsWith('✓') ||
+												message.content.startsWith('✗');
+
+											if (
+												hasToolStatusIcon &&
+												(message.role === 'assistant' ||
+													message.role === 'subagent')
+											) {
+												return (
+													<Text color={toolStatusColor}>
+														{removeAnsiCodes(message.content || ' ')}
+													</Text>
+												);
+											}
+
+											return (
+												<MarkdownRenderer content={message.content || ' '} />
+											);
+										})()
 									)}
 									{/* Show sub-agent token usage */}
 									{message.subAgentUsage &&

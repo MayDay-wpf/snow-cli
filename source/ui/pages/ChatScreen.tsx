@@ -981,6 +981,65 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return;
 		}
 
+		// Execute onUserMessage hook before processing
+		try {
+			const {unifiedHooksExecutor} = await import(
+				'../../utils/execution/unifiedHooksExecutor.js'
+			);
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'onUserMessage',
+				{
+					message,
+					imageCount: images?.length || 0,
+					source: 'normal',
+				},
+			);
+			// Handle hook result using centralized handler
+			const {handleHookResult} = await import(
+				'../../utils/execution/hookResultHandler.js'
+			);
+			const handlerResult = handleHookResult(hookResult, message);
+
+			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
+				// Critical error: store structured data in message
+				// MessageRenderer will handle the formatting
+				const {exitCode, command, output, error} = handlerResult.errorDetails;
+				const combinedOutput =
+					[output, error].filter(Boolean).join('\n\n') || '(no output)';
+
+				// Truncate for readability
+				const truncCommand =
+					command.length > 150 ? command.slice(0, 150) + '...' : command;
+				const truncOutput =
+					combinedOutput.length > 300
+						? combinedOutput.slice(0, 300) + '...'
+						: combinedOutput;
+
+				// Store as special format that MessageRenderer can parse
+				const errorContent = JSON.stringify({
+					type: 'hook-error',
+					exitCode,
+					command: truncCommand,
+					output: truncOutput,
+				});
+
+				setMessages(prev => [
+					...prev,
+					{
+						role: 'assistant',
+						content: errorContent,
+						timestamp: new Date(),
+					},
+				]);
+				return; // Abort - don't send to AI
+			}
+
+			// Update message with any modifications (e.g., warning appended)
+			message = handlerResult.modifiedMessage!;
+		} catch (error) {
+			console.error('Failed to execute onUserMessage hook:', error);
+		}
+
 		// Create checkpoint (lightweight, only tracks modifications)
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) {
@@ -1322,9 +1381,70 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		// Combine multiple pending messages into one
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
+		// Execute onUserMessage hook for pending messages
+		let messageToSend = combinedMessage;
+		try {
+			const {unifiedHooksExecutor} = await import(
+				'../../utils/execution/unifiedHooksExecutor.js'
+			);
+			const allImages = messagesToProcess.flatMap(m => m.images || []);
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'onUserMessage',
+				{
+					message: combinedMessage,
+					imageCount: allImages.length,
+					source: 'pending',
+				},
+			);
+			// Handle hook result using centralized handler
+			const {handleHookResult} = await import(
+				'../../utils/execution/hookResultHandler.js'
+			);
+			const handlerResult = handleHookResult(hookResult, combinedMessage);
+
+			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
+				// Critical error: store structured data in message
+				// MessageRenderer will handle the formatting
+				const {exitCode, command, output, error} = handlerResult.errorDetails;
+				const combinedOutput =
+					[output, error].filter(Boolean).join('\n\n') || '(no output)';
+
+				// Truncate for readability
+				const truncCommand =
+					command.length > 150 ? command.slice(0, 150) + '...' : command;
+				const truncOutput =
+					combinedOutput.length > 300
+						? combinedOutput.slice(0, 300) + '...'
+						: combinedOutput;
+
+				// Store as special format that MessageRenderer can parse
+				const errorContent = JSON.stringify({
+					type: 'hook-error',
+					exitCode,
+					command: truncCommand,
+					output: truncOutput,
+				});
+
+				setMessages(prev => [
+					...prev,
+					{
+						role: 'assistant',
+						content: errorContent,
+						timestamp: new Date(),
+					},
+				]);
+				return; // Abort - don't send to AI
+			}
+
+			// Update message with any modifications (e.g., warning appended)
+			messageToSend = handlerResult.modifiedMessage!;
+		} catch (error) {
+			console.error('Failed to execute onUserMessage hook:', error);
+		}
+
 		// Parse and validate file references (same as processMessage)
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			combinedMessage,
+			messageToSend,
 		);
 
 		// Separate image files from regular files

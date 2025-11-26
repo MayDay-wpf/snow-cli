@@ -19,6 +19,14 @@ export interface ToolResult {
 	role: 'tool';
 	content: string;
 	images?: ImageContent[]; // Support multimodal content with images
+	hookFailed?: boolean; // Indicates if a hook failed and AI flow should be interrupted
+	hookErrorDetails?: {
+		type: 'warning' | 'error';
+		exitCode: number;
+		command: string;
+		output?: string;
+		error?: string;
+	}; // Hook error details for UI rendering
 }
 
 export type SubAgentMessageCallback = (message: SubAgentMessage) => void;
@@ -144,8 +152,58 @@ export async function executeToolCall(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
 ): Promise<ToolResult> {
+	let result: ToolResult | undefined;
+	let executionError: Error | null = null;
+
 	try {
 		const args = JSON.parse(toolCall.function.arguments);
+
+		// Execute beforeToolCall hook
+		try {
+			const {unifiedHooksExecutor} = await import(
+				'../execution/unifiedHooksExecutor.js'
+			);
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'beforeToolCall',
+				{
+					toolName: toolCall.function.name,
+					args,
+				},
+			);
+			// Handle hook exit codes: 0=continue, 1=continue, 2+=set hookFailed and return
+			if (hookResult && !hookResult.success) {
+				// Find failed command hook
+				const commandError = hookResult.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					// Exit code 2+: Set hookFailed flag and return result immediately
+					if (exitCode >= 2 || exitCode < 0) {
+						return {
+							tool_call_id: toolCall.id,
+							role: 'tool',
+							content: '', // Content will be rendered by HookErrorDisplay component
+							hookFailed: true,
+							hookErrorDetails: {
+								type: 'error',
+								exitCode,
+								command,
+								output,
+								error,
+							},
+						};
+					}
+					// Exit code 1: Warning, continue execution (logged but not thrown)
+					// Exit code 0: Success, continue
+				}
+			}
+		} catch (error) {
+			// Log unexpected errors and continue - don't block on unexpected errors
+			console.warn('Failed to execute beforeToolCall hook:', error);
+		}
 
 		// Check if this is a sub-agent tool
 		if (toolCall.function.name.startsWith('subagent-')) {
@@ -167,7 +225,7 @@ export async function executeToolCall(
 				  }
 				: undefined;
 
-			const result = await subAgentService.execute({
+			const subAgentResult = await subAgentService.execute({
 				agentId,
 				prompt: args.prompt,
 				onMessage: onSubAgentMessage,
@@ -188,31 +246,33 @@ export async function executeToolCall(
 				requestUserQuestion: onUserInteractionNeeded,
 			});
 
-			return {
+			result = {
 				tool_call_id: toolCall.id,
 				role: 'tool',
-				content: JSON.stringify(result),
+				content: JSON.stringify(subAgentResult),
+			};
+		} else {
+			// Regular tool execution
+			const toolResult = await executeMCPTool(
+				toolCall.function.name,
+				args,
+				abortSignal,
+				onTokenUpdate,
+			);
+
+			// Extract multimodal content (text + images)
+			const {textContent, images} = extractMultimodalContent(toolResult);
+
+			result = {
+				tool_call_id: toolCall.id,
+				role: 'tool',
+				content: textContent,
+				images,
 			};
 		}
-
-		// Regular tool execution
-		const result = await executeMCPTool(
-			toolCall.function.name,
-			args,
-			abortSignal,
-			onTokenUpdate,
-		);
-
-		// Extract multimodal content (text + images)
-		const {textContent, images} = extractMultimodalContent(result);
-
-		return {
-			tool_call_id: toolCall.id,
-			role: 'tool',
-			content: textContent,
-			images,
-		};
 	} catch (error) {
+		executionError = error instanceof Error ? error : new Error(String(error));
+
 		// Check if this is a user interaction needed error
 		const {UserInteractionNeededError} = await import(
 			'../ui/userInteractionError.js'
@@ -231,30 +291,88 @@ export async function executeToolCall(
 					? `User response: ${response.customInput}`
 					: `User selected: ${response.selected}`;
 
-				return {
+				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
 					content: resultContent,
 				};
 			} else {
 				// No callback provided, return error
-				return {
+				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
 					content: 'Error: User interaction needed but no callback provided',
 				};
 			}
+		} else {
+			// Regular error handling
+			result = {
+				tool_call_id: toolCall.id,
+				role: 'tool',
+				content: `Error: ${
+					error instanceof Error ? error.message : 'Tool execution failed'
+				}`,
+			};
 		}
+	} finally {
+		// Execute afterToolCall hook
+		try {
+			const {unifiedHooksExecutor} = await import(
+				'../execution/unifiedHooksExecutor.js'
+			);
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'afterToolCall',
+				{
+					toolName: toolCall.function.name,
+					args: JSON.parse(toolCall.function.arguments),
+					result,
+					error: executionError,
+				},
+			);
 
-		// Regular error handling
-		return {
-			tool_call_id: toolCall.id,
-			role: 'tool',
-			content: `Error: ${
-				error instanceof Error ? error.message : 'Tool execution failed'
-			}`,
-		};
+			// Handle hook result based on exit code strategy
+			if (hookResult && !hookResult.success) {
+				// Find failed command hook
+				const commandError = hookResult.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					if (exitCode === 1) {
+						// Exit code 1: Warning - append to tool result
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						const warningMessage = `\n\n[afterToolCall Hook Warning]\nCommand: ${command}\nOutput:\n${combinedOutput}`;
+
+						// Append warning to result content
+						if (result && typeof result.content === 'string') {
+							result.content = result.content + warningMessage;
+						}
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Exit code 2+: Set hookFailed flag on result
+						// Set error details for UI rendering (HookErrorDisplay component)
+						if (result && typeof result.content === 'string') {
+							result.hookFailed = true;
+							result.hookErrorDetails = {
+								type: 'error',
+								exitCode,
+								command,
+								output,
+								error,
+							};
+						}
+					}
+				}
+			}
+		} catch (error) {
+			// Log unexpected errors but continue - don't block tool execution
+			console.warn('Failed to execute afterToolCall hook:', error);
+		}
 	}
+
+	return result!;
 }
 
 /**
@@ -370,6 +488,11 @@ export async function executeToolCalls(
 					onUserInteractionNeeded,
 				);
 				groupResults.push(result);
+
+				// If hook failed, stop executing remaining tools
+				if (result.hookFailed) {
+					break;
+				}
 			}
 			return groupResults;
 		}),

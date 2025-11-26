@@ -33,10 +33,17 @@ export interface PromptHookResponse {
 
 /**
  * Command Hook 执行结果
+ *
+ * 退出码处理:
+ * - 0: 通过,正常继续
+ * - 1: 警告,携带stderr发送给AI处理
+ * - 2+: 严重错误,阻止发送,直接显示给用户
  */
 export interface CommandHookResult {
 	type: 'command';
 	success: boolean;
+	command: string; // 执行的命令
+	exitCode: number; // 进程退出码
 	output?: string;
 	error?: string;
 }
@@ -92,10 +99,7 @@ export class UnifiedHooksExecutor {
 	private requestMethod: RequestMethod = 'chat';
 	private promptInitialized: boolean = false;
 
-	constructor(
-		maxOutputLength: number = 10000,
-		defaultTimeout: number = 5000,
-	) {
+	constructor(maxOutputLength: number = 10000, defaultTimeout: number = 5000) {
 		this.maxOutputLength = maxOutputLength;
 		this.defaultTimeout = defaultTimeout;
 	}
@@ -180,7 +184,7 @@ export class UnifiedHooksExecutor {
 				let result: HookActionResult | null = null;
 
 				if (action.type === 'command' && action.command) {
-					result = await this.executeCommand(action);
+					result = await this.executeCommand(action, context);
 				} else if (action.type === 'prompt' && action.prompt) {
 					result = await this.executePrompt(action, context);
 				} else {
@@ -195,6 +199,11 @@ export class UnifiedHooksExecutor {
 				// 检查是否有错误
 				if (!result.success) {
 					hasError = true;
+
+					// 如果是 Command 类型且 exitCode >= 2,停止后续 Action 执行
+					if (result.type === 'command' && result.exitCode >= 2) {
+						break;
+					}
 				}
 			}
 		}
@@ -205,6 +214,50 @@ export class UnifiedHooksExecutor {
 			executedActions: totalExecuted,
 			skippedActions: totalSkipped,
 		};
+	}
+
+	/**
+	 * 替换字符串中的占位符
+	 * @param text - 要处理的文本
+	 * @param context - 上下文对象
+	 * @returns 替换后的文本
+	 */
+	private replacePlaceholders(text: string, context?: HookContext): string {
+		if (!context) {
+			return text;
+		}
+
+		let result = text;
+
+		// Note: onUserMessage Hook now uses stdin for data transmission instead of placeholders
+		// $USERMESSAGE$ placeholder support has been removed
+
+		// 替换 $TOOLSRESULT$ 占位符 (beforeToolCall 和 afterToolCall Hooks)
+		// beforeToolCall: 提供 toolName, args
+		// afterToolCall: 提供 toolName, args, result, error
+		if (context['toolName'] !== undefined || context['args'] !== undefined) {
+			const toolsData: any = {
+				toolName: context['toolName'],
+				args: context['args'],
+			};
+
+			// afterToolCall 还包含 result 和 error
+			if (context['result'] !== undefined) {
+				toolsData.result = context['result'];
+			}
+			if (context['error'] !== undefined) {
+				toolsData.error = context['error'];
+			}
+
+			// 将工具数据序列化为紧凑的单行 JSON（不带缩进和换行）
+			const toolsResultJson = JSON.stringify(toolsData);
+			result = result.replace(/\$TOOLSRESULT\$/g, toolsResultJson);
+		}
+
+		// 可以在这里添加更多占位符的支持
+		// 例如：$IMAGECOUNT$, $SOURCE$ 等
+
+		return result;
 	}
 
 	/**
@@ -224,7 +277,7 @@ export class UnifiedHooksExecutor {
 
 		// 只要有一个匹配就返回 true
 		for (const matcher of matchers) {
-			if (this.testMatcher(matcher, context)) {
+			if (this.checkMatcher(matcher, context)) {
 				return true;
 			}
 		}
@@ -233,17 +286,20 @@ export class UnifiedHooksExecutor {
 	}
 
 	/**
-	 * 测试单个 matcher
+	 * 检查单个 matcher 是否匹配
 	 * @param matcher - 匹配器字符串
 	 * @param context - 执行上下文
 	 * @returns 是否匹配
 	 */
-	private testMatcher(matcher: string, context: HookContext): boolean {
-		// 支持简单的通配符匹配
-		// 例如: "toolName:filesystem-*"
-		// 例如: "message:*fix*"
+	private checkMatcher(matcher: string, context: HookContext): boolean {
+		// Matcher 只用于工具 Hooks (beforeToolCall, afterToolCall)
+		// 直接匹配 toolName 字段，支持通配符
+		// 例如: "filesystem-read" 精确匹配
+		// 例如: "filesystem-*" 匹配所有 filesystem 工具
+		// 例如: "toolName:filesystem-*" 显式指定字段（兼容旧格式）
 
 		if (matcher.includes(':')) {
+			// 显式指定字段的格式 "key:pattern"
 			const [key, pattern] = matcher.split(':', 2);
 			const value = context[key!];
 
@@ -255,7 +311,13 @@ export class UnifiedHooksExecutor {
 			return this.matchPattern(pattern!, valueStr);
 		}
 
-		// 如果没有冒号，直接匹配整个字符串
+		// 没有冒号：直接匹配 toolName 字段（工具 Hooks 专用）
+		if (context['toolName'] !== undefined) {
+			const toolName = String(context['toolName']);
+			return this.matchPattern(matcher, toolName);
+		}
+
+		// Fallback: 如果没有 toolName，在整个 context JSON 中搜索
 		const contextStr = JSON.stringify(context);
 		return contextStr.includes(matcher);
 	}
@@ -281,13 +343,19 @@ export class UnifiedHooksExecutor {
 	/**
 	 * 执行单个 command action
 	 * @param action - Hook 动作
+	 * @param context - 执行上下文（用于占位符替换）
 	 * @returns 执行结果
 	 */
 	private async executeCommand(
 		action: HookAction,
+		context?: HookContext,
 	): Promise<CommandHookResult> {
-		const command = action.command!;
+		// 替换命令中的占位符
+		const command = this.replacePlaceholders(action.command!, context);
 		const timeout = action.timeout || this.defaultTimeout;
+
+		// 准备通过 stdin 传递的 context JSON
+		const stdinData = context ? JSON.stringify(context) : '';
 
 		try {
 			const childProcess = exec(command, {
@@ -304,13 +372,20 @@ export class UnifiedHooksExecutor {
 				},
 			});
 
+			// 如果有 context，通过 stdin 传递
+			if (stdinData && childProcess.stdin) {
+				childProcess.stdin.write(stdinData);
+				childProcess.stdin.end();
+			}
+
 			// 注册进程以便清理
 			processManager.register(childProcess);
 
 			// 等待命令执行完成
-			const {stdout, stderr} = await new Promise<{
+			const {stdout, stderr, exitCode} = await new Promise<{
 				stdout: string;
 				stderr: string;
+				exitCode: number;
 			}>((resolve, reject) => {
 				let stdoutData = '';
 				let stderrData = '';
@@ -333,21 +408,22 @@ export class UnifiedHooksExecutor {
 						error.stderr = stderrData;
 						error.signal = signal;
 						reject(error);
-					} else if (code === 0) {
-						resolve({stdout: stdoutData, stderr: stderrData});
 					} else {
-						const error: any = new Error(`Process exited with code ${code}`);
-						error.code = code;
-						error.stdout = stdoutData;
-						error.stderr = stderrData;
-						reject(error);
+						// 无论退出码是什么,都resolve(包括0, 1, 2+)
+						resolve({
+							stdout: stdoutData,
+							stderr: stderrData,
+							exitCode: code || 0,
+						});
 					}
 				});
 			});
 
 			return {
 				type: 'command',
-				success: true,
+				success: exitCode === 0,
+				command,
+				exitCode,
 				output: this.truncateOutput(stdout),
 				error: stderr ? this.truncateOutput(stderr) : undefined,
 			};
@@ -357,17 +433,22 @@ export class UnifiedHooksExecutor {
 				return {
 					type: 'command',
 					success: false,
+					command,
+					exitCode: -1, // 超时使用-1
 					error: `Command timed out after ${timeout}ms: ${command}`,
 				};
 			}
 
-			// 即使出错也返回可能的输出
+			// 命令本身执行失败（如命令不存在、语法错误等）
+			// error.code 可能是字符串（如 'ENOENT'），此时应返回 exitCode 2
+			const exitCode = typeof error.code === 'number' ? error.code : 2;
+
 			return {
 				type: 'command',
 				success: false,
-				output: error.stdout
-					? this.truncateOutput(error.stdout)
-					: undefined,
+				command,
+				exitCode,
+				output: error.stdout ? this.truncateOutput(error.stdout) : undefined,
 				error:
 					error.stderr || error.message
 						? this.truncateOutput(error.stderr || error.message)
@@ -416,7 +497,8 @@ export class UnifiedHooksExecutor {
 			};
 		}
 
-		const prompt = action.prompt!;
+		// 替换prompt中的占位符
+		const prompt = this.replacePlaceholders(action.prompt!, context);
 
 		try {
 			// 构建系统提示和用户消息

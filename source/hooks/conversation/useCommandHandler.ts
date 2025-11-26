@@ -51,6 +51,18 @@ export async function executeContextCompression(): Promise<{
 			return null;
 		}
 
+		// Check if beforeCompress hook failed
+		if (compressionResult.hookFailed) {
+			console.warn('Compression blocked by beforeCompress hook');
+			// Return a special result with hookFailed flag to abort AI flow
+			// Don't return usage to avoid changing token counts
+			return {
+				uiMessages: [],
+				hookFailed: true,
+				hookErrorDetails: compressionResult.hookErrorDetails,
+			} as any;
+		}
+
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
 

@@ -14,6 +14,14 @@ export interface CompressionResult {
 		total_tokens: number;
 	};
 	preservedMessages?: ChatMessage[];
+	hookFailed?: boolean; // Indicates if beforeCompress hook failed
+	hookErrorDetails?: {
+		type: 'warning' | 'error';
+		exitCode: number;
+		command: string;
+		output?: string;
+		error?: string;
+	}; // Hook error details for UI rendering
 }
 
 /**
@@ -359,6 +367,77 @@ async function compressWithAnthropic(
 export async function compressContext(
 	messages: ChatMessage[],
 ): Promise<CompressionResult | null> {
+	// Execute beforeCompress hook
+	try {
+		const {unifiedHooksExecutor} = await import(
+			'../execution/unifiedHooksExecutor.js'
+		);
+		const {sessionManager} = await import('../session/sessionManager.js');
+
+		// Get current session for conversation history
+		const currentSession = sessionManager.getCurrentSession();
+		const conversationMessages = currentSession?.messages || messages;
+
+		// Prepare conversation JSON for stdin
+		const conversationJson = JSON.stringify(conversationMessages, null, 2);
+
+		const hookResult = await unifiedHooksExecutor.executeHooks(
+			'beforeCompress',
+			{
+				messages: conversationMessages,
+				conversationJson, // Full conversation JSON for stdin
+			},
+		);
+
+		// Handle hook exit codes: 0=continue, 1=warning+continue, 2+=block compression
+		if (hookResult && !hookResult.success) {
+			const commandError = hookResult.results.find(
+				(r: any) => r.type === 'command' && !r.success,
+			);
+
+			if (commandError && commandError.type === 'command') {
+				const {exitCode, command, output, error} = commandError;
+
+				if (exitCode >= 2 || exitCode < 0) {
+					// Exit code 2+: Block compression and return hookFailed result
+					console.warn(
+						`[WARN] beforeCompress hook blocked compression (exitCode: ${exitCode}):\n` +
+							`output: ${output || '(empty)'}\n` +
+							`error: ${error || '(empty)'}`,
+					);
+					// Return a special result with hookFailed flag
+					return {
+						summary: '',
+						usage: {
+							prompt_tokens: 0,
+							completion_tokens: 0,
+							total_tokens: 0,
+						},
+						hookFailed: true,
+						hookErrorDetails: {
+							type: 'error',
+							exitCode,
+							command,
+							output,
+							error,
+						},
+					};
+				} else if (exitCode === 1) {
+					// Exit code 1: Warning, log and continue
+					console.warn(
+						`[WARN] beforeCompress hook warning (exitCode: ${exitCode}):\n` +
+							`output: ${output || '(empty)'}\n` +
+							`error: ${error || '(empty)'}`,
+					);
+				}
+				// Exit code 0: Success, continue silently
+			}
+		}
+	} catch (error) {
+		// Log unexpected errors but continue - don't block compression on unexpected errors
+		console.warn('Failed to execute beforeCompress hook:', error);
+	}
+
 	const config = getOpenAiConfig();
 
 	// Check if compact model is configured

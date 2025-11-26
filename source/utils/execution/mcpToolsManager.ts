@@ -25,6 +25,13 @@ import {resourceMonitor} from '../core/resourceMonitor.js';
 import os from 'os';
 import path from 'path';
 
+/**
+ * Extended Error interface with optional isHookFailure flag
+ */
+export interface HookError extends Error {
+	isHookFailure?: boolean;
+}
+
 export interface MCPTool {
 	type: 'function';
 	function: {
@@ -935,264 +942,430 @@ export async function executeMCPTool(
 	abortSignal?: AbortSignal,
 	onTokenUpdate?: (tokenCount: number) => void,
 ): Promise<any> {
-	// Find the service name by checking against known services
-	let serviceName: string | null = null;
-	let actualToolName: string | null = null;
+	// Execute beforeToolCall hook
+	try {
+		const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');
+		const hookResult = await unifiedHooksExecutor.executeHooks(
+			'beforeToolCall',
+			{
+				toolName,
+				args,
+			},
+		);
 
-	// Check built-in services first
-	if (toolName.startsWith('todo-')) {
-		serviceName = 'todo';
-		actualToolName = toolName.substring('todo-'.length);
-	} else if (toolName.startsWith('notebook-')) {
-		serviceName = 'notebook';
-		actualToolName = toolName.substring('notebook-'.length);
-	} else if (toolName.startsWith('filesystem-')) {
-		serviceName = 'filesystem';
-		actualToolName = toolName.substring('filesystem-'.length);
-	} else if (toolName.startsWith('terminal-')) {
-		serviceName = 'terminal';
-		actualToolName = toolName.substring('terminal-'.length);
-	} else if (toolName.startsWith('ace-')) {
-		serviceName = 'ace';
-		actualToolName = toolName.substring('ace-'.length);
-	} else if (toolName.startsWith('websearch-')) {
-		serviceName = 'websearch';
-		actualToolName = toolName.substring('websearch-'.length);
-	} else if (toolName.startsWith('ide-')) {
-		serviceName = 'ide';
-		actualToolName = toolName.substring('ide-'.length);
-	} else if (toolName.startsWith('codebase-')) {
-		serviceName = 'codebase';
-		actualToolName = toolName.substring('codebase-'.length);
-	} else if (toolName.startsWith('askuser-')) {
-		serviceName = 'askuser';
-		actualToolName = toolName.substring('askuser-'.length);
-	} else if (toolName.startsWith('subagent-')) {
-		serviceName = 'subagent';
-		actualToolName = toolName.substring('subagent-'.length);
-	} else {
-		// Check configured MCP services
-		try {
-			const mcpConfig = getMCPConfig();
-			for (const configuredServiceName of Object.keys(mcpConfig.mcpServers)) {
-				const prefix = `${configuredServiceName}-`;
-				if (toolName.startsWith(prefix)) {
-					serviceName = configuredServiceName;
-					actualToolName = toolName.substring(prefix.length);
+		// Handle hook exit codes: 0=continue, 1=continue, 2+=throw
+		if (hookResult && !hookResult.success) {
+			// Find failed command hook
+			const commandError = hookResult.results.find(
+				(r: any) => r.type === 'command' && !r.success,
+			);
+
+			if (commandError && commandError.type === 'command') {
+				const {exitCode, command, output, error} = commandError;
+
+				// Exit code 2+: Throw error to stop AI conversation
+				if (exitCode >= 2 || exitCode < 0) {
+					const combinedOutput =
+						[output, error].filter(Boolean).join('\n\n') || '(no output)';
+					const hookError = new Error(
+						`beforeToolCall hook failed with exit code ${exitCode}\n` +
+							`Command: ${command}\n` +
+							`Output:\n${combinedOutput}`,
+					) as HookError;
+					hookError.isHookFailure = true;
+					throw hookError;
+				} else if (exitCode === 1) {
+					// Exit code 1: Warning, log and continue execution
+					console.warn(
+						`[WARN] beforeToolCall hook warning (exitCode: ${exitCode}):\n` +
+							`output: ${output || '(empty)'}\n` +
+							`error: ${error || '(empty)'}`,
+					);
+				}
+				// Exit code 0: Success, continue silently
+			}
+		}
+	} catch (error) {
+		// Re-throw hook errors to stop AI conversation
+		if ((error as HookError)?.isHookFailure) {
+			throw error;
+		}
+		// Otherwise log and continue - don't block on unexpected errors
+		console.warn('Failed to execute beforeToolCall hook:', error);
+	}
+
+	let result: any;
+	let executionError: Error | null = null;
+
+	try {
+		// Find the service name by checking against known services
+		let serviceName: string | null = null;
+		let actualToolName: string | null = null;
+
+		// Check built-in services first
+		if (toolName.startsWith('todo-')) {
+			serviceName = 'todo';
+			actualToolName = toolName.substring('todo-'.length);
+		} else if (toolName.startsWith('notebook-')) {
+			serviceName = 'notebook';
+			actualToolName = toolName.substring('notebook-'.length);
+		} else if (toolName.startsWith('filesystem-')) {
+			serviceName = 'filesystem';
+			actualToolName = toolName.substring('filesystem-'.length);
+		} else if (toolName.startsWith('terminal-')) {
+			serviceName = 'terminal';
+			actualToolName = toolName.substring('terminal-'.length);
+		} else if (toolName.startsWith('ace-')) {
+			serviceName = 'ace';
+			actualToolName = toolName.substring('ace-'.length);
+		} else if (toolName.startsWith('websearch-')) {
+			serviceName = 'websearch';
+			actualToolName = toolName.substring('websearch-'.length);
+		} else if (toolName.startsWith('ide-')) {
+			serviceName = 'ide';
+			actualToolName = toolName.substring('ide-'.length);
+		} else if (toolName.startsWith('codebase-')) {
+			serviceName = 'codebase';
+			actualToolName = toolName.substring('codebase-'.length);
+		} else if (toolName.startsWith('askuser-')) {
+			serviceName = 'askuser';
+			actualToolName = toolName.substring('askuser-'.length);
+		} else if (toolName.startsWith('subagent-')) {
+			serviceName = 'subagent';
+			actualToolName = toolName.substring('subagent-'.length);
+		} else {
+			// Check configured MCP services
+			try {
+				const mcpConfig = getMCPConfig();
+				for (const configuredServiceName of Object.keys(mcpConfig.mcpServers)) {
+					const prefix = `${configuredServiceName}-`;
+					if (toolName.startsWith(prefix)) {
+						serviceName = configuredServiceName;
+						actualToolName = toolName.substring(prefix.length);
+						break;
+					}
+				}
+			} catch {
+				// Ignore config errors, will handle below
+			}
+		}
+
+		if (!serviceName || !actualToolName) {
+			throw new Error(
+				`Invalid tool name format: ${toolName}. Expected format: serviceName-toolName`,
+			);
+		}
+
+		if (serviceName === 'todo') {
+			// Handle built-in TODO tools (no connection needed)
+			result = await getTodoService().executeTool(actualToolName, args);
+		} else if (serviceName === 'notebook') {
+			// Handle built-in Notebook tools (no connection needed)
+			result = await executeNotebookTool(toolName, args);
+		} else if (serviceName === 'filesystem') {
+			// Handle built-in filesystem tools (no connection needed)
+			const {filesystemService} = await import('../../mcp/filesystem.js');
+
+			switch (actualToolName) {
+				case 'read':
+					result = await filesystemService.getFileContent(
+						args.filePath,
+						args.startLine,
+						args.endLine,
+					);
 					break;
+				case 'create':
+					result = await filesystemService.createFile(
+						args.filePath,
+						args.content,
+						args.createDirectories,
+					);
+					break;
+				case 'exists':
+					result = await filesystemService.exists(args.filePath);
+					break;
+				case 'info':
+					result = await filesystemService.getFileInfo(args.filePath);
+					break;
+				case 'edit':
+					result = await filesystemService.editFile(
+						args.filePath,
+						args.startLine,
+						args.endLine,
+						args.newContent,
+						args.contextLines,
+					);
+					break;
+				case 'edit_search':
+					result = await filesystemService.editFileBySearch(
+						args.filePath,
+						args.searchContent,
+						args.replaceContent,
+						args.occurrence,
+						args.contextLines,
+					);
+					break;
+
+				default:
+					throw new Error(`Unknown filesystem tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'terminal') {
+			// Handle built-in terminal tools (no connection needed)
+			const {terminalService} = await import('../../mcp/bash.js');
+
+			switch (actualToolName) {
+				case 'execute':
+					result = await terminalService.executeCommand(
+						args.command,
+						args.timeout,
+					);
+					break;
+				default:
+					throw new Error(`Unknown terminal tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'ace') {
+			// Handle built-in ACE Code Search tools (no connection needed)
+			const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
+
+			switch (actualToolName) {
+				case 'search_symbols':
+					result = await aceCodeSearchService.searchSymbols(
+						args.query,
+						args.symbolType,
+						args.language,
+						args.maxResults,
+					);
+					break;
+				case 'find_definition':
+					result = await aceCodeSearchService.findDefinition(
+						args.symbolName,
+						args.contextFile,
+					);
+					break;
+				case 'find_references':
+					result = await aceCodeSearchService.findReferences(
+						args.symbolName,
+						args.maxResults,
+					);
+					break;
+				case 'semantic_search':
+					result = await aceCodeSearchService.semanticSearch(
+						args.query,
+						args.searchType,
+						args.language,
+						args.maxResults,
+					);
+					break;
+				case 'file_outline':
+					result = await aceCodeSearchService.getFileOutline(args.filePath);
+					break;
+				case 'text_search':
+					result = await aceCodeSearchService.textSearch(
+						args.pattern,
+						args.fileGlob,
+						args.isRegex,
+						args.maxResults,
+					);
+					break;
+				default:
+					throw new Error(`Unknown ACE tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'websearch') {
+			// Handle built-in Web Search tools (no connection needed)
+			const {webSearchService} = await import('../../mcp/websearch.js');
+
+			switch (actualToolName) {
+				case 'search':
+					const searchResponse = await webSearchService.search(
+						args.query,
+						args.maxResults,
+					);
+					// Return object directly, will be JSON.stringify in API layer
+					result = searchResponse;
+					break;
+				case 'fetch':
+					const pageContent = await webSearchService.fetchPage(
+						args.url,
+						args.maxLength,
+						args.isUserProvided, // Pass isUserProvided parameter
+						args.userQuery, // Pass optional userQuery parameter
+						abortSignal, // Pass abort signal
+						onTokenUpdate, // Pass token update callback
+					);
+					// Return object directly, will be JSON.stringify in API layer
+					result = pageContent;
+					break;
+				default:
+					throw new Error(`Unknown websearch tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'ide') {
+			// Handle built-in IDE Diagnostics tools (no connection needed)
+			const {ideDiagnosticsService} = await import(
+				'../../mcp/ideDiagnostics.js'
+			);
+
+			switch (actualToolName) {
+				case 'get_diagnostics':
+					const diagnostics = await ideDiagnosticsService.getDiagnostics(
+						args.filePath,
+					);
+					// Format diagnostics for better readability
+					const formatted = ideDiagnosticsService.formatDiagnostics(
+						diagnostics,
+						args.filePath,
+					);
+					result = {
+						diagnostics,
+						formatted,
+						summary: `Found ${diagnostics.length} diagnostic(s) in ${args.filePath}`,
+					};
+					break;
+				default:
+					throw new Error(`Unknown IDE tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'codebase') {
+			// Handle built-in Codebase Search tools (no connection needed)
+			const {codebaseSearchService} = await import(
+				'../../mcp/codebaseSearch.js'
+			);
+
+			switch (actualToolName) {
+				case 'search':
+					result = await codebaseSearchService.search(args.query, args.topN);
+					break;
+				default:
+					throw new Error(`Unknown codebase tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'askuser') {
+			// Handle Ask User Question tool - returns special marker for UI handling
+			switch (actualToolName) {
+				case 'ask_question':
+					// Return a special response that indicates user interaction is needed
+					result = {
+						_userInteractionNeeded: true,
+						question: args.question,
+						options: args.options,
+					};
+					break;
+				default:
+					throw new Error(`Unknown askuser tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'subagent') {
+			// Handle sub-agent tools
+			// actualToolName is the agent ID
+			result = await subAgentService.execute({
+				agentId: actualToolName,
+				prompt: args.prompt,
+				abortSignal,
+			});
+		} else {
+			// Handle user-configured MCP service tools - connect only when needed
+			const mcpConfig = getMCPConfig();
+			const server = mcpConfig.mcpServers[serviceName];
+
+			if (!server) {
+				throw new Error(`MCP service not found: ${serviceName}`);
+			}
+			// Connect to service and execute tool
+			logger.info(
+				`Executing tool ${actualToolName} on MCP service ${serviceName}... args: ${
+					args ? JSON.stringify(args) : 'none'
+				}`,
+			);
+			result = await executeOnExternalMCPService(
+				serviceName,
+				server,
+				actualToolName,
+				args,
+			);
+		}
+	} catch (error) {
+		executionError = error instanceof Error ? error : new Error(String(error));
+		throw executionError;
+	} finally {
+		// Execute afterToolCall hook
+		try {
+			const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'afterToolCall',
+				{
+					toolName,
+					args,
+					result,
+					error: executionError,
+				},
+			);
+
+			// Handle hook result based on exit code strategy
+			if (hookResult && !hookResult.success) {
+				// Find failed command hook
+				const commandError = hookResult.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					if (exitCode === 1) {
+						// Exit code 1: Warning - log and append to tool result
+						console.warn(
+							`[WARN] afterToolCall hook warning (exitCode: ${exitCode}):\n` +
+								`output: ${output || '(empty)'}\n` +
+								`error: ${error || '(empty)'}`,
+						);
+
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						const warningMessage = `\n\n[afterToolCall Hook Warning]\nCommand: ${command}\nOutput:\n${combinedOutput}`;
+
+						// Append warning to result
+						if (typeof result === 'string') {
+							result = result + warningMessage;
+						} else if (result && typeof result === 'object') {
+							// For object results, try to append to content field or convert to string
+							if ('content' in result && typeof result.content === 'string') {
+								result.content = result.content + warningMessage;
+							} else {
+								result = JSON.stringify(result, null, 2) + warningMessage;
+							}
+						}
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Exit code 2+: Critical error - throw exception
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						throw new Error(
+							`afterToolCall hook failed with exit code ${exitCode}\n` +
+								`Command: ${command}\n` +
+								`Output:\n${combinedOutput}`,
+						);
+					}
+					// Exit code 0: Success, continue silently
 				}
 			}
-		} catch {
-			// Ignore config errors, will handle below
+		} catch (error) {
+			// Re-throw if it's a critical hook error (exit code 2+)
+			if (
+				error instanceof Error &&
+				error.message.includes('afterToolCall hook failed')
+			) {
+				throw error;
+			}
+			// Otherwise just warn - don't block tool execution on unexpected errors
+			logger.warn('Failed to execute afterToolCall hook:', error);
 		}
 	}
 
-	if (!serviceName || !actualToolName) {
-		throw new Error(
-			`Invalid tool name format: ${toolName}. Expected format: serviceName-toolName`,
+	// Re-throw execution error if it exists (from try block)
+	if (executionError) {
+		const err: any = executionError;
+		console.log(
+			'[DEBUG] Re-throwing executionError:',
+			err.message || String(err),
 		);
+		throw executionError;
 	}
 
-	if (serviceName === 'todo') {
-		// Handle built-in TODO tools (no connection needed)
-		return await getTodoService().executeTool(actualToolName, args);
-	} else if (serviceName === 'notebook') {
-		// Handle built-in Notebook tools (no connection needed)
-		return await executeNotebookTool(toolName, args);
-	} else if (serviceName === 'filesystem') {
-		// Handle built-in filesystem tools (no connection needed)
-		const {filesystemService} = await import('../../mcp/filesystem.js');
-
-		switch (actualToolName) {
-			case 'read':
-				return await filesystemService.getFileContent(
-					args.filePath,
-					args.startLine,
-					args.endLine,
-				);
-			case 'create':
-				return await filesystemService.createFile(
-					args.filePath,
-					args.content,
-					args.createDirectories,
-				);
-			case 'exists':
-				return await filesystemService.exists(args.filePath);
-			case 'info':
-				return await filesystemService.getFileInfo(args.filePath);
-			case 'edit':
-				return await filesystemService.editFile(
-					args.filePath,
-					args.startLine,
-					args.endLine,
-					args.newContent,
-					args.contextLines,
-				);
-			case 'edit_search':
-				return await filesystemService.editFileBySearch(
-					args.filePath,
-					args.searchContent,
-					args.replaceContent,
-					args.occurrence,
-					args.contextLines,
-				);
-
-			default:
-				throw new Error(`Unknown filesystem tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'terminal') {
-		// Handle built-in terminal tools (no connection needed)
-		const {terminalService} = await import('../../mcp/bash.js');
-
-		switch (actualToolName) {
-			case 'execute':
-				return await terminalService.executeCommand(args.command, args.timeout);
-			default:
-				throw new Error(`Unknown terminal tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'ace') {
-		// Handle built-in ACE Code Search tools (no connection needed)
-		const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
-
-		switch (actualToolName) {
-			case 'search_symbols':
-				return await aceCodeSearchService.searchSymbols(
-					args.query,
-					args.symbolType,
-					args.language,
-					args.maxResults,
-				);
-			case 'find_definition':
-				return await aceCodeSearchService.findDefinition(
-					args.symbolName,
-					args.contextFile,
-				);
-			case 'find_references':
-				return await aceCodeSearchService.findReferences(
-					args.symbolName,
-					args.maxResults,
-				);
-			case 'semantic_search':
-				return await aceCodeSearchService.semanticSearch(
-					args.query,
-					args.searchType,
-					args.language,
-					args.maxResults,
-				);
-			case 'file_outline':
-				return await aceCodeSearchService.getFileOutline(args.filePath);
-			case 'text_search':
-				return await aceCodeSearchService.textSearch(
-					args.pattern,
-					args.fileGlob,
-					args.isRegex,
-					args.maxResults,
-				);
-			default:
-				throw new Error(`Unknown ACE tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'websearch') {
-		// Handle built-in Web Search tools (no connection needed)
-		const {webSearchService} = await import('../../mcp/websearch.js');
-
-		switch (actualToolName) {
-			case 'search':
-				const searchResponse = await webSearchService.search(
-					args.query,
-					args.maxResults,
-				);
-				// Return object directly, will be JSON.stringify in API layer
-				return searchResponse;
-			case 'fetch':
-				const pageContent = await webSearchService.fetchPage(
-					args.url,
-					args.maxLength,
-					args.isUserProvided, // Pass isUserProvided parameter
-					args.userQuery, // Pass optional userQuery parameter
-					abortSignal, // Pass abort signal
-					onTokenUpdate, // Pass token update callback
-				);
-				// Return object directly, will be JSON.stringify in API layer
-				return pageContent;
-			default:
-				throw new Error(`Unknown websearch tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'ide') {
-		// Handle built-in IDE Diagnostics tools (no connection needed)
-		const {ideDiagnosticsService} = await import('../../mcp/ideDiagnostics.js');
-
-		switch (actualToolName) {
-			case 'get_diagnostics':
-				const diagnostics = await ideDiagnosticsService.getDiagnostics(
-					args.filePath,
-				);
-				// Format diagnostics for better readability
-				const formatted = ideDiagnosticsService.formatDiagnostics(
-					diagnostics,
-					args.filePath,
-				);
-				return {
-					diagnostics,
-					formatted,
-					summary: `Found ${diagnostics.length} diagnostic(s) in ${args.filePath}`,
-				};
-			default:
-				throw new Error(`Unknown IDE tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'codebase') {
-		// Handle built-in Codebase Search tools (no connection needed)
-		const {codebaseSearchService} = await import('../../mcp/codebaseSearch.js');
-
-		switch (actualToolName) {
-			case 'search':
-				return await codebaseSearchService.search(args.query, args.topN);
-			default:
-				throw new Error(`Unknown codebase tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'askuser') {
-		// Handle Ask User Question tool - returns special marker for UI handling
-		switch (actualToolName) {
-			case 'ask_question':
-				// Return a special response that indicates user interaction is needed
-				return {
-					_userInteractionNeeded: true,
-					question: args.question,
-					options: args.options,
-				};
-			default:
-				throw new Error(`Unknown askuser tool: ${actualToolName}`);
-		}
-	} else if (serviceName === 'subagent') {
-		// Handle sub-agent tools
-		// actualToolName is the agent ID
-		const result = await subAgentService.execute({
-			agentId: actualToolName,
-			prompt: args.prompt,
-			abortSignal,
-		});
-
-		return result;
-	} else {
-		// Handle user-configured MCP service tools - connect only when needed
-		const mcpConfig = getMCPConfig();
-		const server = mcpConfig.mcpServers[serviceName];
-
-		if (!server) {
-			throw new Error(`MCP service not found: ${serviceName}`);
-		}
-		// Connect to service and execute tool
-		logger.info(
-			`Executing tool ${actualToolName} on MCP service ${serviceName}... args: ${
-				args ? JSON.stringify(args) : 'none'
-			}`,
-		);
-		return await executeOnExternalMCPService(
-			serviceName,
-			server,
-			actualToolName,
-			args,
-		);
-	}
+	return result;
 }
 
 /**

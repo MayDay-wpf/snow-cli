@@ -15,11 +15,18 @@ export function shouldAutoCompress(
 
 /**
  * 执行自动压缩
- * @returns 压缩结果，如果失败返回null
+ * @returns 压缩结果，如果失败返回null或包含hookFailed的结果
  */
 export async function performAutoCompression() {
 	try {
 		const result = await executeContextCompression();
+
+		// If beforeCompress hook failed, return the result with hookFailed flag
+		// The caller (useConversation.ts) will handle displaying error and aborting AI flow
+		if (result && (result as any).hookFailed) {
+			return result;
+		}
+
 		return result;
 	} catch (error) {
 		console.error('Auto-compression failed:', error);

@@ -48,6 +48,13 @@ export interface Message {
 		cacheReadInputTokens?: number;
 	};
 	parallelGroup?: string; // Group ID for parallel tool execution (same ID = executed together)
+	hookError?: {
+		type: 'warning' | 'error';
+		exitCode: number;
+		command: string;
+		output?: string;
+		error?: string;
+	}; // Hook error details for rendering with HookErrorDisplay
 }
 
 interface Props {
