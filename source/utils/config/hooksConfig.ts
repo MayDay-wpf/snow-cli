@@ -195,3 +195,18 @@ export function getAllHookTypes(): HookType[] {
 		'onStop',
 	];
 }
+
+/**
+ * 验证 Hook Action 类型是否允许在指定的 Hook 中使用
+ */
+export function isActionTypeAllowed(
+	hookType: HookType,
+	actionType: HookActionType,
+): boolean {
+	// prompt 类型只能在 onSubAgentComplete 和 onStop 中使用
+	if (actionType === 'prompt') {
+		return hookType === 'onSubAgentComplete' || hookType === 'onStop';
+	}
+	// command 类型在所有 Hook 中都可以使用
+	return true;
+}

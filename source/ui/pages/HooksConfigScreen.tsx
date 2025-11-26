@@ -61,25 +61,27 @@ export default function HooksConfigScreen({onBack}: Props) {
 	// 验证是否可以添加指定类型的 Action
 	const canAddActionType = useCallback(
 		(newType: HookActionType, currentHooks: HookAction[]): boolean => {
-			if (currentHooks.length === 0) {
-				return true; // 没有现有 Action，可以添加任何类型
-			}
-
-			const hasPrompt = currentHooks.some(h => h.type === 'prompt');
-
+			// prompt 类型只能在 onSubAgentComplete 和 onStop 中使用
 			if (newType === 'prompt') {
+				if (
+					selectedHookType !== 'onSubAgentComplete' &&
+					selectedHookType !== 'onStop'
+				) {
+					return false; // 其他 Hook 类型不允许使用 prompt
+				}
 				// 如果要添加 Prompt，不能有任何现有 Action
 				return currentHooks.length === 0;
 			}
 
 			if (newType === 'command') {
+				const hasPrompt = currentHooks.some(h => h.type === 'prompt');
 				// 如果要添加 Command，不能有 Prompt
 				return !hasPrompt;
 			}
 
 			return false;
 		},
-		[],
+		[selectedHookType],
 	);
 
 	// 返回上一级
@@ -455,13 +457,31 @@ export default function HooksConfigScreen({onBack}: Props) {
 								return;
 							}
 
-							// 如果已有其他 Action，只能添加 Command 类型
-							const newAction: HookAction = {
-								type: 'command',
-								command: 'echo "Hello from hook"',
-								timeout: 5000,
-								enabled: true,
-							};
+							// 决定新 Action 的默认类型
+							// 如果是 onSubAgentComplete 或 onStop，且没有现有 hooks，默认为 prompt
+							// 否则只能使用 command
+							const defaultType: HookActionType =
+								(selectedHookType === 'onSubAgentComplete' ||
+									selectedHookType === 'onStop') &&
+								currentHooks.length === 0
+									? 'prompt'
+									: 'command';
+
+							const newAction: HookAction =
+								defaultType === 'prompt'
+									? {
+											type: 'prompt',
+											prompt: 'What should I do next?',
+											timeout: 30000,
+											enabled: true,
+									  }
+									: {
+											type: 'command',
+											command: 'echo "Hello from hook"',
+											timeout: 5000,
+											enabled: true,
+									  };
+
 							setEditingRule({
 								...editingRule,
 								hooks: [...editingRule.hooks, newAction],
