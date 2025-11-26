@@ -66,8 +66,8 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Lazy initialization of TODO service to avoid circular dependencies
 let todoService: TodoService | null = null;
 
-// 🔥 FIX: Persistent MCP client connections for services like Playwright
-// These services require long-lived connections to keep browser processes running
+// 🔥 FIX: Persistent MCP client connections for all external services
+// MCP protocol supports multiple calls over same connection - no need to reconnect each time
 interface PersistentMCPClient {
 	client: Client;
 	transport: any;
@@ -76,9 +76,6 @@ interface PersistentMCPClient {
 
 const persistentClients = new Map<string, PersistentMCPClient>();
 const CLIENT_IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes idle timeout
-
-// Services that need persistent connections (don't close after each tool call)
-const PERSISTENT_SERVICES = ['playwright', 'browser', 'puppeteer'];
 
 /**
  * Get the TODO service instance (lazy initialization)
@@ -817,15 +814,6 @@ async function connectAndGetTools(
 }
 
 /**
- * Check if a service needs persistent connection
- */
-function needsPersistentConnection(serviceName: string): boolean {
-	return PERSISTENT_SERVICES.some(persistent =>
-		serviceName.toLowerCase().includes(persistent),
-	);
-}
-
-/**
  * Get or create a persistent MCP client for a service
  */
 async function getPersistentClient(
@@ -1209,7 +1197,7 @@ export async function executeMCPTool(
 
 /**
  * Execute a tool on an external MCP service
- * Uses persistent connections for services like Playwright that need long-lived browser processes
+ * Uses persistent connections to avoid reconnecting on every call
  */
 async function executeOnExternalMCPService(
 	serviceName: string,
@@ -1217,99 +1205,20 @@ async function executeOnExternalMCPService(
 	toolName: string,
 	args: any,
 ): Promise<any> {
-	// 🔥 FIX: Use persistent connection for browser automation services
-	const isPersistent = needsPersistentConnection(serviceName);
+	// 🔥 FIX: Always use persistent connection for external MCP services
+	// MCP protocol supports multiple calls - no need to reconnect each time
+	const client = await getPersistentClient(serviceName, server);
 
-	if (isPersistent) {
-		// Get or create persistent client
-		const client = await getPersistentClient(serviceName, server);
-
-		logger.debug(
-			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
-		);
-
-		// Execute the tool with the original tool name (not prefixed)
-		const result = await client.callTool({
-			name: toolName,
-			arguments: args,
-		});
-		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
-
-		return result.content;
-	}
-
-	// Non-persistent services: connect, execute, disconnect
-	let client: Client | null = null;
 	logger.debug(
-		`Connecting to MCP service ${serviceName} to execute tool ${toolName}...`,
+		`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 	);
 
-	try {
-		client = new Client(
-			{
-				name: `snow-cli-${serviceName}`,
-				version: '1.0.0',
-			},
-			{
-				capabilities: {},
-			},
-		);
+	// Execute the tool with the original tool name (not prefixed)
+	const result = await client.callTool({
+		name: toolName,
+		arguments: args,
+	});
+	logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
 
-		resourceMonitor.trackMCPConnectionOpened(serviceName);
-
-		// Setup transport
-		let transport: any;
-
-		if (server.url) {
-			let urlString = server.url;
-
-			if (server.env) {
-				const allEnv = {...process.env, ...server.env};
-				urlString = urlString.replace(
-					/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-					(match, braced, simple) => {
-						const varName = braced || simple;
-						return allEnv[varName] || match;
-					},
-				);
-			}
-
-			const url = new URL(urlString);
-			transport = new StreamableHTTPClientTransport(url);
-		} else if (server.command) {
-			transport = new StdioClientTransport({
-				command: server.command,
-				args: server.args || [],
-				env: server.env
-					? ({...process.env, ...server.env} as Record<string, string>)
-					: (process.env as Record<string, string>),
-				stderr: 'ignore', // Non-persistent services can ignore stderr
-			});
-		}
-
-		await client.connect(transport);
-
-		logger.debug(
-			`ToolName ${toolName}, args:`,
-			args ? JSON.stringify(args) : 'none',
-		);
-		// Execute the tool with the original tool name (not prefixed)
-		const result = await client.callTool({
-			name: toolName,
-			arguments: args,
-		});
-		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
-
-		return result.content;
-	} finally {
-		try {
-			if (client) {
-				await client.close();
-				resourceMonitor.trackMCPConnectionClosed(serviceName);
-			}
-		} catch (error) {
-			logger.warn(`Failed to close client for ${serviceName}:`, error);
-			resourceMonitor.trackMCPConnectionClosed(serviceName); // Track even on error
-		}
-	}
+	return result.content;
 }
