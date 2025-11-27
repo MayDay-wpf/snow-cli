@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.28
+
+- FileList .gitignore
+
 ## v0.4.27
 
 - MCP long connection, controllable start and stop, join Hooks, TODO optimization, SVG recognition compatibility

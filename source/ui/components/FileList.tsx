@@ -50,7 +50,7 @@ const FileList = memo(
 			},
 			ref,
 		) => {
-			const { theme } = useTheme();
+			const {theme} = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
 
@@ -65,115 +65,139 @@ const FileList = memo(
 					: MAX_DISPLAY_ITEMS;
 			}, [maxItems]);
 
-	// Get files from directory - optimized for performance with depth limit
-	const loadFiles = useCallback(async () => {
-		const MAX_DEPTH = 5; // Limit recursion depth to prevent performance issues
-		const MAX_FILES = 1000; // Reduced from 2000 for better performance
+			// Read .gitignore patterns at the start
+			const readGitignore = useCallback(async (): Promise<string[]> => {
+				const gitignorePath = path.join(rootPath, '.gitignore');
+				try {
+					const content = await fs.promises.readFile(gitignorePath, 'utf-8');
+					return content
+						.split('\n')
+						.map(line => line.trim())
+						.filter(line => line && !line.startsWith('#'))
+						.map(line => line.replace(/\/$/, '')); // Remove trailing slashes
+				} catch {
+					return [];
+				}
+			}, [rootPath]);
 
-		const getFilesRecursively = async (
-			dir: string,
-			depth: number = 0,
-		): Promise<FileItem[]> => {
-			// Stop recursion if depth limit reached
-			if (depth > MAX_DEPTH) {
-				return [];
-			}
+			// Get files from directory - optimized for performance with depth limit
+			const loadFiles = useCallback(async () => {
+				const MAX_DEPTH = 5; // Limit recursion depth to prevent performance issues
+				const MAX_FILES = 1000; // Reduced from 2000 for better performance
 
-			try {
-				const entries = await fs.promises.readdir(dir, {
-					withFileTypes: true,
-				});
-				let result: FileItem[] = [];
+				// Read .gitignore patterns
+				const gitignorePatterns = await readGitignore();
 
-				// Common ignore patterns for better performance
-				const ignorePatterns = [
-					'node_modules',
-					'dist',
-					'build',
-					'coverage',
-					'.git',
-					'.vscode',
-					'.idea',
-					'out',
-					'target',
-					'bin',
-					'obj',
-					'.next',
-					'.nuxt',
-					'vendor',
-					'__pycache__',
-					'.pytest_cache',
-					'.mypy_cache',
-					'venv',
-					'.venv',
-					'env',
-					'.env',
-				];
-
-				for (const entry of entries) {
-					// Early exit if we've collected enough files
-					if (result.length >= MAX_FILES) {
-						break;
+				const getFilesRecursively = async (
+					dir: string,
+					depth: number = 0,
+				): Promise<FileItem[]> => {
+					// Stop recursion if depth limit reached
+					if (depth > MAX_DEPTH) {
+						return [];
 					}
 
-					// Skip hidden files and ignore patterns
-					if (
-						entry.name.startsWith('.') ||
-						ignorePatterns.includes(entry.name)
-					) {
-						continue;
-					}
-
-					const fullPath = path.join(dir, entry.name);
-
-					// Skip if file is too large (> 10MB) for performance
 					try {
-						const stats = await fs.promises.stat(fullPath);
-						if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
-							continue;
+						const entries = await fs.promises.readdir(dir, {
+							withFileTypes: true,
+						});
+						let result: FileItem[] = [];
+
+						// Common ignore patterns for better performance
+						const baseIgnorePatterns = [
+							'node_modules',
+							'dist',
+							'build',
+							'coverage',
+							'.git',
+							'.vscode',
+							'.idea',
+							'out',
+							'target',
+							'bin',
+							'obj',
+							'.next',
+							'.nuxt',
+							'vendor',
+							'__pycache__',
+							'.pytest_cache',
+							'.mypy_cache',
+							'venv',
+							'.venv',
+							'env',
+							'.env',
+						];
+
+						// Merge base patterns with .gitignore patterns
+						const ignorePatterns = [
+							...baseIgnorePatterns,
+							...gitignorePatterns,
+						];
+
+						for (const entry of entries) {
+							// Early exit if we've collected enough files
+							if (result.length >= MAX_FILES) {
+								break;
+							}
+
+							// Skip hidden files and ignore patterns
+							if (
+								entry.name.startsWith('.') ||
+								ignorePatterns.includes(entry.name)
+							) {
+								continue;
+							}
+
+							const fullPath = path.join(dir, entry.name);
+
+							// Skip if file is too large (> 10MB) for performance
+							try {
+								const stats = await fs.promises.stat(fullPath);
+								if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
+									continue;
+								}
+							} catch {
+								continue;
+							}
+
+							let relativePath = path.relative(rootPath, fullPath);
+
+							// Ensure relative paths start with ./ for consistency
+							if (
+								!relativePath.startsWith('.') &&
+								!path.isAbsolute(relativePath)
+							) {
+								relativePath = './' + relativePath;
+							}
+
+							// Normalize to forward slashes for cross-platform consistency
+							relativePath = relativePath.replace(/\\/g, '/');
+
+							result.push({
+								name: entry.name,
+								path: relativePath,
+								isDirectory: entry.isDirectory(),
+							});
+
+							// Recursively get files from subdirectories with depth limit
+							if (entry.isDirectory() && depth < MAX_DEPTH) {
+								const subFiles = await getFilesRecursively(fullPath, depth + 1);
+								result = result.concat(subFiles);
+							}
 						}
-					} catch {
-						continue;
+
+						return result;
+					} catch (error) {
+						return [];
 					}
+				};
 
-				let relativePath = path.relative(rootPath, fullPath);
-
-				// Ensure relative paths start with ./ for consistency
-				if (
-					!relativePath.startsWith('.') &&
-					!path.isAbsolute(relativePath)
-				) {
-					relativePath = './' + relativePath;
-				}
-
-				// Normalize to forward slashes for cross-platform consistency
-				relativePath = relativePath.replace(/\\/g, '/');
-
-				result.push({
-					name: entry.name,
-					path: relativePath,
-					isDirectory: entry.isDirectory(),
-				});
-
-					// Recursively get files from subdirectories with depth limit
-					if (entry.isDirectory() && depth < MAX_DEPTH) {
-						const subFiles = await getFilesRecursively(fullPath, depth + 1);
-						result = result.concat(subFiles);
-					}
-				}
-
-				return result;
-			} catch (error) {
-				return [];
-			}
-		};
-
-		// Batch all state updates together
-		setIsLoading(true);
-		const fileList = await getFilesRecursively(rootPath);
-		setFiles(fileList);
-		setIsLoading(false);
-	}, [rootPath]);
+				// Batch all state updates together
+				setIsLoading(true);
+				const fileList = await getFilesRecursively(rootPath);
+				setFiles(fileList);
+				setIsLoading(false);
+			}, [rootPath, readGitignore]);
 
 			// Search file content for content search mode
 			const searchFileContent = useCallback(
@@ -310,24 +334,24 @@ const FileList = memo(
 						}
 					}
 
-			return results;
-		},
-		[files, rootPath, terminalWidth],
-	);
+					return results;
+				},
+				[files, rootPath, terminalWidth],
+			);
 
-	// Load files when component becomes visible
-	// This ensures the file list is always fresh without complex file watching
-	useEffect(() => {
-		if (!visible) {
-			return;
-		}
+			// Load files when component becomes visible
+			// This ensures the file list is always fresh without complex file watching
+			useEffect(() => {
+				if (!visible) {
+					return;
+				}
 
-		// Always reload when becoming visible to ensure fresh data
-		loadFiles();
-	}, [visible, rootPath, loadFiles]);
+				// Always reload when becoming visible to ensure fresh data
+				loadFiles();
+			}, [visible, rootPath, loadFiles]);
 
-	// State for filtered files (needed for async content search)
-	const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
+			// State for filtered files (needed for async content search)
+			const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
 
 			// Filter files based on query and search mode with debounce
 			useEffect(() => {
@@ -452,15 +476,15 @@ const FileList = memo(
 				);
 			}
 
-		if (filteredFiles.length === 0) {
-			return (
-				<Box paddingX={1} marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						No files found
-					</Text>
-				</Box>
-			);
-		}
+			if (filteredFiles.length === 0) {
+				return (
+					<Box paddingX={1} marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							No files found
+						</Text>
+					</Box>
+				);
+			}
 
 			return (
 				<Box paddingX={1} marginTop={1} flexDirection="column">
@@ -476,48 +500,56 @@ const FileList = memo(
 							key={`${file.path}-${file.lineNumber || 0}`}
 							flexDirection="column"
 						>
-				{/* First line: file path and line number (for content search) or file path (for file search) */}
-				<Text
-					backgroundColor={
-						index === displaySelectedIndex ? theme.colors.menuSelected : undefined
-					}
-					color={
-						index === displaySelectedIndex
-							? theme.colors.menuNormal
-							: file.isDirectory
-							? theme.colors.warning
-							: 'white'
-					}
-				>
-					{searchMode === 'content' && file.lineNumber !== undefined
-						? `${file.path}:${file.lineNumber}`
-						: file.isDirectory
-						? '◇ ' + file.path
-						: '◆ ' + file.path}
-				</Text>
-				{/* Second line: code content (only for content search) */}
-				{searchMode === 'content' && file.lineContent && (
-					<Text
-						backgroundColor={
-							index === displaySelectedIndex ? theme.colors.menuSelected : undefined
-						}
-						color={index === displaySelectedIndex ? theme.colors.menuSecondary : theme.colors.menuSecondary}
-						dimColor
-					>
-						{'  '}
-						{file.lineContent}
-					</Text>
-				)}
+							{/* First line: file path and line number (for content search) or file path (for file search) */}
+							<Text
+								backgroundColor={
+									index === displaySelectedIndex
+										? theme.colors.menuSelected
+										: undefined
+								}
+								color={
+									index === displaySelectedIndex
+										? theme.colors.menuNormal
+										: file.isDirectory
+										? theme.colors.warning
+										: 'white'
+								}
+							>
+								{searchMode === 'content' && file.lineNumber !== undefined
+									? `${file.path}:${file.lineNumber}`
+									: file.isDirectory
+									? '◇ ' + file.path
+									: '◆ ' + file.path}
+							</Text>
+							{/* Second line: code content (only for content search) */}
+							{searchMode === 'content' && file.lineContent && (
+								<Text
+									backgroundColor={
+										index === displaySelectedIndex
+											? theme.colors.menuSelected
+											: undefined
+									}
+									color={
+										index === displaySelectedIndex
+											? theme.colors.menuSecondary
+											: theme.colors.menuSecondary
+									}
+									dimColor
+								>
+									{'  '}
+									{file.lineContent}
+								</Text>
+							)}
 						</Box>
 					))}
-			{allFilteredFiles.length > effectiveMaxItems && (
-				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems}{' '}
-						more hidden
-					</Text>
-				</Box>
-			)}
+					{allFilteredFiles.length > effectiveMaxItems && (
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems}{' '}
+								more hidden
+							</Text>
+						</Box>
+					)}
 				</Box>
 			);
 		},
