@@ -1,6 +1,7 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
 import * as prettier from 'prettier';
+import sharp from 'sharp';
 // IDE connection supports both VSCode and JetBrains IDEs
 import {vscodeConnection, type Diagnostic} from '../utils/ui/vscodeConnection.js';
 import {incrementalSnapshotManager} from '../utils/codebase/incrementalSnapshot.js';
@@ -118,6 +119,7 @@ export class FilesystemMCPService {
 
 	/**
 	 * Read image file and convert to base64
+	 * For SVG files, converts to PNG format for better compatibility
 	 * @param fullPath - Full path to the image file
 	 * @returns ImageContent object with base64 data
 	 */
@@ -130,6 +132,37 @@ export class FilesystemMCPService {
 				return null;
 			}
 
+			const ext = extname(fullPath).toLowerCase();
+
+			// Handle SVG files - convert to PNG for better compatibility
+			if (ext === '.svg') {
+				try {
+					const buffer = await fs.readFile(fullPath);
+					// Convert SVG to PNG using sharp
+					const pngBuffer = await sharp(buffer)
+						.png()
+						.toBuffer();
+					const base64Data = pngBuffer.toString('base64');
+
+					return {
+						type: 'image',
+						data: base64Data,
+						mimeType: 'image/png', // Return as PNG
+					};
+				} catch (svgError) {
+					console.error(`Failed to convert SVG to PNG ${fullPath}:`, svgError);
+					// Fallback: try to read SVG as base64 directly
+					const buffer = await fs.readFile(fullPath);
+					const base64Data = buffer.toString('base64');
+					return {
+						type: 'image',
+						data: base64Data,
+						mimeType: 'image/svg+xml',
+					};
+				}
+			}
+
+			// For other image formats, read directly as base64
 			const buffer = await fs.readFile(fullPath);
 			const base64Data = buffer.toString('base64');
 

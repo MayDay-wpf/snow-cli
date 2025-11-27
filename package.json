@@ -54,6 +54,7 @@
 		"@types/pdf-parse": "^1.1.5",
 		"@types/prettier": "^2.7.3",
 		"@types/react": "^18.0.32",
+		"@types/sharp": "^0.32.0",
 		"@types/sql.js": "^1.4.9",
 		"@types/ws": "^8.5.8",
 		"@vdemedes/prettier-config": "^2.0.1",
@@ -118,5 +119,8 @@
 			"react-hooks/exhaustive-deps": "warn"
 		}
 	},
-	"prettier": "@vdemedes/prettier-config"
+	"prettier": "@vdemedes/prettier-config",
+	"dependencies": {
+		"sharp": "^0.34.5"
+	}
 }

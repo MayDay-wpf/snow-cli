@@ -241,23 +241,99 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			}
 
 			if (result.success && result.action === 'clear') {
-				resetTerminal(stdout);
-				// Clear current session and start new one
-				sessionManager.clearCurrentSession();
-				options.clearSavedMessages();
-				options.setMessages([]);
-				options.setRemountKey(prev => prev + 1);
-				// Reset context usage (token statistics)
-				options.setContextUsage(null);
-				// Note: yoloMode is preserved via localStorage (lines 68-76, 104-111)
-				// Note: VSCode connection is preserved and managed by vscodeConnection utility
-				// Add command execution feedback
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages([commandMessage]);
+				// Execute onSessionStart hook BEFORE clearing session
+				(async () => {
+					try {
+						const {unifiedHooksExecutor} = await import(
+							'../../utils/execution/unifiedHooksExecutor.js'
+						);
+						const hookResult = await unifiedHooksExecutor.executeHooks(
+							'onSessionStart',
+							{
+								messages: [],
+								messageCount: 0,
+							},
+						);
+
+						// Check for hook failures
+						let shouldAbort = false;
+						let warningMessage: string | null = null;
+						if (!hookResult.success) {
+							const commandError = hookResult.results.find(
+								r => r.type === 'command' && !r.success,
+							);
+
+							if (commandError && commandError.type === 'command') {
+								const {exitCode, command, output, error} = commandError;
+								const combinedOutput =
+									[output, error].filter(Boolean).join('\n\n') || '(no output)';
+
+								if (exitCode === 1) {
+									// Warning: save to display AFTER clearing screen
+									warningMessage = `[WARN] onSessionStart hook warning:\nCommand: ${command}\nOutput: ${combinedOutput}`;
+								} else if (exitCode >= 2 || exitCode < 0) {
+									// Critical error: display using HookErrorDisplay component
+									const errorMessage: Message = {
+										role: 'assistant',
+										content: '', // Content will be rendered by HookErrorDisplay
+										hookError: {
+											type: 'error',
+											exitCode,
+											command,
+											output,
+											error,
+										},
+									};
+
+									options.setMessages(prev => [...prev, errorMessage]);
+									shouldAbort = true;
+								}
+							}
+						}
+
+						// If hook failed critically, don't clear session
+						if (shouldAbort) {
+							return;
+						}
+
+						// Hook passed, now clear session
+						resetTerminal(stdout);
+						sessionManager.clearCurrentSession();
+						options.clearSavedMessages();
+						options.setMessages([]);
+						options.setRemountKey(prev => prev + 1);
+						options.setContextUsage(null);
+
+						// Add command message
+						const commandMessage: Message = {
+							role: 'command',
+							content: '',
+							commandName: commandName,
+						};
+						options.setMessages([commandMessage]);
+
+						// Display warning AFTER clearing screen
+						if (warningMessage) {
+							console.log(warningMessage);
+						}
+					} catch (error) {
+						console.error('Failed to execute onSessionStart hook:', error);
+						// On exception, still clear session
+						resetTerminal(stdout);
+						sessionManager.clearCurrentSession();
+						options.clearSavedMessages();
+						options.setMessages([]);
+						options.setRemountKey(prev => prev + 1);
+						options.setContextUsage(null);
+
+						const commandMessage: Message = {
+							role: 'command',
+							content: '',
+							commandName: commandName,
+						};
+						options.setMessages([commandMessage]);
+					}
+				})();
 			} else if (result.success && result.action === 'showSessionPanel') {
 				options.setShowSessionPanel(true);
 				const commandMessage: Message = {

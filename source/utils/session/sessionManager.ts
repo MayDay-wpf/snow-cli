@@ -1,11 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { randomUUID } from 'crypto';
-import type { ChatMessage as APIChatMessage } from '../../api/chat.js';
-import { getTodoService } from '../execution/mcpToolsManager.js';
-import { logger } from '../core/logger.js';
-import { summaryAgent } from '../../agents/summaryAgent.js';
+import {randomUUID} from 'crypto';
+import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
+import {getTodoService} from '../execution/mcpToolsManager.js';
+import {logger} from '../core/logger.js';
+import {summaryAgent} from '../../agents/summaryAgent.js';
 // Session 中直接使用 API 的消息格式,额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
 	timestamp: number;
@@ -42,12 +42,12 @@ class SessionManager {
 
 	private async ensureSessionsDir(date?: Date): Promise<void> {
 		try {
-			await fs.mkdir(this.sessionsDir, { recursive: true });
+			await fs.mkdir(this.sessionsDir, {recursive: true});
 
 			if (date) {
 				const dateFolder = this.formatDateForFolder(date);
 				const sessionDir = path.join(this.sessionsDir, dateFolder);
-				await fs.mkdir(sessionDir, { recursive: true });
+				await fs.mkdir(sessionDir, {recursive: true});
 			}
 		} catch (error) {
 			// Directory already exists or other error
@@ -104,12 +104,38 @@ class SessionManager {
 		await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
 	}
 
+	lastLoadHookError?: {
+		type: 'warning' | 'error';
+		exitCode: number;
+		command: string;
+		output?: string;
+		error?: string;
+	};
+	lastLoadHookWarning?: string;
+
 	async loadSession(sessionId: string): Promise<Session | null> {
+		// Clear previous error and warning
+		this.lastLoadHookError = undefined;
+		this.lastLoadHookWarning = undefined;
+
 		// 首先尝试从旧格式加载（向下兼容）
 		try {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
 			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
+
+			// Execute onSessionStart hook before setting current session
+			const hookResult = await this.executeSessionStartHook(session.messages);
+			if (!hookResult.shouldContinue) {
+				// Hook failed, store error details and abort loading
+				this.lastLoadHookError = hookResult.errorDetails;
+				return null;
+			}
+			// Store warning if exists
+			if (hookResult.warningMessage) {
+				this.lastLoadHookWarning = hookResult.warningMessage;
+			}
+
 			this.currentSession = session;
 			return session;
 		} catch (error) {
@@ -120,7 +146,17 @@ class SessionManager {
 		try {
 			const session = await this.findSessionInDateFolders(sessionId);
 			if (session) {
-				this.currentSession = session;
+				// Execute onSessionStart hook before setting current session
+				const hookResult = await this.executeSessionStartHook(session.messages);
+				if (!hookResult.shouldContinue) {
+					// Hook failed, store error details and abort loading
+					this.lastLoadHookError = hookResult.errorDetails;
+					return null;
+				}
+				// Store warning if exists
+				if (hookResult.warningMessage) {
+					this.lastLoadHookWarning = hookResult.warningMessage;
+				}
 				return session;
 			}
 		} catch (error) {
@@ -286,8 +322,12 @@ class SessionManager {
 		// Generate simple title and summary from first user message
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
 			// Use first 50 chars as title, first 100 chars as summary
-			const title = message.content.slice(0, 50) + (message.content.length > 50 ? '...' : '');
-			const summary = message.content.slice(0, 100) + (message.content.length > 100 ? '...' : '');
+			const title =
+				message.content.slice(0, 50) +
+				(message.content.length > 50 ? '...' : '');
+			const summary =
+				message.content.slice(0, 100) +
+				(message.content.length > 100 ? '...' : '');
 
 			this.currentSession.title = this.cleanTitle(title);
 			this.currentSession.summary = this.cleanTitle(summary);
@@ -295,7 +335,10 @@ class SessionManager {
 
 		// After the first complete conversation exchange (user + assistant), generate AI summary
 		// Only run once when messageCount becomes 2 and the second message is from assistant
-		if (this.currentSession.messageCount === 2 && message.role === 'assistant') {
+		if (
+			this.currentSession.messageCount === 2 &&
+			message.role === 'assistant'
+		) {
 			// Run summary generation in background without blocking
 			this.generateAndUpdateSummary().catch(error => {
 				logger.error('Failed to generate conversation summary:', error);
@@ -316,18 +359,24 @@ class SessionManager {
 
 		try {
 			// Extract first user and assistant messages
-			const firstUserMessage = this.currentSession.messages.find(m => m.role === 'user');
-			const firstAssistantMessage = this.currentSession.messages.find(m => m.role === 'assistant');
+			const firstUserMessage = this.currentSession.messages.find(
+				m => m.role === 'user',
+			);
+			const firstAssistantMessage = this.currentSession.messages.find(
+				m => m.role === 'assistant',
+			);
 
 			if (!firstUserMessage || !firstAssistantMessage) {
-				logger.warn('Summary agent: Could not find first user/assistant messages');
+				logger.warn(
+					'Summary agent: Could not find first user/assistant messages',
+				);
 				return;
 			}
 
 			// Generate summary using summary agent
 			const result = await summaryAgent.generateSummary(
 				firstUserMessage.content,
-				firstAssistantMessage.content
+				firstAssistantMessage.content,
 			);
 
 			if (result) {
@@ -341,7 +390,7 @@ class SessionManager {
 				logger.info('Summary agent: Successfully updated session summary', {
 					sessionId: this.currentSession.id,
 					title: result.title,
-					summary: result.summary
+					summary: result.summary,
 				});
 			}
 		} catch (error) {
@@ -416,6 +465,82 @@ class SessionManager {
 		}
 
 		return sessionDeleted;
+	}
+
+	/**
+	 * Execute onSessionStart hook
+	 * @param messages - Chat messages from the session (empty array for new sessions)
+	 * @returns {shouldContinue: boolean, errorDetails?: HookErrorDetails}
+	 */
+	private async executeSessionStartHook(messages: ChatMessage[]): Promise<{
+		shouldContinue: boolean;
+		errorDetails?: {
+			type: 'warning' | 'error';
+			exitCode: number;
+			command: string;
+			output?: string;
+			error?: string;
+		};
+		warningMessage?: string;
+	}> {
+		try {
+			const {unifiedHooksExecutor} = await import(
+				'../execution/unifiedHooksExecutor.js'
+			);
+
+			// Execute hook with messages passed via stdin
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'onSessionStart',
+				{
+					messages,
+					messageCount: messages.length,
+				},
+			);
+
+			// onSessionStart only uses command type hooks
+			// exitCode 0: continue normally
+			// exitCode 1: warning (log to console)
+			// exitCode >= 2: critical error (return error details for UI display)
+
+			// Check for command hook failures
+			if (!hookResult.success) {
+				const commandError = hookResult.results.find(
+					r => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+					const combinedOutput =
+						[output, error].filter(Boolean).join('\n\n') || '(no output)';
+
+					if (exitCode === 1) {
+						// Warning - continue
+						const warningMsg = `[WARN] onSessionStart hook warning:\nCommand: ${command}\nOutput: ${combinedOutput}`;
+						logger.warn(warningMsg);
+						return {shouldContinue: true, warningMessage: warningMsg};
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Critical error - return error details for UI display
+						logger.error(
+							`onSessionStart hook failed (exitCode=${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
+						);
+						return {
+							shouldContinue: false,
+							errorDetails: {
+								type: 'error',
+								exitCode,
+								command,
+								output,
+								error,
+							},
+						};
+					}
+				}
+			}
+			return {shouldContinue: true};
+		} catch (error) {
+			logger.error('Failed to execute onSessionStart hook:', error);
+			return {shouldContinue: true}; // On exception, continue
+		}
 	}
 
 	async truncateMessages(messageCount: number): Promise<void> {

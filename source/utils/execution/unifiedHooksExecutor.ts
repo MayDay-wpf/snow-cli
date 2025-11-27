@@ -38,6 +38,10 @@ export interface PromptHookResponse {
  * - 0: 通过,正常继续
  * - 1: 警告,携带stderr发送给AI处理
  * - 2+: 严重错误,阻止发送,直接显示给用户
+ *
+ * onStop Hook 特殊说明:
+ * - command 类型: 通过 stdin 传递会话列表上下文 (JSON 格式的 messages 数组)
+ * - prompt 类型: 使用 $STOPSESSION$ 占位符传递会话上下文给小模型
  */
 export interface CommandHookResult {
 	type: 'command';
@@ -254,6 +258,33 @@ export class UnifiedHooksExecutor {
 			result = result.replace(/\$TOOLSRESULT\$/g, toolsResultJson);
 		}
 
+		// 替换 $STOPSESSION$ 占位符 (onStop Hook)
+		// onStop: 提供 messages (会话消息列表)
+		if (context['messages'] !== undefined) {
+			// 将会话消息列表序列化为 JSON
+			const sessionJson = JSON.stringify(context['messages']);
+			result = result.replace(/\$STOPSESSION\$/g, sessionJson);
+		}
+
+		// 替换 $SUBAGENTRESULT$ 占位符 (onSubAgentComplete Hook)
+		// onSubAgentComplete: 提供 agentId, agentName, content, success, usage
+		if (
+			context['agentId'] !== undefined ||
+			context['agentName'] !== undefined
+		) {
+			const subAgentData: any = {
+				agentId: context['agentId'],
+				agentName: context['agentName'],
+				content: context['content'],
+				success: context['success'],
+				usage: context['usage'],
+			};
+
+			// 将子代理数据序列化为紧凑的单行 JSON
+			const subAgentResultJson = JSON.stringify(subAgentData);
+			result = result.replace(/\$SUBAGENTRESULT\$/g, subAgentResultJson);
+		}
+
 		// 可以在这里添加更多占位符的支持
 		// 例如：$IMAGECOUNT$, $SOURCE$ 等
 
@@ -372,10 +403,33 @@ export class UnifiedHooksExecutor {
 				},
 			});
 
-			// 如果有 context，通过 stdin 传递
-			if (stdinData && childProcess.stdin) {
-				childProcess.stdin.write(stdinData);
-				childProcess.stdin.end();
+			// 处理 stdin
+			if (childProcess.stdin) {
+				// 注册错误监听器防止未捕获的 EPIPE 异常
+				childProcess.stdin.on('error', (error: any) => {
+					// EPIPE 错误 - 进程可能不读取 stdin，这是正常的
+					if (error.code !== 'EPIPE') {
+						logger.error('Hook stdin error:', error);
+					}
+				});
+
+				if (stdinData) {
+					// 有 context 数据时才写入 stdin
+					// 使用 setImmediate 异步写入，避免阻塞
+					setImmediate(() => {
+						if (childProcess.stdin && !childProcess.stdin.destroyed) {
+							childProcess.stdin.write(stdinData, (error: any) => {
+								if (error && error.code !== 'EPIPE') {
+									logger.error('Hook stdin write error:', error);
+								}
+							});
+							childProcess.stdin.end();
+						}
+					});
+				} else {
+					// 没有数据时直接关闭 stdin
+					childProcess.stdin.end();
+				}
 			}
 
 			// 注册进程以便清理
@@ -502,26 +556,29 @@ export class UnifiedHooksExecutor {
 
 		try {
 			// 构建系统提示和用户消息
-			const systemPrompt = `You are a hook execution assistant. You must respond ONLY with a valid JSON object in this exact format:
+			const systemPrompt = `You MUST respond with ONLY a valid JSON object. No markdown, no explanations, no additional text.
+
+Required JSON format:
 {
-  "ask": "user" or "ai",
-  "message": "your message content",
-  "continue": true or false
+  "ask": "user",
+  "message": "your message here",
+  "continue": false
 }
 
-CRITICAL FLOW CONTROL:
-- "ask": "ai" -> Message will be sent to AI, conversation continues
-- "ask": "user" -> Message will be shown to user, conversation ENDS
-- "continue": true (when ask="ai") or false (when ask="user") -> Quick boolean check
-- Choose "ai" + true when you want the AI to process something or continue the workflow
-- Choose "user" + false when you want to directly inform/ask the user and stop the current flow
+OR
 
-CRITICAL RULES:
-- "ask" field is REQUIRED and must be either "user" or "ai"
-- "message" field is REQUIRED and contains the actual message content
-- "continue" field is REQUIRED and must be boolean (true when ask="ai", false when ask="user")
-- Output ONLY the JSON object, no additional text, no explanations
-- Ensure the JSON is valid and properly formatted`;
+{
+  "ask": "ai",
+  "message": "your message here",
+  "continue": true
+}
+
+Rules:
+- ask: "user" means show message to user and END conversation (continue must be false)
+- ask: "ai" means send message to AI and CONTINUE conversation (continue must be true)
+- Output ONLY the JSON object
+- Do NOT use markdown code blocks
+- Do NOT add any explanations`;
 
 			// 构建用户消息（包含 prompt 和 context）
 			let userMessage = prompt;
@@ -531,12 +588,8 @@ CRITICAL RULES:
 
 			const messages: ChatMessage[] = [
 				{
-					role: 'system',
-					content: systemPrompt,
-				},
-				{
 					role: 'user',
-					content: userMessage,
+					content: `${systemPrompt}\n\n${userMessage}\n\nRemember: Respond with ONLY JSON, no markdown, no explanations.`,
 				},
 			];
 
@@ -710,7 +763,7 @@ CRITICAL RULES:
 			let cleaned = response.trim();
 
 			// 移除 markdown 代码块
-			const codeBlockMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+			const codeBlockMatch = cleaned.match(/```(?:json)?[\s\n]*([\s\S]*?)```/);
 			if (codeBlockMatch) {
 				cleaned = codeBlockMatch[1]!.trim();
 			}

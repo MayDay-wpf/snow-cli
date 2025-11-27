@@ -51,6 +51,7 @@ export interface MCPServer {
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>; // 环境变量
+	enabled?: boolean; // 是否启用该MCP服务，默认为true
 }
 
 export interface MCPConfig {

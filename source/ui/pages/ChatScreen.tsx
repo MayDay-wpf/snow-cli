@@ -965,6 +965,29 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					counts.set(snapshot.messageIndex, snapshot.fileCount);
 				}
 				snapshotState.setSnapshotFileCount(counts);
+
+				// Display warning AFTER loading session (if any)
+				if (sessionManager.lastLoadHookWarning) {
+					console.log(sessionManager.lastLoadHookWarning);
+				}
+			} else {
+				// Session load failed - check if it's due to hook failure
+				if (sessionManager.lastLoadHookError) {
+					// Display hook error using HookErrorDisplay component
+					const errorMessage: Message = {
+						role: 'assistant',
+						content: '', // Content will be rendered by HookErrorDisplay
+						hookError: sessionManager.lastLoadHookError,
+					};
+					setMessages(prev => [...prev, errorMessage]);
+				} else {
+					// Generic error
+					const errorMessage: Message = {
+						role: 'assistant',
+						content: 'Failed to load session.',
+					};
+					setMessages(prev => [...prev, errorMessage]);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to load session:', error);
@@ -1001,34 +1024,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			const handlerResult = handleHookResult(hookResult, message);
 
 			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
-				// Critical error: store structured data in message
-				// MessageRenderer will handle the formatting
-				const {exitCode, command, output, error} = handlerResult.errorDetails;
-				const combinedOutput =
-					[output, error].filter(Boolean).join('\n\n') || '(no output)';
-
-				// Truncate for readability
-				const truncCommand =
-					command.length > 150 ? command.slice(0, 150) + '...' : command;
-				const truncOutput =
-					combinedOutput.length > 300
-						? combinedOutput.slice(0, 300) + '...'
-						: combinedOutput;
-
-				// Store as special format that MessageRenderer can parse
-				const errorContent = JSON.stringify({
-					type: 'hook-error',
-					exitCode,
-					command: truncCommand,
-					output: truncOutput,
-				});
-
+				// Critical error: display using HookErrorDisplay component
 				setMessages(prev => [
 					...prev,
 					{
 						role: 'assistant',
-						content: errorContent,
+						content: '', // Content will be rendered by HookErrorDisplay
 						timestamp: new Date(),
+						hookError: handlerResult.errorDetails,
 					},
 				]);
 				return; // Abort - don't send to AI
@@ -1131,11 +1134,19 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				data: img.data,
 				mimeType: img.mimeType,
 			})),
-			...imageFiles.map(f => ({
-				type: 'image' as const,
-				data: f.imageData!,
-				mimeType: f.mimeType!,
-			})),
+			...imageFiles.map(f => {
+				// Extract base64 data from data URL (format: data:image/svg+xml;base64,...)
+				let base64Data = f.imageData!;
+				const base64Match = base64Data.match(/^data:[^;]+;base64,(.+)$/);
+				if (base64Match && base64Match[1]) {
+					base64Data = base64Match[1];
+				}
+				return {
+					type: 'image' as const,
+					data: base64Data,
+					mimeType: f.mimeType!,
+				};
+			}),
 		];
 
 		// Only add user message to UI if not hidden (显示原始用户消息)
@@ -1403,34 +1414,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			const handlerResult = handleHookResult(hookResult, combinedMessage);
 
 			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
-				// Critical error: store structured data in message
-				// MessageRenderer will handle the formatting
-				const {exitCode, command, output, error} = handlerResult.errorDetails;
-				const combinedOutput =
-					[output, error].filter(Boolean).join('\n\n') || '(no output)';
-
-				// Truncate for readability
-				const truncCommand =
-					command.length > 150 ? command.slice(0, 150) + '...' : command;
-				const truncOutput =
-					combinedOutput.length > 300
-						? combinedOutput.slice(0, 300) + '...'
-						: combinedOutput;
-
-				// Store as special format that MessageRenderer can parse
-				const errorContent = JSON.stringify({
-					type: 'hook-error',
-					exitCode,
-					command: truncCommand,
-					output: truncOutput,
-				});
-
+				// Critical error: display using HookErrorDisplay component
 				setMessages(prev => [
 					...prev,
 					{
 						role: 'assistant',
-						content: errorContent,
+						content: '', // Content will be rendered by HookErrorDisplay
 						timestamp: new Date(),
+						hookError: handlerResult.errorDetails,
 					},
 				]);
 				return; // Abort - don't send to AI
@@ -1457,10 +1448,18 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		const allImages = messagesToProcess
 			.flatMap(m => m.images || [])
 			.concat(
-				imageFiles.map(f => ({
-					data: f.imageData!,
-					mimeType: f.mimeType!,
-				})),
+				imageFiles.map(f => {
+					// Extract base64 data from data URL (format: data:image/svg+xml;base64,...)
+					let base64Data = f.imageData!;
+					const base64Match = base64Data.match(/^data:[^;]+;base64,(.+)$/);
+					if (base64Match && base64Match[1]) {
+						base64Data = base64Match[1];
+					}
+					return {
+						data: base64Data,
+						mimeType: f.mimeType!,
+					};
+				}),
 			);
 
 		// Convert to image content format

@@ -18,6 +18,7 @@ import {
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {formatTodoContext} from '../../utils/core/todoPreprocessor.js';
+import {unifiedHooksExecutor} from '../../utils/execution/unifiedHooksExecutor.js';
 import type {Message} from '../../ui/components/MessageList.js';
 import {formatToolCallMessage} from '../../utils/ui/messageFormatter.js';
 import {resourceMonitor} from '../../utils/core/resourceMonitor.js';
@@ -1504,6 +1505,88 @@ export async function handleConversationWithTools(
 				saveMessage(assistantMessage).catch(error => {
 					console.error('Failed to save assistant message:', error);
 				});
+			}
+
+			// ✅ 执行 onStop 钩子（在会话结束前，非用户中断）
+			if (!controller.signal.aborted) {
+				try {
+					const hookResult = await unifiedHooksExecutor.executeHooks('onStop', {
+						messages: conversationMessages,
+					});
+
+					// 处理钩子返回结果
+					if (hookResult.results && hookResult.results.length > 0) {
+						let shouldContinue = false;
+						for (const result of hookResult.results) {
+							if (result.type === 'command' && !result.success) {
+								if (result.exitCode === 1) {
+									// exitCode 1: 警告，显示给用户
+									console.log(
+										'[WARN] onStop hook warning:',
+										result.error || result.output || '',
+									);
+								} else if (result.exitCode >= 2) {
+									// exitCode >= 2: 错误，发送给 AI 继续处理
+									const errorMessage: ChatMessage = {
+										role: 'user',
+										content: result.error || result.output || '未知错误',
+									};
+									conversationMessages.push(errorMessage);
+									await saveMessage(errorMessage);
+									setMessages(prev => [
+										...prev,
+										{
+											role: 'user',
+											content: errorMessage.content,
+											streaming: false,
+										},
+									]);
+									shouldContinue = true;
+								}
+							} else if (result.type === 'prompt' && result.response) {
+								// 处理 prompt 类型
+								if (result.response.ask === 'ai' && result.response.continue) {
+									// 发送给 AI 继续处理
+									const promptMessage: ChatMessage = {
+										role: 'user',
+										content: result.response.message,
+									};
+									conversationMessages.push(promptMessage);
+									await saveMessage(promptMessage);
+									setMessages(prev => [
+										...prev,
+										{
+											role: 'user',
+											content: promptMessage.content,
+											streaming: false,
+										},
+									]);
+									shouldContinue = true;
+								} else if (
+									result.response.ask === 'user' &&
+									!result.response.continue
+								) {
+									// 显示给用户
+									setMessages(prev => [
+										...prev,
+										{
+											role: 'assistant',
+											content: result.response!.message,
+											streaming: false,
+										},
+									]);
+								}
+							}
+						}
+
+						// 如果需要继续，则不 break，让循环继续
+						if (shouldContinue) {
+							continue;
+						}
+					}
+				} catch (error) {
+					console.error('onStop hook execution failed:', error);
+				}
 			}
 
 			// Conversation complete - exit the loop

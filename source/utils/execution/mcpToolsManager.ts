@@ -441,6 +441,18 @@ async function refreshToolsCache(): Promise<void> {
 	try {
 		const mcpConfig = getMCPConfig();
 		for (const [serviceName, server] of Object.entries(mcpConfig.mcpServers)) {
+			// Skip disabled services
+			if (server.enabled === false) {
+				servicesInfo.push({
+					serviceName,
+					tools: [],
+					isBuiltIn: false,
+					connected: false,
+					error: 'Disabled by user',
+				});
+				continue;
+			}
+
 			try {
 				const serviceTools = await probeServiceTools(serviceName, server);
 				servicesInfo.push({

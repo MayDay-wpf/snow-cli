@@ -1,14 +1,15 @@
-import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {createStreamingResponse} from '../../api/responses.js';
-import {createStreamingGeminiCompletion} from '../../api/gemini.js';
-import {createStreamingChatCompletion} from '../../api/chat.js';
-import {getSubAgent} from '../config/subAgentConfig.js';
-import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
-import {sessionManager} from '../session/sessionManager.js';
-import type {MCPTool} from './mcpToolsManager.js';
-import type {ChatMessage} from '../../api/types.js';
-import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import { createStreamingAnthropicCompletion } from '../../api/anthropic.js';
+import { createStreamingResponse } from '../../api/responses.js';
+import { createStreamingGeminiCompletion } from '../../api/gemini.js';
+import { createStreamingChatCompletion } from '../../api/chat.js';
+import { getSubAgent } from '../config/subAgentConfig.js';
+import { collectAllMCPTools, executeMCPTool } from './mcpToolsManager.js';
+import { getOpenAiConfig } from '../config/apiConfig.js';
+import { sessionManager } from '../session/sessionManager.js';
+import { unifiedHooksExecutor } from './unifiedHooksExecutor.js';
+import type { MCPTool } from './mcpToolsManager.js';
+import type { ChatMessage } from '../../api/types.js';
+import type { ConfirmationResult } from '../../ui/components/ToolConfirmation.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -256,19 +257,19 @@ export async function executeSubAgent(
 			const stream =
 				config.requestMethod === 'anthropic'
 					? createStreamingAnthropicCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								max_tokens: config.maxTokens || 4096,
-								tools: allowedTools,
-								sessionId: currentSession?.id,
-								disableThinking: true, // Sub-agents 不使用 Extended Thinking
-							},
-							abortSignal,
-					  )
+						{
+							model,
+							messages,
+							temperature: 0,
+							max_tokens: config.maxTokens || 4096,
+							tools: allowedTools,
+							sessionId: currentSession?.id,
+							disableThinking: true, // Sub-agents 不使用 Extended Thinking
+						},
+						abortSignal,
+					)
 					: config.requestMethod === 'gemini'
-					? createStreamingGeminiCompletion(
+						? createStreamingGeminiCompletion(
 							{
 								model,
 								messages,
@@ -276,27 +277,27 @@ export async function executeSubAgent(
 								tools: allowedTools,
 							},
 							abortSignal,
-					  )
-					: config.requestMethod === 'responses'
-					? createStreamingResponse(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-								prompt_cache_key: currentSession?.id,
-							},
-							abortSignal,
-					  )
-					: createStreamingChatCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-							},
-							abortSignal,
-					  );
+						)
+						: config.requestMethod === 'responses'
+							? createStreamingResponse(
+								{
+									model,
+									messages,
+									temperature: 0,
+									tools: allowedTools,
+									prompt_cache_key: currentSession?.id,
+								},
+								abortSignal,
+							)
+							: createStreamingChatCompletion(
+								{
+									model,
+									messages,
+									temperature: 0,
+									tools: allowedTools,
+								},
+								abortSignal,
+							);
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
@@ -368,9 +369,75 @@ export async function executeSubAgent(
 				messages.push(assistantMessage);
 				finalResponse = currentContent;
 			}
-
 			// If no tool calls, we're done
 			if (toolCalls.length === 0) {
+				// 执行 onSubAgentComplete 钩子（在子代理任务完成前）
+				try {
+					const hookResult = await unifiedHooksExecutor.executeHooks(
+						'onSubAgentComplete',
+						{
+							agentId: agent.id,
+							agentName: agent.name,
+							content: finalResponse,
+							success: true,
+							usage: totalUsage,
+						},
+					);
+
+					// 处理钩子返回结果
+					if (hookResult.results && hookResult.results.length > 0) {
+						let shouldContinue = false;
+
+						for (const result of hookResult.results) {
+							if (result.type === 'command' && !result.success) {
+								if (result.exitCode >= 2) {
+									// exitCode >= 2: 错误，追加消息并再次调用 API
+									const errorMessage: ChatMessage = {
+										role: 'user',
+										content: result.error || result.output || '未知错误',
+									};
+									messages.push(errorMessage);
+									shouldContinue = true;
+								}
+							} else if (result.type === 'prompt' && result.response) {
+								// 处理 prompt 类型
+								if (result.response.ask === 'ai' && result.response.continue) {
+									// 发送给 AI 继续处理
+									const promptMessage: ChatMessage = {
+										role: 'user',
+										content: result.response.message,
+									};
+									messages.push(promptMessage);
+									shouldContinue = true;
+
+									// 向 UI 显示钩子消息，告知用户子代理继续执行
+									if (onMessage) {
+										console.log(`Hook: ${result.response.message}`);
+									}
+								}
+							}
+						}
+						// 如果需要继续，则不 break，让循环继续
+						if (shouldContinue) {
+							// 在继续前发送提示信息
+							if (onMessage) {
+								// 先发送一个 done 消息标记当前流结束
+								onMessage({
+									type: 'sub_agent_message',
+									agentId: agent.id,
+									agentName: agent.name,
+									message: {
+										type: 'done',
+									},
+								});
+							}
+							continue;
+						}
+					}
+				} catch (error) {
+					console.error('onSubAgentComplete hook execution failed:', error);
+				}
+
 				break;
 			}
 
@@ -572,9 +639,8 @@ export async function executeSubAgent(
 					const errorResult = {
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
-						content: `Error: ${
-							error instanceof Error ? error.message : 'Tool execution failed'
-						}`,
+						content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'
+							}`,
 					};
 					toolResults.push(errorResult);
 
@@ -588,11 +654,10 @@ export async function executeSubAgent(
 								type: 'tool_result',
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
-								content: `Error: ${
-									error instanceof Error
+								content: `Error: ${error instanceof Error
 										? error.message
 										: 'Tool execution failed'
-								}`,
+									}`,
 							} as any,
 						});
 					}

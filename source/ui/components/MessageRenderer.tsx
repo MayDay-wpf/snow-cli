@@ -164,6 +164,26 @@ export default function MessageRenderer({
 												return <HookErrorDisplay details={message.hookError} />;
 											}
 
+											// Check if content is a hook-error JSON
+											try {
+												const parsed = JSON.parse(message.content);
+												if (parsed.type === 'hook-error') {
+													return (
+														<HookErrorDisplay
+															details={{
+																type: 'error',
+																exitCode: parsed.exitCode,
+																command: parsed.command,
+																output: parsed.output,
+																error: '',
+															}}
+														/>
+													);
+												}
+											} catch {
+												// Not JSON, continue with normal rendering
+											}
+
 											// For tool messages (with status icons), render as plain text with color
 											// instead of using MarkdownRenderer which ignores the toolStatusColor
 											const hasToolStatusIcon =

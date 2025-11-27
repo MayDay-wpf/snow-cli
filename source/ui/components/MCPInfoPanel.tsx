@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
-import SelectInput from 'ink-select-input';
-import { getMCPServicesInfo, refreshMCPToolsCache, reconnectMCPService } from '../../utils/execution/mcpToolsManager.js';
+import React, {useState, useEffect} from 'react';
+import {Box, Text, useInput} from 'ink';
+import {
+	getMCPServicesInfo,
+	refreshMCPToolsCache,
+	reconnectMCPService,
+} from '../../utils/execution/mcpToolsManager.js';
+import {getMCPConfig, updateMCPConfig} from '../../utils/config/apiConfig.js';
 
 interface MCPConnectionStatus {
 	name: string;
@@ -10,6 +14,7 @@ interface MCPConnectionStatus {
 	connectionMethod?: string;
 	error?: string;
 	isBuiltIn?: boolean;
+	enabled?: boolean;
 }
 
 interface SelectItem {
@@ -19,10 +24,12 @@ interface SelectItem {
 	isBuiltIn?: boolean;
 	error?: string;
 	isRefreshAll?: boolean;
+	enabled?: boolean;
 }
 
 export default function MCPInfoPanel() {
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
+	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [isReconnecting, setIsReconnecting] = useState(false);
@@ -30,20 +37,26 @@ export default function MCPInfoPanel() {
 	const loadMCPStatus = async () => {
 		try {
 			const servicesInfo = await getMCPServicesInfo();
+			const mcpConfig = getMCPConfig();
 			const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
 				name: service.serviceName,
 				connected: service.connected,
 				tools: service.tools.map(tool => tool.name),
 				connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
 				isBuiltIn: service.isBuiltIn,
-				error: service.error
+				error: service.error,
+				enabled:
+					service.isBuiltIn ||
+					mcpConfig.mcpServers[service.serviceName]?.enabled !== false,
 			}));
 
 			setMcpStatus(statusList);
 			setErrorMessage(null);
 			setIsLoading(false);
 		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : 'Failed to load MCP services');
+			setErrorMessage(
+				error instanceof Error ? error.message : 'Failed to load MCP services',
+			);
 			setIsLoading(false);
 		}
 	};
@@ -76,53 +89,83 @@ export default function MCPInfoPanel() {
 			}
 			await loadMCPStatus();
 		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : 'Failed to reconnect');
+			setErrorMessage(
+				error instanceof Error ? error.message : 'Failed to reconnect',
+			);
 		} finally {
 			setIsReconnecting(false);
 		}
 	};
 
+	// Listen for Tab key to toggle service enabled/disabled
+	useInput(async (_, key) => {
+		if (isReconnecting) return;
+
+		// Arrow key navigation
+		if (key.upArrow) {
+			setSelectedIndex(prev => (prev > 0 ? prev - 1 : selectItems.length - 1));
+			return;
+		}
+		if (key.downArrow) {
+			setSelectedIndex(prev => (prev < selectItems.length - 1 ? prev + 1 : 0));
+			return;
+		}
+
+		// Enter to select
+		if (key.return) {
+			const currentItem = selectItems[selectedIndex];
+			if (currentItem) {
+				await handleServiceSelect(currentItem);
+			}
+			return;
+		}
+
+		// Tab key to toggle enabled/disabled for non-system MCP services
+		if (key.tab) {
+			const currentItem = selectItems[selectedIndex];
+
+			// Skip if it's the refresh-all option or a built-in service
+			if (currentItem && !currentItem.isRefreshAll && !currentItem.isBuiltIn) {
+				try {
+					const config = getMCPConfig();
+					const serviceName = currentItem.value;
+
+					if (config.mcpServers[serviceName]) {
+						// Toggle enabled state (default to true if undefined)
+						const currentEnabled =
+							config.mcpServers[serviceName].enabled !== false;
+						config.mcpServers[serviceName].enabled = !currentEnabled;
+
+						updateMCPConfig(config);
+
+						// Refresh MCP tools cache and reload status
+						await refreshMCPToolsCache();
+						await loadMCPStatus();
+					}
+				} catch (error) {
+					setErrorMessage(
+						error instanceof Error ? error.message : 'Failed to toggle service',
+					);
+				}
+			}
+		}
+	});
+
 	// Build select items from all services
 	const selectItems: SelectItem[] = [
-		{ label: 'Refresh all services', value: 'refresh-all', isRefreshAll: true },
+		{label: 'Refresh all services', value: 'refresh-all', isRefreshAll: true},
 		...mcpStatus.map(s => ({
 			label: s.name,
 			value: s.name,
 			connected: s.connected,
 			isBuiltIn: s.isBuiltIn,
-			error: s.error
-		}))
+			error: s.error,
+			enabled: s.enabled,
+		})),
 	];
 
-	// Custom item component to render with colors
-	const ItemComponent = ({ isSelected, label }: { isSelected?: boolean; label: string }) => {
-		const item = selectItems.find(i => i.label === label);
-		if (!item) return <Text>{label}</Text>;
-
-		if (item.isRefreshAll) {
-			return (
-				<Text color={isSelected ? 'cyan' : 'blue'}>
-					↻ {label}
-				</Text>
-			);
-		}
-
-		const statusColor = item.connected ? 'green' : 'red';
-		const suffix = item.isBuiltIn ? ' (System)' : item.connected ? ' (External)' : ` - ${item.error || 'Failed'}`;
-
-		return (
-			<Box>
-				<Text color={statusColor}>● </Text>
-				<Text color={isSelected ? 'cyan' : 'white'}>{label}</Text>
-				<Text color="gray" dimColor>{suffix}</Text>
-			</Box>
-		);
-	};
-
 	if (isLoading) {
-		return (
-			<Text color="gray">Loading MCP services...</Text>
-		);
+		return <Text color="gray">Loading MCP services...</Text>;
 	}
 
 	if (errorMessage) {
@@ -138,7 +181,9 @@ export default function MCPInfoPanel() {
 	if (mcpStatus.length === 0) {
 		return (
 			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="gray" dimColor>No available MCP services detected</Text>
+				<Text color="gray" dimColor>
+					No available MCP services detected
+				</Text>
 			</Box>
 		);
 	}
@@ -149,15 +194,57 @@ export default function MCPInfoPanel() {
 				<Text color="cyan" bold>
 					{isReconnecting ? 'Refreshing services...' : 'MCP Services'}
 				</Text>
-				{!isReconnecting && (
-					<SelectInput
-						items={selectItems}
-						onSelect={handleServiceSelect}
-						itemComponent={ItemComponent}
-					/>
-				)}
+				{!isReconnecting &&
+					selectItems.map((item, index) => {
+						const isSelected = index === selectedIndex;
+
+						// Render refresh-all item
+						if (item.isRefreshAll) {
+							return (
+								<Box key={item.value}>
+									<Text color={isSelected ? 'cyan' : 'blue'}>
+										{isSelected ? '❯ ' : '  '}↻ {item.label}
+									</Text>
+								</Box>
+							);
+						}
+
+						// Check if service is disabled
+						const isEnabled = item.enabled !== false;
+						const statusColor = !isEnabled
+							? 'gray'
+							: item.connected
+							? 'green'
+							: 'red';
+						const suffix = item.isBuiltIn
+							? ' (System)'
+							: !isEnabled
+							? ' (Disabled)'
+							: item.connected
+							? ' (External)'
+							: ` - ${item.error || 'Failed'}`;
+
+						return (
+							<Box key={item.value}>
+								<Text>
+									{isSelected ? '> ' : '  '}
+									<Text color={statusColor}>● </Text>
+									<Text
+										color={isSelected ? 'cyan' : !isEnabled ? 'gray' : 'white'}
+									>
+										{item.label}
+									</Text>
+									<Text color="gray" dimColor>
+										{suffix}
+									</Text>
+								</Text>
+							</Box>
+						);
+					})}
 				{isReconnecting && (
-					<Text color="yellow" dimColor>Please wait...</Text>
+					<Text color="yellow" dimColor>
+						Please wait...
+					</Text>
 				)}
 			</Box>
 		</Box>
