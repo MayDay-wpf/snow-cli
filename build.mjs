@@ -35,10 +35,18 @@ const require = _createRequire(import.meta.url);
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));`,
 	},
-	external: [
+external: [
 		// Only Node.js built-in modules should be external
 		...builtinModules,
 		...builtinModules.map(m => `node:${m}`),
+		// Sharp and its platform-specific native dependencies
+		'sharp',
+		'@img/sharp-win32-x64',
+		'@img/sharp-win32-arm64',
+		'@img/sharp-linux-x64',
+		'@img/sharp-linux-arm64',
+		'@img/sharp-darwin-x64',
+		'@img/sharp-darwin-arm64',
 	],
 	plugins: [stubPlugin],
 	minify: false,
