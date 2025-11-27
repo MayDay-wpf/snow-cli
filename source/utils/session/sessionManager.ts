@@ -157,6 +157,8 @@ class SessionManager {
 				if (hookResult.warningMessage) {
 					this.lastLoadHookWarning = hookResult.warningMessage;
 				}
+				// Set as current session before returning
+				this.currentSession = session;
 				return session;
 			}
 		} catch (error) {

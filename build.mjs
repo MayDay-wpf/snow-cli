@@ -39,6 +39,8 @@ const __dirname = _fileURLToPath(new URL('.', import.meta.url));`,
 		// Only Node.js built-in modules should be external
 		...builtinModules,
 		...builtinModules.map(m => `node:${m}`),
+		// Optional native dependencies (dynamically imported in code)
+		'sharp',
 	],
 	plugins: [stubPlugin],
 	minify: false,

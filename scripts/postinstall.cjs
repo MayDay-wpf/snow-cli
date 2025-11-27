@@ -80,6 +80,32 @@ function checkNodeVersion() {
 }
 
 /**
+ * Try to install sharp as optional dependency
+ */
+function tryInstallSharp() {
+	try {
+		// Check if sharp is already installed
+		require.resolve('sharp');
+		console.log(`${colors.green}✓ sharp is already installed${colors.reset}`);
+		return true;
+	} catch {
+		console.log(`${colors.yellow}Installing optional dependency: sharp (for SVG to PNG conversion)${colors.reset}`);
+		try {
+			execSync('npm install --no-save --prefer-offline sharp', {
+				stdio: 'inherit',
+				cwd: process.cwd()
+			});
+			console.log(`${colors.green}✓ sharp installed successfully${colors.reset}`);
+			return true;
+		} catch (error) {
+			console.log(`${colors.yellow}⚠ sharp installation failed (this is OK - SVG will be returned as-is)${colors.reset}`);
+			console.log(`${colors.cyan}  Reason: sharp requires native binaries that may not be compatible with your system${colors.reset}`);
+			return false;
+		}
+	}
+}
+
+/**
  * Main function
  */
 async function main() {
@@ -90,6 +116,9 @@ async function main() {
 	if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) {
 		return;
 	}
+
+	// Try to install sharp (optional dependency)
+	tryInstallSharp();
 
 	const currentRegistry = getCurrentRegistry();
 	const isUsingMirror = currentRegistry.includes('npmmirror.com') ||

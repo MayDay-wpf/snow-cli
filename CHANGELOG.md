@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.29
+
+- Make sharp an optional dependency and optimize the SVG conversion logic
+
 ## v0.4.28
 
 - FileList .gitignore

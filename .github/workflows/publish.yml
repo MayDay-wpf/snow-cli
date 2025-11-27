@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - FileList .gitignore
+            - Make sharp an optional dependency and optimize the SVG conversion logic
             
             ### Installation
             ```bash
