@@ -15,7 +15,6 @@ import ShimmerText from '../components/ShimmerText.js';
 import MessageRenderer from '../components/MessageRenderer.js';
 
 // Lazy load panel components to reduce initial bundle size
-const MCPInfoScreen = lazy(() => import('../components/MCPInfoScreen.js'));
 const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
 const SessionListPanel = lazy(
 	() => import('../components/SessionListPanel.js'),
@@ -77,8 +76,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
 	const [remountKey, setRemountKey] = useState(0);
-	const [showMcpInfo, setShowMcpInfo] = useState(false);
-	const [mcpPanelKey, setMcpPanelKey] = useState(0);
 	const [currentContextPercentage, setCurrentContextPercentage] = useState(0); // Track context percentage from ChatInput
 	const currentContextPercentageRef = useRef(0); // Use ref to avoid closure issues
 
@@ -535,12 +532,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setIsCompressing,
 		setCompressionError,
 		setShowSessionPanel,
-		setShowMcpInfo,
 		setShowMcpPanel,
 		setShowUsagePanel,
 		setShowHelpPanel,
 		setShowCustomCommandConfig,
-		setMcpPanelKey,
 		setYoloMode,
 		setContextUsage: streamingState.setContextUsage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
@@ -688,13 +683,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		if (showCustomCommandConfig) {
 			if (key.escape) {
 				setShowCustomCommandConfig(false);
-			}
-			return;
-		}
-
-		if (showMcpInfo) {
-			if (key.escape) {
-				setShowMcpInfo(false);
 			}
 			return;
 		}
@@ -1624,25 +1612,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			streamingState.setStreamTokenCount(0);
 		}
 	};
-
-	if (showMcpInfo) {
-		return (
-			<Suspense
-				fallback={
-					<Box>
-						<Text>
-							<Spinner type="dots" /> Loading...
-						</Text>
-					</Box>
-				}
-			>
-				<MCPInfoScreen
-					onClose={() => setShowMcpInfo(false)}
-					panelKey={mcpPanelKey}
-				/>
-			</Suspense>
-		);
-	}
 
 	// Show warning if terminal is too small
 	if (terminalHeight < MIN_TERMINAL_HEIGHT) {

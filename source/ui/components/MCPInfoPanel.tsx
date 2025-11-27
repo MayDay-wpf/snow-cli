@@ -33,6 +33,7 @@ export default function MCPInfoPanel() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [isReconnecting, setIsReconnecting] = useState(false);
+	const [togglingService, setTogglingService] = useState<string | null>(null);
 
 	const loadMCPStatus = async () => {
 		try {
@@ -99,7 +100,7 @@ export default function MCPInfoPanel() {
 
 	// Listen for Tab key to toggle service enabled/disabled
 	useInput(async (_, key) => {
-		if (isReconnecting) return;
+		if (isReconnecting || togglingService) return;
 
 		// Arrow key navigation
 		if (key.upArrow) {
@@ -127,6 +128,7 @@ export default function MCPInfoPanel() {
 			// Skip if it's the refresh-all option or a built-in service
 			if (currentItem && !currentItem.isRefreshAll && !currentItem.isBuiltIn) {
 				try {
+					setTogglingService(currentItem.value);
 					const config = getMCPConfig();
 					const serviceName = currentItem.value;
 
@@ -146,6 +148,8 @@ export default function MCPInfoPanel() {
 					setErrorMessage(
 						error instanceof Error ? error.message : 'Failed to toggle service',
 					);
+				} finally {
+					setTogglingService(null);
 				}
 			}
 		}
@@ -192,9 +196,13 @@ export default function MCPInfoPanel() {
 		<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
 			<Box flexDirection="column">
 				<Text color="cyan" bold>
-					{isReconnecting ? 'Refreshing services...' : 'MCP Services'}
+					{isReconnecting
+						? 'Refreshing services...'
+						: togglingService
+						? `Toggling ${togglingService}...`
+						: 'MCP Services'}
 				</Text>
-				{!isReconnecting &&
+				{!isReconnecting && !togglingService &&
 					selectItems.map((item, index) => {
 						const isSelected = index === selectedIndex;
 
@@ -227,7 +235,7 @@ export default function MCPInfoPanel() {
 						return (
 							<Box key={item.value}>
 								<Text>
-									{isSelected ? '> ' : '  '}
+									{isSelected ? '❯ ' : '  '}
 									<Text color={statusColor}>● </Text>
 									<Text
 										color={isSelected ? 'cyan' : !isEnabled ? 'gray' : 'white'}
@@ -241,7 +249,7 @@ export default function MCPInfoPanel() {
 							</Box>
 						);
 					})}
-				{isReconnecting && (
+				{(isReconnecting || togglingService) && (
 					<Text color="yellow" dimColor>
 						Please wait...
 					</Text>

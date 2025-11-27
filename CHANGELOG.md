@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.27
+
+- MCP long connection, controllable start and stop, join Hooks, TODO optimization, SVG recognition compatibility
+
 ## v0.4.26
 
 - Introduce chokidar to improve file monitoring performance and reliability, add --yolo and --c-yolo commands, and add custom commands

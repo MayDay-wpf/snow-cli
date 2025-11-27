@@ -157,12 +157,10 @@ type CommandHandlerOptions = {
 	setIsCompressing: React.Dispatch<React.SetStateAction<boolean>>;
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	setShowSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setShowMcpInfo: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
-	setMcpPanelKey: React.Dispatch<React.SetStateAction<number>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setVscodeConnectionStatus: React.Dispatch<
@@ -336,15 +334,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				})();
 			} else if (result.success && result.action === 'showSessionPanel') {
 				options.setShowSessionPanel(true);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (result.success && result.action === 'showMcpInfo') {
-				options.setShowMcpInfo(true);
-				options.setMcpPanelKey(prev => prev + 1);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',
