@@ -20,6 +20,7 @@ import {sessionManager} from '../../utils/session/sessionManager.js';
 import {formatTodoContext} from '../../utils/core/todoPreprocessor.js';
 import {unifiedHooksExecutor} from '../../utils/execution/unifiedHooksExecutor.js';
 import type {Message} from '../../ui/components/MessageList.js';
+import {filterToolsBySensitivity} from '../../utils/execution/yoloPermissionChecker.js';
 import {formatToolCallMessage} from '../../utils/ui/messageFormatter.js';
 import {resourceMonitor} from '../../utils/core/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../../utils/config/toolDisplayConfig.js';
@@ -627,34 +628,11 @@ export async function handleConversationWithTools(
 
 				// In YOLO mode, auto-approve all tools EXCEPT sensitive commands
 				if (yoloMode) {
-					// Filter out sensitive commands from auto-approval
-					const nonSensitiveTools: ToolCall[] = [];
-					const sensitiveTools: ToolCall[] = [];
+					// Use the unified permission checker to filter tools
+					const {sensitiveTools, nonSensitiveTools} =
+						await filterToolsBySensitivity(toolsNeedingConfirmation, yoloMode);
 
-					for (const toolCall of toolsNeedingConfirmation) {
-						if (toolCall.function.name === 'terminal-execute') {
-							try {
-								const args = JSON.parse(toolCall.function.arguments);
-								const {isSensitiveCommand: checkSensitiveCommand} =
-									await import(
-										'../../utils/execution/sensitiveCommandManager.js'
-									).then(m => ({
-										isSensitiveCommand: m.isSensitiveCommand,
-									}));
-								const sensitiveCheck = checkSensitiveCommand(args.command);
-								if (sensitiveCheck.isSensitive) {
-									sensitiveTools.push(toolCall);
-								} else {
-									nonSensitiveTools.push(toolCall);
-								}
-							} catch {
-								nonSensitiveTools.push(toolCall);
-							}
-						} else {
-							nonSensitiveTools.push(toolCall);
-						}
-					}
-
+					// Auto-approve non-sensitive tools
 					approvedTools.push(...nonSensitiveTools);
 
 					// If there are sensitive tools, still need confirmation even in YOLO mode
