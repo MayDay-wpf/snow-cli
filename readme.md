@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo.png" alt="Snow AI CLI Logo" width="200"/>
+<img src="docs/images/logo.png" alt="Snow AI CLI Logo" width="200"/>
 
 # snow-ai
 
@@ -72,13 +72,13 @@ In version `v0.3.2` and later, all official SDKs have been removed (they were to
 - **Max Context Tokens** - The model's maximum context window, used for calculating context percentage. For example, Gemini typically has 1M context, so enter `1000000`. This parameter only affects UI calculations, not actual model context
 - **Max Tokens** - This is critical and will be directly added to API requests as the `max_tokens` parameter
 
-![alt text](image.png)
+![alt text](docs/images/image.png)
 
 ## Proxy & Browser Settings
 
 Configure system proxy port and search engine for web search. In most cases, this doesn't need modification as the app will automatically use system proxy. The app automatically detects available search engines (Edge/Chrome) unless you've manually changed their installation paths.
 
-![alt text](image-1.png)
+![alt text](docs/images/image-1.png)
 
 ## System Prompt Settings
 
@@ -98,7 +98,7 @@ Once everything is configured, enter the conversation page by clicking `Start`.
 
 - If you launch Snow from VSCode or other editors, Snow will automatically connect to the IDE using the `Snow CLI` plugin. You'll see a connection message. The plugins are published online - search for `Snow CLI` in the plugin marketplace to install.
 
-![alt text](image-2.png)
+![alt text](docs/images/image-2.png)
 
 ### File Selection & Commands
 
@@ -125,13 +125,13 @@ Once everything is configured, enter the conversation page by clicking `Start`.
 
 The input area displays context usage percentage, token count, cache hit tokens, and cache creation tokens.
 
-![alt text](image-3.png)
+![alt text](docs/images/image-3.png)
 
 ## Snow System Files
 
 All Snow files are stored in the `.snow` folder in your user directory. Here's what each file/folder contains:
 
-![alt text](image-4.png)
+![alt text](docs/images/image-4.png)
 
 - **log** - Runtime logs (not uploaded anywhere, kept locally for debugging). Safe to delete
 - **profiles** - Multiple configuration files for switching between different API/model setups
