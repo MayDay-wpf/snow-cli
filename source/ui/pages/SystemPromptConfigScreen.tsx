@@ -39,7 +39,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 	const [view, setView] = useState<View>('list');
 	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [currentAction, setCurrentAction] = useState<ListAction>('activate');
+	const [currentAction, setCurrentAction] = useState<ListAction>('add');
 	const [isEditing, setIsEditing] = useState(false);
 	const [editName, setEditName] = useState('');
 	const [editContent, setEditContent] = useState('');
@@ -52,6 +52,13 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 				? ['activate', 'deactivate', 'edit', 'delete', 'add', 'back']
 				: ['activate', 'edit', 'delete', 'add', 'back']
 			: ['add', 'back'];
+
+	// 当配置变化时，确保 currentAction 在可用操作列表中
+	useEffect(() => {
+		if (!actions.includes(currentAction)) {
+			setCurrentAction(actions[0] || 'add');
+		}
+	}, [config.prompts.length, config.active]);
 
 	useEffect(() => {
 		// 保存配置时刷新
@@ -288,20 +295,20 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-			<Box
-				marginBottom={1}
-				borderStyle="round"
-				borderColor={theme.colors.menuInfo}
-				paddingX={2}
-				paddingY={1}
-			>
-				<Box flexDirection="column">
-					<Gradient name="rainbow">{t.systemPromptConfig.title}</Gradient>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.systemPromptConfig.subtitle}
-					</Text>
+				<Box
+					marginBottom={1}
+					borderStyle="round"
+					borderColor={theme.colors.menuInfo}
+					paddingX={2}
+					paddingY={1}
+				>
+					<Box flexDirection="column">
+						<Gradient name="rainbow">{t.systemPromptConfig.title}</Gradient>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.systemPromptConfig.subtitle}
+						</Text>
+					</Box>
 				</Box>
-			</Box>
 
 				{error && (
 					<Box marginBottom={1}>
@@ -309,37 +316,37 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					</Box>
 				)}
 
-			<Box marginBottom={1}>
-				<Text bold>
-					{t.systemPromptConfig.activePrompt}{' '}
-					<Text color={theme.colors.success}>
-						{activePrompt?.name || t.systemPromptConfig.none}
-					</Text>
-				</Text>
-			</Box>
-
-			{config.prompts.length === 0 ? (
 				<Box marginBottom={1}>
-					<Text color={theme.colors.warning}>
-						{t.systemPromptConfig.noPromptsConfigured}
+					<Text bold>
+						{t.systemPromptConfig.activePrompt}{' '}
+						<Text color={theme.colors.success}>
+							{activePrompt?.name || t.systemPromptConfig.none}
+						</Text>
 					</Text>
 				</Box>
-			) : (
-				<Box flexDirection="column" marginBottom={1}>
-					<Text bold color={theme.colors.menuInfo}>
-						{t.systemPromptConfig.availablePrompts}
-					</Text>
+
+				{config.prompts.length === 0 ? (
+					<Box marginBottom={1}>
+						<Text color={theme.colors.warning}>
+							{t.systemPromptConfig.noPromptsConfigured}
+						</Text>
+					</Box>
+				) : (
+					<Box flexDirection="column" marginBottom={1}>
+						<Text bold color={theme.colors.menuInfo}>
+							{t.systemPromptConfig.availablePrompts}
+						</Text>
 						{config.prompts.map((prompt, index) => (
 							<Box key={prompt.id} marginLeft={2}>
-					<Text
-						color={
-							index === selectedIndex
-								? theme.colors.menuSelected
-								: prompt.id === config.active
-								? theme.colors.menuInfo
-								: theme.colors.menuNormal
-						}
-					>
+								<Text
+									color={
+										index === selectedIndex
+											? theme.colors.menuSelected
+											: prompt.id === config.active
+											? theme.colors.menuInfo
+											: theme.colors.menuNormal
+									}
+								>
 									{index === selectedIndex ? '❯ ' : '  '}
 									{prompt.id === config.active ? '✓ ' : '  '}
 									{prompt.name}
@@ -356,18 +363,22 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					</Box>
 				)}
 
-			<Box marginBottom={1}>
-				<Text bold color={theme.colors.menuInfo}>
-					{t.systemPromptConfig.actions}
-				</Text>
-			</Box>
-			<Box flexDirection="column" marginBottom={1} marginLeft={2}>
-				{actions.map(action => (
-					<Text
-						key={action}
-						color={currentAction === action ? theme.colors.menuSelected : theme.colors.menuSecondary}
-						bold={currentAction === action}
-					>
+				<Box marginBottom={1}>
+					<Text bold color={theme.colors.menuInfo}>
+						{t.systemPromptConfig.actions}
+					</Text>
+				</Box>
+				<Box flexDirection="column" marginBottom={1} marginLeft={2}>
+					{actions.map(action => (
+						<Text
+							key={action}
+							color={
+								currentAction === action
+									? theme.colors.menuSelected
+									: theme.colors.menuSecondary
+							}
+							bold={currentAction === action}
+						>
 							{currentAction === action ? '❯ ' : '  '}
 							{action === 'activate' && t.systemPromptConfig.activate}
 							{action === 'deactivate' && t.systemPromptConfig.deactivate}
@@ -379,11 +390,11 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					))}
 				</Box>
 
-			<Box marginTop={1}>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{t.systemPromptConfig.navigationHint}
-				</Text>
-			</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.systemPromptConfig.navigationHint}
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -412,66 +423,78 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					</Box>
 				)}
 
-			<Box flexDirection="column" marginBottom={1}>
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={editingField === 'name' ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{editingField === 'name' ? '❯ ' : '  '}
-							{t.systemPromptConfig.nameLabel}
-						</Text>
-						{editingField === 'name' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={editName}
-									onChange={setEditName}
-									placeholder={t.systemPromptConfig.enterPromptName}
-								/>
-							</Box>
-						)}
-						{(!isEditing || editingField !== 'name') && (
-							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>
-									{editName || t.systemPromptConfig.notSet}
-								</Text>
-							</Box>
-						)}
+				<Box flexDirection="column" marginBottom={1}>
+					<Box marginBottom={1}>
+						<Box flexDirection="column">
+							<Text
+								color={
+									editingField === 'name'
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+							>
+								{editingField === 'name' ? '❯ ' : '  '}
+								{t.systemPromptConfig.nameLabel}
+							</Text>
+							{editingField === 'name' && isEditing && (
+								<Box marginLeft={3}>
+									<TextInput
+										value={editName}
+										onChange={setEditName}
+										placeholder={t.systemPromptConfig.enterPromptName}
+									/>
+								</Box>
+							)}
+							{(!isEditing || editingField !== 'name') && (
+								<Box marginLeft={3}>
+									<Text color={theme.colors.menuSecondary}>
+										{editName || t.systemPromptConfig.notSet}
+									</Text>
+								</Box>
+							)}
+						</Box>
+					</Box>
+
+					<Box marginBottom={1}>
+						<Box flexDirection="column">
+							<Text
+								color={
+									editingField === 'content'
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+							>
+								{editingField === 'content' ? '❯ ' : '  '}
+								{t.systemPromptConfig.contentLabel}
+							</Text>
+							{editingField === 'content' && isEditing && (
+								<Box marginLeft={3}>
+									<TextInput
+										value={editContent}
+										onChange={setEditContent}
+										placeholder={t.systemPromptConfig.enterPromptContent}
+									/>
+								</Box>
+							)}
+							{(!isEditing || editingField !== 'content') && (
+								<Box marginLeft={3}>
+									<Text color={theme.colors.menuSecondary}>
+										{editContent
+											? editContent.substring(0, 100) +
+											  (editContent.length > 100 ? '...' : '')
+											: t.systemPromptConfig.notSet}
+									</Text>
+								</Box>
+							)}
+						</Box>
 					</Box>
 				</Box>
 
-				<Box marginBottom={1}>
-					<Box flexDirection="column">
-						<Text color={editingField === 'content' ? theme.colors.menuSelected : theme.colors.menuNormal}>
-							{editingField === 'content' ? '❯ ' : '  '}
-							{t.systemPromptConfig.contentLabel}
-						</Text>
-						{editingField === 'content' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={editContent}
-									onChange={setEditContent}
-									placeholder={t.systemPromptConfig.enterPromptContent}
-								/>
-							</Box>
-						)}
-						{(!isEditing || editingField !== 'content') && (
-							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>
-									{editContent
-										? editContent.substring(0, 100) +
-										  (editContent.length > 100 ? '...' : '')
-										: t.systemPromptConfig.notSet}
-								</Text>
-							</Box>
-						)}
-					</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.systemPromptConfig.editingHint}
+					</Text>
 				</Box>
-			</Box>
-
-			<Box marginTop={1}>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{t.systemPromptConfig.editingHint}
-				</Text>
-			</Box>
 			</Box>
 		);
 	}

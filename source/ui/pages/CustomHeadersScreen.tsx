@@ -39,7 +39,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 	const [view, setView] = useState<View>('list');
 	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [currentAction, setCurrentAction] = useState<ListAction>('activate');
+	const [currentAction, setCurrentAction] = useState<ListAction>('add');
 	const [isEditing, setIsEditing] = useState(false);
 	const [editName, setEditName] = useState('');
 	const [editHeaders, setEditHeaders] = useState<Record<string, string>>({});
@@ -64,6 +64,13 @@ export default function CustomHeadersScreen({onBack}: Props) {
 				? ['activate', 'deactivate', 'edit', 'delete', 'add', 'back']
 				: ['activate', 'edit', 'delete', 'add', 'back']
 			: ['add', 'back'];
+
+	// 当配置变化时，确保 currentAction 在可用操作列表中
+	useEffect(() => {
+		if (!actions.includes(currentAction)) {
+			setCurrentAction(actions[0] || 'add');
+		}
+	}, [config.schemes.length, config.active]);
 
 	useEffect(() => {
 		const savedConfig = getCustomHeadersConfig();
