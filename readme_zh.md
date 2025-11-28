@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo.png" alt="Snow AI CLI Logo" width="200"/>
+<img src="docs/images/logo.png" alt="Snow AI CLI Logo" width="200"/>
 
 # snow-ai
 
@@ -69,13 +69,13 @@ $ nvm use 16
 - `Max Context Tokens` 模型的最大上下文窗口，用于计算上下文百分比用的，可以根据模型实际情况填写，例如 `gemini` 一般是 1M 上下文，就填 1000000，这个参数不会影响实际的模型上下文，只会影响界面的计算结果
 - `Max Tokens` 这个不能乱填，这个参数会直接加入 API 请求体中，作为 `max_tokens` 参数
 
-![alt text](image.png)
+![alt text](docs/images/image.png)
 
 # 四、Proxy & Browser Settings
 
 ### 用户设置系统代理端口，以及联网搜索的搜索引擎，一般情况下，这是不需要修改的，因为即便不设置，实测也会自动走代理除非有特殊抓包需求要走特定端口。同时，应用会自己寻找可能的搜索引擎路劲，Edge/Chrome 系统只要装了，基本都可以用，除非手动修改过 Edge 的下载位置
 
-![alt text](image-1.png)
+![alt text](docs/images/image-1.png)
 
 # 五、System Prompt Settings
 
@@ -93,7 +93,7 @@ $ nvm use 16
 
 - 如果你在`vscode`等编辑器中启动，Snow 会自动使用 `Snow CLI` 插件连接 IDE，你会看到这样的信息，插件都已经发布线上版本，直接在插件市场搜索 `Snow CLI` 即可安装
 
-![alt text](image-2.png)
+![alt text](docs/images/image-2.png)
 
 - 使用 `@` 可以选择文件，当然 vscode 最方便的操作还是长按`shift` 拖拽文件，效果一致
 - 使用 `/` 可查看可用命令,
@@ -112,13 +112,13 @@ $ nvm use 16
   - `ESC` 中断 AI 生成
   - 双击`ESC` 回滚对话（系统自带检查点，可回滚文件）
 - Token 使用情况（输入框下方会显示上下文占用百分比和 token 数、缓存命中 token 数、缓存创建 token 数）
-  ![alt text](image-3.png)
+  ![alt text](docs/images/image-3.png)
 
 # 八、Snow 的系统文件
 
 ### 在用户目录的 `.snow` 文件夹中有 Snow 的所有文件，下面一个一个解释
 
-![alt text](image-4.png)
+![alt text](docs/images/image-4.png)
 
 - `log` 该目录主要记录了运行日志，这些日志不会上传任何远端，仅留在本地用于出现 BUG 时方便定位，可任意删除
 - `profiles` 前文中提到，Snow 支持多个配置文件切换，用户自定义的多个配置文件都将保存在这个目录
@@ -139,7 +139,7 @@ $ nvm use 16
 
   - 自定义系统提示词(注意不能多余或缺少任何字符):
   - `You are Claude Code, Anthropic's official CLI for Claude.`
-    ![alt text](image-5.png)
+    ![alt text](docs/images/image-5.png)
 
   - 自定义请求头:
 ```json
@@ -151,7 +151,7 @@ $ nvm use 16
     	"x-app": "cli"
     }
 ```
-    ![alt text](image-6.png)
+    ![alt text](docs/images/image-6.png)
 
 - Codex
   - Codex 中转一般无需配置请求头
