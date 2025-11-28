@@ -44,7 +44,7 @@ You can also clone and build from source: https://github.com/MayDay-wpf/snow-cli
 
 ### Install VSCode Extension
 
-- Download [VSIX/snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/)
+- Download [snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/releases/tag/vsix)
 
 - Open VSCode, click `Extensions` -> `Install from VSIX...` -> select `snow-cli-0.2.6.vsix`
 
