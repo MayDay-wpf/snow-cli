@@ -41,7 +41,7 @@ $ nvm use 16
 
 ## 安装 VSCode 扩展
 
-- 下载 [VSIX/snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/blob/main/VSIX/)
+- 下载 [snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/releases/tag/vsix)
 
 - 打开 VSCode，点击 `扩展` -> `从 VSIX 安装...` -> 选择 `snow-cli-0.2.6.vsix`
 
