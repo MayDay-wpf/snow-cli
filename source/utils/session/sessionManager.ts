@@ -157,6 +157,9 @@ class SessionManager {
 				if (hookResult.warningMessage) {
 					this.lastLoadHookWarning = hookResult.warningMessage;
 				}
+
+				// 设置currentSession
+				this.currentSession = session;
 				return session;
 			}
 		} catch (error) {
