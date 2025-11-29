@@ -1,15 +1,16 @@
-import { createStreamingAnthropicCompletion } from '../../api/anthropic.js';
-import { createStreamingResponse } from '../../api/responses.js';
-import { createStreamingGeminiCompletion } from '../../api/gemini.js';
-import { createStreamingChatCompletion } from '../../api/chat.js';
-import { getSubAgent } from '../config/subAgentConfig.js';
-import { collectAllMCPTools, executeMCPTool } from './mcpToolsManager.js';
-import { getOpenAiConfig } from '../config/apiConfig.js';
-import { sessionManager } from '../session/sessionManager.js';
-import { unifiedHooksExecutor } from './unifiedHooksExecutor.js';
-import type { MCPTool } from './mcpToolsManager.js';
-import type { ChatMessage } from '../../api/types.js';
-import type { ConfirmationResult } from '../../ui/components/ToolConfirmation.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
+import {createStreamingChatCompletion} from '../../api/chat.js';
+import {getSubAgent} from '../config/subAgentConfig.js';
+import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
+import {getOpenAiConfig} from '../config/apiConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
+import {checkYoloPermission} from './yoloPermissionChecker.js';
+import type {MCPTool} from './mcpToolsManager.js';
+import type {ChatMessage} from '../../api/types.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -257,19 +258,19 @@ export async function executeSubAgent(
 			const stream =
 				config.requestMethod === 'anthropic'
 					? createStreamingAnthropicCompletion(
-						{
-							model,
-							messages,
-							temperature: 0,
-							max_tokens: config.maxTokens || 4096,
-							tools: allowedTools,
-							sessionId: currentSession?.id,
-							disableThinking: true, // Sub-agents 不使用 Extended Thinking
-						},
-						abortSignal,
-					)
+							{
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: allowedTools,
+								sessionId: currentSession?.id,
+								disableThinking: true, // Sub-agents 不使用 Extended Thinking
+							},
+							abortSignal,
+					  )
 					: config.requestMethod === 'gemini'
-						? createStreamingGeminiCompletion(
+					? createStreamingGeminiCompletion(
 							{
 								model,
 								messages,
@@ -277,27 +278,27 @@ export async function executeSubAgent(
 								tools: allowedTools,
 							},
 							abortSignal,
-						)
-						: config.requestMethod === 'responses'
-							? createStreamingResponse(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-									prompt_cache_key: currentSession?.id,
-								},
-								abortSignal,
-							)
-							: createStreamingChatCompletion(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-								},
-								abortSignal,
-							);
+					  )
+					: config.requestMethod === 'responses'
+					? createStreamingResponse(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+								prompt_cache_key: currentSession?.id,
+							},
+							abortSignal,
+					  )
+					: createStreamingChatCompletion(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+							},
+							abortSignal,
+					  );
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
@@ -520,17 +521,19 @@ export async function executeSubAgent(
 					args = {};
 				}
 
-				// Check if tool needs confirmation
-				let needsConfirmation = true;
+				// Check if tool needs confirmation using the unified YOLO permission checker
+				const permissionResult = await checkYoloPermission(
+					toolName,
+					args,
+					yoloMode ?? false,
+				);
+				let needsConfirmation = permissionResult.needsConfirmation;
 
-				// In YOLO mode, auto-approve all tools
-				if (yoloMode) {
-					needsConfirmation = false;
-				}
 				// Check if tool is in auto-approved list (global or session)
-				else if (
-					sessionApprovedTools.has(toolName) ||
-					(isToolAutoApproved && isToolAutoApproved(toolName))
+				if (
+					!needsConfirmation &&
+					(sessionApprovedTools.has(toolName) ||
+						(isToolAutoApproved && isToolAutoApproved(toolName)))
 				) {
 					needsConfirmation = false;
 				}
@@ -639,8 +642,9 @@ export async function executeSubAgent(
 					const errorResult = {
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
-						content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'
-							}`,
+						content: `Error: ${
+							error instanceof Error ? error.message : 'Tool execution failed'
+						}`,
 					};
 					toolResults.push(errorResult);
 
@@ -654,10 +658,11 @@ export async function executeSubAgent(
 								type: 'tool_result',
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
-								content: `Error: ${error instanceof Error
+								content: `Error: ${
+									error instanceof Error
 										? error.message
 										: 'Tool execution failed'
-									}`,
+								}`,
 							} as any,
 						});
 					}
