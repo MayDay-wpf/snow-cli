@@ -530,10 +530,10 @@ export async function executeSubAgent(
 				let needsConfirmation = permissionResult.needsConfirmation;
 
 				// Check if tool is in auto-approved list (global or session)
+				// This should override the YOLO permission check result
 				if (
-					!needsConfirmation &&
-					(sessionApprovedTools.has(toolName) ||
-						(isToolAutoApproved && isToolAutoApproved(toolName)))
+					sessionApprovedTools.has(toolName) ||
+					(isToolAutoApproved && isToolAutoApproved(toolName))
 				) {
 					needsConfirmation = false;
 				}
