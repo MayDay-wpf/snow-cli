@@ -80,6 +80,8 @@
 		"ink-testing-library": "^3.0.0",
 		"ink-text-input": "^6.0.0",
 		"mammoth": "^1.11.0",
+		"markdown-it": "^14.1.0",
+		"markdown-it-terminal": "^0.4.0",
 		"marked": "^15.0.6",
 		"marked-terminal": "^7.3.0",
 		"meow": "^11.0.0",

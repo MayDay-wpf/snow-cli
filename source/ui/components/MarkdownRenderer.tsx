@@ -1,18 +1,22 @@
 import React from 'react';
 import {Text, Box} from 'ink';
-import {marked} from 'marked';
-import TerminalRenderer from 'marked-terminal';
+import MarkdownIt from 'markdown-it';
+// @ts-expect-error - markdown-it-terminal has no type definitions
+import terminal from 'markdown-it-terminal';
 import logger from '../../utils/core/logger.js';
 
-// Configure marked to use terminal renderer
-marked.setOptions({
-	// @ts-expect-error - marked-terminal types mismatch with marked v15
-	renderer: new TerminalRenderer({
-		reflowText: true,
-		width: 80,
-		emoji: false,
-		tab: 2,
-	}),
+// Configure markdown-it with terminal renderer
+const md = new MarkdownIt({
+	html: true,
+	breaks: true,
+	linkify: true,
+});
+
+md.use(terminal, {
+	styleOptions: {
+		// Style options are handled by markdown-it-terminal automatically
+	},
+	unescape: true,
 });
 
 interface Props {
@@ -20,15 +24,12 @@ interface Props {
 }
 
 /**
- * Sanitize markdown content to prevent number-to-alphabet errors
- * Fixes invalid ordered list start attributes (0 or negative values)
+ * Sanitize markdown content to prevent rendering issues
+ * Fixes invalid HTML attributes in rendered output
  */
 function sanitizeMarkdownContent(content: string): string {
 	// Replace <ol start="0">, <ol start="-1">, etc. with <ol start="1">
-	return content.replace(
-		/<ol\s+start=["']?(0|-\d+)["']?>/gi,
-		'<ol start="1">'
-	);
+	return content.replace(/<ol\s+start=["']?(0|-\d+)["']?>/gi, '<ol start="1">');
 }
 
 /**
@@ -47,15 +48,15 @@ function renderFallback(content: string): React.ReactElement {
 }
 
 export default function MarkdownRenderer({content}: Props) {
-	// Use marked + marked-terminal for elegant markdown rendering with syntax highlighting
-	// marked provides better stability and cross-platform support
-	
+	// Use markdown-it + markdown-it-terminal for complete markdown rendering
+	// markdown-it-terminal properly handles inline formatting in list items
+
 	try {
-		// Stage 1: Sanitize content to prevent invalid list numbering
+		// Stage 1: Sanitize content to prevent invalid HTML attributes
 		const sanitizedContent = sanitizeMarkdownContent(content);
-		
-		// Stage 2: Render with marked
-		const rendered = marked.parse(sanitizedContent) as string;
+
+		// Stage 2: Render with markdown-it
+		const rendered = md.render(sanitizedContent);
 
 		// Split into lines and render each separately
 		// This prevents Ink's Text component from creating mysterious whitespace
@@ -87,18 +88,24 @@ export default function MarkdownRenderer({content}: Props) {
 	} catch (error: any) {
 		// Stage 3: Error handling - catch number-to-alphabet errors
 		if (error?.message?.includes('Number must be >')) {
-			logger.warn('[MarkdownRenderer] Invalid list numbering detected, falling back to plain text', {
-				error: error.message,
-			});
+			logger.warn(
+				'[MarkdownRenderer] Invalid list numbering detected, falling back to plain text',
+				{
+					error: error.message,
+				},
+			);
 			return renderFallback(content);
 		}
-		
+
 		// Re-throw other errors for debugging
-		logger.error('[MarkdownRenderer] Unexpected error during markdown rendering', {
-			error: error.message,
-			stack: error.stack,
-		});
-		
+		logger.error(
+			'[MarkdownRenderer] Unexpected error during markdown rendering',
+			{
+				error: error.message,
+				stack: error.stack,
+			},
+		);
+
 		// Still provide fallback to prevent crash
 		return renderFallback(content);
 	}
