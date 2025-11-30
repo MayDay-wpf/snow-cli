@@ -226,7 +226,7 @@ Codex 中转一般无需配置请求头，同样地请替换如下自定义系�
 **注意不能多余或缺少任何字符**）:
   
 ```markdown
-You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
+      You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
       ## General
 
