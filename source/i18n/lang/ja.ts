@@ -6,6 +6,8 @@ export const ja: TranslationKeys = {
 		subtitle: 'インテリジェントコマンドラインアシスタント',
 		startChat: '開始',
 		startChatInfo: '新しいチャット会話を開始',
+		resumeLastChat: '前回の会話を再開',
+		resumeLastChatInfo: '最新の会話を再開',
 		apiSettings: 'API・モデル設定',
 		apiSettingsInfo: 'API設定、AIモデルの構成、プロファイル管理',
 		proxySettings: 'プロキシ・ブラウザ設定',

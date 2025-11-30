@@ -6,6 +6,8 @@ export const es: TranslationKeys = {
 		subtitle: 'Asistente Inteligente de Línea de Comandos',
 		startChat: 'Comenzar',
 		startChatInfo: 'Iniciar una nueva conversación de chat',
+		resumeLastChat: 'Reanudar última conversación',
+		resumeLastChatInfo: 'Reanudar la conversación más reciente',
 		apiSettings: 'Configuración de API y Modelo',
 		apiSettingsInfo:
 			'Configurar ajustes de API, modelos de IA y gestionar perfiles',

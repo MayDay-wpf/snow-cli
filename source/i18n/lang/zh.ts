@@ -6,6 +6,8 @@ export const zh: TranslationKeys = {
 		subtitle: '智能命令行助手',
 		startChat: '开始对话',
 		startChatInfo: '开始新的对话',
+		resumeLastChat: '继续上次对话',
+		resumeLastChatInfo: '恢复最近的对话记录',
 		apiSettings: 'API 和模型设置',
 		apiSettingsInfo: '配置 API 设置、AI 模型和管理配置文件',
 		proxySettings: '代理和浏览器设置',

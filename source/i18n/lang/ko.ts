@@ -6,6 +6,8 @@ export const ko: TranslationKeys = {
 		subtitle: '지능형 커맨드라인 어시스턴트',
 		startChat: '시작',
 		startChatInfo: '새 채팅 대화 시작',
+		resumeLastChat: '마지막 대화 재개',
+		resumeLastChatInfo: '가장 최근 대화 재개',
 		apiSettings: 'API 및 모델 설정',
 		apiSettingsInfo: 'API 설정, AI 모델 구성 및 프로필 관리',
 		proxySettings: '프록시 및 브라우저 설정',

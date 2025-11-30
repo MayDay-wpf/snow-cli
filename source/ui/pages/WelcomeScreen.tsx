@@ -82,6 +82,12 @@ export default function WelcomeScreen({
 				clearTerminal: true,
 			},
 			{
+				label: t.welcome.resumeLastChat,
+				value: 'resume-last',
+				infoText: t.welcome.resumeLastChatInfo,
+				clearTerminal: true,
+			},
+			{
 				label: t.welcome.apiSettings,
 				value: 'config',
 				infoText: t.welcome.apiSettingsInfo,

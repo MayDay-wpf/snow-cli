@@ -6,6 +6,8 @@ export const en: TranslationKeys = {
 		subtitle: 'Intelligent Command Line Assistant',
 		startChat: 'Start',
 		startChatInfo: 'Start a new chat conversation',
+		resumeLastChat: 'Resume Last Chat',
+		resumeLastChatInfo: 'Resume the most recent conversation',
 		apiSettings: 'API & Model Settings',
 		apiSettingsInfo: 'Configure API settings, AI models, and manage profiles',
 		proxySettings: 'Proxy & Browser Settings',

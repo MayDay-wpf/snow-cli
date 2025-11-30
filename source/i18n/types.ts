@@ -7,6 +7,8 @@ export type TranslationKeys = {
 		subtitle: string;
 		startChat: string;
 		startChatInfo: string;
+		resumeLastChat: string;
+		resumeLastChatInfo: string;
 		apiSettings: string;
 		apiSettingsInfo: string;
 		proxySettings: string;

@@ -56,6 +56,9 @@ function AppContent({
 	// This ensures configuration changes are picked up
 	const [chatScreenKey, setChatScreenKey] = useState(0);
 
+	// Track whether to auto-resume last session (from resume-last menu option)
+	const [shouldAutoResume, setShouldAutoResume] = useState(false);
+
 	const [exitNotification, setExitNotification] =
 		useState<ExitNotificationType>({
 			show: false,
@@ -76,6 +79,10 @@ function AppContent({
 			if (event.destination === 'welcome' && currentView === 'chat') {
 				setChatScreenKey(prev => prev + 1);
 			}
+			// Reset auto-resume flag when leaving chat
+			if (event.destination !== 'chat' && currentView === 'chat') {
+				setShouldAutoResume(false);
+			}
 			setCurrentView(event.destination);
 		});
 		return unsubscribe;
@@ -84,6 +91,7 @@ function AppContent({
 	const handleMenuSelect = (value: string) => {
 		if (
 			value === 'chat' ||
+			value === 'resume-last' ||
 			value === 'settings' ||
 			value === 'mcp' ||
 			value === 'systemprompt' ||
@@ -91,10 +99,16 @@ function AppContent({
 		) {
 			// When entering chat from welcome screen, increment key to force remount
 			// This ensures any configuration changes are picked up
-			if (value === 'chat' && currentView === 'welcome') {
+			if (
+				(value === 'chat' || value === 'resume-last') &&
+				currentView === 'welcome'
+			) {
 				setChatScreenKey(prev => prev + 1);
 			}
-			setCurrentView(value);
+			// Set auto-resume flag for resume-last option
+			setShouldAutoResume(value === 'resume-last');
+			// Both 'chat' and 'resume-last' go to chat view
+			setCurrentView(value === 'resume-last' ? 'chat' : value);
 		} else if (value === 'exit') {
 			process.exit(0);
 		}
@@ -115,7 +129,7 @@ function AppContent({
 					<Suspense fallback={loadingFallback}>
 						<ChatScreen
 							key={chatScreenKey}
-							autoResume={autoResume}
+							autoResume={autoResume || shouldAutoResume}
 							enableYolo={enableYolo}
 						/>
 					</Suspense>
