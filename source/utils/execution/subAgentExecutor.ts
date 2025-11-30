@@ -8,9 +8,9 @@ import {getOpenAiConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
-import type {MCPTool} from './mcpToolsManager.js';
-import type {ChatMessage} from '../../api/types.js';
 import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {MCPTool} from './mcpToolsManager.js';
+import type {ChatMessage} from '../../api/chat.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -530,10 +530,10 @@ export async function executeSubAgent(
 				let needsConfirmation = permissionResult.needsConfirmation;
 
 				// Check if tool is in auto-approved list (global or session)
+				// This should override the YOLO permission check result
 				if (
-					!needsConfirmation &&
-					(sessionApprovedTools.has(toolName) ||
-						(isToolAutoApproved && isToolAutoApproved(toolName)))
+					sessionApprovedTools.has(toolName) ||
+					(isToolAutoApproved && isToolAutoApproved(toolName))
 				) {
 					needsConfirmation = false;
 				}
