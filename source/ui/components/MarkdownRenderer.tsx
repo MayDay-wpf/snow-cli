@@ -41,7 +41,7 @@ function renderFallback(content: string): React.ReactElement {
 	return (
 		<Box flexDirection="column">
 			{lines.map((line: string, index: number) => (
-				<Text key={index}>{line}</Text>
+				<Text key={index}>{line || ' '}</Text>
 			))}
 		</Box>
 	);
@@ -84,7 +84,7 @@ export default function MarkdownRenderer({content}: Props) {
 			return (
 				<Box flexDirection="column">
 					{lines.slice(0, 500).map((line: string, index: number) => (
-						<Text key={index}>{line}</Text>
+						<Text key={index}>{line || ' '}</Text>
 					))}
 				</Box>
 			);
@@ -93,7 +93,7 @@ export default function MarkdownRenderer({content}: Props) {
 		return (
 			<Box flexDirection="column">
 				{lines.map((line: string, index: number) => (
-					<Text key={index}>{line}</Text>
+					<Text key={index}>{line || ' '}</Text>
 				))}
 			</Box>
 		);
