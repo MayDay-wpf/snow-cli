@@ -1784,7 +1784,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers and multimodal support (text + images + Office documents). **MULTIMODAL SUPPORT**: Automatically detects and processes: (1) Image files (.png, .jpg, .jpeg, .gif, .webp, .bmp, .svg) - returns base64-encoded image data, (2) Office documents (.pdf, .docx, .doc, .xlsx, .xls, .pptx, .ppt) - extracts and returns readable text content. All returned in MCP content format for AI analysis. **Read only when the actual file or folder path is found or provided by the user, do not make random guesses,Search for specific documents or line numbers before reading more accurately** **SUPPORTS MULTIPLE FILES WITH FLEXIBLE LINE RANGES**: Pass either (1) a single file path (string), (2) array of file paths (strings) with unified startLine/endLine, or (3) array of file config objects with per-file line ranges. **INTEGRATED DIRECTORY LISTING**: When filePath is a directory, automatically lists its contents instead of throwing error. ⚠️ **IMPORTANT WORKFLOW**: (1) ALWAYS use ACE search tools FIRST (ace-text_search/ace-search_symbols/ace-file_outline) to locate the relevant code, (2) ONLY use filesystem-read when you know the approximate location and need precise line numbers for editing. **ANTI-PATTERN**: Reading files line-by-line from the top wastes tokens - use search instead! **USAGE**: Call without parameters to read entire file(s), or specify startLine/endLine for partial reads. Returns content with line numbers (format: "123→code") for text files or multimodal content array for images/documents. **EXAMPLES**: (A) Unified: filePath=["a.ts", "b.ts"], startLine=1, endLine=500 reads lines 1-500 from both. (B) Per-file: filePath=[{path:"a.ts", startLine:1, endLine:300}, {path:"b.ts", startLine:100, endLine:550}] reads different ranges from each file. (C) Directory: filePath="./src" returns list of files in src/. (D) Image: filePath="screenshot.png" returns multimodal content with base64 image data. (E) Office: filePath="report.pdf" or "data.xlsx" extracts and returns document text.',
+			'Read file content with line numbers. Supports text files, images, Office documents, and directories. **PATH REQUIREMENT**: Use EXACT paths from search results or user input, never undefined/null/empty/placeholders. **WORKFLOW**: (1) Use search tools FIRST to locate files, (2) Read only when you have the exact path. **SUPPORTS**: Single file (string), multiple files (array of strings), or per-file ranges (array of {path, startLine?, endLine?}). Returns content with line numbers (format: "123→code").',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1848,7 +1848,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Preferred tool for creating files: Use specified content to create a new file. Before creating the file, you need to determine if the file already exists; if it does, your creation will fail. You should use editing instead of creation, as this tool is more reliable than terminal commands like echo/cat with redirection. If necessary, automatically create the parent directory. If necessary, terminal commands can be used as a fallback.',
+			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Verify file does not exist first. Automatically creates parent directories.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1873,7 +1873,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit_search',
 		description:
-			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. SUPPORTS BATCH EDITING: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. CRITICAL WORKFLOW FOR CODE SAFETY: (1) Use ace-text_search/ace-search_symbols to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries (entire function body with all braces, complete markup tags with opening/closing pairs, full code blocks), (3) Copy the COMPLETE code block (without line numbers), (4) Verify boundaries are intact (matching braces/brackets/tags), (5) Use THIS tool. WHY: No line tracking, auto-handles spacing/tabs, finds best match. COMMON ERRORS TO AVOID: Modifying only part of a function (missing closing brace), incomplete markup tags (HTML/Vue/JSX), partial code blocks. Always include complete syntactic units. BATCH EXAMPLE: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
+			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries (entire function body with all braces, complete markup tags with opening/closing pairs, full code blocks), (3) Copy the COMPLETE code block (without line numbers), (4) Verify boundaries are intact (matching braces/brackets/tags), (5) Use THIS tool. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm (60% threshold) to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace), incomplete markup tags (HTML/Vue/JSX), partial code blocks, copying line numbers from filesystem-read output. Always include complete syntactic units with all opening/closing pairs. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1950,7 +1950,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit',
 		description:
-			'Line-based editing for precise control. SUPPORTS BATCH EDITING: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. WHEN TO USE: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. CRITICAL WORKFLOW FOR CODE SAFETY: (1) Use ace-text_search/ace-file_outline to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries - for functions: include opening line to closing brace; for markup tags (HTML/Vue/JSX): include opening tag to closing tag; for code blocks: include all braces/brackets, (3) Verify line range covers the ENTIRE syntactic unit (check indentation levels, matching pairs), (4) Use THIS tool with exact startLine/endLine. RECOMMENDATION: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. COMMON ERRORS TO AVOID: Line range stops mid-function (missing closing brace), partial markup tags, incomplete code blocks. Always verify boundaries with filesystem-read first. BATCH EXAMPLE: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
+			'Line-based editing for precise control. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **CRITICAL WORKFLOW FOR CODE SAFETY**: (1) Use search tools (codebase-search or ACE tools) to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries - for functions: include opening line to closing brace; for markup tags (HTML/Vue/JSX): include opening tag to closing tag; for code blocks: include all braces/brackets, (3) Verify line range covers the ENTIRE syntactic unit (check indentation levels, matching pairs), (4) Use THIS tool with exact startLine/endLine. **BEST PRACTICE**: Keep edits small (under 15 lines recommended) for better accuracy. For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. **WHY LINE-BASED IS RISKIER**: Line numbers can shift during editing, making it easy to target wrong lines. Search-replace avoids this by matching actual content. **COMMON ERRORS TO AVOID**: Using invalid/empty file paths, line range stops mid-function (missing closing brace), partial markup tags, incomplete code blocks, targeting wrong lines after file changes. Always verify boundaries with filesystem-read first. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -2002,17 +2002,17 @@ export const mcpTools = [
 				startLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Starting line number (1-indexed, inclusive) for single file or unified mode. MUST match filesystem-read output.',
+						'CRITICAL: Starting line number (1-indexed, inclusive) for single file or unified mode. MUST match filesystem-read output.',
 				},
 				endLine: {
 					type: 'number',
 					description:
-						'⚠️  CRITICAL: Ending line number (1-indexed, inclusive) for single file or unified mode. Keep edits small (≤15 lines).',
+						'CRITICAL: Ending line number (1-indexed, inclusive) for single file or unified mode. Keep edits small (under 15 lines recommended).',
 				},
 				newContent: {
 					type: 'string',
 					description:
-						'New content to replace specified lines (for single file or unified mode). ⚠️  Do NOT include line numbers. Ensure proper indentation.',
+						'New content to replace specified lines (for single file or unified mode). CRITICAL: Do NOT include line numbers. Ensure proper indentation.',
 				},
 				contextLines: {
 					type: 'number',

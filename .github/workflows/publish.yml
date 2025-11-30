@@ -58,8 +58,28 @@ jobs:
             
             ### What's New
 
-            - Make sharp an optional dependency and optimize the SVG conversion logic
+            - feat(API): Updated the system prompt template to strengthen the file path validity requirements
+
+            - Added principle 7: requires all file system tool calls to use the exact file path,
+            Undefined, empty strings, or placeholder paths are prohibited.
+
+            - refactor(input): Optimizes the keyboard input processing logic to support the separation of multi-line input and command submission
+
+            - Modify the behavior of the enter key: Ctrl+Enter inserts a line break, and Enter to submit the message separately;
+            When a slash is added to a non-whitespace character in front of the cursor, a line break is automatically inserted to avoid missubmission.
+
+            - FEAT (MCP): Enhanced file system tool parameter checksum description
+
+            - filesystem-read/create/edit/edit_search tool adds checks to filePath and other key parameters
+            - Streamlined and clarified the requirements for paths in the description of each tool, emphasizing the need to use precise paths
+            - Unified error message format and AI usage suggestions
+
+            - fix(ui): Fixed potential security issues with the Markdown renderer and ANSI escape exceptions
+
+            - Added render result type checking to prevent crashes caused by invalid content
+            - Fixed an issue where markdown-it-terminal incorrectly removed "undefined" in the indentation list
             
+            - Fixed a bug where the "Always approve this tool" option did not take effect in non-YOLO mode of the sub-agent
             ### Installation
             ```bash
             npm install -g snow-ai

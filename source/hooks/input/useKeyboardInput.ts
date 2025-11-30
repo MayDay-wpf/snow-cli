@@ -668,11 +668,45 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 		}
 
-		// Enter - submit message
+		// Ctrl+Enter - Insert newline
+		if (key.ctrl && key.return) {
+			buffer.insert('\n');
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateCommandPanelState(text);
+			updateFilePickerState(text, cursorPos);
+			updateAgentPickerState(text, cursorPos);
+			return;
+		}
+
+		// Enter - submit message or insert newline after '/'
 		if (key.return) {
 			// Prevent submission if multi-char input (paste/IME) is still being processed
 			if (isProcessingInput.current) {
 				return; // Ignore Enter key while processing
+			}
+
+			// Check if we should insert newline instead of submitting
+			// Condition: If text ends with '/' and there's non-whitespace content before it
+			const fullText = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+
+			// Check if cursor is right after a '/' character
+			if (cursorPos > 0 && fullText[cursorPos - 1] === '/') {
+				// Find the text before '/' (ignoring the '/' itself)
+				const textBeforeSlash = fullText.slice(0, cursorPos - 1);
+
+				// If there's any non-whitespace content before '/', insert newline
+				// This prevents conflict with command panel trigger at line start
+				if (textBeforeSlash.trim().length > 0) {
+					buffer.insert('\n');
+					const text = buffer.getFullText();
+					const newCursorPos = buffer.getCursorPosition();
+					updateCommandPanelState(text);
+					updateFilePickerState(text, newCursorPos);
+					updateAgentPickerState(text, newCursorPos);
+					return;
+				}
 			}
 
 			// Reset history navigation on submit

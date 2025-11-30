@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.4.30
+
+- feat(API): Updated the system prompt template to strengthen the file path validity requirements
+
+- Added principle 7: requires all file system tool calls to use the exact file path,
+Undefined, empty strings, or placeholder paths are prohibited.
+- refactor(input): Optimizes the keyboard input processing logic to support the separation ofmulti-line input and command submission
+- Modify the behavior of the enter key: Ctrl+Enter inserts a line break, and Enter to submitthe message separately;
+When a slash is added to a non-whitespace character in front of the cursor, a line break isautomatically inserted to avoid missubmission.
+- FEAT (MCP): Enhanced file system tool parameter checksum description
+- filesystem-read/create/edit/edit_search tool adds checks to filePath and other keyparameters
+- Streamlined and clarified the requirements for paths in the description of each tool,emphasizing the need to use precise paths
+- Unified error message format and AI usage suggestions
+- fix(ui): Fixed potential security issues with the Markdown renderer and ANSI escapeexceptions
+- Added render result type checking to prevent crashes caused by invalid content
+- Fixed an issue where markdown-it-terminal incorrectly removed "undefined" in theindentation list
+
+- Fixed a bug where the "Always approve this tool" option did not take effect in non-YOLOmode of the sub-agent
+
 ## v0.4.29
 
 - Make sharp an optional dependency and optimize the SVG conversion logic

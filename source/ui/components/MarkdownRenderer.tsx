@@ -58,10 +58,22 @@ export default function MarkdownRenderer({content}: Props) {
 		// Stage 2: Render with markdown-it
 		const rendered = md.render(sanitizedContent);
 
+		// Safety check: ensure rendered content is valid
+		if (!rendered || typeof rendered !== 'string') {
+			logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
+				renderedType: typeof rendered,
+				renderedValue: rendered,
+			});
+			return renderFallback(content);
+		}
+
 		// Split into lines and render each separately
 		// This prevents Ink's Text component from creating mysterious whitespace
 		// when handling multi-line content with \n characters
-		const lines = rendered.split('\n');
+		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes in indented lists
+		const lines = rendered
+			.split('\n')
+			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
 
 		// Safety check: prevent rendering issues with excessively long output
 		if (lines.length > 500) {

@@ -1,6 +1,7 @@
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+// Intentionally kept for backward compatibility fallback, despite deprecation
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
 import {getMCPConfig, type MCPServer} from '../config/apiConfig.js';
 import {mcpTools as filesystemTools} from '../../mcp/filesystem.js';
@@ -693,7 +694,11 @@ async function connectAndGetTools(
 			const url = new URL(urlString);
 
 			try {
-				// Try HTTP first
+				// Try StreamableHTTP transport first (recommended)
+				logger.debug(
+					`[MCP] Attempting StreamableHTTP connection to ${serviceName}...`,
+				);
+
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
 				};
@@ -718,7 +723,7 @@ async function connectAndGetTools(
 					new Promise<never>((_, reject) => {
 						timeoutId = setTimeout(() => {
 							abortConnection();
-							reject(new Error('HTTP connection timeout'));
+							reject(new Error('StreamableHTTP connection timeout'));
 						}, timeoutMs);
 					}),
 				]);
@@ -727,8 +732,16 @@ async function connectAndGetTools(
 					clearTimeout(timeoutId);
 					timeoutId = null;
 				}
+
+				logger.debug(
+					`[MCP] Successfully connected to ${serviceName} using StreamableHTTP`,
+				);
 			} catch (httpError) {
-				// Fallback to SSE
+				// Fallback to SSE transport for backward compatibility
+				logger.debug(
+					`[MCP] StreamableHTTP failed for ${serviceName}, falling back to SSE (deprecated)...`,
+				);
+
 				try {
 					await client.close();
 				} catch {}
@@ -737,6 +750,7 @@ async function connectAndGetTools(
 					throw new Error('Connection aborted due to timeout');
 				}
 
+				// Recreate client for SSE connection
 				client = new Client(
 					{
 						name: `snow-cli-${serviceName}`,
@@ -747,6 +761,7 @@ async function connectAndGetTools(
 					},
 				);
 
+				// SSE transport kept for backward compatibility (deprecated)
 				transport = new SSEClientTransport(url);
 				await Promise.race([
 					client.connect(transport),
@@ -762,6 +777,10 @@ async function connectAndGetTools(
 					clearTimeout(timeoutId);
 					timeoutId = null;
 				}
+
+				logger.debug(
+					`[MCP] Successfully connected to ${serviceName} using SSE (deprecated)`,
+				);
 			}
 		} else if (server.command) {
 			const processEnv: Record<string, string> = {};
@@ -1080,6 +1099,14 @@ export async function executeMCPTool(
 
 			switch (actualToolName) {
 				case 'read':
+					// Validate required parameters
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-read tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
+						);
+					}
 					result = await filesystemService.getFileContent(
 						args.filePath,
 						args.startLine,
@@ -1087,19 +1114,49 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'create':
+					// Validate required parameters
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-create tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
+						);
+					}
+					if (args.content === undefined || args.content === null) {
+						throw new Error(
+							`Missing required parameter 'content' for filesystem-create tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+						);
+					}
 					result = await filesystemService.createFile(
 						args.filePath,
 						args.content,
 						args.createDirectories,
 					);
 					break;
-				case 'exists':
-					result = await filesystemService.exists(args.filePath);
-					break;
-				case 'info':
-					result = await filesystemService.getFileInfo(args.filePath);
-					break;
 				case 'edit':
+					// Validate required parameters
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-edit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
+						);
+					}
+					if (
+						!Array.isArray(args.filePath) &&
+						(args.startLine === undefined ||
+							args.endLine === undefined ||
+							args.newContent === undefined)
+					) {
+						throw new Error(
+							`Missing required parameters for filesystem-edit tool.\n` +
+								`For single file mode, 'startLine', 'endLine', and 'newContent' are required.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Provide startLine (number), endLine (number), and newContent (string).`,
+						);
+					}
 					result = await filesystemService.editFile(
 						args.filePath,
 						args.startLine,
@@ -1109,6 +1166,26 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'edit_search':
+					// Validate required parameters
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-edit_search tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
+						);
+					}
+					if (
+						!Array.isArray(args.filePath) &&
+						(args.searchContent === undefined ||
+							args.replaceContent === undefined)
+					) {
+						throw new Error(
+							`Missing required parameters for filesystem-edit_search tool.\n` +
+								`For single file mode, 'searchContent' and 'replaceContent' are required.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Provide searchContent (string) and replaceContent (string).`,
+						);
+					}
 					result = await filesystemService.editFileBySearch(
 						args.filePath,
 						args.searchContent,
