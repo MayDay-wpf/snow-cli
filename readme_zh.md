@@ -49,7 +49,7 @@ nvm use 16
 
 - `git clone https://github.com/MayDay-wpf/snow-cli.git`
 
-## 安装 Vs Code 扩展
+## 安装 VS Code 扩展
 
 - 下载 [snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/releases/tag/vsix)
 
@@ -126,7 +126,7 @@ nvm use 16
 
 # 八、一切准备就绪进入到对话页 `Start`
 
-如果你在 `Vs Code` 等编辑器中启动，Snow 会自动使用 `Snow CLI` 插件连接 IDE，连接成功后你会看到如下图所示的提示信息。
+如果你在 `VS Code` 等编辑器中启动，Snow 会自动使用 `Snow CLI` 插件连接 IDE，连接成功后你会看到如下图所示的提示信息。
 
 ![IDE Connected 提醒消息](docs/images/image-2.png)
 
@@ -135,7 +135,7 @@ nvm use 16
 
 ## File Select
 
-- 使用 `@` 可以选择文件，当然 Vs Code 中最方便的操作还是长按`shift` 拖拽文件，效果一致
+- 使用 `@` 可以选择文件，当然 VS Code 中最方便的操作还是长按`shift` 拖拽文件，效果一致
 
 ## Slash Commands
 
