@@ -225,8 +225,8 @@ You are Claude Code, Anthropic's official CLI for Claude.
 Codex 中转一般无需配置请求头，同样地请替换如下自定义系统提示词（
 **注意不能多余或缺少任何字符**）:
   
-    ```markdown
-      You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
+```markdown
+You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
       ## General
 
@@ -332,4 +332,4 @@ Codex 中转一般无需配置请求头，同样地请替换如下自定义系�
         * Do not use URIs like file://, vscode://, or https://.
         * Do not provide range of lines
         * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
-      ```
+```
