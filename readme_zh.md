@@ -10,25 +10,27 @@ _面向开发者的智能 AI 命令行工具_
 
 </div>
 
-# 注意：如果你希望使用 Snow 接入国内的 Claude Code 或者 Codex 中转，请看底部的配置方法
+⚠️注意：如果你希望使用 Snow 接入国内的 Claude Code 或者 Codex 中转，请 [点击这里](#claude-code--codex-中转站接入-snow-配置方法) 查看对应的的配置方法
 
 # 一、系统要求
+
+安装 Snow 需要的前置环境：
 
 - **Node.js >= 16.x** (需要 ES2020 特性支持)
 - npm >= 8.3.0
 
-### 检查你的 Node.js 版本
+检查你的 Node.js 版本
 
 ```bash
-$ node --version
+node --version
 ```
 
-如果版本低于 16.x，请升级：
+如果版本低于 16.x，请先升级：
 
 ```bash
 # 使用 nvm (推荐)
-$ nvm install 16
-$ nvm use 16
+nvm install 16
+nvm use 16
 
 # 或从官网下载
 # https://nodejs.org/
@@ -36,10 +38,18 @@ $ nvm use 16
 
 # 二、安装
 
-`$ npm install -g snow-ai`
-也可前往：https://github.com/MayDay-wpf/snow-cli 使用源码编译安装
+## 安装 Snow CLI
 
-## 安装 VSCode 扩展
+可直接使用 npm 安装：
+
+- `npm install -g snow-ai`
+
+
+也可前往：[官方仓库](https://github.com/MayDay-wpf/snow-cli)  使用源码编译安装，快速 clone 命令：
+
+- `git clone https://github.com/MayDay-wpf/snow-cli.git`
+
+## 安装 VS Code 扩展
 
 - 下载 [snow-cli-x.x.x.vsix](https://github.com/MayDay-wpf/snow-cli/releases/tag/vsix)
 
@@ -58,69 +68,120 @@ $ nvm use 16
 
 # 三、API & Model Settings
 
-### 在最新的`v0.3.2`版本中移除了所有官方 SDK(依赖太重了),所以配置会有轻微区别，启动后进入 `API & Model Settings` 可以看到如下内容
+在最新的 `v0.3.2` 版本中移除了所有官方 SDK (依赖太重了)，**所以配置会有轻微区别**，启动后进入 `API & Model Settings` 可以看到如下内容：
 
 - `Profile` 用于切换或新建配置，Snow 现在支持保存多套 API 和模型方案
-- `Base URL` 请求地址，由于移除了官方 SDK 所以，OpenAI 和 Anthropic 需要补`/v1`,Gemini 需要补 `/v1beta`
-- `API Key` 没啥好说的，Key 呗
-- `Request Method` 请求方案，按照你的需要选择：`Chat Completions`、`Responses`、`Gemini`、`Anthropic`
-- `Anthropic Beta` 这个复选框如果勾选，Anthropic 的请求 URL 会自动补一个 `beta=true`的参数
-- `Advanced Model`、`Basic Model`、`Compact Model` 这三个分别设置：高级模型干活的、小模型总结的、压缩模型压缩上下文用的，这三个模型都来源于上面设置的 `BaseURL`和`API Key`,系统会自动请求对应的 `/models` 接口获取列表,支持键入过滤,当然遇到模型接口列表不完善的 API,应用提供了 `Manual Input (Enter model name)`选项，可自行输入模型名称
-- `Max Context Tokens` 模型的最大上下文窗口，用于计算上下文百分比用的，可以根据模型实际情况填写，例如 `gemini` 一般是 1M 上下文，就填 1000000，这个参数不会影响实际的模型上下文，只会影响界面的计算结果
+- `Base URL` 即请求地址。由于移除了官方 SDK ，所以 OpenAI 和 Anthropic 接口的 url 需要补后缀 `/v1`，Gemini 则需要补 `/v1beta`
+- `API Key` 没啥好说的，Key 呗，注意对应的 Url，防止出现 `401 Unauthorized` 之类拿自己家钥匙开不开邻居家门的错误
+- `Request Method` 用于按照你的所需以及 API 接口支持得请求方式来选择请求方案，：`Chat Completions`（通用OpenAI对话补全）、`Responses`（Codex CLI 的支持接口即为此）、`Gemini`、`Anthropic`
+- `Anthropic Beta` 这个复选框如果勾选，Anthropic 的请求 URL 会自动补一个 `beta=true` 的参数
+- `Advanced Model`、`Basic Model`、`Compact Model` 这三个分别用于设置：干活的高级模型、总结的小模型、压缩上下文用的压缩模型。这三个模型都来源于上面设置的 `BaseURL` 和 `API Key`，系统会自动请求对应的 `/models` 接口获取列表，支持键入过滤，当然遇到模型接口列表不完善的 API端点，应用内提供了 `Manual Input (Enter model name)`选项，可自行键入所需模型名称
+- `Max Context Tokens` 对应模型的最大上下文窗口，用于计算当前上下文占模型支持的最大上下文百分比。可以根据模型实际情况填写，例如满血 `gemini` 一般是 1M 上下文，就填 1000000。注意，此参数不会影响实际的模型上下文，只会影响界面显示的计算结果
 - `Max Tokens` 这个不能乱填，这个参数会直接加入 API 请求体中，作为 `max_tokens` 参数
 
-![alt text](docs/images/image.png)
+
+![API & Model Settings in CLI ](docs/images/image.png)
 
 # 四、Proxy & Browser Settings
 
-### 用户设置系统代理端口，以及联网搜索的搜索引擎，一般情况下，这是不需要修改的，因为即便不设置，实测也会自动走代理除非有特殊抓包需求要走特定端口。同时，应用会自己寻找可能的搜索引擎路劲，Edge/Chrome 系统只要装了，基本都可以用，除非手动修改过 Edge 的下载位置
+用户设置系统代理端口，以及联网搜索的搜索引擎。一般情况下，这是不需要修改的，因为即便不设置，实测结果显示 snow cli 也会自动走代理，除非你有特殊抓包需求想要流量走特定端口。
 
-![alt text](docs/images/image-1.png)
+同时，应用会自己寻找可能的搜索引擎路径，也就是说， 系统只要装了 Edge/Chrome，基本都可以用，除非手动修改过 Edge 的默认下载和安装位置.
+
+![Proxy & Browser Settings in CLI](docs/images/image-1.png)
+
 
 # 五、System Prompt Settings
 
-### 顾名思义，用户可以自己设置系统提示词，需要注意的是，这并不能替换 Snow 本来的系统提示词，当用户设置了系统提示词，Snow 自带的系统提示词将降级为用户消息，补充到第一条用户消息中，在`Windows`系统中，应用会自动唤醒`记事本`，`MacOS/Linux`中会启用系统自带的终端文本编辑器，编辑完保存即可生效，Snow 会关闭，并提醒用户重启应用生效 `Custom system prompt saved successfully! Please use `snow` to restart!`
+顾名思义，用户可以在此处自己设置系统提示词。**需要注意的是，这并不能替换 Snow 内置的系统提示词。**当用户设置了系统提示词，Snow 自带的系统提示词会自动降级为用户消息，补充到第一条用户消息中。
+
+在 `Windows` 系统中，应用会自动唤醒 `记事本`，而在 `MacOS/Linux` 系统中则会启用系统自带的终端文本编辑器。
+
+**新系统提示词配置会在下一次启动 Snow 时生效。**  在对应的编辑器中编辑完后你的自定义系统提示词后保存退出，Snow 会自动关闭并输出如下信息提醒用户重启应用生效： 
+
+-  `Custom system prompt saved successfully! Please use snow to restart!`
 
 # 六、Custom Headers Settings
 
-### 用户可以自定义添加请求头，注意是添加，用户无法覆盖 Snow 自带的请求头
+用户可以添加自定义请求头，**注意是添加**，用户无法覆盖 Snow 自带的请求头，具体用法可参照最后一节 [添加自定义请求头](#claude-code--codex-中转站接入-snow-配置方法) 进行自定义设置。
+
 
 # 七、MCP Settings
 
-### 基操，用来配置 MCP 的，方法和设置系统提示词一模一样，Json 格式和 Cursor 一模一样
+基操，用来配置 MCP 的，方法和设置系统提示词一模一样，Json 格式和 Cursor 一模一样，可在 [对应目录下的文件](#九snow-的系统文件) 进行编辑，示例：
+
+```json
+{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "mcp-server"],
+      "env": {
+        "API_KEY": "value"
+      }
+    }
+  }
+}
+```
 
 # 八、一切准备就绪进入到对话页 `Start`
 
-- 如果你在`vscode`等编辑器中启动，Snow 会自动使用 `Snow CLI` 插件连接 IDE，你会看到这样的信息，插件都已经发布线上版本，直接在插件市场搜索 `Snow CLI` 即可安装
+如果你在 `VS Code` 等编辑器中启动，Snow 会自动使用 `Snow CLI` 插件连接 IDE，连接成功后你会看到如下图所示的提示信息。
 
-![alt text](docs/images/image-2.png)
+![IDE Connected 提醒消息](docs/images/image-2.png)
 
-- 使用 `@` 可以选择文件，当然 vscode 最方便的操作还是长按`shift` 拖拽文件，效果一致
-- 使用 `/` 可查看可用命令,
+对应的 IDE插件均已经发布线上版本，直接在插件市场搜索 `Snow CLI` 或 [点此](https://marketplace.visualstudio.com/items?itemName=mufasa.snow-cli) 即可安装。
+
+
+## File Select
+
+- 使用 `@` 可以选择文件，当然 VS Code 中最方便的操作还是长按`shift` 拖拽文件，效果一致
+
+## Slash Commands
+
+使用 `/` 可查看可用命令：
+
   - `/init` 构建项目说明书 `SNOW.md`
   - `/clear` 新建会话
   - `/resume` 恢复历史记录
   - `/mcp`查看 MCP 连接状态，以及重连
-  - `/yolo` 无人值守模式，任何工具调用都不会二次确认，比较危险
-  - `/ide`手动连接 IDE，基本不需要使用，因为会自动连，如果安装了 IDE 插件的话
-  - `/compact`压缩上下文，很少使用，因为压缩后 AI 效果并不佳
-- 快捷键
+  - `/yolo` ⚠️ 无人值守模式，任何工具调用都不会二次确认，危险
+  - `/ide`手动连接 IDE，基本不需要使用，因为如果安装了 IDE 插件的话， Snow 会自动连接
+  - `/compact` 主动压缩当前会话上下文，很少使用，因为压缩后会遗失上下文中关键信息导致 Agent 输出质量下降
+
+
+## 快捷键
+
+支持如下快捷键：
+
   - Windows:`Alt+V` 粘贴图片、MacOS/Linux:`Ctrl+V`(会有提示)
   - `Ctrl+L` 从光标位置开始向左清空输入框
   - `Ctrl+R` 从光标位置开始向右清空输入框
   - `Shift+Tab` 启用或禁用 `Yolo` 模式
   - `ESC` 中断 AI 生成
   - 双击`ESC` 回滚对话（系统自带检查点，可回滚文件）
-- Token 使用情况（输入框下方会显示上下文占用百分比和 token 数、缓存命中 token 数、缓存创建 token 数）
-  ![alt text](docs/images/image-3.png)
 
-# 八、Snow 的系统文件
+## 数据统计
 
-### 在用户目录的 `.snow` 文件夹中有 Snow 的所有文件，下面一个一个解释
+结合 [对应设置](#三api--model-settings) 可以在输入框下方会显示完整的 Token 统计数据，包括：  
 
-![alt text](docs/images/image-4.png)
+- Token 使用情况
+- 上下文占用百分比和 token 数
+- 缓存命中 token 数
+- 缓存创建 token 数
 
-- `log` 该目录主要记录了运行日志，这些日志不会上传任何远端，仅留在本地用于出现 BUG 时方便定位，可任意删除
+
+
+![Token 使用情况示意图](docs/images/image-3.png)
+
+# 九、Snow 的系统文件
+
+在用户目录的 `.snow` 文件夹中有与 Snow 配置和运行相关的所有文件，下面逐个解释：
+
+![配置文件一览](docs/images/image-4.png)
+
+
+- `log` 该目录主要记录了运行日志，这些日志不会上传任何远端，仅在本地保留，你可以在出现 BUG 时查找对应日志从而协助定位问题，可以任意删除，对 Snow 功能无影响
 - `profiles` 前文中提到，Snow 支持多个配置文件切换，用户自定义的多个配置文件都将保存在这个目录
 - `sessions` 该目录保存了用户的所有对话记录，同样是用于 `/resume` 以及其他功能实现的必要目录，不会上传任何远端
 - `snapshots` 该目录保存了 AI 自动编辑文件前的快照，用于文件回滚，一般情况无需查看该目录，一切都是自动的
@@ -131,17 +192,22 @@ $ nvm use 16
 - `mcp-config.json` 自定义 MCP 服务的内容
 - `system-prompt.txt` 自定义系统提示词的内容
 
-## Claude Code & Codex 中转方案
+# Claude Code & Codex 中转站接入 Snow 配置方法
 
-- 因为中转对第三方客户端一般都有拦截，所以你需要在 Snow 中配置自定义系统提示词和请求头
+中转服务商对于第三方客户端都会设置拦截手段，因此你需要在 Snow 中配置自定义系统提示词和请求头来伪装实现接入：
 
-- Claude Code
+## Claude Code
 
-  - 自定义系统提示词(注意不能多余或缺少任何字符):
-  - `You are Claude Code, Anthropic's official CLI for Claude.`
-    ![alt text](docs/images/image-5.png)
+自定义系统提示词（**注意不能多余或缺少任何字符**），请进入下图所示位置进行复制替换：
 
-  - 自定义请求头:
+```
+You are Claude Code, Anthropic's official CLI for Claude.
+```  
+
+![入口示意图1](docs/images/image-5.png)
+
+此外，还需要添加如下的自定义请求头：
+
 ```json
     {
     	"anthropic-beta": "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
@@ -151,13 +217,15 @@ $ nvm use 16
     	"x-app": "cli"
     }
 ```
-    ![alt text](docs/images/image-6.png)
 
-- Codex
-  - Codex 中转一般无需配置请求头
-  - 自定义系统提示词(注意不能多余或缺少任何字符):
+![入口示意图2](docs/images/image-6.png)
+
+## Codex
+
+Codex 中转一般无需配置请求头，同样地请替换如下自定义系统提示词（
+**注意不能多余或缺少任何字符**）:
   
-      ```markdown
+    ```markdown
       You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
       ## General
