@@ -50,6 +50,7 @@
 		"@modelcontextprotocol/sdk": "^1.17.3",
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
+		"@types/markdown-it": "^14.1.2",
 		"@types/marked-terminal": "^6.1.1",
 		"@types/pdf-parse": "^1.1.5",
 		"@types/prettier": "^2.7.3",
@@ -122,7 +123,6 @@
 		}
 	},
 	"prettier": "@vdemedes/prettier-config",
-	"dependencies": {},
 	"optionalDependencies": {
 		"sharp": "^0.34.5"
 	}
