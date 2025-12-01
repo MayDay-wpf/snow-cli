@@ -1,0 +1,203 @@
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import {randomUUID} from 'crypto';
+import type {ChatMessage} from '../session/sessionManager.js';
+
+export interface Task {
+	id: string;
+	title: string;
+	status: 'pending' | 'running' | 'completed' | 'failed';
+	prompt: string;
+	createdAt: number;
+	updatedAt: number;
+	messages: ChatMessage[];
+	error?: string;
+	pid?: number;
+}
+
+export interface TaskListItem {
+	id: string;
+	title: string;
+	status: 'pending' | 'running' | 'completed' | 'failed';
+	createdAt: number;
+	updatedAt: number;
+	messageCount: number;
+}
+
+class TaskManager {
+	private readonly tasksDir: string;
+
+	constructor() {
+		this.tasksDir = path.join(os.homedir(), '.snow', 'tasks');
+	}
+
+	private async ensureTasksDir(): Promise<void> {
+		try {
+			await fs.mkdir(this.tasksDir, {recursive: true});
+		} catch (error) {
+			// Directory already exists
+		}
+	}
+
+	private getTaskPath(taskId: string): string {
+		return path.join(this.tasksDir, `${taskId}.json`);
+	}
+
+	async createTask(prompt: string): Promise<Task> {
+		await this.ensureTasksDir();
+
+		const taskId = randomUUID();
+		const title = prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '');
+
+		const task: Task = {
+			id: taskId,
+			title,
+			status: 'pending',
+			prompt,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			messages: [],
+		};
+
+		await this.saveTask(task);
+		return task;
+	}
+
+	async saveTask(task: Task): Promise<void> {
+		await this.ensureTasksDir();
+		const taskPath = this.getTaskPath(task.id);
+		await fs.writeFile(taskPath, JSON.stringify(task, null, 2));
+	}
+
+	async loadTask(taskId: string): Promise<Task | null> {
+		try {
+			const taskPath = this.getTaskPath(taskId);
+			const data = await fs.readFile(taskPath, 'utf-8');
+			return JSON.parse(data);
+		} catch (error) {
+			return null;
+		}
+	}
+
+	async listTasks(): Promise<TaskListItem[]> {
+		await this.ensureTasksDir();
+		const tasks: TaskListItem[] = [];
+
+		try {
+			const files = await fs.readdir(this.tasksDir);
+
+			for (const file of files) {
+				if (file.endsWith('.json')) {
+					try {
+						const taskPath = path.join(this.tasksDir, file);
+						const data = await fs.readFile(taskPath, 'utf-8');
+						const task: Task = JSON.parse(data);
+
+						tasks.push({
+							id: task.id,
+							title: task.title,
+							status: task.status,
+							createdAt: task.createdAt,
+							updatedAt: task.updatedAt,
+							messageCount: task.messages.length,
+						});
+					} catch (error) {
+						continue;
+					}
+				}
+			}
+
+			return tasks.sort((a, b) => b.updatedAt - a.updatedAt);
+		} catch (error) {
+			return [];
+		}
+	}
+
+	async deleteTask(taskId: string): Promise<boolean> {
+		try {
+			// Load task to check if it has a running process
+			const task = await this.loadTask(taskId);
+			if (task?.pid) {
+				// Try to kill the process if it's still running
+				try {
+					process.kill(task.pid, 'SIGTERM');
+					// Wait a bit for graceful shutdown
+					await new Promise(resolve => setTimeout(resolve, 100));
+					// If still running, force kill
+					try {
+						process.kill(task.pid, 'SIGKILL');
+					} catch {
+						// Process already terminated, ignore
+					}
+				} catch (killError) {
+					// Process doesn't exist or already terminated, continue with deletion
+				}
+			}
+
+			const taskPath = this.getTaskPath(taskId);
+			await fs.unlink(taskPath);
+			return true;
+		} catch (error) {
+			return false;
+		}
+	}
+
+	async updateTaskStatus(
+		taskId: string,
+		status: Task['status'],
+		error?: string,
+	): Promise<void> {
+		const task = await this.loadTask(taskId);
+		if (task) {
+			task.status = status;
+			task.updatedAt = Date.now();
+			if (error) {
+				task.error = error;
+			}
+			await this.saveTask(task);
+		}
+	}
+
+	async addMessage(taskId: string, message: ChatMessage): Promise<void> {
+		const task = await this.loadTask(taskId);
+		if (task) {
+			task.messages.push(message);
+			task.updatedAt = Date.now();
+			await this.saveTask(task);
+		}
+	}
+
+	async convertTaskToSession(taskId: string): Promise<string | null> {
+		const task = await this.loadTask(taskId);
+		if (!task) {
+			return null;
+		}
+
+		// Import sessionManager
+		const {sessionManager} = await import('../session/sessionManager.js');
+
+		// Create new session with task's messages
+		const session = await sessionManager.createNewSession();
+		session.title = task.title;
+		session.messages = task.messages.map(msg => ({
+			...msg,
+			timestamp: msg.timestamp || Date.now(),
+		}));
+		session.messageCount = session.messages.length;
+		session.updatedAt = Date.now();
+
+		// Save the session
+		await sessionManager.saveSession(session);
+
+		// Set as current session
+		sessionManager.setCurrentSession(session);
+
+		// Delete the task
+		await this.deleteTask(taskId);
+
+		return session.id;
+	}
+}
+
+export const taskManager = new TaskManager();

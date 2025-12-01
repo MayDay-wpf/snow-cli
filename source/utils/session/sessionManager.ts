@@ -21,6 +21,7 @@ export interface Session {
 	updatedAt: number;
 	messages: ChatMessage[];
 	messageCount: number;
+	isTemporary?: boolean; // Temporary sessions are not shown in resume list
 }
 
 export interface SessionListItem {
@@ -77,7 +78,7 @@ class SessionManager {
 			.trim(); // Remove leading/trailing spaces
 	}
 
-	async createNewSession(): Promise<Session> {
+	async createNewSession(isTemporary = false): Promise<Session> {
 		await this.ensureSessionsDir(new Date());
 
 		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
@@ -90,14 +91,25 @@ class SessionManager {
 			updatedAt: Date.now(),
 			messages: [],
 			messageCount: 0,
+			isTemporary,
 		};
 
 		this.currentSession = session;
-		await this.saveSession(session);
+
+		// Don't save temporary sessions to disk
+		if (!isTemporary) {
+			await this.saveSession(session);
+		}
+
 		return session;
 	}
 
 	async saveSession(session: Session): Promise<void> {
+		// Don't save temporary sessions to disk
+		if (session.isTemporary) {
+			return;
+		}
+
 		const sessionDate = new Date(session.createdAt);
 		await this.ensureSessionsDir(sessionDate);
 		const sessionPath = this.getSessionPath(session.id, sessionDate);

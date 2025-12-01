@@ -126,7 +126,9 @@ const cli = meow(
 	`
 Usage
   $ snow
-  $ snow --ask "your prompt"
+  $ snow --ask \"your prompt\"
+  $ snow --task \"your task description\"
+  $ snow --task-list
 
 Options
 		--help        Show help
@@ -134,6 +136,8 @@ Options
 		--update      Update to latest version
 		-c            Skip welcome screen and resume last conversation
 		--ask         Quick question mode (headless mode with single prompt)
+		--task        Create a background AI task (headless mode, saves session)
+		--task-list   Open task manager to view and manage background tasks
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
@@ -151,6 +155,18 @@ Options
 			},
 			ask: {
 				type: 'string',
+			},
+			task: {
+				type: 'string',
+			},
+			taskList: {
+				type: 'boolean',
+				default: false,
+				alias: 'task-list',
+			},
+			taskExecute: {
+				type: 'string',
+				alias: 'task-execute',
 			},
 			yolo: {
 				type: 'boolean',
@@ -185,6 +201,43 @@ if (cli.flags.update) {
 	}
 }
 
+// Handle task creation - create and execute in background
+if (cli.flags.task) {
+	const {taskManager} = await import('./utils/task/taskManager.js');
+	const {executeTaskInBackground} = await import(
+		'./utils/task/taskExecutor.js'
+	);
+
+	const task = await taskManager.createTask(cli.flags.task);
+	await executeTaskInBackground(task.id, cli.flags.task);
+
+	console.log(`Task created: ${task.id}`);
+	console.log(`Title: ${task.title}`);
+	console.log(`Use "snow --task-list" to view task status`);
+	process.exit(0);
+}
+
+// Handle task execution (internal use by background process)
+if (cli.flags.taskExecute) {
+	const {executeTask} = await import('./utils/task/taskExecutor.js');
+	const taskId = cli.flags.taskExecute;
+	// Get prompt from remaining args after --
+	const promptIndex = process.argv.indexOf('--');
+	const prompt =
+		promptIndex !== -1
+			? process.argv.slice(promptIndex + 1).join(' ')
+			: cli.input.join(' ');
+
+	console.log(
+		`[Task ${taskId}] Starting execution with prompt: ${prompt.slice(
+			0,
+			50,
+		)}...`,
+	);
+	await executeTask(taskId, prompt);
+	process.exit(0);
+}
+
 // Dev mode and resource monitoring will be initialized in Startup component
 
 // Startup component that shows loading spinner during update check
@@ -193,6 +246,7 @@ const Startup = ({
 	skipWelcome,
 	autoResume,
 	headlessPrompt,
+	showTaskList,
 	isDevMode,
 	enableYolo,
 }: {
@@ -200,6 +254,7 @@ const Startup = ({
 	skipWelcome: boolean;
 	autoResume: boolean;
 	headlessPrompt?: string;
+	showTaskList?: boolean;
 	isDevMode: boolean;
 	enableYolo: boolean;
 }) => {
@@ -290,6 +345,7 @@ const Startup = ({
 			skipWelcome={skipWelcome}
 			autoResume={autoResume}
 			headlessPrompt={headlessPrompt}
+			showTaskList={showTaskList}
 			enableYolo={enableYolo}
 		/>
 	);
@@ -333,6 +389,7 @@ render(
 		skipWelcome={Boolean(cli.flags.c || cli.flags.yolo || cli.flags.cYolo)}
 		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
 		headlessPrompt={cli.flags.ask}
+		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
 		enableYolo={Boolean(cli.flags.yolo || cli.flags.cYolo)}
 	/>,

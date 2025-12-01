@@ -723,4 +723,38 @@ export const es: TranslationKeys = {
 		cached: 'en caché',
 		newCache: 'nuevo caché',
 	},
+	taskManager: {
+		title: 'Administrador de Tareas',
+		loadingTasks: 'Cargando tareas...',
+		noTasksFound: 'No se encontraron tareas',
+		noTasksHint: 'Crear con: snow --task "prompt"',
+		escToClose: 'ESC para cerrar',
+		tasksCount: 'Tareas ({current}/{total})',
+		messagesCount: '{count} msgs',
+		markedCount: '{count} marcados',
+		navigationHint:
+			'↑↓ navegar • Espacio marcar • D eliminar • R actualizar • Enter ver • ESC cerrar',
+		moreAbove: '↑ {count} más arriba',
+		moreBelow: '↓ {count} más abajo',
+		deleteConfirm: 'Presiona D nuevamente para eliminar tarea',
+		deleteMultipleConfirm:
+			'Presiona D nuevamente para eliminar {count} tareas marcadas',
+		taskDetailsTitle: 'Detalles de la Tarea',
+		continueHint: 'C continuar',
+		backToList: 'ESC volver a la lista',
+		titleLabel: 'Título:',
+		statusLabel: 'Estado:',
+		createdLabel: 'Creado:',
+		updatedLabel: 'Actualizado:',
+		messagesLabel: 'Mensajes: {count}',
+		untitled: 'Sin título',
+		statusPending: 'pendiente',
+		statusRunning: 'ejecutando',
+		statusCompleted: 'completado',
+		statusFailed: 'fallido',
+		taskNotCompleted:
+			'Tarea aún no completada. Por favor espera a que termine la tarea.',
+		confirmConvertToSession:
+			'Presiona C nuevamente para convertir a sesión (la tarea será eliminada)',
+	},
 };

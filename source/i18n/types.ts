@@ -665,6 +665,36 @@ export type TranslationKeys = {
 		cached: string;
 		newCache: string;
 	};
+	taskManager: {
+		title: string;
+		loadingTasks: string;
+		noTasksFound: string;
+		noTasksHint: string;
+		escToClose: string;
+		tasksCount: string;
+		messagesCount: string;
+		markedCount: string;
+		navigationHint: string;
+		moreAbove: string;
+		moreBelow: string;
+		deleteConfirm: string;
+		deleteMultipleConfirm: string;
+		taskDetailsTitle: string;
+		continueHint: string;
+		backToList: string;
+		titleLabel: string;
+		statusLabel: string;
+		createdLabel: string;
+		updatedLabel: string;
+		messagesLabel: string;
+		untitled: string;
+		statusPending: string;
+		statusRunning: string;
+		statusCompleted: string;
+		statusFailed: string;
+		taskNotCompleted: string;
+		confirmConvertToSession: string;
+	};
 };
 
 import type {Language as Lang} from '../utils/config/languageConfig.js';

@@ -9,6 +9,9 @@ const ChatScreen = React.lazy(() => import('./ui/pages/ChatScreen.js'));
 const HeadlessModeScreen = React.lazy(
 	() => import('./ui/pages/HeadlessModeScreen.js'),
 );
+const TaskManagerScreen = React.lazy(
+	() => import('./ui/pages/TaskManagerScreen.js'),
+);
 const MCPConfigScreen = React.lazy(
 	() => import('./ui/pages/MCPConfigScreen.js'),
 );
@@ -33,8 +36,64 @@ type Props = {
 	skipWelcome?: boolean;
 	autoResume?: boolean;
 	headlessPrompt?: string;
+	showTaskList?: boolean;
 	enableYolo?: boolean;
 };
+
+// ShowTaskListWrapper: Handles task list mode with session conversion support
+function ShowTaskListWrapper() {
+	const [currentView, setCurrentView] = useState<'tasks' | 'chat'>('tasks');
+	const [chatScreenKey, setChatScreenKey] = useState(0);
+	const [exitNotification, setExitNotification] =
+		useState<ExitNotificationType>({
+			show: false,
+			message: '',
+		});
+	const {columns: terminalWidth} = useTerminalSize();
+	const loadingFallback = null;
+
+	// Global exit handler
+	useGlobalExit(setExitNotification);
+
+	const renderView = () => {
+		if (currentView === 'chat') {
+			return (
+				<Suspense fallback={loadingFallback}>
+					<ChatScreen
+						key={chatScreenKey}
+						autoResume={true}
+						enableYolo={false}
+					/>
+				</Suspense>
+			);
+		}
+
+		return (
+			<Suspense fallback={loadingFallback}>
+				<TaskManagerScreen
+					onBack={() => process.exit(0)}
+					onResumeTask={() => {
+						// Session is already set by convertTaskToSession
+						// Just navigate to chat view
+						setCurrentView('chat');
+						setChatScreenKey(prev => prev + 1);
+					}}
+				/>
+			</Suspense>
+		);
+	};
+
+	return (
+		<Box flexDirection="column" width={terminalWidth}>
+			{renderView()}
+			{exitNotification.show && (
+				<Box paddingX={1} flexShrink={0}>
+					<Alert variant="warning">{exitNotification.message}</Alert>
+				</Box>
+			)}
+		</Box>
+	);
+}
 
 // Inner component that uses I18n context
 function AppContent({
@@ -49,7 +108,13 @@ function AppContent({
 	enableYolo?: boolean;
 }) {
 	const [currentView, setCurrentView] = useState<
-		'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders'
+		| 'welcome'
+		| 'chat'
+		| 'settings'
+		| 'mcp'
+		| 'systemprompt'
+		| 'customheaders'
+		| 'tasks'
 	>(skipWelcome ? 'chat' : 'welcome');
 
 	// Add a key to force remount ChatScreen when returning from welcome screen
@@ -166,6 +231,20 @@ function AppContent({
 						<CustomHeadersScreen onBack={() => setCurrentView('welcome')} />
 					</Suspense>
 				);
+			case 'tasks':
+				return (
+					<Suspense fallback={loadingFallback}>
+						<TaskManagerScreen
+							onBack={() => setCurrentView('welcome')}
+							onResumeTask={() => {
+								// Session is already set by convertTaskToSession
+								// Just navigate to chat view
+								setCurrentView('chat');
+								setChatScreenKey(prev => prev + 1);
+							}}
+						/>
+					</Suspense>
+				);
 			default:
 				return (
 					<Suspense fallback={loadingFallback}>
@@ -192,6 +271,7 @@ export default function App({
 	skipWelcome,
 	autoResume,
 	headlessPrompt,
+	showTaskList,
 	enableYolo,
 }: Props) {
 	// If headless prompt is provided, use headless mode
@@ -208,6 +288,17 @@ export default function App({
 							onComplete={() => process.exit(0)}
 						/>
 					</Suspense>
+				</ThemeProvider>
+			</I18nProvider>
+		);
+	}
+
+	// If showTaskList is true, show task manager screen
+	if (showTaskList) {
+		return (
+			<I18nProvider>
+				<ThemeProvider>
+					<ShowTaskListWrapper />
 				</ThemeProvider>
 			</I18nProvider>
 		);

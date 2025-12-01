@@ -114,7 +114,10 @@ export async function handleConversationWithTools(
 	// Step 1: Ensure session exists and get existing TODOs
 	let currentSession = sessionManager.getCurrentSession();
 	if (!currentSession) {
-		currentSession = await sessionManager.createNewSession();
+		// Check if running in task mode (temporary session)
+		const isTaskMode = process.env['SNOW_TASK_MODE'] === 'true';
+
+		currentSession = await sessionManager.createNewSession(isTaskMode);
 	}
 	const todoService = getTodoService();
 
