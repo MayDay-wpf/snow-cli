@@ -4,7 +4,10 @@ import crypto from 'node:crypto';
 import ignore, {type Ignore} from 'ignore';
 import chokidar from 'chokidar';
 import {logger} from '../utils/core/logger.js';
-import {CodebaseDatabase, type CodeChunk} from '../utils/codebase/codebaseDatabase.js';
+import {
+	CodebaseDatabase,
+	type CodeChunk,
+} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbeddings} from '../api/embedding.js';
 import {
 	loadCodebaseConfig,
@@ -374,6 +377,17 @@ export class CodebaseIndexAgent {
 				this.db.deleteChunksByFile(relativePath);
 			});
 
+			// Handle watcher errors
+			this.fileWatcher.on('error', (error: Error) => {
+				// Ignore ELOOP errors (circular symlinks) - common in some project structures
+				if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
+					logger.debug('Skipping circular symlink during file watching');
+					return;
+				}
+				// Log other errors but don't crash the watcher
+				logger.warn('File watcher error', error);
+			});
+
 			// Persist watcher state to database
 			this.db.setWatcherEnabled(true);
 
@@ -519,7 +533,11 @@ export class CodebaseIndexAgent {
 
 				// Check if should be ignored
 				// Skip empty paths (should not happen, but defensive check)
-				if (relativePath && relativePath !== '.' && this.ignoreFilter.ignores(relativePath)) {
+				if (
+					relativePath &&
+					relativePath !== '.' &&
+					this.ignoreFilter.ignores(relativePath)
+				) {
 					continue;
 				}
 
