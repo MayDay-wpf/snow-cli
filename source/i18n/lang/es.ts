@@ -773,5 +773,10 @@ export const es: TranslationKeys = {
 			'Tarea aún no completada. Por favor espera a que termine la tarea.',
 		confirmConvertToSession:
 			'Presiona C nuevamente para convertir a sesión (la tarea será eliminada)',
+		sensitiveCommandDetected: 'Comando Sensible Detectado',
+		commandLabel: 'Comando: ',
+		approveRejectHint: 'Presiona A para aprobar o R para rechazar',
+		enterRejectionReason: 'Ingresa razón de rechazo:',
+		submitCancelHint: 'Enter Enviar • ESC Cancelar',
 	},
 };

@@ -29,6 +29,8 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 		taskId?: string;
 		timestamp: number;
 	} | null>(null);
+	const [rejectInputMode, setRejectInputMode] = useState(false);
+	const [rejectReason, setRejectReason] = useState('');
 
 	const VISIBLE_ITEMS = 5;
 
@@ -75,6 +77,75 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 
 	useInput((input, key) => {
 		if (isLoading) return;
+
+		// 拒绝输入模式处理
+		if (rejectInputMode && viewMode === 'detail' && detailTask) {
+			if (key.return) {
+				if (rejectReason.trim()) {
+					void (async () => {
+						const success = await taskManager.rejectSensitiveCommand(
+							detailTask.id,
+							rejectReason.trim(),
+						);
+						if (success) {
+							setRejectInputMode(false);
+							setRejectReason('');
+							await loadTasks();
+							setViewMode('list');
+						}
+					})();
+				}
+				return;
+			}
+
+			if (key.escape) {
+				setRejectInputMode(false);
+				setRejectReason('');
+				return;
+			}
+
+			if (key.backspace || key.delete) {
+				setRejectReason(prev => prev.slice(0, -1));
+				return;
+			}
+
+			if (input && !key.ctrl && !key.meta) {
+				setRejectReason(prev => prev + input);
+				return;
+			}
+
+			return;
+		}
+
+		// A键:同意敏感命令
+		if ((input === 'a' || input === 'A') && !key.ctrl) {
+			if (viewMode === 'detail' && detailTask?.status === 'paused') {
+				void (async () => {
+					const success = await taskManager.approveSensitiveCommand(
+						detailTask.id,
+					);
+					if (success) {
+						await loadTasks();
+						setViewMode('list');
+					}
+				})();
+				return;
+			}
+		}
+
+		// R键:拒绝敏感命令或刷新
+		if ((input === 'r' || input === 'R') && !key.ctrl) {
+			if (viewMode === 'detail' && detailTask?.status === 'paused') {
+				setRejectInputMode(true);
+				setRejectReason('');
+				return;
+			}
+
+			if (viewMode === 'list') {
+				void loadTasks();
+			}
+			return;
+		}
 
 		if ((input === 'c' || input === 'C') && !key.ctrl) {
 			if (viewMode === 'detail' && detailTask) {
@@ -233,6 +304,8 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 				return 'yellow';
 			case 'running':
 				return 'cyan';
+			case 'paused':
+				return 'magenta';
 			case 'completed':
 				return 'green';
 			case 'failed':
@@ -248,6 +321,8 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 				return '○';
 			case 'running':
 				return '◐';
+			case 'paused':
+				return '⏸';
 			case 'completed':
 				return '●';
 			case 'failed':
@@ -319,7 +394,9 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 							{t.taskManager.taskDetailsTitle}
 						</Text>
 						<Text color={theme.colors.menuSecondary as any} dimColor>
-							{t.taskManager.continueHint} • {t.taskManager.backToList}
+							{detailTask.status === 'paused'
+								? t.taskManager.backToList
+								: `${t.taskManager.continueHint} • ${t.taskManager.backToList}`}
 						</Text>
 					</Box>
 
@@ -362,18 +439,96 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 								)}
 							</Text>
 						</Box>
+
+						{detailTask.status === 'paused' &&
+							detailTask.pausedInfo?.sensitiveCommand && (
+								<Box flexDirection="column" marginTop={1}>
+									<Box
+										flexDirection="column"
+										borderStyle="round"
+										borderColor="yellow"
+										paddingX={1}
+										paddingY={1}
+									>
+										<Text color="yellow" bold>
+											{t.taskManager.sensitiveCommandDetected}
+										</Text>
+										<Box marginTop={1}>
+											<Text>
+												<Text bold>{t.taskManager.commandLabel}</Text>
+												<Text color="yellow">
+													{detailTask.pausedInfo.sensitiveCommand.command}
+												</Text>
+											</Text>
+										</Box>
+										{detailTask.pausedInfo.sensitiveCommand.description && (
+											<Text dimColor>
+												{detailTask.pausedInfo.sensitiveCommand.description}
+											</Text>
+										)}
+
+										{!rejectInputMode ? (
+											<Box
+												marginTop={1}
+												paddingTop={1}
+												borderStyle="single"
+												borderTop
+												borderBottom={false}
+												borderLeft={false}
+												borderRight={false}
+												borderColor="gray"
+												flexDirection="column"
+											>
+												<Text
+													color={theme.colors.menuSecondary as any}
+													dimColor
+												>
+													{t.taskManager.approveRejectHint}
+												</Text>
+											</Box>
+										) : (
+											<Box
+												marginTop={1}
+												paddingTop={1}
+												borderStyle="single"
+												borderTop
+												borderBottom={false}
+												borderLeft={false}
+												borderRight={false}
+												borderColor="gray"
+												flexDirection="column"
+											>
+												<Text color="yellow" bold>
+													{t.taskManager.enterRejectionReason}
+												</Text>
+												<Text>
+													{rejectReason}
+													<Text color={theme.colors.menuInfo as any}>█</Text>
+												</Text>
+												<Text
+													color={theme.colors.menuSecondary as any}
+													dimColor
+												>
+													{t.taskManager.submitCancelHint}
+												</Text>
+											</Box>
+										)}
+									</Box>
+								</Box>
+							)}
 					</Box>
+
+					{pendingAction?.type === 'continue' &&
+						pendingAction.taskId === detailTask.id && (
+							<Box marginTop={1}>
+								<Alert variant="warning">
+									{detailTask.status !== 'completed'
+										? t.taskManager.taskNotCompleted
+										: t.taskManager.confirmConvertToSession}
+								</Alert>
+							</Box>
+						)}
 				</Box>
-				{pendingAction?.type === 'continue' &&
-					pendingAction.taskId === detailTask.id && (
-						<Box marginTop={1}>
-							<Alert variant="warning">
-								{detailTask.status !== 'completed'
-									? t.taskManager.taskNotCompleted
-									: t.taskManager.confirmConvertToSession}
-							</Alert>
-						</Box>
-					)}
 			</Box>
 		);
 	}

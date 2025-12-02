@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// Force color support for all chalk instances (must be set before any imports)
+// This ensures syntax highlighting works in cli-highlight and other color libraries
+process.env['FORCE_COLOR'] = '3';
+
 // Check Node.js version before anything else
 const MIN_NODE_VERSION = 16;
 const currentVersion = process.version;

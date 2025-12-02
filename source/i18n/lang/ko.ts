@@ -716,5 +716,10 @@ export const ko: TranslationKeys = {
 		taskNotCompleted:
 			'작업이 아직 완료되지 않았습니다. 작업이 완료될 때까지 기다려 주세요.',
 		confirmConvertToSession: 'C를 다시 눌러 세션으로 변환 (작업이 삭제됨)',
+		sensitiveCommandDetected: '민감한 명령어 감지됨',
+		commandLabel: '명령어: ',
+		approveRejectHint: 'A 키로 승인 또는 R 키로 거부',
+		enterRejectionReason: '거부 사유를 입력하세요:',
+		submitCancelHint: 'Enter 제출 • ESC 취소',
 	},
 };

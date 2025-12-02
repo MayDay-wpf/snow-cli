@@ -707,5 +707,10 @@ export const zh: TranslationKeys = {
 		statusFailed: '失败',
 		taskNotCompleted: '任务尚未完成。请等待任务完成。',
 		confirmConvertToSession: '再次按 C 确认转换为会话(任务将被删除)',
+		sensitiveCommandDetected: '检测到敏感命令',
+		commandLabel: '命令:',
+		approveRejectHint: '按 A 同意或按 R 拒绝',
+		enterRejectionReason: '请输入拒绝原因:',
+		submitCancelHint: 'Enter 提交 • ESC 取消',
 	},
 };

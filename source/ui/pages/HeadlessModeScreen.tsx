@@ -14,6 +14,8 @@ import {
 	createMessageWithFileInstructions,
 } from '../../utils/core/fileUtils.js';
 import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
+import {getCurrentTheme} from '../../utils/config/themeConfig.js';
+import {themes} from '../themes/index.js';
 
 type Props = {
 	prompt: string;
@@ -250,12 +252,35 @@ function renderInlineFormatting(text: string): string {
 	return text;
 }
 
+// Get theme colors
+const getTheme = () => {
+	const currentTheme = getCurrentTheme();
+	return themes[currentTheme].colors;
+};
+
+// Helper function to convert theme color to ANSI code
+const getAnsiColor = (color: string): string => {
+	const colorMap: Record<string, string> = {
+		red: '\x1b[31m',
+		green: '\x1b[32m',
+		yellow: '\x1b[33m',
+		blue: '\x1b[34m',
+		magenta: '\x1b[35m',
+		cyan: '\x1b[36m',
+		white: '\x1b[37m',
+		gray: '\x1b[90m',
+	};
+	return colorMap[color] || '\x1b[37m'; // default to white
+};
+
 // Helper function to ask user for confirmation in headless mode
 async function askHeadlessConfirmation(
 	toolName: string,
 	toolArguments: string,
 ): Promise<'approve' | 'reject' | 'approve_always'> {
 	return new Promise(resolve => {
+		const theme = getTheme();
+
 		// Create readline interface
 		const rl = readline.createInterface({
 			input: process.stdin,
@@ -275,37 +300,41 @@ async function askHeadlessConfirmation(
 
 		// Check if it's a sensitive command
 		const sensitiveCheck = isSensitiveCommand(command);
-		const isSensitive = sensitiveCheck.isSensitive;
 
-		// Display tool information
+		const warningColor = getAnsiColor(theme.warning);
+		const errorColor = getAnsiColor(theme.error);
+		const infoColor = getAnsiColor(theme.menuInfo);
+		const successColor = getAnsiColor(theme.success);
+		const resetColor = '\x1b[0m';
+
+		// Display tool information with theme colors
 		console.log(
-			`\n\x1b[93m⚠ Tool Confirmation Required\x1b[0m ${
-				isSensitive ? '\x1b[31m(Sensitive Command)\x1b[0m' : ''
+			`\n${warningColor}⚠ Tool Confirmation Required${resetColor} ${
+				sensitiveCheck.isSensitive
+					? `${errorColor}(Sensitive Command)${resetColor}`
+					: ''
 			}`,
 		);
-		console.log(`\x1b[36mTool:\x1b[0m ${toolName}`);
+		console.log(`${infoColor}Tool:${resetColor} ${toolName}`);
 		if (command) {
-			console.log(`\x1b[36mCommand:\x1b[0m ${command}`);
+			console.log(`${infoColor}Command:${resetColor} ${command}`);
 		}
-		if (isSensitive && sensitiveCheck.matchedCommand) {
+		if (sensitiveCheck.isSensitive && sensitiveCheck.matchedCommand) {
 			console.log(
-				`\x1b[33mReason:\x1b[0m ${sensitiveCheck.matchedCommand.description}`,
+				`${warningColor}Reason:${resetColor} ${sensitiveCheck.matchedCommand.description}`,
 			);
 		}
 		console.log('');
-		console.log('\x1b[32m[A]\x1b[0m Approve');
-		console.log('\x1b[32m[Y]\x1b[0m Approve Always');
-		console.log('\x1b[31m[R]\x1b[0m Reject');
+		console.log(`${successColor}[A]${resetColor} Approve`);
+		console.log(`${errorColor}[R]${resetColor} Reject`);
 		console.log('');
 
 		// Ask for input
-		rl.question('\x1b[36mYour choice:\x1b[0m ', answer => {
+		rl.question(`${infoColor}Your choice:${resetColor} `, answer => {
 			rl.close();
 
 			const choice = answer.trim().toLowerCase();
-			if (choice === 'y') {
-				resolve('approve_always');
-			} else if (choice === 'r') {
+			if (choice === 'r') {
 				resolve('reject');
 			} else {
 				// Default to approve
@@ -318,6 +347,8 @@ async function askHeadlessConfirmation(
 export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isComplete, setIsComplete] = useState(false);
+	const [lastDisplayedIndex, setLastDisplayedIndex] = useState(-1);
+	const [isWaitingForInput, setIsWaitingForInput] = useState(false);
 	const {stdout} = useStdout();
 
 	// Use custom hooks
@@ -332,7 +363,10 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	// Listen for message changes to display AI responses and tool calls
 	useEffect(() => {
 		const lastMessage = messages[messages.length - 1];
-		if (!lastMessage) return;
+		const currentIndex = messages.length - 1;
+
+		// Only display if this is a new message we haven't displayed yet
+		if (!lastMessage || currentIndex <= lastDisplayedIndex) return;
 
 		if (lastMessage.role === 'assistant') {
 			if (lastMessage.toolPending) {
@@ -346,6 +380,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				} else {
 					console.log(`\n\x1b[96m❆ ${lastMessage.content}\x1b[0m`);
 				}
+				setLastDisplayedIndex(currentIndex);
 			} else if (lastMessage.content && !lastMessage.streaming) {
 				// Final response with markdown rendering and better formatting
 				console.log(renderConsoleMarkdown(lastMessage.content));
@@ -378,12 +413,16 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 						console.log(`\x1b[90m└─ Execution complete\x1b[0m`);
 					}
 				}
+				setLastDisplayedIndex(currentIndex);
 			}
 		}
-	}, [messages]);
+	}, [messages, lastDisplayedIndex]);
 
 	// Listen for streaming state to show loading status
 	useEffect(() => {
+		// Don't show thinking status when waiting for user input
+		if (isWaitingForInput) return;
+
 		if (streamingState.isStreaming) {
 			if (streamingState.retryStatus && streamingState.retryStatus.isRetrying) {
 				// Show retry status with colors
@@ -422,6 +461,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 		streamingState.elapsedSeconds,
 		streamingState.streamTokenCount,
 		streamingState.retryStatus,
+		isWaitingForInput,
 	]);
 	const processMessage = async () => {
 		try {
@@ -517,11 +557,16 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 					}
 
 					// For sensitive commands, ask for confirmation
+					// Clear thinking status before showing confirmation
+					process.stdout.write('\r\x1b[K'); // Clear current line
+					setIsWaitingForInput(true);
+
 					const confirmation = await askHeadlessConfirmation(
 						toolCall.function.name,
 						toolCall.function.arguments,
 					);
 
+					setIsWaitingForInput(false);
 					return confirmation;
 				},
 				requestUserQuestion: async () => {

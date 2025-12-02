@@ -125,5 +125,8 @@
 	"prettier": "@vdemedes/prettier-config",
 	"optionalDependencies": {
 		"sharp": "^0.34.5"
+	},
+	"dependencies": {
+		"cli-table3": "^0.6.5"
 	}
 }

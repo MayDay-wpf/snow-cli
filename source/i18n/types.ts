@@ -709,6 +709,11 @@ export type TranslationKeys = {
 		statusFailed: string;
 		taskNotCompleted: string;
 		confirmConvertToSession: string;
+		sensitiveCommandDetected: string;
+		commandLabel: string;
+		approveRejectHint: string;
+		enterRejectionReason: string;
+		submitCancelHint: string;
 	};
 };
 

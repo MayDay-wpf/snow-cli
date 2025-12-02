@@ -3,6 +3,8 @@ import {Text, Box} from 'ink';
 import MarkdownIt from 'markdown-it';
 // @ts-expect-error - markdown-it-terminal has no type definitions
 import terminal from 'markdown-it-terminal';
+import Table from 'cli-table3';
+import {highlight} from 'cli-highlight';
 import logger from '../../utils/core/logger.js';
 
 // Configure markdown-it with terminal renderer
@@ -19,6 +21,77 @@ md.use(terminal, {
 	unescape: true,
 });
 
+// Override fence rule to enable syntax highlighting for all languages
+// markdown-it-terminal only highlights js/javascript by default
+const originalFenceRule = md.renderer.rules.fence!;
+md.renderer.rules.fence = function (tokens, idx, options, env, self) {
+	const token = tokens[idx];
+	if (!token) {
+		return originalFenceRule(tokens, idx, options, env, self);
+	}
+
+	const langName = token.info ? token.info.trim().split(/\s+/g)[0] : '';
+
+	if (langName) {
+		try {
+			const highlighted = highlight(token.content, {
+				language: langName,
+				ignoreIllegals: true,
+			});
+			// Return with code block styling
+			const styleOptions = (options as any).styleOptions || {};
+			const codeStyle = styleOptions.code || {open: '', close: ''};
+			return (
+				'\n' + codeStyle.open + highlighted.trimEnd() + codeStyle.close + '\n\n'
+			);
+		} catch (error) {
+			// Language not supported, fall through to original rule
+		}
+	}
+
+	// Fallback to original rule
+	return originalFenceRule(tokens, idx, options, env, self);
+};
+
+// Custom table renderer to fix markdown-it-terminal's broken table rendering
+// Override table-related rules to use cli-table3
+md.renderer.rules['table_open'] = function () {
+	return '\x1b[TABLE_START]\x1b';
+};
+md.renderer.rules['table_close'] = function () {
+	return '\x1b[TABLE_END]\x1b';
+};
+md.renderer.rules['thead_open'] = function () {
+	return '\x1b[THEAD_START]\x1b';
+};
+md.renderer.rules['thead_close'] = function () {
+	return '\x1b[THEAD_END]\x1b';
+};
+md.renderer.rules['tbody_open'] = function () {
+	return '\x1b[TBODY_START]\x1b';
+};
+md.renderer.rules['tbody_close'] = function () {
+	return '\x1b[TBODY_END]\x1b';
+};
+md.renderer.rules['tr_open'] = function () {
+	return '\x1b[TR_START]\x1b';
+};
+md.renderer.rules['tr_close'] = function () {
+	return '\x1b[TR_END]\x1b';
+};
+md.renderer.rules['th_open'] = function () {
+	return '\x1b[TH_START]\x1b';
+};
+md.renderer.rules['th_close'] = function () {
+	return '\x1b[TH_END]\x1b';
+};
+md.renderer.rules['td_open'] = function () {
+	return '\x1b[TD_START]\x1b';
+};
+md.renderer.rules['td_close'] = function () {
+	return '\x1b[TD_END]\x1b';
+};
+
 interface Props {
 	content: string;
 }
@@ -30,6 +103,86 @@ interface Props {
 function sanitizeMarkdownContent(content: string): string {
 	// Replace <ol start="0">, <ol start="-1">, etc. with <ol start="1">
 	return content.replace(/<ol\s+start=["']?(0|-\d+)["']?>/gi, '<ol start="1">');
+}
+
+/**
+ * Parse and render table from special markers
+ * Extracts table data between TABLE_START/TABLE_END markers
+ */
+function parseAndRenderTable(content: string): string {
+	const tableRegex = /\x1b\[TABLE_START\]\x1b([\s\S]*?)\x1b\[TABLE_END\]\x1b/g;
+
+	return content.replace(tableRegex, (match, tableContent) => {
+		try {
+			// Extract headers and rows from table content
+			const headers: string[] = [];
+			const rows: string[][] = [];
+			let currentRow: string[] = [];
+			let isInHead = false;
+			let isInBody = false;
+			let cellContent = '';
+
+			// Parse table structure using markers
+			const parts = tableContent.split(
+				/(\x1b\[(?:THEAD_START|THEAD_END|TBODY_START|TBODY_END|TR_START|TR_END|TH_START|TH_END|TD_START|TD_END)\]\x1b)/g,
+			);
+
+			for (let i = 0; i < parts.length; i++) {
+				const part = parts[i];
+
+				if (part === '\x1b[THEAD_START]\x1b') {
+					isInHead = true;
+				} else if (part === '\x1b[THEAD_END]\x1b') {
+					isInHead = false;
+				} else if (part === '\x1b[TBODY_START]\x1b') {
+					isInBody = true;
+				} else if (part === '\x1b[TBODY_END]\x1b') {
+					isInBody = false;
+				} else if (part === '\x1b[TR_START]\x1b') {
+					currentRow = [];
+				} else if (part === '\x1b[TR_END]\x1b') {
+					if (isInHead && currentRow.length > 0) {
+						headers.push(...currentRow);
+					} else if (isInBody && currentRow.length > 0) {
+						rows.push(currentRow);
+					}
+				} else if (
+					part === '\x1b[TH_START]\x1b' ||
+					part === '\x1b[TD_START]\x1b'
+				) {
+					cellContent = '';
+				} else if (part === '\x1b[TH_END]\x1b' || part === '\x1b[TD_END]\x1b') {
+					// Strip ANSI codes and clean up content
+					const cleanContent = cellContent
+						.replace(/\x1b\[[0-9;]*m/g, '')
+						.trim();
+					currentRow.push(cleanContent);
+				} else if (!part.match(/\x1b\[/)) {
+					// This is cell content
+					cellContent += part;
+				}
+			}
+
+			// Create table using cli-table3
+			const table = new Table({
+				head: headers,
+				style: {
+					head: ['cyan'],
+					border: ['gray'],
+				},
+			});
+
+			rows.forEach(row => table.push(row));
+
+			return '\n' + table.toString() + '\n';
+		} catch (error: any) {
+			logger.warn('[MarkdownRenderer] Failed to render table', {
+				error: error.message,
+			});
+			// Return original content on error
+			return match;
+		}
+	});
 }
 
 /**
@@ -67,11 +220,14 @@ export default function MarkdownRenderer({content}: Props) {
 			return renderFallback(content);
 		}
 
+		// Stage 3: Parse and render tables using cli-table3
+		const renderedWithTables = parseAndRenderTable(rendered);
+
 		// Split into lines and render each separately
 		// This prevents Ink's Text component from creating mysterious whitespace
 		// when handling multi-line content with \n characters
 		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes in indented lists
-		const lines = rendered
+		const lines = renderedWithTables
 			.split('\n')
 			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
 

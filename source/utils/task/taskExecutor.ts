@@ -223,7 +223,104 @@ export async function executeTask(
 					}
 				},
 				setStreamTokenCount: streamingState.setStreamTokenCount,
-				requestToolConfirmation: async () => 'approve' as const,
+				requestToolConfirmation: async toolCall => {
+					log('requestToolConfirmation called');
+					log(
+						`Tool: ${toolCall.function.name}, Args: ${toolCall.function.arguments}`,
+					);
+
+					if (toolCall.function.name === 'terminal-execute') {
+						const args = JSON.parse(toolCall.function.arguments);
+						const command = args?.command || '';
+						const {isSensitiveCommand} = await import(
+							'../execution/sensitiveCommandManager.js'
+						);
+						const checkResult = isSensitiveCommand(command);
+
+						if (checkResult.isSensitive) {
+							log(`Sensitive command detected: ${command}`);
+							log(`Description: ${checkResult.matchedCommand?.description}`);
+
+							await taskManager.pauseTaskForSensitiveCommand(taskId, {
+								command,
+								description: checkResult.matchedCommand?.description,
+								toolCallId: toolCall.id,
+								toolName: toolCall.function.name,
+								args,
+							});
+
+							log('Task paused, waiting for user approval...');
+
+							// Wait a bit to ensure the paused status is persisted
+							// This prevents concurrent addMessage calls from overwriting the status
+							await new Promise(resolve => setTimeout(resolve, 500));
+
+							// Verify the paused status was saved correctly
+							let verifyTask = await taskManager.loadTask(taskId);
+							if (verifyTask && verifyTask.status !== 'paused') {
+								log('Paused status was overwritten, forcing re-save...');
+								verifyTask.status = 'paused';
+								if (!verifyTask.pausedInfo) {
+									verifyTask.pausedInfo = {
+										reason: 'sensitive_command',
+										sensitiveCommand: {
+											command,
+											description: checkResult.matchedCommand?.description,
+											toolCallId: toolCall.id,
+											toolName: toolCall.function.name,
+											args,
+										},
+										pausedAt: Date.now(),
+									};
+								}
+								await taskManager.saveTask(verifyTask);
+								log('Paused status re-saved successfully');
+							}
+
+							const pollInterval = 2000;
+							const maxWaitTime = 3600000;
+							const startTime = Date.now();
+
+							while (true) {
+								await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+								if (Date.now() - startTime > maxWaitTime) {
+									log('Approval timeout, rejecting command');
+									return 'reject' as const;
+								}
+
+								const currentTask = await taskManager.loadTask(taskId);
+								if (!currentTask) {
+									log('Task not found, rejecting');
+									return 'reject' as const;
+								}
+
+								if (currentTask.status === 'running') {
+									const rejectionReason =
+										currentTask.pausedInfo?.sensitiveCommand?.rejectionReason;
+									if (rejectionReason) {
+										log(`User rejected with reason: ${rejectionReason}`);
+										delete currentTask.pausedInfo;
+										await taskManager.saveTask(currentTask);
+
+										return {
+											type: 'reject_with_reply',
+											reason: rejectionReason,
+										};
+									} else {
+										log('User approved, continuing execution');
+										return 'approve' as const;
+									}
+								} else if (currentTask.status === 'failed') {
+									log('Task failed during approval wait, rejecting');
+									return 'reject' as const;
+								}
+							}
+						}
+					}
+
+					return 'approve' as const;
+				},
 				requestUserQuestion: async () => {
 					throw new Error('askuser tool is not supported in task mode');
 				},

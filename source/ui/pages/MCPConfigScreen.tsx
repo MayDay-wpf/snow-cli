@@ -16,7 +16,11 @@ const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function checkCommandExists(command: string): boolean {
 	try {
-		execSync(`which ${command}`, {stdio: 'ignore'});
+		execSync(`command -v ${command}`, {
+			stdio: 'ignore',
+			shell: '/bin/zsh',
+			env: process.env,
+		});
 		return true;
 	} catch {
 		return false;

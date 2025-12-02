@@ -55,8 +55,11 @@ function getSystemEnvironmentInfo(): string {
 		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
 		const shellName = path.basename(shellPath).toLowerCase();
 		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell') || shellName.includes('pwsh'))
-			return 'PowerShell';
+		if (shellName.includes('powershell') || shellName.includes('pwsh')) {
+			// Detect PowerShell version
+			const psVersion = getPowerShellVersion();
+			return psVersion ? `PowerShell ${psVersion}` : 'PowerShell';
+		}
 		if (shellName.includes('zsh')) return 'zsh';
 		if (shellName.includes('bash')) return 'bash';
 		if (shellName.includes('fish')) return 'fish';
@@ -69,6 +72,31 @@ function getSystemEnvironmentInfo(): string {
 	return `Platform: ${platform}
 Shell: ${shell}
 Working Directory: ${workingDirectory}`;
+}
+
+// Get PowerShell version
+function getPowerShellVersion(): string | null {
+	try {
+		const platformType = os.platform();
+		if (platformType !== 'win32') return null;
+
+		// Detect PowerShell version from shell path
+		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
+		const shellName = path.basename(shellPath).toLowerCase();
+
+		// pwsh typically indicates PowerShell 7+
+		if (shellName.includes('pwsh')) {
+			return '7.x';
+		}
+		// powershell.exe is typically PowerShell 5.x
+		if (shellName.includes('powershell')) {
+			return '5.x';
+		}
+
+		return null;
+	} catch (error) {
+		return null;
+	}
 }
 
 const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line assistant.
@@ -303,6 +331,38 @@ Guidance and recommendations:
 1. Run build
 2. Fix any errors immediately
 3. Never leave broken code
+
+## Platform-Specific Command Requirements
+
+ALWAYS use commands compatible with the detected operating system and shell version:
+
+**Windows with cmd.exe:**
+- Use: 		\`del\`, \`copy\`, \`move\`, \`findstr\`, \`type\`, \`dir\`, \`mkdir\`, \`rmdir\`, \`set\`, \`if\`
+- Avoid: Unix commands (\`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`), modern operators (\`&&\`, \`||\` - use \`&\` and \`|\` instead)
+
+**Windows with PowerShell 5.x (Windows PowerShell):**
+- Use: \`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, \`Get-ChildItem\`, \`New-Item\`
+- Shell operators: \`;\` for command separation, \`-and\`, \`-or\` for logical operations
+- Avoid: Modern pwsh features, operators like \`&&\`, \`||\` which only work in PowerShell 7+
+- Note: Avoid \`$(...)\` syntax in certain contexts; use \`@()\` array syntax where applicable
+
+**Windows with PowerShell 7.x+ (pwsh):**
+- Use: All PowerShell 5.x cmdlets plus modern features
+- Shell operators: \`;\`, \`&&\`, \`||\`, \`-and\`, \`-or\` are all supported
+- Supports cross-platform scripting patterns
+
+**macOS/Linux (bash/zsh/sh):**
+- Use: \`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`, \`mkdir\`, \`rmdir\`, \`find\`, \`sed\`, \`awk\`
+- Supports: \`&&\`, \`||\`, pipes \`|\`, redirection \`>\`, \`<\`, \`>>\`
+
+## Command Selection Algorithm:
+
+1. Check Platform and Shell from System Environment
+2. If **Windows + cmd.exe**: Use basic CMD syntax (no \`&&\`/\`||\`)
+3. If **Windows + PowerShell 5.x**: Use PowerShell cmdlets with \`;\` separator
+4. If **Windows + PowerShell 7.x**: Use PowerShell with modern operators
+5. If **macOS/Linux**: Use Unix/Linux commands with modern operators
+6. For complex cross-platform tasks: Prefer Node.js scripts or npm packages
 
 ## Project Context (AGENTS.md)
 

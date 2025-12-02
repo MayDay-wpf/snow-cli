@@ -730,5 +730,10 @@ export const ja: TranslationKeys = {
 			'タスクはまだ完了していません。タスクが終了するまでお待ちください。',
 		confirmConvertToSession:
 			'Cをもう一度押してセッションに変換（タスクは削除されます）',
+		sensitiveCommandDetected: '危険なコマンドを検出',
+		commandLabel: 'コマンド: ',
+		approveRejectHint: 'A キーで承認、R キーで拒否',
+		enterRejectionReason: '拒否理由を入力してください:',
+		submitCancelHint: 'Enter 送信 • ESC キャンセル',
 	},
 };

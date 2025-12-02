@@ -7,19 +7,31 @@ import type {ChatMessage} from '../session/sessionManager.js';
 export interface Task {
 	id: string;
 	title: string;
-	status: 'pending' | 'running' | 'completed' | 'failed';
+	status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
 	prompt: string;
 	createdAt: number;
 	updatedAt: number;
 	messages: ChatMessage[];
 	error?: string;
 	pid?: number;
+	pausedInfo?: {
+		reason: 'sensitive_command';
+		sensitiveCommand?: {
+			command: string;
+			description?: string;
+			toolCallId: string;
+			toolName: string;
+			args: any;
+			rejectionReason?: string;
+		};
+		pausedAt: number;
+	};
 }
 
 export interface TaskListItem {
 	id: string;
 	title: string;
-	status: 'pending' | 'running' | 'completed' | 'failed';
+	status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
 	createdAt: number;
 	updatedAt: number;
 	messageCount: number;
@@ -27,9 +39,33 @@ export interface TaskListItem {
 
 class TaskManager {
 	private readonly tasksDir: string;
+	private readonly operationQueues: Map<string, Promise<any>> = new Map();
 
 	constructor() {
 		this.tasksDir = path.join(os.homedir(), '.snow', 'tasks');
+	}
+
+	/**
+	 * Queue an operation for a specific task to prevent concurrent modifications
+	 */
+	private async queueOperation<T>(
+		taskId: string,
+		operation: () => Promise<T>,
+	): Promise<T> {
+		const existingQueue = this.operationQueues.get(taskId);
+		const newQueue = (existingQueue || Promise.resolve()).then(
+			() => operation(),
+			() => operation(),
+		);
+		this.operationQueues.set(taskId, newQueue);
+
+		try {
+			return await newQueue;
+		} finally {
+			if (this.operationQueues.get(taskId) === newQueue) {
+				this.operationQueues.delete(taskId);
+			}
+		}
 	}
 
 	private async ensureTasksDir(): Promise<void> {
@@ -148,24 +184,29 @@ class TaskManager {
 		status: Task['status'],
 		error?: string,
 	): Promise<void> {
-		const task = await this.loadTask(taskId);
-		if (task) {
-			task.status = status;
-			task.updatedAt = Date.now();
-			if (error) {
-				task.error = error;
+		return this.queueOperation(taskId, async () => {
+			const task = await this.loadTask(taskId);
+			if (task) {
+				task.status = status;
+				task.updatedAt = Date.now();
+				if (error) {
+					task.error = error;
+				}
+				await this.saveTask(task);
 			}
-			await this.saveTask(task);
-		}
+		});
 	}
 
 	async addMessage(taskId: string, message: ChatMessage): Promise<void> {
-		const task = await this.loadTask(taskId);
-		if (task) {
-			task.messages.push(message);
-			task.updatedAt = Date.now();
-			await this.saveTask(task);
-		}
+		return this.queueOperation(taskId, async () => {
+			const task = await this.loadTask(taskId);
+			if (task) {
+				task.messages.push(message);
+				task.updatedAt = Date.now();
+				// Preserve paused status and pausedInfo - don't overwrite them
+				await this.saveTask(task);
+			}
+		});
 	}
 
 	async convertTaskToSession(taskId: string): Promise<string | null> {
@@ -197,6 +238,77 @@ class TaskManager {
 		await this.deleteTask(taskId);
 
 		return session.id;
+	}
+
+	async pauseTaskForSensitiveCommand(
+		taskId: string,
+		sensitiveCommand: {
+			command: string;
+			description?: string;
+			toolCallId: string;
+			toolName: string;
+			args: any;
+		},
+	): Promise<void> {
+		return this.queueOperation(taskId, async () => {
+			const task = await this.loadTask(taskId);
+			if (task) {
+				task.status = 'paused';
+				task.pausedInfo = {
+					reason: 'sensitive_command',
+					sensitiveCommand,
+					pausedAt: Date.now(),
+				};
+				task.updatedAt = Date.now();
+				await this.saveTask(task);
+			}
+		});
+	}
+
+	async approveSensitiveCommand(taskId: string): Promise<boolean> {
+		return this.queueOperation(taskId, async () => {
+			const task = await this.loadTask(taskId);
+			if (!task || task.status !== 'paused') {
+				return false;
+			}
+
+			task.status = 'running';
+			delete task.pausedInfo;
+			task.updatedAt = Date.now();
+			await this.saveTask(task);
+			return true;
+		});
+	}
+
+	async rejectSensitiveCommand(
+		taskId: string,
+		reason: string,
+	): Promise<boolean> {
+		return this.queueOperation(taskId, async () => {
+			const task = await this.loadTask(taskId);
+			if (
+				!task ||
+				task.status !== 'paused' ||
+				!task.pausedInfo?.sensitiveCommand
+			) {
+				return false;
+			}
+
+			task.pausedInfo.sensitiveCommand = {
+				...task.pausedInfo.sensitiveCommand,
+				rejectionReason: reason,
+			};
+
+			task.status = 'running';
+			task.updatedAt = Date.now();
+			await this.saveTask(task);
+			return true;
+		});
+	}
+
+	async getPausedInfo(taskId: string): Promise<Task['pausedInfo'] | null> {
+		const task = await this.loadTask(taskId);
+		return task?.pausedInfo || null;
 	}
 }
 

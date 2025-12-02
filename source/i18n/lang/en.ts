@@ -740,5 +740,10 @@ export const en: TranslationKeys = {
 			'Task not completed yet. Please wait for the task to finish.',
 		confirmConvertToSession:
 			'Press C again to convert to session (task will be deleted)',
+		sensitiveCommandDetected: 'Sensitive Command Detected',
+		commandLabel: 'Command: ',
+		approveRejectHint: 'Press A to approve or R to reject',
+		enterRejectionReason: 'Enter rejection reason:',
+		submitCancelHint: 'Enter Submit • ESC Cancel',
 	},
 };
