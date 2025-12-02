@@ -49,6 +49,12 @@ export async function parsePDFDocument(
 		// pdfjs-dist requires browser APIs (DOMMatrix) which causes errors in Node.js
 		const {PDFParse} = await import('pdf-parse');
 
+		// Set worker path for Node.js environment
+		// The worker file is copied to bundle directory during build
+		// Use __dirname which is defined in the bundle banner to locate worker file
+		const workerPath = new URL('pdf.worker.mjs', import.meta.url).href;
+		PDFParse.setWorker(workerPath);
+
 		const buffer = await fs.readFile(fullPath);
 		const uint8Array = new Uint8Array(buffer);
 

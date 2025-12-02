@@ -59,4 +59,10 @@ copyFileSync(
 	'bundle/tiktoken_bg.wasm',
 );
 
+// Copy PDF.js worker file for PDF parsing
+copyFileSync(
+	'node_modules/pdfjs-dist/build/pdf.worker.mjs',
+	'bundle/pdf.worker.mjs',
+);
+
 console.log('✓ Bundle created successfully');
