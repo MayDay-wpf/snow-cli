@@ -10,7 +10,7 @@ _面向开发者的智能 AI 命令行工具_
 
 </div>
 
-⚠️注意：如果你希望使用 Snow 接入国内的 Claude Code 或者 Codex 中转，请 [点击这里](#claude-code--codex-中转站接入-snow-配置方法) 查看对应的的配置方法
+⚠️ 注意：如果你希望使用 Snow 接入国内的 Claude Code 或者 Codex 中转，请 [点击这里](#claude-code--codex-中转站接入-snow-配置方法) 查看对应的的配置方法
 
 # 一、系统要求
 
@@ -44,8 +44,7 @@ nvm use 16
 
 - `npm install -g snow-ai`
 
-
-也可前往：[官方仓库](https://github.com/MayDay-wpf/snow-cli)  使用源码编译安装，快速 clone 命令：
+也可前往：[官方仓库](https://github.com/MayDay-wpf/snow-cli) 使用源码编译安装，快速 clone 命令：
 
 - `git clone https://github.com/MayDay-wpf/snow-cli.git`
 
@@ -73,12 +72,11 @@ nvm use 16
 - `Profile` 用于切换或新建配置，Snow 现在支持保存多套 API 和模型方案
 - `Base URL` 即请求地址。由于移除了官方 SDK ，所以 OpenAI 和 Anthropic 接口的 url 需要补后缀 `/v1`，Gemini 则需要补 `/v1beta`
 - `API Key` 没啥好说的，Key 呗，注意对应的 Url，防止出现 `401 Unauthorized` 之类拿自己家钥匙开不开邻居家门的错误
-- `Request Method` 用于按照你的所需以及 API 接口支持得请求方式来选择请求方案，：`Chat Completions`（通用OpenAI对话补全）、`Responses`（Codex CLI 的支持接口即为此）、`Gemini`、`Anthropic`
+- `Request Method` 用于按照你的所需以及 API 接口支持得请求方式来选择请求方案，：`Chat Completions`（通用 OpenAI 对话补全）、`Responses`（Codex CLI 的支持接口即为此）、`Gemini`、`Anthropic`
 - `Anthropic Beta` 这个复选框如果勾选，Anthropic 的请求 URL 会自动补一个 `beta=true` 的参数
-- `Advanced Model`、`Basic Model`、`Compact Model` 这三个分别用于设置：干活的高级模型、总结的小模型、压缩上下文用的压缩模型。这三个模型都来源于上面设置的 `BaseURL` 和 `API Key`，系统会自动请求对应的 `/models` 接口获取列表，支持键入过滤，当然遇到模型接口列表不完善的 API端点，应用内提供了 `Manual Input (Enter model name)`选项，可自行键入所需模型名称
+- `Advanced Model`、`Basic Model`、`Compact Model` 这三个分别用于设置：干活的高级模型、总结的小模型、压缩上下文用的压缩模型。这三个模型都来源于上面设置的 `BaseURL` 和 `API Key`，系统会自动请求对应的 `/models` 接口获取列表，支持键入过滤，当然遇到模型接口列表不完善的 API 端点，应用内提供了 `Manual Input (Enter model name)`选项，可自行键入所需模型名称
 - `Max Context Tokens` 对应模型的最大上下文窗口，用于计算当前上下文占模型支持的最大上下文百分比。可以根据模型实际情况填写，例如满血 `gemini` 一般是 1M 上下文，就填 1000000。注意，此参数不会影响实际的模型上下文，只会影响界面显示的计算结果
 - `Max Tokens` 这个不能乱填，这个参数会直接加入 API 请求体中，作为 `max_tokens` 参数
-
 
 ![API & Model Settings in CLI ](docs/images/image.png)
 
@@ -90,21 +88,19 @@ nvm use 16
 
 ![Proxy & Browser Settings in CLI](docs/images/image-1.png)
 
-
 # 五、System Prompt Settings
 
 顾名思义，用户可以在此处自己设置系统提示词。**需要注意的是，这并不能替换 Snow 内置的系统提示词。**当用户设置了系统提示词，Snow 自带的系统提示词会自动降级为用户消息，补充到第一条用户消息中。
 
 在 `Windows` 系统中，应用会自动唤醒 `记事本`，而在 `MacOS/Linux` 系统中则会启用系统自带的终端文本编辑器。
 
-**新系统提示词配置会在下一次启动 Snow 时生效。**  在对应的编辑器中编辑完后你的自定义系统提示词后保存退出，Snow 会自动关闭并输出如下信息提醒用户重启应用生效： 
+**新系统提示词配置会在下一次启动 Snow 时生效。** 在对应的编辑器中编辑完后你的自定义系统提示词后保存退出，Snow 会自动关闭并输出如下信息提醒用户重启应用生效：
 
--  `Custom system prompt saved successfully! Please use snow to restart!`
+- `Custom system prompt saved successfully! Please use snow to restart!`
 
 # 六、Custom Headers Settings
 
 用户可以添加自定义请求头，**注意是添加**，用户无法覆盖 Snow 自带的请求头，具体用法可参照最后一节 [添加自定义请求头](#claude-code--codex-中转站接入-snow-配置方法) 进行自定义设置。
-
 
 # 七、MCP Settings
 
@@ -112,15 +108,15 @@ nvm use 16
 
 ```json
 {
-  "mcpServers": {
-    "server-name": {
-      "command": "npx",
-      "args": ["-y", "mcp-server"],
-      "env": {
-        "API_KEY": "value"
-      }
-    }
-  }
+	"mcpServers": {
+		"server-name": {
+			"command": "npx",
+			"args": ["-y", "mcp-server"],
+			"env": {
+				"API_KEY": "value"
+			}
+		}
+	}
 }
 ```
 
@@ -130,8 +126,7 @@ nvm use 16
 
 ![IDE Connected 提醒消息](docs/images/image-2.png)
 
-对应的 IDE插件均已经发布线上版本，直接在插件市场搜索 `Snow CLI` 或 [点此](https://marketplace.visualstudio.com/items?itemName=mufasa.snow-cli) 即可安装。
-
+对应的 IDE 插件均已经发布线上版本，直接在插件市场搜索 `Snow CLI` 或 [点此](https://marketplace.visualstudio.com/items?itemName=mufasa.snow-cli) 即可安装。
 
 ## File Select
 
@@ -141,7 +136,7 @@ nvm use 16
 
 使用 `/` 可查看可用命令：
 
-  - `/init` 构建项目说明书 `SNOW.md`
+- `/init` 构建项目说明书 `AGENTS.md`
   - `/clear` 新建会话
   - `/resume` 恢复历史记录
   - `/mcp`查看 MCP 连接状态，以及重连
@@ -149,28 +144,25 @@ nvm use 16
   - `/ide`手动连接 IDE，基本不需要使用，因为如果安装了 IDE 插件的话， Snow 会自动连接
   - `/compact` 主动压缩当前会话上下文，很少使用，因为压缩后会遗失上下文中关键信息导致 Agent 输出质量下降
 
-
 ## 快捷键
 
 支持如下快捷键：
 
-  - Windows:`Alt+V` 粘贴图片、MacOS/Linux:`Ctrl+V`(会有提示)
-  - `Ctrl+L` 从光标位置开始向左清空输入框
-  - `Ctrl+R` 从光标位置开始向右清空输入框
-  - `Shift+Tab` 启用或禁用 `Yolo` 模式
-  - `ESC` 中断 AI 生成
-  - 双击`ESC` 回滚对话（系统自带检查点，可回滚文件）
+- Windows:`Alt+V` 粘贴图片、MacOS/Linux:`Ctrl+V`(会有提示)
+- `Ctrl+L` 从光标位置开始向左清空输入框
+- `Ctrl+R` 从光标位置开始向右清空输入框
+- `Shift+Tab` 启用或禁用 `Yolo` 模式
+- `ESC` 中断 AI 生成
+- 双击`ESC` 回滚对话（系统自带检查点，可回滚文件）
 
 ## 数据统计
 
-结合 [对应设置](#三api--model-settings) 可以在输入框下方会显示完整的 Token 统计数据，包括：  
+结合 [对应设置](#三api--model-settings) 可以在输入框下方会显示完整的 Token 统计数据，包括：
 
 - Token 使用情况
 - 上下文占用百分比和 token 数
 - 缓存命中 token 数
 - 缓存创建 token 数
-
-
 
 ![Token 使用情况示意图](docs/images/image-3.png)
 
@@ -179,7 +171,6 @@ nvm use 16
 在用户目录的 `.snow` 文件夹中有与 Snow 配置和运行相关的所有文件，下面逐个解释：
 
 ![配置文件一览](docs/images/image-4.png)
-
 
 - `log` 该目录主要记录了运行日志，这些日志不会上传任何远端，仅在本地保留，你可以在出现 BUG 时查找对应日志从而协助定位问题，可以任意删除，对 Snow 功能无影响
 - `profiles` 前文中提到，Snow 支持多个配置文件切换，用户自定义的多个配置文件都将保存在这个目录
@@ -202,20 +193,20 @@ nvm use 16
 
 ```
 You are Claude Code, Anthropic's official CLI for Claude.
-```  
+```
 
 ![入口示意图1](docs/images/image-5.png)
 
 此外，还需要添加如下的自定义请求头：
 
 ```json
-    {
-    	"anthropic-beta": "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
-    	"anthropic-dangerous-direct-browser-access": "true",
-    	"anthropic-version": "2023-06-01",
-    	"user-agent": "claude-cli/2.0.22 (external, cli)",
-    	"x-app": "cli"
-    }
+{
+	"anthropic-beta": "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
+	"anthropic-dangerous-direct-browser-access": "true",
+	"anthropic-version": "2023-06-01",
+	"user-agent": "claude-cli/2.0.22 (external, cli)",
+	"x-app": "cli"
+}
 ```
 
 ![入口示意图2](docs/images/image-6.png)
@@ -224,7 +215,7 @@ You are Claude Code, Anthropic's official CLI for Claude.
 
 Codex 中转一般无需配置请求头，同样地请替换如下自定义系统提示词（
 **注意不能多余或缺少任何字符**）:
-  
+
 ```markdown
 You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
@@ -240,16 +231,17 @@ You are Codex, based on GPT-5. You are running as a coding agent in the Codex CL
 - Add succinct code comments that explain what is going on if code is not self-explanatory. You should not add comments like "Assigns the value to the variable", but a brief comment might be useful ahead of a complex code block that the user would otherwise have to spend time parsing out. Usage of these comments should be rare.
 - Try to use apply_patch for single file edits, but it is fine to explore other options to make the edit if it does not work well. Do not use apply_patch for changes that are auto-generated (i.e. generating package.json or running a lint or format command like gofmt) or when scripting is more efficient (such as search and replacing a string across a codebase).
 - You may be in a dirty git worktree.
-    * NEVER revert existing changes you did not make unless explicitly requested, since these changes were made by the user.
-    * If asked to make a commit or code edits and there are unrelated changes to your work or changes that you didn't make in those files, don't revert those changes.
-    * If the changes are in files you've touched recently, you should read carefully and understand how you can work with the changes rather than reverting them.
-    * If the changes are in unrelated files, just ignore them and don't revert them.
+  - NEVER revert existing changes you did not make unless explicitly requested, since these changes were made by the user.
+  - If asked to make a commit or code edits and there are unrelated changes to your work or changes that you didn't make in those files, don't revert those changes.
+  - If the changes are in files you've touched recently, you should read carefully and understand how you can work with the changes rather than reverting them.
+  - If the changes are in unrelated files, just ignore them and don't revert them.
 - While you are working, you might notice unexpected changes that you didn't make. If this happens, STOP IMMEDIATELY and ask the user how they would like to proceed.
 - **NEVER** use destructive commands like `git reset --hard` or `git checkout --` unless specifically requested or approved by the user.
 
 ## Plan tool
 
 When using the planning tool:
+
 - Skip using the planning tool for straightforward tasks (roughly the easiest 25%).
 - Do not make single-step plans.
 - When you made a plan, update it after having performed one of the sub-tasks that you shared on the plan.
@@ -259,21 +251,25 @@ When using the planning tool:
 The Codex CLI harness supports several different configurations for sandboxing and escalation approvals that the user can choose from.
 
 Filesystem sandboxing defines which files can be read or written. The options for `sandbox_mode` are:
+
 - **read-only**: The sandbox only permits reading files.
 - **workspace-write**: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval.
 - **danger-full-access**: No filesystem sandboxing - all commands are permitted.
 
 Network sandboxing defines whether network can be accessed without approval. Options for `network_access` are:
+
 - **restricted**: Requires approval
 - **enabled**: No approval needed
 
 Approvals are your mechanism to get user consent to run shell commands without the sandbox. Possible configuration options for `approval_policy` are
+
 - **untrusted**: The harness will escalate most commands for user approval, apart from a limited allowlist of safe "read" commands.
 - **on-failure**: The harness will allow all commands to run in the sandbox (if enabled), and failures will be escalated to the user for approval to run again without the sandbox.
 - **on-request**: Commands will be run in the sandbox by default, and you can specify in your tool call if you want to escalate a command to run without sandboxing. (Note that this mode is not always available. If it is, you'll see parameters for it in the `shell` command description.)
 - **never**: This is a non-interactive mode where you may NEVER ask the user for approval to run commands. Instead, you must always persist and work around constraints to solve the task for the user. You MUST do your utmost best to finish the task and validate your work before yielding. If this mode is paired with `danger-full-access`, take advantage of it to deliver the best outcome for the user. Further, in this mode, your default testing philosophy is overridden: Even if you don't see local patterns for testing, you may add tests and scripts to validate your work. Just remove them before yielding.
 
 When you are running with `approval_policy == on-request`, and sandboxing enabled, here are scenarios where you'll need to request approval:
+
 - You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
 - You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
 - You are running sandboxed and need to run a command that requires network access (e.g. installing packages)
@@ -288,8 +284,9 @@ You will be told what filesystem sandboxing, network sandboxing, and approval mo
 Although they introduce friction to the user because your work is paused until the user responds, you should leverage them when necessary to accomplish important work. If the completing the task requires escalated permissions, Do not let these settings or the sandbox deter you from attempting to accomplish the user's task unless it is set to "never", in which case never ask for approvals.
 
 When requesting approval to execute a command that will require escalated privileges:
-  - Provide the `with_escalated_permissions` parameter with the boolean value true
-  - Include a short, 1 sentence explanation for why you need to enable `with_escalated_permissions` in the justification parameter
+
+- Provide the `with_escalated_permissions` parameter with the boolean value true
+- Include a short, 1 sentence explanation for why you need to enable `with_escalated_permissions` in the justification parameter
 
 ## Special user requests
 
@@ -308,9 +305,9 @@ You are producing plain text that will later be styled by the CLI. Follow these 
 - No "save/copy this file" - User is on the same machine.
 - Offer logical next steps (tests, commits, build) briefly; add verify steps if you couldn't do something.
 - For code changes:
-  * Lead with a quick explanation of the change, and then give more details on the context covering where and why a change was made. Do not start this explanation with "summary", just jump right in.
-  * If there are natural next steps the user may want to take, suggest them at the end of your response. Do not make suggestions if there are no natural next steps.
-  * When suggesting multiple options, use numeric lists for the suggestions so the user can quickly respond with a single number.
+  - Lead with a quick explanation of the change, and then give more details on the context covering where and why a change was made. Do not start this explanation with "summary", just jump right in.
+  - If there are natural next steps the user may want to take, suggest them at the end of your response. Do not make suggestions if there are no natural next steps.
+  - When suggesting multiple options, use numeric lists for the suggestions so the user can quickly respond with a single number.
 - The user does not command execution outputs. When asked to show the output of a command (e.g. `git show`), relay the important details in your answer or summarize the key lines so the user understands the result.
 
 ### Final answer structure and style guidelines
@@ -318,18 +315,18 @@ You are producing plain text that will later be styled by the CLI. Follow these 
 - Plain text; CLI handles styling. Use structure only when it helps scanability.
 - Headers: optional; short Title Case (1-3 words) wrapped in **…**; no blank line before the first bullet; add only if they truly help.
 - Bullets: use - ; merge related points; keep to one line when possible; 4–6 per list ordered by importance; keep phrasing consistent.
-- Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with **.
+- Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with \*\*.
 - Code samples or multi-line snippets should be wrapped in fenced code blocks; include an info string as often as possible.
 - Structure: group related bullets; order sections general → specific → supporting; for subsections, start with a bolded keyword bullet, then items; match complexity to the task.
 - Tone: collaborative, concise, factual; present tense, active voice; self-contained; no "above/below"; parallel wording.
 - Don'ts: no nested bullets/hierarchies; no ANSI codes; don't cram unrelated keywords; keep keyword lists short—wrap/reformat if long; avoid naming formatting styles in answers.
 - Adaptation: code explanations → precise, structured with code refs; simple tasks → lead with outcome; big changes → logical walkthrough + rationale + next actions; casual one-offs → plain sentences, no headers/bullets.
 - File References: When referencing files in your response, make sure to include the relevant start line and always follow the below rules:
-  * Use inline code to make file paths clickable.
-  * Each reference should have a stand alone path. Even if it's the same file.
-  * Accepted: absolute, workspace-relative, a/ or b/ diff prefixes, or bare filename/suffix.
-  * Line/column (1-based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
-  * Do not use URIs like file://, vscode://, or https://.
-  * Do not provide range of lines
-  * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
+  - Use inline code to make file paths clickable.
+  - Each reference should have a stand alone path. Even if it's the same file.
+  - Accepted: absolute, workspace-relative, a/ or b/ diff prefixes, or bare filename/suffix.
+  - Line/column (1-based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
+  - Do not use URIs like file://, vscode://, or https://.
+  - Do not provide range of lines
+  - Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
 ```

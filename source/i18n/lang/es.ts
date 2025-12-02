@@ -448,7 +448,7 @@ export const es: TranslationKeys = {
 			resume: 'Reanudar conversación',
 			mcp: 'Mostrar servicios y herramientas del Protocolo de Contexto de Modelo',
 			yolo: 'Alternar modo desatendido (aprobar automáticamente todas las herramientas)',
-			init: 'Analizar proyecto y generar/actualizar documento SNOW.md',
+			init: 'Analizar proyecto y generar/actualizar documento AGENTS.md',
 			ide: 'Conectar al editor VSCode y sincronizar contexto',
 			compact: 'Comprimir historial de conversación usando modelo compacto',
 			home: 'Volver a la pantalla de bienvenida para modificar configuración',

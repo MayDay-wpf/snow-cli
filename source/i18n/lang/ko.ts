@@ -403,7 +403,7 @@ export const ko: TranslationKeys = {
 			resume: '대화 재개',
 			mcp: '모델 컨텍스트 프로토콜 서비스 및 도구 표시',
 			yolo: '무인 모드 토글(모든 도구 자동 승인)',
-			init: '프로젝트 분석 및 SNOW.md 문서 생성/업데이트',
+			init: '프로젝트 분석 및 AGENTS.md 문서 생성/업데이트',
 			ide: 'VSCode 편집기에 연결하고 컨텍스트 동기화',
 			compact: '컴팩트 모델을 사용하여 대화 기록 압축',
 			home: '환영 화면으로 돌아가서 설정 수정',

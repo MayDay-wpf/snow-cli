@@ -1,6 +1,9 @@
-import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
-// Init command handler - Triggers AI to analyze current project and generate SNOW.md
+// Init command handler - Triggers AI to analyze current project and generate AGENTS.md
 registerCommand('init', {
 	execute: (): CommandResult => {
 		return {
@@ -8,7 +11,7 @@ registerCommand('init', {
 			action: 'initProject',
 			message: 'Starting project initialization...',
 			// Pass the optimized English prompt for AI
-			prompt: `You are an expert technical documentation specialist. Analyze the current project directory comprehensively and generate or update a SNOW.md file.
+			prompt: `You are an expert technical documentation specialist. Analyze the current project directory comprehensively and generate or update an AGENTS.md file.
 
 **Your tasks:**
 1. Use ALL available MCP tools (filesystem, terminal) to thoroughly explore the project structure
@@ -16,9 +19,9 @@ registerCommand('init', {
 3. Identify the project type, technologies, frameworks, and architecture
 4. Examine the source code structure and main modules
 5. Check for existing documentation files
-6. Generate or update SNOW.md with the following structure:
+6. Generate or update AGENTS.md with the following structure:
 
-# SNOW.md Structure
+# AGENTS.md Structure
 
 ## Project Name
 Brief one-line description
@@ -82,9 +85,9 @@ License information (check package.json or LICENSE file)
 - Use filesystem-read to read important files
 - Use terminal-execute to run commands like 'npm run' to discover available scripts
 - Be thorough but concise - focus on essential information
-- If SNOW.md already exists, read it first and UPDATE it rather than replace
+- If AGENTS.md already exists, read it first and UPDATE it rather than replace
 - Format with proper Markdown syntax
-- After generating content, use filesystem-create to save SNOW.md in the project root
+- After generating content, use filesystem-create to save AGENTS.md in the project root
 - Confirm completion with a brief summary
 
 Begin your analysis now. Use every tool at your disposal to understand this project completely.`,

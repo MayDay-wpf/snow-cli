@@ -398,7 +398,7 @@ export const zhTW: TranslationKeys = {
 			resume: '恢復對話',
 			mcp: '顯示模型上下文協定服務和工具',
 			yolo: '切換無人值守模式(自動批准所有工具)',
-			init: '分析專案並產生/更新 SNOW.md 文件',
+			init: '分析專案並產生/更新 AGENTS.md 文件',
 			ide: '連線到 VSCode 編輯器並同步上下文',
 			compact: '使用壓縮模型壓縮對話歷史',
 			home: '返回歡迎畫面修改設定',

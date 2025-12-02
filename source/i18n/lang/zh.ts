@@ -398,7 +398,7 @@ export const zh: TranslationKeys = {
 			resume: '恢复对话',
 			mcp: '显示模型上下文协议服务和工具',
 			yolo: '切换无人值守模式(自动批准所有工具)',
-			init: '分析项目并生成/更新 SNOW.md 文档',
+			init: '分析项目并生成/更新 AGENTS.md 文档',
 			ide: '连接到 VSCode 编辑器并同步上下文',
 			compact: '使用压缩模型压缩对话历史',
 			home: '返回欢迎屏幕修改设置',

@@ -620,7 +620,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					options.onQuit();
 				}
 			} else if (result.message) {
-				// For commands that just return a message (like /role, /init without SNOW.md, etc.)
+				// For commands that just return a message (like /role, /init without AGENTS.md, etc.)
 				// Display the message as a command message
 				const commandMessage: Message = {
 					role: 'command',

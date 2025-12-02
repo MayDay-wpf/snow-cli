@@ -423,7 +423,7 @@ export const en: TranslationKeys = {
 			resume: 'Resume a conversation',
 			mcp: 'Show Model Context Protocol services and tools',
 			yolo: 'Toggle unattended mode (auto-approve all tools)',
-			init: 'Analyze project and generate/update SNOW.md documentation',
+			init: 'Analyze project and generate/update AGENTS.md documentation',
 			ide: 'Connect to VSCode editor and sync context',
 			compact: 'Compress conversation history using compact model',
 			home: 'Return to welcome screen to modify settings',

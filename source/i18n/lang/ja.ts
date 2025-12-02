@@ -411,7 +411,7 @@ export const ja: TranslationKeys = {
 			resume: '会話を再開',
 			mcp: 'Model Context Protocolサービスとツールを表示',
 			yolo: '無人モードを切替(すべてのツールを自動承認)',
-			init: 'プロジェクトを分析してSNOW.mdドキュメントを生成/更新',
+			init: 'プロジェクトを分析してAGENTS.mdドキュメントを生成/更新',
 			ide: 'VSCodeエディタに接続してコンテキストを同期',
 			compact: 'コンパクトモデルを使用して会話履歴を圧縮',
 			home: 'ウェルカム画面に戻って設定を変更',

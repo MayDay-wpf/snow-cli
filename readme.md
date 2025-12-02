@@ -104,7 +104,7 @@ Once everything is configured, enter the conversation page by clicking `Start`.
 
 - Use `@` to select files. In VSCode, you can also hold `Shift` and drag files for the same effect
 - Use `/` to view available commands:
-  - `/init` - Build project documentation `SNOW.md`
+- `/init` - Build project documentation `AGENTS.md`
   - `/clear` - Create a new session
   - `/resume` - Restore conversation history
   - `/mcp` - Check MCP connection status and reconnect

@@ -304,7 +304,7 @@ Guidance and recommendations:
 2. Fix any errors immediately
 3. Never leave broken code
 
-## Project Context (SNOW.md)
+## Project Context (AGENTS.md)
 
 - Contains: project overview, architecture, tech stack.
 - Generally located in the project root directory.

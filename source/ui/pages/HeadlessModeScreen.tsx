@@ -2,6 +2,7 @@ import React, {useState, useEffect} from 'react';
 import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import {highlight} from 'cli-highlight';
+import readline from 'readline';
 import {type Message} from '../components/MessageList.js';
 import {handleConversationWithTools} from '../../hooks/conversation/useConversation.js';
 import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
@@ -12,6 +13,7 @@ import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
 } from '../../utils/core/fileUtils.js';
+import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
 
 type Props = {
 	prompt: string;
@@ -248,6 +250,71 @@ function renderInlineFormatting(text: string): string {
 	return text;
 }
 
+// Helper function to ask user for confirmation in headless mode
+async function askHeadlessConfirmation(
+	toolName: string,
+	toolArguments: string,
+): Promise<'approve' | 'reject' | 'approve_always'> {
+	return new Promise(resolve => {
+		// Create readline interface
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+
+		// Parse tool arguments to check if it's a sensitive command
+		let command = '';
+		try {
+			const args = JSON.parse(toolArguments);
+			if (args.command) {
+				command = args.command;
+			}
+		} catch {
+			// Ignore parsing errors
+		}
+
+		// Check if it's a sensitive command
+		const sensitiveCheck = isSensitiveCommand(command);
+		const isSensitive = sensitiveCheck.isSensitive;
+
+		// Display tool information
+		console.log(
+			`\n\x1b[93m⚠ Tool Confirmation Required\x1b[0m ${
+				isSensitive ? '\x1b[31m(Sensitive Command)\x1b[0m' : ''
+			}`,
+		);
+		console.log(`\x1b[36mTool:\x1b[0m ${toolName}`);
+		if (command) {
+			console.log(`\x1b[36mCommand:\x1b[0m ${command}`);
+		}
+		if (isSensitive && sensitiveCheck.matchedCommand) {
+			console.log(
+				`\x1b[33mReason:\x1b[0m ${sensitiveCheck.matchedCommand.description}`,
+			);
+		}
+		console.log('');
+		console.log('\x1b[32m[A]\x1b[0m Approve');
+		console.log('\x1b[32m[Y]\x1b[0m Approve Always');
+		console.log('\x1b[31m[R]\x1b[0m Reject');
+		console.log('');
+
+		// Ask for input
+		rl.question('\x1b[36mYour choice:\x1b[0m ', answer => {
+			rl.close();
+
+			const choice = answer.trim().toLowerCase();
+			if (choice === 'y') {
+				resolve('approve_always');
+			} else if (choice === 'r') {
+				resolve('reject');
+			} else {
+				// Default to approve
+				resolve('approve');
+			}
+		});
+	});
+}
+
 export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isComplete, setIsComplete] = useState(false);
@@ -259,11 +326,8 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	const {saveMessage} = useSessionSave();
 
 	// Use tool confirmation hook
-	const {
-		requestToolConfirmation,
-		isToolAutoApproved,
-		addMultipleToAlwaysApproved,
-	} = useToolConfirmation();
+	const {isToolAutoApproved, addMultipleToAlwaysApproved} =
+		useToolConfirmation();
 
 	// Listen for message changes to display AI responses and tool calls
 	useEffect(() => {
@@ -348,7 +412,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 					? 'Writing...'
 					: 'Thinking...';
 				process.stdout.write(
-					`\r\x1b[96m❆\x1b[90m ${thinkingText} \x1b[37m(\x1b[33m${streamingState.elapsedSeconds}s\x1b[37m · \x1b[32m↓ ${streamingState.streamTokenCount} tokens\x1b[37m)\x1b[0m`,
+					`\r\x1b[96m❆\x1b[90m ${thinkingText} \x1b[33m${streamingState.elapsedSeconds}s\x1b[37m · \x1b[32m↓ ${streamingState.streamTokenCount} tokens\x1b[0m`,
 				);
 			}
 		}
@@ -432,7 +496,34 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				saveMessage,
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
-				requestToolConfirmation,
+				requestToolConfirmation: async toolCall => {
+					// In headless mode with YOLO, still need to confirm sensitive commands
+					// Check if this is a sensitive command
+					let needsConfirmation = false;
+
+					if (toolCall.function.name === 'terminal-execute') {
+						try {
+							const args = JSON.parse(toolCall.function.arguments);
+							const sensitiveCheck = isSensitiveCommand(args.command);
+							needsConfirmation = sensitiveCheck.isSensitive;
+						} catch {
+							// If parsing fails, treat as normal command
+						}
+					}
+
+					// If not sensitive, auto-approve (YOLO mode behavior)
+					if (!needsConfirmation) {
+						return 'approve';
+					}
+
+					// For sensitive commands, ask for confirmation
+					const confirmation = await askHeadlessConfirmation(
+						toolCall.function.name,
+						toolCall.function.arguments,
+					);
+
+					return confirmation;
+				},
 				requestUserQuestion: async () => {
 					throw new Error('askuser tool is not supported in headless mode');
 				},
