@@ -1,17 +1,20 @@
-import { createHash, randomUUID } from 'crypto';
+import {createHash, randomUUID} from 'crypto';
 import {
 	getOpenAiConfig,
 	getCustomSystemPrompt,
 	getCustomHeaders,
 	type ThinkingConfig,
 } from '../utils/config/apiConfig.js';
-import { getSystemPrompt } from './systemPrompt.js';
-import { withRetryGenerator, parseJsonWithFix } from '../utils/core/retryUtils.js';
-import type { ChatMessage, ChatCompletionTool, UsageInfo } from './types.js';
-import { logger } from '../utils/core/logger.js';
-import { addProxyToFetchOptions } from '../utils/core/proxyUtils.js';
-import { saveUsageToFile } from '../utils/core/usageLogger.js';
-import { isDevMode, getDevUserId } from '../utils/core/devMode.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {
+	withRetryGenerator,
+	parseJsonWithFix,
+} from '../utils/core/retryUtils.js';
+import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
+import {logger} from '../utils/core/logger.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {saveUsageToFile} from '../utils/core/usageLogger.js';
+import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -22,17 +25,21 @@ export interface AnthropicOptions {
 	sessionId?: string; // Session ID for user tracking and caching
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
+	// Sub-agent configuration overrides
+	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
+	customSystemPromptId?: string; // 自定义系统提示词 ID
+	customHeaders?: Record<string, string>; // 自定义请求头
 }
 
 export interface AnthropicStreamChunk {
 	type:
-	| 'content'
-	| 'tool_calls'
-	| 'tool_call_delta'
-	| 'done'
-	| 'usage'
-	| 'reasoning_started'
-	| 'reasoning_delta';
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'done'
+		| 'usage'
+		| 'reasoning_started'
+		| 'reasoning_delta';
 	content?: string;
 	tool_calls?: Array<{
 		id: string;
@@ -55,7 +62,7 @@ export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: { type: 'ephemeral' };
+	cache_control?: {type: 'ephemeral'};
 }
 
 export interface AnthropicMessageParam {
@@ -63,6 +70,8 @@ export interface AnthropicMessageParam {
 	content: string | Array<any>;
 }
 
+// Deprecated: No longer used, kept for backward compatibility
+// @ts-ignore - Variable kept for backward compatibility with resetAnthropicClient export
 let anthropicConfig: {
 	apiKey: string;
 	baseUrl: string;
@@ -74,32 +83,7 @@ let anthropicConfig: {
 // Persistent userId that remains the same until application restart
 let persistentUserId: string | null = null;
 
-function getAnthropicConfig() {
-	if (!anthropicConfig) {
-		const config = getOpenAiConfig();
-
-		if (!config.apiKey) {
-			throw new Error(
-				'Anthropic API configuration is incomplete. Please configure API key first.',
-			);
-		}
-
-		const customHeaders = getCustomHeaders();
-
-		anthropicConfig = {
-			apiKey: config.apiKey,
-			baseUrl:
-				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-					? config.baseUrl
-					: 'https://api.anthropic.com/v1',
-			customHeaders,
-			anthropicBeta: config.anthropicBeta,
-			thinking: config.thinking,
-		};
-	}
-
-	return anthropicConfig;
-}
+// Deprecated: Client reset is no longer needed with new config loading approach
 export function resetAnthropicClient(): void {
 	anthropicConfig = null;
 	persistentUserId = null; // Reset userId on client reset
@@ -109,7 +93,7 @@ export function resetAnthropicClient(): void {
  * Generate a persistent user_id that remains the same until application restart
  * Format: user_<hash>_account__session_<uuid>
  * This matches Anthropic's expected format for tracking and caching
- * 
+ *
  * In dev mode (--dev flag), uses a persistent userId from ~/.snow/dev-user-id
  * instead of generating a new one each session
  */
@@ -156,7 +140,7 @@ function convertToolsToAnthropic(
 
 	if (convertedTools.length > 0) {
 		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = { type: 'ephemeral' };
+		(lastTool as any).cache_control = {type: 'ephemeral'};
 	}
 
 	return convertedTools;
@@ -171,11 +155,13 @@ function convertToolsToAnthropic(
 function convertToAnthropicMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
+	customSystemPromptOverride?: string, // Allow override for sub-agents
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
 } {
-	const customSystemPrompt = getCustomSystemPrompt();
+	const customSystemPrompt =
+		customSystemPromptOverride || getCustomSystemPrompt();
 	let systemContent: string | undefined;
 	const anthropicMessages: AnthropicMessageParam[] = [];
 
@@ -339,7 +325,7 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: getSystemPrompt(),
-						cache_control: { type: 'ephemeral' },
+						cache_control: {type: 'ephemeral'},
 					},
 				] as any,
 			});
@@ -368,14 +354,14 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: lastMessage.content,
-						cache_control: { type: 'ephemeral' },
+						cache_control: {type: 'ephemeral'},
 					} as any,
 				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = { type: 'ephemeral' };
+					lastContent.cache_control = {type: 'ephemeral'};
 				}
 			}
 		}
@@ -383,15 +369,15 @@ function convertToAnthropicMessages(
 
 	const system = systemContent
 		? [
-			{
-				type: 'text',
-				text: systemContent,
-				cache_control: { type: 'ephemeral' },
-			},
-		]
+				{
+					type: 'text',
+					text: systemContent,
+					cache_control: {type: 'ephemeral'},
+				},
+		  ]
 		: undefined;
 
-	return { system, messages: anthropicMessages };
+	return {system, messages: anthropicMessages};
 }
 
 /**
@@ -412,7 +398,10 @@ async function* parseSSEStream(
 				if (buffer.trim()) {
 					// 连接异常中断，抛出明确错误
 					throw new Error(
-						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
+						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(
+							0,
+							100,
+						)}...`,
 					);
 				}
 				break; // 正常结束
@@ -469,17 +458,62 @@ export async function* createStreamingAnthropicCompletion(
 ): AsyncGenerator<AnthropicStreamChunk, void, unknown> {
 	yield* withRetryGenerator(
 		async function* () {
-			const config = getAnthropicConfig();
-			const { system, messages } = convertToAnthropicMessages(
+			// Load configuration: if configProfile is specified, load it; otherwise use main config
+			let config: ReturnType<typeof getOpenAiConfig>;
+			if (options.configProfile) {
+				try {
+					const {loadProfile} = await import(
+						'../utils/config/configManager.js'
+					);
+					const profileConfig = loadProfile(options.configProfile);
+					if (profileConfig?.snowcfg) {
+						config = profileConfig.snowcfg;
+					} else {
+						// Profile not found, fallback to main config
+						config = getOpenAiConfig();
+						logger.warn(
+							`Profile ${options.configProfile} not found, using main config`,
+						);
+					}
+				} catch (error) {
+					// If loading profile fails, fallback to main config
+					config = getOpenAiConfig();
+					logger.warn(
+						`Failed to load profile ${options.configProfile}, using main config:`,
+						error,
+					);
+				}
+			} else {
+				// No configProfile specified, use main config
+				config = getOpenAiConfig();
+			}
+
+			// Get system prompt (with custom override support)
+			let customSystemPromptContent: string | undefined;
+			if (options.customSystemPromptId) {
+				const {getSystemPromptConfig} = await import(
+					'../utils/config/apiConfig.js'
+				);
+				const systemPromptConfig = getSystemPromptConfig();
+				const customPrompt = systemPromptConfig?.prompts.find(
+					p => p.id === options.customSystemPromptId,
+				);
+				if (customPrompt) {
+					customSystemPromptContent = customPrompt.content;
+				}
+			}
+
+			const {system, messages} = convertToAnthropicMessages(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
+				customSystemPromptContent, // 传递自定义系统提示词
 			);
 
 			// Use persistent userId that remains the same until application restart
 			const userId = getPersistentUserId();
 
 			const requestBody: any = {
-				model: options.model,
+				model: config.advancedModel || options.model,
 				max_tokens: options.max_tokens || 4096,
 				system,
 				messages,
@@ -498,6 +532,9 @@ export async function* createStreamingAnthropicCompletion(
 				requestBody.temperature = 1;
 			}
 
+			// Use custom headers from options if provided, otherwise get from main config
+			const customHeaders = options.customHeaders || getCustomHeaders();
+
 			// Prepare headers
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
@@ -505,7 +542,7 @@ export async function* createStreamingAnthropicCompletion(
 				Authorization: `Bearer ${config.apiKey}`,
 				'anthropic-version': '2023-06-01',
 				'x-snow': 'true',
-				...config.customHeaders,
+				...customHeaders,
 			};
 
 			// Add beta parameter if configured
@@ -513,9 +550,15 @@ export async function* createStreamingAnthropicCompletion(
 			// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
 			// }
 
+			// Use configured baseUrl or default Anthropic URL
+			const baseUrl =
+				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+					? config.baseUrl
+					: 'https://api.anthropic.com/v1';
+
 			const url = config.anthropicBeta
-				? `${config.baseUrl}/messages?beta=true`
-				: `${config.baseUrl}/messages`;
+				? `${baseUrl}/messages?beta=true`
+				: `${baseUrl}/messages`;
 
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
@@ -762,10 +805,10 @@ export async function* createStreamingAnthropicCompletion(
 			// Return complete thinking block with signature if thinking content exists
 			const thinkingBlock = thinkingTextBuffer
 				? {
-					type: 'thinking' as const,
-					thinking: thinkingTextBuffer,
-					signature: thinkingSignature || undefined,
-				}
+						type: 'thinking' as const,
+						thinking: thinkingTextBuffer,
+						signature: thinkingSignature || undefined,
+				  }
 				: undefined;
 
 			yield {

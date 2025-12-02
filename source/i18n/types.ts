@@ -259,6 +259,21 @@ export type TranslationKeys = {
 		webSearchTools: string;
 		ideTools: string;
 		userInteractionTools: string;
+		configProfile: string;
+		customSystemPrompt: string;
+		customHeaders: string;
+		noItems: string;
+		moreAbove: string;
+		moreBelow: string;
+		scrollToggleHint: string;
+		spaceToggleHint: string;
+		moreTools: string;
+		scrollToolsHint: string;
+		builtinReadonly: string;
+		roleExpandHint: string;
+		roleExpanded: string;
+		roleCollapsed: string;
+		roleViewFull: string;
 	};
 	// Sub-Agent List Screen
 	subAgentList: {

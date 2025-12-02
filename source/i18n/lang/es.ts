@@ -297,6 +297,23 @@ export const es: TranslationKeys = {
 		webSearchTools: 'Herramientas de Búsqueda Web',
 		ideTools: 'Herramientas de Diagnóstico IDE',
 		userInteractionTools: 'Herramientas de Interacción del Usuario',
+		configProfile: 'Perfil de Configuración (Opcional):',
+		customSystemPrompt: 'Prompt del Sistema Personalizado (Opcional):',
+		customHeaders: 'Encabezados Personalizados (Opcionales):',
+		noItems: 'No hay elementos disponibles',
+		moreAbove: '{count} más arriba',
+		moreBelow: '{count} más abajo',
+		scrollToggleHint:
+			'↑/↓ desplazar, ←/→ cambiar área de configuración, Espacio alternar',
+		spaceToggleHint: 'Espacio para alternar selección',
+		moreTools: '{count} herramientas más',
+		scrollToolsHint:
+			'↑/↓ desplazar, Espacio alternar, A seleccionar/deseleccionar todo',
+		builtinReadonly: ' (incorporado, solo lectura)',
+		roleExpandHint: '({status} - Espacio para alternar)',
+		roleExpanded: 'Expandido',
+		roleCollapsed: 'Contraído',
+		roleViewFull: '(Espacio para ver completo)',
 	},
 	subAgentList: {
 		title: 'Gestión de Sub-Agentes',

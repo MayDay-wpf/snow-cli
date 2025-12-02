@@ -3,16 +3,19 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import { getSystemPrompt } from './systemPrompt.js';
-import { withRetryGenerator, parseJsonWithFix } from '../utils/core/retryUtils.js';
+import {getSystemPrompt} from './systemPrompt.js';
+import {
+	withRetryGenerator,
+	parseJsonWithFix,
+} from '../utils/core/retryUtils.js';
 import type {
 	ChatMessage,
 	ToolCall,
 	ChatCompletionTool,
 	UsageInfo,
 } from './types.js';
-import { addProxyToFetchOptions } from '../utils/core/proxyUtils.js';
-import { saveUsageToFile } from '../utils/core/usageLogger.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {saveUsageToFile} from '../utils/core/usageLogger.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -29,6 +32,10 @@ export interface ResponseOptions {
 	store?: boolean;
 	include?: string[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	// Sub-agent configuration overrides
+	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
+	customSystemPromptId?: string; // 自定义系统提示词 ID
+	customHeaders?: Record<string, string>; // 自定义请求头
 }
 
 /**
@@ -94,12 +101,12 @@ function ensureStrictSchema(
  */
 function convertToolsForResponses(tools?: ChatCompletionTool[]):
 	| Array<{
-		type: 'function';
-		name: string;
-		description?: string;
-		strict?: boolean;
-		parameters?: Record<string, any>;
-	}>
+			type: 'function';
+			name: string;
+			description?: string;
+			strict?: boolean;
+			parameters?: Record<string, any>;
+	  }>
 	| undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
@@ -116,51 +123,23 @@ function convertToolsForResponses(tools?: ChatCompletionTool[]):
 
 export interface ResponseStreamChunk {
 	type:
-	| 'content'
-	| 'tool_calls'
-	| 'tool_call_delta'
-	| 'reasoning_delta'
-	| 'reasoning_started'
-	| 'reasoning_data'
-	| 'done'
-	| 'usage';
+		| 'content'
+		| 'tool_calls'
+		| 'tool_call_delta'
+		| 'reasoning_delta'
+		| 'reasoning_started'
+		| 'reasoning_data'
+		| 'done'
+		| 'usage';
 	content?: string;
 	tool_calls?: ToolCall[];
 	delta?: string;
 	usage?: UsageInfo;
 	reasoning?: {
-		summary?: Array<{ type: 'summary_text'; text: string }>;
+		summary?: Array<{type: 'summary_text'; text: string}>;
 		content?: any;
 		encrypted_content?: string;
 	};
-}
-
-let openaiConfig: {
-	apiKey: string;
-	baseUrl: string;
-	customHeaders: Record<string, string>;
-} | null = null;
-
-function getOpenAIConfig() {
-	if (!openaiConfig) {
-		const config = getOpenAiConfig();
-
-		if (!config.apiKey || !config.baseUrl) {
-			throw new Error(
-				'OpenAI API configuration is incomplete. Please configure API settings first.',
-			);
-		}
-
-		const customHeaders = getCustomHeaders();
-
-		openaiConfig = {
-			apiKey: config.apiKey,
-			baseUrl: config.baseUrl,
-			customHeaders,
-		};
-	}
-
-	return openaiConfig;
 }
 
 function getResponsesReasoningConfig(): {
@@ -170,12 +149,10 @@ function getResponsesReasoningConfig(): {
 	const config = getOpenAiConfig();
 	const reasoningConfig = config.responsesReasoning;
 
-	// 如果 reasoning 未启用，返回 null
-	if (!reasoningConfig?.enabled) {
+	if (!reasoningConfig || !reasoningConfig.enabled) {
 		return null;
 	}
 
-	// 返回配置，summary 永远默认为 'auto'
 	return {
 		effort: reasoningConfig.effort || 'high',
 		summary: 'auto',
@@ -183,17 +160,19 @@ function getResponsesReasoningConfig(): {
 }
 
 export function resetOpenAIClient(): void {
-	openaiConfig = null;
+	// No-op: kept for backward compatibility
 }
 
 function convertToResponseInput(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
+	customSystemPromptOverride?: string,
 ): {
 	input: any[];
 	systemInstructions: string;
 } {
-	const customSystemPrompt = getCustomSystemPrompt();
+	const customSystemPrompt =
+		customSystemPromptOverride || getCustomSystemPrompt();
 	const result: any[] = [];
 
 	for (const msg of messages) {
@@ -322,7 +301,10 @@ function convertToResponseInput(
 				content: [
 					{
 						type: 'input_text',
-						text: '<environment_context>' + getSystemPrompt() + '</environment_context>',
+						text:
+							'<environment_context>' +
+							getSystemPrompt() +
+							'</environment_context>',
 					},
 				],
 			});
@@ -335,7 +317,7 @@ function convertToResponseInput(
 		systemInstructions = 'You are a helpful assistant.';
 	}
 
-	return { input: result, systemInstructions };
+	return {input: result, systemInstructions};
 }
 
 /**
@@ -349,7 +331,7 @@ async function* parseSSEStream(
 
 	try {
 		while (true) {
-			const { done, value } = await reader.read();
+			const {done, value} = await reader.read();
 
 			if (done) {
 				// ✅ 关键修复：检查buffer是否有残留数据
@@ -365,7 +347,7 @@ async function* parseSSEStream(
 				break; // 正常结束
 			}
 
-			buffer += decoder.decode(value, { stream: true });
+			buffer += decoder.decode(value, {stream: true});
 			const lines = buffer.split('\n');
 			buffer = lines.pop() || '';
 
@@ -401,7 +383,7 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const { logger } = await import('../utils/core/logger.js');
+		const {logger} = await import('../utils/core/logger.js');
 		logger.error('Responses API SSE stream parsing error:', {
 			error: error instanceof Error ? error.message : 'Unknown error',
 			remainingBuffer: buffer.substring(0, 200),
@@ -418,12 +400,56 @@ export async function* createStreamingResponse(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
-	const config = getOpenAIConfig();
+	// Load configuration: if configProfile is specified, load it; otherwise use main config
+	let config: ReturnType<typeof getOpenAiConfig>;
+	if (options.configProfile) {
+		try {
+			const {loadProfile} = await import('../utils/config/configManager.js');
+			const profileConfig = loadProfile(options.configProfile);
+			if (profileConfig?.snowcfg) {
+				config = profileConfig.snowcfg;
+			} else {
+				// Profile not found, fallback to main config
+				config = getOpenAiConfig();
+				const {logger} = await import('../utils/core/logger.js');
+				logger.warn(
+					`Profile ${options.configProfile} not found, using main config`,
+				);
+			}
+		} catch (error) {
+			// If loading profile fails, fallback to main config
+			config = getOpenAiConfig();
+			const {logger} = await import('../utils/core/logger.js');
+			logger.warn(
+				`Failed to load profile ${options.configProfile}, using main config:`,
+				error,
+			);
+		}
+	} else {
+		// No configProfile specified, use main config
+		config = getOpenAiConfig();
+	}
+
+	// Get system prompt (with custom override support)
+	let customSystemPromptContent: string | undefined;
+	if (options.customSystemPromptId) {
+		const {getSystemPromptConfig} = await import(
+			'../utils/config/apiConfig.js'
+		);
+		const systemPromptConfig = getSystemPromptConfig();
+		const customPrompt = systemPromptConfig?.prompts.find(
+			p => p.id === options.customSystemPromptId,
+		);
+		if (customPrompt) {
+			customSystemPromptContent = customPrompt.content;
+		}
+	}
 
 	// 提取系统提示词和转换后的消息
-	const { input: requestInput, systemInstructions } = convertToResponseInput(
+	const {input: requestInput, systemInstructions} = convertToResponseInput(
 		options.messages,
 		options.includeBuiltinSystemPrompt !== false, // 默认为 true
+		customSystemPromptContent,
 	);
 
 	// 获取配置的 reasoning 设置
@@ -433,7 +459,7 @@ export async function* createStreamingResponse(
 	yield* withRetryGenerator(
 		async function* () {
 			const requestPayload: any = {
-				model: options.model,
+				model: config.advancedModel || options.model,
 				instructions: systemInstructions,
 				input: requestInput,
 				tools: convertToolsForResponses(options.tools),
@@ -445,13 +471,15 @@ export async function* createStreamingResponse(
 				}),
 				store: false,
 				stream: true,
-				include: [
-					'reasoning.encrypted_content'
-				],
+				include: ['reasoning.encrypted_content'],
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
 			const url = `${config.baseUrl}/responses`;
+
+			// Use custom headers from options if provided, otherwise get from main config
+			const customHeaders = options.customHeaders || getCustomHeaders();
+
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
@@ -462,7 +490,7 @@ export async function* createStreamingResponse(
 						conversation_id: options.prompt_cache_key,
 						session_id: options.prompt_cache_key,
 					}),
-					...config.customHeaders,
+					...customHeaders,
 				},
 				body: JSON.stringify(requestPayload),
 				signal: abortSignal,
@@ -482,16 +510,16 @@ export async function* createStreamingResponse(
 			}
 
 			let contentBuffer = '';
-			let toolCallsBuffer: { [call_id: string]: any } = {};
+			let toolCallsBuffer: {[call_id: string]: any} = {};
 			let hasToolCalls = false;
 			let currentFunctionCallId: string | null = null;
 			let usageData: UsageInfo | undefined;
 			let reasoningData:
 				| {
-					summary?: Array<{ text: string; type: 'summary_text' }>;
-					content?: any;
-					encrypted_content?: string;
-				}
+						summary?: Array<{text: string; type: 'summary_text'}>;
+						content?: any;
+						encrypted_content?: string;
+				  }
 				| undefined;
 
 			for await (const chunk of parseSSEStream(response.body.getReader())) {

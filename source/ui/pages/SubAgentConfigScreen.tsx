@@ -10,6 +10,14 @@ import {
 	getSubAgent,
 	validateSubAgent,
 } from '../../utils/config/subAgentConfig.js';
+import {
+	getAllProfiles,
+	getActiveProfileName,
+} from '../../utils/config/configManager.js';
+import {
+	getCustomHeadersConfig,
+	getSystemPromptConfig,
+} from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 
@@ -68,7 +76,14 @@ type ToolCategory = {
 	tools: string[];
 };
 
-type FormField = 'name' | 'description' | 'role' | 'tools';
+type FormField =
+	| 'name'
+	| 'description'
+	| 'role'
+	| 'configProfile'
+	| 'customSystemPrompt'
+	| 'customHeaders'
+	| 'tools';
 
 export default function SubAgentConfigScreen({
 	onBack,
@@ -81,6 +96,7 @@ export default function SubAgentConfigScreen({
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
 	const [role, setRole] = useState('');
+	const [roleExpanded, setRoleExpanded] = useState(false);
 	const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
 	const [currentField, setCurrentField] = useState<FormField>('name');
 	const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
@@ -91,6 +107,22 @@ export default function SubAgentConfigScreen({
 	const [mcpServices, setMcpServices] = useState<MCPServiceTools[]>([]);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const isEditMode = !!agentId;
+	const [isBuiltinAgent, setIsBuiltinAgent] = useState(false);
+
+	// 选择器状态（索引）- 用于键盘导航
+	const [selectedSystemPromptIndex, setSelectedSystemPromptIndex] = useState(0);
+	const [selectedConfigProfileIndex, setSelectedConfigProfileIndex] =
+		useState(0);
+	const [selectedCustomHeadersIndex, setSelectedCustomHeadersIndex] =
+		useState(0);
+
+	// 已确认选中的索引（用于显示勾选标记）
+	const [confirmedSystemPromptIndex, setConfirmedSystemPromptIndex] =
+		useState(-1);
+	const [confirmedConfigProfileIndex, setConfirmedConfigProfileIndex] =
+		useState(-1);
+	const [confirmedCustomHeadersIndex, setConfirmedCustomHeadersIndex] =
+		useState(-1);
 
 	// Tool categories with translations
 	const toolCategories: ToolCategory[] = [
@@ -147,15 +179,179 @@ export default function SubAgentConfigScreen({
 		},
 	];
 
-	// Load existing agent data in edit mode
+	// Get available system prompts (must be defined before useEffect)
+	const availableSystemPrompts = useMemo(() => {
+		const config = getSystemPromptConfig();
+		if (!config || !config.prompts) return [];
+		return config.prompts.map(p => ({name: p.name, id: p.id}));
+	}, []);
+
+	// 获取可用的配置文件列表
+	const availableProfiles = useMemo(() => {
+		const profiles = getAllProfiles();
+		return profiles.map(p => p.name);
+	}, []);
+
+	// 获取可用的自定义请求头方案列表
+	const availableCustomHeaders = useMemo(() => {
+		const config = getCustomHeadersConfig();
+		if (!config || !config.schemes) return [];
+		return config.schemes.map(s => s.name);
+	}, []);
+
+	// Initialize with current active configurations (non-edit mode)
+	useEffect(() => {
+		if (!agentId) {
+			// 初始化为当前激活的配置
+			const activeProfile = getActiveProfileName();
+			const systemPromptConfig = getSystemPromptConfig();
+			const customHeadersConfig = getCustomHeadersConfig();
+
+			// 设置配置文件索引（同时设置光标和确认索引）
+			if (activeProfile && availableProfiles.length > 0) {
+				const profileIndex = availableProfiles.findIndex(
+					p => p === activeProfile,
+				);
+				if (profileIndex >= 0) {
+					setSelectedConfigProfileIndex(profileIndex);
+					setConfirmedConfigProfileIndex(profileIndex);
+				}
+			}
+
+			// 设置系统提示词索引（同时设置光标和确认索引）
+			if (systemPromptConfig?.active && availableSystemPrompts.length > 0) {
+				const promptIndex = availableSystemPrompts.findIndex(
+					p => p.id === systemPromptConfig.active,
+				);
+				if (promptIndex >= 0) {
+					setSelectedSystemPromptIndex(promptIndex);
+					setConfirmedSystemPromptIndex(promptIndex);
+				}
+			}
+
+			// 设置自定义请求头索引（同时设置光标和确认索引）
+			if (customHeadersConfig?.active && availableCustomHeaders.length > 0) {
+				const activeScheme = customHeadersConfig.schemes.find(
+					s => s.id === customHeadersConfig.active,
+				);
+				if (activeScheme) {
+					const headerIndex = availableCustomHeaders.findIndex(
+						h => h === activeScheme.name,
+					);
+					if (headerIndex >= 0) {
+						setSelectedCustomHeadersIndex(headerIndex);
+						setConfirmedCustomHeadersIndex(headerIndex);
+					}
+				}
+			}
+		}
+	}, [
+		availableSystemPrompts,
+		availableProfiles,
+		availableCustomHeaders,
+		agentId,
+	]);
+	// Load agent data when in edit mode
 	useEffect(() => {
 		if (agentId) {
 			const agent = getSubAgent(agentId);
 			if (agent) {
+				// Check if this is a built-in agent (based on ID)
+				const isBuiltin = [
+					'agent_explore',
+					'agent_plan',
+					'agent_general',
+				].includes(agentId);
+				setIsBuiltinAgent(isBuiltin);
+
 				setAgentName(agent.name);
 				setDescription(agent.description);
 				setRole(agent.role || '');
-				setSelectedTools(new Set(agent.tools));
+				setSelectedTools(new Set(agent.tools || []));
+
+				// 加载配置文件索引
+				if (agent.configProfile) {
+					const profileIndex = availableProfiles.findIndex(
+						p => p === agent.configProfile,
+					);
+					if (profileIndex >= 0) {
+						setSelectedConfigProfileIndex(profileIndex);
+						setConfirmedConfigProfileIndex(profileIndex);
+					}
+				} else {
+					// Use current active profile if not set
+					const activeProfile = getActiveProfileName();
+					if (activeProfile && availableProfiles.length > 0) {
+						const profileIndex = availableProfiles.findIndex(
+							p => p === activeProfile,
+						);
+						if (profileIndex >= 0) {
+							setSelectedConfigProfileIndex(profileIndex);
+							setConfirmedConfigProfileIndex(profileIndex);
+						}
+					}
+				}
+
+				// 加载系统提示词索引
+				if (agent.customSystemPrompt) {
+					const promptIndex = availableSystemPrompts.findIndex(
+						p => p.id === agent.customSystemPrompt,
+					);
+					if (promptIndex >= 0) {
+						setSelectedSystemPromptIndex(promptIndex);
+						setConfirmedSystemPromptIndex(promptIndex);
+					}
+				} else {
+					// Use global active prompt if not set
+					const systemPromptConfig = getSystemPromptConfig();
+					if (systemPromptConfig?.active && availableSystemPrompts.length > 0) {
+						const promptIndex = availableSystemPrompts.findIndex(
+							p => p.id === systemPromptConfig.active,
+						);
+						if (promptIndex >= 0) {
+							setSelectedSystemPromptIndex(promptIndex);
+							setConfirmedSystemPromptIndex(promptIndex);
+						}
+					}
+				}
+
+				// 加载自定义请求头索引
+				if (agent.customHeaders) {
+					const headersConfig = getCustomHeadersConfig();
+					const headerName = headersConfig?.schemes.find(
+						s =>
+							JSON.stringify(s.headers) === JSON.stringify(agent.customHeaders),
+					)?.name;
+					if (headerName) {
+						const headerIndex = availableCustomHeaders.findIndex(
+							h => h === headerName,
+						);
+						if (headerIndex >= 0) {
+							setSelectedCustomHeadersIndex(headerIndex);
+							setConfirmedCustomHeadersIndex(headerIndex);
+						}
+					}
+				} else {
+					// Use global active headers if not set
+					const customHeadersConfig = getCustomHeadersConfig();
+					if (
+						customHeadersConfig?.active &&
+						availableCustomHeaders.length > 0
+					) {
+						const activeScheme = customHeadersConfig.schemes.find(
+							s => s.id === customHeadersConfig.active,
+						);
+						if (activeScheme) {
+							const headerIndex = availableCustomHeaders.findIndex(
+								h => h === activeScheme.name,
+							);
+							if (headerIndex >= 0) {
+								setSelectedCustomHeadersIndex(headerIndex);
+								setConfirmedCustomHeadersIndex(headerIndex);
+							}
+						}
+					}
+				}
 			}
 		}
 	}, [agentId]);
@@ -266,6 +462,33 @@ export default function SubAgentConfigScreen({
 		}
 
 		try {
+			// 使用 confirmedIndex，确保保存用户通过Space键确认的选择
+			const selectedProfile =
+				confirmedConfigProfileIndex >= 0
+					? availableProfiles[confirmedConfigProfileIndex]
+					: undefined;
+
+			// 处理自定义请求头（使用 confirmedIndex）
+			let customHeadersObj: Record<string, string> | undefined;
+			if (confirmedCustomHeadersIndex >= 0) {
+				const selectedHeader =
+					availableCustomHeaders[confirmedCustomHeadersIndex];
+				if (selectedHeader) {
+					// 如果选择的是方案名称，从配置中查找
+					const headersConfig = getCustomHeadersConfig();
+					const scheme = headersConfig?.schemes.find(
+						s => s.name === selectedHeader,
+					);
+					customHeadersObj = scheme?.headers;
+				}
+			}
+
+			// 获取系统提示词ID（使用 confirmedIndex）
+			const systemPromptId =
+				confirmedSystemPromptIndex >= 0
+					? availableSystemPrompts[confirmedSystemPromptIndex]?.id
+					: undefined;
+
 			if (isEditMode && agentId) {
 				// Update existing agent
 				updateSubAgent(agentId, {
@@ -273,6 +496,9 @@ export default function SubAgentConfigScreen({
 					description: description,
 					role: role || undefined,
 					tools: Array.from(selectedTools),
+					configProfile: selectedProfile || undefined,
+					customSystemPrompt: systemPromptId,
+					customHeaders: customHeadersObj,
 				});
 			} else {
 				// Create new agent
@@ -281,6 +507,9 @@ export default function SubAgentConfigScreen({
 					description,
 					Array.from(selectedTools),
 					role || undefined,
+					selectedProfile || undefined,
+					systemPromptId,
+					customHeadersObj,
 				);
 			}
 
@@ -299,6 +528,12 @@ export default function SubAgentConfigScreen({
 		description,
 		role,
 		selectedTools,
+		confirmedSystemPromptIndex,
+		confirmedConfigProfileIndex,
+		confirmedCustomHeadersIndex,
+		availableSystemPrompts,
+		availableProfiles,
+		availableCustomHeaders,
 		onSave,
 		isEditMode,
 		agentId,
@@ -333,6 +568,33 @@ export default function SubAgentConfigScreen({
 			} else if (currentField === 'role') {
 				setCurrentField('description');
 				return;
+			} else if (currentField === 'configProfile') {
+				// Navigate within config profiles
+				if (selectedConfigProfileIndex > 0) {
+					setSelectedConfigProfileIndex(prev => prev - 1);
+				} else {
+					// At top of profiles, go to role
+					setCurrentField('role');
+				}
+				return;
+			} else if (currentField === 'customSystemPrompt') {
+				// Navigate within system prompts
+				if (selectedSystemPromptIndex > 0) {
+					setSelectedSystemPromptIndex(prev => prev - 1);
+				} else {
+					// At top of prompts, go to configProfile
+					setCurrentField('configProfile');
+				}
+				return;
+			} else if (currentField === 'customHeaders') {
+				// Navigate within custom headers
+				if (selectedCustomHeadersIndex > 0) {
+					setSelectedCustomHeadersIndex(prev => prev - 1);
+				} else {
+					// At top of headers, go to customSystemPrompt
+					setCurrentField('customSystemPrompt');
+				}
+				return;
 			} else if (currentField === 'tools') {
 				// Navigate within tools
 				if (selectedToolIndex > 0) {
@@ -344,8 +606,8 @@ export default function SubAgentConfigScreen({
 						prevCategory ? prevCategory.tools.length - 1 : 0,
 					);
 				} else {
-					// At top of tools, go to role
-					setCurrentField('role');
+					// At top of tools, go to custom headers
+					setCurrentField('customHeaders');
 				}
 				return;
 			}
@@ -359,9 +621,36 @@ export default function SubAgentConfigScreen({
 				setCurrentField('role');
 				return;
 			} else if (currentField === 'role') {
-				setCurrentField('tools');
-				setSelectedCategoryIndex(0);
-				setSelectedToolIndex(0);
+				setCurrentField('configProfile');
+				return;
+			} else if (currentField === 'configProfile') {
+				// Navigate within config profiles
+				if (selectedConfigProfileIndex < availableProfiles.length - 1) {
+					setSelectedConfigProfileIndex(prev => prev + 1);
+				} else {
+					// At bottom of profiles, go to customSystemPrompt
+					setCurrentField('customSystemPrompt');
+				}
+				return;
+			} else if (currentField === 'customSystemPrompt') {
+				// Navigate within system prompts
+				if (selectedSystemPromptIndex < availableSystemPrompts.length - 1) {
+					setSelectedSystemPromptIndex(prev => prev + 1);
+				} else {
+					// At bottom of prompts, go to customHeaders
+					setCurrentField('customHeaders');
+				}
+				return;
+			} else if (currentField === 'customHeaders') {
+				// Navigate within custom headers
+				if (selectedCustomHeadersIndex < availableCustomHeaders.length - 1) {
+					setSelectedCustomHeadersIndex(prev => prev + 1);
+				} else {
+					// At bottom of headers, go to tools
+					setCurrentField('tools');
+					setSelectedCategoryIndex(0);
+					setSelectedToolIndex(0);
+				}
 				return;
 			} else if (currentField === 'tools') {
 				// Navigate within tools
@@ -375,6 +664,68 @@ export default function SubAgentConfigScreen({
 					setSelectedToolIndex(0);
 				}
 				// At bottom of tools, stay there
+				return;
+			}
+		}
+
+		// Role field controls - Space to toggle expansion
+		if (currentField === 'role' && input === ' ') {
+			setRoleExpanded(prev => !prev);
+			return;
+		}
+
+		// Config field controls - Left/Right arrow to switch between config sections
+		if (
+			currentField === 'configProfile' ||
+			currentField === 'customSystemPrompt' ||
+			currentField === 'customHeaders'
+		) {
+			if (key.leftArrow) {
+				// Navigate to previous config section
+				if (currentField === 'customHeaders') {
+					setCurrentField('customSystemPrompt');
+				} else if (currentField === 'customSystemPrompt') {
+					setCurrentField('configProfile');
+				}
+				// At configProfile, do nothing (already at first config section)
+				return;
+			}
+			if (key.rightArrow) {
+				// Navigate to next config section
+				if (currentField === 'configProfile') {
+					setCurrentField('customSystemPrompt');
+				} else if (currentField === 'customSystemPrompt') {
+					setCurrentField('customHeaders');
+				}
+				// At customHeaders, do nothing (already at last config section)
+				return;
+			}
+		}
+
+		// Config field controls - Space to toggle selection
+		if (
+			currentField === 'configProfile' ||
+			currentField === 'customSystemPrompt' ||
+			currentField === 'customHeaders'
+		) {
+			if (input === ' ') {
+				if (currentField === 'configProfile') {
+					setConfirmedConfigProfileIndex(prev =>
+						prev === selectedConfigProfileIndex
+							? -1
+							: selectedConfigProfileIndex,
+					);
+				} else if (currentField === 'customSystemPrompt') {
+					setConfirmedSystemPromptIndex(prev =>
+						prev === selectedSystemPromptIndex ? -1 : selectedSystemPromptIndex,
+					);
+				} else if (currentField === 'customHeaders') {
+					setConfirmedCustomHeadersIndex(prev =>
+						prev === selectedCustomHeadersIndex
+							? -1
+							: selectedCustomHeadersIndex,
+					);
+				}
 				return;
 			}
 		}
@@ -415,6 +766,160 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 	});
+
+	// 滚动列表渲染辅助函数（支持字符串数组和对象数组）
+	const renderScrollableList = <T extends string | {name: string}>(
+		items: T[],
+		selectedIndex: number,
+		confirmedIndex: number, // 已确认选中的索引
+		isActive: boolean,
+		maxVisible = 5,
+		keyPrefix: string,
+	) => {
+		const totalItems = items.length;
+
+		// 如果没有可用项，显示提示信息
+		if (totalItems === 0) {
+			return (
+				<Box flexDirection="column">
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.subAgentConfig.noItems}
+					</Text>
+				</Box>
+			);
+		}
+
+		// 计算可见范围
+		let startIndex = Math.max(0, selectedIndex - Math.floor(maxVisible / 2));
+		let endIndex = Math.min(totalItems, startIndex + maxVisible);
+
+		// 调整起始位置确保显示maxVisible个项目
+		if (endIndex - startIndex < maxVisible) {
+			startIndex = Math.max(0, endIndex - maxVisible);
+		}
+
+		const visibleItems = items.slice(startIndex, endIndex);
+		const hasMore = totalItems > maxVisible;
+
+		return (
+			<Box flexDirection="column">
+				{startIndex > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↑{' '}
+						{t.subAgentConfig.moreAbove.replace('{count}', String(startIndex))}
+					</Text>
+				)}
+				{visibleItems.map((item, relativeIndex) => {
+					const actualIndex = startIndex + relativeIndex;
+					const isHighlighted = actualIndex === selectedIndex;
+					const isConfirmed = actualIndex === confirmedIndex;
+					const displayText = typeof item === 'string' ? item : item.name;
+					return (
+						<Box key={`${keyPrefix}-${actualIndex}`} marginY={0}>
+							<Text
+								color={
+									isActive && isHighlighted
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+								bold={isHighlighted}
+							>
+								{isActive && isHighlighted ? '❯ ' : '  '}
+								{isConfirmed ? '[✓] ' : '[ ] '}
+								{displayText}
+							</Text>
+						</Box>
+					);
+				})}
+				{endIndex < totalItems && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↓{' '}
+						{t.subAgentConfig.moreBelow.replace(
+							'{count}',
+							String(totalItems - endIndex),
+						)}
+					</Text>
+				)}
+				{isActive && hasMore && totalItems > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{' '}
+						{t.subAgentConfig.scrollToggleHint}
+					</Text>
+				)}
+				{isActive && !hasMore && totalItems > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{' '}
+						{t.subAgentConfig.spaceToggleHint}
+					</Text>
+				)}
+			</Box>
+		);
+	};
+
+	// 滚动工具列表渲染辅助函数
+	const renderScrollableTools = (
+		tools: string[],
+		selectedIndex: number,
+		maxVisible = 5,
+	) => {
+		const totalTools = tools.length;
+
+		// 计算可见范围
+		let startIndex = Math.max(0, selectedIndex - Math.floor(maxVisible / 2));
+		let endIndex = Math.min(totalTools, startIndex + maxVisible);
+
+		// 调整起始位置确保显示maxVisible个项目
+		if (endIndex - startIndex < maxVisible) {
+			startIndex = Math.max(0, endIndex - maxVisible);
+		}
+
+		const visibleTools = tools.slice(startIndex, endIndex);
+		const hasMore = totalTools > maxVisible;
+
+		return (
+			<Box flexDirection="column" marginLeft={2}>
+				{startIndex > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↑{' '}
+						{t.subAgentConfig.moreTools.replace('{count}', String(startIndex))}
+					</Text>
+				)}
+				{visibleTools.map((tool, relativeIndex) => {
+					const actualIndex = startIndex + relativeIndex;
+					const isCurrentTool = actualIndex === selectedIndex;
+					return (
+						<Box key={tool}>
+							<Text
+								color={
+									isCurrentTool
+										? theme.colors.menuInfo
+										: theme.colors.menuNormal
+								}
+								bold={isCurrentTool}
+							>
+								{isCurrentTool ? '❯ ' : '  '}
+								{selectedTools.has(tool) ? '[✓]' : '[ ]'} {tool}
+							</Text>
+						</Box>
+					);
+				})}
+				{endIndex < totalTools && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↓{' '}
+						{t.subAgentConfig.moreTools.replace(
+							'{count}',
+							String(totalTools - endIndex),
+						)}
+					</Text>
+				)}
+				{hasMore && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.subAgentConfig.scrollToolsHint}
+					</Text>
+				)}
+			</Box>
+		);
+	};
 
 	const renderToolSelection = () => {
 		return (
@@ -459,28 +964,9 @@ export default function SubAgentConfigScreen({
 								</Text>
 							</Box>
 
-							{isCurrent && currentField === 'tools' && (
-								<Box flexDirection="column" marginLeft={2}>
-									{category.tools.map((tool, toolIndex) => {
-										const isCurrentTool = toolIndex === selectedToolIndex;
-										return (
-											<Box key={tool}>
-												<Text
-													color={
-														isCurrentTool
-															? theme.colors.menuInfo
-															: theme.colors.menuNormal
-													}
-													bold={isCurrentTool}
-												>
-													{isCurrentTool ? '❯ ' : '  '}
-													{selectedTools.has(tool) ? '[✓]' : '[ ]'} {tool}
-												</Text>
-											</Box>
-										);
-									})}
-								</Box>
-							)}
+							{isCurrent &&
+								currentField === 'tools' &&
+								renderScrollableTools(category.tools, selectedToolIndex, 5)}
 						</Box>
 					);
 				})}
@@ -537,14 +1023,23 @@ export default function SubAgentConfigScreen({
 						}
 					>
 						{t.subAgentConfig.agentName}
+						{isBuiltinAgent && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.subAgentConfig.builtinReadonly}
+							</Text>
+						)}
 					</Text>
 					<Box marginLeft={2}>
-						<TextInput
-							value={agentName}
-							onChange={value => setAgentName(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.agentNamePlaceholder}
-							focus={currentField === 'name'}
-						/>
+						{isBuiltinAgent ? (
+							<Text color={theme.colors.menuNormal}>{agentName}</Text>
+						) : (
+							<TextInput
+								value={agentName}
+								onChange={value => setAgentName(stripFocusArtifacts(value))}
+								placeholder={t.subAgentConfig.agentNamePlaceholder}
+								focus={currentField === 'name'}
+							/>
+						)}
 					</Box>
 				</Box>
 
@@ -559,14 +1054,23 @@ export default function SubAgentConfigScreen({
 						}
 					>
 						{t.subAgentConfig.description}
+						{isBuiltinAgent && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.subAgentConfig.builtinReadonly}
+							</Text>
+						)}
 					</Text>
 					<Box marginLeft={2}>
-						<TextInput
-							value={description}
-							onChange={value => setDescription(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.descriptionPlaceholder}
-							focus={currentField === 'description'}
-						/>
+						{isBuiltinAgent ? (
+							<Text color={theme.colors.menuNormal}>{description}</Text>
+						) : (
+							<TextInput
+								value={description}
+								onChange={value => setDescription(stripFocusArtifacts(value))}
+								placeholder={t.subAgentConfig.descriptionPlaceholder}
+								focus={currentField === 'description'}
+							/>
+						)}
 					</Box>
 				</Box>
 
@@ -581,14 +1085,99 @@ export default function SubAgentConfigScreen({
 						}
 					>
 						{t.subAgentConfig.roleOptional}
+						{isBuiltinAgent && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.subAgentConfig.builtinReadonly}
+							</Text>
+						)}
+						{!isBuiltinAgent && role && role.length > 100 && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{' '}
+								{t.subAgentConfig.roleExpandHint.replace(
+									'{status}',
+									roleExpanded
+										? t.subAgentConfig.roleExpanded
+										: t.subAgentConfig.roleCollapsed,
+								)}
+							</Text>
+						)}
+					</Text>
+					<Box marginLeft={2} flexDirection="column">
+						{isBuiltinAgent ? (
+							role && role.length > 100 && !roleExpanded ? (
+								<Text color={theme.colors.menuNormal}>
+									{role.substring(0, 100)}...
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{' '}
+										{t.subAgentConfig.roleViewFull}
+									</Text>
+								</Text>
+							) : (
+								<Text color={theme.colors.menuNormal}>{role}</Text>
+							)
+						) : role && role.length > 100 && !roleExpanded ? (
+							<Text color={theme.colors.menuNormal}>
+								{role.substring(0, 100)}...
+							</Text>
+						) : (
+							<TextInput
+								value={role}
+								onChange={value => setRole(stripFocusArtifacts(value))}
+								placeholder={t.subAgentConfig.rolePlaceholder}
+								focus={currentField === 'role'}
+							/>
+						)}
+					</Box>
+				</Box>
+
+				{/* Config Profile (Optional) */}
+				<Box flexDirection="column">
+					<Text bold color={theme.colors.menuInfo}>
+						{t.subAgentConfig.configProfile}
 					</Text>
 					<Box marginLeft={2}>
-						<TextInput
-							value={role}
-							onChange={value => setRole(stripFocusArtifacts(value))}
-							placeholder={t.subAgentConfig.rolePlaceholder}
-							focus={currentField === 'role'}
-						/>
+						{renderScrollableList(
+							availableProfiles,
+							selectedConfigProfileIndex,
+							confirmedConfigProfileIndex, // 确认选中的项
+							currentField === 'configProfile',
+							5,
+							'profile',
+						)}
+					</Box>
+				</Box>
+
+				{/* Custom System Prompt (Optional) */}
+				<Box flexDirection="column">
+					<Text bold color={theme.colors.menuInfo}>
+						{t.subAgentConfig.customSystemPrompt}
+					</Text>
+					<Box marginLeft={2}>
+						{renderScrollableList(
+							availableSystemPrompts,
+							selectedSystemPromptIndex,
+							confirmedSystemPromptIndex, // 确认选中的项
+							currentField === 'customSystemPrompt',
+							5,
+							'prompt',
+						)}
+					</Box>
+				</Box>
+
+				{/* Custom Headers (Optional) */}
+				<Box flexDirection="column">
+					<Text bold color={theme.colors.menuInfo}>
+						{t.subAgentConfig.customHeaders}
+					</Text>
+					<Box marginLeft={2}>
+						{renderScrollableList(
+							availableCustomHeaders,
+							selectedCustomHeadersIndex,
+							confirmedCustomHeadersIndex, // 确认选中的项
+							currentField === 'customHeaders',
+							5,
+							'header',
+						)}
 					</Box>
 				</Box>
 

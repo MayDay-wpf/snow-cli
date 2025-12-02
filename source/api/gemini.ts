@@ -4,7 +4,10 @@ import {
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
 import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/core/retryUtils.js';
+import {
+	withRetryGenerator,
+	parseJsonWithFix,
+} from '../utils/core/retryUtils.js';
 import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
@@ -15,6 +18,10 @@ export interface GeminiOptions {
 	temperature?: number;
 	tools?: ChatCompletionTool[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	// Sub-agent configuration overrides
+	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
+	customSystemPromptId?: string; // 自定义系统提示词 ID
+	customHeaders?: Record<string, string>; // 自定义请求头
 }
 
 export interface GeminiStreamChunk {
@@ -43,6 +50,8 @@ export interface GeminiStreamChunk {
 	};
 }
 
+// Deprecated: No longer used, kept for backward compatibility
+// @ts-ignore - Variable kept for backward compatibility with resetGeminiClient export
 let geminiConfig: {
 	apiKey: string;
 	baseUrl: string;
@@ -53,32 +62,7 @@ let geminiConfig: {
 	};
 } | null = null;
 
-function getGeminiConfig() {
-	if (!geminiConfig) {
-		const config = getOpenAiConfig();
-
-		if (!config.apiKey) {
-			throw new Error(
-				'Gemini API configuration is incomplete. Please configure API key first.',
-			);
-		}
-
-		const customHeaders = getCustomHeaders();
-
-		geminiConfig = {
-			apiKey: config.apiKey,
-			baseUrl:
-				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-					? config.baseUrl
-					: 'https://generativelanguage.googleapis.com/v1beta',
-			customHeaders,
-			geminiThinking: config.geminiThinking,
-		};
-	}
-
-	return geminiConfig;
-}
-
+// Deprecated: Client reset is no longer needed with new config loading approach
 export function resetGeminiClient(): void {
 	geminiConfig = null;
 }
@@ -122,11 +106,13 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 function convertToGeminiMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
+	customSystemPromptOverride?: string, // Allow override for sub-agents
 ): {
 	systemInstruction?: string;
 	contents: any[];
 } {
-	const customSystemPrompt = getCustomSystemPrompt();
+	const customSystemPrompt =
+		customSystemPromptOverride || getCustomSystemPrompt();
 	let systemInstruction: string | undefined;
 	const contents: any[] = [];
 
@@ -336,7 +322,50 @@ export async function* createStreamingGeminiCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<GeminiStreamChunk, void, unknown> {
-	const config = getGeminiConfig();
+	// Load configuration: if configProfile is specified, load it; otherwise use main config
+	let config: ReturnType<typeof getOpenAiConfig>;
+	if (options.configProfile) {
+		try {
+			const {loadProfile} = await import('../utils/config/configManager.js');
+			const profileConfig = loadProfile(options.configProfile);
+			if (profileConfig?.snowcfg) {
+				config = profileConfig.snowcfg;
+			} else {
+				// Profile not found, fallback to main config
+				config = getOpenAiConfig();
+				const {logger} = await import('../utils/core/logger.js');
+				logger.warn(
+					`Profile ${options.configProfile} not found, using main config`,
+				);
+			}
+		} catch (error) {
+			// If loading profile fails, fallback to main config
+			config = getOpenAiConfig();
+			const {logger} = await import('../utils/core/logger.js');
+			logger.warn(
+				`Failed to load profile ${options.configProfile}, using main config:`,
+				error,
+			);
+		}
+	} else {
+		// No configProfile specified, use main config
+		config = getOpenAiConfig();
+	}
+
+	// Get system prompt (with custom override support)
+	let customSystemPromptContent: string | undefined;
+	if (options.customSystemPromptId) {
+		const {getSystemPromptConfig} = await import(
+			'../utils/config/apiConfig.js'
+		);
+		const systemPromptConfig = getSystemPromptConfig();
+		const customPrompt = systemPromptConfig?.prompts.find(
+			p => p.id === options.customSystemPromptId,
+		);
+		if (customPrompt) {
+			customSystemPromptContent = customPrompt.content;
+		}
+	}
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
@@ -344,6 +373,7 @@ export async function* createStreamingGeminiCompletion(
 			const {systemInstruction, contents} = convertToGeminiMessages(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
+				customSystemPromptContent, // 传递自定义系统提示词
 			);
 
 			// Build request payload
@@ -371,11 +401,21 @@ export async function* createStreamingGeminiCompletion(
 			}
 
 			// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
-			const modelName = options.model.startsWith('models/')
-				? options.model
-				: `models/${options.model}`;
+			const effectiveModel = config.advancedModel || options.model;
+			const modelName = effectiveModel.startsWith('models/')
+				? effectiveModel
+				: `models/${effectiveModel}`;
 
-			const url = `${config.baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
+			// Use configured baseUrl or default Gemini URL
+			const baseUrl =
+				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+					? config.baseUrl
+					: 'https://generativelanguage.googleapis.com/v1beta';
+
+			const url = `${baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
+
+			// Use custom headers from options if provided, otherwise get from main config
+			const customHeaders = options.customHeaders || getCustomHeaders();
 
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
@@ -383,7 +423,7 @@ export async function* createStreamingGeminiCompletion(
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
 					'x-snow': 'true',
-					...config.customHeaders,
+					...customHeaders,
 				},
 				body: JSON.stringify(requestBody),
 				signal: abortSignal,
@@ -416,133 +456,135 @@ export async function* createStreamingGeminiCompletion(
 			let toolCallIndex = 0;
 			let totalTokens = {prompt: 0, completion: 0, total: 0};
 
-		// Parse SSE stream
-		const reader = response.body.getReader();
-		const decoder = new TextDecoder();
-		let buffer = '';
+			// Parse SSE stream
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
 
-		try {
-			while (true) {
-				const {done, value} = await reader.read();
+			try {
+				while (true) {
+					const {done, value} = await reader.read();
 
-				if (done) {
-					// ✅ 关键修复：检查buffer是否有残留数据
-					if (buffer.trim()) {
-						// 连接异常中断，抛出明确错误
-						throw new Error(
-							`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
-						);
-					}
-					break; // 正常结束
-				}
-
-				if (abortSignal?.aborted) {
-					return;
-				}
-
-				buffer += decoder.decode(value, {stream: true});
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					const trimmed = line.trim();
-					if (!trimmed || trimmed.startsWith(':')) continue;
-
-					if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
-						break;
+					if (done) {
+						// ✅ 关键修复：检查buffer是否有残留数据
+						if (buffer.trim()) {
+							// 连接异常中断，抛出明确错误
+							throw new Error(
+								`Stream terminated unexpectedly with incomplete data: ${buffer.substring(
+									0,
+									100,
+								)}...`,
+							);
+						}
+						break; // 正常结束
 					}
 
-					// Handle both "event: " and "event:" formats
-					if (trimmed.startsWith('event:')) {
-						// Event type, will be followed by data
-						continue;
+					if (abortSignal?.aborted) {
+						return;
 					}
 
-					// Handle both "data: " and "data:" formats
-					if (trimmed.startsWith('data:')) {
-						const data = trimmed.startsWith('data: ')
-							? trimmed.slice(6)
-							: trimmed.slice(5);
-						const parseResult = parseJsonWithFix(data, {
-							toolName: 'Gemini SSE stream',
-							logWarning: false,
-							logError: true,
-						});
+					buffer += decoder.decode(value, {stream: true});
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
 
-						if (parseResult.success) {
-							const chunk = parseResult.data;
+					for (const line of lines) {
+						const trimmed = line.trim();
+						if (!trimmed || trimmed.startsWith(':')) continue;
 
-							// Process candidates
-							if (chunk.candidates && chunk.candidates.length > 0) {
-								const candidate = chunk.candidates[0];
-								if (candidate.content && candidate.content.parts) {
-									for (const part of candidate.content.parts) {
-										// Process thought content (Gemini thinking)
-										// When part.thought === true, the text field contains thinking content
-										if (part.thought === true && part.text) {
-											thinkingTextBuffer += part.text;
-											yield {
-												type: 'reasoning_delta',
-												delta: part.text,
-											};
-										}
-										// Process regular text content (when thought is not true)
-										else if (part.text) {
-											contentBuffer += part.text;
-											yield {
-												type: 'content',
-												content: part.text,
-											};
-										}
+						if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
+							break;
+						}
 
-										// Process function calls
-										if (part.functionCall) {
-											hasToolCalls = true;
-											const fc = part.functionCall;
+						// Handle both "event: " and "event:" formats
+						if (trimmed.startsWith('event:')) {
+							// Event type, will be followed by data
+							continue;
+						}
 
-											const toolCall = {
-												id: `call_${toolCallIndex++}`,
-												type: 'function' as const,
-												function: {
-													name: fc.name,
-													arguments: JSON.stringify(fc.args || {}),
-												},
-											};
-											toolCallsBuffer.push(toolCall);
+						// Handle both "data: " and "data:" formats
+						if (trimmed.startsWith('data:')) {
+							const data = trimmed.startsWith('data: ')
+								? trimmed.slice(6)
+								: trimmed.slice(5);
+							const parseResult = parseJsonWithFix(data, {
+								toolName: 'Gemini SSE stream',
+								logWarning: false,
+								logError: true,
+							});
 
-											// Yield delta for token counting
-											const deltaText = fc.name + JSON.stringify(fc.args || {});
-											yield {
-												type: 'tool_call_delta',
-												delta: deltaText,
-											};
+							if (parseResult.success) {
+								const chunk = parseResult.data;
+
+								// Process candidates
+								if (chunk.candidates && chunk.candidates.length > 0) {
+									const candidate = chunk.candidates[0];
+									if (candidate.content && candidate.content.parts) {
+										for (const part of candidate.content.parts) {
+											// Process thought content (Gemini thinking)
+											// When part.thought === true, the text field contains thinking content
+											if (part.thought === true && part.text) {
+												thinkingTextBuffer += part.text;
+												yield {
+													type: 'reasoning_delta',
+													delta: part.text,
+												};
+											}
+											// Process regular text content (when thought is not true)
+											else if (part.text) {
+												contentBuffer += part.text;
+												yield {
+													type: 'content',
+													content: part.text,
+												};
+											}
+
+											// Process function calls
+											if (part.functionCall) {
+												hasToolCalls = true;
+												const fc = part.functionCall;
+
+												const toolCall = {
+													id: `call_${toolCallIndex++}`,
+													type: 'function' as const,
+													function: {
+														name: fc.name,
+														arguments: JSON.stringify(fc.args || {}),
+													},
+												};
+												toolCallsBuffer.push(toolCall);
+
+												// Yield delta for token counting
+												const deltaText =
+													fc.name + JSON.stringify(fc.args || {});
+												yield {
+													type: 'tool_call_delta',
+													delta: deltaText,
+												};
+											}
 										}
 									}
 								}
-							}
 
-							// Track usage info
-							if (chunk.usageMetadata) {
-								totalTokens = {
-									prompt: chunk.usageMetadata.promptTokenCount || 0,
-									completion: chunk.usageMetadata.candidatesTokenCount || 0,
-									total: chunk.usageMetadata.totalTokenCount || 0,
-								};
+								// Track usage info
+								if (chunk.usageMetadata) {
+									totalTokens = {
+										prompt: chunk.usageMetadata.promptTokenCount || 0,
+										completion: chunk.usageMetadata.candidatesTokenCount || 0,
+										total: chunk.usageMetadata.totalTokenCount || 0,
+									};
+								}
 							}
 						}
 					}
 				}
+			} catch (error) {
+				const {logger} = await import('../utils/core/logger.js');
+				logger.error('Gemini SSE stream parsing error:', {
+					error: error instanceof Error ? error.message : 'Unknown error',
+					remainingBuffer: buffer.substring(0, 200),
+				});
+				throw error;
 			}
-		} catch (error) {
-			const {logger} = await import('../utils/core/logger.js');
-			logger.error('Gemini SSE stream parsing error:', {
-				error: error instanceof Error ? error.message : 'Unknown error',
-				remainingBuffer: buffer.substring(0, 200),
-			});
-			throw error;
-		}
-
-
 
 			// Yield tool calls if any
 			if (hasToolCalls && toolCallsBuffer.length > 0) {

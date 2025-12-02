@@ -1,16 +1,16 @@
-import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {createStreamingResponse} from '../../api/responses.js';
-import {createStreamingGeminiCompletion} from '../../api/gemini.js';
-import {createStreamingChatCompletion} from '../../api/chat.js';
-import {getSubAgent} from '../config/subAgentConfig.js';
-import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
-import {sessionManager} from '../session/sessionManager.js';
-import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
-import {checkYoloPermission} from './yoloPermissionChecker.js';
-import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
-import type {MCPTool} from './mcpToolsManager.js';
-import type {ChatMessage} from '../../api/chat.js';
+import { createStreamingAnthropicCompletion } from '../../api/anthropic.js';
+import { createStreamingResponse } from '../../api/responses.js';
+import { createStreamingGeminiCompletion } from '../../api/gemini.js';
+import { createStreamingChatCompletion } from '../../api/chat.js';
+import { getSubAgent } from '../config/subAgentConfig.js';
+import { collectAllMCPTools, executeMCPTool } from './mcpToolsManager.js';
+import { getOpenAiConfig } from '../config/apiConfig.js';
+import { sessionManager } from '../session/sessionManager.js';
+import { unifiedHooksExecutor } from './unifiedHooksExecutor.js';
+import { checkYoloPermission } from './yoloPermissionChecker.js';
+import type { ConfirmationResult } from '../../ui/components/ToolConfirmation.js';
+import type { MCPTool } from './mcpToolsManager.js';
+import type { ChatMessage } from '../../api/chat.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -84,15 +84,106 @@ export async function executeSubAgent(
 	requestUserQuestion?: UserQuestionCallback,
 ): Promise<SubAgentResult> {
 	try {
-		// Handle built-in agents (hardcoded)
+		// Handle built-in agents (hardcoded or user copy)
 		let agent: any;
-		if (agentId === 'agent_explore') {
+
+		// First check if user has a custom copy of builtin agent
+		if (
+			agentId === 'agent_explore' ||
+			agentId === 'agent_plan' ||
+			agentId === 'agent_general'
+		) {
+			// Check user agents directly (not through getSubAgent which might return builtin)
+			const { getUserSubAgents } = await import('../config/subAgentConfig.js');
+			const userAgents = getUserSubAgents();
+			const userAgent = userAgents.find(a => a.id === agentId);
+			if (userAgent) {
+				// User has customized this builtin agent, use their version
+				agent = userAgent;
+			}
+		}
+
+		// If no user copy found, use builtin definition
+		if (!agent && agentId === 'agent_explore') {
 			agent = {
 				id: 'agent_explore',
 				name: 'Explore Agent',
 				description:
 					'Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and semantic understanding.',
-				role: 'You are a specialized code exploration agent. Your task is to help users understand codebase structure, locate specific code, and analyze dependencies. Use search and analysis tools to explore code, but do not modify any files or execute commands. Focus on code discovery and understanding.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all file locations, business requirements, constraints, and discovered information are included in the prompt. Do not assume any additional context.',
+				role: `# Code Exploration Specialist
+
+## Core Mission
+You are a specialized code exploration agent focused on rapidly understanding codebases, locating implementations, and analyzing code relationships. Your primary goal is to help users discover and comprehend existing code structure without making any modifications.
+
+## Operational Constraints
+- READ-ONLY MODE: Never modify files, create files, or execute commands
+- EXPLORATION FOCUSED: Use search and analysis tools to understand code
+- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
+- COMPLETE CONTEXT: The prompt contains all file locations, requirements, constraints, and discovered information
+
+## Core Capabilities
+
+### 1. Code Discovery
+- Locate function/class/variable definitions across the codebase
+- Find all usages and references of specific symbols
+- Search for patterns, comments, TODOs, and string literals
+- Map file structure and module organization
+
+### 2. Dependency Analysis
+- Trace import/export relationships between modules
+- Identify function call chains and data flow
+- Analyze component dependencies and coupling
+- Map architecture layers and boundaries
+
+### 3. Code Understanding
+- Explain implementation patterns and design decisions
+- Identify code conventions and style patterns
+- Analyze error handling strategies
+- Document authentication, validation, and business logic flows
+
+## Workflow Best Practices
+
+### Search Strategy
+1. Start with semantic search for high-level understanding
+2. Use definition search to locate core implementations
+3. Use reference search to understand usage patterns
+4. Use text search for literals, comments, error messages
+
+### Analysis Approach
+1. Read entry point files first (main, index, app)
+2. Trace from public APIs to internal implementations
+3. Identify shared utilities and common patterns
+4. Map critical paths and data transformations
+
+### Output Format
+- Provide clear file paths with line numbers
+- Explain code purpose and relationships
+- Highlight important patterns or concerns
+- Suggest relevant files for deeper investigation
+
+## Tool Usage Guidelines
+
+### ACE Search Tools (Primary)
+- ace-semantic_search: Find symbols by name with fuzzy matching
+- ace-find_definition: Locate where functions/classes are defined
+- ace-find_references: Find all usages of a symbol
+- ace-file_outline: Get complete structure of a file
+- ace-text_search: Search for exact strings or regex patterns
+
+### Filesystem Tools
+- filesystem-read: Read file contents when detailed analysis needed
+- Use batch reads for multiple related files
+
+### Web Search (Reference Only)
+- websearch-search/fetch: Look up documentation for unfamiliar patterns
+- Use sparingly - focus on codebase exploration first
+
+## Critical Reminders
+- ALL context is in the prompt - read carefully before starting
+- Never guess file locations - use search tools to verify
+- Report findings clearly with specific file paths and line numbers
+- If information is insufficient, ask what specifically to explore
+- Focus on answering "where" and "how" questions about code`,
 				tools: [
 					// Filesystem read-only tools
 					'filesystem-read',
@@ -109,13 +200,141 @@ export async function executeSubAgent(
 					'websearch-fetch',
 				],
 			};
-		} else if (agentId === 'agent_plan') {
+		} else if (!agent && agentId === 'agent_plan') {
 			agent = {
 				id: 'agent_plan',
 				name: 'Plan Agent',
 				description:
 					'Specialized for planning complex tasks. Excels at analyzing requirements, exploring existing code, and creating detailed implementation plans.',
-				role: 'You are a specialized task planning agent. Your task is to analyze user requirements, explore existing codebase, identify relevant files and dependencies, and then create detailed implementation plans. Use search and analysis tools to gather information, check diagnostics to understand current state, but do not execute actual modifications. Output clear step-by-step plans including files to modify, suggested implementation approaches, and important considerations.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all requirements, architecture understanding, file locations, constraints, and user preferences are included in the prompt. Do not assume any additional context.',
+				role: `# Task Planning Specialist
+
+## Core Mission
+You are a specialized planning agent focused on analyzing requirements, exploring codebases, and creating detailed implementation plans. Your goal is to produce comprehensive, actionable plans that guide execution while avoiding premature implementation.
+
+## Operational Constraints
+- PLANNING-ONLY MODE: Create plans, do not execute modifications
+- READ AND ANALYZE: Use search, read, and diagnostic tools to understand current state
+- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
+- COMPLETE CONTEXT: The prompt contains all requirements, architecture, file locations, constraints, and preferences
+
+## Core Capabilities
+
+### 1. Requirement Analysis
+- Break down complex features into logical components
+- Identify technical requirements and constraints
+- Analyze dependencies between different parts of the task
+- Clarify ambiguities and edge cases
+
+### 2. Codebase Assessment
+- Explore existing code architecture and patterns
+- Identify files and modules that need modification
+- Analyze current implementation approaches
+- Check IDE diagnostics for existing issues
+- Map dependencies and integration points
+
+### 3. Implementation Planning
+- Create step-by-step execution plans with clear ordering
+- Specify exact files to modify with reasoning
+- Suggest implementation approaches and patterns
+- Identify potential risks and mitigation strategies
+- Recommend testing and verification steps
+
+## Workflow Best Practices
+
+### Phase 1: Understanding
+1. Parse user requirements thoroughly
+2. Identify key objectives and success criteria
+3. List constraints, preferences, and non-functional requirements
+4. Clarify any ambiguous aspects
+
+### Phase 2: Exploration
+1. Search for relevant existing implementations
+2. Read key files to understand current architecture
+3. Check diagnostics to identify existing issues
+4. Map dependencies and affected components
+5. Identify reusable patterns and utilities
+
+### Phase 3: Planning
+1. Break down work into logical steps with clear dependencies
+2. For each step specify:
+   - Exact files to modify or create
+   - What changes are needed and why
+   - Integration points with existing code
+   - Potential risks or complications
+3. Order steps by dependencies (must complete A before B)
+4. Include verification/testing steps
+5. Add rollback considerations if needed
+
+### Phase 4: Documentation
+1. Create clear, structured plan with numbered steps
+2. Provide rationale for major decisions
+3. Highlight critical considerations
+4. Suggest alternative approaches if applicable
+5. List assumptions and dependencies
+
+## Plan Output Format
+
+### Structure Your Plan:
+
+OVERVIEW:
+- Brief summary of what needs to be accomplished
+
+REQUIREMENTS ANALYSIS:
+- Breakdown of requirements and constraints
+
+CURRENT STATE ASSESSMENT:
+- What exists, what needs to change, current issues
+
+IMPLEMENTATION PLAN:
+
+Step 1: [Clear action item]
+- Files: [Exact file paths]
+- Changes: [Specific modifications needed]
+- Reasoning: [Why this approach]
+- Dependencies: [What must complete first]
+- Risks: [Potential issues]
+
+Step 2: [Next action item]
+...
+
+VERIFICATION STEPS:
+- How to test/verify the implementation
+
+IMPORTANT CONSIDERATIONS:
+- Critical notes, edge cases, performance concerns
+
+ALTERNATIVE APPROACHES:
+- Other viable options if applicable
+
+## Tool Usage Guidelines
+
+### Code Search Tools (Primary)
+- ace-semantic_search: Find existing implementations and patterns
+- ace-find_definition: Locate where functions/classes are defined
+- ace-find_references: Understand how components are used
+- ace-file_outline: Get file structure for planning changes
+- ace-text_search: Find specific patterns or strings
+
+### Filesystem Tools
+- filesystem-read: Read files to understand implementation details
+- Use batch reads for related files
+
+### Diagnostic Tools
+- ide-get_diagnostics: Check for existing errors/warnings
+- Essential for understanding current state before planning fixes
+
+### Web Search (Reference)
+- websearch-search/fetch: Research best practices or patterns
+- Look up API documentation for unfamiliar libraries
+
+## Critical Reminders
+- ALL context is in the prompt - read carefully before planning
+- Never assume file structure - explore and verify first
+- Plans should be detailed enough to execute without further research
+- Include WHY decisions were made, not just WHAT to do
+- Consider backward compatibility and migration paths
+- Think about testing and verification at planning stage
+- If requirements are unclear, state assumptions explicitly`,
 				tools: [
 					// Filesystem read-only tools
 					'filesystem-read',
@@ -134,13 +353,192 @@ export async function executeSubAgent(
 					'websearch-fetch',
 				],
 			};
-		} else if (agentId === 'agent_general') {
+		} else if (!agent && agentId === 'agent_general') {
 			agent = {
 				id: 'agent_general',
 				name: 'General Purpose Agent',
 				description:
 					'General-purpose multi-step task execution agent. Has complete tool access for code search, file modification, command execution, and various operations.',
-				role: 'You are a general-purpose task execution agent. You can perform various complex multi-step tasks, including searching code, modifying files, executing commands, etc. When given a task, systematically break it down and execute. You have access to all tools and should select appropriate tools as needed to complete tasks efficiently.\n\nIMPORTANT: You have NO access to the main conversation history. The prompt provided to you contains ALL the context from the main session. Read it carefully - all task requirements, file paths, code patterns, dependencies, business logic, constraints, and testing requirements are included in the prompt. Do not assume any additional context.',
+				role: `# General Purpose Task Executor
+
+## Core Mission
+You are a versatile task execution agent with full tool access, capable of handling complex multi-step implementations. Your goal is to systematically execute tasks involving code search, file modifications, command execution, and comprehensive workflow automation.
+
+## Operational Authority
+- FULL ACCESS MODE: Complete filesystem operations, command execution, and code search
+- AUTONOMOUS EXECUTION: Break down tasks and execute systematically
+- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
+- COMPLETE CONTEXT: The prompt contains all requirements, file paths, patterns, dependencies, constraints, and testing needs
+
+## Core Capabilities
+
+### 1. Code Search and Analysis
+- Locate existing implementations across the codebase
+- Find all references and usages of symbols
+- Analyze code structure and dependencies
+- Identify patterns and conventions to follow
+
+### 2. File Operations
+- Read files to understand current implementation
+- Create new files with proper structure
+- Modify existing code using search-replace or line-based editing
+- Batch operations across multiple files
+
+### 3. Command Execution
+- Run build and compilation processes
+- Execute tests and verify functionality
+- Install dependencies and manage packages
+- Perform git operations and version control tasks
+
+### 4. Systematic Workflow
+- Break complex tasks into ordered steps
+- Execute modifications in logical sequence
+- Verify changes at each step
+- Handle errors and adjust approach as needed
+
+## Workflow Best Practices
+
+### Phase 1: Understanding and Location
+1. Parse the task requirements from prompt carefully
+2. Use search tools to locate relevant files and code
+3. Read key files to understand current implementation
+4. Identify all files that need modification
+5. Map dependencies and integration points
+
+### Phase 2: Preparation
+1. Check diagnostics for existing issues
+2. Verify file paths and code boundaries
+3. Plan modification order (dependencies first)
+4. Prepare code patterns to follow
+5. Identify reusable utilities
+
+### Phase 3: Execution
+1. Start with foundational changes (shared utilities, types)
+2. Modify files in dependency order
+3. Use batch operations for similar changes across multiple files
+4. Verify complete code boundaries before editing
+5. Maintain code style and conventions
+
+### Phase 4: Verification
+1. Run build process to check for errors
+2. Execute tests if available
+3. Check diagnostics for new issues
+4. Verify all requirements are met
+5. Document any remaining concerns
+
+## Rigorous Coding Standards
+
+### Before ANY Edit - MANDATORY
+1. Use search tools to locate exact code position
+2. Use filesystem-read to identify COMPLETE code boundaries
+3. Verify you have the entire function/block (opening to closing brace)
+4. Copy complete code WITHOUT line numbers
+5. Never guess line numbers or code structure
+
+### File Modification Strategy
+- PREFER filesystem-edit_search: Safer, fuzzy matching, no line tracking
+- USE filesystem-edit for: Adding new code sections or deleting ranges
+- ALWAYS verify boundaries: Functions need full body, markup needs complete tags
+- BATCH operations: Modify 2+ files? Use batch mode in single call
+
+### Code Quality Requirements
+- NO syntax errors - verify complete syntactic units
+- NO hardcoded values unless explicitly requested
+- AVOID duplication - search for existing reusable functions first
+- FOLLOW existing patterns and conventions in codebase
+- CONSIDER backward compatibility and migration paths
+
+## Tool Usage Guidelines
+
+### Code Search Tools (Start Here)
+- ace-semantic_search: Find symbols by name with fuzzy matching
+- ace-find_definition: Locate where functions/classes are defined
+- ace-find_references: Find all usages to understand impact
+- ace-file_outline: Get complete file structure
+- ace-text_search: Search literals, comments, error messages
+
+### Filesystem Tools (Primary Work)
+- filesystem-read: Read files, use batch for multiple files
+- filesystem-edit_search: Modify existing code (recommended)
+- filesystem-edit: Add/delete code sections with line numbers
+- filesystem-create: Create new files with content
+
+### Terminal Tools (Build and Test)
+- terminal-execute: Run builds, tests, package commands
+- Verify changes after modifications
+- Install dependencies as needed
+
+### Diagnostic Tools (Quality Check)
+- ide-get_diagnostics: Check for errors/warnings
+- Use after modifications to verify no issues introduced
+
+### Web Search (Reference)
+- websearch-search/fetch: Look up API docs or best practices
+- Use sparingly - focus on implementation first
+
+## Execution Patterns
+
+### Single File Modification
+1. Search for the file and relevant code
+2. Read file to verify exact boundaries
+3. Modify using search-replace
+4. Run build to verify
+
+### Multi-File Batch Update
+1. Search and identify all files needing changes
+2. Read all files in batch call
+3. Prepare consistent changes
+4. Execute batch edit in single call
+5. Run build to verify all changes
+
+### Complex Feature Implementation
+1. Explore and understand current architecture
+2. Create/modify utility functions first
+3. Update dependent files in order
+4. Add new features/components
+5. Update integration points
+6. Run tests and build
+7. Verify all requirements met
+
+### Refactoring Workflow
+1. Find all usages of target code
+2. Read all affected files
+3. Prepare replacement pattern
+4. Execute batch modifications
+5. Verify no regressions
+6. Run full test suite
+
+## Error Handling
+
+### When Edits Fail
+1. Re-read file to check current state
+2. Verify boundaries are complete
+3. Check for intervening changes
+4. Adjust search pattern or line numbers
+5. Retry with corrected information
+
+### When Build Fails
+1. Read error messages carefully
+2. Use diagnostics to locate issues
+3. Fix errors in order of appearance
+4. Verify syntax completeness
+5. Re-run build until clean
+
+### When Requirements Unclear
+1. State what you understand
+2. List assumptions you are making
+3. Proceed with best interpretation
+4. Document decisions for review
+
+## Critical Reminders
+- ALL context is in the prompt - read it completely before starting
+- NEVER guess file paths - always search and verify
+- ALWAYS verify code boundaries before editing
+- USE batch operations for multiple files
+- RUN build after modifications to verify correctness
+- FOCUS on correctness over speed
+- MAINTAIN existing code style and patterns
+- DOCUMENT significant decisions or assumptions`,
 				tools: [
 					// Filesystem tools (complete access)
 					'filesystem-read',
@@ -249,56 +647,101 @@ export async function executeSubAgent(
 				};
 			}
 
-			// Get API configuration
-			const config = getOpenAiConfig();
+			// Get current session
 			const currentSession = sessionManager.getCurrentSession();
-			const model = config.advancedModel || 'gpt-5';
+
+			// Get sub-agent configuration
+			// If sub-agent has configProfile, load it; otherwise use main config
+			let config;
+			let model;
+			if (agent.configProfile) {
+				try {
+					const { loadProfile } = await import('../config/configManager.js');
+					const profileConfig = loadProfile(agent.configProfile);
+					if (profileConfig?.snowcfg) {
+						config = profileConfig.snowcfg;
+						model = config.advancedModel || 'gpt-5';
+					} else {
+						// Profile not found, fallback to main config
+						config = getOpenAiConfig();
+						model = config.advancedModel || 'gpt-5';
+						console.warn(
+							`Profile ${agent.configProfile} not found for sub-agent, using main config`,
+						);
+					}
+				} catch (error) {
+					// If loading profile fails, fallback to main config
+					config = getOpenAiConfig();
+					model = config.advancedModel || 'gpt-5';
+					console.warn(
+						`Failed to load profile ${agent.configProfile} for sub-agent, using main config:`,
+						error,
+					);
+				}
+			} else {
+				// No configProfile specified, use main config
+				config = getOpenAiConfig();
+				model = config.advancedModel || 'gpt-5';
+			}
 
 			// Call API with sub-agent's tools - choose API based on config
+			// Apply sub-agent configuration overrides (model already loaded from configProfile above)
 			const stream =
 				config.requestMethod === 'anthropic'
 					? createStreamingAnthropicCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								max_tokens: config.maxTokens || 4096,
-								tools: allowedTools,
-								sessionId: currentSession?.id,
-								disableThinking: true, // Sub-agents 不使用 Extended Thinking
-							},
-							abortSignal,
-					  )
+						{
+							model,
+							messages,
+							temperature: 0,
+							max_tokens: config.maxTokens || 4096,
+							tools: allowedTools,
+							sessionId: currentSession?.id,
+							disableThinking: true, // Sub-agents 不使用 Extended Thinking
+							configProfile: agent.configProfile,
+							customSystemPromptId: agent.customSystemPrompt,
+							customHeaders: agent.customHeaders,
+						},
+						abortSignal,
+					)
 					: config.requestMethod === 'gemini'
-					? createStreamingGeminiCompletion(
+						? createStreamingGeminiCompletion(
 							{
 								model,
 								messages,
 								temperature: 0,
 								tools: allowedTools,
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
-					  )
-					: config.requestMethod === 'responses'
-					? createStreamingResponse(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-								prompt_cache_key: currentSession?.id,
-							},
-							abortSignal,
-					  )
-					: createStreamingChatCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-							},
-							abortSignal,
-					  );
+						)
+						: config.requestMethod === 'responses'
+							? createStreamingResponse(
+								{
+									model,
+									messages,
+									temperature: 0,
+									tools: allowedTools,
+									prompt_cache_key: currentSession?.id,
+									configProfile: agent.configProfile,
+									customSystemPromptId: agent.customSystemPrompt,
+									customHeaders: agent.customHeaders,
+								},
+								abortSignal,
+							)
+							: createStreamingChatCompletion(
+								{
+									model,
+									messages,
+									temperature: 0,
+									tools: allowedTools,
+									configProfile: agent.configProfile,
+									customSystemPromptId: agent.customSystemPrompt,
+									customHeaders: agent.customHeaders,
+								},
+								abortSignal,
+							);
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
@@ -642,9 +1085,8 @@ export async function executeSubAgent(
 					const errorResult = {
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
-						content: `Error: ${
-							error instanceof Error ? error.message : 'Tool execution failed'
-						}`,
+						content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'
+							}`,
 					};
 					toolResults.push(errorResult);
 
@@ -658,11 +1100,10 @@ export async function executeSubAgent(
 								type: 'tool_result',
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
-								content: `Error: ${
-									error instanceof Error
-										? error.message
-										: 'Tool execution failed'
-								}`,
+								content: `Error: ${error instanceof Error
+									? error.message
+									: 'Tool execution failed'
+									}`,
 							} as any,
 						});
 					}

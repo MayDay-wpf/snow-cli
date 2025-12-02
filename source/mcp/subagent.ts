@@ -91,7 +91,7 @@ export class SubAgentService {
 		description: string;
 		inputSchema: any;
 	}> {
-		// Get only user-configured agents (built-in agents are hardcoded below)
+		// Get user-configured agents (built-in agents are hardcoded below)
 		const userAgents = getUserSubAgents();
 
 		// Built-in agents (hardcoded, always available)
@@ -146,23 +146,32 @@ export class SubAgentService {
 			},
 		];
 
-		// Add user-configured agents (avoid duplicates with built-in)
+		// Built-in agent IDs (used to filter out duplicates)
+		const builtInAgentIds = new Set([
+			'agent_explore',
+			'agent_plan',
+			'agent_general',
+		]);
+
+		// Add user-configured agents (filter out duplicates with built-in)
 		tools.push(
-			...userAgents.map(agent => ({
-				name: agent.id,
-				description: `${agent.name}: ${agent.description}`,
-				inputSchema: {
-					type: 'object',
-					properties: {
-						prompt: {
-							type: 'string',
-							description:
-								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include all relevant: (1) Task requirements and objectives, (2) Known file locations and code structure, (3) Business logic and constraints, (4) Code patterns or examples, (5) Dependencies and relationships. Be specific and comprehensive - sub-agent cannot ask for clarification from main session.',
+			...userAgents
+				.filter(agent => !builtInAgentIds.has(agent.id))
+				.map(agent => ({
+					name: agent.id,
+					description: `${agent.name}: ${agent.description}`,
+					inputSchema: {
+						type: 'object',
+						properties: {
+							prompt: {
+								type: 'string',
+								description:
+									'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include all relevant: (1) Task requirements and objectives, (2) Known file locations and code structure, (3) Business logic and constraints, (4) Code patterns or examples, (5) Dependencies and relationships. Be specific and comprehensive - sub-agent cannot ask for clarification from main session.',
+							},
 						},
+						required: ['prompt'],
 					},
-					required: ['prompt'],
-				},
-			})),
+				})),
 		);
 
 		return tools;

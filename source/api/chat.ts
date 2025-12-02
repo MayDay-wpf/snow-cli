@@ -4,7 +4,10 @@ import {
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
 import {getSystemPrompt} from './systemPrompt.js';
-import {withRetryGenerator, parseJsonWithFix} from '../utils/core/retryUtils.js';
+import {
+	withRetryGenerator,
+	parseJsonWithFix,
+} from '../utils/core/retryUtils.js';
 import type {
 	ChatMessage,
 	ChatCompletionTool,
@@ -36,6 +39,10 @@ export interface ChatCompletionOptions {
 		| 'required'
 		| {type: 'function'; function: {name: string}};
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	// Sub-agent configuration overrides
+	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
+	customSystemPromptId?: string; // 自定义系统提示词 ID
+	customHeaders?: Record<string, string>; // 自定义请求头
 }
 
 export interface ChatCompletionChunk {
@@ -76,19 +83,22 @@ export interface ChatCompletionMessageParam {
 }
 
 /**
- * Convert our ChatMessage format to OpenAI's ChatCompletionMessageParam format
- * Automatically prepends system prompt if not present
- * Logic:
- * 1. If custom system prompt exists: use custom as system, prepend default as first user message
+ * Convert internal ChatMessage to OpenAI's message format
+ * Supports both text-only and multimodal (text + images) messages
+ * System prompt handling:
+ * 1. If custom system prompt provided: place it as system message, default as user message
  * 2. If no custom system prompt: use default as system
  * @param messages - The messages to convert
  * @param includeBuiltinSystemPrompt - Whether to include builtin system prompt (default true)
+ * @param customSystemPromptOverride - Optional custom system prompt content (for sub-agents)
  */
 function convertToOpenAIMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
+	customSystemPromptOverride?: string,
 ): ChatCompletionMessageParam[] {
-	const customSystemPrompt = getCustomSystemPrompt();
+	const customSystemPrompt =
+		customSystemPromptOverride || getCustomSystemPrompt();
 
 	let result = messages.map(msg => {
 		// 如果消息包含图片，使用 content 数组格式
@@ -138,7 +148,11 @@ function convertToOpenAIMessages(
 		if (msg.role === 'tool' && msg.tool_call_id) {
 			// Handle multimodal tool results with images
 			if (msg.images && msg.images.length > 0) {
-				const content: Array<{type: 'text' | 'image_url'; text?: string; image_url?: {url: string}}> = [];
+				const content: Array<{
+					type: 'text' | 'image_url';
+					text?: string;
+					image_url?: {url: string};
+				}> = [];
 
 				// Add text content
 				if (msg.content) {
@@ -219,36 +233,8 @@ function convertToOpenAIMessages(
 	return result;
 }
 
-let openaiConfig: {
-	apiKey: string;
-	baseUrl: string;
-	customHeaders: Record<string, string>;
-} | null = null;
-
-function getOpenAIConfig() {
-	if (!openaiConfig) {
-		const config = getOpenAiConfig();
-
-		if (!config.apiKey || !config.baseUrl) {
-			throw new Error(
-				'OpenAI API configuration is incomplete. Please configure API settings first.',
-			);
-		}
-
-		const customHeaders = getCustomHeaders();
-
-		openaiConfig = {
-			apiKey: config.apiKey,
-			baseUrl: config.baseUrl,
-			customHeaders,
-		};
-	}
-
-	return openaiConfig;
-}
-
 export function resetOpenAIClient(): void {
-	openaiConfig = null;
+	// No-op: kept for backward compatibility
 }
 
 export interface StreamChunk {
@@ -290,7 +276,10 @@ async function* parseSSEStream(
 				if (buffer.trim()) {
 					// 连接异常中断，抛出明确错误
 					throw new Error(
-						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(0, 100)}...`,
+						`Stream terminated unexpectedly with incomplete data: ${buffer.substring(
+							0,
+							100,
+						)}...`,
 					);
 				}
 				break; // 正常结束
@@ -341,7 +330,6 @@ async function* parseSSEStream(
 	}
 }
 
-
 /**
  * Simple streaming chat completion - only handles OpenAI interaction
  * Tool execution should be handled by the caller
@@ -351,16 +339,60 @@ export async function* createStreamingChatCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<StreamChunk, void, unknown> {
-	const config = getOpenAIConfig();
+	// Load configuration: if configProfile is specified, load it; otherwise use main config
+	let config: ReturnType<typeof getOpenAiConfig>;
+	if (options.configProfile) {
+		try {
+			const {loadProfile} = await import('../utils/config/configManager.js');
+			const profileConfig = loadProfile(options.configProfile);
+			if (profileConfig?.snowcfg) {
+				config = profileConfig.snowcfg;
+			} else {
+				// Profile not found, fallback to main config
+				config = getOpenAiConfig();
+				const {logger} = await import('../utils/core/logger.js');
+				logger.warn(
+					`Profile ${options.configProfile} not found, using main config`,
+				);
+			}
+		} catch (error) {
+			// If loading profile fails, fallback to main config
+			config = getOpenAiConfig();
+			const {logger} = await import('../utils/core/logger.js');
+			logger.warn(
+				`Failed to load profile ${options.configProfile}, using main config:`,
+				error,
+			);
+		}
+	} else {
+		// No configProfile specified, use main config
+		config = getOpenAiConfig();
+	}
+
+	// Get system prompt (with custom override support)
+	let customSystemPromptContent: string | undefined;
+	if (options.customSystemPromptId) {
+		const {getSystemPromptConfig} = await import(
+			'../utils/config/apiConfig.js'
+		);
+		const systemPromptConfig = getSystemPromptConfig();
+		const customPrompt = systemPromptConfig?.prompts.find(
+			p => p.id === options.customSystemPromptId,
+		);
+		if (customPrompt) {
+			customSystemPromptContent = customPrompt.content;
+		}
+	}
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
 			const requestBody = {
-				model: options.model,
+				model: config.advancedModel || options.model,
 				messages: convertToOpenAIMessages(
 					options.messages,
 					options.includeBuiltinSystemPrompt !== false, // 默认为 true
+					customSystemPromptContent,
 				),
 				stream: true,
 				stream_options: {include_usage: true},
@@ -371,13 +403,17 @@ export async function* createStreamingChatCompletion(
 			};
 
 			const url = `${config.baseUrl}/chat/completions`;
+
+			// Use custom headers from options if provided, otherwise get from main config
+			const customHeaders = options.customHeaders || getCustomHeaders();
+
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
 					'x-snow': 'true',
-					...config.customHeaders,
+					...customHeaders,
 				},
 				body: JSON.stringify(requestBody),
 				signal: abortSignal,

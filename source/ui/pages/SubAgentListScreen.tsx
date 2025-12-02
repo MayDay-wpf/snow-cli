@@ -202,12 +202,14 @@ export default function SubAgentListScreen({
 											<Text color={theme.colors.menuSecondary}>
 												{t.subAgentList.toolsCount.replace(
 													'{count}',
-													agent.tools.length.toString(),
+													(agent.tools?.length || 0).toString(),
 												)}
 											</Text>
 											<Text color={theme.colors.menuSecondary} dimColor>
 												{t.subAgentList.updated}{' '}
-												{new Date(agent.updatedAt).toLocaleString()}
+												{agent.updatedAt
+													? new Date(agent.updatedAt).toLocaleString()
+													: 'N/A'}
 											</Text>
 										</Box>
 									)}
