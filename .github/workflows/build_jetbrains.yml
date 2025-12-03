@@ -1,0 +1,94 @@
+name: Build JetBrains Plugin
+
+on:
+  push:
+    paths:
+      - '.github/workflows/build_jetbrains.yml'
+      - 'JetBrains/**'
+      - '!JetBrains/**.md'
+      - '!JetBrains/.gitignore'
+    branches:
+      - '*'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JetBrains
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: Update version (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Updating version to ${VERSION}"
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" build.gradle.kts
+          sed -i "s/^pluginVersion = .*/pluginVersion = ${VERSION}/" gradle.properties
+
+      - name: Get version
+        run: |
+          echo "PLUGIN_VERSION=$(grep '^version =' build.gradle.kts | cut -d'"' -f2)" >> $GITHUB_ENV
+
+      - name: Build and Publish Plugin
+        # env:
+          # PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          # CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          # PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          # PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: |
+          ./gradlew buildPlugin
+          ./gradlew verifyPlugin
+          # ./gradlew publishPlugin
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: jetbrains
+          files: JetBrains/build/distributions/snow-cli-jetbrains-${{ env.PLUGIN_VERSION }}.zip
+          name: Release JetBrains plugin
+          body: |
+            ## 🚀 Snow CLI JetBrains plugin 
+            Latest release version: `v${{ env.PLUGIN_VERSION }}`
+
+            ### Usage
+
+            JetBrains IDE plugin for integrating with Snow AI CLI. Provides intelligent code navigation and search powered by AI, with support for IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs.
+
+            ### Features
+
+            - **WebSocket Integration**: Real-time bi-directional communication with Snow CLI
+            - **Editor Context Tracking**: Automatically sends active file, cursor position, and selected text to Snow CLI
+            - **Code Diagnostics**: Retrieves and shares code diagnostics with the AI
+            - **Go to Definition**: Navigate to symbol definitions via Snow CLI
+            - **Find References**: Find all references to symbols across the project
+            - **Document Symbols**: Extract and share document structure with the AI
+            - **Auto-Reconnection**: Robust reconnection with exponential backoff strategy
+            - **Terminal Integration**: Quick access to Snow CLI from the toolbar
+          draft: false
+          prerelease: false

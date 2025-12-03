@@ -4,7 +4,7 @@
 
 # snow-ai
 
-[English](readme.md) | **中文**
+[English](README.md) | **中文**
 
 _面向开发者的智能 AI 命令行工具_
 
@@ -56,7 +56,7 @@ nvm use 16
 
 ## 安装 JetBrains 插件
 
-- 下载 [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
+- 下载 [JetBrains 插件](https://github.com/MayDay-wpf/snow-cli/releases/tag/jetbrains)
 
 ## 可用命令
 
