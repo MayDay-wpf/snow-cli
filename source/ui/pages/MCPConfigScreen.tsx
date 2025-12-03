@@ -15,16 +15,22 @@ const CONFIG_DIR = join(homedir(), '.snow');
 const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function checkCommandExists(command: string): boolean {
-	try {
-		execSync(`command -v ${command}`, {
-			stdio: 'ignore',
-			shell: '/bin/zsh',
-			env: process.env,
-		});
-		return true;
-	} catch {
-		return false;
+	const shells = ['/bin/sh', '/bin/bash', '/bin/zsh'];
+
+	for (const shell of shells) {
+		try {
+			execSync(`command -v ${command}`, {
+				stdio: 'ignore',
+				shell,
+				env: process.env,
+			});
+			return true;
+		} catch {
+			// Try next shell
+		}
 	}
+
+	return false;
 }
 
 function getSystemEditor(): string | null {
