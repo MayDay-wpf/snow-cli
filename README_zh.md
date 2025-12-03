@@ -4,7 +4,7 @@
 
 # snow-ai
 
-[English](readme.md) | **中文**
+[English](README.md) | **中文**
 
 _面向开发者的智能 AI 命令行工具_
 

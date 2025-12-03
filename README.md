@@ -4,7 +4,7 @@
 
 # snow-ai
 
-**English** | [中文](readme_zh.md)
+**English** | [中文](README_zh.md)
 
 _An intelligent AI-powered CLI tool for developers_
 
@@ -143,3 +143,7 @@ All Snow files are stored in the `.snow` folder in your user directory. Here's w
 - **custom-headers.json** - Custom request headers
 - **mcp-config.json** - MCP service configuration
 - **system-prompt.txt** - Custom system prompt content
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=MayDay-wpf/snow-cli&type=Date)](https://star-history.com/#MayDay-wpf/snow-cli&Date)
