@@ -30,6 +30,7 @@ import {onNavigate} from './hooks/integration/useGlobalNavigation.js';
 import {useTerminalSize} from './hooks/ui/useTerminalSize.js';
 import {I18nProvider} from './i18n/index.js';
 import {ThemeProvider} from './ui/contexts/ThemeContext.js';
+import {gracefulExit} from './utils/core/processManager.js';
 
 type Props = {
 	version?: string;
@@ -71,7 +72,7 @@ function ShowTaskListWrapper() {
 		return (
 			<Suspense fallback={loadingFallback}>
 				<TaskManagerScreen
-					onBack={() => process.exit(0)}
+					onBack={() => gracefulExit()}
 					onResumeTask={() => {
 						// Session is already set by convertTaskToSession
 						// Just navigate to chat view
@@ -175,7 +176,7 @@ function AppContent({
 			// Both 'chat' and 'resume-last' go to chat view
 			setCurrentView(value === 'resume-last' ? 'chat' : value);
 		} else if (value === 'exit') {
-			process.exit(0);
+			gracefulExit();
 		}
 	};
 
@@ -285,7 +286,7 @@ export default function App({
 					<Suspense fallback={loadingFallback}>
 						<HeadlessModeScreen
 							prompt={headlessPrompt}
-							onComplete={() => process.exit(0)}
+							onComplete={() => gracefulExit()}
 						/>
 					</Suspense>
 				</ThemeProvider>

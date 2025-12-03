@@ -18,8 +18,9 @@ export function useGlobalExit(
 		if (key.ctrl && input === 'c') {
 			const now = Date.now();
 			if (now - lastCtrlCTime < ctrlCTimeout) {
-				// Second Ctrl+C within timeout - exit
-				process.exit(0);
+				// Second Ctrl+C within timeout - emit SIGINT to trigger cleanup
+				// This ensures proper async cleanup before exit
+				process.emit('SIGINT');
 			} else {
 				// First Ctrl+C - show notification
 				setLastCtrlCTime(now);

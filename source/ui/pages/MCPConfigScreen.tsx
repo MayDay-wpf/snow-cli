@@ -5,6 +5,7 @@ import {writeFileSync, readFileSync, existsSync} from 'fs';
 import {join} from 'path';
 import {homedir, platform} from 'os';
 import {getMCPConfig, validateMCPConfig} from '../../utils/config/apiConfig.js';
+import {gracefulExit} from '../../utils/core/processManager.js';
 
 type Props = {
 	onBack: () => void;
@@ -73,7 +74,7 @@ export default function MCPConfigScreen({onBack}: Props) {
 				console.error('  Ubuntu/Debian: sudo apt-get install nano');
 				console.error('  CentOS/RHEL:   sudo yum install nano');
 				console.error('  macOS:         nano is usually pre-installed');
-				process.exit(1);
+				gracefulExit();
 				return;
 			}
 
@@ -106,12 +107,12 @@ export default function MCPConfigScreen({onBack}: Props) {
 					}
 				}
 
-				process.exit(0);
+				gracefulExit();
 			});
 
 			child.on('error', error => {
 				console.error('Failed to open editor:', error.message);
-				process.exit(1);
+				gracefulExit();
 			});
 		};
 
