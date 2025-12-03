@@ -56,7 +56,7 @@ nvm use 16
 
 ## 安装 JetBrains 插件
 
-- 下载 [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
+- 下载 [JetBrains 插件](https://github.com/MayDay-wpf/snow-cli/releases/tag/jetbrains)
 
 ## 可用命令
 

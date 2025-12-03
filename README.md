@@ -50,7 +50,7 @@ You can also clone and build from source: https://github.com/MayDay-wpf/snow-cli
 
 ### Install JetBrains Plugin
 
-- Download [JetBrains/build/distributions](https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains/build/distributions)
+- Download [JetBrains plugins](https://github.com/MayDay-wpf/snow-cli/releases/tag/jetbrains)
 
 ## Available Commands
 

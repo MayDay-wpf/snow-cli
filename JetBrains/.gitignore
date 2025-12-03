@@ -1,7 +1,6 @@
 # Gradle
 .gradle/
-build/*
-!build/distributions/
+build/
 !gradle/
 !gradle/wrapper/
 !gradle/wrapper/gradle-wrapper.jar
@@ -26,4 +25,3 @@ Thumbs.db
 
 # Plugin build artifacts
 *.zip
-!build/distributions/*.zip
