@@ -157,13 +157,7 @@ export default function SubAgentConfigScreen({
 		},
 		{
 			name: t.subAgentConfig.todoTools,
-			tools: [
-				'todo-create',
-				'todo-get',
-				'todo-update',
-				'todo-add',
-				'todo-delete',
-			],
+			tools: ['todo-get', 'todo-update', 'todo-add', 'todo-delete'],
 		},
 		{
 			name: t.subAgentConfig.webSearchTools,

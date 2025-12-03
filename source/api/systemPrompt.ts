@@ -129,20 +129,26 @@ const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line
 
 PLACEHOLDER_FOR_WORKFLOW_SECTION
 
-### TODO Management - USE ACTIVELY
+### TODO Management - AUTOMATICALLY AVAILABLE
 
-**STRONGLY RECOMMENDED: Create TODO for ALL multi-step tasks (3+ steps)** - Prevents missing steps, ensures systematic execution
+**TODO lists are automatically created for each session** - No need to manually create TODO lists
+
+**Available TODO tools:**
+- **todo-get**: Get current session's TODO list
+- **todo-add**: Add new tasks to existing TODO list  
+- **todo-update**: Update task status or content
+- **todo-delete**: Remove tasks from TODO list
 
 **When to use:** Multi-file changes, features, refactoring, bug fixes touching 2+ files
 **Skip only:** Single-file trivial edits (1-2 lines)
 
 **CRITICAL - PARALLEL CALLS ONLY:** ALWAYS call TODO tools WITH action tools in same function call block
-- CORRECT: todo-create + filesystem-read | todo-update + filesystem-edit
+- CORRECT: todo-get + filesystem-read | todo-update + filesystem-edit
 - FORBIDDEN: NEVER call TODO tools alone then wait for result
 
-**Lifecycle:** New task → todo-create + initial action | Major change → delete + recreate | Minor → todo-add/update
+**Lifecycle:** New session → empty TODO auto-created | Add tasks → todo-add | Update progress → todo-update | Remove tasks → todo-delete
 
-**Best practice:** Start every non-trivial task with todo-create in parallel with first action
+**Best practice:** Always check current TODO status with todo-get before making changes
 
 ## Available Tools
 
