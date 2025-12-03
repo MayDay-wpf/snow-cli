@@ -209,6 +209,7 @@ class VSCodeConnectionManager {
 
 	/**
 	 * Find the correct port for the current workspace
+	 * Prioritizes exact matches and longer path matches to handle multiple IDE instances
 	 */
 	private findPortForWorkspace(): number {
 		try {
@@ -219,17 +220,39 @@ class VSCodeConnectionManager {
 				// Normalize cwd for consistent comparison
 				const cwd = this.normalizePath(this.currentWorkingDirectory);
 
-				// Direct match
+				// Direct match - highest priority
 				if (portInfo[cwd]) {
 					return portInfo[cwd];
 				}
 
-				// Check if cwd is within any of the workspace folders
+				// Find all matching workspaces where cwd is within the workspace
+				const matches: Array<{
+					workspace: string;
+					port: number;
+					length: number;
+				}> = [];
+
 				for (const [workspace, port] of Object.entries(portInfo)) {
 					const normalizedWorkspace = this.normalizePath(workspace);
-					if (cwd.startsWith(normalizedWorkspace)) {
-						return port as number;
+
+					// Check if cwd is within this workspace
+					if (
+						cwd.startsWith(normalizedWorkspace + '/') ||
+						cwd === normalizedWorkspace
+					) {
+						matches.push({
+							workspace: normalizedWorkspace,
+							port: port as number,
+							length: normalizedWorkspace.length,
+						});
 					}
+				}
+
+				// Sort by path length (longest first) to get the most specific workspace
+				// This ensures we connect to the IDE with the most specific workspace match
+				if (matches.length > 0) {
+					matches.sort((a, b) => b.length - a.length);
+					return matches[0]!.port;
 				}
 			}
 		} catch (error) {
@@ -242,6 +265,7 @@ class VSCodeConnectionManager {
 
 	/**
 	 * Check if we should handle this message based on workspace folder
+	 * Uses the same matching logic as findPortForWorkspace to ensure consistency
 	 */
 	private shouldHandleMessage(data: any): boolean {
 		// If no workspace folder in message, accept it (backwards compatibility)
@@ -253,12 +277,18 @@ class VSCodeConnectionManager {
 		const cwd = this.normalizePath(this.currentWorkingDirectory);
 		const workspaceFolder = this.normalizePath(data.workspaceFolder);
 
-		// Bidirectional check: either cwd is within IDE workspace, or IDE workspace is within cwd
-		const cwdInWorkspace = cwd.startsWith(workspaceFolder);
-		const workspaceInCwd = workspaceFolder.startsWith(cwd);
-		const matches = cwdInWorkspace || workspaceInCwd;
+		// Exact match - highest priority
+		if (cwd === workspaceFolder) {
+			return true;
+		}
 
-		return matches;
+		// Check if cwd is within the IDE workspace (cwd is more specific)
+		const cwdInWorkspace = cwd.startsWith(workspaceFolder + '/');
+
+		// Check if workspace is within cwd (workspace is more specific)
+		const workspaceInCwd = workspaceFolder.startsWith(cwd + '/');
+
+		return cwdInWorkspace || workspaceInCwd;
 	}
 
 	private scheduleReconnect(): void {

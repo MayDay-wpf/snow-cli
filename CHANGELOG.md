@@ -1,14 +1,32 @@
 # Changelog
 
+## v0.4.31
+
+- feat(pdf): Add support for PDF.js Worker files
+
+- feat(cli): Implement sensitive command detection and confirmation mechanism
+
+- feat(api): Support sub-agent configuration and custom system prompts
+
+- feat(task): Implement background task management function
+
+- feat(codebase): Enhance error handling for file listeners and code formatting
+
+- feat(chat): Add functionality to restore the last session
+
+- fix(MarkdownRenderer): Prevent rendering issues caused by empty lines
+
+- docs(readme): Change SNOW.md to AGENTS.md to match the new project documentation standards
+
 ## v0.4.30
 
 - feat(API): Updated the system prompt template to strengthen the file path validity requirements
 
 - Added principle 7: requires all file system tool calls to use the exact file path,
-Undefined, empty strings, or placeholder paths are prohibited.
+  Undefined, empty strings, or placeholder paths are prohibited.
 - refactor(input): Optimizes the keyboard input processing logic to support the separation ofmulti-line input and command submission
 - Modify the behavior of the enter key: Ctrl+Enter inserts a line break, and Enter to submitthe message separately;
-When a slash is added to a non-whitespace character in front of the cursor, a line break isautomatically inserted to avoid missubmission.
+  When a slash is added to a non-whitespace character in front of the cursor, a line break isautomatically inserted to avoid missubmission.
 - FEAT (MCP): Enhanced file system tool parameter checksum description
 - filesystem-read/create/edit/edit_search tool adds checks to filePath and other keyparameters
 - Streamlined and clarified the requirements for paths in the description of each tool,emphasizing the need to use precise paths
@@ -51,7 +69,6 @@ When a slash is added to a non-whitespace character in front of the cursor, a li
 
 - Silently handle VS Code connection failures and update status indicators
 - Adjust maxContextTokens in the default configuration from 4000 to 120000, and adjust maxTokenfrom 4096 to 32000 to adapt to larger model context and output requirements.
-            
 
 ## v0.4.21
 
@@ -179,12 +196,12 @@ Enhance language configuration and symbol patterns
 ```bash
 $ npm install --global snow-ai
 ```
+
 ### Update
 
 ```bash
 $ snow --update
 ```
-
 
 ### Usage
 
