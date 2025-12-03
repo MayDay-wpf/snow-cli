@@ -369,7 +369,10 @@ TODO will be automatically created for each session.`,
  ALWAYS: todo-delete + filesystem-edit/todo-get/etc in parallel
  FORBIDDEN: Call todo-delete alone
 
-NOTE: Deleting a parent task will cascade delete all its children automatically.`,
+NOTE: Deleting a parent task will cascade delete all its children automatically.
+
+BEST PRACTICE - MAINTAIN CLEAN TODO:
+Proactively delete obsolete, redundant, or overly detailed completed subtasks to keep the TODO list clear and focused on current work status.`,
 				inputSchema: {
 					type: 'object',
 					properties: {

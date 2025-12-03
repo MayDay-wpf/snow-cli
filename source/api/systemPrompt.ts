@@ -148,7 +148,9 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **Lifecycle:** New session → empty TODO auto-created | Add tasks → todo-add | Update progress → todo-update | Remove tasks → todo-delete
 
-**Best practice:** Always check current TODO status with todo-get before making changes
+**Best practice:** 
+- Always check current TODO status with todo-get before making changes
+- **Keep TODO clean**: Proactively delete obsolete, redundant, or overly detailed completed subtasks to maintain clarity and focus on current work
 
 ## Available Tools
 
