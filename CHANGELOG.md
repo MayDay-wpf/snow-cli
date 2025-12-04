@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.32
+
+- Urgently fix the issue of TODO tool response loss after rejection in non-YOLO mode, as well as the issue of markdown table not being fully displayed.
+
 ## v0.4.31
 
 - feat(pdf): Add support for PDF.js Worker files

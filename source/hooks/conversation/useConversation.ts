@@ -665,6 +665,7 @@ export async function handleConversationWithTools(
 							// Create UI messages for rejected tools
 							const rejectedToolUIMessages: Message[] = [];
 
+							// Handle sensitive tools that needed confirmation
 							for (const toolCall of sensitiveTools) {
 								const rejectionMessage = {
 									role: 'tool' as const,
@@ -695,6 +696,27 @@ export async function handleConversationWithTools(
 									content: `${statusIcon} ${toolDisplay.toolName}${statusText}`,
 									streaming: false,
 								});
+							}
+
+							// Also handle auto-approved tools (including TODO tools) - they weren't executed either
+							for (const toolCall of [
+								...autoApprovedTools,
+								...nonSensitiveTools,
+							]) {
+								const rejectionMessage = {
+									role: 'tool' as const,
+									tool_call_id: toolCall.id,
+									content: rejectMessage,
+								};
+								conversationMessages.push(rejectionMessage);
+								saveMessage(rejectionMessage).catch(error => {
+									console.error(
+										'Failed to save auto-approved tool rejection message:',
+										error,
+									);
+								});
+
+								// No UI message for auto-approved tools since they were meant to be silent
 							}
 
 							// Add rejected tool messages to UI
@@ -759,6 +781,7 @@ export async function handleConversationWithTools(
 						// Create UI messages for rejected tools
 						const rejectedToolUIMessages: Message[] = [];
 
+						// Handle tools that needed confirmation
 						for (const toolCall of toolsNeedingConfirmation) {
 							const rejectionMessage = {
 								role: 'tool' as const,
@@ -786,6 +809,24 @@ export async function handleConversationWithTools(
 								content: `${statusIcon} ${toolDisplay.toolName}${statusText}`,
 								streaming: false,
 							});
+						}
+
+						// Also handle auto-approved tools (including TODO tools) - they weren't executed either
+						for (const toolCall of autoApprovedTools) {
+							const rejectionMessage = {
+								role: 'tool' as const,
+								tool_call_id: toolCall.id,
+								content: rejectMessage,
+							};
+							conversationMessages.push(rejectionMessage);
+							saveMessage(rejectionMessage).catch(error => {
+								console.error(
+									'Failed to save auto-approved tool rejection message:',
+									error,
+								);
+							});
+
+							// No UI message for auto-approved tools since they were meant to be silent
 						}
 
 						// Add rejected tool messages to UI

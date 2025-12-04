@@ -58,21 +58,7 @@ jobs:
             
             ### What's New
 
-            - feat(pdf): Add support for PDF.js Worker files
-
-            - feat(cli): Implement sensitive command detection and confirmation mechanism
-
-            - feat(api): Support sub-agent configuration and custom system prompts
-
-            - feat(task): Implement background task management function
-
-            - feat(codebase): Enhance error handling for file listeners and code formatting
-
-            - feat(chat): Add functionality to restore the last session
-
-            - fix(MarkdownRenderer): Prevent rendering issues caused by empty lines
-
-            - docs(readme): Change SNOW.md to AGENTS.md to match the new project documentation standards
+            - Urgently fix the issue of TODO tool response loss after rejection in non-YOLO mode, as well as the issue of markdown table not being fully displayed.
             
             ### Installation
             ```bash
