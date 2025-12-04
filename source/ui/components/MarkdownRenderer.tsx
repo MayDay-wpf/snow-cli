@@ -3,11 +3,12 @@ import {Text, Box} from 'ink';
 import MarkdownIt from 'markdown-it';
 // @ts-expect-error - markdown-it-terminal has no type definitions
 import terminal from 'markdown-it-terminal';
-import Table from 'cli-table3';
+import {marked} from 'marked';
+import {markedTerminal} from 'marked-terminal';
 import {highlight} from 'cli-highlight';
 import logger from '../../utils/core/logger.js';
 
-// Configure markdown-it with terminal renderer
+// Configure markdown-it with terminal renderer for non-table content
 const md = new MarkdownIt({
 	html: true,
 	breaks: true,
@@ -20,6 +21,14 @@ md.use(terminal, {
 	},
 	unescape: true,
 });
+
+// Configure marked with marked-terminal renderer for table rendering only
+marked.use(
+	markedTerminal({
+		width: process.stdout.columns || 80,
+		reflowText: true,
+	}) as any,
+);
 
 // Override fence rule to enable syntax highlighting for all languages
 // markdown-it-terminal only highlights js/javascript by default
@@ -53,43 +62,22 @@ md.renderer.rules.fence = function (tokens, idx, options, env, self) {
 	return originalFenceRule(tokens, idx, options, env, self);
 };
 
-// Custom table renderer to fix markdown-it-terminal's broken table rendering
-// Override table-related rules to use cli-table3
-md.renderer.rules['table_open'] = function () {
-	return '\x1b[TABLE_START]\x1b';
+// Override link rendering to use OSC 8 hyperlinks for clickable terminal links
+// Format: \x1b]8;;URL\x07TEXT\x1b]8;;\x07
+// This allows links to be clickable in supported terminals (iTerm2, Windows Terminal, etc.)
+md.renderer.rules['link_open'] = function (tokens, idx) {
+	const token = tokens[idx];
+	const hrefAttr = token?.attrs?.find(
+		(attr: [string, string]) => attr[0] === 'href',
+	);
+	const href = hrefAttr ? hrefAttr[1] : '';
+	// OSC 8 hyperlink start + cyan color for link text
+	return `\x1b]8;;${href}\x07\x1b[36m`;
 };
-md.renderer.rules['table_close'] = function () {
-	return '\x1b[TABLE_END]\x1b';
-};
-md.renderer.rules['thead_open'] = function () {
-	return '\x1b[THEAD_START]\x1b';
-};
-md.renderer.rules['thead_close'] = function () {
-	return '\x1b[THEAD_END]\x1b';
-};
-md.renderer.rules['tbody_open'] = function () {
-	return '\x1b[TBODY_START]\x1b';
-};
-md.renderer.rules['tbody_close'] = function () {
-	return '\x1b[TBODY_END]\x1b';
-};
-md.renderer.rules['tr_open'] = function () {
-	return '\x1b[TR_START]\x1b';
-};
-md.renderer.rules['tr_close'] = function () {
-	return '\x1b[TR_END]\x1b';
-};
-md.renderer.rules['th_open'] = function () {
-	return '\x1b[TH_START]\x1b';
-};
-md.renderer.rules['th_close'] = function () {
-	return '\x1b[TH_END]\x1b';
-};
-md.renderer.rules['td_open'] = function () {
-	return '\x1b[TD_START]\x1b';
-};
-md.renderer.rules['td_close'] = function () {
-	return '\x1b[TD_END]\x1b';
+
+md.renderer.rules['link_close'] = function () {
+	// Reset color + OSC 8 hyperlink end
+	return `\x1b[39m\x1b]8;;\x07`;
 };
 
 interface Props {
@@ -106,145 +94,57 @@ function sanitizeMarkdownContent(content: string): string {
 }
 
 /**
- * Parse and render table from special markers
- * Extracts table data between TABLE_START/TABLE_END markers
+ * Extract and render tables using marked library
+ * Detects markdown tables and renders them with marked-terminal
  */
-function parseAndRenderTable(content: string): string {
-	const tableRegex = /\x1b\[TABLE_START\]\x1b([\s\S]*?)\x1b\[TABLE_END\]\x1b/g;
+function renderTablesWithMarked(content: string): string {
+	// Match markdown tables (at least 2 lines with | separators)
+	const tableRegex = /^\s*\|.+\|.*$/gm;
 
-	return content.replace(tableRegex, (match, tableContent) => {
-		try {
-			// Extract headers and rows from table content
-			const headers: string[] = [];
-			const rows: string[][] = [];
-			let currentRow: string[] = [];
-			let isInHead = false;
-			let isInBody = false;
-			let cellContent = '';
+	// Find all table blocks
+	const lines = content.split('\n');
+	const result: string[] = [];
+	let i = 0;
 
-			// Parse table structure using markers
-			const parts = tableContent.split(
-				/(\x1b\[(?:THEAD_START|THEAD_END|TBODY_START|TBODY_END|TR_START|TR_END|TH_START|TH_END|TD_START|TD_END)\]\x1b)/g,
-			);
+	while (i < lines.length) {
+		const line = lines[i];
 
-			for (let i = 0; i < parts.length; i++) {
-				const part = parts[i];
-
-				if (part === '\x1b[THEAD_START]\x1b') {
-					isInHead = true;
-				} else if (part === '\x1b[THEAD_END]\x1b') {
-					isInHead = false;
-				} else if (part === '\x1b[TBODY_START]\x1b') {
-					isInBody = true;
-				} else if (part === '\x1b[TBODY_END]\x1b') {
-					isInBody = false;
-				} else if (part === '\x1b[TR_START]\x1b') {
-					currentRow = [];
-				} else if (part === '\x1b[TR_END]\x1b') {
-					if (isInHead && currentRow.length > 0) {
-						headers.push(...currentRow);
-					} else if (isInBody && currentRow.length > 0) {
-						rows.push(currentRow);
-					}
-				} else if (
-					part === '\x1b[TH_START]\x1b' ||
-					part === '\x1b[TD_START]\x1b'
-				) {
-					cellContent = '';
-				} else if (part === '\x1b[TH_END]\x1b' || part === '\x1b[TD_END]\x1b') {
-					// Strip ANSI codes and clean up content
-					const cleanContent = cellContent
-						.replace(/\x1b\[[0-9;]*m/g, '')
-						.trim();
-					currentRow.push(cleanContent);
-				} else if (!part.match(/\x1b\[/)) {
-					// This is cell content
-					cellContent += part;
-				}
-			}
-
-			// Get terminal width, default to 80 if not available
-			const terminalWidth = process.stdout.columns || 80;
-
-			// Calculate available width for content
-			// Table structure: | col1 | col2 | col3 |
-			// Borders: (numColumns + 1) * 1
-			// Padding: numColumns * 2 (1 space on each side)
-			const numColumns = headers.length;
-			const bordersWidth = numColumns + 1;
-			const paddingWidth = numColumns * 2;
-			const availableWidth = terminalWidth - bordersWidth - paddingWidth;
-
-			// Distribute width across columns proportionally based on content
-			const columnWidths: number[] = [];
-
-			if (availableWidth > 0 && numColumns > 0) {
-				// Calculate content length for each column (max of header and all rows)
-				const contentLengths = headers.map((header, colIndex) => {
-					// Count Chinese characters as 2, English as 1
-					const getDisplayWidth = (str: string) => {
-						let width = 0;
-						for (const char of str) {
-							// Chinese characters range
-							width += char.charCodeAt(0) > 255 ? 2 : 1;
-						}
-						return width;
-					};
-
-					let maxLen = getDisplayWidth(header);
-					rows.forEach(row => {
-						const cellContent = row[colIndex] || '';
-						maxLen = Math.max(maxLen, getDisplayWidth(cellContent));
-					});
-					return maxLen;
-				});
-
-				const totalContentWidth = contentLengths.reduce(
-					(sum, len) => sum + len,
-					0,
-				);
-
-				// Distribute available width proportionally
-				if (totalContentWidth > 0) {
-					contentLengths.forEach((len, index) => {
-						const proportion = len / totalContentWidth;
-						let colWidth = Math.floor(availableWidth * proportion);
-
-						// Set minimum column width to 8 for readability
-						colWidth = Math.max(8, colWidth);
-
-						columnWidths[index] = colWidth;
-					});
+		// Check if this line starts a table
+		if (line && tableRegex.test(line)) {
+			// Collect all consecutive table lines
+			const tableLines: string[] = [];
+			while (i < lines.length) {
+				const currentLine = lines[i];
+				if (currentLine && /^\s*\|.+\|.*$/.test(currentLine)) {
+					tableLines.push(currentLine);
+					i++;
 				} else {
-					// Equal distribution if no content
-					const equalWidth = Math.floor(availableWidth / numColumns);
-					headers.forEach(() => columnWidths.push(Math.max(8, equalWidth)));
+					break;
 				}
 			}
 
-			// Create table using cli-table3 with calculated widths
-			const table = new Table({
-				head: headers,
-				colWidths: columnWidths.length > 0 ? columnWidths : undefined,
-				style: {
-					head: ['cyan'],
-					border: ['gray'],
-				},
-				wordWrap: true,
-				wrapOnWordBoundary: false,
-			});
-
-			rows.forEach(row => table.push(row));
-
-			return '\n' + table.toString() + '\n';
-		} catch (error: any) {
-			logger.warn('[MarkdownRenderer] Failed to render table', {
-				error: error.message,
-			});
-			// Return original content on error
-			return match;
+			// Render table with marked
+			const tableMarkdown = tableLines.join('\n');
+			try {
+				const renderedTable = marked(tableMarkdown) as string;
+				result.push(renderedTable.trim());
+			} catch (error: any) {
+				logger.warn('[MarkdownRenderer] Failed to render table with marked', {
+					error: error.message,
+				});
+				// Fallback to original table markdown
+				result.push(tableMarkdown);
+			}
+		} else {
+			// Not a table line, keep as-is
+			if (line !== undefined) {
+				result.push(line);
+			}
+			i++;
 		}
-	});
+	}
+
+	return result.join('\n');
 }
 
 /**
@@ -263,15 +163,17 @@ function renderFallback(content: string): React.ReactElement {
 }
 
 export default function MarkdownRenderer({content}: Props) {
-	// Use markdown-it + markdown-it-terminal for complete markdown rendering
-	// markdown-it-terminal properly handles inline formatting in list items
+	// Use hybrid rendering: marked for tables, markdown-it for everything else
 
 	try {
 		// Stage 1: Sanitize content to prevent invalid HTML attributes
 		const sanitizedContent = sanitizeMarkdownContent(content);
 
-		// Stage 2: Render with markdown-it
-		const rendered = md.render(sanitizedContent);
+		// Stage 2: Extract tables and render them with marked
+		const processedContent = renderTablesWithMarked(sanitizedContent);
+
+		// Stage 3: Render remaining content with markdown-it
+		const rendered = md.render(processedContent);
 
 		// Safety check: ensure rendered content is valid
 		if (!rendered || typeof rendered !== 'string') {
@@ -282,14 +184,9 @@ export default function MarkdownRenderer({content}: Props) {
 			return renderFallback(content);
 		}
 
-		// Stage 3: Parse and render tables using cli-table3
-		const renderedWithTables = parseAndRenderTable(rendered);
-
-		// Split into lines and render each separately
-		// This prevents Ink's Text component from creating mysterious whitespace
-		// when handling multi-line content with \n characters
-		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes in indented lists
-		const lines = renderedWithTables
+		// Stage 4: Clean up and split lines
+		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes
+		const lines = rendered
 			.split('\n')
 			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
 
@@ -316,7 +213,7 @@ export default function MarkdownRenderer({content}: Props) {
 			</Box>
 		);
 	} catch (error: any) {
-		// Stage 3: Error handling - catch number-to-alphabet errors
+		// Error handling - catch rendering errors
 		if (error?.message?.includes('Number must be >')) {
 			logger.warn(
 				'[MarkdownRenderer] Invalid list numbering detected, falling back to plain text',

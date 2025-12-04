@@ -459,7 +459,7 @@ export async function* createStreamingResponse(
 	yield* withRetryGenerator(
 		async function* () {
 			const requestPayload: any = {
-				model: config.advancedModel || options.model,
+				model: options.model || config.advancedModel,
 				instructions: systemInstructions,
 				input: requestInput,
 				tools: convertToolsForResponses(options.tools),

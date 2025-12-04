@@ -388,7 +388,7 @@ export async function* createStreamingChatCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			const requestBody = {
-				model: config.advancedModel || options.model,
+				model: options.model || config.advancedModel,
 				messages: convertToOpenAIMessages(
 					options.messages,
 					options.includeBuiltinSystemPrompt !== false, // 默认为 true

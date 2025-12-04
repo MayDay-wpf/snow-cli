@@ -401,7 +401,7 @@ export async function* createStreamingGeminiCompletion(
 			}
 
 			// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
-			const effectiveModel = config.advancedModel || options.model;
+			const effectiveModel = options.model || config.advancedModel || '';
 			const modelName = effectiveModel.startsWith('models/')
 				? effectiveModel
 				: `models/${effectiveModel}`;

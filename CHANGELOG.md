@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.33
+
+- Update dependencies and optimize table rendering
+
 ## v0.4.32
 
 - Urgently fix the issue of TODO tool response loss after rejection in non-YOLO mode, as well as the issue of markdown table not being fully displayed.

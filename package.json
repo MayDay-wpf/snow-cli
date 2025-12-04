@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.32",
+	"version": "0.4.33",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -125,8 +125,5 @@
 	"prettier": "@vdemedes/prettier-config",
 	"optionalDependencies": {
 		"sharp": "^0.34.5"
-	},
-	"dependencies": {
-		"cli-table3": "^0.6.5"
 	}
 }

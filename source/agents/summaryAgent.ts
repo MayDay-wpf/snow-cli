@@ -32,19 +32,17 @@ export class SummaryAgent {
 		try {
 			const config = getOpenAiConfig();
 
-			// Check if basic model is configured
-			if (!config.basicModel) {
-				logger.warn(
-					'Summary agent: Basic model not configured, using advanced model as fallback',
-				);
-				// Fallback to advanced model if basic model is not configured
-				if (!config.advancedModel) {
-					logger.warn('Summary agent: No model configured');
-					return false;
-				}
-				this.modelName = config.advancedModel;
+			// Use basicModel first, fallback to advancedModel if not configured
+			const basicModel = config.basicModel?.trim();
+			const advancedModel = config.advancedModel?.trim();
+
+			if (basicModel) {
+				this.modelName = basicModel;
+			} else if (advancedModel) {
+				this.modelName = advancedModel;
 			} else {
-				this.modelName = config.basicModel;
+				logger.warn('Summary agent: No model configured');
+				return false;
 			}
 
 			this.requestMethod = config.requestMethod;

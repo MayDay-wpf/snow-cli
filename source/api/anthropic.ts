@@ -513,7 +513,7 @@ export async function* createStreamingAnthropicCompletion(
 			const userId = getPersistentUserId();
 
 			const requestBody: any = {
-				model: config.advancedModel || options.model,
+				model: options.model || config.advancedModel,
 				max_tokens: options.max_tokens || 4096,
 				system,
 				messages,

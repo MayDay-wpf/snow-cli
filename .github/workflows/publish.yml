@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Urgently fix the issue of TODO tool response loss after rejection in non-YOLO mode, as well as the issue of markdown table not being fully displayed.
+            - Update dependencies and optimize table rendering
             
             ### Installation
             ```bash
