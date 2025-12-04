@@ -4,6 +4,11 @@
 // This ensures syntax highlighting works in cli-highlight and other color libraries
 process.env['FORCE_COLOR'] = '3';
 
+// Set WORKSPACE_FOLDER_PATHS to current working directory for MCP configs
+// This allows MCP configs to use ${WORKSPACE_FOLDER_PATHS%%,*} to get the workspace path
+// Compatible with VSCode's workspaceFolders API (comma-separated paths)
+process.env['WORKSPACE_FOLDER_PATHS'] = process.cwd();
+
 // Check Node.js version before anything else
 const MIN_NODE_VERSION = 16;
 const currentVersion = process.version;

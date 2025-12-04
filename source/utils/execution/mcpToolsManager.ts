@@ -27,6 +27,147 @@ import os from 'os';
 import path from 'path';
 
 /**
+ * Enhanced environment variable expansion supporting Shell parameter expansion syntax
+ *
+ * Supported syntax:
+ * - ${VAR} or $VAR - Simple variable substitution
+ * - ${VAR:-default} - Use default value if VAR is unset or empty
+ * - ${VAR:offset} - Substring from offset to end
+ * - ${VAR:offset:length} - Substring with length
+ * - ${VAR#pattern} - Remove shortest match from beginning
+ * - ${VAR##pattern} - Remove longest match from beginning
+ * - ${VAR%pattern} - Remove shortest match from end
+ * - ${VAR%%pattern} - Remove longest match from end
+ * - $env:VAR - PowerShell variable syntax (simple substitution only)
+ *
+ * @param str - String containing environment variable references
+ * @param env - Environment variables object
+ * @returns String with variables expanded
+ */
+function expandEnvVars(
+	str: string,
+	env: Record<string, string | undefined>,
+): string {
+	// Handle ${...} syntax with parameter expansion
+	str = str.replace(/\$\{([^}]+)\}/g, (match, content) => {
+		// ${VAR%%pattern} - Remove longest match from end
+		if (content.includes('%%')) {
+			const [varName, pattern] = content.split('%%', 2);
+			const value = env[varName];
+			if (value === undefined) return match;
+
+			// Convert glob pattern to regex (simple implementation)
+			const regexPattern = pattern
+				.replace(/\*/g, '.*')
+				.replace(/\?/g, '.')
+				.replace(/\[/g, '\\[')
+				.replace(/\]/g, '\\]');
+
+			// Find longest match from end
+			const regex = new RegExp(`${regexPattern}$`);
+			return value.replace(regex, '');
+		}
+
+		// ${VAR%pattern} - Remove shortest match from end
+		if (content.includes('%')) {
+			const [varName, pattern] = content.split('%', 2);
+			const value = env[varName];
+			if (value === undefined) return match;
+
+			// Convert glob pattern to regex (non-greedy)
+			const regexPattern = pattern
+				.replace(/\*/g, '.*?')
+				.replace(/\?/g, '.')
+				.replace(/\[/g, '\\[')
+				.replace(/\]/g, '\\]');
+
+			// Find shortest match from end
+			const regex = new RegExp(`${regexPattern}$`);
+			return value.replace(regex, '');
+		}
+
+		// ${VAR##pattern} - Remove longest match from beginning
+		if (content.includes('##')) {
+			const [varName, pattern] = content.split('##', 2);
+			const value = env[varName];
+			if (value === undefined) return match;
+
+			// Convert glob pattern to regex
+			const regexPattern = pattern
+				.replace(/\*/g, '.*')
+				.replace(/\?/g, '.')
+				.replace(/\[/g, '\\[')
+				.replace(/\]/g, '\\]');
+
+			// Find longest match from beginning
+			const regex = new RegExp(`^${regexPattern}`);
+			return value.replace(regex, '');
+		}
+
+		// ${VAR#pattern} - Remove shortest match from beginning
+		if (content.includes('#')) {
+			const [varName, pattern] = content.split('#', 2);
+			const value = env[varName];
+			if (value === undefined) return match;
+
+			// Convert glob pattern to regex (non-greedy)
+			const regexPattern = pattern
+				.replace(/\*/g, '.*?')
+				.replace(/\?/g, '.')
+				.replace(/\[/g, '\\[')
+				.replace(/\]/g, '\\]');
+
+			// Find shortest match from beginning
+			const regex = new RegExp(`^${regexPattern}`);
+			return value.replace(regex, '');
+		}
+
+		// ${VAR:-default} - Use default if unset or empty
+		if (content.includes(':-')) {
+			const [varName, defaultValue] = content.split(':-', 2);
+			const value = env[varName];
+			return value === undefined || value === '' ? defaultValue : value;
+		}
+
+		// ${VAR:offset:length} or ${VAR:offset} - Substring
+		if (content.includes(':')) {
+			const parts = content.split(':');
+			const varName = parts[0];
+			const value = env[varName];
+			if (value === undefined) return match;
+
+			const offset = parseInt(parts[1], 10);
+			if (isNaN(offset)) return match;
+
+			if (parts.length === 3) {
+				const length = parseInt(parts[2], 10);
+				if (isNaN(length)) return match;
+				return value.substring(offset, offset + length);
+			}
+
+			return value.substring(offset);
+		}
+
+		// ${VAR} - Simple substitution
+		const value = env[content];
+		return value !== undefined ? value : match;
+	});
+
+	// Handle $VAR syntax (simple variables only)
+	str = str.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, varName) => {
+		const value = env[varName];
+		return value !== undefined ? value : match;
+	});
+
+	// Handle PowerShell $env:VAR syntax (simple substitution only)
+	str = str.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/g, (match, varName) => {
+		const value = env[varName];
+		return value !== undefined ? value : match;
+	});
+
+	return str;
+}
+/**
  * Extended Error interface with optional isHookFailure flag
  */
 export interface HookError extends Error {
@@ -672,24 +813,9 @@ async function connectAndGetTools(
 		if (server.url) {
 			let urlString = server.url;
 
-			if (server.env) {
-				const allEnv = {...process.env, ...server.env};
-				urlString = urlString.replace(
-					/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-					(match, braced, simple) => {
-						const varName = braced || simple;
-						return allEnv[varName] || match;
-					},
-				);
-			} else {
-				urlString = urlString.replace(
-					/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-					(match, braced, simple) => {
-						const varName = braced || simple;
-						return process.env[varName] || match;
-					},
-				);
-			}
+			// Use enhanced environment variable expansion
+			const allEnv = server.env ? {...process.env, ...server.env} : process.env;
+			urlString = expandEnvVars(urlString, allEnv);
 
 			const url = new URL(urlString);
 
@@ -882,16 +1008,11 @@ async function getPersistentClient(
 
 	if (server.url) {
 		let urlString = server.url;
-		if (server.env) {
-			const allEnv = {...process.env, ...server.env};
-			urlString = urlString.replace(
-				/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-				(match, braced, simple) => {
-					const varName = braced || simple;
-					return allEnv[varName] || match;
-				},
-			);
-		}
+
+		// Use enhanced environment variable expansion
+		const allEnv = server.env ? {...process.env, ...server.env} : process.env;
+		urlString = expandEnvVars(urlString, allEnv);
+
 		const url = new URL(urlString);
 		transport = new StreamableHTTPClientTransport(url);
 	} else if (server.command) {
