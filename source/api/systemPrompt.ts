@@ -135,22 +135,35 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **Available TODO tools:**
 - **todo-get**: Get current session's TODO list
-- **todo-add**: Add new tasks to existing TODO list  
+- **todo-add**: Add one or multiple new tasks to existing TODO list (supports batch adding)
 - **todo-update**: Update task status or content
 - **todo-delete**: Remove tasks from TODO list
 
 **When to use:** Multi-file changes, features, refactoring, bug fixes touching 2+ files
 **Skip only:** Single-file trivial edits (1-2 lines)
 
+**RECOMMENDED WORKFLOW - Plan Before Execute:**
+- **Before starting programming tasks**: Use todo-add to create a task list first (supports batch adding multiple tasks at once)
+- **While executing**: Update task status with todo-update as you complete each step
+- **Benefits**: Clear task structure, trackable progress, prevents missing requirements
+
 **CRITICAL - PARALLEL CALLS ONLY:** ALWAYS call TODO tools WITH action tools in same function call block
-- CORRECT: todo-get + filesystem-read | todo-update + filesystem-edit
+- CORRECT: todo-get + filesystem-read | todo-update + filesystem-edit | todo-add + filesystem-read
 - FORBIDDEN: NEVER call TODO tools alone then wait for result
 
-**Lifecycle:** New session → empty TODO auto-created | Add tasks → todo-add | Update progress → todo-update | Remove tasks → todo-delete
+**Lifecycle:** Receive task → Add TODO items (todo-add) → Execute & update progress (todo-update) → Clean up completed items (todo-delete)
+
+**todo-add supports both single and batch adding:**
+- Single task: Pass a string for 'content' parameter
+- Multiple tasks: Pass an array of strings for 'content' to add multiple tasks at once
+- Example single: todo-add(content="Task 1")
+- Example batch: todo-add(content=["Task 1", "Task 2", "Task 3"])
+- This avoids redundant tool calls when adding multiple tasks
 
 **Best practice:** 
 - Always check current TODO status with todo-get before making changes
 - **Keep TODO clean**: Proactively delete obsolete, redundant, or overly detailed completed subtasks to maintain clarity and focus on current work
+- Use batch adding when you have multiple tasks to add at once to reduce tool call overhead
 
 ## Available Tools
 

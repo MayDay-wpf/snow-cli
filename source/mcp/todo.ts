@@ -330,7 +330,7 @@ Example: todo-update(task1, completed) + filesystem-edit(task2) → Update while
 			},
 			{
 				name: 'todo-add',
-				description: `Add new task to existing TODO list when requirements expand.
+				description: `Add one or multiple new tasks to existing TODO list when requirements expand.
 
  MANDATORY RULE - PARALLEL CALLS ONLY:
  NEVER call todo-add alone! MUST call with other tools in the SAME function call block.
@@ -342,19 +342,34 @@ USE WHEN:
 - You discover additional necessary steps
 - Breaking down a complex task into subtasks
 
+SUPPORTS BOTH:
+- Single task: Pass a string for 'content'
+- Multiple tasks: Pass an array of strings for 'content' to batch add tasks efficiently
+
 TODO will be automatically created for each session.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
 						content: {
-							type: 'string',
+							oneOf: [
+								{
+									type: 'string',
+									description: 'Single TODO item description',
+								},
+								{
+									type: 'array',
+									items: {type: 'string'},
+									description:
+										'Multiple TODO item descriptions for batch adding',
+								},
+							],
 							description:
-								'TODO item description - must be specific, actionable, and technically precise',
+								'TODO item description(s) - must be specific, actionable, and technically precise. Can be a single string or an array of strings.',
 						},
 						parentId: {
 							type: 'string',
 							description:
-								'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get.',
+								'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get. When adding multiple tasks, all will be added under the same parent.',
 						},
 					},
 					required: ['content'],
@@ -455,19 +470,37 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 
 				case 'add': {
 					const {content, parentId} = args as {
-						content: string;
+						content: string | string[];
 						parentId?: string;
 					};
 
-					const result = await this.addTodoItem(sessionId, content, parentId);
-					return {
-						content: [
-							{
-								type: 'text',
-								text: JSON.stringify(result, null, 2),
-							},
-						],
-					};
+					// 支持批量添加或单个添加
+					if (Array.isArray(content)) {
+						// 批量添加多个TODO项
+						let currentList = await this.getTodoList(sessionId);
+						for (const item of content) {
+							currentList = await this.addTodoItem(sessionId, item, parentId);
+						}
+						return {
+							content: [
+								{
+									type: 'text',
+									text: JSON.stringify(currentList, null, 2),
+								},
+							],
+						};
+					} else {
+						// 单个添加
+						const result = await this.addTodoItem(sessionId, content, parentId);
+						return {
+							content: [
+								{
+									type: 'text',
+									text: JSON.stringify(result, null, 2),
+								},
+							],
+						};
+					}
 				}
 
 				case 'delete': {
