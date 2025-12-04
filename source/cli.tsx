@@ -361,30 +361,52 @@ process.stdout.write('\x1b[?2004l');
 process.stdout.write('\x1b[2K\r'); // Clear line
 process.stdout.write('\x1b[?25h'); // Show cursor
 
-// Re-enable on exit to avoid polluting parent shell
-const cleanup = async () => {
+// Track cleanup state to prevent multiple cleanup calls
+let isCleaningUp = false;
+
+// Synchronous cleanup for 'exit' event (cannot be async)
+const cleanupSync = () => {
 	process.stdout.write('\x1b[?2004l');
-	// Cleanup loaded dependencies if available
 	const deps = (global as any).__deps;
 	if (deps) {
-		// Close all persistent MCP connections (Playwright, etc.)
-		await deps.closeAllMCPConnections?.();
-		// Kill all child processes
+		// Kill all child processes synchronously
 		deps.processManager.killAll();
-		// Stop resource monitoring
 		deps.resourceMonitor.stopMonitoring();
-		// Disconnect VSCode connection before exit
 		deps.vscodeConnection.stop();
 	}
 };
 
-process.on('exit', cleanup);
-process.on('SIGINT', () => {
-	cleanup();
+// Async cleanup for SIGINT/SIGTERM - waits for graceful shutdown
+const cleanupAsync = async () => {
+	if (isCleaningUp) return;
+	isCleaningUp = true;
+
+	process.stdout.write('\x1b[?2004l');
+	const deps = (global as any).__deps;
+	if (deps) {
+		// Close MCP connections first (graceful shutdown with timeout)
+		try {
+			await Promise.race([
+				deps.closeAllMCPConnections?.(),
+				new Promise(resolve => setTimeout(resolve, 2000)), // 2s timeout
+			]);
+		} catch {
+			// Ignore MCP close errors
+		}
+		// Then kill remaining processes
+		deps.processManager.killAll();
+		deps.resourceMonitor.stopMonitoring();
+		deps.vscodeConnection.stop();
+	}
+};
+
+process.on('exit', cleanupSync);
+process.on('SIGINT', async () => {
+	await cleanupAsync();
 	process.exit(0);
 });
-process.on('SIGTERM', () => {
-	cleanup();
+process.on('SIGTERM', async () => {
+	await cleanupAsync();
 	process.exit(0);
 });
 render(
