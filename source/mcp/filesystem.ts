@@ -1123,7 +1123,25 @@ export class FilesystemMCPService {
 				.replace(/\r/g, '\n');
 			const beforeLines = lines.slice(0, startLine - 1);
 			const afterLines = lines.slice(endLine);
-			const replaceLines = normalizedReplace.split('\n');
+			let replaceLines = normalizedReplace.split('\n');
+
+			// Fix indentation for Python/YAML files: preserve first line's original indentation
+			// but keep relative indentation for subsequent lines
+			if (replaceLines.length > 0) {
+				const originalFirstLine = lines[startLine - 1];
+				const originalIndent = originalFirstLine?.match(/^(\s*)/)?.[1] || '';
+				const replaceFirstLine = replaceLines[0];
+				const replaceIndent = replaceFirstLine?.match(/^(\s*)/)?.[1] || '';
+
+				// Only adjust if the first line indentation is different
+				if (originalIndent !== replaceIndent && replaceFirstLine) {
+					// Adjust only the first line to match original indentation
+					const adjustedFirstLine = originalIndent + replaceFirstLine.trim();
+					replaceLines[0] = adjustedFirstLine;
+					// Subsequent lines keep their relative indentation
+				}
+			}
+
 			const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
 			const modifiedContent = modifiedLines.join('\n');
 
