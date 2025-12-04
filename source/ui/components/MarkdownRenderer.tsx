@@ -163,13 +163,75 @@ function parseAndRenderTable(content: string): string {
 				}
 			}
 
-			// Create table using cli-table3
+			// Get terminal width, default to 80 if not available
+			const terminalWidth = process.stdout.columns || 80;
+
+			// Calculate available width for content
+			// Table structure: | col1 | col2 | col3 |
+			// Borders: (numColumns + 1) * 1
+			// Padding: numColumns * 2 (1 space on each side)
+			const numColumns = headers.length;
+			const bordersWidth = numColumns + 1;
+			const paddingWidth = numColumns * 2;
+			const availableWidth = terminalWidth - bordersWidth - paddingWidth;
+
+			// Distribute width across columns proportionally based on content
+			const columnWidths: number[] = [];
+
+			if (availableWidth > 0 && numColumns > 0) {
+				// Calculate content length for each column (max of header and all rows)
+				const contentLengths = headers.map((header, colIndex) => {
+					// Count Chinese characters as 2, English as 1
+					const getDisplayWidth = (str: string) => {
+						let width = 0;
+						for (const char of str) {
+							// Chinese characters range
+							width += char.charCodeAt(0) > 255 ? 2 : 1;
+						}
+						return width;
+					};
+
+					let maxLen = getDisplayWidth(header);
+					rows.forEach(row => {
+						const cellContent = row[colIndex] || '';
+						maxLen = Math.max(maxLen, getDisplayWidth(cellContent));
+					});
+					return maxLen;
+				});
+
+				const totalContentWidth = contentLengths.reduce(
+					(sum, len) => sum + len,
+					0,
+				);
+
+				// Distribute available width proportionally
+				if (totalContentWidth > 0) {
+					contentLengths.forEach((len, index) => {
+						const proportion = len / totalContentWidth;
+						let colWidth = Math.floor(availableWidth * proportion);
+
+						// Set minimum column width to 8 for readability
+						colWidth = Math.max(8, colWidth);
+
+						columnWidths[index] = colWidth;
+					});
+				} else {
+					// Equal distribution if no content
+					const equalWidth = Math.floor(availableWidth / numColumns);
+					headers.forEach(() => columnWidths.push(Math.max(8, equalWidth)));
+				}
+			}
+
+			// Create table using cli-table3 with calculated widths
 			const table = new Table({
 				head: headers,
+				colWidths: columnWidths.length > 0 ? columnWidths : undefined,
 				style: {
 					head: ['cyan'],
 					border: ['gray'],
 				},
+				wordWrap: true,
+				wrapOnWordBoundary: false,
 			});
 
 			rows.forEach(row => table.push(row));
