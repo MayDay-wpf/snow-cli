@@ -381,7 +381,6 @@ export async function executeToolCall(
 function getToolResourceType(toolName: string): string {
 	// TODO tools all modify the same TODO file - must be sequential
 	if (
-		toolName === 'todo-create' ||
 		toolName === 'todo-update' ||
 		toolName === 'todo-add' ||
 		toolName === 'todo-delete'

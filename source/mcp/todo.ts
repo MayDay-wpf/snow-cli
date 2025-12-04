@@ -174,13 +174,26 @@ export class TodoService {
 		const todoList = await this.getTodoList(sessionId);
 		const now = new Date().toISOString();
 
+		/**
+		 * 验证并修正 parentId
+		 * - 如果 parentId 为空或不存在于当前列表中，自动转为 undefined（创建根级任务）
+		 * - 如果 parentId 有效，保持原值（创建子任务）
+		 */
+		let validatedParentId: string | undefined;
+		if (parentId && parentId.trim() !== '' && todoList) {
+			const parentExists = todoList.todos.some(todo => todo.id === parentId);
+			if (parentExists) {
+				validatedParentId = parentId;
+			}
+		}
+
 		const newTodo: TodoItem = {
 			id: `todo-${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
 			content,
 			status: 'pending',
 			createdAt: now,
 			updatedAt: now,
-			parentId,
+			parentId: validatedParentId,
 		};
 
 		const todos = todoList ? [...todoList.todos, newTodo] : [newTodo];
@@ -203,6 +216,13 @@ export class TodoService {
 			t => t.id !== todoId && t.parentId !== todoId,
 		);
 		return this.saveTodoList(sessionId, filteredTodos, todoList);
+	}
+
+	/**
+	 * 创建空 TODO 列表（会话自动创建时使用）
+	 */
+	async createEmptyTodo(sessionId: string): Promise<TodoList> {
+		return this.saveTodoList(sessionId, [], null);
 	}
 
 	/**
@@ -250,69 +270,6 @@ export class TodoService {
 	 */
 	getTools(): Tool[] {
 		return [
-			{
-				name: 'todo-create',
-				description: ` RECOMMENDED: Create TODO list for structured task execution. Use this for ALL multi-step tasks!
-
-MANDATORY RULE - PARALLEL CALLS ONLY:
-NEVER call todo-create alone! MUST call with other tools in the SAME function call block.
-ALWAYS: todo-create + filesystem-read (or other action tool) in parallel
-FORBIDDEN: Call todo-create, wait for result, then call other tools
-
-##  DEFAULT USAGE - Use TODO by default for:
-ANY multi-file changes (always create TODO first)
-ANY feature implementation (plan with TODO)
-ANY refactoring work (track with TODO)
-Bug fixes involving 2+ files (use TODO)
-Tasks with 3+ distinct steps (create TODO)
-SKIP ONLY: Single-file trivial edits (1-2 lines)
-
-##  WHY CREATE TODO:
-- Ensures all requirements are addressed
-- Prevents missing critical steps
-- Provides clear progress tracking
-- Improves code quality through systematic approach
-- Builds user confidence with visible structure
-
-##  WHEN TO CALL:
-1. **NEW TASK**: Create TODO immediately when starting work (with parallel action)
-2. **NEW REQUIREMENT**: Delete old todos, create fresh list (with parallel action)
-3. **BEST PRACTICE**: Call todo-create + filesystem-read in parallel
-
-##  CREATION GUIDELINES:
-- Break work into 3-7 clear, actionable tasks
-- Order by logical dependencies
-- Be specific (e.g., "Modify validateInput in form.ts" not "fix validation")
-- Include verification step if critical
-- Creates root tasks only - use todo-add to create subtasks
-
-##  LIFECYCLE:
-This REPLACES the entire TODO list. For adding tasks to existing list, use "todo-add" instead.
-
-##  REMEMBER: MUST call with other tools - never alone!`,
-				inputSchema: {
-					type: 'object',
-					properties: {
-						todos: {
-							type: 'array',
-							items: {
-								type: 'object',
-								properties: {
-									content: {
-										type: 'string',
-										description:
-											'TODO item description - must be specific, actionable, and technically precise (e.g., "Modify handleSubmit function in ChatInput.tsx to validate user input before processing" NOT "fix input validation")',
-									},
-								},
-								required: ['content'],
-							},
-							description:
-								'Complete list of TODO items. Each item must represent a discrete, verifiable unit of work. For programming tasks, typical structure: analyze code → implement changes → test functionality → verify build → commit (if requested).',
-						},
-					},
-					required: ['todos'],
-				},
-			},
 			{
 				name: 'todo-get',
 				description: `Get current TODO list with task IDs, status, and hierarchy.
@@ -385,7 +342,7 @@ USE WHEN:
 - You discover additional necessary steps
 - Breaking down a complex task into subtasks
 
-DO NOT use for initial planning - use todo-create instead.`,
+TODO will be automatically created for each session.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -412,7 +369,10 @@ DO NOT use for initial planning - use todo-create instead.`,
  ALWAYS: todo-delete + filesystem-edit/todo-get/etc in parallel
  FORBIDDEN: Call todo-delete alone
 
-NOTE: Deleting a parent task will cascade delete all its children automatically.`,
+NOTE: Deleting a parent task will cascade delete all its children automatically.
+
+BEST PRACTICE - MAINTAIN CLEAN TODO:
+Proactively delete obsolete, redundant, or overly detailed completed subtasks to keep the TODO list clear and focused on current work status.`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -451,49 +411,19 @@ NOTE: Deleting a parent task will cascade delete all its children automatically.
 
 		try {
 			switch (toolName) {
-				case 'create': {
-					const {todos} = args as {
-						todos: Array<{content: string}>;
-					};
+				case 'get': {
+					let result = await this.getTodoList(sessionId);
 
-					const todoItems: TodoItem[] = todos.map(t => {
-						const now = new Date().toISOString();
-						return {
-							id: `todo-${Date.now()}_${Math.random()
-								.toString(36)
-								.slice(2, 9)}`,
-							content: t.content,
-							status: 'pending' as const,
-							createdAt: now,
-							updatedAt: now,
-						};
-					});
+					// 兜底机制：如果TODO不存在，自动创建空TODO
+					if (!result) {
+						result = await this.createEmptyTodo(sessionId);
+					}
 
-					const existingList = await this.getTodoList(sessionId);
-					const result = await this.saveTodoList(
-						sessionId,
-						todoItems,
-						existingList,
-					);
 					return {
 						content: [
 							{
 								type: 'text',
 								text: JSON.stringify(result, null, 2),
-							},
-						],
-					};
-				}
-
-				case 'get': {
-					const result = await this.getTodoList(sessionId);
-					return {
-						content: [
-							{
-								type: 'text',
-								text: result
-									? JSON.stringify(result, null, 2)
-									: 'No TODO list found',
 							},
 						],
 					};

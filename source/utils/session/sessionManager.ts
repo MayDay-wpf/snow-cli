@@ -101,7 +101,26 @@ class SessionManager {
 			await this.saveSession(session);
 		}
 
+		// 🔥 新增：自动创建空TODO
+		await this.createEmptyTodoForSession(sessionId);
+
 		return session;
+	}
+
+	/**
+	 * 为会话创建空TODO列表
+	 */
+	private async createEmptyTodoForSession(sessionId: string): Promise<void> {
+		try {
+			const todoService = getTodoService();
+			await todoService.createEmptyTodo(sessionId);
+		} catch (error) {
+			// TODO创建失败不应该影响会话创建，记录日志即可
+			logger.warn('Failed to create empty TODO for session:', {
+				sessionId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 	}
 
 	async saveSession(session: Session): Promise<void> {
