@@ -80,15 +80,18 @@ export async function executeContextCompression(): Promise<{
 		) {
 			for (const msg of compressionResult.preservedMessages) {
 				// 保留完整的消息结构，包括所有关键字段
+				// CRITICAL: Use !== undefined to preserve empty strings and empty arrays
 				newSessionMessages.push({
 					role: msg.role,
 					content: msg.content,
 					timestamp: Date.now(),
-					...(msg.tool_call_id && {tool_call_id: msg.tool_call_id}),
-					...(msg.tool_calls && {tool_calls: msg.tool_calls}),
-					...(msg.images && {images: msg.images}),
-					...(msg.reasoning && {reasoning: msg.reasoning}),
-					...(msg.thinking && {thinking: msg.thinking}), // 保留 thinking 字段（Anthropic Extended Thinking）
+					...(msg.tool_call_id !== undefined && {
+						tool_call_id: msg.tool_call_id,
+					}),
+					...(msg.tool_calls !== undefined && {tool_calls: msg.tool_calls}),
+					...(msg.images !== undefined && {images: msg.images}),
+					...(msg.reasoning !== undefined && {reasoning: msg.reasoning}),
+					...(msg.thinking !== undefined && {thinking: msg.thinking}), // 保留 thinking 字段（Anthropic Extended Thinking）
 					...(msg.subAgentInternal !== undefined && {
 						subAgentInternal: msg.subAgentInternal,
 					}),
