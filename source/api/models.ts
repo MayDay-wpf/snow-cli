@@ -1,4 +1,5 @@
 import { getOpenAiConfig, getCustomHeaders } from '../utils/config/apiConfig.js';
+import { addProxyToFetchOptions } from '../utils/core/proxyUtils.js';
 
 export interface Model {
 	id: string;
@@ -47,10 +48,11 @@ async function fetchOpenAIModels(baseUrl: string, apiKey: string, customHeaders:
 		headers['Authorization'] = `Bearer ${apiKey}`;
 	}
 
-	const response = await fetch(url, {
+	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
 		headers,
 	});
+	const response = await fetch(url, fetchOptions);
 
 	if (!response.ok) {
 		throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
@@ -67,12 +69,13 @@ async function fetchGeminiModels(baseUrl: string, apiKey: string): Promise<Model
 	// Gemini uses API key as query parameter
 	const url = `${baseUrl}/models?key=${apiKey}`;
 
-	const response = await fetch(url, {
+	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',
 		},
 	});
+	const response = await fetch(url, fetchOptions);
 
 	if (!response.ok) {
 		throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
@@ -106,10 +109,11 @@ async function fetchAnthropicModels(baseUrl: string, apiKey: string, customHeade
 		headers['Authorization'] = `Bearer ${apiKey}`;
 	}
 
-	const response = await fetch(url, {
+	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
 		headers,
 	});
+	const response = await fetch(url, fetchOptions);
 
 	if (!response.ok) {
 		throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
