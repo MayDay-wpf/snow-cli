@@ -39,6 +39,7 @@ export interface ApiConfig {
 	maxTokens?: number; // Max tokens for single response (API request parameter)
 	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
+	anthropicCacheTTL?: '5m' | '1h'; // Anthropic prompt cache TTL (default: 5m)
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
 	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration

@@ -62,7 +62,7 @@ export interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: any;
-	cache_control?: {type: 'ephemeral'};
+	cache_control?: {type: 'ephemeral'; ttl?: '5m' | '1h'};
 }
 
 export interface AnthropicMessageParam {
@@ -138,10 +138,11 @@ function convertToolsToAnthropic(
 			throw new Error('Invalid tool format');
 		});
 
-	if (convertedTools.length > 0) {
-		const lastTool = convertedTools[convertedTools.length - 1];
-		(lastTool as any).cache_control = {type: 'ephemeral'};
-	}
+	// Do not add cache_control to tools to avoid TTL ordering issues
+	// if (convertedTools.length > 0) {
+	// 	const lastTool = convertedTools[convertedTools.length - 1];
+	// 	(lastTool as any).cache_control = {type: 'ephemeral', ttl: '5m'};
+	// }
 
 	return convertedTools;
 }
@@ -151,11 +152,14 @@ function convertToolsToAnthropic(
  * Adds cache_control to system prompt and last user message for prompt caching
  * @param messages - The messages to convert
  * @param includeBuiltinSystemPrompt - Whether to include builtin system prompt (default true)
+ * @param customSystemPromptOverride - Allow override for sub-agents
+ * @param cacheTTL - Cache TTL for prompt caching (default: '5m')
  */
 function convertToAnthropicMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string, // Allow override for sub-agents
+	cacheTTL: '5m' | '1h' = '5m', // Cache TTL configuration
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
@@ -325,7 +329,7 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: getSystemPrompt(),
-						cache_control: {type: 'ephemeral'},
+						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
 				] as any,
 			});
@@ -354,14 +358,14 @@ function convertToAnthropicMessages(
 					{
 						type: 'text',
 						text: lastMessage.content,
-						cache_control: {type: 'ephemeral'},
+						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					} as any,
 				];
 			} else if (Array.isArray(lastMessage.content)) {
 				const lastContentIndex = lastMessage.content.length - 1;
 				if (lastContentIndex >= 0) {
 					const lastContent = lastMessage.content[lastContentIndex] as any;
-					lastContent.cache_control = {type: 'ephemeral'};
+					lastContent.cache_control = {type: 'ephemeral', ttl: cacheTTL};
 				}
 			}
 		}
@@ -372,7 +376,7 @@ function convertToAnthropicMessages(
 				{
 					type: 'text',
 					text: systemContent,
-					cache_control: {type: 'ephemeral'},
+					cache_control: {type: 'ephemeral', ttl: cacheTTL},
 				},
 		  ]
 		: undefined;
@@ -507,6 +511,7 @@ export async function* createStreamingAnthropicCompletion(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 				customSystemPromptContent, // 传递自定义系统提示词
+				config.anthropicCacheTTL || '5m', // 使用配置的 TTL，默认 5m
 			);
 
 			// Use persistent userId that remains the same until application restart

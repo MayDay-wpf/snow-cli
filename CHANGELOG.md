@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.34
+
+- Add Anthropic cache TL configuration options
+
 ## v0.4.33
 
 - Update dependencies and optimize table rendering

@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Update dependencies and optimize table rendering
+            - Add Anthropic cache TL configuration options
             
             ### Installation
             ```bash

@@ -133,6 +133,9 @@ export type TranslationKeys = {
 		apiKey: string;
 		requestMethod: string;
 		anthropicBeta: string;
+		anthropicCacheTTL: string;
+		anthropicCacheTTL5m: string;
+		anthropicCacheTTL1h: string;
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
 		thinkingEnabled: string;

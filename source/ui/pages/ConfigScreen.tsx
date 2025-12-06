@@ -39,6 +39,7 @@ type ConfigField =
 	| 'apiKey'
 	| 'requestMethod'
 	| 'anthropicBeta'
+	| 'anthropicCacheTTL'
 	| 'enablePromptOptimization'
 	| 'enableAutoCompress'
 	| 'thinkingEnabled'
@@ -116,6 +117,7 @@ export default function ConfigScreen({
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
+	const [anthropicCacheTTL, setAnthropicCacheTTL] = useState<'5m' | '1h'>('5m');
 	const [enablePromptOptimization, setEnablePromptOptimization] =
 		useState(true);
 	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
@@ -188,6 +190,7 @@ export default function ConfigScreen({
 			...(requestMethod === 'anthropic'
 				? [
 						'anthropicBeta' as ConfigField,
+						'anthropicCacheTTL' as ConfigField,
 						'thinkingEnabled' as ConfigField,
 						'thinkingBudgetTokens' as ConfigField,
 				  ]
@@ -226,6 +229,7 @@ export default function ConfigScreen({
 		if (
 			requestMethod !== 'anthropic' &&
 			(currentField === 'anthropicBeta' ||
+				currentField === 'anthropicCacheTTL' ||
 				currentField === 'thinkingEnabled' ||
 				currentField === 'thinkingBudgetTokens')
 		) {
@@ -275,6 +279,7 @@ export default function ConfigScreen({
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
 		setAnthropicBeta(config.anthropicBeta || false);
+		setAnthropicCacheTTL(config.anthropicCacheTTL || '5m');
 		setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
 		setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
 		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
@@ -363,6 +368,7 @@ export default function ConfigScreen({
 					apiKey,
 					requestMethod,
 					anthropicBeta,
+					anthropicCacheTTL,
 					thinking: thinkingEnabled
 						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
@@ -455,6 +461,7 @@ export default function ConfigScreen({
 				apiKey,
 				requestMethod,
 				anthropicBeta,
+				anthropicCacheTTL,
 				enablePromptOptimization,
 				enableAutoCompress,
 				advancedModel,
@@ -508,6 +515,7 @@ export default function ConfigScreen({
 						apiKey,
 						requestMethod,
 						anthropicBeta,
+						anthropicCacheTTL,
 						enablePromptOptimization,
 						enableAutoCompress,
 						thinking: thinkingEnabled
@@ -674,6 +682,44 @@ export default function ConfigScreen({
 								{t.configScreen.toggleHint}
 							</Text>
 						</Box>
+					</Box>
+				);
+
+			case 'anthropicCacheTTL':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.anthropicCacheTTL}
+						</Text>
+						{isEditing && isActive ? (
+							<Box marginLeft={3}>
+								<Select
+									options={[
+										{label: t.configScreen.anthropicCacheTTL5m, value: '5m'},
+										{label: t.configScreen.anthropicCacheTTL1h, value: '1h'},
+									]}
+									defaultValue={anthropicCacheTTL}
+									onChange={(value: string) => {
+										setAnthropicCacheTTL(value as '5m' | '1h');
+										setIsEditing(false);
+									}}
+								/>
+							</Box>
+						) : (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{anthropicCacheTTL === '5m'
+										? t.configScreen.anthropicCacheTTL5m
+										: t.configScreen.anthropicCacheTTL1h}{' '}
+									({t.configScreen.toggleHint})
+								</Text>
+							</Box>
+						)}
 					</Box>
 				);
 
@@ -1238,6 +1284,8 @@ export default function ConfigScreen({
 				// Enter edit mode
 				if (currentField === 'anthropicBeta') {
 					setAnthropicBeta(!anthropicBeta);
+				} else if (currentField === 'anthropicCacheTTL') {
+					setIsEditing(true);
 				} else if (currentField === 'enablePromptOptimization') {
 					setEnablePromptOptimization(!enablePromptOptimization);
 				} else if (currentField === 'enableAutoCompress') {
