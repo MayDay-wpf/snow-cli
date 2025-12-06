@@ -284,16 +284,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle todo picker navigation
 		if (showTodoPicker) {
-			// Up arrow in todo picker
+			// Up arrow in todo picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setTodoSelectedIndex(prev => Math.max(0, prev - 1));
+				setTodoSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, todos.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in todo picker
+			// Down arrow in todo picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, todos.length - 1);
-				setTodoSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setTodoSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -341,16 +343,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showAgentPicker) {
 			const filteredAgents = getFilteredAgents();
 
-			// Up arrow in agent picker
+			// Up arrow in agent picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setAgentSelectedIndex(prev => Math.max(0, prev - 1));
+				setAgentSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredAgents.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in agent picker
+			// Down arrow in agent picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredAgents.length - 1);
-				setAgentSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setAgentSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -379,16 +383,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showHistoryMenu) {
 			const userMessages = getUserMessages();
 
-			// Up arrow in history menu
+			// Up arrow in history menu - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setHistorySelectedIndex(prev => Math.max(0, prev - 1));
+				setHistorySelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, userMessages.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in history menu
+			// Down arrow in history menu - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, userMessages.length - 1);
-				setHistorySelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setHistorySelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -583,16 +589,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle file picker navigation
 		if (showFilePicker) {
-			// Up arrow in file picker
+			// Up arrow in file picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setFileSelectedIndex(prev => Math.max(0, prev - 1));
+				setFileSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredFileCount - 1),
+				);
 				return;
 			}
 
-			// Down arrow in file picker
+			// Down arrow in file picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredFileCount - 1);
-				setFileSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setFileSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -612,16 +620,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showCommands) {
 			const filteredCommands = getFilteredCommands();
 
-			// Up arrow in command panel
+			// Up arrow in command panel - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setCommandSelectedIndex(prev => Math.max(0, prev - 1));
+				setCommandSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredCommands.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in command panel
+			// Down arrow in command panel - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredCommands.length - 1);
-				setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setCommandSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 

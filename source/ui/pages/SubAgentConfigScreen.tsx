@@ -551,46 +551,64 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		// Global navigation with up/down arrows
+		// ========================================
+		// 导航逻辑说明:
+		// ↑↓键: 在主字段间导航 (name → description → role → configProfile → customSystemPrompt → customHeaders → tools)
+		//       在配置列表字段内导航，到达边界时跳到相邻主字段
+		//       在 tools 字段内导航工具列表，到达边界时跳到相邻主字段
+		// ←→键: 仅在 tools 字段中切换工具分类
+		// Space: 切换选中状态
+		// ========================================
+
+		// 定义主字段顺序（用于导航）
+		const mainFields: FormField[] = [
+			'name',
+			'description',
+			'role',
+			'configProfile',
+			'customSystemPrompt',
+			'customHeaders',
+			'tools',
+		];
+		const currentFieldIndex = mainFields.indexOf(currentField);
+
 		if (key.upArrow) {
-			if (currentField === 'name') {
-				// At top, do nothing or cycle to bottom
-				return;
-			} else if (currentField === 'description') {
-				setCurrentField('name');
-				return;
-			} else if (currentField === 'role') {
-				setCurrentField('description');
-				return;
-			} else if (currentField === 'configProfile') {
-				// Navigate within config profiles
-				if (selectedConfigProfileIndex > 0) {
-					setSelectedConfigProfileIndex(prev => prev - 1);
-				} else {
-					// At top of profiles, go to role
+			// 配置列表字段：在列表内导航，到达顶部时跳到上一个主字段
+			if (currentField === 'configProfile') {
+				if (
+					availableProfiles.length === 0 ||
+					selectedConfigProfileIndex === 0
+				) {
+					// 跳到上一个主字段
 					setCurrentField('role');
+				} else {
+					setSelectedConfigProfileIndex(prev => prev - 1);
 				}
 				return;
 			} else if (currentField === 'customSystemPrompt') {
-				// Navigate within system prompts
-				if (selectedSystemPromptIndex > 0) {
-					setSelectedSystemPromptIndex(prev => prev - 1);
-				} else {
-					// At top of prompts, go to configProfile
+				if (
+					availableSystemPrompts.length === 0 ||
+					selectedSystemPromptIndex === 0
+				) {
+					// 跳到上一个主字段
 					setCurrentField('configProfile');
+				} else {
+					setSelectedSystemPromptIndex(prev => prev - 1);
 				}
 				return;
 			} else if (currentField === 'customHeaders') {
-				// Navigate within custom headers
-				if (selectedCustomHeadersIndex > 0) {
-					setSelectedCustomHeadersIndex(prev => prev - 1);
-				} else {
-					// At top of headers, go to customSystemPrompt
+				if (
+					availableCustomHeaders.length === 0 ||
+					selectedCustomHeadersIndex === 0
+				) {
+					// 跳到上一个主字段
 					setCurrentField('customSystemPrompt');
+				} else {
+					setSelectedCustomHeadersIndex(prev => prev - 1);
 				}
 				return;
 			} else if (currentField === 'tools') {
-				// Navigate within tools
+				// 在工具列表内导航
 				if (selectedToolIndex > 0) {
 					setSelectedToolIndex(prev => prev - 1);
 				} else if (selectedCategoryIndex > 0) {
@@ -600,54 +618,58 @@ export default function SubAgentConfigScreen({
 						prevCategory ? prevCategory.tools.length - 1 : 0,
 					);
 				} else {
-					// At top of tools, go to custom headers
+					// 在 tools 顶部时跳到上一个主字段
 					setCurrentField('customHeaders');
 				}
+				return;
+			} else {
+				// 普通字段：跳到上一个主字段
+				const prevIndex =
+					currentFieldIndex > 0 ? currentFieldIndex - 1 : mainFields.length - 1;
+				setCurrentField(mainFields[prevIndex]!);
 				return;
 			}
 		}
 
 		if (key.downArrow) {
-			if (currentField === 'name') {
-				setCurrentField('description');
-				return;
-			} else if (currentField === 'description') {
-				setCurrentField('role');
-				return;
-			} else if (currentField === 'role') {
-				setCurrentField('configProfile');
-				return;
-			} else if (currentField === 'configProfile') {
-				// Navigate within config profiles
-				if (selectedConfigProfileIndex < availableProfiles.length - 1) {
-					setSelectedConfigProfileIndex(prev => prev + 1);
-				} else {
-					// At bottom of profiles, go to customSystemPrompt
+			// 配置列表字段：在列表内导航，到达底部时跳到下一个主字段
+			if (currentField === 'configProfile') {
+				if (
+					availableProfiles.length === 0 ||
+					selectedConfigProfileIndex >= availableProfiles.length - 1
+				) {
+					// 跳到下一个主字段
 					setCurrentField('customSystemPrompt');
+				} else {
+					setSelectedConfigProfileIndex(prev => prev + 1);
 				}
 				return;
 			} else if (currentField === 'customSystemPrompt') {
-				// Navigate within system prompts
-				if (selectedSystemPromptIndex < availableSystemPrompts.length - 1) {
-					setSelectedSystemPromptIndex(prev => prev + 1);
-				} else {
-					// At bottom of prompts, go to customHeaders
+				if (
+					availableSystemPrompts.length === 0 ||
+					selectedSystemPromptIndex >= availableSystemPrompts.length - 1
+				) {
+					// 跳到下一个主字段
 					setCurrentField('customHeaders');
+				} else {
+					setSelectedSystemPromptIndex(prev => prev + 1);
 				}
 				return;
 			} else if (currentField === 'customHeaders') {
-				// Navigate within custom headers
-				if (selectedCustomHeadersIndex < availableCustomHeaders.length - 1) {
-					setSelectedCustomHeadersIndex(prev => prev + 1);
-				} else {
-					// At bottom of headers, go to tools
+				if (
+					availableCustomHeaders.length === 0 ||
+					selectedCustomHeadersIndex >= availableCustomHeaders.length - 1
+				) {
+					// 跳到下一个主字段
 					setCurrentField('tools');
 					setSelectedCategoryIndex(0);
 					setSelectedToolIndex(0);
+				} else {
+					setSelectedCustomHeadersIndex(prev => prev + 1);
 				}
 				return;
 			} else if (currentField === 'tools') {
-				// Navigate within tools
+				// 在工具列表内导航
 				const currentCategory = allToolCategories[selectedCategoryIndex];
 				if (!currentCategory) return;
 
@@ -656,8 +678,16 @@ export default function SubAgentConfigScreen({
 				} else if (selectedCategoryIndex < allToolCategories.length - 1) {
 					setSelectedCategoryIndex(prev => prev + 1);
 					setSelectedToolIndex(0);
+				} else {
+					// 在 tools 底部时跳到第一个主字段（循环）
+					setCurrentField('name');
 				}
-				// At bottom of tools, stay there
+				return;
+			} else {
+				// 普通字段：跳到下一个主字段
+				const nextIndex =
+					currentFieldIndex < mainFields.length - 1 ? currentFieldIndex + 1 : 0;
+				setCurrentField(mainFields[nextIndex]!);
 				return;
 			}
 		}
@@ -668,33 +698,8 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		// Config field controls - Left/Right arrow to switch between config sections
-		if (
-			currentField === 'configProfile' ||
-			currentField === 'customSystemPrompt' ||
-			currentField === 'customHeaders'
-		) {
-			if (key.leftArrow) {
-				// Navigate to previous config section
-				if (currentField === 'customHeaders') {
-					setCurrentField('customSystemPrompt');
-				} else if (currentField === 'customSystemPrompt') {
-					setCurrentField('configProfile');
-				}
-				// At configProfile, do nothing (already at first config section)
-				return;
-			}
-			if (key.rightArrow) {
-				// Navigate to next config section
-				if (currentField === 'configProfile') {
-					setCurrentField('customSystemPrompt');
-				} else if (currentField === 'customSystemPrompt') {
-					setCurrentField('customHeaders');
-				}
-				// At customHeaders, do nothing (already at last config section)
-				return;
-			}
-		}
+		// 配置字段使用 ↑↓ 键在列表内循环导航，不再使用 ←→ 键切换字段
+		// ←→ 键仅用于 tools 字段切换工具分类
 
 		// Config field controls - Space to toggle selection
 		if (

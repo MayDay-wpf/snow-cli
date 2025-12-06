@@ -207,9 +207,19 @@ export default function WelcomeScreen({
 		setInlineView('subagent-edit');
 	}, []);
 
-	const handleSubAgentSave = useCallback(() => {
+	const handleSubAgentBack = useCallback(() => {
+		// 从三级返回二级时清除终端以避免残留显示
+		stdout.write(ansiEscapes.clearTerminal);
+		setRemountKey(prev => prev + 1);
 		setInlineView('subagent-list');
-	}, []);
+	}, [stdout]);
+
+	const handleSubAgentSave = useCallback(() => {
+		// 保存后返回二级列表，清除终端以避免残留显示
+		stdout.write(ansiEscapes.clearTerminal);
+		setRemountKey(prev => prev + 1);
+		setInlineView('subagent-list');
+	}, [stdout]);
 
 	// Clear terminal and re-render on terminal width change
 	// Use debounce to avoid flickering during continuous resize
@@ -334,7 +344,7 @@ export default function WelcomeScreen({
 				<Suspense fallback={loadingFallback}>
 					<Box paddingX={1}>
 						<SubAgentConfigScreen
-							onBack={() => setInlineView('subagent-list')}
+							onBack={handleSubAgentBack}
 							onSave={handleSubAgentSave}
 							inlineMode={true}
 						/>
@@ -345,7 +355,7 @@ export default function WelcomeScreen({
 				<Suspense fallback={loadingFallback}>
 					<Box paddingX={1}>
 						<SubAgentConfigScreen
-							onBack={() => setInlineView('subagent-list')}
+							onBack={handleSubAgentBack}
 							onSave={handleSubAgentSave}
 							agentId={editingAgentId}
 							inlineMode={true}
