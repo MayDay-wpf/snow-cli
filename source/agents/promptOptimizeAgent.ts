@@ -34,9 +34,7 @@ export class PromptOptimizeAgent {
 
 			// Check if basic model is configured
 			if (!config.basicModel) {
-				logger.warn(
-					'Prompt optimize agent: Basic model not configured',
-				);
+				logger.warn('Prompt optimize agent: Basic model not configured');
 				return false;
 			}
 
@@ -212,34 +210,34 @@ export class PromptOptimizeAgent {
 		}
 
 		try {
-		// Check word count - if prompt > 100 words, skip optimization
-		// User likely provided detailed/important original text that should be preserved as-is
-		const wordCount = userPrompt.trim().split(/\s+/).length;
-		if (wordCount > 100) {
-			return userPrompt;
-		}
+			// Check character count - if prompt < 100 characters, skip optimization
+			// Short prompts likely lack context and may not benefit from optimization
+			const charCount = userPrompt.trim().length;
+			if (charCount < 100) {
+				return userPrompt;
+			}
 
-		// Filter conversation history to lightweight context (only user<->assistant, no tool calls)
-		const contextMessages = this.filterContextMessages(conversationHistory);
+			// Filter conversation history to lightweight context (only user<->assistant, no tool calls)
+			const contextMessages = this.filterContextMessages(conversationHistory);
 
-		// Build context summary if there's conversation history
-		let contextSummary = '';
-		if (contextMessages.length > 0) {
-			// Take last 8 messages to keep context focused, but use full content (no truncation)
-			const recentContext = contextMessages.slice(-8);
-			contextSummary =
-				'\n\nRecent conversation context:\n' +
-				recentContext
-					.map((msg) => {
-						const content =
-							typeof msg.content === 'string'
-								? msg.content
-								: JSON.stringify(msg.content);
-						// Use full message content (no truncation)
-						return `${msg.role}: ${content}`;
-					})
-					.join('\n');
-		}
+			// Build context summary if there's conversation history
+			let contextSummary = '';
+			if (contextMessages.length > 0) {
+				// Take last 8 messages to keep context focused, but use full content (no truncation)
+				const recentContext = contextMessages.slice(-8);
+				contextSummary =
+					'\n\nRecent conversation context:\n' +
+					recentContext
+						.map(msg => {
+							const content =
+								typeof msg.content === 'string'
+									? msg.content
+									: JSON.stringify(msg.content);
+							// Use full message content (no truncation)
+							return `${msg.role}: ${content}`;
+						})
+						.join('\n');
+			}
 
 			const optimizationPrompt = `You are a prompt optimization assistant. Your task is to improve user prompts for better AI understanding while maintaining HIGH FIDELITY to the original content.
 
@@ -297,7 +295,14 @@ IMPORTANT: Output ONLY the optimized prompt text. No explanations, no meta-comme
 				);
 				return userPrompt;
 			}
-			return cleanedPrompt;
+
+			// Append original user message to ensure no information is lost
+			const finalPrompt = `${cleanedPrompt}
+
+---
+Original user message: ${userPrompt}`;
+
+			return finalPrompt;
 		} catch (error) {
 			logger.error('Prompt optimize agent: Failed to optimize prompt', error);
 			return userPrompt;

@@ -369,6 +369,8 @@ export default function ConfigScreen({
 					requestMethod,
 					anthropicBeta,
 					anthropicCacheTTL,
+					enablePromptOptimization: false,
+					enableAutoCompress,
 					thinking: thinkingEnabled
 						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
