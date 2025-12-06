@@ -16,8 +16,21 @@ const CONFIG_DIR = join(homedir(), '.snow');
 const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function checkCommandExists(command: string): boolean {
-	const shells = ['/bin/sh', '/bin/bash', '/bin/zsh'];
+	if (platform() === 'win32') {
+		// Windows: 使用 where 命令检查
+		try {
+			execSync(`where ${command}`, {
+				stdio: 'ignore',
+				windowsHide: true,
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	}
 
+	// Unix/Linux/macOS: 使用 command -v
+	const shells = ['/bin/sh', '/bin/bash', '/bin/zsh'];
 	for (const shell of shells) {
 		try {
 			execSync(`command -v ${command}`, {
@@ -35,17 +48,24 @@ function checkCommandExists(command: string): boolean {
 }
 
 function getSystemEditor(): string | null {
-	if (platform() === 'win32') {
-		return 'notepad';
-	}
-
-	// 优先使用环境变量指定的编辑器
-	const envEditor = process.env['EDITOR'];
+	// 优先使用环境变量指定的编辑器 (所有平台)
+	const envEditor = process.env['VISUAL'] || process.env['EDITOR'];
 	if (envEditor && checkCommandExists(envEditor)) {
 		return envEditor;
 	}
 
-	// 按优先级检测常见编辑器
+	if (platform() === 'win32') {
+		// Windows: 按优先级检测常见编辑器
+		const windowsEditors = ['notepad++', 'notepad', 'code', 'vim', 'nano'];
+		for (const editor of windowsEditors) {
+			if (checkCommandExists(editor)) {
+				return editor;
+			}
+		}
+		return null;
+	}
+
+	// Unix/Linux/macOS: 按优先级检测常见编辑器
 	const editors = ['nano', 'vim', 'vi'];
 	for (const editor of editors) {
 		if (checkCommandExists(editor)) {
@@ -68,12 +88,28 @@ export default function MCPConfigScreen({onBack}: Props) {
 
 			if (!editor) {
 				console.error(
-					'No text editor found! Please install nano or vim, or set the EDITOR environment variable.',
+					'No text editor found! Please set the EDITOR or VISUAL environment variable.',
 				);
-				console.error('Installation command:');
-				console.error('  Ubuntu/Debian: sudo apt-get install nano');
-				console.error('  CentOS/RHEL:   sudo yum install nano');
-				console.error('  macOS:         nano is usually pre-installed');
+				console.error('');
+				console.error('Examples:');
+				if (platform() === 'win32') {
+					console.error('  set EDITOR=notepad');
+					console.error('  set EDITOR=code');
+					console.error('  set EDITOR=notepad++');
+				} else {
+					console.error('  export EDITOR=nano');
+					console.error('  export EDITOR=vim');
+					console.error('  export EDITOR=code');
+				}
+				console.error('');
+				console.error('Or install a text editor:');
+				if (platform() === 'win32') {
+					console.error('  Windows: Notepad++ or VS Code');
+				} else {
+					console.error('  Ubuntu/Debian: sudo apt-get install nano');
+					console.error('  CentOS/RHEL:   sudo yum install nano');
+					console.error('  macOS:         nano is usually pre-installed');
+				}
 				gracefulExit();
 				return;
 			}
