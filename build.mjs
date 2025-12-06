@@ -33,7 +33,33 @@ await esbuild.build({
 import { fileURLToPath as _fileURLToPath } from 'url';
 const require = _createRequire(import.meta.url);
 const __filename = _fileURLToPath(import.meta.url);
-const __dirname = _fileURLToPath(new URL('.', import.meta.url));`,
+const __dirname = _fileURLToPath(new URL('.', import.meta.url));
+
+// Polyfill for undici's web API dependencies
+// undici uses File, Blob, etc. which are only available in Node.js 20+
+// For Node.js 16-18, we provide minimal polyfills
+if (typeof globalThis.File === 'undefined') {
+  globalThis.File = class File {
+    constructor(bits, name, options) {
+      this.bits = bits;
+      this.name = name;
+      this.options = options;
+    }
+  };
+}
+if (typeof globalThis.FormData === 'undefined') {
+  globalThis.FormData = class FormData {
+    constructor() {
+      this._data = new Map();
+    }
+    append(key, value) {
+      this._data.set(key, value);
+    }
+    get(key) {
+      return this._data.get(key);
+    }
+  };
+}`,
 	},
 	external: [
 		// Only Node.js built-in modules should be external

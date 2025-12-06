@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add Anthropic cache TL configuration options
+            - Add Web API polyfill support for Node.js versions 16-18.
             
             ### Installation
             ```bash

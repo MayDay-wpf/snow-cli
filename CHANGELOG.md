@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.35
+
+- Add Web API polyfill support for Node.js versions 16-18.
+
 ## v0.4.34
 
 - Add Anthropic cache TL configuration options
