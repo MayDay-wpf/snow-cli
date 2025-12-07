@@ -48,6 +48,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.custom || 'Add custom command',
 			},
 			{
+				name: 'skills',
+				description: t.commandPanel.commands.skills || 'Create skill template',
+			},
+			{
 				name: 'agent-',
 				description: t.commandPanel.commands.agent,
 			},

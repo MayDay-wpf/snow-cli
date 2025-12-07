@@ -164,6 +164,7 @@ type CommandHandlerOptions = {
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setVscodeConnectionStatus: React.Dispatch<
@@ -372,6 +373,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.action === 'showCustomCommandConfig'
 			) {
 				options.setShowCustomCommandConfig(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showSkillsCreation') {
+				options.setShowSkillsCreation(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

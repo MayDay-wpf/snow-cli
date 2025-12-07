@@ -22,10 +22,15 @@ const SessionListPanel = lazy(
 const UsagePanel = lazy(() => import('../components/UsagePanel.js'));
 const HelpPanel = lazy(() => import('../components/HelpPanel.js'));
 import {CustomCommandConfigPanel} from '../components/CustomCommandConfigPanel.js';
+import {SkillsCreationPanel} from '../components/SkillsCreationPanel.js';
 import {
 	saveCustomCommand,
 	registerCustomCommands,
 } from '../../utils/commands/custom.js';
+import {
+	createSkillTemplate,
+	type SkillLocation,
+} from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
@@ -103,6 +108,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
+	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -165,6 +171,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/todoPicker.js'),
 			import('../../utils/commands/help.js'),
 			import('../../utils/commands/custom.js'),
+			import('../../utils/commands/skills.js'),
 			import('../../utils/commands/quit.js'),
 		])
 			.then(async () => {
@@ -536,6 +543,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowUsagePanel,
 		setShowHelpPanel,
 		setShowCustomCommandConfig,
+		setShowSkillsCreation,
 		setYoloMode,
 		setContextUsage: streamingState.setContextUsage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
@@ -683,6 +691,13 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		if (showCustomCommandConfig) {
 			if (key.escape) {
 				setShowCustomCommandConfig(false);
+			}
+			return;
+		}
+
+		if (showSkillsCreation) {
+			if (key.escape) {
+				setShowSkillsCreation(false);
 			}
 			return;
 		}
@@ -1930,6 +1945,49 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				</Box>
 			)}
 
+			{/* Show skills creation panel if active */}
+			{showSkillsCreation && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<SkillsCreationPanel
+						projectRoot={workingDirectory}
+						onSave={async (
+							skillName: string,
+							description: string,
+							location: SkillLocation,
+						) => {
+							const result = await createSkillTemplate(
+								skillName,
+								description,
+								location,
+								workingDirectory,
+							);
+							setShowSkillsCreation(false);
+
+							if (result.success) {
+								const locationDesc =
+									location === 'global'
+										? 'Global (~/.snow/skills/)'
+										: 'Project (.snow/skills/)';
+								const successMessage: Message = {
+									role: 'command',
+									content: `Skill '${skillName}' created successfully!\nLocation: ${locationDesc}\nPath: ${result.path}\n\nThe following files have been created:\n- SKILL.md (main skill documentation)\n- reference.md (detailed reference)\n- examples.md (usage examples)\n- templates/template.txt (template file)\n- scripts/helper.py (helper script)\n\nYou can now edit these files to customize your skill.`,
+									commandName: 'skills',
+								};
+								setMessages(prev => [...prev, successMessage]);
+							} else {
+								const errorMessage: Message = {
+									role: 'command',
+									content: `Failed to create skill: ${result.error}`,
+									commandName: 'skills',
+								};
+								setMessages(prev => [...prev, errorMessage]);
+							}
+						}}
+						onCancel={() => setShowSkillsCreation(false)}
+					/>
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -1939,7 +1997,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or rollback confirmation or user question */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or rollback confirmation or user question */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!isCompressing &&
@@ -1948,6 +2006,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				!showUsagePanel &&
 				!showHelpPanel &&
 				!showCustomCommandConfig &&
+				!showSkillsCreation &&
 				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput

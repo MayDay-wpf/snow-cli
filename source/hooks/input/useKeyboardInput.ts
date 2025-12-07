@@ -635,6 +635,28 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
+			// Tab - autocomplete command to input
+			if (key.tab) {
+				if (
+					filteredCommands.length > 0 &&
+					commandSelectedIndex < filteredCommands.length
+				) {
+					const selectedCommand = filteredCommands[commandSelectedIndex];
+					if (selectedCommand) {
+						// Replace input with "/" + selected command name
+						buffer.setText('/' + selectedCommand.name);
+						// Move cursor to end
+						buffer.setCursorPosition(buffer.text.length);
+						// Close command panel
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						triggerUpdate();
+						return;
+					}
+				}
+				return;
+			}
+
 			// Enter - select command
 			if (key.return) {
 				if (

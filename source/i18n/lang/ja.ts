@@ -408,6 +408,7 @@ export const ja: TranslationKeys = {
 		processingMessage: '会話が完了するまでお待ちください',
 		scrollHint: '↑↓ スクロール',
 		moreHidden: '{count}個非表示',
+		interactionHint: 'Tab: オートコンプリート • Enter: 実行',
 		commands: {
 			help: 'ショートカットとヘルプ情報を表示',
 			clear: 'チャットコンテキストと会話履歴をクリア',
@@ -425,6 +426,7 @@ export const ja: TranslationKeys = {
 			export:
 				'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
 			custom: 'カスタムコマンドを追加して ~/.snow/commands に保存',
+			skills: 'ドキュメントと例を含むスキルテンプレートを作成',
 			agent: 'サブエージェントを選択して特定のタスクを処理',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
 			quit: 'アプリケーションを終了',
@@ -738,5 +740,32 @@ export const ja: TranslationKeys = {
 		approveRejectHint: 'A キーで承認、R キーで拒否',
 		enterRejectionReason: '拒否理由を入力してください:',
 		submitCancelHint: 'Enter 送信 • ESC キャンセル',
+	},
+
+	skillsCreation: {
+		title: 'Create New Skill',
+		nameLabel: 'Skill Name:',
+		nameHint: 'Use lowercase letters, numbers, and hyphens only (max 64 chars)',
+		namePlaceholder: 'my-skill-name',
+		descriptionLabel: 'Description:',
+		descriptionHint:
+			'Brief description of what this Skill does and when to use it',
+		descriptionPlaceholder: 'A brief description...',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/skills/)',
+		locationGlobalInfo: 'Available across all projects',
+		locationProject: 'Project (.snow/skills/ in project root)',
+		locationProjectInfo: 'Only available in this project',
+		confirmQuestion: 'Create this Skill?',
+		confirmYes: 'Yes, Create',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		errorInvalidName: 'Invalid skill name',
+		errorExistsBoth:
+			'Skill "{name}" already exists in both global and project locations',
+		errorExistsGlobal:
+			'Skill "{name}" already exists in global location (~/.snow/skills/)',
+		errorExistsProject:
+			'Skill "{name}" already exists in project location (.snow/skills/)',
 	},
 };

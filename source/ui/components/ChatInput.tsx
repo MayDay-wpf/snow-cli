@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import React, {
+	useCallback,
+	useEffect,
+	useRef,
+	useMemo,
+	lazy,
+	Suspense,
+} from 'react';
 import { Box, Text } from 'ink';
 import { Viewport } from '../../utils/ui/textBuffer.js';
 import { cpSlice } from '../../utils/core/textUtils.js';
@@ -358,7 +365,10 @@ export default function ChatInput({
 			if (hasFocus) {
 				// Focused: solid block cursor (use inverted colors)
 				return (
-					<Text backgroundColor={theme.colors.menuNormal} color={theme.colors.background}>
+					<Text
+						backgroundColor={theme.colors.menuNormal}
+						color={theme.colors.background}
+					>
 						{char}
 					</Text>
 				);
@@ -524,21 +534,25 @@ export default function ChatInput({
 			{!showHistoryMenu && (
 				<>
 					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{'─'.repeat(terminalWidth - 2)}
+						</Text>
 						<Box flexDirection="row">
 							<Text color={theme.colors.menuInfo} bold>
 								❯{' '}
 							</Text>
 							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
-						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{'─'.repeat(terminalWidth - 2)}
+						</Text>
 					</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
 						showFilePicker ? (
 						<Box marginTop={1}>
 							<Text>
 								{showCommands && getFilteredCommands().length > 0
-									? t.chatScreen.typeToFilterCommands
+									? t.commandPanel.interactionHint + ' • ' + t.chatScreen.typeToFilterCommands
 									: showFilePicker
 										? searchMode === 'content'
 											? t.chatScreen.contentSearchHint

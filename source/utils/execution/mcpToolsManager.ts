@@ -20,6 +20,10 @@ import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
 } from '../../mcp/subagent.js';
+import {
+	getMCPTools as getSkillTools,
+	executeSkillTool,
+} from '../../mcp/skills.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
@@ -106,6 +110,10 @@ async function generateConfigHash(): Promise<string> {
 		const mcpConfig = getMCPConfig();
 		const subAgents = getSubAgentTools(); // Include sub-agents in hash
 
+		// Include skills in hash (both project and global)
+		const projectRoot = process.cwd();
+		const skillTools = await getSkillTools(projectRoot);
+
 		// 🔥 CRITICAL: Include codebase enabled status in hash
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
@@ -113,6 +121,7 @@ async function generateConfigHash(): Promise<string> {
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
 			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
+			skills: skillTools.map(t => t.name), // Include skill names in hash
 			codebaseEnabled: codebaseConfig.enabled, // 🔥 Must include to invalidate cache on enable/disable
 		});
 	} catch {
@@ -371,6 +380,30 @@ async function refreshToolsCache(): Promise<void> {
 				type: 'function',
 				function: {
 					name: `subagent-${tool.name}`,
+					description: tool.description,
+					parameters: tool.inputSchema,
+				},
+			});
+		}
+	}
+
+	// Add skill tools (dynamically generated from available skills)
+	const projectRoot = process.cwd();
+	const skillTools = await getSkillTools(projectRoot);
+
+	if (skillTools.length > 0) {
+		servicesInfo.push({
+			serviceName: 'skill',
+			tools: skillTools,
+			isBuiltIn: true,
+			connected: true,
+		});
+
+		for (const tool of skillTools) {
+			allTools.push({
+				type: 'function',
+				function: {
+					name: tool.name,
 					description: tool.description,
 					parameters: tool.inputSchema,
 				},
@@ -1061,6 +1094,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('askuser-')) {
 			serviceName = 'askuser';
 			actualToolName = toolName.substring('askuser-'.length);
+		} else if (toolName.startsWith('skill-')) {
+			serviceName = 'skill';
+			actualToolName = toolName.substring('skill-'.length);
 		} else if (toolName.startsWith('subagent-')) {
 			serviceName = 'subagent';
 			actualToolName = toolName.substring('subagent-'.length);
@@ -1339,6 +1375,10 @@ export async function executeMCPTool(
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
 			}
+		} else if (serviceName === 'skill') {
+			// Handle skill tools (no connection needed)
+			const projectRoot = process.cwd();
+			result = await executeSkillTool(toolName, args, projectRoot);
 		} else if (serviceName === 'subagent') {
 			// Handle sub-agent tools
 			// actualToolName is the agent ID

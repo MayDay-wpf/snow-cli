@@ -399,6 +399,7 @@ export type TranslationKeys = {
 		processingMessage: string;
 		scrollHint: string;
 		moreHidden: string;
+		interactionHint: string;
 		commands: {
 			help: string;
 			clear: string;
@@ -414,11 +415,13 @@ export type TranslationKeys = {
 			usage: string;
 			export: string;
 			custom: string;
+			skills: string;
 			agent: string;
 			todo: string;
 			quit: string;
 		};
 	};
+
 	// Hooks
 	hooks: {
 		pressCtrlCAgain: string;
@@ -717,6 +720,29 @@ export type TranslationKeys = {
 		approveRejectHint: string;
 		enterRejectionReason: string;
 		submitCancelHint: string;
+	};
+	// Skills Creation
+	skillsCreation: {
+		title: string;
+		nameLabel: string;
+		nameHint: string;
+		namePlaceholder: string;
+		descriptionLabel: string;
+		descriptionHint: string;
+		descriptionPlaceholder: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		errorInvalidName: string;
+		errorExistsBoth: string;
+		errorExistsGlobal: string;
+		errorExistsProject: string;
 	};
 };
 

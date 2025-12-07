@@ -400,6 +400,7 @@ export const ko: TranslationKeys = {
 		processingMessage: '대화 완료 후 명령 사용하세요',
 		scrollHint: '↑↓ 스크롤',
 		moreHidden: '{count}개 숨김',
+		interactionHint: 'Tab: 자동완성 • Enter: 실행',
 		commands: {
 			help: '단축키 및 도움말 정보 표시',
 			clear: '채팅 컨텍스트 및 대화 기록 지우기',
@@ -416,6 +417,7 @@ export const ko: TranslationKeys = {
 			usage: '대화형 차트가 있는 토큰 사용 통계 보기',
 			export: '채팅 대화를 저장 대화상자가 있는 텍스트 파일로 내보내기',
 			custom: '사용자 정의 명령 추가 및 ~/.snow/commands에 저장',
+			skills: '문서 및 예제가 포함된 스킬 템플릿 생성',
 			agent: '하위 에이전트를 선택하고 특정 작업 처리',
 			todo: '프로젝트 파일에서 TODO 주석 검색 및 선택',
 			quit: '애플리케이션 종료',
@@ -724,5 +726,32 @@ export const ko: TranslationKeys = {
 		approveRejectHint: 'A 키로 승인 또는 R 키로 거부',
 		enterRejectionReason: '거부 사유를 입력하세요:',
 		submitCancelHint: 'Enter 제출 • ESC 취소',
+	},
+
+	skillsCreation: {
+		title: 'Create New Skill',
+		nameLabel: 'Skill Name:',
+		nameHint: 'Use lowercase letters, numbers, and hyphens only (max 64 chars)',
+		namePlaceholder: 'my-skill-name',
+		descriptionLabel: 'Description:',
+		descriptionHint:
+			'Brief description of what this Skill does and when to use it',
+		descriptionPlaceholder: 'A brief description...',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/skills/)',
+		locationGlobalInfo: 'Available across all projects',
+		locationProject: 'Project (.snow/skills/ in project root)',
+		locationProjectInfo: 'Only available in this project',
+		confirmQuestion: 'Create this Skill?',
+		confirmYes: 'Yes, Create',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		errorInvalidName: 'Invalid skill name',
+		errorExistsBoth:
+			'Skill "{name}" already exists in both global and project locations',
+		errorExistsGlobal:
+			'Skill "{name}" already exists in global location (~/.snow/skills/)',
+		errorExistsProject:
+			'Skill "{name}" already exists in project location (.snow/skills/)',
 	},
 };

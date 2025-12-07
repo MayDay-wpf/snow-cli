@@ -1,0 +1,316 @@
+import {join} from 'path';
+import {existsSync} from 'fs';
+import {readFile} from 'fs/promises';
+import {homedir} from 'os';
+import matter from 'gray-matter';
+
+export interface SkillMetadata {
+	name: string;
+	description: string;
+}
+
+export interface Skill {
+	name: string;
+	description: string;
+	location: 'project' | 'global';
+	path: string;
+	content: string;
+}
+
+/**
+ * Read and parse SKILL.md file
+ */
+async function readSkillFile(skillPath: string): Promise<{
+	metadata: SkillMetadata;
+	content: string;
+} | null> {
+	try {
+		const skillFile = join(skillPath, 'SKILL.md');
+		if (!existsSync(skillFile)) {
+			return null;
+		}
+
+		const fileContent = await readFile(skillFile, 'utf-8');
+		const parsed = matter(fileContent);
+
+		// Remove leading description section between --- markers if exists
+		let content = parsed.content.trim();
+		const descriptionPattern = /^---\s*[\s\S]*?---\s*/;
+		if (descriptionPattern.test(content)) {
+			content = content.replace(descriptionPattern, '').trim();
+		}
+
+		return {
+			metadata: {
+				name: parsed.data['name'] || '',
+				description: parsed.data['description'] || '',
+			},
+			content,
+		};
+	} catch (error) {
+		console.error(`Failed to read skill at ${skillPath}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Scan and load all available skills
+ * Project skills have priority over global skills
+ */
+async function loadAvailableSkills(
+	projectRoot?: string,
+): Promise<Map<string, Skill>> {
+	const skills = new Map<string, Skill>();
+	const globalSkillsDir = join(homedir(), '.snow', 'skills');
+	const projectSkillsDir = projectRoot
+		? join(projectRoot, '.snow', 'skills')
+		: null;
+
+	// Load global skills first
+	if (existsSync(globalSkillsDir)) {
+		try {
+			const {readdirSync} = await import('fs');
+			const entries = readdirSync(globalSkillsDir, {withFileTypes: true});
+
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					const skillPath = join(globalSkillsDir, entry.name);
+					const skillData = await readSkillFile(skillPath);
+
+					if (skillData) {
+						skills.set(entry.name, {
+							name: skillData.metadata.name || entry.name,
+							description: skillData.metadata.description || '',
+							location: 'global',
+							path: skillPath,
+							content: skillData.content,
+						});
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load global skills:', error);
+		}
+	}
+
+	// Load project skills (override global if same name)
+	if (projectSkillsDir && existsSync(projectSkillsDir)) {
+		try {
+			const {readdirSync} = await import('fs');
+			const entries = readdirSync(projectSkillsDir, {withFileTypes: true});
+
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					const skillPath = join(projectSkillsDir, entry.name);
+					const skillData = await readSkillFile(skillPath);
+
+					if (skillData) {
+						skills.set(entry.name, {
+							name: skillData.metadata.name || entry.name,
+							description: skillData.metadata.description || '',
+							location: 'project',
+							path: skillPath,
+							content: skillData.content,
+						});
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load project skills:', error);
+		}
+	}
+
+	return skills;
+}
+
+/**
+ * Generate dynamic skill tool description
+ */
+function generateSkillToolDescription(skills: Map<string, Skill>): string {
+	const skillsList = Array.from(skills.values())
+		.map(
+			skill => `<skill>
+<name>
+${skill.name}
+</name>
+<description>
+${skill.description}
+</description>
+<location>
+${skill.location}
+</location>
+</skill>`,
+		)
+		.join('\n');
+
+	return `Execute a skill within the main conversation
+
+<skills_instructions>
+When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
+
+How to use skills:
+- Invoke skills using this tool with the skill name only (no arguments)
+- When you invoke a skill, you will see <command-message>The "{name}" skill is loading</command-message>
+- The skill's prompt will expand and provide detailed instructions on how to complete the task
+- Examples:
+  - skill: "pdf" - invoke the pdf skill
+  - skill: "data-analysis" - invoke the data-analysis skill
+
+Important:
+- Only use skills listed in <available_skills> below
+- Do not invoke a skill that is already running
+- Do not use this tool for built-in CLI commands (like /help, /clear, etc.)
+</skills_instructions>
+
+<available_skills>
+${skillsList}
+</available_skills>`;
+}
+
+/**
+ * Get MCP tools for skills (dynamic generation based on available skills)
+ */
+export async function getMCPTools(projectRoot?: string) {
+	const skills = await loadAvailableSkills(projectRoot);
+
+	// If no skills available, return empty array
+	if (skills.size === 0) {
+		return [];
+	}
+
+	const description = generateSkillToolDescription(skills);
+
+	return [
+		{
+			name: 'skill-execute',
+			description,
+			inputSchema: {
+				type: 'object',
+				properties: {
+					skill: {
+						type: 'string',
+						description:
+							'The skill name (no arguments). E.g., "pdf" or "data-analysis"',
+					},
+				},
+				required: ['skill'],
+				additionalProperties: false,
+				$schema: 'http://json-schema.org/draft-07/schema#',
+			},
+		},
+	];
+}
+
+/**
+ * Generate directory tree structure for skill
+ */
+async function generateSkillTree(skillPath: string): Promise<string> {
+	try {
+		const {readdirSync} = await import('fs');
+		const entries = readdirSync(skillPath, {withFileTypes: true});
+
+		const lines: string[] = [];
+		const sortedEntries = entries.sort((a, b) => {
+			// Directories first, then files
+			if (a.isDirectory() && !b.isDirectory()) return -1;
+			if (!a.isDirectory() && b.isDirectory()) return 1;
+			return a.name.localeCompare(b.name);
+		});
+
+		for (let i = 0; i < sortedEntries.length; i++) {
+			const entry = sortedEntries[i];
+			if (!entry) continue;
+
+			const isLast = i === sortedEntries.length - 1;
+			const prefix = isLast ? '└─' : '├─';
+			const connector = isLast ? '   ' : '│  ';
+
+			if (entry.isDirectory()) {
+				lines.push(`${prefix} ${entry.name}/`);
+				// Recursively list directory contents (one level deep only)
+				try {
+					const subPath = join(skillPath, entry.name);
+					const subEntries = readdirSync(subPath, {withFileTypes: true});
+					const sortedSubEntries = subEntries.sort((a, b) =>
+						a.name.localeCompare(b.name),
+					);
+
+					for (let j = 0; j < sortedSubEntries.length; j++) {
+						const subEntry = sortedSubEntries[j];
+						if (!subEntry) continue;
+
+						const subIsLast = j === sortedSubEntries.length - 1;
+						const subPrefix = subIsLast ? '└─' : '├─';
+						const fileType = subEntry.isDirectory() ? '[DIR]' : '[FILE]';
+						lines.push(
+							`${connector}  ${subPrefix} ${fileType} ${subEntry.name}`,
+						);
+					}
+				} catch {
+					// Ignore subdirectory read errors
+				}
+			} else {
+				const fileType = entry.name === 'SKILL.md' ? '[MAIN]' : '[FILE]';
+				lines.push(`${prefix} ${fileType} ${entry.name}`);
+			}
+		}
+
+		return lines.join('\n');
+	} catch (error) {
+		return '(Unable to generate directory tree)';
+	}
+}
+
+/**
+ * Execute skill tool
+ */
+export async function executeSkillTool(
+	toolName: string,
+	args: any,
+	projectRoot?: string,
+): Promise<string> {
+	if (toolName !== 'skill-execute') {
+		throw new Error(`Unknown tool: ${toolName}`);
+	}
+
+	const skillName = args.skill;
+	if (!skillName || typeof skillName !== 'string') {
+		throw new Error('skill parameter is required and must be a string');
+	}
+
+	// Load available skills
+	const skills = await loadAvailableSkills(projectRoot);
+	const skill = skills.get(skillName);
+
+	if (!skill) {
+		const availableSkills = Array.from(skills.keys()).join(', ');
+		throw new Error(
+			`Skill "${skillName}" not found. Available skills: ${
+				availableSkills || 'none'
+			}`,
+		);
+	}
+
+	// Generate directory tree for skill
+	const directoryTree = await generateSkillTree(skill.path);
+
+	// Return the skill content (markdown instructions)
+	return `<command-message>The "${skill.name}" skill is loading</command-message>
+
+${skill.content}
+
+<skill-info>
+Skill Name: ${skill.name}
+Absolute Path: ${skill.path}
+
+Directory Structure:
+\`\`\`
+${skill.name}/
+${directoryTree}
+\`\`\`
+
+Note: You can use filesystem-read tool to read any file in this skill directory using the absolute path above.
+</skill-info>`;
+}
+
+export const mcpTools = [];

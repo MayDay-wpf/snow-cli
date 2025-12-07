@@ -420,6 +420,7 @@ export const en: TranslationKeys = {
 			'Please wait for the conversation to complete before using commands',
 		scrollHint: '↑↓ to scroll',
 		moreHidden: '{count} more hidden',
+		interactionHint: 'Tab: Autocomplete • Enter: Execute',
 		commands: {
 			help: 'Show keyboard shortcuts and help information',
 			clear: 'Clear chat context and conversation history',
@@ -436,6 +437,7 @@ export const en: TranslationKeys = {
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
 			custom: 'Add custom command and save to ~/.snow/commands',
+			skills: 'Create skill template with documentation and examples',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
 			quit: 'Exit the application',
@@ -748,5 +750,32 @@ export const en: TranslationKeys = {
 		approveRejectHint: 'Press A to approve or R to reject',
 		enterRejectionReason: 'Enter rejection reason:',
 		submitCancelHint: 'Enter Submit • ESC Cancel',
+	},
+	skillsCreation: {
+		title: 'Create New Skill',
+		nameLabel: 'Skill Name:',
+		nameHint: 'Use lowercase letters, numbers, and hyphens only (max 64 chars)',
+		namePlaceholder: 'my-skill-name',
+		descriptionLabel: 'Description:',
+		descriptionHint:
+			'Brief description of what this Skill does and when to use it',
+		descriptionPlaceholder: 'A brief description...',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/skills/)',
+		locationGlobalInfo: 'Available across all projects',
+		locationProject: 'Project (.snow/skills/ in project root)',
+		locationProjectInfo: 'Only available in this project',
+		confirmQuestion: 'Create this Skill?',
+		confirmYes: 'Yes, Create',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		// Error messages
+		errorInvalidName: 'Invalid skill name',
+		errorExistsBoth:
+			'Skill "{name}" already exists in both global and project locations',
+		errorExistsGlobal:
+			'Skill "{name}" already exists in global location (~/.snow/skills/)',
+		errorExistsProject:
+			'Skill "{name}" already exists in project location (.snow/skills/)',
 	},
 };
