@@ -307,7 +307,7 @@ export default function ConfigScreen({
 			apiKey,
 			requestMethod,
 		};
-		updateOpenAiConfig(tempConfig);
+		await updateOpenAiConfig(tempConfig);
 
 		try {
 			const fetchedModels = await fetchAvailableModels();
@@ -452,7 +452,7 @@ export default function ConfigScreen({
 		setSearchTerm('');
 	};
 
-	const saveConfiguration = () => {
+	const saveConfiguration = async () => {
 		const validationErrors = validateApiConfig({
 			baseUrl,
 			apiKey,
@@ -508,7 +508,7 @@ export default function ConfigScreen({
 			}
 
 			// Save to main config
-			updateOpenAiConfig(config);
+			await updateOpenAiConfig(config);
 
 			// Also save to the current profile
 			try {
@@ -1275,12 +1275,13 @@ export default function ConfigScreen({
 
 		// Handle save/exit globally
 		if (input === 's' && (key.ctrl || key.meta)) {
-			if (saveConfiguration()) {
-				onSave();
-			}
+			saveConfiguration().then(success => {
+				if (success) {
+					onSave();
+				}
+			});
 		} else if (key.escape) {
-			saveConfiguration();
-			onBack();
+			saveConfiguration().then(() => onBack());
 		} else if (key.return) {
 			if (isEditing) {
 				setIsEditing(false);

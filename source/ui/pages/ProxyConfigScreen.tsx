@@ -51,7 +51,7 @@ export default function ProxyConfigScreen({
 		return validationErrors;
 	};
 
-	const saveConfig = () => {
+	const saveConfig = async () => {
 		const validationErrors = validateConfig();
 		if (validationErrors.length === 0) {
 			const config: ProxyConfig = {
@@ -59,7 +59,7 @@ export default function ProxyConfigScreen({
 				port: parseInt(port, 10),
 				browserPath: browserPath.trim() || undefined,
 			};
-			updateProxyConfig(config);
+			await updateProxyConfig(config);
 			setErrors([]);
 			return true;
 		} else {
@@ -71,12 +71,13 @@ export default function ProxyConfigScreen({
 	useInput((input, key) => {
 		// Handle save/exit globally
 		if (input === 's' && (key.ctrl || key.meta)) {
-			if (saveConfig()) {
-				onSave();
-			}
+			saveConfig().then(success => {
+				if (success) {
+					onSave();
+				}
+			});
 		} else if (key.escape) {
-			saveConfig(); // Try to save even on escape
-			onBack();
+			saveConfig().then(() => onBack()); // Try to save even on escape
 		} else if (key.return) {
 			if (isEditing) {
 				// Exit edit mode, return to navigation

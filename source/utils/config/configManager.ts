@@ -8,7 +8,13 @@ import {
 	readdirSync,
 	unlinkSync,
 } from 'fs';
-import {loadConfig, saveConfig, type AppConfig} from './apiConfig.js';
+import {
+	loadConfig,
+	saveConfig,
+	DEFAULT_CONFIG,
+	type AppConfig,
+	type ProxyConfig,
+} from './apiConfig.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const PROFILES_DIR = join(CONFIG_DIR, 'profiles');
@@ -127,7 +133,8 @@ function migrateLegacyConfig(): void {
 }
 
 /**
- * Load a specific profile
+ * Load a specific profile with deep merge of default config
+ * This ensures new config fields (like browserPath) are preserved
  */
 export function loadProfile(profileName: string): AppConfig | undefined {
 	ensureProfilesDirectory();
@@ -141,7 +148,25 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 
 	try {
 		const configData = readFileSync(profilePath, 'utf8');
-		return JSON.parse(configData) as AppConfig;
+		const parsedConfig = JSON.parse(configData) as Partial<AppConfig>;
+
+		// Deep merge with default config to ensure new fields have defaults
+		const proxyConfig: ProxyConfig = {
+			...DEFAULT_CONFIG.proxy!,
+			...(parsedConfig.proxy || {}),
+		};
+
+		const mergedConfig: AppConfig = {
+			...DEFAULT_CONFIG,
+			...parsedConfig,
+			snowcfg: {
+				...DEFAULT_CONFIG.snowcfg,
+				...(parsedConfig.snowcfg || {}),
+			},
+			proxy: proxyConfig,
+		};
+
+		return mergedConfig;
 	} catch {
 		return undefined;
 	}
