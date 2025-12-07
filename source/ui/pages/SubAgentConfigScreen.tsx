@@ -556,7 +556,7 @@ export default function SubAgentConfigScreen({
 		// ↑↓键: 在主字段间导航 (name → description → role → configProfile → customSystemPrompt → customHeaders → tools)
 		//       在配置列表字段内导航，到达边界时跳到相邻主字段
 		//       在 tools 字段内导航工具列表，到达边界时跳到相邻主字段
-		// ←→键: 仅在 tools 字段中切换工具分类
+		// ←→键: 在所有主字段之间切换 (除了 tools 字段中用于切换工具分类)
 		// Space: 切换选中状态
 		// ========================================
 
@@ -698,15 +698,13 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		// 配置字段使用 ↑↓ 键在列表内循环导航，不再使用 ←→ 键切换字段
-		// ←→ 键仅用于 tools 字段切换工具分类
-
 		// Config field controls - Space to toggle selection
 		if (
 			currentField === 'configProfile' ||
 			currentField === 'customSystemPrompt' ||
 			currentField === 'customHeaders'
 		) {
+			// Space to toggle selection
 			if (input === ' ') {
 				if (currentField === 'configProfile') {
 					setConfirmedConfigProfileIndex(prev =>
@@ -757,6 +755,23 @@ export default function SubAgentConfigScreen({
 				handleToggleCategory();
 				return;
 			}
+		}
+
+		// Global left/right arrow navigation between main fields (except tools field which uses it for categories)
+		if (key.leftArrow && currentField !== 'tools') {
+			// Navigate to previous main field
+			const prevIndex =
+				currentFieldIndex > 0 ? currentFieldIndex - 1 : mainFields.length - 1;
+			setCurrentField(mainFields[prevIndex]!);
+			return;
+		}
+
+		if (key.rightArrow && currentField !== 'tools') {
+			// Navigate to next main field
+			const nextIndex =
+				currentFieldIndex < mainFields.length - 1 ? currentFieldIndex + 1 : 0;
+			setCurrentField(mainFields[nextIndex]!);
+			return;
 		}
 
 		// Save with Enter key
