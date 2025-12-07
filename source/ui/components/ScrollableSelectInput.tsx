@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, {useState, useMemo, useEffect, useCallback} from 'react';
+import {Box, Text, useInput} from 'ink';
 
 type SelectItem = {
 	label: string;
@@ -31,7 +31,7 @@ type Props<T extends SelectItem> = {
 	onDeleteSelection?: () => void;
 };
 
-function DefaultIndicator({ isSelected }: IndicatorProps) {
+function DefaultIndicator({isSelected}: IndicatorProps) {
 	return (
 		<Box marginRight={1}>
 			<Text color={isSelected ? 'cyan' : 'gray'}>{isSelected ? '>' : ' '}</Text>
@@ -39,7 +39,10 @@ function DefaultIndicator({ isSelected }: IndicatorProps) {
 	);
 }
 
-function DefaultItem<T extends SelectItem>({ label, isSelected }: RenderItemProps<T>) {
+function DefaultItem<T extends SelectItem>({
+	label,
+	isSelected,
+}: RenderItemProps<T>) {
 	return <Text color={isSelected ? 'cyan' : 'white'}>{label}</Text>;
 }
 
@@ -54,10 +57,13 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 	onHighlight,
 	selectedValues,
 	onToggleItem,
-	onDeleteSelection
+	onDeleteSelection,
 }: Props<T>) {
 	const totalItems = items.length;
-	const windowSize = totalItems === 0 ? 0 : Math.min(Math.max(limit ?? totalItems, 1), totalItems);
+	const windowSize =
+		totalItems === 0
+			? 0
+			: Math.min(Math.max(limit ?? totalItems, 1), totalItems);
 	const selectedValueSet = useMemo<ReadonlySet<string>>(() => {
 		if (!selectedValues) {
 			return new Set<string>();
@@ -76,17 +82,18 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				return 0;
 			}
 
+			// 循环导航:小于 0 → 跳到最后一项,大于最后一项 → 跳到第一项
 			if (value < 0) {
-				return 0;
+				return totalItems - 1;
 			}
 
 			if (value > totalItems - 1) {
-				return totalItems - 1;
+				return 0;
 			}
 
 			return value;
 		},
-		[totalItems]
+		[totalItems],
 	);
 
 	const computeOffset = useCallback(
@@ -106,11 +113,13 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 
 			return Math.min(Math.max(nextOffset, 0), maxOffset);
 		},
-		[totalItems, windowSize]
+		[totalItems, windowSize],
 	);
 
 	const [cursor, setCursor] = useState(() => clampCursor(initialIndex));
-	const [offset, setOffset] = useState(() => computeOffset(clampCursor(initialIndex), clampCursor(initialIndex)));
+	const [offset, setOffset] = useState(() =>
+		computeOffset(clampCursor(initialIndex), clampCursor(initialIndex)),
+	);
 
 	useEffect(() => {
 		if (totalItems === 0) {
@@ -167,7 +176,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				return nextCursor;
 			});
 		},
-		[clampCursor, computeOffset, totalItems]
+		[clampCursor, computeOffset, totalItems],
 	);
 
 	const selectIndex = useCallback(
@@ -184,7 +193,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				onSelect?.(item);
 			}
 		},
-		[clampCursor, computeOffset, items, onSelect, totalItems]
+		[clampCursor, computeOffset, items, onSelect, totalItems],
 	);
 
 	const handleInput = useCallback(
@@ -225,10 +234,22 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				}
 			}
 		},
-		[isFocused, moveCursor, offset, onDeleteSelection, onSelect, onToggleItem, selectIndex, selectedItem, totalItems, visibleItems.length, windowSize]
+		[
+			isFocused,
+			moveCursor,
+			offset,
+			onDeleteSelection,
+			onSelect,
+			onToggleItem,
+			selectIndex,
+			selectedItem,
+			totalItems,
+			visibleItems.length,
+			windowSize,
+		],
 	);
 
-	useInput(handleInput, { isActive: isFocused });
+	useInput(handleInput, {isActive: isFocused});
 
 	if (windowSize === 0) {
 		return null;
@@ -242,7 +263,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 
 			return DefaultItem(row);
 		},
-		[renderItem]
+		[renderItem],
 	);
 
 	return (
@@ -255,8 +276,8 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 
 				return (
 					<Box key={key}>
-						{indicator({ isSelected })}
-						{renderRow({ ...item, isSelected, isMarked } as RenderItemProps<T>)}
+						{indicator({isSelected})}
+						{renderRow({...item, isSelected, isMarked} as RenderItemProps<T>)}
 					</Box>
 				);
 			})}

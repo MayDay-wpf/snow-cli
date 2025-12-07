@@ -63,28 +63,38 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		}
 
 		if (key.upArrow) {
-			setSelectedIndex(prev => {
-				const newIndex = Math.max(0, prev - 1);
-				// Adjust scroll offset if needed
-				if (newIndex < scrollOffset) {
-					setScrollOffset(newIndex);
-				}
-				return newIndex;
-			});
-			return;
-		}
+		setSelectedIndex(prev => {
+			// 循环导航: 第一项 → 最后一项, 其他 → 前一项
+			const newIndex = prev > 0 ? prev - 1 : sessions.length - 1;
+			// Adjust scroll offset if needed
+			if (newIndex < scrollOffset) {
+				// Scrolling up
+				setScrollOffset(newIndex);
+			} else if (newIndex >= sessions.length - VISIBLE_ITEMS) {
+				// Wrapped to end - scroll to show last items
+				setScrollOffset(Math.max(0, sessions.length - VISIBLE_ITEMS));
+			}
+			return newIndex;
+		});
+		return;
+	}
 
 		if (key.downArrow) {
-			setSelectedIndex(prev => {
-				const newIndex = Math.min(sessions.length - 1, prev + 1);
-				// Adjust scroll offset if needed
-				if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
-					setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
-				}
-				return newIndex;
-			});
-			return;
-		}
+		setSelectedIndex(prev => {
+			// 循环导航: 最后一项 → 第一项, 其他 → 后一项
+			const newIndex = prev < sessions.length - 1 ? prev + 1 : 0;
+			// Adjust scroll offset if needed
+			if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
+				// Scrolling down
+				setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
+			} else if (newIndex === 0) {
+				// Wrapped to start - scroll to top
+				setScrollOffset(0);
+			}
+			return newIndex;
+		});
+		return;
+	}
 
 		// Space to toggle mark
 		if (input === ' ') {

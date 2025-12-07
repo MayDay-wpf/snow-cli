@@ -550,13 +550,15 @@ export default function UsagePanel() {
 		);
 		const totalModels = sortedModels.length;
 
+		// 循环导航:第一项 → 最后一项,最后一项 → 第一项
 		if (key.upArrow) {
-			setScrollOffset(prev => Math.max(0, prev - 1));
+			const maxScroll = Math.max(0, totalModels - 1);
+			setScrollOffset(prev => (prev > 0 ? prev - 1 : maxScroll));
 		}
 		if (key.downArrow) {
 			// Reserve space for header, legend, total summary
 			const maxScroll = Math.max(0, totalModels - 1);
-			setScrollOffset(prev => Math.min(maxScroll, prev + 1));
+			setScrollOffset(prev => (prev < maxScroll ? prev + 1 : 0));
 		}
 	});
 

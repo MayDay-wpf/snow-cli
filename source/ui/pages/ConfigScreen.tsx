@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Select, Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
+import ScrollableSelectInput from '../components/ScrollableSelectInput.js';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
@@ -700,14 +701,15 @@ export default function ConfigScreen({
 						</Text>
 						{isEditing && isActive ? (
 							<Box marginLeft={3}>
-								<Select
-									options={[
+								<ScrollableSelectInput
+									items={[
 										{label: t.configScreen.anthropicCacheTTL5m, value: '5m'},
 										{label: t.configScreen.anthropicCacheTTL1h, value: '1h'},
 									]}
-									defaultValue={anthropicCacheTTL}
-									onChange={(value: string) => {
-										setAnthropicCacheTTL(value as '5m' | '1h');
+									initialIndex={anthropicCacheTTL === '5m' ? 0 : 1}
+									isFocused={true}
+									onSelect={item => {
+										setAnthropicCacheTTL(item.value as '5m' | '1h');
 										setIsEditing(false);
 									}}
 								/>
@@ -1340,15 +1342,15 @@ export default function ConfigScreen({
 		} else if (!isEditing && key.upArrow) {
 			const fields = getAllFields();
 			const currentIndex = fields.indexOf(currentField);
-			if (currentIndex > 0) {
-				setCurrentField(fields[currentIndex - 1]!);
-			}
+			// 向上导航:第一项 → 最后一项,其他 → 前一项 (标准循环导航)
+			const nextIndex = currentIndex > 0 ? currentIndex - 1 : fields.length - 1;
+			setCurrentField(fields[nextIndex]!);
 		} else if (!isEditing && key.downArrow) {
 			const fields = getAllFields();
 			const currentIndex = fields.indexOf(currentField);
-			if (currentIndex < fields.length - 1) {
-				setCurrentField(fields[currentIndex + 1]!);
-			}
+			// 向下导航:最后一项 → 第一项,其他 → 后一项 (标准循环导航)
+			const nextIndex = currentIndex < fields.length - 1 ? currentIndex + 1 : 0;
+			setCurrentField(fields[nextIndex]!);
 		}
 	});
 
@@ -1633,11 +1635,14 @@ export default function ConfigScreen({
 							</Box>
 						)}
 						{currentField === 'requestMethod' && (
-							<Select
-								options={requestMethodOptions}
-								defaultValue={requestMethod}
-								onChange={value => {
-									setRequestMethod(value as RequestMethod);
+							<ScrollableSelectInput
+								items={requestMethodOptions}
+								initialIndex={requestMethodOptions.findIndex(
+									opt => opt.value === requestMethod,
+								)}
+								isFocused={true}
+								onSelect={item => {
+									setRequestMethod(item.value as RequestMethod);
 									setIsEditing(false);
 								}}
 							/>
@@ -1651,25 +1656,39 @@ export default function ConfigScreen({
 										Filter: {searchTerm}
 									</Text>
 								)}
-								<Select
-									options={getCurrentOptions()}
-									defaultValue={getCurrentValue()}
-									onChange={handleModelChange}
+								<ScrollableSelectInput
+									items={getCurrentOptions()}
+									initialIndex={Math.max(
+										0,
+										getCurrentOptions().findIndex(
+											opt => opt.value === getCurrentValue(),
+										),
+									)}
+									isFocused={true}
+									onSelect={item => {
+										handleModelChange(item.value);
+									}}
 								/>
 							</Box>
 						)}
 						{currentField === 'responsesReasoningEffort' && (
-							<Select
-								options={[
+							<ScrollableSelectInput
+								items={[
 									{label: 'LOW', value: 'low'},
 									{label: 'MEDIUM', value: 'medium'},
 									{label: 'HIGH', value: 'high'},
 									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
 								]}
-								defaultValue={responsesReasoningEffort}
-								onChange={value => {
+								initialIndex={[
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
+								].findIndex(opt => opt.value === responsesReasoningEffort)}
+								isFocused={true}
+								onSelect={item => {
 									// If xhigh selected but unsupported, force reset to high
-									const nextEffort = value as
+									const nextEffort = item.value as
 										| 'low'
 										| 'medium'
 										| 'high'
