@@ -33,6 +33,12 @@ export interface SessionListItem {
 	messageCount: number;
 }
 
+export interface PaginatedSessionList {
+	sessions: SessionListItem[];
+	total: number;
+	hasMore: boolean;
+}
+
 class SessionManager {
 	private readonly sessionsDir: string;
 	private currentSession: Session | null = null;
@@ -270,6 +276,37 @@ class SessionManager {
 		} catch (error) {
 			return [];
 		}
+	}
+
+	async listSessionsPaginated(
+		page: number = 0,
+		pageSize: number = 20,
+		searchQuery?: string,
+	): Promise<PaginatedSessionList> {
+		let allSessions = await this.listSessions();
+
+		// Filter by search query if provided
+		if (searchQuery && searchQuery.trim()) {
+			const query = searchQuery.toLowerCase().trim();
+			allSessions = allSessions.filter(session => {
+				const titleMatch = session.title.toLowerCase().includes(query);
+				const summaryMatch = session.summary?.toLowerCase().includes(query);
+				const idMatch = session.id.toLowerCase().includes(query);
+				return titleMatch || summaryMatch || idMatch;
+			});
+		}
+
+		const total = allSessions.length;
+		const startIndex = page * pageSize;
+		const endIndex = startIndex + pageSize;
+		const sessions = allSessions.slice(startIndex, endIndex);
+		const hasMore = endIndex < total;
+
+		return {
+			sessions,
+			total,
+			hasMore,
+		};
 	}
 
 	private async readSessionsFromDir(
