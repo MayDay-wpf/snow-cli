@@ -6,6 +6,13 @@ import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
+import {
+	getProjectId,
+	getProjectPath,
+	formatDateCompact,
+	isDateFolder,
+	isProjectFolder,
+} from './projectUtils.js';
 // Session 中直接使用 API 的消息格式,额外添加 timestamp 用于会话管理
 export interface ChatMessage extends APIChatMessage {
 	timestamp: number;
@@ -22,6 +29,8 @@ export interface Session {
 	messages: ChatMessage[];
 	messageCount: number;
 	isTemporary?: boolean; // Temporary sessions are not shown in resume list
+	projectPath?: string; // 项目路径，用于区分不同项目的会话
+	projectId?: string; // 项目ID（项目名-哈希），用于存储分类
 }
 
 export interface SessionListItem {
@@ -31,6 +40,8 @@ export interface SessionListItem {
 	createdAt: number;
 	updatedAt: number;
 	messageCount: number;
+	projectPath?: string; // 项目路径
+	projectId?: string; // 项目ID
 }
 
 export interface PaginatedSessionList {
@@ -42,36 +53,70 @@ export interface PaginatedSessionList {
 class SessionManager {
 	private readonly sessionsDir: string;
 	private currentSession: Session | null = null;
+	private readonly currentProjectId: string;
+	private readonly currentProjectPath: string;
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
+		this.currentProjectId = getProjectId();
+		this.currentProjectPath = getProjectPath();
+	}
+
+	/**
+	 * 获取当前项目的会话目录
+	 * 路径结构: ~/.snow/sessions/项目名/YYYYMMDD/
+	 */
+	private getProjectSessionsDir(): string {
+		return path.join(this.sessionsDir, this.currentProjectId);
 	}
 
 	private async ensureSessionsDir(date?: Date): Promise<void> {
 		try {
+			// 确保基础目录存在
 			await fs.mkdir(this.sessionsDir, {recursive: true});
 
+			// 确保项目目录存在
+			const projectDir = this.getProjectSessionsDir();
+			await fs.mkdir(projectDir, {recursive: true});
+
 			if (date) {
-				const dateFolder = this.formatDateForFolder(date);
-				const sessionDir = path.join(this.sessionsDir, dateFolder);
+				const dateFolder = formatDateCompact(date);
+				const sessionDir = path.join(projectDir, dateFolder);
 				await fs.mkdir(sessionDir, {recursive: true});
 			}
 		} catch (error) {
 			// Directory already exists or other error
 		}
 	}
-	private getSessionPath(sessionId: string, date?: Date): string {
+
+	/**
+	 * 获取会话文件路径
+	 * 新路径结构: ~/.snow/sessions/项目名/YYYYMMDD/UUID.json
+	 */
+	private getSessionPath(
+		sessionId: string,
+		date?: Date,
+		projectId?: string,
+	): string {
 		const sessionDate = date || new Date();
-		const dateFolder = this.formatDateForFolder(sessionDate);
-		const sessionDir = path.join(this.sessionsDir, dateFolder);
+		const dateFolder = formatDateCompact(sessionDate);
+		const targetProjectId = projectId || this.currentProjectId;
+		const sessionDir = path.join(this.sessionsDir, targetProjectId, dateFolder);
 		return path.join(sessionDir, `${sessionId}.json`);
 	}
 
-	private formatDateForFolder(date: Date): string {
-		const year = date.getFullYear();
-		const month = String(date.getMonth() + 1).padStart(2, '0');
-		const day = String(date.getDate()).padStart(2, '0');
-		return `${year}-${month}-${day}`;
+	/**
+	 * 获取当前项目ID
+	 */
+	getProjectId(): string {
+		return this.currentProjectId;
+	}
+
+	/**
+	 * 获取当前项目路径
+	 */
+	getProjectPath(): string {
+		return this.currentProjectPath;
 	}
 
 	/**
@@ -98,6 +143,8 @@ class SessionManager {
 			messages: [],
 			messageCount: 0,
 			isTemporary,
+			projectPath: this.currentProjectPath, // 记录项目路径
+			projectId: this.currentProjectId, // 记录项目ID
 		};
 
 		this.currentSession = session;
@@ -135,9 +182,19 @@ class SessionManager {
 			return;
 		}
 
+		// 确保会话有项目信息（向后兼容：补充旧会话的项目信息）
+		if (!session.projectId) {
+			session.projectId = this.currentProjectId;
+			session.projectPath = this.currentProjectPath;
+		}
+
 		const sessionDate = new Date(session.createdAt);
 		await this.ensureSessionsDir(sessionDate);
-		const sessionPath = this.getSessionPath(session.id, sessionDate);
+		const sessionPath = this.getSessionPath(
+			session.id,
+			sessionDate,
+			session.projectId,
+		);
 		await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
 	}
 
@@ -205,25 +262,57 @@ class SessionManager {
 		return null;
 	}
 
+	/**
+	 * 在项目文件夹和日期文件夹中查找会话
+	 * 搜索顺序:
+	 * 1. 当前项目的日期文件夹（新格式）
+	 * 2. 其他项目的日期文件夹（跨项目兼容）
+	 * 3. 旧格式的日期文件夹（向后兼容）
+	 */
 	private async findSessionInDateFolders(
 		sessionId: string,
 	): Promise<Session | null> {
 		try {
 			const files = await fs.readdir(this.sessionsDir);
 
+			// 1. 首先在当前项目中查找
+			const currentProjectDir = this.getProjectSessionsDir();
+			const sessionFromCurrentProject = await this.findSessionInProjectDir(
+				currentProjectDir,
+				sessionId,
+			);
+			if (sessionFromCurrentProject) {
+				return sessionFromCurrentProject;
+			}
+
+			// 2. 在所有项目文件夹中查找（跨项目和向后兼容）
 			for (const file of files) {
 				const filePath = path.join(this.sessionsDir, file);
 				const stat = await fs.stat(filePath);
 
-				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
-					// 这是日期文件夹，查找会话文件
+				if (!stat.isDirectory()) continue;
+
+				// 跳过当前项目（已经搜索过了）
+				if (file === this.currentProjectId) continue;
+
+				// 新格式：项目文件夹（项目名-哈希）
+				if (isProjectFolder(file)) {
+					const session = await this.findSessionInProjectDir(
+						filePath,
+						sessionId,
+					);
+					if (session) return session;
+				}
+
+				// 旧格式：日期文件夹 YYYY-MM-DD（无项目层级）
+				if (isDateFolder(file)) {
 					const sessionPath = path.join(filePath, `${sessionId}.json`);
 					try {
 						const data = await fs.readFile(sessionPath, 'utf-8');
 						const session: Session = JSON.parse(data);
 						return session;
 					} catch (error) {
-						// 文件不存在或读取失败，继续搜索
+						// 文件不存在，继续搜索
 						continue;
 					}
 				}
@@ -235,39 +324,93 @@ class SessionManager {
 		return null;
 	}
 
+	/**
+	 * 在指定项目目录中查找会话
+	 */
+	private async findSessionInProjectDir(
+		projectDir: string,
+		sessionId: string,
+	): Promise<Session | null> {
+		try {
+			const dateFolders = await fs.readdir(projectDir);
+
+			for (const dateFolder of dateFolders) {
+				if (!isDateFolder(dateFolder)) continue;
+
+				const sessionPath = path.join(
+					projectDir,
+					dateFolder,
+					`${sessionId}.json`,
+				);
+				try {
+					const data = await fs.readFile(sessionPath, 'utf-8');
+					const session: Session = JSON.parse(data);
+					return session;
+				} catch (error) {
+					// 文件不存在，继续搜索
+					continue;
+				}
+			}
+		} catch (error) {
+			// 目录读取失败
+		}
+
+		return null;
+	}
+
+	/**
+	 * 列出当前项目的所有会话
+	 * 只返回与当前项目关联的会话，实现项目级别的会话隔离
+	 * 旧格式数据作为只读备用显示，不迁移到新格式
+	 */
 	async listSessions(): Promise<SessionListItem[]> {
 		await this.ensureSessionsDir();
 		const sessions: SessionListItem[] = [];
+		const seenIds = new Set<string>(); // 用于去重
 
 		try {
-			// 首先处理新的日期文件夹结构
-			const files = await fs.readdir(this.sessionsDir);
+			// 1. 从当前项目目录读取会话（新格式，优先）
+			const projectDir = this.getProjectSessionsDir();
+			try {
+				const dateFolders = await fs.readdir(projectDir);
+				for (const dateFolder of dateFolders) {
+					if (!isDateFolder(dateFolder)) continue;
+					const datePath = path.join(projectDir, dateFolder);
+					await this.readSessionsFromDir(datePath, sessions);
+				}
+				// 记录新格式中的会话ID
+				for (const s of sessions) {
+					seenIds.add(s.id);
+				}
+			} catch (error) {
+				// 项目目录不存在，继续处理旧格式
+			}
 
-			for (const file of files) {
-				const filePath = path.join(this.sessionsDir, file);
-				const stat = await fs.stat(filePath);
+			// 2. 只有当新格式目录为空时，才读取旧格式作为只读备用
+			if (sessions.length === 0) {
+				try {
+					const files = await fs.readdir(this.sessionsDir);
 
-				if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
-					// 这是日期文件夹，读取其中的会话文件
-					await this.readSessionsFromDir(filePath, sessions);
-				} else if (file.endsWith('.json')) {
-					// 这是旧格式的会话文件（向下兼容）
-					try {
-						const data = await fs.readFile(filePath, 'utf-8');
-						const session: Session = JSON.parse(data);
+					for (const file of files) {
+						const filePath = path.join(this.sessionsDir, file);
+						const stat = await fs.stat(filePath);
 
-						sessions.push({
-							id: session.id,
-							title: this.cleanTitle(session.title),
-							summary: session.summary,
-							createdAt: session.createdAt,
-							updatedAt: session.updatedAt,
-							messageCount: session.messageCount,
-						});
-					} catch (error) {
-						// Skip invalid session files
-						continue;
+						// 旧格式：直接在 sessions 目录下的日期文件夹（不是项目文件夹）
+						if (
+							stat.isDirectory() &&
+							isDateFolder(file) &&
+							!isProjectFolder(file)
+						) {
+							await this.readLegacySessionsFromDir(filePath, sessions, seenIds);
+						}
+
+						// 旧格式：直接在 sessions 目录下的 JSON 文件
+						if (file.endsWith('.json')) {
+							await this.readLegacySessionFile(filePath, sessions, seenIds);
+						}
 					}
+				} catch (error) {
+					// 读取旧格式失败不影响主流程
 				}
 			}
 
@@ -275,6 +418,70 @@ class SessionManager {
 			return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 		} catch (error) {
 			return [];
+		}
+	}
+
+	/**
+	 * 从旧格式目录读取会话（只读备用，按项目过滤）
+	 */
+	private async readLegacySessionsFromDir(
+		dirPath: string,
+		sessions: SessionListItem[],
+		seenIds: Set<string>,
+	): Promise<void> {
+		try {
+			const files = await fs.readdir(dirPath);
+			for (const file of files) {
+				if (!file.endsWith('.json')) continue;
+				const filePath = path.join(dirPath, file);
+				await this.readLegacySessionFile(filePath, sessions, seenIds);
+			}
+		} catch (error) {
+			// Skip inaccessible directories
+		}
+	}
+
+	/**
+	 * 读取单个旧格式会话文件（只读备用，按项目过滤）
+	 */
+	private async readLegacySessionFile(
+		filePath: string,
+		sessions: SessionListItem[],
+		seenIds: Set<string>,
+	): Promise<void> {
+		try {
+			const data = await fs.readFile(filePath, 'utf-8');
+			const session: Session = JSON.parse(data);
+
+			// 跳过已在新格式中存在的会话
+			if (seenIds.has(session.id)) {
+				return;
+			}
+
+			// 项目过滤：只显示匹配当前项目或没有项目标识的会话
+			if (
+				session.projectPath &&
+				session.projectPath !== this.currentProjectPath
+			) {
+				return;
+			}
+			if (session.projectId && session.projectId !== this.currentProjectId) {
+				return;
+			}
+
+			sessions.push({
+				id: session.id,
+				title: this.cleanTitle(session.title),
+				summary: session.summary,
+				createdAt: session.createdAt,
+				updatedAt: session.updatedAt,
+				messageCount: session.messageCount,
+				projectPath: session.projectPath,
+				projectId: session.projectId,
+			});
+			seenIds.add(session.id);
+		} catch (error) {
+			// Skip invalid session files
 		}
 	}
 
@@ -330,6 +537,8 @@ class SessionManager {
 							createdAt: session.createdAt,
 							updatedAt: session.updatedAt,
 							messageCount: session.messageCount,
+							projectPath: session.projectPath,
+							projectId: session.projectId,
 						});
 					} catch (error) {
 						// Skip invalid session files
@@ -484,26 +693,50 @@ class SessionManager {
 	async deleteSession(sessionId: string): Promise<boolean> {
 		let sessionDeleted = false;
 
-		// 首先尝试删除旧格式（向下兼容）
+		// 1. 首先尝试删除旧格式（向下兼容）
 		try {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
 			await fs.unlink(oldSessionPath);
 			sessionDeleted = true;
 		} catch (error) {
-			// 旧格式不存在，搜索日期文件夹
+			// 旧格式不存在，继续搜索
 		}
 
-		// 在日期文件夹中查找并删除会话
+		// 2. 在当前项目的日期文件夹中查找
+		if (!sessionDeleted) {
+			sessionDeleted = await this.deleteSessionFromProjectDir(
+				this.getProjectSessionsDir(),
+				sessionId,
+			);
+		}
+
+		// 3. 在所有项目文件夹和旧格式日期文件夹中查找
 		if (!sessionDeleted) {
 			try {
 				const files = await fs.readdir(this.sessionsDir);
 
 				for (const file of files) {
+					if (sessionDeleted) break;
+
 					const filePath = path.join(this.sessionsDir, file);
 					const stat = await fs.stat(filePath);
 
-					if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(file)) {
-						// 这是日期文件夹，查找会话文件
+					if (!stat.isDirectory()) continue;
+
+					// 跳过当前项目（已经搜索过了）
+					if (file === this.currentProjectId) continue;
+
+					// 新格式：项目文件夹
+					if (isProjectFolder(file)) {
+						sessionDeleted = await this.deleteSessionFromProjectDir(
+							filePath,
+							sessionId,
+						);
+						if (sessionDeleted) break;
+					}
+
+					// 旧格式：日期文件夹
+					if (isDateFolder(file)) {
 						const sessionPath = path.join(filePath, `${sessionId}.json`);
 						try {
 							await fs.unlink(sessionPath);
@@ -535,6 +768,39 @@ class SessionManager {
 		}
 
 		return sessionDeleted;
+	}
+
+	/**
+	 * 从指定项目目录中删除会话
+	 */
+	private async deleteSessionFromProjectDir(
+		projectDir: string,
+		sessionId: string,
+	): Promise<boolean> {
+		try {
+			const dateFolders = await fs.readdir(projectDir);
+
+			for (const dateFolder of dateFolders) {
+				if (!isDateFolder(dateFolder)) continue;
+
+				const sessionPath = path.join(
+					projectDir,
+					dateFolder,
+					`${sessionId}.json`,
+				);
+				try {
+					await fs.unlink(sessionPath);
+					return true;
+				} catch (error) {
+					// 文件不存在，继续搜索
+					continue;
+				}
+			}
+		} catch (error) {
+			// 目录读取失败
+		}
+
+		return false;
 	}
 
 	/**

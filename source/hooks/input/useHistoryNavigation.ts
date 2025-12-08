@@ -41,7 +41,7 @@ export function useHistoryNavigation(
 
 	// Load persistent history on mount
 	useEffect(() => {
-		historyManager.loadHistory().then(entries => {
+		historyManager.getEntries().then(entries => {
 			setPersistentHistory(entries);
 		});
 	}, []);

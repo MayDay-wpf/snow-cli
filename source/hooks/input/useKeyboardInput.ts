@@ -873,14 +873,17 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
-			const isAtStart = cursorPos === 0;
-			const hasNewline = text.includes('\n');
+
+			// Check if cursor is on the first line
+			const firstNewlineIndex = text.indexOf('\n');
+			const isOnFirstLine =
+				firstNewlineIndex === -1 || cursorPos <= firstNewlineIndex;
 
 			// Terminal-style history navigation:
 			// 1. Empty input box -> navigate history
-			// 2. Cursor at start of single line -> navigate history
-			// 3. Otherwise -> normal cursor movement
-			if (isEmpty || (!hasNewline && isAtStart)) {
+			// 2. Cursor on first line -> navigate history
+			// 3. Otherwise -> normal cursor movement (move up within multiline text)
+			if (isEmpty || isOnFirstLine) {
 				const navigated = navigateHistoryUp();
 				if (navigated) {
 					updateFilePickerState(
@@ -927,14 +930,17 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
-			const isAtEnd = cursorPos === text.length;
-			const hasNewline = text.includes('\n');
+
+			// Check if cursor is on the last line
+			const lastNewlineIndex = text.lastIndexOf('\n');
+			const isOnLastLine =
+				lastNewlineIndex === -1 || cursorPos > lastNewlineIndex;
 
 			// Terminal-style history navigation:
 			// 1. Empty input box -> navigate history (if in history mode)
-			// 2. Cursor at end of single line -> navigate history (if in history mode)
-			// 3. Otherwise -> normal cursor movement
-			if ((isEmpty || (!hasNewline && isAtEnd)) && currentHistoryIndex !== -1) {
+			// 2. Cursor on last line -> navigate history (if in history mode)
+			// 3. Otherwise -> normal cursor movement (move down within multiline text)
+			if ((isEmpty || isOnLastLine) && currentHistoryIndex !== -1) {
 				const navigated = navigateHistoryDown();
 				if (navigated) {
 					updateFilePickerState(
