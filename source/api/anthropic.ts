@@ -160,6 +160,7 @@ function convertToAnthropicMessages(
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string, // Allow override for sub-agents
 	cacheTTL: '5m' | '1h' = '5m', // Cache TTL configuration
+	disableThinking: boolean = false, // When true, strip thinking blocks from messages
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
@@ -261,7 +262,8 @@ function convertToAnthropicMessages(
 			const content: any[] = [];
 
 			// When thinking is enabled, thinking block must come first
-			if (msg.thinking) {
+			// Skip thinking block when disableThinking is true
+			if (msg.thinking && !disableThinking) {
 				// Use the complete thinking block object (includes signature)
 				content.push(msg.thinking);
 			}
@@ -291,7 +293,8 @@ function convertToAnthropicMessages(
 
 		if (msg.role === 'user' || msg.role === 'assistant') {
 			// For assistant messages with thinking, convert to structured format
-			if (msg.role === 'assistant' && msg.thinking) {
+			// Skip thinking block when disableThinking is true
+			if (msg.role === 'assistant' && msg.thinking && !disableThinking) {
 				const content: any[] = [];
 
 				// Thinking block must come first - use complete block object (includes signature)
@@ -512,6 +515,7 @@ export async function* createStreamingAnthropicCompletion(
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 				customSystemPromptContent, // 传递自定义系统提示词
 				config.anthropicCacheTTL || '5m', // 使用配置的 TTL，默认 5m
+				options.disableThinking || false, // Strip thinking blocks when thinking is disabled
 			);
 
 			// Use persistent userId that remains the same until application restart
@@ -532,6 +536,14 @@ export async function* createStreamingAnthropicCompletion(
 			// Add thinking configuration if enabled and not explicitly disabled
 			// When thinking is enabled, temperature must be 1
 			// Note: agents and other internal tools should set disableThinking=true
+			// Debug: Log thinking decision for troubleshooting
+			if (config.thinking) {
+				logger.debug('Thinking config check:', {
+					configThinking: !!config.thinking,
+					disableThinking: options.disableThinking,
+					willEnableThinking: config.thinking && !options.disableThinking,
+				});
+			}
 			if (config.thinking && !options.disableThinking) {
 				requestBody.thinking = config.thinking;
 				requestBody.temperature = 1;
