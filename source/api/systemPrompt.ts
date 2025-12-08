@@ -99,6 +99,76 @@ function getPowerShellVersion(): string | null {
 	}
 }
 
+/**
+ * Get platform-specific command requirements based on detected OS and shell
+ */
+function getPlatformCommandsSection(): string {
+	const platformType = os.platform();
+	const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
+	const shellName = path.basename(shellPath).toLowerCase();
+
+	// Windows with cmd.exe
+	if (platformType === 'win32' && shellName.includes('cmd')) {
+		return `## Platform-Specific Command Requirements
+
+**Current Environment: Windows with cmd.exe**
+
+- Use: \`del\`, \`copy\`, \`move\`, \`findstr\`, \`type\`, \`dir\`, \`mkdir\`, \`rmdir\`, \`set\`, \`if\`
+- Avoid: Unix commands (\`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`)
+- Avoid: Modern operators (\`&&\`, \`||\` - use \`&\` and \`|\` instead)
+- For complex tasks: Prefer Node.js scripts or npm packages`;
+	}
+
+	// Windows with PowerShell 5.x
+	if (
+		platformType === 'win32' &&
+		shellName.includes('powershell') &&
+		!shellName.includes('pwsh')
+	) {
+		return `## Platform-Specific Command Requirements
+
+**Current Environment: Windows with PowerShell 5.x**
+
+- Use: \`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, \`Get-ChildItem\`, \`New-Item\`
+- Shell operators: \`;\` for command separation, \`-and\`, \`-or\` for logical operations
+- Avoid: Modern pwsh features and operators like \`&&\`, \`||\` (only work in PowerShell 7+)
+- Note: Avoid \`$(...)\` syntax in certain contexts; use \`@()\` array syntax where applicable
+- For complex tasks: Prefer Node.js scripts or npm packages`;
+	}
+
+	// Windows with PowerShell 7.x+
+	if (platformType === 'win32' && shellName.includes('pwsh')) {
+		return `## Platform-Specific Command Requirements
+
+**Current Environment: Windows with PowerShell 7.x+**
+
+- Use: All PowerShell cmdlets (\`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, etc.)
+- Shell operators: \`;\`, \`&&\`, \`||\`, \`-and\`, \`-or\` are all supported
+- Supports cross-platform scripting patterns
+- For complex tasks: Prefer Node.js scripts or npm packages`;
+	}
+
+	// macOS/Linux (bash/zsh/sh/fish)
+	if (platformType === 'darwin' || platformType === 'linux') {
+		return `## Platform-Specific Command Requirements
+
+**Current Environment: ${
+			platformType === 'darwin' ? 'macOS' : 'Linux'
+		} with Unix shell**
+
+- Use: \`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`, \`mkdir\`, \`rmdir\`, \`find\`, \`sed\`, \`awk\`
+- Supports: \`&&\`, \`||\`, pipes \`|\`, redirection \`>\`, \`<\`, \`>>\`
+- For complex tasks: Prefer Node.js scripts or npm packages`;
+	}
+
+	// Fallback for unknown platforms
+	return `## Platform-Specific Command Requirements
+
+**Current Environment: ${platformType}**
+
+For cross-platform compatibility, prefer Node.js scripts or npm packages when possible.`;
+}
+
 const SYSTEM_PROMPT_TEMPLATE = `You are Snow AI CLI, an intelligent command-line assistant.
 
 ## Core Principles
@@ -354,37 +424,7 @@ Guidance and recommendations:
 2. Fix any errors immediately
 3. Never leave broken code
 
-## Platform-Specific Command Requirements
-
-ALWAYS use commands compatible with the detected operating system and shell version:
-
-**Windows with cmd.exe:**
-- Use: 		\`del\`, \`copy\`, \`move\`, \`findstr\`, \`type\`, \`dir\`, \`mkdir\`, \`rmdir\`, \`set\`, \`if\`
-- Avoid: Unix commands (\`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`), modern operators (\`&&\`, \`||\` - use \`&\` and \`|\` instead)
-
-**Windows with PowerShell 5.x (Windows PowerShell):**
-- Use: \`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, \`Get-ChildItem\`, \`New-Item\`
-- Shell operators: \`;\` for command separation, \`-and\`, \`-or\` for logical operations
-- Avoid: Modern pwsh features, operators like \`&&\`, \`||\` which only work in PowerShell 7+
-- Note: Avoid \`$(...)\` syntax in certain contexts; use \`@()\` array syntax where applicable
-
-**Windows with PowerShell 7.x+ (pwsh):**
-- Use: All PowerShell 5.x cmdlets plus modern features
-- Shell operators: \`;\`, \`&&\`, \`||\`, \`-and\`, \`-or\` are all supported
-- Supports cross-platform scripting patterns
-
-**macOS/Linux (bash/zsh/sh):**
-- Use: \`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`, \`mkdir\`, \`rmdir\`, \`find\`, \`sed\`, \`awk\`
-- Supports: \`&&\`, \`||\`, pipes \`|\`, redirection \`>\`, \`<\`, \`>>\`
-
-## Command Selection Algorithm:
-
-1. Check Platform and Shell from System Environment
-2. If **Windows + cmd.exe**: Use basic CMD syntax (no \`&&\`/\`||\`)
-3. If **Windows + PowerShell 5.x**: Use PowerShell cmdlets with \`;\` separator
-4. If **Windows + PowerShell 7.x**: Use PowerShell with modern operators
-5. If **macOS/Linux**: Use Unix/Linux commands with modern operators
-6. For complex cross-platform tasks: Prefer Node.js scripts or npm packages
+PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION
 
 ## Project Context (AGENTS.md)
 
@@ -486,6 +526,7 @@ export function getSystemPrompt(): string {
 	// Generate dynamic sections
 	const workflowSection = getWorkflowSection(hasCodebase);
 	const codeSearchSection = getCodeSearchSection(hasCodebase);
+	const platformCommandsSection = getPlatformCommandsSection();
 
 	// Get current year and month
 	const now = new Date();
@@ -495,7 +536,11 @@ export function getSystemPrompt(): string {
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
 		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
-		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection);
+		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection)
+		.replace(
+			'PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION',
+			platformCommandsSection,
+		);
 
 	return `${finalPrompt}
 
