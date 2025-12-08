@@ -70,11 +70,10 @@ function isRetriableError(error: Error): boolean {
 		return true;
 	}
 
-	// Server errors
+	// Server errors (5xx - temporary server issues, retryable)
+	// Note: 400, 403, 405 are client errors - typically not retryable
+	// as they indicate request format issues that won't change on retry
 	if (
-		errorMessage.includes('400') ||
-		errorMessage.includes('403') ||
-		errorMessage.includes('405') ||
 		errorMessage.includes('500') ||
 		errorMessage.includes('502') ||
 		errorMessage.includes('503') ||
