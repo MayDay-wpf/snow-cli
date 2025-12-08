@@ -2,6 +2,7 @@ import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
+import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import type {SubAgent} from '../../utils/config/subAgentConfig.js';
 
 type KeyboardInputOptions = {
@@ -685,6 +686,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						}
 						// Execute command instead of inserting text
 						executeCommand(selectedCommand.name).then(result => {
+							// Record command usage for frequency-based sorting
+							commandUsageManager.recordUsage(selectedCommand.name);
 							if (onCommand) {
 								onCommand(selectedCommand.name, result);
 							}
@@ -757,6 +760,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 						// Execute command with arguments
 						executeCommand(commandName, commandArgs).then(result => {
+							// Record command usage for frequency-based sorting
+							commandUsageManager.recordUsage(commandName);
 							if (onCommand) {
 								onCommand(commandName, result);
 							}
