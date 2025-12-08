@@ -143,8 +143,6 @@ export default function SubAgentConfigScreen({
 				'ace-semantic_search',
 				'ace-text_search',
 				'ace-file_outline',
-				'ace-index_stats',
-				'ace-clear_cache',
 			],
 		},
 		{
