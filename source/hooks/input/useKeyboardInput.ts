@@ -879,16 +879,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
 
-			// Check if cursor is on the first line
-			const firstNewlineIndex = text.indexOf('\n');
-			const isOnFirstLine =
-				firstNewlineIndex === -1 || cursorPos <= firstNewlineIndex;
-
 			// Terminal-style history navigation:
-			// 1. Empty input box -> navigate history
-			// 2. Cursor on first line -> navigate history
-			// 3. Otherwise -> normal cursor movement (move up within multiline text)
-			if (isEmpty || isOnFirstLine) {
+			// Only navigate history when cursor is at the very beginning (position 0)
+			// This allows normal cursor movement within the line
+			if (isEmpty || cursorPos === 0) {
 				const navigated = navigateHistoryUp();
 				if (navigated) {
 					updateFilePickerState(
@@ -936,16 +930,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
 
-			// Check if cursor is on the last line
-			const lastNewlineIndex = text.lastIndexOf('\n');
-			const isOnLastLine =
-				lastNewlineIndex === -1 || cursorPos > lastNewlineIndex;
-
 			// Terminal-style history navigation:
-			// 1. Empty input box -> navigate history (if in history mode)
-			// 2. Cursor on last line -> navigate history (if in history mode)
-			// 3. Otherwise -> normal cursor movement (move down within multiline text)
-			if ((isEmpty || isOnLastLine) && currentHistoryIndex !== -1) {
+			// Only navigate history when cursor is at the very end (position equals text length)
+			// and we're already in history mode (currentHistoryIndex !== -1)
+			// This allows normal cursor movement within the text
+			if (
+				(isEmpty || cursorPos === text.length) &&
+				currentHistoryIndex !== -1
+			) {
 				const navigated = navigateHistoryDown();
 				if (navigated) {
 					updateFilePickerState(
