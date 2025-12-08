@@ -87,10 +87,15 @@ const CLIENT_IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes idle timeout
 
 /**
  * Get the TODO service instance (lazy initialization)
+ * TODO 服务路径与 Session 保持一致，按项目分类存储
  */
 export function getTodoService(): TodoService {
 	if (!todoService) {
-		todoService = new TodoService(path.join(os.homedir(), '.snow'), () => {
+		// 获取当前项目ID，与 Session 路径结构保持一致
+		const projectId = sessionManager.getProjectId();
+		const basePath = path.join(os.homedir(), '.snow', 'todos', projectId);
+
+		todoService = new TodoService(basePath, () => {
 			const session = sessionManager.getCurrentSession();
 			return session ? session.id : null;
 		});
