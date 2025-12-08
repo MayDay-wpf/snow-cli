@@ -17,6 +17,7 @@ Snow CLI is an intelligent AI-powered CLI tool that brings advanced AI capabilit
 
 **English** | [中文](README_zh.md)
 
+**QQ群**: 910298558
 
 ## 🚀 Why Snow CLI?
 

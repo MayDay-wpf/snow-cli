@@ -487,6 +487,11 @@ export function getSystemPrompt(): string {
 	const workflowSection = getWorkflowSection(hasCodebase);
 	const codeSearchSection = getCodeSearchSection(hasCodebase);
 
+	// Get current year and month
+	const now = new Date();
+	const currentYear = now.getFullYear();
+	const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
+
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
 		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
@@ -496,5 +501,10 @@ export function getSystemPrompt(): string {
 
 ## System Environment
 
-${systemEnv}`;
+${systemEnv}
+
+## Current Time
+
+Year: ${currentYear}
+Month: ${currentMonth}`;
 }
