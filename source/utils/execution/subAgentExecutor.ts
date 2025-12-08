@@ -1,16 +1,16 @@
-import { createStreamingAnthropicCompletion } from '../../api/anthropic.js';
-import { createStreamingResponse } from '../../api/responses.js';
-import { createStreamingGeminiCompletion } from '../../api/gemini.js';
-import { createStreamingChatCompletion } from '../../api/chat.js';
-import { getSubAgent } from '../config/subAgentConfig.js';
-import { collectAllMCPTools, executeMCPTool } from './mcpToolsManager.js';
-import { getOpenAiConfig } from '../config/apiConfig.js';
-import { sessionManager } from '../session/sessionManager.js';
-import { unifiedHooksExecutor } from './unifiedHooksExecutor.js';
-import { checkYoloPermission } from './yoloPermissionChecker.js';
-import type { ConfirmationResult } from '../../ui/components/ToolConfirmation.js';
-import type { MCPTool } from './mcpToolsManager.js';
-import type { ChatMessage } from '../../api/chat.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
+import {createStreamingChatCompletion} from '../../api/chat.js';
+import {getSubAgent} from '../config/subAgentConfig.js';
+import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
+import {getOpenAiConfig} from '../config/apiConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
+import {checkYoloPermission} from './yoloPermissionChecker.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {MCPTool} from './mcpToolsManager.js';
+import type {ChatMessage} from '../../api/chat.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -94,7 +94,7 @@ export async function executeSubAgent(
 			agentId === 'agent_general'
 		) {
 			// Check user agents directly (not through getSubAgent which might return builtin)
-			const { getUserSubAgents } = await import('../config/subAgentConfig.js');
+			const {getUserSubAgents} = await import('../config/subAgentConfig.js');
 			const userAgents = getUserSubAgents();
 			const userAgent = userAgents.find(a => a.id === agentId);
 			if (userAgent) {
@@ -658,7 +658,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 			let model;
 			if (agent.configProfile) {
 				try {
-					const { loadProfile } = await import('../config/configManager.js');
+					const {loadProfile} = await import('../config/configManager.js');
 					const profileConfig = loadProfile(agent.configProfile);
 					if (profileConfig?.snowcfg) {
 						config = profileConfig.snowcfg;
@@ -691,22 +691,22 @@ You are a versatile task execution agent with full tool access, capable of handl
 			const stream =
 				config.requestMethod === 'anthropic'
 					? createStreamingAnthropicCompletion(
-						{
-							model,
-							messages,
-							temperature: 0,
-							max_tokens: config.maxTokens || 4096,
-							tools: allowedTools,
-							sessionId: currentSession?.id,
-							disableThinking: true, // Sub-agents 不使用 Extended Thinking
-							configProfile: agent.configProfile,
-							customSystemPromptId: agent.customSystemPrompt,
-							customHeaders: agent.customHeaders,
-						},
-						abortSignal,
-					)
+							{
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: allowedTools,
+								sessionId: currentSession?.id,
+								disableThinking: true, // Sub-agents 不使用 Extended Thinking
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  )
 					: config.requestMethod === 'gemini'
-						? createStreamingGeminiCompletion(
+					? createStreamingGeminiCompletion(
 							{
 								model,
 								messages,
@@ -717,36 +717,46 @@ You are a versatile task execution agent with full tool access, capable of handl
 								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
-						)
-						: config.requestMethod === 'responses'
-							? createStreamingResponse(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-									prompt_cache_key: currentSession?.id,
-									configProfile: agent.configProfile,
-									customSystemPromptId: agent.customSystemPrompt,
-									customHeaders: agent.customHeaders,
-								},
-								abortSignal,
-							)
-							: createStreamingChatCompletion(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-									configProfile: agent.configProfile,
-									customSystemPromptId: agent.customSystemPrompt,
-									customHeaders: agent.customHeaders,
-								},
-								abortSignal,
-							);
+					  )
+					: config.requestMethod === 'responses'
+					? createStreamingResponse(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+								prompt_cache_key: currentSession?.id,
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  )
+					: createStreamingChatCompletion(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  );
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
+			// Capture thinking/reasoning content for Extended Thinking support
+			// Note: thinkingContent is kept for potential future use (e.g., logging)
+			let thinkingContent = '';
+			let receivedThinking:
+				| {
+						type: 'thinking';
+						thinking: string;
+						signature?: string;
+				  }
+				| undefined;
 
 			for await (const event of stream) {
 				// Forward message to UI (but don't save to main conversation)
@@ -786,6 +796,16 @@ You are a versatile task execution agent with full tool access, capable of handl
 					}
 				}
 
+				// Capture thinking/reasoning events (Anthropic Extended Thinking)
+				if (event.type === 'reasoning_delta' && (event as any).delta) {
+					thinkingContent += (event as any).delta;
+				}
+
+				// Capture complete thinking block from done event (includes signature)
+				if (event.type === 'done' && (event as any).thinking) {
+					receivedThinking = (event as any).thinking;
+				}
+
 				if (event.type === 'content' && event.content) {
 					currentContent += event.content;
 				} else if (event.type === 'tool_calls' && event.tool_calls) {
@@ -802,11 +822,18 @@ You are a versatile task execution agent with full tool access, capable of handl
 			}
 
 			// Add assistant response to conversation
-			if (currentContent || toolCalls.length > 0) {
+			// Include thinking block if present (required for Anthropic Extended Thinking multi-turn)
+			if (currentContent || toolCalls.length > 0 || receivedThinking) {
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
 					content: currentContent || '',
 				};
+
+				// Add thinking block if received (critical for Extended Thinking compatibility)
+				// The thinking block with signature must be preserved for subsequent API calls
+				if (receivedThinking) {
+					(assistantMessage as any).thinking = receivedThinking;
+				}
 
 				if (toolCalls.length > 0) {
 					assistantMessage.tool_calls = toolCalls;
@@ -1087,8 +1114,9 @@ You are a versatile task execution agent with full tool access, capable of handl
 					const errorResult = {
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
-						content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'
-							}`,
+						content: `Error: ${
+							error instanceof Error ? error.message : 'Tool execution failed'
+						}`,
 					};
 					toolResults.push(errorResult);
 
@@ -1102,10 +1130,11 @@ You are a versatile task execution agent with full tool access, capable of handl
 								type: 'tool_result',
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
-								content: `Error: ${error instanceof Error
+								content: `Error: ${
+									error instanceof Error
 										? error.message
 										: 'Tool execution failed'
-									}`,
+								}`,
 							} as any,
 						});
 					}
