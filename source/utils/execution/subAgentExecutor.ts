@@ -351,6 +351,8 @@ ALTERNATIVE APPROACHES:
 					// Web search for reference
 					'websearch-search',
 					'websearch-fetch',
+					// Ask user questions for clarification
+					'askuser-ask_question',
 				],
 			};
 		} else if (!agent && agentId === 'agent_general') {
@@ -1101,8 +1103,8 @@ You are a versatile task execution agent with full tool access, capable of handl
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
 								content: `Error: ${error instanceof Error
-									? error.message
-									: 'Tool execution failed'
+										? error.message
+										: 'Tool execution failed'
 									}`,
 							} as any,
 						});

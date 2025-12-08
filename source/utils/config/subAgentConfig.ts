@@ -267,6 +267,7 @@ ALTERNATIVE APPROACHES:
 			'codebase-search',
 			'websearch-search',
 			'websearch-fetch',
+			'askuser-ask_question',
 		],
 		createdAt: '2024-01-01T00:00:00.000Z',
 		updatedAt: '2024-01-01T00:00:00.000Z',
