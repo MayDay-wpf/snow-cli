@@ -741,4 +741,12 @@ export const zhTW: TranslationKeys = {
 		errorExistsGlobal: '技能 "{name}" 已存在於全局位置 (~/.snow/skills/)',
 		errorExistsProject: '技能 "{name}" 已存在於項目位置 (.snow/skills/)',
 	},
+	askUser: {
+		header: '[需要使用者輸入]',
+		customInputOption: '自訂輸入...',
+		customInputLabel: '自訂輸入',
+		selectPrompt: '選擇一個選項:',
+		enterResponse: '請輸入您的回答:',
+		keyboardHints: "提示: 按 'Enter' 選擇 | 按 'e' 編輯當前選項",
+	},
 };
