@@ -1113,6 +1113,32 @@ export async function handleConversationWithTools(
 					// Need to add tool results for all pending tool calls to complete conversation history
 					// This is critical for sub-agents and any tools that were being executed
 					if (receivedToolCalls && receivedToolCalls.length > 0) {
+						// CRITICAL FIX: If assistant message with tool_calls hasn't been saved yet,
+						// we must save it first to avoid orphaned tool results in the session
+						const assistantMsgWithTools = conversationMessages.find(
+							msg =>
+								msg.role === 'assistant' &&
+								msg.tool_calls &&
+								msg.tool_calls.some(tc =>
+									receivedToolCalls!.some(rtc => rtc.id === tc.id),
+								),
+						);
+
+						// If assistant message exists in memory but might not be in session yet,
+						// wait for it to be saved before adding aborted tool results
+						if (assistantMsgWithTools) {
+							try {
+								// Ensure assistant message is persisted first
+								await saveMessage(assistantMsgWithTools);
+							} catch (error) {
+								console.error(
+									'Failed to save assistant message before abort:',
+									error,
+								);
+							}
+						}
+
+						// Now add aborted tool results
 						for (const toolCall of receivedToolCalls) {
 							const abortedResult = {
 								role: 'tool' as const,
