@@ -45,6 +45,7 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
+	cleanIDEContext,
 } from '../../utils/core/fileUtils.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
@@ -752,25 +753,23 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						selectedIndex,
 				  )
 				: [];
-
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length, // Use actual unique file count
 				filePaths,
-				message, // Save message for restore after rollback
+				message: cleanIDEContext(message), // Clean IDE context before saving
 				images, // Save images for restore after rollback
 			});
 		} else {
 			// No files to rollback, just rollback conversation
 			// Restore message to input buffer (with or without images)
 			setRestoreInputContent({
-				text: message,
+				text: cleanIDEContext(message), // Clean IDE context before restoring
 				images: images,
 			});
 			await performRollback(selectedIndex, false);
 		}
 	};
-
 	const performRollback = async (
 		selectedIndex: number,
 		rollbackFiles: boolean,
