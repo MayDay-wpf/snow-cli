@@ -209,23 +209,86 @@ class VSCodeConnectionManager {
 
 	/**
 	 * Find the correct port for the current workspace
-	 * Prioritizes exact matches and longer path matches to handle multiple IDE instances
+	 * Detects which IDE terminal this is running in and connects accordingly
 	 */
 	private findPortForWorkspace(): number {
 		try {
 			const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 			if (fs.existsSync(portInfoPath)) {
 				const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
-
-				// Normalize cwd for consistent comparison
 				const cwd = this.normalizePath(this.currentWorkingDirectory);
 
-				// Direct match - highest priority
+				// Priority 1: Check terminal environment variables to detect IDE type
+				const termProgram = process.env['TERM_PROGRAM'];
+				const terminalEmulator = process.env['TERMINAL_EMULATOR'];
+
+				// Build a list of candidate ports based on IDE type and workspace match
+				let candidatePorts: Array<{
+					port: number;
+					workspace: string;
+					matchScore: number;
+				}> = [];
+
+				// If running in VSCode terminal, collect VSCode ports with workspace match scores
+				if (termProgram === 'vscode') {
+					for (const [workspace, port] of Object.entries(portInfo)) {
+						if (typeof port === 'number' && port >= 9527 && port <= 9537) {
+							const normalizedWorkspace = this.normalizePath(workspace);
+							let matchScore = 1; // Default: at least it's the right IDE type
+							if (normalizedWorkspace === cwd) {
+								matchScore = 100; // Exact match
+							} else if (
+								normalizedWorkspace &&
+								cwd.startsWith(normalizedWorkspace + '/')
+							) {
+								matchScore = 50 + normalizedWorkspace.length; // Parent workspace
+							} else if (
+								normalizedWorkspace &&
+								normalizedWorkspace.startsWith(cwd + '/')
+							) {
+								matchScore = 30; // Child workspace
+							}
+							candidatePorts.push({port, workspace, matchScore});
+						}
+					}
+				}
+
+				// If running in JetBrains terminal, collect JetBrains ports with workspace match scores
+				if (terminalEmulator?.includes('JetBrains')) {
+					for (const [workspace, port] of Object.entries(portInfo)) {
+						if (typeof port === 'number' && port >= 9538 && port <= 9548) {
+							const normalizedWorkspace = this.normalizePath(workspace);
+							let matchScore = 1; // Default: at least it's the right IDE type
+							if (normalizedWorkspace === cwd) {
+								matchScore = 100; // Exact match
+							} else if (
+								normalizedWorkspace &&
+								cwd.startsWith(normalizedWorkspace + '/')
+							) {
+								matchScore = 50 + normalizedWorkspace.length; // Parent workspace
+							} else if (
+								normalizedWorkspace &&
+								normalizedWorkspace.startsWith(cwd + '/')
+							) {
+								matchScore = 30; // Child workspace
+							}
+							candidatePorts.push({port, workspace, matchScore});
+						}
+					}
+				}
+
+				// If we found candidates based on terminal type, use the best match
+				if (candidatePorts.length > 0) {
+					candidatePorts.sort((a, b) => b.matchScore - a.matchScore);
+					return candidatePorts[0]!.port;
+				}
+
+				// Priority 2: Exact workspace match
 				if (portInfo[cwd]) {
 					return portInfo[cwd];
 				}
 
-				// Find all matching workspaces where cwd is within the workspace
+				// Priority 3: Find workspace containing current directory
 				const matches: Array<{
 					workspace: string;
 					port: number;
@@ -249,7 +312,6 @@ class VSCodeConnectionManager {
 				}
 
 				// Sort by path length (longest first) to get the most specific workspace
-				// This ensures we connect to the IDE with the most specific workspace match
 				if (matches.length > 0) {
 					matches.sort((a, b) => b.length - a.length);
 					return matches[0]!.port;

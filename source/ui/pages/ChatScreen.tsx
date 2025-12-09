@@ -627,7 +627,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}, 0);
 
 		return () => clearTimeout(timer);
-	}, [commandsLoaded, vscodeState]);
+	}, [commandsLoaded]);
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
