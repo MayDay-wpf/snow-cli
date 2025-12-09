@@ -702,7 +702,7 @@ export const ja: TranslationKeys = {
 			'入力してファイルをフィルタ • Tab/Enter 選択 • ESC キャンセル',
 		yoloModeActive:
 			'❁ YOLOモード有効 - すべてのツールが確認なしで自動承認されます',
-		planModeActive: '𖨆 Planモード有効 - 専門的な計画・調整エージェント',
+		planModeActive: '⚐ Planモード有効 - 専門的な計画・調整エージェント',
 		tokens: 'トークン',
 		cached: 'キャッシュ済み',
 		newCache: '新規キャッシュ',

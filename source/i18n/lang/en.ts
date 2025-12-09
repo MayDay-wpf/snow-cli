@@ -714,7 +714,7 @@ export const en: TranslationKeys = {
 		yoloModeActive:
 			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
-			'𖨆 Plan mode active - Specialized planning and coordination agent',
+			'⚐ Plan mode active - Specialized planning and coordination agent',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

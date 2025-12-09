@@ -681,7 +681,7 @@ export const zhTW: TranslationKeys = {
 		contentSearchHint: '內容搜尋 • Tab/Enter 選擇 • ESC 取消',
 		fileSearchHint: '輸入以過濾檔案 • Tab/Enter 選擇 • ESC 取消',
 		yoloModeActive: '❁ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
-		planModeActive: '𖨆 Plan 模式已啟用 - 專業規劃與協調助手',
+		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',
 		tokens: ' 個token',
 		cached: '已快取',
 		newCache: '新快取',

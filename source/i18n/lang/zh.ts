@@ -682,7 +682,7 @@ export const zh: TranslationKeys = {
 		contentSearchHint: '内容搜索 • Tab/Enter 选择 • ESC 取消',
 		fileSearchHint: '输入以过滤文件 • Tab/Enter 选择 • ESC 取消',
 		yoloModeActive: '❁ YOLO 模式已激活 - 所有工具将自动批准无需确认',
-		planModeActive: '𖨆 Plan 模式已激活 - 专业规划与协调助手',
+		planModeActive: '⚐ Plan 模式已激活 - 专业规划与协调助手',
 		tokens: ' 个token',
 		cached: '已缓存',
 		newCache: '新缓存',

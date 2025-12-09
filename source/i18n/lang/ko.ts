@@ -689,7 +689,7 @@ export const ko: TranslationKeys = {
 		fileSearchHint: '입력하여 파일 필터 • Tab/Enter 선택 • ESC 취소',
 		yoloModeActive:
 			'❁ YOLO 모드 활성화 - 모든 도구가 확인 없이 자동 승인됩니다',
-		planModeActive: '𖨆 Plan 모드 활성화 - 전문 계획 및 조정 에이전트',
+		planModeActive: '⚐ Plan 모드 활성화 - 전문 계획 및 조정 에이전트',
 		tokens: '토큰',
 		cached: '캐시됨',
 		newCache: '새 캐시',
