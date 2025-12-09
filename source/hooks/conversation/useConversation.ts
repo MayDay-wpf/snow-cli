@@ -1210,7 +1210,9 @@ export async function handleConversationWithTools(
 						};
 						setMessages(prev => [...prev, compressingMessage]);
 
-						const compressionResult = await performAutoCompression();
+						// 获取当前会话ID并传递给压缩函数
+						const session = sessionManager.getCurrentSession();
+						const compressionResult = await performAutoCompression(session?.id);
 
 						// Check if beforeCompress hook failed
 						if (compressionResult && (compressionResult as any).hookFailed) {
@@ -1433,7 +1435,11 @@ export async function handleConversationWithTools(
 								};
 								setMessages(prev => [...prev, compressingMessage]);
 
-								const compressionResult = await performAutoCompression();
+								// 获取当前会话ID并传递给压缩函数
+								const session = sessionManager.getCurrentSession();
+								const compressionResult = await performAutoCompression(
+									session?.id,
+								);
 
 								// Check if beforeCompress hook failed
 								if (

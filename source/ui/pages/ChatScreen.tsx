@@ -1106,7 +1106,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				};
 				setMessages(prev => [...prev, compressingMessage]);
 
-				const compressionResult = await performAutoCompression();
+				// 获取当前会话ID并传递给压缩函数
+				const session = sessionManager.getCurrentSession();
+				const compressionResult = await performAutoCompression(session?.id);
 
 				if (compressionResult) {
 					// 更新UI和token使用情况
@@ -1115,7 +1117,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
 				} else {
-					throw new Error('Compression failed');
+					// 压缩失败或跳过，移除压缩提示消息，继续执行
+					setMessages(prev => prev.filter(m => m !== compressingMessage));
 				}
 			} catch (error) {
 				const errorMsg =

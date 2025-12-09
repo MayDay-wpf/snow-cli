@@ -15,11 +15,12 @@ export function shouldAutoCompress(
 
 /**
  * 执行自动压缩
+ * @param sessionId - 可选的会话ID，如果提供则使用该ID加载会话进行压缩
  * @returns 压缩结果，如果失败返回null或包含hookFailed的结果
  */
-export async function performAutoCompression() {
+export async function performAutoCompression(sessionId?: string) {
 	try {
-		const result = await executeContextCompression();
+		const result = await executeContextCompression(sessionId);
 
 		// If beforeCompress hook failed, return the result with hookFailed flag
 		// The caller (useConversation.ts) will handle displaying error and aborting AI flow
