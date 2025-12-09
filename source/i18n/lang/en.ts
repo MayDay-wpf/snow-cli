@@ -778,4 +778,13 @@ export const en: TranslationKeys = {
 		errorExistsProject:
 			'Skill "{name}" already exists in project location (.snow/skills/)',
 	},
+	askUser: {
+		header: '[User Input Required]',
+		customInputOption: 'Custom input...',
+		customInputLabel: 'Custom input',
+		selectPrompt: 'Select an option:',
+		enterResponse: 'Enter your response:',
+		keyboardHints:
+			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
+	},
 };

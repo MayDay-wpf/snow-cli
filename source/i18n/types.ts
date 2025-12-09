@@ -721,7 +721,6 @@ export type TranslationKeys = {
 		enterRejectionReason: string;
 		submitCancelHint: string;
 	};
-	// Skills Creation
 	skillsCreation: {
 		title: string;
 		nameLabel: string;
@@ -743,6 +742,15 @@ export type TranslationKeys = {
 		errorExistsBoth: string;
 		errorExistsGlobal: string;
 		errorExistsProject: string;
+	};
+	// AskUserQuestion Component
+	askUser: {
+		header: string;
+		customInputOption: string;
+		customInputLabel: string;
+		selectPrompt: string;
+		enterResponse: string;
+		keyboardHints: string;
 	};
 };
 

@@ -786,29 +786,39 @@ export const es: TranslationKeys = {
 	},
 
 	skillsCreation: {
-		title: 'Create New Skill',
-		nameLabel: 'Skill Name:',
-		nameHint: 'Use lowercase letters, numbers, and hyphens only (max 64 chars)',
-		namePlaceholder: 'my-skill-name',
-		descriptionLabel: 'Description:',
+		title: 'Crear Nueva Habilidad',
+		nameLabel: 'Nombre de Habilidad:',
+		nameHint:
+			'Use solo letras minúsculas, números y guiones (máx. 64 caracteres)',
+		namePlaceholder: 'mi-nombre-habilidad',
+		descriptionLabel: 'Descripción:',
 		descriptionHint:
-			'Brief description of what this Skill does and when to use it',
-		descriptionPlaceholder: 'A brief description...',
-		locationLabel: 'Select Location:',
+			'Breve descripción de lo que hace esta habilidad y cuándo usarla',
+		descriptionPlaceholder: 'Una breve descripción...',
+		locationLabel: 'Seleccionar Ubicación:',
 		locationGlobal: 'Global (~/.snow/skills/)',
-		locationGlobalInfo: 'Available across all projects',
-		locationProject: 'Project (.snow/skills/ in project root)',
-		locationProjectInfo: 'Only available in this project',
-		confirmQuestion: 'Create this Skill?',
-		confirmYes: 'Yes, Create',
-		confirmNo: 'No, Cancel',
-		escCancel: 'Press ESC to cancel',
-		errorInvalidName: 'Invalid skill name',
+		locationGlobalInfo: 'Disponible en todos los proyectos',
+		locationProject: 'Proyecto (.snow/skills/ en raíz del proyecto)',
+		locationProjectInfo: 'Solo disponible en este proyecto',
+		confirmQuestion: '¿Crear esta habilidad?',
+		confirmYes: 'Sí, Crear',
+		confirmNo: 'No, Cancelar',
+		escCancel: 'Presiona ESC para cancelar',
+		errorInvalidName: 'Nombre de habilidad inválido',
 		errorExistsBoth:
-			'Skill "{name}" already exists in both global and project locations',
+			'La habilidad "{name}" ya existe en ambas ubicaciones global y de proyecto',
 		errorExistsGlobal:
-			'Skill "{name}" already exists in global location (~/.snow/skills/)',
+			'La habilidad "{name}" ya existe en la ubicación global (~/.snow/skills/)',
 		errorExistsProject:
-			'Skill "{name}" already exists in project location (.snow/skills/)',
+			'La habilidad "{name}" ya existe en la ubicación del proyecto (.snow/skills/)',
+	},
+	askUser: {
+		header: '[Se requiere entrada del usuario]',
+		customInputOption: 'Entrada personalizada...',
+		customInputLabel: 'Entrada personalizada',
+		selectPrompt: 'Seleccione una opción:',
+		enterResponse: 'Ingrese su respuesta:',
+		keyboardHints:
+			"Consejo: Presione 'Enter' para seleccionar | Presione 'e' para editar la opción seleccionada",
 	},
 };
