@@ -72,6 +72,7 @@ export function generateSkillTemplate(metadata: SkillMetadata): string {
 	return `---
 name: ${metadata.name}
 description: ${metadata.description}
+allowed-tools:
 ---
 
 # ${metadata.name

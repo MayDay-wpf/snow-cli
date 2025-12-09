@@ -407,7 +407,8 @@ export const en: TranslationKeys = {
 		navigateHistory: '↑/↓ - Navigate command/message history',
 		selectItem: 'Tab/Enter - Select item in pickers',
 		cancelClose: 'ESC - Cancel/close pickers or interrupt AI response',
-		toggleYolo: 'Shift+Tab/Ctrl+Y - Toggle YOLO mode (auto-approve tools)',
+		toggleYolo:
+			'Shift+Tab/Ctrl+Y - Toggle YOLO/Plan modes (cycle: Off → YOLO → YOLO+Plan → Off)',
 		tipsTitle: '💡 Tips:',
 		tipUseHelp: 'Use /help anytime to see this information',
 		tipShowCommands: 'Type / to see all available commands',
@@ -428,6 +429,7 @@ export const en: TranslationKeys = {
 			resume: 'Resume a conversation',
 			mcp: 'Show Model Context Protocol services and tools',
 			yolo: 'Toggle unattended mode (auto-approve all tools)',
+			plan: 'Toggle Plan mode (specialized planning assistant)',
 			init: 'Analyze project and generate/update AGENTS.md documentation',
 			ide: 'Connect to VSCode editor and sync context',
 			compact: 'Compress conversation history using compact model',
@@ -556,7 +558,8 @@ export const en: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: 'Ask for code explanations and debugging help',
 		headerInterrupt: 'Press ESC during response to interrupt',
-		headerYolo: 'Press Shift+Tab/Ctrl+Y: toggle YOLO',
+		headerYolo:
+			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: Off → YOLO → YOLO+Plan → Off)',
 		headerShortcuts:
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerWorkingDirectory: 'Working directory: {directory}',
@@ -710,6 +713,8 @@ export const en: TranslationKeys = {
 			'Type to filter files • Tab/Enter to select • ESC to cancel',
 		yoloModeActive:
 			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
+		planModeActive:
+			'𖨆 Plan mode active - Specialized planning and coordination agent',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

@@ -383,7 +383,8 @@ export const zh: TranslationKeys = {
 		navigateHistory: '↑/↓ - 导航命令/消息历史',
 		selectItem: 'Tab/Enter - 在选择器中选择项目',
 		cancelClose: 'ESC - 取消/关闭选择器或中断 AI 响应',
-		toggleYolo: 'Shift+Tab/Ctrl+Y - 切换 YOLO 模式(自动批准工具)',
+		toggleYolo:
+			'Shift+Tab/Ctrl+Y - 切换 YOLO/Plan 模式(循环: 关闭 → YOLO → YOLO+Plan → 关闭)',
 		tipsTitle: '💡 提示:',
 		tipUseHelp: '随时使用 /help 查看此信息',
 		tipShowCommands: '输入 / 查看所有可用命令',
@@ -403,6 +404,7 @@ export const zh: TranslationKeys = {
 			resume: '恢复对话',
 			mcp: '显示模型上下文协议服务和工具',
 			yolo: '切换无人值守模式(自动批准所有工具)',
+			plan: '切换计划模式(专业规划助手)',
 			init: '分析项目并生成/更新 AGENTS.md 文档',
 			ide: '连接到 VSCode 编辑器并同步上下文',
 			compact: '使用压缩模型压缩对话历史',
@@ -527,7 +529,8 @@ export const zh: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: '询问代码说明和调试帮助',
 		headerInterrupt: '在响应期间按 ESC 中断',
-		headerYolo: '按 Shift+Tab/Ctrl+Y: 切换 YOLO',
+		headerYolo:
+			'按 Shift+Tab/Ctrl+Y: 切换 YOLO/Plan 模式(循环: 关闭 → YOLO → YOLO+Plan → 关闭)',
 		headerShortcuts:
 			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目录: {directory}',
@@ -679,6 +682,7 @@ export const zh: TranslationKeys = {
 		contentSearchHint: '内容搜索 • Tab/Enter 选择 • ESC 取消',
 		fileSearchHint: '输入以过滤文件 • Tab/Enter 选择 • ESC 取消',
 		yoloModeActive: '❁ YOLO 模式已激活 - 所有工具将自动批准无需确认',
+		planModeActive: '𖨆 Plan 模式已激活 - 专业规划与协调助手',
 		tokens: ' 个token',
 		cached: '已缓存',
 		newCache: '新缓存',

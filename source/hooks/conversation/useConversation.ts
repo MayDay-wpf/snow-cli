@@ -6,7 +6,7 @@ import {
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {getSystemPrompt} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../api/systemPrompt.js';
 import {
 	collectAllMCPTools,
 	getTodoService,
@@ -58,6 +58,7 @@ export type ConversationHandlerOptions = {
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
+	planMode?: boolean; // Plan mode flag (optional, defaults to false)
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
 	getPendingMessages?: () => Array<{
@@ -128,7 +129,10 @@ export async function handleConversationWithTools(
 	const mcpTools = await collectAllMCPTools();
 	// Build conversation history with TODO context as pinned user message
 	let conversationMessages: ChatMessage[] = [
-		{role: 'system', content: getSystemPrompt()},
+		{
+			role: 'system',
+			content: getSystemPromptForMode(options.planMode || false),
+		},
 	];
 
 	// If there are TODOs, add pinned context message at the front
@@ -272,6 +276,7 @@ export async function handleConversationWithTools(
 								sessionId: currentSession?.id,
 								// Disable thinking for basicModel (e.g., init command)
 								disableThinking: options.useBasicModel,
+								planMode: options.planMode, // Pass planMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -283,6 +288,7 @@ export async function handleConversationWithTools(
 								messages: conversationMessages,
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								planMode: options.planMode, // Pass planMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -299,6 +305,7 @@ export async function handleConversationWithTools(
 								// Don't pass reasoning for basicModel (small models may not support it)
 								// Pass null to explicitly disable reasoning in API call
 								reasoning: options.useBasicModel ? null : undefined,
+								planMode: options.planMode, // Pass planMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -309,6 +316,7 @@ export async function handleConversationWithTools(
 								messages: conversationMessages,
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								planMode: options.planMode, // Pass planMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,

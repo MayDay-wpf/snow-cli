@@ -1,5 +1,5 @@
 import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
-import {getSystemPrompt} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../api/systemPrompt.js';
 import type {ChatMessage} from '../../api/types.js';
 import {createStreamingChatCompletion} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
@@ -141,7 +141,8 @@ function prepareMessagesForCompression(
 		// messages.push({role: 'user', content: getSystemPrompt()});
 	} else {
 		// No custom system prompt: default as system
-		messages.push({role: 'system', content: getSystemPrompt()});
+		// Default to false for compression (no Plan mode in compression context)
+		messages.push({role: 'system', content: getSystemPromptForMode(false)});
 	}
 
 	// Add all conversation history for compression

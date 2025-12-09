@@ -432,7 +432,7 @@ export const es: TranslationKeys = {
 		selectItem: 'Tab/Enter - Seleccionar elemento en el selector',
 		cancelClose: 'ESC - Cancelar/Cerrar selector o interrumpir respuesta de IA',
 		toggleYolo:
-			'Shift+Tab - Alternar modo YOLO (aprobación automática de herramientas)',
+			'Shift+Tab/Ctrl+Y - Alternar modos YOLO/Plan (ciclo: Apagado → YOLO → YOLO+Plan → Apagado)',
 		tipsTitle: '💡 Consejos:',
 		tipUseHelp: 'Usa /help en cualquier momento para ver esta información',
 		tipShowCommands: 'Escribe / para ver todos los comandos disponibles',
@@ -453,6 +453,7 @@ export const es: TranslationKeys = {
 			resume: 'Reanudar conversación',
 			mcp: 'Mostrar servicios y herramientas del Protocolo de Contexto de Modelo',
 			yolo: 'Alternar modo desatendido (aprobar automáticamente todas las herramientas)',
+			plan: 'Alternar modo Plan (asistente de planificación especializado)',
 			init: 'Analizar proyecto y generar/actualizar documento AGENTS.md',
 			ide: 'Conectar al editor VSCode y sincronizar contexto',
 			compact: 'Comprimir historial de conversación usando modelo compacto',
@@ -741,7 +742,9 @@ export const es: TranslationKeys = {
 		fileSearchHint:
 			'Escribe para filtrar archivos • Tab/Enter Seleccionar • ESC Cancelar',
 		yoloModeActive:
-			'❁ Modo YOLO activo - todas las herramientas se aprobarán automáticamente sin confirmación',
+			'❁ MODO YOLO ACTIVO - Todas las herramientas serán aprobadas automáticamente sin confirmación',
+		planModeActive:
+			'𖨆 Modo Plan activo - Agente especializado en planificación y coordinación',
 		tokens: ' tokens',
 		cached: 'en caché',
 		newCache: 'nuevo caché',

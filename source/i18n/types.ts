@@ -407,6 +407,7 @@ export type TranslationKeys = {
 			resume: string;
 			mcp: string;
 			yolo: string;
+			plan: string;
 			init: string;
 			ide: string;
 			compact: string;
@@ -683,6 +684,7 @@ export type TranslationKeys = {
 		contentSearchHint: string;
 		fileSearchHint: string;
 		yoloModeActive: string;
+		planModeActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

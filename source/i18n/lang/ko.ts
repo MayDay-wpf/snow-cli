@@ -388,7 +388,8 @@ export const ko: TranslationKeys = {
 		navigateHistory: '↑/↓ - 명령/메시지 기록 탐색',
 		selectItem: 'Tab/Enter - 선택기에서 항목 선택',
 		cancelClose: 'ESC - 선택기 취소/닫기 또는 AI 응답 중단',
-		toggleYolo: 'Shift+Tab - YOLO 모드 토글(자동 도구 승인)',
+		toggleYolo:
+			'Shift+Tab/Ctrl+Y - YOLO/Plan 모드 토글(순환: 끄기 → YOLO → YOLO+Plan → 끄기)',
 		tipsTitle: '💡 팁:',
 		tipUseHelp: '언제든지 /help로 이 정보 보기',
 		tipShowCommands: '/ 입력하여 모든 사용 가능한 명령 보기',
@@ -408,6 +409,7 @@ export const ko: TranslationKeys = {
 			resume: '대화 재개',
 			mcp: '모델 컨텍스트 프로토콜 서비스 및 도구 표시',
 			yolo: '무인 모드 토글(모든 도구 자동 승인)',
+			plan: '계획 모드 토글(전문 계획 도우미)',
 			init: '프로젝트 분석 및 AGENTS.md 문서 생성/업데이트',
 			ide: 'VSCode 편집기에 연결하고 컨텍스트 동기화',
 			compact: '컴팩트 모델을 사용하여 대화 기록 압축',
@@ -686,7 +688,8 @@ export const ko: TranslationKeys = {
 		contentSearchHint: '내용 검색 • Tab/Enter 선택 • ESC 취소',
 		fileSearchHint: '입력하여 파일 필터 • Tab/Enter 선택 • ESC 취소',
 		yoloModeActive:
-			'❁ YOLO 모드 활성화됨 - 모든 도구가 확인 없이 자동 승인됩니다',
+			'❁ YOLO 모드 활성화 - 모든 도구가 확인 없이 자동 승인됩니다',
+		planModeActive: '𖨆 Plan 모드 활성화 - 전문 계획 및 조정 에이전트',
 		tokens: '토큰',
 		cached: '캐시됨',
 		newCache: '새 캐시',

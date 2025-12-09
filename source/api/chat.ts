@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
+import {getSystemPromptForMode} from './systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -39,6 +39,7 @@ export interface ChatCompletionOptions {
 		| 'required'
 		| {type: 'function'; function: {name: string}};
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -96,6 +97,7 @@ function convertToOpenAIMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string,
+	planMode: boolean = false, // When true, use Plan mode system prompt
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompt =
 		customSystemPromptOverride || getCustomSystemPrompt();
@@ -205,7 +207,7 @@ function convertToOpenAIMessages(
 				} as ChatCompletionMessageParam,
 				{
 					role: 'user',
-					content: getSystemPrompt(),
+					content: getSystemPromptForMode(planMode),
 				} as ChatCompletionMessageParam,
 				...result,
 			];
@@ -224,7 +226,7 @@ function convertToOpenAIMessages(
 		result = [
 			{
 				role: 'system',
-				content: getSystemPrompt(),
+				content: getSystemPromptForMode(planMode),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
@@ -393,6 +395,7 @@ export async function* createStreamingChatCompletion(
 					options.messages,
 					options.includeBuiltinSystemPrompt !== false, // 默认为 true
 					customSystemPromptContent,
+					options.planMode || false, // Pass planMode to use correct system prompt
 				),
 				stream: true,
 				stream_options: {include_usage: true},

@@ -166,6 +166,7 @@ type CommandHandlerOptions = {
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
@@ -521,6 +522,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'toggleYolo') {
 				// Toggle YOLO mode without adding command message
 				options.setYoloMode(prev => !prev);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'togglePlan') {
+				// Toggle Plan mode without adding command message
+				options.setPlanMode(prev => !prev);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&

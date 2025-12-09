@@ -102,6 +102,15 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return false;
 		}
 	});
+	const [planMode, setPlanMode] = useState(() => {
+		// Load plan mode from localStorage on initialization
+		try {
+			const saved = localStorage.getItem('snow-plan-mode');
+			return saved === 'true';
+		} catch {
+			return false;
+		}
+	});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
@@ -160,6 +169,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/resume.js'),
 			import('../../utils/commands/mcp.js'),
 			import('../../utils/commands/yolo.js'),
+			import('../../utils/commands/plan.js'),
 			import('../../utils/commands/init.js'),
 			import('../../utils/commands/ide.js'),
 			import('../../utils/commands/compact.js'),
@@ -381,6 +391,15 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}
 	}, [yoloMode]);
 
+	// Persist plan mode to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem('snow-plan-mode', String(planMode));
+		} catch {
+			// Ignore localStorage errors
+		}
+	}, [planMode]);
+
 	// Clear restore input content after it's been used
 	useEffect(() => {
 		if (restoreInputContent !== null) {
@@ -546,6 +565,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
 		setYoloMode,
+		setPlanMode,
 		setContextUsage: streamingState.setContextUsage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
@@ -1241,6 +1261,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
+				planMode, // Pass planMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel,
 				getPendingMessages: () => pendingMessagesRef.current,
@@ -1512,6 +1533,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
+				planMode, // Pass planMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
@@ -2017,6 +2039,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							chatHistory={messages}
 							onHistorySelect={handleHistorySelect}
 							yoloMode={yoloMode}
+							setYoloMode={setYoloMode}
+							planMode={planMode}
+							setPlanMode={setPlanMode}
 							contextUsage={
 								streamingState.contextUsage
 									? {

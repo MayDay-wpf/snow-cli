@@ -7,6 +7,7 @@ import matter from 'gray-matter';
 export interface SkillMetadata {
 	name: string;
 	description: string;
+	allowedTools?: string[];
 }
 
 export interface Skill {
@@ -15,6 +16,7 @@ export interface Skill {
 	location: 'project' | 'global';
 	path: string;
 	content: string;
+	allowedTools?: string[];
 }
 
 /**
@@ -40,10 +42,30 @@ async function readSkillFile(skillPath: string): Promise<{
 			content = content.replace(descriptionPattern, '').trim();
 		}
 
+		// Parse allowed-tools field (comma-separated list or array)
+		let allowedTools: string[] | undefined;
+		const allowedToolsData = parsed.data['allowed-tools'];
+		if (allowedToolsData) {
+			if (Array.isArray(allowedToolsData)) {
+				allowedTools = allowedToolsData.filter(
+					tool => typeof tool === 'string' && tool.trim().length > 0,
+				);
+			} else if (
+				typeof allowedToolsData === 'string' &&
+				allowedToolsData.trim()
+			) {
+				allowedTools = allowedToolsData
+					.split(',')
+					.map(tool => tool.trim())
+					.filter(tool => tool.length > 0);
+			}
+		}
+
 		return {
 			metadata: {
 				name: parsed.data['name'] || '',
 				description: parsed.data['description'] || '',
+				allowedTools,
 			},
 			content,
 		};
@@ -84,6 +106,7 @@ async function loadAvailableSkills(
 							location: 'global',
 							path: skillPath,
 							content: skillData.content,
+							allowedTools: skillData.metadata.allowedTools,
 						});
 					}
 				}
@@ -111,6 +134,7 @@ async function loadAvailableSkills(
 							location: 'project',
 							path: skillPath,
 							content: skillData.content,
+							allowedTools: skillData.metadata.allowedTools,
 						});
 					}
 				}
@@ -294,10 +318,23 @@ export async function executeSkillTool(
 	// Generate directory tree for skill
 	const directoryTree = await generateSkillTree(skill.path);
 
+	// Generate allowed tools restriction if specified
+	let toolRestriction = '';
+	if (skill.allowedTools && skill.allowedTools.length > 0) {
+		toolRestriction = `
+
+<tool-restrictions>
+CRITICAL: This skill ONLY allows the following tools:
+${skill.allowedTools.map(tool => `- ${tool}`).join('\n')}
+
+You MUST NOT use any other tools. Any tool not listed above is forbidden for this skill.
+</tool-restrictions>`;
+	}
+
 	// Return the skill content (markdown instructions)
 	return `<command-message>The "${skill.name}" skill is loading</command-message>
 
-${skill.content}
+${skill.content}${toolRestriction}
 
 <skill-info>
 Skill Name: ${skill.name}

@@ -396,7 +396,8 @@ export const ja: TranslationKeys = {
 		navigateHistory: '↑/↓ - コマンド/メッセージ履歴を移動',
 		selectItem: 'Tab/Enter - セレクターで項目を選択',
 		cancelClose: 'ESC - セレクターをキャンセル/閉じる、またはAI応答を中断',
-		toggleYolo: 'Shift+Tab - YOLOモードを切替(ツールの自動承認)',
+		toggleYolo:
+			'Shift+Tab/Ctrl+Y - YOLO/Planモードを切替(サイクル: オフ → YOLO → YOLO+Plan → オフ)',
 		tipsTitle: '💡 ヒント:',
 		tipUseHelp: 'いつでも /help でこの情報を表示',
 		tipShowCommands: '/ を入力してすべての利用可能なコマンドを表示',
@@ -416,6 +417,7 @@ export const ja: TranslationKeys = {
 			resume: '会話を再開',
 			mcp: 'Model Context Protocolサービスとツールを表示',
 			yolo: '無人モードを切替(すべてのツールを自動承認)',
+			plan: 'プランモードを切替(専門的な計画アシスタント)',
 			init: 'プロジェクトを分析してAGENTS.mdドキュメントを生成/更新',
 			ide: 'VSCodeエディタに接続してコンテキストを同期',
 			compact: 'コンパクトモデルを使用して会話履歴を圧縮',
@@ -700,6 +702,7 @@ export const ja: TranslationKeys = {
 			'入力してファイルをフィルタ • Tab/Enter 選択 • ESC キャンセル',
 		yoloModeActive:
 			'❁ YOLOモード有効 - すべてのツールが確認なしで自動承認されます',
+		planModeActive: '𖨆 Planモード有効 - 専門的な計画・調整エージェント',
 		tokens: 'トークン',
 		cached: 'キャッシュ済み',
 		newCache: '新規キャッシュ',

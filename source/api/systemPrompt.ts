@@ -553,3 +553,17 @@ ${systemEnv}
 Year: ${currentYear}
 Month: ${currentMonth}`;
 }
+
+/**
+ * Get the appropriate system prompt based on Plan mode status
+ * @param planMode - Whether Plan mode is enabled
+ * @returns System prompt string
+ */
+export function getSystemPromptForMode(planMode: boolean): string {
+	if (planMode) {
+		// Import dynamically to avoid circular dependency
+		const {getPlanModeSystemPrompt} = require('./planModeSystemPrompt.js');
+		return getPlanModeSystemPrompt();
+	}
+	return getSystemPrompt();
+}

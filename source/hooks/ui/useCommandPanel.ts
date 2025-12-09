@@ -19,6 +19,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.yolo,
 			},
 			{
+				name: 'plan',
+				description: t.commandPanel.commands.plan,
+			},
+			{
 				name: 'init',
 				description: t.commandPanel.commands.init,
 			},

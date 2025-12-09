@@ -10,6 +10,11 @@ type KeyboardInputOptions = {
 	disabled: boolean;
 	triggerUpdate: () => void;
 	forceUpdate: React.Dispatch<React.SetStateAction<{}>>;
+	// Mode state
+	yoloMode: boolean;
+	setYoloMode: (value: boolean) => void;
+	planMode: boolean;
+	setPlanMode: (value: boolean) => void;
 	// Command panel
 	showCommands: boolean;
 	setShowCommands: (show: boolean) => void;
@@ -87,6 +92,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		disabled,
 		triggerUpdate,
 		forceUpdate,
+		yoloMode,
+		setYoloMode,
+		planMode,
+		setPlanMode,
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -195,23 +204,43 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Shift+Tab - Toggle YOLO mode
+		// Shift+Tab - Toggle YOLO modes in cycle: All Off -> YOLO -> YOLO+Plan -> All Off
 		if (key.shift && key.tab) {
-			executeCommand('yolo').then(result => {
-				if (onCommand) {
-					onCommand('yolo', result);
-				}
-			});
+			if (!yoloMode && !planMode) {
+				// All off -> YOLO only
+				setYoloMode(true);
+			} else if (yoloMode && !planMode) {
+				// YOLO only -> YOLO + Plan
+				setPlanMode(true);
+			} else if (yoloMode && planMode) {
+				// YOLO + Plan -> All off
+				setYoloMode(false);
+				setPlanMode(false);
+			} else if (!yoloMode && planMode) {
+				// Plan only (edge case) -> YOLO only
+				setPlanMode(false);
+				setYoloMode(true);
+			}
 			return;
 		}
 
-		// Ctrl+Y - Toggle YOLO mode
+		// Ctrl+Y - Toggle YOLO modes in cycle: All Off -> YOLO -> YOLO+Plan -> All Off
 		if (key.ctrl && input === 'y') {
-			executeCommand('yolo').then(result => {
-				if (onCommand) {
-					onCommand('yolo', result);
-				}
-			});
+			if (!yoloMode && !planMode) {
+				// All off -> YOLO only
+				setYoloMode(true);
+			} else if (yoloMode && !planMode) {
+				// YOLO only -> YOLO + Plan
+				setPlanMode(true);
+			} else if (yoloMode && planMode) {
+				// YOLO + Plan -> All off
+				setYoloMode(false);
+				setPlanMode(false);
+			} else if (!yoloMode && planMode) {
+				// Plan only (edge case) -> YOLO only
+				setPlanMode(false);
+				setYoloMode(true);
+			}
 			return;
 		}
 

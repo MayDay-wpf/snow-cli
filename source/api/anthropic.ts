@@ -5,7 +5,7 @@ import {
 	getCustomHeaders,
 	type ThinkingConfig,
 } from '../utils/config/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
+import {getSystemPromptForMode} from './systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -25,6 +25,7 @@ export interface AnthropicOptions {
 	sessionId?: string; // Session ID for user tracking and caching
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
+	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -161,6 +162,7 @@ function convertToAnthropicMessages(
 	customSystemPromptOverride?: string, // Allow override for sub-agents
 	cacheTTL: '5m' | '1h' = '5m', // Cache TTL configuration
 	disableThinking: boolean = false, // When true, strip thinking blocks from messages
+	planMode: boolean = false, // When true, use Plan mode system prompt
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
@@ -331,7 +333,7 @@ function convertToAnthropicMessages(
 				content: [
 					{
 						type: 'text',
-						text: getSystemPrompt(),
+						text: getSystemPromptForMode(planMode),
 						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
 				] as any,
@@ -339,7 +341,7 @@ function convertToAnthropicMessages(
 		}
 	} else if (!systemContent && includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemContent = getSystemPrompt();
+		systemContent = getSystemPromptForMode(planMode);
 	}
 
 	let lastUserMessageIndex = -1;
@@ -516,6 +518,7 @@ export async function* createStreamingAnthropicCompletion(
 				customSystemPromptContent, // 传递自定义系统提示词
 				config.anthropicCacheTTL || '5m', // 使用配置的 TTL，默认 5m
 				options.disableThinking || false, // Strip thinking blocks when thinking is disabled
+				options.planMode || false, // Use Plan mode system prompt if enabled
 			);
 
 			// Use persistent userId that remains the same until application restart

@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPrompt} from './systemPrompt.js';
+import {getSystemPromptForMode} from './systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -18,6 +18,7 @@ export interface GeminiOptions {
 	temperature?: number;
 	tools?: ChatCompletionTool[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -107,6 +108,7 @@ function convertToGeminiMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string, // Allow override for sub-agents
+	planMode: boolean = false, // When true, use Plan mode system prompt
 ): {
 	systemInstruction?: string;
 	contents: any[];
@@ -303,12 +305,12 @@ function convertToGeminiMessages(
 			// Prepend default system prompt as first user message
 			contents.unshift({
 				role: 'user',
-				parts: [{text: getSystemPrompt()}],
+				parts: [{text: getSystemPromptForMode(planMode)}],
 			});
 		}
 	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstruction = getSystemPrompt();
+		systemInstruction = getSystemPromptForMode(planMode);
 	}
 
 	return {systemInstruction, contents};
@@ -374,6 +376,7 @@ export async function* createStreamingGeminiCompletion(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
 				customSystemPromptContent, // 传递自定义系统提示词
+				options.planMode || false, // Pass planMode to use correct system prompt
 			);
 
 			// Build request payload
