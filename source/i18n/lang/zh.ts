@@ -259,6 +259,7 @@ export const zh: TranslationKeys = {
 		webSearchTools: '网络搜索工具',
 		ideTools: 'IDE 诊断工具',
 		userInteractionTools: '用户交互工具',
+		skillTools: '技能工具',
 		configProfile: '配置文件(可选):',
 		customSystemPrompt: '自定义系统提示词(可选):',
 		customHeaders: '自定义请求头(可选):',

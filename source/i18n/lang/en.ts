@@ -281,6 +281,7 @@ export const en: TranslationKeys = {
 		webSearchTools: 'Web Search Tools',
 		ideTools: 'IDE Diagnostics Tools',
 		userInteractionTools: 'User Interaction Tools',
+		skillTools: 'Skill Tools',
 		configProfile: 'Config Profile (Optional):',
 		customSystemPrompt: 'Custom System Prompt (Optional):',
 		customHeaders: 'Custom Headers (Optional):',

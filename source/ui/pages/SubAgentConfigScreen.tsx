@@ -169,6 +169,10 @@ export default function SubAgentConfigScreen({
 			name: t.subAgentConfig.userInteractionTools || 'User Interaction',
 			tools: ['askuser-ask_question'],
 		},
+		{
+			name: t.subAgentConfig.skillTools || 'Skills',
+			tools: ['skill-execute'],
+		},
 	];
 
 	// Get available system prompts (must be defined before useEffect)

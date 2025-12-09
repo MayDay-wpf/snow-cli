@@ -300,6 +300,7 @@ export const es: TranslationKeys = {
 		webSearchTools: 'Herramientas de Búsqueda Web',
 		ideTools: 'Herramientas de Diagnóstico IDE',
 		userInteractionTools: 'Herramientas de Interacción del Usuario',
+		skillTools: 'Herramientas de Habilidades',
 		configProfile: 'Perfil de Configuración (Opcional):',
 		customSystemPrompt: 'Prompt del Sistema Personalizado (Opcional):',
 		customHeaders: 'Encabezados Personalizados (Opcionales):',

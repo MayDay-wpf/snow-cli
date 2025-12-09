@@ -264,6 +264,7 @@ export const ko: TranslationKeys = {
 		webSearchTools: '웹 검색 도구',
 		ideTools: 'IDE 진단 도구',
 		userInteractionTools: '사용자 상호작용 도구',
+		skillTools: '스킬 도구',
 		configProfile: '구성 프로필(선택사항):',
 		customSystemPrompt: '사용자 정의 시스템 프롬프트(선택사항):',
 		customHeaders: '사용자 정의 헤더(선택사항):',

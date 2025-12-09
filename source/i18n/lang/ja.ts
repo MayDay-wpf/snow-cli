@@ -271,6 +271,7 @@ export const ja: TranslationKeys = {
 		webSearchTools: 'Web検索ツール',
 		ideTools: 'IDE診断ツール',
 		userInteractionTools: 'ユーザー対話ツール',
+		skillTools: 'スキルツール',
 		configProfile: '設定プロファイル(オプション):',
 		customSystemPrompt: 'カスタムシステムプロンプト(オプション):',
 		customHeaders: 'カスタムヘッダー(オプション):',

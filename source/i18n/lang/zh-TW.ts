@@ -259,6 +259,7 @@ export const zhTW: TranslationKeys = {
 		webSearchTools: '網路搜尋工具',
 		ideTools: 'IDE 診斷工具',
 		userInteractionTools: '用戶交互工具',
+		skillTools: '技能工具',
 		configProfile: '配置文件(可選):',
 		customSystemPrompt: '自定義系統提示詞(可選):',
 		customHeaders: '自定義請求頭(可選):',

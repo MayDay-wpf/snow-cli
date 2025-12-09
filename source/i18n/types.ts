@@ -262,6 +262,7 @@ export type TranslationKeys = {
 		webSearchTools: string;
 		ideTools: string;
 		userInteractionTools: string;
+		skillTools: string;
 		configProfile: string;
 		customSystemPrompt: string;
 		customHeaders: string;
