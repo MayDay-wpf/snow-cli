@@ -270,8 +270,8 @@ export default function SubAgentConfigScreen({
 						setSelectedConfigProfileIndex(profileIndex);
 						setConfirmedConfigProfileIndex(profileIndex);
 					}
-				} else {
-					// Use current active profile if not set
+				} else if (agent.builtin) {
+					// 第一次编辑内置代理（创建副本），使用全局配置作为默认值
 					const activeProfile = getActiveProfileName();
 					if (activeProfile && availableProfiles.length > 0) {
 						const profileIndex = availableProfiles.findIndex(
@@ -283,6 +283,8 @@ export default function SubAgentConfigScreen({
 						}
 					}
 				}
+				// 编辑已有副本时，如果副本没有设置配置，不自动使用全局配置
+				// 保持 confirmedConfigProfileIndex 为 -1
 
 				// 加载系统提示词索引
 				if (agent.customSystemPrompt) {
@@ -293,8 +295,8 @@ export default function SubAgentConfigScreen({
 						setSelectedSystemPromptIndex(promptIndex);
 						setConfirmedSystemPromptIndex(promptIndex);
 					}
-				} else {
-					// Use global active prompt if not set
+				} else if (agent.builtin) {
+					// 第一次编辑内置代理（创建副本），使用全局配置作为默认值
 					const systemPromptConfig = getSystemPromptConfig();
 					if (systemPromptConfig?.active && availableSystemPrompts.length > 0) {
 						const promptIndex = availableSystemPrompts.findIndex(
@@ -306,6 +308,8 @@ export default function SubAgentConfigScreen({
 						}
 					}
 				}
+				// 编辑已有副本时，如果副本没有设置系统提示词，不自动使用全局配置
+				// 保持 confirmedSystemPromptIndex 为 -1
 
 				// 加载自定义请求头索引
 				if (agent.customHeaders) {
@@ -323,8 +327,8 @@ export default function SubAgentConfigScreen({
 							setConfirmedCustomHeadersIndex(headerIndex);
 						}
 					}
-				} else {
-					// Use global active headers if not set
+				} else if (agent.builtin) {
+					// 第一次编辑内置代理（创建副本），使用全局配置作为默认值
 					const customHeadersConfig = getCustomHeadersConfig();
 					if (
 						customHeadersConfig?.active &&
@@ -344,6 +348,8 @@ export default function SubAgentConfigScreen({
 						}
 					}
 				}
+				// 编辑已有副本时，如果副本没有设置自定义请求头，不自动使用全局配置
+				// 保持 confirmedCustomHeadersIndex 为 -1
 			}
 		}
 	}, [agentId]);
