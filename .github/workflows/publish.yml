@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - New version v0.4.36 Add skill tools, fix some known bugs
+            - Fixed some bugs, add complete Plan mode workflow, Skills added with tool restrictions
             
             ### Installation
             ```bash
