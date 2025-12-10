@@ -1,5 +1,6 @@
 import {useState, useCallback, useRef, useEffect} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {cleanIDEContext} from '../../utils/core/fileUtils.js';
 import {
 	historyManager,
 	type HistoryEntry,
@@ -41,7 +42,7 @@ export function useHistoryNavigation(
 
 	// Load persistent history on mount
 	useEffect(() => {
-		historyManager.loadHistory().then(entries => {
+		historyManager.getEntries().then(entries => {
 			setPersistentHistory(entries);
 		});
 	}, []);
@@ -63,8 +64,10 @@ export function useHistoryNavigation(
 
 		// Keep original order (oldest first, newest last) and map with display numbers
 		return userMessages.map((msg, index) => {
+			// Clean IDE context info first, then clean for display
+			const cleanedContent = cleanIDEContext(msg.content);
 			// Remove all newlines, control characters and extra whitespace to ensure single line display
-			const cleanContent = msg.content
+			const cleanContent = cleanedContent
 				.replace(/[\r\n\t\v\f\u0000-\u001F\u007F-\u009F]+/g, ' ')
 				.replace(/\s+/g, ' ')
 				.trim();
@@ -73,11 +76,11 @@ export function useHistoryNavigation(
 					cleanContent.length > 50 ? '...' : ''
 				}`,
 				value: msg.originalIndex.toString(),
-				infoText: msg.content,
+				infoText: cleanedContent, // Use cleaned content for infoText as well
 			};
 		});
 	}, [chatHistory]);
-	// Handle history selection
+
 	const handleHistorySelect = useCallback(
 		(value: string) => {
 			const selectedIndex = parseInt(value, 10);
@@ -88,7 +91,7 @@ export function useHistoryNavigation(
 				setShowHistoryMenu(false);
 				onHistorySelect(
 					selectedIndex,
-					selectedMessage.content,
+					cleanIDEContext(selectedMessage.content), // Clean IDE context before passing
 					selectedMessage.images,
 				);
 			}

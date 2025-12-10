@@ -13,6 +13,8 @@ import AskUserQuestion from '../components/AskUserQuestion.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
 import MessageRenderer from '../components/MessageRenderer.js';
+import StatusLine from '../components/StatusLine.js';
+import SimpleModeLogo from '../components/SimpleModeLogo.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
@@ -22,11 +24,17 @@ const SessionListPanel = lazy(
 const UsagePanel = lazy(() => import('../components/UsagePanel.js'));
 const HelpPanel = lazy(() => import('../components/HelpPanel.js'));
 import {CustomCommandConfigPanel} from '../components/CustomCommandConfigPanel.js';
+import {SkillsCreationPanel} from '../components/SkillsCreationPanel.js';
 import {
 	saveCustomCommand,
 	registerCustomCommands,
 } from '../../utils/commands/custom.js';
+import {
+	createSkillTemplate,
+	type SkillLocation,
+} from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSimpleMode} from '../../utils/config/themeConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
@@ -40,6 +48,7 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
+	cleanIDEContext,
 } from '../../utils/core/fileUtils.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
@@ -96,6 +105,19 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return false;
 		}
 	});
+	const [planMode, setPlanMode] = useState(() => {
+		// Load plan mode from localStorage on initialization
+		try {
+			const saved = localStorage.getItem('snow-plan-mode');
+			return saved === 'true';
+		} catch {
+			return false;
+		}
+	});
+	const [simpleMode, setSimpleMode] = useState(() => {
+		// Load simple mode from config
+		return getSimpleMode();
+	});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
@@ -103,6 +125,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
+	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -153,6 +176,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/resume.js'),
 			import('../../utils/commands/mcp.js'),
 			import('../../utils/commands/yolo.js'),
+			import('../../utils/commands/plan.js'),
 			import('../../utils/commands/init.js'),
 			import('../../utils/commands/ide.js'),
 			import('../../utils/commands/compact.js'),
@@ -165,6 +189,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/todoPicker.js'),
 			import('../../utils/commands/help.js'),
 			import('../../utils/commands/custom.js'),
+			import('../../utils/commands/skills.js'),
 			import('../../utils/commands/quit.js'),
 		])
 			.then(async () => {
@@ -373,6 +398,27 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}
 	}, [yoloMode]);
 
+	// Persist plan mode to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem('snow-plan-mode', String(planMode));
+		} catch {
+			// Ignore localStorage errors
+		}
+	}, [planMode]);
+
+	// Sync simple mode from config periodically to reflect theme settings changes
+	useEffect(() => {
+		const interval = setInterval(() => {
+			const currentSimpleMode = getSimpleMode();
+			if (currentSimpleMode !== simpleMode) {
+				setSimpleMode(currentSimpleMode);
+			}
+		}, 1000); // Check every second
+
+		return () => clearInterval(interval);
+	}, [simpleMode]);
+
 	// Clear restore input content after it's been used
 	useEffect(() => {
 		if (restoreInputContent !== null) {
@@ -536,7 +582,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowUsagePanel,
 		setShowHelpPanel,
 		setShowCustomCommandConfig,
+		setShowSkillsCreation,
 		setYoloMode,
+		setPlanMode,
 		setContextUsage: streamingState.setContextUsage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
@@ -598,7 +646,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}, 0);
 
 		return () => clearTimeout(timer);
-	}, [commandsLoaded, vscodeState]);
+	}, [commandsLoaded]);
 
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
@@ -687,6 +735,13 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return;
 		}
 
+		if (showSkillsCreation) {
+			if (key.escape) {
+				setShowSkillsCreation(false);
+			}
+			return;
+		}
+
 		if (
 			key.escape &&
 			streamingState.isStreaming &&
@@ -737,25 +792,23 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						selectedIndex,
 				  )
 				: [];
-
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length, // Use actual unique file count
 				filePaths,
-				message, // Save message for restore after rollback
+				message: cleanIDEContext(message), // Clean IDE context before saving
 				images, // Save images for restore after rollback
 			});
 		} else {
 			// No files to rollback, just rollback conversation
 			// Restore message to input buffer (with or without images)
 			setRestoreInputContent({
-				text: message,
+				text: cleanIDEContext(message), // Clean IDE context before restoring
 				images: images,
 			});
 			await performRollback(selectedIndex, false);
 		}
 	};
-
 	const performRollback = async (
 		selectedIndex: number,
 		rollbackFiles: boolean,
@@ -1072,7 +1125,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				};
 				setMessages(prev => [...prev, compressingMessage]);
 
-				const compressionResult = await performAutoCompression();
+				// 获取当前会话ID并传递给压缩函数
+				const session = sessionManager.getCurrentSession();
+				const compressionResult = await performAutoCompression(session?.id);
 
 				if (compressionResult) {
 					// 更新UI和token使用情况
@@ -1081,7 +1136,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
 				} else {
-					throw new Error('Compression failed');
+					// 压缩失败或跳过，移除压缩提示消息，继续执行
+					setMessages(prev => prev.filter(m => m !== compressingMessage));
 				}
 			} catch (error) {
 				const errorMsg =
@@ -1227,6 +1283,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
+				planMode, // Pass planMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel,
 				getPendingMessages: () => pendingMessagesRef.current,
@@ -1498,6 +1555,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode,
+				planMode, // Pass planMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
@@ -1652,31 +1710,52 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							width={terminalWidth - 2}
 						>
 							<Box flexDirection="column">
-								<Text color="white" bold>
-									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">{t.chatScreen.headerTitle}</Gradient>
-									<Text color="white"> ⛇</Text>
-								</Text>
-								<Text>• {t.chatScreen.headerExplanations}</Text>
-								<Text>• {t.chatScreen.headerInterrupt}</Text>
-								<Text>• {t.chatScreen.headerYolo}</Text>
-								<Text>
-									{(() => {
-										const pasteKey =
-											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
-										return `• ${t.chatScreen.headerShortcuts.replace(
-											'{pasteKey}',
-											pasteKey,
-										)}`;
-									})()}
-								</Text>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									•{' '}
-									{t.chatScreen.headerWorkingDirectory.replace(
-										'{directory}',
-										workingDirectory,
-									)}
-								</Text>
+								{simpleMode ? (
+									<>
+										{/* Simple mode: Show responsive ASCII art title */}
+										<SimpleModeLogo
+											terminalWidth={terminalWidth}
+											logoGradient={theme.colors.logoGradient}
+										/>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											{t.chatScreen.headerWorkingDirectory.replace(
+												'{directory}',
+												workingDirectory,
+											)}
+										</Text>
+									</>
+								) : (
+									<>
+										{/* Normal mode: Show compact title with gradient */}
+										<Text color="white" bold>
+											<Text color="cyan">❆ </Text>
+											<Gradient name="rainbow">
+												{t.chatScreen.headerTitle}
+											</Gradient>
+											<Text color="white"> ⛇</Text>
+										</Text>
+										<Text>• {t.chatScreen.headerExplanations}</Text>
+										<Text>• {t.chatScreen.headerInterrupt}</Text>
+										<Text>• {t.chatScreen.headerYolo}</Text>
+										<Text>
+											{(() => {
+												const pasteKey =
+													process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+												return `• ${t.chatScreen.headerShortcuts.replace(
+													'{pasteKey}',
+													pasteKey,
+												)}`;
+											})()}
+										</Text>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											•{' '}
+											{t.chatScreen.headerWorkingDirectory.replace(
+												'{directory}',
+												workingDirectory,
+											)}
+										</Text>
+									</>
+								)}
 							</Box>
 						</Box>
 					</Box>,
@@ -1930,6 +2009,49 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				</Box>
 			)}
 
+			{/* Show skills creation panel if active */}
+			{showSkillsCreation && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<SkillsCreationPanel
+						projectRoot={workingDirectory}
+						onSave={async (
+							skillName: string,
+							description: string,
+							location: SkillLocation,
+						) => {
+							const result = await createSkillTemplate(
+								skillName,
+								description,
+								location,
+								workingDirectory,
+							);
+							setShowSkillsCreation(false);
+
+							if (result.success) {
+								const locationDesc =
+									location === 'global'
+										? 'Global (~/.snow/skills/)'
+										: 'Project (.snow/skills/)';
+								const successMessage: Message = {
+									role: 'command',
+									content: `Skill '${skillName}' created successfully!\nLocation: ${locationDesc}\nPath: ${result.path}\n\nThe following files have been created:\n- SKILL.md (main skill documentation)\n- reference.md (detailed reference)\n- examples.md (usage examples)\n- templates/template.txt (template file)\n- scripts/helper.py (helper script)\n\nYou can now edit these files to customize your skill.`,
+									commandName: 'skills',
+								};
+								setMessages(prev => [...prev, successMessage]);
+							} else {
+								const errorMessage: Message = {
+									role: 'command',
+									content: `Failed to create skill: ${result.error}`,
+									commandName: 'skills',
+								};
+								setMessages(prev => [...prev, errorMessage]);
+							}
+						}}
+						onCancel={() => setShowSkillsCreation(false)}
+					/>
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -1939,7 +2061,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or rollback confirmation or user question */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or rollback confirmation or user question */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!isCompressing &&
@@ -1948,6 +2070,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				!showUsagePanel &&
 				!showHelpPanel &&
 				!showCustomCommandConfig &&
+				!showSkillsCreation &&
 				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput
@@ -1959,6 +2082,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							chatHistory={messages}
 							onHistorySelect={handleHistorySelect}
 							yoloMode={yoloMode}
+							setYoloMode={setYoloMode}
+							planMode={planMode}
+							setPlanMode={setPlanMode}
 							contextUsage={
 								streamingState.contextUsage
 									? {
@@ -1976,84 +2102,31 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							initialContent={restoreInputContent}
 							onContextPercentageChange={setCurrentContextPercentage}
 						/>
-						{/* IDE connection status indicator */}
-						{(vscodeState.vscodeConnectionStatus === 'connecting' ||
-							vscodeState.vscodeConnectionStatus === 'connected' ||
-							vscodeState.vscodeConnectionStatus === 'error') && (
-							<Box marginTop={1} paddingX={1}>
-								<Text
-									color={
-										vscodeState.vscodeConnectionStatus === 'connecting'
-											? 'yellow'
-											: vscodeState.vscodeConnectionStatus === 'error'
-											? 'gray'
-											: 'green'
-									}
-									dimColor
-								>
-									{vscodeState.vscodeConnectionStatus === 'connecting' ? (
-										<>
-											<Spinner type="dots" /> {t.chatScreen.ideConnecting}
-										</>
-									) : vscodeState.vscodeConnectionStatus === 'error' ? (
-										<>○ {t.chatScreen.ideError}</>
-									) : (
-										<>
-											● {t.chatScreen.ideConnected}
-											{vscodeState.editorContext.activeFile &&
-												t.chatScreen.ideActiveFile.replace(
-													'{file}',
-													vscodeState.editorContext.activeFile,
-												)}
-											{vscodeState.editorContext.selectedText &&
-												t.chatScreen.ideSelectedText.replace(
-													'{count}',
-													vscodeState.editorContext.selectedText.length.toString(),
-												)}
-										</>
-									)}
-								</Text>
-							</Box>
-						)}
-						{/* Codebase indexing status indicator */}
-						{codebaseIndexing && codebaseProgress && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="cyan" dimColor>
-									<Spinner type="dots" />{' '}
-									{t.chatScreen.codebaseIndexing
-										.replace(
-											'{processed}',
-											codebaseProgress.processedFiles.toString(),
-										)
-										.replace('{total}', codebaseProgress.totalFiles.toString())}
-									{codebaseProgress.totalChunks > 0 &&
-										` (${t.chatScreen.codebaseProgress.replace(
-											'{chunks}',
-											codebaseProgress.totalChunks.toString(),
-										)})`}
-								</Text>
-							</Box>
-						)}
-						{/* File watcher status indicator */}
-						{!codebaseIndexing && watcherEnabled && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="green" dimColor>
-									☉ {t.chatScreen.statusWatcherActive}
-								</Text>
-							</Box>
-						)}
-						{/* File update notification */}
-						{fileUpdateNotification && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="yellow" dimColor>
-									⛁{' '}
-									{t.chatScreen.statusFileUpdated.replace(
-										'{file}',
-										fileUpdateNotification.file,
-									)}
-								</Text>
-							</Box>
-						)}
+						{/* Unified status line component */}
+						<StatusLine
+							yoloMode={yoloMode}
+							planMode={planMode}
+							vscodeConnectionStatus={vscodeState.vscodeConnectionStatus}
+							editorContext={vscodeState.editorContext}
+							contextUsage={
+								streamingState.contextUsage
+									? {
+											inputTokens: streamingState.contextUsage.prompt_tokens,
+											maxContextTokens:
+												getOpenAiConfig().maxContextTokens || 4000,
+											cacheCreationTokens:
+												streamingState.contextUsage.cache_creation_input_tokens,
+											cacheReadTokens:
+												streamingState.contextUsage.cache_read_input_tokens,
+											cachedTokens: streamingState.contextUsage.cached_tokens,
+									  }
+									: undefined
+							}
+							codebaseIndexing={codebaseIndexing}
+							codebaseProgress={codebaseProgress}
+							watcherEnabled={watcherEnabled}
+							fileUpdateNotification={fileUpdateNotification}
+						/>
 					</>
 				)}
 

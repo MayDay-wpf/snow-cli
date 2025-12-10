@@ -98,12 +98,14 @@ export default function SensitiveCommandConfigScreen({
 			}
 
 			if (key.upArrow) {
-				setSelectedIndex(prev => Math.max(0, prev - 1));
+				if (commands.length === 0) return;
+				setSelectedIndex(prev => (prev > 0 ? prev - 1 : commands.length - 1));
 				// Clear confirmations when navigating
 				setConfirmDelete(false);
 				setConfirmReset(false);
 			} else if (key.downArrow) {
-				setSelectedIndex(prev => Math.min(commands.length - 1, prev + 1));
+				if (commands.length === 0) return;
+				setSelectedIndex(prev => (prev < commands.length - 1 ? prev + 1 : 0));
 				// Clear confirmations when navigating
 				setConfirmDelete(false);
 				setConfirmReset(false);
@@ -253,7 +255,15 @@ export default function SensitiveCommandConfigScreen({
 
 				<Text dimColor>{t.sensitiveCommandConfig.patternLabel}</Text>
 				<Box>
-					<Text color={addField === 'pattern' ? theme.colors.menuInfo : theme.colors.menuSecondary}>❯ </Text>
+					<Text
+						color={
+							addField === 'pattern'
+								? theme.colors.menuInfo
+								: theme.colors.menuSecondary
+						}
+					>
+						❯{' '}
+					</Text>
 					<TextInput
 						value={customPattern}
 						onChange={handlePatternChange}
@@ -263,10 +273,18 @@ export default function SensitiveCommandConfigScreen({
 					/>
 				</Box>
 
-			<Box marginTop={1} />
-			<Text dimColor>{t.sensitiveCommandConfig.descriptionLabel}</Text>
-			<Box>
-				<Text color={addField === 'description' ? theme.colors.menuInfo : theme.colors.menuSecondary}>❯ </Text>
+				<Box marginTop={1} />
+				<Text dimColor>{t.sensitiveCommandConfig.descriptionLabel}</Text>
+				<Box>
+					<Text
+						color={
+							addField === 'description'
+								? theme.colors.menuInfo
+								: theme.colors.menuSecondary
+						}
+					>
+						❯{' '}
+					</Text>
 					<TextInput
 						value={customDescription}
 						onChange={handleDescriptionChange}
@@ -316,26 +334,29 @@ export default function SensitiveCommandConfigScreen({
 						return null;
 					}
 
-				return (
-					<Text
-						key={cmd.id}
-						color={
-							selectedIndex === index
-								? theme.colors.menuInfo
-								: cmd.enabled
-								? theme.colors.menuNormal
-								: theme.colors.menuSecondary
-						}
-						bold={selectedIndex === index}
-						dimColor={!cmd.enabled}
-					>
-						{selectedIndex === index ? '❯ ' : '  '}[{cmd.enabled ? '✓' : ' '}]{' '}
-						{cmd.pattern}
-						{!cmd.isPreset && (
-							<Text color={theme.colors.warning}> ({t.sensitiveCommandConfig.custom})</Text>
-						)}
-					</Text>
-				);
+					return (
+						<Text
+							key={cmd.id}
+							color={
+								selectedIndex === index
+									? theme.colors.menuInfo
+									: cmd.enabled
+									? theme.colors.menuNormal
+									: theme.colors.menuSecondary
+							}
+							bold={selectedIndex === index}
+							dimColor={!cmd.enabled}
+						>
+							{selectedIndex === index ? '❯ ' : '  '}[{cmd.enabled ? '✓' : ' '}]{' '}
+							{cmd.pattern}
+							{!cmd.isPreset && (
+								<Text color={theme.colors.warning}>
+									{' '}
+									({t.sensitiveCommandConfig.custom})
+								</Text>
+							)}
+						</Text>
+					);
 				})
 			)}
 
@@ -352,20 +373,20 @@ export default function SensitiveCommandConfigScreen({
 				</Text>
 			)}
 
-		{confirmDelete && selectedCmd && (
-			<Text bold color={theme.colors.warning}>
-				{t.sensitiveCommandConfig.confirmDeleteMessage.replace(
-					'{pattern}',
-					selectedCmd.pattern,
-				)}
-			</Text>
-		)}
+			{confirmDelete && selectedCmd && (
+				<Text bold color={theme.colors.warning}>
+					{t.sensitiveCommandConfig.confirmDeleteMessage.replace(
+						'{pattern}',
+						selectedCmd.pattern,
+					)}
+				</Text>
+			)}
 
-		{confirmReset && (
-			<Text bold color={theme.colors.warning}>
-				{t.sensitiveCommandConfig.confirmResetMessage}
-			</Text>
-		)}
+			{confirmReset && (
+				<Text bold color={theme.colors.warning}>
+					{t.sensitiveCommandConfig.confirmResetMessage}
+				</Text>
+			)}
 
 			<Box marginTop={1} />
 			<Text dimColor>

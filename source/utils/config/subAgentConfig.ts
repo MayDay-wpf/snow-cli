@@ -117,6 +117,7 @@ You are a specialized code exploration agent focused on rapidly understanding co
 			'codebase-search',
 			'websearch-search',
 			'websearch-fetch',
+			'skill-execute',
 		],
 		createdAt: '2024-01-01T00:00:00.000Z',
 		updatedAt: '2024-01-01T00:00:00.000Z',
@@ -267,6 +268,8 @@ ALTERNATIVE APPROACHES:
 			'codebase-search',
 			'websearch-search',
 			'websearch-fetch',
+			'askuser-ask_question',
+			'skill-execute',
 		],
 		createdAt: '2024-01-01T00:00:00.000Z',
 		updatedAt: '2024-01-01T00:00:00.000Z',
@@ -472,6 +475,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 			'websearch-fetch',
 			'ide-get_diagnostics',
 			'codebase-search',
+			'skill-execute',
 		],
 		createdAt: '2024-01-01T00:00:00.000Z',
 		updatedAt: '2024-01-01T00:00:00.000Z',
@@ -626,17 +630,18 @@ export function updateSubAgent(
 			createdAt: agent.createdAt || new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
 			builtin: false, // Must be false to allow saving to config file
-			// 继承已有的配置，如果updates中没有指定
+			// 使用 hasOwnProperty 检查是否传递了该字段，而不是检查值是否为 undefined
+			// 这样可以区分"未传递"和"传递 undefined 以清除"
 			configProfile:
-				updates.configProfile !== undefined
+				'configProfile' in updates
 					? updates.configProfile
 					: existingUserCopy?.configProfile,
 			customSystemPrompt:
-				updates.customSystemPrompt !== undefined
+				'customSystemPrompt' in updates
 					? updates.customSystemPrompt
 					: existingUserCopy?.customSystemPrompt,
 			customHeaders:
-				updates.customHeaders !== undefined
+				'customHeaders' in updates
 					? updates.customHeaders
 					: existingUserCopy?.customHeaders,
 		};
@@ -672,10 +677,20 @@ export function updateSubAgent(
 		createdAt: existingAgent.createdAt,
 		updatedAt: new Date().toISOString(),
 		builtin: false,
-		configProfile: updates.configProfile ?? existingAgent.configProfile,
+		// 使用 'in' 操作符检查是否传递了该字段，而不是使用 ?? 运算符
+		// 这样可以区分"未传递"和"传递 undefined 以清除"
+		configProfile:
+			'configProfile' in updates
+				? updates.configProfile
+				: existingAgent.configProfile,
 		customSystemPrompt:
-			updates.customSystemPrompt ?? existingAgent.customSystemPrompt,
-		customHeaders: updates.customHeaders ?? existingAgent.customHeaders,
+			'customSystemPrompt' in updates
+				? updates.customSystemPrompt
+				: existingAgent.customSystemPrompt,
+		customHeaders:
+			'customHeaders' in updates
+				? updates.customHeaders
+				: existingAgent.customHeaders,
 	};
 
 	userAgents[existingUserIndex] = updatedAgent;

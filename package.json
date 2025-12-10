@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.4.35",
+	"version": "0.4.37",
 	"description": "Intelligent Command Line Assistant powered by AI",
 	"license": "MIT",
 	"bin": {
@@ -33,6 +33,7 @@
 		"build:bundle": "node build.mjs",
 		"dev": "tsc --watch",
 		"start": "node bundle/cli.mjs",
+		"start:dev": "node build.mjs && node bundle/cli.mjs",
 		"link": "npm run build && npm link",
 		"unlink": "npm unlink -g snow-ai",
 		"prepublishOnly": "npm run build",
@@ -71,6 +72,7 @@
 		"eslint-plugin-react": "^7.32.2",
 		"eslint-plugin-react-hooks": "^4.6.0",
 		"fzf": "^0.5.2",
+		"gray-matter": "^4.0.3",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
 		"ignore": "^7.0.5",

@@ -1,7 +1,8 @@
-import {useState, useCallback, useMemo} from 'react';
+import {useState, useCallback, useMemo, useEffect} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCustomCommands} from '../../utils/commands/custom.js';
+import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
@@ -16,6 +17,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			{
 				name: 'yolo',
 				description: t.commandPanel.commands.yolo,
+			},
+			{
+				name: 'plan',
+				description: t.commandPanel.commands.plan,
 			},
 			{
 				name: 'init',
@@ -48,6 +53,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.custom || 'Add custom command',
 			},
 			{
+				name: 'skills',
+				description: t.commandPanel.commands.skills || 'Create skill template',
+			},
+			{
 				name: 'agent-',
 				description: t.commandPanel.commands.agent,
 			},
@@ -74,8 +83,28 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+	const [usageLoaded, setUsageLoaded] = useState(false);
+
+	// Load command usage data on mount
+	// Use isMounted flag to prevent state update on unmounted component
+	useEffect(() => {
+		let isMounted = true;
+
+		commandUsageManager.ensureLoaded().then(() => {
+			if (isMounted) {
+				setUsageLoaded(true);
+			}
+		});
+
+		return () => {
+			isMounted = false;
+		};
+	}, []);
 
 	// Get filtered commands based on current input
+	// Sorting strategy:
+	// - Empty query: Sort by usage frequency (most used first)
+	// - With query: Sort by match priority, then by usage frequency within same priority
 	const getFilteredCommands = useCallback(() => {
 		const text = buffer.getFullText();
 		if (!text.startsWith('/')) return [];
@@ -85,7 +114,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		// Get all commands (including latest custom commands)
 		const allCommands = getAllCommands();
 
-		// Filter and sort commands by priority
+		// Filter and sort commands by priority and usage frequency
 		// Priority order:
 		// 1. Command starts with query (highest)
 		// 2. Command contains query
@@ -100,6 +129,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(command => {
 				const nameLower = command.name.toLowerCase();
 				const descLower = command.description.toLowerCase();
+				const usageCount = commandUsageManager.getUsageCountSync(command.name);
 
 				let priority = 4; // Default: description contains query
 
@@ -111,20 +141,33 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					priority = 3; // Description starts with query
 				}
 
-				return {command, priority};
+				return {command, priority, usageCount};
 			})
 			.sort((a, b) => {
-				// Sort by priority (lower number = higher priority)
+				// When query is empty, sort primarily by usage frequency
+				if (query === '') {
+					// Sort by usage count (descending), then alphabetically
+					if (a.usageCount !== b.usageCount) {
+						return b.usageCount - a.usageCount;
+					}
+					return a.command.name.localeCompare(b.command.name);
+				}
+
+				// With query: sort by priority first, then by usage frequency
 				if (a.priority !== b.priority) {
 					return a.priority - b.priority;
 				}
-				// If same priority, sort alphabetically by name
+				// Same priority: sort by usage count (descending)
+				if (a.usageCount !== b.usageCount) {
+					return b.usageCount - a.usageCount;
+				}
+				// Same usage count: sort alphabetically
 				return a.command.name.localeCompare(b.command.name);
 			})
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer, getAllCommands]);
+	}, [buffer, getAllCommands, usageLoaded]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {

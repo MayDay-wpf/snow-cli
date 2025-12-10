@@ -12,13 +12,16 @@ import {formatDateForFolder} from './utils/todo/date.utils.js';
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
+ * 路径结构: ~/.snow/todos/项目名/YYYY-MM-DD/sessionId.json
  */
 export class TodoService {
 	private readonly todoDir: string;
 	private getCurrentSessionId: GetCurrentSessionId;
 
 	constructor(baseDir: string, getCurrentSessionId: GetCurrentSessionId) {
-		this.todoDir = path.join(baseDir, 'todos');
+		// baseDir 现在已经包含了项目ID，直接使用
+		// 路径结构: baseDir/YYYY-MM-DD/sessionId.json
+		this.todoDir = baseDir;
 		this.getCurrentSessionId = getCurrentSessionId;
 	}
 

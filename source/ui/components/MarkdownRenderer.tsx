@@ -186,9 +186,19 @@ export default function MarkdownRenderer({content}: Props) {
 
 		// Stage 4: Clean up and split lines
 		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes
-		const lines = rendered
+		let lines = rendered
 			.split('\n')
 			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
+
+		// Remove leading empty lines
+		while (lines.length > 0 && lines[0]?.trim() === '') {
+			lines.shift();
+		}
+
+		// Remove trailing empty lines
+		while (lines.length > 0 && lines[lines.length - 1]?.trim() === '') {
+			lines.pop();
+		}
 
 		// Safety check: prevent rendering issues with excessively long output
 		if (lines.length > 500) {

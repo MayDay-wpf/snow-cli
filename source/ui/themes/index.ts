@@ -29,6 +29,8 @@ export interface ThemeColors {
 	error: string;
 	warning: string;
 	success: string;
+	// Logo gradient colors (3 colors for gradient effect)
+	logoGradient: [string, string, string];
 }
 
 export const defaultCustomColors: ThemeColors = {
@@ -47,6 +49,7 @@ export const defaultCustomColors: ThemeColors = {
 	error: 'red',
 	warning: 'yellow',
 	success: 'green',
+	logoGradient: ['#d3d3d3', '#808080', '#505050'],
 };
 
 function loadCustomThemeColors(): ThemeColors {
@@ -58,7 +61,12 @@ function loadCustomThemeColors(): ThemeColors {
 		const data = readFileSync(configPath, 'utf-8');
 		const config = JSON.parse(data);
 		if (config.customColors) {
-			return {...defaultCustomColors, ...config.customColors};
+			// Ensure backward compatibility: add logoGradient if missing
+			const colors = {...defaultCustomColors, ...config.customColors};
+			if (!colors.logoGradient) {
+				colors.logoGradient = defaultCustomColors.logoGradient;
+			}
+			return colors;
 		}
 	} catch {
 		// ignore
@@ -87,6 +95,8 @@ export interface Theme {
 		error: string;
 		warning: string;
 		success: string;
+		// Logo gradient colors
+		logoGradient: [string, string, string];
 	};
 }
 
@@ -112,6 +122,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: 'red',
 			warning: 'yellow',
 			success: 'green',
+			// Logo gradient - gray gradient
+			logoGradient: ['#d3d3d3', '#808080', '#505050'],
 		},
 	},
 	light: {
@@ -135,6 +147,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#cc0000',
 			warning: '#cc6600',
 			success: '#006400',
+			// Logo gradient - darker for light theme
+			logoGradient: ['#606060', '#404040', '#202020'],
 		},
 	},
 	'github-dark': {
@@ -158,6 +172,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#f85149',
 			warning: '#d29922',
 			success: '#3fb950',
+			// Logo gradient - GitHub blue tones
+			logoGradient: ['#58a6ff', '#1f6feb', '#0d419d'],
 		},
 	},
 	rainbow: {
@@ -181,6 +197,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#ff006e',
 			warning: '#ffbe0b',
 			success: '#06ffa5',
+			// Logo gradient - rainbow colors
+			logoGradient: ['#ff006e', '#8338ec', '#00f5ff'],
 		},
 	},
 	'solarized-dark': {
@@ -204,6 +222,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#dc322f',
 			warning: '#b58900',
 			success: '#859900',
+			// Logo gradient - Solarized accent colors
+			logoGradient: ['#2aa198', '#268bd2', '#6c71c4'],
 		},
 	},
 	nord: {
@@ -227,6 +247,8 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#bf616a',
 			warning: '#ebcb8b',
 			success: '#a3be8c',
+			// Logo gradient - Nord frost colors
+			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
 		},
 	},
 	custom: {

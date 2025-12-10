@@ -300,6 +300,7 @@ export const es: TranslationKeys = {
 		webSearchTools: 'Herramientas de Búsqueda Web',
 		ideTools: 'Herramientas de Diagnóstico IDE',
 		userInteractionTools: 'Herramientas de Interacción del Usuario',
+		skillTools: 'Herramientas de Habilidades',
 		configProfile: 'Perfil de Configuración (Opcional):',
 		customSystemPrompt: 'Prompt del Sistema Personalizado (Opcional):',
 		customHeaders: 'Encabezados Personalizados (Opcionales):',
@@ -371,6 +372,10 @@ export const es: TranslationKeys = {
 		preview: 'Vista previa:',
 		back: '← Atrás',
 		backInfo: 'Volver al menú principal',
+		simpleMode: 'Modo Sencillo:',
+		simpleModeInfo: 'Habilitar el modo sencillo para simplificar la interfaz',
+		enabled: '[✓] Habilitado',
+		disabled: '[ ] Deshabilitado',
 		darkTheme: 'Tema Oscuro',
 		darkThemeInfo: 'Esquema de colores oscuros clásico',
 		lightTheme: 'Tema Claro',
@@ -412,7 +417,7 @@ export const es: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - Eliminar desde el cursor hasta el inicio (legacy)',
 		deleteToEnd: 'Ctrl+R - Eliminar desde el cursor hasta el final (legacy)',
 		pasteImages: '{pasteKey} - Pegar imágenes desde el portapapeles',
-		readlineTitle: '⌨️ Atajos Readline:',
+		readlineTitle: '🚀 Atajos Readline:',
 		moveToLineStart: 'Ctrl+A - Mover al inicio de línea',
 		moveToLineEnd: 'Ctrl+E - Mover al final de línea',
 		forwardWord: 'Alt+F - Avanzar una palabra',
@@ -431,7 +436,7 @@ export const es: TranslationKeys = {
 		selectItem: 'Tab/Enter - Seleccionar elemento en el selector',
 		cancelClose: 'ESC - Cancelar/Cerrar selector o interrumpir respuesta de IA',
 		toggleYolo:
-			'Shift+Tab - Alternar modo YOLO (aprobación automática de herramientas)',
+			'Shift+Tab/Ctrl+Y - Alternar modos YOLO/Plan (ciclo: YOLO → YOLO+Plan → Plan → Apagado)',
 		tipsTitle: '💡 Consejos:',
 		tipUseHelp: 'Usa /help en cualquier momento para ver esta información',
 		tipShowCommands: 'Escribe / para ver todos los comandos disponibles',
@@ -445,12 +450,14 @@ export const es: TranslationKeys = {
 			'Por favor espera a que la conversación termine antes de usar comandos',
 		scrollHint: '↑↓ Desplazar',
 		moreHidden: '{count} ocultos',
+		interactionHint: 'Tab: Autocompletar • Enter: Ejecutar',
 		commands: {
 			help: 'Mostrar información de atajos y ayuda',
 			clear: 'Limpiar contexto de chat e historial de conversación',
 			resume: 'Reanudar conversación',
 			mcp: 'Mostrar servicios y herramientas del Protocolo de Contexto de Modelo',
 			yolo: 'Alternar modo desatendido (aprobar automáticamente todas las herramientas)',
+			plan: 'Alternar modo Plan (asistente de planificación especializado)',
 			init: 'Analizar proyecto y generar/actualizar documento AGENTS.md',
 			ide: 'Conectar al editor VSCode y sincronizar contexto',
 			compact: 'Comprimir historial de conversación usando modelo compacto',
@@ -462,6 +469,7 @@ export const es: TranslationKeys = {
 			export:
 				'Exportar conversación de chat a archivo de texto con diálogo de guardado',
 			custom: 'Agregar comando personalizado y guardar en ~/.snow/commands',
+			skills: 'Crear plantilla de habilidad con documentación y ejemplos',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
 			quit: 'Salir de la aplicación',
@@ -580,7 +588,8 @@ export const es: TranslationKeys = {
 		headerExplanations:
 			'Solicita explicaciones de código y ayuda de depuración',
 		headerInterrupt: 'Presiona ESC durante la respuesta para interrumpir',
-		headerYolo: 'Presiona Shift+Tab: Alternar YOLO',
+		headerYolo:
+			'Presiona Shift+Tab/Ctrl+Y: Alternar modos YOLO/Plan (ciclo: YOLO → YOLO+Plan → Plan → Apagado)',
 		headerShortcuts:
 			"Atajos: Ctrl+L (eliminar hasta inicio) • Ctrl+R (eliminar hasta final) • {pasteKey} (pegar imagen) • '@' (archivo) • '@@' (buscar contenido) • '#' (sub-agentes) • '/' (comando)",
 		headerWorkingDirectory: 'Directorio de Trabajo: {directory}',
@@ -593,7 +602,9 @@ export const es: TranslationKeys = {
 		statusIndexing: 'Indexando base de código...',
 		statusWatcherActive:
 			'Observador de archivos activo - monitoreando cambios de código',
+		statusWatcherActiveShort: 'Observador',
 		statusFileUpdated: 'Actualizado: {file}',
+		statusFileUpdatedShort: 'Actualizado',
 		statusCreating: 'Creando...',
 		statusSaving: 'Guardando...',
 		statusCompressing: 'Comprimiendo...',
@@ -671,6 +682,7 @@ export const es: TranslationKeys = {
 		// Codebase
 		codebaseIndexing:
 			'Indexando base de código... {processed}/{total} archivos',
+		codebaseIndexingShort: 'Indexando',
 		codebaseProgress: '{chunks} fragmentos',
 		codebaseChunks: 'fragmentos',
 		codebaseSearching: '⏏ Búsqueda en base de código (intento {current}/{max})',
@@ -697,7 +709,7 @@ export const es: TranslationKeys = {
 		shortcutDeleteToEnd: 'Eliminar hasta final',
 		shortcutCancel: 'Cancelar (ESC)',
 		shortcutRegenerate: 'Regenerar (Ctrl+R)',
-		shortcutToggleYolo: 'Alternar YOLO (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'Alternar YOLO/Plan (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirmar Reversión',
 		rollbackFiles: 'Revertir Archivos',
@@ -738,7 +750,9 @@ export const es: TranslationKeys = {
 		fileSearchHint:
 			'Escribe para filtrar archivos • Tab/Enter Seleccionar • ESC Cancelar',
 		yoloModeActive:
-			'❁ Modo YOLO activo - todas las herramientas se aprobarán automáticamente sin confirmación',
+			'❁ MODO YOLO ACTIVO - Todas las herramientas serán aprobadas automáticamente sin confirmación',
+		planModeActive:
+			'⚐ Modo Plan activo - Agente especializado en planificación y coordinación',
 		tokens: ' tokens',
 		cached: 'en caché',
 		newCache: 'nuevo caché',
@@ -781,5 +795,88 @@ export const es: TranslationKeys = {
 		approveRejectHint: 'Presiona A para aprobar o R para rechazar',
 		enterRejectionReason: 'Ingresa razón de rechazo:',
 		submitCancelHint: 'Enter Enviar • ESC Cancelar',
+	},
+
+	skillsCreation: {
+		title: 'Crear Nueva Habilidad',
+		nameLabel: 'Nombre de Habilidad:',
+		nameHint:
+			'Use solo letras minúsculas, números y guiones (máx. 64 caracteres)',
+		namePlaceholder: 'mi-nombre-habilidad',
+		descriptionLabel: 'Descripción:',
+		descriptionHint:
+			'Breve descripción de lo que hace esta habilidad y cuándo usarla',
+		descriptionPlaceholder: 'Una breve descripción...',
+		locationLabel: 'Seleccionar Ubicación:',
+		locationGlobal: 'Global (~/.snow/skills/)',
+		locationGlobalInfo: 'Disponible en todos los proyectos',
+		locationProject: 'Proyecto (.snow/skills/ en raíz del proyecto)',
+		locationProjectInfo: 'Solo disponible en este proyecto',
+		confirmQuestion: '¿Crear esta habilidad?',
+		confirmYes: 'Sí, Crear',
+		confirmNo: 'No, Cancelar',
+		escCancel: 'Presiona ESC para cancelar',
+		errorInvalidName: 'Nombre de habilidad inválido',
+		errorExistsBoth:
+			'La habilidad "{name}" ya existe en ambas ubicaciones global y de proyecto',
+		errorExistsGlobal:
+			'La habilidad "{name}" ya existe en la ubicación global (~/.snow/skills/)',
+		errorExistsProject:
+			'La habilidad "{name}" ya existe en la ubicación del proyecto (.snow/skills/)',
+	},
+	askUser: {
+		header: '[Se requiere entrada del usuario]',
+		customInputOption: 'Entrada personalizada...',
+		customInputLabel: 'Entrada personalizada',
+		selectPrompt: 'Seleccione una opción:',
+		enterResponse: 'Ingrese su respuesta:',
+		keyboardHints:
+			"Consejo: Presione 'Enter' para seleccionar | Presione 'e' para editar la opción seleccionada",
+	},
+	toolConfirmation: {
+		header: '[Confirmación de herramienta]',
+		tool: 'Herramienta:',
+		tools: 'Herramientas:',
+		toolsInParallel: '{count} herramientas en paralelo',
+		sensitiveCommandDetected: 'COMANDO SENSIBLE DETECTADO',
+		pattern: 'Patrón:',
+		reason: 'Razón:',
+		requiresConfirmation:
+			'Este comando requiere confirmación incluso en modo YOLO/Siempre aprobado',
+		arguments: 'Argumentos:',
+		selectAction: 'Seleccionar acción:',
+		enterRejectionReason: 'Ingrese razón de rechazo:',
+		pressEnterToSubmit: 'Presione Enter para enviar',
+		confirmed: 'Confirmado',
+		approveOnce: 'Aprobar (una vez)',
+		alwaysApprove: 'Aprobar siempre esta herramienta',
+		rejectWithReply: 'Rechazar con respuesta',
+		rejectEndSession: 'Rechazar (finalizar sesión)',
+	},
+	usagePanel: {
+		title: 'Estadísticas de Uso de Tokens',
+		granularity: {
+			last24h: 'Últimas 24h',
+			last7d: 'Últimos 7d',
+			last30d: 'Últimos 30d',
+			last12m: 'Últimos 12m',
+		},
+		chart: {
+			noData: 'No hay datos disponibles',
+			usage: 'Uso',
+			cacheHit: 'Cache Hit',
+			cacheCreate: 'Crear Cache',
+			moreAbove: '↑ {count} más arriba (usar ↑ flecha)',
+			in: 'Entrada:',
+			out: 'Salida:',
+			hit: 'Hit:',
+			create: 'Crear:',
+			total: 'TOTAL:',
+			moreBelow: '↓ {count} más abajo (usar ↓ flecha)',
+		},
+		loading: 'Cargando estadísticas de uso...',
+		error: 'Error: {error}',
+		tabToSwitch: '- Tab para cambiar',
+		noDataForPeriod: 'No hay datos de uso para este período',
 	},
 };

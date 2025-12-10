@@ -11,11 +11,10 @@
 **English** | [中文](README_zh.md)
 
 _An intelligent AI-powered CLI tool for developers_
+
+**QQ群**: 910298558
 </div>
 
-Snow CLI is an intelligent AI-powered CLI tool that brings advanced AI capabilities directly into your terminal. It provides lightweight access to multiple AI models, giving you the most direct path from your prompt to powerful AI assistance.
-
-**English** | [中文](README_zh.md)
 
 
 ## 🚀 Why Snow CLI?

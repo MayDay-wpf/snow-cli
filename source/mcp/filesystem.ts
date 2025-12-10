@@ -323,6 +323,23 @@ export class FilesystemMCPService {
 		endLine?: number,
 	): Promise<SingleFileReadResult | MultipleFilesReadResult> {
 		try {
+			// Defensive handling: if filePath is a string that looks like a JSON array, parse it
+			// This can happen when AI tools serialize array parameters as strings
+			if (
+				typeof filePath === 'string' &&
+				filePath.startsWith('[') &&
+				filePath.endsWith(']')
+			) {
+				try {
+					const parsed = JSON.parse(filePath);
+					if (Array.isArray(parsed)) {
+						filePath = parsed;
+					}
+				} catch {
+					// If parsing fails, treat as a regular string path
+				}
+			}
+
 			// Handle array of files
 			if (Array.isArray(filePath)) {
 				const filesData: Array<{
@@ -336,6 +353,9 @@ export class FilesystemMCPService {
 					mimeType?: string;
 				}> = [];
 				const multimodalContent: MultimodalContent = [];
+
+				// Track the last successfully resolved absolute path for context-aware relative path resolution
+				let lastAbsolutePath: string | undefined;
 
 				for (const fileItem of filePath) {
 					try {
@@ -356,7 +376,13 @@ export class FilesystemMCPService {
 							fileEndLine = fileItem.endLine ?? endLine;
 						}
 
-						const fullPath = this.resolvePath(file);
+						// Use context-aware path resolution for relative paths in batch operations
+						const fullPath = this.resolvePath(file, lastAbsolutePath);
+
+						// Update lastAbsolutePath for next iteration if this path is absolute
+						if (isAbsolute(file)) {
+							lastAbsolutePath = fullPath;
+						}
 
 						// For absolute paths, skip validation to allow access outside base path
 						if (!isAbsolute(file)) {
@@ -496,11 +522,24 @@ export class FilesystemMCPService {
 						const errorMsg =
 							error instanceof Error ? error.message : 'Unknown error';
 						// Extract file path for error message
-						const filePath =
+						const inputPath =
 							typeof fileItem === 'string' ? fileItem : fileItem.path;
+						// Try to resolve path for better error context (may fail, so wrapped in try-catch)
+						let resolvedPathInfo = '';
+						try {
+							const attemptedResolve = this.resolvePath(
+								inputPath,
+								lastAbsolutePath,
+							);
+							if (attemptedResolve !== inputPath) {
+								resolvedPathInfo = `\n   Resolved to: ${attemptedResolve}`;
+							}
+						} catch {
+							// Ignore resolution errors in error handler
+						}
 						multimodalContent.push({
 							type: 'text',
-							text: `❌ ${filePath}: ${errorMsg}`,
+							text: `❌ ${inputPath}${resolvedPathInfo}\n   Error: ${errorMsg}`,
 						});
 					}
 				}
@@ -1764,20 +1803,31 @@ export class FilesystemMCPService {
 
 	/**
 	 * Resolve path relative to base path and normalize it
+	 * Supports contextPath for smart relative path resolution in batch operations
+	 * @param filePath - Path to resolve
+	 * @param contextPath - Optional context path (e.g., previous absolute path in batch)
+	 *                      If provided and filePath is relative, will resolve relative to contextPath's directory
 	 * @private
 	 */
-	private resolvePath(filePath: string): string {
+	private resolvePath(filePath: string, contextPath?: string): string {
 		// Check if the path is already absolute
-		const isAbsolute = path.isAbsolute(filePath);
+		const isAbs = path.isAbsolute(filePath);
 
-		if (isAbsolute) {
+		if (isAbs) {
 			// Return absolute path as-is (will be validated later)
 			return resolve(filePath);
 		}
 
-		// For relative paths, resolve against base path
-		// Remove any leading slashes to treat as relative path
-		const relativePath = filePath.replace(/^\/+/, '');
+		// For relative paths, resolve against context path if provided
+		// Remove any leading slashes or backslashes to treat as relative path
+		const relativePath = filePath.replace(/^[\/\\]+/, '');
+
+		// If context path is provided and is absolute, resolve relative to its directory
+		if (contextPath && path.isAbsolute(contextPath)) {
+			return resolve(path.dirname(contextPath), relativePath);
+		}
+
+		// Otherwise resolve against base path
 		return resolve(this.basePath, relativePath);
 	}
 

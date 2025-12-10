@@ -575,6 +575,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloMode: true, // Always use YOLO mode in headless
+				planMode: false, // HeadlessMode doesn't support Plan mode
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel: false,
 				getPendingMessages: () => [],

@@ -1,25 +1,32 @@
-import React, { useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { Box, Text } from 'ink';
-import { Viewport } from '../../utils/ui/textBuffer.js';
-import { cpSlice } from '../../utils/core/textUtils.js';
+import React, {
+	useCallback,
+	useEffect,
+	useRef,
+	useMemo,
+	lazy,
+	Suspense,
+} from 'react';
+import {Box, Text} from 'ink';
+import {Viewport} from '../../utils/ui/textBuffer.js';
+import {cpSlice} from '../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('./CommandPanel.js'));
 const FileList = lazy(() => import('./FileList.js'));
 const AgentPickerPanel = lazy(() => import('./AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('./TodoPickerPanel.js'));
-import { useInputBuffer } from '../../hooks/input/useInputBuffer.js';
-import { useCommandPanel } from '../../hooks/ui/useCommandPanel.js';
-import { useFilePicker } from '../../hooks/picker/useFilePicker.js';
-import { useHistoryNavigation } from '../../hooks/input/useHistoryNavigation.js';
-import { useClipboard } from '../../hooks/input/useClipboard.js';
-import { useKeyboardInput } from '../../hooks/input/useKeyboardInput.js';
-import { useTerminalSize } from '../../hooks/ui/useTerminalSize.js';
-import { useTerminalFocus } from '../../hooks/ui/useTerminalFocus.js';
-import { useAgentPicker } from '../../hooks/picker/useAgentPicker.js';
-import { useTodoPicker } from '../../hooks/picker/useTodoPicker.js';
-import { useI18n } from '../../i18n/index.js';
-import { useTheme } from '../contexts/ThemeContext.js';
+import {useInputBuffer} from '../../hooks/input/useInputBuffer.js';
+import {useCommandPanel} from '../../hooks/ui/useCommandPanel.js';
+import {useFilePicker} from '../../hooks/picker/useFilePicker.js';
+import {useHistoryNavigation} from '../../hooks/input/useHistoryNavigation.js';
+import {useClipboard} from '../../hooks/input/useClipboard.js';
+import {useKeyboardInput} from '../../hooks/input/useKeyboardInput.js';
+import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
+import {useTerminalFocus} from '../../hooks/ui/useTerminalFocus.js';
+import {useAgentPicker} from '../../hooks/picker/useAgentPicker.js';
+import {useTodoPicker} from '../../hooks/picker/useTodoPicker.js';
+import {useI18n} from '../../i18n/index.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 /**
  * Calculate context usage percentage
@@ -41,8 +48,8 @@ export function calculateContextPercentage(contextUsage: {
 	// For OpenAI: Total = inputTokens (cachedTokens are already included in inputTokens)
 	const totalInputTokens = isAnthropic
 		? contextUsage.inputTokens +
-		(contextUsage.cacheCreationTokens || 0) +
-		(contextUsage.cacheReadTokens || 0)
+		  (contextUsage.cacheCreationTokens || 0) +
+		  (contextUsage.cacheReadTokens || 0)
 		: contextUsage.inputTokens;
 
 	return Math.min(
@@ -54,15 +61,18 @@ export function calculateContextPercentage(contextUsage: {
 type Props = {
 	onSubmit: (
 		message: string,
-		images?: Array<{ data: string; mimeType: string }>,
+		images?: Array<{data: string; mimeType: string}>,
 	) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	placeholder?: string;
 	disabled?: boolean;
 	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
-	chatHistory?: Array<{ role: string; content: string }>;
+	chatHistory?: Array<{role: string; content: string}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
+	setYoloMode?: (value: boolean) => void;
+	planMode?: boolean;
+	setPlanMode?: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -74,7 +84,7 @@ type Props = {
 	};
 	initialContent?: {
 		text: string;
-		images?: Array<{ type: 'image'; data: string; mimeType: string }>;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
 };
@@ -88,20 +98,23 @@ export default function ChatInput({
 	chatHistory = [],
 	onHistorySelect,
 	yoloMode = false,
+	setYoloMode,
+	planMode = false,
+	setPlanMode,
 	contextUsage,
 	initialContent = null,
 	onContextPercentageChange,
 }: Props) {
 	// Use i18n hook for translations
-	const { t } = useI18n();
-	const { theme } = useTheme();
+	const {t} = useI18n();
+	const {theme} = useTheme();
 
 	// Use terminal size hook to listen for resize events
-	const { columns: terminalWidth } = useTerminalSize();
+	const {columns: terminalWidth} = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
 
 	// Use terminal focus hook to detect focus state
-	const { hasFocus, ensureFocus } = useTerminalFocus();
+	const {hasFocus, ensureFocus} = useTerminalFocus();
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
@@ -115,7 +128,7 @@ export default function ChatInput({
 	); // Memoize viewport to prevent unnecessary re-renders
 
 	// Use input buffer hook
-	const { buffer, triggerUpdate, forceUpdate } = useInputBuffer(viewport);
+	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
 
 	// Use command panel hook
 	const {
@@ -192,7 +205,7 @@ export default function ChatInput({
 	} = useTodoPicker(buffer, triggerUpdate, process.cwd());
 
 	// Use clipboard hook
-	const { pasteFromClipboard } = useClipboard(
+	const {pasteFromClipboard} = useClipboard(
 		buffer,
 		updateCommandPanelState,
 		updateFilePickerState,
@@ -205,6 +218,10 @@ export default function ChatInput({
 		disabled,
 		triggerUpdate,
 		forceUpdate,
+		yoloMode,
+		setYoloMode: setYoloMode || (() => {}),
+		planMode,
+		setPlanMode: setPlanMode || (() => {}),
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -358,7 +375,10 @@ export default function ChatInput({
 			if (hasFocus) {
 				// Focused: solid block cursor (use inverted colors)
 				return (
-					<Text backgroundColor={theme.colors.menuNormal} color={theme.colors.background}>
+					<Text
+						backgroundColor={theme.colors.menuNormal}
+						color={theme.colors.background}
+					>
 						{char}
 					</Text>
 				);
@@ -524,26 +544,32 @@ export default function ChatInput({
 			{!showHistoryMenu && (
 				<>
 					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{'─'.repeat(terminalWidth - 2)}
+						</Text>
 						<Box flexDirection="row">
 							<Text color={theme.colors.menuInfo} bold>
 								❯{' '}
 							</Text>
 							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
-						<Text color={theme.colors.menuSecondary}>{'─'.repeat(terminalWidth - 2)}</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{'─'.repeat(terminalWidth - 2)}
+						</Text>
 					</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
-						showFilePicker ? (
+					showFilePicker ? (
 						<Box marginTop={1}>
 							<Text>
 								{showCommands && getFilteredCommands().length > 0
-									? t.chatScreen.typeToFilterCommands
+									? t.commandPanel.interactionHint +
+									  ' • ' +
+									  t.chatScreen.typeToFilterCommands
 									: showFilePicker
-										? searchMode === 'content'
-											? t.chatScreen.contentSearchHint
-											: t.chatScreen.fileSearchHint
-										: ''}
+									? searchMode === 'content'
+										? t.chatScreen.contentSearchHint
+										: t.chatScreen.fileSearchHint
+									: ''}
 							</Text>
 						</Box>
 					) : null}
@@ -590,101 +616,7 @@ export default function ChatInput({
 							totalCount={totalTodoCount}
 						/>
 					</Suspense>
-					{yoloMode && (
-						<Box marginTop={1}>
-							<Text color={theme.colors.warning} dimColor>
-								{t.chatScreen.yoloModeActive}
-							</Text>
-						</Box>
-					)}
-					{contextUsage && (
-						<Box marginTop={1}>
-							<Text color={theme.colors.menuSecondary} dimColor>
-								{(() => {
-									// Determine which caching system is being used
-									const isAnthropic =
-										(contextUsage.cacheCreationTokens || 0) > 0 ||
-										(contextUsage.cacheReadTokens || 0) > 0;
-									const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
-
-									// Use the exported function for consistent calculation
-									const percentage = calculateContextPercentage(contextUsage);
-
-									// Calculate total tokens for display
-									const totalInputTokens = isAnthropic
-										? contextUsage.inputTokens +
-										(contextUsage.cacheCreationTokens || 0) +
-										(contextUsage.cacheReadTokens || 0)
-										: contextUsage.inputTokens;
-									let color: string;
-									if (percentage < 50) color = theme.colors.success;
-									else if (percentage < 75) color = theme.colors.warning;
-									else if (percentage < 90) color = theme.colors.warning;
-									else color = theme.colors.error;
-
-									const formatNumber = (num: number) => {
-										if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-										return num.toString();
-									};
-
-									const hasCacheMetrics = isAnthropic || isOpenAI;
-
-									return (
-										<>
-											<Text color={color}>{percentage.toFixed(1)}%</Text>
-											<Text> · </Text>
-											<Text color={color}>
-												{formatNumber(totalInputTokens)}
-											</Text>
-											<Text>{t.chatScreen.tokens}</Text>
-											{hasCacheMetrics && (
-												<>
-													<Text> · </Text>
-													{/* Anthropic caching display */}
-													{isAnthropic && (
-														<>
-															{(contextUsage.cacheReadTokens || 0) > 0 && (
-																<>
-																	<Text color={theme.colors.menuInfo}>
-																		↯{' '}
-																		{formatNumber(
-																			contextUsage.cacheReadTokens || 0,
-																		)}{' '}
-																		{t.chatScreen.cached}
-																	</Text>
-																</>
-															)}
-															{(contextUsage.cacheCreationTokens || 0) > 0 && (
-																<>
-																	{(contextUsage.cacheReadTokens || 0) > 0 && (
-																		<Text> · </Text>
-																	)}
-																	<Text color={theme.colors.warning}>
-																		◆{' '}
-																		{formatNumber(
-																			contextUsage.cacheCreationTokens || 0,
-																		)}{' '}
-																		{t.chatScreen.newCache}
-																	</Text>
-																</>
-															)}
-														</>
-													)}
-													{/* OpenAI caching display */}
-													{isOpenAI && (
-														<Text color={theme.colors.menuInfo}>
-															↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-															{t.chatScreen.cached}
-														</Text>
-													)}
-												</>
-											)}
-										</>
-									);
-								})()}
-							</Text>
-						</Box>
-					)}
+					{/* Status information moved to StatusLine component */}
 				</>
 			)}
 		</Box>

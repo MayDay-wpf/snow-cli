@@ -14,7 +14,7 @@ export interface SelectedFile {
  * Get line count for a file
  */
 export function getFileLineCount(filePath: string): Promise<number> {
-	return new Promise((resolve) => {
+	return new Promise(resolve => {
 		try {
 			if (!fs.existsSync(filePath)) {
 				resolve(0);
@@ -34,7 +34,15 @@ export function getFileLineCount(filePath: string): Promise<number> {
  * Check if file is an image based on extension
  */
 function isImageFile(filePath: string): boolean {
-	const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+	const imageExtensions = [
+		'.png',
+		'.jpg',
+		'.jpeg',
+		'.gif',
+		'.webp',
+		'.bmp',
+		'.svg',
+	];
 	const ext = path.extname(filePath).toLowerCase();
 	return imageExtensions.includes(ext);
 }
@@ -51,7 +59,7 @@ function getMimeType(filePath: string): string {
 		'.gif': 'image/gif',
 		'.webp': 'image/webp',
 		'.bmp': 'image/bmp',
-		'.svg': 'image/svg+xml'
+		'.svg': 'image/svg+xml',
 	};
 	return mimeTypes[ext] || 'application/octet-stream';
 }
@@ -107,13 +115,13 @@ export async function getFileInfo(filePath: string): Promise<SelectedFile> {
 			exists,
 			isImage,
 			imageData,
-			mimeType
+			mimeType,
 		};
 	} catch (error) {
 		return {
 			path: filePath,
 			lineCount: 0,
-			exists: false
+			exists: false,
 		};
 	}
 }
@@ -123,10 +131,15 @@ export async function getFileInfo(filePath: string): Promise<SelectedFile> {
  */
 export function formatFileTree(files: SelectedFile[]): string {
 	if (files.length === 0) return '';
-	
-	return files.map(file => 
-		`└─ Read \`${file.path}\`${file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'}`
-	).join('\n');
+
+	return files
+		.map(
+			file =>
+				`└─ Read \`${file.path}\`${
+					file.exists ? ` (total line ${file.lineCount})` : ' (file not found)'
+				}`,
+		)
+		.join('\n');
 }
 
 /**
@@ -151,7 +164,8 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 
 	// Pattern 2: Direct absolute/relative paths (e.g., c:\Users\...\file.ts or ./src/file.ts)
 	// Match paths that look like file paths with extensions, but NOT @-prefixed ones
-	const directPathRegex = /(?<!@)(?:^|\s)((?:[a-zA-Z]:[\\\/]|\.{1,2}[\\\/]|[\\\/])(?:[A-Za-z0-9\-._/\\:()[\] ]+)\.[a-zA-Z]+)(?=\s|$)/g;
+	const directPathRegex =
+		/(?<!@)(?:^|\s)((?:[a-zA-Z]:[\\\/]|\.{1,2}[\\\/]|[\\\/])(?:[A-Za-z0-9\-._/\\:()[\] ]+)\.[a-zA-Z]+)(?=\s|$)/g;
 
 	while ((match = directPathRegex.exec(content)) !== null) {
 		if (match[1]) {
@@ -168,10 +182,10 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 
 	// Check which files actually exist
 	const fileInfos = await Promise.all(
-		uniqueFiles.map(async (filePath) => {
+		uniqueFiles.map(async filePath => {
 			const info = await getFileInfo(filePath);
 			return info;
-		})
+		}),
 	);
 
 	// Filter only existing files
@@ -182,7 +196,7 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 
 	return {
 		cleanContent,
-		validFiles
+		validFiles,
 	};
 }
 
@@ -192,7 +206,12 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 export function createMessageWithFileInstructions(
 	content: string,
 	files: SelectedFile[],
-	editorContext?: {activeFile?: string; selectedText?: string; cursorPosition?: {line: number; character: number}; workspaceFolder?: string}
+	editorContext?: {
+		activeFile?: string;
+		selectedText?: string;
+		cursorPosition?: {line: number; character: number};
+		workspaceFolder?: string;
+	},
 ): string {
 	const parts: string[] = [content];
 
@@ -206,10 +225,16 @@ export function createMessageWithFileInstructions(
 			editorLines.push(`└─ Active File: ${editorContext.activeFile}`);
 		}
 		if (editorContext.cursorPosition) {
-			editorLines.push(`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${editorContext.cursorPosition.character + 1}`);
+			editorLines.push(
+				`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${
+					editorContext.cursorPosition.character + 1
+				}`,
+			);
 		}
 		if (editorContext.selectedText) {
-			editorLines.push(`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``);
+			editorLines.push(
+				`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``,
+			);
 		}
 		if (editorLines.length > 0) {
 			parts.push(editorLines.join('\n'));
@@ -227,3 +252,14 @@ export function createMessageWithFileInstructions(
 	return parts.join('\n');
 }
 
+/**
+ * Clean IDE context information from message content
+ * Removes all lines that start with "└─" (IDE context prefix)
+ */
+export function cleanIDEContext(content: string): string {
+	return content
+		.split('\n')
+		.filter(line => !line.trim().startsWith('└─'))
+		.join('\n')
+		.trim();
+}

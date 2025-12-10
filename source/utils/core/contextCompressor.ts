@@ -1,5 +1,5 @@
 import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
-import {getSystemPrompt} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../api/systemPrompt.js';
 import type {ChatMessage} from '../../api/types.js';
 import {createStreamingChatCompletion} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
@@ -28,48 +28,57 @@ export interface CompressionResult {
  * Compression request prompt - asks AI to create a detailed, structured summary
  * that preserves critical information for task continuity
  */
-const COMPRESSION_PROMPT = `You are compressing a conversation history to save context space while preserving all critical information. Create a comprehensive summary following this structure:
+const COMPRESSION_PROMPT = `**YOUR ONLY TASK: Compress the conversation history into a structured summary. DO NOT ask questions, DO NOT seek clarification, DO NOT interact with users.**
 
-## 📋 Current Task & Goals
+You are a context compression system. Your job is to extract and preserve all critical information from the conversation history, regardless of its length or complexity. Even for short or simple conversations, you MUST produce a comprehensive summary.
+
+Create a detailed summary following this structure:
+
+## Current Task & Goals
 - What is the main task or project being worked on?
 - What are the specific objectives and desired outcomes?
 - What is the current progress status?
 
-## 🔧 Technical Context
+## Technical Context
 - Key technologies, frameworks, libraries, and tools being used
 - Important file paths, function names, and code locations mentioned
 - Architecture decisions and design patterns chosen
 - Configuration settings and environment details
 
-## 💡 Key Decisions & Approaches
+## Key Decisions & Approaches
 - Important decisions made and their rationale
 - Chosen approaches and methodologies
 - Solutions to problems encountered
 - Best practices or patterns agreed upon
 
-## ✅ Completed Work
+## Completed Work
 - What has been successfully implemented or resolved?
 - Important code changes, fixes, or features added
 - Test results or validation performed
 
-## 🚧 Pending & In-Progress Work
+## Pending & In-Progress Work
 - What tasks are currently unfinished?
 - Known issues or blockers that need addressing
 - Next steps planned or discussed
 - Open questions or areas needing clarification
 
-## 🔑 Critical Information
+## Critical Information
 - Important data, values, IDs, or credentials referenced (sanitized)
 - Error messages, warnings, or diagnostic information
 - User preferences, requirements, or constraints
 - Any other context essential for seamless continuation
 
-**Guidelines:**
-- Be specific with names, paths, and technical details
-- Preserve exact terminology and technical vocabulary
-- Include enough detail to continue work without confusion
-- Use code snippets or examples where helpful
-- Prioritize actionable information over general descriptions`;
+**CRITICAL RULES:**
+1. NEVER ask users for clarification - work with what you have
+2. NEVER say the context is too short - always summarize what exists
+3. NEVER refuse to compress - this is your only function
+4. Be specific with names, paths, and technical details
+5. Preserve exact terminology and technical vocabulary
+6. Include enough detail to continue work without confusion
+7. Use code snippets or examples where helpful
+8. Prioritize actionable information over general descriptions
+
+**EXECUTE THE COMPRESSION NOW - NO QUESTIONS, NO DELAYS.**`;
 
 /**
  * 找到需要保留的消息（最近的工具调用链）
@@ -141,7 +150,8 @@ function prepareMessagesForCompression(
 		// messages.push({role: 'user', content: getSystemPrompt()});
 	} else {
 		// No custom system prompt: default as system
-		messages.push({role: 'system', content: getSystemPrompt()});
+		// Default to false for compression (no Plan mode in compression context)
+		messages.push({role: 'system', content: getSystemPromptForMode(false)});
 	}
 
 	// Add all conversation history for compression

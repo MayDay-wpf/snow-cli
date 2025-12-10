@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add Web API polyfill support for Node.js versions 16-18.
+            - Fixed some bugs, add complete Plan mode workflow, Skills added with tool restrictions
             
             ### Installation
             ```bash
@@ -73,6 +73,5 @@ jobs:
             ```bash
             snow --update
             ```
-            See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.
           draft: false
           prerelease: false

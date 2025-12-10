@@ -1,16 +1,16 @@
-import { createStreamingAnthropicCompletion } from '../../api/anthropic.js';
-import { createStreamingResponse } from '../../api/responses.js';
-import { createStreamingGeminiCompletion } from '../../api/gemini.js';
-import { createStreamingChatCompletion } from '../../api/chat.js';
-import { getSubAgent } from '../config/subAgentConfig.js';
-import { collectAllMCPTools, executeMCPTool } from './mcpToolsManager.js';
-import { getOpenAiConfig } from '../config/apiConfig.js';
-import { sessionManager } from '../session/sessionManager.js';
-import { unifiedHooksExecutor } from './unifiedHooksExecutor.js';
-import { checkYoloPermission } from './yoloPermissionChecker.js';
-import type { ConfirmationResult } from '../../ui/components/ToolConfirmation.js';
-import type { MCPTool } from './mcpToolsManager.js';
-import type { ChatMessage } from '../../api/chat.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
+import {createStreamingChatCompletion} from '../../api/chat.js';
+import {getSubAgent} from '../config/subAgentConfig.js';
+import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
+import {getOpenAiConfig} from '../config/apiConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
+import {checkYoloPermission} from './yoloPermissionChecker.js';
+import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {MCPTool} from './mcpToolsManager.js';
+import type {ChatMessage} from '../../api/chat.js';
 
 export interface SubAgentMessage {
 	type: 'sub_agent_message';
@@ -94,7 +94,7 @@ export async function executeSubAgent(
 			agentId === 'agent_general'
 		) {
 			// Check user agents directly (not through getSubAgent which might return builtin)
-			const { getUserSubAgents } = await import('../config/subAgentConfig.js');
+			const {getUserSubAgents} = await import('../config/subAgentConfig.js');
 			const userAgents = getUserSubAgents();
 			const userAgent = userAgents.find(a => a.id === agentId);
 			if (userAgent) {
@@ -198,6 +198,8 @@ You are a specialized code exploration agent focused on rapidly understanding co
 					// Web search for documentation
 					'websearch-search',
 					'websearch-fetch',
+					// Skill execution
+					'skill-execute',
 				],
 			};
 		} else if (!agent && agentId === 'agent_plan') {
@@ -351,6 +353,10 @@ ALTERNATIVE APPROACHES:
 					// Web search for reference
 					'websearch-search',
 					'websearch-fetch',
+					// Ask user questions for clarification
+					'askuser-ask_question',
+					// Skill execution
+					'skill-execute',
 				],
 			};
 		} else if (!agent && agentId === 'agent_general') {
@@ -560,6 +566,8 @@ You are a versatile task execution agent with full tool access, capable of handl
 					'ide-get_diagnostics',
 					// Codebase search tools
 					'codebase-search',
+					// Skill execution
+					'skill-execute',
 				],
 			};
 		} else {
@@ -656,7 +664,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 			let model;
 			if (agent.configProfile) {
 				try {
-					const { loadProfile } = await import('../config/configManager.js');
+					const {loadProfile} = await import('../config/configManager.js');
 					const profileConfig = loadProfile(agent.configProfile);
 					if (profileConfig?.snowcfg) {
 						config = profileConfig.snowcfg;
@@ -689,22 +697,22 @@ You are a versatile task execution agent with full tool access, capable of handl
 			const stream =
 				config.requestMethod === 'anthropic'
 					? createStreamingAnthropicCompletion(
-						{
-							model,
-							messages,
-							temperature: 0,
-							max_tokens: config.maxTokens || 4096,
-							tools: allowedTools,
-							sessionId: currentSession?.id,
-							disableThinking: true, // Sub-agents 不使用 Extended Thinking
-							configProfile: agent.configProfile,
-							customSystemPromptId: agent.customSystemPrompt,
-							customHeaders: agent.customHeaders,
-						},
-						abortSignal,
-					)
+							{
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: allowedTools,
+								sessionId: currentSession?.id,
+								disableThinking: true, // Sub-agents 不使用 Extended Thinking
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  )
 					: config.requestMethod === 'gemini'
-						? createStreamingGeminiCompletion(
+					? createStreamingGeminiCompletion(
 							{
 								model,
 								messages,
@@ -715,33 +723,33 @@ You are a versatile task execution agent with full tool access, capable of handl
 								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
-						)
-						: config.requestMethod === 'responses'
-							? createStreamingResponse(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-									prompt_cache_key: currentSession?.id,
-									configProfile: agent.configProfile,
-									customSystemPromptId: agent.customSystemPrompt,
-									customHeaders: agent.customHeaders,
-								},
-								abortSignal,
-							)
-							: createStreamingChatCompletion(
-								{
-									model,
-									messages,
-									temperature: 0,
-									tools: allowedTools,
-									configProfile: agent.configProfile,
-									customSystemPromptId: agent.customSystemPrompt,
-									customHeaders: agent.customHeaders,
-								},
-								abortSignal,
-							);
+					  )
+					: config.requestMethod === 'responses'
+					? createStreamingResponse(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+								prompt_cache_key: currentSession?.id,
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  )
+					: createStreamingChatCompletion(
+							{
+								model,
+								messages,
+								temperature: 0,
+								tools: allowedTools,
+								configProfile: agent.configProfile,
+								customSystemPromptId: agent.customSystemPrompt,
+								customHeaders: agent.customHeaders,
+							},
+							abortSignal,
+					  );
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
@@ -1085,8 +1093,9 @@ You are a versatile task execution agent with full tool access, capable of handl
 					const errorResult = {
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
-						content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'
-							}`,
+						content: `Error: ${
+							error instanceof Error ? error.message : 'Tool execution failed'
+						}`,
 					};
 					toolResults.push(errorResult);
 
@@ -1100,10 +1109,11 @@ You are a versatile task execution agent with full tool access, capable of handl
 								type: 'tool_result',
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
-								content: `Error: ${error instanceof Error
-									? error.message
-									: 'Tool execution failed'
-									}`,
+								content: `Error: ${
+									error instanceof Error
+										? error.message
+										: 'Tool execution failed'
+								}`,
 							} as any,
 						});
 					}

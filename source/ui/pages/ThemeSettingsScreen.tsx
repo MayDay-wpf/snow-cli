@@ -1,4 +1,10 @@
-import React, {useMemo, useCallback, useState, Suspense} from 'react';
+import React, {
+	useMemo,
+	useCallback,
+	useState,
+	useEffect,
+	Suspense,
+} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {Alert, Spinner} from '@inkjs/ui';
 import Menu from '../components/Menu.js';
@@ -6,6 +12,7 @@ import DiffViewer from '../components/DiffViewer.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';
+import {getSimpleMode, setSimpleMode} from '../../utils/config/themeConfig.js';
 
 const CustomThemeScreen = React.lazy(() => import('./CustomThemeScreen.js'));
 
@@ -36,9 +43,30 @@ export default function ThemeSettingsScreen({
 	const [selectedTheme, setSelectedTheme] = useState<ThemeType>(themeType);
 	const [infoText, setInfoText] = useState<string>('');
 	const [screen, setScreen] = useState<Screen>('main');
+	const [simpleMode, setSimpleModeState] = useState<boolean>(() =>
+		getSimpleMode(),
+	);
+
+	// Load simple mode on mount
+	useEffect(() => {
+		setSimpleModeState(getSimpleMode());
+	}, []);
+
+	const handleToggleSimpleMode = useCallback(() => {
+		const newSimpleMode = !simpleMode;
+		setSimpleModeState(newSimpleMode);
+		setSimpleMode(newSimpleMode);
+	}, [simpleMode]);
 
 	const themeOptions = useMemo(
 		() => [
+			{
+				label: `${t.themeSettings.simpleMode} ${
+					simpleMode ? t.themeSettings.enabled : t.themeSettings.disabled
+				}`,
+				value: 'simple-mode',
+				infoText: t.themeSettings.simpleModeInfo,
+			},
 			{
 				label:
 					selectedTheme === 'dark'
@@ -107,7 +135,7 @@ export default function ThemeSettingsScreen({
 				infoText: t.themeSettings.backInfo,
 			},
 		],
-		[selectedTheme, t],
+		[selectedTheme, simpleMode, t],
 	);
 
 	const handleSelect = useCallback(
@@ -116,6 +144,9 @@ export default function ThemeSettingsScreen({
 				// Restore original theme if cancelled
 				setThemeType(selectedTheme);
 				onBack();
+			} else if (value === 'simple-mode') {
+				// Toggle simple mode
+				handleToggleSimpleMode();
 			} else if (value === 'edit-custom') {
 				// Go to custom theme editor
 				setScreen('custom');
@@ -126,15 +157,19 @@ export default function ThemeSettingsScreen({
 				setThemeType(newTheme);
 			}
 		},
-		[onBack, setThemeType, selectedTheme],
+		[onBack, setThemeType, selectedTheme, handleToggleSimpleMode],
 	);
 
 	const handleSelectionChange = useCallback(
 		(newInfoText: string, value: string) => {
 			setInfoText(newInfoText);
 			// Preview theme on selection change (navigation)
-			if (value === 'back' || value === 'edit-custom') {
-				// Restore to selected theme when hovering on "Back" or "Edit Custom"
+			if (
+				value === 'back' ||
+				value === 'edit-custom' ||
+				value === 'simple-mode'
+			) {
+				// Restore to selected theme when hovering on "Back", "Edit Custom", or "Simple Mode"
 				setThemeType(selectedTheme);
 			} else {
 				// Preview the theme

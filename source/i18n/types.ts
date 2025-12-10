@@ -262,6 +262,7 @@ export type TranslationKeys = {
 		webSearchTools: string;
 		ideTools: string;
 		userInteractionTools: string;
+		skillTools: string;
 		configProfile: string;
 		customSystemPrompt: string;
 		customHeaders: string;
@@ -327,6 +328,10 @@ export type TranslationKeys = {
 		preview: string;
 		back: string;
 		backInfo: string;
+		simpleMode: string;
+		simpleModeInfo: string;
+		enabled: string;
+		disabled: string;
 		darkTheme: string;
 		darkThemeInfo: string;
 		lightTheme: string;
@@ -399,12 +404,14 @@ export type TranslationKeys = {
 		processingMessage: string;
 		scrollHint: string;
 		moreHidden: string;
+		interactionHint: string;
 		commands: {
 			help: string;
 			clear: string;
 			resume: string;
 			mcp: string;
 			yolo: string;
+			plan: string;
 			init: string;
 			ide: string;
 			compact: string;
@@ -414,11 +421,13 @@ export type TranslationKeys = {
 			usage: string;
 			export: string;
 			custom: string;
+			skills: string;
 			agent: string;
 			todo: string;
 			quit: string;
 		};
 	};
+
 	// Hooks
 	hooks: {
 		pressCtrlCAgain: string;
@@ -542,7 +551,9 @@ export type TranslationKeys = {
 		statusWorking: string;
 		statusIndexing: string;
 		statusWatcherActive: string;
+		statusWatcherActiveShort: string;
 		statusFileUpdated: string;
+		statusFileUpdatedShort: string;
 		statusCreating: string;
 		statusSaving: string;
 		statusCompressing: string;
@@ -615,6 +626,7 @@ export type TranslationKeys = {
 		retryError: string;
 		// Codebase
 		codebaseIndexing: string;
+		codebaseIndexingShort: string;
 		codebaseProgress: string;
 		codebaseChunks: string;
 		codebaseSearching: string;
@@ -679,6 +691,7 @@ export type TranslationKeys = {
 		contentSearchHint: string;
 		fileSearchHint: string;
 		yoloModeActive: string;
+		planModeActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;
@@ -717,6 +730,82 @@ export type TranslationKeys = {
 		approveRejectHint: string;
 		enterRejectionReason: string;
 		submitCancelHint: string;
+	};
+	skillsCreation: {
+		title: string;
+		nameLabel: string;
+		nameHint: string;
+		namePlaceholder: string;
+		descriptionLabel: string;
+		descriptionHint: string;
+		descriptionPlaceholder: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		errorInvalidName: string;
+		errorExistsBoth: string;
+		errorExistsGlobal: string;
+		errorExistsProject: string;
+	};
+	// AskUserQuestion Component
+	askUser: {
+		header: string;
+		customInputOption: string;
+		customInputLabel: string;
+		selectPrompt: string;
+		enterResponse: string;
+		keyboardHints: string;
+	};
+	toolConfirmation: {
+		header: string;
+		tool: string;
+		tools: string;
+		toolsInParallel: string;
+		sensitiveCommandDetected: string;
+		pattern: string;
+		reason: string;
+		requiresConfirmation: string;
+		arguments: string;
+		selectAction: string;
+		enterRejectionReason: string;
+		pressEnterToSubmit: string;
+		confirmed: string;
+		approveOnce: string;
+		alwaysApprove: string;
+		rejectWithReply: string;
+		rejectEndSession: string;
+	};
+	usagePanel: {
+		title: string;
+		granularity: {
+			last24h: string;
+			last7d: string;
+			last30d: string;
+			last12m: string;
+		};
+		chart: {
+			noData: string;
+			usage: string;
+			cacheHit: string;
+			cacheCreate: string;
+			moreAbove: string;
+			in: string;
+			out: string;
+			hit: string;
+			create: string;
+			total: string;
+			moreBelow: string;
+		};
+		loading: string;
+		error: string;
+		tabToSwitch: string;
+		noDataForPeriod: string;
 	};
 };
 

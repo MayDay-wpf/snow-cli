@@ -14,17 +14,36 @@ import {exportMessagesToFile} from '../../utils/session/chatExporter.js';
 
 /**
  * 执行上下文压缩
+ * @param sessionId - 可选的会话ID，如果提供则使用该ID加载会话进行压缩
  * @returns 返回压缩后的UI消息列表和token使用信息，如果失败返回null
  */
-export async function executeContextCompression(): Promise<{
+export async function executeContextCompression(sessionId?: string): Promise<{
 	uiMessages: Message[];
 	usage: UsageInfo;
 } | null> {
 	try {
-		// 从会话文件读取真实的消息记录
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession || currentSession.messages.length === 0) {
-			throw new Error('No active session or no messages to compress');
+		// 必须提供 sessionId 才能执行压缩，避免压缩错误的会话
+		if (!sessionId) {
+			console.warn(
+				'Context compression skipped: No active session ID available',
+			);
+			return null;
+		}
+
+		// 使用提供的 sessionId 加载会话
+		console.log(`Loading session ${sessionId} for compression...`);
+		const currentSession = await sessionManager.loadSession(sessionId);
+
+		if (!currentSession) {
+			console.warn(
+				`Context compression skipped: Failed to load session ${sessionId}`,
+			);
+			return null;
+		}
+
+		if (currentSession.messages.length === 0) {
+			console.warn(`Session ${sessionId} has no messages to compress`);
+			return null;
 		}
 
 		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
@@ -164,7 +183,9 @@ type CommandHandlerOptions = {
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
@@ -194,8 +215,16 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setCompressionError(null);
 
 				try {
-					// 使用提取的压缩函数
-					const compressionResult = await executeContextCompression();
+					// 获取当前会话ID
+					const currentSession = sessionManager.getCurrentSession();
+					if (!currentSession) {
+						throw new Error('No active session to compress');
+					}
+
+					// 使用提取的压缩函数，传入当前会话ID
+					const compressionResult = await executeContextCompression(
+						currentSession.id,
+					);
 
 					if (!compressionResult) {
 						throw new Error('Compression failed');
@@ -378,6 +407,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showSkillsCreation') {
+				options.setShowSkillsCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (
 				result.success &&
 				result.action === 'executeCustomCommand' &&
@@ -512,6 +549,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'toggleYolo') {
 				// Toggle YOLO mode without adding command message
 				options.setYoloMode(prev => !prev);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'togglePlan') {
+				// Toggle Plan mode without adding command message
+				options.setPlanMode(prev => !prev);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&

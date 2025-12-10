@@ -107,7 +107,7 @@ export interface CustomHeadersConfig {
 	schemes: CustomHeadersItem[]; // 方案列表
 }
 
-const DEFAULT_CONFIG: AppConfig = {
+export const DEFAULT_CONFIG: AppConfig = {
 	snowcfg: {
 		baseUrl: 'https://api.openai.com/v1',
 		apiKey: '',
@@ -208,10 +208,17 @@ export function loadConfig(): AppConfig {
 			};
 		}
 
+		// 深度合并 proxy 配置，确保新字段有默认值
+		const proxyConfig: ProxyConfig = {
+			...DEFAULT_CONFIG.proxy!,
+			...(configWithoutMcp.proxy || {}),
+		};
+
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...configWithoutMcp,
 			snowcfg: apiConfig,
+			proxy: proxyConfig,
 		};
 
 		// 如果是从旧版本迁移过来的，保存新配置
@@ -241,7 +248,9 @@ export function saveConfig(config: AppConfig): void {
 	}
 }
 
-export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
+export async function updateOpenAiConfig(
+	apiConfig: Partial<ApiConfig>,
+): Promise<void> {
 	const currentConfig = loadConfig();
 	const updatedConfig: AppConfig = {
 		...currentConfig,
@@ -251,8 +260,10 @@ export function updateOpenAiConfig(apiConfig: Partial<ApiConfig>): void {
 
 	// Also save to the active profile if profiles system is initialized
 	try {
-		// Dynamic import to avoid circular dependencies
-		const {getActiveProfileName, saveProfile} = require('./configManager.js');
+		// Dynamic import for ESM compatibility
+		const {getActiveProfileName, saveProfile} = await import(
+			'./configManager.js'
+		);
 		const activeProfileName = getActiveProfileName();
 		if (activeProfileName) {
 			saveProfile(activeProfileName, updatedConfig);
@@ -325,7 +336,9 @@ export function getProxyConfig(): ProxyConfig {
 	return fullConfig.proxy || DEFAULT_CONFIG.proxy!;
 }
 
-export function updateProxyConfig(proxyConfig: ProxyConfig): void {
+export async function updateProxyConfig(
+	proxyConfig: ProxyConfig,
+): Promise<void> {
 	ensureConfigDirectory();
 	try {
 		const fullConfig = loadConfig();
@@ -336,8 +349,10 @@ export function updateProxyConfig(proxyConfig: ProxyConfig): void {
 
 		// Also save to the active profile if profiles system is initialized
 		try {
-			// Dynamic import to avoid circular dependencies
-			const {getActiveProfileName, saveProfile} = require('./configManager.js');
+			// Dynamic import for ESM compatibility
+			const {getActiveProfileName, saveProfile} = await import(
+				'./configManager.js'
+			);
 			const activeProfileName = getActiveProfileName();
 			if (activeProfileName) {
 				saveProfile(activeProfileName, fullConfig);

@@ -2,6 +2,7 @@ import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
+import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import type {SubAgent} from '../../utils/config/subAgentConfig.js';
 
 type KeyboardInputOptions = {
@@ -9,6 +10,11 @@ type KeyboardInputOptions = {
 	disabled: boolean;
 	triggerUpdate: () => void;
 	forceUpdate: React.Dispatch<React.SetStateAction<{}>>;
+	// Mode state
+	yoloMode: boolean;
+	setYoloMode: (value: boolean) => void;
+	planMode: boolean;
+	setPlanMode: (value: boolean) => void;
 	// Command panel
 	showCommands: boolean;
 	setShowCommands: (show: boolean) => void;
@@ -86,6 +92,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		disabled,
 		triggerUpdate,
 		forceUpdate,
+		yoloMode,
+		setYoloMode,
+		planMode,
+		setPlanMode,
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -194,23 +204,39 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Shift+Tab - Toggle YOLO mode
+		// Shift+Tab - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
 		if (key.shift && key.tab) {
-			executeCommand('yolo').then(result => {
-				if (onCommand) {
-					onCommand('yolo', result);
-				}
-			});
+			if (yoloMode && !planMode) {
+				// YOLO only -> YOLO + Plan
+				setPlanMode(true);
+			} else if (yoloMode && planMode) {
+				// YOLO + Plan -> Plan only
+				setYoloMode(false);
+			} else if (!yoloMode && planMode) {
+				// Plan only -> All off
+				setPlanMode(false);
+			} else if (!yoloMode && !planMode) {
+				// All off -> YOLO only
+				setYoloMode(true);
+			}
 			return;
 		}
 
-		// Ctrl+Y - Toggle YOLO mode
+		// Ctrl+Y - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
 		if (key.ctrl && input === 'y') {
-			executeCommand('yolo').then(result => {
-				if (onCommand) {
-					onCommand('yolo', result);
-				}
-			});
+			if (yoloMode && !planMode) {
+				// YOLO only -> YOLO + Plan
+				setPlanMode(true);
+			} else if (yoloMode && planMode) {
+				// YOLO + Plan -> Plan only
+				setYoloMode(false);
+			} else if (!yoloMode && planMode) {
+				// Plan only -> All off
+				setPlanMode(false);
+			} else if (!yoloMode && !planMode) {
+				// All off -> YOLO only
+				setYoloMode(true);
+			}
 			return;
 		}
 
@@ -284,16 +310,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle todo picker navigation
 		if (showTodoPicker) {
-			// Up arrow in todo picker
+			// Up arrow in todo picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setTodoSelectedIndex(prev => Math.max(0, prev - 1));
+				setTodoSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, todos.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in todo picker
+			// Down arrow in todo picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, todos.length - 1);
-				setTodoSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setTodoSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -341,16 +369,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showAgentPicker) {
 			const filteredAgents = getFilteredAgents();
 
-			// Up arrow in agent picker
+			// Up arrow in agent picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setAgentSelectedIndex(prev => Math.max(0, prev - 1));
+				setAgentSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredAgents.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in agent picker
+			// Down arrow in agent picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredAgents.length - 1);
-				setAgentSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setAgentSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -379,16 +409,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showHistoryMenu) {
 			const userMessages = getUserMessages();
 
-			// Up arrow in history menu
+			// Up arrow in history menu - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setHistorySelectedIndex(prev => Math.max(0, prev - 1));
+				setHistorySelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, userMessages.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in history menu
+			// Down arrow in history menu - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, userMessages.length - 1);
-				setHistorySelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setHistorySelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -583,16 +615,18 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle file picker navigation
 		if (showFilePicker) {
-			// Up arrow in file picker
+			// Up arrow in file picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setFileSelectedIndex(prev => Math.max(0, prev - 1));
+				setFileSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredFileCount - 1),
+				);
 				return;
 			}
 
-			// Down arrow in file picker
+			// Down arrow in file picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredFileCount - 1);
-				setFileSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setFileSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -612,16 +646,40 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (showCommands) {
 			const filteredCommands = getFilteredCommands();
 
-			// Up arrow in command panel
+			// Up arrow in command panel - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
-				setCommandSelectedIndex(prev => Math.max(0, prev - 1));
+				setCommandSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredCommands.length - 1),
+				);
 				return;
 			}
 
-			// Down arrow in command panel
+			// Down arrow in command panel - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredCommands.length - 1);
-				setCommandSelectedIndex(prev => Math.min(maxIndex, prev + 1));
+				setCommandSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+				return;
+			}
+
+			// Tab - autocomplete command to input
+			if (key.tab) {
+				if (
+					filteredCommands.length > 0 &&
+					commandSelectedIndex < filteredCommands.length
+				) {
+					const selectedCommand = filteredCommands[commandSelectedIndex];
+					if (selectedCommand) {
+						// Replace input with "/" + selected command name
+						buffer.setText('/' + selectedCommand.name);
+						// Move cursor to end
+						buffer.setCursorPosition(buffer.text.length);
+						// Close command panel
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						triggerUpdate();
+						return;
+					}
+				}
 				return;
 			}
 
@@ -653,6 +711,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						}
 						// Execute command instead of inserting text
 						executeCommand(selectedCommand.name).then(result => {
+							// Record command usage for frequency-based sorting
+							commandUsageManager.recordUsage(selectedCommand.name);
 							if (onCommand) {
 								onCommand(selectedCommand.name, result);
 							}
@@ -725,6 +785,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 						// Execute command with arguments
 						executeCommand(commandName, commandArgs).then(result => {
+							// Record command usage for frequency-based sorting
+							commandUsageManager.recordUsage(commandName);
 							if (onCommand) {
 								onCommand(commandName, result);
 							}
@@ -841,14 +903,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
-			const isAtStart = cursorPos === 0;
-			const hasNewline = text.includes('\n');
 
 			// Terminal-style history navigation:
-			// 1. Empty input box -> navigate history
-			// 2. Cursor at start of single line -> navigate history
-			// 3. Otherwise -> normal cursor movement
-			if (isEmpty || (!hasNewline && isAtStart)) {
+			// Only navigate history when cursor is at the very beginning (position 0)
+			// This allows normal cursor movement within the line
+			if (isEmpty || cursorPos === 0) {
 				const navigated = navigateHistoryUp();
 				if (navigated) {
 					updateFilePickerState(
@@ -895,14 +954,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			const isEmpty = text.trim() === '';
-			const isAtEnd = cursorPos === text.length;
-			const hasNewline = text.includes('\n');
 
 			// Terminal-style history navigation:
-			// 1. Empty input box -> navigate history (if in history mode)
-			// 2. Cursor at end of single line -> navigate history (if in history mode)
-			// 3. Otherwise -> normal cursor movement
-			if ((isEmpty || (!hasNewline && isAtEnd)) && currentHistoryIndex !== -1) {
+			// Only navigate history when cursor is at the very end (position equals text length)
+			// and we're already in history mode (currentHistoryIndex !== -1)
+			// This allows normal cursor movement within the text
+			if (
+				(isEmpty || cursorPos === text.length) &&
+				currentHistoryIndex !== -1
+			) {
 				const navigated = navigateHistoryDown();
 				if (navigated) {
 					updateFilePickerState(
