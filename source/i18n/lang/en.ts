@@ -389,7 +389,7 @@ export const en: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - Delete from cursor to start (legacy)',
 		deleteToEnd: 'Ctrl+R - Delete from cursor to end (legacy)',
 		pasteImages: '{pasteKey} - Paste images from clipboard',
-		readlineTitle: '⌨️ Readline Shortcuts:',
+		readlineTitle: '🚀 Readline Shortcuts:',
 		moveToLineStart: 'Ctrl+A - Move to beginning of line',
 		moveToLineEnd: 'Ctrl+E - Move to end of line',
 		forwardWord: 'Alt+F - Move forward one word',
@@ -408,7 +408,7 @@ export const en: TranslationKeys = {
 		selectItem: 'Tab/Enter - Select item in pickers',
 		cancelClose: 'ESC - Cancel/close pickers or interrupt AI response',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - Toggle YOLO/Plan modes (cycle: Off → YOLO → YOLO+Plan → Off)',
+			'Shift+Tab/Ctrl+Y - Toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
 		tipsTitle: '💡 Tips:',
 		tipUseHelp: 'Use /help anytime to see this information',
 		tipShowCommands: 'Type / to see all available commands',
@@ -559,7 +559,7 @@ export const en: TranslationKeys = {
 		headerExplanations: 'Ask for code explanations and debugging help',
 		headerInterrupt: 'Press ESC during response to interrupt',
 		headerYolo:
-			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: Off → YOLO → YOLO+Plan → Off)',
+			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
 		headerShortcuts:
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerWorkingDirectory: 'Working directory: {directory}',
@@ -672,7 +672,7 @@ export const en: TranslationKeys = {
 		shortcutDeleteToEnd: 'Delete to end',
 		shortcutCancel: 'Cancel (ESC)',
 		shortcutRegenerate: 'Regenerate (Ctrl+R)',
-		shortcutToggleYolo: 'Toggle YOLO (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'Toggle YOLO/Plan (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirm rollback',
 		rollbackFiles: 'Rollback files',

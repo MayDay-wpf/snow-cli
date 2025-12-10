@@ -413,7 +413,7 @@ export const es: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - Eliminar desde el cursor hasta el inicio (legacy)',
 		deleteToEnd: 'Ctrl+R - Eliminar desde el cursor hasta el final (legacy)',
 		pasteImages: '{pasteKey} - Pegar imágenes desde el portapapeles',
-		readlineTitle: '⌨️ Atajos Readline:',
+		readlineTitle: '🚀 Atajos Readline:',
 		moveToLineStart: 'Ctrl+A - Mover al inicio de línea',
 		moveToLineEnd: 'Ctrl+E - Mover al final de línea',
 		forwardWord: 'Alt+F - Avanzar una palabra',
@@ -432,7 +432,7 @@ export const es: TranslationKeys = {
 		selectItem: 'Tab/Enter - Seleccionar elemento en el selector',
 		cancelClose: 'ESC - Cancelar/Cerrar selector o interrumpir respuesta de IA',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - Alternar modos YOLO/Plan (ciclo: Apagado → YOLO → YOLO+Plan → Apagado)',
+			'Shift+Tab/Ctrl+Y - Alternar modos YOLO/Plan (ciclo: YOLO → YOLO+Plan → Plan → Apagado)',
 		tipsTitle: '💡 Consejos:',
 		tipUseHelp: 'Usa /help en cualquier momento para ver esta información',
 		tipShowCommands: 'Escribe / para ver todos los comandos disponibles',
@@ -584,7 +584,8 @@ export const es: TranslationKeys = {
 		headerExplanations:
 			'Solicita explicaciones de código y ayuda de depuración',
 		headerInterrupt: 'Presiona ESC durante la respuesta para interrumpir',
-		headerYolo: 'Presiona Shift+Tab: Alternar YOLO',
+		headerYolo:
+			'Presiona Shift+Tab/Ctrl+Y: Alternar modos YOLO/Plan (ciclo: YOLO → YOLO+Plan → Plan → Apagado)',
 		headerShortcuts:
 			"Atajos: Ctrl+L (eliminar hasta inicio) • Ctrl+R (eliminar hasta final) • {pasteKey} (pegar imagen) • '@' (archivo) • '@@' (buscar contenido) • '#' (sub-agentes) • '/' (comando)",
 		headerWorkingDirectory: 'Directorio de Trabajo: {directory}',
@@ -701,7 +702,7 @@ export const es: TranslationKeys = {
 		shortcutDeleteToEnd: 'Eliminar hasta final',
 		shortcutCancel: 'Cancelar (ESC)',
 		shortcutRegenerate: 'Regenerar (Ctrl+R)',
-		shortcutToggleYolo: 'Alternar YOLO (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'Alternar YOLO/Plan (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirmar Reversión',
 		rollbackFiles: 'Revertir Archivos',

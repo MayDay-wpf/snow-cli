@@ -378,7 +378,7 @@ export const ja: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - カーソルから先頭まで削除(旧版)',
 		deleteToEnd: 'Ctrl+R - カーソルから末尾まで削除(旧版)',
 		pasteImages: '{pasteKey} - クリップボードから画像を貼り付け',
-		readlineTitle: '⌨️ Readlineショートカット:',
+		readlineTitle: '🚀 Readlineショートカット:',
 		moveToLineStart: 'Ctrl+A - 行頭に移動',
 		moveToLineEnd: 'Ctrl+E - 行末に移動',
 		forwardWord: 'Alt+F - 次の単語に進む',
@@ -397,7 +397,7 @@ export const ja: TranslationKeys = {
 		selectItem: 'Tab/Enter - セレクターで項目を選択',
 		cancelClose: 'ESC - セレクターをキャンセル/閉じる、またはAI応答を中断',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - YOLO/Planモードを切替(サイクル: オフ → YOLO → YOLO+Plan → オフ)',
+			'Shift+Tab/Ctrl+Y - YOLO/Planモードを切替(サイクル: YOLO → YOLO+Plan → Plan → オフ)',
 		tipsTitle: '💡 ヒント:',
 		tipUseHelp: 'いつでも /help でこの情報を表示',
 		tipShowCommands: '/ を入力してすべての利用可能なコマンドを表示',
@@ -546,7 +546,8 @@ export const ja: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: 'コードの説明とデバッグヘルプを問い合わせ',
 		headerInterrupt: '応答中にESCで中断',
-		headerYolo: 'Shift+Tabを押す: YOLOを切替',
+		headerYolo:
+			'Shift+Tab/Ctrl+Yを押す: YOLO/Planモードを切替(サイクル: YOLO → YOLO+Plan → Plan → オフ)',
 		headerShortcuts:
 			"ショートカット: Ctrl+L (先頭まで削除) • Ctrl+R (末尾まで削除) • {pasteKey} (画像貼付) • '@' (ファイル) • '@@' (内容検索) • '#' (サブエージェント) • '/' (コマンド)",
 		headerWorkingDirectory: '作業ディレクトリ: {directory}',
@@ -661,7 +662,7 @@ export const ja: TranslationKeys = {
 		shortcutDeleteToEnd: '末尾まで削除',
 		shortcutCancel: 'キャンセル (ESC)',
 		shortcutRegenerate: '再生成 (Ctrl+R)',
-		shortcutToggleYolo: 'YOLOを切替 (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'YOLO/Planを切替 (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'ロールバックを確認',
 		rollbackFiles: 'ファイルをロールバック',

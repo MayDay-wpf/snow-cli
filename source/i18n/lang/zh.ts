@@ -365,7 +365,7 @@ export const zh: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - 从光标删除到开头(旧版)',
 		deleteToEnd: 'Ctrl+R - 从光标删除到末尾(旧版)',
 		pasteImages: '{pasteKey} - 从剪贴板粘贴图片',
-		readlineTitle: '⌨️ Readline 快捷键:',
+		readlineTitle: '🚀 Readline 快捷键:',
 		moveToLineStart: 'Ctrl+A - 移动到行首',
 		moveToLineEnd: 'Ctrl+E - 移动到行尾',
 		forwardWord: 'Alt+F - 向前移动一个词',
@@ -384,7 +384,7 @@ export const zh: TranslationKeys = {
 		selectItem: 'Tab/Enter - 在选择器中选择项目',
 		cancelClose: 'ESC - 取消/关闭选择器或中断 AI 响应',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - 切换 YOLO/Plan 模式(循环: 关闭 → YOLO → YOLO+Plan → 关闭)',
+			'Shift+Tab/Ctrl+Y - 切换 YOLO/Plan 模式(循环: YOLO → YOLO+Plan → Plan → 关闭)',
 		tipsTitle: '💡 提示:',
 		tipUseHelp: '随时使用 /help 查看此信息',
 		tipShowCommands: '输入 / 查看所有可用命令',
@@ -530,7 +530,7 @@ export const zh: TranslationKeys = {
 		headerExplanations: '询问代码说明和调试帮助',
 		headerInterrupt: '在响应期间按 ESC 中断',
 		headerYolo:
-			'按 Shift+Tab/Ctrl+Y: 切换 YOLO/Plan 模式(循环: 关闭 → YOLO → YOLO+Plan → 关闭)',
+			'按 Shift+Tab/Ctrl+Y: 切换 YOLO/Plan 模式(循环: YOLO → YOLO+Plan → Plan → 关闭)',
 		headerShortcuts:
 			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目录: {directory}',
@@ -643,7 +643,7 @@ export const zh: TranslationKeys = {
 		shortcutDeleteToEnd: '删除至末尾',
 		shortcutCancel: '取消 (ESC)',
 		shortcutRegenerate: '重新生成 (Ctrl+R)',
-		shortcutToggleYolo: '切换 YOLO (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: '切换 YOLO/Plan (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '确认回滚',
 		rollbackFiles: '回滚文件',

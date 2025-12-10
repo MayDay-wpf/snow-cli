@@ -370,7 +370,7 @@ export const ko: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - 커서에서 시작까지 삭제(레거시)',
 		deleteToEnd: 'Ctrl+R - 커서에서 끝까지 삭제(레거시)',
 		pasteImages: '{pasteKey} - 클립보드에서 이미지 붙여넣기',
-		readlineTitle: '⌨️ Readline 단축키:',
+		readlineTitle: '🚀 Readline 단축키:',
 		moveToLineStart: 'Ctrl+A - 줄 시작으로 이동',
 		moveToLineEnd: 'Ctrl+E - 줄 끝으로 이동',
 		forwardWord: 'Alt+F - 다음 단어로 이동',
@@ -389,7 +389,7 @@ export const ko: TranslationKeys = {
 		selectItem: 'Tab/Enter - 선택기에서 항목 선택',
 		cancelClose: 'ESC - 선택기 취소/닫기 또는 AI 응답 중단',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - YOLO/Plan 모드 토글(순환: 끄기 → YOLO → YOLO+Plan → 끄기)',
+			'Shift+Tab/Ctrl+Y - YOLO/Plan 모드 토글(순환: YOLO → YOLO+Plan → Plan → 끄기)',
 		tipsTitle: '💡 팁:',
 		tipUseHelp: '언제든지 /help로 이 정보 보기',
 		tipShowCommands: '/ 입력하여 모든 사용 가능한 명령 보기',
@@ -536,7 +536,8 @@ export const ko: TranslationKeys = {
 		headerSubtitle: '❆ SNOW AI CLI',
 		headerExplanations: '코드 설명 및 디버그 도움 요청',
 		headerInterrupt: '응답 중 ESC로 중단',
-		headerYolo: 'Shift+Tab 누르기: YOLO 토글',
+		headerYolo:
+			'Shift+Tab/Ctrl+Y 누르기: YOLO/Plan 모드 토글(순환: YOLO → YOLO+Plan → Plan → 끄기)',
 		headerShortcuts:
 			"단축키: Ctrl+L (시작까지 삭제) • Ctrl+R (끝까지 삭제) • {pasteKey} (이미지 붙여넣기) • '@' (파일) • '@@' (내용 검색) • '#' (하위 에이전트) • '/' (명령)",
 		headerWorkingDirectory: '작업 디렉토리: {directory}',
@@ -649,7 +650,7 @@ export const ko: TranslationKeys = {
 		shortcutDeleteToEnd: '끝까지 삭제',
 		shortcutCancel: '취소 (ESC)',
 		shortcutRegenerate: '재생성 (Ctrl+R)',
-		shortcutToggleYolo: 'YOLO 토글 (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'YOLO/Plan 토글 (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '롤백 확인',
 		rollbackFiles: '파일 롤백',
