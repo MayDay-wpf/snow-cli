@@ -204,41 +204,37 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Shift+Tab - Toggle YOLO modes in cycle: All Off -> YOLO -> YOLO+Plan -> All Off
+		// Shift+Tab - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
 		if (key.shift && key.tab) {
-			if (!yoloMode && !planMode) {
-				// All off -> YOLO only
-				setYoloMode(true);
-			} else if (yoloMode && !planMode) {
+			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 			} else if (yoloMode && planMode) {
-				// YOLO + Plan -> All off
+				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-				setPlanMode(false);
 			} else if (!yoloMode && planMode) {
-				// Plan only (edge case) -> YOLO only
+				// Plan only -> All off
 				setPlanMode(false);
+			} else if (!yoloMode && !planMode) {
+				// All off -> YOLO only
 				setYoloMode(true);
 			}
 			return;
 		}
 
-		// Ctrl+Y - Toggle YOLO modes in cycle: All Off -> YOLO -> YOLO+Plan -> All Off
+		// Ctrl+Y - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
 		if (key.ctrl && input === 'y') {
-			if (!yoloMode && !planMode) {
-				// All off -> YOLO only
-				setYoloMode(true);
-			} else if (yoloMode && !planMode) {
+			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 			} else if (yoloMode && planMode) {
-				// YOLO + Plan -> All off
+				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-				setPlanMode(false);
 			} else if (!yoloMode && planMode) {
-				// Plan only (edge case) -> YOLO only
+				// Plan only -> All off
 				setPlanMode(false);
+			} else if (!yoloMode && !planMode) {
+				// All off -> YOLO only
 				setYoloMode(true);
 			}
 			return;
