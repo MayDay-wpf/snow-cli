@@ -13,6 +13,8 @@ import AskUserQuestion from '../components/AskUserQuestion.js';
 import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
 import ShimmerText from '../components/ShimmerText.js';
 import MessageRenderer from '../components/MessageRenderer.js';
+import StatusLine from '../components/StatusLine.js';
+import SimpleModeLogo from '../components/SimpleModeLogo.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
@@ -32,6 +34,7 @@ import {
 	type SkillLocation,
 } from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSimpleMode} from '../../utils/config/themeConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
@@ -110,6 +113,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		} catch {
 			return false;
 		}
+	});
+	const [simpleMode, setSimpleMode] = useState(() => {
+		// Load simple mode from config
+		return getSimpleMode();
 	});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
@@ -399,6 +406,18 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			// Ignore localStorage errors
 		}
 	}, [planMode]);
+
+	// Sync simple mode from config periodically to reflect theme settings changes
+	useEffect(() => {
+		const interval = setInterval(() => {
+			const currentSimpleMode = getSimpleMode();
+			if (currentSimpleMode !== simpleMode) {
+				setSimpleMode(currentSimpleMode);
+			}
+		}, 1000); // Check every second
+
+		return () => clearInterval(interval);
+	}, [simpleMode]);
 
 	// Clear restore input content after it's been used
 	useEffect(() => {
@@ -1691,31 +1710,52 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							width={terminalWidth - 2}
 						>
 							<Box flexDirection="column">
-								<Text color="white" bold>
-									<Text color="cyan">❆ </Text>
-									<Gradient name="rainbow">{t.chatScreen.headerTitle}</Gradient>
-									<Text color="white"> ⛇</Text>
-								</Text>
-								<Text>• {t.chatScreen.headerExplanations}</Text>
-								<Text>• {t.chatScreen.headerInterrupt}</Text>
-								<Text>• {t.chatScreen.headerYolo}</Text>
-								<Text>
-									{(() => {
-										const pasteKey =
-											process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
-										return `• ${t.chatScreen.headerShortcuts.replace(
-											'{pasteKey}',
-											pasteKey,
-										)}`;
-									})()}
-								</Text>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									•{' '}
-									{t.chatScreen.headerWorkingDirectory.replace(
-										'{directory}',
-										workingDirectory,
-									)}
-								</Text>
+								{simpleMode ? (
+									<>
+										{/* Simple mode: Show responsive ASCII art title */}
+										<SimpleModeLogo
+											terminalWidth={terminalWidth}
+											logoGradient={theme.colors.logoGradient}
+										/>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											{t.chatScreen.headerWorkingDirectory.replace(
+												'{directory}',
+												workingDirectory,
+											)}
+										</Text>
+									</>
+								) : (
+									<>
+										{/* Normal mode: Show compact title with gradient */}
+										<Text color="white" bold>
+											<Text color="cyan">❆ </Text>
+											<Gradient name="rainbow">
+												{t.chatScreen.headerTitle}
+											</Gradient>
+											<Text color="white"> ⛇</Text>
+										</Text>
+										<Text>• {t.chatScreen.headerExplanations}</Text>
+										<Text>• {t.chatScreen.headerInterrupt}</Text>
+										<Text>• {t.chatScreen.headerYolo}</Text>
+										<Text>
+											{(() => {
+												const pasteKey =
+													process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+												return `• ${t.chatScreen.headerShortcuts.replace(
+													'{pasteKey}',
+													pasteKey,
+												)}`;
+											})()}
+										</Text>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											•{' '}
+											{t.chatScreen.headerWorkingDirectory.replace(
+												'{directory}',
+												workingDirectory,
+											)}
+										</Text>
+									</>
+								)}
 							</Box>
 						</Box>
 					</Box>,
@@ -2062,84 +2102,31 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							initialContent={restoreInputContent}
 							onContextPercentageChange={setCurrentContextPercentage}
 						/>
-						{/* IDE connection status indicator */}
-						{(vscodeState.vscodeConnectionStatus === 'connecting' ||
-							vscodeState.vscodeConnectionStatus === 'connected' ||
-							vscodeState.vscodeConnectionStatus === 'error') && (
-							<Box marginTop={1} paddingX={1}>
-								<Text
-									color={
-										vscodeState.vscodeConnectionStatus === 'connecting'
-											? 'yellow'
-											: vscodeState.vscodeConnectionStatus === 'error'
-											? 'gray'
-											: 'green'
-									}
-									dimColor
-								>
-									{vscodeState.vscodeConnectionStatus === 'connecting' ? (
-										<>
-											<Spinner type="dots" /> {t.chatScreen.ideConnecting}
-										</>
-									) : vscodeState.vscodeConnectionStatus === 'error' ? (
-										<>○ {t.chatScreen.ideError}</>
-									) : (
-										<>
-											● {t.chatScreen.ideConnected}
-											{vscodeState.editorContext.activeFile &&
-												t.chatScreen.ideActiveFile.replace(
-													'{file}',
-													vscodeState.editorContext.activeFile,
-												)}
-											{vscodeState.editorContext.selectedText &&
-												t.chatScreen.ideSelectedText.replace(
-													'{count}',
-													vscodeState.editorContext.selectedText.length.toString(),
-												)}
-										</>
-									)}
-								</Text>
-							</Box>
-						)}
-						{/* Codebase indexing status indicator */}
-						{codebaseIndexing && codebaseProgress && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="cyan" dimColor>
-									<Spinner type="dots" />{' '}
-									{t.chatScreen.codebaseIndexing
-										.replace(
-											'{processed}',
-											codebaseProgress.processedFiles.toString(),
-										)
-										.replace('{total}', codebaseProgress.totalFiles.toString())}
-									{codebaseProgress.totalChunks > 0 &&
-										` (${t.chatScreen.codebaseProgress.replace(
-											'{chunks}',
-											codebaseProgress.totalChunks.toString(),
-										)})`}
-								</Text>
-							</Box>
-						)}
-						{/* File watcher status indicator */}
-						{!codebaseIndexing && watcherEnabled && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="green" dimColor>
-									☉ {t.chatScreen.statusWatcherActive}
-								</Text>
-							</Box>
-						)}
-						{/* File update notification */}
-						{fileUpdateNotification && (
-							<Box marginTop={1} paddingX={1}>
-								<Text color="yellow" dimColor>
-									⛁{' '}
-									{t.chatScreen.statusFileUpdated.replace(
-										'{file}',
-										fileUpdateNotification.file,
-									)}
-								</Text>
-							</Box>
-						)}
+						{/* Unified status line component */}
+						<StatusLine
+							yoloMode={yoloMode}
+							planMode={planMode}
+							vscodeConnectionStatus={vscodeState.vscodeConnectionStatus}
+							editorContext={vscodeState.editorContext}
+							contextUsage={
+								streamingState.contextUsage
+									? {
+											inputTokens: streamingState.contextUsage.prompt_tokens,
+											maxContextTokens:
+												getOpenAiConfig().maxContextTokens || 4000,
+											cacheCreationTokens:
+												streamingState.contextUsage.cache_creation_input_tokens,
+											cacheReadTokens:
+												streamingState.contextUsage.cache_read_input_tokens,
+											cachedTokens: streamingState.contextUsage.cached_tokens,
+									  }
+									: undefined
+							}
+							codebaseIndexing={codebaseIndexing}
+							codebaseProgress={codebaseProgress}
+							watcherEnabled={watcherEnabled}
+							fileUpdateNotification={fileUpdateNotification}
+						/>
 					</>
 				)}
 

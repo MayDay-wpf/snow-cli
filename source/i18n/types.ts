@@ -328,6 +328,10 @@ export type TranslationKeys = {
 		preview: string;
 		back: string;
 		backInfo: string;
+		simpleMode: string;
+		simpleModeInfo: string;
+		enabled: string;
+		disabled: string;
 		darkTheme: string;
 		darkThemeInfo: string;
 		lightTheme: string;
@@ -547,7 +551,9 @@ export type TranslationKeys = {
 		statusWorking: string;
 		statusIndexing: string;
 		statusWatcherActive: string;
+		statusWatcherActiveShort: string;
 		statusFileUpdated: string;
+		statusFileUpdatedShort: string;
 		statusCreating: string;
 		statusSaving: string;
 		statusCompressing: string;
@@ -620,6 +626,7 @@ export type TranslationKeys = {
 		retryError: string;
 		// Codebase
 		codebaseIndexing: string;
+		codebaseIndexingShort: string;
 		codebaseProgress: string;
 		codebaseChunks: string;
 		codebaseSearching: string;
@@ -754,6 +761,51 @@ export type TranslationKeys = {
 		selectPrompt: string;
 		enterResponse: string;
 		keyboardHints: string;
+	};
+	toolConfirmation: {
+		header: string;
+		tool: string;
+		tools: string;
+		toolsInParallel: string;
+		sensitiveCommandDetected: string;
+		pattern: string;
+		reason: string;
+		requiresConfirmation: string;
+		arguments: string;
+		selectAction: string;
+		enterRejectionReason: string;
+		pressEnterToSubmit: string;
+		confirmed: string;
+		approveOnce: string;
+		alwaysApprove: string;
+		rejectWithReply: string;
+		rejectEndSession: string;
+	};
+	usagePanel: {
+		title: string;
+		granularity: {
+			last24h: string;
+			last7d: string;
+			last30d: string;
+			last12m: string;
+		};
+		chart: {
+			noData: string;
+			usage: string;
+			cacheHit: string;
+			cacheCreate: string;
+			moreAbove: string;
+			in: string;
+			out: string;
+			hit: string;
+			create: string;
+			total: string;
+			moreBelow: string;
+		};
+		loading: string;
+		error: string;
+		tabToSwitch: string;
+		noDataForPeriod: string;
 	};
 };
 

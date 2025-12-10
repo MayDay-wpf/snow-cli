@@ -34,6 +34,7 @@ const colorKeys: ColorKey[] = [
 	'error',
 	'warning',
 	'success',
+	'logoGradient',
 ];
 
 const sampleOldCode = `function greet(name) {
@@ -96,7 +97,11 @@ export default function CustomThemeScreen({onBack}: Props) {
 			} else {
 				const key = value as ColorKey;
 				setEditingKey(key);
-				setEditValue(colors[key]);
+				// Handle array type for logoGradient
+				const colorValue = colors[key];
+				setEditValue(
+					Array.isArray(colorValue) ? colorValue.join(', ') : colorValue,
+				);
 			}
 		},
 		[colors, onBack, setThemeType, refreshCustomTheme],
@@ -108,10 +113,19 @@ export default function CustomThemeScreen({onBack}: Props) {
 
 	const handleEditSubmit = useCallback(() => {
 		if (editingKey && editValue.trim()) {
-			setColors(prev => ({
-				...prev,
-				[editingKey]: editValue.trim(),
-			}));
+			setColors(prev => {
+				const newValue =
+					editingKey === 'logoGradient'
+						? (editValue
+								.split(',')
+								.map(v => v.trim())
+								.filter(v => v) as [string, string, string])
+						: editValue.trim();
+				return {
+					...prev,
+					[editingKey]: newValue,
+				};
+			});
 		}
 		setEditingKey(null);
 		setEditValue('');
@@ -136,7 +150,11 @@ export default function CustomThemeScreen({onBack}: Props) {
 				</Text>
 				<Box marginTop={1}>
 					<Text>{t.customTheme?.currentValue || 'Current'}: </Text>
-					<Text color={colors[editingKey]}>{colors[editingKey]}</Text>
+					<Text>
+						{Array.isArray(colors[editingKey])
+							? (colors[editingKey] as [string, string, string]).join(', ')
+							: colors[editingKey]}
+					</Text>
 				</Box>
 				<Box marginTop={1}>
 					<Text>{t.customTheme?.newValue || 'New value'}: </Text>

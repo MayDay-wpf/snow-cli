@@ -9,10 +9,11 @@ const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');
 interface ThemeConfig {
 	theme: ThemeType;
 	customColors?: ThemeColors;
+	simpleMode?: boolean;
 }
-
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'dark',
+	simpleMode: false,
 };
 
 function ensureConfigDirectory(): void {
@@ -89,4 +90,20 @@ export function getCustomColors(): ThemeColors | undefined {
 export function saveCustomColors(colors: ThemeColors): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, customColors: colors});
+}
+
+/**
+ * Get simple mode setting
+ */
+export function getSimpleMode(): boolean {
+	const config = loadThemeConfig();
+	return config.simpleMode ?? false;
+}
+
+/**
+ * Set simple mode and persist to file system
+ */
+export function setSimpleMode(simpleMode: boolean): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, simpleMode});
 }
