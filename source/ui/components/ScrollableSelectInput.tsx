@@ -76,12 +76,13 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				return 0;
 			}
 
+			// 循环导航:小于 0 → 跳到最后一项,大于最后一项 → 跳到第一项
 			if (value < 0) {
-				return 0;
+				return totalItems - 1;
 			}
 
 			if (value > totalItems - 1) {
-				return totalItems - 1;
+				return 0;
 			}
 
 			return value;
@@ -158,16 +159,32 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 			}
 
 			setCursor(previousCursor => {
-				const nextCursor = clampCursor(previousCursor + direction);
+				const rawNext = previousCursor + direction;
+				const nextCursor = clampCursor(rawNext);
 				if (nextCursor === previousCursor) {
 					return previousCursor;
 				}
 
-				setOffset(previousOffset => computeOffset(previousOffset, nextCursor));
+				// 检测是否发生循环跳转
+				const isWrapping = (direction === -1 && rawNext < 0) || (direction === 1 && rawNext > totalItems - 1);
+
+				if (isWrapping) {
+					// 循环时直接设置偏移到正确位置
+					if (nextCursor === 0) {
+						// 跳到第一项，偏移设为 0
+						setOffset(0);
+					} else {
+						// 跳到最后一项，偏移设为最大值
+						const maxOffset = Math.max(0, totalItems - windowSize);
+						setOffset(maxOffset);
+					}
+				} else {
+					setOffset(previousOffset => computeOffset(previousOffset, nextCursor));
+				}
 				return nextCursor;
 			});
 		},
-		[clampCursor, computeOffset, totalItems]
+		[clampCursor, computeOffset, totalItems, windowSize]
 	);
 
 	const selectIndex = useCallback(

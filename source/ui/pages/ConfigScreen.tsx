@@ -26,6 +26,7 @@ import {
 } from '../../utils/config/configManager.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import ScrollableSelectInput from '../components/ScrollableSelectInput.js';
 
 type Props = {
 	onBack: () => void;
@@ -1603,14 +1604,19 @@ export default function ConfigScreen({
 										Scroll to see more profiles (↑↓)
 									</Text>
 								)}
-								<Select
-									options={profiles.map(p => ({
+								<ScrollableSelectInput
+									items={profiles.map(p => ({
 										label: `${p.displayName}${p.isActive ? ' (Active)' : ''}`,
 										value: p.name,
 									}))}
-									defaultValue={activeProfile}
-									onChange={value => {
-										switchProfile(value);
+									limit={5}
+									initialIndex={Math.max(
+										0,
+										profiles.findIndex(p => p.name === activeProfile),
+									)}
+									isFocused={true}
+									onSelect={item => {
+										switchProfile(item.value);
 										loadProfilesAndConfig();
 										setIsEditing(false);
 										setErrors([]);
