@@ -20,6 +20,8 @@ import {
 
 type Props = {
 	onBack: () => void;
+	defaultScopeIndex?: number;
+	onScopeSelectionPersist?: (index: number) => void;
 };
 
 type Screen =
@@ -32,7 +34,7 @@ type Screen =
 type RuleField = 'description' | 'matcher';
 type ActionField = 'enabled' | 'type' | 'command' | 'prompt' | 'timeout';
 
-export default function HooksConfigScreen({onBack}: Props) {
+export default function HooksConfigScreen({onBack, defaultScopeIndex = 0, onScopeSelectionPersist}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
@@ -44,6 +46,14 @@ export default function HooksConfigScreen({onBack}: Props) {
 	const [selectedRuleIndex, setSelectedRuleIndex] = useState<number>(-1);
 	const [editingRule, setEditingRule] = useState<HookRule | null>(null);
 	const [selectedHookInfo, setSelectedHookInfo] = useState('');
+
+	// Track the scope menu index for persistence
+	const [scopeMenuIndex, setScopeMenuIndex] = useState(defaultScopeIndex);
+
+	// Sync with parent's defaultScopeIndex when it changes
+	React.useEffect(() => {
+		setScopeMenuIndex(defaultScopeIndex);
+	}, [defaultScopeIndex]);
 
 	// 规则编辑状态
 	const [editingRuleField, setEditingRuleField] = useState<RuleField | null>(
@@ -133,6 +143,7 @@ export default function HooksConfigScreen({onBack}: Props) {
 			<>
 				<Menu
 					options={options}
+					defaultIndex={scopeMenuIndex}
 					onSelect={value => {
 						if (value === 'back') {
 							onBack();
@@ -141,8 +152,14 @@ export default function HooksConfigScreen({onBack}: Props) {
 							setScreen('hook-list');
 						}
 					}}
-					onSelectionChange={infoText => {
+					onSelectionChange={(infoText, value) => {
 						setSelectedHookInfo(infoText);
+						// Find index and persist
+						const index = options.findIndex(opt => opt.value === value);
+						if (index !== -1) {
+							setScopeMenuIndex(index);
+							onScopeSelectionPersist?.(index);
+						}
 					}}
 				/>
 				{selectedHookInfo && (

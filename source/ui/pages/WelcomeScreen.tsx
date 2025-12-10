@@ -45,6 +45,8 @@ const HooksConfigScreen = React.lazy(() => import('./HooksConfigScreen.js'));
 type Props = {
 	version?: string;
 	onMenuSelect?: (value: string) => void;
+	defaultMenuIndex?: number;
+	onMenuSelectionPersist?: (index: number) => void;
 };
 
 type InlineView =
@@ -65,6 +67,8 @@ type InlineView =
 export default function WelcomeScreen({
 	version = '1.0.0',
 	onMenuSelect,
+	defaultMenuIndex = 0,
+	onMenuSelectionPersist,
 }: Props) {
 	const {t} = useI18n();
 	const [infoText, setInfoText] = useState(t.welcome.startChatInfo);
@@ -73,6 +77,19 @@ export default function WelcomeScreen({
 	const {columns: terminalWidth} = useTerminalSize();
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
+
+	// Local state for menu index, synced with parent's defaultMenuIndex
+	const [currentMenuIndex, setCurrentMenuIndex] = useState(defaultMenuIndex);
+
+	// Track sub-menu indices for persistence
+	const [subAgentListIndex, setSubAgentListIndex] = useState(0);
+	const [hooksConfigIndex, setHooksConfigIndex] = useState(0);
+
+	// Sync with parent's defaultMenuIndex when it changes
+	useEffect(() => {
+		setCurrentMenuIndex(defaultMenuIndex);
+	}, [defaultMenuIndex]);
+
 	const menuOptions = useMemo(
 		() => [
 			{
@@ -154,12 +171,25 @@ export default function WelcomeScreen({
 
 	const [remountKey, setRemountKey] = useState(0);
 
-	const handleSelectionChange = useCallback((newInfoText: string) => {
+	const handleSelectionChange = useCallback((newInfoText: string, value: string) => {
 		setInfoText(newInfoText);
-	}, []);
+		// Find the index of the selected option and persist it
+		const index = menuOptions.findIndex(opt => opt.value === value);
+		if (index !== -1) {
+			setCurrentMenuIndex(index);
+			onMenuSelectionPersist?.(index);
+		}
+	}, [menuOptions, onMenuSelectionPersist]);
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {
+			// Persist the selected index before navigating
+			const index = menuOptions.findIndex(opt => opt.value === value);
+			if (index !== -1) {
+				setCurrentMenuIndex(index);
+				onMenuSelectionPersist?.(index);
+			}
+
 			// Handle inline views (config, proxy, codebase, subagent) or pass through to parent
 			if (value === 'config') {
 				setInlineView('config');
@@ -186,7 +216,7 @@ export default function WelcomeScreen({
 				onMenuSelect?.(value);
 			}
 		},
-		[onMenuSelect],
+		[onMenuSelect, menuOptions, onMenuSelectionPersist],
 	);
 
 	const handleBackToMenu = useCallback(() => {
@@ -284,6 +314,7 @@ export default function WelcomeScreen({
 							options={menuOptions}
 							onSelect={handleInlineMenuSelect}
 							onSelectionChange={handleSelectionChange}
+							defaultIndex={currentMenuIndex}
 						/>
 					</Box>
 				</Box>
@@ -336,6 +367,8 @@ export default function WelcomeScreen({
 							onAdd={handleSubAgentAdd}
 							onEdit={handleSubAgentEdit}
 							inlineMode={true}
+							defaultSelectedIndex={subAgentListIndex}
+							onSelectionPersist={setSubAgentListIndex}
 						/>
 					</Box>
 				</Suspense>
@@ -390,7 +423,11 @@ export default function WelcomeScreen({
 			{inlineView === 'hooks-config' && (
 				<Suspense fallback={loadingFallback}>
 					<Box paddingX={1}>
-						<HooksConfigScreen onBack={handleBackToMenu} />
+						<HooksConfigScreen
+							onBack={handleBackToMenu}
+							defaultScopeIndex={hooksConfigIndex}
+							onScopeSelectionPersist={setHooksConfigIndex}
+						/>
 					</Box>
 				</Suspense>
 			)}
