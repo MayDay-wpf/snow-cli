@@ -427,6 +427,7 @@ export const zh: TranslationKeys = {
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
+		exitingApplication: '正在安全退出...',
 	},
 	hooksConfig: {
 		title: 'Hooks 配置',

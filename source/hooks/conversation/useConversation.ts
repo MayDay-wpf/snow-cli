@@ -240,6 +240,7 @@ export async function handleConversationWithTools(
 			let receivedThinking:
 				| {type: 'thinking'; thinking: string; signature?: string}
 				| undefined; // Accumulate thinking content from all platforms
+			let receivedReasoningContent: string | undefined; // DeepSeek R1 reasoning content
 			let hasStartedReasoning = false; // Track if reasoning has started (for Gemini thinking)
 
 			// Stream AI response - choose API based on config
@@ -385,9 +386,15 @@ export async function handleConversationWithTools(
 				} else if (chunk.type === 'reasoning_data' && chunk.reasoning) {
 					// Capture reasoning data from Responses API
 					receivedReasoning = chunk.reasoning;
-				} else if (chunk.type === 'done' && (chunk as any).thinking) {
-					// Capture thinking content from Anthropic only (includes signature)
-					receivedThinking = (chunk as any).thinking;
+				} else if (chunk.type === 'done') {
+					// Capture thinking content from Anthropic (includes signature)
+					if ((chunk as any).thinking) {
+						receivedThinking = (chunk as any).thinking;
+					}
+					// Capture reasoning content from DeepSeek R1 models
+					if ((chunk as any).reasoning_content) {
+						receivedReasoningContent = (chunk as any).reasoning_content;
+					}
 				} else if (chunk.type === 'usage' && chunk.usage) {
 					// Capture usage information both in state and locally
 					setContextUsage(chunk.usage);
@@ -458,6 +465,7 @@ export async function handleConversationWithTools(
 					})),
 					reasoning: receivedReasoning, // Include reasoning data for caching (Responses API)
 					thinking: receivedThinking, // Include thinking content (Anthropic/OpenAI)
+					reasoning_content: receivedReasoningContent, // Include reasoning content (DeepSeek R1)
 				} as any;
 				conversationMessages.push(assistantMessage);
 
@@ -989,6 +997,58 @@ export async function handleConversationWithTools(
 									}
 								}
 
+								// For filesystem tools, extract diff data to display DiffViewer
+								let fileToolData: any = undefined;
+								if (
+									!isError &&
+									(msg.tool_name === 'filesystem-create' ||
+										msg.tool_name === 'filesystem-edit' ||
+										msg.tool_name === 'filesystem-edit_search')
+								) {
+									try {
+										const resultData = JSON.parse(msg.content);
+
+										// Handle different result formats
+										if (resultData.content) {
+											// filesystem-create result
+											fileToolData = {
+												name: msg.tool_name,
+												arguments: {
+													content: resultData.content,
+													path: resultData.path || resultData.filename,
+												},
+											};
+										} else if (resultData.oldContent && resultData.newContent) {
+											// Single file edit result
+											fileToolData = {
+												name: msg.tool_name,
+												arguments: {
+													oldContent: resultData.oldContent,
+													newContent: resultData.newContent,
+													filename: resultData.path || resultData.filename,
+													completeOldContent: resultData.completeOldContent,
+													completeNewContent: resultData.completeNewContent,
+													contextStartLine: resultData.contextStartLine,
+												},
+											};
+										} else if (
+											resultData.batchResults &&
+											Array.isArray(resultData.batchResults)
+										) {
+											// Batch edit results
+											fileToolData = {
+												name: msg.tool_name,
+												arguments: {
+													isBatch: true,
+													batchResults: resultData.batchResults,
+												},
+											};
+										}
+									} catch (e) {
+										// If parsing fails, just show regular result
+									}
+								}
+
 								// Create completed tool result message for UI
 								const uiMsg = {
 									role: 'subagent' as const,
@@ -1001,6 +1061,8 @@ export async function handleConversationWithTools(
 												name: msg.tool_name,
 												arguments: terminalResultData,
 										  }
+										: fileToolData
+										? fileToolData
 										: undefined,
 									subAgent: {
 										agentId: subAgentMessage.agentId,
@@ -1562,6 +1624,7 @@ export async function handleConversationWithTools(
 					content: streamedContent.trim(),
 					reasoning: receivedReasoning, // Include reasoning data for caching (Responses API)
 					thinking: receivedThinking, // Include thinking content (Anthropic/OpenAI)
+					reasoning_content: receivedReasoningContent, // Include reasoning content (DeepSeek R1)
 				};
 				conversationMessages.push(assistantMessage);
 				saveMessage(assistantMessage).catch(error => {

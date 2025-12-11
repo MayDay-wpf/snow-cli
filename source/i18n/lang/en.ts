@@ -454,6 +454,7 @@ export const en: TranslationKeys = {
 	},
 	hooks: {
 		pressCtrlCAgain: 'Press Ctrl+C again to exit',
+		exitingApplication: 'Exiting safely...',
 	},
 	hooksConfig: {
 		title: 'Hooks Configuration',

@@ -479,6 +479,7 @@ export const es: TranslationKeys = {
 	},
 	hooks: {
 		pressCtrlCAgain: 'Presiona Ctrl+C nuevamente para salir',
+		exitingApplication: 'Saliendo de forma segura...',
 	},
 	hooksConfig: {
 		title: 'Configuración de Hooks',

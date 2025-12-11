@@ -560,19 +560,53 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		>();
 	// Handle quit command - clean up resources and exit application
 	const handleQuit = async () => {
-		// Stop codebase indexing agent
-		if (codebaseAgentRef.current) {
-			await codebaseAgentRef.current.stop();
-			codebaseAgentRef.current.stopWatching();
-		}
+		// Show exiting message
+		setMessages(prev => [
+			...prev,
+			{
+				role: 'command',
+				content: t.hooks.exitingApplication,
+			},
+		]);
 
-		// Stop VSCode connection
-		if (vscodeConnection.isConnected() || vscodeConnection.isClientRunning()) {
-			vscodeConnection.stop();
-		}
+		// 设置超时机制，防止卡死
+		const quitTimeout = setTimeout(() => {
+			// 超时后强制退出
+			process.exit(0);
+		}, 3000); // 3秒超时
 
-		// Exit the application
-		exit();
+		try {
+			// Stop codebase indexing agent with timeout
+			if (codebaseAgentRef.current) {
+				const agent = codebaseAgentRef.current;
+				await Promise.race([
+					(async () => {
+						await agent.stop();
+						agent.stopWatching();
+					})(),
+					new Promise(resolve => setTimeout(resolve, 2000)), // 2秒超时
+				]);
+			}
+
+			// Stop VSCode connection (同步操作，不需要超时)
+			if (
+				vscodeConnection.isConnected() ||
+				vscodeConnection.isClientRunning()
+			) {
+				vscodeConnection.stop();
+			}
+
+			// 清除超时计时器
+			clearTimeout(quitTimeout);
+
+			// Exit the application
+			exit();
+		} catch (error) {
+			// 出现错误时也要清除超时计时器
+			clearTimeout(quitTimeout);
+			// 强制退出
+			process.exit(0);
+		}
 	};
 
 	// Handle reindex codebase command

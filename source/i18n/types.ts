@@ -432,6 +432,7 @@ export type TranslationKeys = {
 	// Hooks
 	hooks: {
 		pressCtrlCAgain: string;
+		exitingApplication: string;
 	};
 	// Hooks Config
 	hooksConfig: {

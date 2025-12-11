@@ -36,6 +36,8 @@ export interface ChatMessage {
 		thinking: string; // Accumulated thinking text
 		signature?: string; // Required signature for verification
 	};
+	// DeepSeek R1 Reasoning Content - complete reasoning chain
+	reasoning_content?: string; // Complete reasoning content from DeepSeek R1 models
 }
 
 export interface ChatCompletionTool {

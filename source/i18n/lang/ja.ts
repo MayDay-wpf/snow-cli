@@ -443,6 +443,7 @@ export const ja: TranslationKeys = {
 	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+Cをもう一度押して終了',
+		exitingApplication: '安全に終了しています...',
 	},
 	hooksConfig: {
 		title: 'Hooks設定',

@@ -141,10 +141,15 @@ function convertToOpenAIMessages(
 		};
 
 		if (msg.role === 'assistant' && msg.tool_calls) {
-			return {
+			const result: any = {
 				...baseMessage,
 				tool_calls: msg.tool_calls,
-			} as ChatCompletionMessageParam;
+			};
+			// Include reasoning_content for DeepSeek R1 models
+			if ((msg as any).reasoning_content) {
+				result.reasoning_content = (msg as any).reasoning_content;
+			}
+			return result as ChatCompletionMessageParam;
 		}
 
 		if (msg.role === 'tool' && msg.tool_call_id) {
@@ -186,6 +191,14 @@ function convertToOpenAIMessages(
 				content: msg.content,
 				tool_call_id: msg.tool_call_id,
 			} as ChatCompletionMessageParam;
+		}
+
+		// Include reasoning_content for assistant messages (DeepSeek R1)
+		if (msg.role === 'assistant' && (msg as any).reasoning_content) {
+			return {
+				...baseMessage,
+				reasoning_content: (msg as any).reasoning_content,
+			} as any;
 		}
 
 		return baseMessage as ChatCompletionMessageParam;
@@ -259,6 +272,7 @@ export interface StreamChunk {
 	}>;
 	delta?: string; // For tool call streaming chunks or reasoning content
 	usage?: UsageInfo; // Token usage information
+	reasoning_content?: string; // Complete reasoning content for DeepSeek R1 models
 }
 /**
  * Parse Server-Sent Events (SSE) stream
@@ -422,7 +436,25 @@ export async function* createStreamingChatCompletion(
 				signal: abortSignal,
 			});
 
-			const response = await fetch(url, fetchOptions);
+			let response: Response;
+			try {
+				response = await fetch(url, fetchOptions);
+			} catch (error) {
+				// 捕获 fetch 底层错误（网络错误、连接超时等）
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+				throw new Error(
+					`OpenAI API fetch failed: ${errorMessage}\n` +
+						`URL: ${url}\n` +
+						`Model: ${requestBody.model}\n` +
+						`Error type: ${
+							error instanceof TypeError
+								? 'Network/Connection Error'
+								: 'Unknown Error'
+						}\n` +
+						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
+				);
+			}
 
 			if (!response.ok) {
 				const errorText = await response.text();
@@ -440,6 +472,7 @@ export async function* createStreamingChatCompletion(
 			let hasToolCalls = false;
 			let usageData: UsageInfo | undefined;
 			let reasoningStarted = false; // Track if reasoning has started
+			let reasoningContentBuffer = ''; // Accumulate complete reasoning content for saving
 			for await (const chunk of parseSSEStream(response.body.getReader())) {
 				if (abortSignal?.aborted) {
 					return;
@@ -477,6 +510,9 @@ export async function* createStreamingChatCompletion(
 				// Note: reasoning_content is NOT included in the response, only counted for tokens
 				const reasoningContent = (choice.delta as any)?.reasoning_content;
 				if (reasoningContent) {
+					// Accumulate reasoning content for saving to message
+					reasoningContentBuffer += reasoningContent;
+
 					// Emit reasoning_started event on first reasoning content
 					if (!reasoningStarted) {
 						reasoningStarted = true;
@@ -557,9 +593,10 @@ export async function* createStreamingChatCompletion(
 				};
 			}
 
-			// Signal completion
+			// Signal completion with reasoning content (for DeepSeek R1, etc.)
 			yield {
 				type: 'done',
+				reasoning_content: reasoningContentBuffer || undefined,
 			};
 		},
 		{

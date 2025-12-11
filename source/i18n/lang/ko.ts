@@ -433,6 +433,7 @@ export const ko: TranslationKeys = {
 	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+C를 다시 눌러 종료',
+		exitingApplication: '안전하게 종료 중...',
 	},
 	hooksConfig: {
 		title: 'Hooks 설정',

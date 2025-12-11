@@ -499,7 +499,25 @@ export async function* createStreamingResponse(
 				signal: abortSignal,
 			});
 
-			const response = await fetch(url, fetchOptions);
+			let response: Response;
+			try {
+				response = await fetch(url, fetchOptions);
+			} catch (error) {
+				// 捕获 fetch 底层错误（网络错误、连接超时等）
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+				throw new Error(
+					`OpenAI Responses API fetch failed: ${errorMessage}\n` +
+						`URL: ${url}\n` +
+						`Model: ${requestPayload.model}\n` +
+						`Error type: ${
+							error instanceof TypeError
+								? 'Network/Connection Error'
+								: 'Unknown Error'
+						}\n` +
+						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
+				);
+			}
 
 			if (!response.ok) {
 				const errorText = await response.text();
