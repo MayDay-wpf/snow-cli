@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Fixed some bugs, add complete Plan mode workflow, Skills added with tool restrictions
+            - Fixed some bugs, Enhance Codebase accuracy, add progressive recursive file search, add /reindex command to reload Codebase, internationalization and list self-loop enhancement.
             
             ### Installation
             ```bash
