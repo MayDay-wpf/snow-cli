@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {sessionManager} from '../../utils/session/sessionManager.js';
-import type {Message} from '../../ui/components/MessageList.js';
+import type {Message} from '../../ui/components/chat/MessageList.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 
 /**

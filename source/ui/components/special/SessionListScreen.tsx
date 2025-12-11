@@ -2,11 +2,11 @@ import React, {useState, useEffect, useMemo, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert} from '@inkjs/ui';
-import ScrollableSelectInput from './ScrollableSelectInput.js';
+import ScrollableSelectInput from '../common/ScrollableSelectInput.js';
 import {
 	sessionManager,
 	type SessionListItem,
-} from '../../utils/session/sessionManager.js';
+} from '../../../utils/session/sessionManager.js';
 
 type Props = {
 	onBack: () => void;

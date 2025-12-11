@@ -19,12 +19,12 @@ import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {formatTodoContext} from '../../utils/core/todoPreprocessor.js';
 import {unifiedHooksExecutor} from '../../utils/execution/unifiedHooksExecutor.js';
-import type {Message} from '../../ui/components/MessageList.js';
+import type {Message} from '../../ui/components/chat/MessageList.js';
 import {filterToolsBySensitivity} from '../../utils/execution/yoloPermissionChecker.js';
 import {formatToolCallMessage} from '../../utils/ui/messageFormatter.js';
 import {resourceMonitor} from '../../utils/core/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../../utils/config/toolDisplayConfig.js';
-import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,

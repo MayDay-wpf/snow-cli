@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import type { Message } from '../../ui/components/MessageList.js';
+import type {Message} from '../../ui/components/chat/MessageList.js';
 
 /**
  * Format messages to plain text for export
@@ -45,9 +45,10 @@ export function formatMessagesAsText(messages: Message[]): string {
 			lines.push('');
 			lines.push(`[TOOL CALL: ${message.toolCall.name}]`);
 			try {
-				const argsStr = typeof message.toolCall.arguments === 'string'
-					? message.toolCall.arguments
-					: JSON.stringify(message.toolCall.arguments, null, 2);
+				const argsStr =
+					typeof message.toolCall.arguments === 'string'
+						? message.toolCall.arguments
+						: JSON.stringify(message.toolCall.arguments, null, 2);
 				lines.push(argsStr);
 			} catch {
 				lines.push(String(message.toolCall.arguments));
@@ -126,7 +127,7 @@ export function formatMessagesAsText(messages: Message[]): string {
  */
 export async function exportMessagesToFile(
 	messages: Message[],
-	filePath: string
+	filePath: string,
 ): Promise<void> {
 	const textContent = formatMessagesAsText(messages);
 	await fs.writeFile(filePath, textContent, 'utf-8');

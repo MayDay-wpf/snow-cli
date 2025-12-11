@@ -7,8 +7,8 @@ import React, {
 } from 'react';
 import {Box, Text, useInput} from 'ink';
 import {Alert, Spinner} from '@inkjs/ui';
-import Menu from '../components/Menu.js';
-import DiffViewer from '../components/DiffViewer.js';
+import Menu from '../components/common/Menu.js';
+import DiffViewer from '../components/tools/DiffViewer.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';

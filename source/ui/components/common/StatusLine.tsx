@@ -1,9 +1,9 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
-import {getSimpleMode} from '../../utils/config/themeConfig.js';
+import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
 type VSCodeConnectionStatus =
 	| 'disconnected'

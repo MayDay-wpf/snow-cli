@@ -1,13 +1,13 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {TextInput} from '@inkjs/ui';
-import {useTheme} from '../contexts/ThemeContext.js';
-import {useI18n} from '../../i18n/I18nContext.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 import {
 	validateSkillName,
 	checkSkillExists,
 	type SkillLocation,
-} from '../../utils/commands/skills.js';
+} from '../../../utils/commands/skills.js';
 
 interface Props {
 	onSave: (

@@ -3,7 +3,7 @@ import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import {highlight} from 'cli-highlight';
 import readline from 'readline';
-import {type Message} from '../components/MessageList.js';
+import {type Message} from '../components/chat/MessageList.js';
 import {handleConversationWithTools} from '../../hooks/conversation/useConversation.js';
 import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';

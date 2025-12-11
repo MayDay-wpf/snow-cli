@@ -2,9 +2,9 @@ import React, {useState, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
-import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
-import {useTheme} from '../contexts/ThemeContext.js';
-import {useI18n} from '../../i18n/index.js';
+import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/index.js';
 
 export type ConfirmationResult =
 	| 'approve'

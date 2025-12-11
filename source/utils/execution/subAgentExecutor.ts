@@ -8,7 +8,7 @@ import {getOpenAiConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
-import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import type {ChatMessage} from '../../api/chat.js';
 

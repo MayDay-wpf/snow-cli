@@ -1,9 +1,9 @@
 import React, {useState, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
-import ScrollableSelectInput from './ScrollableSelectInput.js';
-import {useTheme} from '../contexts/ThemeContext.js';
-import {useI18n} from '../../i18n/index.js';
+import ScrollableSelectInput from '../common/ScrollableSelectInput.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/index.js';
 
 export interface AskUserQuestionResult {
 	selected: string;

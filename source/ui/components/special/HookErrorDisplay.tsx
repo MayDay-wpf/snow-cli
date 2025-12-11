@@ -1,6 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import type {HookErrorDetails} from '../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
 
 interface HookErrorDisplayProps {
 	details: HookErrorDetails;

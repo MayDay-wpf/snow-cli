@@ -1,8 +1,8 @@
 import React, {useState, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
-import Menu from '../components/Menu.js';
-import DiffViewer from '../components/DiffViewer.js';
+import Menu from '../components/common/Menu.js';
+import DiffViewer from '../components/tools/DiffViewer.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {
 	ThemeColors,

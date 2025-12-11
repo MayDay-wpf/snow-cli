@@ -1,8 +1,8 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
-import {resetTerminal} from '../../utils/execution/terminal.js';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+import {resetTerminal} from '../../../utils/execution/terminal.js';
+import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 type MenuOption = {
 	label: string;
@@ -20,7 +20,13 @@ type Props = {
 	defaultIndex?: number; // Initial selected index
 };
 
-function Menu({options, onSelect, onSelectionChange, maxHeight, defaultIndex = 0}: Props) {
+function Menu({
+	options,
+	onSelect,
+	onSelectionChange,
+	maxHeight,
+	defaultIndex = 0,
+}: Props) {
 	const {stdout} = useStdout();
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -40,10 +46,10 @@ function Menu({options, onSelect, onSelectionChange, maxHeight, defaultIndex = 0
 	};
 
 	const [selectedIndex, setSelectedIndex] = useState(() =>
-		Math.min(defaultIndex, options.length - 1)
+		Math.min(defaultIndex, options.length - 1),
 	);
 	const [scrollOffset, setScrollOffset] = useState(() =>
-		getInitialScrollOffset(defaultIndex, visibleItemCount)
+		getInitialScrollOffset(defaultIndex, visibleItemCount),
 	);
 
 	// Sync selectedIndex and scrollOffset when defaultIndex changes from parent

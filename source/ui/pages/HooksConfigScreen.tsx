@@ -2,7 +2,7 @@ import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import {Alert} from '@inkjs/ui';
-import Menu from '../components/Menu.js';
+import Menu from '../components/common/Menu.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useI18n} from '../../i18n/index.js';
 import {
@@ -34,7 +34,11 @@ type Screen =
 type RuleField = 'description' | 'matcher';
 type ActionField = 'enabled' | 'type' | 'command' | 'prompt' | 'timeout';
 
-export default function HooksConfigScreen({onBack, defaultScopeIndex = 0, onScopeSelectionPersist}: Props) {
+export default function HooksConfigScreen({
+	onBack,
+	defaultScopeIndex = 0,
+	onScopeSelectionPersist,
+}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 

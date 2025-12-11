@@ -6,7 +6,7 @@ import terminal from 'markdown-it-terminal';
 import {marked} from 'marked';
 import {markedTerminal} from 'marked-terminal';
 import {highlight} from 'cli-highlight';
-import logger from '../../utils/core/logger.js';
+import logger from '../../../utils/core/logger.js';
 
 // Configure markdown-it with terminal renderer for non-table content
 const md = new MarkdownIt({

@@ -1,7 +1,7 @@
 import React, {useMemo} from 'react';
 import {Box, Text} from 'ink';
 import * as Diff from 'diff';
-import {useTheme} from '../contexts/ThemeContext.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 interface Props {
 	oldContent?: string;

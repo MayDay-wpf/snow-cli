@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, {useEffect} from 'react';
 import SessionListScreen from './SessionListScreen.js';
 
 type Props = {
@@ -6,7 +6,10 @@ type Props = {
 	onSelectSession: (sessionId: string) => void;
 };
 
-export default function SessionListScreenWrapper({ onBack, onSelectSession }: Props) {
+export default function SessionListScreenWrapper({
+	onBack,
+	onSelectSession,
+}: Props) {
 	useEffect(() => {
 		process.stdout.write('\x1B[?1049h');
 		process.stdout.write('\x1B[2J');
@@ -18,9 +21,6 @@ export default function SessionListScreenWrapper({ onBack, onSelectSession }: Pr
 	}, []);
 
 	return (
-		<SessionListScreen
-			onBack={onBack}
-			onSelectSession={onSelectSession}
-		/>
+		<SessionListScreen onBack={onBack} onSelectSession={onSelectSession} />
 	);
 }

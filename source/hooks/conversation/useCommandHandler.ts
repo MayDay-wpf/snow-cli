@@ -1,6 +1,6 @@
 import {useStdout} from 'ink';
 import {useCallback} from 'react';
-import type {Message} from '../../ui/components/MessageList.js';
+import type {Message} from '../../ui/components/chat/MessageList.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {navigateTo} from '../integration/useGlobalNavigation.js';

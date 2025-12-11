@@ -4,8 +4,8 @@ import {
 	getMCPServicesInfo,
 	refreshMCPToolsCache,
 	reconnectMCPService,
-} from '../../utils/execution/mcpToolsManager.js';
-import {getMCPConfig, updateMCPConfig} from '../../utils/config/apiConfig.js';
+} from '../../../utils/execution/mcpToolsManager.js';
+import {getMCPConfig, updateMCPConfig} from '../../../utils/config/apiConfig.js';
 
 interface MCPConnectionStatus {
 	name: string;

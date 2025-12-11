@@ -9,7 +9,7 @@
  * 3. 避免 subAgentExecutor.ts 和 useConversation.ts 中出现重复的权限判断代码。
  */
 
-import type {ToolCall} from '../../ui/components/ToolConfirmation.js';
+import type {ToolCall} from '../../ui/components/tools/ToolConfirmation.js';
 
 /**
  * YOLO 权限检查结果接口

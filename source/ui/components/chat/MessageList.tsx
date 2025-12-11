@@ -1,7 +1,7 @@
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
-import {SelectedFile} from '../../utils/core/fileUtils.js';
-import MarkdownRenderer from './MarkdownRenderer.js';
+import {SelectedFile} from '../../../utils/core/fileUtils.js';
+import MarkdownRenderer from '../common/MarkdownRenderer.js';
 
 export interface Message {
 	role: 'user' | 'assistant' | 'command' | 'subagent';

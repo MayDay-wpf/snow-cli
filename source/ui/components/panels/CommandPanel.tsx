@@ -1,8 +1,8 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 interface Command {
 	name: string;

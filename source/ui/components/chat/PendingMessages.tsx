@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Text } from 'ink';
-import { useTheme } from '../contexts/ThemeContext.js';
+import {Box, Text} from 'ink';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 interface PendingMessage {
 	text: string;
@@ -11,15 +11,20 @@ interface Props {
 	pendingMessages: PendingMessage[];
 }
 
-export default function PendingMessages({ pendingMessages }: Props) {
-	const { theme } = useTheme();
+export default function PendingMessages({pendingMessages}: Props) {
+	const {theme} = useTheme();
 
 	if (pendingMessages.length === 0) {
 		return null;
 	}
 
 	return (
-		<Box flexDirection="column" borderStyle="round" borderColor={theme.colors.warning} paddingX={1}>
+		<Box
+			flexDirection="column"
+			borderStyle="round"
+			borderColor={theme.colors.warning}
+			paddingX={1}
+		>
 			<Text color={theme.colors.warning} bold>
 				⬑ Pending Messages ({pendingMessages.length})
 			</Text>
@@ -31,14 +36,17 @@ export default function PendingMessages({ pendingMessages }: Props) {
 						</Text>
 						<Box marginLeft={1}>
 							<Text color={theme.colors.menuSecondary}>
-								{message.text.length > 60 ? `${message.text.substring(0, 60)}...` : message.text}
+								{message.text.length > 60
+									? `${message.text.substring(0, 60)}...`
+									: message.text}
 							</Text>
 						</Box>
 					</Box>
 					{message.images && message.images.length > 0 && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								└─ {message.images.length} image{message.images.length > 1 ? 's' : ''} attached
+								└─ {message.images.length} image
+								{message.images.length > 1 ? 's' : ''} attached
 							</Text>
 						</Box>
 					)}

@@ -10,8 +10,8 @@ import React, {
 import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
-import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 type FileItem = {
 	name: string;

@@ -1,11 +1,11 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import {useTheme} from '../contexts/ThemeContext.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 import {type Message} from './MessageList.js';
-import MarkdownRenderer from './MarkdownRenderer.js';
-import DiffViewer from './DiffViewer.js';
-import ToolResultPreview from './ToolResultPreview.js';
-import {HookErrorDisplay} from './HookErrorDisplay.js';
+import MarkdownRenderer from '../common/MarkdownRenderer.js';
+import DiffViewer from '../tools/DiffViewer.js';
+import ToolResultPreview from '../tools/ToolResultPreview.js';
+import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 
 type Props = {
 	message: Message;

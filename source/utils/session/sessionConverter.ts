@@ -1,5 +1,5 @@
 import type {ChatMessage} from '../../api/chat.js';
-import type {Message} from '../../ui/components/MessageList.js';
+import type {Message} from '../../ui/components/chat/MessageList.js';
 import {formatToolCallMessage} from '../ui/messageFormatter.js';
 import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
 

@@ -11,7 +11,7 @@ import {Alert} from '@inkjs/ui';
 import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import Spinner from 'ink-spinner';
-import Menu from '../components/Menu.js';
+import Menu from '../components/common/Menu.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../i18n/index.js';
 
@@ -171,15 +171,18 @@ export default function WelcomeScreen({
 
 	const [remountKey, setRemountKey] = useState(0);
 
-	const handleSelectionChange = useCallback((newInfoText: string, value: string) => {
-		setInfoText(newInfoText);
-		// Find the index of the selected option and persist it
-		const index = menuOptions.findIndex(opt => opt.value === value);
-		if (index !== -1) {
-			setCurrentMenuIndex(index);
-			onMenuSelectionPersist?.(index);
-		}
-	}, [menuOptions, onMenuSelectionPersist]);
+	const handleSelectionChange = useCallback(
+		(newInfoText: string, value: string) => {
+			setInfoText(newInfoText);
+			// Find the index of the selected option and persist it
+			const index = menuOptions.findIndex(opt => opt.value === value);
+			if (index !== -1) {
+				setCurrentMenuIndex(index);
+				onMenuSelectionPersist?.(index);
+			}
+		},
+		[menuOptions, onMenuSelectionPersist],
+	);
 
 	const handleInlineMenuSelect = useCallback(
 		(value: string) => {

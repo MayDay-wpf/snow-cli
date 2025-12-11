@@ -1,7 +1,7 @@
 import {executeMCPTool} from './mcpToolsManager.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import type {SubAgentMessage} from './subAgentExecutor.js';
-import type {ConfirmationResult} from '../../ui/components/ToolConfirmation.js';
+import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
 import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
 

@@ -5,26 +5,26 @@ import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
-import ChatInput from '../components/ChatInput.js';
-import {type Message} from '../components/MessageList.js';
-import PendingMessages from '../components/PendingMessages.js';
-import ToolConfirmation from '../components/ToolConfirmation.js';
-import AskUserQuestion from '../components/AskUserQuestion.js';
-import FileRollbackConfirmation from '../components/FileRollbackConfirmation.js';
-import ShimmerText from '../components/ShimmerText.js';
-import MessageRenderer from '../components/MessageRenderer.js';
-import StatusLine from '../components/StatusLine.js';
-import SimpleModeLogo from '../components/SimpleModeLogo.js';
+import ChatInput from '../components/chat/ChatInput.js';
+import {type Message} from '../components/chat/MessageList.js';
+import PendingMessages from '../components/chat/PendingMessages.js';
+import ToolConfirmation from '../components/tools/ToolConfirmation.js';
+import AskUserQuestion from '../components/special/AskUserQuestion.js';
+import FileRollbackConfirmation from '../components/tools/FileRollbackConfirmation.js';
+import ShimmerText from '../components/common/ShimmerText.js';
+import MessageRenderer from '../components/chat/MessageRenderer.js';
+import StatusLine from '../components/common/StatusLine.js';
+import SimpleModeLogo from '../components/special/SimpleModeLogo.js';
 
 // Lazy load panel components to reduce initial bundle size
-const MCPInfoPanel = lazy(() => import('../components/MCPInfoPanel.js'));
+const MCPInfoPanel = lazy(() => import('../components/panels/MCPInfoPanel.js'));
 const SessionListPanel = lazy(
-	() => import('../components/SessionListPanel.js'),
+	() => import('../components/panels/SessionListPanel.js'),
 );
-const UsagePanel = lazy(() => import('../components/UsagePanel.js'));
-const HelpPanel = lazy(() => import('../components/HelpPanel.js'));
-import {CustomCommandConfigPanel} from '../components/CustomCommandConfigPanel.js';
-import {SkillsCreationPanel} from '../components/SkillsCreationPanel.js';
+const UsagePanel = lazy(() => import('../components/panels/UsagePanel.js'));
+const HelpPanel = lazy(() => import('../components/panels/HelpPanel.js'));
+import {CustomCommandConfigPanel} from '../components/panels/CustomCommandConfigPanel.js';
+import {SkillsCreationPanel} from '../components/panels/SkillsCreationPanel.js';
 import {
 	saveCustomCommand,
 	registerCustomCommands,

@@ -1,6 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import TodoTree from './TodoTree.js';
+import TodoTree from '../special/TodoTree.js';
 
 interface ToolResultPreviewProps {
 	toolName: string;

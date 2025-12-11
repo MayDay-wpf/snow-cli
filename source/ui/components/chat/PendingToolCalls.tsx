@@ -44,7 +44,10 @@ export default function PendingToolCalls({messages}: Props) {
 						<Box flexDirection="column" marginLeft={2}>
 							{tool.toolDisplay.args.slice(0, 3).map((arg, argIndex) => (
 								<Text key={argIndex} color="gray" dimColor>
-									{arg.key}: {arg.value.length > 50 ? `${arg.value.substring(0, 50)}...` : arg.value}
+									{arg.key}:{' '}
+									{arg.value.length > 50
+										? `${arg.value.substring(0, 50)}...`
+										: arg.value}
 								</Text>
 							))}
 							{tool.toolDisplay.args.length > 3 && (

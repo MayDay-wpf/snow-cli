@@ -3,7 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Select, Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
-import ScrollableSelectInput from '../components/ScrollableSelectInput.js';
+import ScrollableSelectInput from '../components/common/ScrollableSelectInput.js';
 import {
 	getOpenAiConfig,
 	updateOpenAiConfig,

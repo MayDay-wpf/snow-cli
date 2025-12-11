@@ -1,6 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import {useI18n} from '../../i18n/index.js';
+import {useI18n} from '../../../i18n/index.js';
 
 // Get platform-specific paste key
 const getPasteKey = () => {

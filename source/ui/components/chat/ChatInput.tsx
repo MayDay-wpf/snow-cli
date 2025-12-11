@@ -7,26 +7,26 @@ import React, {
 	Suspense,
 } from 'react';
 import {Box, Text} from 'ink';
-import {Viewport} from '../../utils/ui/textBuffer.js';
-import {cpSlice} from '../../utils/core/textUtils.js';
+import {Viewport} from '../../../utils/ui/textBuffer.js';
+import {cpSlice} from '../../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
-const CommandPanel = lazy(() => import('./CommandPanel.js'));
-const FileList = lazy(() => import('./FileList.js'));
-const AgentPickerPanel = lazy(() => import('./AgentPickerPanel.js'));
-const TodoPickerPanel = lazy(() => import('./TodoPickerPanel.js'));
-import {useInputBuffer} from '../../hooks/input/useInputBuffer.js';
-import {useCommandPanel} from '../../hooks/ui/useCommandPanel.js';
-import {useFilePicker} from '../../hooks/picker/useFilePicker.js';
-import {useHistoryNavigation} from '../../hooks/input/useHistoryNavigation.js';
-import {useClipboard} from '../../hooks/input/useClipboard.js';
-import {useKeyboardInput} from '../../hooks/input/useKeyboardInput.js';
-import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
-import {useTerminalFocus} from '../../hooks/ui/useTerminalFocus.js';
-import {useAgentPicker} from '../../hooks/picker/useAgentPicker.js';
-import {useTodoPicker} from '../../hooks/picker/useTodoPicker.js';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
+const FileList = lazy(() => import('../tools/FileList.js'));
+const AgentPickerPanel = lazy(() => import('../panels/AgentPickerPanel.js'));
+const TodoPickerPanel = lazy(() => import('../panels/TodoPickerPanel.js'));
+import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
+import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
+import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
+import {useHistoryNavigation} from '../../../hooks/input/useHistoryNavigation.js';
+import {useClipboard} from '../../../hooks/input/useClipboard.js';
+import {useKeyboardInput} from '../../../hooks/input/useKeyboardInput.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {useTerminalFocus} from '../../../hooks/ui/useTerminalFocus.js';
+import {useAgentPicker} from '../../../hooks/picker/useAgentPicker.js';
+import {useTodoPicker} from '../../../hooks/picker/useTodoPicker.js';
+import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 /**
  * Calculate context usage percentage
