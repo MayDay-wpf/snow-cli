@@ -27,7 +27,6 @@ import {
 } from '../../utils/config/configManager.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
-import ScrollableSelectInput from '../components/ScrollableSelectInput.js';
 
 type Props = {
 	onBack: () => void;
