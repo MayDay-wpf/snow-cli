@@ -1,7 +1,6 @@
 import React, {useState, useEffect, useRef, lazy, Suspense} from 'react';
 import {Box, Text, useInput, Static, useStdout, useApp} from 'ink';
 import Spinner from 'ink-spinner';
-import Gradient from 'ink-gradient';
 import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
@@ -14,7 +13,7 @@ import FileRollbackConfirmation from '../components/tools/FileRollbackConfirmati
 import ShimmerText from '../components/common/ShimmerText.js';
 import MessageRenderer from '../components/chat/MessageRenderer.js';
 import StatusLine from '../components/common/StatusLine.js';
-import SimpleModeLogo from '../components/special/SimpleModeLogo.js';
+import ChatHeader from '../components/special/ChatHeader.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/panels/MCPInfoPanel.js'));
@@ -1701,64 +1700,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			<Static
 				key={remountKey}
 				items={[
-					<Box key="header" paddingX={1} width={terminalWidth}>
-						<Box
-							borderColor={'cyan'}
-							borderStyle="round"
-							paddingX={2}
-							paddingY={1}
-							width={terminalWidth - 2}
-						>
-							<Box flexDirection="column">
-								{simpleMode ? (
-									<>
-										{/* Simple mode: Show responsive ASCII art title */}
-										<SimpleModeLogo
-											terminalWidth={terminalWidth}
-											logoGradient={theme.colors.logoGradient}
-										/>
-										<Text color={theme.colors.menuSecondary} dimColor>
-											{t.chatScreen.headerWorkingDirectory.replace(
-												'{directory}',
-												workingDirectory,
-											)}
-										</Text>
-									</>
-								) : (
-									<>
-										{/* Normal mode: Show compact title with gradient */}
-										<Text color="white" bold>
-											<Text color="cyan">❆ </Text>
-											<Gradient name="rainbow">
-												{t.chatScreen.headerTitle}
-											</Gradient>
-											<Text color="white"> ⛇</Text>
-										</Text>
-										<Text>• {t.chatScreen.headerExplanations}</Text>
-										<Text>• {t.chatScreen.headerInterrupt}</Text>
-										<Text>• {t.chatScreen.headerYolo}</Text>
-										<Text>
-											{(() => {
-												const pasteKey =
-													process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
-												return `• ${t.chatScreen.headerShortcuts.replace(
-													'{pasteKey}',
-													pasteKey,
-												)}`;
-											})()}
-										</Text>
-										<Text color={theme.colors.menuSecondary} dimColor>
-											•{' '}
-											{t.chatScreen.headerWorkingDirectory.replace(
-												'{directory}',
-												workingDirectory,
-											)}
-										</Text>
-									</>
-								)}
-							</Box>
-						</Box>
-					</Box>,
+					<ChatHeader
+						key="header"
+						terminalWidth={terminalWidth}
+						simpleMode={simpleMode}
+						workingDirectory={workingDirectory}
+					/>,
 					...messages
 						.filter(m => !m.streaming)
 						.map((message, index, filteredMessages) => {
