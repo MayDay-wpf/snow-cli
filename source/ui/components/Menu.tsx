@@ -17,20 +17,41 @@ type Props = {
 	onSelect: (value: string) => void;
 	onSelectionChange?: (infoText: string, value: string) => void;
 	maxHeight?: number; // Maximum number of visible items
+	defaultIndex?: number; // Initial selected index
 };
 
-function Menu({options, onSelect, onSelectionChange, maxHeight}: Props) {
-	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [scrollOffset, setScrollOffset] = useState(0);
+function Menu({options, onSelect, onSelectionChange, maxHeight, defaultIndex = 0}: Props) {
 	const {stdout} = useStdout();
 	const {t} = useI18n();
 	const {theme} = useTheme();
 
-	// Calculate available height
+	// Calculate available height first, before initializing state
 	const terminalHeight = stdout?.rows || 24;
 	const headerHeight = 8; // Space for header, borders, etc.
 	const defaultMaxHeight = Math.max(5, terminalHeight - headerHeight);
 	const visibleItemCount = maxHeight || defaultMaxHeight;
+
+	// Initialize selectedIndex and scrollOffset based on defaultIndex
+	const getInitialScrollOffset = (index: number, visibleCount: number) => {
+		// Center the selected item if possible
+		const halfVisible = Math.floor(visibleCount / 2);
+		const maxOffset = Math.max(0, options.length - visibleCount);
+		return Math.max(0, Math.min(index - halfVisible, maxOffset));
+	};
+
+	const [selectedIndex, setSelectedIndex] = useState(() =>
+		Math.min(defaultIndex, options.length - 1)
+	);
+	const [scrollOffset, setScrollOffset] = useState(() =>
+		getInitialScrollOffset(defaultIndex, visibleItemCount)
+	);
+
+	// Sync selectedIndex and scrollOffset when defaultIndex changes from parent
+	React.useEffect(() => {
+		const newIndex = Math.min(defaultIndex, options.length - 1);
+		setSelectedIndex(newIndex);
+		setScrollOffset(getInitialScrollOffset(newIndex, visibleItemCount));
+	}, [defaultIndex, options.length, visibleItemCount]);
 
 	React.useEffect(() => {
 		const currentOption = options[selectedIndex];
@@ -133,6 +154,7 @@ export default React.memo(Menu, (prevProps, nextProps) => {
 		prevProps.options === nextProps.options &&
 		prevProps.onSelect === nextProps.onSelect &&
 		prevProps.onSelectionChange === nextProps.onSelectionChange &&
-		prevProps.maxHeight === nextProps.maxHeight
+		prevProps.maxHeight === nextProps.maxHeight &&
+		prevProps.defaultIndex === nextProps.defaultIndex
 	);
 });

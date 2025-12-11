@@ -122,6 +122,9 @@ function AppContent({
 	// This ensures configuration changes are picked up
 	const [chatScreenKey, setChatScreenKey] = useState(0);
 
+	// Track the welcome menu index to preserve selection when returning
+	const [welcomeMenuIndex, setWelcomeMenuIndex] = useState(0);
+
 	// Track whether to auto-resume last session (from resume-last menu option)
 	const [shouldAutoResume, setShouldAutoResume] = useState(false);
 
@@ -187,7 +190,12 @@ function AppContent({
 			case 'welcome':
 				return (
 					<Suspense fallback={loadingFallback}>
-						<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+						<WelcomeScreen
+							version={version}
+							onMenuSelect={handleMenuSelect}
+							defaultMenuIndex={welcomeMenuIndex}
+							onMenuSelectionPersist={setWelcomeMenuIndex}
+						/>
 					</Suspense>
 				);
 			case 'chat':
@@ -249,7 +257,12 @@ function AppContent({
 			default:
 				return (
 					<Suspense fallback={loadingFallback}>
-						<WelcomeScreen version={version} onMenuSelect={handleMenuSelect} />
+						<WelcomeScreen
+							version={version}
+							onMenuSelect={handleMenuSelect}
+							defaultMenuIndex={welcomeMenuIndex}
+							onMenuSelectionPersist={setWelcomeMenuIndex}
+						/>
 					</Suspense>
 				);
 		}

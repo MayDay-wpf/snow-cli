@@ -15,6 +15,8 @@ type Props = {
 	onAdd: () => void;
 	onEdit: (agentId: string) => void;
 	inlineMode?: boolean;
+	defaultSelectedIndex?: number;
+	onSelectionPersist?: (index: number) => void;
 };
 
 export default function SubAgentListScreen({
@@ -22,15 +24,22 @@ export default function SubAgentListScreen({
 	onAdd,
 	onEdit,
 	inlineMode = false,
+	defaultSelectedIndex = 0,
+	onSelectionPersist,
 }: Props) {
 	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
 	const {t} = useI18n();
 	const [agents, setAgents] = useState<SubAgent[]>([]);
-	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [selectedIndex, setSelectedIndex] = useState(defaultSelectedIndex);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteSuccess, setDeleteSuccess] = useState(false);
 	const [deleteFailed, setDeleteFailed] = useState(false);
+
+	// Sync with parent's defaultSelectedIndex when it changes
+	useEffect(() => {
+		setSelectedIndex(defaultSelectedIndex);
+	}, [defaultSelectedIndex]);
 
 	// Truncate text based on terminal width
 	const truncateText = useCallback(
@@ -95,17 +104,23 @@ export default function SubAgentListScreen({
 		}
 
 		if (key.upArrow) {
-			setSelectedIndex(prev => (prev > 0 ? prev - 1 : agents.length - 1));
+			const newIndex = selectedIndex > 0 ? selectedIndex - 1 : agents.length - 1;
+			setSelectedIndex(newIndex);
+			onSelectionPersist?.(newIndex);
 		} else if (key.downArrow) {
-			setSelectedIndex(prev => (prev < agents.length - 1 ? prev + 1 : 0));
+			const newIndex = selectedIndex < agents.length - 1 ? selectedIndex + 1 : 0;
+			setSelectedIndex(newIndex);
+			onSelectionPersist?.(newIndex);
 		} else if (key.return) {
 			if (agents.length > 0) {
 				const agent = agents[selectedIndex];
 				if (agent) {
+					onSelectionPersist?.(selectedIndex);
 					onEdit(agent.id);
 				}
 			}
 		} else if (input === 'a' || input === 'A') {
+			onSelectionPersist?.(selectedIndex);
 			onAdd();
 		} else if (input === 'd' || input === 'D') {
 			if (agents.length > 0) {
