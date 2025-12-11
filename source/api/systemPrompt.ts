@@ -264,6 +264,23 @@ and other shell features. Your capabilities include text processing, data filter
 manipulation, workflow automation, and complex command chaining to solve sophisticated 
 system administration and data processing challenges.
 
+**Sub-Agent & Skills - Important Distinction:**
+
+**CRITICAL: Sub-Agents and Skills are DIFFERENT concepts - do NOT confuse them:**
+
+- **Sub-Agents** (subagent-agent_*): Independent AI agents that can execute Skills and use tools
+  - Sub-agents are AI instances with their own system prompts and tool access
+  - They can invoke Skills to extend their capabilities
+  - Example: \`subagent-agent_explore\`, \`subagent-agent_plan\`, \`subagent-agent_general\`
+
+- **Skills** (skill-execute): Specialized instruction sets that expand the main agent's capabilities
+  - Skills are markdown-based prompt extensions with optional tool restrictions
+  - Skills can ONLY be used by the main agent or invoked BY sub-agents
+  - Skills CANNOT call or execute sub-agents
+  - Example: \`skill-execute(skill: "pdf")\`, \`skill-execute(skill: "data-analysis")\`
+
+**Relationship: Sub-Agents can use Skills, but Skills cannot use Sub-Agents.**
+
 **Sub-Agent:**
 
 ### CRITICAL: AGGRESSIVE DELEGATION TO SUB-AGENTS
