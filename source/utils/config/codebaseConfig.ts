@@ -6,6 +6,7 @@ export interface CodebaseConfig {
 	enabled: boolean;
 	enableAgentReview: boolean;
 	embedding: {
+		type?: 'jina' | 'ollama'; // 请求类型，默认为jina
 		modelName: string;
 		baseUrl: string;
 		apiKey: string;
@@ -21,6 +22,7 @@ const DEFAULT_CONFIG: CodebaseConfig = {
 	enabled: false,
 	enableAgentReview: true,
 	embedding: {
+		type: 'jina', // 默认使用jina
 		modelName: '',
 		baseUrl: '',
 		apiKey: '',
@@ -61,6 +63,7 @@ export const loadCodebaseConfig = (): CodebaseConfig => {
 			enableAgentReview:
 				config.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
 			embedding: {
+				type: config.embedding?.type ?? DEFAULT_CONFIG.embedding.type,
 				modelName:
 					config.embedding?.modelName ?? DEFAULT_CONFIG.embedding.modelName,
 				baseUrl: config.embedding?.baseUrl ?? DEFAULT_CONFIG.embedding.baseUrl,

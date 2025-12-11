@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
+import ScrollableSelectInput from '../components/common/ScrollableSelectInput.js';
 import {
 	loadCodebaseConfig,
 	saveCodebaseConfig,
@@ -20,6 +21,7 @@ type Props = {
 type ConfigField =
 	| 'enabled'
 	| 'enableAgentReview'
+	| 'embeddingType'
 	| 'embeddingModelName'
 	| 'embeddingBaseUrl'
 	| 'embeddingApiKey'
@@ -79,6 +81,7 @@ export default function CodeBaseConfigScreen({
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
+	const [embeddingType, setEmbeddingType] = useState<'jina' | 'ollama'>('jina');
 	const [embeddingModelName, setEmbeddingModelName] = useState('');
 	const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState('');
 	const [embeddingApiKey, setEmbeddingApiKey] = useState('');
@@ -97,12 +100,19 @@ export default function CodeBaseConfigScreen({
 	const allFields: ConfigField[] = [
 		'enabled',
 		'enableAgentReview',
+		'embeddingType',
 		'embeddingModelName',
 		'embeddingBaseUrl',
 		'embeddingApiKey',
 		'embeddingDimensions',
 		'batchMaxLines',
 		'batchConcurrency',
+	];
+
+	// Embedding type options
+	const embeddingTypeOptions = [
+		{label: 'Jina', value: 'jina' as const},
+		{label: 'Ollama', value: 'ollama' as const},
 	];
 
 	const currentFieldIndex = allFields.indexOf(currentField);
@@ -116,6 +126,7 @@ export default function CodeBaseConfigScreen({
 		const config = loadCodebaseConfig();
 		setEnabled(config.enabled);
 		setEnableAgentReview(config.enableAgentReview);
+		setEmbeddingType(config.embedding.type || 'jina');
 		setEmbeddingModelName(config.embedding.modelName);
 		setEmbeddingBaseUrl(config.embedding.baseUrl);
 		setEmbeddingApiKey(config.embedding.apiKey);
@@ -165,6 +176,7 @@ export default function CodeBaseConfigScreen({
 				enabled,
 				enableAgentReview,
 				embedding: {
+					type: embeddingType,
 					modelName: embeddingModelName,
 					baseUrl: embeddingBaseUrl,
 					apiKey: embeddingApiKey,
@@ -236,6 +248,43 @@ export default function CodeBaseConfigScreen({
 								{t.codebaseConfig.toggleHint}
 							</Text>
 						</Box>
+					</Box>
+				);
+
+			case 'embeddingType':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingType}
+						</Text>
+						{isEditing && isActive ? (
+							<Box marginLeft={3}>
+								<ScrollableSelectInput
+									items={embeddingTypeOptions}
+									initialIndex={embeddingTypeOptions.findIndex(
+										opt => opt.value === embeddingType,
+									)}
+									isFocused={true}
+									onSelect={item => {
+										setEmbeddingType(item.value as 'jina' | 'ollama');
+										setIsEditing(false);
+									}}
+								/>
+							</Box>
+						) : (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{embeddingTypeOptions.find(opt => opt.value === embeddingType)
+										?.label || t.codebaseConfig.notSet}{' '}
+									({t.codebaseConfig.toggleHint})
+								</Text>
+							</Box>
+						)}
 					</Box>
 				);
 
@@ -506,6 +555,12 @@ export default function CodeBaseConfigScreen({
 		// Toggle enableAgentReview field
 		if (key.return && currentField === 'enableAgentReview') {
 			setEnableAgentReview(!enableAgentReview);
+			return;
+		}
+
+		// Enter editing mode for embeddingType to show selector
+		if (key.return && currentField === 'embeddingType') {
+			setIsEditing(true);
 			return;
 		}
 

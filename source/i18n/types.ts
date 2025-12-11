@@ -73,6 +73,7 @@ export type TranslationKeys = {
 		enabled: string;
 		disabled: string;
 		toggleHint: string;
+		embeddingType: string;
 		embeddingModelName: string;
 		embeddingBaseUrl: string;
 		embeddingApiKey: string;

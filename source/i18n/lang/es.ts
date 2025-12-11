@@ -84,6 +84,7 @@ export const es: TranslationKeys = {
 		enabled: '[✓] Habilitado',
 		disabled: '[ ] Deshabilitado',
 		toggleHint: '(Presiona Enter para alternar)',
+		embeddingType: 'Tipo de Solicitud:',
 		embeddingModelName: 'Nombre del Modelo de Incrustación:',
 		embeddingBaseUrl: 'URL Base de Incrustación:',
 		embeddingApiKey: 'Clave API de Incrustación:',

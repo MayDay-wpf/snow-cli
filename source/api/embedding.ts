@@ -24,6 +24,14 @@ export interface EmbeddingResponse {
 	}>;
 }
 
+interface OllamaEmbeddingResponse {
+	model: string;
+	embeddings: number[][];
+	total_duration?: number;
+	load_duration?: number;
+	prompt_eval_count?: number;
+}
+
 /**
  * Create embeddings for text array (single API call)
  * @param options Embedding options
@@ -74,10 +82,21 @@ export async function createEmbeddings(
 		requestBody.dimensions = dimensions;
 	}
 
-	// Use baseUrl directly, append /embeddings if needed
-	const url = baseUrl.endsWith('/embeddings')
-		? baseUrl
-		: `${baseUrl.replace(/\/$/, '')}/embeddings`;
+	// Determine endpoint based on provider type
+	const embeddingType = config.embedding.type || 'jina';
+	let url: string;
+
+	if (embeddingType === 'ollama') {
+		// Ollama uses /embed endpoint
+		url = baseUrl.endsWith('/embed')
+			? baseUrl
+			: `${baseUrl.replace(/\/$/, '')}/embed`;
+	} else {
+		// Jina uses /embeddings endpoint
+		url = baseUrl.endsWith('/embeddings')
+			? baseUrl
+			: `${baseUrl.replace(/\/$/, '')}/embeddings`;
+	}
 
 	// Build headers - only include Authorization if API key is provided
 	const headers: Record<string, string> = {
@@ -102,6 +121,25 @@ export async function createEmbeddings(
 	}
 
 	const data = await response.json();
+
+	// Convert Ollama response format to unified format
+	if (embeddingType === 'ollama') {
+		const ollamaData = data as OllamaEmbeddingResponse;
+		return {
+			model: ollamaData.model,
+			object: 'list',
+			usage: {
+				total_tokens: ollamaData.prompt_eval_count || 0,
+				prompt_tokens: ollamaData.prompt_eval_count || 0,
+			},
+			data: ollamaData.embeddings.map((embedding, index) => ({
+				object: 'embedding',
+				index,
+				embedding,
+			})),
+		};
+	}
+
 	return data as EmbeddingResponse;
 }
 

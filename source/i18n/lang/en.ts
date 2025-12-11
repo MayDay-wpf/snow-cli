@@ -77,6 +77,7 @@ export const en: TranslationKeys = {
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',
 		toggleHint: '(Press Enter to toggle)',
+		embeddingType: 'Request Type:',
 		embeddingModelName: 'Embedding Model Name:',
 		embeddingBaseUrl: 'Embedding Base URL:',
 		embeddingApiKey: 'Embedding API Key:',

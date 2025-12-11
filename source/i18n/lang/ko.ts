@@ -73,6 +73,7 @@ export const ko: TranslationKeys = {
 		enabled: '[✓] 활성화됨',
 		disabled: '[ ] 비활성화됨',
 		toggleHint: '(Enter 키로 토글)',
+		embeddingType: '요청 유형:',
 		embeddingModelName: '임베딩 모델 이름:',
 		embeddingBaseUrl: '임베딩 Base URL:',
 		embeddingApiKey: '임베딩 API 키:',

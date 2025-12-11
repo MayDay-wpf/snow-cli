@@ -207,6 +207,7 @@ type CommandHandlerOptions = {
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
+	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
 	>;
@@ -354,6 +355,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);
 						options.setContextUsage(null);
+						options.setCurrentContextPercentage(0);
 
 						// Add command message
 						const commandMessage: Message = {
@@ -376,6 +378,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);
 						options.setContextUsage(null);
+						options.setCurrentContextPercentage(0);
 
 						const commandMessage: Message = {
 							role: 'command',

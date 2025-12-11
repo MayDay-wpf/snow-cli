@@ -72,6 +72,7 @@ export const zhTW: TranslationKeys = {
 		enabled: '[✓] 已啟用',
 		disabled: '[ ] 已停用',
 		toggleHint: '(按 Enter 切換)',
+		embeddingType: '請求類型:',
 		embeddingModelName: '嵌入模型名稱:',
 		embeddingBaseUrl: '嵌入 Base URL:',
 		embeddingApiKey: '嵌入 API 金鑰:',

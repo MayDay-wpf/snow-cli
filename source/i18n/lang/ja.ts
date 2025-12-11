@@ -75,6 +75,7 @@ export const ja: TranslationKeys = {
 		enabled: '[✓] 有効',
 		disabled: '[ ] 無効',
 		toggleHint: '(Enterキーで切り替え)',
+		embeddingType: 'リクエストタイプ:',
 		embeddingModelName: '埋め込みモデル名:',
 		embeddingBaseUrl: '埋め込みBase URL:',
 		embeddingApiKey: '埋め込みAPIキー:',

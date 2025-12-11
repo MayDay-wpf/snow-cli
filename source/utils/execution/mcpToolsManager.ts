@@ -1011,6 +1011,46 @@ export async function executeMCPTool(
 	abortSignal?: AbortSignal,
 	onTokenUpdate?: (tokenCount: number) => void,
 ): Promise<any> {
+	// Normalize args: parse stringified JSON parameters for known parameters
+	// Some AI models (e.g., Anthropic) may serialize array/object parameters as JSON strings
+	// Only parse parameters that are EXPECTED to be arrays/objects (whitelist approach)
+	if (args && typeof args === 'object') {
+		// Whitelist: parameters that may legitimately be arrays or objects
+		const arrayOrObjectParams = [
+			'filePath',
+			'files',
+			'paths',
+			'items',
+			'options',
+		];
+
+		for (const [key, value] of Object.entries(args)) {
+			// Only process whitelisted parameters
+			if (arrayOrObjectParams.includes(key) && typeof value === 'string') {
+				const trimmed = value.trim();
+				// Only attempt to parse if it looks like JSON array or object
+				if (
+					(trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+					(trimmed.startsWith('{') && trimmed.endsWith('}'))
+				) {
+					try {
+						const parsed = JSON.parse(value);
+						// Type safety: Only replace if parsed result is array or plain object
+						if (
+							parsed !== null &&
+							typeof parsed === 'object' &&
+							(Array.isArray(parsed) || parsed.constructor === Object)
+						) {
+							args[key] = parsed;
+						}
+					} catch {
+						// Keep original value if parsing fails
+					}
+				}
+			}
+		}
+	}
+
 	// Execute beforeToolCall hook
 	try {
 		const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');

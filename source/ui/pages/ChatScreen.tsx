@@ -674,7 +674,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}
 	};
 
-	// Use command handler hook
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
 		setMessages,
@@ -691,6 +690,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setYoloMode,
 		setPlanMode,
 		setContextUsage: streamingState.setContextUsage,
+		setCurrentContextPercentage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
 			processMessageRef.current?.(
