@@ -4,6 +4,7 @@ import {logger} from '../utils/core/logger.js';
 import {codebaseReviewAgent} from '../agents/codebaseReviewAgent.js';
 import {codebaseSearchEvents} from '../utils/codebase/codebaseSearchEvents.js';
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
+import {sessionManager} from '../utils/session/sessionManager.js';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -178,9 +179,27 @@ class CodebaseSearchService {
 					logger.info(
 						`Reviewing ${formattedResults.length} search results (attempt ${searchAttempt})`,
 					);
+
+					// Get conversation context from session (exclude tool calls)
+					const session = sessionManager.getCurrentSession();
+					const conversationContext =
+						session?.messages
+							.filter(
+								msg =>
+									(msg.role === 'user' || msg.role === 'assistant') &&
+									!msg.tool_calls &&
+									!msg.tool_call_id,
+							)
+							.map(msg => ({
+								role: msg.role,
+								content: msg.content,
+							}))
+							.slice(-10) || []; // Last 10 messages
+
 					const reviewResult = await codebaseReviewAgent.reviewResults(
 						query,
 						formattedResults,
+						conversationContext.length > 0 ? conversationContext : undefined,
 					);
 
 					finalResults = reviewResult.filteredResults;
@@ -318,7 +337,7 @@ export const mcpTools = [
 	{
 		name: 'codebase-search',
 		description:
-		    '**Important:When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.**'+
+			'**Important:When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.**' +
 			'* Semantic search across the codebase using embeddings. ' +
 			'* Finds code snippets similar to your query based on meaning, not just keywords. ' +
 			'* Returns full code content with similarity scores and file locations. ' +

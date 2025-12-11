@@ -187,10 +187,22 @@ export class CodebaseReviewAgent {
 			similarityScore: string;
 			location: string;
 		}>,
+		conversationContext?: Array<{role: string; content: string}>,
 		abortSignal?: AbortSignal,
 	): Promise<{parsed: any; attempt: number} | null> {
-		const reviewPrompt = `You are a code search result reviewer. Your task is to analyze search results and determine which ones are truly relevant to the user's query.
+		// Build conversation context section
+		let conversationSection = '';
+		if (conversationContext && conversationContext.length > 0) {
+			conversationSection =
+				`\n\nConversation Context (Recent Messages):\n` +
+				conversationContext
+					.map((msg, idx) => `[${idx + 1}] ${msg.role}: ${msg.content}`)
+					.join('\n') +
+				'\n';
+		}
 
+		const reviewPrompt = `You are a code search result reviewer. Your task is to analyze search results and determine which ones are truly relevant to the user's query.
+${conversationSection}
 Search Query: "${query}"
 
 Search Results (${results.length} items):
@@ -302,6 +314,7 @@ Guidelines:
 	 *
 	 * @param query - Original search query
 	 * @param results - Search results to review
+	 * @param conversationContext - Optional conversation context (messages without tool calls)
 	 * @param abortSignal - Optional abort signal
 	 * @returns Object with filtered results and optional suggestions
 	 */
@@ -316,6 +329,7 @@ Guidelines:
 			similarityScore: string;
 			location: string;
 		}>,
+		conversationContext?: Array<{role: string; content: string}>,
 		abortSignal?: AbortSignal,
 	): Promise<{
 		filteredResults: typeof results;
@@ -324,6 +338,7 @@ Guidelines:
 		reviewFailed?: boolean;
 	}> {
 		const available = await this.isAvailable();
+
 		if (!available) {
 			logger.warn(
 				'Codebase review agent: Not available, returning original results',
@@ -339,6 +354,7 @@ Guidelines:
 		const reviewResult = await this.reviewWithRetry(
 			query,
 			results,
+			conversationContext,
 			abortSignal,
 		);
 
