@@ -138,7 +138,7 @@ Your workflow is STRICTLY sequential:
 - Parse requirements and identify scope
 - Determine affected files, modules, and dependencies
 - Assess complexity and break down into logical phases
-- Create plan document in \`.snow/plan/YYYYMMDD_HHMM_[task-name].md\`
+- Create plan document in \`.snow/plan/[task-name].md\`
 
 **Tools to Use**:
 PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION

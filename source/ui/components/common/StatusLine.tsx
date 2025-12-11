@@ -260,25 +260,7 @@ export default function StatusLine({
 
 	return (
 		<Box flexDirection="column" paddingX={1} marginTop={1}>
-			{/* YOLO模式提示 */}
-			{yoloMode && (
-				<Box>
-					<Text color={theme.colors.warning} dimColor>
-						{t.chatScreen.yoloModeActive}
-					</Text>
-				</Box>
-			)}
-
-			{/* Plan模式提示 */}
-			{planMode && (
-				<Box>
-					<Text color="#60A5FA" dimColor>
-						{t.chatScreen.planModeActive}
-					</Text>
-				</Box>
-			)}
-
-			{/* Token使用信息 */}
+			{/* Token使用信息 - 始终显示在第一行 */}
 			{contextUsage && (
 				<Box>
 					<Text color={theme.colors.menuSecondary} dimColor>
@@ -358,6 +340,24 @@ export default function StatusLine({
 								</>
 							);
 						})()}
+					</Text>
+				</Box>
+			)}
+
+			{/* YOLO模式提示 */}
+			{yoloMode && (
+				<Box>
+					<Text color={theme.colors.warning} dimColor>
+						{t.chatScreen.yoloModeActive}
+					</Text>
+				</Box>
+			)}
+
+			{/* Plan模式提示 */}
+			{planMode && (
+				<Box>
+					<Text color="#60A5FA" dimColor>
+						{t.chatScreen.planModeActive}
 					</Text>
 				</Box>
 			)}

@@ -380,24 +380,7 @@ export default function MessageRenderer({
 												}
 											/>
 										)}
-									{/* Show rejection reason for rejected tools with reply */}
-									{(message.content.startsWith('✗') ||
-										message.content.includes('⚇✗')) &&
-										message.content.includes(
-											'Tool execution rejected by user:',
-										) && (
-											<Box flexDirection="column" marginTop={1}>
-												<Text color="yellow" dimColor>
-													Rejection reason:
-												</Text>
-												<Text color={theme.colors.menuSecondary} dimColor>
-													└{' '}
-													{message.content
-														.split('Tool execution rejected by user:')[1]
-														?.trim() || 'No reason provided'}
-												</Text>
-											</Box>
-										)}
+
 									{message.files && message.files.length > 0 && (
 										<Box flexDirection="column">
 											{message.files.map((file, fileIndex) => (

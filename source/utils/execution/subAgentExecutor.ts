@@ -962,6 +962,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 			// Check tool approvals before execution
 			const approvedToolCalls: typeof toolCalls = [];
 			const rejectedToolCalls: typeof toolCalls = [];
+			const rejectionReasons = new Map<string, string>(); // Map tool_call_id to rejection reason
 
 			for (const toolCall of toolCalls) {
 				const toolName = toolCall.function.name;
@@ -999,6 +1000,10 @@ You are a versatile task execution agent with full tool access, capable of handl
 							confirmation.type === 'reject_with_reply')
 					) {
 						rejectedToolCalls.push(toolCall);
+						// Save rejection reason if provided
+						if (typeof confirmation === 'object' && confirmation.reason) {
+							rejectionReasons.set(toolCall.id, confirmation.reason);
+						}
 						continue;
 					}
 					// If approve_always, add to both global and session lists
@@ -1015,26 +1020,50 @@ You are a versatile task execution agent with full tool access, capable of handl
 				approvedToolCalls.push(toolCall);
 			}
 
-			// Handle rejected tools
+			// Handle rejected tools - add rejection results to conversation instead of stopping
 			if (rejectedToolCalls.length > 0) {
-				// Send done message to mark completion when tools are rejected
-				if (onMessage) {
-					onMessage({
-						type: 'sub_agent_message',
-						agentId: agent.id,
-						agentName: agent.name,
-						message: {
-							type: 'done',
-						},
-					});
+				const rejectionResults: ChatMessage[] = [];
+
+				for (const toolCall of rejectedToolCalls) {
+					// Get rejection reason if provided by user
+					const rejectionReason = rejectionReasons.get(toolCall.id);
+					const rejectMessage = rejectionReason
+						? `Tool execution rejected by user: ${rejectionReason}`
+						: 'Tool execution rejected by user';
+
+					const toolResultMessage = {
+						role: 'tool' as const,
+						tool_call_id: toolCall.id,
+						content: `Error: ${rejectMessage}`,
+					};
+					rejectionResults.push(toolResultMessage);
+
+					// Send tool result to UI
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'tool_result',
+								tool_call_id: toolCall.id,
+								tool_name: toolCall.function.name,
+								content: `Error: ${rejectMessage}`,
+							} as any,
+						});
+					}
 				}
-				return {
-					success: false,
-					result: finalResponse,
-					error: `User rejected tool execution: ${rejectedToolCalls
-						.map(tc => tc.function.name)
-						.join(', ')}`,
-				};
+
+				// Add rejection results to conversation
+				messages.push(...rejectionResults);
+
+				// If all tools were rejected and there are no approved tools, continue to next AI turn
+				// The AI will see the rejection messages and can respond accordingly
+				if (approvedToolCalls.length === 0) {
+					continue;
+				}
+
+				// Otherwise, continue executing approved tools below
 			}
 
 			// Execute approved tool calls
