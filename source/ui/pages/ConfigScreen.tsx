@@ -1608,7 +1608,9 @@ export default function ConfigScreen({
 								)}
 								<ScrollableSelectInput
 									items={profiles.map(p => ({
-										label: `${p.displayName}${p.isActive ? ' (Active)' : ''}`,
+										label: p.isActive
+											? `${p.displayName} \x1b[32m✓\x1b[0m`
+											: p.displayName,
 										value: p.name,
 									}))}
 									limit={5}
