@@ -447,6 +447,8 @@ export const en: TranslationKeys = {
 			skills: 'Create skill template with documentation and examples',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
+			reindex:
+				'Rebuild codebase index, detect changed, deleted, new and modified files',
 			quit: 'Exit the application',
 		},
 	},

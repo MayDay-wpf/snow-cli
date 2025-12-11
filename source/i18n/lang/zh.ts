@@ -421,6 +421,7 @@ export const zh: TranslationKeys = {
 			skills: '创建包含文档和示例的技能模板',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
+			reindex: '重建代码库索引，检测变更、删除、新增和修改的文件',
 			quit: '退出应用程序',
 		},
 	},

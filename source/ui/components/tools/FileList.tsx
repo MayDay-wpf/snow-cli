@@ -53,6 +53,8 @@ const FileList = memo(
 			const {theme} = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
+			const [searchDepth, setSearchDepth] = useState(5); // Default depth 5, will increase if needed
+			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -80,10 +82,9 @@ const FileList = memo(
 				}
 			}, [rootPath]);
 
-			// Get files from directory - optimized for performance with depth limit
+			// Get files from directory with progressive depth search
 			const loadFiles = useCallback(async () => {
-				const MAX_DEPTH = 5; // Limit recursion depth to prevent performance issues
-				const MAX_FILES = 1000; // Reduced from 2000 for better performance
+				const MAX_FILES = 1000; // Limit total files for performance
 
 				// Read .gitignore patterns
 				const gitignorePatterns = await readGitignore();
@@ -91,9 +92,10 @@ const FileList = memo(
 				const getFilesRecursively = async (
 					dir: string,
 					depth: number = 0,
+					maxDepth: number = searchDepth,
 				): Promise<FileItem[]> => {
 					// Stop recursion if depth limit reached
-					if (depth > MAX_DEPTH) {
+					if (depth > maxDepth) {
 						return [];
 					}
 
@@ -180,8 +182,12 @@ const FileList = memo(
 							});
 
 							// Recursively get files from subdirectories with depth limit
-							if (entry.isDirectory() && depth < MAX_DEPTH) {
-								const subFiles = await getFilesRecursively(fullPath, depth + 1);
+							if (entry.isDirectory() && depth < maxDepth) {
+								const subFiles = await getFilesRecursively(
+									fullPath,
+									depth + 1,
+									maxDepth,
+								);
 								result = result.concat(subFiles);
 							}
 						}
@@ -197,7 +203,7 @@ const FileList = memo(
 				const fileList = await getFilesRecursively(rootPath);
 				setFiles(fileList);
 				setIsLoading(false);
-			}, [rootPath, readGitignore]);
+			}, [rootPath, readGitignore, searchDepth]);
 
 			// Search file content for content search mode
 			const searchFileContent = useCallback(
@@ -388,6 +394,25 @@ const FileList = memo(
 						});
 
 						setAllFilteredFiles(filtered);
+
+						// If no files found, increase search depth progressively
+						if (filtered.length === 0 && query.trim().length > 0) {
+							// Show increasing depth indicator
+							setIsIncreasingDepth(true);
+
+							// Increase search depth for next search (progressive increase)
+							const newDepth = searchDepth + 5;
+							setSearchDepth(newDepth);
+
+							// Reload files with increased depth
+							setTimeout(() => {
+								loadFiles();
+								// Hide indicator after reload
+								setTimeout(() => {
+									setIsIncreasingDepth(false);
+								}, 500);
+							}, 100);
+						}
 					}
 				};
 
@@ -399,7 +424,7 @@ const FileList = memo(
 				}, debounceDelay);
 
 				return () => clearTimeout(timer);
-			}, [files, query, searchMode, searchFileContent]);
+			}, [files, query, searchMode, searchFileContent, searchDepth, loadFiles]);
 
 			// Display with scrolling window
 			const filteredFiles = useMemo(() => {
@@ -470,7 +495,9 @@ const FileList = memo(
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color="blue" dimColor>
-							Loading files...
+							{isIncreasingDepth
+								? `Searching deeper directories (depth: ${searchDepth})...`
+								: 'Loading files...'}
 						</Text>
 					</Box>
 				);
@@ -480,7 +507,9 @@ const FileList = memo(
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							No files found
+							{isIncreasingDepth
+								? 'Searching deeper directories...'
+								: 'No files found'}
 						</Text>
 					</Box>
 				);

@@ -1,15 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { logger } from '../core/logger.js';
+import {logger} from '../core/logger.js';
 
 /**
  * File backup entry
  */
 interface FileBackup {
-	path: string;           // Absolute file path
+	path: string; // Absolute file path
 	content: string | null; // File content (null if file didn't exist)
-	existed: boolean;       // Whether file existed before operation
+	existed: boolean; // Whether file existed before operation
 }
 
 /**
@@ -19,7 +19,7 @@ interface SnapshotMetadata {
 	sessionId: string;
 	messageIndex: number;
 	timestamp: number;
-	backups: FileBackup[];  // Only modified files
+	backups: FileBackup[]; // Only modified files
 }
 
 /**
@@ -38,7 +38,7 @@ class IncrementalSnapshotManager {
 	 * Ensure snapshots directory exists
 	 */
 	private async ensureSnapshotsDir(): Promise<void> {
-		await fs.mkdir(this.snapshotsDir, { recursive: true });
+		await fs.mkdir(this.snapshotsDir, {recursive: true});
 	}
 
 	/**
@@ -56,7 +56,7 @@ class IncrementalSnapshotManager {
 			sessionId,
 			messageIndex,
 			timestamp: Date.now(),
-			backups: []
+			backups: [],
 		};
 	}
 
@@ -81,14 +81,14 @@ class IncrementalSnapshotManager {
 			this.activeSnapshot.backups.push({
 				path: filePath,
 				content,
-				existed: true
+				existed: true,
 			});
 		} catch (error) {
 			// File doesn't exist, record as non-existent
 			this.activeSnapshot.backups.push({
 				path: filePath,
 				content: null,
-				existed: false
+				existed: false,
 			});
 		}
 
@@ -107,10 +107,13 @@ class IncrementalSnapshotManager {
 		await this.ensureSnapshotsDir();
 		const snapshotPath = this.getSnapshotPath(
 			this.activeSnapshot.sessionId,
-			this.activeSnapshot.messageIndex
+			this.activeSnapshot.messageIndex,
 		);
 
-		await fs.writeFile(snapshotPath, JSON.stringify(this.activeSnapshot, null, 2));
+		await fs.writeFile(
+			snapshotPath,
+			JSON.stringify(this.activeSnapshot, null, 2),
+		);
 	}
 
 	/**
@@ -124,9 +127,17 @@ class IncrementalSnapshotManager {
 	/**
 	 * List all snapshots for a session
 	 */
-	async listSnapshots(sessionId: string): Promise<Array<{ messageIndex: number; timestamp: number; fileCount: number }>> {
+	async listSnapshots(
+		sessionId: string,
+	): Promise<
+		Array<{messageIndex: number; timestamp: number; fileCount: number}>
+	> {
 		await this.ensureSnapshotsDir();
-		const snapshots: Array<{ messageIndex: number; timestamp: number; fileCount: number }> = [];
+		const snapshots: Array<{
+			messageIndex: number;
+			timestamp: number;
+			fileCount: number;
+		}> = [];
 
 		try {
 			const files = await fs.readdir(this.snapshotsDir);
@@ -138,7 +149,7 @@ class IncrementalSnapshotManager {
 					snapshots.push({
 						messageIndex: metadata.messageIndex,
 						timestamp: metadata.timestamp,
-						fileCount: metadata.backups.length
+						fileCount: metadata.backups.length,
 					});
 				}
 			}
@@ -152,7 +163,10 @@ class IncrementalSnapshotManager {
 	/**
 	 * Rollback to a specific snapshot
 	 */
-	async rollbackToSnapshot(sessionId: string, messageIndex: number): Promise<boolean> {
+	async rollbackToSnapshot(
+		sessionId: string,
+		messageIndex: number,
+	): Promise<boolean> {
 		const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
 
 		try {
@@ -191,7 +205,10 @@ class IncrementalSnapshotManager {
 	 * @param targetMessageIndex The message index to rollback to (inclusive)
 	 * @returns Array of file paths that will be rolled back
 	 */
-	async getFilesToRollback(sessionId: string, targetMessageIndex: number): Promise<string[]> {
+	async getFilesToRollback(
+		sessionId: string,
+		targetMessageIndex: number,
+	): Promise<string[]> {
 		await this.ensureSnapshotsDir();
 
 		try {
@@ -230,12 +247,19 @@ class IncrementalSnapshotManager {
 	 * @param targetMessageIndex The message index to rollback to (inclusive)
 	 * @returns Number of files rolled back
 	 */
-	async rollbackToMessageIndex(sessionId: string, targetMessageIndex: number): Promise<number> {
+	async rollbackToMessageIndex(
+		sessionId: string,
+		targetMessageIndex: number,
+	): Promise<number> {
 		await this.ensureSnapshotsDir();
 
 		try {
 			const files = await fs.readdir(this.snapshotsDir);
-			const snapshots: Array<{ messageIndex: number; path: string; metadata: SnapshotMetadata }> = [];
+			const snapshots: Array<{
+				messageIndex: number;
+				path: string;
+				metadata: SnapshotMetadata;
+			}> = [];
 
 			// Load all snapshots for this session
 			for (const file of files) {
@@ -246,7 +270,7 @@ class IncrementalSnapshotManager {
 					snapshots.push({
 						messageIndex: metadata.messageIndex,
 						path: snapshotPath,
-						metadata
+						metadata,
 					});
 				}
 			}
@@ -295,7 +319,10 @@ class IncrementalSnapshotManager {
 	 * @param sessionId Session ID
 	 * @param targetMessageIndex The message index to delete from (inclusive)
 	 */
-	async deleteSnapshotsFromIndex(sessionId: string, targetMessageIndex: number): Promise<number> {
+	async deleteSnapshotsFromIndex(
+		sessionId: string,
+		targetMessageIndex: number,
+	): Promise<number> {
 		await this.ensureSnapshotsDir();
 
 		try {
@@ -314,7 +341,10 @@ class IncrementalSnapshotManager {
 							await fs.unlink(snapshotPath);
 							deletedCount++;
 						} catch (error) {
-							console.error(`Failed to delete snapshot file ${snapshotPath}:`, error);
+							console.error(
+								`Failed to delete snapshot file ${snapshotPath}:`,
+								error,
+							);
 						}
 					}
 				}
@@ -346,6 +376,129 @@ class IncrementalSnapshotManager {
 	}
 
 	/**
+	 * Remap snapshot indices after context compression
+	 * This is critical to maintain snapshot validity when session messages are compressed
+	 *
+	 * @param sessionId - Session ID
+	 * @param oldMessageCount - Original message count before compression (for logging)
+	 * @param newMessageCount - New message count after compression
+	 * @param preservedMessageStartIndex - Start index of preserved messages in old array
+	 *
+	 * Example:
+	 * - Before: 50 messages (indices 0-49), snapshots at 10, 20, 30, 40, 48, 49
+	 * - After compression: 3 messages (summary + last 2 preserved messages from index 48-49)
+	 * - preservedMessageStartIndex = 48
+	 * - Result: Keep snapshots 48, 49 → rename to 1, 2 (indices in new array)
+	 *          Delete snapshots 10, 20, 30, 40 (compressed history)
+	 */
+	async remapSnapshotsAfterCompression(
+		sessionId: string,
+		_oldMessageCount: number, // Prefix with _ to indicate intentionally unused
+		newMessageCount: number,
+		preservedMessageStartIndex: number,
+	): Promise<void> {
+		await this.ensureSnapshotsDir();
+
+		try {
+			const files = await fs.readdir(this.snapshotsDir);
+			const snapshotsToProcess: Array<{
+				file: string;
+				path: string;
+				oldIndex: number;
+				metadata: SnapshotMetadata;
+			}> = [];
+
+			// Step 1: Load all snapshots for this session
+			for (const file of files) {
+				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+					const snapshotPath = path.join(this.snapshotsDir, file);
+					try {
+						const content = await fs.readFile(snapshotPath, 'utf-8');
+						const metadata: SnapshotMetadata = JSON.parse(content);
+						snapshotsToProcess.push({
+							file,
+							path: snapshotPath,
+							oldIndex: metadata.messageIndex,
+							metadata,
+						});
+					} catch (error) {
+						logger.error(`Failed to read snapshot ${file}:`, error);
+					}
+				}
+			}
+
+			// Step 2: Separate preserved and obsolete snapshots
+			const preservedSnapshots = snapshotsToProcess.filter(
+				s => s.oldIndex >= preservedMessageStartIndex,
+			);
+			const obsoleteSnapshots = snapshotsToProcess.filter(
+				s => s.oldIndex < preservedMessageStartIndex,
+			);
+
+			// Step 3: Delete obsolete snapshots (history that was compressed)
+			for (const snapshot of obsoleteSnapshots) {
+				try {
+					await fs.unlink(snapshot.path);
+					logger.info(
+						`Deleted obsolete snapshot at old index ${snapshot.oldIndex}`,
+					);
+				} catch (error) {
+					logger.error(`Failed to delete snapshot ${snapshot.file}:`, error);
+				}
+			}
+
+			// Step 4: Remap preserved snapshots to new indices
+			// New indices start after the summary message (index 0 is summary)
+			// preservedMessages in new array start at index 1
+			const indexOffset = preservedMessageStartIndex - 1; // How much to shift down
+
+			for (const snapshot of preservedSnapshots) {
+				const newIndex = snapshot.oldIndex - indexOffset;
+
+				// Validate new index is within bounds
+				if (newIndex < 1 || newIndex >= newMessageCount) {
+					logger.warn(
+						`Snapshot old index ${snapshot.oldIndex} maps to invalid new index ${newIndex}, skipping`,
+					);
+					continue;
+				}
+
+				// Update metadata with new index
+				snapshot.metadata.messageIndex = newIndex;
+
+				// Generate new file path
+				const newPath = this.getSnapshotPath(sessionId, newIndex);
+
+				try {
+					// Write updated metadata to new path
+					await fs.writeFile(
+						newPath,
+						JSON.stringify(snapshot.metadata, null, 2),
+					);
+
+					// Delete old file if path changed
+					if (newPath !== snapshot.path) {
+						await fs.unlink(snapshot.path);
+					}
+
+					logger.info(
+						`Remapped snapshot: old index ${snapshot.oldIndex} → new index ${newIndex}`,
+					);
+				} catch (error) {
+					logger.error(`Failed to remap snapshot ${snapshot.file}:`, error);
+				}
+			}
+
+			logger.info(
+				`Snapshot remapping complete: ${obsoleteSnapshots.length} deleted, ${preservedSnapshots.length} remapped`,
+			);
+		} catch (error) {
+			logger.error('Failed to remap snapshots after compression:', error);
+			throw error;
+		}
+	}
+
+	/**
 	 * Get active snapshot
 	 */
 	getActiveSnapshot(): SnapshotMetadata | null {
@@ -355,19 +508,27 @@ class IncrementalSnapshotManager {
 	/**
 	 * Capture workspace state before terminal command
 	 */
-	async captureWorkspaceState(workspaceRoot: string = process.cwd()): Promise<Map<string, { mtime: number; size: number }>> {
-		const fileStates = new Map<string, { mtime: number; size: number }>();
+	async captureWorkspaceState(
+		workspaceRoot: string = process.cwd(),
+	): Promise<Map<string, {mtime: number; size: number}>> {
+		const fileStates = new Map<string, {mtime: number; size: number}>();
 
 		const scanDir = async (dirPath: string) => {
 			try {
-				const entries = await fs.readdir(dirPath, { withFileTypes: true });
+				const entries = await fs.readdir(dirPath, {withFileTypes: true});
 
 				for (const entry of entries) {
 					// Skip ignored directories
 					if (entry.isDirectory()) {
 						const dirName = entry.name;
-						if (dirName === 'node_modules' || dirName === '.git' || dirName === 'dist' ||
-						    dirName === 'build' || dirName === '.snow' || dirName.startsWith('.')) {
+						if (
+							dirName === 'node_modules' ||
+							dirName === '.git' ||
+							dirName === 'dist' ||
+							dirName === 'build' ||
+							dirName === '.snow' ||
+							dirName.startsWith('.')
+						) {
 							continue;
 						}
 						await scanDir(path.join(dirPath, entry.name));
@@ -377,7 +538,7 @@ class IncrementalSnapshotManager {
 							const stats = await fs.stat(fullPath);
 							fileStates.set(fullPath, {
 								mtime: stats.mtimeMs,
-								size: stats.size
+								size: stats.size,
 							});
 						} catch (error) {
 							// Skip files that can't be read
@@ -396,7 +557,10 @@ class IncrementalSnapshotManager {
 	/**
 	 * Detect and backup changed files after terminal command
 	 */
-	async backupChangedFiles(beforeState: Map<string, { mtime: number; size: number }>, workspaceRoot: string = process.cwd()): Promise<void> {
+	async backupChangedFiles(
+		beforeState: Map<string, {mtime: number; size: number}>,
+		workspaceRoot: string = process.cwd(),
+	): Promise<void> {
 		const afterState = await this.captureWorkspaceState(workspaceRoot);
 
 		// Find modified and new files
@@ -406,7 +570,10 @@ class IncrementalSnapshotManager {
 			if (!beforeStats) {
 				// New file created - backup as non-existent
 				await this.backupFile(filePath);
-			} else if (beforeStats.mtime !== afterStats.mtime || beforeStats.size !== afterStats.size) {
+			} else if (
+				beforeStats.mtime !== afterStats.mtime ||
+				beforeStats.size !== afterStats.size
+			) {
 				// File modified - backup original (if not already backed up)
 				await this.backupFile(filePath);
 			}

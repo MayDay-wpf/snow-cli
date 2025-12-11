@@ -427,6 +427,7 @@ export const ko: TranslationKeys = {
 			skills: '문서 및 예제가 포함된 스킬 템플릿 생성',
 			agent: '하위 에이전트를 선택하고 특정 작업 처리',
 			todo: '프로젝트 파일에서 TODO 주석 검색 및 선택',
+			reindex: '코드베이스 인덱스 재구축, 변경·삭제·신규·수정된 파일 감지',
 			quit: '애플리케이션 종료',
 		},
 	},

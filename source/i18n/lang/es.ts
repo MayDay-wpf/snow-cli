@@ -472,6 +472,8 @@ export const es: TranslationKeys = {
 			skills: 'Crear plantilla de habilidad con documentación y ejemplos',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
+			reindex:
+				'Reconstruir índice de código, detectar archivos modificados, eliminados, nuevos y cambiados',
 			quit: 'Salir de la aplicación',
 		},
 	},

@@ -24,6 +24,7 @@ export interface CommandResult {
 		| 'executeTerminalCommand'
 		| 'deleteCustomCommand'
 		| 'showSkillsCreation'
+		| 'reindexCodebase'
 		| 'quit';
 	prompt?: string;
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected

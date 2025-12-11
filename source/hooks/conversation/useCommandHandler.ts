@@ -118,13 +118,33 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 			}
 		}
 
-		// 更新当前会话的消息（不新建会话）
-		currentSession.messages = newSessionMessages;
-		currentSession.messageCount = newSessionMessages.length;
-		currentSession.updatedAt = Date.now();
+		// 创建新会话而不是覆盖旧会话
+		// 这样可以保留压缩前的完整历史，支持回滚到压缩前的任意快照点
+		const compressedSession = await sessionManager.createNewSession(false);
 
-		// 保存更新后的会话文件
-		await sessionManager.saveSession(currentSession);
+		// 设置新会话的消息
+		compressedSession.messages = newSessionMessages;
+		compressedSession.messageCount = newSessionMessages.length;
+		compressedSession.updatedAt = Date.now();
+
+		// 保留原会话的标题和摘要
+		compressedSession.title = currentSession.title;
+		compressedSession.summary = currentSession.summary;
+
+		// 记录压缩关系
+		compressedSession.compressedFrom = currentSession.id;
+		compressedSession.compressedAt = Date.now();
+		compressedSession.originalMessageIndex =
+			compressionResult.preservedMessageStartIndex;
+
+		// 保存新会话
+		await sessionManager.saveSession(compressedSession);
+
+		// 切换到新会话
+		sessionManager.setCurrentSession(compressedSession);
+
+		// 新会话有独立的快照系统，不需要重映射旧会话的快照
+		// 旧会话的快照保持不变，如果需要回滚到压缩前，可以切换回旧会话
 
 		// 同步更新UI消息列表：从会话消息转换为UI Message格式
 		const newUIMessages: Message[] = [];
@@ -197,6 +217,7 @@ type CommandHandlerOptions = {
 		hideUserMessage?: boolean,
 	) => Promise<void>;
 	onQuit?: () => void;
+	onReindexCodebase?: () => Promise<void>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -662,6 +683,22 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Handle quit command - exit the application cleanly
 				if (options.onQuit) {
 					options.onQuit();
+				}
+			} else if (result.success && result.action === 'reindexCodebase') {
+				// Handle reindex codebase command - silent execution
+				if (options.onReindexCodebase) {
+					try {
+						await options.onReindexCodebase();
+					} catch (error) {
+						const errorMsg =
+							error instanceof Error ? error.message : 'Unknown error';
+						const errorMessage: Message = {
+							role: 'command',
+							content: `Failed to rebuild codebase index: ${errorMsg}`,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+					}
 				}
 			} else if (result.message) {
 				// For commands that just return a message (like /role, /init without AGENTS.md, etc.)

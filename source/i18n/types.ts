@@ -424,6 +424,7 @@ export type TranslationKeys = {
 			skills: string;
 			agent: string;
 			todo: string;
+			reindex: string;
 			quit: string;
 		};
 	};

@@ -65,6 +65,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.todo,
 			},
 			{
+				name: 'reindex',
+				description: t.commandPanel.commands.reindex,
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

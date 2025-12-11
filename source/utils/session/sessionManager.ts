@@ -31,6 +31,9 @@ export interface Session {
 	isTemporary?: boolean; // Temporary sessions are not shown in resume list
 	projectPath?: string; // 项目路径，用于区分不同项目的会话
 	projectId?: string; // 项目ID（项目名-哈希），用于存储分类
+	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
+	compressedAt?: number; // 压缩时间戳
+	originalMessageIndex?: number; // 压缩点在原会话中的消息索引
 }
 
 export interface SessionListItem {
@@ -42,6 +45,8 @@ export interface SessionListItem {
 	messageCount: number;
 	projectPath?: string; // 项目路径
 	projectId?: string; // 项目ID
+	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
+	compressedAt?: number; // 压缩时间戳
 }
 
 export interface PaginatedSessionList {
@@ -478,6 +483,8 @@ class SessionManager {
 				messageCount: session.messageCount,
 				projectPath: session.projectPath,
 				projectId: session.projectId,
+				compressedFrom: session.compressedFrom,
+				compressedAt: session.compressedAt,
 			});
 			seenIds.add(session.id);
 		} catch (error) {
@@ -539,6 +546,8 @@ class SessionManager {
 							messageCount: session.messageCount,
 							projectPath: session.projectPath,
 							projectId: session.projectId,
+							compressedFrom: session.compressedFrom,
+							compressedAt: session.compressedAt,
 						});
 					} catch (error) {
 						// Skip invalid session files

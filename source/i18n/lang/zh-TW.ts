@@ -421,6 +421,7 @@ export const zhTW: TranslationKeys = {
 			skills: '建立包含文件和範例的技能模板',
 			agent: '選擇並使用子代理處理特定任務',
 			todo: '從專案檔案搜尋並選擇 TODO 註解',
+			reindex: '重建代碼庫索引，檢測變更、刪除、新增和修改的檔案',
 			quit: '退出應用程式',
 		},
 	},

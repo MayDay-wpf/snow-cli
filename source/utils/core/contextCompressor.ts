@@ -14,6 +14,7 @@ export interface CompressionResult {
 		total_tokens: number;
 	};
 	preservedMessages?: ChatMessage[];
+	preservedMessageStartIndex?: number; // Start index of preserved messages in original array
 	hookFailed?: boolean; // Indicates if beforeCompress hook failed
 	hookErrorDetails?: {
 		type: 'warning' | 'error';
@@ -529,6 +530,7 @@ export async function compressContext(
 		// 添加保留的消息到结果中
 		if (preservedMessages.length > 0) {
 			result.preservedMessages = preservedMessages;
+			result.preservedMessageStartIndex = preserveStartIndex;
 		}
 
 		return result;

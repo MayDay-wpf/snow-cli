@@ -58,6 +58,7 @@ import {
 	performAutoCompression,
 } from '../../utils/core/autoCompress.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
+import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
 import {logger} from '../../utils/core/logger.js';
@@ -190,6 +191,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/custom.js'),
 			import('../../utils/commands/skills.js'),
 			import('../../utils/commands/quit.js'),
+			import('../../utils/commands/reindex.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -432,7 +434,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// Auto-resume last session when autoResume is true
 	useEffect(() => {
-		if (!autoResume) return;
+		if (!autoResume) {
+			// Clear any residual session when entering chat without auto-resume
+			// This ensures a clean start when user hasn't sent first message yet
+			sessionManager.clearCurrentSession();
+			return;
+		}
 
 		const resumeSession = async () => {
 			try {
@@ -568,6 +575,71 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		exit();
 	};
 
+	// Handle reindex codebase command
+	const handleReindexCodebase = async () => {
+		const workingDirectory = process.cwd();
+
+		setCodebaseIndexing(true);
+
+		try {
+			// Use the reindexCodebase utility function
+			const agent = await reindexCodebase(
+				workingDirectory,
+				codebaseAgentRef.current,
+				progressData => {
+					setCodebaseProgress({
+						totalFiles: progressData.totalFiles,
+						processedFiles: progressData.processedFiles,
+						totalChunks: progressData.totalChunks,
+						currentFile: progressData.currentFile,
+						status: progressData.status,
+					});
+
+					if (
+						progressData.status === 'completed' ||
+						progressData.status === 'error'
+					) {
+						setCodebaseIndexing(false);
+					}
+				},
+			);
+
+			// Update the agent reference
+			codebaseAgentRef.current = agent;
+
+			// Start file watcher after reindexing is completed
+			if (agent) {
+				agent.startWatching(watcherProgressData => {
+					setCodebaseProgress({
+						totalFiles: watcherProgressData.totalFiles,
+						processedFiles: watcherProgressData.processedFiles,
+						totalChunks: watcherProgressData.totalChunks,
+						currentFile: watcherProgressData.currentFile,
+						status: watcherProgressData.status,
+					});
+
+					if (
+						watcherProgressData.totalFiles === 0 &&
+						watcherProgressData.currentFile
+					) {
+						setFileUpdateNotification({
+							file: watcherProgressData.currentFile,
+							timestamp: Date.now(),
+						});
+
+						setTimeout(() => {
+							setFileUpdateNotification(null);
+						}, 3000);
+					}
+				});
+				setWatcherEnabled(true);
+			}
+		} catch (error) {
+			setCodebaseIndexing(false);
+			throw error;
+		}
+	};
+
 	// Use command handler hook
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
@@ -594,6 +666,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				hideUserMessage,
 			) || Promise.resolve(),
 		onQuit: handleQuit,
+		onReindexCodebase: handleReindexCodebase,
 	});
 
 	useEffect(() => {
@@ -773,6 +846,68 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		currentContextPercentageRef.current = 0;
 		streamingState.setContextUsage(null);
 
+		const currentSession = sessionManager.getCurrentSession();
+		if (!currentSession) return;
+
+		// 检查是否需要跨会话回滚（仅适用于新版本压缩产生的会话）
+		// 条件：选择 index 0（压缩摘要），且当前会话有 compressedFrom 字段（新版本）
+		if (
+			selectedIndex === 0 &&
+			currentSession.compressedFrom !== undefined &&
+			currentSession.compressedFrom !== null
+		) {
+			// 需要跨会话回滚到原会话
+			const originalSessionId = currentSession.compressedFrom;
+
+			try {
+				// 加载原会话
+				const originalSession = await sessionManager.loadSession(
+					originalSessionId,
+				);
+				if (!originalSession) {
+					console.error('Failed to load original session for rollback');
+					// 失败则继续正常回滚流程
+				} else {
+					// 切换到原会话
+					sessionManager.setCurrentSession(originalSession);
+
+					// 转换原会话消息为UI格式
+					const {convertSessionMessagesToUI} = await import(
+						'../../utils/session/sessionConverter.js'
+					);
+					const uiMessages = convertSessionMessagesToUI(
+						originalSession.messages,
+					);
+
+					// 更新UI
+					clearSavedMessages();
+					setMessages(uiMessages);
+					setRemountKey(prev => prev + 1);
+
+					// 加载原会话的快照计数
+					const snapshots = await incrementalSnapshotManager.listSnapshots(
+						originalSession.id,
+					);
+					const counts = new Map<number, number>();
+					for (const snapshot of snapshots) {
+						counts.set(snapshot.messageIndex, snapshot.fileCount);
+					}
+					snapshotState.setSnapshotFileCount(counts);
+
+					// 提示用户已切换到原会话
+					console.log(
+						`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
+					);
+
+					return;
+				}
+			} catch (error) {
+				console.error('Failed to switch to original session:', error);
+				// 失败则继续正常回滚流程
+			}
+		}
+
+		// 正常的当前会话内回滚逻辑（兼容旧版本会话）
 		// Count total files that will be rolled back (from selectedIndex onwards)
 		let totalFileCount = 0;
 		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
@@ -784,13 +919,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		// Show confirmation dialog if there are files to rollback
 		if (totalFileCount > 0) {
 			// Get list of files that will be rolled back
-			const currentSession = sessionManager.getCurrentSession();
-			const filePaths = currentSession
-				? await incrementalSnapshotManager.getFilesToRollback(
-						currentSession.id,
-						selectedIndex,
-				  )
-				: [];
+			const filePaths = await incrementalSnapshotManager.getFilesToRollback(
+				currentSession.id,
+				selectedIndex,
+			);
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length, // Use actual unique file count
@@ -1134,6 +1266,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					setMessages(compressionResult.uiMessages);
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
+
+					// 压缩创建了新会话，新会话的快照系统是独立的
+					// 清空当前的快照计数，因为新会话还没有快照
+					snapshotState.setSnapshotFileCount(new Map());
 				} else {
 					// 压缩失败或跳过，移除压缩提示消息，继续执行
 					setMessages(prev => prev.filter(m => m !== compressingMessage));
