@@ -704,7 +704,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 								max_tokens: config.maxTokens || 4096,
 								tools: allowedTools,
 								sessionId: currentSession?.id,
-								disableThinking: true, // Sub-agents 不使用 Extended Thinking
+								//disableThinking: true, // Sub-agents 不使用 Extended Thinking
 								configProfile: agent.configProfile,
 								customSystemPromptId: agent.customSystemPrompt,
 								customHeaders: agent.customHeaders,
@@ -753,6 +753,18 @@ You are a versatile task execution agent with full tool access, capable of handl
 
 			let currentContent = '';
 			let toolCalls: any[] = [];
+			// 保存 thinking/reasoning 内容用于多轮对话
+			let currentThinking:
+				| {type: 'thinking'; thinking: string; signature?: string}
+				| undefined; // Anthropic/Gemini thinking block
+			let currentReasoningContent: string | undefined; // Chat API (DeepSeek R1) reasoning_content
+			let currentReasoning:
+				| {
+						summary?: Array<{type: 'summary_text'; text: string}>;
+						content?: any;
+						encrypted_content?: string;
+				  }
+				| undefined; // Responses API reasoning data
 
 			for await (const event of stream) {
 				// Forward message to UI (but don't save to main conversation)
@@ -796,6 +808,23 @@ You are a versatile task execution agent with full tool access, capable of handl
 					currentContent += event.content;
 				} else if (event.type === 'tool_calls' && event.tool_calls) {
 					toolCalls = event.tool_calls;
+				} else if (event.type === 'reasoning_data' && 'reasoning' in event) {
+					// Capture reasoning data from Responses API
+					currentReasoning = event.reasoning as typeof currentReasoning;
+				} else if (event.type === 'done') {
+					// Capture thinking/reasoning from done event for multi-turn conversations
+					if ('thinking' in event && event.thinking) {
+						// Anthropic/Gemini thinking block
+						currentThinking = event.thinking as {
+							type: 'thinking';
+							thinking: string;
+							signature?: string;
+						};
+					}
+					if ('reasoning_content' in event && event.reasoning_content) {
+						// Chat API (DeepSeek R1) reasoning_content
+						currentReasoningContent = event.reasoning_content as string;
+					}
 				}
 			}
 
@@ -814,7 +843,23 @@ You are a versatile task execution agent with full tool access, capable of handl
 					content: currentContent || '',
 				};
 
+				// Save thinking/reasoning for multi-turn conversations
+				// Anthropic/Gemini: thinking block (required by Anthropic when thinking is enabled)
+				if (currentThinking) {
+					assistantMessage.thinking = currentThinking;
+				}
+				// Chat API (DeepSeek R1): reasoning_content
+				if (currentReasoningContent) {
+					(assistantMessage as any).reasoning_content = currentReasoningContent;
+				}
+				// Responses API: reasoning data with encrypted_content
+				if (currentReasoning) {
+					(assistantMessage as any).reasoning = currentReasoning;
+				}
+
 				if (toolCalls.length > 0) {
+					// tool_calls may contain thought_signature (Gemini thinking mode)
+					// This is preserved automatically since toolCalls is captured directly from the stream
 					assistantMessage.tool_calls = toolCalls;
 				}
 

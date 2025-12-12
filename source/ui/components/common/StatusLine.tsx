@@ -5,9 +5,8 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
-// 根据平台返回快捷键显示文本: Mac 用 ⌥+P, 其他用 Alt+P
-const getProfileShortcut = () =>
-	process.platform === 'darwin' ? '⌥+P' : 'Alt+P';
+// 根据平台返回快捷键显示文本: 统一使用 Ctrl+P
+const getProfileShortcut = () => 'Ctrl+P';
 
 type VSCodeConnectionStatus =
 	| 'disconnected'

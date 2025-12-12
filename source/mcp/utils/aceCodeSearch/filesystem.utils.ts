@@ -57,9 +57,7 @@ export function shouldExcludeDirectory(
 			// Use cached regex to avoid recompilation
 			let regex = regexCache.get(pattern);
 			if (!regex) {
-				const regexPattern = pattern
-					.replace(/\./g, '\\.')
-					.replace(/\*/g, '.*');
+				const regexPattern = pattern.replace(/\./g, '\\.').replace(/\*/g, '.*');
 				regex = new RegExp(`^${regexPattern}$`);
 				regexCache.set(pattern, regex);
 			}
@@ -73,6 +71,84 @@ export function shouldExcludeDirectory(
 				dirName === pattern ||
 				relativePath.startsWith(pattern + '/')
 			) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check if a file should be excluded based on exclusion patterns
+ * @param fileName - File name
+ * @param fullPath - Full path to file
+ * @param basePath - Base path for relative path calculation
+ * @param customExcludes - Custom exclusion patterns
+ * @param regexCache - Cache for compiled regex patterns
+ * @returns True if file should be excluded
+ */
+export function shouldExcludeFile(
+	fileName: string,
+	fullPath: string,
+	basePath: string,
+	customExcludes: string[],
+	regexCache: Map<string, RegExp>,
+): boolean {
+	// Skip most hidden files (starting with .)
+	// But allow common config files
+	if (fileName.startsWith('.')) {
+		const allowedHiddenFiles = [
+			'.env',
+			'.gitignore',
+			'.eslintrc',
+			'.prettierrc',
+			'.babelrc',
+			'.editorconfig',
+			'.npmrc',
+			'.yarnrc',
+		];
+		const isAllowedConfig = allowedHiddenFiles.some(
+			allowed =>
+				fileName === allowed ||
+				fileName.startsWith(allowed + '.') ||
+				fileName.endsWith('rc.js') ||
+				fileName.endsWith('rc.json') ||
+				fileName.endsWith('rc.yaml') ||
+				fileName.endsWith('rc.yml'),
+		);
+		if (!isAllowedConfig) {
+			return true;
+		}
+	}
+
+	// Check custom exclusion patterns from .gitignore/.snowignore
+	const relativePath = path.relative(basePath, fullPath);
+	for (const pattern of customExcludes) {
+		// Skip directory-only patterns (ending with /)
+		if (pattern.endsWith('/')) {
+			continue;
+		}
+
+		// Pattern matching: exact match or glob-style wildcards
+		if (pattern.includes('*')) {
+			// Use cached regex to avoid recompilation
+			let regex = regexCache.get(pattern);
+			if (!regex) {
+				const regexPattern = pattern.replace(/\./g, '\\.').replace(/\*/g, '.*');
+				regex = new RegExp(`^${regexPattern}$`);
+				regexCache.set(pattern, regex);
+			}
+			if (regex.test(relativePath) || regex.test(fileName)) {
+				return true;
+			}
+		} else {
+			// Exact match for file name or relative path
+			if (relativePath === pattern || fileName === pattern) {
+				return true;
+			}
+			// Check if file matches path prefix pattern
+			if (relativePath.startsWith(pattern + '/')) {
 				return true;
 			}
 		}

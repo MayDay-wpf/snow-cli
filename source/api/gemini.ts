@@ -240,6 +240,14 @@ function convertToGeminiMessages(
 		) {
 			const parts: any[] = [];
 
+			// Add thinking content first if exists (required by Gemini thinking mode)
+			if (msg.thinking) {
+				parts.push({
+					thought: true,
+					text: msg.thinking.thinking,
+				});
+			}
+
 			// Add text content if exists
 			if (msg.content) {
 				parts.push({text: msg.content});
@@ -254,12 +262,23 @@ function convertToGeminiMessages(
 					logError: true,
 				});
 
-				parts.push({
+				const functionCallPart: any = {
 					functionCall: {
 						name: toolCall.function.name,
 						args: argsParseResult.data,
 					},
-				});
+				};
+
+				// Include thoughtSignature at part level (sibling to functionCall, not inside it)
+				// According to Gemini docs, thoughtSignature is required for function calls in thinking mode
+				const signature =
+					(toolCall as any).thoughtSignature ||
+					(toolCall as any).thought_signature;
+				if (signature) {
+					functionCallPart.thoughtSignature = signature;
+				}
+
+				parts.push(functionCallPart);
 			}
 
 			contents.push({
@@ -465,6 +484,7 @@ export async function* createStreamingGeminiCompletion(
 
 			let contentBuffer = '';
 			let thinkingTextBuffer = ''; // Accumulate thinking text content
+			let sharedThoughtSignature: string | undefined; // Store first thoughtSignature for reuse
 			let toolCallsBuffer: Array<{
 				id: string;
 				type: 'function';
@@ -472,6 +492,7 @@ export async function* createStreamingGeminiCompletion(
 					name: string;
 					arguments: string;
 				};
+				thoughtSignature?: string; // For Gemini thinking mode
 			}> = [];
 			let hasToolCalls = false;
 			let toolCallIndex = 0;
@@ -564,7 +585,7 @@ export async function* createStreamingGeminiCompletion(
 												hasToolCalls = true;
 												const fc = part.functionCall;
 
-												const toolCall = {
+												const toolCall: any = {
 													id: `call_${toolCallIndex++}`,
 													type: 'function' as const,
 													function: {
@@ -572,6 +593,24 @@ export async function* createStreamingGeminiCompletion(
 														arguments: JSON.stringify(fc.args || {}),
 													},
 												};
+
+												// Capture thoughtSignature from part level (Gemini thinking mode)
+												// According to Gemini docs, thoughtSignature is at part level, sibling to functionCall
+												// IMPORTANT: Gemini only returns thoughtSignature on the FIRST function call
+												// We need to save it and reuse for all subsequent function calls
+												const partSignature =
+													part.thoughtSignature || part.thought_signature;
+												if (partSignature) {
+													// Save the first signature for reuse
+													if (!sharedThoughtSignature) {
+														sharedThoughtSignature = partSignature;
+													}
+													toolCall.thoughtSignature = partSignature;
+												} else if (sharedThoughtSignature) {
+													// Use shared signature for subsequent function calls
+													toolCall.thoughtSignature = sharedThoughtSignature;
+												}
+
 												toolCallsBuffer.push(toolCall);
 
 												// Yield delta for token counting

@@ -813,35 +813,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
-		// Alt+P to cycle through profiles
-		if (key.meta && _ === 'p') {
-			// Don't switch if any panel is open or streaming
-			if (
-				showSessionPanel ||
-				showMcpPanel ||
-				showUsagePanel ||
-				showHelpPanel ||
-				showCustomCommandConfig ||
-				showSkillsCreation ||
-				snapshotState.pendingRollback ||
-				pendingToolConfirmation ||
-				pendingUserQuestion ||
-				streamingState.isStreaming
-			) {
-				return;
-			}
-
-			// Get next profile and switch
-			const nextProfileName = getNextProfileName();
-			switchProfile(nextProfileName);
-
-			// Update display name
-			const profiles = getAllProfiles();
-			const profile = profiles.find(p => p.name === nextProfileName);
-			setCurrentProfileName(profile?.displayName || nextProfileName);
-			return;
-		}
-
 		if (snapshotState.pendingRollback) {
 			if (key.escape) {
 				snapshotState.setPendingRollback(null);
@@ -912,6 +883,34 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			// Note: session cleanup will be handled in processMessage/processPendingMessages finally block
 		}
 	});
+
+	// Handle profile switching (Ctrl+P shortcut)
+	const handleSwitchProfile = () => {
+		// Don't switch if any panel is open or streaming
+		if (
+			showSessionPanel ||
+			showMcpPanel ||
+			showUsagePanel ||
+			showHelpPanel ||
+			showCustomCommandConfig ||
+			showSkillsCreation ||
+			snapshotState.pendingRollback ||
+			pendingToolConfirmation ||
+			pendingUserQuestion ||
+			streamingState.isStreaming
+		) {
+			return;
+		}
+
+		// Get next profile and switch
+		const nextProfileName = getNextProfileName();
+		switchProfile(nextProfileName);
+
+		// Update display name
+		const profiles = getAllProfiles();
+		const profile = profiles.find(p => p.name === nextProfileName);
+		setCurrentProfileName(profile?.displayName || nextProfileName);
+	};
 
 	const handleHistorySelect = async (
 		selectedIndex: number,
@@ -2261,6 +2260,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							}
 							initialContent={restoreInputContent}
 							onContextPercentageChange={setCurrentContextPercentage}
+							onSwitchProfile={handleSwitchProfile}
 						/>
 						{/* Unified status line component */}
 						<StatusLine

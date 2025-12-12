@@ -156,14 +156,35 @@ function prepareMessagesForCompression(
 	}
 
 	// Add all conversation history for compression
-	// Filter out system messages (already added above) and tool messages (only needed for API, not for summary)
+	// Filter out only system messages (already added above)
+	// Keep tool messages to maintain valid API request structure (Anthropic requires tool_result after tool_use)
 	for (const msg of conversationMessages) {
-		if (msg.role !== 'system' && msg.role !== 'tool') {
-			// Only include user and assistant messages for compression
-			messages.push({
+		if (msg.role !== 'system') {
+			// Include user, assistant, and tool messages for compression
+			// Preserve all critical fields for accurate summary generation
+			const compressMsg: any = {
 				role: msg.role,
 				content: msg.content,
-			});
+			};
+			// Preserve tool_calls for assistant messages (required by Anthropic API)
+			if (msg.tool_calls) {
+				compressMsg.tool_calls = msg.tool_calls;
+			}
+			// Preserve tool_call_id for tool messages (links to tool_calls)
+			if (msg.tool_call_id) {
+				compressMsg.tool_call_id = msg.tool_call_id;
+			}
+			// Preserve thinking/reasoning fields (OpenAI Responses API, Anthropic, DeepSeek R1)
+			if (msg.reasoning) {
+				compressMsg.reasoning = msg.reasoning;
+			}
+			if (msg.thinking) {
+				compressMsg.thinking = msg.thinking;
+			}
+			if (msg.reasoning_content) {
+				compressMsg.reasoning_content = msg.reasoning_content;
+			}
+			messages.push(compressMsg);
 		}
 	}
 

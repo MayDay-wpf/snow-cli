@@ -87,6 +87,7 @@ type Props = {
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
+	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 };
 
 export default function ChatInput({
@@ -104,6 +105,7 @@ export default function ChatInput({
 	contextUsage,
 	initialContent = null,
 	onContextPercentageChange,
+	onSwitchProfile,
 }: Props) {
 	// Use i18n hook for translations
 	const {t} = useI18n();
@@ -275,6 +277,7 @@ export default function ChatInput({
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		onSwitchProfile,
 	});
 
 	// Set initial content when provided (e.g., when rolling back to first message)

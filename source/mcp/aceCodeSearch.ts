@@ -14,6 +14,7 @@ import {detectLanguage} from './utils/aceCodeSearch/language.utils.js';
 import {
 	loadExclusionPatterns,
 	shouldExcludeDirectory,
+	shouldExcludeFile,
 	readFileWithCache,
 } from './utils/aceCodeSearch/filesystem.utils.js';
 import {
@@ -424,12 +425,25 @@ export class ACECodeSearchService {
 		// Escape special regex characters to prevent ReDoS
 		const escapedSymbol = symbolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+		// 使用标记来控制递归提前终止
+		let shouldStop = false;
+
 		const searchInDirectory = async (dirPath: string): Promise<void> => {
+			// 提前终止检查
+			if (shouldStop || references.length >= maxResults) {
+				shouldStop = true;
+				return;
+			}
+
 			try {
 				const entries = await fs.readdir(dirPath, {withFileTypes: true});
 
 				for (const entry of entries) {
-					if (references.length >= maxResults) break;
+					// 每次循环都检查是否应该停止
+					if (shouldStop || references.length >= maxResults) {
+						shouldStop = true;
+						return;
+					}
 
 					const fullPath = path.join(dirPath, entry.name);
 
@@ -448,16 +462,39 @@ export class ACECodeSearchService {
 						}
 						await searchInDirectory(fullPath);
 					} else if (entry.isFile()) {
+						// 使用配置化的文件排除检查（支持 .gitignore/.snowignore）
+						if (
+							shouldExcludeFile(
+								entry.name,
+								fullPath,
+								this.basePath,
+								this.customExcludes,
+								this.regexCache,
+							)
+						) {
+							continue;
+						}
+
 						const language = detectLanguage(fullPath);
 						if (language) {
 							try {
-								const content = await fs.readFile(fullPath, 'utf-8');
+								// 使用缓存读取文件（避免重复读取）
+								const content = await readFileWithCache(
+									fullPath,
+									this.fileContentCache,
+								);
 								const lines = content.split('\n');
 
 								// Search for symbol usage with escaped symbol name
 								const regex = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
 								for (let i = 0; i < lines.length; i++) {
+									// 内层循环也检查限制
+									if (references.length >= maxResults) {
+										shouldStop = true;
+										return;
+									}
+
 									const line = lines[i];
 									if (!line) continue;
 
@@ -466,7 +503,11 @@ export class ACECodeSearchService {
 									let match;
 
 									while ((match = regex.exec(line)) !== null) {
-										if (references.length >= maxResults) break;
+										// 每找到一个匹配都检查
+										if (references.length >= maxResults) {
+											shouldStop = true;
+											return;
+										}
 
 										// Determine reference type
 										let referenceType: CodeReference['referenceType'] = 'usage';
@@ -1182,7 +1223,8 @@ export const mcpTools = [
 			properties: {
 				query: {
 					type: 'string',
-					description: 'Search Query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent")',
+					description:
+						'Search Query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent")',
 				},
 				searchType: {
 					type: 'string',
@@ -1205,7 +1247,8 @@ export const mcpTools = [
 						'import',
 						'export',
 					],
-					description: 'Optionally, filter by symbol type (function, class, variable, etc.).',
+					description:
+						'Optionally, filter by symbol type (function, class, variable, etc.).',
 				},
 				language: {
 					type: 'string',

@@ -452,6 +452,11 @@ export async function handleConversationWithTools(
 			// If there are tool calls, we need to handle them specially
 			if (receivedToolCalls && receivedToolCalls.length > 0) {
 				// Add assistant message with tool_calls to conversation (OpenAI requires this format)
+				// Extract shared thoughtSignature from the first tool call (Gemini only returns it on the first one)
+				const sharedThoughtSignature = (
+					receivedToolCalls.find(tc => (tc as any).thoughtSignature) as any
+				)?.thoughtSignature as string | undefined;
+
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
 					content: streamedContent || '',
@@ -462,6 +467,12 @@ export async function handleConversationWithTools(
 							name: tc.function.name,
 							arguments: tc.function.arguments,
 						},
+						// Preserve thoughtSignature for Gemini thinking mode
+						// If this tool call has its own signature, use it; otherwise use shared signature
+						...(((tc as any).thoughtSignature || sharedThoughtSignature) && {
+							thoughtSignature:
+								(tc as any).thoughtSignature || sharedThoughtSignature,
+						}),
 					})),
 					reasoning: receivedReasoning, // Include reasoning data for caching (Responses API)
 					thinking: receivedThinking, // Include thinking content (Anthropic/OpenAI)

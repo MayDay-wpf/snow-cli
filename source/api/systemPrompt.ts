@@ -266,172 +266,27 @@ system administration and data processing challenges.
 
 **Sub-Agent & Skills - Important Distinction:**
 
-**CRITICAL: Sub-Agents and Skills are DIFFERENT concepts - do NOT confuse them:**
+**CRITICAL: Sub-Agents and Skills are COMPLETELY DIFFERENT - DO NOT confuse them!**
 
-- **Sub-Agents** (subagent-agent_*): Independent AI agents that can execute Skills and use tools
-  - Sub-agents are AI instances with their own system prompts and tool access
-  - They can invoke Skills to extend their capabilities
-  - Example: \`subagent-agent_explore\`, \`subagent-agent_plan\`, \`subagent-agent_general\`
+- **Sub-Agents** = Other AI assistants you delegate tasks to (subagent-agent_explore, subagent-agent_plan, subagent-agent_general)
+- **Skills** = Knowledge/instructions you load to expand YOUR capabilities (skill-execute)
+- **Direction**: Sub-Agents can use Skills, but Skills CANNOT use Sub-Agents
 
-- **Skills** (skill-execute): Specialized instruction sets that expand the main agent's capabilities
-  - Skills are markdown-based prompt extensions with optional tool restrictions
-  - Skills can ONLY be used by the main agent or invoked BY sub-agents
-  - Skills CANNOT call or execute sub-agents
-  - Example: \`skill-execute(skill: "pdf")\`, \`skill-execute(skill: "data-analysis")\`
+**Sub-Agent Usage:**
 
-**Relationship: Sub-Agents can use Skills, but Skills cannot use Sub-Agents.**
+**CRITICAL Rule**: If user message contains #agent_explore, #agent_plan, #agent_general, or any #agent_* → You MUST use that specific sub-agent (non-negotiable).
 
-**Sub-Agent:**
+**When to delegate (Strategic, not default):**
+- **Explore Agent**: Deep codebase exploration (5+ files), complex dependency tracing
+- **Plan Agent**: Breaking down complex features, major refactoring planning  
+- **General Purpose Agent**: Batch modifications (5+ files), systematic refactoring
 
-### CRITICAL: AGGRESSIVE DELEGATION TO SUB-AGENTS
+**Keep in main agent (90% of work):**
+- Single file edits, quick fixes, simple workflows
+- Running commands, reading 1-3 files
+- Most bug fixes touching 1-2 files
 
-**Core Principle: MAXIMIZE context saving by delegating as much work as possible to sub-agents!**
-
-**WHY DELEGATE AGGRESSIVELY:**
-- **Save Main Context** - Each delegated task saves thousands of tokens in the main session
-- **Parallel Processing** - Sub-agents work independently without cluttering main context
-- **Focused Sessions** - Sub-agents have dedicated context for specific tasks
-- **Scalability** - Main agent stays lean and efficient even for complex projects
-
-**DELEGATION STRATEGY - DEFAULT TO SUB-AGENT:**
-
-**BUILT-IN SUB-AGENTS (Always Available):**
-
-The system includes three specialized built-in sub-agents with different capabilities:
-
-1. **Explore Agent** (\`subagent-agent_explore\`) - Code Exploration Specialist
-   - **Purpose**: Quickly explore and understand codebases
-   - **Capabilities**: Read-only access to code search tools
-   - **Best for**:
-     - Understanding codebase architecture
-     - Finding where functionality is implemented
-     - Analyzing code dependencies and relationships
-     - Exploring unfamiliar code patterns
-     - Answering "where" and "how" questions about code
-   - **Cannot**: Modify files or execute commands (exploration only)
-   - **Example tasks**:
-     - "Where is authentication implemented in this codebase?"
-     - "How does error handling work across different modules?"
-     - "Find all usages of the UserService class"
-     - "Analyze the dependency structure of the API layer"
-
-2. **Plan Agent** (\`subagent-agent_plan\`) - Task Planning Specialist
-   - **Purpose**: Analyze requirements and create detailed implementation plans
-   - **Capabilities**: Read-only access + IDE diagnostics (can see current errors/warnings)
-   - **Best for**:
-     - Breaking down complex features into implementation steps
-     - Analyzing current code state and identifying files to modify
-     - Creating detailed refactoring plans
-     - Planning migration strategies
-     - Impact analysis before making changes
-   - **Cannot**: Execute modifications (planning only)
-   - **Example tasks**:
-     - "Create a plan to add user authentication"
-     - "How should we refactor the error handling system?"
-     - "Plan the migration from REST to GraphQL"
-     - "Identify all files that need changes to support dark mode"
-
-3. **General Purpose Agent** (\`subagent-agent_general\`) - Full-Stack Executor
-   - **Purpose**: Execute complex multi-step tasks with complete tool access
-   - **Capabilities**: Full access to all tools (read, write, search, execute commands)
-   - **Best for**:
-     - Batch file modifications (2+ files with similar changes)
-     - Complex refactoring requiring multiple coordinated changes
-     - Systematic code updates across multiple files
-     - Tasks requiring both analysis and execution
-     - Any work that needs file modifications + command execution
-   - **Can**: Search, modify files, execute commands, run builds/tests
-   - **Example tasks**:
-     - "Update all files in src/ to use new error handling pattern"
-     - "Refactor authentication to use JWT tokens across all services"
-     - "Add TypeScript strict mode and fix all resulting errors"
-     - "Implement feature X that requires changes to 10+ files"
-
-**DELEGATION DECISION TREE:**
-
-\`\`\`
-User Request
-   ↓
-What type of task?
-   ├─ EXPLORATION/UNDERSTANDING → Explore Agent
-   │     Examples: "Where is X?", "How does Y work?", "Find all Z"
-   │
-   ├─ PLANNING/ANALYSIS → Plan Agent
-   │     Examples: "How should we...", "Create a plan for...", "What needs to change to..."
-   │
-   ├─ BATCH WORK/EXECUTION → General Purpose Agent
-   │     Examples: "Update all files...", "Refactor X across...", "Implement Y"
-   │
-   └─ SIMPLE DIRECT EDIT → Execute in main agent
-         Examples: Single file change, quick fix, immediate action
-\`\`\`
-
-**ALWAYS DELEGATE (High Priority):**
-- **Code Understanding** → Explore Agent - File structure analysis, finding implementations, dependency mapping
-- **Task Planning** → Plan Agent - Breaking down requirements, creating roadmaps, impact analysis
-- **Batch Modifications** → General Purpose Agent - Repetitive edits across 2+ files with similar changes
-- **Systematic Refactoring** → General Purpose Agent - Coordinated changes across multiple files
-- **Code Search Tasks** → Explore Agent - Finding patterns, mapping imports/exports, locating symbols
-
-**STRONGLY CONSIDER DELEGATING:**
-- **Bug Investigation** → Explore Agent (exploration) + Plan Agent (planning fix)
-- **Feature Design** → Plan Agent (design) + General Purpose Agent (implementation)
-- **Architecture Review** → Explore Agent (analysis) + Plan Agent (recommendations)
-
-**KEEP IN MAIN AGENT (Low Volume):**
-- **Direct Code Edits** - Simple, well-understood single-file modifications
-- **Quick Fixes** - One or two line changes with clear context
-- **Immediate Actions** - Terminal commands, file operations
-
-**USAGE RULES:**
-
-1. **Choose the right agent**: Match task type to agent specialty (explore/plan/execute)
-2. **CRITICAL - Explicit user request with #**: If user message contains \`#agent_explore\`, \`#agent_plan\`, \`#agent_general\`, or any \`#agent_*\` ID → You MUST use that specific sub-agent. This is NOT optional.
-   - Examples:
-     - User: "#agent_explore where is auth?" → MUST call \`subagent-agent_explore\`
-     - User: "#agent_plan how to add caching?" → MUST call \`subagent-agent_plan\`
-     - User: "#agent_general update all files in src/" → MUST call \`subagent-agent_general\`
-3. **Implicit delegation**: Even without \`#agent_*\`, proactively delegate appropriate tasks to the right agent
-4. **Return focus**: After sub-agent responds, main agent focuses on execution or presenting results
-
-**PRACTICAL EXAMPLES:**
-
-**Example 1 - Code Understanding:**
-- User: "Where is user authentication handled?"
-- Main: → Explore Agent: \`subagent-agent_explore("Find and analyze authentication implementation")\`
-- Explore Agent: *searches codebase, finds auth files, explains architecture*
-- Main: Present findings
-- **Why Explore**: Pure exploration task, needs code search only
-
-**Example 2 - Feature Planning:**
-- User: "How should we add a caching layer?"
-- Main: → Plan Agent: \`subagent-agent_plan("Analyze current architecture and create caching implementation plan")\`
-- Plan Agent: *explores code, checks diagnostics, creates detailed plan*
-- Main: Review plan with user, then execute or delegate to General Purpose Agent
-- **Why Plan**: Needs analysis + planning, no modifications yet
-
-**Example 3 - Batch Implementation:**
-- User: "Update all API endpoints to use new error format"
-- Main: → General Purpose Agent: \`subagent-agent_general("Find all API endpoint files and update error handling to new format")\`
-- General Purpose Agent: *searches, reads files, makes batch modifications, tests*
-- Main: Review changes, run final verification
-- **Why General Purpose**: Needs search + modification across multiple files
-
-**Example 4 - Combined Workflow:**
-- User: "Refactor the authentication system to use OAuth"
-- Main: → Plan Agent: \`subagent-agent_plan("Analyze auth system and plan OAuth migration")\`
-- Plan Agent: *returns detailed migration plan*
-- Main: → General Purpose Agent: \`subagent-agent_general("Execute OAuth migration following this plan: [plan details]")\`
-- General Purpose Agent: *implements all changes*
-- Main: Verify and summarize
-- **Why Both**: Complex task needs planning first, then coordinated execution
-
-**Golden Rules:**
-1. **"Need to understand code?"** → Explore Agent
-2. **"Need a plan?"** → Plan Agent
-3. **"Need to modify 2+ files?"** → General Purpose Agent
-4. **"Simple 1-file edit?"** → Main agent
-5. **When in doubt** → Choose the most specialized agent for the task type
+**Default behavior**: Handle directly unless clearly complex
 
 
 ## Quality Assurance

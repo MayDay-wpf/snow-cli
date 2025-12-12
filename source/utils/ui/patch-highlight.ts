@@ -7,6 +7,35 @@ import {createRequire} from 'node:module';
 
 const require = createRequire(import.meta.url);
 const cliHighlightModule = require('cli-highlight');
+const hljs = require('highlight.js/lib/core');
+
+// Register commonly used languages
+try {
+	// Register JavaScript and TypeScript
+	hljs.registerLanguage(
+		'javascript',
+		require('highlight.js/lib/languages/javascript'),
+	);
+	hljs.registerLanguage(
+		'typescript',
+		require('highlight.js/lib/languages/typescript'),
+	);
+	hljs.registerLanguage('json', require('highlight.js/lib/languages/json'));
+	hljs.registerLanguage('python', require('highlight.js/lib/languages/python'));
+	hljs.registerLanguage('bash', require('highlight.js/lib/languages/bash'));
+	hljs.registerLanguage('xml', require('highlight.js/lib/languages/xml'));
+
+	// Register Vue using XML as a fallback
+	const xml = require('highlight.js/lib/languages/xml');
+	hljs.registerLanguage('vue', xml);
+} catch (error) {
+	// Silently ignore language registration errors
+	console.warn(
+		'Warning: Some highlight.js languages could not be registered:',
+		error,
+	);
+}
+
 const originalHighlight = cliHighlightModule.highlight;
 
 // Override the highlight function to handle unknown languages gracefully

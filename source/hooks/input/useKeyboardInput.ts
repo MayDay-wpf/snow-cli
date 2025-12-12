@@ -84,6 +84,8 @@ type KeyboardInputOptions = {
 	confirmTodoSelection: () => void;
 	todoSearchQuery: string;
 	setTodoSearchQuery: (query: string) => void;
+	// Profile switching
+	onSwitchProfile?: () => void;
 };
 
 export function useKeyboardInput(options: KeyboardInputOptions) {
@@ -147,6 +149,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		onSwitchProfile,
 	} = options;
 
 	// Mark variables as used (they are used in useInput closure below)
@@ -236,6 +239,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			} else if (!yoloMode && !planMode) {
 				// All off -> YOLO only
 				setYoloMode(true);
+			}
+			return;
+		}
+
+		// Ctrl+P - Switch to next profile
+		if (key.ctrl && input === 'p') {
+			if (onSwitchProfile) {
+				onSwitchProfile();
 			}
 			return;
 		}
