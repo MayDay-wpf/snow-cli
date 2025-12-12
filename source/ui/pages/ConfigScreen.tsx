@@ -154,11 +154,8 @@ export default function ConfigScreen({
 	// Scrolling configuration
 	const MAX_VISIBLE_FIELDS = 8;
 
-	// Responses reasoning effort options (xhigh only on supported model)
-	const supportsXHigh =
-		requestMethod === 'responses' &&
-		(advancedModel === 'gpt-5.1-codex-max' ||
-			basicModel === 'gpt-5.1-codex-max');
+	// Responses reasoning effort options（XHIGH 不做模型限制）
+	const supportsXHigh = requestMethod === 'responses';
 
 	const requestMethodOptions = [
 		{
@@ -424,30 +421,15 @@ export default function ConfigScreen({
 			return;
 		}
 
-		// Track next model values for correct supportsXHigh evaluation
-		let nextAdvancedModel = advancedModel;
-		let nextBasicModel = basicModel;
-
 		if (currentField === 'advancedModel') {
-			nextAdvancedModel = value;
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
-			nextBasicModel = value;
 			setBasicModel(value);
 		} else if (currentField === 'compactModelName') {
 			setCompactModelName(value);
 		}
 
-		// If current effort is xhigh but new selection no longer supports it, downgrade to high
-		const nextSupportsXHigh =
-			requestMethod === 'responses' &&
-			(nextAdvancedModel === 'gpt-5.1-codex-max' ||
-				nextBasicModel === 'gpt-5.1-codex-max');
-
-		if (responsesReasoningEffort === 'xhigh' && !nextSupportsXHigh) {
-			setResponsesReasoningEffort('high');
-		}
-
+		// XHIGH 不再随模型变动而降级；仅在离开 responses 时由 useEffect 自动降级
 		setIsEditing(false);
 		setSearchTerm('');
 	};
