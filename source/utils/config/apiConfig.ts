@@ -140,7 +140,7 @@ function migrateProxyConfigToNewFile(legacyProxy: any): void {
 				JSON.stringify(proxyConfig, null, 2),
 				'utf8',
 			);
-			console.log('✅ Migrated proxy config to proxy-config.json');
+			//console.log('✅ Migrated proxy config to proxy-config.json');
 		}
 	} catch (error) {
 		console.error('Failed to migrate proxy config:', error);
