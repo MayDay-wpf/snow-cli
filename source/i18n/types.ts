@@ -425,6 +425,7 @@ export type TranslationKeys = {
 			skills: string;
 			agent: string;
 			todo: string;
+			addDir: string;
 			reindex: string;
 			quit: string;
 		};
@@ -812,6 +813,32 @@ export type TranslationKeys = {
 		error: string;
 		tabToSwitch: string;
 		noDataForPeriod: string;
+	};
+	// Working Directory Panel
+	workingDirectoryPanel: {
+		title: string;
+		loading: string;
+		noDirectories: string;
+		defaultLabel: string;
+		markedCount: string;
+		markedCountSingular: string;
+		markedCountPlural: string;
+		// Navigation hints
+		navigationHint: string;
+		// Add mode
+		addTitle: string;
+		addPathLabel: string;
+		addPathPrompt: string;
+		addErrorEmpty: string;
+		addErrorFailed: string;
+		addHint: string;
+		// Delete confirmation
+		confirmDeleteTitle: string;
+		confirmDeleteMessage: string;
+		confirmDeleteMessagePlural: string;
+		confirmHint: string;
+		// Alert messages
+		alertDefaultCannotDelete: string;
 	};
 };
 

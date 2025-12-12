@@ -86,6 +86,93 @@ export type ConversationHandlerOptions = {
 };
 
 /**
+ * LAYER 3 PROTECTION: Clean orphaned tool_calls from conversation messages
+ *
+ * Removes two types of problematic messages:
+ * 1. Assistant messages with tool_calls that have no corresponding tool results
+ * 2. Tool result messages that have no corresponding tool_calls
+ *
+ * This prevents OpenAI API errors when sessions have incomplete tool_calls
+ * due to force quit (Ctrl+C/ESC) during tool execution.
+ *
+ * @param messages - Array of conversation messages (will be modified in-place)
+ */
+function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
+	// Build map of tool_call_ids that have results
+	const toolResultIds = new Set<string>();
+	for (const msg of messages) {
+		if (msg.role === 'tool' && msg.tool_call_id) {
+			toolResultIds.add(msg.tool_call_id);
+		}
+	}
+
+	// Build map of tool_call_ids that are declared in assistant messages
+	const declaredToolCallIds = new Set<string>();
+	for (const msg of messages) {
+		if (msg.role === 'assistant' && msg.tool_calls) {
+			for (const tc of msg.tool_calls) {
+				declaredToolCallIds.add(tc.id);
+			}
+		}
+	}
+
+	// Find indices to remove (iterate backwards for safe removal)
+	const indicesToRemove: number[] = [];
+
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i];
+		if (!msg) continue; // Skip undefined messages (should never happen, but TypeScript requires check)
+
+		// Check for orphaned assistant messages with tool_calls
+		if (msg.role === 'assistant' && msg.tool_calls) {
+			const hasAllResults = msg.tool_calls.every(tc =>
+				toolResultIds.has(tc.id),
+			);
+
+			if (!hasAllResults) {
+				const orphanedIds = msg.tool_calls
+					.filter(tc => !toolResultIds.has(tc.id))
+					.map(tc => tc.id);
+
+				console.warn(
+					'[cleanOrphanedToolCalls] Removing assistant message with orphaned tool_calls',
+					{
+						messageIndex: i,
+						toolCallIds: msg.tool_calls.map(tc => tc.id),
+						orphanedIds,
+					},
+				);
+
+				indicesToRemove.push(i);
+			}
+		}
+
+		// Check for orphaned tool result messages
+		if (msg.role === 'tool' && msg.tool_call_id) {
+			if (!declaredToolCallIds.has(msg.tool_call_id)) {
+				console.warn('[cleanOrphanedToolCalls] Removing orphaned tool result', {
+					messageIndex: i,
+					toolCallId: msg.tool_call_id,
+				});
+
+				indicesToRemove.push(i);
+			}
+		}
+	}
+
+	// Remove messages in reverse order (from end to start) to preserve indices
+	for (const idx of indicesToRemove) {
+		messages.splice(idx, 1);
+	}
+
+	if (indicesToRemove.length > 0) {
+		console.log(
+			`[cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from conversation`,
+		);
+	}
+}
+
+/**
  * Handle conversation with streaming and tool calls
  * Returns the usage data collected during the conversation
  */
@@ -159,6 +246,10 @@ export async function handleConversationWithTools(
 		);
 		conversationMessages.push(...filteredMessages);
 	}
+
+	// LAYER 3 PROTECTION: Clean orphaned tool_calls before sending to API
+	// This prevents API errors if session has incomplete tool_calls due to force quit
+	cleanOrphanedToolCalls(conversationMessages);
 
 	// Add current user message
 	conversationMessages.push({
@@ -483,10 +574,15 @@ export async function handleConversationWithTools(
 				} as any;
 				conversationMessages.push(assistantMessage);
 
-				// Save assistant message with tool calls
-				saveMessage(assistantMessage).catch(error => {
+				// CRITICAL: Save assistant message with tool calls synchronously (await)
+				// This ensures the message is persisted BEFORE auto-compression check
+				// If compression happens after tool_calls but before tool results,
+				// the new session MUST include this tool_calls message (via preservedMessages)
+				try {
+					await saveMessage(assistantMessage);
+				} catch (error) {
 					console.error('Failed to save assistant message:', error);
-				});
+				}
 
 				// If there's text content before tool calls, display it first
 				if (streamedContent && streamedContent.trim()) {
@@ -1230,9 +1326,12 @@ export async function handleConversationWithTools(
 								content: 'Error: Tool execution aborted by user',
 							};
 							conversationMessages.push(abortedResult);
-							saveMessage(abortedResult).catch(error => {
+							try {
+								// Use await to ensure aborted results are saved before exiting
+								await saveMessage(abortedResult);
+							} catch (error) {
 								console.error('Failed to save aborted tool result:', error);
-							});
+							}
 						}
 					}
 					freeEncoder();
@@ -1267,6 +1366,21 @@ export async function handleConversationWithTools(
 					}
 					freeEncoder();
 					break;
+				}
+
+				// CRITICAL: 在压缩前，必须先将 toolResults 保存到 conversationMessages 和会话文件
+				// 这样压缩时读取的会话才包含完整的工具调用和结果
+				// 否则新会话只有 tool_calls 没有对应的 tool results
+				for (const result of toolResults) {
+					conversationMessages.push(result as any);
+					try {
+						await saveMessage(result);
+					} catch (error) {
+						console.error(
+							'Failed to save tool result before compression:',
+							error,
+						);
+					}
 				}
 
 				// 在工具执行完成后、发送结果到AI前，检查是否需要压缩
@@ -1395,11 +1509,8 @@ export async function handleConversationWithTools(
 								subAgentUsage: usage,
 							});
 
-							// Save the tool result to conversation history
-							conversationMessages.push(result as any);
-							saveMessage(result).catch(error => {
-								console.error('Failed to save tool result:', error);
-							});
+							// Tool result already saved before compression check (line 1374-1384)
+							// No need to save again here
 							continue;
 						}
 
@@ -1482,13 +1593,8 @@ export async function handleConversationWithTools(
 						});
 					}
 
-					// Add tool result to conversation history and save (skip if already saved above)
-					if (toolCall && !toolCall.function.name.startsWith('subagent-')) {
-						conversationMessages.push(result as any);
-						saveMessage(result).catch(error => {
-							console.error('Failed to save tool result:', error);
-						});
-					}
+					// Tool results already saved before compression check (line 1374-1384)
+					// No need to save again here
 				}
 
 				// Add all result messages in batch to avoid intermediate renders

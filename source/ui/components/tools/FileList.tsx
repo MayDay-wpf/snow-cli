@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {getWorkingDirectories} from '../../../utils/config/workingDirConfig.js';
 
 type FileItem = {
 	name: string;
@@ -20,6 +21,8 @@ type FileItem = {
 	// For content search mode
 	lineNumber?: number;
 	lineContent?: string;
+	// Source working directory for multi-dir support
+	sourceDir?: string;
 };
 
 type Props = {
@@ -55,6 +58,7 @@ const FileList = memo(
 			const [isLoading, setIsLoading] = useState(false);
 			const [searchDepth, setSearchDepth] = useState(5); // Default depth 5, will increase if needed
 			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
+			const [actualMaxDepth, setActualMaxDepth] = useState(0); // Track actual max depth found
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -67,143 +71,168 @@ const FileList = memo(
 					: MAX_DISPLAY_ITEMS;
 			}, [maxItems]);
 
-			// Read .gitignore patterns at the start
-			const readGitignore = useCallback(async (): Promise<string[]> => {
-				const gitignorePath = path.join(rootPath, '.gitignore');
-				try {
-					const content = await fs.promises.readFile(gitignorePath, 'utf-8');
-					return content
-						.split('\n')
-						.map(line => line.trim())
-						.filter(line => line && !line.startsWith('#'))
-						.map(line => line.replace(/\/$/, '')); // Remove trailing slashes
-				} catch {
-					return [];
-				}
-			}, [rootPath]);
-
 			// Get files from directory with progressive depth search
 			const loadFiles = useCallback(async () => {
-				const MAX_FILES = 1000; // Limit total files for performance
+				const MAX_FILES = 3000; // Increased limit for multiple directories
 
-				// Read .gitignore patterns
-				const gitignorePatterns = await readGitignore();
+				// Get all working directories
+				const workingDirs = await getWorkingDirectories();
+				const allFiles: FileItem[] = [];
+				let globalMaxDepth = 0;
 
-				const getFilesRecursively = async (
-					dir: string,
-					depth: number = 0,
-					maxDepth: number = searchDepth,
-				): Promise<FileItem[]> => {
-					// Stop recursion if depth limit reached
-					if (depth > maxDepth) {
-						return [];
+				// Load files from each working directory
+				for (const workingDir of workingDirs) {
+					const dirPath = workingDir.path;
+
+					// Read .gitignore patterns for this directory
+					const gitignorePath = path.join(dirPath, '.gitignore');
+					let gitignorePatterns: string[] = [];
+					try {
+						const content = await fs.promises.readFile(gitignorePath, 'utf-8');
+						gitignorePatterns = content
+							.split('\n')
+							.map(line => line.trim())
+							.filter(line => line && !line.startsWith('#'))
+							.map(line => line.replace(/\/$/, ''));
+					} catch {
+						// No .gitignore or read error
 					}
 
-					try {
-						const entries = await fs.promises.readdir(dir, {
-							withFileTypes: true,
-						});
-						let result: FileItem[] = [];
-
-						// Common ignore patterns for better performance
-						const baseIgnorePatterns = [
-							'node_modules',
-							'dist',
-							'build',
-							'coverage',
-							'.git',
-							'.vscode',
-							'.idea',
-							'out',
-							'target',
-							'bin',
-							'obj',
-							'.next',
-							'.nuxt',
-							'vendor',
-							'__pycache__',
-							'.pytest_cache',
-							'.mypy_cache',
-							'venv',
-							'.venv',
-							'env',
-							'.env',
-						];
-
-						// Merge base patterns with .gitignore patterns
-						const ignorePatterns = [
-							...baseIgnorePatterns,
-							...gitignorePatterns,
-						];
-
-						for (const entry of entries) {
-							// Early exit if we've collected enough files
-							if (result.length >= MAX_FILES) {
-								break;
-							}
-
-							// Skip hidden files and ignore patterns
-							if (
-								entry.name.startsWith('.') ||
-								ignorePatterns.includes(entry.name)
-							) {
-								continue;
-							}
-
-							const fullPath = path.join(dir, entry.name);
-
-							// Skip if file is too large (> 10MB) for performance
-							try {
-								const stats = await fs.promises.stat(fullPath);
-								if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
-									continue;
-								}
-							} catch {
-								continue;
-							}
-
-							let relativePath = path.relative(rootPath, fullPath);
-
-							// Ensure relative paths start with ./ for consistency
-							if (
-								!relativePath.startsWith('.') &&
-								!path.isAbsolute(relativePath)
-							) {
-								relativePath = './' + relativePath;
-							}
-
-							// Normalize to forward slashes for cross-platform consistency
-							relativePath = relativePath.replace(/\\/g, '/');
-
-							result.push({
-								name: entry.name,
-								path: relativePath,
-								isDirectory: entry.isDirectory(),
-							});
-
-							// Recursively get files from subdirectories with depth limit
-							if (entry.isDirectory() && depth < maxDepth) {
-								const subFiles = await getFilesRecursively(
-									fullPath,
-									depth + 1,
-									maxDepth,
-								);
-								result = result.concat(subFiles);
-							}
+					const getFilesRecursively = async (
+						dir: string,
+						depth: number = 0,
+						maxDepth: number = searchDepth,
+						maxFiles: number = MAX_FILES,
+					): Promise<{files: FileItem[]; maxDepthReached: number}> => {
+						// Stop recursion if depth limit reached
+						if (depth > maxDepth) {
+							return {files: [], maxDepthReached: depth - 1};
 						}
 
-						return result;
-					} catch (error) {
-						return [];
+						try {
+							const entries = await fs.promises.readdir(dir, {
+								withFileTypes: true,
+							});
+							let result: FileItem[] = [];
+							let currentMaxDepth = depth; // Track deepest level we actually explored
+
+							// Common ignore patterns for better performance
+							const baseIgnorePatterns = [
+								'node_modules',
+								'dist',
+								'build',
+								'coverage',
+								'.git',
+								'.vscode',
+								'.idea',
+								'out',
+								'target',
+								'bin',
+								'obj',
+								'.next',
+								'.nuxt',
+								'vendor',
+								'__pycache__',
+								'.pytest_cache',
+								'.mypy_cache',
+								'venv',
+								'.venv',
+								'env',
+								'.env',
+							];
+
+							// Merge base patterns with .gitignore patterns
+							const ignorePatterns = [
+								...baseIgnorePatterns,
+								...gitignorePatterns,
+							];
+
+							for (const entry of entries) {
+								// Early exit if we've collected enough files
+								if (result.length >= maxFiles) {
+									break;
+								}
+
+								// Skip hidden files and ignore patterns
+								if (
+									entry.name.startsWith('.') ||
+									ignorePatterns.includes(entry.name)
+								) {
+									continue;
+								}
+
+								const fullPath = path.join(dir, entry.name);
+
+								// Skip if file is too large (> 10MB) for performance
+								try {
+									const stats = await fs.promises.stat(fullPath);
+									if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
+										continue;
+									}
+								} catch {
+									continue;
+								}
+
+								let relativePath = path.relative(dirPath, fullPath);
+
+								// Ensure relative paths start with ./ for consistency
+								if (
+									!relativePath.startsWith('.') &&
+									!path.isAbsolute(relativePath)
+								) {
+									relativePath = './' + relativePath;
+								}
+
+								// Normalize to forward slashes for cross-platform consistency
+								relativePath = relativePath.replace(/\\/g, '/');
+
+								result.push({
+									name: entry.name,
+									path: relativePath,
+									isDirectory: entry.isDirectory(),
+									sourceDir: dirPath, // Track source directory
+								});
+
+								// Recursively get files from subdirectories with depth limit
+								if (entry.isDirectory() && depth < maxDepth) {
+									const subResult = await getFilesRecursively(
+										fullPath,
+										depth + 1,
+										maxDepth,
+										maxFiles,
+									);
+									result = result.concat(subResult.files);
+									// Track the deepest level reached
+									currentMaxDepth = Math.max(
+										currentMaxDepth,
+										subResult.maxDepthReached,
+									);
+								}
+							}
+
+							return {files: result, maxDepthReached: currentMaxDepth};
+						} catch (error) {
+							return {files: [], maxDepthReached: depth};
+						}
+					};
+
+					// Load files from this directory
+					const dirResult = await getFilesRecursively(dirPath);
+					allFiles.push(...dirResult.files);
+					globalMaxDepth = Math.max(globalMaxDepth, dirResult.maxDepthReached);
+
+					// Stop if we've collected enough files
+					if (allFiles.length >= MAX_FILES) {
+						break;
 					}
-				};
+				}
 
 				// Batch all state updates together
 				setIsLoading(true);
-				const fileList = await getFilesRecursively(rootPath);
-				setFiles(fileList);
+				setFiles(allFiles);
+				setActualMaxDepth(globalMaxDepth);
 				setIsLoading(false);
-			}, [rootPath, readGitignore, searchDepth]);
+			}, [searchDepth]);
 
 			// Search file content for content search mode
 			const searchFileContent = useCallback(
@@ -295,7 +324,9 @@ const FileList = memo(
 							const fileResults: FileItem[] = [];
 
 							try {
-								const fullPath = path.join(rootPath, file.path);
+								// Use sourceDir if available, otherwise fallback to rootPath
+								const baseDir = file.sourceDir || rootPath;
+								const fullPath = path.join(baseDir, file.path);
 								const content = await fs.promises.readFile(fullPath, 'utf-8');
 								const lines = content.split('\n');
 
@@ -316,6 +347,7 @@ const FileList = memo(
 											isDirectory: false,
 											lineNumber: i + 1,
 											lineContent: line.trim().slice(0, maxLineLength),
+											sourceDir: file.sourceDir, // Preserve source directory
 										});
 									}
 								}
@@ -395,8 +427,13 @@ const FileList = memo(
 
 						setAllFilteredFiles(filtered);
 
-						// If no files found, increase search depth progressively
-						if (filtered.length === 0 && query.trim().length > 0) {
+						// Only increase search depth if we hit the depth limit
+						// (actualMaxDepth equals searchDepth means there might be deeper files)
+						if (
+							filtered.length === 0 &&
+							query.trim().length > 0 &&
+							actualMaxDepth >= searchDepth
+						) {
 							// Show increasing depth indicator
 							setIsIncreasingDepth(true);
 
@@ -424,7 +461,15 @@ const FileList = memo(
 				}, debounceDelay);
 
 				return () => clearTimeout(timer);
-			}, [files, query, searchMode, searchFileContent, searchDepth, loadFiles]);
+			}, [
+				files,
+				query,
+				searchMode,
+				searchFileContent,
+				searchDepth,
+				loadFiles,
+				actualMaxDepth,
+			]);
 
 			// Display with scrolling window
 			const filteredFiles = useMemo(() => {
@@ -466,16 +511,20 @@ const FileList = memo(
 							allFilteredFiles[selectedIndex]
 						) {
 							const selectedFile = allFilteredFiles[selectedIndex];
+							// Use sourceDir if available, otherwise use rootPath
+							const baseDir = selectedFile.sourceDir || rootPath;
+							const fullPath = path.join(baseDir, selectedFile.path);
+
 							// For content search mode, include line number
 							if (selectedFile.lineNumber !== undefined) {
-								return `${selectedFile.path}:${selectedFile.lineNumber}`;
+								return `${fullPath}:${selectedFile.lineNumber}`;
 							}
-							return selectedFile.path;
+							return fullPath;
 						}
 						return null;
 					},
 				}),
-				[allFilteredFiles, selectedIndex],
+				[allFilteredFiles, selectedIndex, rootPath],
 			);
 
 			// Calculate display index for the scrolling window

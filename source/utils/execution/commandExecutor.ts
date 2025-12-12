@@ -13,6 +13,7 @@ export interface CommandResult {
 		| 'showSessionPanel'
 		| 'showMcpPanel'
 		| 'showUsagePanel'
+		| 'showWorkingDirPanel'
 		| 'home'
 		| 'review'
 		| 'exportChat'

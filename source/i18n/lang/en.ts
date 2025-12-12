@@ -448,6 +448,8 @@ export const en: TranslationKeys = {
 			skills: 'Create skill template with documentation and examples',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
+			addDir:
+				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
 			quit: 'Exit the application',
@@ -852,5 +854,32 @@ export const en: TranslationKeys = {
 		error: 'Error: {error}',
 		tabToSwitch: '- Tab to switch',
 		noDataForPeriod: 'No usage data for this period',
+	},
+	workingDirectoryPanel: {
+		title: 'Working Directories',
+		loading: 'Loading...',
+		noDirectories: 'No directories found',
+		defaultLabel: '[DEFAULT]',
+		markedCount: '{count} director{plural} marked for deletion',
+		markedCountSingular: 'y',
+		markedCountPlural: 'ies',
+		// Navigation hints
+		navigationHint:
+			'↑↓ Navigate | Space Mark/Unmark | A Add New | D Delete Marked | ESC Close',
+		// Add mode
+		addTitle: 'Add Working Directory',
+		addPathLabel: 'Path: ',
+		addPathPrompt: 'Enter directory path:',
+		addErrorEmpty: 'Path cannot be empty',
+		addErrorFailed: 'Failed to add directory (already exists or invalid path)',
+		addHint: 'Enter to add, ESC to cancel',
+		// Delete confirmation
+		confirmDeleteTitle: 'Confirm Delete',
+		confirmDeleteMessage: 'Are you sure you want to delete {count} directory?',
+		confirmDeleteMessagePlural:
+			'Are you sure you want to delete {count} directories?',
+		confirmHint: 'Y to confirm, N to cancel',
+		// Alert messages
+		alertDefaultCannotDelete: 'Default directory cannot be deleted',
 	},
 };

@@ -203,6 +203,77 @@ class SessionManager {
 		await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
 	}
 
+	/**
+	 * 清理未完成的 tool_calls
+	 * 如果最后一条 assistant 消息有 tool_calls，但后续没有对应的 tool results，则删除该消息
+	 * 这种情况通常发生在用户强制退出（Ctrl+C）时
+	 */
+	private cleanIncompleteToolCalls(session: Session): void {
+		if (!session.messages || session.messages.length === 0) {
+			return;
+		}
+
+		// 从后往前查找最后一条 assistant 消息及其 tool_calls
+		let lastAssistantWithToolCallsIndex = -1;
+		let toolCallIds: string[] = [];
+
+		for (let i = session.messages.length - 1; i >= 0; i--) {
+			const msg = session.messages[i];
+			if (
+				msg &&
+				msg.role === 'assistant' &&
+				msg.tool_calls &&
+				msg.tool_calls.length > 0
+			) {
+				lastAssistantWithToolCallsIndex = i;
+				toolCallIds = msg.tool_calls.map(tc => tc.id);
+				break;
+			}
+		}
+
+		// 如果没有找到带 tool_calls 的 assistant 消息，不需要清理
+		if (lastAssistantWithToolCallsIndex === -1) {
+			return;
+		}
+
+		// 检查这些 tool_calls 是否都有对应的 tool results
+		const toolResultIds = new Set<string>();
+		for (
+			let i = lastAssistantWithToolCallsIndex + 1;
+			i < session.messages.length;
+			i++
+		) {
+			const msg = session.messages[i];
+			if (msg && msg.role === 'tool' && msg.tool_call_id) {
+				toolResultIds.add(msg.tool_call_id);
+			}
+		}
+
+		// 检查是否所有 tool_calls 都有对应的 results
+		const hasIncompleteToolCalls = toolCallIds.some(
+			id => !toolResultIds.has(id),
+		);
+
+		if (hasIncompleteToolCalls) {
+			// 存在未完成的 tool_calls，需要删除该 assistant 消息及其之后的所有消息
+			logger.warn('Detected incomplete tool_calls, cleaning up session', {
+				sessionId: session.id,
+				removingFromIndex: lastAssistantWithToolCallsIndex,
+				totalMessages: session.messages.length,
+				toolCallIds,
+				toolResultIds: Array.from(toolResultIds),
+			});
+
+			// 截断消息列表，移除未完成的 tool_calls 及后续消息
+			session.messages = session.messages.slice(
+				0,
+				lastAssistantWithToolCallsIndex,
+			);
+			session.messageCount = session.messages.length;
+			session.updatedAt = Date.now();
+		}
+	}
+
 	lastLoadHookError?: {
 		type: 'warning' | 'error';
 		exitCode: number;
@@ -222,6 +293,9 @@ class SessionManager {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
 			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
+
+			// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
+			this.cleanIncompleteToolCalls(session);
 
 			// Execute onSessionStart hook before setting current session
 			const hookResult = await this.executeSessionStartHook(session.messages);
@@ -245,6 +319,9 @@ class SessionManager {
 		try {
 			const session = await this.findSessionInDateFolders(sessionId);
 			if (session) {
+				// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
+				this.cleanIncompleteToolCalls(session);
+
 				// Execute onSessionStart hook before setting current session
 				const hookResult = await this.executeSessionStartHook(session.messages);
 				if (!hookResult.shouldContinue) {

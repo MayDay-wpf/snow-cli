@@ -277,17 +277,15 @@ export class TodoService {
 				name: 'todo-get',
 				description: `Get current TODO list with task IDs, status, and hierarchy.
 
- MANDATORY RULE - PARALLEL CALLS ONLY:
- NEVER call todo-get alone! MUST call with other tools in the SAME function call block.
- ALWAYS: todo-get + filesystem-read/terminal-execute/etc in parallel
- FORBIDDEN: Call todo-get alone to check status
+PARALLEL CALLS ONLY: MUST pair with other tools (todo-get + filesystem-read/terminal-execute/etc).
+NEVER call todo-get alone - always combine with an action tool.
 
-##  WHEN TO USE IN DIALOGUE:
-- **User provides additional info**: Use todo-get + filesystem-read to check what's done
-- **User requests modifications**: Check current progress before adding/updating tasks
-- **Continuing work**: Always check status first to avoid redoing completed tasks
+USE WHEN:
+- User provides additional info → Check what's already done before continuing
+- User requests modifications → Check current progress before adding tasks
+- Continuing work → Verify status to avoid redoing completed tasks
 
-USAGE: Combine with filesystem-read, terminal-execute, or other actions to check progress while working.`,
+EXAMPLE: todo-get + filesystem-read (check progress while reading files)`,
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -295,17 +293,17 @@ USAGE: Combine with filesystem-read, terminal-execute, or other actions to check
 			},
 			{
 				name: 'todo-update',
-				description: `Update TODO status/content - USE THIS FREQUENTLY to track progress!
+				description: `Update TODO status/content - USE FREQUENTLY to track progress!
 
- MANDATORY RULE - PARALLEL CALLS ONLY:
- NEVER call todo-update alone! MUST call with other tools in the SAME function call block.
- ALWAYS: todo-update + filesystem-edit/terminal-execute/etc in parallel
- FORBIDDEN: Call todo-update, wait for result, then proceed
+PARALLEL CALLS ONLY: MUST pair with other tools (todo-update + filesystem-edit/terminal-execute/etc).
+NEVER call todo-update alone - always combine with an action tool.
 
-BEST PRACTICE: Mark "completed" ONLY after task is verified.
-Example: todo-update(task1, completed) + filesystem-edit(task2) → Update while working!
+BEST PRACTICE: 
+- Mark "completed" ONLY after task is verified
+- Update while working, not after
+- Example: todo-update(task1, completed) + filesystem-edit(task2) 
 
- This ensures efficient workflow and prevents unnecessary wait times.`,
+This ensures efficient workflow and prevents unnecessary wait times.`,
 
 				inputSchema: {
 					type: 'object',
@@ -333,23 +331,21 @@ Example: todo-update(task1, completed) + filesystem-edit(task2) → Update while
 			},
 			{
 				name: 'todo-add',
-				description: `Add one or multiple new tasks to existing TODO list when requirements expand.
+				description: `Add tasks to TODO list - FIRST STEP for most programming tasks.
 
- MANDATORY RULE - PARALLEL CALLS ONLY:
- NEVER call todo-add alone! MUST call with other tools in the SAME function call block.
- ALWAYS: todo-add + filesystem-edit/filesystem-read/etc in parallel
- FORBIDDEN: Call todo-add alone to add task
+PARALLEL CALLS ONLY: MUST pair with other tools (todo-add + filesystem-read/etc).
+NEVER call todo-add alone - always combine with an action tool.
 
-USE WHEN:
-- User adds new requirements during work
-- You discover additional necessary steps
-- Breaking down a complex task into subtasks
+WHEN TO USE (Very common):
+- Start ANY multi-step task → Create TODO list immediately
+- User adds new requirements → Add tasks for new work
+- Break down complex work → Add subtasks
 
-SUPPORTS BOTH:
-- Single task: Pass a string for 'content'
-- Multiple tasks: Pass an array of strings for 'content' to batch add tasks efficiently
+SUPPORTS BATCH ADDING:
+- Single: content="Task description"
+- Multiple: content=["Task 1", "Task 2", "Task 3"] (recommended for multi-step work)
 
-TODO will be automatically created for each session.`,
+EXAMPLE: todo-add(content=["Read file", "Modify code", "Test changes"]) + filesystem-read("file.ts")`,
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -382,15 +378,13 @@ TODO will be automatically created for each session.`,
 				name: 'todo-delete',
 				description: `Delete TODO item from the list.
 
- MANDATORY RULE - PARALLEL CALLS ONLY:
- NEVER call todo-delete alone! MUST call with other tools in the SAME function call block.
- ALWAYS: todo-delete + filesystem-edit/todo-get/etc in parallel
- FORBIDDEN: Call todo-delete alone
+PARALLEL CALLS ONLY: MUST pair with other tools (todo-delete + filesystem-edit/todo-get/etc).
+NEVER call todo-delete alone - always combine with an action tool.
 
-NOTE: Deleting a parent task will cascade delete all its children automatically.
+CASCADE DELETE: Deleting a parent task automatically deletes all its children.
 
-BEST PRACTICE - MAINTAIN CLEAN TODO:
-Proactively delete obsolete, redundant, or overly detailed completed subtasks to keep the TODO list clear and focused on current work status.`,
+BEST PRACTICE - KEEP TODO CLEAN:
+Proactively delete obsolete, redundant, or overly detailed completed subtasks to maintain focus on current work.`,
 				inputSchema: {
 					type: 'object',
 					properties: {

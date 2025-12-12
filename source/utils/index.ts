@@ -1,9 +1,27 @@
 import {Command} from '../types/index.js';
 
 // Import commands to register them
+import './commands/addDir.js';
+import './commands/agent.js';
 import './commands/clear.js';
-import './commands/resume.js';
+import './commands/compact.js';
 import './commands/custom.js';
+import './commands/export.js';
+import './commands/help.js';
+import './commands/home.js';
+import './commands/ide.js';
+import './commands/init.js';
+import './commands/mcp.js';
+import './commands/plan.js';
+import './commands/quit.js';
+import './commands/reindex.js';
+import './commands/resume.js';
+import './commands/review.js';
+import './commands/role.js';
+import './commands/skills.js';
+import './commands/todoPicker.js';
+import './commands/usage.js';
+import './commands/yolo.js';
 
 // Export logger
 export {Logger, LogLevel, logger} from './core/logger.js';

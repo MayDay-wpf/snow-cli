@@ -422,6 +422,7 @@ export const zh: TranslationKeys = {
 			skills: '创建包含文档和示例的技能模板',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
+			addDir: '添加工作目录以支持多项目上下文。用法: /add-dir 或 /add-dir 路径',
 			reindex: '重建代码库索引，检测变更、删除、新增和修改的文件',
 			quit: '退出应用程序',
 		},
@@ -811,5 +812,31 @@ export const zh: TranslationKeys = {
 		error: '错误: {error}',
 		tabToSwitch: '- Tab 切换',
 		noDataForPeriod: '此期间无使用数据',
+	},
+	workingDirectoryPanel: {
+		title: '工作目录',
+		loading: '加载中...',
+		noDirectories: '未找到目录',
+		defaultLabel: '[默认]',
+		markedCount: '已标记 {count} 个目录以删除',
+		markedCountSingular: '个目录',
+		markedCountPlural: '个目录',
+		// Navigation hints
+		navigationHint:
+			'↑↓ 导航 | 空格 标记/取消 | A 添加新目录 | D 删除已标记 | ESC 关闭',
+		// Add mode
+		addTitle: '添加工作目录',
+		addPathLabel: '路径: ',
+		addPathPrompt: '输入目录路径:',
+		addErrorEmpty: '路径不能为空',
+		addErrorFailed: '添加目录失败(已存在或路径无效)',
+		addHint: 'Enter 添加, ESC 取消',
+		// Delete confirmation
+		confirmDeleteTitle: '确认删除',
+		confirmDeleteMessage: '确定要删除 {count} 个目录吗?',
+		confirmDeleteMessagePlural: '确定要删除 {count} 个目录吗?',
+		confirmHint: 'Y 确认, N 取消',
+		// Alert messages
+		alertDefaultCannotDelete: '默认目录不能被删除',
 	},
 };

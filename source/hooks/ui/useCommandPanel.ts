@@ -65,6 +65,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.todo,
 			},
 			{
+				name: 'add-dir',
+				description: t.commandPanel.commands.addDir || 'Add working directory',
+			},
+			{
 				name: 'reindex',
 				description: t.commandPanel.commands.reindex,
 			},

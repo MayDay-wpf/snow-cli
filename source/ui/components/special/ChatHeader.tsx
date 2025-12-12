@@ -22,7 +22,7 @@ export default function ChatHeader({
 		<Box paddingX={1} width={terminalWidth}>
 			{simpleMode ? (
 				// Simple mode: No border, smaller logo
-				<Box paddingX={1} paddingY={0}>
+				<Box paddingX={1} paddingY={1}>
 					<Box flexDirection="column">
 						{/* Simple mode: Show responsive ASCII art title */}
 						<ChatHeaderLogo

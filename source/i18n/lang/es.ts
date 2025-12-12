@@ -473,6 +473,8 @@ export const es: TranslationKeys = {
 			skills: 'Crear plantilla de habilidad con documentación y ejemplos',
 			agent: 'Seleccionar y usar sub-agente para manejar tareas específicas',
 			todo: 'Buscar y seleccionar comentarios TODO de archivos del proyecto',
+			addDir:
+				'Agregar directorio de trabajo para contexto multi-proyecto. Uso: /add-dir o /add-dir ruta',
 			reindex:
 				'Reconstruir índice de código, detectar archivos modificados, eliminados, nuevos y cambiados',
 			quit: 'Salir de la aplicación',
@@ -885,5 +887,28 @@ export const es: TranslationKeys = {
 		error: 'Error: {error}',
 		tabToSwitch: '- Tab para cambiar',
 		noDataForPeriod: 'No hay datos de uso para este período',
+	},
+	workingDirectoryPanel: {
+		title: 'Directorios de Trabajo',
+		loading: 'Cargando...',
+		noDirectories: 'No se encontraron directorios',
+		defaultLabel: '[PREDETERMINADO]',
+		markedCount: '{count} director{plural} marcado para eliminación',
+		markedCountSingular: 'io',
+		markedCountPlural: 'ios',
+		navigationHint:
+			'↑↓ Navegar | Espacio Marcar/Desmarcar | A Agregar Nuevo | D Eliminar Marcados | ESC Cerrar',
+		addTitle: 'Agregar Directorio de Trabajo',
+		addPathLabel: 'Ruta: ',
+		addPathPrompt: 'Ingrese la ruta del directorio:',
+		addErrorEmpty: 'La ruta no puede estar vacía',
+		addErrorFailed: 'Error al agregar directorio (ya existe o ruta inválida)',
+		addHint: 'Enter para agregar, ESC para cancelar',
+		confirmDeleteTitle: 'Confirmar Eliminación',
+		confirmDeleteMessage: '¿Está seguro de eliminar {count} directorio?',
+		confirmDeleteMessagePlural: '¿Está seguro de eliminar {count} directorios?',
+		confirmHint: 'Y para confirmar, N para cancelar',
+		alertDefaultCannotDelete:
+			'El directorio predeterminado no se puede eliminar',
 	},
 };

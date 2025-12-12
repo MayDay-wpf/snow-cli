@@ -793,7 +793,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (message) {
 				// Check if message is a command with arguments (e.g., /review [note])
 				if (message.startsWith('/')) {
-					const commandMatch = message.match(/^\/(\w+)(?:\s+(.+))?$/);
+					const commandMatch = message.match(
+						/^\/([a-zA-Z0-9_-]+)(?:\s+(.+))?$/,
+					);
 					if (commandMatch && commandMatch[1]) {
 						const commandName = commandMatch[1];
 						const commandArgs = commandMatch[2];

@@ -435,10 +435,12 @@ export const ja: TranslationKeys = {
 				'チャット会話を保存ダイアログ付きのテキストファイルにエクスポート',
 			custom: 'カスタムコマンドを追加して ~/.snow/commands に保存',
 			skills: 'ドキュメントと例を含むスキルテンプレートを作成',
-			agent: 'サブエージェントを選択して特定のタスクを処理',
+			agent: 'サブエージェントを選択して特定のタスクを処理する',
 			todo: 'プロジェクトファイルからTODOコメントを検索して選択',
+			addDir:
+				'マルチプロジェクトコンテキストのための作業ディレクトリを追加。使用方法: /add-dir または /add-dir パス',
 			reindex:
-				'コードベースインデックスを再構築、変更・削除・新規・修正されたファイルを検出',
+				'コードベースインデックスを再構築、変更、削除、新規、修正されたファイルを検出',
 			quit: 'アプリケーションを終了',
 		},
 	},
@@ -838,5 +840,29 @@ export const ja: TranslationKeys = {
 		error: 'エラー: {error}',
 		tabToSwitch: '- Tab で切り替え',
 		noDataForPeriod: 'この期間のデータはありません',
+	},
+	workingDirectoryPanel: {
+		title: 'ワーキングディレクトリ',
+		loading: '読み込み中...',
+		noDirectories: 'ディレクトリが見つかりません',
+		defaultLabel: '[デフォルト]',
+		markedCount: '{count}個のディレクトリが削除対象としてマークされています',
+		markedCountSingular: '個のディレクトリ',
+		markedCountPlural: '個のディレクトリ',
+		navigationHint:
+			'↑↓ 移動 | Space マーク/解除 | A 新規追加 | D マーク済み削除 | ESC 閉じる',
+		addTitle: 'ワーキングディレクトリを追加',
+		addPathLabel: 'パス: ',
+		addPathPrompt: 'ディレクトリパスを入力:',
+		addErrorEmpty: 'パスを空にすることはできません',
+		addErrorFailed:
+			'ディレクトリの追加に失敗しました（既に存在するか無効なパス）',
+		addHint: 'Enter で追加、ESC でキャンセル',
+		confirmDeleteTitle: '削除の確認',
+		confirmDeleteMessage: '{count}個のディレクトリを削除してもよろしいですか?',
+		confirmDeleteMessagePlural:
+			'{count}個のディレクトリを削除してもよろしいですか?',
+		confirmHint: 'Y で確認、N でキャンセル',
+		alertDefaultCannotDelete: 'デフォルトディレクトリは削除できません',
 	},
 };

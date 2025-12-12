@@ -30,7 +30,17 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 			return null;
 		}
 
-		// 使用提供的 sessionId 加载会话
+		// CRITICAL: Save current session to disk BEFORE loading for compression
+		// This ensures all recently added messages (including tool_calls) are persisted
+		// Otherwise loadSession might read stale data, causing compressed session to miss tool_calls
+		console.log(`Saving current session ${sessionId} before compression...`);
+		const currentSessionBeforeSave = sessionManager.getCurrentSession();
+		if (currentSessionBeforeSave && currentSessionBeforeSave.id === sessionId) {
+			await sessionManager.saveSession(currentSessionBeforeSave);
+			console.log(`Session ${sessionId} saved, now loading for compression...`);
+		}
+
+		// 使用提供的 sessionId 加载会话（从文件读取，确保数据完整）
 		console.log(`Loading session ${sessionId} for compression...`);
 		const currentSession = await sessionManager.loadSession(sessionId);
 
@@ -140,8 +150,29 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 		// 保存新会话
 		await sessionManager.saveSession(compressedSession);
 
-		// 切换到新会话
-		sessionManager.setCurrentSession(compressedSession);
+		// CRITICAL: Reload the new session from disk after compression
+		// This ensures the in-memory session object is fully synchronized with the persisted data
+		// Without this, subsequent saveMessage calls might save to the old session file
+		console.log(
+			`Reloading compressed session ${compressedSession.id} from disk...`,
+		);
+		const reloadedSession = await sessionManager.loadSession(
+			compressedSession.id,
+		);
+
+		if (reloadedSession) {
+			// Set the reloaded session as current (with fresh data from disk)
+			sessionManager.setCurrentSession(reloadedSession);
+			console.log(
+				`Compressed session ${compressedSession.id} reloaded and set as current`,
+			);
+		} else {
+			// Fallback: set the in-memory session if reload fails
+			sessionManager.setCurrentSession(compressedSession);
+			console.warn(
+				`Failed to reload compressed session, using in-memory version`,
+			);
+		}
 
 		// 新会话有独立的快照系统，不需要重映射旧会话的快照
 		// 旧会话的快照保持不变，如果需要回滚到压缩前，可以切换回旧会话
@@ -204,6 +235,7 @@ type CommandHandlerOptions = {
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
@@ -433,6 +465,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showSkillsCreation') {
 				options.setShowSkillsCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showWorkingDirPanel') {
+				options.setShowWorkingDirPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

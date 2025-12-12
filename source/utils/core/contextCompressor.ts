@@ -135,6 +135,96 @@ function findPreserveStartIndex(messages: ChatMessage[]): number {
 }
 
 /**
+ * Clean orphaned tool_calls from conversation messages
+ *
+ * Removes two types of problematic messages:
+ * 1. Assistant messages with tool_calls that have no corresponding tool results
+ * 2. Tool result messages that have no corresponding tool_calls
+ *
+ * This prevents API errors when compression happens while tools are executing
+ * (e.g., last message has tool_use but no tool_result yet).
+ *
+ * @param messages - Array of conversation messages (will be modified in-place)
+ */
+function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
+	// Build map of tool_call_ids that have results
+	const toolResultIds = new Set<string>();
+	for (const msg of messages) {
+		if (msg.role === 'tool' && msg.tool_call_id) {
+			toolResultIds.add(msg.tool_call_id);
+		}
+	}
+
+	// Build map of tool_call_ids that are declared in assistant messages
+	const declaredToolCallIds = new Set<string>();
+	for (const msg of messages) {
+		if (msg.role === 'assistant' && msg.tool_calls) {
+			for (const tc of msg.tool_calls) {
+				declaredToolCallIds.add(tc.id);
+			}
+		}
+	}
+
+	// Find indices to remove (iterate backwards for safe removal)
+	const indicesToRemove: number[] = [];
+
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i];
+		if (!msg) continue; // Skip undefined messages
+
+		// Check for orphaned assistant messages with tool_calls
+		if (msg.role === 'assistant' && msg.tool_calls) {
+			const hasAllResults = msg.tool_calls.every(tc =>
+				toolResultIds.has(tc.id),
+			);
+
+			if (!hasAllResults) {
+				const orphanedIds = msg.tool_calls
+					.filter(tc => !toolResultIds.has(tc.id))
+					.map(tc => tc.id);
+
+				console.warn(
+					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message with orphaned tool_calls',
+					{
+						messageIndex: i,
+						toolCallIds: msg.tool_calls.map(tc => tc.id),
+						orphanedIds,
+					},
+				);
+
+				indicesToRemove.push(i);
+			}
+		}
+
+		// Check for orphaned tool result messages
+		if (msg.role === 'tool' && msg.tool_call_id) {
+			if (!declaredToolCallIds.has(msg.tool_call_id)) {
+				console.warn(
+					'[contextCompressor:cleanOrphanedToolCalls] Removing orphaned tool result',
+					{
+						messageIndex: i,
+						toolCallId: msg.tool_call_id,
+					},
+				);
+
+				indicesToRemove.push(i);
+			}
+		}
+	}
+
+	// Remove messages in reverse order (from end to start) to preserve indices
+	for (const idx of indicesToRemove) {
+		messages.splice(idx, 1);
+	}
+
+	if (indicesToRemove.length > 0) {
+		console.log(
+			`[contextCompressor:cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from compression input`,
+		);
+	}
+}
+
+/**
  * Prepare messages for compression by adding system prompt and compression request
  * Note: Only filters out system messages and tool messages, preserving user and assistant messages
  */
@@ -187,6 +277,11 @@ function prepareMessagesForCompression(
 			messages.push(compressMsg);
 		}
 	}
+
+	// CRITICAL: Clean orphaned tool_calls before sending to API
+	// This prevents errors when compression happens while tools are executing
+	// (e.g., last message has tool_use but no tool_result yet)
+	cleanOrphanedToolCalls(messages);
 
 	// Add compression request as final user message
 	messages.push({
@@ -505,6 +600,11 @@ export async function compressContext(
 	// 分离待压缩和待保留的消息
 	const messagesToCompress = messages.slice(0, preserveStartIndex);
 	const preservedMessages = messages.slice(preserveStartIndex);
+
+	// CRITICAL: Clean orphaned tool_calls from preserved messages
+	// This prevents orphaned tool_calls from being saved to the new session
+	// When compression happens after tool_calls are saved but before tool_results are added
+	cleanOrphanedToolCalls(preservedMessages);
 
 	try {
 		// Choose compression method based on request method
