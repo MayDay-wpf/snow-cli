@@ -267,6 +267,22 @@ export function switchProfile(profileName: string): void {
 }
 
 /**
+ * Get the next profile name for cycling through profiles
+ * Returns the next profile in alphabetical order, or wraps to the first one
+ */
+export function getNextProfileName(): string {
+	const profiles = getAllProfiles();
+	if (profiles.length <= 1) {
+		return getActiveProfileName();
+	}
+
+	const currentProfile = getActiveProfileName();
+	const currentIndex = profiles.findIndex(p => p.name === currentProfile);
+	const nextIndex = (currentIndex + 1) % profiles.length;
+	return profiles[nextIndex]?.name || profiles[0]?.name || 'default';
+}
+
+/**
  * Create a new profile
  */
 export function createProfile(profileName: string, config?: AppConfig): void {

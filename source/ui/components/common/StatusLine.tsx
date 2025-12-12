@@ -5,6 +5,10 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
+// 根据平台返回快捷键显示文本: Mac 用 ⌥+P, 其他用 Alt+P
+const getProfileShortcut = () =>
+	process.platform === 'darwin' ? '⌥+P' : 'Alt+P';
+
 type VSCodeConnectionStatus =
 	| 'disconnected'
 	| 'connecting'
@@ -54,6 +58,9 @@ type Props = {
 		file: string;
 		timestamp: number;
 	} | null;
+
+	// Profile 信息
+	currentProfileName?: string;
 };
 
 function calculateContextPercentage(contextUsage: ContextUsage): number {
@@ -83,6 +90,7 @@ export default function StatusLine({
 	codebaseProgress,
 	watcherEnabled = false,
 	fileUpdateNotification,
+	currentProfileName,
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -96,7 +104,8 @@ export default function StatusLine({
 		contextUsage ||
 		codebaseIndexing ||
 		watcherEnabled ||
-		fileUpdateNotification;
+		fileUpdateNotification ||
+		currentProfileName;
 
 	if (!hasAnyStatus) {
 		return null;
@@ -105,6 +114,16 @@ export default function StatusLine({
 	// 简易模式：横向单行显示状态，Token信息单独一行
 	if (simpleMode) {
 		const statusItems: Array<{text: string; color: string}> = [];
+
+		// Profile - 显示在最前面
+		if (currentProfileName) {
+			statusItems.push({
+				text: `⚙ ${currentProfileName} | ${getProfileShortcut()} ${
+					t.chatScreen.profileSwitchHint
+				}`,
+				color: theme.colors.menuInfo,
+			});
+		}
 
 		// YOLO模式
 		if (yoloMode) {
@@ -340,6 +359,16 @@ export default function StatusLine({
 								</>
 							);
 						})()}
+					</Text>
+				</Box>
+			)}
+
+			{/* Profile显示 */}
+			{currentProfileName && (
+				<Box>
+					<Text color={theme.colors.menuInfo} dimColor>
+						⚙ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
+						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
 					</Text>
 				</Box>
 			)}
