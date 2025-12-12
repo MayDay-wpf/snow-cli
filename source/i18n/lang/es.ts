@@ -616,6 +616,9 @@ export const es: TranslationKeys = {
 		statusConnected: 'IDE conectado',
 		statusConnectionFailed:
 			'Conexión fallida (esto no afectará ningún uso) - Por favor asegúrate de que el plugin Snow CLI esté instalado y activado en tu IDE',
+		// Profile switch
+		profileCurrent: 'Perfil',
+		profileSwitchHint: 'cambiar',
 		// Tool execution
 		toolCall: 'Llamada de Herramienta',
 		toolThinking: 'Pensamiento',

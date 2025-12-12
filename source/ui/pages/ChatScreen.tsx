@@ -34,6 +34,12 @@ import {
 } from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {getSimpleMode} from '../../utils/config/themeConfig.js';
+import {
+	getActiveProfileName,
+	getNextProfileName,
+	switchProfile,
+	getAllProfiles,
+} from '../../utils/config/configManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
@@ -150,6 +156,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		timestamp: number;
 	} | null>(null);
 	const codebaseAgentRef = useRef<CodebaseIndexAgent | null>(null);
+
+	// Profile state for quick switch
+	const [currentProfileName, setCurrentProfileName] = useState(() => {
+		const profiles = getAllProfiles();
+		const activeName = getActiveProfileName();
+		const profile = profiles.find(p => p.name === activeName);
+		return profile?.displayName || activeName;
+	});
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -799,6 +813,35 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((_, key) => {
+		// Alt+P to cycle through profiles
+		if (key.meta && _ === 'p') {
+			// Don't switch if any panel is open or streaming
+			if (
+				showSessionPanel ||
+				showMcpPanel ||
+				showUsagePanel ||
+				showHelpPanel ||
+				showCustomCommandConfig ||
+				showSkillsCreation ||
+				snapshotState.pendingRollback ||
+				pendingToolConfirmation ||
+				pendingUserQuestion ||
+				streamingState.isStreaming
+			) {
+				return;
+			}
+
+			// Get next profile and switch
+			const nextProfileName = getNextProfileName();
+			switchProfile(nextProfileName);
+
+			// Update display name
+			const profiles = getAllProfiles();
+			const profile = profiles.find(p => p.name === nextProfileName);
+			setCurrentProfileName(profile?.displayName || nextProfileName);
+			return;
+		}
+
 		if (snapshotState.pendingRollback) {
 			if (key.escape) {
 				snapshotState.setPendingRollback(null);
@@ -2243,6 +2286,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							codebaseProgress={codebaseProgress}
 							watcherEnabled={watcherEnabled}
 							fileUpdateNotification={fileUpdateNotification}
+							currentProfileName={currentProfileName}
 						/>
 					</>
 				)}

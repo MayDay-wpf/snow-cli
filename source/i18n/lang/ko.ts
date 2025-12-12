@@ -566,6 +566,9 @@ export const ko: TranslationKeys = {
 		statusConnected: 'IDE 연결됨',
 		statusConnectionFailed:
 			'연결 실패 (이것은 사용에 영향을 미치지 않습니다) - IDE에 Snow CLI 플러그인이 설치 및 활성화되어 있는지 확인하세요',
+		// Profile switch
+		profileCurrent: '프로필',
+		profileSwitchHint: '전환',
 		// Tool execution
 		toolCall: '도구 호출',
 		toolThinking: '생각',
