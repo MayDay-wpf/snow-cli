@@ -13,7 +13,6 @@ import {
 	saveConfig,
 	DEFAULT_CONFIG,
 	type AppConfig,
-	type ProxyConfig,
 } from './apiConfig.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
@@ -150,12 +149,6 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 		const configData = readFileSync(profilePath, 'utf8');
 		const parsedConfig = JSON.parse(configData) as Partial<AppConfig>;
 
-		// Deep merge with default config to ensure new fields have defaults
-		const proxyConfig: ProxyConfig = {
-			...DEFAULT_CONFIG.proxy!,
-			...(parsedConfig.proxy || {}),
-		};
-
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...parsedConfig,
@@ -163,7 +156,6 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 				...DEFAULT_CONFIG.snowcfg,
 				...(parsedConfig.snowcfg || {}),
 			},
-			proxy: proxyConfig,
 		};
 
 		return mergedConfig;
@@ -256,7 +248,35 @@ export function switchProfile(profileName: string): void {
 	const profileConfig = loadProfile(profileName);
 
 	if (!profileConfig) {
-		throw new Error(`Profile "${profileName}" not found`);
+		throw new Error(`Profile \"${profileName}\" not found`);
+	}
+
+	// Check if profile has legacy proxy config and migrate it
+	const profileConfigAny = profileConfig as any;
+	if (profileConfigAny.proxy !== undefined) {
+		try {
+			// Migrate proxy config to independent file by writing directly
+			const proxyConfigPath = join(CONFIG_DIR, 'proxy-config.json');
+			const proxyConfig = {
+				enabled: profileConfigAny.proxy.enabled ?? false,
+				port: profileConfigAny.proxy.port ?? 7890,
+				browserPath: profileConfigAny.proxy.browserPath,
+			};
+			writeFileSync(
+				proxyConfigPath,
+				JSON.stringify(proxyConfig, null, 2),
+				'utf8',
+			);
+			// Remove proxy from profile config
+			delete profileConfigAny.proxy;
+			// Also resave the profile without proxy
+			saveProfile(profileName, profileConfig);
+		} catch (error) {
+			console.error(
+				'Failed to migrate proxy config during profile switch:',
+				error,
+			);
+		}
 	}
 
 	// Save the profile config to the main config.json (for backward compatibility)

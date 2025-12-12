@@ -1,4 +1,4 @@
-import {getProxyConfig} from '../config/apiConfig.js';
+import {getProxyConfig} from '../config/proxyConfig.js';
 import {ProxyAgent} from 'undici';
 
 /**

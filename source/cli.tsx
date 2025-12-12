@@ -120,6 +120,7 @@ async function checkForUpdates(currentVersion: string): Promise<void> {
 			console.log(`   Current version: ${currentVersion}`);
 			console.log(`   Latest version:  ${latestVersion}`);
 			console.log('   Run "snow --update" to update\n');
+			console.log('   Github: https://github.com/MayDay-wpf/snow-cli');
 		}
 	} catch (error) {
 		// Silently fail - don't interrupt user experience

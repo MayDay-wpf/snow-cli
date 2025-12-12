@@ -59,16 +59,9 @@ export interface MCPConfig {
 	mcpServers: Record<string, MCPServer>;
 }
 
-export interface ProxyConfig {
-	enabled: boolean;
-	port: number;
-	browserPath?: string; // Custom browser executable path
-}
-
 export interface AppConfig {
 	snowcfg: ApiConfig;
 	openai?: ApiConfig; // 向下兼容旧版本
-	proxy?: ProxyConfig; // Proxy configuration
 }
 
 /**
@@ -118,10 +111,6 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxTokens: 32000,
 		anthropicBeta: false,
 	},
-	proxy: {
-		enabled: false,
-		port: 7890,
-	},
 };
 
 const DEFAULT_MCP_CONFIG: MCPConfig = {
@@ -129,10 +118,34 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 };
 
 const CONFIG_DIR = join(homedir(), '.snow');
+const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
 
 const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本，保留用于迁移
 const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新版本
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
+
+/**
+ * 迁移旧版本的 proxy 配置到新的独立文件
+ */
+function migrateProxyConfigToNewFile(legacyProxy: any): void {
+	try {
+		if (!existsSync(PROXY_CONFIG_FILE)) {
+			const proxyConfig = {
+				enabled: legacyProxy.enabled ?? false,
+				port: legacyProxy.port ?? 7890,
+				browserPath: legacyProxy.browserPath,
+			};
+			writeFileSync(
+				PROXY_CONFIG_FILE,
+				JSON.stringify(proxyConfig, null, 2),
+				'utf8',
+			);
+			console.log('✅ Migrated proxy config to proxy-config.json');
+		}
+	} catch (error) {
+		console.error('Failed to migrate proxy config:', error);
+	}
+}
 
 function normalizeRequestMethod(method: unknown): RequestMethod {
 	if (
@@ -178,8 +191,9 @@ export function loadConfig(): AppConfig {
 		const configData = readFileSync(CONFIG_FILE, 'utf8');
 		const parsedConfig = JSON.parse(configData) as Partial<AppConfig> & {
 			mcp?: unknown;
+			proxy?: unknown;
 		};
-		const {mcp: legacyMcp, ...restConfig} = parsedConfig;
+		const {mcp: legacyMcp, proxy: legacyProxy, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
 		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
@@ -208,22 +222,22 @@ export function loadConfig(): AppConfig {
 			};
 		}
 
-		// 深度合并 proxy 配置，确保新字段有默认值
-		const proxyConfig: ProxyConfig = {
-			...DEFAULT_CONFIG.proxy!,
-			...(configWithoutMcp.proxy || {}),
-		};
-
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...configWithoutMcp,
 			snowcfg: apiConfig,
-			proxy: proxyConfig,
 		};
 
-		// 如果是从旧版本迁移过来的，保存新配置
+		// 如果检测到旧版本的 proxy 配置，迁移到新的独立文件
+		if (legacyProxy !== undefined) {
+			// 使用同步方式迁移
+			migrateProxyConfigToNewFile(legacyProxy);
+		}
+
+		// 如果是从旧版本迁移过来的，保存新配置（移除 proxy 字段）
 		if (
 			legacyMcp !== undefined ||
+			legacyProxy !== undefined ||
 			(configWithoutMcp.openai && !configWithoutMcp.snowcfg)
 		) {
 			saveConfig(mergedConfig);
@@ -328,40 +342,6 @@ export function getMCPConfig(): MCPConfig {
 		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig);
 		return defaultMCPConfig;
-	}
-}
-
-export function getProxyConfig(): ProxyConfig {
-	const fullConfig = loadConfig();
-	return fullConfig.proxy || DEFAULT_CONFIG.proxy!;
-}
-
-export async function updateProxyConfig(
-	proxyConfig: ProxyConfig,
-): Promise<void> {
-	ensureConfigDirectory();
-	try {
-		const fullConfig = loadConfig();
-		fullConfig.proxy = proxyConfig;
-		const {openai, ...configWithoutOpenai} = fullConfig;
-		const configData = JSON.stringify(configWithoutOpenai, null, 2);
-		writeFileSync(CONFIG_FILE, configData, 'utf8');
-
-		// Also save to the active profile if profiles system is initialized
-		try {
-			// Dynamic import for ESM compatibility
-			const {getActiveProfileName, saveProfile} = await import(
-				'./configManager.js'
-			);
-			const activeProfileName = getActiveProfileName();
-			if (activeProfileName) {
-				saveProfile(activeProfileName, fullConfig);
-			}
-		} catch {
-			// Profiles system not available yet (during initialization), skip sync
-		}
-	} catch (error) {
-		throw new Error(`Failed to save proxy configuration: ${error}`);
 	}
 }
 
