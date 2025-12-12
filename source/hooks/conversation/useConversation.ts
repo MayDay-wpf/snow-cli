@@ -79,6 +79,9 @@ export type ConversationHandlerOptions = {
 	>; // Retry status
 	clearSavedMessages?: () => void; // Clear saved messages for auto-compression
 	setRemountKey?: React.Dispatch<React.SetStateAction<number>>; // Remount key for auto-compression
+	setSnapshotFileCount?: React.Dispatch<
+		React.SetStateAction<Map<number, number>>
+	>; // Clear snapshot counts after compression
 	getCurrentContextPercentage?: () => number; // Get current context percentage from ChatInput
 };
 
@@ -1320,6 +1323,12 @@ export async function handleConversationWithTools(
 								options.setContextUsage(compressionResult.usage);
 								// 更新累计的usage为压缩后的usage
 								accumulatedUsage = compressionResult.usage;
+							}
+
+							// 压缩创建了新会话，新会话的快照系统是独立的
+							// 清空当前的快照计数，因为新会话还没有快照
+							if (options.setSnapshotFileCount) {
+								options.setSnapshotFileCount(new Map());
 							}
 
 							// 压缩后需要重新构建conversationMessages

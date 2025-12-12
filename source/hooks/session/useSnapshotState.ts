@@ -12,6 +12,8 @@ export function useSnapshotState(messagesLength: number) {
 		filePaths?: string[];
 		message?: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		crossSessionRollback?: boolean; // 是否跨会话回滚
+		originalSessionId?: string; // 原会话ID(压缩前的会话)
 	} | null>(null);
 
 	// Load snapshot file counts when session changes

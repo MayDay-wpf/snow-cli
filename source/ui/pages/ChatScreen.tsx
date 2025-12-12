@@ -932,6 +932,35 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			currentSession.compressedFrom !== undefined &&
 			currentSession.compressedFrom !== null
 		) {
+			// 跨会话回滚前，先检查当前会话是否有快照（压缩后的编辑）
+			// 如果有，应该先提示用户是否回滚这些编辑
+			let totalFileCount = 0;
+			for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
+				if (index >= selectedIndex) {
+					totalFileCount += count;
+				}
+			}
+
+			// 如果当前会话有快照（压缩后的编辑），先提示回滚
+			if (totalFileCount > 0) {
+				const filePaths = await incrementalSnapshotManager.getFilesToRollback(
+					currentSession.id,
+					selectedIndex,
+				);
+				snapshotState.setPendingRollback({
+					messageIndex: selectedIndex,
+					fileCount: filePaths.length,
+					filePaths,
+					message: cleanIDEContext(message),
+					images,
+					// 添加跨会话回滚标记
+					crossSessionRollback: true,
+					originalSessionId: currentSession.compressedFrom,
+				});
+				return; // 等待用户确认
+			}
+
+			// 如果没有快照，直接跨会话回滚
 			// 需要跨会话回滚到原会话
 			const originalSessionId = currentSession.compressedFrom;
 
@@ -1183,10 +1212,66 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				});
 			}
 
-			await performRollback(
-				snapshotState.pendingRollback.messageIndex,
-				rollbackFiles,
-			);
+			// 如果是跨会话回滚，先执行当前会话的文件回滚，再切换到原会话
+			if (snapshotState.pendingRollback.crossSessionRollback) {
+				const {originalSessionId} = snapshotState.pendingRollback;
+
+				// 先回滚当前会话的文件（如果用户选择了回滚）
+				if (rollbackFiles) {
+					await performRollback(
+						snapshotState.pendingRollback.messageIndex,
+						true,
+					);
+				}
+
+				// 清除待处理回滚状态
+				snapshotState.setPendingRollback(null);
+
+				// 加载并切换到原会话
+				if (originalSessionId) {
+					try {
+						const originalSession = await sessionManager.loadSession(
+							originalSessionId,
+						);
+						if (originalSession) {
+							// 切换到原会话
+							sessionManager.setCurrentSession(originalSession);
+
+							// 转换原会话消息为UI格式
+							const uiMessages = convertSessionMessagesToUI(
+								originalSession.messages,
+							);
+
+							// 更新UI
+							clearSavedMessages();
+							setMessages(uiMessages);
+							setRemountKey(prev => prev + 1);
+
+							// 加载原会话的快照计数
+							const snapshots = await incrementalSnapshotManager.listSnapshots(
+								originalSession.id,
+							);
+							const counts = new Map<number, number>();
+							for (const snapshot of snapshots) {
+								counts.set(snapshot.messageIndex, snapshot.fileCount);
+							}
+							snapshotState.setSnapshotFileCount(counts);
+
+							console.log(
+								`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
+							);
+						}
+					} catch (error) {
+						console.error('Failed to switch to original session:', error);
+					}
+				}
+			} else {
+				// 正常的会话内回滚
+				await performRollback(
+					snapshotState.pendingRollback.messageIndex,
+					rollbackFiles,
+				);
+			}
 		}
 	};
 
@@ -1504,6 +1589,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setRetryStatus: streamingState.setRetryStatus,
 				clearSavedMessages,
 				setRemountKey,
+				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
 			});
 		} catch (error) {
@@ -1775,6 +1861,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setRetryStatus: streamingState.setRetryStatus,
 				clearSavedMessages,
 				setRemountKey,
+				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
 			});
 		} catch (error) {
