@@ -89,7 +89,7 @@ const MessageList = memo(
 						<Box key={index}>
 							<Text color={iconColor} bold>
 								{message.role === 'user'
-									? '⛇'
+									? '𖨆 '
 									: message.role === 'command'
 									? '⌘'
 									: message.role === 'subagent'

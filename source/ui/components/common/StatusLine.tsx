@@ -118,7 +118,7 @@ export default function StatusLine({
 		// Profile - 显示在最前面
 		if (currentProfileName) {
 			statusItems.push({
-				text: `⚙ ${currentProfileName} | ${getProfileShortcut()} ${
+				text: `ꚰ ${currentProfileName} | ${getProfileShortcut()} ${
 					t.chatScreen.profileSwitchHint
 				}`,
 				color: theme.colors.menuInfo,
@@ -367,7 +367,7 @@ export default function StatusLine({
 			{currentProfileName && (
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
-						⚙ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
+						ꚰ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
 						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
 					</Text>
 				</Box>

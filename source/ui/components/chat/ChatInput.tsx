@@ -27,6 +27,7 @@ import {useAgentPicker} from '../../../hooks/picker/useAgentPicker.js';
 import {useTodoPicker} from '../../../hooks/picker/useTodoPicker.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useBashMode} from '../../../hooks/input/useBashMode.js';
 
 /**
  * Calculate context usage percentage
@@ -111,6 +112,9 @@ export default function ChatInput({
 	const {t} = useI18n();
 	const {theme} = useTheme();
 
+	// Use bash mode hook for command detection
+	const {parseBashCommands} = useBashMode();
+
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
 	const prevTerminalWidthRef = useRef(terminalWidth);
@@ -131,6 +135,10 @@ export default function ChatInput({
 
 	// Use input buffer hook
 	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
+
+	// Track bash mode state with debounce to avoid high-frequency updates
+	const [isBashMode, setIsBashMode] = React.useState(false);
+	const bashModeDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
 	// Use command panel hook
 	const {
@@ -372,6 +380,33 @@ export default function ChatInput({
 		}
 	}, [contextUsage, onContextPercentageChange]);
 
+	// Detect bash mode with debounce (150ms delay to avoid high-frequency updates)
+	useEffect(() => {
+		// Clear existing timer
+		if (bashModeDebounceTimer.current) {
+			clearTimeout(bashModeDebounceTimer.current);
+		}
+
+		// Set new timer
+		bashModeDebounceTimer.current = setTimeout(() => {
+			const text = buffer.getFullText();
+			const commands = parseBashCommands(text);
+			const hasBashCommands = commands.length > 0;
+
+			// Only update state if changed
+			if (hasBashCommands !== isBashMode) {
+				setIsBashMode(hasBashCommands);
+			}
+		}, 150);
+
+		// Cleanup on unmount
+		return () => {
+			if (bashModeDebounceTimer.current) {
+				clearTimeout(bashModeDebounceTimer.current);
+			}
+		};
+	}, [buffer.text, parseBashCommands, isBashMode]);
+
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
 		(char: string) => {
@@ -547,16 +582,29 @@ export default function ChatInput({
 			{!showHistoryMenu && (
 				<>
 					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text color={theme.colors.menuSecondary}>
+						<Text
+							color={
+								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+							}
+						>
 							{'─'.repeat(terminalWidth - 2)}
 						</Text>
 						<Box flexDirection="row">
-							<Text color={theme.colors.menuInfo} bold>
-								❯{' '}
+							<Text
+								color={
+									isBashMode ? theme.colors.success : theme.colors.menuInfo
+								}
+								bold
+							>
+								{isBashMode ? '>_' : '❯'}{' '}
 							</Text>
 							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
-						<Text color={theme.colors.menuSecondary}>
+						<Text
+							color={
+								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+							}
+						>
 							{'─'.repeat(terminalWidth - 2)}
 						</Text>
 					</Box>

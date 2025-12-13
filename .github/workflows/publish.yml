@@ -58,10 +58,7 @@ jobs:
             
             ### What's New
 
-            - Hooks improve scenario coverage
-            - Add request model display
-            - Incorporate command execution injection prompts
-            - Optimize some display effects
+            - UI optimization
             
             ### Installation
             ```bash

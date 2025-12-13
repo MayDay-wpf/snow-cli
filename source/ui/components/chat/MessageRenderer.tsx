@@ -123,7 +123,7 @@ export default function MessageRenderer({
 						>
 							{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
 							{message.role === 'user'
-								? '⛇'
+								? '𖨆 '
 								: message.role === 'command'
 								? '⌘'
 								: '❆'}
