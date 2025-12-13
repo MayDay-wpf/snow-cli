@@ -42,6 +42,10 @@ export default function ToolResultPreview({
 			return renderACEPreview(toolName, data, maxLines);
 		} else if (toolName.startsWith('todo-')) {
 			return renderTodoPreview(toolName, data, maxLines);
+		} else if (toolName === 'skill-execute') {
+			// skill-execute returns a string message, no preview needed
+			// (the skill content is displayed elsewhere)
+			return null;
 		} else {
 			// Generic preview for unknown tools
 			return renderGenericPreview(data, maxLines);
@@ -444,6 +448,12 @@ function renderWebFetchPreview(data: any) {
 }
 
 function renderGenericPreview(data: any, maxLines: number) {
+	// Guard: if data is not an object (e.g., it's a string), skip preview
+	// This prevents Object.entries from treating strings as character arrays
+	if (typeof data !== 'object' || data === null) {
+		return null;
+	}
+
 	// For unknown tool types, show first few properties
 	const entries = Object.entries(data).slice(0, maxLines);
 	if (entries.length === 0) return null;
