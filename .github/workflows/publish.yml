@@ -58,13 +58,10 @@ jobs:
             
             ### What's New
 
-            - Fix the context compression bug
-            - Add the /add-dir command
-            - Support switching configurations on the conversation page
-            - Add a simple theme
-            - Enhance Codebase retrieval accuracy
-            - Strengthen the global Plan mode
-            - Complete Skills compatibility
+            - Hooks improve scenario coverage
+            - Add request model display
+            - Incorporate command execution injection prompts
+            - Optimize some display effects
             
             ### Installation
             ```bash
