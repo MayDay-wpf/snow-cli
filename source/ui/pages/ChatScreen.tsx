@@ -2209,27 +2209,36 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 			{/* Show bash sensitive command confirmation if pending */}
 			{bashSensitiveCommand && (
-				<BashCommandConfirmation
-					command={bashSensitiveCommand.command}
-					onConfirm={bashSensitiveCommand.resolve}
-				/>
+				<Box paddingX={1} width={terminalWidth}>
+					<BashCommandConfirmation
+						command={bashSensitiveCommand.command}
+						onConfirm={bashSensitiveCommand.resolve}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
 			)}
 
 			{/* Show bash command execution status */}
 			{bashMode.state.isExecuting && bashMode.state.currentCommand && (
-				<BashCommandExecutionStatus
-					command={bashMode.state.currentCommand}
-					timeout={bashMode.state.currentTimeout || 30000}
-				/>
+				<Box paddingX={1} width={terminalWidth}>
+					<BashCommandExecutionStatus
+						command={bashMode.state.currentCommand}
+						timeout={bashMode.state.currentTimeout || 30000}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
 			)}
 
 			{/* Show terminal-execute tool execution status */}
 			{terminalExecutionState.state.isExecuting &&
 				terminalExecutionState.state.command && (
-					<BashCommandExecutionStatus
-						command={terminalExecutionState.state.command}
-						timeout={terminalExecutionState.state.timeout || 30000}
-					/>
+					<Box paddingX={1} width={terminalWidth}>
+						<BashCommandExecutionStatus
+							command={terminalExecutionState.state.command}
+							timeout={terminalExecutionState.state.timeout || 30000}
+							terminalWidth={terminalWidth}
+						/>
+					</Box>
 				)}
 
 			{/* Show user question panel if askuser tool is called */}

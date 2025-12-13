@@ -8,10 +8,12 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 interface BashCommandConfirmationProps {
 	command: string;
 	onConfirm: (proceed: boolean) => void;
+	terminalWidth: number;
 }
 
 export function BashCommandConfirmation({
 	command,
+	terminalWidth,
 }: BashCommandConfirmationProps) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -26,6 +28,7 @@ export function BashCommandConfirmation({
 			borderColor={theme.colors.error}
 			paddingX={2}
 			paddingY={1}
+			width={terminalWidth - 2}
 		>
 			<Box marginBottom={1}>
 				<Text bold color={theme.colors.error}>
@@ -60,11 +63,13 @@ export function BashCommandConfirmation({
 interface BashCommandExecutionStatusProps {
 	command: string;
 	timeout?: number;
+	terminalWidth: number;
 }
 
 export function BashCommandExecutionStatus({
 	command,
 	timeout = 30000,
+	terminalWidth,
 }: BashCommandExecutionStatusProps) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -77,6 +82,7 @@ export function BashCommandExecutionStatus({
 			borderColor={theme.colors.menuInfo}
 			paddingX={2}
 			paddingY={1}
+			width={terminalWidth - 2}
 		>
 			<Box marginBottom={1}>
 				<Text bold color={theme.colors.menuInfo}>
