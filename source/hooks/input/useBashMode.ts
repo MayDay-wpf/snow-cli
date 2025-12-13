@@ -1,0 +1,258 @@
+import {useState, useCallback} from 'react';
+import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
+
+export interface BashCommand {
+	id: string;
+	command: string;
+	startIndex: number;
+	endIndex: number;
+	timeout?: number; // 超时时间（毫秒），默认30000
+}
+
+export interface CommandExecutionResult {
+	success: boolean;
+	stdout: string;
+	stderr: string;
+	command: string;
+}
+
+export interface BashModeState {
+	isExecuting: boolean;
+	currentCommand: string | null;
+	currentTimeout: number | null; // 当前命令的超时时间
+	executionResults: Map<string, CommandExecutionResult>;
+}
+
+export function useBashMode() {
+	const [state, setState] = useState<BashModeState>({
+		isExecuting: false,
+		currentCommand: null,
+		currentTimeout: null,
+		executionResults: new Map(),
+	});
+
+	/**
+	 * 解析用户消息中的命令
+	 * 格式：!`command` 或 !`command`<timeout>
+	 * timeout 单位：毫秒，可选，默认30000
+	 * 严格语法：感叹号和反引号必须全部存在
+	 */
+	const parseBashCommands = useCallback((message: string): BashCommand[] => {
+		const commands: BashCommand[] = [];
+		// 匹配 !`...`<timeout> 或 !`...` 格式
+		const regex = /!`([^`]+)`(?:<(\d+)>)?/g;
+		let match;
+
+		while ((match = regex.exec(message)) !== null) {
+			const command = match[1]?.trim();
+			const timeoutStr = match[2];
+			const timeout = timeoutStr ? parseInt(timeoutStr, 10) : 30000;
+
+			if (command) {
+				commands.push({
+					id: `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+					command,
+					startIndex: match.index,
+					endIndex: match.index + match[0].length,
+					timeout,
+				});
+			}
+		}
+
+		return commands;
+	}, []);
+
+	/**
+	 * 检查命令是否为敏感命令
+	 */
+	const checkSensitiveCommand = useCallback((command: string) => {
+		return isSensitiveCommand(command);
+	}, []);
+
+	/**
+	 * 执行单个命令
+	 */
+	const executeCommand = useCallback(
+		async (
+			command: string,
+			timeout: number = 30000,
+		): Promise<CommandExecutionResult> => {
+			setState(prev => ({
+				...prev,
+				isExecuting: true,
+				currentCommand: command,
+				currentTimeout: timeout,
+			}));
+
+			return new Promise(resolve => {
+				const {spawn} = require('child_process');
+				const isWindows = process.platform === 'win32';
+
+				// Windows 使用 cmd.exe，Unix-like 系统使用 sh
+				const shell = isWindows ? 'cmd' : 'sh';
+				const shellArgs = isWindows ? ['/c', command] : ['-c', command];
+
+				const child = spawn(shell, shellArgs, {
+					cwd: process.cwd(),
+					timeout,
+					env: process.env,
+				});
+
+				let stdout = '';
+				let stderr = '';
+
+				child.stdout?.on('data', (data: Buffer) => {
+					stdout += data.toString();
+				});
+
+				child.stderr?.on('data', (data: Buffer) => {
+					stderr += data.toString();
+				});
+
+				child.on('close', (code: number | null) => {
+					const result: CommandExecutionResult = {
+						success: code === 0,
+						stdout: stdout.trim(),
+						stderr: stderr.trim(),
+						command,
+					};
+
+					setState(prev => {
+						const newResults = new Map(prev.executionResults);
+						newResults.set(command, result);
+						return {
+							...prev,
+							isExecuting: false,
+							currentCommand: null,
+							currentTimeout: null,
+							executionResults: newResults,
+						};
+					});
+
+					resolve(result);
+				});
+
+				child.on('error', (error: Error) => {
+					const result: CommandExecutionResult = {
+						success: false,
+						stdout: '',
+						stderr: error.message,
+						command,
+					};
+
+					setState(prev => {
+						const newResults = new Map(prev.executionResults);
+						newResults.set(command, result);
+						return {
+							...prev,
+							isExecuting: false,
+							currentCommand: null,
+							currentTimeout: null,
+							executionResults: newResults,
+						};
+					});
+
+					resolve(result);
+				});
+			});
+		},
+		[],
+	);
+
+	/**
+	 * 处理用户消息，解析并执行命令，返回替换后的消息
+	 */
+	const processBashMessage = useCallback(
+		async (
+			message: string,
+			onSensitiveCommand?: (command: string) => Promise<boolean>,
+		): Promise<{
+			processedMessage: string;
+			hasCommands: boolean;
+			hasRejectedCommands: boolean; // 是否有命令被用户拒绝
+			results: CommandExecutionResult[];
+		}> => {
+			const commands = parseBashCommands(message);
+
+			if (commands.length === 0) {
+				return {
+					processedMessage: message,
+					hasCommands: false,
+					hasRejectedCommands: false,
+					results: [],
+				};
+			}
+
+			const results: CommandExecutionResult[] = [];
+			let processedMessage = message;
+			let offset = 0; // 跟踪替换导致的位置偏移
+			let hasRejectedCommands = false;
+
+			// 按顺序执行所有命令
+			for (const cmd of commands) {
+				// 检查敏感命令
+				const sensitiveCheck = checkSensitiveCommand(cmd.command);
+				if (sensitiveCheck.isSensitive && onSensitiveCommand) {
+					const shouldContinue = await onSensitiveCommand(cmd.command);
+					if (!shouldContinue) {
+						// 用户拒绝执行，标记并跳过
+						hasRejectedCommands = true;
+						continue;
+					}
+				}
+
+				// 执行命令
+				const result = await executeCommand(cmd.command, cmd.timeout || 30000);
+				results.push(result);
+
+				// 构建替换文本
+				const output = result.success
+					? result.stdout || '(no output)'
+					: `Error: ${result.stderr || 'Command failed'}`;
+
+				const replacement = `\n--- Command: ${cmd.command} ---\n${output}\n--- End of output ---\n`;
+
+				// 替换原始命令位置
+				const adjustedStart = cmd.startIndex + offset;
+				const adjustedEnd = cmd.endIndex + offset;
+
+				processedMessage =
+					processedMessage.slice(0, adjustedStart) +
+					replacement +
+					processedMessage.slice(adjustedEnd);
+
+				// 更新偏移量
+				offset += replacement.length - (cmd.endIndex - cmd.startIndex);
+			}
+
+			return {
+				processedMessage,
+				hasCommands: true,
+				hasRejectedCommands,
+				results,
+			};
+		},
+		[parseBashCommands, checkSensitiveCommand, executeCommand],
+	);
+
+	/**
+	 * 重置状态
+	 */
+	const resetState = useCallback(() => {
+		setState({
+			isExecuting: false,
+			currentCommand: null,
+			currentTimeout: null,
+			executionResults: new Map(),
+		});
+	}, []);
+
+	return {
+		state,
+		parseBashCommands,
+		checkSensitiveCommand,
+		executeCommand,
+		processBashMessage,
+		resetState,
+	};
+}

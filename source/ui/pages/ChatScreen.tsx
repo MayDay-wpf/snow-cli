@@ -9,6 +9,10 @@ import {type Message} from '../components/chat/MessageList.js';
 import PendingMessages from '../components/chat/PendingMessages.js';
 import ToolConfirmation from '../components/tools/ToolConfirmation.js';
 import AskUserQuestion from '../components/special/AskUserQuestion.js';
+import {
+	BashCommandConfirmation,
+	BashCommandExecutionStatus,
+} from '../components/bash/BashCommandConfirmation.js';
 import FileRollbackConfirmation from '../components/tools/FileRollbackConfirmation.js';
 import ShimmerText from '../components/common/ShimmerText.js';
 import MessageRenderer from '../components/chat/MessageRenderer.js';
@@ -51,6 +55,8 @@ import {useSnapshotState} from '../../hooks/session/useSnapshotState.js';
 import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
 import {useCommandHandler} from '../../hooks/conversation/useCommandHandler.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
+import {useBashMode} from '../../hooks/input/useBashMode.js';
+import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecutionState.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -138,6 +144,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null>(null);
+	// BashMode sensitive command confirmation state
+	const [bashSensitiveCommand, setBashSensitiveCommand] = useState<{
+		command: string;
+		resolve: (proceed: boolean) => void;
+	} | null>(null);
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
@@ -171,6 +182,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
 	const snapshotState = useSnapshotState(messages.length);
+	const bashMode = useBashMode();
+	const terminalExecutionState = useTerminalExecutionState();
 
 	// Use session save hook
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
@@ -816,7 +829,23 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	}, [streamingState]);
 
 	// ESC key handler to interrupt streaming or close overlays
-	useInput((_, key) => {
+	useInput((input, key) => {
+		// Handle bash sensitive command confirmation
+		if (bashSensitiveCommand) {
+			if (input.toLowerCase() === 'y') {
+				bashSensitiveCommand.resolve(true);
+				setBashSensitiveCommand(null);
+			} else if (input.toLowerCase() === 'n') {
+				bashSensitiveCommand.resolve(false);
+				setBashSensitiveCommand(null);
+			} else if (key.escape) {
+				// Allow ESC to cancel
+				bashSensitiveCommand.resolve(false);
+				setBashSensitiveCommand(null);
+			}
+			return;
+		}
+
 		if (snapshotState.pendingRollback) {
 			if (key.escape) {
 				snapshotState.setPendingRollback(null);
@@ -1378,6 +1407,32 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			message = handlerResult.modifiedMessage!;
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
+		}
+
+		// Process bash commands if message contains !`command` syntax
+		try {
+			const result = await bashMode.processBashMessage(
+				message,
+				async command => {
+					// Show sensitive command confirmation dialog
+					return new Promise<boolean>(resolve => {
+						setBashSensitiveCommand({command, resolve});
+					});
+				},
+			);
+
+			// If user rejected any command, restore message to input and abort
+			if (result.hasRejectedCommands) {
+				setRestoreInputContent({
+					text: message,
+					images: images?.map(img => ({type: 'image' as const, ...img})),
+				});
+				return; // Don't send message to AI
+			}
+
+			message = result.processedMessage;
+		} catch (error) {
+			console.error('Failed to process bash commands:', error);
 		}
 
 		// Create checkpoint (lightweight, only tracks modifications)
@@ -2143,6 +2198,31 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
+			{/* Show bash sensitive command confirmation if pending */}
+			{bashSensitiveCommand && (
+				<BashCommandConfirmation
+					command={bashSensitiveCommand.command}
+					onConfirm={bashSensitiveCommand.resolve}
+				/>
+			)}
+
+			{/* Show bash command execution status */}
+			{bashMode.state.isExecuting && bashMode.state.currentCommand && (
+				<BashCommandExecutionStatus
+					command={bashMode.state.currentCommand}
+					timeout={bashMode.state.currentTimeout || 30000}
+				/>
+			)}
+
+			{/* Show terminal-execute tool execution status */}
+			{terminalExecutionState.state.isExecuting &&
+				terminalExecutionState.state.command && (
+					<BashCommandExecutionStatus
+						command={terminalExecutionState.state.command}
+						timeout={terminalExecutionState.state.timeout || 30000}
+					/>
+				)}
+
 			{/* Show user question panel if askuser tool is called */}
 			{pendingUserQuestion && (
 				<AskUserQuestion
@@ -2323,6 +2403,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or rollback confirmation or user question */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
+				!bashSensitiveCommand &&
 				!isCompressing &&
 				!showSessionPanel &&
 				!showMcpPanel &&
@@ -2337,8 +2418,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							onSubmit={handleMessageSubmit}
 							onCommand={handleCommandExecution}
 							placeholder={t.chatScreen.inputPlaceholder}
-							disabled={!!pendingToolConfirmation}
-							isProcessing={streamingState.isStreaming || isSaving}
+							disabled={!!pendingToolConfirmation || !!bashSensitiveCommand}
+							isProcessing={
+								streamingState.isStreaming ||
+								isSaving ||
+								bashMode.state.isExecuting
+							}
 							chatHistory={messages}
 							onHistorySelect={handleHistorySelect}
 							yoloMode={yoloMode}

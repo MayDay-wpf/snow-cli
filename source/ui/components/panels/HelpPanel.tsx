@@ -62,6 +62,14 @@ export default function HelpPanel() {
 			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
+				<Text bold color="yellow">
+					{t.helpPanel.bashModeTitle}
+				</Text>
+				<Text> • {t.helpPanel.bashModeTrigger}</Text>
+				<Text dimColor> {t.helpPanel.bashModeDesc}</Text>
+			</Box>
+
+			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="blue">
 					{t.helpPanel.navigationTitle}
 				</Text>

@@ -8,6 +8,7 @@ import type {
 	CodeSymbol,
 	CodeReference,
 	SemanticSearchResult,
+	SymbolType,
 } from './types/aceCodeSearch.types.js';
 // Utility functions
 import {detectLanguage} from './utils/aceCodeSearch/language.utils.js';
@@ -1096,12 +1097,51 @@ export class ACECodeSearchService {
 	/**
 	 * Get code outline for a file (all symbols in the file)
 	 */
-	async getFileOutline(filePath: string): Promise<CodeSymbol[]> {
+	async getFileOutline(
+		filePath: string,
+		options?: {
+			maxResults?: number;
+			includeContext?: boolean;
+			symbolTypes?: SymbolType[];
+		},
+	): Promise<CodeSymbol[]> {
 		const fullPath = path.resolve(this.basePath, filePath);
 
 		try {
 			const content = await fs.readFile(fullPath, 'utf-8');
-			return await parseFileSymbols(fullPath, content, this.basePath);
+			let symbols = await parseFileSymbols(fullPath, content, this.basePath);
+
+			// Filter by symbol types if specified
+			if (options?.symbolTypes && options.symbolTypes.length > 0) {
+				symbols = symbols.filter(s => options.symbolTypes!.includes(s.type));
+			}
+
+			// Prioritize important symbols (function, class, interface, method)
+			const importantTypes: SymbolType[] = [
+				'function',
+				'class',
+				'interface',
+				'method',
+			];
+			symbols.sort((a, b) => {
+				const aImportant = importantTypes.includes(a.type);
+				const bImportant = importantTypes.includes(b.type);
+				if (aImportant && !bImportant) return -1;
+				if (!aImportant && bImportant) return 1;
+				return 0;
+			});
+
+			// Limit results
+			if (options?.maxResults && options.maxResults > 0) {
+				symbols = symbols.slice(0, options.maxResults);
+			}
+
+			// Remove context if not needed
+			if (options?.includeContext === false) {
+				symbols = symbols.map(s => ({...s, context: undefined}));
+			}
+
+			return symbols;
 		} catch (error) {
 			throw new Error(
 				`Failed to get outline for ${filePath}: ${
@@ -1284,8 +1324,39 @@ export const mcpTools = [
 					description:
 						'Path to the file to get outline for (relative to workspace root)',
 				},
+				maxResults: {
+					type: 'number',
+					description:
+						'Maximum number of symbols to return (default: unlimited). Important symbols (function, class, interface, method) are prioritized.',
+				},
+				includeContext: {
+					type: 'boolean',
+					description:
+						'Whether to include surrounding code context (default: true). Set to false to reduce output size significantly.',
+					default: true,
+				},
+				symbolTypes: {
+					type: 'array',
+					items: {
+						type: 'string',
+						enum: [
+							'function',
+							'class',
+							'method',
+							'variable',
+							'constant',
+							'interface',
+							'type',
+							'enum',
+							'import',
+							'export',
+						],
+					},
+					description:
+						'Filter by specific symbol types (optional). If not specified, all symbol types are returned.',
+				},
 			},
-			required: ['filePath'],
+			required: ['filePath','maxResults','includeContext'],
 		},
 	},
 	{

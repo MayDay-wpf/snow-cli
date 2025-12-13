@@ -1282,13 +1282,32 @@ export async function executeMCPTool(
 		} else if (serviceName === 'terminal') {
 			// Handle built-in terminal tools (no connection needed)
 			const {terminalService} = await import('../../mcp/bash.js');
+			const {setTerminalExecutionState} = await import(
+				'../../hooks/execution/useTerminalExecutionState.js'
+			);
 
 			switch (actualToolName) {
 				case 'execute':
-					result = await terminalService.executeCommand(
-						args.command,
-						args.timeout,
-					);
+					// Set execution state to show UI
+					setTerminalExecutionState({
+						isExecuting: true,
+						command: args.command,
+						timeout: args.timeout || 30000,
+					});
+
+					try {
+						result = await terminalService.executeCommand(
+							args.command,
+							args.timeout,
+						);
+					} finally {
+						// Clear execution state
+						setTerminalExecutionState({
+							isExecuting: false,
+							command: null,
+							timeout: null,
+						});
+					}
 					break;
 				default:
 					throw new Error(`Unknown terminal tool: ${actualToolName}`);
@@ -1327,7 +1346,11 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'file_outline':
-					result = await aceCodeSearchService.getFileOutline(args.filePath);
+					result = await aceCodeSearchService.getFileOutline(args.filePath, {
+						maxResults: args.maxResults,
+						includeContext: args.includeContext,
+						symbolTypes: args.symbolTypes,
+					});
 					break;
 				case 'text_search':
 					result = await aceCodeSearchService.textSearch(

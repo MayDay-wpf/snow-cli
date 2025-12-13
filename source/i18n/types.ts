@@ -387,6 +387,9 @@ export type TranslationKeys = {
 		searchContent: string;
 		selectAgent: string;
 		showCommands: string;
+		bashModeTitle: string;
+		bashModeTrigger: string;
+		bashModeDesc: string;
 		navigationTitle: string;
 		navigateHistory: string;
 		selectItem: string;
@@ -787,6 +790,16 @@ export type TranslationKeys = {
 		alwaysApprove: string;
 		rejectWithReply: string;
 		rejectEndSession: string;
+	};
+	bash: {
+		sensitiveCommandDetected: string;
+		sensitivePattern: string;
+		sensitiveReason: string;
+		executeConfirm: string;
+		confirmHint: string;
+		executingCommand: string;
+		timeout: string;
+		customTimeout: string;
 	};
 	usagePanel: {
 		title: string;
