@@ -83,6 +83,7 @@ export type ConversationHandlerOptions = {
 		React.SetStateAction<Map<number, number>>
 	>; // Clear snapshot counts after compression
 	getCurrentContextPercentage?: () => number; // Get current context percentage from ChatInput
+	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>; // Set current model name for display
 };
 
 /**
@@ -299,6 +300,11 @@ export async function handleConversationWithTools(
 	const model = options.useBasicModel
 		? config.basicModel || config.advancedModel || 'gpt-5'
 		: config.advancedModel || 'gpt-5';
+
+	// Set current model for display in UI
+	if (options.setCurrentModel) {
+		options.setCurrentModel(model);
+	}
 
 	// Tool calling loop (no limit on rounds)
 	let finalAssistantMessage: Message | null = null;

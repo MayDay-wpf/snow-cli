@@ -1650,6 +1650,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setRemountKey,
 				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
+				setCurrentModel: streamingState.setCurrentModel,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -1922,6 +1923,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setRemountKey,
 				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
 				getCurrentContextPercentage: () => currentContextPercentageRef.current,
+				setCurrentModel: streamingState.setCurrentModel,
 			});
 		} catch (error) {
 			if (controller.signal.aborted) {
@@ -2153,7 +2155,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 														: t.chatScreen.statusThinking
 												}
 											/>{' '}
-											({formatElapsedTime(streamingState.elapsedSeconds)}
+											(
+											{streamingState.currentModel && (
+												<>
+													{streamingState.currentModel}
+													{' · '}
+												</>
+											)}
+											{formatElapsedTime(streamingState.elapsedSeconds)}
 											{' · '}
 											<Text color="cyan">
 												↓{' '}
