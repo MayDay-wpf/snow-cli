@@ -106,6 +106,12 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 			// Search backwards from cursor to find @@ or @
 			for (let i = beforeCursor.length - 1; i >= 0; i--) {
 				if (beforeCursor[i] === '@') {
+					// Check if @ is preceded by # (agent picker should handle it)
+					if (i > 0 && beforeCursor[i - 1] === '#') {
+						// @ is part of #@, don't activate file picker
+						position = -1;
+						break;
+					}
 					// Check if this is part of @@
 					if (i > 0 && beforeCursor[i - 1] === '@') {
 						// Found @@, use content search

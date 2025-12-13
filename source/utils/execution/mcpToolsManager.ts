@@ -1430,16 +1430,18 @@ export async function executeMCPTool(
 					throw new Error(`Unknown codebase tool: ${actualToolName}`);
 			}
 		} else if (serviceName === 'askuser') {
-			// Handle Ask User Question tool - returns special marker for UI handling
+			// Handle Ask User Question tool - throw error to trigger user interaction
 			switch (actualToolName) {
 				case 'ask_question':
-					// Return a special response that indicates user interaction is needed
-					result = {
-						_userInteractionNeeded: true,
-						question: args.question,
-						options: args.options,
-					};
-					break;
+					// Throw UserInteractionNeededError to trigger UI component
+					const {UserInteractionNeededError} = await import(
+						'../ui/userInteractionError.js'
+					);
+					throw new UserInteractionNeededError(
+						args.question,
+						args.options,
+						'', // toolCallId will be set by executeToolCall
+					);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
 			}

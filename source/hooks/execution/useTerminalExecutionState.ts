@@ -20,10 +20,9 @@ export function useTerminalExecutionState() {
 		timeout: null,
 	});
 
-	// Register global setter on mount
-	if (!globalSetState) {
-		globalSetState = setState;
-	}
+	// Always update global setter to ensure it's current
+	// This prevents race conditions where setState might be stale or null
+	globalSetState = setState;
 
 	const startExecution = useCallback((command: string, timeout: number) => {
 		setState({

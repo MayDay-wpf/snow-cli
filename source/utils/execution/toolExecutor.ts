@@ -287,14 +287,18 @@ export async function executeToolCall(
 				);
 
 				// Return the user's response as the tool result
-				const resultContent = response.customInput
-					? `User response: ${response.customInput}`
-					: `User selected: ${response.selected}`;
+				const answerText = response.customInput
+					? `${response.selected}: ${response.customInput}`
+					: response.selected;
 
 				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
-					content: resultContent,
+					content: JSON.stringify({
+						answer: answerText,
+						selected: response.selected,
+						customInput: response.customInput,
+					}),
 				};
 			} else {
 				// No callback provided, return error
