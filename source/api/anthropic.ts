@@ -15,6 +15,7 @@ import {logger} from '../utils/core/logger.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
+import {getVersionHeader} from '../utils/core/version.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -561,7 +562,7 @@ export async function* createStreamingAnthropicCompletion(
 				'x-api-key': config.apiKey,
 				Authorization: `Bearer ${config.apiKey}`,
 				'anthropic-version': '2023-06-01',
-				'x-snow': 'true',
+				'x-snow': getVersionHeader(),
 				...customHeaders,
 			};
 

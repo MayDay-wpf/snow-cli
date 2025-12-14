@@ -16,6 +16,7 @@ import type {
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
+import {getVersionHeader} from '../utils/core/version.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -488,7 +489,7 @@ export async function* createStreamingResponse(
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': 'true',
+					'x-snow': getVersionHeader(),
 					...(options.prompt_cache_key && {
 						conversation_id: options.prompt_cache_key,
 						session_id: options.prompt_cache_key,

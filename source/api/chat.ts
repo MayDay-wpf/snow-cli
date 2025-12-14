@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
+import {getVersionHeader} from '../utils/core/version.js';
 
 export type {
 	ChatMessage,
@@ -429,7 +430,7 @@ export async function* createStreamingChatCompletion(
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': 'true',
+					'x-snow': getVersionHeader(),
 					...customHeaders,
 				},
 				body: JSON.stringify(requestBody),
