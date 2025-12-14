@@ -243,11 +243,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Windows: Alt+P, macOS: Ctrl+P - Switch to next profile
+		// Windows/Linux: Alt+P, macOS: Ctrl+P - Switch to next profile
 		const isProfileSwitchShortcut =
-			process.platform === 'win32'
-				? key.meta && input === 'p'
-				: key.ctrl && input === 'p';
+			process.platform === 'darwin'
+				? key.ctrl && input === 'p'
+				: key.meta && input === 'p';
 		if (isProfileSwitchShortcut) {
 			if (onSwitchProfile) {
 				onSwitchProfile();
