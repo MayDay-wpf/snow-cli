@@ -58,9 +58,12 @@ jobs:
             
             ### What's New
 
-            - Add compatibility for third-party mcp timeout field configuration
-            - Fix the bug where the interrupt signal was not transmitted and repeated saving occurred when the codebase was reviewed using ai
-            - `cleanOrphanedToolCalls` stricter cleanup mechanisms
+            - Add internationalization support for file rollback confirmation
+
+            ### What's Changed
+
+            - Linux switches configurations with Alt+P
+
             ### Installation
             ```bash
             npm install -g snow-ai
