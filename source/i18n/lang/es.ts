@@ -875,6 +875,23 @@ export const es: TranslationKeys = {
 		timeout: 'Tiempo límite:',
 		customTimeout: '(personalizado)',
 	},
+	fileRollback: {
+		title: 'Confirmación de Reversión de Archivos',
+		description: 'Este punto de control tiene',
+		question: '¿Desea revertir los archivos también?',
+		yesRollbackFiles: 'Sí, revertir archivos y conversación',
+		noConversationOnly: 'No, revertir solo conversación',
+		moreAbove: 'más arriba...',
+		moreBelow: 'más abajo...',
+		andMoreFiles: 'y',
+		viewAllHint: 'Tab ver todos',
+		selectHint: '↑↓ seleccionar',
+		confirmHint: 'Enter confirmar',
+		cancelHint: 'ESC cancelar',
+		scrollHint: '↑↓ desplazar',
+		backHint: 'Tab volver',
+		closeHint: 'ESC cerrar',
+	},
 	usagePanel: {
 		title: 'Estadísticas de Uso de Tokens',
 		granularity: {

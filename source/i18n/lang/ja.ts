@@ -828,6 +828,23 @@ export const ja: TranslationKeys = {
 		timeout: 'タイムアウト:',
 		customTimeout: '(カスタム)',
 	},
+	fileRollback: {
+		title: 'ファイルロールバック確認',
+		description: 'このチェックポイントには',
+		question: 'ファイルもロールバックしますか？',
+		yesRollbackFiles: 'はい、ファイルと会話をロールバック',
+		noConversationOnly: 'いいえ、会話のみロールバック',
+		moreAbove: '上にもっと...',
+		moreBelow: '下にもっと...',
+		andMoreFiles: 'および',
+		viewAllHint: 'Tab すべて表示',
+		selectHint: '↑↓ 選択',
+		confirmHint: 'Enter 確認',
+		cancelHint: 'ESC キャンセル',
+		scrollHint: '↑↓ スクロール',
+		backHint: 'Tab 戻る',
+		closeHint: 'ESC 閉じる',
+	},
 	usagePanel: {
 		title: 'トークン使用統計',
 		granularity: {

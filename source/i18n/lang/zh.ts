@@ -800,6 +800,23 @@ export const zh: TranslationKeys = {
 		timeout: '超时时间:',
 		customTimeout: '(自定义)',
 	},
+	fileRollback: {
+		title: '文件回滚确认',
+		description: '此检查点包含',
+		question: '是否同时回滚文件？',
+		yesRollbackFiles: '是，回滚文件和对话',
+		noConversationOnly: '否，仅回滚对话',
+		moreAbove: '更多...',
+		moreBelow: '更多...',
+		andMoreFiles: '以及',
+		viewAllHint: 'Tab 查看全部',
+		selectHint: '↑↓ 选择',
+		confirmHint: 'Enter 确认',
+		cancelHint: 'ESC 取消',
+		scrollHint: '↑↓ 滚动',
+		backHint: 'Tab 返回',
+		closeHint: 'ESC 关闭',
+	},
 	usagePanel: {
 		title: 'Token 使用统计',
 		granularity: {

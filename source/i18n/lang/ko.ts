@@ -814,6 +814,23 @@ export const ko: TranslationKeys = {
 		timeout: '타임아웃:',
 		customTimeout: '(사용자 지정)',
 	},
+	fileRollback: {
+		title: '파일 롤백 확인',
+		description: '이 체크포인트에는',
+		question: '파일도 롤백하시겠습니까?',
+		yesRollbackFiles: '예, 파일과 대화 롤백',
+		noConversationOnly: '아니요, 대화만 롤백',
+		moreAbove: '위에 더 많이...',
+		moreBelow: '아래에 더 많이...',
+		andMoreFiles: '및',
+		viewAllHint: 'Tab 전체 보기',
+		selectHint: '↑↓ 선택',
+		confirmHint: 'Enter 확인',
+		cancelHint: 'ESC 취소',
+		scrollHint: '↑↓ 스크롤',
+		backHint: 'Tab 돌아가기',
+		closeHint: 'ESC 닫기',
+	},
 	usagePanel: {
 		title: '토큰 사용 통계',
 		granularity: {

@@ -842,6 +842,23 @@ export const en: TranslationKeys = {
 		timeout: 'Timeout:',
 		customTimeout: '(custom)',
 	},
+	fileRollback: {
+		title: 'File Rollback Confirmation',
+		description: 'This checkpoint has',
+		question: 'Do you want to rollback the files as well?',
+		yesRollbackFiles: 'Yes, rollback files and conversation',
+		noConversationOnly: 'No, rollback conversation only',
+		moreAbove: 'more above...',
+		moreBelow: 'more below...',
+		andMoreFiles: 'and',
+		viewAllHint: 'Tab view all',
+		selectHint: '↑↓ select',
+		confirmHint: 'Enter confirm',
+		cancelHint: 'ESC cancel',
+		scrollHint: '↑↓ scroll',
+		backHint: 'Tab back',
+		closeHint: 'ESC close',
+	},
 	usagePanel: {
 		title: 'Token Usage Statistics',
 		granularity: {

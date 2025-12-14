@@ -801,6 +801,23 @@ export type TranslationKeys = {
 		timeout: string;
 		customTimeout: string;
 	};
+	fileRollback: {
+		title: string;
+		description: string;
+		question: string;
+		yesRollbackFiles: string;
+		noConversationOnly: string;
+		moreAbove: string;
+		moreBelow: string;
+		andMoreFiles: string;
+		viewAllHint: string;
+		selectHint: string;
+		confirmHint: string;
+		cancelHint: string;
+		scrollHint: string;
+		backHint: string;
+		closeHint: string;
+	};
 	usagePanel: {
 		title: string;
 		granularity: {

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, {useState} from 'react';
+import {Box, Text, useInput} from 'ink';
+import {useI18n} from '../../../i18n/I18nContext.js';
 
 type Props = {
 	fileCount: number;
@@ -7,14 +8,19 @@ type Props = {
 	onConfirm: (rollbackFiles: boolean | null) => void; // null means cancel
 };
 
-export default function FileRollbackConfirmation({ fileCount, filePaths, onConfirm }: Props) {
+export default function FileRollbackConfirmation({
+	fileCount,
+	filePaths,
+	onConfirm,
+}: Props) {
+	const {t} = useI18n();
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [showFullList, setShowFullList] = useState(false);
 	const [fileScrollIndex, setFileScrollIndex] = useState(0);
 
 	const options = [
-		{ label: 'Yes, rollback files and conversation', value: true },
-		{ label: 'No, rollback conversation only', value: false }
+		{label: t.fileRollback.yesRollbackFiles, value: true},
+		{label: t.fileRollback.noConversationOnly, value: false},
 	];
 
 	useInput((_, key) => {
@@ -80,19 +86,21 @@ export default function FileRollbackConfirmation({ fileCount, filePaths, onConfi
 
 	const remainingCountCompact = fileCount - maxFilesToShowCompact;
 	const hasMoreAbove = showFullList && fileScrollIndex > 0;
-	const hasMoreBelow = showFullList && (fileScrollIndex + maxFilesToShowFull) < filePaths.length;
+	const hasMoreBelow =
+		showFullList && fileScrollIndex + maxFilesToShowFull < filePaths.length;
 
 	return (
 		<Box flexDirection="column" marginX={1} marginBottom={1} padding={1}>
 			<Box marginBottom={1}>
 				<Text color="yellow" bold>
-					⚠  File Rollback Confirmation
+					⚠ {t.fileRollback.title}
 				</Text>
 			</Box>
 
 			<Box marginBottom={1}>
 				<Text color="white">
-					This checkpoint has {fileCount} file{fileCount > 1 ? 's' : ''} that will be rolled back:
+					{t.fileRollback.description} {fileCount} file
+					{fileCount > 1 ? 's' : ''} that will be rolled back:
 				</Text>
 			</Box>
 
@@ -100,7 +108,7 @@ export default function FileRollbackConfirmation({ fileCount, filePaths, onConfi
 			<Box flexDirection="column" marginBottom={1} marginLeft={2}>
 				{hasMoreAbove && (
 					<Text color="gray" dimColor>
-						↑ {fileScrollIndex} more above...
+						↑ {fileScrollIndex} {t.fileRollback.moreAbove}
 					</Text>
 				)}
 				{displayFiles.map((file, index) => (
@@ -110,12 +118,14 @@ export default function FileRollbackConfirmation({ fileCount, filePaths, onConfi
 				))}
 				{hasMoreBelow && (
 					<Text color="gray" dimColor>
-						↓ {filePaths.length - (fileScrollIndex + maxFilesToShowFull)} more below...
+						↓ {filePaths.length - (fileScrollIndex + maxFilesToShowFull)}{' '}
+						{t.fileRollback.moreBelow}
 					</Text>
 				)}
 				{!showFullList && remainingCountCompact > 0 && (
 					<Text color="gray" dimColor>
-						... and {remainingCountCompact} more file{remainingCountCompact > 1 ? 's' : ''}
+						... {t.fileRollback.andMoreFiles} {remainingCountCompact} more file
+						{remainingCountCompact > 1 ? 's' : ''}
 					</Text>
 				)}
 			</Box>
@@ -124,7 +134,7 @@ export default function FileRollbackConfirmation({ fileCount, filePaths, onConfi
 				<>
 					<Box marginBottom={1}>
 						<Text color="gray" dimColor>
-							Do you want to rollback the files as well?
+							{t.fileRollback.question}
 						</Text>
 					</Box>
 
@@ -147,10 +157,10 @@ export default function FileRollbackConfirmation({ fileCount, filePaths, onConfi
 			<Box>
 				<Text color="gray" dimColor>
 					{showFullList
-						? '↑↓ scroll · Tab back · ESC close'
+						? `${t.fileRollback.scrollHint} · ${t.fileRollback.backHint} · ${t.fileRollback.closeHint}`
 						: fileCount > maxFilesToShowCompact
-						? `↑↓ select · Tab view all (${fileCount} files) · Enter confirm · ESC cancel`
-						: '↑↓ select · Enter confirm · ESC cancel'}
+						? `${t.fileRollback.selectHint} · ${t.fileRollback.viewAllHint} (${fileCount} files) · ${t.fileRollback.confirmHint} · ${t.fileRollback.cancelHint}`
+						: `${t.fileRollback.selectHint} · ${t.fileRollback.confirmHint} · ${t.fileRollback.cancelHint}`}
 				</Text>
 			</Box>
 		</Box>
