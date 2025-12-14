@@ -53,6 +53,7 @@ export interface MCPServer {
 	args?: string[];
 	env?: Record<string, string>; // 环境变量
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
+	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
 }
 
 export interface MCPConfig {

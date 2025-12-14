@@ -86,10 +86,14 @@ class CodebaseSearchService {
 		return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 	}
 
-	/**
+		/**
 	 * Search codebase using semantic similarity with retry logic
 	 */
-	async search(query: string, topN: number = 10): Promise<any> {
+	async search(
+		query: string,
+		topN: number = 10,
+		abortSignal?: AbortSignal,
+	): Promise<any> {
 		// Load codebase config
 		const config = loadCodebaseConfig();
 		const enableAgentReview = config.enableAgentReview;
@@ -196,11 +200,12 @@ class CodebaseSearchService {
 							}))
 							.slice(-10) || []; // Last 10 messages
 
-					const reviewResult = await codebaseReviewAgent.reviewResults(
-						query,
-						formattedResults,
-						conversationContext.length > 0 ? conversationContext : undefined,
-					);
+									const reviewResult = await codebaseReviewAgent.reviewResults(
+					query,
+					formattedResults,
+					conversationContext.length > 0 ? conversationContext : undefined,
+					abortSignal,
+				);
 
 					finalResults = reviewResult.filteredResults;
 					reviewFailed = reviewResult.reviewFailed || false;
