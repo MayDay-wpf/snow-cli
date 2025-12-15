@@ -1648,6 +1648,8 @@ export default function ConfigScreen({
 								)}
 								<ScrollableSelectInput
 									items={getCurrentOptions()}
+									limit={10}
+									disableNumberShortcuts={true}
 									initialIndex={Math.max(
 										0,
 										getCurrentOptions().findIndex(

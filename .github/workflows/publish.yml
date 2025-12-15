@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - VScode extension supports preview editing, JetBrains plugin modifies the startup icon position.
+            - Optimize some list operations
 
             ### Installation
             ```bash
