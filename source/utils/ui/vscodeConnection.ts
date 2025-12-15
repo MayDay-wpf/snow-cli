@@ -513,6 +513,67 @@ class VSCodeConnectionManager {
 	resetReconnectAttempts(): void {
 		this.reconnectAttempts = 0;
 	}
+
+	/**
+	 * Show diff in VSCode editor
+	 * @param filePath - The file path
+	 * @param originalContent - Original file content
+	 * @param newContent - New file content
+	 * @param label - Label for the diff view
+	 * @returns Promise that resolves when diff is shown or rejects if not connected
+	 */
+	async showDiff(
+		filePath: string,
+		originalContent: string,
+		newContent: string,
+		label: string,
+	): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+				reject(new Error('VSCode extension not connected'));
+				return;
+			}
+
+			try {
+				this.client.send(
+					JSON.stringify({
+						type: 'showDiff',
+						filePath,
+						originalContent,
+						newContent,
+						label,
+					}),
+				);
+				resolve();
+			} catch (error) {
+				reject(error);
+			}
+		});
+	}
+
+	/**
+	 * Close diff view in VSCode editor
+	 * @returns Promise that resolves when close command is sent or rejects if not connected
+	 */
+	async closeDiff(): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+				reject(new Error('VSCode extension not connected'));
+				return;
+			}
+
+			try {
+				this.client.send(
+					JSON.stringify({
+						type: 'closeDiff',
+					}),
+				);
+				resolve();
+			} catch (error) {
+				reject(error);
+			}
+		});
+	}
 }
 
 export const vscodeConnection = new VSCodeConnectionManager();

@@ -58,11 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add internationalization support for file rollback confirmation
-
-            ### What's Changed
-
-            - Linux switches configurations with Alt+P
+            - VScode extension supports preview editing, JetBrains plugin modifies the startup icon position.
 
             ### Installation
             ```bash
