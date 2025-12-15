@@ -243,6 +243,7 @@ type CommandHandlerOptions = {
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
 	>;
+	setIsExecutingTerminalCommand: React.Dispatch<React.SetStateAction<boolean>>;
 	processMessage: (
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
@@ -501,6 +502,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Execute terminal command (execute type - run in terminal)
 				const {spawn} = require('child_process');
 
+				// Disable input while command is executing
+				options.setIsExecutingTerminalCommand(true);
+
 				// Show executing status
 				const statusMessage: Message = {
 					role: 'command',
@@ -510,7 +514,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, statusMessage]);
 
 				// Use spawn for streaming output
-				const child = spawn('sh', ['-c', result.prompt], {
+				// Windows 使用 cmd.exe，Unix-like 系统使用 sh
+				const isWindows = process.platform === 'win32';
+				const shell = isWindows ? 'cmd' : 'sh';
+				const shellArgs = isWindows
+					? ['/c', result.prompt]
+					: ['-c', result.prompt];
+
+				const child = spawn(shell, shellArgs, {
 					timeout: 30000,
 				});
 
@@ -546,6 +557,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 
 				// Handle completion
 				child.on('close', () => {
+					// Re-enable input
+					options.setIsExecutingTerminalCommand(false);
+
 					// Remove executing status message
 					options.setMessages(prev =>
 						prev.filter(msg => msg !== statusMessage),
@@ -564,6 +578,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 
 				// Handle error
 				child.on('error', (error: any) => {
+					// Re-enable input
+					options.setIsExecutingTerminalCommand(false);
+
 					// Remove executing status message
 					options.setMessages(prev =>
 						prev.filter(msg => msg !== statusMessage),
@@ -589,8 +606,13 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				} = require('../../utils/commands/custom.js');
 
 				try {
-					await deleteCustomCommand(result.prompt);
-					await registerCustomCommands();
+					// Use the location from result, default to 'global' if not provided
+					const location = result.location || 'global';
+					const projectRoot =
+						location === 'project' ? process.cwd() : undefined;
+
+					await deleteCustomCommand(result.prompt, location, projectRoot);
+					await registerCustomCommands(projectRoot);
 
 					const successMessage: Message = {
 						role: 'command',

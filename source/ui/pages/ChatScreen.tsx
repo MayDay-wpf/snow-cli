@@ -102,6 +102,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [remountKey, setRemountKey] = useState(0);
 	const [currentContextPercentage, setCurrentContextPercentage] = useState(0); // Track context percentage from ChatInput
 	const currentContextPercentageRef = useRef(0); // Use ref to avoid closure issues
+	const [isExecutingTerminalCommand, setIsExecutingTerminalCommand] =
+		useState(false); // Track terminal command execution
 
 	// Sync state to ref
 	useEffect(() => {
@@ -725,6 +727,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
+		setIsExecutingTerminalCommand,
 		processMessage: (message, images, useBasicModel, hideUserMessage) =>
 			processMessageRef.current?.(
 				message,
@@ -2489,7 +2492,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							onSubmit={handleMessageSubmit}
 							onCommand={handleCommandExecution}
 							placeholder={t.chatScreen.inputPlaceholder}
-							disabled={!!pendingToolConfirmation || !!bashSensitiveCommand}
+							disabled={
+								!!pendingToolConfirmation ||
+								!!bashSensitiveCommand ||
+								isExecutingTerminalCommand
+							}
 							isProcessing={
 								streamingState.isStreaming ||
 								isSaving ||

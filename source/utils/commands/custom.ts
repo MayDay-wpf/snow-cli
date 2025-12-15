@@ -201,6 +201,7 @@ export async function registerCustomCommands(
 						action: 'deleteCustomCommand',
 						message: `Delete custom command: ${cmd.name}`,
 						prompt: cmd.name,
+						location: cmd.location,
 					};
 				}
 
