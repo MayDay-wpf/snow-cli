@@ -255,11 +255,48 @@ export function createMessageWithFileInstructions(
 /**
  * Clean IDE context information from message content
  * Removes all lines that start with "└─" (IDE context prefix)
+ * Also removes code blocks that follow "└─ Selected Code:" lines
  */
 export function cleanIDEContext(content: string): string {
-	return content
-		.split('\n')
-		.filter(line => !line.trim().startsWith('└─'))
-		.join('\n')
-		.trim();
+	const lines = content.split('\n');
+	const result: string[] = [];
+	let skipCodeBlock = false;
+	let codeBlockDepth = 0;
+
+	for (const line of lines) {
+		const trimmedLine = line.trim();
+
+		// Check if this line starts a Selected Code context
+		if (trimmedLine.startsWith('└─ Selected Code:')) {
+			skipCodeBlock = true;
+			codeBlockDepth = 0;
+			continue;
+		}
+
+		// Skip other IDE context lines
+		if (trimmedLine.startsWith('└─')) {
+			continue;
+		}
+
+		// Handle code block tracking when in skip mode
+		if (skipCodeBlock) {
+			if (trimmedLine.startsWith('```')) {
+				codeBlockDepth++;
+				if (codeBlockDepth >= 2) {
+					// We've seen opening and closing ```, done skipping
+					skipCodeBlock = false;
+					codeBlockDepth = 0;
+				}
+				continue;
+			}
+			// Skip content inside the code block
+			if (codeBlockDepth >= 1) {
+				continue;
+			}
+		}
+
+		result.push(line);
+	}
+
+	return result.join('\n').trim();
 }
