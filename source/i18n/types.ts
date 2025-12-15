@@ -535,6 +535,11 @@ export type TranslationKeys = {
 		typeLabel: string;
 		typeExecute: string;
 		typePrompt: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationProject: string;
+		locationGlobalInfo: string;
+		locationProjectInfo: string;
 		confirmSave: string;
 		confirmYes: string;
 		confirmNo: string;

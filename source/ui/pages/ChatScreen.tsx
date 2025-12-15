@@ -33,6 +33,7 @@ import WorkingDirectoryPanel from '../components/panels/WorkingDirectoryPanel.js
 import {
 	saveCustomCommand,
 	registerCustomCommands,
+	type CommandLocation,
 } from '../../utils/commands/custom.js';
 import {
 	createSkillTemplate,
@@ -226,7 +227,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
-				await registerCustomCommands();
+				await registerCustomCommands(workingDirectory);
 				setCommandsLoaded(true);
 			})
 			.catch(error => {
@@ -2374,19 +2375,32 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			{showCustomCommandConfig && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<CustomCommandConfigPanel
+						projectRoot={workingDirectory}
 						onSave={async (
 							name: string,
 							command: string,
 							type: 'execute' | 'prompt',
+							location: CommandLocation,
 						) => {
-							await saveCustomCommand(name, command, type);
-							await registerCustomCommands();
+							await saveCustomCommand(
+								name,
+								command,
+								type,
+								undefined,
+								location,
+								workingDirectory,
+							);
+							await registerCustomCommands(workingDirectory);
 							setShowCustomCommandConfig(false);
 							const typeDesc =
 								type === 'execute' ? 'Execute in terminal' : 'Send to AI';
+							const locationDesc =
+								location === 'global'
+									? 'Global (~/.snow/commands/)'
+									: 'Project (.snow/commands/)';
 							const successMessage: Message = {
 								role: 'command',
-								content: `Custom command '${name}' saved successfully! Type: ${typeDesc}. You can now use /${name}`,
+								content: `Custom command '${name}' saved successfully!\nType: ${typeDesc}\nLocation: ${locationDesc}\nYou can now use /${name}`,
 								commandName: 'custom',
 							};
 							setMessages(prev => [...prev, successMessage]);
