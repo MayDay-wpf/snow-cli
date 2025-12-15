@@ -702,7 +702,7 @@ export default function ConfigScreen({
 									{anthropicCacheTTL === '5m'
 										? t.configScreen.anthropicCacheTTL5m
 										: t.configScreen.anthropicCacheTTL1h}{' '}
-									({t.configScreen.toggleHint})
+									{t.configScreen.toggleHint}
 								</Text>
 							</Box>
 						)}
