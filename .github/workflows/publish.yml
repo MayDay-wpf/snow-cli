@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Optimize some list operations
+            - Add a code repository search status component to enhance search feedback and result display, strengthen the precision of code repository search with progressive search, and add token prediction to file reading.
 
             ### Installation
             ```bash
