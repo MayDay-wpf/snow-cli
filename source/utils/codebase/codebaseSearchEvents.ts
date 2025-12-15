@@ -7,6 +7,18 @@ export type CodebaseSearchEvent = {
 	currentTopN: number;
 	message: string;
 	query?: string;
+	// Original results count (before AI review)
+	originalResultsCount?: number;
+	// AI review results
+	reviewResults?: {
+		originalCount: number;
+		filteredCount: number;
+		removedCount: number;
+		highConfidenceFiles?: string[];
+		reviewFailed?: boolean;
+	};
+	// AI suggested search query (single best suggestion)
+	suggestion?: string;
 };
 
 class CodebaseSearchEventEmitter extends EventEmitter {

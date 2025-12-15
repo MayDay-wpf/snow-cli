@@ -15,6 +15,16 @@ export type CodebaseSearchStatus = {
 	maxAttempts: number;
 	currentTopN: number;
 	message: string;
+	query?: string;
+	originalResultsCount?: number;
+	suggestion?: string;
+	reviewResults?: {
+		originalCount: number;
+		filteredCount: number;
+		removedCount: number;
+		highConfidenceFiles?: string[];
+		reviewFailed?: boolean;
+	};
 };
 
 export function useStreamingState() {

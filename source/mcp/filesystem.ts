@@ -457,6 +457,41 @@ export class FilesystemMCPService {
 						const actualStartLine = fileStartLine ?? 1;
 						const actualEndLine = fileEndLine ?? totalLines;
 
+						// If reading entire file (actualStartLine is 1 and actualEndLine is totalLines), check token count
+						if (actualStartLine === 1 && actualEndLine === totalLines) {
+							try {
+								const {encoding_for_model} = await import('tiktoken');
+								const encoder = encoding_for_model('gpt-5');
+								try {
+									const tokens = encoder.encode(content);
+									const tokenCount = tokens.length;
+
+									// If file exceeds 50K tokens, throw error
+									if (tokenCount > 50000) {
+										throw new Error(
+											`File ${file} is too large: ${tokenCount} tokens (exceeds 50,000 token limit).\n` +
+												`Tip: Use startLine and endLine parameters to read the file in chunks.\n` +
+												`Total lines: ${totalLines}, suggested chunk size: ~${Math.floor(
+													(totalLines * 50000) / tokenCount,
+												)} lines per read.\n` +
+												`Example: Use object format - {path: "${file}", startLine: 1, endLine: 1000}`,
+										);
+									}
+								} finally {
+									encoder.free();
+								}
+							} catch (error) {
+								// If it's our token limit error, re-throw it
+								if (
+									error instanceof Error &&
+									error.message.includes('exceeds 50,000 token limit')
+								) {
+									throw error;
+								}
+								// If tiktoken fails, silently continue (don't block file reading)
+							}
+						}
+
 						// Validate and adjust line numbers
 						if (actualStartLine < 1) {
 							throw new Error(`Start line must be greater than 0 for ${file}`);
@@ -622,6 +657,41 @@ export class FilesystemMCPService {
 			// - Both params: read from startLine to endLine
 			const actualStartLine = startLine ?? 1;
 			const actualEndLine = endLine ?? totalLines;
+
+			// If reading entire file (actualStartLine is 1 and actualEndLine is totalLines), check token count
+			if (actualStartLine === 1 && actualEndLine === totalLines) {
+				try {
+					const {encoding_for_model} = await import('tiktoken');
+					const encoder = encoding_for_model('gpt-4o');
+					try {
+						const tokens = encoder.encode(content);
+						const tokenCount = tokens.length;
+
+						// If file exceeds 50K tokens, return error with suggestion
+						if (tokenCount > 50000) {
+							throw new Error(
+								`File ${filePath} is too large: ${tokenCount} tokens (exceeds 50,000 token limit).\n` +
+									`Tip: Use startLine and endLine parameters to read the file in chunks.\n` +
+									`Total lines: ${totalLines}, suggested chunk size: ~${Math.floor(
+										(totalLines * 50000) / tokenCount,
+									)} lines per read.\n` +
+									`Example: Read first 1000 lines - startLine: 1, endLine: 1000`,
+							);
+						}
+					} finally {
+						encoder.free();
+					}
+				} catch (error) {
+					// If it's our token limit error, re-throw it
+					if (
+						error instanceof Error &&
+						error.message.includes('exceeds 50,000 token limit')
+					) {
+						throw error;
+					}
+					// If tiktoken fails, silently continue (don't block file reading)
+				}
+			}
 
 			// Validate and adjust line numbers
 			if (actualStartLine < 1) {

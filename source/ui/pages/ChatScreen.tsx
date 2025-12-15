@@ -18,6 +18,7 @@ import ShimmerText from '../components/common/ShimmerText.js';
 import MessageRenderer from '../components/chat/MessageRenderer.js';
 import StatusLine from '../components/common/StatusLine.js';
 import ChatHeader from '../components/special/ChatHeader.js';
+import CodebaseSearchStatus from '../components/chat/CodebaseSearchStatus.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/panels/MCPInfoPanel.js'));
@@ -805,10 +806,34 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			maxAttempts: number;
 			currentTopN: number;
 			message: string;
+			query?: string;
+			originalResultsCount?: number;
+			suggestion?: string;
+			reviewResults?: {
+				originalCount: number;
+				filteredCount: number;
+				removedCount: number;
+				highConfidenceFiles?: string[];
+				reviewFailed?: boolean;
+			};
 		}) => {
 			if (event.type === 'search-complete') {
-				// Clear status after completion
-				streamingState.setCodebaseSearchStatus(null);
+				// Show completion status briefly
+				streamingState.setCodebaseSearchStatus({
+					isSearching: false,
+					attempt: event.attempt,
+					maxAttempts: event.maxAttempts,
+					currentTopN: event.currentTopN,
+					message: event.message,
+					query: event.query,
+					originalResultsCount: event.originalResultsCount,
+					suggestion: event.suggestion,
+					reviewResults: event.reviewResults,
+				});
+				// Clear status after a delay to show completion
+				setTimeout(() => {
+					streamingState.setCodebaseSearchStatus(null);
+				}, 2000);
 			} else {
 				// Update search status
 				streamingState.setCodebaseSearchStatus({
@@ -817,6 +842,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					maxAttempts: event.maxAttempts,
 					currentTopN: event.currentTopN,
 					message: event.message,
+					query: event.query,
+					originalResultsCount: event.originalResultsCount,
+					suggestion: undefined,
+					reviewResults: undefined,
 				});
 			}
 		};
@@ -1139,8 +1168,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					// Just truncate UI, don't modify session
 					setMessages(prev => prev.slice(0, selectedIndex));
 					clearSavedMessages();
-					setRemountKey(prev => prev + 1);
 					snapshotState.setPendingRollback(null);
+
+					// Trigger remount in next tick to ensure messages update is applied
+					setTimeout(() => {
+						setRemountKey(prev => prev + 1);
+					}, 0);
 					return;
 				}
 			}
@@ -1193,8 +1226,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				// Clear pending rollback dialog
 				snapshotState.setPendingRollback(null);
 
-				// Trigger remount
-				setRemountKey(prev => prev + 1);
+				// Trigger remount in next tick to ensure messages update is applied
+				setTimeout(() => {
+					setRemountKey(prev => prev + 1);
+				}, 0);
 
 				return;
 			}
@@ -1223,10 +1258,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setMessages(prev => prev.slice(0, selectedIndex));
 
 		clearSavedMessages();
-		setRemountKey(prev => prev + 1);
 
-		// Clear pending rollback dialog
+		// Clear pending rollback dialog first
 		snapshotState.setPendingRollback(null);
+
+		// Trigger remount in next tick to ensure messages update is applied
+		setTimeout(() => {
+			setRemountKey(prev => prev + 1);
+		}, 0);
 	};
 
 	const handleRollbackConfirm = async (rollbackFiles: boolean | null) => {
@@ -2132,17 +2171,17 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 											)}
 										</Box>
 									) : streamingState.codebaseSearchStatus?.isSearching ? (
-										// Codebase search retry status
-										<Box flexDirection="column">
-											<Text color="cyan" dimColor>
-												⏏ Codebase Search (Attempt{' '}
-												{streamingState.codebaseSearchStatus.attempt}/
-												{streamingState.codebaseSearchStatus.maxAttempts})
-											</Text>
-											<Text color={theme.colors.menuSecondary} dimColor>
-												{streamingState.codebaseSearchStatus.message}
-											</Text>
-										</Box>
+										// Codebase search in progress
+										<CodebaseSearchStatus
+											status={streamingState.codebaseSearchStatus}
+										/>
+									) : streamingState.codebaseSearchStatus &&
+									  !streamingState.codebaseSearchStatus.isSearching &&
+									  streamingState.codebaseSearchStatus.reviewResults ? (
+										// Codebase search completed with review results
+										<CodebaseSearchStatus
+											status={streamingState.codebaseSearchStatus}
+										/>
 									) : (
 										// Normal thinking status
 										<Text color={theme.colors.menuSecondary} dimColor>

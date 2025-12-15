@@ -43,11 +43,10 @@ export class CodebaseReviewAgent {
 						description:
 							'Array of irrelevant result indices that should be removed (1-based). Example: [2, 4]',
 					},
-					suggestions: {
-						type: 'array',
-						items: {type: 'string'},
+					suggestion: {
+						type: 'string',
 						description:
-							'Suggested search keywords if most results are irrelevant. Only provide if >50% are irrelevant',
+							'If there are relevant results but not enough, extract actual code snippet from the RELEVANT results to use as new search term. Copy real code text like function names, class names, key variable names, or important code lines. Example: if relevant result contains "async function validateUserInput(data)", extract "validateUserInput" or "async function validateUserInput". This helps find similar code patterns.',
 					},
 					highConfidenceFiles: {
 						type: 'array',
@@ -226,7 +225,9 @@ export class CodebaseReviewAgent {
 		try {
 			// Extract JSON from markdown code blocks if present
 			let jsonStr = response.trim();
-			const jsonMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+			const jsonMatch = jsonStr.match(
+				/```(?:json)?\\s*\\n?([\\s\\S]*?)\\n?```/,
+			);
 			if (jsonMatch) {
 				jsonStr = jsonMatch[1]!.trim();
 			}
@@ -301,7 +302,7 @@ Guidelines:
 - Be strict but fair: code doesn't need to match exactly, but should be semantically related
 - Consider file paths, code content, and context
 - If a result is marginally relevant, keep it
-- Only suggest new keywords if >50% of results are irrelevant
+- IMPORTANT for suggestion: If there are relevant results but not enough (results < threshold), extract actual code snippet from the RELEVANT results. Copy real code text like function names, class names, key variable names, or important code lines that appear in relevant results. Example: if relevant result contains "async function validateUserInput(data)", extract "validateUserInput" or "async function validateUserInput". Use this extracted code as the new search term to find similar code patterns.
 - Identify files with >2 relevant results OR that seem to be core implementation files (look for patterns: multiple hits, core modules, entry points)`;
 
 		const messages: ChatMessage[] = [
@@ -345,6 +346,19 @@ Guidelines:
 							toolCall.function?.name === 'review_search_results'
 						) {
 							const parsed = JSON.parse(toolCall.function.arguments);
+
+							// Validate structure
+							if (!Array.isArray(parsed.relevantIndices)) {
+								logger.warn(
+									`Codebase review agent: Tool call returned invalid structure on attempt ${attempt}`,
+								);
+								if (attempt < this.MAX_RETRIES) {
+									await this.sleep(500 * attempt);
+									continue;
+								}
+								return null;
+							}
+
 							logger.info(
 								`Codebase review agent: Successfully parsed from tool call on attempt ${attempt}`,
 							);
@@ -410,8 +424,7 @@ Guidelines:
 	 * @param query - Original search query
 	 * @param results - Search results to review
 	 * @param conversationContext - Optional conversation context (messages without tool calls)
-	 * @param abortSignal - Optional abort signal
-	 * @param returns Object with filtered results and optional suggestions
+	 * @param returns Object with filtered results and optional suggestion
 	 */
 	async reviewResults(
 		query: string,
@@ -429,7 +442,7 @@ Guidelines:
 	): Promise<{
 		filteredResults: typeof results;
 		removedCount: number;
-		suggestions?: string[];
+		suggestion?: string;
 		highConfidenceFiles?: string[];
 		reviewFailed?: boolean;
 	}> {
@@ -480,14 +493,14 @@ Guidelines:
 			filteredCount: filteredResults.length,
 			removedCount,
 			attempts: attempt,
-			hasSuggestions: !!parsed.suggestions?.length,
+			hasSuggestion: !!parsed.suggestion,
 			hasHighConfidenceFiles: !!parsed.highConfidenceFiles?.length,
 		});
 
 		return {
 			filteredResults,
 			removedCount,
-			suggestions: parsed.suggestions || undefined,
+			suggestion: parsed.suggestion || undefined,
 			highConfidenceFiles: parsed.highConfidenceFiles || undefined,
 			reviewFailed: false,
 		};
