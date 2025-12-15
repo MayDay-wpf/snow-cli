@@ -742,6 +742,8 @@ export class CodebaseIndexAgent {
 		const lines = content.split('\n');
 		const chunks: CodeChunk[] = [];
 		const maxLinesPerChunk = 100; // Max lines per chunk
+		const minLinesPerChunk = 5; // Minimum lines per chunk to avoid tiny fragments
+		const minCharsPerChunk = 50; // Minimum characters per chunk (after trim)
 		const overlapLines = 10; // Overlap between chunks for context
 
 		for (let i = 0; i < lines.length; i += maxLinesPerChunk - overlapLines) {
@@ -749,9 +751,27 @@ export class CodebaseIndexAgent {
 			const endLine = Math.min(i + maxLinesPerChunk, lines.length);
 			const chunkLines = lines.slice(startLine, endLine);
 			const chunkContent = chunkLines.join('\n');
+			const trimmedContent = chunkContent.trim();
 
-			// Skip empty chunks
-			if (chunkContent.trim().length === 0) {
+			// Skip chunks that are too small (less than minimum lines or characters)
+			// This prevents creating chunks with just a few characters or empty lines
+			const actualLineCount = chunkLines.filter(
+				line => line.trim().length > 0,
+			).length;
+			if (
+				trimmedContent.length < minCharsPerChunk ||
+				actualLineCount < minLinesPerChunk
+			) {
+				// If this is the last chunk and it's too small, try to merge with previous
+				if (i > 0 && endLine >= lines.length && chunks.length > 0) {
+					const lastChunk = chunks[chunks.length - 1]!;
+					// Merge with previous chunk if the combined size is reasonable
+					const mergedLines = lines.slice(lastChunk.startLine - 1, endLine);
+					if (mergedLines.length <= maxLinesPerChunk * 1.5) {
+						lastChunk.content = mergedLines.join('\n');
+						lastChunk.endLine = endLine;
+					}
+				}
 				continue;
 			}
 

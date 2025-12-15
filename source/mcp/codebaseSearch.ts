@@ -86,13 +86,18 @@ class CodebaseSearchService {
 		return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 	}
 
-		/**
+	/**
 	 * Search codebase using semantic similarity with retry logic
+	 * @param query - Search query
+	 * @param topN - Number of results to return
+	 * @param abortSignal - Optional abort signal
+	 * @param deepExploreFiles - Optional file paths for deep exploration (focused search)
 	 */
 	async search(
 		query: string,
 		topN: number = 10,
 		abortSignal?: AbortSignal,
+		deepExploreFiles?: string[],
 	): Promise<any> {
 		// Load codebase config
 		const config = loadCodebaseConfig();
@@ -140,12 +145,23 @@ class CodebaseSearchService {
 
 				// Generate embedding for query
 				logger.info(
-					`Search attempt ${searchAttempt}/${MAX_SEARCH_RETRIES}: Searching top ${currentTopN} chunks for query: "${query}"`,
+					`Search attempt ${searchAttempt}/${MAX_SEARCH_RETRIES}: Searching top ${currentTopN} chunks for query: "${query}"${
+						deepExploreFiles
+							? ` (deep explore in ${deepExploreFiles.length} files)`
+							: ''
+					}`,
 				);
 				const queryEmbedding = await createEmbedding(query);
 
 				// Search similar chunks
-				const results = db.searchSimilar(queryEmbedding, currentTopN);
+				// If deepExploreFiles is specified, search only in those files
+				const results = deepExploreFiles
+					? db.searchSimilarInFiles(
+							queryEmbedding,
+							deepExploreFiles,
+							currentTopN,
+					  )
+					: db.searchSimilar(queryEmbedding, currentTopN);
 
 				// Format results with similarity scores and full content
 				const formattedResults = results.map((chunk, index) => {
@@ -168,6 +184,7 @@ class CodebaseSearchService {
 				let reviewFailed = false;
 				let removedCount = 0;
 				let suggestions: string[] = [];
+				let highConfidenceFiles: string[] = [];
 
 				if (enableAgentReview) {
 					// Emit reviewing event
@@ -200,17 +217,18 @@ class CodebaseSearchService {
 							}))
 							.slice(-10) || []; // Last 10 messages
 
-									const reviewResult = await codebaseReviewAgent.reviewResults(
-					query,
-					formattedResults,
-					conversationContext.length > 0 ? conversationContext : undefined,
-					abortSignal,
-				);
+					const reviewResult = await codebaseReviewAgent.reviewResults(
+						query,
+						formattedResults,
+						conversationContext.length > 0 ? conversationContext : undefined,
+						abortSignal,
+					);
 
 					finalResults = reviewResult.filteredResults;
 					reviewFailed = reviewResult.reviewFailed || false;
 					removedCount = reviewResult.removedCount;
 					suggestions = reviewResult.suggestions || [];
+					highConfidenceFiles = reviewResult.highConfidenceFiles || [];
 				} else {
 					// Skip agent review, use all formatted results
 					finalResults = formattedResults;
@@ -298,6 +316,28 @@ class CodebaseSearchService {
 						(removedCount / formattedResults.length) *
 						100
 					).toFixed(1);
+
+					// Check if we have high confidence files for deep exploration
+					if (
+						highConfidenceFiles &&
+						highConfidenceFiles.length > 0 &&
+						!deepExploreFiles
+					) {
+						// Try deep exploration in high confidence files
+						logger.info(
+							`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Trying deep exploration in ${highConfidenceFiles.length} high-confidence files...`,
+						);
+
+						// Recursive call with deep explore files
+						db.close();
+						return await this.search(
+							query,
+							topN,
+							abortSignal,
+							highConfidenceFiles,
+						);
+					}
+
 					logger.warn(
 						`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Retrying with more candidates...`,
 					);

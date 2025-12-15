@@ -20,6 +20,48 @@ export class CodebaseReviewAgent {
 	private readonly MAX_RETRIES = 3;
 
 	/**
+	 * Function calling tool definition for result review
+	 */
+	private readonly REVIEW_TOOL = {
+		type: 'function' as const,
+		function: {
+			name: 'review_search_results',
+			description:
+				'Review code search results and identify relevant ones, suggest improvements',
+			parameters: {
+				type: 'object',
+				properties: {
+					relevantIndices: {
+						type: 'array',
+						items: {type: 'integer'},
+						description:
+							'Array of relevant result indices (1-based). Example: [1, 3, 5]',
+					},
+					removedIndices: {
+						type: 'array',
+						items: {type: 'integer'},
+						description:
+							'Array of irrelevant result indices that should be removed (1-based). Example: [2, 4]',
+					},
+					suggestions: {
+						type: 'array',
+						items: {type: 'string'},
+						description:
+							'Suggested search keywords if most results are irrelevant. Only provide if >50% are irrelevant',
+					},
+					highConfidenceFiles: {
+						type: 'array',
+						items: {type: 'string'},
+						description:
+							'File paths with high confidence that may contain more relevant code. Include files with >2 relevant results or core implementation files',
+					},
+				},
+				required: ['relevantIndices', 'removedIndices'],
+			},
+		},
+	};
+
+	/**
 	 * Initialize the review agent with current configuration
 	 */
 	private async initialize(): Promise<boolean> {
@@ -61,11 +103,12 @@ export class CodebaseReviewAgent {
 
 	/**
 	 * Call the model with streaming API and assemble complete response
+	 * Uses Function Calling to ensure structured output
 	 */
 	private async callModel(
 		messages: ChatMessage[],
 		abortSignal?: AbortSignal,
-	): Promise<string> {
+	): Promise<{content: string; tool_calls?: any[]}> {
 		let streamGenerator: AsyncGenerator<any, void, unknown>;
 
 		switch (this.requestMethod) {
@@ -74,6 +117,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						tools: [this.REVIEW_TOOL],
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 					},
@@ -86,6 +130,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						tools: [this.REVIEW_TOOL],
 						includeBuiltinSystemPrompt: false,
 					},
 					abortSignal,
@@ -97,6 +142,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						tools: [this.REVIEW_TOOL],
 						stream: true,
 						includeBuiltinSystemPrompt: false,
 					},
@@ -110,6 +156,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						tools: [this.REVIEW_TOOL],
 						stream: true,
 						includeBuiltinSystemPrompt: false,
 					},
@@ -119,6 +166,7 @@ export class CodebaseReviewAgent {
 		}
 
 		let completeContent = '';
+		let tool_calls: any[] = [];
 
 		try {
 			for await (const chunk of streamGenerator) {
@@ -127,12 +175,39 @@ export class CodebaseReviewAgent {
 				}
 
 				if (this.requestMethod === 'chat') {
+					// OpenAI chat format
 					if (chunk.choices && chunk.choices[0]?.delta?.content) {
 						completeContent += chunk.choices[0].delta.content;
 					}
+					if (chunk.choices && chunk.choices[0]?.delta?.tool_calls) {
+						// Accumulate tool calls
+						const deltaToolCalls = chunk.choices[0].delta.tool_calls;
+						for (const tc of deltaToolCalls) {
+							if (tc.index !== undefined) {
+								if (!tool_calls[tc.index]) {
+									tool_calls[tc.index] = {
+										id: tc.id || '',
+										type: 'function',
+										function: {name: '', arguments: ''},
+									};
+								}
+								if (tc.function?.name) {
+									tool_calls[tc.index].function.name += tc.function.name;
+								}
+								if (tc.function?.arguments) {
+									tool_calls[tc.index].function.arguments +=
+										tc.function.arguments;
+								}
+							}
+						}
+					}
 				} else {
+					// Anthropic/Gemini/Responses format
 					if (chunk.type === 'content' && chunk.content) {
 						completeContent += chunk.content;
+					}
+					if (chunk.type === 'tool_calls' && chunk.tool_calls) {
+						tool_calls = chunk.tool_calls;
 					}
 				}
 			}
@@ -141,7 +216,7 @@ export class CodebaseReviewAgent {
 			throw streamError;
 		}
 
-		return completeContent;
+		return {content: completeContent, tool_calls};
 	}
 
 	/**
@@ -220,24 +295,14 @@ ${r.content}
 	)
 	.join('\n---')}
 
-Your Tasks:
-1. Identify which results are RELEVANT to the search query
-2. Mark irrelevant results for removal
-3. If most results are irrelevant, suggest better search keywords
-
-Output in JSON format:
-{
-  "relevantIndices": [1, 3, 5],
-  "removedIndices": [2, 4],
-  "suggestions": ["keyword1", "keyword2"]
-}
+Please call the review_search_results function to provide your analysis.
 
 Guidelines:
 - Be strict but fair: code doesn't need to match exactly, but should be semantically related
 - Consider file paths, code content, and context
 - If a result is marginally relevant, keep it
 - Only suggest new keywords if >50% of results are irrelevant
-- Return ONLY valid JSON, no other text or explanation`;
+- Identify files with >2 relevant results OR that seem to be core implementation files (look for patterns: multiple hits, core modules, entry points)`;
 
 		const messages: ChatMessage[] = [
 			{
@@ -255,7 +320,12 @@ Guidelines:
 
 				const response = await this.callModel(messages, abortSignal);
 
-				if (!response || response.trim().length === 0) {
+				// Check for empty response
+				if (
+					!response ||
+					(!response.content &&
+						(!response.tool_calls || response.tool_calls.length === 0))
+				) {
 					logger.warn(
 						`Codebase review agent: Empty response on attempt ${attempt}`,
 					);
@@ -266,13 +336,38 @@ Guidelines:
 					return null;
 				}
 
-				// Try to parse JSON
-				const parsed = this.tryParseJSON(response);
-				if (parsed) {
-					logger.info(
-						`Codebase review agent: Successfully parsed on attempt ${attempt}`,
-					);
-					return {parsed, attempt};
+				// Try to parse from tool calls first (more reliable)
+				if (response.tool_calls && response.tool_calls.length > 0) {
+					try {
+						const toolCall = response.tool_calls[0];
+						if (
+							toolCall.type === 'function' &&
+							toolCall.function?.name === 'review_search_results'
+						) {
+							const parsed = JSON.parse(toolCall.function.arguments);
+							logger.info(
+								`Codebase review agent: Successfully parsed from tool call on attempt ${attempt}`,
+							);
+							return {parsed, attempt};
+						}
+					} catch (toolError) {
+						logger.warn(
+							'Codebase review agent: Tool call parse error:',
+							toolError,
+						);
+						// Fall through to try JSON parsing from content
+					}
+				}
+
+				// Fallback: Try to parse JSON from content
+				if (response.content) {
+					const parsed = this.tryParseJSON(response.content);
+					if (parsed) {
+						logger.info(
+							`Codebase review agent: Successfully parsed from content on attempt ${attempt}`,
+						);
+						return {parsed, attempt};
+					}
 				}
 
 				// If parse failed and we have retries left
@@ -316,7 +411,7 @@ Guidelines:
 	 * @param results - Search results to review
 	 * @param conversationContext - Optional conversation context (messages without tool calls)
 	 * @param abortSignal - Optional abort signal
-	 * @returns Object with filtered results and optional suggestions
+	 * @param returns Object with filtered results and optional suggestions
 	 */
 	async reviewResults(
 		query: string,
@@ -335,6 +430,7 @@ Guidelines:
 		filteredResults: typeof results;
 		removedCount: number;
 		suggestions?: string[];
+		highConfidenceFiles?: string[];
 		reviewFailed?: boolean;
 	}> {
 		const available = await this.isAvailable();
@@ -385,12 +481,14 @@ Guidelines:
 			removedCount,
 			attempts: attempt,
 			hasSuggestions: !!parsed.suggestions?.length,
+			hasHighConfidenceFiles: !!parsed.highConfidenceFiles?.length,
 		});
 
 		return {
 			filteredResults,
 			removedCount,
 			suggestions: parsed.suggestions || undefined,
+			highConfidenceFiles: parsed.highConfidenceFiles || undefined,
 			reviewFailed: false,
 		};
 	}
