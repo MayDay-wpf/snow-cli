@@ -4,18 +4,13 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.snow.plugin.SnowWebSocketManager
-import icons.SnowPluginIcons
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import org.jetbrains.plugins.terminal.TerminalToolWindowManager
 
 /**
  * Action to open Snow CLI in terminal
  */
-class OpenSnowTerminalAction : AnAction(
-    "Open Snow CLI",
-    "Open Snow CLI in integrated terminal",
-    SnowPluginIcons.SnowAction
-) {
+class OpenSnowTerminalAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
 
