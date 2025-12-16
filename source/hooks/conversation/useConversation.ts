@@ -347,6 +347,26 @@ export async function handleConversationWithTools(
 			let receivedReasoningContent: string | undefined; // DeepSeek R1 reasoning content
 			let hasStartedReasoning = false; // Track if reasoning has started (for Gemini thinking)
 
+			// Helper function to extract thinking content from all sources
+			const extractThinkingContent = (): string | undefined => {
+				// 1. Anthropic Extended Thinking
+				if (receivedThinking?.thinking) {
+					return receivedThinking.thinking;
+				}
+				// 2. Responses API reasoning summary
+				if (
+					receivedReasoning?.summary &&
+					receivedReasoning.summary.length > 0
+				) {
+					return receivedReasoning.summary.map(item => item.text).join('\n');
+				}
+				// 3. DeepSeek R1 reasoning content
+				if (receivedReasoningContent) {
+					return receivedReasoningContent;
+				}
+				return undefined;
+			};
+
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
 			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
@@ -598,14 +618,17 @@ export async function handleConversationWithTools(
 					console.error('Failed to save assistant message:', error);
 				}
 
-				// If there's text content before tool calls, display it first
-				if (streamedContent && streamedContent.trim()) {
+				// Display thinking content and text content before tool calls
+				const thinkingContent = extractThinkingContent();
+				// Show message if there's text content OR thinking content
+				if ((streamedContent && streamedContent.trim()) || thinkingContent) {
 					setMessages(prev => [
 						...prev,
 						{
 							role: 'assistant',
-							content: streamedContent.trim(),
+							content: streamedContent?.trim() || '',
 							streaming: false,
+							thinking: thinkingContent,
 						},
 					]);
 				}
@@ -1656,6 +1679,7 @@ export async function handleConversationWithTools(
 					content: streamedContent.trim(),
 					streaming: false,
 					discontinued: controller.signal.aborted,
+					thinking: extractThinkingContent(),
 				};
 				setMessages(prev => [...prev, finalAssistantMessage!]);
 

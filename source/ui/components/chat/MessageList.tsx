@@ -55,6 +55,7 @@ export interface Message {
 		output?: string;
 		error?: string;
 	}; // Hook error details for rendering with HookErrorDisplay
+	thinking?: string; // Extended Thinking content from Anthropic
 }
 
 interface Props {

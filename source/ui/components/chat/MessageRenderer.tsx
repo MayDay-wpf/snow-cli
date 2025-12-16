@@ -207,7 +207,20 @@ export default function MessageRenderer({
 											}
 
 											return (
-												<MarkdownRenderer content={message.content || ' '} />
+												<>
+													{message.thinking && (
+														<Box flexDirection="column" marginBottom={1}>
+															<Text
+																color={theme.colors.menuSecondary}
+																dimColor
+																italic
+															>
+																{message.thinking}
+															</Text>
+														</Box>
+													)}
+													<MarkdownRenderer content={message.content || ' '} />
+												</>
 											);
 										})()
 									)}
