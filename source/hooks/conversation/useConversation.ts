@@ -6,7 +6,7 @@ import {
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {getSystemPromptForMode} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../prompt/systemPrompt.js';
 import {
 	collectAllMCPTools,
 	getTodoService,
@@ -59,6 +59,7 @@ export type ConversationHandlerOptions = {
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
 	planMode?: boolean; // Plan mode flag (optional, defaults to false)
+	vulnerabilityHuntingMode?: boolean; // Vulnerability Hunting mode flag (optional, defaults to false)
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
 	getPendingMessages?: () => Array<{
@@ -222,7 +223,10 @@ export async function handleConversationWithTools(
 	let conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(options.planMode || false),
+			content: getSystemPromptForMode(
+				options.planMode || false,
+				options.vulnerabilityHuntingMode || false,
+			),
 		},
 	];
 
@@ -378,6 +382,7 @@ export async function handleConversationWithTools(
 								// Disable thinking for basicModel (e.g., init command)
 								disableThinking: options.useBasicModel,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -390,6 +395,7 @@ export async function handleConversationWithTools(
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -407,6 +413,7 @@ export async function handleConversationWithTools(
 								// Pass null to explicitly disable reasoning in API call
 								reasoning: options.useBasicModel ? null : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -418,6 +425,7 @@ export async function handleConversationWithTools(
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -1224,8 +1232,6 @@ export async function handleConversationWithTools(
 					if (receivedToolCalls && receivedToolCalls.length > 0) {
 						// NOTE: Assistant message with tool_calls was already saved at line 588 (await saveMessage)
 						// No need to save it again here to avoid duplicate assistant messages
-
-
 
 						// Now add aborted tool results
 						for (const toolCall of receivedToolCalls) {

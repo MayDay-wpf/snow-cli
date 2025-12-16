@@ -442,11 +442,23 @@ Month: ${currentMonth}`;
 }
 
 /**
- * Get the appropriate system prompt based on Plan mode status
+ * Get the appropriate system prompt based on mode status
  * @param planMode - Whether Plan mode is enabled
+ * @param vulnerabilityHuntingMode - Whether Vulnerability Hunting mode is enabled
  * @returns System prompt string
  */
-export function getSystemPromptForMode(planMode: boolean): string {
+export function getSystemPromptForMode(
+	planMode: boolean,
+	vulnerabilityHuntingMode: boolean,
+): string {
+	// Vulnerability Hunting mode takes precedence over Plan mode
+	if (vulnerabilityHuntingMode) {
+		// Import dynamically to avoid circular dependency
+		const {
+			getVulnerabilityHuntingModeSystemPrompt,
+		} = require('./vulnerabilityHuntingModeSystemPrompt.js');
+		return getVulnerabilityHuntingModeSystemPrompt();
+	}
 	if (planMode) {
 		// Import dynamically to avoid circular dependency
 		const {getPlanModeSystemPrompt} = require('./planModeSystemPrompt.js');

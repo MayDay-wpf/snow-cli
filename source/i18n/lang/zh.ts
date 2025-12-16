@@ -427,6 +427,7 @@ export const zh: TranslationKeys = {
 			todo: '从项目文件搜索并选择 TODO 注释',
 			addDir: '添加工作目录以支持多项目上下文。用法: /add-dir 或 /add-dir 路径',
 			reindex: '重建代码库索引，检测变更、删除、新增和修改的文件',
+			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
 			quit: '退出应用程序',
 		},
 	},
@@ -705,6 +706,8 @@ export const zh: TranslationKeys = {
 		fileSearchHint: '输入以过滤文件 • Tab/Enter 选择 • ESC 取消',
 		yoloModeActive: '❁ YOLO 模式已激活 - 所有工具将自动批准无需确认',
 		planModeActive: '⚐ Plan 模式已激活 - 专业规划与协调助手',
+		vulnerabilityHuntingModeActive:
+			'⍨ Vulnerability Hunting 模式已激活 - 专注漏洞挖掘与安全分析',
 		tokens: ' 个token',
 		cached: '已缓存',
 		newCache: '新缓存',

@@ -430,6 +430,7 @@ export type TranslationKeys = {
 			todo: string;
 			addDir: string;
 			reindex: string;
+			vulnerabilityHunting: string;
 			quit: string;
 		};
 	};
@@ -707,6 +708,7 @@ export type TranslationKeys = {
 		fileSearchHint: string;
 		yoloModeActive: string;
 		planModeActive: string;
+		vulnerabilityHuntingModeActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

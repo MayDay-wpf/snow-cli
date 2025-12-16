@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPromptForMode} from './systemPrompt.js';
+import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -34,6 +34,7 @@ export interface ResponseOptions {
 	include?: string[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
+	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -170,6 +171,7 @@ function convertToResponseInput(
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string,
 	planMode: boolean = false, // When true, use Plan mode system prompt
+	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): {
 	input: any[];
 	systemInstructions: string;
@@ -306,7 +308,7 @@ function convertToResponseInput(
 						type: 'input_text',
 						text:
 							'<environment_context>' +
-							getSystemPromptForMode(planMode) +
+							getSystemPromptForMode(planMode, vulnerabilityHuntingMode) +
 							'</environment_context>',
 					},
 				],
@@ -314,7 +316,10 @@ function convertToResponseInput(
 		}
 	} else if (includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstructions = getSystemPromptForMode(planMode);
+		systemInstructions = getSystemPromptForMode(
+			planMode,
+			vulnerabilityHuntingMode,
+		);
 	} else {
 		// 既没有自定义系统提示词，也不需要添加默认系统提示词
 		systemInstructions = 'You are a helpful assistant.';

@@ -480,6 +480,8 @@ export const es: TranslationKeys = {
 				'Agregar directorio de trabajo para contexto multi-proyecto. Uso: /add-dir o /add-dir ruta',
 			reindex:
 				'Reconstruir índice de código, detectar archivos modificados, eliminados, nuevos y cambiados',
+			vulnerabilityHunting:
+				'Alternar modo de búsqueda de vulnerabilidades para análisis de código enfocado en seguridad',
 			quit: 'Salir de la aplicación',
 		},
 	},
@@ -770,6 +772,8 @@ export const es: TranslationKeys = {
 			'❁ MODO YOLO ACTIVO - Todas las herramientas serán aprobadas automáticamente sin confirmación',
 		planModeActive:
 			'⚐ Modo Plan activo - Agente especializado en planificación y coordinación',
+		vulnerabilityHuntingModeActive:
+			'⍨ Modo Vulnerability Hunting Activo - Enfocado en descubrimiento de vulnerabilidades y análisis de seguridad',
 		tokens: ' tokens',
 		cached: 'en caché',
 		newCache: 'nuevo caché',

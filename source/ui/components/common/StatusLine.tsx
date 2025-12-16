@@ -34,6 +34,7 @@ type Props = {
 	// 模式信息
 	yoloMode?: boolean;
 	planMode?: boolean;
+	vulnerabilityHuntingMode?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -83,6 +84,7 @@ function calculateContextPercentage(contextUsage: ContextUsage): number {
 export default function StatusLine({
 	yoloMode = false,
 	planMode = false,
+	vulnerabilityHuntingMode = false,
 	vscodeConnectionStatus,
 	editorContext,
 	contextUsage,
@@ -100,6 +102,7 @@ export default function StatusLine({
 	const hasAnyStatus =
 		yoloMode ||
 		planMode ||
+		vulnerabilityHuntingMode ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		contextUsage ||
 		codebaseIndexing ||
@@ -133,6 +136,11 @@ export default function StatusLine({
 		// Plan模式
 		if (planMode) {
 			statusItems.push({text: '⚐ Plan', color: '#60A5FA'});
+		}
+
+		// Vulnerability Hunting 模式
+		if (vulnerabilityHuntingMode) {
+			statusItems.push({text: '⍨ Vuln Hunt', color: '#de409aff'});
 		}
 
 		// IDE连接状态
@@ -387,6 +395,15 @@ export default function StatusLine({
 				<Box>
 					<Text color="#60A5FA" dimColor>
 						{t.chatScreen.planModeActive}
+					</Text>
+				</Box>
+			)}
+
+			{/* Vulnerability Hunting 模式提示 */}
+			{vulnerabilityHuntingMode && (
+				<Box>
+					<Text color="#EF4444" dimColor>
+						{t.chatScreen.vulnerabilityHuntingModeActive}
 					</Text>
 				</Box>
 			)}

@@ -455,6 +455,8 @@ export const en: TranslationKeys = {
 				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
+			vulnerabilityHunting:
+				'Toggle vulnerability hunting mode for security-focused code analysis',
 			quit: 'Exit the application',
 		},
 	},
@@ -739,6 +741,8 @@ export const en: TranslationKeys = {
 			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
 			'⚐ Plan mode active - Specialized planning and coordination agent',
+		vulnerabilityHuntingModeActive:
+			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

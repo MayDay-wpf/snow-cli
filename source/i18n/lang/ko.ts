@@ -434,6 +434,7 @@ export const ko: TranslationKeys = {
 			addDir:
 				'다중 프로젝트 컨텍스트를 위한 작업 디렉터리 추가. 사용법: /add-dir 또는 /add-dir 경로',
 			reindex: '코드베이스 인덱스 재구축, 변경·삭제·신규·수정된 파일 감지',
+			vulnerabilityHunting: '보안 중심 코드 분석을 위한 취약점 헌팅 모드 전환',
 			quit: '애플리케이션 종료',
 		},
 	},
@@ -714,6 +715,8 @@ export const ko: TranslationKeys = {
 		yoloModeActive:
 			'❁ YOLO 모드 활성화 - 모든 도구가 확인 없이 자동 승인됩니다',
 		planModeActive: '⚐ Plan 모드 활성화 - 전문 계획 및 조정 에이전트',
+		vulnerabilityHuntingModeActive:
+			'⍨ Vulnerability Hunting 모드 활성화 - 취약점 발견 및 보안 분석에 특화',
 		tokens: '토큰',
 		cached: '캐시됨',
 		newCache: '새 캐시',

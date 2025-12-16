@@ -74,6 +74,8 @@ type Props = {
 	setYoloMode?: (value: boolean) => void;
 	planMode?: boolean;
 	setPlanMode?: (value: boolean) => void;
+	vulnerabilityHuntingMode?: boolean;
+	setVulnerabilityHuntingMode?: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -103,6 +105,8 @@ export default function ChatInput({
 	setYoloMode,
 	planMode = false,
 	setPlanMode,
+	vulnerabilityHuntingMode = false,
+	setVulnerabilityHuntingMode,
 	contextUsage,
 	initialContent = null,
 	onContextPercentageChange,
@@ -232,6 +236,8 @@ export default function ChatInput({
 		setYoloMode: setYoloMode || (() => {}),
 		planMode,
 		setPlanMode: setPlanMode || (() => {}),
+		vulnerabilityHuntingMode,
+		setVulnerabilityHuntingMode: setVulnerabilityHuntingMode || (() => {}),
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,

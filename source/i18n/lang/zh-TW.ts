@@ -427,6 +427,7 @@ export const zhTW: TranslationKeys = {
 			todo: '從專案檔案搜尋並選擇 TODO 註釋',
 			addDir: '新增工作目錄以支援多專案上下文。用法: /add-dir 或 /add-dir 路徑',
 			reindex: '重建代碼庫索引，檢測變更、刪除、新增和修改的檔案',
+			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			quit: '退出應用程式',
 		},
 	},
@@ -705,6 +706,8 @@ export const zhTW: TranslationKeys = {
 		fileSearchHint: '輸入以過濾檔案 • Tab/Enter 選擇 • ESC 取消',
 		yoloModeActive: '❁ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
 		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',
+		vulnerabilityHuntingModeActive:
+			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
 		tokens: ' 個token',
 		cached: '已快取',
 		newCache: '新快取',

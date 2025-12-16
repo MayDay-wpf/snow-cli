@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPromptForMode} from './systemPrompt.js';
+import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -20,6 +20,7 @@ export interface GeminiOptions {
 	tools?: ChatCompletionTool[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
+	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -110,6 +111,7 @@ function convertToGeminiMessages(
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string, // Allow override for sub-agents
 	planMode: boolean = false, // When true, use Plan mode system prompt
+	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): {
 	systemInstruction?: string;
 	contents: any[];
@@ -340,12 +342,17 @@ function convertToGeminiMessages(
 			// Prepend default system prompt as first user message
 			contents.unshift({
 				role: 'user',
-				parts: [{text: getSystemPromptForMode(planMode)}],
+				parts: [
+					{text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode)},
+				],
 			});
+		} else if (!systemInstruction && includeBuiltinSystemPrompt) {
+			// 没有自定义系统提示词，但需要添加默认系统提示词
+			systemInstruction = getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+			);
 		}
-	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
-		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstruction = getSystemPromptForMode(planMode);
 	}
 
 	return {systemInstruction, contents};

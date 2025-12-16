@@ -73,6 +73,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.reindex,
 			},
 			{
+				name: 'vulnerability-hunting',
+				description:
+					t.commandPanel.commands.vulnerabilityHunting ||
+					'Toggle vulnerability hunting mode',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

@@ -131,6 +131,17 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return false;
 		}
 	});
+	const [vulnerabilityHuntingMode, setVulnerabilityHuntingMode] = useState(
+		() => {
+			// Load vulnerability hunting mode from localStorage on initialization
+			try {
+				const saved = localStorage.getItem('snow-vulnerability-hunting-mode');
+				return saved === 'true';
+			} catch {
+				return false;
+			}
+		},
+	);
 	const [simpleMode, setSimpleMode] = useState(() => {
 		// Load simple mode from config
 		return getSimpleMode();
@@ -442,6 +453,18 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}
 	}, [planMode]);
 
+	// Persist vulnerability hunting mode to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem(
+				'snow-vulnerability-hunting-mode',
+				String(vulnerabilityHuntingMode),
+			);
+		} catch {
+			// Ignore localStorage errors
+		}
+	}, [vulnerabilityHuntingMode]);
+
 	// Sync simple mode from config periodically to reflect theme settings changes
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -724,6 +747,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowWorkingDirPanel,
 		setYoloMode,
 		setPlanMode,
+		setVulnerabilityHuntingMode,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
@@ -1682,6 +1706,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				addMultipleToAlwaysApproved,
 				yoloMode,
 				planMode, // Pass planMode to use correct system prompt
+				vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel,
 				getPendingMessages: () => pendingMessagesRef.current,
@@ -1941,7 +1966,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
-			// Use the same conversation handler
 			await handleConversationWithTools({
 				userContent: messageForAI,
 				imageContents,
@@ -1956,6 +1980,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				addMultipleToAlwaysApproved,
 				yoloMode,
 				planMode, // Pass planMode to use correct system prompt
+				vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 				setContextUsage: streamingState.setContextUsage,
 				getPendingMessages: () => pendingMessagesRef.current,
 				clearPendingMessages: () => setPendingMessages([]),
@@ -2508,6 +2533,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							setYoloMode={setYoloMode}
 							planMode={planMode}
 							setPlanMode={setPlanMode}
+							vulnerabilityHuntingMode={vulnerabilityHuntingMode}
+							setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
 							contextUsage={
 								streamingState.contextUsage
 									? {
@@ -2530,6 +2557,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						<StatusLine
 							yoloMode={yoloMode}
 							planMode={planMode}
+							vulnerabilityHuntingMode={vulnerabilityHuntingMode}
 							vscodeConnectionStatus={vscodeState.vscodeConnectionStatus}
 							editorContext={vscodeState.editorContext}
 							contextUsage={

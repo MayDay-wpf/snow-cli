@@ -238,6 +238,7 @@ type CommandHandlerOptions = {
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	setVscodeConnectionStatus: React.Dispatch<
@@ -638,7 +639,28 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Don't add command message to keep UI clean
 			} else if (result.success && result.action === 'togglePlan') {
 				// Toggle Plan mode without adding command message
-				options.setPlanMode(prev => !prev);
+				options.setPlanMode(prev => {
+					const newValue = !prev;
+					// If enabling Plan mode, disable Vulnerability Hunting mode
+					if (newValue) {
+						options.setVulnerabilityHuntingMode(false);
+					}
+					return newValue;
+				});
+				// Don't add command message to keep UI clean
+			} else if (
+				result.success &&
+				result.action === 'toggleVulnerabilityHunting'
+			) {
+				// Toggle Vulnerability Hunting mode without adding command message
+				options.setVulnerabilityHuntingMode(prev => {
+					const newValue = !prev;
+					// If enabling Vulnerability Hunting mode, disable Plan mode
+					if (newValue) {
+						options.setPlanMode(false);
+					}
+					return newValue;
+				});
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&

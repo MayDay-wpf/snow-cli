@@ -444,6 +444,8 @@ export const ja: TranslationKeys = {
 				'マルチプロジェクトコンテキストのための作業ディレクトリを追加。使用方法: /add-dir または /add-dir パス',
 			reindex:
 				'コードベースインデックスを再構築、変更、削除、新規、修正されたファイルを検出',
+			vulnerabilityHunting:
+				'セキュリティ重視のコード分析のための脆弱性ハンティングモードを切り替え',
 			quit: 'アプリケーションを終了',
 		},
 	},
@@ -728,6 +730,8 @@ export const ja: TranslationKeys = {
 		yoloModeActive:
 			'❁ YOLOモード有効 - すべてのツールが確認なしで自動承認されます',
 		planModeActive: '⚐ Planモード有効 - 専門的な計画・調整エージェント',
+		vulnerabilityHuntingModeActive:
+			'⍨ Vulnerability Huntingモード有効 - 脆弱性発見とセキュリティ分析に特化',
 		tokens: 'トークン',
 		cached: 'キャッシュ済み',
 		newCache: '新規キャッシュ',

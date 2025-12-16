@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPromptForMode} from './systemPrompt.js';
+import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -41,6 +41,7 @@ export interface ChatCompletionOptions {
 		| {type: 'function'; function: {name: string}};
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
+	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -99,6 +100,7 @@ function convertToOpenAIMessages(
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string,
 	planMode: boolean = false, // When true, use Plan mode system prompt
+	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompt =
 		customSystemPromptOverride || getCustomSystemPrompt();
@@ -221,7 +223,7 @@ function convertToOpenAIMessages(
 				} as ChatCompletionMessageParam,
 				{
 					role: 'user',
-					content: getSystemPromptForMode(planMode),
+					content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
 				} as ChatCompletionMessageParam,
 				...result,
 			];
@@ -240,7 +242,7 @@ function convertToOpenAIMessages(
 		result = [
 			{
 				role: 'system',
-				content: getSystemPromptForMode(planMode),
+				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
@@ -411,6 +413,7 @@ export async function* createStreamingChatCompletion(
 					options.includeBuiltinSystemPrompt !== false, // 默认为 true
 					customSystemPromptContent,
 					options.planMode || false, // Pass planMode to use correct system prompt
+					options.vulnerabilityHuntingMode || false, // Pass vulnerabilityHuntingMode to use correct system prompt
 				),
 				stream: true,
 				stream_options: {include_usage: true},
