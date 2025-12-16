@@ -141,6 +141,7 @@ export const ja: TranslationKeys = {
 		anthropicCacheTTL1h: '1時間',
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
+		showThinking: 'Show Thinking Process:',
 		thinkingEnabled: 'Thinking Enabled:',
 		thinkingBudgetTokens: '思考予算トークン数:',
 		geminiThinkingEnabled: 'Gemini思考を有効化:',

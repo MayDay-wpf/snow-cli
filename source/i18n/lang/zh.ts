@@ -136,6 +136,7 @@ export const zh: TranslationKeys = {
 		anthropicCacheTTL1h: '1小时',
 		enablePromptOptimization: '启用提示词优化:',
 		enableAutoCompress: '启用自动压缩:',
+		showThinking: '显示思考过程:',
 		thinkingEnabled: '启用思考模式:',
 		thinkingBudgetTokens: '思考预算令牌数:',
 		geminiThinkingEnabled: '启用 Gemini 思考:',

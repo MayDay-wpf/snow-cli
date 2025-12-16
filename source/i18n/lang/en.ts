@@ -146,6 +146,7 @@ export const en: TranslationKeys = {
 		anthropicCacheTTL1h: '1 hour',
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
+		showThinking: 'Show Thinking Process:',
 		thinkingEnabled: 'Thinking Enabled:',
 		thinkingBudgetTokens: 'Thinking Budget Tokens:',
 		geminiThinkingEnabled: 'Gemini Thinking Enabled:',

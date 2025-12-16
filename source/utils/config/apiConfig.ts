@@ -45,6 +45,7 @@ export interface ApiConfig {
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
+	showThinking?: boolean; // Show AI thinking process in UI (default: true)
 }
 
 export interface MCPServer {

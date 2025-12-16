@@ -14,6 +14,7 @@ import {
 export type HookType =
 	| 'onUserMessage' // 用户发送消息时触发
 	| 'beforeToolCall' // 在工具调用之前运行
+	| 'toolConfirmation' // 工具二次确认时触发（包括敏感词检查）
 	| 'afterToolCall' // 在工具调用完成后运行
 	| 'onSubAgentComplete' // 当子代理任务完成时运行
 	| 'beforeCompress' // 在即将运行压缩操作之前运行
@@ -188,6 +189,7 @@ export function getAllHookTypes(): HookType[] {
 	return [
 		'onUserMessage',
 		'beforeToolCall',
+		'toolConfirmation',
 		'afterToolCall',
 		'onSubAgentComplete',
 		'beforeCompress',

@@ -139,6 +139,7 @@ export type TranslationKeys = {
 		anthropicCacheTTL1h: string;
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
+		showThinking: string;
 		thinkingEnabled: string;
 		thinkingBudgetTokens: string;
 		geminiThinkingEnabled: string;

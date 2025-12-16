@@ -137,6 +137,7 @@ export const ko: TranslationKeys = {
 		anthropicCacheTTL1h: '1시간',
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
+		showThinking: 'Show Thinking Process:',
 		thinkingEnabled: 'Thinking Enabled:',
 		thinkingBudgetTokens: '사고 예산 토큰 수:',
 		geminiThinkingEnabled: 'Gemini 사고 활성화:',

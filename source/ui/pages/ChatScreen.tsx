@@ -19,6 +19,8 @@ import MessageRenderer from '../components/chat/MessageRenderer.js';
 import StatusLine from '../components/common/StatusLine.js';
 import ChatHeader from '../components/special/ChatHeader.js';
 import CodebaseSearchStatus from '../components/chat/CodebaseSearchStatus.js';
+import {HookErrorDisplay} from '../components/special/HookErrorDisplay.js';
+import type {HookErrorDetails} from '../../utils/execution/hookResultHandler.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/panels/MCPInfoPanel.js'));
@@ -146,6 +148,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		// Load simple mode from config
 		return getSimpleMode();
 	});
+	const [showThinking, _setShowThinking] = useState(() => {
+		// Load showThinking from config (default: true)
+		const config = getOpenAiConfig();
+		return config.showThinking !== false;
+	});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
@@ -164,6 +171,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		command: string;
 		resolve: (proceed: boolean) => void;
 	} | null>(null);
+	// Hook error state for displaying in chat area
+	const [hookError, setHookError] = useState<HookErrorDetails | null>(null);
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
@@ -900,6 +909,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				bashSensitiveCommand.resolve(false);
 				setBashSensitiveCommand(null);
 			}
+			return;
+		}
+
+		// Clear hook error on ESC
+		if (hookError && key.escape) {
+			setHookError(null);
 			return;
 		}
 
@@ -2146,6 +2161,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 									isLastMessage={isLastMessage}
 									filteredMessages={filteredMessages}
 									terminalWidth={terminalWidth}
+									showThinking={showThinking}
 								/>
 							);
 						}),
@@ -2258,6 +2274,13 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
 
+			{/* Display Hook error in chat area */}
+			{hookError && (
+				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+					<HookErrorDisplay details={hookError} />
+				</Box>
+			)}
+
 			{/* Show tool confirmation dialog if pending */}
 			{pendingToolConfirmation && (
 				<ToolConfirmation
@@ -2272,6 +2295,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					}
 					allTools={pendingToolConfirmation.allTools}
 					onConfirm={pendingToolConfirmation.resolve}
+					onHookError={error => {
+						setHookError(error);
+					}}
 				/>
 			)}
 

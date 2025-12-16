@@ -1,4 +1,4 @@
-import React, {useState, useMemo, useEffect} from 'react';
+import React, {useMemo, useState, useEffect} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
@@ -6,6 +6,8 @@ import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManag
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
+import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
 import fs from 'fs';
 
 export type ConfirmationResult =
@@ -28,6 +30,7 @@ interface Props {
 	toolArguments?: string; // JSON string of tool arguments
 	allTools?: ToolCall[]; // All tools when confirming multiple tools in parallel
 	onConfirm: (result: ConfirmationResult) => void;
+	onHookError?: (error: HookErrorDetails) => void; // Hook error callback
 }
 
 // Helper function to format argument values with truncation
@@ -83,6 +86,7 @@ export default function ToolConfirmation({
 	toolArguments,
 	allTools,
 	onConfirm,
+	onHookError,
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -121,7 +125,58 @@ export default function ToolConfirmation({
 		}
 	}, [toolArguments, toolName]);
 
-	// Show diff in VSCode if it's a file edit/create operation
+	// Trigger toolConfirmation Hook when component mounts
+	useEffect(() => {
+		const context = {
+			toolName,
+			args: toolArguments,
+			isSensitive: sensitiveCommandCheck.isSensitive,
+			allTools: allTools?.map(t => ({
+				name: t.function.name,
+				arguments: t.function.arguments,
+			})),
+		};
+
+		// Execute hook and handle exit code
+		unifiedHooksExecutor
+			.executeHooks('toolConfirmation', context)
+			.then((result: any) => {
+				// Check for command failures
+				const commandError = result.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					if (exitCode === 1) {
+						// Warning: print to console
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						console.warn(
+							`[Hook Warning] toolConfirmation Hook returned warning:\nCommand: ${command}\nOutput: ${combinedOutput}`,
+						);
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Critical error: send to chat area and close confirmation
+						if (onHookError) {
+							onHookError({
+								type: 'error',
+								exitCode,
+								command,
+								output,
+								error,
+							});
+						}
+						// Close confirmation dialog with reject
+						setHasSelected(true);
+						onConfirm('reject');
+					}
+				}
+			})
+			.catch(error => {
+				console.error('Failed to execute toolConfirmation hook:', error);
+			});
+	}, [toolName, toolArguments, sensitiveCommandCheck.isSensitive, allTools]);
 	useEffect(() => {
 		// Only show diff for filesystem operations and when VSCode is connected
 		if (!vscodeConnection.isConnected()) {

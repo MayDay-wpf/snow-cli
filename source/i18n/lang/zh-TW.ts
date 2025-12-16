@@ -136,6 +136,7 @@ export const zhTW: TranslationKeys = {
 		anthropicCacheTTL1h: '1小時',
 		enablePromptOptimization: '啟用提示詞優化:',
 		enableAutoCompress: '啟用自動壓縮:',
+		showThinking: '顯示思考過程:',
 		thinkingEnabled: '啟用思考模式:',
 		thinkingBudgetTokens: '思考預算令牌數:',
 		geminiThinkingEnabled: '啟用 Gemini 思考:',

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
 
 interface BashCommandConfirmationProps {
 	command: string;
@@ -20,6 +21,50 @@ export function BashCommandConfirmation({
 
 	// Check if this is a sensitive command
 	const sensitiveCheck = isSensitiveCommand(command);
+
+	// Trigger toolConfirmation Hook when component mounts
+	useEffect(() => {
+		const context = {
+			toolName: 'terminal-execute',
+			args: JSON.stringify({command}),
+			isSensitive: sensitiveCheck.isSensitive,
+			matchedPattern: sensitiveCheck.matchedCommand?.pattern,
+			matchedReason: sensitiveCheck.matchedCommand?.description,
+		};
+
+		// Execute hook and handle exit code
+		unifiedHooksExecutor
+			.executeHooks('toolConfirmation', context)
+			.then((result: any) => {
+				// Check for command failures
+				const commandError = result.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					if (exitCode === 1) {
+						// Warning: print to console
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						console.warn(
+							`[Hook Warning] toolConfirmation Hook returned warning:\nCommand: ${command}\nOutput: ${combinedOutput}`,
+						);
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Critical error: print to console (user will see in terminal output)
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						console.error(
+							`[Hook Error] toolConfirmation Hook failed (exitCode ${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
+						);
+					}
+				}
+			})
+			.catch((error: any) => {
+				console.error('Failed to execute toolConfirmation hook:', error);
+			});
+	}, [command, sensitiveCheck.isSensitive]);
 
 	return (
 		<Box

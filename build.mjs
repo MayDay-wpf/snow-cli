@@ -91,4 +91,7 @@ copyFileSync(
 	'bundle/pdf.worker.mjs',
 );
 
+// Copy package.json to bundle directory for version reading
+copyFileSync('package.json', 'bundle/package.json');
+
 console.log('✓ Bundle created successfully');

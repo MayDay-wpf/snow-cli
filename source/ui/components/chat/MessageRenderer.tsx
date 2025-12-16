@@ -13,6 +13,7 @@ type Props = {
 	isLastMessage: boolean;
 	filteredMessages: Message[];
 	terminalWidth: number;
+	showThinking?: boolean;
 };
 
 export default function MessageRenderer({
@@ -21,6 +22,7 @@ export default function MessageRenderer({
 	isLastMessage,
 	filteredMessages,
 	terminalWidth,
+	showThinking = true,
 }: Props) {
 	const {theme} = useTheme();
 
@@ -208,7 +210,7 @@ export default function MessageRenderer({
 
 											return (
 												<>
-													{message.thinking && (
+													{message.thinking && showThinking && (
 														<Box flexDirection="column" marginBottom={1}>
 															<Text
 																color={theme.colors.menuSecondary}
