@@ -1594,6 +1594,15 @@ ${combinedOutput}`;
 		throw executionError;
 	}
 
+	// Apply token limit validation before returning result
+	try {
+		const {wrapToolResultWithTokenLimit} = await import('./tokenLimiter.js');
+		result = await wrapToolResultWithTokenLimit(result, toolName);
+	} catch (tokenLimitError) {
+		// Token limit error should be thrown to the AI
+		throw tokenLimitError;
+	}
+
 	return result;
 }
 
