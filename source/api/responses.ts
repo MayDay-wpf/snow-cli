@@ -473,7 +473,7 @@ export async function* createStreamingResponse(
 				input: requestInput,
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
-				parallel_tool_calls: false,
+				parallel_tool_calls: true,
 				// 只有当 reasoning 启用时才添加 reasoning 字段
 				...(configuredReasoning && {
 					reasoning: configuredReasoning,
