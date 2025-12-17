@@ -1086,8 +1086,10 @@ export async function executeMCPTool(
 				} else if (exitCode === 1) {
 					// Exit code 1: Warning, log and continue execution
 					console.warn(
-						`[WARN] beforeToolCall hook warning (exitCode: ${exitCode}):\n` +
-							`output: ${output || '(empty)'}\n` +
+						`[WARN] beforeToolCall hook warning (exitCode: ${exitCode}):
+` +
+							`output: ${output || '(empty)'}
+` +
 							`error: ${error || '(empty)'}`,
 					);
 				}
@@ -1183,8 +1185,10 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-read tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameter 'filePath' for filesystem-read tool.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
 						);
 					}
@@ -1198,15 +1202,19 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-create tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameter 'filePath' for filesystem-create tool.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
 						);
 					}
 					if (args.content === undefined || args.content === null) {
 						throw new Error(
-							`Missing required parameter 'content' for filesystem-create tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameter 'content' for filesystem-create tool.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
 						);
 					}
@@ -1220,8 +1228,10 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameter 'filePath' for filesystem-edit tool.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
@@ -1232,9 +1242,12 @@ export async function executeMCPTool(
 							args.newContent === undefined)
 					) {
 						throw new Error(
-							`Missing required parameters for filesystem-edit tool.\n` +
-								`For single file mode, 'startLine', 'endLine', and 'newContent' are required.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameters for filesystem-edit tool.
+` +
+								`For single file mode, 'startLine', 'endLine', and 'newContent' are required.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Provide startLine (number), endLine (number), and newContent (string).`,
 						);
 					}
@@ -1250,8 +1263,10 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit_search tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameter 'filePath' for filesystem-edit_search tool.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
@@ -1261,9 +1276,12 @@ export async function executeMCPTool(
 							args.replaceContent === undefined)
 					) {
 						throw new Error(
-							`Missing required parameters for filesystem-edit_search tool.\n` +
-								`For single file mode, 'searchContent' and 'replaceContent' are required.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+							`Missing required parameters for filesystem-edit_search tool.
+` +
+								`For single file mode, 'searchContent' and 'replaceContent' are required.
+` +
+								`Received args: ${JSON.stringify(args, null, 2)}
+` +
 								`AI Tip: Provide searchContent (string) and replaceContent (string).`,
 						);
 					}
@@ -1424,22 +1442,28 @@ export async function executeMCPTool(
 
 			switch (actualToolName) {
 				case 'search':
-					result = await codebaseSearchService.search(args.query, args.topN);
+					result = await codebaseSearchService.search(
+						args.query,
+						args.topN,
+						abortSignal,
+					);
 					break;
 				default:
 					throw new Error(`Unknown codebase tool: ${actualToolName}`);
 			}
 		} else if (serviceName === 'askuser') {
-			// Handle Ask User Question tool - returns special marker for UI handling
+			// Handle Ask User Question tool - throw error to trigger user interaction
 			switch (actualToolName) {
 				case 'ask_question':
-					// Return a special response that indicates user interaction is needed
-					result = {
-						_userInteractionNeeded: true,
-						question: args.question,
-						options: args.options,
-					};
-					break;
+					// Throw UserInteractionNeededError to trigger UI component
+					const {UserInteractionNeededError} = await import(
+						'../ui/userInteractionError.js'
+					);
+					throw new UserInteractionNeededError(
+						args.question,
+						args.options,
+						'', // toolCallId will be set by executeToolCall
+					);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
 			}
@@ -1506,14 +1530,21 @@ export async function executeMCPTool(
 					if (exitCode === 1) {
 						// Exit code 1: Warning - log and append to tool result
 						console.warn(
-							`[WARN] afterToolCall hook warning (exitCode: ${exitCode}):\n` +
-								`output: ${output || '(empty)'}\n` +
+							`[WARN] afterToolCall hook warning (exitCode: ${exitCode}):
+` +
+								`output: ${output || '(empty)'}
+` +
 								`error: ${error || '(empty)'}`,
 						);
 
 						const combinedOutput =
 							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						const warningMessage = `\n\n[afterToolCall Hook Warning]\nCommand: ${command}\nOutput:\n${combinedOutput}`;
+						const warningMessage = `
+
+[afterToolCall Hook Warning]
+Command: ${command}
+Output:
+${combinedOutput}`;
 
 						// Append warning to result
 						if (typeof result === 'string') {
@@ -1531,7 +1562,8 @@ export async function executeMCPTool(
 						const combinedOutput =
 							[output, error].filter(Boolean).join('\n\n') || '(no output)';
 						throw new Error(
-							`afterToolCall hook failed with exit code ${exitCode}\n` +
+							`afterToolCall hook failed with exit code ${exitCode}
+` +
 								`Command: ${command}\n` +
 								`Output:\n${combinedOutput}`,
 						);
@@ -1562,6 +1594,15 @@ export async function executeMCPTool(
 		throw executionError;
 	}
 
+	// Apply token limit validation before returning result
+	try {
+		const {wrapToolResultWithTokenLimit} = await import('./tokenLimiter.js');
+		result = await wrapToolResultWithTokenLimit(result, toolName);
+	} catch (tokenLimitError) {
+		// Token limit error should be thrown to the AI
+		throw tokenLimitError;
+	}
+
 	return result;
 }
 
@@ -1583,11 +1624,21 @@ async function executeOnExternalMCPService(
 		`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 	);
 
+	// 获取 timeout 配置，默认 5 分钟
+	const timeout = server.timeout ?? 300000;
+
 	// Execute the tool with the original tool name (not prefixed)
-	const result = await client.callTool({
-		name: toolName,
-		arguments: args,
-	});
+	const result = await client.callTool(
+		{
+			name: toolName,
+			arguments: args,
+		},
+		undefined,
+		{
+			timeout,
+			resetTimeoutOnProgress: true,
+		},
+	);
 	logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
 
 	return result.content;

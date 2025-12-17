@@ -1,5 +1,5 @@
 import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
-import {getSystemPromptForMode} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../prompt/systemPrompt.js';
 import type {ChatMessage} from '../../api/types.js';
 import {createStreamingChatCompletion} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
@@ -137,82 +137,156 @@ function findPreserveStartIndex(messages: ChatMessage[]): number {
 /**
  * Clean orphaned tool_calls from conversation messages
  *
- * Removes two types of problematic messages:
+ * Removes problematic messages that violate Anthropic API requirements:
  * 1. Assistant messages with tool_calls that have no corresponding tool results
- * 2. Tool result messages that have no corresponding tool_calls
+ * 2. Assistant messages with tool_calls where tool_results don't IMMEDIATELY follow
+ * 3. Tool result messages that have no corresponding tool_calls
+ * 4. Tool result messages that don't immediately follow their corresponding tool_calls
+ *
+ * Anthropic API requires: Each tool_use block must have corresponding tool_result
+ * blocks in the NEXT message (immediately after).
  *
  * This prevents API errors when compression happens while tools are executing
- * (e.g., last message has tool_use but no tool_result yet).
+ * or when message order is disrupted.
  *
  * @param messages - Array of conversation messages (will be modified in-place)
  */
 function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
-	// Build map of tool_call_ids that have results
-	const toolResultIds = new Set<string>();
-	for (const msg of messages) {
-		if (msg.role === 'tool' && msg.tool_call_id) {
-			toolResultIds.add(msg.tool_call_id);
-		}
-	}
-
-	// Build map of tool_call_ids that are declared in assistant messages
-	const declaredToolCallIds = new Set<string>();
-	for (const msg of messages) {
-		if (msg.role === 'assistant' && msg.tool_calls) {
-			for (const tc of msg.tool_calls) {
-				declaredToolCallIds.add(tc.id);
-			}
-		}
-	}
-
 	// Find indices to remove (iterate backwards for safe removal)
 	const indicesToRemove: number[] = [];
 
-	for (let i = messages.length - 1; i >= 0; i--) {
+	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i];
 		if (!msg) continue; // Skip undefined messages
 
-		// Check for orphaned assistant messages with tool_calls
-		if (msg.role === 'assistant' && msg.tool_calls) {
-			const hasAllResults = msg.tool_calls.every(tc =>
-				toolResultIds.has(tc.id),
-			);
+		// Check assistant messages with tool_calls
+		if (
+			msg.role === 'assistant' &&
+			msg.tool_calls &&
+			msg.tool_calls.length > 0
+		) {
+			const nextMsg = messages[i + 1];
 
-			if (!hasAllResults) {
-				const orphanedIds = msg.tool_calls
-					.filter(tc => !toolResultIds.has(tc.id))
-					.map(tc => tc.id);
-
+			// Verify next message is a tool message
+			if (!nextMsg || nextMsg.role !== 'tool') {
+				// Next message is not a tool message - remove assistant message
 				console.warn(
-					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message with orphaned tool_calls',
+					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - next message is not tool result',
 					{
 						messageIndex: i,
 						toolCallIds: msg.tool_calls.map(tc => tc.id),
-						orphanedIds,
+						nextMessageRole: nextMsg?.role || 'none',
 					},
 				);
+				indicesToRemove.push(i);
+				continue;
+			}
 
+			// Collect all tool_call_ids from this assistant message
+			const expectedToolCallIds = new Set(msg.tool_calls.map(tc => tc.id));
+
+			// Check all immediately following tool messages
+			const foundToolCallIds = new Set<string>();
+			for (let j = i + 1; j < messages.length; j++) {
+				const followingMsg = messages[j];
+				if (!followingMsg) continue;
+
+				if (followingMsg.role === 'tool') {
+					if (followingMsg.tool_call_id) {
+						foundToolCallIds.add(followingMsg.tool_call_id);
+					}
+				} else {
+					// Hit non-tool message, stop checking
+					break;
+				}
+			}
+
+			// Verify all tool_calls have corresponding results immediately after
+			const missingIds = Array.from(expectedToolCallIds).filter(
+				id => !foundToolCallIds.has(id),
+			);
+
+			if (missingIds.length > 0) {
+				// Missing some tool results immediately after - remove assistant message
+				console.warn(
+					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - missing immediate tool results',
+					{
+						messageIndex: i,
+						toolCallIds: msg.tool_calls.map(tc => tc.id),
+						missingIds,
+					},
+				);
 				indicesToRemove.push(i);
 			}
 		}
 
-		// Check for orphaned tool result messages
+		// Check tool messages
 		if (msg.role === 'tool' && msg.tool_call_id) {
-			if (!declaredToolCallIds.has(msg.tool_call_id)) {
+			// Find the nearest preceding assistant message with tool_calls
+			let foundCorrespondingAssistant = false;
+
+			// Search backwards for assistant with this tool_call_id
+			for (let j = i - 1; j >= 0; j--) {
+				const prevMsg = messages[j];
+				if (!prevMsg) continue;
+
+				if (prevMsg.role === 'assistant' && prevMsg.tool_calls) {
+					// Check if this assistant has our tool_call_id
+					const hasToolCall = prevMsg.tool_calls.some(
+						tc => tc.id === msg.tool_call_id,
+					);
+
+					if (hasToolCall) {
+						foundCorrespondingAssistant = true;
+
+						// Verify this tool message immediately follows the assistant
+						// (or follows other tool messages from the same assistant)
+						let isImmediatelyAfter = true;
+						for (let k = j + 1; k < i; k++) {
+							const betweenMsg = messages[k];
+							if (betweenMsg && betweenMsg.role !== 'tool') {
+								// Found non-tool message between assistant and this tool
+								isImmediatelyAfter = false;
+								break;
+							}
+						}
+
+						if (!isImmediatelyAfter) {
+							// Tool result doesn't immediately follow - remove it
+							console.warn(
+								'[contextCompressor:cleanOrphanedToolCalls] Removing tool result - not immediately after assistant',
+								{
+									messageIndex: i,
+									toolCallId: msg.tool_call_id,
+									assistantIndex: j,
+								},
+							);
+							indicesToRemove.push(i);
+						}
+						break;
+					}
+				} else if (prevMsg.role !== 'tool') {
+					// Hit non-assistant, non-tool message - stop searching
+					break;
+				}
+			}
+
+			if (!foundCorrespondingAssistant) {
+				// No corresponding assistant found - remove orphaned tool result
 				console.warn(
-					'[contextCompressor:cleanOrphanedToolCalls] Removing orphaned tool result',
+					'[contextCompressor:cleanOrphanedToolCalls] Removing orphaned tool result - no corresponding assistant',
 					{
 						messageIndex: i,
 						toolCallId: msg.tool_call_id,
 					},
 				);
-
 				indicesToRemove.push(i);
 			}
 		}
 	}
 
 	// Remove messages in reverse order (from end to start) to preserve indices
+	indicesToRemove.sort((a, b) => b - a);
 	for (const idx of indicesToRemove) {
 		messages.splice(idx, 1);
 	}
@@ -242,7 +316,10 @@ function prepareMessagesForCompression(
 	} else {
 		// No custom system prompt: default as system
 		// Default to false for compression (no Plan mode in compression context)
-		messages.push({role: 'system', content: getSystemPromptForMode(false)});
+		messages.push({
+			role: 'system',
+			content: getSystemPromptForMode(false, false),
+		});
 	}
 
 	// Add all conversation history for compression

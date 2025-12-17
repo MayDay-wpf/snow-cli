@@ -15,6 +15,8 @@ type KeyboardInputOptions = {
 	setYoloMode: (value: boolean) => void;
 	planMode: boolean;
 	setPlanMode: (value: boolean) => void;
+	vulnerabilityHuntingMode: boolean;
+	setVulnerabilityHuntingMode: (value: boolean) => void;
 	// Command panel
 	showCommands: boolean;
 	setShowCommands: (show: boolean) => void;
@@ -84,6 +86,19 @@ type KeyboardInputOptions = {
 	confirmTodoSelection: () => void;
 	todoSearchQuery: string;
 	setTodoSearchQuery: (query: string) => void;
+	// Profile picker
+	showProfilePicker: boolean;
+	setShowProfilePicker: (show: boolean) => void;
+	profileSelectedIndex: number;
+	setProfileSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	getFilteredProfiles: () => Array<{
+		name: string;
+		displayName: string;
+		isActive: boolean;
+	}>;
+	handleProfileSelect: (profileName: string) => void;
+	profileSearchQuery: string;
+	setProfileSearchQuery: (query: string) => void;
 	// Profile switching
 	onSwitchProfile?: () => void;
 };
@@ -98,6 +113,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		setYoloMode,
 		planMode,
 		setPlanMode,
+		vulnerabilityHuntingMode: _vulnerabilityHuntingMode,
+		setVulnerabilityHuntingMode,
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -149,6 +166,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		showProfilePicker,
+		setShowProfilePicker,
+		profileSelectedIndex,
+		setProfileSelectedIndex,
+		getFilteredProfiles,
+		handleProfileSelect,
+		profileSearchQuery,
+		setProfileSearchQuery,
 		onSwitchProfile,
 	} = options;
 
@@ -162,6 +187,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
 	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
 	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
+	const componentMountTime = useRef<number>(Date.now()); // Track when component mounted
 
 	// Cleanup timer on unmount
 	useEffect(() => {
@@ -187,12 +213,29 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Handle input using useInput hook
 	useInput((input, key) => {
 		if (disabled) return;
+
+		// Ignore focus events during the first 500ms after component mount
+		// This prevents [I[I artifacts when switching from WelcomeScreen to ChatScreen
+		const timeSinceMount = Date.now() - componentMountTime.current;
+		if (timeSinceMount < 500) {
+			// During initial mount period, aggressively filter any input that could be focus events
+			if (
+				input.includes('[I') ||
+				input.includes('[O') ||
+				input === '\x1b[I' ||
+				input === '\x1b[O' ||
+				/^[\s\x1b\[IO]+$/.test(input)
+			) {
+				return;
+			}
+		}
+
 		// Filter out focus events more robustly
 		// Focus events: ESC[I (focus in) or ESC[O (focus out)
 		// Some terminals may send these with or without ESC, and they might appear
 		// anywhere in the input string (especially during drag-and-drop with Shift held)
 		// We need to filter them out but NOT remove legitimate user input
-		const focusEventPattern = /(\s|^)\[(?:I|O)(?=(?:\s|$|["'~\\\/]|[A-Za-z]:))/;
+		const focusEventPattern = /(\s|^)\[(?:I|O)(?=(?:\s|$|["'~\\/]|[A-Za-z]:))/;
 
 		if (
 			// Complete escape sequences
@@ -212,6 +255,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
+				// Disable Vulnerability Hunting when enabling Plan
+				setVulnerabilityHuntingMode(false);
 			} else if (yoloMode && planMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
@@ -230,6 +275,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
+				// Disable Vulnerability Hunting when enabling Plan
+				setVulnerabilityHuntingMode(false);
 			} else if (yoloMode && planMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
@@ -243,11 +290,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Windows: Alt+P, macOS: Ctrl+P - Switch to next profile
+		// Windows/Linux: Alt+P, macOS: Ctrl+P - Switch to next profile
 		const isProfileSwitchShortcut =
-			process.platform === 'win32'
-				? key.meta && input === 'p'
-				: key.ctrl && input === 'p';
+			process.platform === 'darwin'
+				? key.ctrl && input === 'p'
+				: key.meta && input === 'p';
 		if (isProfileSwitchShortcut) {
 			if (onSwitchProfile) {
 				onSwitchProfile();
@@ -257,6 +304,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
+			// Close profile picker if open
+			if (showProfilePicker) {
+				setShowProfilePicker(false);
+				setProfileSelectedIndex(0);
+				setProfileSearchQuery(''); // Reset search query
+				return;
+			}
+
 			// Close todo picker if open
 			if (showTodoPicker) {
 				setShowTodoPicker(false);
@@ -323,6 +378,71 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
+		// Handle profile picker navigation
+		if (showProfilePicker) {
+			const filteredProfiles = getFilteredProfiles();
+
+			// Up arrow in profile picker - 循环导航:第一项 → 最后一项
+			if (key.upArrow) {
+				setProfileSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredProfiles.length - 1),
+				);
+				return;
+			}
+
+			// Down arrow in profile picker - 循环导航:最后一项 → 第一项
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, filteredProfiles.length - 1);
+				setProfileSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+				return;
+			}
+
+			// Enter - select profile
+			if (key.return) {
+				if (
+					filteredProfiles.length > 0 &&
+					profileSelectedIndex < filteredProfiles.length
+				) {
+					const selectedProfile = filteredProfiles[profileSelectedIndex];
+					if (selectedProfile) {
+						handleProfileSelect(selectedProfile.name);
+					}
+				}
+				return;
+			}
+
+			// Backspace - remove last character from search
+			if (key.backspace || key.delete) {
+				if (profileSearchQuery.length > 0) {
+					setProfileSearchQuery(profileSearchQuery.slice(0, -1));
+					setProfileSelectedIndex(0); // Reset to first item
+					triggerUpdate();
+				}
+				return;
+			}
+
+			// Type to search - alphanumeric and common characters
+			// Accept complete characters (including multi-byte like Chinese)
+			// but filter out control sequences and incomplete input
+			if (
+				input &&
+				!key.ctrl &&
+				!key.meta &&
+				!key.escape &&
+				input !== '\x1b' && // Ignore escape sequences
+				input !== '\u001b' && // Additional escape check
+				!/[\x00-\x1F]/.test(input) // Ignore other control characters
+			) {
+				setProfileSearchQuery(profileSearchQuery + input);
+				setProfileSelectedIndex(0); // Reset to first item
+				triggerUpdate();
+				return;
+			}
+
+			// For any other key in profile picker, just return to prevent interference
+			return;
+		}
+
 		// Handle todo picker navigation
 		if (showTodoPicker) {
 			// Up arrow in todo picker - 循环导航:第一项 → 最后一项
@@ -363,12 +483,16 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 
 			// Type to search - alphanumeric and common characters
+			// Accept complete characters (including multi-byte like Chinese)
+			// but filter out control sequences and incomplete input
 			if (
 				input &&
-				input.length === 1 &&
 				!key.ctrl &&
 				!key.meta &&
-				input !== '\x1b' // Ignore escape sequences
+				!key.escape &&
+				input !== '\x1b' && // Ignore escape sequences
+				input !== '\u001b' && // Additional escape check
+				!/[\x00-\x1F]/.test(input) // Ignore other control characters
 			) {
 				setTodoSearchQuery(todoSearchQuery + input);
 				setTodoSelectedIndex(0); // Reset to first item

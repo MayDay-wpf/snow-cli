@@ -43,6 +43,7 @@ type ConfigField =
 	| 'anthropicCacheTTL'
 	| 'enablePromptOptimization'
 	| 'enableAutoCompress'
+	| 'showThinking'
 	| 'thinkingEnabled'
 	| 'thinkingBudgetTokens'
 	| 'geminiThinkingEnabled'
@@ -122,6 +123,7 @@ export default function ConfigScreen({
 	const [enablePromptOptimization, setEnablePromptOptimization] =
 		useState(true);
 	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
+	const [showThinking, setShowThinking] = useState(true);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
@@ -185,6 +187,7 @@ export default function ConfigScreen({
 			'requestMethod',
 			'enablePromptOptimization',
 			'enableAutoCompress',
+			'showThinking',
 			...(requestMethod === 'anthropic'
 				? [
 						'anthropicBeta' as ConfigField,
@@ -280,6 +283,7 @@ export default function ConfigScreen({
 		setAnthropicCacheTTL(config.anthropicCacheTTL || '5m');
 		setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
 		setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
+		setShowThinking(config.showThinking !== false); // Default to true
 		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
 		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
 		setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
@@ -369,6 +373,7 @@ export default function ConfigScreen({
 					anthropicCacheTTL,
 					enablePromptOptimization: false,
 					enableAutoCompress,
+					showThinking,
 					thinking: thinkingEnabled
 						? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
@@ -449,6 +454,7 @@ export default function ConfigScreen({
 				anthropicCacheTTL,
 				enablePromptOptimization,
 				enableAutoCompress,
+				showThinking,
 				advancedModel,
 				basicModel,
 				maxContextTokens,
@@ -503,6 +509,7 @@ export default function ConfigScreen({
 						anthropicCacheTTL,
 						enablePromptOptimization,
 						enableAutoCompress,
+						showThinking,
 						thinking: thinkingEnabled
 							? {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 							: undefined,
@@ -702,7 +709,7 @@ export default function ConfigScreen({
 									{anthropicCacheTTL === '5m'
 										? t.configScreen.anthropicCacheTTL5m
 										: t.configScreen.anthropicCacheTTL1h}{' '}
-									({t.configScreen.toggleHint})
+									{t.configScreen.toggleHint}
 								</Text>
 							</Box>
 						)}
@@ -745,6 +752,28 @@ export default function ConfigScreen({
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{enableAutoCompress
+									? t.configScreen.enabled
+									: t.configScreen.disabled}{' '}
+								{t.configScreen.toggleHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'showThinking':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.showThinking}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{showThinking
 									? t.configScreen.enabled
 									: t.configScreen.disabled}{' '}
 								{t.configScreen.toggleHint}
@@ -1277,6 +1306,8 @@ export default function ConfigScreen({
 					setEnablePromptOptimization(!enablePromptOptimization);
 				} else if (currentField === 'enableAutoCompress') {
 					setEnableAutoCompress(!enableAutoCompress);
+				} else if (currentField === 'showThinking') {
+					setShowThinking(!showThinking);
 				} else if (currentField === 'thinkingEnabled') {
 					setThinkingEnabled(!thinkingEnabled);
 				} else if (currentField === 'geminiThinkingEnabled') {
@@ -1648,6 +1679,8 @@ export default function ConfigScreen({
 								)}
 								<ScrollableSelectInput
 									items={getCurrentOptions()}
+									limit={10}
+									disableNumberShortcuts={true}
 									initialIndex={Math.max(
 										0,
 										getCurrentOptions().findIndex(

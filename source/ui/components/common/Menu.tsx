@@ -59,12 +59,27 @@ function Menu({
 		setScrollOffset(getInitialScrollOffset(newIndex, visibleItemCount));
 	}, [defaultIndex, options.length, visibleItemCount]);
 
+	// Notify parent of selection changes (debounced for performance)
+	const onSelectionChangeRef = React.useRef(onSelectionChange);
+	React.useEffect(() => {
+		onSelectionChangeRef.current = onSelectionChange;
+	}, [onSelectionChange]);
+
 	React.useEffect(() => {
 		const currentOption = options[selectedIndex];
-		if (onSelectionChange && currentOption?.infoText) {
-			onSelectionChange(currentOption.infoText, currentOption.value);
+		if (onSelectionChangeRef.current && currentOption?.infoText) {
+			// Use setImmediate to defer the callback to the next event loop iteration
+			// This prevents blocking the UI during rapid key presses
+			const handle = setImmediate(() => {
+				onSelectionChangeRef.current?.(
+					currentOption.infoText!,
+					currentOption.value,
+				);
+			});
+			return () => clearImmediate(handle);
 		}
-	}, [selectedIndex, options, onSelectionChange]);
+		return undefined;
+	}, [selectedIndex, options]);
 
 	// Auto-scroll to keep selected item visible
 	React.useEffect(() => {

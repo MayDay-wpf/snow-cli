@@ -6,7 +6,7 @@ import {
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {getSystemPromptForMode} from '../../api/systemPrompt.js';
+import {getSystemPromptForMode} from '../../prompt/systemPrompt.js';
 import {
 	collectAllMCPTools,
 	getTodoService,
@@ -59,6 +59,7 @@ export type ConversationHandlerOptions = {
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	yoloMode: boolean;
 	planMode?: boolean; // Plan mode flag (optional, defaults to false)
+	vulnerabilityHuntingMode?: boolean; // Vulnerability Hunting mode flag (optional, defaults to false)
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
 	getPendingMessages?: () => Array<{
@@ -83,6 +84,7 @@ export type ConversationHandlerOptions = {
 		React.SetStateAction<Map<number, number>>
 	>; // Clear snapshot counts after compression
 	getCurrentContextPercentage?: () => number; // Get current context percentage from ChatInput
+	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>; // Set current model name for display
 };
 
 /**
@@ -221,7 +223,10 @@ export async function handleConversationWithTools(
 	let conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(options.planMode || false),
+			content: getSystemPromptForMode(
+				options.planMode || false,
+				options.vulnerabilityHuntingMode || false,
+			),
 		},
 	];
 
@@ -300,6 +305,11 @@ export async function handleConversationWithTools(
 		? config.basicModel || config.advancedModel || 'gpt-5'
 		: config.advancedModel || 'gpt-5';
 
+	// Set current model for display in UI
+	if (options.setCurrentModel) {
+		options.setCurrentModel(model);
+	}
+
 	// Tool calling loop (no limit on rounds)
 	let finalAssistantMessage: Message | null = null;
 	// Accumulate usage data across all rounds
@@ -337,10 +347,31 @@ export async function handleConversationWithTools(
 			let receivedReasoningContent: string | undefined; // DeepSeek R1 reasoning content
 			let hasStartedReasoning = false; // Track if reasoning has started (for Gemini thinking)
 
+			// Helper function to extract thinking content from all sources
+			const extractThinkingContent = (): string | undefined => {
+				// 1. Anthropic Extended Thinking
+				if (receivedThinking?.thinking) {
+					return receivedThinking.thinking;
+				}
+				// 2. Responses API reasoning summary
+				if (
+					receivedReasoning?.summary &&
+					receivedReasoning.summary.length > 0
+				) {
+					return receivedReasoning.summary.map(item => item.text).join('\n');
+				}
+				// 3. DeepSeek R1 reasoning content
+				if (receivedReasoningContent) {
+					return receivedReasoningContent;
+				}
+				return undefined;
+			};
+
 			// Stream AI response - choose API based on config
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
 			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
 			let chunkCount = 0; // Track number of chunks received (to delay clearing retry status)
+			let currentTokenCount = 0; // Track current token count incrementally
 
 			// Get or create session for cache key
 			const currentSession = sessionManager.getCurrentSession();
@@ -372,6 +403,7 @@ export async function handleConversationWithTools(
 								// Disable thinking for basicModel (e.g., init command)
 								disableThinking: options.useBasicModel,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -384,6 +416,7 @@ export async function handleConversationWithTools(
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -401,6 +434,7 @@ export async function handleConversationWithTools(
 								// Pass null to explicitly disable reasoning in API call
 								reasoning: options.useBasicModel ? null : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -412,6 +446,7 @@ export async function handleConversationWithTools(
 								temperature: 0,
 								tools: mcpTools.length > 0 ? mcpTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
+								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
 							},
 							controller.signal,
 							onRetry,
@@ -441,11 +476,11 @@ export async function handleConversationWithTools(
 					}
 					// Note: reasoning content is NOT sent back to AI, only counted for display
 					reasoningAccumulator += chunk.delta;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.delta);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -454,11 +489,11 @@ export async function handleConversationWithTools(
 					// When content starts, reasoning is done
 					setIsReasoning?.(false);
 					streamedContent += chunk.content;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.content);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -467,11 +502,11 @@ export async function handleConversationWithTools(
 					// When tool calls start, reasoning is done (OpenAI generally doesn't output text content during tool calls)
 					setIsReasoning?.(false);
 					toolCallAccumulator += chunk.delta;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.delta);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -533,8 +568,8 @@ export async function handleConversationWithTools(
 				}
 			}
 
-			// Reset token count after stream ends
-			setStreamTokenCount(0);
+			// Don't reset token count here - keep it displayed
+			// It will be reset at the start of next streaming (line 301)
 
 			// If aborted during streaming, exit the loop
 			// (discontinued message already added by ChatScreen ESC handler)
@@ -584,14 +619,17 @@ export async function handleConversationWithTools(
 					console.error('Failed to save assistant message:', error);
 				}
 
-				// If there's text content before tool calls, display it first
-				if (streamedContent && streamedContent.trim()) {
+				// Display thinking content and text content before tool calls
+				const thinkingContent = extractThinkingContent();
+				// Show message if there's text content OR thinking content
+				if ((streamedContent && streamedContent.trim()) || thinkingContent) {
 					setMessages(prev => [
 						...prev,
 						{
 							role: 'assistant',
-							content: streamedContent.trim(),
+							content: streamedContent?.trim() || '',
 							streaming: false,
+							thinking: thinkingContent,
 						},
 					]);
 				}
@@ -634,86 +672,9 @@ export async function handleConversationWithTools(
 					}
 				}
 
-				// Check if there are any askuser tools - they need special handling
-				const askUserTool = receivedToolCalls.find(tc =>
-					tc.function.name.startsWith('askuser-'),
-				);
-
-				// If there's an askuser tool, intercept and handle with UI component
-				if (askUserTool) {
-					// Remove pending messages
-					setMessages(prev => prev.filter(msg => !msg.toolPending));
-
-					// Parse tool arguments to get question and options
-					let question = 'Please select an option:';
-					let options: string[] = ['Yes', 'No'];
-
-					try {
-						const args = JSON.parse(askUserTool.function.arguments);
-						if (args.question) question = args.question;
-						if (args.options && Array.isArray(args.options)) {
-							options = args.options;
-						}
-					} catch (error) {
-						console.error('Failed to parse askuser tool arguments:', error);
-					}
-
-					// Request user input via UI component
-					const userAnswer = await requestUserQuestion(
-						question,
-						options,
-						askUserTool,
-					);
-
-					// Format the user's answer as tool result
-					const answerText = userAnswer.customInput
-						? `${userAnswer.selected}: ${userAnswer.customInput}`
-						: userAnswer.selected;
-
-					// Create tool result message and add to conversation
-					const toolResultMessage: ChatMessage = {
-						role: 'tool',
-						tool_call_id: askUserTool.id,
-						content: JSON.stringify({
-							answer: answerText,
-							selected: userAnswer.selected,
-							customInput: userAnswer.customInput,
-						}),
-					};
-
-					conversationMessages.push(toolResultMessage);
-
-					// Save tool result to session
-					await saveMessage(toolResultMessage);
-
-					// Display user's answer in UI
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: `✓ ${askUserTool.function.name}\n  └─ User answered: ${answerText}`,
-							streaming: false,
-							toolResult: answerText,
-						},
-					]);
-
-					// Now filter out the askuser tool from receivedToolCalls
-					// so it doesn't get executed again below
-					const remainingTools = receivedToolCalls.filter(
-						tc => tc.id !== askUserTool.id,
-					);
-
-					// If there are no more tools to execute, continue to next AI turn
-					// The askuser tool result is already in the conversation
-					// AI will receive it in the next iteration of the while loop
-					if (remainingTools.length === 0) {
-						continue;
-					}
-
-					// Otherwise, continue with remaining tools
-					// Update receivedToolCalls to exclude askuser
-					receivedToolCalls = remainingTools;
-				}
+				// askuser-ask_question tools are now handled through normal executeToolCalls flow
+				// No special interception needed - they will trigger UserInteractionNeededError
+				// which will be caught and handled by executeToolCall()
 
 				// Filter tools that need confirmation (not in always-approved list OR session-approved list)
 				const toolsNeedingConfirmation: ToolCall[] = [];
@@ -1293,30 +1254,8 @@ export async function handleConversationWithTools(
 					// Need to add tool results for all pending tool calls to complete conversation history
 					// This is critical for sub-agents and any tools that were being executed
 					if (receivedToolCalls && receivedToolCalls.length > 0) {
-						// CRITICAL FIX: If assistant message with tool_calls hasn't been saved yet,
-						// we must save it first to avoid orphaned tool results in the session
-						const assistantMsgWithTools = conversationMessages.find(
-							msg =>
-								msg.role === 'assistant' &&
-								msg.tool_calls &&
-								msg.tool_calls.some(tc =>
-									receivedToolCalls!.some(rtc => rtc.id === tc.id),
-								),
-						);
-
-						// If assistant message exists in memory but might not be in session yet,
-						// wait for it to be saved before adding aborted tool results
-						if (assistantMsgWithTools) {
-							try {
-								// Ensure assistant message is persisted first
-								await saveMessage(assistantMsgWithTools);
-							} catch (error) {
-								console.error(
-									'Failed to save assistant message before abort:',
-									error,
-								);
-							}
-						}
+						// NOTE: Assistant message with tool_calls was already saved at line 588 (await saveMessage)
+						// No need to save it again here to avoid duplicate assistant messages
 
 						// Now add aborted tool results
 						for (const toolCall of receivedToolCalls) {
@@ -1741,6 +1680,7 @@ export async function handleConversationWithTools(
 					content: streamedContent.trim(),
 					streaming: false,
 					discontinued: controller.signal.aborted,
+					thinking: extractThinkingContent(),
 				};
 				setMessages(prev => [...prev, finalAssistantMessage!]);
 

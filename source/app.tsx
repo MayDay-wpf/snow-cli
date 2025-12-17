@@ -31,6 +31,7 @@ import {useTerminalSize} from './hooks/ui/useTerminalSize.js';
 import {I18nProvider} from './i18n/index.js';
 import {ThemeProvider} from './ui/contexts/ThemeContext.js';
 import {gracefulExit} from './utils/core/processManager.js';
+import {loadConfig} from './utils/config/apiConfig.js';
 
 type Props = {
 	version?: string;
@@ -173,6 +174,8 @@ function AppContent({
 				currentView === 'welcome'
 			) {
 				setChatScreenKey(prev => prev + 1);
+				// 初始化配置缓存，避免进入对话页后频繁读取硬盘
+				loadConfig();
 			}
 			// Set auto-resume flag for resume-last option
 			setShouldAutoResume(value === 'resume-last');

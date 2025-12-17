@@ -9,5 +9,6 @@ import javax.swing.Icon
  */
 object SnowPluginIcons {
     @JvmField
-    val SnowAction: Icon = IconLoader.getIcon("/icons/snow_13.png", SnowPluginIcons::class.java)
+    val SnowAction: Icon = IconLoader.getIcon("/icons/snow.png", SnowPluginIcons::class.java)
 }
+

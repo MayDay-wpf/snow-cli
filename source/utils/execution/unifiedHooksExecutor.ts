@@ -323,7 +323,7 @@ export class UnifiedHooksExecutor {
 	 * @returns 是否匹配
 	 */
 	private checkMatcher(matcher: string, context: HookContext): boolean {
-		// Matcher 只用于工具 Hooks (beforeToolCall, afterToolCall)
+		// Matcher 用于工具 Hooks (beforeToolCall, toolConfirmation, afterToolCall)
 		// 直接匹配 toolName 字段，支持通配符
 		// 例如: "filesystem-read" 精确匹配
 		// 例如: "filesystem-*" 匹配所有 filesystem 工具

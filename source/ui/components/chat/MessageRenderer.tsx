@@ -13,6 +13,7 @@ type Props = {
 	isLastMessage: boolean;
 	filteredMessages: Message[];
 	terminalWidth: number;
+	showThinking?: boolean;
 };
 
 export default function MessageRenderer({
@@ -21,6 +22,7 @@ export default function MessageRenderer({
 	isLastMessage,
 	filteredMessages,
 	terminalWidth,
+	showThinking = true,
 }: Props) {
 	const {theme} = useTheme();
 
@@ -123,7 +125,7 @@ export default function MessageRenderer({
 						>
 							{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
 							{message.role === 'user'
-								? '⛇'
+								? '𖨆 '
 								: message.role === 'command'
 								? '⌘'
 								: '❆'}
@@ -207,7 +209,20 @@ export default function MessageRenderer({
 											}
 
 											return (
-												<MarkdownRenderer content={message.content || ' '} />
+												<>
+													{message.thinking && showThinking && (
+														<Box flexDirection="column" marginBottom={1}>
+															<Text
+																color={theme.colors.menuSecondary}
+																dimColor
+																italic
+															>
+																{message.thinking}
+															</Text>
+														</Box>
+													)}
+													<MarkdownRenderer content={message.content || ' '} />
+												</>
 											);
 										})()
 									)}

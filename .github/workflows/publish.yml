@@ -58,14 +58,8 @@ jobs:
             
             ### What's New
 
-            - Fix the context compression bug
-            - Add the /add-dir command
-            - Support switching configurations on the conversation page
-            - Add a simple theme
-            - Enhance Codebase retrieval accuracy
-            - Strengthen the global Plan mode
-            - Complete Skills compatibility
-            
+            - fix some bugs
+
             ### Installation
             ```bash
             npm install -g snow-ai

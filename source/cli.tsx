@@ -65,6 +65,9 @@ const VERSION = packageJson.version;
 
 // Load heavy dependencies asynchronously
 async function loadDependencies() {
+	// Import utils/index.js to register all commands (side-effect import)
+	await import('./utils/index.js');
+
 	const [
 		appModule,
 		vscodeModule,

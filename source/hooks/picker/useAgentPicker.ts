@@ -1,6 +1,9 @@
 import {useState, useCallback, useEffect} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
-import {getSubAgents, type SubAgent} from '../../utils/config/subAgentConfig.js';
+import {
+	getSubAgents,
+	type SubAgent,
+} from '../../utils/config/subAgentConfig.js';
 
 export function useAgentPicker(buffer: TextBuffer, triggerUpdate: () => void) {
 	const [showAgentPicker, setShowAgentPicker] = useState(false);
@@ -33,6 +36,12 @@ export function useAgentPicker(buffer: TextBuffer, triggerUpdate: () => void) {
 			// Search backwards from cursor to find #
 			for (let i = beforeCursor.length - 1; i >= 0; i--) {
 				if (beforeCursor[i] === '#') {
+					// Check if # is preceded by @ or @@ (file picker should handle it)
+					if (i > 0 && beforeCursor[i - 1] === '@') {
+						// # is part of @# or @@#, don't activate agent picker
+						position = -1;
+						break;
+					}
 					position = i;
 					const afterHash = beforeCursor.slice(i + 1);
 					// Only activate if no space/newline after #

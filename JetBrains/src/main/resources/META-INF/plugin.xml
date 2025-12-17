@@ -37,6 +37,11 @@
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Snow CLI" displayType="BALLOON"/>
+        <toolWindow id="Snow CLI" 
+                    secondary="false" 
+                    anchor="right" 
+                    icon="SnowPluginIcons.SnowAction"
+                    factoryClass="com.snow.plugin.toolwindow.SnowToolWindowFactory"/>
     </extensions>
 
     <actions>
@@ -47,7 +52,6 @@
                 description="Open Snow CLI in integrated terminal"
                 icon="SnowPluginIcons.SnowAction">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <add-to-group group-id="TerminalToolwindowActionGroup" anchor="first"/>
             <keyboard-shortcut first-keystroke="control alt S" keymap="$default"/>
         </action>
     </actions>

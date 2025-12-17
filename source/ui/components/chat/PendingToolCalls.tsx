@@ -39,22 +39,14 @@ export default function PendingToolCalls({messages}: Props) {
 					<Box marginLeft={1}>
 						<Text color="gray">{tool.content}</Text>
 					</Box>
-					{/* 显示工具参数 */}
+					{/* 显示工具参数 - 完整显示所有参数 */}
 					{tool.toolDisplay && tool.toolDisplay.args.length > 0 && (
 						<Box flexDirection="column" marginLeft={2}>
-							{tool.toolDisplay.args.slice(0, 3).map((arg, argIndex) => (
+							{tool.toolDisplay.args.map((arg, argIndex) => (
 								<Text key={argIndex} color="gray" dimColor>
-									{arg.key}:{' '}
-									{arg.value.length > 50
-										? `${arg.value.substring(0, 50)}...`
-										: arg.value}
+									{arg.key}: {arg.value}
 								</Text>
 							))}
-							{tool.toolDisplay.args.length > 3 && (
-								<Text color="gray" dimColor>
-									... and {tool.toolDisplay.args.length - 3} more args
-								</Text>
-							)}
 						</Box>
 					)}
 				</Box>

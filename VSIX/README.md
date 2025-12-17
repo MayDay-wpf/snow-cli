@@ -40,6 +40,16 @@ npm install -g snow-ai
 3. A terminal opens with Snow CLI running
 4. The extension automatically connects via WebSocket
 
+#### Interface Preview
+
+**English Interface:**
+
+![English Interface](https://raw.githubusercontent.com/MayDay-wpf/snow-cli/main/VSIX/en.png)
+
+**Chinese Interface:**
+
+![Chinese Interface](https://raw.githubusercontent.com/MayDay-wpf/snow-cli/main/VSIX/zh.png)
+
 ### ACE Code Search Features
 
 The extension enhances Snow CLI with VSCode's built-in language intelligence:

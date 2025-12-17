@@ -15,6 +15,7 @@ const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
 const FileList = lazy(() => import('../tools/FileList.js'));
 const AgentPickerPanel = lazy(() => import('../panels/AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('../panels/TodoPickerPanel.js'));
+const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
@@ -27,6 +28,7 @@ import {useAgentPicker} from '../../../hooks/picker/useAgentPicker.js';
 import {useTodoPicker} from '../../../hooks/picker/useTodoPicker.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useBashMode} from '../../../hooks/input/useBashMode.js';
 
 /**
  * Calculate context usage percentage
@@ -73,6 +75,8 @@ type Props = {
 	setYoloMode?: (value: boolean) => void;
 	planMode?: boolean;
 	setPlanMode?: (value: boolean) => void;
+	vulnerabilityHuntingMode?: boolean;
+	setVulnerabilityHuntingMode?: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -87,6 +91,21 @@ type Props = {
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
+	// Profile picker
+	showProfilePicker?: boolean;
+	setShowProfilePicker?: (show: boolean) => void;
+	profileSelectedIndex?: number;
+	setProfileSelectedIndex?: (
+		index: number | ((prev: number) => number),
+	) => void;
+	getFilteredProfiles?: () => Array<{
+		name: string;
+		displayName: string;
+		isActive: boolean;
+	}>;
+	handleProfileSelect?: (profileName: string) => void;
+	profileSearchQuery?: string;
+	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 };
 
@@ -102,14 +121,27 @@ export default function ChatInput({
 	setYoloMode,
 	planMode = false,
 	setPlanMode,
+	vulnerabilityHuntingMode = false,
+	setVulnerabilityHuntingMode,
 	contextUsage,
 	initialContent = null,
 	onContextPercentageChange,
+	showProfilePicker = false,
+	setShowProfilePicker,
+	profileSelectedIndex = 0,
+	setProfileSelectedIndex,
+	getFilteredProfiles,
+	handleProfileSelect,
+	profileSearchQuery = '',
+	setProfileSearchQuery,
 	onSwitchProfile,
 }: Props) {
 	// Use i18n hook for translations
 	const {t} = useI18n();
 	const {theme} = useTheme();
+
+	// Use bash mode hook for command detection
+	const {parseBashCommands} = useBashMode();
 
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
@@ -131,6 +163,10 @@ export default function ChatInput({
 
 	// Use input buffer hook
 	const {buffer, triggerUpdate, forceUpdate} = useInputBuffer(viewport);
+
+	// Track bash mode state with debounce to avoid high-frequency updates
+	const [isBashMode, setIsBashMode] = React.useState(false);
+	const bashModeDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
 	// Use command panel hook
 	const {
@@ -224,6 +260,8 @@ export default function ChatInput({
 		setYoloMode: setYoloMode || (() => {}),
 		planMode,
 		setPlanMode: setPlanMode || (() => {}),
+		vulnerabilityHuntingMode,
+		setVulnerabilityHuntingMode: setVulnerabilityHuntingMode || (() => {}),
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -277,6 +315,14 @@ export default function ChatInput({
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		showProfilePicker,
+		setShowProfilePicker: setShowProfilePicker || (() => {}),
+		profileSelectedIndex,
+		setProfileSelectedIndex: setProfileSelectedIndex || (() => {}),
+		getFilteredProfiles: getFilteredProfiles || (() => []),
+		handleProfileSelect: handleProfileSelect || (() => {}),
+		profileSearchQuery,
+		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
 	});
 
@@ -371,6 +417,33 @@ export default function ChatInput({
 			}
 		}
 	}, [contextUsage, onContextPercentageChange]);
+
+	// Detect bash mode with debounce (150ms delay to avoid high-frequency updates)
+	useEffect(() => {
+		// Clear existing timer
+		if (bashModeDebounceTimer.current) {
+			clearTimeout(bashModeDebounceTimer.current);
+		}
+
+		// Set new timer
+		bashModeDebounceTimer.current = setTimeout(() => {
+			const text = buffer.getFullText();
+			const commands = parseBashCommands(text);
+			const hasBashCommands = commands.length > 0;
+
+			// Only update state if changed
+			if (hasBashCommands !== isBashMode) {
+				setIsBashMode(hasBashCommands);
+			}
+		}, 150);
+
+		// Cleanup on unmount
+		return () => {
+			if (bashModeDebounceTimer.current) {
+				clearTimeout(bashModeDebounceTimer.current);
+			}
+		};
+	}, [buffer.text, parseBashCommands, isBashMode]);
 
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
@@ -547,16 +620,29 @@ export default function ChatInput({
 			{!showHistoryMenu && (
 				<>
 					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text color={theme.colors.menuSecondary}>
+						<Text
+							color={
+								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+							}
+						>
 							{'─'.repeat(terminalWidth - 2)}
 						</Text>
 						<Box flexDirection="row">
-							<Text color={theme.colors.menuInfo} bold>
-								❯{' '}
+							<Text
+								color={
+									isBashMode ? theme.colors.success : theme.colors.menuInfo
+								}
+								bold
+							>
+								{isBashMode ? '>_' : '❯'}{' '}
 							</Text>
 							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
-						<Text color={theme.colors.menuSecondary}>
+						<Text
+							color={
+								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+							}
+						>
 							{'─'.repeat(terminalWidth - 2)}
 						</Text>
 					</Box>
@@ -617,6 +703,15 @@ export default function ChatInput({
 							isLoading={todoIsLoading}
 							searchQuery={todoSearchQuery}
 							totalCount={totalTodoCount}
+						/>
+					</Suspense>
+					<Suspense fallback={null}>
+						<ProfilePanel
+							profiles={getFilteredProfiles ? getFilteredProfiles() : []}
+							selectedIndex={profileSelectedIndex}
+							visible={showProfilePicker}
+							maxHeight={5}
+							searchQuery={profileSearchQuery}
 						/>
 					</Suspense>
 					{/* Status information moved to StatusLine component */}

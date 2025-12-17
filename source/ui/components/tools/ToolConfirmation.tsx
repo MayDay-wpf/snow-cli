@@ -1,10 +1,14 @@
-import React, {useState, useMemo} from 'react';
+import React, {useMemo, useState, useEffect} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
+import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
+import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import fs from 'fs';
 
 export type ConfirmationResult =
 	| 'approve'
@@ -26,6 +30,7 @@ interface Props {
 	toolArguments?: string; // JSON string of tool arguments
 	allTools?: ToolCall[]; // All tools when confirming multiple tools in parallel
 	onConfirm: (result: ConfirmationResult) => void;
+	onHookError?: (error: HookErrorDetails) => void; // Hook error callback
 }
 
 // Helper function to format argument values with truncation
@@ -81,6 +86,7 @@ export default function ToolConfirmation({
 	toolArguments,
 	allTools,
 	onConfirm,
+	onHookError,
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -118,6 +124,258 @@ export default function ToolConfirmation({
 			return null;
 		}
 	}, [toolArguments, toolName]);
+
+	// Trigger toolConfirmation Hook when component mounts
+	useEffect(() => {
+		const context = {
+			toolName,
+			args: toolArguments,
+			isSensitive: sensitiveCommandCheck.isSensitive,
+			allTools: allTools?.map(t => ({
+				name: t.function.name,
+				arguments: t.function.arguments,
+			})),
+		};
+
+		// Execute hook and handle exit code
+		unifiedHooksExecutor
+			.executeHooks('toolConfirmation', context)
+			.then((result: any) => {
+				// Check for command failures
+				const commandError = result.results.find(
+					(r: any) => r.type === 'command' && !r.success,
+				);
+
+				if (commandError && commandError.type === 'command') {
+					const {exitCode, command, output, error} = commandError;
+
+					if (exitCode === 1) {
+						// Warning: print to console
+						const combinedOutput =
+							[output, error].filter(Boolean).join('\n\n') || '(no output)';
+						console.warn(
+							`[Hook Warning] toolConfirmation Hook returned warning:\nCommand: ${command}\nOutput: ${combinedOutput}`,
+						);
+					} else if (exitCode >= 2 || exitCode < 0) {
+						// Critical error: send to chat area and close confirmation
+						if (onHookError) {
+							onHookError({
+								type: 'error',
+								exitCode,
+								command,
+								output,
+								error,
+							});
+						}
+						// Close confirmation dialog with reject
+						setHasSelected(true);
+						onConfirm('reject');
+					}
+				}
+			})
+			.catch(error => {
+				console.error('Failed to execute toolConfirmation hook:', error);
+			});
+	}, [toolName, toolArguments, sensitiveCommandCheck.isSensitive, allTools]);
+	useEffect(() => {
+		// Only show diff for filesystem operations and when VSCode is connected
+		if (!vscodeConnection.isConnected()) {
+			return;
+		}
+
+		// Helper function to show diff for a single tool
+		const showDiffForTool = (name: string, args: string): Promise<void>[] => {
+			const promises: Promise<void>[] = [];
+			try {
+				const parsed = JSON.parse(args);
+
+				// Handle filesystem-edit (supports batch editing)
+				if (name === 'filesystem-edit' && parsed.filePath) {
+					// Parse filePath if it's a JSON string (batch mode)
+					let filePathData = parsed.filePath;
+					if (typeof filePathData === 'string') {
+						try {
+							filePathData = JSON.parse(filePathData);
+						} catch {
+							// Not JSON, treat as single file path
+						}
+					}
+
+					// Check if it's batch editing (array of file configs)
+					if (Array.isArray(filePathData)) {
+						// Batch mode: filePath is array of {path, startLine, endLine, newContent}
+						for (const fileConfig of filePathData) {
+							const filePath =
+								typeof fileConfig === 'string' ? fileConfig : fileConfig.path;
+							const newContent =
+								typeof fileConfig === 'string'
+									? parsed.newContent
+									: fileConfig.newContent;
+
+							if (
+								typeof filePath === 'string' &&
+								newContent &&
+								fs.existsSync(filePath)
+							) {
+								const originalContent = fs.readFileSync(filePath, 'utf-8');
+								promises.push(
+									vscodeConnection
+										.showDiff(filePath, originalContent, newContent, 'Edit')
+										.catch(() => {
+											// Silently fail if diff cannot be shown
+										}),
+								);
+							}
+						}
+					} else if (typeof parsed.filePath === 'string' && parsed.newContent) {
+						// Single file mode
+						const filePath = parsed.filePath;
+						if (fs.existsSync(filePath)) {
+							const originalContent = fs.readFileSync(filePath, 'utf-8');
+							promises.push(
+								vscodeConnection
+									.showDiff(
+										filePath,
+										originalContent,
+										parsed.newContent,
+										'Edit',
+									)
+									.catch(() => {
+										// Silently fail if diff cannot be shown
+									}),
+							);
+						}
+					}
+				}
+
+				// Handle filesystem-edit_search (supports batch editing)
+				if (name === 'filesystem-edit_search' && parsed.filePath) {
+					// Parse filePath if it's a JSON string (batch mode)
+					let filePathData = parsed.filePath;
+					if (typeof filePathData === 'string') {
+						try {
+							filePathData = JSON.parse(filePathData);
+						} catch {
+							// Not JSON, treat as single file path
+						}
+					}
+
+					// Check if it's batch editing (array of file configs)
+					if (Array.isArray(filePathData)) {
+						// Batch mode: filePath is array of {path, searchContent, replaceContent}
+						for (const fileConfig of filePathData) {
+							const filePath =
+								typeof fileConfig === 'string' ? fileConfig : fileConfig.path;
+							const searchContent =
+								typeof fileConfig === 'string'
+									? parsed.searchContent
+									: fileConfig.searchContent;
+							const replaceContent =
+								typeof fileConfig === 'string'
+									? parsed.replaceContent
+									: fileConfig.replaceContent;
+
+							if (
+								typeof filePath === 'string' &&
+								searchContent &&
+								replaceContent &&
+								fs.existsSync(filePath)
+							) {
+								const originalContent = fs.readFileSync(filePath, 'utf-8');
+								const newContent = originalContent.replace(
+									searchContent,
+									replaceContent,
+								);
+								promises.push(
+									vscodeConnection
+										.showDiff(
+											filePath,
+											originalContent,
+											newContent,
+											'Search & Replace',
+										)
+										.catch(() => {
+											// Silently fail if diff cannot be shown
+										}),
+								);
+							}
+						}
+					} else if (
+						typeof parsed.filePath === 'string' &&
+						parsed.searchContent &&
+						parsed.replaceContent
+					) {
+						// Single file mode
+						const filePath = parsed.filePath;
+						if (fs.existsSync(filePath)) {
+							const originalContent = fs.readFileSync(filePath, 'utf-8');
+							const newContent = originalContent.replace(
+								parsed.searchContent,
+								parsed.replaceContent,
+							);
+							promises.push(
+								vscodeConnection
+									.showDiff(
+										filePath,
+										originalContent,
+										newContent,
+										'Search & Replace',
+									)
+									.catch(() => {
+										// Silently fail if diff cannot be shown
+									}),
+							);
+						}
+					}
+				}
+
+				// Handle filesystem-create
+				if (name === 'filesystem-create' && parsed.filePath && parsed.content) {
+					const filePath = parsed.filePath;
+					if (typeof filePath === 'string') {
+						promises.push(
+							vscodeConnection
+								.showDiff(filePath, '', parsed.content, 'Create')
+								.catch(() => {
+									// Silently fail if diff cannot be shown
+								}),
+						);
+					}
+				}
+			} catch {
+				// Ignore parse errors
+			}
+			return promises;
+		};
+
+		// Handle parallel tools
+		if (allTools && allTools.length > 0) {
+			// Show diff for all filesystem operations in parallel tools
+			const diffPromises = allTools.flatMap(tool =>
+				showDiffForTool(tool.function.name, tool.function.arguments),
+			);
+
+			// Wait for all diffs to be shown
+			Promise.all(diffPromises).catch(() => {
+				// Silently fail
+			});
+		} else if (toolArguments) {
+			// Handle single tool
+			const promises = showDiffForTool(toolName, toolArguments);
+			Promise.all(promises).catch(() => {
+				// Silently fail
+			});
+		}
+
+		// Cleanup: close diff when component unmounts
+		return () => {
+			if (vscodeConnection.isConnected()) {
+				vscodeConnection.closeDiff().catch(() => {
+					// Silently fail if close fails
+				});
+			}
+		};
+	}, [toolName, toolArguments, allTools]);
 
 	// Parse and format all tools arguments for display (multiple tools)
 	const formattedAllTools = useMemo(() => {
