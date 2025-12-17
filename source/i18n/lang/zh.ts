@@ -432,6 +432,13 @@ export const zh: TranslationKeys = {
 			quit: '退出应用程序',
 		},
 	},
+	profilePanel: {
+		title: '选择配置',
+		scrollHint: '↑↓ 滚动',
+		moreHidden: '隐藏 {count} 个',
+		escHint: '按 ESC 关闭',
+		activeLabel: '(当前)',
+	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
 		exitingApplication: '正在安全退出...',

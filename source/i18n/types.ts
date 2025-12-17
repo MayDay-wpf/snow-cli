@@ -435,6 +435,14 @@ export type TranslationKeys = {
 			quit: string;
 		};
 	};
+	// Profile Panel
+	profilePanel: {
+		title: string;
+		scrollHint: string;
+		moreHidden: string;
+		escHint: string;
+		activeLabel: string;
+	};
 
 	// Hooks
 	hooks: {

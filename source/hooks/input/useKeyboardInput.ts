@@ -86,6 +86,17 @@ type KeyboardInputOptions = {
 	confirmTodoSelection: () => void;
 	todoSearchQuery: string;
 	setTodoSearchQuery: (query: string) => void;
+	// Profile picker
+	showProfilePicker: boolean;
+	setShowProfilePicker: (show: boolean) => void;
+	profileSelectedIndex: number;
+	setProfileSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	getFilteredProfiles: () => Array<{
+		name: string;
+		displayName: string;
+		isActive: boolean;
+	}>;
+	handleProfileSelect: (profileName: string) => void;
 	// Profile switching
 	onSwitchProfile?: () => void;
 };
@@ -153,6 +164,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		showProfilePicker,
+		setShowProfilePicker,
+		profileSelectedIndex,
+		setProfileSelectedIndex,
+		getFilteredProfiles,
+		handleProfileSelect,
 		onSwitchProfile,
 	} = options;
 
@@ -265,6 +282,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
+			// Close profile picker if open
+			if (showProfilePicker) {
+				setShowProfilePicker(false);
+				setProfileSelectedIndex(0);
+				return;
+			}
+
 			// Close todo picker if open
 			if (showTodoPicker) {
 				setShowTodoPicker(false);
@@ -328,6 +352,43 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					}
 				}
 			}
+			return;
+		}
+
+		// Handle profile picker navigation
+		if (showProfilePicker) {
+			const filteredProfiles = getFilteredProfiles();
+
+			// Up arrow in profile picker - 循环导航:第一项 → 最后一项
+			if (key.upArrow) {
+				setProfileSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, filteredProfiles.length - 1),
+				);
+				return;
+			}
+
+			// Down arrow in profile picker - 循环导航:最后一项 → 第一项
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, filteredProfiles.length - 1);
+				setProfileSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+				return;
+			}
+
+			// Enter - select profile
+			if (key.return) {
+				if (
+					filteredProfiles.length > 0 &&
+					profileSelectedIndex < filteredProfiles.length
+				) {
+					const selectedProfile = filteredProfiles[profileSelectedIndex];
+					if (selectedProfile) {
+						handleProfileSelect(selectedProfile.name);
+					}
+				}
+				return;
+			}
+
+			// For any other key in profile picker, just return to prevent interference
 			return;
 		}
 

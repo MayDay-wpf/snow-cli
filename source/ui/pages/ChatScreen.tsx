@@ -46,7 +46,6 @@ import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {getSimpleMode} from '../../utils/config/themeConfig.js';
 import {
 	getActiveProfileName,
-	getNextProfileName,
 	switchProfile,
 	getAllProfiles,
 } from '../../utils/config/configManager.js';
@@ -163,6 +162,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
+	const [showProfilePanel, setShowProfilePanel] = useState(false);
+	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -1000,6 +1001,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			showHelpPanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showProfilePanel ||
 			snapshotState.pendingRollback ||
 			pendingToolConfirmation ||
 			pendingUserQuestion ||
@@ -1008,17 +1010,27 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			return;
 		}
 
-		// Get next profile and switch
-		const nextProfileName = getNextProfileName();
-		switchProfile(nextProfileName);
+		// Show profile selection panel instead of cycling
+		setShowProfilePanel(true);
+		setProfileSelectedIndex(0);
+	};
+
+	// Handle profile selection
+	const handleProfileSelect = (profileName: string) => {
+		// Switch to selected profile
+		switchProfile(profileName);
 
 		// Reload config to pick up new profile's configuration
 		reloadConfig();
 
 		// Update display name
 		const profiles = getAllProfiles();
-		const profile = profiles.find(p => p.name === nextProfileName);
-		setCurrentProfileName(profile?.displayName || nextProfileName);
+		const profile = profiles.find(p => p.name === profileName);
+		setCurrentProfileName(profile?.displayName || profileName);
+
+		// Close panel
+		setShowProfilePanel(false);
+		setProfileSelectedIndex(0);
 	};
 
 	const handleHistorySelect = async (
@@ -2581,6 +2593,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							}
 							initialContent={restoreInputContent}
 							onContextPercentageChange={setCurrentContextPercentage}
+							showProfilePicker={showProfilePanel}
+							setShowProfilePicker={setShowProfilePanel}
+							profileSelectedIndex={profileSelectedIndex}
+							setProfileSelectedIndex={setProfileSelectedIndex}
+							getFilteredProfiles={() => getAllProfiles()}
+							handleProfileSelect={handleProfileSelect}
 							onSwitchProfile={handleSwitchProfile}
 						/>
 						{/* Unified status line component */}

@@ -439,6 +439,13 @@ export const ko: TranslationKeys = {
 			quit: '애플리케이션 종료',
 		},
 	},
+	profilePanel: {
+		title: '프로필 선택',
+		scrollHint: '↑↓ 스크롤',
+		moreHidden: '{count}개 더 숨김',
+		escHint: 'ESC를 눌러 닫기',
+		activeLabel: '(활성)',
+	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+C를 다시 눌러 종료',
 		exitingApplication: '안전하게 종료 중...',

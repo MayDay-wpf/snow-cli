@@ -18,7 +18,7 @@ export interface TokenLimitResult {
  */
 export async function validateTokenLimit(
 	content: any,
-	maxTokens: number = 50000,
+	maxTokens: number = 100000,
 ): Promise<TokenLimitResult> {
 	// 如果内容为空，直接通过
 	if (content === null || content === undefined) {

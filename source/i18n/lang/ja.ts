@@ -450,6 +450,13 @@ export const ja: TranslationKeys = {
 			quit: 'アプリケーションを終了',
 		},
 	},
+	profilePanel: {
+		title: 'プロファイル選択',
+		scrollHint: '↑↓ でスクロール',
+		moreHidden: '{count} 件を非表示',
+		escHint: 'ESCで閉じる',
+		activeLabel: '(アクティブ)',
+	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+Cをもう一度押して終了',
 		exitingApplication: '安全に終了しています...',

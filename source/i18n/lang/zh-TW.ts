@@ -432,6 +432,13 @@ export const zhTW: TranslationKeys = {
 			quit: '退出應用程式',
 		},
 	},
+	profilePanel: {
+		title: '選擇設定檔',
+		scrollHint: '↑↓ 捲動',
+		moreHidden: '隱藏 {count} 個',
+		escHint: '按 ESC 關閉',
+		activeLabel: '(目前)',
+	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
 		exitingApplication: '正在安全退出...',

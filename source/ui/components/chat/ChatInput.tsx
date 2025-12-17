@@ -15,6 +15,7 @@ const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
 const FileList = lazy(() => import('../tools/FileList.js'));
 const AgentPickerPanel = lazy(() => import('../panels/AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('../panels/TodoPickerPanel.js'));
+const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
@@ -90,6 +91,19 @@ type Props = {
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
+	// Profile picker
+	showProfilePicker?: boolean;
+	setShowProfilePicker?: (show: boolean) => void;
+	profileSelectedIndex?: number;
+	setProfileSelectedIndex?: (
+		index: number | ((prev: number) => number),
+	) => void;
+	getFilteredProfiles?: () => Array<{
+		name: string;
+		displayName: string;
+		isActive: boolean;
+	}>;
+	handleProfileSelect?: (profileName: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 };
 
@@ -110,6 +124,12 @@ export default function ChatInput({
 	contextUsage,
 	initialContent = null,
 	onContextPercentageChange,
+	showProfilePicker = false,
+	setShowProfilePicker,
+	profileSelectedIndex = 0,
+	setProfileSelectedIndex,
+	getFilteredProfiles,
+	handleProfileSelect,
 	onSwitchProfile,
 }: Props) {
 	// Use i18n hook for translations
@@ -291,6 +311,12 @@ export default function ChatInput({
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		showProfilePicker,
+		setShowProfilePicker: setShowProfilePicker || (() => {}),
+		profileSelectedIndex,
+		setProfileSelectedIndex: setProfileSelectedIndex || (() => {}),
+		getFilteredProfiles: getFilteredProfiles || (() => []),
+		handleProfileSelect: handleProfileSelect || (() => {}),
 		onSwitchProfile,
 	});
 
@@ -671,6 +697,14 @@ export default function ChatInput({
 							isLoading={todoIsLoading}
 							searchQuery={todoSearchQuery}
 							totalCount={totalTodoCount}
+						/>
+					</Suspense>
+					<Suspense fallback={null}>
+						<ProfilePanel
+							profiles={getFilteredProfiles ? getFilteredProfiles() : []}
+							selectedIndex={profileSelectedIndex}
+							visible={showProfilePicker}
+							maxHeight={5}
 						/>
 					</Suspense>
 					{/* Status information moved to StatusLine component */}

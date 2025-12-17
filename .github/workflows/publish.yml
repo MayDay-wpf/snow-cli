@@ -58,7 +58,10 @@ jobs:
             
             ### What's New
 
-            - Add a code repository search status component to enhance search feedback and result display, strengthen the precision of code repository search with progressive search, and add token prediction to file reading.
+            - Optimize codex experience
+            - Optimize switching configuration experience
+            - Support configuration caching, allowing different configurations in multiple windows
+            - Add hooks before tool confirmation
 
             ### Installation
             ```bash

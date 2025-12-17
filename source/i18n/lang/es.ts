@@ -486,6 +486,13 @@ export const es: TranslationKeys = {
 			quit: 'Salir de la aplicación',
 		},
 	},
+	profilePanel: {
+		title: 'Seleccionar perfil',
+		scrollHint: '↑↓ para desplazarse',
+		moreHidden: '{count} más ocultos',
+		escHint: 'Presiona ESC para cerrar',
+		activeLabel: '(activo)',
+	},
 	hooks: {
 		pressCtrlCAgain: 'Presiona Ctrl+C nuevamente para salir',
 		exitingApplication: 'Saliendo de forma segura...',
