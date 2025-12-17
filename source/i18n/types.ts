@@ -442,6 +442,7 @@ export type TranslationKeys = {
 		moreHidden: string;
 		escHint: string;
 		activeLabel: string;
+		searchLabel: string;
 	};
 
 	// Hooks

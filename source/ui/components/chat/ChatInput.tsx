@@ -104,6 +104,8 @@ type Props = {
 		isActive: boolean;
 	}>;
 	handleProfileSelect?: (profileName: string) => void;
+	profileSearchQuery?: string;
+	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 };
 
@@ -130,6 +132,8 @@ export default function ChatInput({
 	setProfileSelectedIndex,
 	getFilteredProfiles,
 	handleProfileSelect,
+	profileSearchQuery = '',
+	setProfileSearchQuery,
 	onSwitchProfile,
 }: Props) {
 	// Use i18n hook for translations
@@ -317,6 +321,8 @@ export default function ChatInput({
 		setProfileSelectedIndex: setProfileSelectedIndex || (() => {}),
 		getFilteredProfiles: getFilteredProfiles || (() => []),
 		handleProfileSelect: handleProfileSelect || (() => {}),
+		profileSearchQuery,
+		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
 	});
 
@@ -705,6 +711,7 @@ export default function ChatInput({
 							selectedIndex={profileSelectedIndex}
 							visible={showProfilePicker}
 							maxHeight={5}
+							searchQuery={profileSearchQuery}
 						/>
 					</Suspense>
 					{/* Status information moved to StatusLine component */}

@@ -438,6 +438,7 @@ export const zh: TranslationKeys = {
 		moreHidden: '隐藏 {count} 个',
 		escHint: '按 ESC 关闭',
 		activeLabel: '(当前)',
+		searchLabel: '搜索:',
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',

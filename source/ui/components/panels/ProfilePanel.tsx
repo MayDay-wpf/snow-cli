@@ -14,10 +14,11 @@ interface Props {
 	selectedIndex: number;
 	visible: boolean;
 	maxHeight?: number;
+	searchQuery?: string;
 }
 
 const ProfilePanel = memo(
-	({profiles, selectedIndex, visible, maxHeight}: Props) => {
+	({profiles, selectedIndex, visible, maxHeight, searchQuery}: Props) => {
 		const {t} = useI18n();
 		const {theme} = useTheme();
 
@@ -75,6 +76,14 @@ const ProfilePanel = memo(
 									`(${selectedIndex + 1}/${profiles.length})`}
 							</Text>
 						</Box>
+						{searchQuery && (
+							<Box marginTop={1}>
+								<Text color={theme.colors.menuInfo}>
+									{t.profilePanel.searchLabel}{' '}
+									<Text color={theme.colors.menuSelected}>{searchQuery}</Text>
+								</Text>
+							</Box>
+						)}
 						{displayedProfiles.map((profile, index) => (
 							<Box key={profile.name} flexDirection="column" width="100%">
 								<Text

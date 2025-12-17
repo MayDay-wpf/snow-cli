@@ -1,6 +1,6 @@
 /**
  * Token Limiter - 统一的 token 长度拦截器
- * 
+ *
  * 用于在所有 MCP 工具返回给 AI 之前验证内容长度，防止超大内容导致问题
  */
 
@@ -8,6 +8,51 @@ export interface TokenLimitResult {
 	isValid: boolean;
 	tokenCount: number;
 	errorMessage?: string;
+}
+
+/**
+ * 移除内容中的 base64 图片数据
+ * @param obj - 要处理的对象
+ * @returns 移除图片数据后的对象副本
+ */
+function removeBase64Images(obj: any): any {
+	if (obj === null || obj === undefined) {
+		return obj;
+	}
+
+	if (typeof obj === 'string') {
+		return obj;
+	}
+
+	if (Array.isArray(obj)) {
+		return obj.map(item => removeBase64Images(item));
+	}
+
+	if (typeof obj === 'object') {
+		const result: any = {};
+		for (const key in obj) {
+			if (obj.hasOwnProperty(key)) {
+				// 跳过 base64 图片字段
+				if (
+					key === 'data' &&
+					typeof obj[key] === 'string' &&
+					obj.type === 'image'
+				) {
+					result[key] = '[base64 image data removed for token calculation]';
+				} else if (key === 'source' && obj[key]?.type === 'base64') {
+					result[key] = {
+						...obj[key],
+						data: '[base64 image data removed for token calculation]',
+					};
+				} else {
+					result[key] = removeBase64Images(obj[key]);
+				}
+			}
+		}
+		return result;
+	}
+
+	return obj;
 }
 
 /**
@@ -25,15 +70,18 @@ export async function validateTokenLimit(
 		return {isValid: true, tokenCount: 0};
 	}
 
+	// 移除 base64 图片数据后再进行 token 计算
+	const contentWithoutImages = removeBase64Images(content);
+
 	// 将内容转换为字符串
 	let contentStr: string;
-	if (typeof content === 'string') {
-		contentStr = content;
-	} else if (typeof content === 'object') {
+	if (typeof contentWithoutImages === 'string') {
+		contentStr = contentWithoutImages;
+	} else if (typeof contentWithoutImages === 'object') {
 		// 对于对象，序列化为 JSON
-		contentStr = JSON.stringify(content);
+		contentStr = JSON.stringify(contentWithoutImages);
 	} else {
-		contentStr = String(content);
+		contentStr = String(contentWithoutImages);
 	}
 
 	try {

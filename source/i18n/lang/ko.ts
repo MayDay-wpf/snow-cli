@@ -445,6 +445,7 @@ export const ko: TranslationKeys = {
 		moreHidden: '{count}개 더 숨김',
 		escHint: 'ESC를 눌러 닫기',
 		activeLabel: '(활성)',
+		searchLabel: '검색:',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+C를 다시 눌러 종료',

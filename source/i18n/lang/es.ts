@@ -492,6 +492,7 @@ export const es: TranslationKeys = {
 		moreHidden: '{count} más ocultos',
 		escHint: 'Presiona ESC para cerrar',
 		activeLabel: '(activo)',
+		searchLabel: 'Buscar:',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Presiona Ctrl+C nuevamente para salir',

@@ -97,6 +97,8 @@ type KeyboardInputOptions = {
 		isActive: boolean;
 	}>;
 	handleProfileSelect: (profileName: string) => void;
+	profileSearchQuery: string;
+	setProfileSearchQuery: (query: string) => void;
 	// Profile switching
 	onSwitchProfile?: () => void;
 };
@@ -170,6 +172,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		setProfileSelectedIndex,
 		getFilteredProfiles,
 		handleProfileSelect,
+		profileSearchQuery,
+		setProfileSearchQuery,
 		onSwitchProfile,
 	} = options;
 
@@ -286,6 +290,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (showProfilePicker) {
 				setShowProfilePicker(false);
 				setProfileSelectedIndex(0);
+				setProfileSearchQuery(''); // Reset search query
 				return;
 			}
 
@@ -388,6 +393,34 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
+			// Backspace - remove last character from search
+			if (key.backspace || key.delete) {
+				if (profileSearchQuery.length > 0) {
+					setProfileSearchQuery(profileSearchQuery.slice(0, -1));
+					setProfileSelectedIndex(0); // Reset to first item
+					triggerUpdate();
+				}
+				return;
+			}
+
+			// Type to search - alphanumeric and common characters
+			// Accept complete characters (including multi-byte like Chinese)
+			// but filter out control sequences and incomplete input
+			if (
+				input &&
+				!key.ctrl &&
+				!key.meta &&
+				!key.escape &&
+				input !== '\x1b' && // Ignore escape sequences
+				input !== '\u001b' && // Additional escape check
+				!/[\x00-\x1F]/.test(input) // Ignore other control characters
+			) {
+				setProfileSearchQuery(profileSearchQuery + input);
+				setProfileSelectedIndex(0); // Reset to first item
+				triggerUpdate();
+				return;
+			}
+
 			// For any other key in profile picker, just return to prevent interference
 			return;
 		}
@@ -432,12 +465,16 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 
 			// Type to search - alphanumeric and common characters
+			// Accept complete characters (including multi-byte like Chinese)
+			// but filter out control sequences and incomplete input
 			if (
 				input &&
-				input.length === 1 &&
 				!key.ctrl &&
 				!key.meta &&
-				input !== '\x1b' // Ignore escape sequences
+				!key.escape &&
+				input !== '\x1b' && // Ignore escape sequences
+				input !== '\u001b' && // Additional escape check
+				!/[\x00-\x1F]/.test(input) // Ignore other control characters
 			) {
 				setTodoSearchQuery(todoSearchQuery + input);
 				setTodoSelectedIndex(0); // Reset to first item

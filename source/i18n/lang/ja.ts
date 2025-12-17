@@ -456,6 +456,7 @@ export const ja: TranslationKeys = {
 		moreHidden: '{count} 件を非表示',
 		escHint: 'ESCで閉じる',
 		activeLabel: '(アクティブ)',
+		searchLabel: '検索:',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+Cをもう一度押して終了',

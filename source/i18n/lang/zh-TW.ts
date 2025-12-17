@@ -438,6 +438,7 @@ export const zhTW: TranslationKeys = {
 		moreHidden: '隱藏 {count} 個',
 		escHint: '按 ESC 關閉',
 		activeLabel: '(目前)',
+		searchLabel: '搜尋:',
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',

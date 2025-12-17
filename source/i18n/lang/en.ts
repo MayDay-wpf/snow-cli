@@ -467,6 +467,7 @@ export const en: TranslationKeys = {
 		moreHidden: '{count} more hidden',
 		escHint: 'Press ESC to close',
 		activeLabel: '(active)',
+		searchLabel: 'Search:',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Press Ctrl+C again to exit',
