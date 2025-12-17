@@ -949,11 +949,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			// Mark that user manually interrupted
 			userInterruptedRef.current = true;
 
+			// Clear ALL loading indicators BEFORE aborting to prevent flashing
+			// This ensures LoadingIndicator returns null immediately
+			streamingState.setRetryStatus(null);
+			streamingState.setCodebaseSearchStatus(null);
+			streamingState.setIsStreaming(false);
+
 			// Abort the controller
 			streamingState.abortController.abort();
-
-			// Clear retry status immediately when user cancels
-			streamingState.setRetryStatus(null);
 
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));

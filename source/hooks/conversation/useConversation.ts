@@ -371,6 +371,7 @@ export async function handleConversationWithTools(
 			let toolCallAccumulator = ''; // Accumulate tool call deltas for token counting
 			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
 			let chunkCount = 0; // Track number of chunks received (to delay clearing retry status)
+			let currentTokenCount = 0; // Track current token count incrementally
 
 			// Get or create session for cache key
 			const currentSession = sessionManager.getCurrentSession();
@@ -475,11 +476,11 @@ export async function handleConversationWithTools(
 					}
 					// Note: reasoning content is NOT sent back to AI, only counted for display
 					reasoningAccumulator += chunk.delta;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.delta);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -488,11 +489,11 @@ export async function handleConversationWithTools(
 					// When content starts, reasoning is done
 					setIsReasoning?.(false);
 					streamedContent += chunk.content;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.content);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -501,11 +502,11 @@ export async function handleConversationWithTools(
 					// When tool calls start, reasoning is done (OpenAI generally doesn't output text content during tool calls)
 					setIsReasoning?.(false);
 					toolCallAccumulator += chunk.delta;
+					// Incremental token counting - only encode the new delta
 					try {
-						const tokens = encoder.encode(
-							streamedContent + toolCallAccumulator + reasoningAccumulator,
-						);
-						setStreamTokenCount(tokens.length);
+						const deltaTokens = encoder.encode(chunk.delta);
+						currentTokenCount += deltaTokens.length;
+						setStreamTokenCount(currentTokenCount);
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -567,8 +568,8 @@ export async function handleConversationWithTools(
 				}
 			}
 
-			// Reset token count after stream ends
-			setStreamTokenCount(0);
+			// Don't reset token count here - keep it displayed
+			// It will be reset at the start of next streaming (line 301)
 
 			// If aborted during streaming, exit the loop
 			// (discontinued message already added by ChatScreen ESC handler)

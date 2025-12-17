@@ -58,7 +58,7 @@ function removeBase64Images(obj: any): any {
 /**
  * 验证内容的 token 长度
  * @param content - 要验证的内容（字符串或对象）
- * @param maxTokens - 最大允许的 token 数量，默认 50000
+ * @param maxTokens - 最大允许的 token 数量，默认 100000
  * @returns TokenLimitResult - 验证结果
  */
 export async function validateTokenLimit(
@@ -134,7 +134,7 @@ export async function validateTokenLimit(
 export async function wrapToolResultWithTokenLimit(
 	result: any,
 	toolName: string,
-	maxTokens: number = 50000,
+	maxTokens: number = 100000,
 ): Promise<any> {
 	const validation = await validateTokenLimit(result, maxTokens);
 

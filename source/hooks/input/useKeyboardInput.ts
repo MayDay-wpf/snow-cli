@@ -187,6 +187,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
 	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
 	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
+	const componentMountTime = useRef<number>(Date.now()); // Track when component mounted
 
 	// Cleanup timer on unmount
 	useEffect(() => {
@@ -212,12 +213,29 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Handle input using useInput hook
 	useInput((input, key) => {
 		if (disabled) return;
+
+		// Ignore focus events during the first 500ms after component mount
+		// This prevents [I[I artifacts when switching from WelcomeScreen to ChatScreen
+		const timeSinceMount = Date.now() - componentMountTime.current;
+		if (timeSinceMount < 500) {
+			// During initial mount period, aggressively filter any input that could be focus events
+			if (
+				input.includes('[I') ||
+				input.includes('[O') ||
+				input === '\x1b[I' ||
+				input === '\x1b[O' ||
+				/^[\s\x1b\[IO]+$/.test(input)
+			) {
+				return;
+			}
+		}
+
 		// Filter out focus events more robustly
 		// Focus events: ESC[I (focus in) or ESC[O (focus out)
 		// Some terminals may send these with or without ESC, and they might appear
 		// anywhere in the input string (especially during drag-and-drop with Shift held)
 		// We need to filter them out but NOT remove legitimate user input
-		const focusEventPattern = /(\s|^)\[(?:I|O)(?=(?:\s|$|["'~\\\/]|[A-Za-z]:))/;
+		const focusEventPattern = /(\s|^)\[(?:I|O)(?=(?:\s|$|["'~\\/]|[A-Za-z]:))/;
 
 		if (
 			// Complete escape sequences

@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Token length intercepts bypass image field
+            - fix some bugs
 
             ### Installation
             ```bash

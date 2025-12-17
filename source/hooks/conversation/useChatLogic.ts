@@ -362,7 +362,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 				setCurrentModel: streamingState.setCurrentModel,
 			});
 		} catch (error) {
-			if (!controller.signal.aborted) {
+			// Don't show error message if user manually interrupted or request was aborted
+			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
 				const finalMessage: Message = {
@@ -595,7 +596,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 				setCurrentModel: streamingState.setCurrentModel,
 			});
 		} catch (error) {
-			if (!controller.signal.aborted) {
+			// Don't show error message if user manually interrupted or request was aborted
+			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
 				const finalMessage: Message = {
