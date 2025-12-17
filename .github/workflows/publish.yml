@@ -58,10 +58,7 @@ jobs:
             
             ### What's New
 
-            - Optimize codex experience
-            - Optimize switching configuration experience
-            - Support configuration caching, allowing different configurations in multiple windows
-            - Add hooks before tool confirmation
+            - Token length intercepts bypass image field
 
             ### Installation
             ```bash
