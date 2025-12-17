@@ -21,6 +21,7 @@ import ChatHeader from '../components/special/ChatHeader.js';
 import CodebaseSearchStatus from '../components/chat/CodebaseSearchStatus.js';
 import {HookErrorDisplay} from '../components/special/HookErrorDisplay.js';
 import type {HookErrorDetails} from '../../utils/execution/hookResultHandler.js';
+import {reloadConfig} from '../../utils/config/apiConfig.js';
 
 // Lazy load panel components to reduce initial bundle size
 const MCPInfoPanel = lazy(() => import('../components/panels/MCPInfoPanel.js'));
@@ -1010,6 +1011,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		// Get next profile and switch
 		const nextProfileName = getNextProfileName();
 		switchProfile(nextProfileName);
+
+		// Reload config to pick up new profile's configuration
+		reloadConfig();
 
 		// Update display name
 		const profiles = getAllProfiles();

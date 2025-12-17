@@ -1,8 +1,12 @@
-import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 import {resetAnthropicClient} from '../../api/anthropic.js';
 import {resetGeminiClient} from '../../api/gemini.js';
 import {resetOpenAIClient as resetChatClient} from '../../api/chat.js';
 import {resetOpenAIClient as resetResponseClient} from '../../api/responses.js';
+import {clearConfigCache} from '../config/apiConfig.js';
 
 // Home command handler - returns to welcome screen
 registerCommand('home', {
@@ -25,6 +29,8 @@ registerCommand('home', {
 		resetGeminiClient();
 		resetChatClient();
 		resetResponseClient();
+		// Clear config cache to ensure fresh config when re-entering chat
+		clearConfigCache();
 
 		return {
 			success: true,
