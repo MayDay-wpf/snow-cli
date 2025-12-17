@@ -110,9 +110,14 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 
 		return (
 			<Box flexDirection="column" marginLeft={2}>
-				<Text color="green" dimColor>
-					├─ command: {data.command}
-				</Text>
+				<Box flexDirection="column">
+					<Text color="green" dimColor>
+						├─ command:
+					</Text>
+					<Box marginLeft={2}>
+						<Text color="green">{data.command}</Text>
+					</Box>
+				</Box>
 				<Text color="green" dimColor>
 					├─ exitCode: {data.exitCode} ✓
 				</Text>
@@ -139,13 +144,18 @@ function renderTerminalExecutePreview(data: any, isSubAgentInternal: boolean) {
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
-			<Text color="gray" dimColor>
-				├─ command: {data.command}
-			</Text>
+			<Box flexDirection="column">
+				<Text color="gray" dimColor>
+					├─ command:
+				</Text>
+				<Box marginLeft={2}>
+					<Text color="gray">{data.command}</Text>
+				</Box>
+			</Box>
 
 			{/* Exit code with color indication */}
 			<Text color="red" bold>
-				├─ exitCode: {data.exitCode} ⚠️ FAILED
+				├─ exitCode: {data.exitCode} FAILED
 			</Text>
 
 			{/* Stdout - show completely if present */}

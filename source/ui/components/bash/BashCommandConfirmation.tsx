@@ -12,6 +12,21 @@ interface BashCommandConfirmationProps {
 	terminalWidth: number;
 }
 
+/**
+ * Truncate command text to prevent overflow
+ * @param text - Command text to truncate
+ * @param maxWidth - Maximum width (defaults to 100)
+ * @returns Truncated text with ellipsis if needed
+ */
+function truncateCommand(text: string, maxWidth: number = 100): string {
+	if (text.length <= maxWidth) {
+		return text;
+	}
+	const ellipsis = '...';
+	const halfWidth = Math.floor((maxWidth - ellipsis.length) / 2);
+	return text.slice(0, halfWidth) + ellipsis + text.slice(-halfWidth);
+}
+
 export function BashCommandConfirmation({
 	command,
 	terminalWidth,
@@ -66,6 +81,10 @@ export function BashCommandConfirmation({
 			});
 	}, [command, sensitiveCheck.isSensitive]);
 
+	// Calculate max command display width (leave space for padding and borders)
+	const maxCommandWidth = Math.max(40, terminalWidth - 10);
+	const displayCommand = truncateCommand(command, maxCommandWidth);
+
 	return (
 		<Box
 			flexDirection="column"
@@ -81,7 +100,7 @@ export function BashCommandConfirmation({
 				</Text>
 			</Box>
 			<Box marginBottom={1} paddingLeft={2}>
-				<Text color={theme.colors.menuInfo}>{command}</Text>
+				<Text color={theme.colors.menuInfo}>{displayCommand}</Text>
 			</Box>
 			{sensitiveCheck.isSensitive && sensitiveCheck.matchedCommand && (
 				<>
@@ -120,6 +139,10 @@ export function BashCommandExecutionStatus({
 	const {theme} = useTheme();
 	const timeoutSeconds = Math.round(timeout / 1000);
 
+	// Calculate max command display width (leave space for padding and borders)
+	const maxCommandWidth = Math.max(40, terminalWidth - 10);
+	const displayCommand = truncateCommand(command, maxCommandWidth);
+
 	return (
 		<Box
 			flexDirection="column"
@@ -135,7 +158,7 @@ export function BashCommandExecutionStatus({
 				</Text>
 			</Box>
 			<Box marginBottom={1} paddingLeft={2}>
-				<Text dimColor>{command}</Text>
+				<Text dimColor>{displayCommand}</Text>
 			</Box>
 			<Box>
 				<Text dimColor>

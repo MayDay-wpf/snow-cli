@@ -32,6 +32,7 @@ export function formatToolCallMessage(toolCall: ToolCall): {
 		];
 
 		const isEditTool = editTools.includes(toolCall.function.name);
+		const isTerminalExecute = toolCall.function.name === 'terminal-execute';
 
 		if (argEntries.length > 0) {
 			argEntries.forEach(([key, value], idx, arr) => {
@@ -59,9 +60,14 @@ export function formatToolCallMessage(toolCall: ToolCall): {
 				} else {
 					// 其他参数：智能处理不同类型
 					if (typeof value === 'string') {
-						// 字符串类型
-						valueStr =
-							value.length > 60 ? `"${value.slice(0, 60)}..."` : `"${value}"`;
+						// terminal-execute 的 command 参数完整显示，不截断
+						if (isTerminalExecute && key === 'command') {
+							valueStr = `"${value}"`;
+						} else {
+							// 其他字符串类型参数
+							valueStr =
+								value.length > 60 ? `"${value.slice(0, 60)}..."` : `"${value}"`;
+						}
 					} else if (Array.isArray(value)) {
 						// 数组类型：显示元素数量
 						if (value.length === 0) {
