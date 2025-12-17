@@ -25,6 +25,7 @@ export interface CommandResult {
 		| 'executeTerminalCommand'
 		| 'deleteCustomCommand'
 		| 'showSkillsCreation'
+		| 'showPermissionsPanel'
 		| 'reindexCodebase'
 		| 'quit';
 	prompt?: string;

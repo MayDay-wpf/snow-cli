@@ -73,6 +73,11 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.reindex,
 			},
 			{
+				name: 'permissions',
+				description:
+					t.commandPanel.commands.permissions || 'Manage tool permissions',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

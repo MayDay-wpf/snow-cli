@@ -480,8 +480,19 @@ export const es: TranslationKeys = {
 				'Agregar directorio de trabajo para contexto multi-proyecto. Uso: /add-dir o /add-dir ruta',
 			reindex:
 				'Reconstruir índice de código, detectar archivos modificados, eliminados, nuevos y cambiados',
+			permissions: 'Administrar permisos de herramientas siempre aprobadas',
 			quit: 'Salir de la aplicación',
 		},
+	},
+	permissionsPanel: {
+		title: 'Permisos',
+		clearAll: 'Borrar todo',
+		noTools: 'No hay herramientas siempre aprobadas',
+		hint: '↑↓ navegar • Enter eliminar • ESC cerrar',
+		confirmDelete: '¿Eliminar herramienta permitida?',
+		confirmClearAll: '¿Borrar todos los permisos?',
+		yes: 'Sí',
+		no: 'No',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Presiona Ctrl+C nuevamente para salir',

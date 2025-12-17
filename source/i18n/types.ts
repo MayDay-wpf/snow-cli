@@ -430,8 +430,21 @@ export type TranslationKeys = {
 			todo: string;
 			addDir: string;
 			reindex: string;
+			permissions: string;
 			quit: string;
 		};
+	};
+
+	// Permissions Panel
+	permissionsPanel: {
+		title: string;
+		clearAll: string;
+		noTools: string;
+		hint: string;
+		confirmDelete: string;
+		confirmClearAll: string;
+		yes: string;
+		no: string;
 	};
 
 	// Hooks

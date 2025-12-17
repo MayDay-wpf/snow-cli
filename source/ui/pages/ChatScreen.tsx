@@ -26,6 +26,9 @@ const SessionListPanel = lazy(
 );
 const UsagePanel = lazy(() => import('../components/panels/UsagePanel.js'));
 const HelpPanel = lazy(() => import('../components/panels/HelpPanel.js'));
+const PermissionsPanel = lazy(
+	() => import('../components/panels/PermissionsPanel.js'),
+);
 import {CustomCommandConfigPanel} from '../components/panels/CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from '../components/panels/SkillsCreationPanel.js';
 import WorkingDirectoryPanel from '../components/panels/WorkingDirectoryPanel.js';
@@ -140,6 +143,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
+	const [showPermissionsPanel, setShowPermissionsPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -222,6 +226,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/quit.js'),
 			import('../../utils/commands/reindex.js'),
 			import('../../utils/commands/addDir.js'),
+			import('../../utils/commands/permissions.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -535,9 +540,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	// Use tool confirmation hook
 	const {
 		pendingToolConfirmation,
+		alwaysApprovedTools,
 		requestToolConfirmation,
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
+		removeFromAlwaysApproved,
+		clearAllAlwaysApproved,
 	} = useToolConfirmation();
 
 	// State for askuser tool interaction
@@ -718,6 +726,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
 		setShowWorkingDirPanel,
+		setShowPermissionsPanel,
 		setYoloMode,
 		setPlanMode,
 		setContextUsage: streamingState.setContextUsage,
@@ -2391,6 +2400,28 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				</Box>
 			)}
 
+			{/* Show permissions panel if active */}
+			{showPermissionsPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<PermissionsPanel
+							alwaysApprovedTools={alwaysApprovedTools}
+							onRemoveTool={removeFromAlwaysApproved}
+							onClearAll={clearAllAlwaysApproved}
+							onClose={() => setShowPermissionsPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -2400,7 +2431,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or rollback confirmation or user question */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or permissions panel or rollback confirmation or user question */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
@@ -2412,6 +2443,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				!showCustomCommandConfig &&
 				!showSkillsCreation &&
 				!showWorkingDirPanel &&
+				!showPermissionsPanel &&
 				!snapshotState.pendingRollback && (
 					<>
 						<ChatInput

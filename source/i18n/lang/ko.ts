@@ -434,8 +434,19 @@ export const ko: TranslationKeys = {
 			addDir:
 				'다중 프로젝트 컨텍스트를 위한 작업 디렉터리 추가. 사용법: /add-dir 또는 /add-dir 경로',
 			reindex: '코드베이스 인덱스 재구축, 변경·삭제·신규·수정된 파일 감지',
+			permissions: '항상 승인되는 도구 권한 관리',
 			quit: '애플리케이션 종료',
 		},
+	},
+	permissionsPanel: {
+		title: '권한',
+		clearAll: '모두 지우기',
+		noTools: '항상 승인된 도구가 없습니다',
+		hint: '↑↓ 이동 • Enter 제거 • ESC 닫기',
+		confirmDelete: '허용된 도구를 삭제하시겠습니까?',
+		confirmClearAll: '모든 권한을 삭제하시겠습니까?',
+		yes: '예',
+		no: '아니오',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Ctrl+C를 다시 눌러 종료',
