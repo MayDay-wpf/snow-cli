@@ -58,8 +58,8 @@ jobs:
             
             ### What's New
 
-            - Fixed the bug of deep recursive search for files
-            - Added project-level tool authorization persistence to ./.snow/permissions.json
+            - Optimized the compatibility of compressed session records
+            - Optimized the convenience of tool authorization
 
             ### Installation
             ```bash
