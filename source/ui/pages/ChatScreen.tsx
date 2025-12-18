@@ -914,6 +914,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((input, key) => {
+		// Skip ESC handling when tool confirmation is showing (let ToolConfirmation handle it)
+		if (pendingToolConfirmation) {
+			return;
+		}
+
 		// Handle bash sensitive command confirmation
 		if (bashSensitiveCommand) {
 			if (input.toLowerCase() === 'y') {
