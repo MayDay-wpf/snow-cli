@@ -77,6 +77,30 @@ export function useToolConfirmation() {
 		setAlwaysApprovedTools(prev => new Set([...prev, ...toolNames]));
 	}, []);
 
+	/**
+	 * Remove a tool from the always-approved list
+	 */
+	const removeFromAlwaysApproved = useCallback((toolName: string) => {
+		// Update ref immediately (for closure functions)
+		alwaysApprovedToolsRef.current.delete(toolName);
+		// Update state (for UI reactivity)
+		setAlwaysApprovedTools(prev => {
+			const next = new Set(prev);
+			next.delete(toolName);
+			return next;
+		});
+	}, []);
+
+	/**
+	 * Clear all always-approved tools
+	 */
+	const clearAllAlwaysApproved = useCallback(() => {
+		// Update ref immediately (for closure functions)
+		alwaysApprovedToolsRef.current.clear();
+		// Update state (for UI reactivity)
+		setAlwaysApprovedTools(new Set());
+	}, []);
+
 	return {
 		pendingToolConfirmation,
 		alwaysApprovedTools,
@@ -84,5 +108,7 @@ export function useToolConfirmation() {
 		isToolAutoApproved,
 		addToAlwaysApproved,
 		addMultipleToAlwaysApproved,
+		removeFromAlwaysApproved,
+		clearAllAlwaysApproved,
 	};
 }

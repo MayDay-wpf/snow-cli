@@ -445,10 +445,21 @@ export const ja: TranslationKeys = {
 				'マルチプロジェクトコンテキストのための作業ディレクトリを追加。使用方法: /add-dir または /add-dir パス',
 			reindex:
 				'コードベースインデックスを再構築、変更、削除、新規、修正されたファイルを検出',
+			permissions: '常に承認されるツールの権限を管理',
 			vulnerabilityHunting:
 				'セキュリティ重視のコード分析のための脆弱性ハンティングモードを切り替え',
 			quit: 'アプリケーションを終了',
 		},
+	},
+	permissionsPanel: {
+		title: '権限',
+		clearAll: 'すべてクリア',
+		noTools: '常に承認されているツールはありません',
+		hint: '↑↓で移動 • Enterで削除 • ESCで閉じる',
+		confirmDelete: '許可されたツールを削除しますか？',
+		confirmClearAll: 'すべての権限をクリアしますか？',
+		yes: 'はい',
+		no: 'いいえ',
 	},
 	profilePanel: {
 		title: 'プロファイル選択',

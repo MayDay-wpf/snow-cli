@@ -1,5 +1,5 @@
-import React, {useMemo, useState, useEffect} from 'react';
-import {Box, Text} from 'ink';
+import React, {useState, useMemo, useEffect} from 'react';
+import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
@@ -93,6 +93,8 @@ export default function ToolConfirmation({
 	const [hasSelected, setHasSelected] = useState(false);
 	const [showRejectInput, setShowRejectInput] = useState(false);
 	const [rejectReason, setRejectReason] = useState('');
+	const [menuKey, setMenuKey] = useState(0);
+	const [initialMenuIndex, setInitialMenuIndex] = useState(0);
 
 	// Check if this is a sensitive command (for terminal-execute)
 	const sensitiveCommandCheck = useMemo(() => {
@@ -427,6 +429,18 @@ export default function ToolConfirmation({
 		return baseItems;
 	}, [sensitiveCommandCheck.isSensitive, t]);
 
+	// Handle ESC key to exit reject input mode
+	useInput((_input, key) => {
+		if (showRejectInput && key.escape) {
+			setShowRejectInput(false);
+			setRejectReason('');
+			// Keep menu selection on "Reject with reply" after ESC
+			const idx = items.findIndex(i => i.value === 'reject_with_reply');
+			setInitialMenuIndex(idx >= 0 ? idx : 0);
+			setMenuKey(k => k + 1);
+		}
+	});
+
 	const handleSelect = (item: {label: string; value: string}) => {
 		if (!hasSelected) {
 			if (item.value === 'reject_with_reply') {
@@ -570,7 +584,12 @@ export default function ToolConfirmation({
 			</Box>
 
 			{!hasSelected && !showRejectInput && (
-				<SelectInput items={items} onSelect={handleSelect} />
+				<SelectInput
+					key={menuKey}
+					items={items}
+					onSelect={handleSelect}
+					initialIndex={initialMenuIndex}
+				/>
 			)}
 
 			{showRejectInput && !hasSelected && (

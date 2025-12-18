@@ -431,6 +431,7 @@ export type TranslationKeys = {
 			todo: string;
 			addDir: string;
 			reindex: string;
+			permissions: string;
 			vulnerabilityHunting: string;
 			quit: string;
 		};
@@ -443,6 +444,18 @@ export type TranslationKeys = {
 		escHint: string;
 		activeLabel: string;
 		searchLabel: string;
+	};
+
+	// Permissions Panel
+	permissionsPanel: {
+		title: string;
+		clearAll: string;
+		noTools: string;
+		hint: string;
+		confirmDelete: string;
+		confirmClearAll: string;
+		yes: string;
+		no: string;
 	};
 
 	// Hooks

@@ -1,5 +1,6 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, lazy, Suspense} from 'react';
 import {Box, Text, useInput, Static, useStdout, useApp} from 'ink';
+import Spinner from 'ink-spinner';
 import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
@@ -21,6 +22,9 @@ import type {HookErrorDetails} from '../../utils/execution/hookResultHandler.js'
 
 // Lazy load panel components to reduce initial bundle size
 import PanelsManager from '../components/panels/PanelsManager.js';
+const PermissionsPanel = lazy(
+	() => import('../components/panels/PermissionsPanel.js'),
+);
 import {
 	saveCustomCommand,
 	registerCustomCommands,
@@ -126,6 +130,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	});
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
+	const [showPermissionsPanel, setShowPermissionsPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] = useState<{
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
@@ -204,6 +209,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/quit.js'),
 			import('../../utils/commands/reindex.js'),
 			import('../../utils/commands/addDir.js'),
+			import('../../utils/commands/permissions.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -561,9 +567,12 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	// Use tool confirmation hook
 	const {
 		pendingToolConfirmation,
+		alwaysApprovedTools,
 		requestToolConfirmation,
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
+		removeFromAlwaysApproved,
+		clearAllAlwaysApproved,
 	} = useToolConfirmation();
 
 	// State for askuser tool interaction
@@ -768,7 +777,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
-
+		setShowPermissionsPanel,
 		setYoloMode,
 		setPlanMode,
 		setVulnerabilityHuntingMode,
@@ -905,6 +914,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((input, key) => {
+		// Skip ESC handling when tool confirmation is showing (let ToolConfirmation handle it)
+		if (pendingToolConfirmation) {
+			return;
+		}
+
 		// Handle bash sensitive command confirmation
 		if (bashSensitiveCommand) {
 			if (input.toLowerCase() === 'y') {
@@ -1249,6 +1263,28 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				}}
 			/>
 
+			{/* Show permissions panel if active */}
+			{showPermissionsPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<PermissionsPanel
+							alwaysApprovedTools={alwaysApprovedTools}
+							onRemoveTool={removeFromAlwaysApproved}
+							onClearAll={clearAllAlwaysApproved}
+							onClose={() => setShowPermissionsPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
 			{/* Show file rollback confirmation if pending */}
 			{snapshotState.pendingRollback && (
 				<FileRollbackConfirmation
@@ -1258,7 +1294,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput */}
+			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
@@ -1270,7 +1306,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					panelState.showHelpPanel ||
 					panelState.showCustomCommandConfig ||
 					panelState.showSkillsCreation ||
-					panelState.showWorkingDirPanel
+					panelState.showWorkingDirPanel ||
+					showPermissionsPanel
 				) &&
 				!snapshotState.pendingRollback && (
 					<ChatFooter

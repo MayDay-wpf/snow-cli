@@ -236,6 +236,7 @@ type CommandHandlerOptions = {
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -475,6 +476,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showWorkingDirPanel') {
 				options.setShowWorkingDirPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showPermissionsPanel') {
+				options.setShowPermissionsPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

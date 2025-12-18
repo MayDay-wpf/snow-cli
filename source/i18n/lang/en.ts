@@ -456,10 +456,21 @@ export const en: TranslationKeys = {
 				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
+			permissions: 'Manage always-approved tools permissions',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			quit: 'Exit the application',
 		},
+	},
+	permissionsPanel: {
+		title: 'Permissions',
+		clearAll: 'Clear All',
+		noTools: 'No tools are always approved',
+		hint: '↑↓ navigate • Enter remove • ESC close',
+		confirmDelete: 'Delete allowed tool?',
+		confirmClearAll: 'Clear all permissions?',
+		yes: 'Yes',
+		no: 'No',
 	},
 	profilePanel: {
 		title: 'Select Profile',
