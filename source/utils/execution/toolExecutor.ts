@@ -155,6 +155,31 @@ export async function executeToolCall(
 	let result: ToolResult | undefined;
 	let executionError: Error | null = null;
 
+	// Setup ESC key listener for terminal commands (allows user to interrupt long-running commands)
+	let escKeyListener: ((data: Buffer) => void) | undefined;
+	let abortController: AbortController | undefined;
+
+	// Only enable ESC interruption for terminal-execute tool
+	if (toolCall.function.name === 'terminal-execute' && !abortSignal) {
+		abortController = new AbortController();
+		abortSignal = abortController.signal;
+
+		escKeyListener = (data: Buffer) => {
+			const str = data.toString();
+			// ESC key: \x1b
+			if (str === '\x1b' && abortController && !abortSignal?.aborted) {
+				console.log('\n[ESC] Interrupting command execution...');
+				abortController.abort();
+			}
+		};
+
+		// Enable raw mode to capture ESC key immediately
+		if (process.stdin.isTTY && process.stdin.setRawMode) {
+			process.stdin.setRawMode(true);
+			process.stdin.on('data', escKeyListener);
+		}
+	}
+
 	try {
 		const args = JSON.parse(toolCall.function.arguments);
 
@@ -373,6 +398,14 @@ export async function executeToolCall(
 		} catch (error) {
 			// Log unexpected errors but continue - don't block tool execution
 			console.warn('Failed to execute afterToolCall hook:', error);
+		}
+	}
+
+	// Cleanup ESC key listener
+	if (escKeyListener) {
+		if (process.stdin.isTTY && process.stdin.setRawMode) {
+			process.stdin.setRawMode(false);
+			process.stdin.off('data', escKeyListener);
 		}
 	}
 

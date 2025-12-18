@@ -4,7 +4,6 @@ bundle
 out
 .snow
 AGENTS.md
-package.json
 pr.md
 CHANGELOG.md
 CONTEXT.md

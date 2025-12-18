@@ -5,6 +5,7 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.content.ContentFactory
 import com.snow.plugin.SnowWebSocketManager
@@ -18,33 +19,40 @@ import javax.swing.JPanel
  * Launches Snow CLI each time tool window is activated
  */
 class SnowToolWindowFactory : ToolWindowFactory, DumbAware {
+    companion object {
+        private val isLaunching = mutableMapOf<String, Boolean>()
+    }
+    
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         // Create a simple content panel
         val contentPanel = JPanel(BorderLayout())
-        val label = JBLabel("Click to launch Snow CLI", javax.swing.SwingConstants.CENTER)
+        val label = JBLabel("Snow CLI will launch when you open this window", javax.swing.SwingConstants.CENTER)
         contentPanel.add(label, BorderLayout.CENTER)
         
         val contentFactory = ContentFactory.getInstance()
         val content = contentFactory.createContent(contentPanel, "", false)
         toolWindow.contentManager.addContent(content)
         
-        // Add listener to launch Snow CLI when tool window is shown/activated
-        val listener = object : com.intellij.openapi.wm.ex.ToolWindowManagerListener {
+        // Add listener for tool window visibility
+        val projectKey = project.basePath ?: project.name
+        val connection = project.messageBus.connect()
+        
+        connection.subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
             override fun stateChanged(toolWindowManager: com.intellij.openapi.wm.ToolWindowManager) {
                 if (toolWindow.isVisible) {
-                    // Launch Snow CLI each time window becomes visible
-                    launchSnowCLI(project, toolWindow)
+                    // Avoid duplicate launches
+                    synchronized(isLaunching) {
+                        if (isLaunching[projectKey] != true) {
+                            isLaunching[projectKey] = true
+                            launchSnowCLI(project, toolWindow, projectKey)
+                        }
+                    }
                 }
             }
-        }
-        
-        project.messageBus.connect().subscribe(
-            com.intellij.openapi.wm.ex.ToolWindowManagerListener.TOPIC,
-            listener
-        )
+        })
     }
     
-    private fun launchSnowCLI(project: Project, toolWindow: ToolWindow) {
+    private fun launchSnowCLI(project: Project, toolWindow: ToolWindow, projectKey: String) {
         // Use Terminal API to send command directly
         ApplicationManager.getApplication().invokeLater {
             try {
@@ -76,9 +84,16 @@ class SnowToolWindowFactory : ToolWindowFactory, DumbAware {
                 // Hide Snow tool window and show terminal instead
                 ApplicationManager.getApplication().invokeLater {
                     toolWindow.hide(null)
+                    // Reset launching flag after hiding, so it can be launched again
+                    synchronized(isLaunching) {
+                        isLaunching[projectKey] = false
+                    }
                 }
             } catch (ex: Exception) {
                 // Silently handle terminal access failure
+                synchronized(isLaunching) {
+                    isLaunching[projectKey] = false
+                }
             }
         }
         

@@ -28,12 +28,14 @@ export class TerminalCommandService {
 	 * Execute a terminal command in the working directory
 	 * @param command - The command to execute (e.g., "npm -v", "git status")
 	 * @param timeout - Timeout in milliseconds (default: 30000ms = 30s)
+	 * @param abortSignal - Optional AbortSignal to cancel command execution (e.g., ESC key)
 	 * @returns Execution result including stdout, stderr, and exit code
 	 * @throws Error if command execution fails critically
 	 */
 	async executeCommand(
 		command: string,
 		timeout: number = 30000,
+		abortSignal?: AbortSignal,
 	): Promise<CommandExecutionResult> {
 		const executedAt = new Date().toISOString();
 
@@ -62,6 +64,30 @@ export class TerminalCommandService {
 			// Register child process for cleanup
 			processManager.register(childProcess);
 
+			// Setup abort signal handler if provided
+			let abortHandler: (() => void) | undefined;
+			if (abortSignal) {
+				abortHandler = () => {
+					if (childProcess.pid && !childProcess.killed) {
+						// Kill the process immediately when abort signal is triggered
+						try {
+							if (process.platform === 'win32') {
+								// Windows: Use taskkill to kill entire process tree
+								exec(`taskkill /PID ${childProcess.pid} /T /F 2>NUL`, {
+									windowsHide: true,
+								});
+							} else {
+								// Unix: Send SIGTERM
+								childProcess.kill('SIGTERM');
+							}
+						} catch {
+							// Ignore errors if process already dead
+						}
+					}
+				};
+				abortSignal.addEventListener('abort', abortHandler);
+			}
+
 			// Convert to promise
 			const {stdout, stderr} = await new Promise<{
 				stdout: string;
@@ -80,26 +106,31 @@ export class TerminalCommandService {
 
 				childProcess.on('error', reject);
 
-			childProcess.on('close', (code, signal) => {
-				if (signal) {
-					// Process was killed by signal (e.g., timeout, manual kill)
-					// CRITICAL: Still preserve stdout/stderr for debugging
-					const error: any = new Error(`Process killed by signal ${signal}`);
-					error.code = code || 1;
-					error.stdout = stdoutData;
-					error.stderr = stderrData;
-					error.signal = signal;
-					reject(error);
-				} else if (code === 0) {
-					resolve({stdout: stdoutData, stderr: stderrData});
-				} else {
-					const error: any = new Error(`Process exited with code ${code}`);
-					error.code = code;
-					error.stdout = stdoutData;
-					error.stderr = stderrData;
-					reject(error);
-				}
-			});
+				childProcess.on('close', (code, signal) => {
+					// Clean up abort handler
+					if (abortHandler && abortSignal) {
+						abortSignal.removeEventListener('abort', abortHandler);
+					}
+
+					if (signal) {
+						// Process was killed by signal (e.g., timeout, manual kill, ESC key)
+						// CRITICAL: Still preserve stdout/stderr for debugging
+						const error: any = new Error(`Process killed by signal ${signal}`);
+						error.code = code || 1;
+						error.stdout = stdoutData;
+						error.stderr = stderrData;
+						error.signal = signal;
+						reject(error);
+					} else if (code === 0) {
+						resolve({stdout: stdoutData, stderr: stderrData});
+					} else {
+						const error: any = new Error(`Process exited with code ${code}`);
+						error.code = code;
+						error.stdout = stdoutData;
+						error.stderr = stderrData;
+						reject(error);
+					}
+				});
 			});
 
 			// Truncate output if too long
@@ -114,6 +145,21 @@ export class TerminalCommandService {
 			// Handle execution errors (non-zero exit codes)
 			if (error.code === 'ETIMEDOUT') {
 				throw new Error(`Command timed out after ${timeout}ms: ${command}`);
+			}
+
+			// Check if aborted by user (ESC key)
+			if (abortSignal?.aborted) {
+				return {
+					stdout: truncateOutput(error.stdout || '', this.maxOutputLength),
+					stderr: truncateOutput(
+						error.stderr ||
+							'Command execution interrupted by user (ESC key pressed)',
+						this.maxOutputLength,
+					),
+					exitCode: 130, // Standard exit code for SIGINT/user interrupt
+					command,
+					executedAt,
+				};
 			}
 
 			// For non-zero exit codes, still return the output

@@ -1317,6 +1317,7 @@ export async function executeMCPTool(
 						result = await terminalService.executeCommand(
 							args.command,
 							args.timeout,
+							abortSignal, // Pass abort signal to support ESC key interruption
 						);
 					} finally {
 						// Clear execution state

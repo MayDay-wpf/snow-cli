@@ -58,8 +58,8 @@ jobs:
             
             ### What's New
 
-            - Optimized the compatibility of compressed session records
-            - Optimized the convenience of tool authorization
+            - Fixed the issue that the long-consuming command could not be exited using the ESC key
+            - Release JetBrains plugin version 0.4.2, fixing the BUG of infinitely opening windows on Windows systems
 
             ### Installation
             ```bash
