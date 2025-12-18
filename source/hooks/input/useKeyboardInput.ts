@@ -853,7 +853,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							// Record command usage for frequency-based sorting
 							commandUsageManager.recordUsage(selectedCommand.name);
 							if (onCommand) {
-								onCommand(selectedCommand.name, result);
+								// Ensure onCommand errors are caught
+								Promise.resolve(onCommand(selectedCommand.name, result)).catch(
+									error => {
+										console.error('Command execution error:', error);
+									},
+								);
 							}
 						});
 						buffer.setText('');
@@ -929,7 +934,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							// Record command usage for frequency-based sorting
 							commandUsageManager.recordUsage(commandName);
 							if (onCommand) {
-								onCommand(commandName, result);
+								// Ensure onCommand errors are caught
+								Promise.resolve(onCommand(commandName, result)).catch(error => {
+									console.error('Command execution error:', error);
+								});
 							}
 						});
 

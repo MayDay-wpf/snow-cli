@@ -283,6 +283,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.action === 'compact'
 			) {
 				// Set compressing state (不添加命令面板消息)
+				console.log(
+					'[Compact] Starting compression, setting isCompressing=true',
+				);
 				options.setIsCompressing(true);
 				options.setCompressionError(null);
 
@@ -293,6 +296,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						throw new Error('No active session to compress');
 					}
 
+					console.log(
+						'[Compact] Executing compression for session:',
+						currentSession.id,
+					);
 					// 使用提取的压缩函数，传入当前会话ID
 					const compressionResult = await executeContextCompression(
 						currentSession.id,
@@ -302,6 +309,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						throw new Error('Compression failed');
 					}
 
+					console.log('[Compact] Compression completed successfully');
 					// 更新UI
 					options.clearSavedMessages();
 					options.setMessages(compressionResult.uiMessages);
@@ -315,6 +323,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						error instanceof Error
 							? error.message
 							: 'Unknown compression error';
+					console.error('[Compact] Compression error:', errorMsg);
 					options.setCompressionError(errorMsg);
 
 					const errorMessage: Message = {
@@ -324,6 +333,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				} finally {
+					console.log('[Compact] Setting isCompressing=false');
 					options.setIsCompressing(false);
 				}
 				return;

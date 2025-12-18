@@ -1294,11 +1294,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or compression or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput */}
+			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
-				!isCompressing &&
 				!(
 					panelState.showSessionPanel ||
 					panelState.showMcpPanel ||
@@ -1320,12 +1319,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						disabled={
 							!!pendingToolConfirmation ||
 							!!bashSensitiveCommand ||
-							isExecutingTerminalCommand
+							isExecutingTerminalCommand ||
+							isCompressing
 						}
 						isProcessing={
 							streamingState.isStreaming ||
 							isSaving ||
-							bashMode.state.isExecuting
+							bashMode.state.isExecuting ||
+							isCompressing
 						}
 						chatHistory={messages}
 						yoloMode={yoloMode}
