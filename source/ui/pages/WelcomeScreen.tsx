@@ -171,17 +171,28 @@ export default function WelcomeScreen({
 
 	const [remountKey, setRemountKey] = useState(0);
 
+	// Cache menuOptions value-to-index map for O(1) lookups
+	const optionsIndexMap = useMemo(() => {
+		const map = new Map<string, number>();
+		menuOptions.forEach((opt, idx) => {
+			map.set(opt.value, idx);
+		});
+		return map;
+	}, [menuOptions]);
+
 	const handleSelectionChange = useCallback(
 		(newInfoText: string, value: string) => {
-			setInfoText(newInfoText);
-			// Find the index of the selected option and persist it
-			const index = menuOptions.findIndex(opt => opt.value === value);
-			if (index !== -1) {
+			// Only update if infoText actually changed (avoid unnecessary re-renders)
+			setInfoText(prev => (prev === newInfoText ? prev : newInfoText));
+
+			// Use cached map for O(1) index lookup instead of O(n) findIndex
+			const index = optionsIndexMap.get(value);
+			if (index !== undefined) {
 				setCurrentMenuIndex(index);
 				onMenuSelectionPersist?.(index);
 			}
 		},
-		[menuOptions, onMenuSelectionPersist],
+		[optionsIndexMap, onMenuSelectionPersist],
 	);
 
 	const handleInlineMenuSelect = useCallback(

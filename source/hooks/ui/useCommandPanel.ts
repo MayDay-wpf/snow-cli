@@ -78,6 +78,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.permissions || 'Manage tool permissions',
 			},
 			{
+				name: 'vulnerability-hunting',
+				description:
+					t.commandPanel.commands.vulnerabilityHunting ||
+					'Toggle vulnerability hunting mode',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},
@@ -184,6 +190,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {
+		// Check if / is at the start (not preceded by @ or #)
 		if (text.startsWith('/') && text.length > 0) {
 			setShowCommands(true);
 			setCommandSelectedIndex(0);

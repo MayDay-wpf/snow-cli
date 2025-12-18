@@ -29,6 +29,7 @@ type Props<T extends SelectItem> = {
 	selectedValues?: ReadonlySet<string> | readonly string[];
 	onToggleItem?: (item: T) => void;
 	onDeleteSelection?: () => void;
+	disableNumberShortcuts?: boolean;
 };
 
 function DefaultIndicator({isSelected}: IndicatorProps) {
@@ -58,6 +59,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 	selectedValues,
 	onToggleItem,
 	onDeleteSelection,
+	disableNumberShortcuts = false,
 }: Props<T>) {
 	const totalItems = items.length;
 	const windowSize =
@@ -174,7 +176,9 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				}
 
 				// 检测是否发生循环跳转
-				const isWrapping = (direction === -1 && rawNext < 0) || (direction === 1 && rawNext > totalItems - 1);
+				const isWrapping =
+					(direction === -1 && rawNext < 0) ||
+					(direction === 1 && rawNext > totalItems - 1);
 
 				if (isWrapping) {
 					// 循环时直接设置偏移到正确位置
@@ -187,12 +191,14 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 						setOffset(maxOffset);
 					}
 				} else {
-					setOffset(previousOffset => computeOffset(previousOffset, nextCursor));
+					setOffset(previousOffset =>
+						computeOffset(previousOffset, nextCursor),
+					);
 				}
 				return nextCursor;
 			});
 		},
-		[clampCursor, computeOffset, totalItems, windowSize]
+		[clampCursor, computeOffset, totalItems, windowSize],
 	);
 
 	const selectIndex = useCallback(
@@ -243,7 +249,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 				return;
 			}
 
-			if (/^[1-9]$/.test(input) && windowSize > 0) {
+			if (!disableNumberShortcuts && /^[1-9]$/.test(input) && windowSize > 0) {
 				const target = Number.parseInt(input, 10) - 1;
 				if (target >= 0 && target < visibleItems.length) {
 					selectIndex(offset + target);
@@ -262,6 +268,7 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 			totalItems,
 			visibleItems.length,
 			windowSize,
+			disableNumberShortcuts,
 		],
 	);
 

@@ -8,6 +8,7 @@ export interface CommandResult {
 		| 'showMcpInfo'
 		| 'toggleYolo'
 		| 'togglePlan'
+		| 'toggleVulnerabilityHunting'
 		| 'initProject'
 		| 'compact'
 		| 'showSessionPanel'
@@ -29,6 +30,7 @@ export interface CommandResult {
 		| 'reindexCodebase'
 		| 'quit';
 	prompt?: string;
+	location?: 'global' | 'project'; // For custom commands to specify location
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 }
 

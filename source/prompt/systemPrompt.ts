@@ -2,102 +2,15 @@
  * System prompt configuration for Snow AI CLI
  */
 
-import fs from 'fs';
+import {
+	getSystemPromptWithRole as getSystemPromptWithRoleHelper,
+	getSystemEnvironmentInfo as getSystemEnvironmentInfoHelper,
+	isCodebaseEnabled,
+	getCurrentTimeInfo,
+	appendSystemContext,
+} from './shared/promptHelpers.js';
 import path from 'path';
 import os from 'os';
-import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
-
-/**
- * Get the system prompt, dynamically reading from ROLE.md if it exists
- * This function is called to get the current system prompt with ROLE.md content if available
- */
-function getSystemPromptWithRole(): string {
-	try {
-		const cwd = process.cwd();
-		const roleFilePath = path.join(cwd, 'ROLE.md');
-
-		// Check if ROLE.md exists and is not empty
-		if (fs.existsSync(roleFilePath)) {
-			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
-			if (roleContent) {
-				// Replace the default role description with ROLE.md content
-				return SYSTEM_PROMPT_TEMPLATE.replace(
-					'You are Snow AI CLI, an intelligent command-line assistant.',
-					roleContent,
-				);
-			}
-		}
-	} catch (error) {
-		// If reading fails, fall back to default
-		console.error('Failed to read ROLE.md:', error);
-	}
-
-	return SYSTEM_PROMPT_TEMPLATE;
-}
-
-// Get system environment info
-function getSystemEnvironmentInfo(): string {
-	const platform = (() => {
-		const platformType = os.platform();
-		switch (platformType) {
-			case 'win32':
-				return 'Windows';
-			case 'darwin':
-				return 'macOS';
-			case 'linux':
-				return 'Linux';
-			default:
-				return platformType;
-		}
-	})();
-
-	const shell = (() => {
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell') || shellName.includes('pwsh')) {
-			// Detect PowerShell version
-			const psVersion = getPowerShellVersion();
-			return psVersion ? `PowerShell ${psVersion}` : 'PowerShell';
-		}
-		if (shellName.includes('zsh')) return 'zsh';
-		if (shellName.includes('bash')) return 'bash';
-		if (shellName.includes('fish')) return 'fish';
-		if (shellName.includes('sh')) return 'sh';
-		return shellName || 'shell';
-	})();
-
-	const workingDirectory = process.cwd();
-
-	return `Platform: ${platform}
-Shell: ${shell}
-Working Directory: ${workingDirectory}`;
-}
-
-// Get PowerShell version
-function getPowerShellVersion(): string | null {
-	try {
-		const platformType = os.platform();
-		if (platformType !== 'win32') return null;
-
-		// Detect PowerShell version from shell path
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-
-		// pwsh typically indicates PowerShell 7+
-		if (shellName.includes('pwsh')) {
-			return '7.x';
-		}
-		// powershell.exe is typically PowerShell 5.x
-		if (shellName.includes('powershell')) {
-			return '5.x';
-		}
-
-		return null;
-	} catch (error) {
-		return null;
-	}
-}
 
 /**
  * Get platform-specific command requirements based on detected OS and shell
@@ -324,20 +237,6 @@ Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked
 You need to run in a Node.js, If the user wants to close the Node.js process, you need to explain this fact to the user and ask the user to confirm it for the second time.`;
 
 /**
- * Check if codebase functionality is enabled
- * Directly reads from codebase config instead of checking tools parameter
- */
-function isCodebaseEnabled(): boolean {
-	try {
-		const config = loadCodebaseConfig();
-		return config.enabled;
-	} catch (error) {
-		// If config fails to load, assume disabled
-		return false;
-	}
-}
-
-/**
  * Generate workflow section based on available tools
  */
 function getWorkflowSection(hasCodebase: boolean): string {
@@ -407,18 +306,19 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
 export function getSystemPrompt(): string {
-	const basePrompt = getSystemPromptWithRole();
-	const systemEnv = getSystemEnvironmentInfo();
+	const basePrompt = getSystemPromptWithRoleHelper(
+		SYSTEM_PROMPT_TEMPLATE,
+		'You are Snow AI CLI, an intelligent command-line assistant.',
+	);
+	const systemEnv = getSystemEnvironmentInfoHelper(true);
 	const hasCodebase = isCodebaseEnabled();
 	// Generate dynamic sections
 	const workflowSection = getWorkflowSection(hasCodebase);
 	const codeSearchSection = getCodeSearchSection(hasCodebase);
 	const platformCommandsSection = getPlatformCommandsSection();
 
-	// Get current year and month
-	const now = new Date();
-	const currentYear = now.getFullYear();
-	const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
+	// Get current time info
+	const timeInfo = getCurrentTimeInfo();
 
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
@@ -429,24 +329,27 @@ export function getSystemPrompt(): string {
 			platformCommandsSection,
 		);
 
-	return `${finalPrompt}
-
-## System Environment
-
-${systemEnv}
-
-## Current Time
-
-Year: ${currentYear}
-Month: ${currentMonth}`;
+	return appendSystemContext(finalPrompt, systemEnv, timeInfo);
 }
 
 /**
- * Get the appropriate system prompt based on Plan mode status
+ * Get the appropriate system prompt based on mode status
  * @param planMode - Whether Plan mode is enabled
+ * @param vulnerabilityHuntingMode - Whether Vulnerability Hunting mode is enabled
  * @returns System prompt string
  */
-export function getSystemPromptForMode(planMode: boolean): string {
+export function getSystemPromptForMode(
+	planMode: boolean,
+	vulnerabilityHuntingMode: boolean,
+): string {
+	// Vulnerability Hunting mode takes precedence over Plan mode
+	if (vulnerabilityHuntingMode) {
+		// Import dynamically to avoid circular dependency
+		const {
+			getVulnerabilityHuntingModeSystemPrompt,
+		} = require('./vulnerabilityHuntingModeSystemPrompt.js');
+		return getVulnerabilityHuntingModeSystemPrompt();
+	}
 	if (planMode) {
 		// Import dynamically to avoid circular dependency
 		const {getPlanModeSystemPrompt} = require('./planModeSystemPrompt.js');

@@ -15,6 +15,16 @@ export type CodebaseSearchStatus = {
 	maxAttempts: number;
 	currentTopN: number;
 	message: string;
+	query?: string;
+	originalResultsCount?: number;
+	suggestion?: string;
+	reviewResults?: {
+		originalCount: number;
+		filteredCount: number;
+		removedCount: number;
+		highConfidenceFiles?: string[];
+		reviewFailed?: boolean;
+	};
 };
 
 export function useStreamingState() {
@@ -30,6 +40,7 @@ export function useStreamingState() {
 	const [animationFrame, setAnimationFrame] = useState(0);
 	const [codebaseSearchStatus, setCodebaseSearchStatus] =
 		useState<CodebaseSearchStatus | null>(null);
+	const [currentModel, setCurrentModel] = useState<string | null>(null);
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
@@ -130,5 +141,7 @@ export function useStreamingState() {
 		animationFrame,
 		codebaseSearchStatus,
 		setCodebaseSearchStatus,
+		currentModel,
+		setCurrentModel,
 	};
 }

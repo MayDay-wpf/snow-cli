@@ -3,7 +3,7 @@ import {
 	getCustomSystemPrompt,
 	getCustomHeaders,
 } from '../utils/config/apiConfig.js';
-import {getSystemPromptForMode} from './systemPrompt.js';
+import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
@@ -11,6 +11,7 @@ import {
 import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
+import {getVersionHeader} from '../utils/core/version.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -19,6 +20,7 @@ export interface GeminiOptions {
 	tools?: ChatCompletionTool[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
+	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -109,6 +111,7 @@ function convertToGeminiMessages(
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string, // Allow override for sub-agents
 	planMode: boolean = false, // When true, use Plan mode system prompt
+	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): {
 	systemInstruction?: string;
 	contents: any[];
@@ -117,6 +120,9 @@ function convertToGeminiMessages(
 		customSystemPromptOverride || getCustomSystemPrompt();
 	let systemInstruction: string | undefined;
 	const contents: any[] = [];
+
+	// Build tool_call_id to function_name mapping for parallel calls
+	const toolCallIdToFunctionName = new Map<string, string>();
 
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i];
@@ -128,111 +134,7 @@ function convertToGeminiMessages(
 			continue;
 		}
 
-		// Handle tool results
-		if (msg.role === 'tool') {
-			// Find the corresponding function call to get the function name
-			// Look backwards in contents to find the matching tool call
-			let functionName = 'unknown_function';
-			for (let j = contents.length - 1; j >= 0; j--) {
-				const contentMsg = contents[j];
-				if (contentMsg.role === 'model' && contentMsg.parts) {
-					for (const part of contentMsg.parts) {
-						if (part.functionCall) {
-							functionName = part.functionCall.name;
-							break;
-						}
-					}
-					if (functionName !== 'unknown_function') break;
-				}
-			}
-
-			// Tool response must be a valid object for Gemini API
-			// If content is a JSON string, parse it; otherwise wrap it in an object
-			let responseData: any;
-			const imageParts: any[] = [];
-
-			// Handle images from tool result
-			if (msg.images && msg.images.length > 0) {
-				for (const image of msg.images) {
-					imageParts.push({
-						inlineData: {
-							mimeType: image.mimeType,
-							data: image.data,
-						},
-					});
-				}
-			}
-
-			if (!msg.content) {
-				responseData = {};
-			} else {
-				let contentToParse = msg.content;
-
-				// Sometimes the content is double-encoded as JSON
-				// First, try to parse it once
-				const firstParseResult = parseJsonWithFix(contentToParse, {
-					toolName: 'Gemini tool response (first parse)',
-					logWarning: false,
-					logError: false,
-				});
-
-				if (
-					firstParseResult.success &&
-					typeof firstParseResult.data === 'string'
-				) {
-					// If it's a string, it might be double-encoded, try parsing again
-					contentToParse = firstParseResult.data;
-				}
-
-				// Now parse or wrap the final content
-				const finalParseResult = parseJsonWithFix(contentToParse, {
-					toolName: 'Gemini tool response (final parse)',
-					logWarning: false,
-					logError: false,
-				});
-
-				if (finalParseResult.success) {
-					const parsed = finalParseResult.data;
-					// If parsed result is an object (not array, not null), use it directly
-					if (
-						typeof parsed === 'object' &&
-						parsed !== null &&
-						!Array.isArray(parsed)
-					) {
-						responseData = parsed;
-					} else {
-						// If it's a primitive, array, or null, wrap it
-						responseData = {content: parsed};
-					}
-				} else {
-					// Not valid JSON, wrap the raw string
-					responseData = {content: contentToParse};
-				}
-			}
-
-			// Build parts array with functionResponse and optional images
-			const parts: any[] = [
-				{
-					functionResponse: {
-						name: functionName,
-						response: responseData,
-					},
-				},
-			];
-
-			// Add images as inline data parts
-			if (imageParts.length > 0) {
-				parts.push(...imageParts);
-			}
-
-			contents.push({
-				role: 'user',
-				parts,
-			});
-			continue;
-		}
-
-		// Handle tool calls in assistant messages
+		// Handle tool calls in assistant messages - build mapping first
 		if (
 			msg.role === 'assistant' &&
 			msg.tool_calls &&
@@ -253,8 +155,11 @@ function convertToGeminiMessages(
 				parts.push({text: msg.content});
 			}
 
-			// Add function calls
+			// Add function calls and build mapping
 			for (const toolCall of msg.tool_calls) {
+				// Store tool_call_id -> function_name mapping
+				toolCallIdToFunctionName.set(toolCall.id, toolCall.function.name);
+
 				const argsParseResult = parseJsonWithFix(toolCall.function.arguments, {
 					toolName: `Gemini function call: ${toolCall.function.name}`,
 					fallbackValue: {},
@@ -288,7 +193,120 @@ function convertToGeminiMessages(
 			continue;
 		}
 
-		// Build message parts
+		// Handle tool results - collect consecutive tool messages
+		if (msg.role === 'tool') {
+			// Collect all consecutive tool messages starting from current position
+			const toolResponses: Array<{
+				tool_call_id: string;
+				content: string;
+				images?: any[];
+			}> = [];
+
+			let j = i;
+			while (j < messages.length && messages[j]?.role === 'tool') {
+				const toolMsg = messages[j];
+				if (toolMsg) {
+					toolResponses.push({
+						tool_call_id: toolMsg.tool_call_id || '',
+						content: toolMsg.content || '',
+						images: toolMsg.images,
+					});
+				}
+				j++;
+			}
+
+			// Update loop index to skip processed tool messages
+			i = j - 1;
+
+			// Build a single user message with multiple functionResponse parts
+			const parts: any[] = [];
+
+			for (const toolResp of toolResponses) {
+				// Use tool_call_id to find the correct function name
+				const functionName =
+					toolCallIdToFunctionName.get(toolResp.tool_call_id) ||
+					'unknown_function';
+
+				// Tool response must be a valid object for Gemini API
+				let responseData: any;
+
+				if (!toolResp.content) {
+					responseData = {};
+				} else {
+					let contentToParse = toolResp.content;
+
+					// Sometimes the content is double-encoded as JSON
+					// First, try to parse it once
+					const firstParseResult = parseJsonWithFix(contentToParse, {
+						toolName: 'Gemini tool response (first parse)',
+						logWarning: false,
+						logError: false,
+					});
+
+					if (
+						firstParseResult.success &&
+						typeof firstParseResult.data === 'string'
+					) {
+						// If it's a string, it might be double-encoded, try parsing again
+						contentToParse = firstParseResult.data;
+					}
+
+					// Now parse or wrap the final content
+					const finalParseResult = parseJsonWithFix(contentToParse, {
+						toolName: 'Gemini tool response (final parse)',
+						logWarning: false,
+						logError: false,
+					});
+
+					if (finalParseResult.success) {
+						const parsed = finalParseResult.data;
+						// If parsed result is an object (not array, not null), use it directly
+						if (
+							typeof parsed === 'object' &&
+							parsed !== null &&
+							!Array.isArray(parsed)
+						) {
+							responseData = parsed;
+						} else {
+							// If it's a primitive, array, or null, wrap it
+							responseData = {content: parsed};
+						}
+					} else {
+						// Not valid JSON, wrap the raw string
+						responseData = {content: contentToParse};
+					}
+				}
+
+				// Add functionResponse part
+				parts.push({
+					functionResponse: {
+						name: functionName,
+						response: responseData,
+					},
+				});
+
+				// Handle images from tool result
+				if (toolResp.images && toolResp.images.length > 0) {
+					for (const image of toolResp.images) {
+						parts.push({
+							inlineData: {
+								mimeType: image.mimeType,
+								data: image.data,
+							},
+						});
+					}
+				}
+			}
+
+			// Push single user message with all function responses
+			contents.push({
+				role: 'user',
+				parts,
+			});
+			continue;
+		}
+
+		// Build message parts for regular user/assistant messages
 		const parts: any[] = [];
 
 		// Add text content
@@ -324,12 +342,17 @@ function convertToGeminiMessages(
 			// Prepend default system prompt as first user message
 			contents.unshift({
 				role: 'user',
-				parts: [{text: getSystemPromptForMode(planMode)}],
+				parts: [
+					{text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode)},
+				],
 			});
+		} else if (!systemInstruction && includeBuiltinSystemPrompt) {
+			// 没有自定义系统提示词，但需要添加默认系统提示词
+			systemInstruction = getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+			);
 		}
-	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
-		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstruction = getSystemPromptForMode(planMode);
 	}
 
 	return {systemInstruction, contents};
@@ -444,7 +467,7 @@ export async function* createStreamingGeminiCompletion(
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': 'true',
+					'x-snow': getVersionHeader(),
 					...customHeaders,
 				},
 				body: JSON.stringify(requestBody),

@@ -42,7 +42,7 @@ export default function ChatHeader({
 				<Box
 					borderColor={'cyan'}
 					borderStyle="round"
-					paddingX={2}
+					paddingX={1}
 					paddingY={1}
 					width={terminalWidth - 2}
 				>

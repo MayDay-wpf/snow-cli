@@ -15,6 +15,26 @@ export function convertSessionMessagesToUI(
 	// Track which tool_calls have been processed
 	const processedToolCalls = new Set<string>();
 
+	// Helper function to extract thinking content from all sources
+	const extractThinkingFromMessage = (msg: any): string | undefined => {
+		// 1. Anthropic Extended Thinking
+		if (msg.thinking?.thinking) {
+			return msg.thinking.thinking;
+		}
+		// 2. Responses API reasoning summary
+		if (msg.reasoning?.summary && Array.isArray(msg.reasoning.summary)) {
+			return msg.reasoning.summary
+				.map((item: any) => item.text)
+				.filter(Boolean)
+				.join('\n');
+		}
+		// 3. DeepSeek R1 reasoning content
+		if (msg.reasoning_content && typeof msg.reasoning_content === 'string') {
+			return msg.reasoning_content;
+		}
+		return undefined;
+	};
+
 	for (let i = 0; i < sessionMessages.length; i++) {
 		const msg = sessionMessages[i];
 		if (!msg) continue;
@@ -130,6 +150,17 @@ export function convertSessionMessagesToUI(
 			msg.tool_calls.length > 0 &&
 			!msg.subAgentInternal
 		) {
+			// If there's thinking content or text content before tool calls, display it first
+			const thinkingContent = extractThinkingFromMessage(msg);
+			if ((msg.content && msg.content.trim()) || thinkingContent) {
+				uiMessages.push({
+					role: 'assistant',
+					content: msg.content?.trim() || '',
+					streaming: false,
+					thinking: thinkingContent,
+				});
+			}
+
 			// Generate parallel group ID for non-time-consuming tools
 			const hasMultipleTools = msg.tool_calls.length > 1;
 			const hasNonTimeConsumingTool = msg.tool_calls.some(
@@ -367,6 +398,7 @@ export function convertSessionMessagesToUI(
 				content: msg.content,
 				streaming: false,
 				images: msg.images,
+				thinking: extractThinkingFromMessage(msg),
 			});
 			continue;
 		}

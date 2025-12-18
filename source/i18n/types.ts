@@ -139,6 +139,7 @@ export type TranslationKeys = {
 		anthropicCacheTTL1h: string;
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
+		showThinking: string;
 		thinkingEnabled: string;
 		thinkingBudgetTokens: string;
 		geminiThinkingEnabled: string;
@@ -431,8 +432,18 @@ export type TranslationKeys = {
 			addDir: string;
 			reindex: string;
 			permissions: string;
+			vulnerabilityHunting: string;
 			quit: string;
 		};
+	};
+	// Profile Panel
+	profilePanel: {
+		title: string;
+		scrollHint: string;
+		moreHidden: string;
+		escHint: string;
+		activeLabel: string;
+		searchLabel: string;
 	};
 
 	// Permissions Panel
@@ -548,6 +559,11 @@ export type TranslationKeys = {
 		typeLabel: string;
 		typeExecute: string;
 		typePrompt: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationProject: string;
+		locationGlobalInfo: string;
+		locationProjectInfo: string;
 		confirmSave: string;
 		confirmYes: string;
 		confirmNo: string;
@@ -715,6 +731,7 @@ export type TranslationKeys = {
 		fileSearchHint: string;
 		yoloModeActive: string;
 		planModeActive: string;
+		vulnerabilityHuntingModeActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;
@@ -813,6 +830,23 @@ export type TranslationKeys = {
 		executingCommand: string;
 		timeout: string;
 		customTimeout: string;
+	};
+	fileRollback: {
+		title: string;
+		description: string;
+		question: string;
+		yesRollbackFiles: string;
+		noConversationOnly: string;
+		moreAbove: string;
+		moreBelow: string;
+		andMoreFiles: string;
+		viewAllHint: string;
+		selectHint: string;
+		confirmHint: string;
+		cancelHint: string;
+		scrollHint: string;
+		backHint: string;
+		closeHint: string;
 	};
 	usagePanel: {
 		title: string;

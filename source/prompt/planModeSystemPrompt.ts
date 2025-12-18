@@ -5,89 +5,13 @@
  * creating structured execution plans for complex requirements.
  */
 
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
-
-/**
- * Get the system prompt, dynamically reading from ROLE.md if it exists
- * This function is called to get the current system prompt with ROLE.md content if available
- */
-function getSystemPromptWithRole(): string {
-	try {
-		const cwd = process.cwd();
-		const roleFilePath = path.join(cwd, 'ROLE.md');
-
-		// Check if ROLE.md exists and is not empty
-		if (fs.existsSync(roleFilePath)) {
-			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
-			if (roleContent) {
-				// Replace the default role description with ROLE.md content
-				return PLAN_MODE_SYSTEM_PROMPT.replace(
-					'You are Snow AI CLI',
-					roleContent,
-				);
-			}
-		}
-	} catch (error) {
-		// If reading fails, fall back to default
-		console.error('Failed to read ROLE.md:', error);
-	}
-
-	return PLAN_MODE_SYSTEM_PROMPT;
-}
-
-/**
- * Get system environment info
- */
-function getSystemEnvironmentInfo(): string {
-	const platform = (() => {
-		const platformType = os.platform();
-		switch (platformType) {
-			case 'win32':
-				return 'Windows';
-			case 'darwin':
-				return 'macOS';
-			case 'linux':
-				return 'Linux';
-			default:
-				return platformType;
-		}
-	})();
-
-	const shell = (() => {
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell') || shellName.includes('pwsh')) {
-			return 'PowerShell';
-		}
-		if (shellName.includes('zsh')) return 'zsh';
-		if (shellName.includes('bash')) return 'bash';
-		if (shellName.includes('fish')) return 'fish';
-		if (shellName.includes('sh')) return 'sh';
-		return shellName || 'shell';
-	})();
-
-	const workingDirectory = process.cwd();
-
-	return `Platform: ${platform}
-Shell: ${shell}
-Working Directory: ${workingDirectory}`;
-}
-
-/**
- * Check if codebase functionality is enabled
- */
-function isCodebaseEnabled(): boolean {
-	try {
-		const config = loadCodebaseConfig();
-		return config.enabled;
-	} catch (error) {
-		return false;
-	}
-}
+import {
+	getSystemPromptWithRole as getSystemPromptWithRoleHelper,
+	getSystemEnvironmentInfo,
+	isCodebaseEnabled,
+	getCurrentTimeInfo,
+	appendSystemContext,
+} from './shared/promptHelpers.js';
 
 const PLAN_MODE_SYSTEM_PROMPT = `You are Snow AI CLI - Plan Mode, a specialized task planning and coordination agent.
 
@@ -502,7 +426,10 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
  * Get the Plan Mode system prompt
  */
 export function getPlanModeSystemPrompt(): string {
-	const basePrompt = getSystemPromptWithRole();
+	const basePrompt = getSystemPromptWithRoleHelper(
+		PLAN_MODE_SYSTEM_PROMPT,
+		'You are Snow AI CLI',
+	);
 	const systemEnv = getSystemEnvironmentInfo();
 	const hasCodebase = isCodebaseEnabled();
 
@@ -510,24 +437,13 @@ export function getPlanModeSystemPrompt(): string {
 	const analysisToolsSection = getAnalysisToolsSection(hasCodebase);
 	const availableToolsSection = getAvailableToolsSection(hasCodebase);
 
-	// Get current year and month
-	const now = new Date();
-	const currentYear = now.getFullYear();
-	const currentMonth = now.getMonth() + 1;
+	// Get current time info
+	const timeInfo = getCurrentTimeInfo();
 
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
 		.replace('PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION', analysisToolsSection)
 		.replace('PLACEHOLDER_FOR_TOOLS_SECTION', availableToolsSection);
 
-	return `${finalPrompt}
-
-## System Environment
-
-${systemEnv}
-
-## Current Time
-
-Year: ${currentYear}
-Month: ${currentMonth}`;
+	return appendSystemContext(finalPrompt, systemEnv, timeInfo);
 }

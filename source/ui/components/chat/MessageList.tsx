@@ -55,6 +55,7 @@ export interface Message {
 		output?: string;
 		error?: string;
 	}; // Hook error details for rendering with HookErrorDisplay
+	thinking?: string; // Extended Thinking content from Anthropic
 }
 
 interface Props {
@@ -89,7 +90,7 @@ const MessageList = memo(
 						<Box key={index}>
 							<Text color={iconColor} bold>
 								{message.role === 'user'
-									? '⛇'
+									? '𖨆 '
 									: message.role === 'command'
 									? '⌘'
 									: message.role === 'subagent'

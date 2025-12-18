@@ -1,5 +1,6 @@
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {getVersionHeader} from '../utils/core/version.js';
 
 export interface EmbeddingOptions {
 	model?: string;
@@ -101,7 +102,7 @@ export async function createEmbeddings(
 	// Build headers - only include Authorization if API key is provided
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		'x-snow': 'true',
+		'x-snow': getVersionHeader(),
 	};
 	if (apiKey) {
 		headers['Authorization'] = `Bearer ${apiKey}`;

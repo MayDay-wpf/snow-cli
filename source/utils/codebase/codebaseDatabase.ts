@@ -249,6 +249,46 @@ export class CodebaseDatabase {
 	}
 
 	/**
+	 * Search similar code chunks by embedding with file path filter
+	 * Uses cosine similarity, but only searches within specified files
+	 * @param queryEmbedding - Query embedding vector
+	 * @param filePaths - Array of file paths to search within
+	 * @param limit - Maximum number of results
+	 */
+	searchSimilarInFiles(
+		queryEmbedding: number[],
+		filePaths: string[],
+		limit: number = 10,
+	): CodeChunk[] {
+		if (!this.db) throw new Error('Database not initialized');
+
+		if (filePaths.length === 0) {
+			return this.searchSimilar(queryEmbedding, limit);
+		}
+
+		// Build SQL with file path filters
+		const placeholders = filePaths.map(() => '?').join(',');
+		const sql = `SELECT * FROM code_chunks WHERE file_path IN (${placeholders})`;
+		const results = this.db.exec(sql, filePaths);
+
+		if (results.length === 0) return [];
+
+		const rows = this.resultsToObjects(results[0]!);
+
+		// Calculate cosine similarity for each chunk
+		const scored = rows.map(row => {
+			const chunk = this.rowToChunk(row);
+			const similarity = this.cosineSimilarity(queryEmbedding, chunk.embedding);
+			return {chunk, similarity};
+		});
+
+		// Sort by similarity and return top N
+		scored.sort((a, b) => b.similarity - a.similarity);
+
+		return scored.slice(0, limit).map(r => r.chunk);
+	}
+
+	/**
 	 * Update indexing progress
 	 */
 	updateProgress(progress: Partial<IndexProgress>): void {
@@ -307,9 +347,7 @@ export class CodebaseDatabase {
 	getProgress(): IndexProgress {
 		if (!this.db) throw new Error('Database not initialized');
 
-		const results = this.db.exec(
-			'SELECT * FROM index_progress WHERE id = 1',
-		);
+		const results = this.db.exec('SELECT * FROM index_progress WHERE id = 1');
 
 		if (results.length === 0) {
 			return {
@@ -340,10 +378,9 @@ export class CodebaseDatabase {
 	setWatcherEnabled(enabled: boolean): void {
 		if (!this.db) throw new Error('Database not initialized');
 
-		this.db.run(
-			'UPDATE index_progress SET watcher_enabled = ? WHERE id = 1',
-			[enabled ? 1 : 0],
-		);
+		this.db.run('UPDATE index_progress SET watcher_enabled = ? WHERE id = 1', [
+			enabled ? 1 : 0,
+		]);
 		this.save();
 	}
 
@@ -400,9 +437,10 @@ export class CodebaseDatabase {
 	/**
 	 * Convert sql.js query results to objects
 	 */
-	private resultsToObjects(
-		result: {columns: string[]; values: any[][]},
-	): Record<string, any>[] {
+	private resultsToObjects(result: {
+		columns: string[];
+		values: any[][];
+	}): Record<string, any>[] {
 		return result.values.map(row => {
 			const obj: Record<string, any> = {};
 			for (let i = 0; i < result.columns.length; i++) {

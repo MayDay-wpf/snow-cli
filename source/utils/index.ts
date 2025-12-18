@@ -21,6 +21,7 @@ import './commands/role.js';
 import './commands/skills.js';
 import './commands/todoPicker.js';
 import './commands/usage.js';
+import './commands/vulnerability-hunting.js';
 import './commands/yolo.js';
 
 // Export logger

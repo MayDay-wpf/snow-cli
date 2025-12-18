@@ -88,8 +88,18 @@ class CodebaseSearchService {
 
 	/**
 	 * Search codebase using semantic similarity with retry logic
+	 * @param query - Search query
+	 * @param topN - Number of results to return
+	 * @param abortSignal - Optional abort signal
+	 * @param deepExploreFiles - Optional file paths for deep exploration (focused search)
 	 */
-	async search(query: string, topN: number = 10): Promise<any> {
+	async search(
+		query: string,
+		topN: number = 10,
+		abortSignal?: AbortSignal,
+		deepExploreFiles?: string[],
+		queriedTerms: Set<string> = new Set(),
+	): Promise<any> {
 		// Load codebase config
 		const config = loadCodebaseConfig();
 		const enableAgentReview = config.enableAgentReview;
@@ -117,6 +127,10 @@ class CodebaseSearchService {
 			let lastResults: any = null;
 			let searchAttempt = 0;
 			let currentTopN = topN;
+			let currentQuery = query;
+
+			// Track queried terms to avoid infinite loops
+			queriedTerms.add(query.toLowerCase());
 
 			// Retry loop: if results are too few, increase search range and retry
 			while (searchAttempt < MAX_SEARCH_RETRIES) {
@@ -129,19 +143,22 @@ class CodebaseSearchService {
 						attempt: searchAttempt,
 						maxAttempts: MAX_SEARCH_RETRIES,
 						currentTopN,
-						message: `Searching top ${currentTopN} code chunks...`,
-						query,
+						message: `Searching codebase...`,
+						query: currentQuery,
 					});
 				}
 
-				// Generate embedding for query
-				logger.info(
-					`Search attempt ${searchAttempt}/${MAX_SEARCH_RETRIES}: Searching top ${currentTopN} chunks for query: "${query}"`,
-				);
-				const queryEmbedding = await createEmbedding(query);
+				const queryEmbedding = await createEmbedding(currentQuery);
 
 				// Search similar chunks
-				const results = db.searchSimilar(queryEmbedding, currentTopN);
+				// If deepExploreFiles is specified, search only in those files
+				const results = deepExploreFiles
+					? db.searchSimilarInFiles(
+							queryEmbedding,
+							deepExploreFiles,
+							currentTopN,
+					  )
+					: db.searchSimilar(queryEmbedding, currentTopN);
 
 				// Format results with similarity scores and full content
 				const formattedResults = results.map((chunk, index) => {
@@ -163,7 +180,8 @@ class CodebaseSearchService {
 				let finalResults;
 				let reviewFailed = false;
 				let removedCount = 0;
-				let suggestions: string[] = [];
+				let suggestion: string | undefined;
+				let highConfidenceFiles: string[] = [];
 
 				if (enableAgentReview) {
 					// Emit reviewing event
@@ -174,6 +192,7 @@ class CodebaseSearchService {
 						currentTopN,
 						message: `Reviewing ${formattedResults.length} results with AI...`,
 						query,
+						originalResultsCount: formattedResults.length,
 					});
 
 					logger.info(
@@ -200,18 +219,20 @@ class CodebaseSearchService {
 						query,
 						formattedResults,
 						conversationContext.length > 0 ? conversationContext : undefined,
+						abortSignal,
 					);
 
 					finalResults = reviewResult.filteredResults;
 					reviewFailed = reviewResult.reviewFailed || false;
 					removedCount = reviewResult.removedCount;
-					suggestions = reviewResult.suggestions || [];
+					suggestion = reviewResult.suggestion;
+					highConfidenceFiles = reviewResult.highConfidenceFiles || [];
 				} else {
 					// Skip agent review, use all formatted results
 					finalResults = formattedResults;
 					reviewFailed = false;
 					removedCount = 0;
-					suggestions = [];
+					suggestion = undefined;
 
 					// When agent review is disabled, we don't need to retry
 					// Just return results immediately
@@ -229,20 +250,31 @@ class CodebaseSearchService {
 					removedCount,
 					reviewFailed,
 					results: finalResults,
-					suggestions,
+					suggestion,
 					searchAttempts: searchAttempt,
 				};
 
 				// If agent review is disabled, return immediately (no need to retry)
 				if (!enableAgentReview) {
-					// Emit search complete event
+					// Emit search complete event before closing
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
 						attempt: searchAttempt,
 						maxAttempts: MAX_SEARCH_RETRIES,
 						currentTopN,
-						message: `Found ${finalResults.length} results`,
-						query,
+						message: `Search complete`,
+						query: currentQuery,
+						suggestion,
+						reviewResults:
+							enableAgentReview && lastResults
+								? {
+										originalCount: lastResults.originalResultsCount,
+										filteredCount: lastResults.resultsCount,
+										removedCount: lastResults.removedCount,
+										highConfidenceFiles: [],
+										reviewFailed: lastResults.reviewFailed,
+								  }
+								: undefined,
 					});
 
 					db.close();
@@ -253,14 +285,25 @@ class CodebaseSearchService {
 				if (reviewFailed) {
 					logger.info('Review failed, returning all results without retry');
 
-					// Emit search complete event
+					// Emit search complete event before closing
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
 						attempt: searchAttempt,
 						maxAttempts: MAX_SEARCH_RETRIES,
 						currentTopN,
-						message: 'Review failed, returning all results',
-						query,
+						message: `Search complete`,
+						query: currentQuery,
+						suggestion,
+						reviewResults:
+							enableAgentReview && lastResults
+								? {
+										originalCount: lastResults.originalResultsCount,
+										filteredCount: lastResults.resultsCount,
+										removedCount: lastResults.removedCount,
+										highConfidenceFiles: [],
+										reviewFailed: lastResults.reviewFailed,
+								  }
+								: undefined,
 					});
 
 					db.close();
@@ -273,14 +316,24 @@ class CodebaseSearchService {
 						`Found ${finalResults.length} results (>= ${MIN_RESULTS_THRESHOLD} threshold), search complete`,
 					);
 
-					// Emit search complete event
+					// Emit search complete event with review results
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
 						attempt: searchAttempt,
 						maxAttempts: MAX_SEARCH_RETRIES,
 						currentTopN,
-						message: `Found ${finalResults.length} relevant results`,
-						query,
+						message: `Search complete`,
+						query: currentQuery,
+						suggestion,
+						reviewResults: enableAgentReview
+							? {
+									originalCount: formattedResults.length,
+									filteredCount: finalResults.length,
+									removedCount,
+									highConfidenceFiles,
+									reviewFailed,
+							  }
+							: undefined,
 					});
 
 					db.close();
@@ -293,6 +346,42 @@ class CodebaseSearchService {
 						(removedCount / formattedResults.length) *
 						100
 					).toFixed(1);
+
+					// Priority 1: Try AI suggested query if available and not yet tried
+					if (suggestion && !queriedTerms.has(suggestion.toLowerCase())) {
+						logger.info(
+							`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Trying AI suggested query: "${suggestion}"...`,
+						);
+
+						// Use AI suggested query for next attempt
+						currentQuery = suggestion;
+						queriedTerms.add(suggestion.toLowerCase());
+						continue;
+					}
+
+					// Priority 2: Check if we have high confidence files for deep exploration
+					if (
+						highConfidenceFiles &&
+						highConfidenceFiles.length > 0 &&
+						!deepExploreFiles
+					) {
+						// Try deep exploration in high confidence files
+						logger.info(
+							`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Trying deep exploration in ${highConfidenceFiles.length} high-confidence files...`,
+						);
+
+						// Recursive call with deep explore files
+						db.close();
+						return await this.search(
+							currentQuery,
+							topN,
+							abortSignal,
+							highConfidenceFiles,
+							queriedTerms,
+						);
+					}
+
+					// Priority 3: Expand search range (fallback)
 					logger.warn(
 						`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Retrying with more candidates...`,
 					);
@@ -315,7 +404,8 @@ class CodebaseSearchService {
 				maxAttempts: MAX_SEARCH_RETRIES,
 				currentTopN,
 				message: `Completed with ${lastResults?.resultsCount || 0} results`,
-				query,
+				query: currentQuery,
+				suggestion: lastResults?.suggestion,
 			});
 
 			db.close();
@@ -337,19 +427,14 @@ export const mcpTools = [
 	{
 		name: 'codebase-search',
 		description:
-			'**Important:When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.**' +
-			'* Semantic search across the codebase using embeddings. ' +
-			'* Finds code snippets similar to your query based on meaning, not just keywords. ' +
-			'* Returns full code content with similarity scores and file locations. ' +
-			'* NOTE: Only available when codebase indexing is enabled and the index has been built. ' +
-			'* If the index is not available, the tool will return an error message with instructions.',
+			'**Important:When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.*** Semantic search across the codebase using LLM embeddings. * Finds code snippets based on semantic meaning, supports both keywords and natural language queries. * Returns full code content with similarity scores and file locations. * NOTE: Only available when codebase indexing is enabled and the index has been built. * If the index is not available, the tool will return an error message with instructions.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				query: {
 					type: 'string',
 					description:
-						'Search query describing the code you want to find (e.g., "database query", "error handling", "authentication logic")',
+						'Search query string. Use keywords or short phrases for best results. Examples: "user authentication", "error handling", "file upload validation", "database connection". Can also use specific terms like function names, class names, or technical terms.',
 				},
 				topN: {
 					type: 'number',

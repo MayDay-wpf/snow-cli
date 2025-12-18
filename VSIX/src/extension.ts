@@ -27,7 +27,9 @@ function startWebSocketServer() {
 
 	const tryPort = (currentPort: number) => {
 		if (currentPort > MAX_PORT) {
-			console.error(`Failed to start WebSocket server: all ports ${BASE_PORT}-${MAX_PORT} are in use`);
+			console.error(
+				`Failed to start WebSocket server: all ports ${BASE_PORT}-${MAX_PORT} are in use`,
+			);
 			return;
 		}
 
@@ -52,7 +54,9 @@ function startWebSocketServer() {
 				const fs = require('fs');
 				const os = require('os');
 				const path = require('path');
-				const workspaceFolder = normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
+				const workspaceFolder =
+					normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) ||
+					'';
 				const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 				try {
@@ -129,7 +133,9 @@ function sendEditorContext() {
 
 	const context: any = {
 		type: 'context',
-		workspaceFolder: normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath),
+		workspaceFolder: normalizePath(
+			vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+		),
 		activeFile: normalizePath(editor.document.uri.fsPath),
 		cursorPosition: {
 			line: editor.selection.active.line,
@@ -208,6 +214,23 @@ function handleMessage(message: string) {
 			const requestId = data.requestId;
 
 			handleGetSymbols(filePath, requestId);
+		} else if (data.type === 'showDiff') {
+			// Show diff in VSCode
+			const filePath = data.filePath;
+			const originalContent = data.originalContent;
+			const newContent = data.newContent;
+			const label = data.label;
+
+			// Execute the showDiff command
+			vscode.commands.executeCommand('snow-cli.showDiff', {
+				filePath,
+				originalContent,
+				newContent,
+				label,
+			});
+		} else if (data.type === 'closeDiff') {
+			// Close diff view by calling the closeDiff command
+			vscode.commands.executeCommand('snow-cli.closeDiff');
 		}
 	} catch (error) {
 		// Ignore invalid messages
@@ -354,6 +377,9 @@ async function handleGetSymbols(filePath: string, requestId: string) {
 	}
 }
 
+// Track active diff editors
+let activeDiffEditors: vscode.Uri[] = [];
+
 export function activate(context: vscode.ExtensionContext) {
 	// Start WebSocket server immediately when extension activates
 	startWebSocketServer();
@@ -378,6 +404,137 @@ export function activate(context: vscode.ExtensionContext) {
 		},
 	);
 
+	// Register command to show diff in VSCode
+	const showDiffDisposable = vscode.commands.registerCommand(
+		'snow-cli.showDiff',
+		async (data: {
+			filePath: string;
+			originalContent: string;
+			newContent: string;
+			label: string;
+		}) => {
+			try {
+				const {filePath, originalContent, newContent, label} = data;
+
+				// Remember the active terminal before showing diff
+				const activeTerminal = vscode.window.activeTerminal;
+
+				// Create virtual URIs for diff view with unique identifier
+				const uri = vscode.Uri.file(filePath);
+				const uniqueId = `${Date.now()}-${Math.random()
+					.toString(36)
+					.substring(7)}`;
+				const originalUri = uri.with({
+					scheme: 'snow-cli-original',
+					query: uniqueId,
+				});
+				const newUri = uri.with({
+					scheme: 'snow-cli-new',
+					query: uniqueId,
+				});
+
+				// Track these URIs for later cleanup
+				activeDiffEditors.push(originalUri, newUri);
+
+				// Register content providers with URI-specific content
+				// Store content in a map to support multiple diffs
+				const contentMap = new Map<string, string>();
+				contentMap.set(originalUri.toString(), originalContent);
+				contentMap.set(newUri.toString(), newContent);
+
+				const originalProvider =
+					vscode.workspace.registerTextDocumentContentProvider(
+						'snow-cli-original',
+						{
+							provideTextDocumentContent: uri => {
+								return contentMap.get(uri.toString()) || '';
+							},
+						},
+					);
+
+				const newProvider =
+					vscode.workspace.registerTextDocumentContentProvider('snow-cli-new', {
+						provideTextDocumentContent: uri => {
+							return contentMap.get(uri.toString()) || '';
+						},
+					});
+
+				// Show diff view with preview:false to prevent tabs from being replaced
+				const fileName = filePath.split('/').pop() || 'file';
+				const title = `${label}: ${fileName}`;
+				await vscode.commands.executeCommand(
+					'vscode.diff',
+					originalUri,
+					newUri,
+					title,
+					{
+						preview: false, // Changed to false to keep multiple tabs open
+					},
+				);
+
+				// Force focus back to terminal after diff is shown
+				// Multiple attempts to ensure focus is restored
+				setTimeout(() => {
+					if (activeTerminal) {
+						activeTerminal.show(false); // false = preserveFocus, focuses the terminal
+					}
+				}, 50);
+
+				setTimeout(() => {
+					if (activeTerminal) {
+						activeTerminal.show(false);
+					}
+				}, 150);
+
+				// Cleanup providers after a delay
+				setTimeout(() => {
+					originalProvider.dispose();
+					newProvider.dispose();
+					contentMap.clear();
+				}, 2000);
+			} catch (error) {
+				vscode.window.showErrorMessage(
+					`Failed to show diff: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				);
+			}
+		},
+	);
+
+	// Register command to close diff views
+	const closeDiffDisposable = vscode.commands.registerCommand(
+		'snow-cli.closeDiff',
+		() => {
+			// Close only the diff editors we opened
+			const editors = vscode.window.tabGroups.all
+				.flatMap(group => group.tabs)
+				.filter(tab => {
+					if (tab.input instanceof vscode.TabInputTextDiff) {
+						const original = tab.input.original;
+						const modified = tab.input.modified;
+						return (
+							activeDiffEditors.some(
+								uri => uri.toString() === original.toString(),
+							) ||
+							activeDiffEditors.some(
+								uri => uri.toString() === modified.toString(),
+							)
+						);
+					}
+					return false;
+				});
+
+			// Close each matching tab
+			editors.forEach(tab => {
+				vscode.window.tabGroups.close(tab);
+			});
+
+			// Clear the tracking array
+			activeDiffEditors = [];
+		},
+	);
+
 	// Listen to editor changes
 	context.subscriptions.push(
 		vscode.window.onDidChangeActiveTextEditor(() => {
@@ -391,7 +548,11 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(
+		disposable,
+		showDiffDisposable,
+		closeDiffDisposable,
+	);
 }
 
 export function deactivate() {
@@ -412,7 +573,8 @@ export function deactivate() {
 		const fs = require('fs');
 		const os = require('os');
 		const path = require('path');
-		const workspaceFolder = normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
+		const workspaceFolder =
+			normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
 		const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 		if (fs.existsSync(portInfoPath)) {

@@ -240,6 +240,7 @@ export default function HooksConfigScreen({
 		// 只有工具Hooks才显示matcher信息
 		const isToolHook =
 			selectedHookType === 'beforeToolCall' ||
+			selectedHookType === 'toolConfirmation' ||
 			selectedHookType === 'afterToolCall';
 
 		const options = rules.map((rule, index) => ({
@@ -368,6 +369,7 @@ export default function HooksConfigScreen({
 		// 只有工具Hooks才需要matcher
 		const isToolHook =
 			selectedHookType === 'beforeToolCall' ||
+			selectedHookType === 'toolConfirmation' ||
 			selectedHookType === 'afterToolCall';
 
 		const options = [

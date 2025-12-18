@@ -45,6 +45,7 @@ export interface ApiConfig {
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
+	showThinking?: boolean; // Show AI thinking process in UI (default: true)
 }
 
 export interface MCPServer {
@@ -53,6 +54,7 @@ export interface MCPServer {
 	args?: string[];
 	env?: Record<string, string>; // 环境变量
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
+	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
 }
 
 export interface MCPConfig {
@@ -179,11 +181,20 @@ function cloneDefaultMCPConfig(): MCPConfig {
 	};
 }
 
+// 配置缓存
+let configCache: AppConfig | null = null;
+
 export function loadConfig(): AppConfig {
+	// 如果缓存存在，直接返回缓存
+	if (configCache !== null) {
+		return configCache;
+	}
+
 	ensureConfigDirectory();
 
 	if (!existsSync(CONFIG_FILE)) {
 		saveConfig(DEFAULT_CONFIG);
+		configCache = DEFAULT_CONFIG;
 		return DEFAULT_CONFIG;
 	}
 
@@ -243,8 +254,11 @@ export function loadConfig(): AppConfig {
 			saveConfig(mergedConfig);
 		}
 
+		// 缓存配置
+		configCache = mergedConfig;
 		return mergedConfig;
 	} catch (error) {
+		configCache = DEFAULT_CONFIG;
 		return DEFAULT_CONFIG;
 	}
 }
@@ -257,9 +271,26 @@ export function saveConfig(config: AppConfig): void {
 		const {openai, ...configWithoutOpenai} = config;
 		const configData = JSON.stringify(configWithoutOpenai, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
+		// 清除缓存，下次加载时会重新读取
+		configCache = null;
 	} catch (error) {
 		throw new Error(`Failed to save configuration: ${error}`);
 	}
+}
+
+/**
+ * 清除配置缓存，强制下次调用 loadConfig 时重新读取磁盘
+ */
+export function clearConfigCache(): void {
+	configCache = null;
+}
+
+/**
+ * 重新加载配置（清除缓存后重新读取）
+ */
+export function reloadConfig(): AppConfig {
+	clearConfigCache();
+	return loadConfig();
 }
 
 export async function updateOpenAiConfig(

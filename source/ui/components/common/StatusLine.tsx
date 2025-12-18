@@ -5,9 +5,9 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
-// 根据平台返回快捷键显示文本: Windows使用 Alt+P, macOS使用 Ctrl+P
+// 根据平台返回快捷键显示文本: Windows/Linux使用 Alt+P, macOS使用 Ctrl+P
 const getProfileShortcut = () =>
-	process.platform === 'win32' ? 'Alt+P' : 'Ctrl+P';
+	process.platform === 'darwin' ? 'Ctrl+P' : 'Alt+P';
 
 type VSCodeConnectionStatus =
 	| 'disconnected'
@@ -34,6 +34,7 @@ type Props = {
 	// 模式信息
 	yoloMode?: boolean;
 	planMode?: boolean;
+	vulnerabilityHuntingMode?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -83,6 +84,7 @@ function calculateContextPercentage(contextUsage: ContextUsage): number {
 export default function StatusLine({
 	yoloMode = false,
 	planMode = false,
+	vulnerabilityHuntingMode = false,
 	vscodeConnectionStatus,
 	editorContext,
 	contextUsage,
@@ -100,6 +102,7 @@ export default function StatusLine({
 	const hasAnyStatus =
 		yoloMode ||
 		planMode ||
+		vulnerabilityHuntingMode ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		contextUsage ||
 		codebaseIndexing ||
@@ -118,7 +121,7 @@ export default function StatusLine({
 		// Profile - 显示在最前面
 		if (currentProfileName) {
 			statusItems.push({
-				text: `⚙ ${currentProfileName} | ${getProfileShortcut()} ${
+				text: `ꚰ ${currentProfileName} | ${getProfileShortcut()} ${
 					t.chatScreen.profileSwitchHint
 				}`,
 				color: theme.colors.menuInfo,
@@ -133,6 +136,11 @@ export default function StatusLine({
 		// Plan模式
 		if (planMode) {
 			statusItems.push({text: '⚐ Plan', color: '#60A5FA'});
+		}
+
+		// Vulnerability Hunting 模式
+		if (vulnerabilityHuntingMode) {
+			statusItems.push({text: '⍨ Vuln Hunt', color: '#de409aff'});
 		}
 
 		// IDE连接状态
@@ -367,7 +375,7 @@ export default function StatusLine({
 			{currentProfileName && (
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
-						⚙ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
+						ꚰ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
 						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
 					</Text>
 				</Box>
@@ -387,6 +395,15 @@ export default function StatusLine({
 				<Box>
 					<Text color="#60A5FA" dimColor>
 						{t.chatScreen.planModeActive}
+					</Text>
+				</Box>
+			)}
+
+			{/* Vulnerability Hunting 模式提示 */}
+			{vulnerabilityHuntingMode && (
+				<Box>
+					<Text color="#EF4444" dimColor>
+						{t.chatScreen.vulnerabilityHuntingModeActive}
 					</Text>
 				</Box>
 			)}
