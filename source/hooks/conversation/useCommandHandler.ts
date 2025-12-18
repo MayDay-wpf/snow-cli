@@ -95,38 +95,53 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
 
-		// 添加压缩摘要到会话（使用 user 角色，因为 Extended Thinking 模式下所有 assistant 消息都需要 thinking 块）
-		newSessionMessages.push({
-			role: 'user',
-			content: `[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`,
-			timestamp: Date.now(),
-		});
+		// 构建单条user消息，将压缩摘要和保留的消息内容合并为文本
+		// 这样避免了复杂的参数对齐问题（tool_calls、tool_call_id等）
+		let finalContent = `[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
 
-		// 添加保留的最后一轮完整对话（保留完整的消息结构）
+		// 如果有保留的消息，将其内容转换为文本附加到user消息中
 		if (
 			compressionResult.preservedMessages &&
 			compressionResult.preservedMessages.length > 0
 		) {
+			finalContent +=
+				'\n\n---\n\n[Last Interaction - Preserved for Continuity]\n\n';
+
 			for (const msg of compressionResult.preservedMessages) {
-				// 保留完整的消息结构，包括所有关键字段
-				// CRITICAL: Use !== undefined to preserve empty strings and empty arrays
-				newSessionMessages.push({
-					role: msg.role,
-					content: msg.content,
-					timestamp: Date.now(),
-					...(msg.tool_call_id !== undefined && {
-						tool_call_id: msg.tool_call_id,
-					}),
-					...(msg.tool_calls !== undefined && {tool_calls: msg.tool_calls}),
-					...(msg.images !== undefined && {images: msg.images}),
-					...(msg.reasoning !== undefined && {reasoning: msg.reasoning}),
-					...(msg.thinking !== undefined && {thinking: msg.thinking}), // 保留 thinking 字段（Anthropic Extended Thinking）
-					...(msg.subAgentInternal !== undefined && {
-						subAgentInternal: msg.subAgentInternal,
-					}),
-				});
+				if (msg.role === 'user') {
+					finalContent += `**User:**\n${msg.content}\n\n`;
+				} else if (msg.role === 'assistant') {
+					finalContent += `**Assistant:**\n${msg.content}`;
+
+					// 如果有tool_calls，以可读的JSON格式附加
+					if (msg.tool_calls && msg.tool_calls.length > 0) {
+						finalContent += '\n\n**[Tool Calls Initiated]:**\n```json\n';
+						finalContent += JSON.stringify(msg.tool_calls, null, 2);
+						finalContent += '\n```\n\n';
+					} else {
+						finalContent += '\n\n';
+					}
+				} else if (msg.role === 'tool') {
+					// 工具执行结果
+					finalContent += `**[Tool Result - ${msg.tool_call_id}]:**\n`;
+					// 尝试格式化JSON，如果失败则直接显示原始内容
+					try {
+						const parsed = JSON.parse(msg.content);
+						finalContent +=
+							'```json\n' + JSON.stringify(parsed, null, 2) + '\n```\n\n';
+					} catch {
+						finalContent += `${msg.content}\n\n`;
+					}
+				}
 			}
 		}
+
+		// 添加单条user消息
+		newSessionMessages.push({
+			role: 'user',
+			content: finalContent,
+			timestamp: Date.now(),
+		});
 
 		// 创建新会话而不是覆盖旧会话
 		// 这样可以保留压缩前的完整历史，支持回滚到压缩前的任意快照点

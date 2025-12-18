@@ -239,27 +239,27 @@ export class PromptOptimizeAgent {
 						.join('\n');
 			}
 
-			const optimizationPrompt = `You are a prompt optimization assistant. Your task is to improve user prompts for better AI understanding while maintaining HIGH FIDELITY to the original content.
+			const optimizationPrompt = `I want you to help me optimize this prompt so the AI can better understand my intent while maintaining HIGH FIDELITY to the original content.
 
-User's original prompt:
+Here's my original prompt:
 ${userPrompt}${contextSummary}
 
-Your optimization goals (in priority order):
-1. **HIGH FIDELITY REQUIREMENT**: Preserve ALL important information, details, and requirements from the user's original prompt - DO NOT lose or omit any critical content
-2. Preserve the EXACT SAME LANGUAGE as the user (if Chinese, stay Chinese; if English, stay English)
-3. Keep the core intent and meaning unchanged
-4. Make the prompt clearer and more specific ONLY if vague - if already clear, keep it as-is
-5. Add relevant context if the user is asking follow-up questions
-6. Break down complex requests into clear requirements without losing details
+I want you to follow these optimization goals (in priority order):
+1. **HIGH FIDELITY REQUIREMENT**: Preserve ALL important information, details, and requirements from my original prompt - DO NOT lose or omit any critical content
+2. Preserve the EXACT SAME LANGUAGE I'm using (if I wrote in Chinese, keep it Chinese; if English, keep it English)
+3. Keep my core intent and meaning unchanged
+4. Make my prompt clearer and more specific ONLY if it's vague - if it's already clear, keep it as-is
+5. Add relevant context if I'm asking follow-up questions
+6. Break down my complex requests into clear requirements without losing details
 7. Keep the tone natural and conversational
-8. DO NOT add unnecessary formality or change the user's communication style
-9. If the prompt is already clear and specific, return it as-is
+8. DO NOT add unnecessary formality or change my communication style
+9. If my prompt is already clear and specific, return it as-is
 
 CRITICAL RULES:
-- NEVER remove important details, specific requirements, file paths, code snippets, or technical specifications
-- NEVER simplify the prompt if it means losing user-provided information
-- When in doubt, prefer preserving the original over optimizing
-- The goal is CLARITY, not BREVITY - keep all important content
+- NEVER remove important details, specific requirements, file paths, code snippets, or technical specifications I provided
+- NEVER simplify my prompt if it means losing information I gave you
+- When in doubt, prefer preserving my original content over optimizing
+- The goal is CLARITY, not BREVITY - keep all my important content
 
 IMPORTANT: Output ONLY the optimized prompt text. No explanations, no meta-commentary, no JSON format. Just the optimized prompt itself.`;
 
