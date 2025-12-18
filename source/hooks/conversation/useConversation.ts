@@ -568,8 +568,9 @@ export async function handleConversationWithTools(
 				}
 			}
 
-			// Don't reset token count here - keep it displayed
-			// It will be reset at the start of next streaming (line 301)
+			// Reset token count to 0 after stream ends
+			// This ensures the final update with 0 tokens is pushed to UI
+			setStreamTokenCount(0);
 
 			// If aborted during streaming, exit the loop
 			// (discontinued message already added by ChatScreen ESC handler)

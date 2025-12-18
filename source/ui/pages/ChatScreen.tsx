@@ -573,7 +573,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		addMultipleToAlwaysApproved,
 		removeFromAlwaysApproved,
 		clearAllAlwaysApproved,
-	} = useToolConfirmation();
+	} = useToolConfirmation(workingDirectory);
 
 	// State for askuser tool interaction
 	const [pendingUserQuestion, setPendingUserQuestion] = useState<{

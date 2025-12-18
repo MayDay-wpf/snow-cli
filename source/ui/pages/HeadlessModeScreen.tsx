@@ -350,6 +350,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	const [lastDisplayedIndex, setLastDisplayedIndex] = useState(-1);
 	const [isWaitingForInput, setIsWaitingForInput] = useState(false);
 	const {stdout} = useStdout();
+	const workingDirectory = process.cwd();
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -358,7 +359,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 
 	// Use tool confirmation hook
 	const {isToolAutoApproved, addMultipleToAlwaysApproved} =
-		useToolConfirmation();
+		useToolConfirmation(workingDirectory);
 
 	// Listen for message changes to display AI responses and tool calls
 	useEffect(() => {
