@@ -56,9 +56,9 @@ const FileList = memo(
 			const {theme} = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
-			const [searchDepth, setSearchDepth] = useState(5); // Default depth 5, will increase if needed
+			const [searchDepth, setSearchDepth] = useState(5); // Start with shallow depth for performance
 			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
-			const [actualMaxDepth, setActualMaxDepth] = useState(0); // Track actual max depth found
+			const [hasMoreDepth, setHasMoreDepth] = useState(true); // Track if there's more depth to explore
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -227,10 +227,13 @@ const FileList = memo(
 					}
 				}
 
+				// Check if we've hit the depth limit (might have deeper directories)
+				const hitDepthLimit = globalMaxDepth >= searchDepth - 1;
+
 				// Batch all state updates together
 				setIsLoading(true);
 				setFiles(allFiles);
-				setActualMaxDepth(globalMaxDepth);
+				setHasMoreDepth(hitDepthLimit);
 				setIsLoading(false);
 			}, [searchDepth]);
 
@@ -427,28 +430,22 @@ const FileList = memo(
 
 						setAllFilteredFiles(filtered);
 
-						// Only increase search depth if we hit the depth limit
-						// (actualMaxDepth equals searchDepth means there might be deeper files)
+						// Progressive depth increase: automatically increase depth until found
+						// Stop conditions: found files OR no more depth (reached project's max depth)
 						if (
 							filtered.length === 0 &&
 							query.trim().length > 0 &&
-							actualMaxDepth >= searchDepth
+							hasMoreDepth
 						) {
-							// Show increasing depth indicator
-							setIsIncreasingDepth(true);
-
-							// Increase search depth for next search (progressive increase)
+							// Increase search depth progressively (step by 5)
 							const newDepth = searchDepth + 5;
 							setSearchDepth(newDepth);
+							setIsIncreasingDepth(true);
 
-							// Reload files with increased depth
+							// Reset indicator after a short delay
 							setTimeout(() => {
-								loadFiles();
-								// Hide indicator after reload
-								setTimeout(() => {
-									setIsIncreasingDepth(false);
-								}, 500);
-							}, 100);
+								setIsIncreasingDepth(false);
+							}, 300);
 						}
 					}
 				};
@@ -468,7 +465,7 @@ const FileList = memo(
 				searchFileContent,
 				searchDepth,
 				loadFiles,
-				actualMaxDepth,
+				hasMoreDepth,
 			]);
 
 			// Display with scrolling window
