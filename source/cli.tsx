@@ -135,6 +135,7 @@ const cli = meow(
 Usage
   $ snow
   $ snow --ask \"your prompt\"
+  $ snow --ask \"your prompt\" <sessionId>
   $ snow --task \"your task description\"
   $ snow --task-list
 
@@ -143,7 +144,7 @@ Options
 		--version     Show version
 		--update      Update to latest version
 		-c            Skip welcome screen and resume last conversation
-		--ask         Quick question mode (headless mode with single prompt)
+		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
 		--task        Create a background AI task (headless mode, saves session)
 		--task-list   Open task manager to view and manage background tasks
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
@@ -246,14 +247,13 @@ if (cli.flags.taskExecute) {
 	process.exit(0);
 }
 
-// Dev mode and resource monitoring will be initialized in Startup component
-
 // Startup component that shows loading spinner during update check
 const Startup = ({
 	version,
 	skipWelcome,
 	autoResume,
 	headlessPrompt,
+	headlessSessionId,
 	showTaskList,
 	isDevMode,
 	enableYolo,
@@ -262,6 +262,7 @@ const Startup = ({
 	skipWelcome: boolean;
 	autoResume: boolean;
 	headlessPrompt?: string;
+	headlessSessionId?: string;
 	showTaskList?: boolean;
 	isDevMode: boolean;
 	enableYolo: boolean;
@@ -353,6 +354,7 @@ const Startup = ({
 			skipWelcome={skipWelcome}
 			autoResume={autoResume}
 			headlessPrompt={headlessPrompt}
+			headlessSessionId={headlessSessionId}
 			showTaskList={showTaskList}
 			enableYolo={enableYolo}
 		/>
@@ -419,6 +421,7 @@ render(
 		skipWelcome={Boolean(cli.flags.c || cli.flags.yolo || cli.flags.cYolo)}
 		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
 		headlessPrompt={cli.flags.ask}
+		headlessSessionId={cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
 		enableYolo={Boolean(cli.flags.yolo || cli.flags.cYolo)}

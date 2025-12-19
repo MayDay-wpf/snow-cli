@@ -38,6 +38,7 @@ type Props = {
 	skipWelcome?: boolean;
 	autoResume?: boolean;
 	headlessPrompt?: string;
+	headlessSessionId?: string;
 	showTaskList?: boolean;
 	enableYolo?: boolean;
 };
@@ -288,6 +289,7 @@ export default function App({
 	skipWelcome,
 	autoResume,
 	headlessPrompt,
+	headlessSessionId,
 	showTaskList,
 	enableYolo,
 }: Props) {
@@ -302,6 +304,7 @@ export default function App({
 					<Suspense fallback={loadingFallback}>
 						<HeadlessModeScreen
 							prompt={headlessPrompt}
+							sessionId={headlessSessionId}
 							onComplete={() => gracefulExit()}
 						/>
 					</Suspense>

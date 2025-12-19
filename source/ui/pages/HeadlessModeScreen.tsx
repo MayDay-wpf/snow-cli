@@ -9,6 +9,7 @@ import {useStreamingState} from '../../hooks/conversation/useStreamingState.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
 import {useVSCodeState} from '../../hooks/integration/useVSCodeState.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -19,6 +20,7 @@ import {themes} from '../themes/index.js';
 
 type Props = {
 	prompt: string;
+	sessionId?: string;
 	onComplete: () => void;
 };
 
@@ -344,7 +346,11 @@ async function askHeadlessConfirmation(
 	});
 }
 
-export default function HeadlessModeScreen({prompt, onComplete}: Props) {
+export default function HeadlessModeScreen({
+	prompt,
+	sessionId,
+	onComplete,
+}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isComplete, setIsComplete] = useState(false);
 	const [lastDisplayedIndex, setLastDisplayedIndex] = useState(-1);
@@ -466,6 +472,39 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 	]);
 	const processMessage = async () => {
 		try {
+			// Load existing session if sessionId is provided
+			let loadedMessages: Message[] = [];
+			let currentSessionId = sessionId;
+
+			if (sessionId) {
+				console.log(`\n\x1b[96m Loading session: ${sessionId}\x1b[0m`);
+				const loadedSession = await sessionManager.loadSession(sessionId);
+				if (loadedSession) {
+					// Convert API messages to UI messages
+					loadedMessages = loadedSession.messages.map(
+						msg =>
+							({
+								role: msg.role,
+								content: msg.content,
+								toolCall: msg.tool_calls
+									? {
+											name: msg.tool_calls[0]?.function.name || '',
+											arguments: msg.tool_calls[0]?.function.arguments || {},
+									  }
+									: undefined,
+							} as Message),
+					);
+					console.log(
+						`\x1b[32m✓ Loaded ${loadedMessages.length} messages from session\x1b[0m\n`,
+					);
+				} else {
+					console.log(
+						`\x1b[33m⚠ Session not found, starting new session\x1b[0m\n`,
+					);
+					currentSessionId = undefined;
+				}
+			}
+
 			// Parse and validate file references
 			const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 				prompt,
@@ -478,7 +517,10 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				content: cleanContent,
 				files: validFiles.length > 0 ? validFiles : undefined,
 			};
-			setMessages([userMessage]);
+
+			// Combine loaded messages with new user message
+			const allMessages = [...loadedMessages, userMessage];
+			setMessages(allMessages);
 
 			streamingState.setIsStreaming(true);
 
@@ -499,6 +541,15 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 			console.log(
 				`\x1b[94m╰─────────────────────────────────────────────────────────╯\x1b[0m`,
 			);
+
+			// Print session info if continuing conversation
+			if (loadedMessages.length > 0) {
+				console.log(`\n\x1b[36m┌─ Continuing Session\x1b[0m`);
+				console.log(`\x1b[90m│  Session ID: ${currentSessionId}\x1b[0m`);
+				console.log(
+					`\x1b[90m│  Previous messages: ${loadedMessages.length}\x1b[0m`,
+				);
+			}
 
 			// Print user prompt with styling
 			console.log(`\n\x1b[36m┌─ User Query\x1b[0m`);
@@ -533,7 +584,7 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 				userContent: messageForAI,
 				imageContents: [],
 				controller,
-				messages,
+				messages: allMessages,
 				saveMessage,
 				setMessages,
 				setStreamTokenCount: streamingState.setStreamTokenCount,
@@ -598,6 +649,26 @@ export default function HeadlessModeScreen({prompt, onComplete}: Props) {
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);
 			setIsComplete(true);
+
+			// Print session ID for continuous conversation
+			const finalSession = sessionManager.getCurrentSession();
+			if (finalSession) {
+				console.log(`\n\x1b[96m┌─ Session Information\x1b[0m`);
+				console.log(
+					`\x1b[96m│\x1b[0m  Session ID: \x1b[33m${finalSession.id}\x1b[0m`,
+				);
+				console.log(
+					`\x1b[96m│\x1b[0m  To continue this conversation, use:\x1b[0m`,
+				);
+				console.log(
+					`\x1b[96m│\x1b[0m  \x1b[32msnow --ask "your next question" ${finalSession.id}\x1b[0m`,
+				);
+				console.log(`\x1b[96m└─\x1b[0m\n`);
+
+				// Output session ID in plain text for easy parsing by third-party tools
+				// Format: SESSION_ID=<uuid>
+				console.log(`SESSION_ID=${finalSession.id}`);
+			}
 
 			// Wait a moment then call onComplete
 			setTimeout(() => {
