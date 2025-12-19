@@ -922,9 +922,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (message) {
 				// Check if message is a command with arguments (e.g., /review [note])
 				if (message.startsWith('/')) {
-					const commandMatch = message.match(
-						/^\/([a-zA-Z0-9_-]+)(?:\s+(.+))?$/,
-					);
+					// Support namespaced slash commands like /folder:command
+					const commandMatch = message.match(/^\/([^\s]+)(?:\s+(.+))?$/);
 					if (commandMatch && commandMatch[1]) {
 						const commandName = commandMatch[1];
 						const commandArgs = commandMatch[2];

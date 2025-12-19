@@ -5,8 +5,8 @@ import {
 	getAvailableCommands,
 } from '../execution/commandExecutor.js';
 import {homedir} from 'os';
-import {join} from 'path';
-import {readdir, readFile, writeFile, mkdir} from 'fs/promises';
+import {dirname, join} from 'path';
+import {readdir, readFile, writeFile, mkdir, unlink} from 'fs/promises';
 import {existsSync} from 'fs';
 
 export type CommandLocation = 'global' | 'project';
@@ -19,6 +19,188 @@ export interface CustomCommand {
 	location?: CommandLocation; // 新增，可选以兼容旧数据
 }
 
+type CommandFileEntry = {
+	filePath: string;
+	inferredCommandName: string;
+};
+
+function isValidSlashCommandName(name: string): boolean {
+	const trimmed = name.trim();
+	if (trimmed.length === 0) return false;
+	if (trimmed === '.' || trimmed === '..') return false;
+	// Do not allow whitespace or path separators in the command part
+	return !/[\s\\/:]/.test(trimmed);
+}
+
+function parseNamespacedCommandName(name: string): {
+	namespacePath: string | null;
+	commandName: string;
+} {
+	const trimmed = name.trim();
+	if (!trimmed.includes(':')) {
+		return {namespacePath: null, commandName: trimmed};
+	}
+
+	const colonIndex = trimmed.indexOf(':');
+	const namespacePath = trimmed.slice(0, colonIndex).trim();
+	const commandName = trimmed.slice(colonIndex + 1).trim();
+
+	return {
+		namespacePath: namespacePath.length > 0 ? namespacePath : null,
+		commandName,
+	};
+}
+
+function assertValidNamespacePath(namespacePath: string): string[] {
+	const segments = namespacePath
+		.split('/')
+		.map(s => s.trim())
+		.filter(Boolean);
+
+	for (const segment of segments) {
+		if (segment === '.' || segment === '..') {
+			throw new Error(`Invalid namespace path: "${namespacePath}"`);
+		}
+
+		// Prevent Windows path separator injection
+		if (segment.includes('\\')) {
+			throw new Error(`Invalid namespace path: "${namespacePath}"`);
+		}
+
+		// ':' is reserved for separator between folder and command
+		if (segment.includes(':')) {
+			throw new Error(`Invalid namespace path: "${namespacePath}"`);
+		}
+	}
+
+	return segments;
+}
+
+function getCommandJsonFilePath(commandsDir: string, name: string): string {
+	const {namespacePath, commandName} = parseNamespacedCommandName(name);
+
+	if (!isValidSlashCommandName(commandName)) {
+		throw new Error(`Invalid command name: "${name}"`);
+	}
+
+	if (!namespacePath) {
+		return join(commandsDir, `${commandName}.json`);
+	}
+
+	const segments = assertValidNamespacePath(namespacePath);
+	return join(commandsDir, ...segments, `${commandName}.json`);
+}
+
+async function listJsonCommandsRecursively(
+	dir: string,
+	prefixPath: string,
+): Promise<CommandFileEntry[]> {
+	if (!existsSync(dir)) {
+		return [];
+	}
+
+	let entries: Array<import('fs').Dirent> = [];
+	try {
+		entries = await readdir(dir, {withFileTypes: true});
+	} catch {
+		return [];
+	}
+
+	// Stable ordering: directories first, then files
+	entries.sort((a, b) => {
+		if (a.isDirectory() && !b.isDirectory()) return -1;
+		if (!a.isDirectory() && b.isDirectory()) return 1;
+		return a.name.localeCompare(b.name);
+	});
+
+	const results: CommandFileEntry[] = [];
+
+	for (const entry of entries) {
+		const entryPath = join(dir, entry.name);
+
+		if (entry.isDirectory()) {
+			const childPrefix = prefixPath
+				? `${prefixPath}/${entry.name}`
+				: entry.name;
+			results.push(
+				...(await listJsonCommandsRecursively(entryPath, childPrefix)),
+			);
+			continue;
+		}
+
+		if (!entry.isFile()) {
+			continue;
+		}
+
+		if (!entry.name.toLowerCase().endsWith('.json')) {
+			continue;
+		}
+
+		const baseName = entry.name.slice(0, -'.json'.length);
+		const inferredCommandName = prefixPath
+			? `${prefixPath}:${baseName}`
+			: baseName;
+
+		results.push({
+			filePath: entryPath,
+			inferredCommandName,
+		});
+	}
+
+	return results;
+}
+
+async function loadCustomCommandFromFile(
+	entry: CommandFileEntry,
+	defaultLocation: CommandLocation,
+): Promise<CustomCommand | null> {
+	try {
+		const content = await readFile(entry.filePath, 'utf-8');
+		const cmd = JSON.parse(content) as CustomCommand;
+
+		// Use file path to infer command name for stability and namespace support
+		cmd.name = entry.inferredCommandName;
+		cmd.description = cmd.description || cmd.command;
+
+		// Fill default location for backward compatibility
+		if (!cmd.location) {
+			cmd.location = defaultLocation;
+		}
+
+		return cmd;
+	} catch (error) {
+		console.error(`Failed to load custom command: ${entry.filePath}`, error);
+		return null;
+	}
+}
+
+// Load commands from a specific directory (supports subfolders)
+async function loadCommandsFromDir(
+	dir: string,
+	defaultLocation: CommandLocation,
+): Promise<CustomCommand[]> {
+	const commands: CustomCommand[] = [];
+	const entries = await listJsonCommandsRecursively(dir, '');
+	const seenNames = new Set<string>();
+
+	for (const entry of entries) {
+		const cmd = await loadCustomCommandFromFile(entry, defaultLocation);
+		if (!cmd) {
+			continue;
+		}
+
+		if (seenNames.has(cmd.name)) {
+			// Keep first match for deterministic behavior
+			continue;
+		}
+
+		seenNames.add(cmd.name);
+		commands.push(cmd);
+	}
+
+	return commands;
+}
+
 // Get custom commands directory path
 function getCustomCommandsDir(
 	location: CommandLocation,
@@ -26,10 +208,10 @@ function getCustomCommandsDir(
 ): string {
 	if (location === 'global') {
 		return join(homedir(), '.snow', 'commands');
-	} else {
-		const root = projectRoot || process.cwd();
-		return join(root, '.snow', 'commands');
 	}
+
+	const root = projectRoot || process.cwd();
+	return join(root, '.snow', 'commands');
 }
 
 // Ensure custom commands directory exists
@@ -41,40 +223,6 @@ async function ensureCommandsDir(
 	if (!existsSync(dir)) {
 		await mkdir(dir, {recursive: true});
 	}
-}
-
-// Load commands from a specific directory
-async function loadCommandsFromDir(
-	dir: string,
-	defaultLocation: CommandLocation,
-): Promise<CustomCommand[]> {
-	const commands: CustomCommand[] = [];
-	if (!existsSync(dir)) {
-		return commands;
-	}
-
-	try {
-		const files = await readdir(dir);
-		const jsonFiles = files.filter(f => f.endsWith('.json'));
-
-		for (const file of jsonFiles) {
-			try {
-				const content = await readFile(join(dir, file), 'utf-8');
-				const cmd = JSON.parse(content) as CustomCommand;
-				// Fill default location for backward compatibility
-				if (!cmd.location) {
-					cmd.location = defaultLocation;
-				}
-				commands.push(cmd);
-			} catch (error) {
-				console.error(`Failed to load custom command: ${file}`, error);
-			}
-		}
-	} catch (error) {
-		// Directory read failed, return empty
-	}
-
-	return commands;
 }
 
 // Load all custom commands (project commands override global ones with same name)
@@ -119,8 +267,12 @@ export function checkCommandExists(
 	projectRoot?: string,
 ): boolean {
 	const dir = getCustomCommandsDir(location, projectRoot);
-	const filePath = join(dir, `${name}.json`);
-	return existsSync(filePath);
+	try {
+		const filePath = getCommandJsonFilePath(dir, name);
+		return existsSync(filePath);
+	} catch {
+		return false;
+	}
 }
 
 // Save a custom command
@@ -141,8 +293,11 @@ export async function saveCustomCommand(
 
 	await ensureCommandsDir(location, projectRoot);
 	const dir = getCustomCommandsDir(location, projectRoot);
-	const fileName = `${name}.json`;
-	const filePath = join(dir, fileName);
+	const filePath = getCommandJsonFilePath(dir, name);
+
+	// Ensure parent directory exists (for namespaced commands)
+	await mkdir(dirname(filePath), {recursive: true});
+
 	const data: CustomCommand = {name, command, type, description, location};
 	await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
@@ -172,9 +327,9 @@ export async function deleteCustomCommand(
 	location: CommandLocation = 'global',
 	projectRoot?: string,
 ): Promise<void> {
-	const {unlink} = await import('fs/promises');
 	const dir = getCustomCommandsDir(location, projectRoot);
-	const filePath = join(dir, `${name}.json`);
+	const filePath = getCommandJsonFilePath(dir, name);
+
 	await unlink(filePath);
 
 	// Unregister the command from command executor
@@ -212,14 +367,14 @@ export async function registerCustomCommands(
 						action: 'executeTerminalCommand',
 						prompt: cmd.command,
 					};
-				} else {
-					return {
-						success: true,
-						message: `Sending to AI: ${cmd.command}`,
-						action: 'executeCustomCommand',
-						prompt: cmd.command,
-					};
 				}
+
+				return {
+					success: true,
+					message: `Sending to AI: ${cmd.command}`,
+					action: 'executeCustomCommand',
+					prompt: cmd.command,
+				};
 			},
 		});
 	}
