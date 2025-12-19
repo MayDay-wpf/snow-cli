@@ -14,12 +14,31 @@ import {
 	DEFAULT_CONFIG,
 	type AppConfig,
 } from './apiConfig.js';
+import {compactAgent} from '../../agents/compactAgent.js';
+import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
+import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
+import {reviewAgent} from '../../agents/reviewAgent.js';
+import {summaryAgent} from '../../agents/summaryAgent.js';
+import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const PROFILES_DIR = join(CONFIG_DIR, 'profiles');
 const ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.json');
 const LEGACY_ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.txt');
 const LEGACY_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
+/**
+ * Clear all agent configuration caches
+ * Called when profile switches or config reloads
+ */
+export function clearAllAgentCaches(): void {
+	compactAgent.clearCache();
+	codebaseReviewAgent.clearCache();
+	promptOptimizeAgent.clearCache();
+	reviewAgent.clearCache();
+	summaryAgent.clearCache();
+	unifiedHooksExecutor.clearCache();
+}
 
 export interface ConfigProfile {
 	name: string;
@@ -284,6 +303,9 @@ export function switchProfile(profileName: string): void {
 
 	// Update the active profile marker
 	setActiveProfileName(profileName);
+
+	// Clear all agent caches when switching profiles
+	clearAllAgentCaches();
 }
 
 /**

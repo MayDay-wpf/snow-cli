@@ -1,4 +1,7 @@
-import {getOpenAiConfig, getCustomSystemPrompt} from '../utils/config/apiConfig.js';
+import {
+	getOpenAiConfig,
+	getCustomSystemPrompt,
+} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -35,6 +38,15 @@ export class ReviewAgent {
 			logger.warn('Failed to initialize review agent:', error);
 			return false;
 		}
+	}
+
+	/**
+	 * Clear cached configuration (called when profile switches)
+	 */
+	clearCache(): void {
+		this.initialized = false;
+		this.modelName = '';
+		this.requestMethod = 'chat';
 	}
 
 	/**

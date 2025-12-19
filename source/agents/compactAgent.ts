@@ -56,6 +56,15 @@ export class CompactAgent {
 	}
 
 	/**
+	 * Clear cached configuration (called when profile switches)
+	 */
+	clearCache(): void {
+		this.initialized = false;
+		this.modelName = '';
+		this.requestMethod = 'chat';
+	}
+
+	/**
 	 * Check if compact agent is available
 	 */
 	async isAvailable(): Promise<boolean> {

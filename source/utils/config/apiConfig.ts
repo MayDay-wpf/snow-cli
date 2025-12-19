@@ -306,13 +306,14 @@ export async function updateOpenAiConfig(
 	// Also save to the active profile if profiles system is initialized
 	try {
 		// Dynamic import for ESM compatibility
-		const {getActiveProfileName, saveProfile} = await import(
-			'./configManager.js'
-		);
+		const {getActiveProfileName, saveProfile, clearAllAgentCaches} =
+			await import('./configManager.js');
 		const activeProfileName = getActiveProfileName();
 		if (activeProfileName) {
 			saveProfile(activeProfileName, updatedConfig);
 		}
+		// Clear all agent caches to ensure they reload with new configuration
+		clearAllAgentCaches();
 	} catch {
 		// Profiles system not available yet (during initialization), skip sync
 	}

@@ -109,8 +109,18 @@ export class UnifiedHooksExecutor {
 	}
 
 	/**
+	 * Clear cached configuration (called when profile switches)
+	 */
+	clearCache(): void {
+		this.promptInitialized = false;
+		this.modelName = '';
+		this.requestMethod = 'chat';
+	}
+
+	/**
 	 * 初始化 Prompt 执行器（获取 basicModel 配置）
 	 */
+
 	private async initializePromptExecutor(): Promise<boolean> {
 		if (this.promptInitialized) {
 			return true;

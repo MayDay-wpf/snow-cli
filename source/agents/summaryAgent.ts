@@ -56,6 +56,15 @@ export class SummaryAgent {
 	}
 
 	/**
+	 * Clear cached configuration (called when profile switches)
+	 */
+	clearCache(): void {
+		this.initialized = false;
+		this.modelName = '';
+		this.requestMethod = 'chat';
+	}
+
+	/**
 	 * Check if summary agent is available
 	 */
 	async isAvailable(): Promise<boolean> {

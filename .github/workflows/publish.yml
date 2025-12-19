@@ -58,8 +58,7 @@ jobs:
             
             ### What's New
 
-            - Fixed the issue that the long-consuming command could not be exited using the ESC key
-            - Release JetBrains plugin version 0.4.2, fixing the BUG of infinitely opening windows on Windows systems
+            - Fix the bug where the model cache is not cleared after switching configuration files
 
             ### Installation
             ```bash
