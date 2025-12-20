@@ -665,7 +665,9 @@ async function probeServiceTools(
 	serviceName: string,
 	server: MCPServer,
 ): Promise<InternalMCPTool[]> {
-	return await connectAndGetTools(serviceName, server, 3000); // Short timeout for probing
+	//HTTP服务需要更长超时时间
+	const timeout = server.url ? 15000 : 5000;
+	return await connectAndGetTools(serviceName, server, timeout);
 }
 
 /**
@@ -737,9 +739,10 @@ async function connectAndGetTools(
 					`[MCP] Attempting StreamableHTTP connection to ${serviceName}...`,
 				);
 
-				const headers: Record<string, string> = {
-					'Content-Type': 'application/json',
-				};
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json, text/event-stream',
+			};
 
 				if (server.env) {
 					const allEnv = {...process.env, ...server.env};
@@ -920,8 +923,8 @@ async function getPersistentClient(
 
 	if (server.url) {
 		let urlString = server.url;
+		const allEnv = {...process.env, ...(server.env || {})};
 		if (server.env) {
-			const allEnv = {...process.env, ...server.env};
 			urlString = urlString.replace(
 				/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
 				(match, braced, simple) => {
@@ -931,7 +934,22 @@ async function getPersistentClient(
 			);
 		}
 		const url = new URL(urlString);
-		transport = new StreamableHTTPClientTransport(url);
+
+		//构建请求头
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json, text/event-stream',
+		};
+		if (allEnv['MCP_API_KEY']) {
+			headers['Authorization'] = `Bearer ${allEnv['MCP_API_KEY']}`;
+		}
+		if (allEnv['MCP_AUTH_HEADER']) {
+			headers['Authorization'] = allEnv['MCP_AUTH_HEADER'];
+		}
+
+		transport = new StreamableHTTPClientTransport(url, {
+			requestInit: {headers},
+		});
 	} else if (server.command) {
 		transport = new StdioClientTransport({
 			command: server.command,

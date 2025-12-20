@@ -68,6 +68,10 @@ async function loadDependencies() {
 	// Import utils/index.js to register all commands (side-effect import)
 	await import('./utils/index.js');
 
+	//初始化全局代理（让MCP HTTP请求走代理）
+	const {initGlobalProxy} = await import('./utils/core/proxyUtils.js');
+	initGlobalProxy();
+
 	const [
 		appModule,
 		vscodeModule,
