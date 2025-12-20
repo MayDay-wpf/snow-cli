@@ -860,6 +860,9 @@ export const ja: TranslationKeys = {
 	fileRollback: {
 		title: 'ファイルロールバック確認',
 		description: 'このチェックポイントには',
+		filesCount: '{count} 個のファイルがロールバックされます',
+		filesCountWithSelection:
+			'{count} 個のファイルがロールバックされます ({selected}/{total} 選択済み)',
 		question: 'ファイルもロールバックしますか？',
 		yesRollbackFiles: 'はい、ファイルと会話をロールバック',
 		noConversationOnly: 'いいえ、会話のみロールバック',
@@ -871,6 +874,8 @@ export const ja: TranslationKeys = {
 		confirmHint: 'Enter 確認',
 		cancelHint: 'ESC キャンセル',
 		scrollHint: '↑↓ スクロール',
+		navigateHint: '↑↓ ナビゲート',
+		toggleHint: 'Space トグル',
 		backHint: 'Tab 戻る',
 		closeHint: 'ESC 閉じる',
 	},

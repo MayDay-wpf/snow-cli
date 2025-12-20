@@ -831,6 +831,9 @@ export const zh: TranslationKeys = {
 	fileRollback: {
 		title: '文件回滚确认',
 		description: '此检查点包含',
+		filesCount: '{count} 个文件将被回滚',
+		filesCountWithSelection:
+			'{count} 个文件将被回滚 ({selected}/{total} 已选择)',
 		question: '是否同时回滚文件？',
 		yesRollbackFiles: '是，回滚文件和对话',
 		noConversationOnly: '否，仅回滚对话',
@@ -842,6 +845,8 @@ export const zh: TranslationKeys = {
 		confirmHint: 'Enter 确认',
 		cancelHint: 'ESC 取消',
 		scrollHint: '↑↓ 滚动',
+		navigateHint: '↑↓ 导航',
+		toggleHint: '空格 切换',
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 关闭',
 	},

@@ -834,6 +834,8 @@ export type TranslationKeys = {
 	fileRollback: {
 		title: string;
 		description: string;
+		filesCount: string;
+		filesCountWithSelection: string;
 		question: string;
 		yesRollbackFiles: string;
 		noConversationOnly: string;
@@ -845,6 +847,8 @@ export type TranslationKeys = {
 		confirmHint: string;
 		cancelHint: string;
 		scrollHint: string;
+		navigateHint: string;
+		toggleHint: string;
 		backHint: string;
 		closeHint: string;
 	};

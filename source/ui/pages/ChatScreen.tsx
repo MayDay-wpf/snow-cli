@@ -48,7 +48,7 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
-import {incrementalSnapshotManager} from '../../utils/codebase/incrementalSnapshot.js';
+import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
@@ -1008,7 +1008,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setRemountKey(prev => prev + 1);
 
 				// Load snapshot file counts for the loaded session
-				const snapshots = await incrementalSnapshotManager.listSnapshots(
+				const snapshots = await hashBasedSnapshotManager.listSnapshots(
 					session.id,
 				);
 				const counts = new Map<number, number>();

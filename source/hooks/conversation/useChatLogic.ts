@@ -13,7 +13,7 @@ import {
 	performAutoCompression,
 } from '../../utils/core/autoCompress.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
-import {incrementalSnapshotManager} from '../../utils/codebase/incrementalSnapshot.js';
+import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {logger} from '../../utils/core/logger.js';
 
@@ -174,13 +174,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		if (!currentSession) {
 			await sessionManager.createNewSession();
 		}
-		const session = sessionManager.getCurrentSession();
-		if (session) {
-			await incrementalSnapshotManager.createSnapshot(
-				session.id,
-				messages.length,
-			);
-		}
 
 		await processMessage(message, images);
 	};
@@ -279,6 +272,16 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 		streamingState.setIsStreaming(true);
 
+		// Create snapshot after adding user message to UI (non-blocking for better UX)
+		const session = sessionManager.getCurrentSession();
+		if (session) {
+			hashBasedSnapshotManager
+				.createSnapshot(session.id, messages.length)
+				.catch(error => {
+					logger.warn('Failed to create snapshot:', error);
+				});
+		}
+
 		const controller = new AbortController();
 		streamingState.setAbortController(controller);
 
@@ -333,34 +336,53 @@ export function useChatLogic(props: UseChatLogicProps) {
 				}
 			};
 
-			await handleConversationWithTools({
-				userContent: messageForAI,
-				imageContents,
-				controller,
-				messages,
-				saveMessage: saveMessageWithOriginal,
-				setMessages,
-				setStreamTokenCount: streamingState.setStreamTokenCount,
-				requestToolConfirmation,
-				requestUserQuestion,
-				isToolAutoApproved,
-				addMultipleToAlwaysApproved,
-				yoloMode,
-				planMode,
-				vulnerabilityHuntingMode,
-				setContextUsage: streamingState.setContextUsage,
-				useBasicModel,
-				getPendingMessages: () => pendingMessagesRef.current,
-				clearPendingMessages: () => setPendingMessages([]),
-				setIsStreaming: streamingState.setIsStreaming,
-				setIsReasoning: streamingState.setIsReasoning,
-				setRetryStatus: streamingState.setRetryStatus,
-				clearSavedMessages,
-				setRemountKey,
-				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
-				getCurrentContextPercentage: () => currentContextPercentageRef.current,
-				setCurrentModel: streamingState.setCurrentModel,
-			});
+			try {
+				await handleConversationWithTools({
+					userContent: messageForAI,
+					imageContents,
+					controller,
+					messages,
+					saveMessage: saveMessageWithOriginal,
+					setMessages,
+					setStreamTokenCount: streamingState.setStreamTokenCount,
+					requestToolConfirmation,
+					requestUserQuestion,
+					isToolAutoApproved,
+					addMultipleToAlwaysApproved,
+					yoloMode,
+					planMode,
+					vulnerabilityHuntingMode,
+					setContextUsage: streamingState.setContextUsage,
+					useBasicModel,
+					getPendingMessages: () => pendingMessagesRef.current,
+					clearPendingMessages: () => setPendingMessages([]),
+					setIsStreaming: streamingState.setIsStreaming,
+					setIsReasoning: streamingState.setIsReasoning,
+					setRetryStatus: streamingState.setRetryStatus,
+					clearSavedMessages,
+					setRemountKey,
+					setSnapshotFileCount: snapshotState.setSnapshotFileCount,
+					getCurrentContextPercentage: () =>
+						currentContextPercentageRef.current,
+					setCurrentModel: streamingState.setCurrentModel,
+				});
+			} finally {
+				// Commit snapshot after message processing completes (success or error)
+				// Use messages.length as messageIndex since we created snapshot with this index
+				const result = await hashBasedSnapshotManager.commitSnapshot(
+					messages.length,
+				);
+
+				// Update snapshot file count for rollback UI
+				if (result && result.fileCount > 0) {
+					const session = sessionManager.getCurrentSession();
+					if (session) {
+						const newCounts = new Map(snapshotState.snapshotFileCount);
+						newCounts.set(result.messageIndex, result.fileCount);
+						snapshotState.setSnapshotFileCount(newCounts);
+					}
+				}
+			}
 		} catch (error) {
 			// Don't show error message if user manually interrupted or request was aborted
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
@@ -568,33 +590,52 @@ export function useChatLogic(props: UseChatLogicProps) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
-			await handleConversationWithTools({
-				userContent: messageForAI,
-				imageContents,
-				controller,
-				messages,
-				saveMessage,
-				setMessages,
-				setStreamTokenCount: streamingState.setStreamTokenCount,
-				requestToolConfirmation,
-				requestUserQuestion,
-				isToolAutoApproved,
-				addMultipleToAlwaysApproved,
-				yoloMode,
-				planMode,
-				vulnerabilityHuntingMode,
-				setContextUsage: streamingState.setContextUsage,
-				getPendingMessages: () => pendingMessagesRef.current,
-				clearPendingMessages: () => setPendingMessages([]),
-				setIsStreaming: streamingState.setIsStreaming,
-				setIsReasoning: streamingState.setIsReasoning,
-				setRetryStatus: streamingState.setRetryStatus,
-				clearSavedMessages,
-				setRemountKey,
-				setSnapshotFileCount: snapshotState.setSnapshotFileCount,
-				getCurrentContextPercentage: () => currentContextPercentageRef.current,
-				setCurrentModel: streamingState.setCurrentModel,
-			});
+			try {
+				await handleConversationWithTools({
+					userContent: messageForAI,
+					imageContents,
+					controller,
+					messages,
+					saveMessage,
+					setMessages,
+					setStreamTokenCount: streamingState.setStreamTokenCount,
+					requestToolConfirmation,
+					requestUserQuestion,
+					isToolAutoApproved,
+					addMultipleToAlwaysApproved,
+					yoloMode,
+					planMode,
+					vulnerabilityHuntingMode,
+					setContextUsage: streamingState.setContextUsage,
+					getPendingMessages: () => pendingMessagesRef.current,
+					clearPendingMessages: () => setPendingMessages([]),
+					setIsStreaming: streamingState.setIsStreaming,
+					setIsReasoning: streamingState.setIsReasoning,
+					setRetryStatus: streamingState.setRetryStatus,
+					clearSavedMessages,
+					setRemountKey,
+					setSnapshotFileCount: snapshotState.setSnapshotFileCount,
+					getCurrentContextPercentage: () =>
+						currentContextPercentageRef.current,
+					setCurrentModel: streamingState.setCurrentModel,
+				});
+			} finally {
+				// Commit snapshot after message processing completes
+				// Note: This is for processPendingMessages, but snapshots are actually
+				// created and committed in useConversation.ts when pending messages are detected
+				// So this might not find any snapshot to commit
+				const result = await hashBasedSnapshotManager.commitSnapshot();
+
+				// Update snapshot file count for rollback UI
+				if (result && result.fileCount > 0) {
+					const session = sessionManager.getCurrentSession();
+					if (session) {
+						const newCounts = new Map(snapshotState.snapshotFileCount);
+						newCounts.set(result.messageIndex, result.fileCount);
+						snapshotState.setSnapshotFileCount(newCounts);
+					}
+				}
+			}
 		} catch (error) {
 			// Don't show error message if user manually interrupted or request was aborted
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
@@ -707,7 +748,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			}
 
 			if (totalFileCount > 0) {
-				const filePaths = await incrementalSnapshotManager.getFilesToRollback(
+				const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 					currentSession.id,
 					selectedIndex,
 				);
@@ -742,7 +783,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					setMessages(uiMessages);
 					setRemountKey(prev => prev + 1);
 
-					const snapshots = await incrementalSnapshotManager.listSnapshots(
+					const snapshots = await hashBasedSnapshotManager.listSnapshots(
 						originalSession.id,
 					);
 					const counts = new Map<number, number>();
@@ -770,7 +811,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 
 		if (totalFileCount > 0) {
-			const filePaths = await incrementalSnapshotManager.getFilesToRollback(
+			const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 				currentSession.id,
 				selectedIndex,
 			);
@@ -793,14 +834,25 @@ export function useChatLogic(props: UseChatLogicProps) {
 	const performRollback = async (
 		selectedIndex: number,
 		rollbackFiles: boolean,
+		selectedFiles?: string[],
 	) => {
 		const currentSession = sessionManager.getCurrentSession();
 
 		if (rollbackFiles && currentSession) {
-			await incrementalSnapshotManager.rollbackToMessageIndex(
-				currentSession.id,
-				selectedIndex,
-			);
+			if (selectedFiles && selectedFiles.length > 0) {
+				// Partial rollback - only rollback selected files
+				await hashBasedSnapshotManager.rollbackToMessageIndex(
+					currentSession.id,
+					selectedIndex,
+					selectedFiles,
+				);
+			} else {
+				// Full rollback - rollback all files
+				await hashBasedSnapshotManager.rollbackToMessageIndex(
+					currentSession.id,
+					selectedIndex,
+				);
+			}
 		}
 
 		if (currentSession) {
@@ -863,7 +915,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			}
 
 			if (sessionTruncateIndex === 0 && currentSession) {
-				await incrementalSnapshotManager.clearAllSnapshots(currentSession.id);
+				await hashBasedSnapshotManager.clearAllSnapshots(currentSession.id);
 
 				await sessionManager.deleteSession(currentSession.id);
 
@@ -884,12 +936,12 @@ export function useChatLogic(props: UseChatLogicProps) {
 				return;
 			}
 
-			await incrementalSnapshotManager.deleteSnapshotsFromIndex(
+			await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
 				currentSession.id,
 				selectedIndex,
 			);
 
-			const snapshots = await incrementalSnapshotManager.listSnapshots(
+			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,
 			);
 			const counts = new Map<number, number>();
@@ -912,7 +964,10 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}, 0);
 	};
 
-	const handleRollbackConfirm = async (rollbackFiles: boolean | null) => {
+	const handleRollbackConfirm = async (
+		rollbackFiles: boolean | null,
+		selectedFiles?: string[],
+	) => {
 		if (rollbackFiles === null) {
 			snapshotState.setPendingRollback(null);
 			return;
@@ -933,6 +988,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					await performRollback(
 						snapshotState.pendingRollback.messageIndex,
 						true,
+						selectedFiles,
 					);
 				}
 
@@ -954,7 +1010,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 							setMessages(uiMessages);
 							setRemountKey(prev => prev + 1);
 
-							const snapshots = await incrementalSnapshotManager.listSnapshots(
+							const snapshots = await hashBasedSnapshotManager.listSnapshots(
 								originalSession.id,
 							);
 							const counts = new Map<number, number>();
@@ -975,6 +1031,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 				await performRollback(
 					snapshotState.pendingRollback.messageIndex,
 					rollbackFiles,
+					selectedFiles,
 				);
 			}
 		}

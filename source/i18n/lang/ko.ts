@@ -845,6 +845,9 @@ export const ko: TranslationKeys = {
 	fileRollback: {
 		title: '파일 롤백 확인',
 		description: '이 체크포인트에는',
+		filesCount: '{count}개 파일이 롤백됩니다',
+		filesCountWithSelection:
+			'{count}개 파일이 롤백됩니다 ({selected}/{total} 선택됨)',
 		question: '파일도 롤백하시겠습니까?',
 		yesRollbackFiles: '예, 파일과 대화 롤백',
 		noConversationOnly: '아니요, 대화만 롤백',
@@ -856,6 +859,8 @@ export const ko: TranslationKeys = {
 		confirmHint: 'Enter 확인',
 		cancelHint: 'ESC 취소',
 		scrollHint: '↑↓ 스크롤',
+		navigateHint: '↑↓ 탐색',
+		toggleHint: 'Space 토글',
 		backHint: 'Tab 돌아가기',
 		closeHint: 'ESC 닫기',
 	},

@@ -874,6 +874,9 @@ export const en: TranslationKeys = {
 	fileRollback: {
 		title: 'File Rollback Confirmation',
 		description: 'This checkpoint has',
+		filesCount: '{count} file(s) will be rolled back',
+		filesCountWithSelection:
+			'{count} file(s) will be rolled back ({selected}/{total} selected)',
 		question: 'Do you want to rollback the files as well?',
 		yesRollbackFiles: 'Yes, rollback files and conversation',
 		noConversationOnly: 'No, rollback conversation only',
@@ -885,6 +888,8 @@ export const en: TranslationKeys = {
 		confirmHint: 'Enter confirm',
 		cancelHint: 'ESC cancel',
 		scrollHint: '↑↓ scroll',
+		navigateHint: '↑↓ navigate',
+		toggleHint: 'Space toggle',
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
 	},

@@ -25,6 +25,7 @@ import {formatToolCallMessage} from '../../utils/ui/messageFormatter.js';
 import {resourceMonitor} from '../../utils/core/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../../utils/config/toolDisplayConfig.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
+import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
@@ -1640,6 +1641,22 @@ export async function handleConversationWithTools(
 								mimeType: img.mimeType,
 							}));
 
+						// Create snapshot before adding pending message to UI
+						const session = sessionManager.getCurrentSession();
+						let pendingMessageIndex = 0;
+						if (session) {
+							// Use setMessages callback to get REAL-TIME message count
+							options.setMessages(prev => {
+								pendingMessageIndex = prev.length;
+								return prev; // Don't modify, just read
+							});
+
+							await hashBasedSnapshotManager.createSnapshot(
+								session.id,
+								pendingMessageIndex,
+							);
+						}
+
 						// Add user message to UI
 						const userMessage: Message = {
 							role: 'user',
@@ -1787,9 +1804,31 @@ export async function handleConversationWithTools(
 
 		// Free encoder
 		freeEncoder();
-	} catch (error) {
-		throw error;
 	} finally {
+		// 立即隐藏 LoadingIndicator - 确保 UI 优先响应
+		if (options.setIsStreaming) {
+			options.setIsStreaming(false);
+		}
+
+		// 同步提交所有待处理快照 - 确保快照保存可靠性
+		// 处理 normal 和 pending 消息的快照
+		while (true) {
+			const result = await hashBasedSnapshotManager.commitSnapshot();
+			if (!result) break; // 没有更多快照需要提交
+
+			// 更新回滚 UI 的快照文件计数
+			if (result.fileCount > 0 && options.setSnapshotFileCount) {
+				const session = sessionManager.getCurrentSession();
+				if (session) {
+					options.setSnapshotFileCount(prev => {
+						const newCounts = new Map(prev);
+						newCounts.set(result.messageIndex, result.fileCount);
+						return newCounts;
+					});
+				}
+			}
+		}
+
 		// ✅ 确保总是释放encoder资源，避免资源泄漏
 		freeEncoder();
 	}

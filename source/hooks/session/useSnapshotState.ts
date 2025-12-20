@@ -1,6 +1,6 @@
 import {useState, useEffect} from 'react';
 import {sessionManager} from '../../utils/session/sessionManager.js';
-import {incrementalSnapshotManager} from '../../utils/codebase/incrementalSnapshot.js';
+import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 
 export function useSnapshotState(messagesLength: number) {
 	const [snapshotFileCount, setSnapshotFileCount] = useState<
@@ -22,7 +22,7 @@ export function useSnapshotState(messagesLength: number) {
 			const currentSession = sessionManager.getCurrentSession();
 			if (!currentSession) return;
 
-			const snapshots = await incrementalSnapshotManager.listSnapshots(
+			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,
 			);
 			const counts = new Map<number, number>();

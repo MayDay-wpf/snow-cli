@@ -5,7 +5,7 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 type Props = {
 	fileCount: number;
 	filePaths: string[];
-	onConfirm: (rollbackFiles: boolean | null) => void; // null means cancel
+	onConfirm: (rollbackFiles: boolean | null, selectedFiles?: string[]) => void; // null means cancel, selectedFiles for partial rollback
 };
 
 export default function FileRollbackConfirmation({
@@ -17,32 +17,86 @@ export default function FileRollbackConfirmation({
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [showFullList, setShowFullList] = useState(false);
 	const [fileScrollIndex, setFileScrollIndex] = useState(0);
+	const [selectedFiles, setSelectedFiles] = useState<Set<string>>(
+		new Set(filePaths),
+	); // Default all selected
+	const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
 
 	const options = [
 		{label: t.fileRollback.yesRollbackFiles, value: true},
 		{label: t.fileRollback.noConversationOnly, value: false},
 	];
 
-	useInput((_, key) => {
+	useInput((input, key) => {
 		// Tab - toggle full file list view
 		if (key.tab) {
 			setShowFullList(prev => !prev);
 			setFileScrollIndex(0); // Reset scroll when toggling
+			setHighlightedFileIndex(0); // Reset highlight when toggling
 			return;
 		}
 
-		// In full list mode, use up/down to scroll files
+		// In full list mode, use up/down to navigate files, space to toggle selection
 		if (showFullList) {
 			const maxVisibleFiles = 10;
 			const maxScroll = Math.max(0, filePaths.length - maxVisibleFiles);
 
 			if (key.upArrow) {
-				setFileScrollIndex(prev => Math.max(0, prev - 1));
+				setHighlightedFileIndex(prev => {
+					const newIndex = Math.max(0, prev - 1);
+					// Adjust scroll if needed
+					if (newIndex < fileScrollIndex) {
+						setFileScrollIndex(newIndex);
+					}
+					return newIndex;
+				});
 				return;
 			}
 
 			if (key.downArrow) {
-				setFileScrollIndex(prev => Math.min(maxScroll, prev + 1));
+				setHighlightedFileIndex(prev => {
+					const newIndex = Math.min(filePaths.length - 1, prev + 1);
+					// Adjust scroll if needed
+					if (newIndex >= fileScrollIndex + maxVisibleFiles) {
+						setFileScrollIndex(
+							Math.min(maxScroll, newIndex - maxVisibleFiles + 1),
+						);
+					}
+					return newIndex;
+				});
+				return;
+			}
+
+			// Space - toggle file selection
+			if (input === ' ') {
+				const file = filePaths[highlightedFileIndex];
+				if (file) {
+					setSelectedFiles(prev => {
+						const newSet = new Set(prev);
+						if (newSet.has(file)) {
+							newSet.delete(file);
+						} else {
+							newSet.add(file);
+						}
+						return newSet;
+					});
+				}
+				return;
+			}
+
+			// Enter - confirm selection (when in file selection mode)
+			if (key.return) {
+				const selectedFilesArray = Array.from(selectedFiles);
+				if (selectedFilesArray.length === 0) {
+					// If no files selected, treat as conversation only
+					onConfirm(false);
+				} else if (selectedFilesArray.length === filePaths.length) {
+					// All files selected, rollback all
+					onConfirm(true);
+				} else {
+					// Partial selection
+					onConfirm(true, selectedFilesArray);
+				}
 				return;
 			}
 		} else {
@@ -56,12 +110,24 @@ export default function FileRollbackConfirmation({
 				setSelectedIndex(prev => Math.min(options.length - 1, prev + 1));
 				return;
 			}
-		}
 
-		// Enter - confirm selection (only when not in full list mode)
-		if (key.return && !showFullList) {
-			onConfirm(options[selectedIndex]?.value ?? false);
-			return;
+			// Enter - confirm selection (only when not in full list mode)
+			if (key.return) {
+				const choice = options[selectedIndex]?.value ?? false;
+				if (choice) {
+					// If user wants to rollback files, pass all selected files
+					const selectedFilesArray = Array.from(selectedFiles);
+					if (selectedFilesArray.length === filePaths.length) {
+						onConfirm(true);
+					} else {
+						onConfirm(true, selectedFilesArray);
+					}
+				} else {
+					// Conversation only
+					onConfirm(false);
+				}
+				return;
+			}
 		}
 
 		// ESC - exit full list mode or cancel rollback
@@ -69,6 +135,7 @@ export default function FileRollbackConfirmation({
 			if (showFullList) {
 				setShowFullList(false);
 				setFileScrollIndex(0);
+				setHighlightedFileIndex(0);
 			} else {
 				onConfirm(null); // null means cancel everything
 			}
@@ -89,6 +156,8 @@ export default function FileRollbackConfirmation({
 	const hasMoreBelow =
 		showFullList && fileScrollIndex + maxFilesToShowFull < filePaths.length;
 
+	const selectedCount = selectedFiles.size;
+
 	return (
 		<Box flexDirection="column" marginX={1} marginBottom={1} padding={1}>
 			<Box marginBottom={1}>
@@ -99,8 +168,13 @@ export default function FileRollbackConfirmation({
 
 			<Box marginBottom={1}>
 				<Text color="white">
-					{t.fileRollback.description} {fileCount} file
-					{fileCount > 1 ? 's' : ''} that will be rolled back:
+					{showFullList
+						? t.fileRollback.filesCountWithSelection
+								.replace('{count}', String(fileCount))
+								.replace('{selected}', String(selectedCount))
+								.replace('{total}', String(fileCount))
+						: t.fileRollback.filesCount.replace('{count}', String(fileCount))}
+					:
 				</Text>
 			</Box>
 
@@ -108,17 +182,31 @@ export default function FileRollbackConfirmation({
 			<Box flexDirection="column" marginBottom={1} marginLeft={2}>
 				{hasMoreAbove && (
 					<Text color="gray" dimColor>
-						↑ {fileScrollIndex} {t.fileRollback.moreAbove}
+						{fileScrollIndex} {t.fileRollback.moreAbove}
 					</Text>
 				)}
-				{displayFiles.map((file, index) => (
-					<Text key={index} color="cyan" dimColor>
-						• {file}
-					</Text>
-				))}
+				{displayFiles.map((file, index) => {
+					const actualIndex = showFullList ? fileScrollIndex + index : index;
+					const isSelected = selectedFiles.has(file);
+					const isHighlighted =
+						showFullList && actualIndex === highlightedFileIndex;
+
+					return (
+						<Box key={index}>
+							<Text
+								color={isHighlighted ? 'green' : isSelected ? 'cyan' : 'gray'}
+								dimColor={!isHighlighted && !isSelected}
+								bold={isHighlighted}
+							>
+								{showFullList ? (isSelected ? '[x] ' : '[ ] ') : '• '}
+								{file}
+							</Text>
+						</Box>
+					);
+				})}
 				{hasMoreBelow && (
 					<Text color="gray" dimColor>
-						↓ {filePaths.length - (fileScrollIndex + maxFilesToShowFull)}{' '}
+						{filePaths.length - (fileScrollIndex + maxFilesToShowFull)}{' '}
 						{t.fileRollback.moreBelow}
 					</Text>
 				)}
@@ -157,10 +245,8 @@ export default function FileRollbackConfirmation({
 			<Box>
 				<Text color="gray" dimColor>
 					{showFullList
-						? `${t.fileRollback.scrollHint} · ${t.fileRollback.backHint} · ${t.fileRollback.closeHint}`
-						: fileCount > maxFilesToShowCompact
-						? `${t.fileRollback.selectHint} · ${t.fileRollback.viewAllHint} (${fileCount} files) · ${t.fileRollback.confirmHint} · ${t.fileRollback.cancelHint}`
-						: `${t.fileRollback.selectHint} · ${t.fileRollback.confirmHint} · ${t.fileRollback.cancelHint}`}
+						? `${t.fileRollback.navigateHint} · ${t.fileRollback.toggleHint} · ${t.fileRollback.confirmHint} · ${t.fileRollback.backHint}`
+						: `${t.fileRollback.selectHint} · ${t.fileRollback.viewAllHint} · ${t.fileRollback.confirmHint} · ${t.fileRollback.cancelHint}`}
 				</Text>
 			</Box>
 		</Box>

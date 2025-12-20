@@ -907,6 +907,9 @@ export const es: TranslationKeys = {
 	fileRollback: {
 		title: 'Confirmación de Reversión de Archivos',
 		description: 'Este punto de control tiene',
+		filesCount: '{count} archivo(s) se revertirán',
+		filesCountWithSelection:
+			'{count} archivo(s) se revertirán ({selected}/{total} seleccionados)',
 		question: '¿Desea revertir los archivos también?',
 		yesRollbackFiles: 'Sí, revertir archivos y conversación',
 		noConversationOnly: 'No, revertir solo conversación',
@@ -918,6 +921,8 @@ export const es: TranslationKeys = {
 		confirmHint: 'Enter confirmar',
 		cancelHint: 'ESC cancelar',
 		scrollHint: '↑↓ desplazar',
+		navigateHint: '↑↓ navegar',
+		toggleHint: 'Espacio alternar',
 		backHint: 'Tab volver',
 		closeHint: 'ESC cerrar',
 	},

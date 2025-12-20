@@ -6,7 +6,6 @@ import {
 	vscodeConnection,
 	type Diagnostic,
 } from '../utils/ui/vscodeConnection.js';
-import {incrementalSnapshotManager} from '../utils/codebase/incrementalSnapshot.js';
 import {
 	tryUnescapeFix,
 	trimPairIfPossible,
@@ -738,8 +737,6 @@ export class FilesystemMCPService {
 				}
 			}
 
-			// Backup file before creation
-			await incrementalSnapshotManager.backupFile(fullPath);
 
 			// Create parent directories if needed
 			if (createDirectories) {
@@ -1153,8 +1150,6 @@ export class FilesystemMCPService {
 
 			const {startLine, endLine} = selectedMatch;
 
-			// Backup file before editing
-			await incrementalSnapshotManager.backupFile(fullPath);
 
 			// Perform the replacement by replacing the matched lines
 			const normalizedReplace = replaceContent
@@ -1523,8 +1518,6 @@ export class FilesystemMCPService {
 			const adjustedEndLine = Math.min(endLine, totalLines);
 			const linesToModify = adjustedEndLine - adjustedStartLine + 1;
 
-			// Backup file before editing
-			await incrementalSnapshotManager.backupFile(fullPath);
 
 			// Extract the lines that will be replaced (for comparison)
 			// Compress whitespace for display readability

@@ -831,6 +831,9 @@ export const zhTW: TranslationKeys = {
 	fileRollback: {
 		title: '檔案回滾確認',
 		description: '此檢查點包含',
+		filesCount: '{count} 個檔案將被回滾',
+		filesCountWithSelection:
+			'{count} 個檔案將被回滾 ({selected}/{total} 已選擇)',
 		question: '是否同時回滾檔案？',
 		yesRollbackFiles: '是，回滾檔案和對話',
 		noConversationOnly: '否，僅回滾對話',
@@ -842,6 +845,8 @@ export const zhTW: TranslationKeys = {
 		confirmHint: 'Enter 確認',
 		cancelHint: 'ESC 取消',
 		scrollHint: '↑↓ 滾動',
+		navigateHint: '↑↓ 導航',
+		toggleHint: '空白鍵 切換',
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 關閉',
 	},
