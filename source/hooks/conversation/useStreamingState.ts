@@ -29,6 +29,7 @@ export type CodebaseSearchStatus = {
 
 export function useStreamingState() {
 	const [isStreaming, setIsStreaming] = useState(false);
+	const [isStopping, setIsStopping] = useState(false);
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
 	const [isReasoning, setIsReasoning] = useState(false);
 	const [abortController, setAbortController] =
@@ -127,6 +128,8 @@ export function useStreamingState() {
 	return {
 		isStreaming,
 		setIsStreaming,
+		isStopping,
+		setIsStopping,
 		streamTokenCount,
 		setStreamTokenCount,
 		isReasoning,

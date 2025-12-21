@@ -8,6 +8,7 @@ import {formatElapsedTime} from '../../../utils/core/textUtils.js';
 
 type LoadingIndicatorProps = {
 	isStreaming: boolean;
+	isStopping: boolean;
 	isSaving: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
@@ -44,6 +45,7 @@ type LoadingIndicatorProps = {
 
 export default function LoadingIndicator({
 	isStreaming,
+	isStopping,
 	isSaving,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
@@ -61,7 +63,7 @@ export default function LoadingIndicator({
 
 	// 不显示加载指示器的条件
 	if (
-		(!isStreaming && !isSaving) ||
+		(!isStreaming && !isSaving && !isStopping) ||
 		hasPendingToolConfirmation ||
 		hasPendingUserQuestion
 	) {
@@ -85,7 +87,11 @@ export default function LoadingIndicator({
 				❆
 			</Text>
 			<Box marginLeft={1} marginBottom={1} flexDirection="column">
-				{isStreaming ? (
+				{isStopping ? (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.chatScreen.statusStopping}
+					</Text>
+				) : isStreaming ? (
 					<>
 						{retryStatus && retryStatus.isRetrying ? (
 							<Box flexDirection="column">

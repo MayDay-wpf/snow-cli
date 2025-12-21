@@ -846,6 +846,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	useEffect(() => {
 		if (!streamingState.isStreaming && pendingMessages.length > 0) {
 			const timer = setTimeout(() => {
+				// Set isStreaming=true BEFORE processing to show LoadingIndicator
+				streamingState.setIsStreaming(true);
 				processPendingMessages();
 			}, 100);
 			return () => clearTimeout(timer);
@@ -963,17 +965,26 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			// Mark that user manually interrupted
 			userInterruptedRef.current = true;
 
-			// Clear ALL loading indicators BEFORE aborting to prevent flashing
-			// This ensures LoadingIndicator returns null immediately
+			// Set stopping state to show "Stopping..." spinner
+			streamingState.setIsStopping(true);
+
+			// Clear retry and search status to prevent flashing
 			streamingState.setRetryStatus(null);
 			streamingState.setCodebaseSearchStatus(null);
-			streamingState.setIsStreaming(false);
 
 			// Abort the controller
 			streamingState.abortController.abort();
 
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
+
+			// Clear pending messages to prevent auto-send after abort
+			setPendingMessages([]);
+
+			// Note: Don't manually clear isStopping here!
+			// It will be cleared automatically in useConversation's finally block
+			// when setIsStreaming(false) is called, ensuring "Stopping..." spinner
+			// is visible until "user discontinue" message appears
 
 			// Note: discontinued message will be added in processMessage/processPendingMessages finally block
 			// Note: session cleanup will be handled in processMessage/processPendingMessages finally block
@@ -1105,6 +1116,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			{/* Show loading indicator when streaming or saving */}
 			<LoadingIndicator
 				isStreaming={streamingState.isStreaming}
+				isStopping={streamingState.isStopping || false}
 				isSaving={isSaving}
 				hasPendingToolConfirmation={!!pendingToolConfirmation}
 				hasPendingUserQuestion={!!pendingUserQuestion}
@@ -1322,6 +1334,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							isExecutingTerminalCommand ||
 							isCompressing
 						}
+						isStopping={streamingState.isStopping || false}
 						isProcessing={
 							streamingState.isStreaming ||
 							isSaving ||

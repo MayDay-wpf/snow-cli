@@ -609,6 +609,7 @@ export const ja: TranslationKeys = {
 		statusConnected: 'IDE接続済み',
 		statusConnectionFailed:
 			'接続に失敗（これは使用に影響しません） - IDEにSnow CLIプラグインがインストールされ有効になっていることを確認してください',
+		statusStopping: '停止中...',
 		// Profile switch
 		profileCurrent: 'プロファイル',
 		profileSwitchHint: '切替',

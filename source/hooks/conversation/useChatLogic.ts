@@ -479,8 +479,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 				]);
 
 				userInterruptedRef.current = false;
+
+				// Clear stopping state after discontinued message is added
+				streamingState.setIsStopping(false);
 			}
 
+			streamingState.setIsStreaming(false);
+			streamingState.setAbortController(null);
+			streamingState.setStreamTokenCount(0);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);
@@ -717,6 +723,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 				]);
 
 				userInterruptedRef.current = false;
+
+				// Clear stopping state after discontinued message is added
+				streamingState.setIsStopping(false);
 			}
 
 			streamingState.setIsStreaming(false);
@@ -886,10 +895,10 @@ export function useChatLogic(props: UseChatLogicProps) {
 				if (sessionEndsWithAssistant) {
 					setMessages(prev => prev.slice(0, selectedIndex));
 					clearSavedMessages();
-					snapshotState.setPendingRollback(null);
 
 					setTimeout(() => {
 						setRemountKey(prev => prev + 1);
+						snapshotState.setPendingRollback(null);
 					}, 0);
 					return;
 				}
@@ -927,10 +936,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 				snapshotState.setSnapshotFileCount(new Map());
 
-				snapshotState.setPendingRollback(null);
-
 				setTimeout(() => {
 					setRemountKey(prev => prev + 1);
+					snapshotState.setPendingRollback(null);
 				}, 0);
 
 				return;
@@ -957,10 +965,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 		clearSavedMessages();
 
-		snapshotState.setPendingRollback(null);
-
 		setTimeout(() => {
 			setRemountKey(prev => prev + 1);
+			snapshotState.setPendingRollback(null);
 		}, 0);
 	};
 
@@ -992,8 +999,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 					);
 				}
 
-				snapshotState.setPendingRollback(null);
-
 				if (originalSessionId) {
 					try {
 						const originalSession = await sessionManager.loadSession(
@@ -1008,7 +1013,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 							clearSavedMessages();
 							setMessages(uiMessages);
-							setRemountKey(prev => prev + 1);
 
 							const snapshots = await hashBasedSnapshotManager.listSnapshots(
 								originalSession.id,
@@ -1022,10 +1026,18 @@ export function useChatLogic(props: UseChatLogicProps) {
 							console.log(
 								`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
 							);
+
+							setTimeout(() => {
+								setRemountKey(prev => prev + 1);
+								snapshotState.setPendingRollback(null);
+							}, 0);
 						}
 					} catch (error) {
 						console.error('Failed to switch to original session:', error);
+						snapshotState.setPendingRollback(null);
 					}
+				} else {
+					snapshotState.setPendingRollback(null);
 				}
 			} else {
 				await performRollback(

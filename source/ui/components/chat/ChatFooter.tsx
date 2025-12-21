@@ -26,6 +26,7 @@ type ChatFooterProps = {
 	) => Promise<void>;
 
 	disabled: boolean;
+	isStopping: boolean;
 	isProcessing: boolean;
 	chatHistory: Message[];
 	yoloMode: boolean;
@@ -86,7 +87,7 @@ export default function ChatFooter(props: ChatFooterProps) {
 				onSubmit={props.onSubmit}
 				onCommand={props.onCommand}
 				placeholder={t.chatScreen.inputPlaceholder}
-				disabled={props.disabled}
+				disabled={props.disabled || props.isStopping}
 				isProcessing={props.isProcessing}
 				chatHistory={props.chatHistory}
 				onHistorySelect={props.handleHistorySelect}

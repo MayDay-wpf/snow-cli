@@ -596,6 +596,7 @@ export type TranslationKeys = {
 		statusConnecting: string;
 		statusConnected: string;
 		statusConnectionFailed: string;
+		statusStopping: string;
 		// Profile switch
 		profileCurrent: string;
 		profileSwitchHint: string;
