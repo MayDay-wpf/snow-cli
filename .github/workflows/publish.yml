@@ -58,9 +58,8 @@ jobs:
             
             ### What's New
 
-            - Fix memory leaks
-            - More configurable items have been added to the codebase
-
+            - The snapshot is saved back to the user directory, and the interactive tool supports multiple selections
+            
             ### Installation
             ```bash
             npm install -g snow-ai

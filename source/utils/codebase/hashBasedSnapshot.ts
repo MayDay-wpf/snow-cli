@@ -1,9 +1,11 @@
 import fs from 'fs/promises';
 import fssync from 'fs';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 import ignore, {type Ignore} from 'ignore';
 import {logger} from '../core/logger.js';
+import {getProjectId} from '../session/projectUtils.js';
 
 /**
  * File state tracked by hash AND content (optional for memory optimization)
@@ -55,7 +57,13 @@ class HashBasedSnapshotManager {
 	private ignoreFilter: Ignore;
 
 	constructor() {
-		this.snapshotsDir = path.join(process.cwd(), '.snow', 'snapshots');
+		const projectId = getProjectId();
+		this.snapshotsDir = path.join(
+			os.homedir(),
+			'.snow',
+			'snapshots',
+			projectId,
+		);
 		this.ignoreFilter = ignore();
 		this.loadIgnorePatterns();
 	}
