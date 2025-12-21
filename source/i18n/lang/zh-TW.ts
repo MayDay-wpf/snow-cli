@@ -808,6 +808,8 @@ export const zhTW: TranslationKeys = {
 		selectPrompt: '選擇一個選項:',
 		enterResponse: '請輸入您的回答:',
 		keyboardHints: "提示: 按 'Enter' 選擇 | 按 'e' 編輯當前選項",
+		multiSelectHint: '多選模式',
+		multiSelectKeyboardHints: "↑↓ 移動 | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯",
 	},
 	toolConfirmation: {
 		header: '[工具確認]',

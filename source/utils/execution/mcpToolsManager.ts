@@ -1478,11 +1478,12 @@ export async function executeMCPTool(
 					const {UserInteractionNeededError} = await import(
 						'../ui/userInteractionError.js'
 					);
-					throw new UserInteractionNeededError(
-						args.question,
-						args.options,
-						'', // toolCallId will be set by executeToolCall
-					);
+				throw new UserInteractionNeededError(
+					args.question,
+					args.options,
+					'', //toolCallId will be set by executeToolCall
+					args.multiSelect ?? false,
+				);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
 			}
