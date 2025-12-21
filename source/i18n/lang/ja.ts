@@ -93,6 +93,19 @@ export const ja: TranslationKeys = {
 		validationDimensionsPositive: '埋め込み次元は0より大きい必要があります',
 		validationMaxLinesPositive: 'バッチ最大行数は0より大きい必要があります',
 		validationConcurrencyPositive: 'バッチ並行数は0より大きい必要があります',
+		validationMaxLinesPerChunkPositive:
+			'チャンクあたりの最大行数は0より大きい必要があります',
+		validationMinLinesPerChunkPositive:
+			'チャンクあたりの最小行数は0より大きい必要があります',
+		validationMinCharsPerChunkPositive:
+			'チャンクあたりの最小文字数は0より大きい必要があります',
+		validationOverlapLinesNonNegative: '重複行数は0以上である必要があります',
+		validationOverlapLessThanMaxLines:
+			'重複行数はチャンクあたりの最大行数より小さくする必要があります',
+		chunkingMaxLinesPerChunk: 'チャンクあたりの最大行数:',
+		chunkingMinLinesPerChunk: 'チャンクあたりの最小行数:',
+		chunkingMinCharsPerChunk: 'チャンクあたりの最小文字数:',
+		chunkingOverlapLines: '重複行数:',
 		saveError: '構成の保存に失敗',
 	},
 	systemPromptConfig: {

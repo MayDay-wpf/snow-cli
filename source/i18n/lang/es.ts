@@ -110,6 +110,20 @@ export const es: TranslationKeys = {
 			'El máximo de líneas por lote debe ser mayor que 0',
 		validationConcurrencyPositive:
 			'La concurrencia de lote debe ser mayor que 0',
+		validationMaxLinesPerChunkPositive:
+			'Las líneas máximas por fragmento deben ser mayores que 0',
+		validationMinLinesPerChunkPositive:
+			'Las líneas mínimas por fragmento deben ser mayores que 0',
+		validationMinCharsPerChunkPositive:
+			'Los caracteres mínimos por fragmento deben ser mayores que 0',
+		validationOverlapLinesNonNegative:
+			'Las líneas de superposición deben ser no negativas',
+		validationOverlapLessThanMaxLines:
+			'Las líneas de superposición deben ser menores que las líneas máximas por fragmento',
+		chunkingMaxLinesPerChunk: 'Líneas Máximas por Fragmento:',
+		chunkingMinLinesPerChunk: 'Líneas Mínimas por Fragmento:',
+		chunkingMinCharsPerChunk: 'Caracteres Mínimos por Fragmento:',
+		chunkingOverlapLines: 'Líneas de Superposición:',
 		saveError: 'Error al guardar la configuración',
 	},
 	systemPromptConfig: {

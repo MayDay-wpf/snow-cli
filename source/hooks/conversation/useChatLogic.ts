@@ -369,13 +369,17 @@ export function useChatLogic(props: UseChatLogicProps) {
 			} finally {
 				// Commit snapshot after message processing completes (success or error)
 				// Use messages.length as messageIndex since we created snapshot with this index
-				const result = await hashBasedSnapshotManager.commitSnapshot(
-					messages.length,
-				);
+				const session = sessionManager.getCurrentSession();
+				let result = null;
+				if (session) {
+					result = await hashBasedSnapshotManager.commitSnapshot(
+						session.id,
+						messages.length,
+					);
+				}
 
 				// Update snapshot file count for rollback UI
 				if (result && result.fileCount > 0) {
-					const session = sessionManager.getCurrentSession();
 					if (session) {
 						const newCounts = new Map(snapshotState.snapshotFileCount);
 						newCounts.set(result.messageIndex, result.fileCount);
@@ -630,11 +634,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 				// Note: This is for processPendingMessages, but snapshots are actually
 				// created and committed in useConversation.ts when pending messages are detected
 				// So this might not find any snapshot to commit
-				const result = await hashBasedSnapshotManager.commitSnapshot();
+				const session = sessionManager.getCurrentSession();
+				let result = null;
+				if (session) {
+					result = await hashBasedSnapshotManager.commitSnapshot(session.id);
+				}
 
 				// Update snapshot file count for rollback UI
 				if (result && result.fileCount > 0) {
-					const session = sessionManager.getCurrentSession();
 					if (session) {
 						const newCounts = new Map(snapshotState.snapshotFileCount);
 						newCounts.set(result.messageIndex, result.fileCount);

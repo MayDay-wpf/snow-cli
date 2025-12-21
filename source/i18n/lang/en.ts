@@ -97,6 +97,19 @@ export const en: TranslationKeys = {
 		validationDimensionsPositive: 'Embedding dimensions must be greater than 0',
 		validationMaxLinesPositive: 'Batch max lines must be greater than 0',
 		validationConcurrencyPositive: 'Batch concurrency must be greater than 0',
+		validationMaxLinesPerChunkPositive:
+			'Max lines per chunk must be greater than 0',
+		validationMinLinesPerChunkPositive:
+			'Min lines per chunk must be greater than 0',
+		validationMinCharsPerChunkPositive:
+			'Min characters per chunk must be greater than 0',
+		validationOverlapLinesNonNegative: 'Overlap lines must be non-negative',
+		validationOverlapLessThanMaxLines:
+			'Overlap lines must be less than max lines per chunk',
+		chunkingMaxLinesPerChunk: 'Max Lines Per Chunk:',
+		chunkingMinLinesPerChunk: 'Min Lines Per Chunk:',
+		chunkingMinCharsPerChunk: 'Min Characters Per Chunk:',
+		chunkingOverlapLines: 'Overlap Lines:',
 		saveError: 'Failed to save configuration',
 	},
 	systemPromptConfig: {

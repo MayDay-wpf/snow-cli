@@ -6,14 +6,14 @@ import ignore, {type Ignore} from 'ignore';
 import {logger} from '../core/logger.js';
 
 /**
- * File state tracked by hash AND content
+ * File state tracked by hash AND content (optional for memory optimization)
  */
 interface FileState {
 	path: string; // Relative path from workspace root
 	hash: string; // SHA256 hash of file content
 	size: number; // File size in bytes
 	mtime: number; // Last modified timestamp
-	content: string; // IMPORTANT: Store original content for rollback
+	content: string; // File content (empty string if not loaded for memory optimization)
 }
 
 /**
@@ -44,9 +44,9 @@ interface SnapshotMetadata {
  */
 class HashBasedSnapshotManager {
 	private readonly snapshotsDir: string;
-	// Support multiple concurrent snapshots, keyed by messageIndex
+	// Support multiple concurrent snapshots, keyed by sessionId:messageIndex for session isolation
 	private activeSnapshots: Map<
-		number,
+		string, // Key format: "sessionId:messageIndex"
 		{
 			metadata: SnapshotMetadata;
 			beforeStateMap: Map<string, FileState>;
@@ -78,12 +78,13 @@ class HashBasedSnapshotManager {
 	}
 
 	/**
-	 * Scan directory recursively and collect file states WITH CONTENT
+	 * Scan directory recursively and collect file states (metadata only, no content)
 	 */
 	private async scanDirectory(
 		dirPath: string,
 		workspaceRoot: string,
 		fileStates: Map<string, FileState>,
+		includeContent: boolean = false,
 	): Promise<void> {
 		try {
 			const entries = await fs.readdir(dirPath, {withFileTypes: true});
@@ -98,22 +99,33 @@ class HashBasedSnapshotManager {
 				}
 
 				if (entry.isDirectory()) {
-					await this.scanDirectory(fullPath, workspaceRoot, fileStates);
+					await this.scanDirectory(
+						fullPath,
+						workspaceRoot,
+						fileStates,
+						includeContent,
+					);
 				} else if (entry.isFile()) {
 					try {
 						const stats = await fs.stat(fullPath);
-						const content = await fs.readFile(fullPath, 'utf-8');
-						const hash = crypto
-							.createHash('sha256')
-							.update(content)
-							.digest('hex');
+						let content = '';
+						let hash = '';
+
+						if (includeContent) {
+							content = await fs.readFile(fullPath, 'utf-8');
+							hash = crypto.createHash('sha256').update(content).digest('hex');
+						} else {
+							// Only calculate hash without storing content
+							const buffer = await fs.readFile(fullPath);
+							hash = crypto.createHash('sha256').update(buffer).digest('hex');
+						}
 
 						fileStates.set(relativePath, {
 							path: relativePath,
 							hash,
 							size: stats.size,
 							mtime: stats.mtimeMs,
-							content, // CRITICAL: Store original content for rollback
+							content: includeContent ? content : '', // Only store content if requested
 						});
 					} catch (error) {
 						// Skip files that can't be read (binary files, permission issues, etc.)
@@ -162,8 +174,9 @@ class HashBasedSnapshotManager {
 		// Scan current workspace and store state
 		const beforeStateMap = await this.scanWorkspace(workspaceRoot);
 
-		// Store snapshot with messageIndex as key
-		this.activeSnapshots.set(messageIndex, {
+		// Store snapshot with sessionId:messageIndex as key for session isolation
+		const snapshotKey = `${sessionId}:${messageIndex}`;
+		this.activeSnapshots.set(snapshotKey, {
 			metadata: {
 				sessionId,
 				messageIndex,
@@ -174,38 +187,53 @@ class HashBasedSnapshotManager {
 			beforeStateMap,
 		});
 
-		logger.info(`[Snapshot] Created snapshot for message ${messageIndex}`);
+		logger.info(
+			`[Snapshot] Created snapshot for session ${sessionId} message ${messageIndex}`,
+		);
 	}
 
 	/**
 	 * Commit snapshot after message processing
 	 * Compares current workspace state with snapshot and saves changes
-	 * @param messageIndex The message index to commit (if not provided, commits the oldest snapshot)
+	 * @param sessionId The session ID (required for session isolation)
+	 * @param messageIndex The message index to commit (if not provided, commits the oldest snapshot for this session)
 	 * @returns Object with fileCount and messageIndex, or null if no active snapshot
 	 */
-	async commitSnapshot(messageIndex?: number): Promise<{
+	async commitSnapshot(
+		sessionId: string,
+		messageIndex?: number,
+	): Promise<{
 		fileCount: number;
 		messageIndex: number;
 	} | null> {
-		// If messageIndex not provided, get the oldest snapshot
+		// If messageIndex not provided, get the oldest snapshot for this session
 		if (messageIndex === undefined) {
 			const keys = Array.from(this.activeSnapshots.keys());
-			if (keys.length === 0) {
+			const sessionKeys = keys
+				.filter(key => key.startsWith(`${sessionId}:`))
+				.map(key => {
+					const parts = key.split(':');
+					return parseInt(parts[1] || '0', 10);
+				})
+				.filter(index => !isNaN(index));
+			if (sessionKeys.length === 0) {
 				return null;
 			}
-			messageIndex = Math.min(...keys);
+			messageIndex = Math.min(...sessionKeys);
 		}
 
-		const snapshot = this.activeSnapshots.get(messageIndex);
+		const snapshotKey = `${sessionId}:${messageIndex}`;
+		const snapshot = this.activeSnapshots.get(snapshotKey);
 		if (!snapshot) {
 			logger.warn(
-				`[Snapshot] No active snapshot found for message ${messageIndex}`,
+				`[Snapshot] No active snapshot found for session ${sessionId} message ${messageIndex}`,
 			);
 			return null;
 		}
 
 		const {metadata, beforeStateMap} = snapshot;
 		const workspaceRoot = metadata.workspaceRoot;
+		// Scan workspace for comparison, but don't load content yet
 		const afterStateMap = await this.scanWorkspace(workspaceRoot);
 
 		// Find changed, new, and deleted files
@@ -217,8 +245,7 @@ class HashBasedSnapshotManager {
 			const fullPath = path.join(workspaceRoot, relativePath);
 
 			if (!afterState) {
-				// File deleted - we already have the content from beforeStateMap scan
-				// Re-read from the beforeStateMap content we captured
+				// File deleted - read content now
 				try {
 					const content = await fs.readFile(fullPath, 'utf-8');
 					changedFiles.push({
@@ -237,24 +264,29 @@ class HashBasedSnapshotManager {
 					});
 				}
 			} else if (beforeState.hash !== afterState.hash) {
-				// File modified - save original state for rollback
-				// Use the content we captured during createSnapshot
-				changedFiles.push({
-					path: relativePath,
-					content: beforeState.content ?? null, // FIXED: Use stored original content
-					existed: true,
-					hash: beforeState.hash,
-				});
+				// File modified - read original content now
+				try {
+					const content = await fs.readFile(fullPath, 'utf-8');
+					changedFiles.push({
+						path: relativePath,
+						content,
+						existed: true,
+						hash: beforeState.hash,
+					});
+				} catch (error) {
+					logger.warn(`Failed to read modified file ${relativePath}:`, error);
+				}
 			}
 		}
 
 		// Check for new files
 		for (const [relativePath, afterState] of afterStateMap) {
 			if (!beforeStateMap.has(relativePath)) {
-				// New file created - save its content for potential inspection
+				// New file created - we don't need to store its content
+				// Just mark it as a new file
 				changedFiles.push({
 					path: relativePath,
-					content: afterState.content ?? null, // Save new file content
+					content: null, // No need to store content for new files
 					existed: false,
 					hash: afterState.hash,
 				});
@@ -266,14 +298,16 @@ class HashBasedSnapshotManager {
 			metadata.backups = changedFiles;
 			await this.saveSnapshotMetadata(metadata);
 			logger.info(
-				`[Snapshot] Committed: ${changedFiles.length} files changed for message ${messageIndex}`,
+				`[Snapshot] Committed: ${changedFiles.length} files changed for session ${sessionId} message ${messageIndex}`,
 			);
 		} else {
-			logger.info(`[Snapshot] No changes detected for message ${messageIndex}`);
+			logger.info(
+				`[Snapshot] No changes detected for session ${sessionId} message ${messageIndex}`,
+			);
 		}
 
-		// Remove from active snapshots
-		this.activeSnapshots.delete(messageIndex);
+		// Remove from active snapshots and release memory
+		this.activeSnapshots.delete(snapshotKey);
 
 		return {fileCount: changedFiles.length, messageIndex};
 	}
@@ -365,6 +399,7 @@ class HashBasedSnapshotManager {
 
 	/**
 	 * Rollback to a specific message index
+	 * Uses streaming approach to minimize memory usage
 	 */
 	async rollbackToMessageIndex(
 		sessionId: string,
@@ -375,36 +410,40 @@ class HashBasedSnapshotManager {
 
 		try {
 			const files = await fs.readdir(this.snapshotsDir);
-			const snapshots: Array<{
+			const snapshotFiles: Array<{
 				messageIndex: number;
 				path: string;
-				metadata: SnapshotMetadata;
 			}> = [];
 
-			// Load all snapshots
+			// First pass: just collect snapshot file paths (minimal memory)
 			for (const file of files) {
 				if (file.startsWith(sessionId) && file.endsWith('.json')) {
 					const snapshotPath = path.join(this.snapshotsDir, file);
 					const content = await fs.readFile(snapshotPath, 'utf-8');
 					const metadata: SnapshotMetadata = JSON.parse(content);
-					snapshots.push({
-						messageIndex: metadata.messageIndex,
-						path: snapshotPath,
-						metadata,
-					});
+
+					if (metadata.messageIndex >= targetMessageIndex) {
+						snapshotFiles.push({
+							messageIndex: metadata.messageIndex,
+							path: snapshotPath,
+						});
+					}
 				}
 			}
 
-			// Filter and sort snapshots
-			const snapshotsToRollback = snapshots
-				.filter(s => s.messageIndex >= targetMessageIndex)
-				.sort((a, b) => b.messageIndex - a.messageIndex);
+			// Sort snapshots in reverse order
+			snapshotFiles.sort((a, b) => b.messageIndex - a.messageIndex);
 
 			let totalFilesRolledBack = 0;
 
-			// Rollback each snapshot in reverse order
-			for (const snapshot of snapshotsToRollback) {
-				for (const backup of snapshot.metadata.backups) {
+			// Second pass: process snapshots one by one (streaming)
+			for (const snapshotFile of snapshotFiles) {
+				// Read one snapshot at a time
+				const content = await fs.readFile(snapshotFile.path, 'utf-8');
+				const metadata: SnapshotMetadata = JSON.parse(content);
+
+				// Process each backup file
+				for (const backup of metadata.backups) {
 					// If selectedFiles is provided, only rollback selected files
 					if (
 						selectedFiles &&
@@ -414,10 +453,7 @@ class HashBasedSnapshotManager {
 						continue;
 					}
 
-					const fullPath = path.join(
-						snapshot.metadata.workspaceRoot,
-						backup.path,
-					);
+					const fullPath = path.join(metadata.workspaceRoot, backup.path);
 
 					try {
 						if (backup.existed && backup.content !== null) {
@@ -437,6 +473,8 @@ class HashBasedSnapshotManager {
 						logger.error(`Failed to restore file ${backup.path}:`, error);
 					}
 				}
+
+				// Release memory: metadata will be garbage collected after this iteration
 			}
 
 			return totalFilesRolledBack;

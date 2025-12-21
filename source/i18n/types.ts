@@ -91,6 +91,15 @@ export type TranslationKeys = {
 		validationDimensionsPositive: string;
 		validationMaxLinesPositive: string;
 		validationConcurrencyPositive: string;
+		validationMaxLinesPerChunkPositive: string;
+		validationMinLinesPerChunkPositive: string;
+		validationMinCharsPerChunkPositive: string;
+		validationOverlapLinesNonNegative: string;
+		validationOverlapLessThanMaxLines: string;
+		chunkingMaxLinesPerChunk: string;
+		chunkingMinLinesPerChunk: string;
+		chunkingMinCharsPerChunk: string;
+		chunkingOverlapLines: string;
 		saveError: string;
 	};
 	// System Prompt Config Screen

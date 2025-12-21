@@ -58,10 +58,8 @@ jobs:
             
             ### What's New
 
-            - Optimized the flexibility of group-defined instructions
-            - Added foolproof treatment for termination timings
-            - Optimized MCP connections
-            - Added headless mode to continue
+            - Fix memory leaks
+            - More configurable items have been added to the codebase
 
             ### Installation
             ```bash

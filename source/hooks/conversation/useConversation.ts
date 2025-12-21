@@ -373,6 +373,8 @@ export async function handleConversationWithTools(
 			let reasoningAccumulator = ''; // Accumulate reasoning summary deltas for token counting (Responses API only)
 			let chunkCount = 0; // Track number of chunks received (to delay clearing retry status)
 			let currentTokenCount = 0; // Track current token count incrementally
+			let lastTokenUpdateTime = 0; // Track last token update time for throttling
+			const TOKEN_UPDATE_INTERVAL = 100; // Update token count every 100ms (10fps)
 
 			// Get or create session for cache key
 			const currentSession = sessionManager.getCurrentSession();
@@ -477,11 +479,16 @@ export async function handleConversationWithTools(
 					}
 					// Note: reasoning content is NOT sent back to AI, only counted for display
 					reasoningAccumulator += chunk.delta;
-					// Incremental token counting - only encode the new delta
+					// Incremental token counting with throttling - only encode the new delta
 					try {
 						const deltaTokens = encoder.encode(chunk.delta);
 						currentTokenCount += deltaTokens.length;
-						setStreamTokenCount(currentTokenCount);
+						// Throttle UI update to 10fps (100ms interval)
+						const now = Date.now();
+						if (now - lastTokenUpdateTime >= TOKEN_UPDATE_INTERVAL) {
+							setStreamTokenCount(currentTokenCount);
+							lastTokenUpdateTime = now;
+						}
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -490,11 +497,16 @@ export async function handleConversationWithTools(
 					// When content starts, reasoning is done
 					setIsReasoning?.(false);
 					streamedContent += chunk.content;
-					// Incremental token counting - only encode the new delta
+					// Incremental token counting with throttling - only encode the new delta
 					try {
 						const deltaTokens = encoder.encode(chunk.content);
 						currentTokenCount += deltaTokens.length;
-						setStreamTokenCount(currentTokenCount);
+						// Throttle UI update to 10fps (100ms interval)
+						const now = Date.now();
+						if (now - lastTokenUpdateTime >= TOKEN_UPDATE_INTERVAL) {
+							setStreamTokenCount(currentTokenCount);
+							lastTokenUpdateTime = now;
+						}
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -503,11 +515,16 @@ export async function handleConversationWithTools(
 					// When tool calls start, reasoning is done (OpenAI generally doesn't output text content during tool calls)
 					setIsReasoning?.(false);
 					toolCallAccumulator += chunk.delta;
-					// Incremental token counting - only encode the new delta
+					// Incremental token counting with throttling - only encode the new delta
 					try {
 						const deltaTokens = encoder.encode(chunk.delta);
 						currentTokenCount += deltaTokens.length;
-						setStreamTokenCount(currentTokenCount);
+						// Throttle UI update to 10fps (100ms interval)
+						const now = Date.now();
+						if (now - lastTokenUpdateTime >= TOKEN_UPDATE_INTERVAL) {
+							setStreamTokenCount(currentTokenCount);
+							lastTokenUpdateTime = now;
+						}
 					} catch (e) {
 						// Ignore encoding errors
 					}
@@ -570,7 +587,7 @@ export async function handleConversationWithTools(
 			}
 
 			// Reset token count to 0 after stream ends
-			// This ensures the final update with 0 tokens is pushed to UI
+			// Force update to ensure the final token count is displayed
 			setStreamTokenCount(0);
 
 			// If aborted during streaming, exit the loop
@@ -1812,14 +1829,16 @@ export async function handleConversationWithTools(
 
 		// 同步提交所有待处理快照 - 确保快照保存可靠性
 		// 处理 normal 和 pending 消息的快照
-		while (true) {
-			const result = await hashBasedSnapshotManager.commitSnapshot();
-			if (!result) break; // 没有更多快照需要提交
+		const session = sessionManager.getCurrentSession();
+		if (session) {
+			while (true) {
+				const result = await hashBasedSnapshotManager.commitSnapshot(
+					session.id,
+				);
+				if (!result) break; // 没有更多快照需要提交
 
-			// 更新回滚 UI 的快照文件计数
-			if (result.fileCount > 0 && options.setSnapshotFileCount) {
-				const session = sessionManager.getCurrentSession();
-				if (session) {
+				// 更新回滚 UI 的快照文件计数
+				if (result.fileCount > 0 && options.setSnapshotFileCount) {
 					options.setSnapshotFileCount(prev => {
 						const newCounts = new Map(prev);
 						newCounts.set(result.messageIndex, result.fileCount);

@@ -741,10 +741,8 @@ export class CodebaseIndexAgent {
 	private splitIntoChunks(content: string, filePath: string): CodeChunk[] {
 		const lines = content.split('\n');
 		const chunks: CodeChunk[] = [];
-		const maxLinesPerChunk = 100; // Max lines per chunk
-		const minLinesPerChunk = 5; // Minimum lines per chunk to avoid tiny fragments
-		const minCharsPerChunk = 50; // Minimum characters per chunk (after trim)
-		const overlapLines = 10; // Overlap between chunks for context
+		const {maxLinesPerChunk, minLinesPerChunk, minCharsPerChunk, overlapLines} =
+			this.config.chunking;
 
 		for (let i = 0; i < lines.length; i += maxLinesPerChunk - overlapLines) {
 			const startLine = i;

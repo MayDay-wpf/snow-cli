@@ -16,6 +16,12 @@ export interface CodebaseConfig {
 		maxLines: number;
 		concurrency: number;
 	};
+	chunking: {
+		maxLinesPerChunk: number;
+		minLinesPerChunk: number;
+		minCharsPerChunk: number;
+		overlapLines: number;
+	};
 }
 
 const DEFAULT_CONFIG: CodebaseConfig = {
@@ -31,6 +37,12 @@ const DEFAULT_CONFIG: CodebaseConfig = {
 	batch: {
 		maxLines: 10,
 		concurrency: 3,
+	},
+	chunking: {
+		maxLinesPerChunk: 200,
+		minLinesPerChunk: 10,
+		minCharsPerChunk: 20,
+		overlapLines: 20,
 	},
 };
 
@@ -75,6 +87,19 @@ export const loadCodebaseConfig = (): CodebaseConfig => {
 				maxLines: config.batch?.maxLines ?? DEFAULT_CONFIG.batch.maxLines,
 				concurrency:
 					config.batch?.concurrency ?? DEFAULT_CONFIG.batch.concurrency,
+			},
+			chunking: {
+				maxLinesPerChunk:
+					config.chunking?.maxLinesPerChunk ??
+					DEFAULT_CONFIG.chunking.maxLinesPerChunk,
+				minLinesPerChunk:
+					config.chunking?.minLinesPerChunk ??
+					DEFAULT_CONFIG.chunking.minLinesPerChunk,
+				minCharsPerChunk:
+					config.chunking?.minCharsPerChunk ??
+					DEFAULT_CONFIG.chunking.minCharsPerChunk,
+				overlapLines:
+					config.chunking?.overlapLines ?? DEFAULT_CONFIG.chunking.overlapLines,
 			},
 		};
 	} catch (error) {

@@ -91,6 +91,19 @@ export const ko: TranslationKeys = {
 		validationDimensionsPositive: '임베딩 차원은 0보다 커야 합니다',
 		validationMaxLinesPositive: '배치 최대 라인 수는 0보다 커야 합니다',
 		validationConcurrencyPositive: '배치 동시성은 0보다 커야 합니다',
+		validationMaxLinesPerChunkPositive:
+			'청크당 최대 라인 수는 0보다 커야 합니다',
+		validationMinLinesPerChunkPositive:
+			'청크당 최소 라인 수는 0보다 커야 합니다',
+		validationMinCharsPerChunkPositive:
+			'청크당 최소 문자 수는 0보다 커야 합니다',
+		validationOverlapLinesNonNegative: '중첩 라인 수는 음수가 아니어야 합니다',
+		validationOverlapLessThanMaxLines:
+			'중첩 라인 수는 청크당 최대 라인 수보다 작아야 합니다',
+		chunkingMaxLinesPerChunk: '청크당 최대 라인 수:',
+		chunkingMinLinesPerChunk: '청크당 최소 라인 수:',
+		chunkingMinCharsPerChunk: '청크당 최소 문자 수:',
+		chunkingOverlapLines: '중첩 라인 수:',
 		saveError: '구성 저장 실패',
 	},
 	systemPromptConfig: {

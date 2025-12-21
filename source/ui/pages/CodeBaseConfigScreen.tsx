@@ -27,7 +27,11 @@ type ConfigField =
 	| 'embeddingApiKey'
 	| 'embeddingDimensions'
 	| 'batchMaxLines'
-	| 'batchConcurrency';
+	| 'batchConcurrency'
+	| 'chunkingMaxLinesPerChunk'
+	| 'chunkingMinLinesPerChunk'
+	| 'chunkingMinCharsPerChunk'
+	| 'chunkingOverlapLines';
 
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
 
@@ -88,6 +92,10 @@ export default function CodeBaseConfigScreen({
 	const [embeddingDimensions, setEmbeddingDimensions] = useState(1536);
 	const [batchMaxLines, setBatchMaxLines] = useState(10);
 	const [batchConcurrency, setBatchConcurrency] = useState(1);
+	const [chunkingMaxLinesPerChunk, setChunkingMaxLinesPerChunk] = useState(200);
+	const [chunkingMinLinesPerChunk, setChunkingMinLinesPerChunk] = useState(10);
+	const [chunkingMinCharsPerChunk, setChunkingMinCharsPerChunk] = useState(20);
+	const [chunkingOverlapLines, setChunkingOverlapLines] = useState(20);
 
 	// UI state
 	const [currentField, setCurrentField] = useState<ConfigField>('enabled');
@@ -107,11 +115,15 @@ export default function CodeBaseConfigScreen({
 		'embeddingDimensions',
 		'batchMaxLines',
 		'batchConcurrency',
+		'chunkingMaxLinesPerChunk',
+		'chunkingMinLinesPerChunk',
+		'chunkingMinCharsPerChunk',
+		'chunkingOverlapLines',
 	];
 
 	// Embedding type options
 	const embeddingTypeOptions = [
-		{label: 'Jina', value: 'jina' as const},
+		{label: 'Jina & OpenAI', value: 'jina' as const},
 		{label: 'Ollama', value: 'ollama' as const},
 	];
 
@@ -133,6 +145,10 @@ export default function CodeBaseConfigScreen({
 		setEmbeddingDimensions(config.embedding.dimensions);
 		setBatchMaxLines(config.batch.maxLines);
 		setBatchConcurrency(config.batch.concurrency);
+		setChunkingMaxLinesPerChunk(config.chunking.maxLinesPerChunk);
+		setChunkingMinLinesPerChunk(config.chunking.minLinesPerChunk);
+		setChunkingMinCharsPerChunk(config.chunking.minCharsPerChunk);
+		setChunkingOverlapLines(config.chunking.overlapLines);
 	};
 
 	const saveConfiguration = () => {
@@ -163,6 +179,33 @@ export default function CodeBaseConfigScreen({
 				validationErrors.push(t.codebaseConfig.validationConcurrencyPositive);
 			}
 
+			// Chunking configuration validation
+			if (chunkingMaxLinesPerChunk <= 0) {
+				validationErrors.push(
+					t.codebaseConfig.validationMaxLinesPerChunkPositive,
+				);
+			}
+			if (chunkingMinLinesPerChunk <= 0) {
+				validationErrors.push(
+					t.codebaseConfig.validationMinLinesPerChunkPositive,
+				);
+			}
+			if (chunkingMinCharsPerChunk <= 0) {
+				validationErrors.push(
+					t.codebaseConfig.validationMinCharsPerChunkPositive,
+				);
+			}
+			if (chunkingOverlapLines < 0) {
+				validationErrors.push(
+					t.codebaseConfig.validationOverlapLinesNonNegative,
+				);
+			}
+			if (chunkingOverlapLines >= chunkingMaxLinesPerChunk) {
+				validationErrors.push(
+					t.codebaseConfig.validationOverlapLessThanMaxLines,
+				);
+			}
+
 			// LLM is optional - no validation needed
 		}
 
@@ -185,6 +228,12 @@ export default function CodeBaseConfigScreen({
 				batch: {
 					maxLines: batchMaxLines,
 					concurrency: batchConcurrency,
+				},
+				chunking: {
+					maxLinesPerChunk: chunkingMaxLinesPerChunk,
+					minLinesPerChunk: chunkingMinLinesPerChunk,
+					minCharsPerChunk: chunkingMinCharsPerChunk,
+					overlapLines: chunkingOverlapLines,
 				},
 			};
 
@@ -281,7 +330,7 @@ export default function CodeBaseConfigScreen({
 								<Text color={theme.colors.menuSecondary}>
 									{embeddingTypeOptions.find(opt => opt.value === embeddingType)
 										?.label || t.codebaseConfig.notSet}{' '}
-									({t.codebaseConfig.toggleHint})
+									{t.codebaseConfig.toggleHint}
 								</Text>
 							</Box>
 						)}
@@ -501,7 +550,153 @@ export default function CodeBaseConfigScreen({
 						)}
 					</Box>
 				);
+			case 'chunkingMaxLinesPerChunk':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMaxLinesPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={chunkingMaxLinesPerChunk.toString()}
+										onChange={value => {
+											const num = parseInt(stripFocusArtifacts(value) || '0');
+											if (!isNaN(num)) {
+												setChunkingMaxLinesPerChunk(num);
+											}
+										}}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMaxLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
+			case 'chunkingMinLinesPerChunk':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMinLinesPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={chunkingMinLinesPerChunk.toString()}
+										onChange={value => {
+											const num = parseInt(stripFocusArtifacts(value) || '0');
+											if (!isNaN(num)) {
+												setChunkingMinLinesPerChunk(num);
+											}
+										}}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMinLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'chunkingMinCharsPerChunk':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMinCharsPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={chunkingMinCharsPerChunk.toString()}
+										onChange={value => {
+											const num = parseInt(stripFocusArtifacts(value) || '0');
+											if (!isNaN(num)) {
+												setChunkingMinCharsPerChunk(num);
+											}
+										}}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMinCharsPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'chunkingOverlapLines':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingOverlapLines}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={chunkingOverlapLines.toString()}
+										onChange={value => {
+											const num = parseInt(stripFocusArtifacts(value) || '0');
+											if (!isNaN(num)) {
+												setChunkingOverlapLines(num);
+											}
+										}}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingOverlapLines}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 			default:
 				return null;
 		}
