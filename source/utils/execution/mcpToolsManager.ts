@@ -108,6 +108,47 @@ export function getTodoService(): TodoService {
 }
 
 /**
+ * Get all registered service prefixes (synchronous)
+ * Used for detecting merged tool names
+ * Returns cached service names if available, otherwise returns built-in services
+ */
+export function getRegisteredServicePrefixes(): string[] {
+	// 内置服务前缀（始终可用）
+	const builtInPrefixes = [
+		'todo-',
+		'notebook-',
+		'filesystem-',
+		'terminal-',
+		'ace-',
+		'websearch-',
+		'ide-',
+		'codebase-',
+		'askuser-',
+		'skill-',
+		'subagent-',
+	];
+
+	// 如果有缓存，从缓存中获取外部 MCP 服务名称
+	if (toolsCache?.servicesInfo) {
+		const cachedPrefixes = toolsCache.servicesInfo
+			.map(s => `${s.serviceName}-`)
+			.filter(p => !builtInPrefixes.includes(p));
+		return [...builtInPrefixes, ...cachedPrefixes];
+	}
+
+	// 尝试从 MCP 配置中获取外部服务名称
+	try {
+		const mcpConfig = getMCPConfig();
+		const externalPrefixes = Object.keys(mcpConfig.mcpServers || {}).map(
+			name => `${name}-`,
+		);
+		return [...builtInPrefixes, ...externalPrefixes];
+	} catch {
+		return builtInPrefixes;
+	}
+}
+
+/**
  * Generate a hash of the current MCP configuration and sub-agents
  */
 async function generateConfigHash(): Promise<string> {
