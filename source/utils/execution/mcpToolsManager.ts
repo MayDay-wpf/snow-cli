@@ -739,10 +739,10 @@ async function connectAndGetTools(
 					`[MCP] Attempting StreamableHTTP connection to ${serviceName}...`,
 				);
 
-			const headers: Record<string, string> = {
-				'Content-Type': 'application/json',
-				'Accept': 'application/json, text/event-stream',
-			};
+				const headers: Record<string, string> = {
+					'Content-Type': 'application/json',
+					Accept: 'application/json, text/event-stream',
+				};
 
 				if (server.env) {
 					const allEnv = {...process.env, ...server.env};
@@ -938,7 +938,7 @@ async function getPersistentClient(
 		//构建请求头
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
-			'Accept': 'application/json, text/event-stream',
+			Accept: 'application/json, text/event-stream',
 		};
 		if (allEnv['MCP_API_KEY']) {
 			headers['Authorization'] = `Bearer ${allEnv['MCP_API_KEY']}`;
@@ -1471,19 +1471,82 @@ export async function executeMCPTool(
 					throw new Error(`Unknown codebase tool: ${actualToolName}`);
 			}
 		} else if (serviceName === 'askuser') {
-			// Handle Ask User Question tool - throw error to trigger user interaction
+			// Handle Ask User Question tool - validate parameters and trigger user interaction
 			switch (actualToolName) {
 				case 'ask_question':
-					// Throw UserInteractionNeededError to trigger UI component
+					// 参数验证：确保 options 是有效数组
+					if (!args.question || typeof args.question !== 'string') {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: "question" parameter must be a non-empty string.\n\nReceived: ${JSON.stringify(
+										args,
+										null,
+										2,
+									)}\n\nPlease retry with correct parameters.`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					if (!Array.isArray(args.options)) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: "options" parameter must be an array of strings.\n\nReceived options: ${JSON.stringify(
+										args.options,
+									)}\nType: ${typeof args.options}\n\nPlease retry with correct parameters. Example:\n{\n  "question": "Your question here",\n  "options": ["Option 1", "Option 2", "Option 3"]\n}`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					if (args.options.length < 2) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: "options" array must contain at least 2 options.\n\nReceived: ${JSON.stringify(
+										args.options,
+									)}\n\nPlease provide at least 2 options for the user to choose from.`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					// 验证 options 数组中的每个元素都是字符串
+					const invalidOptions = args.options.filter(
+						(opt: any) => typeof opt !== 'string',
+					);
+					if (invalidOptions.length > 0) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: All options must be strings.\n\nInvalid options: ${JSON.stringify(
+										invalidOptions,
+									)}\n\nPlease ensure all options are strings.`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					// 参数验证通过，抛出 UserInteractionNeededError 触发 UI 组件
 					const {UserInteractionNeededError} = await import(
 						'../ui/userInteractionError.js'
 					);
-				throw new UserInteractionNeededError(
-					args.question,
-					args.options,
-					'', //toolCallId will be set by executeToolCall
-					args.multiSelect ?? false,
-				);
+					throw new UserInteractionNeededError(
+						args.question,
+						args.options,
+						'', //toolCallId will be set by executeToolCall
+						false, // multiSelect 已移除，默认支持单选和多选
+					);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
 			}

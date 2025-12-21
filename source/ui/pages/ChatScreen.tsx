@@ -579,9 +579,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const [pendingUserQuestion, setPendingUserQuestion] = useState<{
 		question: string;
 		options: string[];
-		multiSelect?: boolean;
 		toolCall: any;
-		resolve: (result: {selected: string | string[]; customInput?: string}) => void;
+		resolve: (result: {
+			selected: string | string[];
+			customInput?: string;
+		}) => void;
 	} | null>(null);
 
 	// Request user question callback for askuser tool
@@ -589,13 +591,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		question: string,
 		options: string[],
 		toolCall: any,
-		multiSelect?: boolean,
 	): Promise<{selected: string | string[]; customInput?: string}> => {
 		return new Promise(resolve => {
 			setPendingUserQuestion({
 				question,
 				options,
-				multiSelect,
 				toolCall,
 				resolve,
 			});
@@ -1204,7 +1204,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				<AskUserQuestion
 					question={pendingUserQuestion.question}
 					options={pendingUserQuestion.options}
-					multiSelect={pendingUserQuestion.multiSelect}
 					onAnswer={handleUserQuestionAnswer}
 				/>
 			)}

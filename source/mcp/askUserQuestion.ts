@@ -3,7 +3,6 @@ import type {MCPTool} from '../utils/execution/mcpToolsManager.js';
 export interface AskUserQuestionArgs {
 	question: string;
 	options: string[];
-	multiSelect?: boolean;
 }
 
 export interface AskUserQuestionResult {
@@ -17,7 +16,7 @@ export const mcpTools: MCPTool[] = [
 		function: {
 			name: 'askuser-ask_question',
 			description:
-				'Ask the user a question with multiple choice options to clarify requirements. The AI workflow pauses until the user selects an option or provides custom input. Use this when you need user input to continue processing.',
+				'Ask the user a question with multiple choice options to clarify requirements. The AI workflow pauses until the user selects an option or provides custom input. Use this when you need user input to continue processing. Supports both single and multiple selection - user can choose one or more options.',
 			parameters: {
 				type: 'object',
 				properties: {
@@ -32,14 +31,8 @@ export const mcpTools: MCPTool[] = [
 							type: 'string',
 						},
 						description:
-							'Array of option strings for the user to choose from. Should be concise and clear.',
+							'Array of option strings for the user to choose from. Should be concise and clear. User can select one or multiple options.',
 						minItems: 2,
-					},
-					multiSelect: {
-						type: 'boolean',
-						description:
-							'If true, allows the user to select multiple options. Default is false (single select).',
-						default: false,
 					},
 				},
 				required: ['question', 'options'],

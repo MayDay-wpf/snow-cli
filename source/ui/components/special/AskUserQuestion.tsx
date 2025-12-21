@@ -12,7 +12,6 @@ export interface AskUserQuestionResult {
 interface Props {
 	question: string;
 	options: string[];
-	multiSelect?: boolean;
 	onAnswer: (result: AskUserQuestionResult) => void;
 }
 
@@ -21,17 +20,17 @@ interface Props {
  *
  * @description
  * 显示问题和建议选项列表，用户可以：
- * - 直接选择建议选项（回车）
+ * - 直接选择建议选项（回车确认单个高亮项）
+ * - 按空格键切换选项勾选状态（可多选）
  * - 按'e'键编辑当前高亮选项
  * - 选择「Custom input」从头输入
- * - 多选模式下按空格切换选项
+ * - 数字键快速切换选项勾选状态
  *
  * @param question - 要问用户的问题
  * @param options - 建议选项数组
- * @param multiSelect - 是否启用多选模式
  * @param onAnswer - 用户回答后的回调函数
  */
-export default function AskUserQuestion({question, options, multiSelect = false, onAnswer}: Props) {
+export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 	const [hasAnswered, setHasAnswered] = useState(false);
@@ -44,9 +43,11 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 	const CUSTOM_INPUT_VALUE = 'custom';
 
 	//构建选项列表：建议选项 + Custom input
+	//防御性检查：确保 options 是数组
+	const safeOptions = Array.isArray(options) ? options : [];
 	const items = useMemo(
 		() => [
-			...options.map((option, index) => ({
+			...safeOptions.map((option, index) => ({
 				label: option,
 				value: `option-${index}`,
 				index,
@@ -57,7 +58,7 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 				index: -1,
 			},
 		],
-		[options, t.askUser.customInputOption],
+		[safeOptions, t.askUser.customInputOption],
 	);
 
 	const handleSubmit = useCallback(() => {
@@ -71,30 +72,33 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 			return;
 		}
 
-		if (multiSelect) {
-			//多选模式：返回所有选中的选项
-			const selectedOptions = Array.from(checkedIndices)
-				.sort((a, b) => a - b)
-				.map(idx => options[idx] as string)
-				.filter(Boolean);
+		// 始终支持多选：如果有勾选项则返回数组，否则返回当前高亮项（单个）
+		const selectedOptions = Array.from(checkedIndices)
+			.sort((a, b) => a - b)
+			.map(idx => safeOptions[idx] as string)
+			.filter(Boolean);
 
-			if (selectedOptions.length === 0) {
-				//如果没有勾选，则使用当前高亮项
-				selectedOptions.push(currentItem.label);
-			}
+		setHasAnswered(true);
 
-			setHasAnswered(true);
+		if (selectedOptions.length > 0) {
+			// 有勾选项，返回数组
 			onAnswer({
 				selected: selectedOptions,
 			});
 		} else {
-			//单选模式
-			setHasAnswered(true);
+			// 没有勾选项，返回当前高亮项（单个）
 			onAnswer({
 				selected: currentItem.label,
 			});
 		}
-	}, [hasAnswered, items, highlightedIndex, multiSelect, checkedIndices, options, onAnswer]);
+	}, [
+		hasAnswered,
+		items,
+		highlightedIndex,
+		checkedIndices,
+		safeOptions,
+		onAnswer,
+	]);
 
 	const handleCustomInputSubmit = useCallback(() => {
 		if (!hasAnswered && customInput.trim()) {
@@ -135,8 +139,8 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 				return;
 			}
 
-			//空格键切换选中（多选模式）
-			if (input === ' ' && multiSelect) {
+			//空格键切换选中（始终支持多选）
+			if (input === ' ') {
 				const currentItem = items[highlightedIndex];
 				if (currentItem && currentItem.value !== CUSTOM_INPUT_VALUE) {
 					toggleCheck(currentItem.index);
@@ -144,18 +148,11 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 				return;
 			}
 
-			//数字键快速选择/切换
+			//数字键快速切换选项勾选状态
 			const num = parseInt(input, 10);
-			if (!isNaN(num) && num >= 1 && num <= options.length) {
+			if (!isNaN(num) && num >= 1 && num <= safeOptions.length) {
 				const idx = num - 1;
-				if (multiSelect) {
-					toggleCheck(idx);
-				} else {
-					setHasAnswered(true);
-					onAnswer({
-						selected: options[idx] as string,
-					});
-				}
+				toggleCheck(idx);
 				return;
 			}
 
@@ -195,9 +192,7 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 				<Text bold color={theme.colors.menuInfo}>
 					{t.askUser.header}
 				</Text>
-				{multiSelect && (
-					<Text dimColor> ({t.askUser.multiSelectHint || '多选模式'})</Text>
-				)}
+				<Text dimColor> ({t.askUser.multiSelectHint || '可多选'})</Text>
 			</Box>
 
 			<Box marginBottom={1}>
@@ -212,16 +207,22 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 					<Box flexDirection="column">
 						{items.map((item, index) => {
 							const isHighlighted = index === highlightedIndex;
-							const isChecked = item.index >= 0 && checkedIndices.has(item.index);
+							const isChecked =
+								item.index >= 0 && checkedIndices.has(item.index);
 							const isCustomInput = item.value === CUSTOM_INPUT_VALUE;
 
 							return (
 								<Box key={item.value}>
-									<Text color={isHighlighted ? theme.colors.menuInfo : undefined}>
+									<Text
+										color={isHighlighted ? theme.colors.menuInfo : undefined}
+									>
 										{isHighlighted ? '▸ ' : '  '}
 									</Text>
-									{multiSelect && !isCustomInput && (
-										<Text color={isChecked ? theme.colors.success : undefined} dimColor={!isChecked}>
+									{!isCustomInput && (
+										<Text
+											color={isChecked ? theme.colors.success : undefined}
+											dimColor={!isChecked}
+										>
 											{isChecked ? '[✓] ' : '[ ] '}
 										</Text>
 									)}
@@ -238,9 +239,8 @@ export default function AskUserQuestion({question, options, multiSelect = false,
 					</Box>
 					<Box marginTop={1}>
 						<Text dimColor>
-							{multiSelect
-								? (t.askUser.multiSelectKeyboardHints || '↑↓ 移动 | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑')
-								: t.askUser.keyboardHints}
+							{t.askUser.multiSelectKeyboardHints ||
+								'↑↓ 移动 | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑'}
 						</Text>
 					</Box>
 				</Box>
