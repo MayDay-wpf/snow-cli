@@ -50,11 +50,12 @@ export interface AddToAlwaysApprovedCallback {
  * 用于子智能体调用 askuser 工具时，请求主会话显示蓝色边框的 AskUserQuestion 组件
  * @param question - 问题文本
  * @param options - 选项列表
+ * @param multiSelect - 是否多选模式
  * @returns 用户选择的结果
  */
 export interface UserQuestionCallback {
-	(question: string, options: string[]): Promise<{
-		selected: string;
+	(question: string, options: string[], multiSelect?: boolean): Promise<{
+		selected: string | string[];
 		customInput?: string;
 	}>;
 }
@@ -944,9 +945,10 @@ You are a versatile task execution agent with full tool access, capable of handl
 			);
 
 			if (askUserTool && requestUserQuestion) {
-				// 解析工具参数，失败时使用默认值
+				//解析工具参数，失败时使用默认值
 				let question = 'Please select an option:';
 				let options: string[] = ['Yes', 'No'];
+				let multiSelect = false;
 
 				try {
 					const args = JSON.parse(askUserTool.function.arguments);
@@ -954,15 +956,18 @@ You are a versatile task execution agent with full tool access, capable of handl
 					if (args.options && Array.isArray(args.options)) {
 						options = args.options;
 					}
+					if (args.multiSelect === true) {
+						multiSelect = true;
+					}
 				} catch (error) {
 					console.error('Failed to parse askuser tool arguments:', error);
 				}
 
-				const userAnswer = await requestUserQuestion(question, options);
+				const userAnswer = await requestUserQuestion(question, options, multiSelect);
 
 				const answerText = userAnswer.customInput
-					? `${userAnswer.selected}: ${userAnswer.customInput}`
-					: userAnswer.selected;
+					? `${Array.isArray(userAnswer.selected) ? userAnswer.selected.join(', ') : userAnswer.selected}: ${userAnswer.customInput}`
+					: (Array.isArray(userAnswer.selected) ? userAnswer.selected.join(', ') : userAnswer.selected);
 
 				const toolResultMessage = {
 					role: 'tool' as const,

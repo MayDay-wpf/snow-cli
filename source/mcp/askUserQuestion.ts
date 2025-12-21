@@ -3,10 +3,11 @@ import type {MCPTool} from '../utils/execution/mcpToolsManager.js';
 export interface AskUserQuestionArgs {
 	question: string;
 	options: string[];
+	multiSelect?: boolean;
 }
 
 export interface AskUserQuestionResult {
-	selected: string;
+	selected: string | string[];
 	customInput?: string;
 }
 
@@ -33,6 +34,12 @@ export const mcpTools: MCPTool[] = [
 						description:
 							'Array of option strings for the user to choose from. Should be concise and clear.',
 						minItems: 2,
+					},
+					multiSelect: {
+						type: 'boolean',
+						description:
+							'If true, allows the user to select multiple options. Default is false (single select).',
+						default: false,
 					},
 				},
 				required: ['question', 'options'],

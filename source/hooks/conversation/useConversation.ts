@@ -32,7 +32,7 @@ import {
 } from '../../utils/core/autoCompress.js';
 
 export type UserQuestionResult = {
-	selected: string;
+	selected: string | string[];
 	customInput?: string;
 };
 
@@ -55,6 +55,7 @@ export type ConversationHandlerOptions = {
 		question: string,
 		options: string[],
 		toolCall: ToolCall,
+		multiSelect?: boolean,
 	) => Promise<UserQuestionResult>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
@@ -1237,18 +1238,18 @@ export async function handleConversationWithTools(
 					requestToolConfirmation,
 					isToolAutoApproved,
 					yoloMode,
-					addToAlwaysApproved,
-					// Add onUserInteractionNeeded callback for sub-agent askuser tool
-					async (question: string, options: string[]) => {
-						return await requestUserQuestion(question, options, {
-							id: 'fake-tool-call',
-							type: 'function' as const,
-							function: {
-								name: 'askuser',
-								arguments: '{}',
-							},
-						});
-					},
+			addToAlwaysApproved,
+				//添加 onUserInteractionNeeded 回调用于子代理 askuser 工具
+				async (question: string, options: string[], multiSelect?: boolean) => {
+					return await requestUserQuestion(question, options, {
+						id: 'fake-tool-call',
+						type: 'function' as const,
+						function: {
+							name: 'askuser',
+							arguments: '{}',
+						},
+					}, multiSelect);
+				},
 				);
 
 				// Check if aborted during tool execution

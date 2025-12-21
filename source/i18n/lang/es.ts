@@ -873,6 +873,8 @@ export const es: TranslationKeys = {
 		enterResponse: 'Ingrese su respuesta:',
 		keyboardHints:
 			"Consejo: Presione 'Enter' para seleccionar | Presione 'e' para editar la opción seleccionada",
+		multiSelectHint: 'Modo multiselección',
+		multiSelectKeyboardHints: "↑↓ Mover | Espacio Alternar | 1-9 Alternar rápido | Enter Confirmar | e Editar",
 	},
 	toolConfirmation: {
 		header: '[Confirmación de herramienta]',

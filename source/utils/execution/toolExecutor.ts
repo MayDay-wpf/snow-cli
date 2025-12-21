@@ -48,8 +48,8 @@ export interface AddToAlwaysApprovedCallback {
 }
 
 export interface UserInteractionCallback {
-	(question: string, options: string[]): Promise<{
-		selected: string;
+	(question: string, options: string[], multiSelect?: boolean): Promise<{
+		selected: string | string[];
 		customInput?: string;
 	}>;
 }
@@ -309,12 +309,13 @@ export async function executeToolCall(
 				const response = await onUserInteractionNeeded(
 					error.question,
 					error.options,
+					error.multiSelect,
 				);
 
-				// Return the user's response as the tool result
+				//返回用户的响应作为工具结果
 				const answerText = response.customInput
-					? `${response.selected}: ${response.customInput}`
-					: response.selected;
+					? `${Array.isArray(response.selected) ? response.selected.join(', ') : response.selected}: ${response.customInput}`
+					: (Array.isArray(response.selected) ? response.selected.join(', ') : response.selected);
 
 				result = {
 					tool_call_id: toolCall.id,

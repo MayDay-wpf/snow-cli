@@ -840,6 +840,8 @@ export const en: TranslationKeys = {
 		enterResponse: 'Enter your response:',
 		keyboardHints:
 			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
+		multiSelectHint: 'Multi-select mode',
+		multiSelectKeyboardHints: "↑↓ Move | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit",
 	},
 	toolConfirmation: {
 		header: '[Tool Confirmation]',

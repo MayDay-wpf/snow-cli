@@ -827,6 +827,8 @@ export const ja: TranslationKeys = {
 		selectPrompt: 'オプションを選択:',
 		enterResponse: '回答を入力してください:',
 		keyboardHints: "ヒント: 'Enter' で選択 | 'e' で選択中のオプションを編集",
+		multiSelectHint: '複数選択モード',
+		multiSelectKeyboardHints: "↑↓ 移動 | スペース 切替 | 1-9 クイック切替 | Enter 確定 | e 編集",
 	},
 	toolConfirmation: {
 		header: '[ツール確認]',

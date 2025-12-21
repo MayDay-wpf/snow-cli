@@ -811,6 +811,8 @@ export const ko: TranslationKeys = {
 		selectPrompt: '옵션 선택:',
 		enterResponse: '답변을 입력하세요:',
 		keyboardHints: "팁: 'Enter'로 선택 | 'e'로 선택된 옵션 편집",
+		multiSelectHint: '다중 선택 모드',
+		multiSelectKeyboardHints: "↑↓ 이동 | 스페이스 토글 | 1-9 빠른 토글 | Enter 확인 | e 편집",
 	},
 	toolConfirmation: {
 		header: '[도구 확인]',

@@ -801,6 +801,8 @@ export type TranslationKeys = {
 		selectPrompt: string;
 		enterResponse: string;
 		keyboardHints: string;
+		multiSelectHint: string;
+		multiSelectKeyboardHints: string;
 	};
 	toolConfirmation: {
 		header: string;
