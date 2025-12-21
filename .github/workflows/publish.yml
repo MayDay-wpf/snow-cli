@@ -58,7 +58,10 @@ jobs:
             
             ### What's New
 
-            - Fix the bug where the model cache is not cleared after switching configuration files
+            - Optimized the flexibility of group-defined instructions
+            - Added foolproof treatment for termination timings
+            - Optimized MCP connections
+            - Added headless mode to continue
 
             ### Installation
             ```bash
