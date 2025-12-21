@@ -1,5 +1,39 @@
 import {getProxyConfig} from '../config/proxyConfig.js';
-import {ProxyAgent} from 'undici';
+import {ProxyAgent, setGlobalDispatcher} from 'undici';
+
+let globalProxyInitialized = false;
+
+/**
+ * 初始化全局代理（让所有fetch请求自动走代理）
+ * 优先使用Snow配置，其次使用系统环境变量
+ */
+export function initGlobalProxy(): void {
+	if (globalProxyInitialized) {
+		return;
+	}
+
+	let proxyUrl: string | undefined;
+
+	//优先使用Snow代理配置
+	const proxyConfig = getProxyConfig();
+	if (proxyConfig.enabled) {
+		proxyUrl = `http://127.0.0.1:${proxyConfig.port}`;
+	} else {
+		//其次使用系统环境变量
+		proxyUrl = process.env['https_proxy'] || process.env['HTTPS_PROXY'] || 
+		           process.env['http_proxy'] || process.env['HTTP_PROXY'];
+	}
+
+	if (proxyUrl) {
+		try {
+			const agent = new ProxyAgent(proxyUrl);
+			setGlobalDispatcher(agent);
+			globalProxyInitialized = true;
+		} catch (error) {
+			console.error('Failed to initialize global proxy:', error);
+		}
+	}
+}
 
 /**
  * 创建 undici ProxyAgent（如果启用了代理）
