@@ -1,9 +1,135 @@
-import {executeMCPTool} from './mcpToolsManager.js';
+import {
+	executeMCPTool,
+	getRegisteredServicePrefixes,
+} from './mcpToolsManager.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
 import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
+
+/**
+ * 检测并修复被错误合并的工具名称
+ * 例如: "ace-semantic_searchdesktop-commander-start_search" 应该被分割为两个工具
+ * 返回第一个有效的工具名称，如果无法修复则返回原始名称
+ */
+function fixMergedToolName(toolName: string): {
+	fixedName: string;
+	wasMerged: boolean;
+	originalName: string;
+} {
+	// 动态获取已注册的服务前缀
+	const knownPrefixes = getRegisteredServicePrefixes();
+
+	// 检查是否包含多个已知前缀（表示被错误合并）
+	let foundPrefixes: {prefix: string; index: number}[] = [];
+
+	for (const prefix of knownPrefixes) {
+		let searchIndex = 0;
+		while (true) {
+			const index = toolName.indexOf(prefix, searchIndex);
+			if (index === -1) break;
+			foundPrefixes.push({prefix, index});
+			searchIndex = index + 1;
+		}
+	}
+
+	// 按位置排序
+	foundPrefixes.sort((a, b) => a.index - b.index);
+
+	// 如果找到多个前缀，说明工具名称被错误合并
+	if (foundPrefixes.length > 1) {
+		// 提取第一个工具名称（从第一个前缀到第二个前缀之前）
+		const firstPrefix = foundPrefixes[0];
+		const secondPrefix = foundPrefixes[1];
+
+		if (firstPrefix && secondPrefix && firstPrefix.index === 0) {
+			const firstToolName = toolName.substring(0, secondPrefix.index);
+			console.warn(`[Tool Name Fix] Detected merged tool names: "${toolName}"`);
+			console.warn(`[Tool Name Fix] Extracted first tool: "${firstToolName}"`);
+			console.warn(
+				`[Tool Name Fix] Ignored second tool starting at: "${toolName.substring(
+					secondPrefix.index,
+				)}"`,
+			);
+
+			return {
+				fixedName: firstToolName,
+				wasMerged: true,
+				originalName: toolName,
+			};
+		}
+	}
+
+	return {
+		fixedName: toolName,
+		wasMerged: false,
+		originalName: toolName,
+	};
+}
+
+//安全解析JSON，处理可能被拼接的多个JSON对象
+function safeParseToolArguments(argsString: string): Record<string, any> {
+	if (!argsString || argsString.trim() === '') {
+		return {};
+	}
+
+	try {
+		return JSON.parse(argsString);
+	} catch (error) {
+		//尝试只解析第一个完整的JSON对象
+		//这处理了多个工具调用参数被错误拼接的情况
+		const firstBraceIndex = argsString.indexOf('{');
+		if (firstBraceIndex === -1) {
+			return {};
+		}
+
+		let braceCount = 0;
+		let inString = false;
+		let escapeNext = false;
+
+		for (let i = firstBraceIndex; i < argsString.length; i++) {
+			const char = argsString[i];
+
+			if (escapeNext) {
+				escapeNext = false;
+				continue;
+			}
+
+			if (char === '\\') {
+				escapeNext = true;
+				continue;
+			}
+
+			if (char === '"') {
+				inString = !inString;
+				continue;
+			}
+
+			if (!inString) {
+				if (char === '{') {
+					braceCount++;
+				} else if (char === '}') {
+					braceCount--;
+					if (braceCount === 0) {
+						//找到第一个完整的JSON对象
+						const firstJsonObject = argsString.substring(
+							firstBraceIndex,
+							i + 1,
+						);
+						try {
+							return JSON.parse(firstJsonObject);
+						} catch {
+							return {};
+						}
+					}
+				}
+			}
+		}
+
+		return {};
+	}
+}
 
 export interface ToolCall {
 	id: string;
@@ -152,6 +278,19 @@ export async function executeToolCall(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
 ): Promise<ToolResult> {
+	// 检测并修复被错误合并的工具名称
+	const toolNameFix = fixMergedToolName(toolCall.function.name);
+	if (toolNameFix.wasMerged) {
+		// 修复工具调用对象中的名称
+		toolCall = {
+			...toolCall,
+			function: {
+				...toolCall.function,
+				name: toolNameFix.fixedName,
+			},
+		};
+	}
+
 	let result: ToolResult | undefined;
 	let executionError: Error | null = null;
 
@@ -181,7 +320,7 @@ export async function executeToolCall(
 	}
 
 	try {
-		const args = JSON.parse(toolCall.function.arguments);
+		const args = safeParseToolArguments(toolCall.function.arguments);
 
 		// Execute beforeToolCall hook
 		try {
@@ -252,13 +391,13 @@ export async function executeToolCall(
 
 			const subAgentResult = await subAgentService.execute({
 				agentId,
-				prompt: args.prompt,
+				prompt: args['prompt'] as string,
 				onMessage: onSubAgentMessage,
 				abortSignal,
 				requestToolConfirmation: subAgentToolConfirmation
 					? async (toolCall: ToolCall) => {
 							// Use the adapter to convert to the expected signature
-							const args = JSON.parse(toolCall.function.arguments);
+							const args = safeParseToolArguments(toolCall.function.arguments);
 							return await subAgentToolConfirmation(
 								toolCall.function.name,
 								args,
@@ -314,8 +453,14 @@ export async function executeToolCall(
 
 				//返回用户的响应作为工具结果
 				const answerText = response.customInput
-					? `${Array.isArray(response.selected) ? response.selected.join(', ') : response.selected}: ${response.customInput}`
-					: (Array.isArray(response.selected) ? response.selected.join(', ') : response.selected);
+					? `${
+							Array.isArray(response.selected)
+								? response.selected.join(', ')
+								: response.selected
+					  }: ${response.customInput}`
+					: Array.isArray(response.selected)
+					? response.selected.join(', ')
+					: response.selected;
 
 				result = {
 					tool_call_id: toolCall.id,
@@ -354,7 +499,7 @@ export async function executeToolCall(
 				'afterToolCall',
 				{
 					toolName: toolCall.function.name,
-					args: JSON.parse(toolCall.function.arguments),
+					args: safeParseToolArguments(toolCall.function.arguments),
 					result,
 					error: executionError,
 				},
