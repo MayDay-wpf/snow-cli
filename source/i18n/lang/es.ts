@@ -39,6 +39,11 @@ export const es: TranslationKeys = {
 		hooksSettings: 'Configuración de Hooks',
 		hooksSettingsInfo:
 			'Configurar hooks para personalizar el flujo de trabajo de IA',
+		updateNoticeTitle: 'Actualización disponible',
+		updateNoticeCurrent: 'Actual',
+		updateNoticeLatest: 'Última',
+		updateNoticeRun: 'Ejecuta',
+		updateNoticeGithub: 'GitHub',
 		exit: 'Salir',
 		exitInfo: 'Salir de la aplicación',
 	},

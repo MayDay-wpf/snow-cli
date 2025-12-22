@@ -1,7 +1,6 @@
 export type {Language} from '../utils/config/languageConfig.js';
 
 export type TranslationKeys = {
-	// Welcome Screen
 	welcome: {
 		title: string;
 		subtitle: string;
@@ -31,6 +30,11 @@ export type TranslationKeys = {
 		themeSettingsInfo: string;
 		hooksSettings: string;
 		hooksSettingsInfo: string;
+		updateNoticeTitle: string;
+		updateNoticeCurrent: string;
+		updateNoticeLatest: string;
+		updateNoticeRun: string;
+		updateNoticeGithub: string;
 		exit: string;
 		exitInfo: string;
 	};
