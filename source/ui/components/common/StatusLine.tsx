@@ -51,6 +51,7 @@ type Props = {
 		totalChunks: number;
 		currentFile?: string;
 		status?: string;
+		error?: string;
 	} | null;
 
 	// 文件监视器状态
@@ -154,14 +155,21 @@ export default function StatusLine({
 			}
 		}
 
-		// 代码库索引状态
-		if (codebaseIndexing && codebaseProgress) {
-			statusItems.push({
-				text: `◐ ${t.chatScreen.codebaseIndexingShort || '索引'} ${
-					codebaseProgress.processedFiles
-				}/${codebaseProgress.totalFiles}`,
-				color: 'cyan',
-			});
+		// 代码库索引状态 - 显示错误或索引进度
+		if ((codebaseIndexing || codebaseProgress?.error) && codebaseProgress) {
+			if (codebaseProgress.error) {
+				statusItems.push({
+					text: codebaseProgress.error,
+					color: 'yellow',
+				});
+			} else {
+				statusItems.push({
+					text: `◐ ${t.chatScreen.codebaseIndexingShort || '索引'} ${
+						codebaseProgress.processedFiles
+					}/${codebaseProgress.totalFiles}`,
+					color: 'cyan',
+				});
+			}
 		}
 
 		// 文件监视器状态
@@ -449,23 +457,29 @@ export default function StatusLine({
 					</Box>
 				)}
 
-			{/* 代码库索引状态 */}
-			{codebaseIndexing && codebaseProgress && (
+			{/* 代码库索引状态 - 显示错误或索引进度 */}
+			{(codebaseIndexing || codebaseProgress?.error) && codebaseProgress && (
 				<Box>
-					<Text color="cyan" dimColor>
-						<Spinner type="dots" />{' '}
-						{t.chatScreen.codebaseIndexing
-							.replace(
-								'{processed}',
-								codebaseProgress.processedFiles.toString(),
-							)
-							.replace('{total}', codebaseProgress.totalFiles.toString())}
-						{codebaseProgress.totalChunks > 0 &&
-							` (${t.chatScreen.codebaseProgress.replace(
-								'{chunks}',
-								codebaseProgress.totalChunks.toString(),
-							)})`}
-					</Text>
+					{codebaseProgress.error ? (
+						<Text color="red" dimColor>
+							{codebaseProgress.error}
+						</Text>
+					) : (
+						<Text color="cyan" dimColor>
+							<Spinner type="dots" />{' '}
+							{t.chatScreen.codebaseIndexing
+								.replace(
+									'{processed}',
+									codebaseProgress.processedFiles.toString(),
+								)
+								.replace('{total}', codebaseProgress.totalFiles.toString())}
+							{codebaseProgress.totalChunks > 0 &&
+								` (${t.chatScreen.codebaseProgress.replace(
+									'{chunks}',
+									codebaseProgress.totalChunks.toString(),
+								)})`}
+						</Text>
+					)}
 				</Box>
 			)}
 

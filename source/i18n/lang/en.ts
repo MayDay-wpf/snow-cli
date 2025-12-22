@@ -111,6 +111,8 @@ export const en: TranslationKeys = {
 		chunkingMinCharsPerChunk: 'Min Characters Per Chunk:',
 		chunkingOverlapLines: 'Overlap Lines:',
 		saveError: 'Failed to save configuration',
+		gitignoreNotFound:
+			'Cannot create index: .gitignore file not found. Please add a .gitignore file to your project to prevent indexing unnecessary files.',
 	},
 	systemPromptConfig: {
 		title: 'System Prompt Management',
@@ -855,7 +857,8 @@ export const en: TranslationKeys = {
 		keyboardHints:
 			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
 		multiSelectHint: 'Multi-select mode',
-		multiSelectKeyboardHints: "↑↓ Move | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit",
+		multiSelectKeyboardHints:
+			'↑↓ Move | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
 	},
 	toolConfirmation: {
 		header: '[Tool Confirmation]',

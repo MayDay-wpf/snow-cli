@@ -101,6 +101,7 @@ export type TranslationKeys = {
 		chunkingMinCharsPerChunk: string;
 		chunkingOverlapLines: string;
 		saveError: string;
+		gitignoreNotFound: string;
 	};
 	// System Prompt Config Screen
 	systemPromptConfig: {

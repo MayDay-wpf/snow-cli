@@ -114,6 +114,34 @@ export class CodebaseIndexAgent {
 			return;
 		}
 
+		// Check if .gitignore exists
+		const gitignorePath = path.join(this.projectRoot, '.gitignore');
+		if (!fs.existsSync(gitignorePath)) {
+			// Import translations dynamically to get localized error message
+			const {getCurrentLanguage} = await import(
+				'../utils/config/languageConfig.js'
+			);
+			const {translations} = await import('../i18n/index.js');
+			const currentLanguage = getCurrentLanguage();
+			const t = translations[currentLanguage];
+			const errorMessage = t.codebaseConfig.gitignoreNotFound;
+
+			logger.error(errorMessage);
+
+			if (progressCallback) {
+				progressCallback({
+					totalFiles: 0,
+					processedFiles: 0,
+					totalChunks: 0,
+					currentFile: '',
+					status: 'error',
+					error: errorMessage,
+				});
+			}
+
+			return;
+		}
+
 		this.isRunning = true;
 		this.shouldStop = false;
 		this.progressCallback = progressCallback;

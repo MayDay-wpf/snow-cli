@@ -100,6 +100,8 @@ export const zhTW: TranslationKeys = {
 		chunkingMinCharsPerChunk: '每塊最小字元數:',
 		chunkingOverlapLines: '重疊行數:',
 		saveError: '儲存配置失敗',
+		gitignoreNotFound:
+			'無法建立索引：未找到 .gitignore 檔案。請在專案中新增 .gitignore 檔案以防止索引不必要的檔案。',
 	},
 	systemPromptConfig: {
 		title: '系統提示詞管理',
@@ -809,7 +811,8 @@ export const zhTW: TranslationKeys = {
 		enterResponse: '請輸入您的回答:',
 		keyboardHints: "提示: 按 'Enter' 選擇 | 按 'e' 編輯當前選項",
 		multiSelectHint: '多選模式',
-		multiSelectKeyboardHints: "↑↓ 移動 | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯",
+		multiSelectKeyboardHints:
+			'↑↓ 移動 | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯',
 	},
 	toolConfirmation: {
 		header: '[工具確認]',

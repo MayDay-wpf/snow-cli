@@ -105,6 +105,8 @@ export const ko: TranslationKeys = {
 		chunkingMinCharsPerChunk: '청크당 최소 문자 수:',
 		chunkingOverlapLines: '중첩 라인 수:',
 		saveError: '구성 저장 실패',
+		gitignoreNotFound:
+			'인덱스를 만들 수 없습니다: .gitignore 파일을 찾을 수 없습니다. 불필요한 파일 인덱싱을 방지하기 위해 프로젝트에 .gitignore 파일을 추가하세요.',
 	},
 	systemPromptConfig: {
 		title: '시스템 프롬프트 관리',
@@ -826,7 +828,8 @@ export const ko: TranslationKeys = {
 		enterResponse: '답변을 입력하세요:',
 		keyboardHints: "팁: 'Enter'로 선택 | 'e'로 선택된 옵션 편집",
 		multiSelectHint: '다중 선택 모드',
-		multiSelectKeyboardHints: "↑↓ 이동 | 스페이스 토글 | 1-9 빠른 토글 | Enter 확인 | e 편집",
+		multiSelectKeyboardHints:
+			'↑↓ 이동 | 스페이스 토글 | 1-9 빠른 토글 | Enter 확인 | e 편집',
 	},
 	toolConfirmation: {
 		header: '[도구 확인]',
