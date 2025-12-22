@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - The snapshot is saved back to the user directory, and the interactive tool supports multiple selections
+            - Optimize tool call processing logic, adjust session saving policies, and exclude .git directories from snapshots
             
             ### Installation
             ```bash
