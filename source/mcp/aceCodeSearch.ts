@@ -25,13 +25,17 @@ import {
 import {
 	isCommandAvailable,
 	parseGrepOutput,
+	expandGlobBraces,
 } from './utils/aceCodeSearch/search.utils.js';
+import {
+	INDEX_CACHE_DURATION,
+	BATCH_SIZE,
+} from './utils/aceCodeSearch/constants.utils.js';
 
 export class ACECodeSearchService {
 	private basePath: string;
 	private indexCache: Map<string, CodeSymbol[]> = new Map();
 	private lastIndexTime: number = 0;
-	private readonly INDEX_CACHE_DURATION = 60000; // 1 minute
 	private fzfIndex: AsyncFzf<string[]> | undefined;
 	private allIndexedFiles: Set<string> = new Set(); // 使用 Set 提高查找性能 O(1)
 	private fileModTimes: Map<string, number> = new Map(); // Track file modification times
@@ -82,7 +86,7 @@ export class ACECodeSearchService {
 		if (
 			!forceRefresh &&
 			this.indexCache.size > 0 &&
-			now - this.lastIndexTime < this.INDEX_CACHE_DURATION
+			now - this.lastIndexTime < INDEX_CACHE_DURATION
 		) {
 			return;
 		}
@@ -152,7 +156,6 @@ export class ACECodeSearchService {
 		await searchInDirectory(this.basePath);
 
 		// Process files in batches for better performance
-		const BATCH_SIZE = 10; // 并发处理批次大小
 		const batches: string[][] = [];
 
 		for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
@@ -593,28 +596,6 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Expand glob patterns with braces like "*.{ts,tsx}" into multiple patterns
-	 */
-	private expandGlobBraces(glob: string): string[] {
-		// Match {a,b,c} pattern
-		const braceMatch = glob.match(/^(.+)\{([^}]+)\}(.*)$/);
-		if (
-			!braceMatch ||
-			!braceMatch[1] ||
-			!braceMatch[2] ||
-			braceMatch[3] === undefined
-		) {
-			return [glob];
-		}
-
-		const prefix = braceMatch[1];
-		const alternatives = braceMatch[2].split(',');
-		const suffix = braceMatch[3];
-
-		return alternatives.map(alt => `${prefix}${alt}${suffix}`);
-	}
-
-	/**
 	 * Strategy 1: Use git grep for fast searching in Git repositories
 	 */
 	private async gitGrepSearch(
@@ -644,7 +625,7 @@ export class ACECodeSearchService {
 				gitGlob = gitGlob.replace(/\*\*/g, '*');
 
 				// Expand glob patterns with braces (e.g., "source/*.{ts,tsx}" -> ["source/*.ts", "source/*.tsx"])
-				const expandedGlobs = this.expandGlobBraces(gitGlob);
+				const expandedGlobs = expandGlobBraces(gitGlob);
 				args.push('--', ...expandedGlobs);
 			}
 
@@ -722,7 +703,7 @@ export class ACECodeSearchService {
 					// Normalize path separators for Windows compatibility
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
 					// Expand glob patterns with braces
-					const expandedGlobs = this.expandGlobBraces(normalizedGlob);
+					const expandedGlobs = expandGlobBraces(normalizedGlob);
 					expandedGlobs.forEach(glob => args.push('--glob', glob));
 				}
 			} else {
@@ -732,7 +713,7 @@ export class ACECodeSearchService {
 					// Normalize path separators for Windows compatibility
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
 					// Expand glob patterns with braces
-					const expandedGlobs = this.expandGlobBraces(normalizedGlob);
+					const expandedGlobs = expandGlobBraces(normalizedGlob);
 					expandedGlobs.forEach(glob => args.push(`--include=${glob}`));
 				}
 				args.push(pattern, '.');
@@ -1356,7 +1337,7 @@ export const mcpTools = [
 						'Filter by specific symbol types (optional). If not specified, all symbol types are returned.',
 				},
 			},
-			required: ['filePath','maxResults','includeContext'],
+			required: ['filePath', 'maxResults', 'includeContext'],
 		},
 	},
 	{
