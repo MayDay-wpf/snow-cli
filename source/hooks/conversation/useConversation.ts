@@ -25,7 +25,6 @@ import {formatToolCallMessage} from '../../utils/ui/messageFormatter.js';
 import {resourceMonitor} from '../../utils/core/resourceMonitor.js';
 import {isToolNeedTwoStepDisplay} from '../../utils/config/toolDisplayConfig.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
-import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {
 	shouldAutoCompress,
 	performAutoCompression,
@@ -276,6 +275,22 @@ export async function handleConversationWithTools(
 		});
 	} catch (error) {
 		console.error('Failed to save user message:', error);
+	}
+
+	// Set conversation context for on-demand snapshot system
+	// This provides sessionId and messageIndex to file operations
+	// messageIndex is the index after saving the current user message
+	try {
+		const {setConversationContext} = await import(
+			'../../utils/codebase/conversationContext.js'
+		);
+		// Use session.messages.length as messageIndex (after user message is saved)
+		const updatedSession = sessionManager.getCurrentSession();
+		if (updatedSession) {
+			setConversationContext(updatedSession.id, updatedSession.messages.length);
+		}
+	} catch (error) {
+		console.error('Failed to set conversation context:', error);
 	}
 
 	// Initialize token encoder with proper cleanup tracking
@@ -1688,20 +1703,8 @@ export async function handleConversationWithTools(
 							}));
 
 						// Create snapshot before adding pending message to UI
-						const session = sessionManager.getCurrentSession();
-						let pendingMessageIndex = 0;
-						if (session) {
-							// Use setMessages callback to get REAL-TIME message count
-							options.setMessages(prev => {
-								pendingMessageIndex = prev.length;
-								return prev; // Don't modify, just read
-							});
-
-							await hashBasedSnapshotManager.createSnapshot(
-								session.id,
-								pendingMessageIndex,
-							);
-						}
+						// NOTE: New on-demand backup system - no longer需要 need manual snapshot creation
+						// Files will be automatically backed up when they are modified
 
 						// Add user message to UI
 						const userMessage: Message = {
@@ -1721,14 +1724,29 @@ export async function handleConversationWithTools(
 						});
 
 						// Save user message
-						saveMessage({
-							role: 'user',
-							content: combinedMessage,
-							images:
-								allPendingImages.length > 0 ? allPendingImages : undefined,
-						}).catch(error => {
+						try {
+							await saveMessage({
+								role: 'user',
+								content: combinedMessage,
+								images:
+									allPendingImages.length > 0 ? allPendingImages : undefined,
+							});
+
+							// Set conversation context for pending message
+							// This provides sessionId and messageIndex to file operations
+							const {setConversationContext} = await import(
+								'../../utils/codebase/conversationContext.js'
+							);
+							const updatedSession = sessionManager.getCurrentSession();
+							if (updatedSession) {
+								setConversationContext(
+									updatedSession.id,
+									updatedSession.messages.length,
+								);
+							}
+						} catch (error) {
 							console.error('Failed to save pending user message:', error);
-						});
+						}
 					}
 				}
 
@@ -1859,24 +1877,18 @@ export async function handleConversationWithTools(
 		}
 
 		// 同步提交所有待处理快照 - 确保快照保存可靠性
-		// 处理 normal 和 pending 消息的快照
-		const session = sessionManager.getCurrentSession();
-		if (session) {
-			while (true) {
-				const result = await hashBasedSnapshotManager.commitSnapshot(
-					session.id,
-				);
-				if (!result) break; // 没有更多快照需要提交
+		// NOTE: New on-demand backup system - snapshot management is now automatic
+		// Files are backed up when they are created/modified
+		// No need for manual commit process
 
-				// 更新回滚 UI 的快照文件计数
-				if (result.fileCount > 0 && options.setSnapshotFileCount) {
-					options.setSnapshotFileCount(prev => {
-						const newCounts = new Map(prev);
-						newCounts.set(result.messageIndex, result.fileCount);
-						return newCounts;
-					});
-				}
-			}
+		// Clear conversation context after tool execution completes
+		try {
+			const {clearConversationContext} = await import(
+				'../../utils/codebase/conversationContext.js'
+			);
+			clearConversationContext();
+		} catch (error) {
+			// Ignore errors during cleanup
 		}
 
 		// ✅ 确保总是释放encoder资源，避免资源泄漏

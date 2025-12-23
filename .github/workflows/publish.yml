@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Optimize tool call processing logic, adjust session saving policies, and exclude .git directories from snapshots
+            - Snapshot system simplified, bypassing memory
             
             ### Installation
             ```bash

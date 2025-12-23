@@ -272,15 +272,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 		streamingState.setIsStreaming(true);
 
-		// Create snapshot after adding user message to UI (non-blocking for better UX)
-		const session = sessionManager.getCurrentSession();
-		if (session) {
-			hashBasedSnapshotManager
-				.createSnapshot(session.id, messages.length)
-				.catch(error => {
-					logger.warn('Failed to create snapshot:', error);
-				});
-		}
+		// NOTE: New on-demand backup system - files are automatically backed up when modified
+		// No need for manual snapshot creation
 
 		const controller = new AbortController();
 		streamingState.setAbortController(controller);
@@ -367,25 +360,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 					setCurrentModel: streamingState.setCurrentModel,
 				});
 			} finally {
-				// Commit snapshot after message processing completes (success or error)
-				// Use messages.length as messageIndex since we created snapshot with this index
-				const session = sessionManager.getCurrentSession();
-				let result = null;
-				if (session) {
-					result = await hashBasedSnapshotManager.commitSnapshot(
-						session.id,
-						messages.length,
-					);
-				}
-
-				// Update snapshot file count for rollback UI
-				if (result && result.fileCount > 0) {
-					if (session) {
-						const newCounts = new Map(snapshotState.snapshotFileCount);
-						newCounts.set(result.messageIndex, result.fileCount);
-						snapshotState.setSnapshotFileCount(newCounts);
-					}
-				}
+				// NOTE: New on-demand backup system - snapshot management is now automatic
+				// Files are backed up when they are created/modified
+				// No need for manual commit process
 			}
 		} catch (error) {
 			// Don't show error message if user manually interrupted or request was aborted
@@ -626,24 +603,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 					setCurrentModel: streamingState.setCurrentModel,
 				});
 			} finally {
-				// Commit snapshot after message processing completes
-				// Note: This is for processPendingMessages, but snapshots are actually
-				// created and committed in useConversation.ts when pending messages are detected
-				// So this might not find any snapshot to commit
-				const session = sessionManager.getCurrentSession();
-				let result = null;
-				if (session) {
-					result = await hashBasedSnapshotManager.commitSnapshot(session.id);
-				}
-
-				// Update snapshot file count for rollback UI
-				if (result && result.fileCount > 0) {
-					if (session) {
-						const newCounts = new Map(snapshotState.snapshotFileCount);
-						newCounts.set(result.messageIndex, result.fileCount);
-						snapshotState.setSnapshotFileCount(newCounts);
-					}
-				}
+				// Snapshots are now created on-demand during file operations
+				// No global commit needed
 			}
 		} catch (error) {
 			// Don't show error message if user manually interrupted or request was aborted

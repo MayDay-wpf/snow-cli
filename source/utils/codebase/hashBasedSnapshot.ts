@@ -1,22 +1,9 @@
 import fs from 'fs/promises';
-import fssync from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import ignore, {type Ignore} from 'ignore';
 import {logger} from '../core/logger.js';
 import {getProjectId} from '../session/projectUtils.js';
-
-/**
- * File state tracked by hash AND content (optional for memory optimization)
- */
-interface FileState {
-	path: string; // Relative path from workspace root
-	hash: string; // SHA256 hash of file content
-	size: number; // File size in bytes
-	mtime: number; // Last modified timestamp
-	content: string; // File content (empty string if not loaded for memory optimization)
-}
 
 /**
  * File backup entry for rollback
@@ -41,120 +28,20 @@ interface SnapshotMetadata {
 
 /**
  * Hash-Based Snapshot Manager
- * Tracks file changes by SHA256 hash, not by edit operations
- * Respects .gitignore patterns for efficient file filtering
+ * On-demand backup: directly saves backups to disk when files are created/edited
+ * No global monitoring, no memory caching
  */
 class HashBasedSnapshotManager {
 	private readonly snapshotsDir: string;
-	// Support multiple concurrent snapshots, keyed by sessionId:messageIndex for session isolation
-	private activeSnapshots: Map<
-		string, // Key format: "sessionId:messageIndex"
-		{
-			metadata: SnapshotMetadata;
-			beforeStateMap: Map<string, FileState>;
-		}
-	> = new Map();
-	private ignoreFilter: Ignore;
 
 	constructor() {
 		const projectId = getProjectId();
 		this.snapshotsDir = path.join(
 			os.homedir(),
 			'.snow',
-			'.git',
 			'snapshots',
 			projectId,
 		);
-		this.ignoreFilter = ignore();
-		this.loadIgnorePatterns();
-	}
-
-	/**
-	 * Load .gitignore patterns
-	 */
-	private loadIgnorePatterns(): void {
-		const workspaceRoot = process.cwd();
-		const gitignorePath = path.join(workspaceRoot, '.gitignore');
-
-		if (fssync.existsSync(gitignorePath)) {
-			try {
-				const content = fssync.readFileSync(gitignorePath, 'utf-8');
-				this.ignoreFilter.add(content);
-			} catch (error) {
-				logger.warn('Failed to load .gitignore:', error);
-			}
-		}
-	}
-
-	/**
-	 * Scan directory recursively and collect file states (metadata only, no content)
-	 */
-	private async scanDirectory(
-		dirPath: string,
-		workspaceRoot: string,
-		fileStates: Map<string, FileState>,
-		includeContent: boolean = false,
-	): Promise<void> {
-		try {
-			const entries = await fs.readdir(dirPath, {withFileTypes: true});
-
-			for (const entry of entries) {
-				const fullPath = path.join(dirPath, entry.name);
-				const relativePath = path.relative(workspaceRoot, fullPath);
-
-				// Skip if matches ignore patterns
-				if (relativePath && this.ignoreFilter.ignores(relativePath)) {
-					continue;
-				}
-
-				if (entry.isDirectory()) {
-					await this.scanDirectory(
-						fullPath,
-						workspaceRoot,
-						fileStates,
-						includeContent,
-					);
-				} else if (entry.isFile()) {
-					try {
-						const stats = await fs.stat(fullPath);
-						let content = '';
-						let hash = '';
-
-						if (includeContent) {
-							content = await fs.readFile(fullPath, 'utf-8');
-							hash = crypto.createHash('sha256').update(content).digest('hex');
-						} else {
-							// Only calculate hash without storing content
-							const buffer = await fs.readFile(fullPath);
-							hash = crypto.createHash('sha256').update(buffer).digest('hex');
-						}
-
-						fileStates.set(relativePath, {
-							path: relativePath,
-							hash,
-							size: stats.size,
-							mtime: stats.mtimeMs,
-							content: includeContent ? content : '', // Only store content if requested
-						});
-					} catch (error) {
-						// Skip files that can't be read (binary files, permission issues, etc.)
-					}
-				}
-			}
-		} catch (error) {
-			// Skip directories that can't be accessed
-		}
-	}
-
-	/**
-	 * Scan workspace and build file state map
-	 */
-	private async scanWorkspace(
-		workspaceRoot: string = process.cwd(),
-	): Promise<Map<string, FileState>> {
-		const fileStates = new Map<string, FileState>();
-		await this.scanDirectory(workspaceRoot, workspaceRoot, fileStates);
-		return fileStates;
 	}
 
 	/**
@@ -172,153 +59,135 @@ class HashBasedSnapshotManager {
 	}
 
 	/**
-	 * Create snapshot before message processing
-	 * Captures current workspace state by hash
+	 * Backup a file before modification or creation
+	 * @param sessionId Current session ID
+	 * @param messageIndex Current message index
+	 * @param filePath File path (relative to workspace root)
+	 * @param workspaceRoot Workspace root directory
+	 * @param existed Whether the file existed before (false for new files)
+	 * @param originalContent Original file content (undefined for new files)
 	 */
-	async createSnapshot(
+	async backupFile(
 		sessionId: string,
 		messageIndex: number,
-		workspaceRoot: string = process.cwd(),
+		filePath: string,
+		workspaceRoot: string,
+		existed: boolean,
+		originalContent?: string,
 	): Promise<void> {
-		// Scan current workspace and store state
-		const beforeStateMap = await this.scanWorkspace(workspaceRoot);
+		try {
+			logger.info(
+				`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
+			);
+			await this.ensureSnapshotsDir();
+			const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
+			logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
 
-		// Store snapshot with sessionId:messageIndex as key for session isolation
-		const snapshotKey = `${sessionId}:${messageIndex}`;
-		this.activeSnapshots.set(snapshotKey, {
-			metadata: {
-				sessionId,
-				messageIndex,
-				timestamp: Date.now(),
-				workspaceRoot,
-				backups: [],
-			},
-			beforeStateMap,
-		});
+			// Calculate relative path
+			const relativePath = path.isAbsolute(filePath)
+				? path.relative(workspaceRoot, filePath)
+				: filePath;
 
-		logger.info(
-			`[Snapshot] Created snapshot for session ${sessionId} message ${messageIndex}`,
-		);
+			// Create backup entry
+			const backup: FileBackup = {
+				path: relativePath,
+				content: existed ? originalContent ?? null : null,
+				existed,
+				hash: originalContent
+					? crypto.createHash('sha256').update(originalContent).digest('hex')
+					: '',
+			};
+
+			// Load existing snapshot metadata or create new
+			let metadata: SnapshotMetadata;
+			try {
+				const content = await fs.readFile(snapshotPath, 'utf-8');
+				metadata = JSON.parse(content);
+			} catch {
+				// Snapshot doesn't exist, create new
+				metadata = {
+					sessionId,
+					messageIndex,
+					timestamp: Date.now(),
+					workspaceRoot,
+					backups: [],
+				};
+			}
+
+			// Check if this file already has a backup in this snapshot
+			const existingBackupIndex = metadata.backups.findIndex(
+				b => b.path === relativePath,
+			);
+
+			if (existingBackupIndex === -1) {
+				// No existing backup, add new
+				metadata.backups.push(backup);
+				await this.saveSnapshotMetadata(metadata);
+				logger.info(
+					`[Snapshot] Backed up file ${relativePath} for session ${sessionId} message ${messageIndex}`,
+				);
+			}
+			// If backup already exists, keep the original (first backup wins)
+		} catch (error) {
+			logger.warn(`[Snapshot] Failed to backup file ${filePath}:`, error);
+		}
 	}
 
 	/**
-	 * Commit snapshot after message processing
-	 * Compares current workspace state with snapshot and saves changes
-	 * @param sessionId The session ID (required for session isolation)
-	 * @param messageIndex The message index to commit (if not provided, commits the oldest snapshot for this session)
-	 * @returns Object with fileCount and messageIndex, or null if no active snapshot
+	 * Remove a specific file backup from snapshot (for failed operations)
+	 * @param sessionId Current session ID
+	 * @param messageIndex Current message index
+	 * @param filePath File path to remove from backup
 	 */
-	async commitSnapshot(
+	async removeFileBackup(
 		sessionId: string,
-		messageIndex?: number,
-	): Promise<{
-		fileCount: number;
-		messageIndex: number;
-	} | null> {
-		// If messageIndex not provided, get the oldest snapshot for this session
-		if (messageIndex === undefined) {
-			const keys = Array.from(this.activeSnapshots.keys());
-			const sessionKeys = keys
-				.filter(key => key.startsWith(`${sessionId}:`))
-				.map(key => {
-					const parts = key.split(':');
-					return parseInt(parts[1] || '0', 10);
-				})
-				.filter(index => !isNaN(index));
-			if (sessionKeys.length === 0) {
-				return null;
-			}
-			messageIndex = Math.min(...sessionKeys);
-		}
+		messageIndex: number,
+		filePath: string,
+		workspaceRoot: string,
+	): Promise<void> {
+		try {
+			const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
 
-		const snapshotKey = `${sessionId}:${messageIndex}`;
-		const snapshot = this.activeSnapshots.get(snapshotKey);
-		if (!snapshot) {
+			// Load existing snapshot
+			try {
+				const content = await fs.readFile(snapshotPath, 'utf-8');
+				const metadata: SnapshotMetadata = JSON.parse(content);
+
+				// Calculate relative path
+				const relativePath = path.isAbsolute(filePath)
+					? path.relative(workspaceRoot, filePath)
+					: filePath;
+
+				// Remove backup for this file
+				const originalLength = metadata.backups.length;
+				metadata.backups = metadata.backups.filter(
+					b => b.path !== relativePath,
+				);
+
+				if (metadata.backups.length < originalLength) {
+					// If no backups left, delete entire snapshot file
+					if (metadata.backups.length === 0) {
+						await fs.unlink(snapshotPath);
+						logger.info(
+							`[Snapshot] Deleted empty snapshot ${sessionId}_${messageIndex}`,
+						);
+					} else {
+						// Otherwise save updated metadata
+						await this.saveSnapshotMetadata(metadata);
+						logger.info(
+							`[Snapshot] Removed backup for ${relativePath} from snapshot ${sessionId}_${messageIndex}`,
+						);
+					}
+				}
+			} catch (error) {
+				// Snapshot doesn't exist, nothing to remove
+			}
+		} catch (error) {
 			logger.warn(
-				`[Snapshot] No active snapshot found for session ${sessionId} message ${messageIndex}`,
-			);
-			return null;
-		}
-
-		const {metadata, beforeStateMap} = snapshot;
-		const workspaceRoot = metadata.workspaceRoot;
-		// Scan workspace for comparison, but don't load content yet
-		const afterStateMap = await this.scanWorkspace(workspaceRoot);
-
-		// Find changed, new, and deleted files
-		const changedFiles: FileBackup[] = [];
-
-		// Check for modified and deleted files
-		for (const [relativePath, beforeState] of beforeStateMap) {
-			const afterState = afterStateMap.get(relativePath);
-			const fullPath = path.join(workspaceRoot, relativePath);
-
-			if (!afterState) {
-				// File deleted - read content now
-				try {
-					const content = await fs.readFile(fullPath, 'utf-8');
-					changedFiles.push({
-						path: relativePath,
-						content,
-						existed: true,
-						hash: beforeState.hash,
-					});
-				} catch {
-					// File already deleted, we can't recover it
-					changedFiles.push({
-						path: relativePath,
-						content: null,
-						existed: true,
-						hash: beforeState.hash,
-					});
-				}
-			} else if (beforeState.hash !== afterState.hash) {
-				// File modified - read original content now
-				try {
-					const content = await fs.readFile(fullPath, 'utf-8');
-					changedFiles.push({
-						path: relativePath,
-						content,
-						existed: true,
-						hash: beforeState.hash,
-					});
-				} catch (error) {
-					logger.warn(`Failed to read modified file ${relativePath}:`, error);
-				}
-			}
-		}
-
-		// Check for new files
-		for (const [relativePath, afterState] of afterStateMap) {
-			if (!beforeStateMap.has(relativePath)) {
-				// New file created - we don't need to store its content
-				// Just mark it as a new file
-				changedFiles.push({
-					path: relativePath,
-					content: null, // No need to store content for new files
-					existed: false,
-					hash: afterState.hash,
-				});
-			}
-		}
-
-		// Only save snapshot if there are changes
-		if (changedFiles.length > 0) {
-			metadata.backups = changedFiles;
-			await this.saveSnapshotMetadata(metadata);
-			logger.info(
-				`[Snapshot] Committed: ${changedFiles.length} files changed for session ${sessionId} message ${messageIndex}`,
-			);
-		} else {
-			logger.info(
-				`[Snapshot] No changes detected for session ${sessionId} message ${messageIndex}`,
+				`[Snapshot] Failed to remove file backup ${filePath}:`,
+				error,
 			);
 		}
-
-		// Remove from active snapshots and release memory
-		this.activeSnapshots.delete(snapshotKey);
-
-		return {fileCount: changedFiles.length, messageIndex};
 	}
 
 	/**

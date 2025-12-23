@@ -737,6 +737,28 @@ export class FilesystemMCPService {
 				}
 			}
 
+			// Backup for rollback (new file, didn't exist before)
+			try {
+				const {getConversationContext} = await import(
+					'../utils/codebase/conversationContext.js'
+				);
+				const context = getConversationContext();
+				if (context) {
+					const {hashBasedSnapshotManager} = await import(
+						'../utils/codebase/hashBasedSnapshot.js'
+					);
+					await hashBasedSnapshotManager.backupFile(
+						context.sessionId,
+						context.messageIndex,
+						filePath,
+						this.basePath,
+						false, // File didn't exist
+						undefined,
+					);
+				}
+			} catch (backupError) {
+				// Don't fail the operation if backup fails
+			}
 
 			// Create parent directories if needed
 			if (createDirectories) {
@@ -921,6 +943,29 @@ export class FilesystemMCPService {
 			// Read the entire file
 			const content = await fs.readFile(fullPath, 'utf-8');
 			const lines = content.split('\n');
+
+			// Backup for rollback (file modification)
+			try {
+				const {getConversationContext} = await import(
+					'../utils/codebase/conversationContext.js'
+				);
+				const context = getConversationContext();
+				if (context) {
+					const {hashBasedSnapshotManager} = await import(
+						'../utils/codebase/hashBasedSnapshot.js'
+					);
+					await hashBasedSnapshotManager.backupFile(
+						context.sessionId,
+						context.messageIndex,
+						filePath,
+						this.basePath,
+						true, // File existed
+						content, // Original content
+					);
+				}
+			} catch (backupError) {
+				// Don't fail the operation if backup fails
+			}
 
 			// Normalize line endings
 			let normalizedSearch = searchContent
@@ -1149,7 +1194,6 @@ export class FilesystemMCPService {
 			}
 
 			const {startLine, endLine} = selectedMatch;
-
 
 			// Perform the replacement by replacing the matched lines
 			const normalizedReplace = replaceContent
@@ -1505,6 +1549,29 @@ export class FilesystemMCPService {
 			const lines = content.split('\n');
 			const totalLines = lines.length;
 
+			// Backup for rollback (file modification)
+			try {
+				const {getConversationContext} = await import(
+					'../utils/codebase/conversationContext.js'
+				);
+				const context = getConversationContext();
+				if (context) {
+					const {hashBasedSnapshotManager} = await import(
+						'../utils/codebase/hashBasedSnapshot.js'
+					);
+					await hashBasedSnapshotManager.backupFile(
+						context.sessionId,
+						context.messageIndex,
+						filePath,
+						this.basePath,
+						true, // File existed
+						content, // Original content
+					);
+				}
+			} catch (backupError) {
+				// Don't fail the operation if backup fails
+			}
+
 			// Validate line numbers
 			if (startLine < 1 || endLine < 1) {
 				throw new Error('Line numbers must be greater than 0');
@@ -1517,7 +1584,6 @@ export class FilesystemMCPService {
 			const adjustedStartLine = Math.min(startLine, totalLines);
 			const adjustedEndLine = Math.min(endLine, totalLines);
 			const linesToModify = adjustedEndLine - adjustedStartLine + 1;
-
 
 			// Extract the lines that will be replaced (for comparison)
 			// Compress whitespace for display readability
