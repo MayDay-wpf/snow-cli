@@ -203,6 +203,7 @@ In addition, you need to add the following custom request headers:
     "user-agent": "claude-cli/2.0.22 (external, cli",
     "x-app": "cli"
 }
+```
 
 ![Entry diagram 2](docs/images/image-6.png)
 
