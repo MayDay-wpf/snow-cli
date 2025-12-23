@@ -216,6 +216,13 @@ export const ja: TranslationKeys = {
 		deleteProfileShort: '🆇 削除',
 		fetchingModels: 'APIからモデルを取得中...',
 		fetchingHint: 'ネットワーク接続によっては数秒かかる場合があります',
+		systemPrompt: 'システムプロンプト（選択可能）',
+		customHeadersField: 'カスタムヘッダー（選択可能）',
+		followGlobalNone: 'グローバル設定に従う：なし',
+		followGlobal: 'グローバル設定に従う：{name}',
+		followGlobalWithParentheses: 'グローバル設定に従う（{name}）',
+		followGlobalNoneWithParentheses: 'グローバル設定に従う（なし）',
+		notUse: '使用しない',
 	},
 	customHeaders: {
 		title: 'カスタムヘッダー管理',

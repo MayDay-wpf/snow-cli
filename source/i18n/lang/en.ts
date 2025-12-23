@@ -224,6 +224,13 @@ export const en: TranslationKeys = {
 		fetchingModels: 'Fetching models from API...',
 		fetchingHint:
 			'This may take a few seconds depending on your network connection',
+		systemPrompt: 'System Prompt (Optional)',
+		customHeadersField: 'Custom Headers (Optional)',
+		followGlobalNone: 'Follow Global: None',
+		followGlobal: 'Follow Global: {name}',
+		followGlobalWithParentheses: 'Follow Global ({name})',
+		followGlobalNoneWithParentheses: 'Follow Global (None)',
+		notUse: 'Not Use',
 	},
 	customHeaders: {
 		title: 'Custom Headers Management',

@@ -212,6 +212,13 @@ export const ko: TranslationKeys = {
 		deleteProfileShort: '🆇 삭제',
 		fetchingModels: 'API에서 모델 가져오는 중...',
 		fetchingHint: '네트워크 연결에 따라 몇 초가 걸릴 수 있습니다',
+		systemPrompt: '시스템 프롬프트 (선택사항)',
+		customHeadersField: '사용자 정의 헤더 (선택사항)',
+		followGlobalNone: '전역 설정 따르기: 없음',
+		followGlobal: '전역 설정 따르기: {name}',
+		followGlobalWithParentheses: '전역 설정 따르기 ({name})',
+		followGlobalNoneWithParentheses: '전역 설정 따르기 (없음)',
+		notUse: '사용 안 함',
 	},
 	customHeaders: {
 		title: '사용자 정의 헤더 관리',

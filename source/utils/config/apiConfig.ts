@@ -1,5 +1,5 @@
-import {homedir} from 'os';
-import {join} from 'path';
+import { homedir } from 'os';
+import { join } from 'path';
 import {
 	readFileSync,
 	writeFileSync,
@@ -46,6 +46,10 @@ export interface ApiConfig {
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	showThinking?: boolean; // Show AI thinking process in UI (default: true)
+	// 选填：覆盖 system-prompt.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
+	systemPromptId?: string;
+	// 选填：覆盖 custom-headers.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
+	customHeadersSchemeId?: string;
 }
 
 export interface MCPServer {
@@ -171,13 +175,13 @@ const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, {recursive: true});
+		mkdirSync(CONFIG_DIR, { recursive: true });
 	}
 }
 
 function cloneDefaultMCPConfig(): MCPConfig {
 	return {
-		mcpServers: {...DEFAULT_MCP_CONFIG.mcpServers},
+		mcpServers: { ...DEFAULT_MCP_CONFIG.mcpServers },
 	};
 }
 
@@ -204,7 +208,7 @@ export function loadConfig(): AppConfig {
 			mcp?: unknown;
 			proxy?: unknown;
 		};
-		const {mcp: legacyMcp, proxy: legacyProxy, ...restConfig} = parsedConfig;
+		const { mcp: legacyMcp, proxy: legacyProxy, ...restConfig } = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
 		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
@@ -268,7 +272,7 @@ export function saveConfig(config: AppConfig): void {
 
 	try {
 		// 只保留 snowcfg，去除 openai 字段
-		const {openai, ...configWithoutOpenai} = config;
+		const { openai, ...configWithoutOpenai } = config;
 		const configData = JSON.stringify(configWithoutOpenai, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
 		// 清除缓存，下次加载时会重新读取
@@ -299,14 +303,14 @@ export async function updateOpenAiConfig(
 	const currentConfig = loadConfig();
 	const updatedConfig: AppConfig = {
 		...currentConfig,
-		snowcfg: {...currentConfig.snowcfg, ...apiConfig},
+		snowcfg: { ...currentConfig.snowcfg, ...apiConfig },
 	};
 	saveConfig(updatedConfig);
 
 	// Also save to the active profile if profiles system is initialized
 	try {
 		// Dynamic import for ESM compatibility
-		const {getActiveProfileName, saveProfile, clearAllAgentCaches} =
+		const { getActiveProfileName, saveProfile, clearAllAgentCaches } =
 			await import('./configManager.js');
 		const activeProfileName = getActiveProfileName();
 		if (activeProfileName) {
@@ -522,13 +526,29 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 新版本从 system-prompt.json 读取当前激活的提示词
  */
 export function getCustomSystemPrompt(): string | undefined {
+	const { systemPromptId } = getOpenAiConfig();
 	const config = getSystemPromptConfig();
 
-	if (!config || !config.active) {
+	if (!config) {
 		return undefined;
 	}
 
-	// 查找当前激活的提示词
+	// 显式关闭（即使全局有 active 也不使用）
+	if (systemPromptId === '') {
+		return undefined;
+	}
+
+	// profile 覆盖：允许选择列表中的任意项（不依赖 active 状态）
+	if (systemPromptId) {
+		const prompt = config.prompts.find(p => p.id === systemPromptId);
+		return prompt?.content;
+	}
+
+	// 默认行为：跟随全局激活
+	if (!config.active) {
+		return undefined;
+	}
+
 	const activePrompt = config.prompts.find(p => p.id === config.active);
 	return activePrompt?.content;
 }
@@ -541,12 +561,28 @@ export function getCustomSystemPrompt(): string | undefined {
 export function getCustomHeaders(): Record<string, string> {
 	ensureConfigDirectory();
 
+	const { customHeadersSchemeId } = getOpenAiConfig();
 	const config = getCustomHeadersConfig();
-	if (!config || !config.active) {
+	if (!config) {
 		return {};
 	}
 
-	// 查找当前激活的方案
+	// 显式关闭（即使全局有 active 也不使用）
+	if (customHeadersSchemeId === '') {
+		return {};
+	}
+
+	// profile 覆盖：允许选择列表中的任意项（不依赖 active 状态）
+	if (customHeadersSchemeId) {
+		const scheme = config.schemes.find(s => s.id === customHeadersSchemeId);
+		return scheme?.headers || {};
+	}
+
+	// 默认行为：跟随全局激活
+	if (!config.active) {
+		return {};
+	}
+
 	const activeScheme = config.schemes.find(s => s.id === config.active);
 	return activeScheme?.headers || {};
 }

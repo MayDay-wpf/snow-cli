@@ -236,10 +236,17 @@ export const es: TranslationKeys = {
 		requestMethodSelectHint:
 			'↑↓ para seleccionar, Enter para confirmar, Esc para cancelar',
 		newProfile: '+ Nuevo',
-		deleteProfileShort: '🆇 Eliminar',
-		fetchingModels: 'Obteniendo modelos desde la API...',
+		deleteProfileShort: '🆇 Delete',
+		fetchingModels: 'Fetching models from API...',
 		fetchingHint:
-			'Esto puede tardar unos segundos dependiendo de la conexión de red',
+			'This may take a few seconds depending on your network connection',
+		systemPrompt: 'System Prompt (Optional)',
+		customHeadersField: 'Custom Headers (Optional)',
+		followGlobalNone: 'Seguir Global: Ninguno',
+		followGlobal: 'Seguir Global: {name}',
+		followGlobalWithParentheses: 'Seguir Global ({name})',
+		followGlobalNoneWithParentheses: 'Seguir Global (Ninguno)',
+		notUse: 'No usar',
 	},
 	customHeaders: {
 		title: 'Gestión de Encabezados Personalizados',

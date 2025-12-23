@@ -203,6 +203,13 @@ export const zh: TranslationKeys = {
 		deleteProfileShort: '🆇 删除',
 		fetchingModels: '从 API 获取模型...',
 		fetchingHint: '根据网络连接情况,这可能需要几秒钟',
+		systemPrompt: '系统提示词（选填）',
+		customHeadersField: '自定义请求头（选填）',
+		followGlobalNone: '跟随全局：无',
+		followGlobal: '跟随全局：{name}',
+		followGlobalWithParentheses: '跟随全局（{name}）',
+		followGlobalNoneWithParentheses: '跟随全局（无）',
+		notUse: '不使用',
 	},
 	customHeaders: {
 		title: '自定义请求头管理',

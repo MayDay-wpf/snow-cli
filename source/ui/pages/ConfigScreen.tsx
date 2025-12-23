@@ -8,6 +8,8 @@ import {
 	getOpenAiConfig,
 	updateOpenAiConfig,
 	validateApiConfig,
+	getSystemPromptConfig,
+	getCustomHeadersConfig,
 	type RequestMethod,
 	type ApiConfig,
 } from '../../utils/config/apiConfig.js';
@@ -39,6 +41,8 @@ type ConfigField =
 	| 'baseUrl'
 	| 'apiKey'
 	| 'requestMethod'
+	| 'systemPromptId'
+	| 'customHeadersSchemeId'
 	| 'anthropicBeta'
 	| 'anthropicCacheTTL'
 	| 'enablePromptOptimization'
@@ -118,6 +122,21 @@ export default function ConfigScreen({
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
+	const [systemPromptId, setSystemPromptId] = useState<string | undefined>(
+		undefined,
+	);
+	const [customHeadersSchemeId, setCustomHeadersSchemeId] = useState<
+		string | undefined
+	>(undefined);
+	const [systemPrompts, setSystemPrompts] = useState<
+		Array<{id: string; name: string}>
+	>([]);
+	const [activeSystemPromptId, setActiveSystemPromptId] = useState('');
+	const [customHeaderSchemes, setCustomHeaderSchemes] = useState<
+		Array<{id: string; name: string}>
+	>([]);
+	const [activeCustomHeadersSchemeId, setActiveCustomHeadersSchemeId] =
+		useState('');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
 	const [anthropicCacheTTL, setAnthropicCacheTTL] = useState<'5m' | '1h'>('5m');
 	const [enablePromptOptimization, setEnablePromptOptimization] =
@@ -185,6 +204,8 @@ export default function ConfigScreen({
 			'baseUrl',
 			'apiKey',
 			'requestMethod',
+			'systemPromptId',
+			'customHeadersSchemeId',
 			'enablePromptOptimization',
 			'enableAutoCompress',
 			'showThinking',
@@ -279,6 +300,8 @@ export default function ConfigScreen({
 		setBaseUrl(config.baseUrl);
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
+		setSystemPromptId(config.systemPromptId);
+		setCustomHeadersSchemeId(config.customHeadersSchemeId);
 		setAnthropicBeta(config.anthropicBeta || false);
 		setAnthropicCacheTTL(config.anthropicCacheTTL || '5m');
 		setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
@@ -295,6 +318,19 @@ export default function ConfigScreen({
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setCompactModelName(config.compactModel?.modelName || '');
+
+		const systemPromptConfig = getSystemPromptConfig();
+		setSystemPrompts(
+			(systemPromptConfig?.prompts || []).map(p => ({id: p.id, name: p.name})),
+		);
+		setActiveSystemPromptId(systemPromptConfig?.active || '');
+
+		const customHeadersConfig = getCustomHeadersConfig();
+		setCustomHeaderSchemes(
+			(customHeadersConfig?.schemes || []).map(s => ({id: s.id, name: s.name})),
+		);
+		setActiveCustomHeadersSchemeId(customHeadersConfig?.active || '');
+
 		setActiveProfile(getActiveProfileName());
 	};
 
@@ -354,6 +390,82 @@ export default function ConfigScreen({
 		return '';
 	};
 
+	const getSystemPromptNameById = (id: string) =>
+		systemPrompts.find(p => p.id === id)?.name || id;
+
+	const getCustomHeadersSchemeNameById = (id: string) =>
+		customHeaderSchemes.find(s => s.id === id)?.name || id;
+
+	const getSystemPromptSelectItems = () => {
+		const activeLabel = activeSystemPromptId
+			? t.configScreen.followGlobalWithParentheses.replace(
+					'{name}',
+					getSystemPromptNameById(activeSystemPromptId),
+			  )
+			: t.configScreen.followGlobalNoneWithParentheses;
+		return [
+			{label: activeLabel, value: '__FOLLOW__'},
+			{label: t.configScreen.notUse, value: '__DISABLED__'},
+			...systemPrompts.map(p => ({
+				label: p.name || p.id,
+				value: p.id,
+			})),
+		];
+	};
+
+	const getSystemPromptSelectedValue = () => {
+		if (systemPromptId === '') return '__DISABLED__';
+		if (systemPromptId) return systemPromptId;
+		return '__FOLLOW__';
+	};
+
+	const applySystemPromptSelectValue = (value: string) => {
+		if (value === '__FOLLOW__') {
+			setSystemPromptId(undefined);
+			return;
+		}
+		if (value === '__DISABLED__') {
+			setSystemPromptId('');
+			return;
+		}
+		setSystemPromptId(value);
+	};
+
+	const getCustomHeadersSchemeSelectItems = () => {
+		const activeLabel = activeCustomHeadersSchemeId
+			? t.configScreen.followGlobalWithParentheses.replace(
+					'{name}',
+					getCustomHeadersSchemeNameById(activeCustomHeadersSchemeId),
+			  )
+			: t.configScreen.followGlobalNoneWithParentheses;
+		return [
+			{label: activeLabel, value: '__FOLLOW__'},
+			{label: t.configScreen.notUse, value: '__DISABLED__'},
+			...customHeaderSchemes.map(s => ({
+				label: s.name || s.id,
+				value: s.id,
+			})),
+		];
+	};
+
+	const getCustomHeadersSchemeSelectedValue = () => {
+		if (customHeadersSchemeId === '') return '__DISABLED__';
+		if (customHeadersSchemeId) return customHeadersSchemeId;
+		return '__FOLLOW__';
+	};
+
+	const applyCustomHeadersSchemeSelectValue = (value: string) => {
+		if (value === '__FOLLOW__') {
+			setCustomHeadersSchemeId(undefined);
+			return;
+		}
+		if (value === '__DISABLED__') {
+			setCustomHeadersSchemeId('');
+			return;
+		}
+		setCustomHeadersSchemeId(value);
+	};
+
 	const handleCreateProfile = () => {
 		const cleaned = stripFocusArtifacts(newProfileName).trim();
 
@@ -369,6 +481,8 @@ export default function ConfigScreen({
 					baseUrl,
 					apiKey,
 					requestMethod,
+					systemPromptId,
+					customHeadersSchemeId,
 					anthropicBeta,
 					anthropicCacheTTL,
 					enablePromptOptimization: false,
@@ -450,6 +564,8 @@ export default function ConfigScreen({
 				baseUrl,
 				apiKey,
 				requestMethod,
+				systemPromptId,
+				customHeadersSchemeId,
 				anthropicBeta,
 				anthropicCacheTTL,
 				enablePromptOptimization,
@@ -505,6 +621,8 @@ export default function ConfigScreen({
 						baseUrl,
 						apiKey,
 						requestMethod,
+						systemPromptId,
+						customHeadersSchemeId,
 						anthropicBeta,
 						anthropicCacheTTL,
 						enablePromptOptimization,
@@ -654,6 +772,72 @@ export default function ConfigScreen({
 						)}
 					</Box>
 				);
+
+			case 'systemPromptId': {
+				let display = t.configScreen.followGlobalNone;
+				if (systemPromptId === '') {
+					display = t.configScreen.notUse;
+				} else if (systemPromptId) {
+					display = getSystemPromptNameById(systemPromptId);
+				} else if (activeSystemPromptId) {
+					display = t.configScreen.followGlobal.replace(
+						'{name}',
+						getSystemPromptNameById(activeSystemPromptId),
+					);
+				}
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.systemPrompt}
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{display || t.configScreen.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			}
+
+			case 'customHeadersSchemeId': {
+				let display = t.configScreen.followGlobalNone;
+				if (customHeadersSchemeId === '') {
+					display = t.configScreen.notUse;
+				} else if (customHeadersSchemeId) {
+					display = getCustomHeadersSchemeNameById(customHeadersSchemeId);
+				} else if (activeCustomHeadersSchemeId) {
+					display = t.configScreen.followGlobal.replace(
+						'{name}',
+						getCustomHeadersSchemeNameById(activeCustomHeadersSchemeId),
+					);
+				}
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.customHeadersField}
+						</Text>
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{display || t.configScreen.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			}
 
 			case 'anthropicBeta':
 				return (
@@ -1171,6 +1355,9 @@ export default function ConfigScreen({
 			isEditing &&
 			(currentField === 'profile' ||
 				currentField === 'requestMethod' ||
+				currentField === 'systemPromptId' ||
+				currentField === 'customHeadersSchemeId' ||
+				currentField === 'anthropicCacheTTL' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
 				currentField === 'compactModelName' ||
@@ -1591,6 +1778,8 @@ export default function ConfigScreen({
 			{isEditing &&
 			(currentField === 'profile' ||
 				currentField === 'requestMethod' ||
+				currentField === 'systemPromptId' ||
+				currentField === 'customHeadersSchemeId' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
 				currentField === 'compactModelName' ||
@@ -1610,6 +1799,9 @@ export default function ConfigScreen({
 							t.configScreen.compactModel.replace(':', '')}
 						{currentField === 'responsesReasoningEffort' &&
 							t.configScreen.responsesReasoningEffort.replace(':', '')}
+						{currentField === 'systemPromptId' && t.configScreen.systemPrompt}
+						{currentField === 'customHeadersSchemeId' &&
+							t.configScreen.customHeadersField}
 					</Text>
 					<Box marginLeft={3} marginTop={1}>
 						{currentField === 'profile' && (
@@ -1668,6 +1860,46 @@ export default function ConfigScreen({
 								}}
 							/>
 						)}
+						{currentField === 'systemPromptId' &&
+							(() => {
+								const items = getSystemPromptSelectItems();
+								const selected = getSystemPromptSelectedValue();
+								return (
+									<ScrollableSelectInput
+										items={items}
+										limit={10}
+										initialIndex={Math.max(
+											0,
+											items.findIndex(opt => opt.value === selected),
+										)}
+										isFocused={true}
+										onSelect={item => {
+											applySystemPromptSelectValue(item.value);
+											setIsEditing(false);
+										}}
+									/>
+								);
+							})()}
+						{currentField === 'customHeadersSchemeId' &&
+							(() => {
+								const items = getCustomHeadersSchemeSelectItems();
+								const selected = getCustomHeadersSchemeSelectedValue();
+								return (
+									<ScrollableSelectInput
+										items={items}
+										limit={10}
+										initialIndex={Math.max(
+											0,
+											items.findIndex(opt => opt.value === selected),
+										)}
+										isFocused={true}
+										onSelect={item => {
+											applyCustomHeadersSchemeSelectValue(item.value);
+											setIsEditing(false);
+										}}
+									/>
+								);
+							})()}
 						{(currentField === 'advancedModel' ||
 							currentField === 'basicModel' ||
 							currentField === 'compactModelName') && (
@@ -1726,19 +1958,6 @@ export default function ConfigScreen({
 							/>
 						)}
 					</Box>
-					<Box marginTop={1}>
-						<Alert variant="info">
-							{(currentField === 'advancedModel' ||
-								currentField === 'basicModel' ||
-								currentField === 'compactModelName') &&
-								t.configScreen.modelFilterHint}
-							{currentField === 'responsesReasoningEffort' &&
-								t.configScreen.effortSelectHint}
-							{currentField === 'profile' && t.configScreen.profileSelectHint}
-							{currentField === 'requestMethod' &&
-								t.configScreen.requestMethodSelectHint}
-						</Alert>
-					</Box>
 				</Box>
 			) : (
 				<Box flexDirection="column">
@@ -1787,6 +2006,8 @@ export default function ConfigScreen({
 				isEditing &&
 				(currentField === 'profile' ||
 					currentField === 'requestMethod' ||
+					currentField === 'systemPromptId' ||
+					currentField === 'customHeadersSchemeId' ||
 					currentField === 'advancedModel' ||
 					currentField === 'basicModel' ||
 					currentField === 'compactModelName' ||
