@@ -1211,6 +1211,16 @@ export const mcpTools = [
 					description:
 						'Current file path for context-aware search (optional, searches current file first)',
 				},
+				line: {
+					type: 'number',
+					description:
+						'Line number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+				},
+				column: {
+					type: 'number',
+					description:
+						'Column number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+				},
 			},
 			required: ['symbolName'],
 		},

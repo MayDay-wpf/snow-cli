@@ -1391,47 +1391,53 @@ export async function executeMCPTool(
 					throw new Error(`Unknown terminal tool: ${actualToolName}`);
 			}
 		} else if (serviceName === 'ace') {
-			// Handle built-in ACE Code Search tools (no connection needed)
-			const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
+			// Handle built-in ACE Code Search tools with LSP hybrid support
+			const {hybridCodeSearchService} = await import(
+				'../../mcp/lsp/HybridCodeSearchService.js'
+			);
 
 			switch (actualToolName) {
 				case 'search_symbols':
-					result = await aceCodeSearchService.searchSymbols(
+					result = await hybridCodeSearchService.semanticSearch(
 						args.query,
-						args.symbolType,
+						'all',
 						args.language,
+						args.symbolType,
 						args.maxResults,
 					);
 					break;
 				case 'find_definition':
-					result = await aceCodeSearchService.findDefinition(
+					result = await hybridCodeSearchService.findDefinition(
 						args.symbolName,
 						args.contextFile,
+						args.line,
+						args.column,
 					);
 					break;
 				case 'find_references':
-					result = await aceCodeSearchService.findReferences(
+					result = await hybridCodeSearchService.findReferences(
 						args.symbolName,
 						args.maxResults,
 					);
 					break;
 				case 'semantic_search':
-					result = await aceCodeSearchService.semanticSearch(
+					result = await hybridCodeSearchService.semanticSearch(
 						args.query,
 						args.searchType,
 						args.language,
+						args.symbolType,
 						args.maxResults,
 					);
 					break;
 				case 'file_outline':
-					result = await aceCodeSearchService.getFileOutline(args.filePath, {
+					result = await hybridCodeSearchService.getFileOutline(args.filePath, {
 						maxResults: args.maxResults,
 						includeContext: args.includeContext,
 						symbolTypes: args.symbolTypes,
 					});
 					break;
 				case 'text_search':
-					result = await aceCodeSearchService.textSearch(
+					result = await hybridCodeSearchService.textSearch(
 						args.pattern,
 						args.fileGlob,
 						args.isRegex,
