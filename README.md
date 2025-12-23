@@ -16,7 +16,7 @@ _An intelligent AI-powered CLI tool for developers_
 
 ## Thanks 💖
 
-[@NyxJae](https://github.com/NyxJae)、[@Flutter233PM](https://github.com/Flutter233PM)、[@yy1588133](https://github.com/yy1588133)、[@zfb132](https://github.com/zfb132)、[@JillVernus](https://github.com/JillVernus)、[@zhu-jl18](https://github.com/zhu-jl18)、[@kingsword09](https://github.com/kingsword09)、[@zcg](https://github.com/zcg)、[@user-no-found](https://github.com/user-no-found)
+<img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
 
 ## Table of Contents
 
