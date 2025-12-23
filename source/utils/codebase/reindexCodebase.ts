@@ -3,6 +3,7 @@ import {
 	type ProgressCallback,
 } from '../../agents/codebaseIndexAgent.js';
 import {loadCodebaseConfig} from '../config/codebaseConfig.js';
+import {validateGitignore} from './gitignoreValidator.js';
 
 /**
  * Reindex codebase - Rebuild index and skip unchanged files based on hash
@@ -20,6 +21,24 @@ export async function reindexCodebase(
 
 	if (!config.enabled) {
 		throw new Error('Codebase indexing is not enabled');
+	}
+
+	// Check if .gitignore exists
+	const validation = validateGitignore(workingDirectory);
+	if (!validation.isValid) {
+		// Notify via progress callback if provided
+		if (progressCallback) {
+			progressCallback({
+				totalFiles: 0,
+				processedFiles: 0,
+				totalChunks: 0,
+				currentFile: '',
+				status: 'error',
+				error: validation.error,
+			});
+		}
+
+		throw new Error(validation.error);
 	}
 
 	// Stop current agent if running

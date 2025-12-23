@@ -247,3 +247,20 @@ export async function readFileWithCache(
 
 	return content;
 }
+
+/**
+ * Check if a directory is a Git repository
+ * @param directory - Directory path to check
+ * @returns True if directory contains .git folder
+ */
+export async function isGitRepository(
+	directory: string = process.cwd(),
+): Promise<boolean> {
+	try {
+		const gitDir = path.join(directory, '.git');
+		const stats = await fs.stat(gitDir);
+		return stats.isDirectory();
+	} catch {
+		return false;
+	}
+}

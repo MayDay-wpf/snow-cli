@@ -14,6 +14,7 @@ import Spinner from 'ink-spinner';
 import Menu from '../components/common/Menu.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../i18n/index.js';
+import {getUpdateNotice, onUpdateNotice} from '../../utils/ui/updateNotice.js';
 
 // Lazy load all configuration screens for better startup performance
 const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
@@ -73,6 +74,7 @@ export default function WelcomeScreen({
 	const {t} = useI18n();
 	const [infoText, setInfoText] = useState(t.welcome.startChatInfo);
 	const [inlineView, setInlineView] = useState<InlineView>('menu');
+	const [updateNotice, setUpdateNoticeState] = useState(getUpdateNotice());
 	const [editingAgentId, setEditingAgentId] = useState<string | undefined>();
 	const {columns: terminalWidth} = useTerminalSize();
 	const {stdout} = useStdout();
@@ -89,6 +91,13 @@ export default function WelcomeScreen({
 	useEffect(() => {
 		setCurrentMenuIndex(defaultMenuIndex);
 	}, [defaultMenuIndex]);
+
+	useEffect(() => {
+		const unsubscribe = onUpdateNotice(notice => {
+			setUpdateNoticeState(notice);
+		});
+		return unsubscribe;
+	}, []);
 
 	const menuOptions = useMemo(
 		() => [
@@ -319,6 +328,44 @@ export default function WelcomeScreen({
 			>
 				{item => item}
 			</Static>
+
+			{inlineView === 'menu' && updateNotice && (
+				<Box paddingX={1} marginBottom={1}>
+					<Box
+						borderStyle="double"
+						borderColor="cyan"
+						paddingX={2}
+						paddingY={1}
+						width={terminalWidth - 2}
+					>
+						<Box flexDirection="column">
+							<Text bold color="cyan">
+								{t.welcome.updateNoticeTitle}
+							</Text>
+							<Text color="gray" dimColor>
+								{t.welcome.updateNoticeCurrent}:{' '}
+								<Text color="gray">{updateNotice.currentVersion}</Text>
+							</Text>
+							<Text color="gray" dimColor>
+								{t.welcome.updateNoticeLatest}:{' '}
+								<Text color="yellow" bold>
+									{updateNotice.latestVersion}
+								</Text>
+							</Text>
+							<Text color="gray" dimColor>
+								{t.welcome.updateNoticeRun}:{' '}
+								<Text color="yellow" bold>
+									snow --update
+								</Text>
+							</Text>
+							<Text color="gray" dimColor>
+								{t.welcome.updateNoticeGithub}:{' '}
+								https://github.com/MayDay-wpf/snow-cli
+							</Text>
+						</Box>
+					</Box>
+				</Box>
+			)}
 
 			{/* Menu must be outside Static to receive input */}
 			{onMenuSelect && inlineView === 'menu' && (

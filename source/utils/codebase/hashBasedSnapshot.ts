@@ -61,6 +61,7 @@ class HashBasedSnapshotManager {
 		this.snapshotsDir = path.join(
 			os.homedir(),
 			'.snow',
+			'.git',
 			'snapshots',
 			projectId,
 		);

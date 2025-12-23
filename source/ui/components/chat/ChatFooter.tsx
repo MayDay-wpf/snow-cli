@@ -69,6 +69,7 @@ type ChatFooterProps = {
 		totalChunks: number;
 		currentFile: string;
 		status: string;
+		error?: string;
 	} | null;
 	watcherEnabled: boolean;
 	fileUpdateNotification: {file: string; timestamp: number} | null;

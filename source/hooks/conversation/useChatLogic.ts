@@ -412,11 +412,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 								const msg = messages[i];
 								if (!msg) continue;
 
-								if (msg.role === 'user' && i === messages.length - 1) {
-									truncateIndex = i;
-									break;
-								}
-
+								// 检查是否有未完成的 tool_calls
 								if (
 									msg.role === 'assistant' &&
 									msg.tool_calls &&
@@ -674,11 +670,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 								const msg = messages[i];
 								if (!msg) continue;
 
-								if (msg.role === 'user' && i === messages.length - 1) {
-									truncateIndex = i;
-									break;
-								}
-
+								// 检查是否有未完成的 tool_calls
 								if (
 									msg.role === 'assistant' &&
 									msg.tool_calls &&

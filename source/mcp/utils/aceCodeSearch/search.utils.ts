@@ -65,10 +65,7 @@ export function parseGrepOutput(
 
 		// Extract parts
 		const filePathRaw = line.substring(0, firstColonIndex);
-		const lineNumberStr = line.substring(
-			firstColonIndex + 1,
-			secondColonIndex,
-		);
+		const lineNumberStr = line.substring(firstColonIndex + 1, secondColonIndex);
 		const lineContent = line.substring(secondColonIndex + 1);
 
 		const lineNumber = parseInt(lineNumberStr, 10);
@@ -120,10 +117,7 @@ export function globToRegex(glob: string): RegExp {
  * @param query - Search query
  * @returns Score (0-100, higher is better)
  */
-export function calculateFuzzyScore(
-	symbolName: string,
-	query: string,
-): number {
+export function calculateFuzzyScore(symbolName: string, query: string): number {
 	const nameLower = symbolName.toLowerCase();
 	const queryLower = query.toLowerCase();
 
@@ -146,11 +140,7 @@ export function calculateFuzzyScore(
 	// Fuzzy match
 	let score = 0;
 	let queryIndex = 0;
-	for (
-		let i = 0;
-		i < nameLower.length && queryIndex < queryLower.length;
-		i++
-	) {
+	for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
 		if (nameLower[i] === queryLower[queryIndex]) {
 			score += 20;
 			queryIndex++;
@@ -159,4 +149,118 @@ export function calculateFuzzyScore(
 	if (queryIndex === queryLower.length) return score;
 
 	return 0;
+}
+
+/**
+ * Expand glob patterns with braces like "*.{ts,tsx}" into multiple patterns
+ * @param glob - Glob pattern with braces
+ * @returns Array of expanded patterns
+ */
+export function expandGlobBraces(glob: string): string[] {
+	// Match {a,b,c} pattern
+	const braceMatch = glob.match(/^(.+)\{([^}]+)\}(.*)$/);
+	if (
+		!braceMatch ||
+		!braceMatch[1] ||
+		!braceMatch[2] ||
+		braceMatch[3] === undefined
+	) {
+		return [glob];
+	}
+
+	const prefix = braceMatch[1];
+	const alternatives = braceMatch[2].split(',');
+	const suffix = braceMatch[3];
+
+	return alternatives.map(alt => `${prefix}${alt}${suffix}`);
+}
+
+/**
+ * Convert a glob pattern to a RegExp that matches full paths
+ * Supports: *, **, ?, {a,b}, [abc]
+ * @param globPattern - Glob pattern string
+ * @returns Regular expression for matching
+ */
+export function globPatternToRegex(globPattern: string): RegExp {
+	// Normalize path separators
+	const normalizedGlob = globPattern.replace(/\\/g, '/');
+
+	// First, temporarily replace glob special patterns with placeholders
+	// to prevent them from being escaped
+	let regexStr = normalizedGlob
+		.replace(/\*\*/g, '\x00DOUBLESTAR\x00') // ** -> placeholder
+		.replace(/\*/g, '\x00STAR\x00') // * -> placeholder
+		.replace(/\?/g, '\x00QUESTION\x00'); // ? -> placeholder
+
+	// Now escape all special regex characters
+	regexStr = regexStr.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+
+	// Replace placeholders with actual regex patterns
+	regexStr = regexStr
+		.replace(/\x00DOUBLESTAR\x00/g, '.*') // ** -> .* (match any path segments)
+		.replace(/\x00STAR\x00/g, '[^/]*') // * -> [^/]* (match within single segment)
+		.replace(/\x00QUESTION\x00/g, '.'); // ? -> . (match single character)
+
+	return new RegExp(regexStr, 'i');
+}
+
+/**
+ * Sort search results by file modification time (recent files first)
+ * Files modified within last 24 hours are prioritized
+ * @param results - Array of search results
+ * @param basePath - Base path for resolving file paths
+ * @param recentThreshold - Threshold in milliseconds for recent files
+ * @returns Sorted array of search results
+ */
+export async function sortResultsByRecency(
+	results: TextSearchResult[],
+	basePath: string,
+	recentThreshold: number = 24 * 60 * 60 * 1000,
+): Promise<TextSearchResult[]> {
+	if (results.length === 0) return results;
+
+	const {promises: fs} = await import('fs');
+	const now = Date.now();
+
+	// Get unique file paths
+	const uniqueFiles = Array.from(new Set(results.map(r => r.filePath)));
+
+	// Fetch file modification times in parallel using Promise.allSettled
+	const statResults = await Promise.allSettled(
+		uniqueFiles.map(async filePath => {
+			const fullPath = path.resolve(basePath, filePath);
+			const stats = await fs.stat(fullPath);
+			return {filePath, mtimeMs: stats.mtimeMs};
+		}),
+	);
+
+	// Build map of file modification times
+	const fileModTimes = new Map<string, number>();
+	statResults.forEach((result, index) => {
+		if (result.status === 'fulfilled') {
+			fileModTimes.set(result.value.filePath, result.value.mtimeMs);
+		} else {
+			// If we can't get stats, treat as old file
+			fileModTimes.set(uniqueFiles[index]!, 0);
+		}
+	});
+
+	// Sort results: recent files first, then by original order
+	return results.sort((a, b) => {
+		const aMtime = fileModTimes.get(a.filePath) || 0;
+		const bMtime = fileModTimes.get(b.filePath) || 0;
+
+		const aIsRecent = now - aMtime < recentThreshold;
+		const bIsRecent = now - bMtime < recentThreshold;
+
+		// Recent files come first
+		if (aIsRecent && !bIsRecent) return -1;
+		if (!aIsRecent && bIsRecent) return 1;
+
+		// Both recent or both old: sort by modification time (newer first)
+		if (aIsRecent && bIsRecent) return bMtime - aMtime;
+
+		// Both old: maintain original order (preserve relevance from grep)
+		return 0;
+	});
 }

@@ -39,6 +39,11 @@ export const es: TranslationKeys = {
 		hooksSettings: 'Configuración de Hooks',
 		hooksSettingsInfo:
 			'Configurar hooks para personalizar el flujo de trabajo de IA',
+		updateNoticeTitle: 'Actualización disponible',
+		updateNoticeCurrent: 'Actual',
+		updateNoticeLatest: 'Última',
+		updateNoticeRun: 'Ejecuta',
+		updateNoticeGithub: 'GitHub',
 		exit: 'Salir',
 		exitInfo: 'Salir de la aplicación',
 	},
@@ -125,6 +130,8 @@ export const es: TranslationKeys = {
 		chunkingMinCharsPerChunk: 'Caracteres Mínimos por Fragmento:',
 		chunkingOverlapLines: 'Líneas de Superposición:',
 		saveError: 'Error al guardar la configuración',
+		gitignoreNotFound:
+			'No se puede crear el índice: no se encontró el archivo .gitignore. Por favor, agrega un archivo .gitignore a tu proyecto para evitar indexar archivos innecesarios.',
 	},
 	systemPromptConfig: {
 		title: 'Gestión de Prompt del Sistema',
@@ -889,7 +896,8 @@ export const es: TranslationKeys = {
 		keyboardHints:
 			"Consejo: Presione 'Enter' para seleccionar | Presione 'e' para editar la opción seleccionada",
 		multiSelectHint: 'Modo multiselección',
-		multiSelectKeyboardHints: "↑↓ Mover | Espacio Alternar | 1-9 Alternar rápido | Enter Confirmar | e Editar",
+		multiSelectKeyboardHints:
+			'↑↓ Mover | Espacio Alternar | 1-9 Alternar rápido | Enter Confirmar | e Editar',
 	},
 	toolConfirmation: {
 		header: '[Confirmación de herramienta]',

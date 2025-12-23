@@ -48,6 +48,7 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
+import {validateGitignore} from '../../utils/codebase/gitignoreValidator.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
@@ -155,6 +156,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		totalChunks: number;
 		currentFile: string;
 		status: string;
+		error?: string;
 	} | null>(null);
 	const [watcherEnabled, setWatcherEnabled] = useState(false);
 	const [fileUpdateNotification, setFileUpdateNotification] = useState<{
@@ -244,6 +246,23 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					return;
 				}
 
+				// Check if .gitignore exists before creating agent
+				const validation = validateGitignore(workingDirectory);
+				if (!validation.isValid) {
+					setCodebaseProgress({
+						totalFiles: 0,
+						processedFiles: 0,
+						totalChunks: 0,
+						currentFile: '',
+						status: 'error',
+						error: validation.error,
+					});
+					setWatcherEnabled(false);
+
+					logger.error(validation.error || 'Validation error');
+					return;
+				}
+
 				// Initialize agent
 				const agent = new CodebaseIndexAgent(workingDirectory);
 				codebaseAgentRef.current = agent;
@@ -260,6 +279,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							totalChunks: number;
 							currentFile: string;
 							status: string;
+							error?: string;
 						}) => {
 							setCodebaseProgress({
 								totalFiles: progressData.totalFiles,
@@ -267,6 +287,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 								totalChunks: progressData.totalChunks,
 								currentFile: progressData.currentFile,
 								status: progressData.status,
+								error: progressData.error,
 							});
 
 							// Handle file update notifications
@@ -299,6 +320,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							totalChunks: number;
 							currentFile: string;
 							status: string;
+							error?: string;
 						}) => {
 							setCodebaseProgress({
 								totalFiles: progressData.totalFiles,
@@ -306,6 +328,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 								totalChunks: progressData.totalChunks,
 								currentFile: progressData.currentFile,
 								status: progressData.status,
+								error: progressData.error,
 							});
 
 							// Handle file update notifications
@@ -336,6 +359,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						totalChunks: number;
 						currentFile: string;
 						status: string;
+						error?: string;
 					}) => {
 						setCodebaseProgress({
 							totalFiles: progressData.totalFiles,
@@ -343,6 +367,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							totalChunks: progressData.totalChunks,
 							currentFile: progressData.currentFile,
 							status: progressData.status,
+							error: progressData.error,
 						});
 
 						// Handle file update notifications (when totalFiles is 0, it's a file update)
@@ -374,6 +399,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 										totalChunks: number;
 										currentFile: string;
 										status: string;
+										error?: string;
 									}) => {
 										setCodebaseProgress({
 											totalFiles: watcherProgressData.totalFiles,
@@ -381,6 +407,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 											totalChunks: watcherProgressData.totalChunks,
 											currentFile: watcherProgressData.currentFile,
 											status: watcherProgressData.status,
+											error: watcherProgressData.error,
 										});
 
 										// Handle file update notifications
@@ -720,6 +747,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						totalChunks: progressData.totalChunks,
 						currentFile: progressData.currentFile,
 						status: progressData.status,
+						error: progressData.error,
 					});
 
 					if (
@@ -743,6 +771,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						totalChunks: watcherProgressData.totalChunks,
 						currentFile: watcherProgressData.currentFile,
 						status: watcherProgressData.status,
+						error: watcherProgressData.error,
 					});
 
 					if (

@@ -32,6 +32,11 @@ export const ja: TranslationKeys = {
 		themeSettingsInfo: 'テーマを設定して差分ビューワーをプレビュー',
 		hooksSettings: 'Hooks設定',
 		hooksSettingsInfo: 'AIワークフローをカスタマイズするためのHooksを設定',
+		updateNoticeTitle: '更新が利用可能です',
+		updateNoticeCurrent: '現在',
+		updateNoticeLatest: '最新',
+		updateNoticeRun: '実行',
+		updateNoticeGithub: 'GitHub',
 		exit: '終了',
 		exitInfo: 'アプリケーションを終了',
 	},
@@ -107,6 +112,8 @@ export const ja: TranslationKeys = {
 		chunkingMinCharsPerChunk: 'チャンクあたりの最小文字数:',
 		chunkingOverlapLines: '重複行数:',
 		saveError: '構成の保存に失敗',
+		gitignoreNotFound:
+			'インデックスを作成できません: .gitignore ファイルが見つかりません。不要なファイルのインデックス作成を防ぐために、プロジェクトに .gitignore ファイルを追加してください。',
 	},
 	systemPromptConfig: {
 		title: 'システムプロンプト管理',
@@ -842,7 +849,8 @@ export const ja: TranslationKeys = {
 		enterResponse: '回答を入力してください:',
 		keyboardHints: "ヒント: 'Enter' で選択 | 'e' で選択中のオプションを編集",
 		multiSelectHint: '複数選択モード',
-		multiSelectKeyboardHints: "↑↓ 移動 | スペース 切替 | 1-9 クイック切替 | Enter 確定 | e 編集",
+		multiSelectKeyboardHints:
+			'↑↓ 移動 | スペース 切替 | 1-9 クイック切替 | Enter 確定 | e 編集',
 	},
 	toolConfirmation: {
 		header: '[ツール確認]',
