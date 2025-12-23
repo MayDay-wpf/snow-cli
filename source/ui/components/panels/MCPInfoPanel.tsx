@@ -5,7 +5,11 @@ import {
 	refreshMCPToolsCache,
 	reconnectMCPService,
 } from '../../../utils/execution/mcpToolsManager.js';
-import {getMCPConfig, updateMCPConfig} from '../../../utils/config/apiConfig.js';
+import {
+	getMCPConfig,
+	updateMCPConfig,
+} from '../../../utils/config/apiConfig.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 
 interface MCPConnectionStatus {
 	name: string;
@@ -28,6 +32,7 @@ interface SelectItem {
 }
 
 export default function MCPInfoPanel() {
+	const {t} = useI18n();
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
@@ -83,6 +88,9 @@ export default function MCPInfoPanel() {
 		try {
 			if (item.value === 'refresh-all') {
 				// Refresh all services
+				await refreshMCPToolsCache();
+			} else if (item.isBuiltIn) {
+				// Built-in system services just refresh cache
 				await refreshMCPToolsCache();
 			} else {
 				// Reconnect specific service
@@ -157,7 +165,11 @@ export default function MCPInfoPanel() {
 
 	// Build select items from all services
 	const selectItems: SelectItem[] = [
-		{label: 'Refresh all services', value: 'refresh-all', isRefreshAll: true},
+		{
+			label: t.mcpInfoPanel.refreshAll,
+			value: 'refresh-all',
+			isRefreshAll: true,
+		},
 		...mcpStatus.map(s => ({
 			label: s.name,
 			value: s.name,
@@ -169,14 +181,14 @@ export default function MCPInfoPanel() {
 	];
 
 	if (isLoading) {
-		return <Text color="gray">Loading MCP services...</Text>;
+		return <Text color="gray">{t.mcpInfoPanel.loading}</Text>;
 	}
 
 	if (errorMessage) {
 		return (
 			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={0}>
 				<Text color="red" dimColor>
-					Error: {errorMessage}
+					{t.mcpInfoPanel.error.replace('{message}', errorMessage)}
 				</Text>
 			</Box>
 		);
@@ -186,7 +198,7 @@ export default function MCPInfoPanel() {
 		return (
 			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
 				<Text color="gray" dimColor>
-					No available MCP services detected
+					{t.mcpInfoPanel.noServices}
 				</Text>
 			</Box>
 		);
@@ -197,12 +209,13 @@ export default function MCPInfoPanel() {
 			<Box flexDirection="column">
 				<Text color="cyan" bold>
 					{isReconnecting
-						? 'Refreshing services...'
+						? t.mcpInfoPanel.refreshing
 						: togglingService
-						? `Toggling ${togglingService}...`
-						: 'MCP Services'}
+						? t.mcpInfoPanel.toggling.replace('{service}', togglingService)
+						: t.mcpInfoPanel.title}
 				</Text>
-				{!isReconnecting && !togglingService &&
+				{!isReconnecting &&
+					!togglingService &&
 					selectItems.map((item, index) => {
 						const isSelected = index === selectedIndex;
 
@@ -211,7 +224,7 @@ export default function MCPInfoPanel() {
 							return (
 								<Box key={item.value}>
 									<Text color={isSelected ? 'cyan' : 'blue'}>
-										{isSelected ? '❯ ' : '  '}↻ {item.label}
+										{isSelected ? '❯ ' : '  '}↻ {t.mcpInfoPanel.refreshAll}
 									</Text>
 								</Box>
 							);
@@ -225,12 +238,12 @@ export default function MCPInfoPanel() {
 							? 'green'
 							: 'red';
 						const suffix = item.isBuiltIn
-							? ' (System)'
+							? t.mcpInfoPanel.statusSystem
 							: !isEnabled
-							? ' (Disabled)'
+							? t.mcpInfoPanel.statusDisabled
 							: item.connected
-							? ' (External)'
-							: ` - ${item.error || 'Failed'}`;
+							? t.mcpInfoPanel.statusExternal
+							: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
 
 						return (
 							<Box key={item.value}>
@@ -251,7 +264,12 @@ export default function MCPInfoPanel() {
 					})}
 				{(isReconnecting || togglingService) && (
 					<Text color="yellow" dimColor>
-						Please wait...
+						{t.mcpInfoPanel.pleaseWait}
+					</Text>
+				)}
+				{!isReconnecting && !togglingService && (
+					<Text color="gray" dimColor>
+						{t.mcpInfoPanel.navigationHint}
 					</Text>
 				)}
 			</Box>

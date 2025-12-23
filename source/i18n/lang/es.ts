@@ -544,6 +544,8 @@ export const es: TranslationKeys = {
 			onUserMessage: 'Activado cuando el usuario envía un mensaje',
 			beforeToolCall: 'Ejecutar antes de llamada a herramienta',
 			afterToolCall: 'Ejecutar después de completar llamada a herramienta',
+			toolConfirmation:
+				'Desencadenado durante la segunda confirmación de la herramienta (incluyendo verificación de palabras sensibles)',
 			onSubAgentComplete: 'Ejecutar cuando tarea de sub-agente se completa',
 			beforeCompress: 'Ejecutar antes de operación de compresión',
 			onSessionStart:
@@ -999,5 +1001,39 @@ export const es: TranslationKeys = {
 		confirmHint: 'Y para confirmar, N para cancelar',
 		alertDefaultCannotDelete:
 			'El directorio predeterminado no se puede eliminar',
+	},
+	sessionListPanel: {
+		title: 'Reanudar',
+		loading: 'Cargando sesiones...',
+		noResults: 'No se encontraron resultados para "{query}"',
+		noConversations: 'No se encontraron conversaciones',
+		marked: '{count} marcados',
+		loadingMore: 'Cargando...',
+		messages: '{count} mensajes',
+		searchLabel: 'Buscar:',
+		searchPlaceholder: 'Escribe para buscar',
+		searching: 'buscando...',
+		navigationHint:
+			'Escribe para buscar • ↑↓ navegar • Espacio marcar • D eliminar • Enter seleccionar • ESC cerrar',
+		moreAbove: '↑ {count} más arriba',
+		moreBelow: '↓ {count} más abajo',
+		scrollToLoadMore: '(desplazar para cargar más)',
+		untitled: 'Sin título',
+		now: 'ahora',
+	},
+	mcpInfoPanel: {
+		title: 'Servicios MCP',
+		loading: 'Cargando servicios MCP...',
+		refreshing: 'Actualizando servicios...',
+		toggling: 'Cambiando {service}...',
+		refreshAll: 'Actualizar todos los servicios',
+		noServices: 'No se detectaron servicios MCP disponibles',
+		error: 'Error: {message}',
+		statusSystem: '(Sistema)',
+		statusExternal: '(Externo)',
+		statusDisabled: '(Deshabilitado)',
+		statusFailed: 'Falló',
+		navigationHint: '↑↓ Navegar • Enter Reconectar • Tab Alternar servicio',
+		pleaseWait: 'Por favor espere...',
 	},
 };

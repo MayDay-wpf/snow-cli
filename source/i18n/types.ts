@@ -492,6 +492,7 @@ export type TranslationKeys = {
 			onUserMessage: string;
 			beforeToolCall: string;
 			afterToolCall: string;
+			toolConfirmation: string;
 			onSubAgentComplete: string;
 			beforeCompress: string;
 			onSessionStart: string;
@@ -920,6 +921,39 @@ export type TranslationKeys = {
 		confirmHint: string;
 		// Alert messages
 		alertDefaultCannotDelete: string;
+	};
+	sessionListPanel: {
+		title: string;
+		loading: string;
+		noResults: string;
+		noConversations: string;
+		marked: string;
+		loadingMore: string;
+		messages: string;
+		searchLabel: string;
+		searchPlaceholder: string;
+		searching: string;
+		navigationHint: string;
+		moreAbove: string;
+		moreBelow: string;
+		scrollToLoadMore: string;
+		untitled: string;
+		now: string;
+	};
+	mcpInfoPanel: {
+		title: string;
+		loading: string;
+		refreshing: string;
+		toggling: string;
+		refreshAll: string;
+		noServices: string;
+		error: string;
+		statusSystem: string;
+		statusExternal: string;
+		statusDisabled: string;
+		statusFailed: string;
+		navigationHint: string;
+		pleaseWait: string;
 	};
 };
 

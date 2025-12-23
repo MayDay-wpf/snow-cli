@@ -4,6 +4,7 @@ import {
 	sessionManager,
 	type SessionListItem,
 } from '../../../utils/session/sessionManager.js';
+import {useI18n} from '../../../i18n/index.js';
 
 type Props = {
 	onSelectSession: (sessionId: string) => void;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export default function SessionListPanel({onSelectSession, onClose}: Props) {
+	const {t} = useI18n();
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadingMore, setLoadingMore] = useState(false);
@@ -23,11 +25,10 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const [searchInput, setSearchInput] = useState('');
 	const [debouncedSearch, setDebouncedSearch] = useState('');
 
-	const VISIBLE_ITEMS = 5; // Number of items to show at once
-	const PAGE_SIZE = 20; // Number of items to load per page
-	const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search
+	const VISIBLE_ITEMS = 5;
+	const PAGE_SIZE = 20;
+	const SEARCH_DEBOUNCE_MS = 300;
 
-	// Debounce search input
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedSearch(searchInput);
@@ -36,7 +37,6 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		return () => clearTimeout(timer);
 	}, [searchInput]);
 
-	// Load initial sessions on mount or when debounced search query changes
 	useEffect(() => {
 		const loadSessions = async () => {
 			setLoading(true);
@@ -63,7 +63,6 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		void loadSessions();
 	}, [debouncedSearch]);
 
-	// Load more sessions when scrolling near the end
 	const loadMoreSessions = useCallback(async () => {
 		if (loadingMore || !hasMore) return;
 
@@ -85,39 +84,36 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		}
 	}, [currentPage, hasMore, loadingMore, debouncedSearch]);
 
-	// Format date to relative time
-	const formatDate = useCallback((timestamp: number): string => {
-		const date = new Date(timestamp);
-		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffMinutes = Math.floor(diffMs / (1000 * 60));
-		const diffHours = Math.floor(diffMinutes / 60);
-		const diffDays = Math.floor(diffHours / 24);
+	const formatDate = useCallback(
+		(timestamp: number): string => {
+			const date = new Date(timestamp);
+			const now = new Date();
+			const diffMs = now.getTime() - date.getTime();
+			const diffMinutes = Math.floor(diffMs / (1000 * 60));
+			const diffHours = Math.floor(diffMinutes / 60);
+			const diffDays = Math.floor(diffHours / 24);
 
-		if (diffMinutes < 1) return 'now';
-		if (diffMinutes < 60) return `${diffMinutes}m`;
-		if (diffHours < 24) return `${diffHours}h`;
-		if (diffDays < 7) return `${diffDays}d`;
-		return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
-	}, []);
+			if (diffMinutes < 1) return t.sessionListPanel.now;
+			if (diffMinutes < 60) return `${diffMinutes}m`;
+			if (diffHours < 24) return `${diffHours}h`;
+			if (diffDays < 7) return `${diffDays}d`;
+			return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+		},
+		[t],
+	);
 
-	// Handle keyboard input
 	useInput((input, key) => {
 		if (loading) return;
 
-		// ESC closes panel only if search is empty
 		if (key.escape) {
 			if (searchInput) {
-				// Clear search if there's input
 				setSearchInput('');
 			} else {
-				// Close panel if search is empty
 				onClose();
 			}
 			return;
 		}
 
-		// Backspace removes last character from search
 		if (key.backspace || key.delete) {
 			setSearchInput(prev => prev.slice(0, -1));
 			return;
@@ -125,14 +121,10 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 
 		if (key.upArrow) {
 			setSelectedIndex(prev => {
-				// 循环导航: 第一项 → 最后一项, 其他 → 前一项
 				const newIndex = prev > 0 ? prev - 1 : sessions.length - 1;
-				// Adjust scroll offset if needed
 				if (newIndex < scrollOffset) {
-					// Scrolling up
 					setScrollOffset(newIndex);
 				} else if (newIndex >= sessions.length - VISIBLE_ITEMS) {
-					// Wrapped to end - scroll to show last items
 					setScrollOffset(Math.max(0, sessions.length - VISIBLE_ITEMS));
 				}
 				return newIndex;
@@ -142,11 +134,8 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 
 		if (key.downArrow) {
 			setSelectedIndex(prev => {
-				// 循环导航: 最后一项 → 第一项, 其他 → 后一项
 				const newIndex = prev < sessions.length - 1 ? prev + 1 : 0;
 
-				// Check if we need to load more sessions
-				// Load when approaching the end (within 5 items from the end)
 				if (
 					hasMore &&
 					!loadingMore &&
@@ -156,12 +145,9 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 					void loadMoreSessions();
 				}
 
-				// Adjust scroll offset if needed
 				if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
-					// Scrolling down
 					setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
 				} else if (newIndex === 0) {
-					// Wrapped to start - scroll to top
 					setScrollOffset(0);
 				}
 				return newIndex;
@@ -169,7 +155,6 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			return;
 		}
 
-		// Space to toggle mark
 		if (input === ' ') {
 			const currentSession = sessions[selectedIndex];
 			if (currentSession) {
@@ -186,13 +171,11 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			return;
 		}
 
-		// D to delete marked sessions
 		if (input === 'd' || input === 'D') {
 			if (markedSessions.size > 0) {
 				const deleteMarked = async () => {
 					const ids = Array.from(markedSessions);
 					await Promise.all(ids.map(id => sessionManager.deleteSession(id)));
-					// Reload sessions from first page
 					const result = await sessionManager.listSessionsPaginated(
 						0,
 						PAGE_SIZE,
@@ -203,7 +186,6 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 					setTotalCount(result.total);
 					setCurrentPage(0);
 					setMarkedSessions(new Set());
-					// Reset selection if needed
 					if (
 						selectedIndex >= result.sessions.length &&
 						result.sessions.length > 0
@@ -225,10 +207,7 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			return;
 		}
 
-		// Add any printable character to search input (including Chinese/IME input)
 		if (input && !key.ctrl && !key.meta) {
-			// Accept all printable characters including Chinese characters from IME
-			// Filter out arrow keys and other control sequences
 			if (
 				!key.upArrow &&
 				!key.downArrow &&
@@ -243,7 +222,6 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		}
 	});
 
-	// Calculate visible sessions based on scroll offset
 	const visibleSessions = sessions.slice(
 		scrollOffset,
 		scrollOffset + VISIBLE_ITEMS,
@@ -261,56 +239,65 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 		>
 			<Box flexDirection="column">
 				<Text color="cyan" dimColor>
-					Resume ({selectedIndex + 1}/{sessions.length}
+					{t.sessionListPanel.title} ({selectedIndex + 1}/{sessions.length}
 					{totalCount > sessions.length && ` of ${totalCount}`})
-					{currentSession && ` • ${currentSession.messageCount} msgs`}
+					{currentSession &&
+						` • ${currentSession.messageCount} ${t.sessionListPanel.messages.replace('{count}', '')}`}
 					{markedSessions.size > 0 && (
-						<Text color="yellow"> • {markedSessions.size} marked</Text>
+						<Text color="yellow">
+							{' '}
+							•{' '}
+							{t.sessionListPanel.marked.replace(
+								'{count}',
+								String(markedSessions.size),
+							)}
+						</Text>
 					)}
-					{loadingMore && <Text color="gray"> • Loading...</Text>}
+					{loadingMore && (
+						<Text color="gray"> • {t.sessionListPanel.loadingMore}</Text>
+					)}
 				</Text>
 				{searchInput ? (
 					<Text color="green">
-						Search: {searchInput}
+						{t.sessionListPanel.searchLabel} {searchInput}
 						{searchInput !== debouncedSearch && (
-							<Text color="gray"> (searching...)</Text>
+							<Text color="gray"> ({t.sessionListPanel.searching})</Text>
 						)}
 					</Text>
 				) : (
 					<Text color="gray" dimColor>
-						Type to search • ↑↓ navigate • Space mark • D delete • Enter select
-						• ESC close
+						{t.sessionListPanel.navigationHint}
 					</Text>
 				)}
 			</Box>
-			{/* List content area - shows loading, empty state, or session list */}
 			{loading ? (
 				<Text color="gray" dimColor>
-					Loading sessions...
+					{t.sessionListPanel.loading}
 				</Text>
 			) : sessions.length === 0 ? (
 				<Text color="gray" dimColor>
 					{debouncedSearch
-						? `No results for "${debouncedSearch}"`
-						: 'No conversations found'}
+						? t.sessionListPanel.noResults.replace('{query}', debouncedSearch)
+						: t.sessionListPanel.noConversations}
 				</Text>
 			) : (
 				<>
 					{hasPrevious && (
 						<Text color="gray" dimColor>
 							{' '}
-							↑ {scrollOffset} more above
+							{t.sessionListPanel.moreAbove.replace(
+								'{count}',
+								String(scrollOffset),
+							)}
 						</Text>
 					)}
 					{visibleSessions.map((session, index) => {
 						const actualIndex = scrollOffset + index;
 						const isSelected = actualIndex === selectedIndex;
 						const isMarked = markedSessions.has(session.id);
-						// Remove newlines and other whitespace characters from title
-						const cleanTitle = (session.title || 'Untitled').replace(
-							/[\r\n\t]+/g,
-							' ',
-						);
+						const cleanTitle = (
+							session.title || t.sessionListPanel.untitled
+						).replace(/[\r\n\t]+/g, ' ');
 						const timeStr = formatDate(session.updatedAt);
 						const truncatedLabel =
 							cleanTitle.length > 50
@@ -342,8 +329,11 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			{!loading && sessions.length > 0 && hasMoreInView && (
 				<Text color="gray" dimColor>
 					{' '}
-					↓ {sessions.length - scrollOffset - VISIBLE_ITEMS} more below
-					{hasMore && ' (scroll to load more)'}
+					{t.sessionListPanel.moreBelow.replace(
+						'{count}',
+						String(sessions.length - scrollOffset - VISIBLE_ITEMS),
+					)}
+					{hasMore && ` ${t.sessionListPanel.scrollToLoadMore}`}
 				</Text>
 			)}
 		</Box>

@@ -518,6 +518,8 @@ export const en: TranslationKeys = {
 			onUserMessage: 'Triggered when user sends a message',
 			beforeToolCall: 'Run before tool call',
 			afterToolCall: 'Run after tool call completes',
+			toolConfirmation:
+				'Triggered during the second confirmation of the tool (including sensitive word check)',
 			onSubAgentComplete: 'Run when sub-agent task completes',
 			beforeCompress: 'Run before compression operation',
 			onSessionStart:
@@ -969,5 +971,39 @@ export const en: TranslationKeys = {
 		confirmHint: 'Y to confirm, N to cancel',
 		// Alert messages
 		alertDefaultCannotDelete: 'Default directory cannot be deleted',
+	},
+	sessionListPanel: {
+		title: 'Resume',
+		loading: 'Loading sessions...',
+		noResults: 'No results for "{query}"',
+		noConversations: 'No conversations found',
+		marked: '{count} marked',
+		loadingMore: 'Loading...',
+		messages: '{count} msgs',
+		searchLabel: 'Search:',
+		searchPlaceholder: 'Type to search',
+		searching: 'searching...',
+		navigationHint:
+			'Type to search • ↑↓ navigate • Space mark • D delete • Enter select • ESC close',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		scrollToLoadMore: '(scroll to load more)',
+		untitled: 'Untitled',
+		now: 'now',
+	},
+	mcpInfoPanel: {
+		title: 'MCP Services',
+		loading: 'Loading MCP services...',
+		refreshing: 'Refreshing services...',
+		toggling: 'Toggling {service}...',
+		refreshAll: 'Refresh all services',
+		noServices: 'No available MCP services detected',
+		error: 'Error: {message}',
+		statusSystem: '(System)',
+		statusExternal: '(External)',
+		statusDisabled: '(Disabled)',
+		statusFailed: 'Failed',
+		navigationHint: '↑↓ Navigate • Enter Reconnect • Tab Toggle Service',
+		pleaseWait: 'Please wait...',
 	},
 };
