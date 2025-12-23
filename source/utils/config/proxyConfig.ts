@@ -6,11 +6,13 @@ export interface ProxyConfig {
 	enabled: boolean;
 	port: number;
 	browserPath?: string; // Custom browser executable path
+	browserDebugPort?: number; // Remote debugging port for WSL mode (default: 9222)
 }
 
 const DEFAULT_PROXY_CONFIG: ProxyConfig = {
 	enabled: false,
 	port: 7890,
+	browserDebugPort: 9222,
 };
 
 const CONFIG_DIR = join(homedir(), '.snow');

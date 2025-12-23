@@ -8,25 +8,36 @@ import type {
 	WebPageContent,
 } from './types/websearch.types.js';
 // Utility functions
-import {findBrowserExecutable} from './utils/websearch/browser.utils.js';
+import {
+	findBrowserExecutable,
+	isWSL,
+	findWindowsBrowserInWSL,
+	launchWindowsBrowserFromWSL,
+	getRunningBrowserWSEndpoint,
+} from './utils/websearch/browser.utils.js';
 import {cleanText} from './utils/websearch/text.utils.js';
 
 /**
  * Web Search Service using DuckDuckGo Lite with Puppeteer Core
  * Provides web search functionality with real browser support and proxy
  * Uses system-installed Chrome/Edge to reduce package size
+ * Supports WSL environment by connecting to Windows browser via WebSocket
  */
 export class WebSearchService {
 	private maxResults: number;
 	private browser: Browser | null = null;
 	private executablePath: string | null = null;
+	private isWSLMode: boolean = false;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
+		// Detect WSL environment once
+		this.isWSLMode = isWSL();
 	}
 
 	/**
 	 * Launch browser with proxy settings from config
+	 * In WSL mode, connects to Windows browser via WebSocket
 	 */
 	private async launchBrowser(): Promise<Browser> {
 		if (this.browser && this.browser.connected) {
@@ -34,7 +45,77 @@ export class WebSearchService {
 		}
 
 		const proxyConfig = getProxyConfig();
+		const debugPort = proxyConfig.browserDebugPort || 9222;
 
+		// WSL Mode: Connect to Windows browser via WebSocket
+		if (this.isWSLMode) {
+			return this.launchBrowserWSL(proxyConfig, debugPort);
+		}
+
+		// Standard Mode: Launch browser directly
+		return this.launchBrowserDirect(proxyConfig);
+	}
+
+	/**
+	 * Launch browser in WSL mode by connecting to Windows browser
+	 */
+	private async launchBrowserWSL(
+		proxyConfig: ReturnType<typeof getProxyConfig>,
+		debugPort: number,
+	): Promise<Browser> {
+		// First check if browser is already running on debug port
+		let wsEndpoint = await getRunningBrowserWSEndpoint(debugPort);
+
+		if (!wsEndpoint) {
+			// Need to launch Windows browser
+			// Priority: 1. User-configured path, 2. Auto-detect Windows browser in WSL
+			let browserPath: string | null | undefined = proxyConfig.browserPath;
+
+			if (!browserPath || !existsSync(browserPath)) {
+				browserPath = findWindowsBrowserInWSL();
+			}
+
+			if (!browserPath) {
+				throw new Error(
+					'No Windows browser found in WSL environment. Please install Chrome or Edge on Windows, ' +
+						'or configure browser path in ~/.snow/proxy-config.json (browserPath). ' +
+						'Expected paths: /mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe',
+				);
+			}
+
+			// Launch Windows browser with remote debugging
+			wsEndpoint = await launchWindowsBrowserFromWSL(browserPath, debugPort);
+
+			if (!wsEndpoint) {
+				throw new Error(
+					`Failed to launch Windows browser from WSL. Browser path: ${browserPath}. ` +
+						`Debug port: ${debugPort}. Make sure the browser is not already running ` +
+						`or try a different port in ~/.snow/proxy-config.json (browserDebugPort).`,
+				);
+			}
+		}
+
+		try {
+			this.browser = await puppeteer.connect({
+				browserWSEndpoint: wsEndpoint,
+			});
+			return this.browser;
+		} catch (error: unknown) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			throw new Error(
+				`Failed to connect to Windows browser via WebSocket. Endpoint: ${wsEndpoint}. ` +
+					`Original error: ${errorMessage}`,
+			);
+		}
+	}
+
+	/**
+	 * Launch browser directly (non-WSL mode)
+	 */
+	private async launchBrowserDirect(
+		proxyConfig: ReturnType<typeof getProxyConfig>,
+	): Promise<Browser> {
 		// Find browser executable path (cache it)
 		// Priority: 1. User-configured path, 2. Auto-detect
 		if (!this.executablePath) {
@@ -65,11 +146,22 @@ export class WebSearchService {
 			launchArgs.unshift(`--proxy-server=http://127.0.0.1:${proxyConfig.port}`);
 		}
 
-		this.browser = await puppeteer.launch({
-			executablePath: this.executablePath,
-			headless: true,
-			args: launchArgs,
-		});
+		try {
+			this.browser = await puppeteer.launch({
+				executablePath: this.executablePath,
+				headless: true,
+				args: launchArgs,
+			});
+		} catch (error: unknown) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			const browserPathInfo = this.executablePath
+				? `Browser path: ${this.executablePath}`
+				: 'Browser path not set';
+			throw new Error(
+				`Failed to launch the browser process. ${browserPathInfo}. On Linux, ensure Chromium/Chrome is installed and required dependencies are available. You can set a custom browser path in Settings > Proxy & Browser or in ~/.snow/proxy-config.json (browserPath). Original error: ${errorMessage}`,
+			);
+		}
 
 		return this.browser;
 	}
@@ -79,7 +171,12 @@ export class WebSearchService {
 	 */
 	async closeBrowser(): Promise<void> {
 		if (this.browser) {
-			await this.browser.close();
+			if (this.isWSLMode) {
+				// In WSL mode, just disconnect (don't close the Windows browser)
+				this.browser.disconnect();
+			} else {
+				await this.browser.close();
+			}
 			this.browser = null;
 		}
 	}
