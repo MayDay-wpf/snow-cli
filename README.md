@@ -185,13 +185,24 @@ In addition, you need to add the following custom request headers:
 
 ```json
 {
-	"anthropic-beta": "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
-	"anthropic-dangerous-direct-browser-access": "true",
-	"anthropic-version": "2023-06-01",
-	"user-agent": "claude-cli/2.0.22 (external, cli)",
-	"x-app": "cli"
+    "anthropic-beta": "claude-code-20250219,interleaved-thinking-2025-05-14",
+    "anthropic-dangerous-direct-browser-access":"true",
+    "anthropic-version": "2023-06-01",
+    "user-agent": "claude-cli/2.0.22 (external, cli",
+    "x-app": "cli"
 }
 ```
+
+**Enable 1M context request header:**
+
+```json
+{
+    "anthropic-beta": "claude-code-20250219,context-1m-2025-08-07,interleaved-thinking-2025-05-14",
+    "anthropic-dangerous-direct-browser-access":"true",
+    "anthropic-version": "2023-06-01",
+    "user-agent": "claude-cli/2.0.22 (external, cli",
+    "x-app": "cli"
+}
 
 ![Entry diagram 2](docs/images/image-6.png)
 
