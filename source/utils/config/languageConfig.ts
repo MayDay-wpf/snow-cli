@@ -2,7 +2,7 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
 
-export type Language = 'en' | 'zh' | 'zh-TW' | 'ja' | 'ko' | 'es';
+export type Language = 'en' | 'zh' | 'zh-TW';
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const LANGUAGE_CONFIG_FILE = join(CONFIG_DIR, 'language.json');
