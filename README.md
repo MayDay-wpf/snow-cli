@@ -104,7 +104,7 @@ npm run link   # builds and globally links snow
 
 # API & Model Settings
 
-For detailed configuration instructions, please refer to: [First Configuration Documentation](docs/usage/zh/2.首次配置.md)
+For detailed configuration instructions, please refer to: [First Configuration Documentation](docs/usage/zh/02.首次配置.md)
 
 ![API & Model Settings in CLI](docs/images/image.png)
 

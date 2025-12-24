@@ -102,7 +102,7 @@ npm run link   # 构建并全局链接 snow
 
 # API & Model Settings
 
-详细配置说明请参考：[首次配置文档](docs/usage/zh/2.首次配置.md)
+详细配置说明请参考：[首次配置文档](docs/usage/zh/02.首次配置.md)
 
 ![API & Model Settings in CLI](docs/images/image.png)
 
