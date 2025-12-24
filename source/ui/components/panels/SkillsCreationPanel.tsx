@@ -4,7 +4,7 @@ import {TextInput} from '@inkjs/ui';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {
-	validateSkillName,
+	validateSkillId,
 	checkSkillExists,
 	type SkillLocation,
 } from '../../../utils/commands/skills.js';
@@ -65,7 +65,7 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 		(value: string) => {
 			if (value.trim()) {
 				const trimmedName = value.trim();
-				const validation = validateSkillName(trimmedName);
+				const validation = validateSkillId(trimmedName);
 
 				if (!validation.valid) {
 					setErrorMessage(

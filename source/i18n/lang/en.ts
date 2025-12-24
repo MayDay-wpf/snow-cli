@@ -838,8 +838,9 @@ export const en: TranslationKeys = {
 	skillsCreation: {
 		title: 'Create New Skill',
 		nameLabel: 'Skill Name:',
-		nameHint: 'Use lowercase letters, numbers, and hyphens only (max 64 chars)',
-		namePlaceholder: 'my-skill-name',
+		nameHint:
+			'Use lowercase letters, numbers, and hyphens. Use "/" to namespace (max 64 chars per segment)',
+		namePlaceholder: 'team/my-skill-name',
 		descriptionLabel: 'Description:',
 		descriptionHint:
 			'Brief description of what this Skill does and when to use it',

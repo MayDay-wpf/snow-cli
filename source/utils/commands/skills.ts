@@ -16,8 +16,8 @@ export interface SkillMetadata {
 // Skill location type
 export type SkillLocation = 'global' | 'project';
 
-// Validate skill name (lowercase letters, numbers, hyphens only, max 64 chars)
-export function validateSkillName(name: string): {
+// Validate skill id (supports optional /namespace segments)
+export function validateSkillId(name: string): {
 	valid: boolean;
 	error?: string;
 } {
@@ -27,20 +27,69 @@ export function validateSkillName(name: string): {
 
 	const trimmedName = name.trim();
 
-	if (trimmedName.length > 64) {
-		return {valid: false, error: 'Skill name must be 64 characters or less'};
+	// Keep legacy per-segment limit (64), but allow namespaced IDs to be longer overall.
+	if (trimmedName.length > 256) {
+		return {valid: false, error: 'Skill name must be 256 characters or less'};
 	}
 
-	const validNamePattern = /^[a-z0-9-]+$/;
-	if (!validNamePattern.test(trimmedName)) {
+	if (trimmedName.includes('\\')) {
 		return {
 			valid: false,
 			error:
-				'Skill name must contain only lowercase letters, numbers, and hyphens',
+				'Skill name must use "/" as namespace separator (backslashes are not allowed)',
 		};
 	}
 
+	if (trimmedName.includes(':')) {
+		return {valid: false, error: 'Skill name must not contain ":"'};
+	}
+
+	if (trimmedName.startsWith('/') || trimmedName.endsWith('/')) {
+		return {valid: false, error: 'Skill name must not start or end with "/"'};
+	}
+
+	const segments = trimmedName.split('/');
+	if (segments.some(segment => segment.length === 0)) {
+		return {
+			valid: false,
+			error: 'Skill name must not contain empty namespace segments',
+		};
+	}
+
+	const validSegmentPattern = /^[a-z0-9-]+$/;
+	for (const segment of segments) {
+		if (segment === '.' || segment === '..') {
+			return {
+				valid: false,
+				error: 'Skill name must not contain "." or ".." segments',
+			};
+		}
+
+		if (segment.length > 64) {
+			return {
+				valid: false,
+				error: 'Each skill name segment must be 64 characters or less',
+			};
+		}
+
+		if (!validSegmentPattern.test(segment)) {
+			return {
+				valid: false,
+				error:
+					'Skill name segments must contain only lowercase letters, numbers, and hyphens',
+			};
+		}
+	}
+
 	return {valid: true};
+}
+
+// Backward compatible alias (historical name)
+export function validateSkillName(name: string): {
+	valid: boolean;
+	error?: string;
+} {
+	return validateSkillId(name);
 }
 
 // Check if skill name already exists in specified location
@@ -59,12 +108,14 @@ export function getSkillDirectory(
 	location: SkillLocation,
 	projectRoot?: string,
 ): string {
+	const segments = skillName.split('/').filter(Boolean);
+
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'skills', skillName);
-	} else {
-		const root = projectRoot || process.cwd();
-		return join(root, '.snow', 'skills', skillName);
+		return join(homedir(), '.snow', 'skills', ...segments);
 	}
+
+	const root = projectRoot || process.cwd();
+	return join(root, '.snow', 'skills', ...segments);
 }
 
 // Generate SKILL.md content
@@ -224,8 +275,11 @@ export async function createSkillTemplate(
 		await mkdir(join(skillDir, 'scripts'), {recursive: true});
 		await mkdir(join(skillDir, 'templates'), {recursive: true});
 
+		const leafName = skillName.split('/').filter(Boolean).pop() || skillName;
+
 		// Generate and write SKILL.md
-		const skillContent = generateSkillTemplate({name: skillName, description});
+		// OpenCode-style: frontmatter `name` uses leaf folder name (not the full namespaced id)
+		const skillContent = generateSkillTemplate({name: leafName, description});
 		await writeFile(join(skillDir, 'SKILL.md'), skillContent, 'utf-8');
 
 		// Generate and write reference.md

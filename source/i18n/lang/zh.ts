@@ -796,8 +796,9 @@ export const zh: TranslationKeys = {
 	skillsCreation: {
 		title: '创建新技能',
 		nameLabel: '技能名称:',
-		nameHint: '仅使用小写字母、数字和连字符（最多 64 个字符）',
-		namePlaceholder: 'my-skill-name',
+		nameHint:
+			'仅使用小写字母、数字和连字符，可用 "/" 作为命名空间分隔（每段最多 64 个字符）',
+		namePlaceholder: 'team/my-skill-name',
 		descriptionLabel: '描述:',
 		descriptionHint: '简要描述此技能的用途和使用场景',
 		descriptionPlaceholder: '简要描述...',
