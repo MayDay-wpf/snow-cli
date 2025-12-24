@@ -3,10 +3,15 @@ import {Text, Box} from 'ink';
 import MarkdownIt from 'markdown-it';
 // @ts-expect-error - markdown-it-terminal has no type definitions
 import terminal from 'markdown-it-terminal';
+import markdownItMath from 'markdown-it-math';
 import {marked} from 'marked';
 import {markedTerminal} from 'marked-terminal';
 import {highlight} from 'cli-highlight';
 import logger from '../../../utils/core/logger.js';
+import {
+	latexToUnicode,
+	simpleLatexToUnicode,
+} from '../../../utils/latex/unicodeMath.js';
 
 // Configure markdown-it with terminal renderer for non-table content
 const md = new MarkdownIt({
@@ -20,6 +25,34 @@ md.use(terminal, {
 		// Style options are handled by markdown-it-terminal automatically
 	},
 	unescape: true,
+});
+
+// Add markdown-it-math plugin for LaTeX math rendering
+md.use(markdownItMath, {
+	inlineOpen: '$',
+	inlineClose: '$',
+	blockOpen: '$$',
+	blockClose: '$$',
+	inlineRenderer: (latex: string) => {
+		try {
+			// 尝试使用KaTeX转换
+			const unicode = latexToUnicode(latex, false);
+			return unicode;
+		} catch {
+			// 失败时使用简单转换
+			return simpleLatexToUnicode(latex);
+		}
+	},
+	blockRenderer: (latex: string) => {
+		try {
+			// 块级公式使用显示模式
+			const unicode = latexToUnicode(latex, true);
+			return `\n${unicode}\n`;
+		} catch {
+			// 失败时使用简单转换并添加换行
+			return `\n${simpleLatexToUnicode(latex)}\n`;
+		}
+	},
 });
 
 // Configure marked with marked-terminal renderer for table rendering only

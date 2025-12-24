@@ -67,6 +67,7 @@ if (typeof globalThis.FormData === 'undefined') {
 		...builtinModules.map(m => `node:${m}`),
 		// Optional native dependencies (dynamically imported in code)
 		'sharp',
+		// Note: katex and markdown-it-math are bundled (not external)
 	],
 	plugins: [stubPlugin],
 	minify: false,
