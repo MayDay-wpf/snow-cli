@@ -4,6 +4,7 @@ export interface TerminalExecutionState {
 	isExecuting: boolean;
 	command: string | null;
 	timeout: number | null;
+	isBackgrounded: boolean;
 }
 
 // Global state for terminal execution (shared across components)
@@ -18,6 +19,7 @@ export function useTerminalExecutionState() {
 		isExecuting: false,
 		command: null,
 		timeout: null,
+		isBackgrounded: false,
 	});
 
 	// Always update global setter to ensure it's current
@@ -29,6 +31,7 @@ export function useTerminalExecutionState() {
 			isExecuting: true,
 			command,
 			timeout,
+			isBackgrounded: false,
 		});
 	}, []);
 
@@ -37,13 +40,22 @@ export function useTerminalExecutionState() {
 			isExecuting: false,
 			command: null,
 			timeout: null,
+			isBackgrounded: false,
 		});
+	}, []);
+
+	const moveToBackground = useCallback(() => {
+		setState(prev => ({
+			...prev,
+			isBackgrounded: true,
+		}));
 	}, []);
 
 	return {
 		state,
 		startExecution,
 		endExecution,
+		moveToBackground,
 	};
 }
 

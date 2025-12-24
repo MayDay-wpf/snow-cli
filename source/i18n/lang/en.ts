@@ -484,6 +484,7 @@ export const en: TranslationKeys = {
 			reindex:
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
 			permissions: 'Manage always-approved tools permissions',
+			backend: 'Show background processes panel',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			quit: 'Exit the application',
@@ -866,6 +867,7 @@ export const en: TranslationKeys = {
 		header: '[User Input Required]',
 		customInputOption: 'Custom input...',
 		customInputLabel: 'Custom input',
+		cancelOption: 'Cancel',
 		selectPrompt: 'Select an option:',
 		enterResponse: 'Enter your response:',
 		keyboardHints:
@@ -903,6 +905,17 @@ export const en: TranslationKeys = {
 		executingCommand: 'Executing command...',
 		timeout: 'Timeout:',
 		customTimeout: '(custom)',
+		backgroundHint: 'Ctrl+B to move to background',
+	},
+	backgroundProcesses: {
+		title: 'Background Processes',
+		status: 'Status',
+		statusRunning: 'Running',
+		statusCompleted: 'Completed',
+		statusFailed: 'Failed',
+		duration: 'Duration',
+		navigateHint: '↑↓ Navigate | Enter Kill selected | ESC Close',
+		emptyHint: 'No background processes',
 	},
 	fileRollback: {
 		title: 'File Rollback Confirmation',
@@ -925,6 +938,7 @@ export const en: TranslationKeys = {
 		toggleHint: 'Space toggle',
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
+		emptyHint: 'No files to rollback',
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',

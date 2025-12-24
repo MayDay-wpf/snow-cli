@@ -45,6 +45,11 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.usage,
 			},
 			{
+				name: 'backend',
+				description:
+					t.commandPanel.commands.backend || 'Show background processes',
+			},
+			{
 				name: 'export',
 				description: t.commandPanel.commands.export,
 			},

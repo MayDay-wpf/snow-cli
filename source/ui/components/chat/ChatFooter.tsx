@@ -5,6 +5,8 @@ import ChatInput from './ChatInput.js';
 import StatusLine from '../common/StatusLine.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import type {Message} from './MessageList.js';
+import {BackgroundProcessPanel} from '../bash/BackgroundProcessPanel.js';
+import type {BackgroundProcess} from '../../../hooks/execution/useBackgroundProcesses.js';
 
 type ChatFooterProps = {
 	onSubmit: (
@@ -77,6 +79,12 @@ type ChatFooterProps = {
 
 	isCompressing: boolean;
 	compressionError: string | null;
+
+	// Background process panel props
+	backgroundProcesses: BackgroundProcess[];
+	showBackgroundPanel: boolean;
+	selectedProcessIndex: number;
+	terminalWidth: number;
 };
 
 export default function ChatFooter(props: ChatFooterProps) {
@@ -89,6 +97,7 @@ export default function ChatFooter(props: ChatFooterProps) {
 				onCommand={props.onCommand}
 				placeholder={t.chatScreen.inputPlaceholder}
 				disabled={props.disabled || props.isStopping}
+				disableKeyboardNavigation={props.showBackgroundPanel}
 				isProcessing={props.isProcessing}
 				chatHistory={props.chatHistory}
 				onHistorySelect={props.handleHistorySelect}
@@ -143,6 +152,15 @@ export default function ChatFooter(props: ChatFooterProps) {
 						)}
 					</Text>
 				</Box>
+			)}
+
+			{/* Show background process panel if enabled */}
+			{props.showBackgroundPanel && (
+				<BackgroundProcessPanel
+					processes={props.backgroundProcesses}
+					selectedIndex={props.selectedProcessIndex}
+					terminalWidth={props.terminalWidth}
+				/>
 			)}
 		</>
 	);

@@ -8,6 +8,24 @@ import {
 } from './utils/bash/security.utils.js';
 import {processManager} from '../utils/core/processManager.js';
 
+// Global flag to track if command should be moved to background
+let shouldMoveToBackground = false;
+
+/**
+ * Mark command to be moved to background
+ * Called from UI when Ctrl+B is pressed
+ */
+export function markCommandAsBackgrounded() {
+	shouldMoveToBackground = true;
+}
+
+/**
+ * Reset background flag
+ */
+export function resetBackgroundFlag() {
+	shouldMoveToBackground = false;
+}
+
 /**
  * Terminal Command Execution Service
  * Executes terminal commands directly using the system's default shell
@@ -95,6 +113,37 @@ export class TerminalCommandService {
 			}>((resolve, reject) => {
 				let stdoutData = '';
 				let stderrData = '';
+				let backgroundProcessId: string | null = null;
+
+				// Add to background processes if PID available
+				if (childProcess.pid) {
+					import('../hooks/execution/useBackgroundProcesses.js')
+						.then(({addBackgroundProcess}) => {
+							backgroundProcessId = addBackgroundProcess(
+								command,
+								childProcess.pid!,
+							);
+						})
+						.catch(() => {
+							// Ignore error if module not available
+						});
+				}
+
+				// Check background flag periodically
+				const backgroundCheckInterval = setInterval(() => {
+					if (shouldMoveToBackground) {
+						clearInterval(backgroundCheckInterval);
+						// Reset flag for next command
+						resetBackgroundFlag();
+						// Resolve immediately with partial output
+						resolve({
+							stdout:
+								stdoutData +
+								'\n[Command moved to background, execution continues...]',
+							stderr: stderrData,
+						});
+					}
+				}, 100);
 
 				childProcess.stdout?.on('data', chunk => {
 					stdoutData += chunk;
@@ -104,9 +153,40 @@ export class TerminalCommandService {
 					stderrData += chunk;
 				});
 
-				childProcess.on('error', reject);
+				childProcess.on('error', error => {
+					clearInterval(backgroundCheckInterval);
+					// Update process status
+					if (backgroundProcessId) {
+						import('../hooks/execution/useBackgroundProcesses.js')
+							.then(({updateBackgroundProcessStatus}) => {
+								updateBackgroundProcessStatus(
+									backgroundProcessId!,
+									'failed',
+									1,
+								);
+							})
+							.catch(() => {});
+					}
+					reject(error);
+				});
 
 				childProcess.on('close', (code, signal) => {
+					clearInterval(backgroundCheckInterval);
+
+					// Update process status
+					if (backgroundProcessId) {
+						const status = code === 0 ? 'completed' : 'failed';
+						import('../hooks/execution/useBackgroundProcesses.js')
+							.then(({updateBackgroundProcessStatus}) => {
+								updateBackgroundProcessStatus(
+									backgroundProcessId!,
+									status,
+									code || undefined,
+								);
+							})
+							.catch(() => {});
+					}
+
 					// Clean up abort handler
 					if (abortHandler && abortSignal) {
 						abortSignal.removeEventListener('abort', abortHandler);

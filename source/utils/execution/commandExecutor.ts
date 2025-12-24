@@ -14,6 +14,7 @@ export interface CommandResult {
 		| 'showSessionPanel'
 		| 'showMcpPanel'
 		| 'showUsagePanel'
+		| 'showBackgroundPanel'
 		| 'showWorkingDirPanel'
 		| 'home'
 		| 'review'

@@ -508,8 +508,9 @@ export const es: TranslationKeys = {
 			addDir:
 				'Agregar directorio de trabajo para contexto multi-proyecto. Uso: /add-dir o /add-dir ruta',
 			reindex:
-				'Reconstruir índice de código, detectar archivos modificados, eliminados, nuevos y cambiados',
-			permissions: 'Administrar permisos de herramientas siempre aprobadas',
+				'Reconstruir índice de base de código, detectar archivos cambiados, eliminados, nuevos y modificados',
+			permissions: 'Gestionar permisos de herramientas siempre aprobadas',
+			backend: 'Mostrar panel de procesos en segundo plano',
 			vulnerabilityHunting:
 				'Alternar modo de búsqueda de vulnerabilidades para análisis de código enfocado en seguridad',
 			quit: 'Salir de la aplicación',
@@ -900,6 +901,7 @@ export const es: TranslationKeys = {
 		header: '[Se requiere entrada del usuario]',
 		customInputOption: 'Entrada personalizada...',
 		customInputLabel: 'Entrada personalizada',
+		cancelOption: 'Cancelar',
 		selectPrompt: 'Seleccione una opción:',
 		enterResponse: 'Ingrese su respuesta:',
 		keyboardHints:
@@ -935,8 +937,19 @@ export const es: TranslationKeys = {
 		executeConfirm: 'Este comando requiere confirmación. ¿Continuar?',
 		confirmHint: 'Presione y para ejecutar, n para cancelar, o ESC para volver',
 		executingCommand: 'Ejecutando comando...',
-		timeout: 'Tiempo límite:',
+		timeout: 'Tiempo de espera:',
 		customTimeout: '(personalizado)',
+		backgroundHint: 'Ctrl+B para mover a segundo plano',
+	},
+	backgroundProcesses: {
+		title: 'Procesos en Segundo Plano',
+		status: 'Estado',
+		statusRunning: 'Ejecutando',
+		statusCompleted: 'Completado',
+		statusFailed: 'Fallido',
+		duration: 'Duración',
+		navigateHint: '↑↓ Navegar | Enter Terminar seleccionado | ESC Cerrar',
+		emptyHint: 'No hay procesos en segundo plano',
 	},
 	fileRollback: {
 		title: 'Confirmación de Reversión de Archivos',
@@ -959,6 +972,7 @@ export const es: TranslationKeys = {
 		toggleHint: 'Espacio alternar',
 		backHint: 'Tab volver',
 		closeHint: 'ESC cerrar',
+		emptyHint: 'No hay archivos para revertir',
 	},
 	usagePanel: {
 		title: 'Estadísticas de Uso de Tokens',

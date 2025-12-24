@@ -473,6 +473,7 @@ export const ja: TranslationKeys = {
 			reindex:
 				'コードベースインデックスを再構築、変更、削除、新規、修正されたファイルを検出',
 			permissions: '常に承認されるツールの権限を管理',
+			backend: 'バックグラウンドプロセスパネルを表示',
 			vulnerabilityHunting:
 				'セキュリティ重視のコード分析のための脆弱性ハンティングモードを切り替え',
 			quit: 'アプリケーションを終了',
@@ -854,6 +855,7 @@ export const ja: TranslationKeys = {
 		header: '[ユーザー入力が必要]',
 		customInputOption: 'カスタム入力...',
 		customInputLabel: 'カスタム入力',
+		cancelOption: 'キャンセル',
 		selectPrompt: 'オプションを選択:',
 		enterResponse: '回答を入力してください:',
 		keyboardHints: "ヒント: 'Enter' で選択 | 'e' で選択中のオプションを編集",
@@ -889,6 +891,17 @@ export const ja: TranslationKeys = {
 		executingCommand: 'コマンドを実行中...',
 		timeout: 'タイムアウト:',
 		customTimeout: '(カスタム)',
+		backgroundHint: 'Ctrl+Bでバックグラウンドに移動',
+	},
+	backgroundProcesses: {
+		title: 'バックグラウンドプロセス',
+		status: 'ステータス',
+		statusRunning: '実行中',
+		statusCompleted: '完了',
+		statusFailed: '失敗',
+		duration: '期間',
+		navigateHint: '↑↓ ナビゲート | Enter 選択した項目を終了 | ESC 閉じる',
+		emptyHint: 'バックグラウンドプロセスがありません',
 	},
 	fileRollback: {
 		title: 'ファイルロールバック確認',
@@ -911,6 +924,7 @@ export const ja: TranslationKeys = {
 		toggleHint: 'Space トグル',
 		backHint: 'Tab 戻る',
 		closeHint: 'ESC 閉じる',
+		emptyHint: 'ロールバックするファイルがありません',
 	},
 	usagePanel: {
 		title: 'トークン使用統計',

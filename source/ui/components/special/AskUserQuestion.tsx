@@ -7,12 +7,14 @@ import {useI18n} from '../../../i18n/index.js';
 export interface AskUserQuestionResult {
 	selected: string | string[];
 	customInput?: string;
+	cancelled?: boolean;
 }
 
 interface Props {
 	question: string;
 	options: string[];
 	onAnswer: (result: AskUserQuestionResult) => void;
+	onCancel?: () => void;
 }
 
 /**
@@ -41,8 +43,10 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 	//Custom input选项的值标识符
 	const CUSTOM_INPUT_VALUE = 'custom';
+	//Cancel选项的值标识符
+	const CANCEL_VALUE = 'cancel';
 
-	//构建选项列表：建议选项 + Custom input
+	//构建选项列表：建议选项 + Custom input + Cancel
 	//防御性检查：确保 options 是数组
 	const safeOptions = Array.isArray(options) ? options : [];
 	const items = useMemo(
@@ -57,8 +61,13 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				value: CUSTOM_INPUT_VALUE,
 				index: -1,
 			},
+			{
+				label: t.askUser.cancelOption || 'Cancel',
+				value: CANCEL_VALUE,
+				index: -2,
+			},
 		],
-		[safeOptions, t.askUser.customInputOption],
+		[safeOptions, t.askUser.customInputOption, t.askUser.cancelOption],
 	);
 
 	const handleSubmit = useCallback(() => {
@@ -69,6 +78,16 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 		if (currentItem.value === CUSTOM_INPUT_VALUE) {
 			setShowCustomInput(true);
+			return;
+		}
+
+		// 处理取消选项
+		if (currentItem.value === CANCEL_VALUE) {
+			setHasAnswered(true);
+			onAnswer({
+				selected: '',
+				cancelled: true,
+			});
 			return;
 		}
 
@@ -111,6 +130,9 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	}, [hasAnswered, customInput, onAnswer, t.askUser.customInputLabel]);
 
 	const toggleCheck = useCallback((index: number) => {
+		// 不允许勾选特殊选项
+		if (index < 0) return;
+
 		setCheckedIndices(prev => {
 			const newSet = new Set(prev);
 			if (newSet.has(index)) {
@@ -142,7 +164,11 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			//空格键切换选中（始终支持多选）
 			if (input === ' ') {
 				const currentItem = items[highlightedIndex];
-				if (currentItem && currentItem.value !== CUSTOM_INPUT_VALUE) {
+				if (
+					currentItem &&
+					currentItem.value !== CUSTOM_INPUT_VALUE &&
+					currentItem.value !== CANCEL_VALUE
+				) {
 					toggleCheck(currentItem.index);
 				}
 				return;
@@ -210,6 +236,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 							const isChecked =
 								item.index >= 0 && checkedIndices.has(item.index);
 							const isCustomInput = item.value === CUSTOM_INPUT_VALUE;
+							const isCancel = item.value === CANCEL_VALUE;
 
 							return (
 								<Box key={item.value}>
@@ -218,7 +245,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 									>
 										{isHighlighted ? '▸ ' : '  '}
 									</Text>
-									{!isCustomInput && (
+									{!isCustomInput && !isCancel && (
 										<Text
 											color={isChecked ? theme.colors.success : undefined}
 											dimColor={!isChecked}

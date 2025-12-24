@@ -62,6 +62,28 @@ interface UseChatLogicProps {
 			resolve: (proceed: boolean) => void;
 		} | null>
 	>;
+	pendingUserQuestion: {
+		question: string;
+		options: string[];
+		toolCall: any;
+		resolve: (result: {
+			selected: string | string[];
+			customInput?: string;
+			cancelled?: boolean;
+		}) => void;
+	} | null;
+	setPendingUserQuestion: React.Dispatch<
+		React.SetStateAction<{
+			question: string;
+			options: string[];
+			toolCall: any;
+			resolve: (result: {
+				selected: string | string[];
+				customInput?: string;
+				cancelled?: boolean;
+			}) => void;
+		} | null>
+	>;
 }
 
 export function useChatLogic(props: UseChatLogicProps) {
@@ -91,6 +113,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 		userInterruptedRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
+		pendingUserQuestion,
+		setPendingUserQuestion,
 	} = props;
 
 	const processMessageRef =
@@ -176,6 +200,46 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 
 		await processMessage(message, images);
+	};
+
+	// Handle user question answer
+	const handleUserQuestionAnswer = (result: {
+		selected: string | string[];
+		customInput?: string;
+		cancelled?: boolean;
+	}) => {
+		if (pendingUserQuestion) {
+			// 如果用户选择取消，先resolve Promise让工具执行器继续，然后触发中断
+			if (result.cancelled) {
+				// 先清空pendingUserQuestion，确保LoadingIndicator可以显示
+				const resolver = pendingUserQuestion.resolve;
+				setPendingUserQuestion(null);
+
+				// 标记用户手动中断（关键：让finally块能清除停止状态）
+				userInterruptedRef.current = true;
+
+				// 设置停止状态
+				streamingState.setIsStopping(true);
+
+				// 然后resolve Promise，传递cancelled标志
+				resolver(result);
+
+				// 中止AbortController（工具执行器会检测到cancelled并抛出错误）
+				if (streamingState.abortController) {
+					streamingState.abortController.abort();
+				}
+
+				// 清空pending状态
+				setMessages(prev => prev.filter(msg => !msg.toolPending));
+				setPendingMessages([]);
+
+				return;
+			}
+
+			//直接传递结果，保留数组形式用于多选
+			pendingUserQuestion.resolve(result);
+			setPendingUserQuestion(null);
+		}
 	};
 
 	const processMessage = async (
@@ -1015,5 +1079,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		processPendingMessages,
 		handleHistorySelect,
 		handleRollbackConfirm,
+		handleUserQuestionAnswer,
 	};
 }

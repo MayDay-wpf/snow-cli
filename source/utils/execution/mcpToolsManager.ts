@@ -1370,6 +1370,7 @@ export async function executeMCPTool(
 						isExecuting: true,
 						command: args.command,
 						timeout: args.timeout || 30000,
+						isBackgrounded: false,
 					});
 
 					try {
@@ -1384,6 +1385,7 @@ export async function executeMCPTool(
 							isExecuting: false,
 							command: null,
 							timeout: null,
+							isBackgrounded: false,
 						});
 					}
 					break;
