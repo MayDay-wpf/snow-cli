@@ -890,18 +890,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 		if (currentSession) {
 			const messagesAfterSelected = messages.slice(selectedIndex);
-			const hasDiscontinuedMessage = messagesAfterSelected.some(
-				msg => msg.discontinued,
-			);
-
-			let uiUserMessagesToDelete = 0;
-			if (hasDiscontinuedMessage) {
-				uiUserMessagesToDelete = 0;
-			} else {
-				uiUserMessagesToDelete = messagesAfterSelected.filter(
-					msg => msg.role === 'user',
-				).length;
-			}
+			const uiUserMessagesToDelete = messagesAfterSelected.filter(
+				msg => msg.role === 'user',
+			).length;
 			const selectedMessage = messages[selectedIndex];
 			const isUncommittedUserMessage =
 				selectedMessage?.role === 'user' &&
