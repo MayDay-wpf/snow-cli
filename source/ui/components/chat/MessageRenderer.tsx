@@ -31,6 +31,14 @@ export default function MessageRenderer({
 		return text.replace(/\x1b\[[0-9;]*m/g, '');
 	};
 
+	const formatUserBubbleText = (text: string): string => {
+		const normalized = text.length > 0 ? text : ' ';
+		return normalized
+			.split('\n')
+			.map(line => ` ${line || ' '} `)
+			.join('\n');
+	};
+
 	// Determine tool message type and color
 	let toolStatusColor: string = 'cyan';
 
@@ -222,15 +230,16 @@ export default function MessageRenderer({
 														</Box>
 													)}
 													{message.role === 'user' ? (
-														<Box paddingX={1}>
-															<Text
-																backgroundColor={
-																	theme.colors.userMessageBackground
-																}
-															>
-																{message.content || ' '}
-															</Text>
-														</Box>
+														<Text
+															color="white"
+															backgroundColor={
+																theme.colors.userMessageBackground
+															}
+														>
+															{formatUserBubbleText(
+																removeAnsiCodes(message.content),
+															)}
+														</Text>
 													) : (
 														<MarkdownRenderer
 															content={message.content || ' '}
