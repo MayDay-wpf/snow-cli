@@ -58,14 +58,7 @@ jobs:
             
             ### What's New
 
-            - Add background process management and UI enhancements
-            - Introduced a new background process panel to display running and completed processes.
-            - Implemented keyboard navigation for the background process panel, allowing users to select and kill processes.
-            - Added a new command 'backend' to show the background processes panel.
-            - Enhanced keyboard input handling to disable navigation when the background panel is active.
-            - Updated translations for new UI elements and commands in multiple languages.
-            - Refactored command execution to support background processing, including state management for backgrounded commands.
-            - Improved user interaction components to handle cancellation options and custom inputs.
+            - fix some bugs
             
             ### Installation
             ```bash
