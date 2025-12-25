@@ -35,6 +35,7 @@ const colorKeys: ColorKey[] = [
 	'warning',
 	'success',
 	'logoGradient',
+	'userMessageBackground',
 ];
 
 const sampleOldCode = `function greet(name) {

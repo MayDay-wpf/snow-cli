@@ -49,7 +49,7 @@ export default function ChatHeader({
 					<Box flexDirection="column">
 						<Text color="white" bold>
 							<Text color="cyan">❆ </Text>
-							<Gradient name="rainbow">{t.chatScreen.headerTitle}</Gradient>
+							<Gradient colors={theme.colors.logoGradient}>SNOW CLI</Gradient>
 							<Text color="white"> ⛇</Text>
 						</Text>
 						<Text>• {t.chatScreen.headerExplanations}</Text>
