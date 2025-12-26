@@ -283,10 +283,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.success &&
 				result.action === 'compact'
 			) {
-				// Set compressing state (不添加命令面板消息)
-				console.log(
-					'[Compact] Starting compression, setting isCompressing=true',
-				);
 				options.setIsCompressing(true);
 				options.setCompressionError(null);
 
@@ -334,7 +330,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				} finally {
-					console.log('[Compact] Setting isCompressing=false');
 					options.setIsCompressing(false);
 				}
 				return;

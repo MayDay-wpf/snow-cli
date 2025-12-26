@@ -14,9 +14,7 @@ import {
 	DEFAULT_CONFIG,
 	type AppConfig,
 } from './apiConfig.js';
-import {compactAgent} from '../../agents/compactAgent.js';
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
-import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
@@ -32,9 +30,7 @@ const LEGACY_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
  * Called when profile switches or config reloads
  */
 export function clearAllAgentCaches(): void {
-	compactAgent.clearCache();
 	codebaseReviewAgent.clearCache();
-	promptOptimizeAgent.clearCache();
 	reviewAgent.clearCache();
 	summaryAgent.clearCache();
 	unifiedHooksExecutor.clearCache();

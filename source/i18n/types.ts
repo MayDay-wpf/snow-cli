@@ -162,9 +162,9 @@ export type TranslationKeys = {
 		responsesReasoningEffort: string;
 		advancedModel: string;
 		basicModel: string;
-		compactModel: string;
 		maxContextTokens: string;
 		maxTokens: string;
+		editSimilarityThreshold: string;
 		notSet: string;
 		enabled: string;
 		disabled: string;

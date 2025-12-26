@@ -2,7 +2,6 @@ import {useRef} from 'react';
 import {type Message} from '../../ui/components/chat/MessageList.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {handleConversationWithTools} from './useConversation.js';
-import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -15,7 +14,6 @@ import {
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
-import {logger} from '../../utils/core/logger.js';
 
 interface UseChatLogicProps {
 	messages: Message[];
@@ -345,35 +343,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		let originalMessage = message;
 		let optimizedMessage = message;
 		let optimizedCleanContent = cleanContent;
-
-		const config = getOpenAiConfig();
-		const isOptimizationEnabled = config.enablePromptOptimization !== false;
-
-		if (isOptimizationEnabled) {
-			try {
-				const conversationHistory = messages
-					.filter(m => m.role === 'user' || m.role === 'assistant')
-					.map(m => ({
-						role: m.role as 'user' | 'assistant',
-						content: typeof m.content === 'string' ? m.content : '',
-					}));
-
-				optimizedMessage = await promptOptimizeAgent.optimizePrompt(
-					message,
-					conversationHistory,
-					controller.signal,
-				);
-
-				if (optimizedMessage !== originalMessage) {
-					const optimizedParsed = await parseAndValidateFileReferences(
-						optimizedMessage,
-					);
-					optimizedCleanContent = optimizedParsed.cleanContent;
-				}
-			} catch (error) {
-				logger.warn('Prompt optimization failed, using original:', error);
-			}
-		}
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(

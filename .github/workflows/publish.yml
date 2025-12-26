@@ -58,7 +58,10 @@ jobs:
             
             ### What's New
 
-            - fix some bugs
+            - Remove compression model configuration, use advanced model uniformly
+            - Remove prompt word optimization feature
+            - Open configuration for search editing similarity threshold
+            - Optimize sub-agent description and scenario explanation
             
             ### Installation
             ```bash

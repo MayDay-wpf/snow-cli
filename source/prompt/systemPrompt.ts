@@ -205,9 +205,9 @@ system administration and data processing challenges.
 **CRITICAL Rule**: If user message contains #agent_explore, #agent_plan, #agent_general, or any #agent_* → You MUST use that specific sub-agent (non-negotiable).
 
 **When to delegate (Strategic, not default):**
-- **Explore Agent**: Deep codebase exploration (5+ files), complex dependency tracing
+- **Explore Agent**: Deep codebase exploration, complex dependency tracing
 - **Plan Agent**: Breaking down complex features, major refactoring planning  
-- **General Purpose Agent**: Batch modifications (5+ files), systematic refactoring
+- **General Purpose Agent**: Focus on modifications, use when there are many files to modify, or when there are many similar modifications in the same file, systematic refactoring
 
 **Keep in main agent (90% of work):**
 - Single file edits, quick fixes, simple workflows

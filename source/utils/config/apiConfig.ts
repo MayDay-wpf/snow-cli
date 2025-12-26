@@ -1,5 +1,5 @@
-import { homedir } from 'os';
-import { join } from 'path';
+import {homedir} from 'os';
+import {join} from 'path';
 import {
 	readFileSync,
 	writeFileSync,
@@ -9,10 +9,6 @@ import {
 } from 'fs';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
-
-export interface CompactModelConfig {
-	modelName: string;
-}
 
 export interface ThinkingConfig {
 	type: 'enabled';
@@ -37,7 +33,6 @@ export interface ApiConfig {
 	basicModel?: string;
 	maxContextTokens?: number;
 	maxTokens?: number; // Max tokens for single response (API request parameter)
-	compactModel?: CompactModelConfig;
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
 	anthropicCacheTTL?: '5m' | '1h'; // Anthropic prompt cache TTL (default: 5m)
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
@@ -50,6 +45,8 @@ export interface ApiConfig {
 	systemPromptId?: string;
 	// 选填：覆盖 custom-headers.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
 	customHeadersSchemeId?: string;
+	// 文件搜索编辑相似度阈值 (0.0-1.0, 默认: 0.75, 建议非必要不修改)
+	editSimilarityThreshold?: number;
 }
 
 export interface MCPServer {
@@ -116,6 +113,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxContextTokens: 120000,
 		maxTokens: 32000,
 		anthropicBeta: false,
+		editSimilarityThreshold: 0.75,
 	},
 };
 
@@ -175,13 +173,13 @@ const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, { recursive: true });
+		mkdirSync(CONFIG_DIR, {recursive: true});
 	}
 }
 
 function cloneDefaultMCPConfig(): MCPConfig {
 	return {
-		mcpServers: { ...DEFAULT_MCP_CONFIG.mcpServers },
+		mcpServers: {...DEFAULT_MCP_CONFIG.mcpServers},
 	};
 }
 
@@ -208,7 +206,7 @@ export function loadConfig(): AppConfig {
 			mcp?: unknown;
 			proxy?: unknown;
 		};
-		const { mcp: legacyMcp, proxy: legacyProxy, ...restConfig } = parsedConfig;
+		const {mcp: legacyMcp, proxy: legacyProxy, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
 		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
@@ -272,7 +270,7 @@ export function saveConfig(config: AppConfig): void {
 
 	try {
 		// 只保留 snowcfg，去除 openai 字段
-		const { openai, ...configWithoutOpenai } = config;
+		const {openai, ...configWithoutOpenai} = config;
 		const configData = JSON.stringify(configWithoutOpenai, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
 		// 清除缓存，下次加载时会重新读取
@@ -303,14 +301,14 @@ export async function updateOpenAiConfig(
 	const currentConfig = loadConfig();
 	const updatedConfig: AppConfig = {
 		...currentConfig,
-		snowcfg: { ...currentConfig.snowcfg, ...apiConfig },
+		snowcfg: {...currentConfig.snowcfg, ...apiConfig},
 	};
 	saveConfig(updatedConfig);
 
 	// Also save to the active profile if profiles system is initialized
 	try {
 		// Dynamic import for ESM compatibility
-		const { getActiveProfileName, saveProfile, clearAllAgentCaches } =
+		const {getActiveProfileName, saveProfile, clearAllAgentCaches} =
 			await import('./configManager.js');
 		const activeProfileName = getActiveProfileName();
 		if (activeProfileName) {
@@ -526,7 +524,7 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 新版本从 system-prompt.json 读取当前激活的提示词
  */
 export function getCustomSystemPrompt(): string | undefined {
-	const { systemPromptId } = getOpenAiConfig();
+	const {systemPromptId} = getOpenAiConfig();
 	const config = getSystemPromptConfig();
 
 	if (!config) {
@@ -561,7 +559,7 @@ export function getCustomSystemPrompt(): string | undefined {
 export function getCustomHeaders(): Record<string, string> {
 	ensureConfigDirectory();
 
-	const { customHeadersSchemeId } = getOpenAiConfig();
+	const {customHeadersSchemeId} = getOpenAiConfig();
 	const config = getCustomHeadersConfig();
 	if (!config) {
 		return {};

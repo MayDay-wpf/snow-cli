@@ -175,9 +175,10 @@ export const en: TranslationKeys = {
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
-		compactModel: 'Compact Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
+		editSimilarityThreshold:
+			'Edit Similarity Threshold(0-1, change with caution):',
 		notSet: 'Not set',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',

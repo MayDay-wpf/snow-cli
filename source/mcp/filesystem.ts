@@ -985,8 +985,11 @@ export class FilesystemMCPService {
 				endLine: number;
 				similarity: number;
 			}> = [];
-			// Original threshold - using async similarity for precision without UI freeze
-			const threshold = 0.6;
+			// Similarity threshold - higher = stricter matching, lower = more fuzzy
+			// Default 0.75, can be configured via editSimilarityThreshold in config
+			const {getOpenAiConfig} = await import('../utils/config/apiConfig.js');
+			const config = getOpenAiConfig();
+			const threshold = config.editSimilarityThreshold ?? 0.75;
 
 			// Fast pre-filter: use first line as anchor to skip unlikely positions
 			// Only apply pre-filter for multi-line searches to avoid missing valid matches
