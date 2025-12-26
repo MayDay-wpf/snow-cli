@@ -9,6 +9,7 @@ import {Box, Text, useInput} from 'ink';
 import {Alert, Spinner} from '@inkjs/ui';
 import Menu from '../components/common/Menu.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
+import UserMessagePreview from '../components/chat/UserMessagePreview.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';
@@ -179,17 +180,23 @@ export default function ThemeSettingsScreen({
 		[setThemeType, selectedTheme],
 	);
 
-	const handleBackFromCustom = useCallback(() => {
+	const handleBackFromCustom = useCallback((nextSelectedTheme?: ThemeType) => {
 		setScreen('main');
+		if (nextSelectedTheme) {
+			setSelectedTheme(nextSelectedTheme);
+		}
 	}, []);
 
-	useInput((_input, key) => {
-		if (key.escape) {
-			// Restore original theme on ESC
-			setThemeType(selectedTheme);
-			onBack();
-		}
-	});
+	useInput(
+		(_input, key) => {
+			if (key.escape) {
+				// Restore original theme on ESC
+				setThemeType(selectedTheme);
+				onBack();
+			}
+		},
+		{isActive: screen === 'main'},
+	);
 
 	if (screen === 'custom') {
 		return (
@@ -233,6 +240,12 @@ export default function ThemeSettingsScreen({
 					newContent={sampleNewCode}
 					filename="example.ts"
 				/>
+				<Box marginTop={1} flexDirection="column">
+					<Text color="gray" dimColor>
+						{t.themeSettings.userMessagePreview}
+					</Text>
+					<UserMessagePreview content={t.themeSettings.userMessageSample} />
+				</Box>
 			</Box>
 
 			{infoText && (

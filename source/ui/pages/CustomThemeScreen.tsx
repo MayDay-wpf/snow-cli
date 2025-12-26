@@ -3,9 +3,11 @@ import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import Menu from '../components/common/Menu.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
-import {useTheme} from '../contexts/ThemeContext.js';
+import UserMessagePreview from '../components/chat/UserMessagePreview.js';
+import {ThemeContext, useTheme} from '../contexts/ThemeContext.js';
 import {
 	ThemeColors,
+	ThemeType,
 	defaultCustomColors,
 	getCustomTheme,
 } from '../themes/index.js';
@@ -13,7 +15,7 @@ import {saveCustomColors} from '../../utils/config/themeConfig.js';
 import {useI18n} from '../../i18n/index.js';
 
 type Props = {
-	onBack: () => void;
+	onBack: (nextSelectedTheme?: ThemeType) => void;
 };
 
 type ColorKey = keyof ThemeColors;
@@ -84,15 +86,19 @@ export default function CustomThemeScreen({onBack}: Props) {
 		return options;
 	}, [colors, t]);
 
+	const saveAndExit = useCallback(() => {
+		saveCustomColors(colors);
+		refreshCustomTheme?.();
+		setThemeType('custom');
+		onBack('custom');
+	}, [colors, onBack, refreshCustomTheme, setThemeType]);
+
 	const handleSelect = useCallback(
 		(value: string) => {
 			if (value === 'back') {
 				onBack();
 			} else if (value === 'save') {
-				saveCustomColors(colors);
-				refreshCustomTheme?.();
-				setThemeType('custom');
-				onBack();
+				saveAndExit();
 			} else if (value === 'reset') {
 				setColors({...defaultCustomColors});
 			} else {
@@ -105,7 +111,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 				);
 			}
 		},
-		[colors, onBack, setThemeType, refreshCustomTheme],
+		[onBack, saveAndExit, colors],
 	);
 
 	const handleSelectionChange = useCallback((newInfoText: string) => {
@@ -138,7 +144,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 				setEditingKey(null);
 				setEditValue('');
 			} else {
-				onBack();
+				saveAndExit();
 			}
 		}
 	});
@@ -199,11 +205,31 @@ export default function CustomThemeScreen({onBack}: Props) {
 				<Text color="gray" dimColor>
 					{t.customTheme?.preview || 'Preview'}:
 				</Text>
-				<DiffViewer
-					oldContent={sampleOldCode}
-					newContent={sampleNewCode}
-					filename="example.ts"
-				/>
+				<ThemeContext.Provider
+					value={{
+						theme: {name: 'Custom', type: 'custom', colors},
+						themeType: 'custom',
+						setThemeType,
+						refreshCustomTheme,
+					}}
+				>
+					<DiffViewer
+						oldContent={sampleOldCode}
+						newContent={sampleNewCode}
+						filename="example.ts"
+					/>
+					<Box marginTop={1} flexDirection="column">
+						<Text color="gray" dimColor>
+							{t.customTheme?.userMessagePreview || 'User message preview'}:
+						</Text>
+						<UserMessagePreview
+							content={
+								t.customTheme?.userMessageSample ||
+								'这个预览用于检查 userMessageBackground 是否合适'
+							}
+						/>
+					</Box>
+				</ThemeContext.Provider>
 			</Box>
 
 			{infoText && (

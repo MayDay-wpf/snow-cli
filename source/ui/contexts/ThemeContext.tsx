@@ -6,7 +6,10 @@ import React, {
 	ReactNode,
 } from 'react';
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
-import {getCurrentTheme, setCurrentTheme} from '../../utils/config/themeConfig.js';
+import {
+	getCurrentTheme,
+	setCurrentTheme,
+} from '../../utils/config/themeConfig.js';
 
 interface ThemeContextType {
 	theme: Theme;
@@ -15,7 +18,9 @@ interface ThemeContextType {
 	refreshCustomTheme?: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextType | undefined>(
+	undefined,
+);
 
 interface ThemeProviderProps {
 	children: ReactNode;

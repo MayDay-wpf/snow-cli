@@ -348,6 +348,8 @@ export const zh: TranslationKeys = {
 		title: '主题设置',
 		current: '当前:',
 		preview: '预览:',
+		userMessagePreview: '用户消息预览:',
+		userMessageSample: '用于检查用户消息背景色是否合适。',
 		back: '← 返回',
 		backInfo: '返回主菜单',
 		simpleMode: '简易模式:',
@@ -386,6 +388,8 @@ export const zh: TranslationKeys = {
 		cancel: '取消',
 		confirm: '确认',
 		preview: '预览',
+		userMessagePreview: '用户消息预览',
+		userMessageSample: '用于检查 userMessageBackground 是否合适。',
 		colorHint: '按 Enter 编辑此颜色',
 	},
 	helpPanel: {

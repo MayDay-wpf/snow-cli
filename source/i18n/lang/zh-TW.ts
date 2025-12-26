@@ -348,6 +348,8 @@ export const zhTW: TranslationKeys = {
 		title: '主題設定',
 		current: '目前:',
 		preview: '預覽:',
+		userMessagePreview: '使用者訊息預覽:',
+		userMessageSample: '用於檢查使用者訊息背景色是否合適。',
 		back: '← 返回',
 		backInfo: '返回主選單',
 		simpleMode: '簡易模式:',
@@ -386,6 +388,8 @@ export const zhTW: TranslationKeys = {
 		cancel: '取消',
 		confirm: '確認',
 		preview: '預覽',
+		userMessagePreview: '使用者訊息預覽',
+		userMessageSample: '用於檢查 userMessageBackground 是否合適。',
 		colorHint: '按 Enter 編輯此顏色',
 	},
 	helpPanel: {
