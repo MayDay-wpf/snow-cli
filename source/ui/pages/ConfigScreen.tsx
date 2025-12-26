@@ -167,6 +167,7 @@ export default function ConfigScreen({
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
+	const [editingThresholdValue, setEditingThresholdValue] = useState('');
 	const [, forceUpdate] = useState(0);
 
 	// Scrolling configuration
@@ -1197,7 +1198,8 @@ export default function ConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									{t.configScreen.enterValue} {editSimilarityThreshold}
+									{t.configScreen.enterValue}{' '}
+									{editingThresholdValue || editSimilarityThreshold}
 								</Text>
 							</Box>
 						)}
@@ -1354,21 +1356,38 @@ export default function ConfigScreen({
 				// Handle decimal numbers for editSimilarityThreshold
 				if (currentField === 'editSimilarityThreshold') {
 					if (input && input.match(/[0-9.]/)) {
-						const currentStr = editSimilarityThreshold.toString();
+						const currentStr =
+							editingThresholdValue || editSimilarityThreshold.toString();
+						// Prevent multiple decimal points
+						if (input === '.' && currentStr.includes('.')) {
+							return;
+						}
 						const newStr = currentStr + input;
-						const newValue = parseFloat(newStr);
-						if (!isNaN(newValue) && newValue >= 0 && newValue <= 1) {
-							setEditSimilarityThreshold(newValue);
+						// Only update display if it's a valid partial number
+						if (
+							newStr === '.' ||
+							newStr === '0.' ||
+							/^[0-9]*\.?[0-9]*$/.test(newStr)
+						) {
+							setEditingThresholdValue(newStr);
 						}
 					} else if (key.backspace || key.delete) {
-						const currentStr = editSimilarityThreshold.toString();
+						const currentStr =
+							editingThresholdValue || editSimilarityThreshold.toString();
 						const newStr = currentStr.slice(0, -1);
-						const newValue = parseFloat(newStr);
-						setEditSimilarityThreshold(!isNaN(newValue) ? newValue : 0);
+						setEditingThresholdValue(newStr);
 					} else if (key.return) {
-						const finalValue =
-							editSimilarityThreshold < 0.1 ? 0.1 : editSimilarityThreshold;
-						setEditSimilarityThreshold(finalValue);
+						const valueToSave =
+							editingThresholdValue || editSimilarityThreshold.toString();
+						const finalValue = parseFloat(valueToSave);
+						if (!isNaN(finalValue) && finalValue >= 0.1 && finalValue <= 1) {
+							setEditSimilarityThreshold(finalValue);
+						} else if (finalValue < 0.1) {
+							setEditSimilarityThreshold(0.1);
+						} else {
+							// Invalid input, keep original value
+						}
+						setEditingThresholdValue('');
 						setIsEditing(false);
 					}
 					return;
@@ -1491,6 +1510,9 @@ export default function ConfigScreen({
 					currentField === 'thinkingBudgetTokens' ||
 					currentField === 'geminiThinkingBudget'
 				) {
+					setIsEditing(true);
+				} else if (currentField === 'editSimilarityThreshold') {
+					setEditingThresholdValue('');
 					setIsEditing(true);
 				} else if (currentField === 'responsesReasoningEffort') {
 					setIsEditing(true);
