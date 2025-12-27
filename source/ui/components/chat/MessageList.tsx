@@ -90,7 +90,7 @@ const MessageList = memo(
 						<Box key={index}>
 							<Text color={iconColor} bold>
 								{message.role === 'user'
-									? '𖨆 '
+									? '❯'
 									: message.role === 'command'
 									? '⌘'
 									: message.role === 'subagent'
@@ -114,7 +114,13 @@ const MessageList = memo(
 									<>
 										{message.role === 'user' ? (
 											<Text color="white" backgroundColor="#4a4a4a">
-												{message.content || ' '}
+												{(message.content && message.content.length > 0
+													? message.content
+													: ' '
+												)
+													.split('\n')
+													.map(line => ` ${line || ' '} `)
+													.join('\n')}
 											</Text>
 										) : (
 											<MarkdownRenderer content={message.content || ' '} />

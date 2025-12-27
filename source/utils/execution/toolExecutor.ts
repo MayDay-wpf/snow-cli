@@ -177,6 +177,7 @@ export interface UserInteractionCallback {
 	(question: string, options: string[], multiSelect?: boolean): Promise<{
 		selected: string | string[];
 		customInput?: string;
+		cancelled?: boolean;
 	}>;
 }
 
@@ -450,6 +451,12 @@ export async function executeToolCall(
 					error.options,
 					error.multiSelect,
 				);
+
+				// 检查用户是否取消
+				if (response.cancelled) {
+					// 抛出错误以触发中断流程
+					throw new Error('User cancelled the interaction');
+				}
 
 				//返回用户的响应作为工具结果
 				const answerText = response.customInput

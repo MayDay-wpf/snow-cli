@@ -14,6 +14,8 @@ export interface CommandExecutionResult {
 	stdout: string;
 	stderr: string;
 	command: string;
+	exitCode: number | null;
+	signal: NodeJS.Signals | null;
 }
 
 export interface BashModeState {
@@ -109,28 +111,33 @@ export function useBashMode() {
 					stderr += data.toString();
 				});
 
-				child.on('close', (code: number | null) => {
-					const result: CommandExecutionResult = {
-						success: code === 0,
-						stdout: stdout.trim(),
-						stderr: stderr.trim(),
-						command,
-					};
-
-					setState(prev => {
-						const newResults = new Map(prev.executionResults);
-						newResults.set(command, result);
-						return {
-							...prev,
-							isExecuting: false,
-							currentCommand: null,
-							currentTimeout: null,
-							executionResults: newResults,
+				child.on(
+					'close',
+					(code: number | null, signal: NodeJS.Signals | null) => {
+						const result: CommandExecutionResult = {
+							success: code === 0,
+							stdout: stdout.trim(),
+							stderr: stderr.trim(),
+							command,
+							exitCode: code,
+							signal,
 						};
-					});
 
-					resolve(result);
-				});
+						setState(prev => {
+							const newResults = new Map(prev.executionResults);
+							newResults.set(command, result);
+							return {
+								...prev,
+								isExecuting: false,
+								currentCommand: null,
+								currentTimeout: null,
+								executionResults: newResults,
+							};
+						});
+
+						resolve(result);
+					},
+				);
 
 				child.on('error', (error: Error) => {
 					const result: CommandExecutionResult = {
@@ -138,6 +145,8 @@ export function useBashMode() {
 						stdout: '',
 						stderr: error.message,
 						command,
+						exitCode: null,
+						signal: null,
 					};
 
 					setState(prev => {
@@ -208,7 +217,30 @@ export function useBashMode() {
 				// 构建替换文本
 				const output = result.success
 					? result.stdout || '(no output)'
-					: `Error: ${result.stderr || 'Command failed'}`;
+					: (() => {
+							const lines: string[] = [];
+
+							lines.push('Command execution failed.');
+
+							if (typeof result.exitCode === 'number') {
+								lines.push(`Exit code: ${result.exitCode}`);
+							} else {
+								lines.push('Exit code: (unknown)');
+							}
+
+							if (result.signal) {
+								lines.push(`Signal: ${result.signal}`);
+							}
+
+							lines.push('');
+							lines.push('STDOUT:');
+							lines.push(result.stdout || '(empty)');
+							lines.push('');
+							lines.push('STDERR:');
+							lines.push(result.stderr || '(empty)');
+
+							return lines.join('\n');
+					  })();
 
 				const replacement = `\n--- Command: ${cmd.command} ---\n${output}\n--- End of output ---\n`;
 

@@ -91,30 +91,30 @@ export function BashCommandConfirmation({
 			borderStyle="round"
 			borderColor={theme.colors.error}
 			paddingX={2}
-			paddingY={1}
+			paddingY={0}
 			width={terminalWidth - 2}
 		>
-			<Box marginBottom={1}>
+			<Box>
 				<Text bold color={theme.colors.error}>
 					{t.bash.sensitiveCommandDetected}
 				</Text>
 			</Box>
-			<Box marginBottom={1} paddingLeft={2}>
+			<Box paddingLeft={2}>
 				<Text color={theme.colors.menuInfo}>{displayCommand}</Text>
 			</Box>
 			{sensitiveCheck.isSensitive && sensitiveCheck.matchedCommand && (
 				<>
-					<Box marginBottom={1}>
+					<Box>
 						<Text color={theme.colors.warning}>{t.bash.sensitivePattern} </Text>
 						<Text dimColor>{sensitiveCheck.matchedCommand.pattern}</Text>
 					</Box>
-					<Box marginBottom={1}>
+					<Box>
 						<Text color={theme.colors.warning}>{t.bash.sensitiveReason} </Text>
 						<Text dimColor>{sensitiveCheck.matchedCommand.description}</Text>
 					</Box>
 				</>
 			)}
-			<Box marginBottom={1}>
+			<Box>
 				<Text color={theme.colors.warning}>{t.bash.executeConfirm}</Text>
 			</Box>
 			<Box>
@@ -149,24 +149,29 @@ export function BashCommandExecutionStatus({
 			borderStyle="round"
 			borderColor={theme.colors.menuInfo}
 			paddingX={2}
-			paddingY={1}
+			paddingY={0}
 			width={terminalWidth - 2}
 		>
-			<Box marginBottom={1}>
+			<Box>
 				<Text bold color={theme.colors.menuInfo}>
 					<Spinner type="dots" /> {t.bash.executingCommand}
 				</Text>
 			</Box>
-			<Box marginBottom={1} paddingLeft={2}>
+			<Box paddingLeft={2}>
 				<Text dimColor>{displayCommand}</Text>
 			</Box>
-			<Box>
-				<Text dimColor>
-					{t.bash.timeout} {timeoutSeconds}s{' '}
-					{timeout > 60000 && (
-						<Text color={theme.colors.warning}>{t.bash.customTimeout}</Text>
-					)}
-				</Text>
+			<Box flexDirection="column" gap={0}>
+				<Box>
+					<Text dimColor>
+						{t.bash.timeout} {timeoutSeconds}s{' '}
+						{timeout > 60000 && (
+							<Text color={theme.colors.warning}>{t.bash.customTimeout}</Text>
+						)}
+					</Text>
+				</Box>
+				<Box>
+					<Text dimColor>{t.bash.backgroundHint}</Text>
+				</Box>
 			</Box>
 		</Box>
 	);

@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - Snapshot system simplified, bypassing memory
+            - fix some bugs
             
             ### Installation
             ```bash

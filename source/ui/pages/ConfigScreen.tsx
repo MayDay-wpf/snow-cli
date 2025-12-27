@@ -45,7 +45,6 @@ type ConfigField =
 	| 'customHeadersSchemeId'
 	| 'anthropicBeta'
 	| 'anthropicCacheTTL'
-	| 'enablePromptOptimization'
 	| 'enableAutoCompress'
 	| 'showThinking'
 	| 'thinkingEnabled'
@@ -56,9 +55,9 @@ type ConfigField =
 	| 'responsesReasoningEffort'
 	| 'advancedModel'
 	| 'basicModel'
-	| 'compactModelName'
 	| 'maxContextTokens'
-	| 'maxTokens';
+	| 'maxTokens'
+	| 'editSimilarityThreshold';
 
 type ProfileMode = 'normal' | 'creating' | 'deleting';
 
@@ -139,8 +138,6 @@ export default function ConfigScreen({
 		useState('');
 	const [anthropicBeta, setAnthropicBeta] = useState(false);
 	const [anthropicCacheTTL, setAnthropicCacheTTL] = useState<'5m' | '1h'>('5m');
-	const [enablePromptOptimization, setEnablePromptOptimization] =
-		useState(true);
 	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
 	const [showThinking, setShowThinking] = useState(true);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
@@ -158,7 +155,7 @@ export default function ConfigScreen({
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
-	const [compactModelName, setCompactModelName] = useState('');
+	const [editSimilarityThreshold, setEditSimilarityThreshold] = useState(0.75);
 
 	// UI state
 	const [currentField, setCurrentField] = useState<ConfigField>('profile');
@@ -170,6 +167,7 @@ export default function ConfigScreen({
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
+	const [editingThresholdValue, setEditingThresholdValue] = useState('');
 	const [, forceUpdate] = useState(0);
 
 	// Scrolling configuration
@@ -206,7 +204,6 @@ export default function ConfigScreen({
 			'requestMethod',
 			'systemPromptId',
 			'customHeadersSchemeId',
-			'enablePromptOptimization',
 			'enableAutoCompress',
 			'showThinking',
 			...(requestMethod === 'anthropic'
@@ -229,9 +226,9 @@ export default function ConfigScreen({
 				: []),
 			'advancedModel',
 			'basicModel',
-			'compactModelName',
 			'maxContextTokens',
 			'maxTokens',
+			'editSimilarityThreshold',
 		];
 	};
 
@@ -304,7 +301,6 @@ export default function ConfigScreen({
 		setCustomHeadersSchemeId(config.customHeadersSchemeId);
 		setAnthropicBeta(config.anthropicBeta || false);
 		setAnthropicCacheTTL(config.anthropicCacheTTL || '5m');
-		setEnablePromptOptimization(config.enablePromptOptimization !== false); // Default to true
 		setEnableAutoCompress(config.enableAutoCompress !== false); // Default to true
 		setShowThinking(config.showThinking !== false); // Default to true
 		setThinkingEnabled(config.thinking?.type === 'enabled' || false);
@@ -317,7 +313,7 @@ export default function ConfigScreen({
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
-		setCompactModelName(config.compactModel?.modelName || '');
+		setEditSimilarityThreshold(config.editSimilarityThreshold ?? 0.75);
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -380,13 +376,14 @@ export default function ConfigScreen({
 		if (currentField === 'basicModel') return basicModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
 		if (currentField === 'maxTokens') return maxTokens.toString();
+		if (currentField === 'editSimilarityThreshold')
+			return editSimilarityThreshold.toString();
 		if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'geminiThinkingBudget')
 			return geminiThinkingBudget.toString();
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
-		if (currentField === 'compactModelName') return compactModelName;
 		return '';
 	};
 
@@ -485,7 +482,6 @@ export default function ConfigScreen({
 					customHeadersSchemeId,
 					anthropicBeta,
 					anthropicCacheTTL,
-					enablePromptOptimization: false,
 					enableAutoCompress,
 					showThinking,
 					thinking: thinkingEnabled
@@ -495,9 +491,6 @@ export default function ConfigScreen({
 					basicModel,
 					maxContextTokens,
 					maxTokens,
-					compactModel: compactModelName
-						? {modelName: compactModelName}
-						: undefined,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -544,8 +537,6 @@ export default function ConfigScreen({
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
 			setBasicModel(value);
-		} else if (currentField === 'compactModelName') {
-			setCompactModelName(value);
 		}
 
 		// XHIGH 不再随模型变动而降级；仅在离开 responses 时由 useEffect 自动降级
@@ -568,13 +559,13 @@ export default function ConfigScreen({
 				customHeadersSchemeId,
 				anthropicBeta,
 				anthropicCacheTTL,
-				enablePromptOptimization,
 				enableAutoCompress,
 				showThinking,
 				advancedModel,
 				basicModel,
 				maxContextTokens,
 				maxTokens,
+				editSimilarityThreshold,
 			};
 
 			// Save thinking configuration (always save to preserve settings)
@@ -604,13 +595,6 @@ export default function ConfigScreen({
 				effort: responsesReasoningEffort,
 			};
 
-			// Only save compactModel if modelName is provided (uses same baseUrl/apiKey)
-			if (compactModelName) {
-				config.compactModel = {
-					modelName: compactModelName,
-				};
-			}
-
 			// Save to main config
 			await updateOpenAiConfig(config);
 
@@ -625,7 +609,6 @@ export default function ConfigScreen({
 						customHeadersSchemeId,
 						anthropicBeta,
 						anthropicCacheTTL,
-						enablePromptOptimization,
 						enableAutoCompress,
 						showThinking,
 						thinking: thinkingEnabled
@@ -642,9 +625,7 @@ export default function ConfigScreen({
 						basicModel,
 						maxContextTokens,
 						maxTokens,
-						compactModel: compactModelName
-							? {modelName: compactModelName}
-							: undefined,
+						editSimilarityThreshold,
 					},
 				};
 				saveProfile(activeProfile, fullConfig as any);
@@ -900,28 +881,6 @@ export default function ConfigScreen({
 					</Box>
 				);
 
-			case 'enablePromptOptimization':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text
-							color={
-								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-							}
-						>
-							{isActive ? '❯ ' : '  '}
-							{t.configScreen.enablePromptOptimization}
-						</Text>
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{enablePromptOptimization
-									? t.configScreen.enabled
-									: t.configScreen.disabled}{' '}
-								{t.configScreen.toggleHint}
-							</Text>
-						</Box>
-					</Box>
-				);
-
 			case 'enableAutoCompress':
 				return (
 					<Box key={field} flexDirection="column">
@@ -1171,27 +1130,6 @@ export default function ConfigScreen({
 					</Box>
 				);
 
-			case 'compactModelName':
-				return (
-					<Box key={field} flexDirection="column">
-						<Text
-							color={
-								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-							}
-						>
-							{isActive ? '❯ ' : '  '}
-							{t.configScreen.compactModel}
-						</Text>
-						{!isCurrentlyEditing && (
-							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>
-									{compactModelName || t.configScreen.notSet}
-								</Text>
-							</Box>
-						)}
-					</Box>
-				);
-
 			case 'maxContextTokens':
 				return (
 					<Box key={field} flexDirection="column">
@@ -1241,6 +1179,35 @@ export default function ConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuSecondary}>{maxTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'editSimilarityThreshold':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.configScreen.editSimilarityThreshold}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue}{' '}
+									{editingThresholdValue || editSimilarityThreshold}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{editSimilarityThreshold}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -1331,8 +1298,6 @@ export default function ConfigScreen({
 						setAdvancedModel(cleaned);
 					} else if (currentField === 'basicModel') {
 						setBasicModel(cleaned);
-					} else if (currentField === 'compactModelName') {
-						setCompactModelName(cleaned);
 					}
 				}
 				setManualInputMode(false);
@@ -1360,7 +1325,6 @@ export default function ConfigScreen({
 				currentField === 'anthropicCacheTTL' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
-				currentField === 'compactModelName' ||
 				currentField === 'responsesReasoningEffort') &&
 			key.escape
 		) {
@@ -1386,8 +1350,49 @@ export default function ConfigScreen({
 				currentField === 'maxContextTokens' ||
 				currentField === 'maxTokens' ||
 				currentField === 'thinkingBudgetTokens' ||
-				currentField === 'geminiThinkingBudget'
+				currentField === 'geminiThinkingBudget' ||
+				currentField === 'editSimilarityThreshold'
 			) {
+				// Handle decimal numbers for editSimilarityThreshold
+				if (currentField === 'editSimilarityThreshold') {
+					if (input && input.match(/[0-9.]/)) {
+						const currentStr =
+							editingThresholdValue || editSimilarityThreshold.toString();
+						// Prevent multiple decimal points
+						if (input === '.' && currentStr.includes('.')) {
+							return;
+						}
+						const newStr = currentStr + input;
+						// Only update display if it's a valid partial number
+						if (
+							newStr === '.' ||
+							newStr === '0.' ||
+							/^[0-9]*\.?[0-9]*$/.test(newStr)
+						) {
+							setEditingThresholdValue(newStr);
+						}
+					} else if (key.backspace || key.delete) {
+						const currentStr =
+							editingThresholdValue || editSimilarityThreshold.toString();
+						const newStr = currentStr.slice(0, -1);
+						setEditingThresholdValue(newStr);
+					} else if (key.return) {
+						const valueToSave =
+							editingThresholdValue || editSimilarityThreshold.toString();
+						const finalValue = parseFloat(valueToSave);
+						if (!isNaN(finalValue) && finalValue >= 0.1 && finalValue <= 1) {
+							setEditSimilarityThreshold(finalValue);
+						} else if (finalValue < 0.1) {
+							setEditSimilarityThreshold(0.1);
+						} else {
+							// Invalid input, keep original value
+						}
+						setEditingThresholdValue('');
+						setIsEditing(false);
+					}
+					return;
+				}
+
 				if (input && input.match(/[0-9]/)) {
 					const currentValue =
 						currentField === 'maxContextTokens'
@@ -1489,8 +1494,6 @@ export default function ConfigScreen({
 					setAnthropicBeta(!anthropicBeta);
 				} else if (currentField === 'anthropicCacheTTL') {
 					setIsEditing(true);
-				} else if (currentField === 'enablePromptOptimization') {
-					setEnablePromptOptimization(!enablePromptOptimization);
 				} else if (currentField === 'enableAutoCompress') {
 					setEnableAutoCompress(!enableAutoCompress);
 				} else if (currentField === 'showThinking') {
@@ -1508,12 +1511,14 @@ export default function ConfigScreen({
 					currentField === 'geminiThinkingBudget'
 				) {
 					setIsEditing(true);
+				} else if (currentField === 'editSimilarityThreshold') {
+					setEditingThresholdValue('');
+					setIsEditing(true);
 				} else if (currentField === 'responsesReasoningEffort') {
 					setIsEditing(true);
 				} else if (
 					currentField === 'advancedModel' ||
-					currentField === 'basicModel' ||
-					currentField === 'compactModelName'
+					currentField === 'basicModel'
 				) {
 					// Load models for model fields
 					setLoadError(''); // Clear previous error
@@ -1532,11 +1537,7 @@ export default function ConfigScreen({
 			}
 		} else if (input === 'm' && !isEditing) {
 			// Shortcut: press 'm' for manual input mode
-			if (
-				currentField === 'advancedModel' ||
-				currentField === 'basicModel' ||
-				currentField === 'compactModelName'
-			) {
+			if (currentField === 'advancedModel' || currentField === 'basicModel') {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -1721,7 +1722,6 @@ export default function ConfigScreen({
 					<Text color={theme.colors.menuInfo}>
 						{currentField === 'advancedModel' && t.configScreen.advancedModel}
 						{currentField === 'basicModel' && t.configScreen.basicModel}
-						{currentField === 'compactModelName' && t.configScreen.compactModel}
 					</Text>
 					<Box marginLeft={2}>
 						<Text color={theme.colors.menuSelected}>
@@ -1782,7 +1782,6 @@ export default function ConfigScreen({
 				currentField === 'customHeadersSchemeId' ||
 				currentField === 'advancedModel' ||
 				currentField === 'basicModel' ||
-				currentField === 'compactModelName' ||
 				currentField === 'responsesReasoningEffort') ? (
 				<Box flexDirection="column">
 					<Text color={theme.colors.menuSelected}>
@@ -1795,8 +1794,6 @@ export default function ConfigScreen({
 							t.configScreen.advancedModel.replace(':', '')}
 						{currentField === 'basicModel' &&
 							t.configScreen.basicModel.replace(':', '')}
-						{currentField === 'compactModelName' &&
-							t.configScreen.compactModel.replace(':', '')}
 						{currentField === 'responsesReasoningEffort' &&
 							t.configScreen.responsesReasoningEffort.replace(':', '')}
 						{currentField === 'systemPromptId' && t.configScreen.systemPrompt}
@@ -1901,8 +1898,7 @@ export default function ConfigScreen({
 								);
 							})()}
 						{(currentField === 'advancedModel' ||
-							currentField === 'basicModel' ||
-							currentField === 'compactModelName') && (
+							currentField === 'basicModel') && (
 							<Box flexDirection="column">
 								{searchTerm && (
 									<Text color={theme.colors.menuInfo}>
@@ -2010,7 +2006,6 @@ export default function ConfigScreen({
 					currentField === 'customHeadersSchemeId' ||
 					currentField === 'advancedModel' ||
 					currentField === 'basicModel' ||
-					currentField === 'compactModelName' ||
 					currentField === 'responsesReasoningEffort')
 			) && (
 				<Box flexDirection="column" marginTop={1}>

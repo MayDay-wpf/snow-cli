@@ -31,6 +31,14 @@ export default function MessageRenderer({
 		return text.replace(/\x1b\[[0-9;]*m/g, '');
 	};
 
+	const formatUserBubbleText = (text: string): string => {
+		const normalized = text.length > 0 ? text : ' ';
+		return normalized
+			.split('\n')
+			.map(line => ` ${line || ' '} `)
+			.join('\n');
+	};
+
 	// Determine tool message type and color
 	let toolStatusColor: string = 'cyan';
 
@@ -125,7 +133,7 @@ export default function MessageRenderer({
 						>
 							{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
 							{message.role === 'user'
-								? '𖨆 '
+								? '❯'
 								: message.role === 'command'
 								? '⌘'
 								: '❆'}
@@ -221,7 +229,22 @@ export default function MessageRenderer({
 															</Text>
 														</Box>
 													)}
-													<MarkdownRenderer content={message.content || ' '} />
+													{message.role === 'user' ? (
+														<Text
+															color="white"
+															backgroundColor={
+																theme.colors.userMessageBackground
+															}
+														>
+															{formatUserBubbleText(
+																removeAnsiCodes(message.content),
+															)}
+														</Text>
+													) : (
+														<MarkdownRenderer
+															content={message.content || ' '}
+														/>
+													)}
 												</>
 											);
 										})()

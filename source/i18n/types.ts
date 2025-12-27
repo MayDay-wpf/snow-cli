@@ -162,9 +162,9 @@ export type TranslationKeys = {
 		responsesReasoningEffort: string;
 		advancedModel: string;
 		basicModel: string;
-		compactModel: string;
 		maxContextTokens: string;
 		maxTokens: string;
+		editSimilarityThreshold: string;
 		notSet: string;
 		enabled: string;
 		disabled: string;
@@ -349,6 +349,8 @@ export type TranslationKeys = {
 		title: string;
 		current: string;
 		preview: string;
+		userMessagePreview: string;
+		userMessageSample: string;
 		back: string;
 		backInfo: string;
 		simpleMode: string;
@@ -387,6 +389,8 @@ export type TranslationKeys = {
 		cancel: string;
 		confirm: string;
 		preview: string;
+		userMessagePreview: string;
+		userMessageSample: string;
 		colorHint: string;
 	};
 	helpPanel: {
@@ -445,6 +449,7 @@ export type TranslationKeys = {
 			review: string;
 			role: string;
 			usage: string;
+			backend: string;
 			export: string;
 			custom: string;
 			skills: string;
@@ -849,6 +854,7 @@ export type TranslationKeys = {
 		header: string;
 		customInputOption: string;
 		customInputLabel: string;
+		cancelOption: string;
 		selectPrompt: string;
 		enterResponse: string;
 		keyboardHints: string;
@@ -883,6 +889,17 @@ export type TranslationKeys = {
 		executingCommand: string;
 		timeout: string;
 		customTimeout: string;
+		backgroundHint: string;
+	};
+	backgroundProcesses: {
+		title: string;
+		status: string;
+		statusRunning: string;
+		statusCompleted: string;
+		statusFailed: string;
+		duration: string;
+		navigateHint: string;
+		emptyHint: string;
 	};
 	fileRollback: {
 		title: string;
@@ -901,6 +918,7 @@ export type TranslationKeys = {
 		cancelHint: string;
 		scrollHint: string;
 		navigateHint: string;
+		emptyHint: string;
 		toggleHint: string;
 		backHint: string;
 		closeHint: string;

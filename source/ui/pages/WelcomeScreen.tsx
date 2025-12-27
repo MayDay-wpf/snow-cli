@@ -15,6 +15,7 @@ import Menu from '../components/common/Menu.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../i18n/index.js';
 import {getUpdateNotice, onUpdateNotice} from '../../utils/ui/updateNotice.js';
+import {useTheme} from '../contexts/ThemeContext.js';
 
 // Lazy load all configuration screens for better startup performance
 const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
@@ -72,6 +73,7 @@ export default function WelcomeScreen({
 	onMenuSelectionPersist,
 }: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [infoText, setInfoText] = useState(t.welcome.startChatInfo);
 	const [inlineView, setInlineView] = useState<InlineView>('menu');
 	const [updateNotice, setUpdateNoticeState] = useState(getUpdateNotice());
@@ -290,7 +292,7 @@ export default function WelcomeScreen({
 		return () => {
 			clearTimeout(handler);
 		};
-	}, [terminalWidth]); // Remove stdout from dependencies to avoid loops
+	}, [terminalWidth, stdout]); // Remove stdout from dependencies to avoid loops
 
 	// Loading fallback component for lazy-loaded screens
 	const loadingFallback = (
@@ -316,9 +318,14 @@ export default function WelcomeScreen({
 						width={terminalWidth}
 					>
 						<Box flexDirection="column" justifyContent="center">
-							<Text bold>
-								<Gradient name="rainbow">{t.welcome.title}</Gradient>
-							</Text>
+							<Box marginBottom={0}>
+								<Text>
+									<Text color="cyan">❆ </Text>
+									<Gradient colors={theme.colors.logoGradient}>
+										SNOW CLI
+									</Gradient>
+								</Text>
+							</Box>
 							<Text color="gray" dimColor>
 								v{version} • {t.welcome.subtitle}
 							</Text>

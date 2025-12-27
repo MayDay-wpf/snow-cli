@@ -35,21 +35,6 @@ export default function LanguageSettingsScreen({
 			infoText: '切換到繁體中文',
 		},
 		{
-			label: '日本語',
-			value: 'ja',
-			infoText: '日本語に切り替え',
-		},
-		{
-			label: '한국어',
-			value: 'ko',
-			infoText: '한국어로 전환',
-		},
-		{
-			label: 'Español',
-			value: 'es',
-			infoText: 'Cambiar a Español',
-		},
-		{
 			label: '← Back',
 			value: 'back',
 			color: theme.colors.menuSecondary,
@@ -109,13 +94,7 @@ export default function LanguageSettingsScreen({
 							? 'English'
 							: selectedLanguage === 'zh'
 							? '简体中文'
-							: selectedLanguage === 'zh-TW'
-							? '繁體中文'
-							: selectedLanguage === 'ja'
-							? '日本語'
-							: selectedLanguage === 'ko'
-							? '한국어'
-							: 'Español'}
+							: '繁體中文'}
 					</Text>
 				</Box>
 				<Menu

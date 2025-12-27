@@ -18,8 +18,9 @@ _面向开发者的智能 AI 命令行工具_
 
 <img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
 
-## 目录
-- [详细完整文档](docs/usage/zh/0.目录.md)
+## << [点击查看详细完整文档](docs/usage/zh/0.目录.md) >>
+
+## 总览目录
 - [系统要求](#系统要求)
 - [安装](#安装)
 - [Claude Code & Codex 中转站接入](#claude-code--codex-中转站接入-snow-配置方法)
@@ -101,7 +102,7 @@ npm run link   # 构建并全局链接 snow
 
 # API & Model Settings
 
-详细配置说明请参考：[首次配置文档](docs/usage/zh/2.首次配置.md)
+详细配置说明请参考：[首次配置文档](docs/usage/zh/02.首次配置.md)
 
 ![API & Model Settings in CLI](docs/images/image.png)
 

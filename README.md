@@ -18,9 +18,11 @@ _An intelligent AI-powered CLI tool for developers_
 
 <img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
 
-## Table of Contents
+## << [Click to view the detailed complete document](docs/usage/en/0.Catalogue.md) >>
 
-- [Detailed and complete documentation](docs/usage/en/0.Catalogue.md)
+
+## Overview Catalog
+
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
 - [Access Domestic Claude Code & Codex Relay](#access-domestic-claude-code--codex-relay-snow-configuration)
@@ -102,7 +104,7 @@ npm run link   # builds and globally links snow
 
 # API & Model Settings
 
-For detailed configuration instructions, please refer to: [First Configuration Documentation](docs/usage/zh/2.首次配置.md)
+For detailed configuration instructions, please refer to: [First Configuration Documentation](docs/usage/zh/02.首次配置.md)
 
 ![API & Model Settings in CLI](docs/images/image.png)
 

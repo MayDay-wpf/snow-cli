@@ -405,6 +405,10 @@ export class UnifiedHooksExecutor {
 				maxBuffer: this.maxOutputLength,
 				env: {
 					...process.env,
+					// Windows 下设置 UTF-8 编码
+					...(process.platform === 'win32' && {
+						PYTHONIOENCODING: 'utf-8',
+					}),
 					// Windows 下不需要设置 LANG
 					...(process.platform !== 'win32' && {
 						LANG: 'en_US.UTF-8',

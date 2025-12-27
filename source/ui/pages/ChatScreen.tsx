@@ -1,4 +1,11 @@
-import React, {useState, useEffect, useRef, lazy, Suspense} from 'react';
+import React, {
+	useState,
+	useEffect,
+	useRef,
+	useMemo,
+	lazy,
+	Suspense,
+} from 'react';
 import {Box, Text, useInput, Static, useStdout, useApp} from 'ink';
 import Spinner from 'ink-spinner';
 import ansiEscapes from 'ansi-escapes';
@@ -48,6 +55,7 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useTerminalFocus} from '../../hooks/ui/useTerminalFocus.js';
 import {useBashMode} from '../../hooks/input/useBashMode.js';
 import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecutionState.js';
+import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
@@ -174,8 +182,31 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const snapshotState = useSnapshotState(messages.length);
 	const bashMode = useBashMode();
 	const terminalExecutionState = useTerminalExecutionState();
+	const backgroundProcesses = useBackgroundProcesses();
 	const panelState = usePanelState();
 	const {hasFocus} = useTerminalFocus();
+
+	// Background process panel state
+	const [selectedProcessIndex, setSelectedProcessIndex] = useState(0);
+
+	// Sort background processes (running first, then by time)
+	const sortedBackgroundProcesses = useMemo(() => {
+		return [...backgroundProcesses.processes].sort((a, b) => {
+			if (a.status === 'running' && b.status !== 'running') return -1;
+			if (a.status !== 'running' && b.status === 'running') return 1;
+			return b.startedAt.getTime() - a.startedAt.getTime();
+		});
+	}, [backgroundProcesses.processes]);
+
+	// Auto-adjust selected index when process count changes
+	useEffect(() => {
+		if (
+			sortedBackgroundProcesses.length > 0 &&
+			selectedProcessIndex >= sortedBackgroundProcesses.length
+		) {
+			setSelectedProcessIndex(sortedBackgroundProcesses.length - 1);
+		}
+	}, [sortedBackgroundProcesses.length, selectedProcessIndex]);
 
 	// Use session save hook
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
@@ -215,6 +246,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			import('../../utils/commands/reindex.js'),
 			import('../../utils/commands/addDir.js'),
 			import('../../utils/commands/permissions.js'),
+			import('../../utils/commands/backend.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -613,6 +645,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		resolve: (result: {
 			selected: string | string[];
 			customInput?: string;
+			cancelled?: boolean;
 		}) => void;
 	} | null>(null);
 
@@ -632,18 +665,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		});
 	};
 
-	// Handle user question answer
-	const handleUserQuestionAnswer = (result: {
-		selected: string | string[];
-		customInput?: string;
-	}) => {
-		if (pendingUserQuestion) {
-			//直接传递结果，保留数组形式用于多选
-			pendingUserQuestion.resolve(result);
-			setPendingUserQuestion(null);
-		}
-	};
-
 	// Minimum terminal height required for proper rendering
 	const MIN_TERMINAL_HEIGHT = 10;
 
@@ -654,6 +675,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		processPendingMessages,
 		handleHistorySelect,
 		handleRollbackConfirm,
+		handleUserQuestionAnswer,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -680,6 +702,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		userInterruptedRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
+		pendingUserQuestion,
+		setPendingUserQuestion,
 	});
 	// Handle quit command - clean up resources and exit application
 	const handleQuit = async () => {
@@ -814,6 +838,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowPermissionsPanel,
+		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
 		setPlanMode,
 		setVulnerabilityHuntingMode,
@@ -952,6 +977,61 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((input, key) => {
+		// Handle background process panel navigation (only when panel is visible)
+		if (backgroundProcesses.showPanel) {
+			// Handle ESC to close panel
+			if (key.escape) {
+				backgroundProcesses.hidePanel();
+				return;
+			}
+
+			// Only handle navigation keys when there are processes to navigate
+			if (sortedBackgroundProcesses.length > 0) {
+				// Handle arrow up/down for process selection
+				if (key.upArrow) {
+					setSelectedProcessIndex(prev =>
+						prev > 0 ? prev - 1 : sortedBackgroundProcesses.length - 1,
+					);
+					return;
+				}
+				if (key.downArrow) {
+					setSelectedProcessIndex(prev =>
+						prev < sortedBackgroundProcesses.length - 1 ? prev + 1 : 0,
+					);
+					return;
+				}
+
+				// Handle Enter to kill selected process
+				if (key.return) {
+					const selectedProcess =
+						sortedBackgroundProcesses[selectedProcessIndex];
+					if (selectedProcess && selectedProcess.status === 'running') {
+						backgroundProcesses.killProcess(selectedProcess.id);
+					}
+					return;
+				}
+			}
+		}
+
+		// Handle Ctrl+B to move terminal command to background
+		if (
+			key.ctrl &&
+			input === 'b' &&
+			terminalExecutionState.state.isExecuting &&
+			!terminalExecutionState.state.isBackgrounded
+		) {
+			// Import background process functions
+			Promise.all([
+				import('../../mcp/bash.js'),
+				import('../../hooks/execution/useBackgroundProcesses.js'),
+			]).then(([{markCommandAsBackgrounded}, {showBackgroundPanel}]) => {
+				markCommandAsBackgrounded();
+				showBackgroundPanel();
+			});
+			terminalExecutionState.moveToBackground();
+			return;
+		}
+
 		// Skip ESC handling when tool confirmation is showing (let ToolConfirmation handle it)
 		if (pendingToolConfirmation) {
 			return;
@@ -1221,6 +1301,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 
 			{/* Show terminal-execute tool execution status */}
 			{terminalExecutionState.state.isExecuting &&
+				!terminalExecutionState.state.isBackgrounded &&
 				terminalExecutionState.state.command && (
 					<Box paddingX={1} width={terminalWidth}>
 						<BashCommandExecutionStatus
@@ -1452,6 +1533,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						currentProfileName={panelState.currentProfileName}
 						isCompressing={isCompressing}
 						compressionError={compressionError}
+						backgroundProcesses={backgroundProcesses.processes}
+						showBackgroundPanel={backgroundProcesses.showPanel}
+						selectedProcessIndex={selectedProcessIndex}
+						terminalWidth={terminalWidth}
 					/>
 				)}
 		</Box>

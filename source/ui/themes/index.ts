@@ -31,6 +31,8 @@ export interface ThemeColors {
 	success: string;
 	// Logo gradient colors (3 colors for gradient effect)
 	logoGradient: [string, string, string];
+	// User message background
+	userMessageBackground: string;
 }
 
 export const defaultCustomColors: ThemeColors = {
@@ -50,6 +52,7 @@ export const defaultCustomColors: ThemeColors = {
 	warning: 'yellow',
 	success: 'green',
 	logoGradient: ['#d3d3d3', '#808080', '#505050'],
+	userMessageBackground: '#2a4a2a',
 };
 
 function loadCustomThemeColors(): ThemeColors {
@@ -97,6 +100,8 @@ export interface Theme {
 		success: string;
 		// Logo gradient colors
 		logoGradient: [string, string, string];
+		// User message background
+		userMessageBackground: string;
 	};
 }
 
@@ -124,6 +129,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: 'green',
 			// Logo gradient - gray gradient
 			logoGradient: ['#d3d3d3', '#808080', '#505050'],
+			// User message background - dark green
+			userMessageBackground: '#2a4a2a',
 		},
 	},
 	light: {
@@ -149,6 +156,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#006400',
 			// Logo gradient - darker for light theme
 			logoGradient: ['#606060', '#404040', '#202020'],
+			// User message background - light green
+			userMessageBackground: '#d4f1d4',
 		},
 	},
 	'github-dark': {
@@ -174,6 +183,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#3fb950',
 			// Logo gradient - GitHub blue tones
 			logoGradient: ['#58a6ff', '#1f6feb', '#0d419d'],
+			// User message background - GitHub dark green
+			userMessageBackground: '#1a4d2e',
 		},
 	},
 	rainbow: {
@@ -199,6 +210,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#06ffa5',
 			// Logo gradient - rainbow colors
 			logoGradient: ['#ff006e', '#8338ec', '#00f5ff'],
+			// User message background - rainbow green
+			userMessageBackground: '#16697a',
 		},
 	},
 	'solarized-dark': {
@@ -224,6 +237,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#859900',
 			// Logo gradient - Solarized accent colors
 			logoGradient: ['#2aa198', '#268bd2', '#6c71c4'],
+			// User message background - Solarized green
+			userMessageBackground: '#0a3d2c',
 		},
 	},
 	nord: {
@@ -249,6 +264,8 @@ export const themes: Record<ThemeType, Theme> = {
 			success: '#a3be8c',
 			// Logo gradient - Nord frost colors
 			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
+			// User message background - Nord green
+			userMessageBackground: '#1d3a2f',
 		},
 	},
 	custom: {

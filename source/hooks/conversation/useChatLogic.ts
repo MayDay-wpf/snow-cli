@@ -2,7 +2,6 @@ import {useRef} from 'react';
 import {type Message} from '../../ui/components/chat/MessageList.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {handleConversationWithTools} from './useConversation.js';
-import {promptOptimizeAgent} from '../../agents/promptOptimizeAgent.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -15,7 +14,6 @@ import {
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
-import {logger} from '../../utils/core/logger.js';
 
 interface UseChatLogicProps {
 	messages: Message[];
@@ -62,6 +60,28 @@ interface UseChatLogicProps {
 			resolve: (proceed: boolean) => void;
 		} | null>
 	>;
+	pendingUserQuestion: {
+		question: string;
+		options: string[];
+		toolCall: any;
+		resolve: (result: {
+			selected: string | string[];
+			customInput?: string;
+			cancelled?: boolean;
+		}) => void;
+	} | null;
+	setPendingUserQuestion: React.Dispatch<
+		React.SetStateAction<{
+			question: string;
+			options: string[];
+			toolCall: any;
+			resolve: (result: {
+				selected: string | string[];
+				customInput?: string;
+				cancelled?: boolean;
+			}) => void;
+		} | null>
+	>;
 }
 
 export function useChatLogic(props: UseChatLogicProps) {
@@ -91,6 +111,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 		userInterruptedRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
+		pendingUserQuestion,
+		setPendingUserQuestion,
 	} = props;
 
 	const processMessageRef =
@@ -176,6 +198,46 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 
 		await processMessage(message, images);
+	};
+
+	// Handle user question answer
+	const handleUserQuestionAnswer = (result: {
+		selected: string | string[];
+		customInput?: string;
+		cancelled?: boolean;
+	}) => {
+		if (pendingUserQuestion) {
+			// 如果用户选择取消，先resolve Promise让工具执行器继续，然后触发中断
+			if (result.cancelled) {
+				// 先清空pendingUserQuestion，确保LoadingIndicator可以显示
+				const resolver = pendingUserQuestion.resolve;
+				setPendingUserQuestion(null);
+
+				// 标记用户手动中断（关键：让finally块能清除停止状态）
+				userInterruptedRef.current = true;
+
+				// 设置停止状态
+				streamingState.setIsStopping(true);
+
+				// 然后resolve Promise，传递cancelled标志
+				resolver(result);
+
+				// 中止AbortController（工具执行器会检测到cancelled并抛出错误）
+				if (streamingState.abortController) {
+					streamingState.abortController.abort();
+				}
+
+				// 清空pending状态
+				setMessages(prev => prev.filter(msg => !msg.toolPending));
+				setPendingMessages([]);
+
+				return;
+			}
+
+			//直接传递结果，保留数组形式用于多选
+			pendingUserQuestion.resolve(result);
+			setPendingUserQuestion(null);
+		}
 	};
 
 	const processMessage = async (
@@ -281,35 +343,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		let originalMessage = message;
 		let optimizedMessage = message;
 		let optimizedCleanContent = cleanContent;
-
-		const config = getOpenAiConfig();
-		const isOptimizationEnabled = config.enablePromptOptimization !== false;
-
-		if (isOptimizationEnabled) {
-			try {
-				const conversationHistory = messages
-					.filter(m => m.role === 'user' || m.role === 'assistant')
-					.map(m => ({
-						role: m.role as 'user' | 'assistant',
-						content: typeof m.content === 'string' ? m.content : '',
-					}));
-
-				optimizedMessage = await promptOptimizeAgent.optimizePrompt(
-					message,
-					conversationHistory,
-					controller.signal,
-				);
-
-				if (optimizedMessage !== originalMessage) {
-					const optimizedParsed = await parseAndValidateFileReferences(
-						optimizedMessage,
-					);
-					optimizedCleanContent = optimizedParsed.cleanContent;
-				}
-			} catch (error) {
-				logger.warn('Prompt optimization failed, using original:', error);
-			}
-		}
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(
@@ -826,18 +859,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 		if (currentSession) {
 			const messagesAfterSelected = messages.slice(selectedIndex);
-			const hasDiscontinuedMessage = messagesAfterSelected.some(
-				msg => msg.discontinued,
-			);
-
-			let uiUserMessagesToDelete = 0;
-			if (hasDiscontinuedMessage) {
-				uiUserMessagesToDelete = 0;
-			} else {
-				uiUserMessagesToDelete = messagesAfterSelected.filter(
-					msg => msg.role === 'user',
-				).length;
-			}
+			const uiUserMessagesToDelete = messagesAfterSelected.filter(
+				msg => msg.role === 'user',
+			).length;
 			const selectedMessage = messages[selectedIndex];
 			const isUncommittedUserMessage =
 				selectedMessage?.role === 'user' &&
@@ -1015,5 +1039,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		processPendingMessages,
 		handleHistorySelect,
 		handleRollbackConfirm,
+		handleUserQuestionAnswer,
 	};
 }

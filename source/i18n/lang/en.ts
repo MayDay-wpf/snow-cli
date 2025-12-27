@@ -175,9 +175,10 @@ export const en: TranslationKeys = {
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
-		compactModel: 'Compact Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
+		editSimilarityThreshold:
+			'Edit Similarity Threshold(0-1, change with caution):',
 		notSet: 'Not set',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',
@@ -376,6 +377,8 @@ export const en: TranslationKeys = {
 		title: 'Theme Settings',
 		current: 'Current:',
 		preview: 'Preview:',
+		userMessagePreview: 'User message preview:',
+		userMessageSample: 'Check if user message background looks right.',
 		back: '← Back',
 		backInfo: 'Return to main menu',
 		simpleMode: 'Simple Mode:',
@@ -414,6 +417,8 @@ export const en: TranslationKeys = {
 		cancel: 'Cancel',
 		confirm: 'Confirm',
 		preview: 'Preview',
+		userMessagePreview: 'User message preview',
+		userMessageSample: 'Check if userMessageBackground looks right.',
 		colorHint: 'Press Enter to edit this color',
 	},
 	helpPanel: {
@@ -484,6 +489,7 @@ export const en: TranslationKeys = {
 			reindex:
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
 			permissions: 'Manage always-approved tools permissions',
+			backend: 'Show background processes panel',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			quit: 'Exit the application',
@@ -900,6 +906,7 @@ export const en: TranslationKeys = {
 		header: '[User Input Required]',
 		customInputOption: 'Custom input...',
 		customInputLabel: 'Custom input',
+		cancelOption: 'Cancel',
 		selectPrompt: 'Select an option:',
 		enterResponse: 'Enter your response:',
 		keyboardHints:
@@ -937,6 +944,17 @@ export const en: TranslationKeys = {
 		executingCommand: 'Executing command...',
 		timeout: 'Timeout:',
 		customTimeout: '(custom)',
+		backgroundHint: 'Ctrl+B to move to background',
+	},
+	backgroundProcesses: {
+		title: 'Background Processes',
+		status: 'Status',
+		statusRunning: 'Running',
+		statusCompleted: 'Completed',
+		statusFailed: 'Failed',
+		duration: 'Duration',
+		navigateHint: '↑↓ Navigate | Enter Kill selected | ESC Close',
+		emptyHint: 'No background processes',
 	},
 	fileRollback: {
 		title: 'File Rollback Confirmation',
@@ -959,6 +977,7 @@ export const en: TranslationKeys = {
 		toggleHint: 'Space toggle',
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
+		emptyHint: 'No files to rollback',
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',

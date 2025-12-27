@@ -376,6 +376,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 - AUTONOMOUS EXECUTION: Break down tasks and execute systematically
 - NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
 - COMPLETE CONTEXT: The prompt contains all requirements, file paths, patterns, dependencies, constraints, and testing needs
+- Use when there are many files to modify, or when there are many similar modifications in the same file
 
 ## Core Capabilities
 
