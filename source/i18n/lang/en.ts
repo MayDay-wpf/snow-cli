@@ -620,6 +620,12 @@ export const en: TranslationKeys = {
 		confirmYes: 'Yes',
 		confirmNo: 'Cancel',
 		escCancel: 'Press ESC to cancel',
+		resultTypeExecute: 'Execute in terminal',
+		resultTypePrompt: 'Send to AI',
+		resultLocationGlobal: 'Global (~/.snow/commands/)',
+		resultLocationProject: 'Project (.snow/commands/)',
+		saveSuccessMessage:
+			"Custom command '{name}' saved successfully!\nType: {type}\nLocation: {location}\nYou can now use /{name}",
 	},
 	chatScreen: {
 		// Header
@@ -837,6 +843,24 @@ export const en: TranslationKeys = {
 	},
 	skillsCreation: {
 		title: 'Create New Skill',
+		modeLabel: 'Creation Mode:',
+		modeAi: 'AI Generate (describe requirement)',
+		modeManual: 'Manual (create templates)',
+		requirementLabel: 'Requirement:',
+		requirementHint:
+			'Describe what you want this Skill to do (content will follow this language)',
+		requirementPlaceholder:
+			'e.g., Generate a Skill for releasing npm packages...',
+		generatingLabel: 'AI Generating...',
+		generatingMessage: 'Generating skill files, please wait',
+		filesLabel: 'Files to be created:',
+		editName: 'Edit Name',
+		editNameLabel: 'Current Skill Name:',
+		editNameHint:
+			'Enter a new skill name (lowercase letters/numbers/hyphens, max 64 chars)',
+		editNamePlaceholder: 'new-skill-name',
+		regenerate: 'Regenerate',
+		cancel: 'Cancel',
 		nameLabel: 'Skill Name:',
 		nameHint:
 			'Use lowercase letters, numbers, and hyphens. Use "/" to namespace (max 64 chars per segment)',
@@ -862,6 +886,15 @@ export const en: TranslationKeys = {
 			'Skill "{name}" already exists in global location (~/.snow/skills/)',
 		errorExistsProject:
 			'Skill "{name}" already exists in project location (.snow/skills/)',
+		errorExistsAny: 'Skill "{name}" already exists, please choose another name',
+		errorGeneration: 'AI generation failed',
+		errorNoGeneratedContent: 'No generated content, please retry',
+		resultModeAi: 'AI Generated',
+		resultModeManual: 'Manual Template',
+		createSuccessMessage:
+			'Skill "{name}" created successfully!\nMode: {mode}\nLocation: {location}\nPath: {path}\n\nThe following files have been created:\n- SKILL.md (main skill documentation)\n- reference.md (detailed reference)\n- examples.md (usage examples)\n- templates/template.txt (template file)\n- scripts/helper.py (helper script)\n\nYou can now edit these files to customize your skill.',
+		createErrorMessage: 'Failed to create skill: {error}',
+		errorUnknown: 'Unknown error',
 	},
 	askUser: {
 		header: '[User Input Required]',

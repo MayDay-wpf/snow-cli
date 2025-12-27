@@ -583,6 +583,12 @@ export const zh: TranslationKeys = {
 		confirmYes: 'Yes',
 		confirmNo: 'Cancel',
 		escCancel: '按 ESC 取消',
+		resultTypeExecute: '在终端执行',
+		resultTypePrompt: '发送给 AI',
+		resultLocationGlobal: '全局 (~/.snow/commands/)',
+		resultLocationProject: '项目 (.snow/commands/)',
+		saveSuccessMessage:
+			"自定义命令 '{name}' 保存成功！\n类型: {type}\n位置: {location}\n你现在可以使用 /{name}",
 	},
 	chatScreen: {
 		// Header
@@ -795,6 +801,21 @@ export const zh: TranslationKeys = {
 	},
 	skillsCreation: {
 		title: '创建新技能',
+		modeLabel: '选择创建方式:',
+		modeAi: 'AI 生成（输入需求即可）',
+		modeManual: '手动创建（生成模板）',
+		requirementLabel: '技能需求:',
+		requirementHint: '简要描述你希望该技能完成什么（生成内容将跟随此语言）',
+		requirementPlaceholder: '例如：生成一个用于发布 npm 包的技能…',
+		generatingLabel: 'AI 生成中...',
+		generatingMessage: '正在生成技能文件，请稍等',
+		filesLabel: '将创建文件:',
+		editName: '编辑名称',
+		editNameLabel: '当前技能名称:',
+		editNameHint: '输入新的技能名称（小写字母/数字/连字符，最多 64 个字符）',
+		editNamePlaceholder: 'new-skill-name',
+		regenerate: '重新生成',
+		cancel: '取消',
 		nameLabel: '技能名称:',
 		nameHint:
 			'仅使用小写字母、数字和连字符，可用 "/" 作为命名空间分隔（每段最多 64 个字符）',
@@ -816,6 +837,15 @@ export const zh: TranslationKeys = {
 		errorExistsBoth: '技能 "{name}" 在全局和项目位置都已存在',
 		errorExistsGlobal: '技能 "{name}" 已存在于全局位置 (~/.snow/skills/)',
 		errorExistsProject: '技能 "{name}" 已存在于项目位置 (.snow/skills/)',
+		errorExistsAny: '技能 "{name}" 已存在，请换一个名称',
+		errorGeneration: 'AI 生成失败',
+		errorNoGeneratedContent: '缺少生成内容，请重试',
+		resultModeAi: 'AI 生成',
+		resultModeManual: '手动模板',
+		createSuccessMessage:
+			'技能 "{name}" 创建成功！\n模式: {mode}\n位置: {location}\n路径: {path}\n\n已创建以下文件：\n- SKILL.md（主技能文档）\n- reference.md（详细参考）\n- examples.md（使用示例）\n- templates/template.txt（模板文件）\n- scripts/helper.py（辅助脚本）\n\n你现在可以编辑这些文件来自定义技能。',
+		createErrorMessage: '创建技能失败：{error}',
+		errorUnknown: '未知错误',
 	},
 	askUser: {
 		header: '[需要用户输入]',

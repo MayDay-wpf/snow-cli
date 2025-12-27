@@ -7,7 +7,10 @@ import {CustomCommandConfigPanel} from './CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from './SkillsCreationPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
-import type {SkillLocation} from '../../../utils/commands/skills.js';
+import type {
+	GeneratedSkillContent,
+	SkillLocation,
+} from '../../../utils/commands/skills.js';
 
 // Lazy load panel components
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
@@ -40,6 +43,7 @@ type PanelsManagerProps = {
 		skillName: string,
 		description: string,
 		location: SkillLocation,
+		generated?: GeneratedSkillContent,
 	) => Promise<void>;
 };
 
