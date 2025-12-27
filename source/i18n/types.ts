@@ -595,6 +595,11 @@ export type TranslationKeys = {
 		confirmYes: string;
 		confirmNo: string;
 		escCancel: string;
+		resultTypeExecute: string;
+		resultTypePrompt: string;
+		resultLocationGlobal: string;
+		resultLocationProject: string;
+		saveSuccessMessage: string;
 	};
 	// Chat Screen
 	chatScreen: {
@@ -801,6 +806,21 @@ export type TranslationKeys = {
 	};
 	skillsCreation: {
 		title: string;
+		modeLabel: string;
+		modeAi: string;
+		modeManual: string;
+		requirementLabel: string;
+		requirementHint: string;
+		requirementPlaceholder: string;
+		generatingLabel: string;
+		generatingMessage: string;
+		filesLabel: string;
+		editName: string;
+		editNameLabel: string;
+		editNameHint: string;
+		editNamePlaceholder: string;
+		regenerate: string;
+		cancel: string;
 		nameLabel: string;
 		nameHint: string;
 		namePlaceholder: string;
@@ -820,6 +840,14 @@ export type TranslationKeys = {
 		errorExistsBoth: string;
 		errorExistsGlobal: string;
 		errorExistsProject: string;
+		errorExistsAny: string;
+		errorGeneration: string;
+		errorNoGeneratedContent: string;
+		resultModeAi: string;
+		resultModeManual: string;
+		createSuccessMessage: string;
+		createErrorMessage: string;
+		errorUnknown: string;
 	};
 	// AskUserQuestion Component
 	askUser: {

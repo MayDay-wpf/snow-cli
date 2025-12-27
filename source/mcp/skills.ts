@@ -1,4 +1,4 @@
-import {join} from 'path';
+import {dirname, join, relative} from 'path';
 import {existsSync} from 'fs';
 import {readFile} from 'fs/promises';
 import {homedir} from 'os';
@@ -11,6 +11,7 @@ export interface SkillMetadata {
 }
 
 export interface Skill {
+	id: string;
 	name: string;
 	description: string;
 	location: 'project' | 'global';
@@ -75,6 +76,77 @@ async function readSkillFile(skillPath: string): Promise<{
 	}
 }
 
+function normalizeSkillId(skillId: string): string {
+	return skillId.replace(/\\/g, '/').replace(/^\.\/+/, '');
+}
+
+async function loadSkillsFromDirectory(
+	skills: Map<string, Skill>,
+	baseSkillsDir: string,
+	location: Skill['location'],
+): Promise<void> {
+	if (!existsSync(baseSkillsDir)) {
+		return;
+	}
+
+	try {
+		const {readdirSync} = await import('fs');
+		const pendingDirs: string[] = [baseSkillsDir];
+
+		while (pendingDirs.length > 0) {
+			const currentDir = pendingDirs.pop();
+			if (!currentDir) continue;
+
+			let entries: Array<import('fs').Dirent>;
+			try {
+				entries = readdirSync(currentDir, {withFileTypes: true});
+			} catch {
+				continue;
+			}
+
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					pendingDirs.push(join(currentDir, entry.name));
+					continue;
+				}
+
+				if (!entry.isFile() || entry.name !== 'SKILL.md') {
+					continue;
+				}
+
+				const skillFile = join(currentDir, entry.name);
+				const skillDir = dirname(skillFile);
+				const rawSkillId = relative(baseSkillsDir, skillDir);
+				const skillId = normalizeSkillId(rawSkillId);
+
+				if (!skillId || skillId === '.') {
+					continue;
+				}
+
+				const skillData = await readSkillFile(skillDir);
+				if (!skillData) {
+					continue;
+				}
+
+				const fallbackName =
+					skillId.split('/').filter(Boolean).pop() || skillId;
+
+				skills.set(skillId, {
+					id: skillId,
+					name: skillData.metadata.name || fallbackName,
+					description: skillData.metadata.description || '',
+					location,
+					path: skillDir,
+					content: skillData.content,
+					allowedTools: skillData.metadata.allowedTools,
+				});
+			}
+		}
+	} catch (error) {
+		console.error(`Failed to load ${location} skills:`, error);
+	}
+}
+
 /**
  * Scan and load all available skills
  * Project skills have priority over global skills
@@ -88,60 +160,10 @@ async function loadAvailableSkills(
 		? join(projectRoot, '.snow', 'skills')
 		: null;
 
-	// Load global skills first
-	if (existsSync(globalSkillsDir)) {
-		try {
-			const {readdirSync} = await import('fs');
-			const entries = readdirSync(globalSkillsDir, {withFileTypes: true});
-
-			for (const entry of entries) {
-				if (entry.isDirectory()) {
-					const skillPath = join(globalSkillsDir, entry.name);
-					const skillData = await readSkillFile(skillPath);
-
-					if (skillData) {
-						skills.set(entry.name, {
-							name: skillData.metadata.name || entry.name,
-							description: skillData.metadata.description || '',
-							location: 'global',
-							path: skillPath,
-							content: skillData.content,
-							allowedTools: skillData.metadata.allowedTools,
-						});
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Failed to load global skills:', error);
-		}
-	}
-
-	// Load project skills (override global if same name)
-	if (projectSkillsDir && existsSync(projectSkillsDir)) {
-		try {
-			const {readdirSync} = await import('fs');
-			const entries = readdirSync(projectSkillsDir, {withFileTypes: true});
-
-			for (const entry of entries) {
-				if (entry.isDirectory()) {
-					const skillPath = join(projectSkillsDir, entry.name);
-					const skillData = await readSkillFile(skillPath);
-
-					if (skillData) {
-						skills.set(entry.name, {
-							name: skillData.metadata.name || entry.name,
-							description: skillData.metadata.description || '',
-							location: 'project',
-							path: skillPath,
-							content: skillData.content,
-							allowedTools: skillData.metadata.allowedTools,
-						});
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Failed to load project skills:', error);
-		}
+	// Load global skills first, then project skills override global skills
+	await loadSkillsFromDirectory(skills, globalSkillsDir, 'global');
+	if (projectSkillsDir) {
+		await loadSkillsFromDirectory(skills, projectSkillsDir, 'project');
 	}
 
 	return skills;
@@ -155,7 +177,7 @@ function generateSkillToolDescription(skills: Map<string, Skill>): string {
 		.map(
 			skill => `<skill>
 <name>
-${skill.name}
+${skill.id}
 </name>
 <description>
 ${skill.description}
@@ -173,7 +195,7 @@ ${skill.location}
 When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
 How to use skills:
-- Invoke skills using this tool with the skill name only (no arguments)
+- Invoke skills using this tool with the skill id only (no arguments)
 - When you invoke a skill, you will see <command-message>The "{name}" skill is loading</command-message>
 - The skill's prompt will expand and provide detailed instructions on how to complete the task
 - Examples:
@@ -214,7 +236,7 @@ export async function getMCPTools(projectRoot?: string) {
 					skill: {
 						type: 'string',
 						description:
-							'The skill name (no arguments). E.g., "pdf" or "data-analysis"',
+							'The skill id (no arguments). E.g., "pdf", "data-analysis", or "helloagents/analyze"',
 					},
 				},
 				required: ['skill'],
@@ -297,19 +319,21 @@ export async function executeSkillTool(
 		throw new Error(`Unknown tool: ${toolName}`);
 	}
 
-	const skillName = args.skill;
-	if (!skillName || typeof skillName !== 'string') {
+	const requestedSkillId = args.skill;
+	if (!requestedSkillId || typeof requestedSkillId !== 'string') {
 		throw new Error('skill parameter is required and must be a string');
 	}
 
+	const skillId = normalizeSkillId(requestedSkillId);
+
 	// Load available skills
 	const skills = await loadAvailableSkills(projectRoot);
-	const skill = skills.get(skillName);
+	const skill = skills.get(skillId);
 
 	if (!skill) {
 		const availableSkills = Array.from(skills.keys()).join(', ');
 		throw new Error(
-			`Skill "${skillName}" not found. Available skills: ${
+			`Skill \"${skillId}\" not found. Available skills: ${
 				availableSkills || 'none'
 			}`,
 		);
