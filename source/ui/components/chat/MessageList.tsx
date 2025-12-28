@@ -56,6 +56,7 @@ export interface Message {
 		error?: string;
 	}; // Hook error details for rendering with HookErrorDisplay
 	thinking?: string; // Extended Thinking content from Anthropic
+	pendingToolIds?: string[]; // Track pending tool call IDs in sub-agent compact mode
 }
 
 interface Props {

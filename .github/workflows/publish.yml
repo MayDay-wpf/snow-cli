@@ -58,7 +58,8 @@ jobs:
             
             ### What's New
 
-            - fix some bugs
+            - AI-generated Skills
+            - Optimized the display effect of internal tool calls of sub-agents
             
             ### Installation
             ```bash

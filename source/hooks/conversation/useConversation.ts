@@ -1032,49 +1032,91 @@ export async function handleConversationWithTools(
 							if (subAgentMessage.message.type === 'tool_calls') {
 								const toolCalls = subAgentMessage.message.tool_calls;
 								if (toolCalls && toolCalls.length > 0) {
-									// Add tool call messages for each tool (only for time-consuming tools)
-									const toolMessages = toolCalls
-										.filter((toolCall: any) =>
-											isToolNeedTwoStepDisplay(toolCall.function.name),
-										)
-										.map((toolCall: any) => {
-											const toolDisplay = formatToolCallMessage(toolCall);
-											let toolArgs;
-											try {
-												toolArgs = JSON.parse(toolCall.function.arguments);
-											} catch (e) {
-												toolArgs = {};
-											}
+									// Separate time-consuming tools and quick tools
+									const timeConsumingTools = toolCalls.filter((tc: any) =>
+										isToolNeedTwoStepDisplay(tc.function.name),
+									);
+									const quickTools = toolCalls.filter(
+										(tc: any) => !isToolNeedTwoStepDisplay(tc.function.name),
+									);
 
-											const uiMsg = {
-												role: 'subagent' as const,
-												content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
-												streaming: false,
-												toolCall: {
-													name: toolCall.function.name,
-													arguments: toolArgs,
-												},
-												// Don't include toolDisplay for sub-agent tools to avoid showing parameters
-												toolCallId: toolCall.id,
-												toolPending: true,
-												subAgent: {
-													agentId: subAgentMessage.agentId,
-													agentName: subAgentMessage.agentName,
-													isComplete: false,
-												},
-												subAgentInternal: true, // Mark as internal sub-agent message
-											};
+									const newMessages: any[] = [];
 
-											return uiMsg;
+									// Display time-consuming tools individually with full details (Diff, etc.)
+									for (const toolCall of timeConsumingTools) {
+										const toolDisplay = formatToolCallMessage(toolCall);
+										let toolArgs;
+										try {
+											toolArgs = JSON.parse(toolCall.function.arguments);
+										} catch (e) {
+											toolArgs = {};
+										}
+
+										const uiMsg = {
+											role: 'subagent' as const,
+											content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+											streaming: false,
+											toolCall: {
+												name: toolCall.function.name,
+												arguments: toolArgs,
+											},
+											toolCallId: toolCall.id,
+											toolPending: true,
+											subAgent: {
+												agentId: subAgentMessage.agentId,
+												agentName: subAgentMessage.agentName,
+												isComplete: false,
+											},
+											subAgentInternal: true,
+										};
+										newMessages.push(uiMsg);
+									}
+
+									// Display quick tools in compact mode (single line)
+									if (quickTools.length > 0) {
+										// Format tools with tree structure and parameters
+										const toolLines = quickTools.map((tc: any, index: any) => {
+											const display = formatToolCallMessage(tc);
+											const isLast = index === quickTools.length - 1;
+											const prefix = isLast ? '└─' : '├─';
+
+											// Build parameter display
+											const params = display.args
+												.map((arg: any) => `${arg.key}: ${arg.value}`)
+												.join(', ');
+
+											return `\n  \x1b[2m${prefix} ${display.toolName}${
+												params ? ` (${params})` : ''
+											}\x1b[0m`;
 										});
 
-									// Save all tool calls to session (regardless of display type)
+										const uiMsg = {
+											role: 'subagent' as const,
+											content: `\x1b[38;2;184;122;206m⚇ ${
+												subAgentMessage.agentName
+											}${toolLines.join('')}\x1b[0m`,
+											streaming: false,
+											subAgent: {
+												agentId: subAgentMessage.agentId,
+												agentName: subAgentMessage.agentName,
+												isComplete: false,
+											},
+											subAgentInternal: true,
+											// Store pending tool call IDs for later status update
+											pendingToolIds: quickTools.map((tc: any) => tc.id),
+										};
+										newMessages.push(uiMsg);
+									}
+
+									// Save all tool calls to session
 									const sessionMsg = {
 										role: 'assistant' as const,
 										content: toolCalls
 											.map((tc: any) => {
 												const display = formatToolCallMessage(tc);
-												return `⚇⚡ ${display.toolName}`;
+												return isToolNeedTwoStepDisplay(tc.function.name)
+													? `⚇⚡ ${display.toolName}`
+													: `⚇ ${display.toolName}`;
 											})
 											.join(', '),
 										subAgentInternal: true,
@@ -1084,7 +1126,7 @@ export async function handleConversationWithTools(
 										console.error('Failed to save sub-agent tool call:', err),
 									);
 
-									return [...prev, ...toolMessages];
+									return [...prev, ...newMessages];
 								}
 							}
 
@@ -1092,111 +1134,9 @@ export async function handleConversationWithTools(
 							if (subAgentMessage.message.type === 'tool_result') {
 								const msg = subAgentMessage.message as any;
 								const isError = msg.content.startsWith('Error:');
-								const statusIcon = isError ? '✗' : '✓';
-								const statusText = isError ? `\n  └─ ${msg.content}` : '';
-
-								// For terminal-execute, try to extract terminal result data
-								let terminalResultData:
-									| {
-											stdout?: string;
-											stderr?: string;
-											exitCode?: number;
-											command?: string;
-									  }
-									| undefined;
-								if (msg.tool_name === 'terminal-execute' && !isError) {
-									try {
-										const resultData = JSON.parse(msg.content);
-										if (
-											resultData.stdout !== undefined ||
-											resultData.stderr !== undefined
-										) {
-											terminalResultData = {
-												stdout: resultData.stdout,
-												stderr: resultData.stderr,
-												exitCode: resultData.exitCode,
-												command: resultData.command,
-											};
-										}
-									} catch (e) {
-										// If parsing fails, just show regular result
-									}
-								}
-
-								// For filesystem tools, extract diff data to display DiffViewer
-								let fileToolData: any = undefined;
-								if (
-									!isError &&
-									(msg.tool_name === 'filesystem-create' ||
-										msg.tool_name === 'filesystem-edit' ||
-										msg.tool_name === 'filesystem-edit_search')
-								) {
-									try {
-										const resultData = JSON.parse(msg.content);
-
-										// Handle different result formats
-										if (resultData.content) {
-											// filesystem-create result
-											fileToolData = {
-												name: msg.tool_name,
-												arguments: {
-													content: resultData.content,
-													path: resultData.path || resultData.filename,
-												},
-											};
-										} else if (resultData.oldContent && resultData.newContent) {
-											// Single file edit result
-											fileToolData = {
-												name: msg.tool_name,
-												arguments: {
-													oldContent: resultData.oldContent,
-													newContent: resultData.newContent,
-													filename: resultData.path || resultData.filename,
-													completeOldContent: resultData.completeOldContent,
-													completeNewContent: resultData.completeNewContent,
-													contextStartLine: resultData.contextStartLine,
-												},
-											};
-										} else if (
-											resultData.batchResults &&
-											Array.isArray(resultData.batchResults)
-										) {
-											// Batch edit results
-											fileToolData = {
-												name: msg.tool_name,
-												arguments: {
-													isBatch: true,
-													batchResults: resultData.batchResults,
-												},
-											};
-										}
-									} catch (e) {
-										// If parsing fails, just show regular result
-									}
-								}
-
-								// Create completed tool result message for UI
-								const uiMsg = {
-									role: 'subagent' as const,
-									content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
-									streaming: false,
-									toolResult: !isError ? msg.content : undefined,
-									terminalResult: terminalResultData,
-									toolCall: terminalResultData
-										? {
-												name: msg.tool_name,
-												arguments: terminalResultData,
-										  }
-										: fileToolData
-										? fileToolData
-										: undefined,
-									subAgent: {
-										agentId: subAgentMessage.agentId,
-										agentName: subAgentMessage.agentName,
-										isComplete: false,
-									},
-									subAgentInternal: true,
-								};
+								const isTimeConsumingTool = isToolNeedTwoStepDisplay(
+									msg.tool_name,
+								);
 
 								// Save to session as 'tool' role for API compatibility
 								const sessionMsg = {
@@ -1209,8 +1149,172 @@ export async function handleConversationWithTools(
 									console.error('Failed to save sub-agent tool result:', err),
 								);
 
-								// Add completed tool result message
-								return [...prev, uiMsg];
+								// For time-consuming tools, always show result with full details (Diff, etc.)
+								if (isTimeConsumingTool) {
+									const statusIcon = isError ? '✗' : '✓';
+									const statusText = isError ? `\n  └─ ${msg.content}` : '';
+
+									// For terminal-execute, try to extract terminal result data
+									let terminalResultData:
+										| {
+												stdout?: string;
+												stderr?: string;
+												exitCode?: number;
+												command?: string;
+										  }
+										| undefined;
+									if (msg.tool_name === 'terminal-execute' && !isError) {
+										try {
+											const resultData = JSON.parse(msg.content);
+											if (
+												resultData.stdout !== undefined ||
+												resultData.stderr !== undefined
+											) {
+												terminalResultData = {
+													stdout: resultData.stdout,
+													stderr: resultData.stderr,
+													exitCode: resultData.exitCode,
+													command: resultData.command,
+												};
+											}
+										} catch (e) {
+											// If parsing fails, just show regular result
+										}
+									}
+
+									// For filesystem tools, extract diff data to display DiffViewer
+									let fileToolData: any = undefined;
+									if (
+										!isError &&
+										(msg.tool_name === 'filesystem-create' ||
+											msg.tool_name === 'filesystem-edit' ||
+											msg.tool_name === 'filesystem-edit_search')
+									) {
+										try {
+											const resultData = JSON.parse(msg.content);
+
+											// Handle different result formats
+											if (resultData.content) {
+												// filesystem-create result
+												fileToolData = {
+													name: msg.tool_name,
+													arguments: {
+														content: resultData.content,
+														path: resultData.path || resultData.filename,
+													},
+												};
+											} else if (
+												resultData.oldContent &&
+												resultData.newContent
+											) {
+												// Single file edit result
+												fileToolData = {
+													name: msg.tool_name,
+													arguments: {
+														oldContent: resultData.oldContent,
+														newContent: resultData.newContent,
+														filename: resultData.path || resultData.filename,
+														completeOldContent: resultData.completeOldContent,
+														completeNewContent: resultData.completeNewContent,
+														contextStartLine: resultData.contextStartLine,
+													},
+												};
+											} else if (
+												resultData.batchResults &&
+												Array.isArray(resultData.batchResults)
+											) {
+												// Batch edit results
+												fileToolData = {
+													name: msg.tool_name,
+													arguments: {
+														isBatch: true,
+														batchResults: resultData.batchResults,
+													},
+												};
+											}
+										} catch (e) {
+											// If parsing fails, just show regular result
+										}
+									}
+
+									// Create completed tool result message for UI
+									const uiMsg = {
+										role: 'subagent' as const,
+										content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
+										streaming: false,
+										toolResult: !isError ? msg.content : undefined,
+										terminalResult: terminalResultData,
+										toolCall: terminalResultData
+											? {
+													name: msg.tool_name,
+													arguments: terminalResultData,
+											  }
+											: fileToolData
+											? fileToolData
+											: undefined,
+										subAgent: {
+											agentId: subAgentMessage.agentId,
+											agentName: subAgentMessage.agentName,
+											isComplete: false,
+										},
+										subAgentInternal: true,
+									};
+									return [...prev, uiMsg];
+								}
+
+								// For quick tools, only show error results, success results update inline
+								if (isError) {
+									const statusText = `\n  └─ ${msg.content}`;
+									const uiMsg = {
+										role: 'subagent' as const,
+										content: `\x1b[38;2;255;100;100m⚇✗ ${msg.tool_name}\x1b[0m${statusText}`,
+										streaming: false,
+										subAgent: {
+											agentId: subAgentMessage.agentId,
+											agentName: subAgentMessage.agentName,
+											isComplete: false,
+										},
+										subAgentInternal: true,
+									};
+									return [...prev, uiMsg];
+								}
+
+								// For success, update the pending tools message by removing this tool from pendingToolIds
+								const pendingMsgIndex = prev.findIndex(
+									m =>
+										m.role === 'subagent' &&
+										m.subAgent?.agentId === subAgentMessage.agentId &&
+										!m.subAgent?.isComplete &&
+										m.pendingToolIds?.includes(msg.tool_call_id),
+								);
+
+								if (pendingMsgIndex !== -1) {
+									const updated = [...prev];
+									const pendingMsg = updated[pendingMsgIndex];
+									if (pendingMsg && pendingMsg.pendingToolIds) {
+										// Remove this tool from pending list
+										const newPendingIds = pendingMsg.pendingToolIds.filter(
+											id => id !== msg.tool_call_id,
+										);
+
+										// If all tools completed, add checkmark
+										if (newPendingIds.length === 0) {
+											updated[pendingMsgIndex] = {
+												...pendingMsg,
+												content: `${pendingMsg.content} \x1b[38;2;100;200;100m✓\x1b[0m`,
+												pendingToolIds: newPendingIds,
+											};
+										} else {
+											updated[pendingMsgIndex] = {
+												...pendingMsg,
+												pendingToolIds: newPendingIds,
+											};
+										}
+									}
+									return updated;
+								}
+
+								return prev;
 							}
 
 							// Check if we already have a message for this agent
@@ -1219,7 +1323,7 @@ export async function handleConversationWithTools(
 									m.role === 'subagent' &&
 									m.subAgent?.agentId === subAgentMessage.agentId &&
 									!m.subAgent?.isComplete &&
-									!m.toolCall, // Don't match tool call messages
+									!m.pendingToolIds, // Don't match pending tool messages
 							);
 
 							// Extract content from the sub-agent message

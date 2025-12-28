@@ -39,37 +39,82 @@ export function convertSessionMessagesToUI(
 		const msg = sessionMessages[i];
 		if (!msg) continue;
 
-		// Skip system messages
-		if (msg.role === 'system') continue;
-
 		// Handle sub-agent internal tool call messages
 		if (msg.subAgentInternal && msg.role === 'assistant' && msg.tool_calls) {
-			for (const toolCall of msg.tool_calls) {
-				// 只有耗时工具才创建"进行中"消息
-				if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
-					const toolDisplay = formatToolCallMessage(toolCall as any);
-					let toolArgs;
-					try {
-						toolArgs = JSON.parse(toolCall.function.arguments);
-					} catch (e) {
-						toolArgs = {};
-					}
+			// Separate time-consuming tools and quick tools
+			const timeConsumingTools = msg.tool_calls.filter(tc =>
+				isToolNeedTwoStepDisplay(tc.function.name),
+			);
+			const quickTools = msg.tool_calls.filter(
+				tc => !isToolNeedTwoStepDisplay(tc.function.name),
+			);
 
-					uiMessages.push({
-						role: 'subagent',
-						content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
-						streaming: false,
-						toolCall: {
-							name: toolCall.function.name,
-							arguments: toolArgs,
-						},
-						// Don't include toolDisplay for sub-agent tools to avoid showing parameters
-						toolCallId: toolCall.id,
-						toolPending: false,
-						subAgentInternal: true,
-					});
+			// Display time-consuming tools individually
+			for (const toolCall of timeConsumingTools) {
+				const toolDisplay = formatToolCallMessage(toolCall as any);
+				let toolArgs;
+				try {
+					toolArgs = JSON.parse(toolCall.function.arguments);
+				} catch (e) {
+					toolArgs = {};
 				}
+
+				uiMessages.push({
+					role: 'subagent',
+					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+					streaming: false,
+					toolCall: {
+						name: toolCall.function.name,
+						arguments: toolArgs,
+					},
+					toolCallId: toolCall.id,
+					toolPending: false,
+					subAgentInternal: true,
+				});
 				processedToolCalls.add(toolCall.id);
+			}
+
+			// Display quick tools in compact mode
+			if (quickTools.length > 0) {
+				// Find agent name from next tool result message
+				let agentName = 'Sub-Agent';
+				for (let j = i + 1; j < sessionMessages.length; j++) {
+					const nextMsg = sessionMessages[j];
+					if (nextMsg && nextMsg.subAgentInternal && nextMsg.role === 'tool') {
+						// Try to find agent name from context
+						// For now, use a default name
+						break;
+					}
+				}
+
+				const toolLines = quickTools.map((tc: any, index: number) => {
+					const display = formatToolCallMessage(tc);
+					const isLast = index === quickTools.length - 1;
+					const prefix = isLast ? '└─' : '├─';
+
+					// Build parameter display
+					const params = display.args
+						.map((arg: any) => `${arg.key}: ${arg.value}`)
+						.join(', ');
+
+					return `\n  \x1b[2m${prefix} ${display.toolName}${
+						params ? ` (${params})` : ''
+					}\x1b[0m`;
+				});
+
+				uiMessages.push({
+					role: 'subagent',
+					content: `\x1b[38;2;184;122;206m⚇ ${agentName}${toolLines.join(
+						'',
+					)}\x1b[0m`,
+					streaming: false,
+					subAgentInternal: true,
+					pendingToolIds: quickTools.map((tc: any) => tc.id),
+				});
+
+				for (const tc of quickTools) {
+					processedToolCalls.add(tc.id);
+				}
 			}
 			continue;
 		}
@@ -77,19 +122,10 @@ export function convertSessionMessagesToUI(
 		// Handle sub-agent internal tool result messages
 		if (msg.subAgentInternal && msg.role === 'tool' && msg.tool_call_id) {
 			const isError = msg.content.startsWith('Error:');
-			const statusIcon = isError ? '✗' : '✓';
-			const statusText = isError ? `\n  └─ ${msg.content}` : '';
 
 			// Find tool name from previous assistant message
 			let toolName = 'tool';
-			let terminalResultData:
-				| {
-						stdout?: string;
-						stderr?: string;
-						exitCode?: number;
-						command?: string;
-				  }
-				| undefined;
+			let isTimeConsumingTool = false;
 
 			for (let j = i - 1; j >= 0; j--) {
 				const prevMsg = sessionMessages[j];
@@ -103,43 +139,125 @@ export function convertSessionMessagesToUI(
 					const tc = prevMsg.tool_calls.find(t => t.id === msg.tool_call_id);
 					if (tc) {
 						toolName = tc.function.name;
-						if (toolName === 'terminal-execute' && !isError) {
-							try {
-								const resultData = JSON.parse(msg.content);
-								if (
-									resultData.stdout !== undefined ||
-									resultData.stderr !== undefined
-								) {
-									terminalResultData = {
-										stdout: resultData.stdout,
-										stderr: resultData.stderr,
-										exitCode: resultData.exitCode,
-										command: resultData.command,
-									};
-								}
-							} catch (e) {
-								// Ignore parse errors
-							}
-						}
+						isTimeConsumingTool = isToolNeedTwoStepDisplay(toolName);
 						break;
 					}
 				}
 			}
 
-			uiMessages.push({
-				role: 'subagent',
-				content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${toolName}\x1b[0m${statusText}`,
-				streaming: false,
-				toolResult: !isError ? msg.content : undefined,
-				terminalResult: terminalResultData,
-				toolCall: terminalResultData
-					? {
-							name: toolName,
-							arguments: terminalResultData,
+			// For time-consuming tools, always show result with full details
+			if (isTimeConsumingTool) {
+				const statusIcon = isError ? '✗' : '✓';
+				const statusText = isError ? `\n  └─ ${msg.content}` : '';
+
+				let terminalResultData:
+					| {
+							stdout?: string;
+							stderr?: string;
+							exitCode?: number;
+							command?: string;
 					  }
-					: undefined,
-				subAgentInternal: true,
-			});
+					| undefined;
+
+				// Extract terminal result data
+				if (toolName === 'terminal-execute' && !isError) {
+					try {
+						const resultData = JSON.parse(msg.content);
+						if (
+							resultData.stdout !== undefined ||
+							resultData.stderr !== undefined
+						) {
+							terminalResultData = {
+								stdout: resultData.stdout,
+								stderr: resultData.stderr,
+								exitCode: resultData.exitCode,
+								command: resultData.command,
+							};
+						}
+					} catch (e) {
+						// Ignore parse errors
+					}
+				}
+
+				// Extract filesystem diff data
+				let fileToolData: any = undefined;
+				if (
+					!isError &&
+					(toolName === 'filesystem-create' ||
+						toolName === 'filesystem-edit' ||
+						toolName === 'filesystem-edit_search')
+				) {
+					try {
+						const resultData = JSON.parse(msg.content);
+
+						if (resultData.content) {
+							fileToolData = {
+								name: toolName,
+								arguments: {
+									content: resultData.content,
+									path: resultData.path || resultData.filename,
+								},
+							};
+						} else if (resultData.oldContent && resultData.newContent) {
+							fileToolData = {
+								name: toolName,
+								arguments: {
+									oldContent: resultData.oldContent,
+									newContent: resultData.newContent,
+									filename: resultData.path || resultData.filename,
+									completeOldContent: resultData.completeOldContent,
+									completeNewContent: resultData.completeNewContent,
+									contextStartLine: resultData.contextStartLine,
+								},
+							};
+						} else if (
+							resultData.batchResults &&
+							Array.isArray(resultData.batchResults)
+						) {
+							fileToolData = {
+								name: toolName,
+								arguments: {
+									isBatch: true,
+									batchResults: resultData.batchResults,
+								},
+							};
+						}
+					} catch (e) {
+						// Ignore parse errors
+					}
+				}
+
+				uiMessages.push({
+					role: 'subagent',
+					content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${toolName}\x1b[0m${statusText}`,
+					streaming: false,
+					toolResult: !isError ? msg.content : undefined,
+					terminalResult: terminalResultData,
+					toolCall: terminalResultData
+						? {
+								name: toolName,
+								arguments: terminalResultData,
+						  }
+						: fileToolData
+						? fileToolData
+						: undefined,
+					subAgentInternal: true,
+				});
+			} else {
+				// For quick tools, only show errors
+				// Success results are handled by updating pendingToolIds in the compact message
+				if (isError) {
+					const statusText = `\n  └─ ${msg.content}`;
+					uiMessages.push({
+						role: 'subagent',
+						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m${statusText}`,
+						streaming: false,
+						subAgentInternal: true,
+					});
+				}
+				// Note: Success results for quick tools are not shown individually
+				// They are represented by the completion checkmark on the compact "Quick Tools" message
+			}
 			continue;
 		}
 
