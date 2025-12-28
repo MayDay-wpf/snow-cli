@@ -37,6 +37,7 @@ import {
 	analyzeCodeStructure,
 	findSmartContextBoundaries,
 } from './utils/filesystem/code-analysis.utils.js';
+import {preValidateEdit} from './utils/filesystem/edit-validator.utils.js';
 import {
 	findClosestMatches,
 	generateDiffMessage,
@@ -967,6 +968,20 @@ export class FilesystemMCPService {
 				// Don't fail the operation if backup fails
 			}
 
+			// PRE-EDIT VALIDATION: Check code boundaries before editing
+			// This prevents syntax errors from incomplete code blocks
+			const preValidation = preValidateEdit(
+				searchContent,
+				replaceContent,
+				filePath,
+			);
+			if (!preValidation.canEdit) {
+				throw new Error(
+					`🚫 PRE-EDIT VALIDATION FAILED - Code boundary check detected incomplete code:\n\n${preValidation.reason}\n\n` +
+						`This validation prevents syntax errors. The edit operation has been blocked.`,
+				);
+			}
+
 			// Normalize line endings
 			let normalizedSearch = searchContent
 				.replace(/\r\n/g, '\n')
@@ -1581,6 +1596,48 @@ export class FilesystemMCPService {
 			}
 			if (startLine > endLine) {
 				throw new Error('Start line must be less than or equal to end line');
+			}
+
+			// PRE-EDIT VALIDATION: Check new content boundaries
+			// For line-based edits, we validate the newContent that will be inserted
+			const {validateCodeBoundaries} = await import(
+				'./utils/filesystem/edit-validator.utils.js'
+			);
+			const contentValidation = validateCodeBoundaries(
+				newContent,
+				filePath,
+				true,
+			);
+			if (!contentValidation.isValid) {
+				const reasons: string[] = [
+					'❌ New content has incomplete code boundaries:',
+				];
+				contentValidation.errors.forEach(err => {
+					reasons.push(`   • ${err}`);
+				});
+				if (contentValidation.warnings.length > 0) {
+					contentValidation.warnings.forEach(warn => {
+						reasons.push(`   ⚠️  ${warn}`);
+					});
+				}
+				reasons.push('');
+				reasons.push('💡 Fix suggestions:');
+				reasons.push(
+					'   1. Ensure new content includes ALL closing brackets/tags',
+				);
+				reasons.push(
+					'   2. Count symbols: every { must have }, every ( must have ), every [ must have ]',
+				);
+				reasons.push(
+					'   3. For HTML/XML/JSX, include complete tags from <tag> to </tag>',
+				);
+
+				throw new Error(
+					`🚫 PRE-EDIT VALIDATION FAILED - New content boundary check:\n\n${reasons.join(
+						'\n',
+					)}\n\n` +
+						`This validation prevents syntax errors. The edit operation has been blocked.`,
+				);
 			}
 
 			// Adjust startLine and endLine if they exceed file length
