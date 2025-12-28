@@ -37,7 +37,6 @@ import {
 	analyzeCodeStructure,
 	findSmartContextBoundaries,
 } from './utils/filesystem/code-analysis.utils.js';
-import {preValidateEdit} from './utils/filesystem/edit-validator.utils.js';
 import {
 	findClosestMatches,
 	generateDiffMessage,
@@ -968,20 +967,6 @@ export class FilesystemMCPService {
 				// Don't fail the operation if backup fails
 			}
 
-			// PRE-EDIT VALIDATION: Check code boundaries before editing
-			// This prevents syntax errors from incomplete code blocks
-			const preValidation = preValidateEdit(
-				searchContent,
-				replaceContent,
-				filePath,
-			);
-			if (!preValidation.canEdit) {
-				throw new Error(
-					`🚫 PRE-EDIT VALIDATION FAILED - Code boundary check detected incomplete code:\n\n${preValidation.reason}\n\n` +
-						`This validation prevents syntax errors. The edit operation has been blocked.`,
-				);
-			}
-
 			// Normalize line endings
 			let normalizedSearch = searchContent
 				.replace(/\r\n/g, '\n')
@@ -1135,7 +1120,7 @@ export class FilesystemMCPService {
 					);
 
 					let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
-					errorMessage += `🔍 Using smart fuzzy matching (threshold: 60%)\n`;
+					errorMessage += `🔍 Using smart fuzzy matching (threshold: ${threshold})\n`;
 					if (isOverEscaped(searchContent)) {
 						errorMessage += `⚠️  Detected over-escaped content, automatic fix attempted but failed\n`;
 					}
@@ -1598,48 +1583,6 @@ export class FilesystemMCPService {
 				throw new Error('Start line must be less than or equal to end line');
 			}
 
-			// PRE-EDIT VALIDATION: Check new content boundaries
-			// For line-based edits, we validate the newContent that will be inserted
-			const {validateCodeBoundaries} = await import(
-				'./utils/filesystem/edit-validator.utils.js'
-			);
-			const contentValidation = validateCodeBoundaries(
-				newContent,
-				filePath,
-				true,
-			);
-			if (!contentValidation.isValid) {
-				const reasons: string[] = [
-					'❌ New content has incomplete code boundaries:',
-				];
-				contentValidation.errors.forEach(err => {
-					reasons.push(`   • ${err}`);
-				});
-				if (contentValidation.warnings.length > 0) {
-					contentValidation.warnings.forEach(warn => {
-						reasons.push(`   ⚠️  ${warn}`);
-					});
-				}
-				reasons.push('');
-				reasons.push('💡 Fix suggestions:');
-				reasons.push(
-					'   1. Ensure new content includes ALL closing brackets/tags',
-				);
-				reasons.push(
-					'   2. Count symbols: every { must have }, every ( must have ), every [ must have ]',
-				);
-				reasons.push(
-					'   3. For HTML/XML/JSX, include complete tags from <tag> to </tag>',
-				);
-
-				throw new Error(
-					`🚫 PRE-EDIT VALIDATION FAILED - New content boundary check:\n\n${reasons.join(
-						'\n',
-					)}\n\n` +
-						`This validation prevents syntax errors. The edit operation has been blocked.`,
-				);
-			}
-
 			// Adjust startLine and endLine if they exceed file length
 			const adjustedStartLine = Math.min(startLine, totalLines);
 			const adjustedEndLine = Math.min(endLine, totalLines);
@@ -2060,7 +2003,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit_search',
 		description:
-			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: entire function from declaration to final closing brace `}`, complete HTML/XML/JSX tags from opening `<tag>` to closing `</tag>`, full code blocks with ALL matching brackets/braces/parentheses, (3) Copy the COMPLETE code block (without line numbers) - verify you have captured ALL opening and closing symbols, (4) MANDATORY verification: Count and match ALL pairs - every `{` must have `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, (5) Use THIS tool only after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit partial functions (missing closing brace), NEVER edit incomplete markup (missing closing tag), NEVER edit partial code blocks (unmatched brackets), NEVER copy line numbers from filesystem-read output. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm (60% threshold) to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace `}`), incomplete markup tags (HTML/Vue/JSX missing `</tag>`), partial code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), copying line numbers from filesystem-read output. You MUST include complete syntactic units with ALL opening/closing pairs verified and matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
+			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: entire function from declaration to final closing brace `}`, complete HTML/XML/JSX tags from opening `<tag>` to closing `</tag>`, full code blocks with ALL matching brackets/braces/parentheses, (3) Copy the COMPLETE code block (without line numbers) - verify you have captured ALL opening and closing symbols, (4) MANDATORY verification: Count and match ALL pairs - every `{` must have `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, (5) Use THIS tool only after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit partial functions (missing closing brace), NEVER edit incomplete markup (missing closing tag), NEVER edit partial code blocks (unmatched brackets), NEVER copy line numbers from filesystem-read output. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace `}`), incomplete markup tags (HTML/Vue/JSX missing `</tag>`), partial code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), copying line numbers from filesystem-read output. You MUST include complete syntactic units with ALL opening/closing pairs verified and matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
