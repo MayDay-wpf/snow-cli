@@ -1297,19 +1297,11 @@ export async function handleConversationWithTools(
 											id => id !== msg.tool_call_id,
 										);
 
-										// If all tools completed, add checkmark
-										if (newPendingIds.length === 0) {
-											updated[pendingMsgIndex] = {
-												...pendingMsg,
-												content: `${pendingMsg.content} \x1b[38;2;100;200;100m✓\x1b[0m`,
-												pendingToolIds: newPendingIds,
-											};
-										} else {
-											updated[pendingMsgIndex] = {
-												...pendingMsg,
-												pendingToolIds: newPendingIds,
-											};
-										}
+										// Update pending tool IDs
+										updated[pendingMsgIndex] = {
+											...pendingMsg,
+											pendingToolIds: newPendingIds,
+										};
 									}
 									return updated;
 								}

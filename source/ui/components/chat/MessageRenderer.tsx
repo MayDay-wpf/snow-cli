@@ -51,7 +51,7 @@ export default function MessageRenderer({
 	const isTimeConsumingTool =
 		message.toolPending ||
 		(message.role === 'assistant' &&
-			(message.content.startsWith('⚡') || message.content.includes('⚇⚡')));
+			(message.content.startsWith('⚡') || message.content.startsWith('⚇⚡')));
 
 	// Only show parallel group indicators for non-time-consuming tools
 	const shouldShowParallelIndicator = isInParallelGroup && !isTimeConsumingTool;
@@ -78,16 +78,16 @@ export default function MessageRenderer({
 		shouldShowParallelIndicator && (!nextMessage || nextHasDifferentGroup);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
-		if (message.content.startsWith('⚡') || message.content.includes('⚇⚡')) {
+		if (message.content.startsWith('⚡') || message.content.startsWith('⚇⚡')) {
 			toolStatusColor = 'yellowBright';
 		} else if (
 			message.content.startsWith('✓') ||
-			message.content.includes('⚇✓')
+			message.content.startsWith('⚇✓')
 		) {
 			toolStatusColor = 'green';
 		} else if (
 			message.content.startsWith('✗') ||
-			message.content.includes('⚇✗')
+			message.content.startsWith('⚇✗')
 		) {
 			toolStatusColor = 'red';
 		} else {
@@ -197,9 +197,9 @@ export default function MessageRenderer({
 											// For tool messages (with status icons), render as plain text with color
 											// instead of using MarkdownRenderer which ignores the toolStatusColor
 											const hasToolStatusIcon =
-												message.content.includes('⚇⚡') ||
-												message.content.includes('⚇✓') ||
-												message.content.includes('⚇✗') ||
+												message.content.startsWith('⚇⚡') ||
+												message.content.startsWith('⚇✓') ||
+												message.content.startsWith('⚇✗') ||
 												message.content.startsWith('⚡') ||
 												message.content.startsWith('✓') ||
 												message.content.startsWith('✗');
@@ -392,7 +392,7 @@ export default function MessageRenderer({
 										)}
 									{/* Show tool result preview for successful tool executions */}
 									{(message.content.startsWith('✓') ||
-										message.content.includes('⚇✓')) &&
+										message.content.startsWith('⚇✓')) &&
 										message.toolResult &&
 										// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
 										!(
