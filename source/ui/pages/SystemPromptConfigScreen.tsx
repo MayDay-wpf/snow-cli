@@ -3,6 +3,10 @@ import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
+import {spawn, execSync} from 'child_process';
+import {writeFileSync, readFileSync, existsSync, unlinkSync} from 'fs';
+import {join} from 'path';
+import {platform, tmpdir} from 'os';
 import {
 	getSystemPromptConfig,
 	saveSystemPromptConfig,
@@ -16,7 +20,7 @@ type Props = {
 	onBack: () => void;
 };
 
-type View = 'list' | 'add' | 'edit' | 'confirmDelete';
+type View = 'list' | 'add' | 'edit' | 'confirmDelete' | 'editWithEditor';
 type ListAction =
 	| 'activate'
 	| 'deactivate'
@@ -24,6 +28,67 @@ type ListAction =
 	| 'delete'
 	| 'add'
 	| 'back';
+
+function checkCommandExists(command: string): boolean {
+	if (platform() === 'win32') {
+		// Windows: 使用 where 命令检查
+		try {
+			execSync(`where ${command}`, {
+				stdio: 'ignore',
+				windowsHide: true,
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	// Unix/Linux/macOS: 使用 command -v
+	const shells = ['/bin/sh', '/bin/bash', '/bin/zsh'];
+	for (const shell of shells) {
+		try {
+			execSync(`command -v ${command}`, {
+				stdio: 'ignore',
+				shell,
+				env: process.env,
+			});
+			return true;
+		} catch {
+			// Try next shell
+		}
+	}
+
+	return false;
+}
+
+function getSystemEditor(): string | null {
+	// 优先使用环境变量指定的编辑器 (所有平台)
+	const envEditor = process.env['VISUAL'] || process.env['EDITOR'];
+	if (envEditor && checkCommandExists(envEditor)) {
+		return envEditor;
+	}
+
+	if (platform() === 'win32') {
+		// Windows: 按优先级检测常见编辑器
+		const windowsEditors = ['notepad++', 'notepad', 'code', 'vim', 'nano'];
+		for (const editor of windowsEditors) {
+			if (checkCommandExists(editor)) {
+				return editor;
+			}
+		}
+		return null;
+	}
+
+	// Unix/Linux/macOS: 按优先级检测常见编辑器
+	const editors = ['nano', 'vim', 'vi'];
+	for (const editor of editors) {
+		if (checkCommandExists(editor)) {
+			return editor;
+		}
+	}
+
+	return null;
+}
 
 export default function SystemPromptConfigScreen({onBack}: Props) {
 	const {t} = useI18n();
@@ -45,6 +110,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 	const [editContent, setEditContent] = useState('');
 	const [editingField, setEditingField] = useState<'name' | 'content'>('name');
 	const [error, setError] = useState('');
+	const [successMessage, setSuccessMessage] = useState('');
 
 	const actions: ListAction[] =
 		config.prompts.length > 0
@@ -117,6 +183,86 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 		setEditContent(prompt.content);
 		setEditingField('name');
 		setView('edit');
+	};
+
+	const handleEditWithExternalEditor = async () => {
+		if (config.prompts.length === 0 || selectedIndex >= config.prompts.length)
+			return;
+
+		const prompt = config.prompts[selectedIndex]!;
+		const editor = getSystemEditor();
+
+		if (!editor) {
+			setError(t.systemPromptConfig.editorNotFound);
+			return;
+		}
+
+		// 创建临时文件
+		const tempFile = join(tmpdir(), `snow-prompt-${Date.now()}.txt`);
+		writeFileSync(tempFile, prompt.content || '', 'utf8');
+
+		// 暂停 Ink 应用以让编辑器接管终端
+		if (process.stdin.isTTY) {
+			process.stdin.pause();
+		}
+
+		const child = spawn(editor, [tempFile], {
+			stdio: 'inherit',
+		});
+
+		child.on('close', () => {
+			// 恢复 Ink 应用
+			if (process.stdin.isTTY) {
+				process.stdin.resume();
+				process.stdin.setRawMode(true);
+			}
+
+			// 读取编辑后的内容
+			if (existsSync(tempFile)) {
+				try {
+					const editedContent = readFileSync(tempFile, 'utf8');
+					const newConfig: SystemPromptConfig = {
+						...config,
+						prompts: config.prompts.map((p, i) =>
+							i === selectedIndex
+								? {
+										...p,
+										content: editedContent,
+								  }
+								: p,
+						),
+					};
+
+					if (saveAndRefresh(newConfig)) {
+						setSuccessMessage(t.systemPromptConfig.editorSaved);
+						// 3秒后清除成功消息
+						setTimeout(() => setSuccessMessage(''), 3000);
+					}
+
+					// 清理临时文件
+					unlinkSync(tempFile);
+				} catch (err) {
+					setError(
+						err instanceof Error
+							? err.message
+							: t.systemPromptConfig.editorEditFailed,
+					);
+				}
+			}
+		});
+
+		child.on('error', error => {
+			// 恢复 Ink 应用
+			if (process.stdin.isTTY) {
+				process.stdin.resume();
+				process.stdin.setRawMode(true);
+			}
+
+			setError(`${t.systemPromptConfig.editorOpenFailed}: ${error.message}`);
+			if (existsSync(tempFile)) {
+				unlinkSync(tempFile);
+			}
+		});
 	};
 
 	const handleDelete = () => {
@@ -269,6 +415,15 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					saveNewPrompt();
 				} else {
 					saveEditedPrompt();
+				}
+			} else if (
+				!isEditing &&
+				editingField === 'content' &&
+				(input === 'e' || input === 'E')
+			) {
+				// 按E键打开外部编辑器
+				if (view === 'edit') {
+					handleEditWithExternalEditor();
 				}
 			}
 		},
@@ -495,6 +650,26 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 						{t.systemPromptConfig.editingHint}
 					</Text>
 				</Box>
+
+				{view === 'edit' && editingField === 'content' && !isEditing && (
+					<Box marginTop={1}>
+						<Alert variant="info">
+							{t.systemPromptConfig.externalEditorHint}
+						</Alert>
+					</Box>
+				)}
+
+				{successMessage && (
+					<Box marginTop={1}>
+						<Alert variant="success">{successMessage}</Alert>
+					</Box>
+				)}
+
+				{error && (
+					<Box marginTop={1}>
+						<Alert variant="error">{error}</Alert>
+					</Box>
+				)}
 			</Box>
 		);
 	}

@@ -1,11 +1,9 @@
 import {useEffect} from 'react';
-import {useApp} from 'ink';
 import {spawn, execSync} from 'child_process';
 import {writeFileSync, readFileSync, existsSync} from 'fs';
 import {join} from 'path';
 import {homedir, platform} from 'os';
 import {getMCPConfig, validateMCPConfig} from '../../utils/config/apiConfig.js';
-import {gracefulExit} from '../../utils/core/processManager.js';
 
 type Props = {
 	onBack: () => void;
@@ -77,8 +75,6 @@ function getSystemEditor(): string | null {
 }
 
 export default function MCPConfigScreen({onBack}: Props) {
-	const {exit} = useApp();
-
 	useEffect(() => {
 		const openEditor = async () => {
 			const config = getMCPConfig();
@@ -110,17 +106,26 @@ export default function MCPConfigScreen({onBack}: Props) {
 					console.error('  CentOS/RHEL:   sudo yum install nano');
 					console.error('  macOS:         nano is usually pre-installed');
 				}
-				gracefulExit();
+				onBack();
 				return;
 			}
 
-			exit();
+			// 暂停 Ink 应用以让编辑器接管终端
+			if (process.stdin.isTTY) {
+				process.stdin.pause();
+			}
 
 			const child = spawn(editor, [MCP_CONFIG_FILE], {
 				stdio: 'inherit',
 			});
 
 			child.on('close', () => {
+				// 恢复 Ink 应用
+				if (process.stdin.isTTY) {
+					process.stdin.resume();
+					process.stdin.setRawMode(true);
+				}
+
 				// 读取编辑后的配置
 				if (existsSync(MCP_CONFIG_FILE)) {
 					try {
@@ -143,17 +148,23 @@ export default function MCPConfigScreen({onBack}: Props) {
 					}
 				}
 
-				gracefulExit();
+				onBack();
 			});
 
 			child.on('error', error => {
+				// 恢复 Ink 应用
+				if (process.stdin.isTTY) {
+					process.stdin.resume();
+					process.stdin.setRawMode(true);
+				}
+
 				console.error('Failed to open editor:', error.message);
-				gracefulExit();
+				onBack();
 			});
 		};
 
 		openEditor();
-	}, [exit, onBack]);
+	}, [onBack]);
 
 	return null;
 }

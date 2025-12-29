@@ -58,7 +58,7 @@ jobs:
             
             ### What's New
 
-            - refactor(execution): optimize service name sorting in executeMCPTool function
+            - MCP,SystemPrompt add external editor support and related messages
             
             ### Installation
             ```bash

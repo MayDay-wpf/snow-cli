@@ -145,6 +145,12 @@ export const en: TranslationKeys = {
 		notSet: 'Not set',
 		editingHint:
 			'↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel',
+		externalEditorHint: 'Press E to use external editor',
+		editorNotFound:
+			'No text editor found. Please set EDITOR or VISUAL environment variable',
+		editorOpenFailed: 'Failed to open editor',
+		editorEditFailed: 'Edit failed',
+		editorSaved: 'Content saved successfully',
 		confirmDelete: 'Confirm Delete',
 		deleteConfirmMessage: 'Are you sure you want to delete',
 		confirmHint: 'Press Y to confirm, N or ESC to cancel',

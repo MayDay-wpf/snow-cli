@@ -131,6 +131,11 @@ export type TranslationKeys = {
 		enterPromptContent: string;
 		notSet: string;
 		editingHint: string;
+		externalEditorHint: string;
+		editorNotFound: string;
+		editorOpenFailed: string;
+		editorEditFailed: string;
+		editorSaved: string;
 		confirmDelete: string;
 		deleteConfirmMessage: string;
 		confirmHint: string;
