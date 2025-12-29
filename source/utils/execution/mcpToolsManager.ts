@@ -1210,7 +1210,11 @@ export async function executeMCPTool(
 			// Check configured MCP services
 			try {
 				const mcpConfig = getMCPConfig();
-				for (const configuredServiceName of Object.keys(mcpConfig.mcpServers)) {
+				// Sort service names by length descending to match longest first
+				const serviceNames = Object.keys(mcpConfig.mcpServers).sort(
+					(a, b) => b.length - a.length,
+				);
+				for (const configuredServiceName of serviceNames) {
 					const prefix = `${configuredServiceName}-`;
 					if (toolName.startsWith(prefix)) {
 						serviceName = configuredServiceName;

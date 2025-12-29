@@ -58,8 +58,7 @@ jobs:
             
             ### What's New
 
-            - AI-generated Skills
-            - Optimized the display effect of internal tool calls of sub-agents
+            - refactor(execution): optimize service name sorting in executeMCPTool function
             
             ### Installation
             ```bash
