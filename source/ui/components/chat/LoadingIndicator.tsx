@@ -114,9 +114,7 @@ export default function LoadingIndicator({
 							</Box>
 						) : codebaseSearchStatus?.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
-						) : codebaseSearchStatus &&
-						  !codebaseSearchStatus.isSearching &&
-						  codebaseSearchStatus.reviewResults ? (
+						) : codebaseSearchStatus && !codebaseSearchStatus.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
 						) : (
 							<Text color={theme.colors.menuSecondary} dimColor>

@@ -412,6 +412,21 @@ class CodebaseSearchService {
 			return lastResults;
 		} catch (error) {
 			logger.error('Codebase search failed:', error);
+
+			// Emit search complete event with error to reset UI state
+			if (enableAgentReview) {
+				codebaseSearchEvents.emitSearchEvent({
+					type: 'search-complete',
+					attempt: 0,
+					maxAttempts: MAX_SEARCH_RETRIES,
+					currentTopN: topN,
+					message: `Search failed: ${
+						error instanceof Error ? error.message : 'Unknown error'
+					}`,
+					query: query,
+				});
+			}
+
 			throw error;
 		}
 	}
