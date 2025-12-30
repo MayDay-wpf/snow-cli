@@ -154,8 +154,12 @@ Options
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
-		--sse         Start SSE server mode for external integration
+		--sse         Start SSE server mode for external integration (foreground)
+		--sse-daemon  Start SSE server as background daemon
+		--sse-stop    Stop SSE daemon server
+		--sse-status  Show SSE daemon server status
 		--sse-port    SSE server port (default: 3000)
+		--sse-timeout SSE server interaction timeout in milliseconds (default: 300000, i.e. 5 minutes)
 		--work-dir    Working directory for SSE server (default: current directory)
 `,
 	{
@@ -201,10 +205,35 @@ Options
 				type: 'boolean',
 				default: false,
 			},
+			sseDaemon: {
+				type: 'boolean',
+				default: false,
+				alias: 'sse-daemon',
+			},
+			sseDaemonMode: {
+				type: 'boolean',
+				default: false,
+				alias: 'sse-daemon-mode',
+			},
+			sseStop: {
+				type: 'boolean',
+				default: false,
+				alias: 'sse-stop',
+			},
+			sseStatus: {
+				type: 'boolean',
+				default: false,
+				alias: 'sse-status',
+			},
 			ssePort: {
 				type: 'number',
 				default: 3000,
 				alias: 'sse-port',
+			},
+			sseTimeout: {
+				type: 'number',
+				default: 300000,
+				alias: 'sse-timeout',
 			},
 			workDir: {
 				type: 'string',
@@ -230,15 +259,39 @@ if (cli.flags.update) {
 	}
 }
 
+// Handle SSE daemon stop
+if (cli.flags.sseStop) {
+	const {stopDaemon} = await import('./utils/sse/sseDaemon.js');
+	// 支持通过PID或端口停止
+	const target = cli.input[0] ? parseInt(cli.input[0]) : cli.flags.ssePort;
+	stopDaemon(target);
+	process.exit(0);
+}
+
+// Handle SSE daemon status
+if (cli.flags.sseStatus) {
+	const {daemonStatus} = await import('./utils/sse/sseDaemon.js');
+	daemonStatus();
+	process.exit(0);
+}
+
+// Handle SSE daemon mode
+if (cli.flags.sseDaemon) {
+	const {startDaemon} = await import('./utils/sse/sseDaemon.js');
+	const port = cli.flags.ssePort || 3000;
+	const timeout = cli.flags.sseTimeout || 300000;
+	const workDir = cli.flags.workDir;
+	startDaemon(port, workDir, timeout);
+	process.exit(0);
+}
+
 // Handle SSE server mode
 if (cli.flags.sse) {
 	const {sseManager} = await import('./utils/sse/sseManager.js');
-	const {SSEServerStatus} = await import(
-		'./ui/components/sse/SSEServerStatus.js'
-	);
-	const {I18nProvider} = await import('./i18n/I18nContext.js');
 	const port = cli.flags.ssePort || 3000;
+	const timeout = cli.flags.sseTimeout || 300000;
 	const workDir = cli.flags.workDir;
+	const isDaemonMode = cli.flags.sseDaemonMode;
 
 	// 如果指定了工作目录，切换到该目录
 	if (workDir) {
@@ -251,50 +304,92 @@ if (cli.flags.sse) {
 		}
 	}
 
-	// 渲染 SSE 服务器信息组件
-	let logUpdater: (
-		message: string,
-		level?: 'info' | 'error' | 'success',
-	) => void;
+	// 守护进程模式：使用 DaemonLogger 纯文本日志
+	if (isDaemonMode) {
+		const {DaemonLogger} = await import('./utils/sse/daemonLogger.js');
+		const logFilePath = process.env['SSE_DAEMON_LOG_FILE'];
 
-	const {unmount} = render(
-		<I18nProvider>
-			<SSEServerStatus
-				port={port}
-				workingDir={workDir || process.cwd()}
-				onLogUpdate={callback => {
-					logUpdater = callback;
-				}}
-			/>
-		</I18nProvider>,
-	);
-
-	// 设置日志回调
-	sseManager.setLogCallback((message, level) => {
-		if (logUpdater) {
-			logUpdater(message, level);
+		if (!logFilePath) {
+			console.error('错误: 守护进程模式缺少日志文件路径');
+			process.exit(1);
 		}
-	});
 
-	await sseManager.start(port);
+		const logger = new DaemonLogger(logFilePath);
 
-	// 保持进程运行
-	process.on('SIGINT', async () => {
-		unmount();
-		console.log('\nStopping SSE server...');
-		await sseManager.stop();
-		process.exit(0);
-	});
+		// 设置日志回调
+		sseManager.setLogCallback((message, level) => {
+			logger.log(message, level);
+		});
 
-	process.on('SIGTERM', async () => {
-		unmount();
-		console.log('\nStopping SSE server...');
-		await sseManager.stop();
-		process.exit(0);
-	});
+		await sseManager.start(port, timeout);
 
-	// 阻止进程退出
-	await new Promise(() => {});
+		// 保持进程运行
+		process.on('SIGINT', async () => {
+			logger.log('接收到 SIGINT 信号，正在停止服务器...', 'info');
+			await sseManager.stop();
+			process.exit(0);
+		});
+
+		process.on('SIGTERM', async () => {
+			logger.log('接收到 SIGTERM 信号，正在停止服务器...', 'info');
+			await sseManager.stop();
+			process.exit(0);
+		});
+
+		// 阻止进程退出
+		await new Promise(() => {});
+	} else {
+		// 前台模式：使用 Ink UI
+		const {SSEServerStatus} = await import(
+			'./ui/components/sse/SSEServerStatus.js'
+		);
+		const {I18nProvider} = await import('./i18n/I18nContext.js');
+
+		// 渲染 SSE 服务器信息组件
+		let logUpdater: (
+			message: string,
+			level?: 'info' | 'error' | 'success',
+		) => void;
+
+		const {unmount} = render(
+			<I18nProvider>
+				<SSEServerStatus
+					port={port}
+					workingDir={workDir || process.cwd()}
+					onLogUpdate={callback => {
+						logUpdater = callback;
+					}}
+				/>
+			</I18nProvider>,
+		);
+
+		// 设置日志回调
+		sseManager.setLogCallback((message, level) => {
+			if (logUpdater) {
+				logUpdater(message, level);
+			}
+		});
+
+		await sseManager.start(port, timeout);
+
+		// 保持进程运行
+		process.on('SIGINT', async () => {
+			unmount();
+			console.log('\nStopping SSE server...');
+			await sseManager.stop();
+			process.exit(0);
+		});
+
+		process.on('SIGTERM', async () => {
+			unmount();
+			console.log('\nStopping SSE server...');
+			await sseManager.stop();
+			process.exit(0);
+		});
+
+		// 阻止进程退出
+		await new Promise(() => {});
+	}
 }
 
 // Handle task creation - create and execute in background

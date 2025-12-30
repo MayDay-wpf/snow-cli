@@ -9,6 +9,7 @@ import {
 	addMultipleToolsToPermissions,
 } from '../config/permissionsConfig.js';
 import {isSensitiveCommand} from '../execution/sensitiveCommandManager.js';
+import {randomUUID} from 'crypto';
 
 /**
  * 待处理的交互请求
@@ -29,7 +30,7 @@ class SSEManager {
 	private server: SSEServer | null = null;
 	private isRunning = false;
 	private pendingInteractions: Map<string, PendingInteraction> = new Map();
-	private interactionTimeout = 60000; // 60秒超时
+	private interactionTimeout = 300000; // 交互超时时长(默认5分钟,可通过start方法配置)
 	private logCallback?: (
 		message: string,
 		level?: 'info' | 'error' | 'success',
@@ -63,11 +64,17 @@ class SSEManager {
 	/**
 	 * 启动 SSE 服务
 	 */
-	async start(port: number = 3000): Promise<void> {
+	async start(
+		port: number = 3000,
+		interactionTimeout: number = 300000,
+	): Promise<void> {
 		if (this.isRunning) {
 			this.log('SSE service is already running', 'info');
 			return;
 		}
+
+		// 设置交互超时时长
+		this.interactionTimeout = interactionTimeout;
 
 		this.server = new SSEServer(port);
 
@@ -306,7 +313,7 @@ class SSEManager {
 		// 存储到 sessionControllers，以便可以从客户端中断
 		this.sessionControllers.set(currentSession.id, controller);
 
-		// 真实的消息保存函数
+		// 消息保存函数
 		const saveMessage = async (msg: any) => {
 			try {
 				await sessionManager.addMessage(msg);
@@ -498,7 +505,10 @@ class SSEManager {
 
 		// 工具自动批准检查
 		const isToolAutoApproved = (toolName: string) =>
-			approvedToolsSet.has(toolName);
+			approvedToolsSet.has(toolName) ||
+			toolName.startsWith('todo-') ||
+			toolName.startsWith('subagent-') ||
+			toolName === 'askuser-ask_question';
 
 		// 添加到自动批准列表
 		const addMultipleToAlwaysApproved = (toolNames: string[]) => {
@@ -606,7 +616,7 @@ class SSEManager {
 	 * 生成请求ID
 	 */
 	private generateRequestId(): string {
-		return `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+		return randomUUID();
 	}
 
 	/**
