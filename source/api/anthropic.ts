@@ -578,10 +578,12 @@ export async function* createStreamingAnthropicCompletion(
 			// }
 
 			// Use configured baseUrl or default Anthropic URL
-			const baseUrl =
+			//移除末尾斜杠，避免拼接时出现双斜杠（如 /v1//messages）
+			const baseUrl = (
 				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
 					? config.baseUrl
-					: 'https://api.anthropic.com/v1';
+					: 'https://api.anthropic.com/v1'
+			).replace(/\/+$/, '');
 
 			const url = config.anthropicBeta
 				? `${baseUrl}/messages?beta=true`
