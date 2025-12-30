@@ -14,9 +14,13 @@ _An intelligent AI-powered CLI tool for developers_
 
 ⚠️ Notice: If you want to use Snow to access domestic Claude Code or Codex relays, please [click here](#access-domestic-claude-code--codex-relay-snow-configuration) to see the corresponding configuration methods.
 
-## Thanks 💖
+## Thanks Developer 💖
 
 <img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
+
+## ❤️Thanks Support 💖
+
+* [UUCode](https://www.uucode.org/)
 
 ## << [Click to view the detailed complete document](docs/usage/en/0.Catalogue.md) >>
 

@@ -14,9 +14,13 @@ _面向开发者的智能 AI 命令行工具_
 
 ⚠️ 注意：如果你希望使用 Snow 接入国内的 Claude Code 或者 Codex 中转，请 [点击这里](#claude-code--codex-中转站接入-snow-配置方法) 查看对应的的配置方法
 
-## 感谢 💖
+## 感谢开发者 💖
 
 <img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
+
+## 感谢赞助商 💖
+
+* [UUCode](https://www.uucode.org/)
 
 ## << [点击查看详细完整文档](docs/usage/zh/0.目录.md) >>
 
