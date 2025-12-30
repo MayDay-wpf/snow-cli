@@ -97,18 +97,28 @@ export default function LoadingIndicator({
 							<Box flexDirection="column">
 								{retryStatus.errorMessage && (
 									<Text color="red" dimColor>
-										✗ Error: {retryStatus.errorMessage}
+										{t.chatScreen.retryError.replace(
+											'{message}',
+											retryStatus.errorMessage,
+										)}
 									</Text>
 								)}
 								{retryStatus.remainingSeconds !== undefined &&
 								retryStatus.remainingSeconds > 0 ? (
 									<Text color="yellow" dimColor>
-										⟳ Retry {retryStatus.attempt}/5 in{' '}
-										{retryStatus.remainingSeconds}s...
+										{t.chatScreen.retryAttempt
+											.replace('{current}', String(retryStatus.attempt))
+											.replace('{max}', '5')}{' '}
+										{t.chatScreen.retryIn.replace(
+											'{seconds}',
+											String(retryStatus.remainingSeconds),
+										)}
 									</Text>
 								) : (
 									<Text color="yellow" dimColor>
-										⟳ Resending... (Attempt {retryStatus.attempt}/5)
+										{t.chatScreen.retryResending
+											.replace('{current}', String(retryStatus.attempt))
+											.replace('{max}', '5')}
 									</Text>
 								)}
 							</Box>

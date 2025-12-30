@@ -2,6 +2,7 @@ import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {SelectedFile} from '../../../utils/core/fileUtils.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 
 export interface Message {
 	role: 'user' | 'assistant' | 'command' | 'subagent';
@@ -78,6 +79,7 @@ const STREAM_COLORS = ['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'] as const;
 
 const MessageList = memo(
 	({messages, animationFrame, maxMessages = 6}: Props) => {
+		const {t} = useI18n();
 		if (messages.length === 0) {
 			return null;
 		}
@@ -240,7 +242,7 @@ const MessageList = memo(
 											)}
 										{message.discontinued && (
 											<Text color="red" bold>
-												└─ user discontinue
+												{t.chatScreen.discontinuedMessage}
 											</Text>
 										)}
 									</>
