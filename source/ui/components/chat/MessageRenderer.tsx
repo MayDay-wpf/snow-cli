@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
@@ -25,6 +26,7 @@ export default function MessageRenderer({
 	showThinking = true,
 }: Props) {
 	const {theme} = useTheme();
+	const {t} = useI18n();
 
 	// Helper function to remove ANSI escape codes
 	const removeAnsiCodes = (text: string): string => {
@@ -439,7 +441,7 @@ export default function MessageRenderer({
 										)}
 									{message.discontinued && (
 										<Text color="red" bold>
-											└─ user discontinue
+											{t.chatScreen.discontinuedMessage}
 										</Text>
 									)}
 								</>

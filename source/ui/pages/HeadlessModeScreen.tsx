@@ -10,6 +10,7 @@ import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.
 import {useVSCodeState} from '../../hooks/integration/useVSCodeState.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
+import {useI18n} from '../../i18n/I18nContext.js';
 import {
 	parseAndValidateFileReferences,
 	createMessageWithFileInstructions,
@@ -357,6 +358,7 @@ export default function HeadlessModeScreen({
 	const [isWaitingForInput, setIsWaitingForInput] = useState(false);
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
+	const {t} = useI18n();
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -435,7 +437,10 @@ export default function HeadlessModeScreen({
 				// Show retry status with colors
 				if (streamingState.retryStatus.errorMessage) {
 					console.log(
-						`\n\x1b[31m✗ Error: ${streamingState.retryStatus.errorMessage}\x1b[0m`,
+						`\n\x1b[31m${t.chatScreen.retryError.replace(
+							'{message}',
+							streamingState.retryStatus.errorMessage,
+						)}\x1b[0m`,
 					);
 				}
 				if (
@@ -443,11 +448,18 @@ export default function HeadlessModeScreen({
 					streamingState.retryStatus.remainingSeconds > 0
 				) {
 					console.log(
-						`\n\x1b[93m⟳ Retry \x1b[33m${streamingState.retryStatus.attempt}/5\x1b[93m in \x1b[32m${streamingState.retryStatus.remainingSeconds}s\x1b[93m...\x1b[0m`,
+						`\n\x1b[93m${t.chatScreen.retryAttempt
+							.replace('{current}', String(streamingState.retryStatus.attempt))
+							.replace('{max}', '5')} \x1b[93m${t.chatScreen.retryIn.replace(
+							'{seconds}',
+							String(streamingState.retryStatus.remainingSeconds),
+						)}\x1b[93m...\x1b[0m`,
 					);
 				} else {
 					console.log(
-						`\n\x1b[93m⟳ Resending... \x1b[33m(Attempt ${streamingState.retryStatus.attempt}/5)\x1b[0m`,
+						`\n\x1b[93m${t.chatScreen.retryResending
+							.replace('{current}', String(streamingState.retryStatus.attempt))
+							.replace('{max}', '5')}\x1b[0m`,
 					);
 				}
 			} else {
@@ -469,6 +481,7 @@ export default function HeadlessModeScreen({
 		streamingState.streamTokenCount,
 		streamingState.retryStatus,
 		isWaitingForInput,
+		t,
 	]);
 	const processMessage = async () => {
 		try {
