@@ -202,6 +202,7 @@ export async function parseAndValidateFileReferences(content: string): Promise<{
 
 /**
  * Create message with file read instructions for AI
+ * Returns content and editorContext separately for clean storage and rendering
  */
 export function createMessageWithFileInstructions(
 	content: string,
@@ -212,34 +213,8 @@ export function createMessageWithFileInstructions(
 		cursorPosition?: {line: number; character: number};
 		workspaceFolder?: string;
 	},
-): string {
+): {content: string; editorContext?: typeof editorContext} {
 	const parts: string[] = [content];
-
-	// Add editor context if provided (from VSCode connection)
-	if (editorContext) {
-		const editorLines: string[] = [];
-		if (editorContext.workspaceFolder) {
-			editorLines.push(`└─ VSCode Workspace: ${editorContext.workspaceFolder}`);
-		}
-		if (editorContext.activeFile) {
-			editorLines.push(`└─ Active File: ${editorContext.activeFile}`);
-		}
-		if (editorContext.cursorPosition) {
-			editorLines.push(
-				`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${
-					editorContext.cursorPosition.character + 1
-				}`,
-			);
-		}
-		if (editorContext.selectedText) {
-			editorLines.push(
-				`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``,
-			);
-		}
-		if (editorLines.length > 0) {
-			parts.push(editorLines.join('\n'));
-		}
-	}
 
 	// Add file instructions if provided
 	if (files.length > 0) {
@@ -249,7 +224,12 @@ export function createMessageWithFileInstructions(
 		parts.push(fileInstructions);
 	}
 
-	return parts.join('\n');
+	// Return content and editorContext separately instead of concatenating
+	// This allows editorContext to be stored independently and only sent to AI when needed
+	return {
+		content: parts.join('\n'),
+		editorContext,
+	};
 }
 
 /**

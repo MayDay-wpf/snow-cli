@@ -62,6 +62,10 @@ export class LSPManager {
 			const uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
+			if (!content) {
+				return null;
+			}
+
 			await client.openDocument(uri, content);
 
 			const position: Position = {line, character: column};
@@ -96,6 +100,10 @@ export class LSPManager {
 			const uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
+			if (!content) {
+				return [];
+			}
+
 			await client.openDocument(uri, content);
 
 			const position: Position = {line, character: column};
@@ -125,6 +133,10 @@ export class LSPManager {
 			const uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
+			if (!content) {
+				return null;
+			}
+
 			await client.openDocument(uri, content);
 
 			const symbols = await client.documentSymbol(uri);
@@ -153,6 +165,10 @@ export class LSPManager {
 			const uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
+			if (!content) {
+				return null;
+			}
+
 			await client.openDocument(uri, content);
 
 			const position: Position = {line, character: column};
@@ -167,7 +183,7 @@ export class LSPManager {
 		}
 	}
 
-	private async getDocumentContent(filePath: string): Promise<string> {
+	private async getDocumentContent(filePath: string): Promise<string | null> {
 		const fullPath = path.resolve(this.basePath, filePath);
 
 		if (this.documentCache.has(fullPath)) {
@@ -179,11 +195,7 @@ export class LSPManager {
 			this.documentCache.set(fullPath, content);
 			return content;
 		} catch (error) {
-			throw new Error(
-				`Failed to read file ${filePath}: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-			);
+			return null;
 		}
 	}
 

@@ -581,7 +581,7 @@ export default function HeadlessModeScreen({
 
 			// Start conversation with tool support
 			await handleConversationWithTools({
-				userContent: messageForAI,
+				userContent: messageForAI.content,
 				imageContents: [],
 				controller,
 				messages: allMessages,

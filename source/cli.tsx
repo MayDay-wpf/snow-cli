@@ -154,6 +154,9 @@ Options
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
+		--sse         Start SSE server mode for external integration
+		--sse-port    SSE server port (default: 3000)
+		--work-dir    Working directory for SSE server (default: current directory)
 `,
 	{
 		importMeta: import.meta,
@@ -194,6 +197,19 @@ Options
 				type: 'boolean',
 				default: false,
 			},
+			sse: {
+				type: 'boolean',
+				default: false,
+			},
+			ssePort: {
+				type: 'number',
+				default: 3000,
+				alias: 'sse-port',
+			},
+			workDir: {
+				type: 'string',
+				alias: 'work-dir',
+			},
 		},
 	},
 );
@@ -212,6 +228,73 @@ if (cli.flags.update) {
 		);
 		process.exit(1);
 	}
+}
+
+// Handle SSE server mode
+if (cli.flags.sse) {
+	const {sseManager} = await import('./utils/sse/sseManager.js');
+	const {SSEServerStatus} = await import(
+		'./ui/components/sse/SSEServerStatus.js'
+	);
+	const {I18nProvider} = await import('./i18n/I18nContext.js');
+	const port = cli.flags.ssePort || 3000;
+	const workDir = cli.flags.workDir;
+
+	// 如果指定了工作目录，切换到该目录
+	if (workDir) {
+		try {
+			process.chdir(workDir);
+		} catch (error) {
+			console.error(`错误: 无法切换到工作目录 ${workDir}`);
+			console.error(error instanceof Error ? error.message : error);
+			process.exit(1);
+		}
+	}
+
+	// 渲染 SSE 服务器信息组件
+	let logUpdater: (
+		message: string,
+		level?: 'info' | 'error' | 'success',
+	) => void;
+
+	const {unmount} = render(
+		<I18nProvider>
+			<SSEServerStatus
+				port={port}
+				workingDir={workDir || process.cwd()}
+				onLogUpdate={callback => {
+					logUpdater = callback;
+				}}
+			/>
+		</I18nProvider>,
+	);
+
+	// 设置日志回调
+	sseManager.setLogCallback((message, level) => {
+		if (logUpdater) {
+			logUpdater(message, level);
+		}
+	});
+
+	await sseManager.start(port);
+
+	// 保持进程运行
+	process.on('SIGINT', async () => {
+		unmount();
+		console.log('\nStopping SSE server...');
+		await sseManager.stop();
+		process.exit(0);
+	});
+
+	process.on('SIGTERM', async () => {
+		unmount();
+		console.log('\nStopping SSE server...');
+		await sseManager.stop();
+		process.exit(0);
+	});
+
+	// 阻止进程退出
+	await new Promise(() => {});
 }
 
 // Handle task creation - create and execute in background

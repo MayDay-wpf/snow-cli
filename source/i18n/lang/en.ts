@@ -1072,4 +1072,13 @@ export const en: TranslationKeys = {
 		navigationHint: '↑↓ Navigate • Enter Reconnect • Tab Toggle Service',
 		pleaseWait: 'Please wait...',
 	},
+	sseServer: {
+		started: '✓ SSE Server Started',
+		port: 'Port',
+		workingDir: 'Working Directory',
+		running: 'Running',
+		endpoints: 'Endpoints',
+		logs: 'Logs',
+		stopHint: 'Press Ctrl+C to stop server',
+	},
 };

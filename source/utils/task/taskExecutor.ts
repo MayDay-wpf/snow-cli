@@ -200,13 +200,13 @@ export async function executeTask(
 			regularFiles,
 			vscodeState.editorContext,
 		);
-		log(`Message for AI prepared. Length: ${messageForAI.length}`);
+		log(`Message for AI prepared. Length: ${messageForAI.content.length}`);
 
 		// Execute conversation
 		log('Starting conversation with Claude API...');
 		try {
 			await handleConversationWithTools({
-				userContent: messageForAI,
+				userContent: messageForAI.content,
 				imageContents: [],
 				controller,
 				messages,

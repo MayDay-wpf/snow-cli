@@ -1018,4 +1018,13 @@ export const zh: TranslationKeys = {
 		navigationHint: '↑↓ 导航 • Enter 重连服务 • Tab 启停服务',
 		pleaseWait: '请稍候...',
 	},
+	sseServer: {
+		started: '✓ SSE 服务器已启动',
+		port: '端口',
+		workingDir: '工作目录',
+		running: '运行中',
+		endpoints: '可用端点',
+		logs: '运行日志',
+		stopHint: '按 Ctrl+C 停止服务器',
+	},
 };

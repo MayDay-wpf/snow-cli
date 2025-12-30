@@ -46,12 +46,10 @@ export default function MessageRenderer({
 	const isInParallelGroup =
 		message.parallelGroup !== undefined && message.parallelGroup !== null;
 
-	// Check if this is a time-consuming tool (has toolPending or starts with ⚡)
+	// Check if this is a time-consuming tool (has toolPending or status is pending)
 	// Time-consuming tools should not show parallel group indicators
 	const isTimeConsumingTool =
-		message.toolPending ||
-		(message.role === 'assistant' &&
-			(message.content.startsWith('⚡') || message.content.startsWith('⚇⚡')));
+		message.toolPending || message.messageStatus === 'pending';
 
 	// Only show parallel group indicators for non-time-consuming tools
 	const shouldShowParallelIndicator = isInParallelGroup && !isTimeConsumingTool;
@@ -62,7 +60,7 @@ export default function MessageRenderer({
 			filteredMessages[index - 1]?.parallelGroup !== message.parallelGroup ||
 			// Previous message is time-consuming tool, so this is the first non-time-consuming one
 			filteredMessages[index - 1]?.toolPending ||
-			filteredMessages[index - 1]?.content.startsWith('⚡'));
+			filteredMessages[index - 1]?.messageStatus === 'pending');
 
 	// Check if this is the last message in the parallel group
 	// Only show end indicator if:
@@ -78,17 +76,12 @@ export default function MessageRenderer({
 		shouldShowParallelIndicator && (!nextMessage || nextHasDifferentGroup);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
-		if (message.content.startsWith('⚡') || message.content.startsWith('⚇⚡')) {
+		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
+		if (message.messageStatus === 'pending') {
 			toolStatusColor = 'yellowBright';
-		} else if (
-			message.content.startsWith('✓') ||
-			message.content.startsWith('⚇✓')
-		) {
+		} else if (message.messageStatus === 'success') {
 			toolStatusColor = 'green';
-		} else if (
-			message.content.startsWith('✗') ||
-			message.content.startsWith('⚇✗')
-		) {
+		} else if (message.messageStatus === 'error') {
 			toolStatusColor = 'red';
 		} else {
 			toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
@@ -194,18 +187,12 @@ export default function MessageRenderer({
 												// Not JSON, continue with normal rendering
 											}
 
-											// For tool messages (with status icons), render as plain text with color
+											// For tool messages with status, render as plain text with color
 											// instead of using MarkdownRenderer which ignores the toolStatusColor
-											const hasToolStatusIcon =
-												message.content.startsWith('⚇⚡') ||
-												message.content.startsWith('⚇✓') ||
-												message.content.startsWith('⚇✗') ||
-												message.content.startsWith('⚡') ||
-												message.content.startsWith('✓') ||
-												message.content.startsWith('✗');
+											const hasToolStatus = message.messageStatus !== undefined;
 
 											if (
-												hasToolStatusIcon &&
+												hasToolStatus &&
 												(message.role === 'assistant' ||
 													message.role === 'subagent')
 											) {
@@ -391,8 +378,7 @@ export default function MessageRenderer({
 											</Box>
 										)}
 									{/* Show tool result preview for successful tool executions */}
-									{(message.content.startsWith('✓') ||
-										message.content.startsWith('⚇✓')) &&
+									{message.messageStatus === 'success' &&
 										message.toolResult &&
 										// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
 										!(

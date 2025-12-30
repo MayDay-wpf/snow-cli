@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Snow AI SSE 客户端测试</title>
+	<link rel="stylesheet" href="style.css" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+	<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+	<script src="dialogs.js"></script>
+</head>
+
+<body>
+	<div class="container">
+		<div class="header">
+			<h1>Snow AI SSE 客户端测试</h1>
+			<div class="status" id="status">未连接</div>
+		</div>
+
+		<div class="content">
+			<!-- 左侧列 -->
+			<div class="left-column">
+				<!-- 聊天面板 -->
+				<div class="panel">
+					<div class="panel-header">
+						聊天界面
+						<button onclick="newSession()" class="header-btn" title="新建会话">
+							新建会话
+						</button>
+					</div>
+					<div class="panel-body">
+						<div class="chat-box" id="chatBox"></div>
+						<div class="image-preview" id="imagePreview"></div>
+						<div class="input-group">
+					<input type="file" id="imageInput" accept="image/*" style="display: none" />
+					<button onclick="document.getElementById('imageInput').click()" id="imageBtn" title="选择图片">
+						图片
+					</button>
+					<input type="text" id="messageInput" placeholder="输入消息或粘贴图片..."
+						onkeypress="if(event.key==='Enter') sendMessage()" />
+					<button onclick="sendMessage()" id="sendBtn">发送</button>
+					<button onclick="abortTask()" id="abortBtn" disabled style="background-color: #dc3545">
+						终止
+					</button>
+				</div>
+					</div>
+				</div>
+
+				<!-- 配置面板 -->
+				<div class="panel">
+					<div class="panel-header">连接配置</div>
+					<div class="panel-body">
+						<div class="config-section">
+							<label for="serverUrl">服务器地址</label>
+							<input type="text" id="serverUrl" value="http://localhost:3000" style="width: 100%" />
+						</div>
+						<div class="config-section">
+							<label>连接控制</label>
+							<div style="display: flex; gap: 8px">
+								<button onclick="connect()" id="connectBtn">连接</button>
+								<button onclick="disconnect()" id="disconnectBtn" disabled>
+									断开
+								</button>
+							</div>
+						</div>
+						<div class="config-section">
+							<div class="checkbox-option">
+								<input type="checkbox" id="yoloModeCheckbox" />
+								<label for="yoloModeCheckbox">
+									启用 YOLO 模式（自动批准所有工具调用）
+								</label>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 右侧列: 事件日志 -->
+			<div class="right-column">
+				<div class="panel">
+					<div class="panel-header">事件日志</div>
+					<div class="panel-body">
+						<div class="event-log" id="eventLog"></div>
+						<button onclick="clearLog()" style="margin-top: 10px; width: 100%">
+							清空日志
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	</div>
+	</div>
+</div>
+
+<!-- 工具确认对话框 -->
+<div id="toolConfirmationModal" class="modal-overlay" style="display: none">
+	<div class="modal-dialog">
+		<div class="modal-header">
+			<h3>工具执行确认</h3>
+		</div>
+		<div class="modal-body" id="toolConfirmationBody"></div>
+		<div class="modal-footer" id="toolConfirmationFooter"></div>
+	</div>
+</div>
+
+<!-- 用户问题对话框 -->
+<div id="userQuestionModal" class="modal-overlay" style="display: none">
+	<div class="modal-dialog">
+		<div class="modal-header">
+			<h3 id="userQuestionTitle">问题</h3>
+		</div>
+		<div class="modal-body" id="userQuestionBody"></div>
+		<div class="modal-footer" id="userQuestionFooter"></div>
+	</div>
+</div>
+
+<script>
+		let eventSource = null;
+		let serverUrl = 'http://localhost:3000';
+		let currentSessionId = null;
+		let selectedImage = null;
+
+		// 添加消息到聊天框
+	function addMessage(role, content, imageData = null) {
+		const chatBox = document.getElementById('chatBox');
+		const messageDiv = document.createElement('div');
+		messageDiv.className = `message ${role}`;
+
+		if (typeof content === 'string') {
+			// 如果是 assistant 消息，使用 Markdown 渲染
+			if (role === 'assistant') {
+				const htmlContent = marked.parse(content);
+				messageDiv.innerHTML = htmlContent;
+				// 对代码块进行语法高亮
+				messageDiv.querySelectorAll('pre code').forEach((block) => {
+					hljs.highlightElement(block);
+				});
+			} else {
+				messageDiv.textContent = content;
+			}
+		} else {
+			messageDiv.innerHTML = content;
+		}
+
+		if (imageData) {
+			const img = document.createElement('img');
+			img.src = imageData;
+			messageDiv.appendChild(img);
+		}
+
+		chatBox.appendChild(messageDiv);
+		chatBox.scrollTop = chatBox.scrollHeight;
+	}
+
+	// 更新助手消息内容（用于流式更新）
+	function updateAssistantMessage(messageDiv, content) {
+		const htmlContent = marked.parse(content);
+		messageDiv.innerHTML = htmlContent;
+		// 对代码块进行语法高亮
+		messageDiv.querySelectorAll('pre code').forEach((block) => {
+			hljs.highlightElement(block);
+		});
+	}
+
+	// 显示 AI 回复中的 loading 动画
+	function showLoadingMessage() {
+		removeLoadingMessage(); // 确保之前的 loading 已移除
+		const chatBox = document.getElementById('chatBox');
+		const loadingDiv = document.createElement('div');
+		loadingDiv.className = 'message assistant loading-message';
+		loadingDiv.id = 'aiLoadingMessage';
+		loadingDiv.innerHTML = `
+			<span class="loading-dots">
+				<span></span><span></span><span></span>
+			</span>
+		`;
+		chatBox.appendChild(loadingDiv);
+		chatBox.scrollTop = chatBox.scrollHeight;
+	}
+
+	// 移除 loading 消息
+	function removeLoadingMessage() {
+		const loadingMsg = document.getElementById('aiLoadingMessage');
+		if (loadingMsg) {
+			loadingMsg.remove();
+		}
+	}
+
+		// 添加系统消息
+		function addSystemMessage(content) {
+			const chatBox = document.getElementById('chatBox');
+			const messageDiv = document.createElement('div');
+			messageDiv.className = 'message system';
+			messageDiv.textContent = content;
+			chatBox.appendChild(messageDiv);
+			chatBox.scrollTop = chatBox.scrollHeight;
+		}
+
+		// 添加事件到日志
+		function logEvent(type, data, isError = false) {
+			const eventLog = document.getElementById('eventLog');
+			const eventDiv = document.createElement('div');
+			eventDiv.className = `event ${isError ? 'error' : 'success'}`;
+
+			const timestamp = new Date().toLocaleTimeString();
+			eventDiv.innerHTML = `
+			             <span class="timestamp">[${timestamp}]</span>
+			             <span class="type">${type}</span>
+			             <span>${JSON.stringify(data, null, 2)}</span>
+			         `;
+
+			eventLog.appendChild(eventDiv);
+			eventLog.scrollTop = eventLog.scrollHeight;
+		}
+
+		// 清空日志
+		function clearLog() {
+			document.getElementById('eventLog').innerHTML = '';
+		}
+
+		// 新建会话
+		function newSession() {
+			currentSessionId = null;
+			document.getElementById('chatBox').innerHTML = '';
+			clearImagePreview();
+			addSystemMessage('已创建新会话');
+			logEvent('NEW_SESSION', {});
+
+			const statusEl = document.getElementById('status');
+			if (eventSource) {
+				statusEl.textContent = '已连接';
+			}
+		}
+
+		// 更新状态
+		function updateStatus(connected) {
+			const statusEl = document.getElementById('status');
+			statusEl.textContent = connected ? '已连接' : '未连接';
+			statusEl.className = `status ${connected ? 'connected' : 'disconnected'
+				}`;
+
+			document.getElementById('connectBtn').disabled = connected;
+			document.getElementById('disconnectBtn').disabled = !connected;
+			document.getElementById('sendBtn').disabled = !connected;
+		}
+
+		// 连接到 SSE 服务器
+		function connect() {
+			serverUrl = document.getElementById('serverUrl').value;
+
+			eventSource = new EventSource(`${serverUrl}/events`);
+
+			eventSource.onopen = () => {
+				updateStatus(true);
+				addSystemMessage('已连接到 Snow AI');
+				logEvent('CONNECTED', { serverUrl });
+			};
+
+			eventSource.onerror = error => {
+				updateStatus(false);
+				addSystemMessage('连接错误');
+				logEvent('ERROR', { message: '连接失败' }, true);
+				eventSource.close();
+				eventSource = null;
+			};
+
+			eventSource.onmessage = event => {
+				const data = JSON.parse(event.data);
+				handleEvent(data);
+			};
+		}
+
+		// 断开连接
+		function disconnect() {
+			if (eventSource) {
+				eventSource.close();
+				eventSource = null;
+				updateStatus(false);
+				addSystemMessage('已断开连接');
+				logEvent('DISCONNECTED', {});
+			}
+		}
+
+		// 处理事件
+		function handleEvent(event) {
+			logEvent(event.type, event.data);
+
+			switch (event.type) {
+				case 'connected':
+					addSystemMessage(`连接ID: ${event.data.connectionId}`);
+					break;
+
+				case 'message':
+					// 捕获 sessionId
+					if (event.data.role === 'system' && event.data.sessionId) {
+						currentSessionId = event.data.sessionId;
+						addSystemMessage(`会话ID: ${currentSessionId}`);
+						// 更新状态显示
+						const statusEl = document.getElementById('status');
+						statusEl.textContent = `已连接 (Session: ${currentSessionId.substring(
+							0,
+							8,
+						)}...)`;
+						logEvent('SESSION_ID', { sessionId: currentSessionId });
+						break;
+					}
+
+					if (event.data.streaming) {
+			// 流式消息 - 更新最后一条消息，但保持 loading
+			const chatBox = document.getElementById('chatBox');
+			const messages = Array.from(chatBox.children);
+			
+			// 查找最后一个 assistant 消息（跳过 loading）
+			let lastAssistantMsg = null;
+			for (let i = messages.length - 1; i >= 0; i--) {
+				if (messages[i].classList.contains('assistant') && !messages[i].classList.contains('loading-message')) {
+					lastAssistantMsg = messages[i];
+					break;
+				}
+			}
+			
+			if (lastAssistantMsg) {
+				// 更新已存在的助手消息（使用 Markdown 渲染）
+				updateAssistantMessage(lastAssistantMsg, event.data.content);
+			} else {
+				// 创建新的助手消息（在 loading 之前插入）
+				const loadingMsg = document.getElementById('aiLoadingMessage');
+				const newMessage = document.createElement('div');
+				newMessage.className = 'message assistant';
+				const htmlContent = marked.parse(event.data.content);
+				newMessage.innerHTML = htmlContent;
+				newMessage.querySelectorAll('pre code').forEach((block) => {
+					hljs.highlightElement(block);
+				});
+				
+				if (loadingMsg) {
+					chatBox.insertBefore(newMessage, loadingMsg);
+				} else {
+					chatBox.appendChild(newMessage);
+				}
+			}
+			chatBox.scrollTop = chatBox.scrollHeight;
+		} else if (event.data.role === 'user') {
+			// 显示用户消息后，立即显示 loading 等待 AI 回复
+			addMessage('user', event.data.content);
+			showLoadingMessage();
+			// 启用终止按钮
+			document.getElementById('abortBtn').disabled = false;
+		} else if (event.data.role === 'assistant') {
+			// 非流式的助手消息 - 在 loading 之前插入
+			const chatBox = document.getElementById('chatBox');
+			const loadingMsg = document.getElementById('aiLoadingMessage');
+			const newMessage = document.createElement('div');
+			newMessage.className = 'message assistant';
+			const htmlContent = marked.parse(event.data.content);
+			newMessage.innerHTML = htmlContent;
+			newMessage.querySelectorAll('pre code').forEach((block) => {
+				hljs.highlightElement(block);
+			});
+			
+			if (loadingMsg) {
+				chatBox.insertBefore(newMessage, loadingMsg);
+			} else {
+				chatBox.appendChild(newMessage);
+			}
+			chatBox.scrollTop = chatBox.scrollHeight;
+		}
+					break;
+
+				case 'tool_call':
+					addSystemMessage(`工具调用: ${event.data.name || 'unknown'}`);
+					break;
+
+				case 'tool_result':
+					addSystemMessage(`工具结果: ${event.data.status}`);
+					break;
+
+				case 'tool_confirmation_request':
+					handleToolConfirmation(event);
+					break;
+
+				case 'user_question_request':
+					handleUserQuestion(event);
+					break;
+
+				case 'complete':
+				// 移除 loading
+				removeLoadingMessage();
+				addSystemMessage('对话完成');
+				// 保存 sessionId
+				if (event.data.sessionId) {
+					currentSessionId = event.data.sessionId;
+					logEvent('SESSION_SAVED', { sessionId: currentSessionId });
+				}
+				// 禁用终止按钮
+				document.getElementById('abortBtn').disabled = true;
+				break;
+
+			case 'error':
+				// 移除 loading
+				removeLoadingMessage();
+				addSystemMessage(`错误: ${event.data.message}`);
+				// 禁用终止按钮
+				document.getElementById('abortBtn').disabled = true;
+				break;
+			}
+		}
+
+		// 处理工具确认请求
+	function handleToolConfirmation(event) {
+		showToolConfirmationDialog(event, sendResponse);
+	}
+
+	// 处理用户问题请求
+	function handleUserQuestion(event) {
+		showUserQuestionDialog(event, sendResponse);
+	}
+
+		// 发送响应
+		async function sendResponse(type, requestId, response) {
+			try {
+				const res = await fetch(`${serverUrl}/message`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						type: type,
+						requestId: requestId,
+						response: response,
+					}),
+				});
+
+				const data = await res.json();
+				logEvent('RESPONSE_SENT', { type, requestId });
+			} catch (error) {
+				logEvent('SEND_ERROR', { message: error.message }, true);
+			}
+		}
+
+		// 发送消息
+	async function sendMessage() {
+		const input = document.getElementById('messageInput');
+		const content = input.value.trim();
+
+		if (!content && !selectedImage) return;
+
+		// 立即清空输入框
+		input.value = '';
+		clearImagePreview();
+
+		try {
+			const payload = {
+				type: 'chat',
+				content: content || '查看图片',
+			};
+
+			if (currentSessionId) {
+				payload.sessionId = currentSessionId;
+			}
+
+			const yoloMode = document.getElementById('yoloModeCheckbox').checked;
+			if (yoloMode) {
+				payload.yoloMode = true;
+			}
+
+			if (selectedImage) {
+				const base64Match = selectedImage.match(/^data:([^;]+);base64,(.+)$/);
+				if (base64Match) {
+					payload.images = [{
+						data: selectedImage, // 完整的 data URI
+						mimeType: base64Match[1]
+					}];
+				}
+			}
+
+			const response = await fetch(`${serverUrl}/message`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(payload),
+			});
+
+			const data = await response.json();
+			logEvent('MESSAGE_SENT', { content, hasImage: !!selectedImage, yoloMode });
+		} catch (error) {
+			removeLoadingMessage(); // 出错时移除 loading
+		addSystemMessage(`发送失败: ${error.message}`);
+		logEvent('SEND_ERROR', { message: error.message }, true);
+	}
+}
+
+// 终止当前任务
+async function abortTask() {
+	if (!currentSessionId) {
+		addSystemMessage('没有活动的会话');
+		return;
+	}
+
+	try {
+		const payload = {
+			type: 'abort',
+			sessionId: currentSessionId,
+		};
+
+		const response = await fetch(`${serverUrl}/message`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(payload),
+		});
+
+		const data = await response.json();
+	logEvent('ABORT_SENT', { sessionId: currentSessionId });
+
+	// 移除 loading 并禁用终止按钮
+	removeLoadingMessage();
+	document.getElementById('abortBtn').disabled = true;
+	addSystemMessage('任务已终止');
+} catch (error) {
+	removeLoadingMessage();
+	addSystemMessage(`终止失败: ${error.message}`);
+	logEvent('ABORT_ERROR', { message: error.message }, true);
+	document.getElementById('abortBtn').disabled = true;
+}
+}
+
+		// 图片处理函数
+		function handleImageSelect(file) {
+			if (!file || !file.type.startsWith('image/')) {
+				addSystemMessage('请选择图片文件');
+				return;
+			}
+
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				selectedImage = e.target.result;
+				showImagePreview(selectedImage);
+			};
+			reader.readAsDataURL(file);
+		}
+
+		function showImagePreview(imageData) {
+			const preview = document.getElementById('imagePreview');
+			preview.className = 'image-preview active';
+			preview.innerHTML = `
+					<img src="${imageData}" alt="预览图片" />
+					<button class="remove-image" onclick="clearImagePreview()">移除</button>
+				`;
+		}
+
+		function clearImagePreview() {
+			const preview = document.getElementById('imagePreview');
+			preview.className = 'image-preview';
+			preview.innerHTML = '';
+			selectedImage = null;
+			document.getElementById('imageInput').value = '';
+		}
+
+		// 页面加载时初始化
+		window.addEventListener('load', () => {
+			updateStatus(false);
+
+			const imageInput = document.getElementById('imageInput');
+			imageInput.addEventListener('change', (e) => {
+				if (e.target.files.length > 0) {
+					handleImageSelect(e.target.files[0]);
+				}
+			});
+
+			const messageInput = document.getElementById('messageInput');
+			messageInput.addEventListener('paste', (e) => {
+				const items = e.clipboardData.items;
+				for (let i = 0; i < items.length; i++) {
+					if (items[i].type.indexOf('image') !== -1) {
+						const file = items[i].getAsFile();
+						handleImageSelect(file);
+						e.preventDefault();
+						break;
+					}
+				}
+			});
+		});
+	</script>
+</body>
+
+</html>

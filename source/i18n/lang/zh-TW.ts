@@ -1013,4 +1013,13 @@ export const zhTW: TranslationKeys = {
 		navigationHint: '↑↓ 導航 • Enter 重新連線 • Tab 啟停服務',
 		pleaseWait: '請稍候...',
 	},
+	sseServer: {
+		started: '✓ SSE 伺服器已啟動',
+		port: '連接埠',
+		workingDir: '工作目錄',
+		running: '執行中',
+		endpoints: '可用端點',
+		logs: '執行日誌',
+		stopHint: '按 Ctrl+C 停止伺服器',
+	},
 };

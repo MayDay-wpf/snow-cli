@@ -356,15 +356,21 @@ export function useChatLogic(props: UseChatLogicProps) {
 					await saveMessage({
 						...msg,
 						originalContent: originalMessage,
+						editorContext: messageForAI.editorContext,
 					});
 				} else {
-					await saveMessage(msg);
+					await saveMessage({
+						...msg,
+						editorContext:
+							msg.role === 'user' ? messageForAI.editorContext : undefined,
+					});
 				}
 			};
 
 			try {
 				await handleConversationWithTools({
-					userContent: messageForAI,
+					userContent: messageForAI.content,
+					editorContext: messageForAI.editorContext,
 					imageContents,
 					controller,
 					messages,
@@ -608,7 +614,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 			try {
 				await handleConversationWithTools({
-					userContent: messageForAI,
+					userContent: messageForAI.content,
+					editorContext: messageForAI.editorContext,
 					imageContents,
 					controller,
 					messages,

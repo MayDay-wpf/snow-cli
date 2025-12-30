@@ -20,10 +20,19 @@ export interface ToolCall {
 export interface ChatMessage {
 	role: 'system' | 'user' | 'assistant' | 'tool';
 	content: string;
+	messageStatus?: 'pending' | 'success' | 'error';
 	tool_call_id?: string;
 	tool_calls?: ToolCall[];
 	images?: ImageContent[]; // 图片内容
 	subAgentInternal?: boolean; // Mark internal sub-agent messages (filtered from API requests)
+	// IDE editor context (VSCode workspace, active file, cursor position, selected code)
+	// This field is stored separately and only used when sending to AI, not displayed in UI
+	editorContext?: {
+		workspaceFolder?: string;
+		activeFile?: string;
+		cursorPosition?: {line: number; character: number};
+		selectedText?: string;
+	};
 	reasoning?: {
 		// Reasoning data for Responses API caching
 		summary?: Array<{type: 'summary_text'; text: string}>;

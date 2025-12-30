@@ -8,6 +8,7 @@ export interface Message {
 	content: string;
 	streaming?: boolean;
 	discontinued?: boolean;
+	messageStatus?: 'pending' | 'success' | 'error';
 	commandName?: string;
 	hideCommandName?: boolean; // Don't show command name prefix for output chunks
 	plainOutput?: boolean; // Don't show any prefix/icon, just plain text
@@ -17,6 +18,14 @@ export interface Message {
 		data: string;
 		mimeType: string;
 	}>;
+	// IDE editor context (VSCode workspace, active file, cursor position, selected code)
+	// This field is stored separately and only used when sending to AI, not displayed in UI
+	editorContext?: {
+		workspaceFolder?: string;
+		activeFile?: string;
+		cursorPosition?: {line: number; character: number};
+		selectedText?: string;
+	};
 	toolCall?: {
 		name: string;
 		arguments: any;

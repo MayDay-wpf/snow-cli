@@ -69,6 +69,7 @@ export function convertSessionMessagesToUI(
 					},
 					toolCallId: toolCall.id,
 					toolPending: false,
+					messageStatus: 'pending',
 					subAgentInternal: true,
 				});
 				processedToolCalls.add(toolCall.id);
@@ -121,7 +122,10 @@ export function convertSessionMessagesToUI(
 
 		// Handle sub-agent internal tool result messages
 		if (msg.subAgentInternal && msg.role === 'tool' && msg.tool_call_id) {
-			const isError = msg.content.startsWith('Error:');
+			const status =
+				msg.messageStatus ??
+				(msg.content.startsWith('Error:') ? 'error' : 'success');
+			const isError = status === 'error';
 
 			// Find tool name from previous assistant message
 			let toolName = 'tool';
@@ -241,6 +245,7 @@ export function convertSessionMessagesToUI(
 						: fileToolData
 						? fileToolData
 						: undefined,
+					messageStatus: status,
 					subAgentInternal: true,
 				});
 			} else {
@@ -252,6 +257,7 @@ export function convertSessionMessagesToUI(
 						role: 'subagent',
 						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m${statusText}`,
 						streaming: false,
+						messageStatus: 'error',
 						subAgentInternal: true,
 					});
 				}
@@ -314,6 +320,7 @@ export function convertSessionMessagesToUI(
 							arguments: toolArgs,
 						},
 						toolDisplay,
+						messageStatus: 'pending',
 					});
 				}
 
@@ -331,11 +338,16 @@ export function convertSessionMessagesToUI(
 
 		// Handle regular tool result messages (non-subagent)
 		if (msg.role === 'tool' && msg.tool_call_id && !msg.subAgentInternal) {
-			const isError = msg.content.startsWith('Error:');
 			const isRejectedWithReply = msg.content.includes(
 				'Tool execution rejected by user:',
 			);
-			const statusIcon = isError || isRejectedWithReply ? '✗' : '✓';
+			const status =
+				msg.messageStatus ??
+				(msg.content.startsWith('Error:') || isRejectedWithReply
+					? 'error'
+					: 'success');
+			const isError = status === 'error';
+			const statusIcon = isError ? '✗' : '✓';
 
 			let statusText = '';
 			if (isError) {
@@ -490,6 +502,7 @@ export function convertSessionMessagesToUI(
 						  }
 						: undefined,
 				terminalResult: terminalResultData,
+				messageStatus: status,
 				// Add toolDisplay for non-time-consuming tools
 				toolDisplay:
 					isNonTimeConsuming && !editDiffData
@@ -517,6 +530,7 @@ export function convertSessionMessagesToUI(
 				streaming: false,
 				images: msg.images,
 				thinking: extractThinkingFromMessage(msg),
+				editorContext: msg.role === 'user' ? msg.editorContext : undefined,
 			});
 			continue;
 		}
