@@ -8,7 +8,7 @@
 let eventSource = null; // SSE 连接实例
 let serverUrl = 'http://localhost:3000';
 let currentSessionId = null; // 当前会话 ID
-let selectedImage = null; // 待发送的图片（Base64 data URI）
+let selectedImages = []; // 待发送的图片（Base64 data URI）数组
 
 // 会话列表 UI 状态
 const sessionListState = {
@@ -881,17 +881,21 @@ function handleUserQuestion(event) {
 async function sendMessage() {
 	const input = document.getElementById('messageInput');
 	const content = input.value.trim();
+	const hasImages = Array.isArray(selectedImages) && selectedImages.length > 0;
 
-	if (!content && !selectedImage) return;
+	if (!content && !hasImages) return;
 
 	// 立即清空输入框
 	input.value = '';
+	const imagesForSend = Array.isArray(selectedImages)
+		? selectedImages.slice()
+		: [];
 	clearImagePreview();
 
 	try {
 		const payload = {
 			type: 'chat',
-			content: content || '查看图片',
+			content: content || (hasImages ? '查看图片' : ''),
 		};
 
 		if (currentSessionId) {
@@ -903,15 +907,18 @@ async function sendMessage() {
 			payload.yoloMode = true;
 		}
 
-		if (selectedImage) {
-			const base64Match = selectedImage.match(/^data:([^;]+);base64,(.+)$/);
-			if (base64Match) {
-				payload.images = [
-					{
-						data: selectedImage,
-						mimeType: base64Match[1],
-					},
-				];
+		if (hasImages) {
+			const images = [];
+			for (const dataUri of imagesForSend) {
+				const base64Match = String(dataUri).match(/^data:([^;]+);base64,(.+)$/);
+				if (!base64Match) continue;
+				images.push({
+					data: dataUri,
+					mimeType: base64Match[1],
+				});
+			}
+			if (images.length > 0) {
+				payload.images = images;
 			}
 		}
 
@@ -923,8 +930,12 @@ async function sendMessage() {
 			body: JSON.stringify(payload),
 		});
 
-		const data = await response.json();
-		logEvent('MESSAGE_SENT', {content, hasImage: !!selectedImage, yoloMode});
+		await response.json();
+		logEvent('MESSAGE_SENT', {
+			content,
+			imageCount: imagesForSend.length,
+			yoloMode,
+		});
 	} catch (error) {
 		removeLoadingMessage();
 		addSystemMessage(`发送失败: ${error.message}`);
@@ -1202,36 +1213,80 @@ async function sendResponse(type, requestId, response) {
 // ----------------------------------------------------------------------------
 
 // 处理用户选择的图片
-function handleImageSelect(file) {
-	if (!file || !file.type.startsWith('image/')) {
-		addSystemMessage('请选择图片文件');
-		return;
-	}
+function handleImageSelect(filesOrFile) {
+	const files = Array.isArray(filesOrFile)
+		? filesOrFile
+		: filesOrFile
+		? [filesOrFile]
+		: [];
+	if (!files.length) return;
 
-	const reader = new FileReader();
-	reader.onload = e => {
-		selectedImage = e.target.result;
-		showImagePreview(selectedImage);
-	};
-	reader.readAsDataURL(file);
+	for (const file of files) {
+		if (!file || !file.type || !String(file.type).startsWith('image/')) {
+			addSystemMessage('请选择图片文件');
+			continue;
+		}
+
+		const reader = new FileReader();
+		reader.onload = e => {
+			const dataUri = e.target.result;
+			if (typeof dataUri === 'string') {
+				selectedImages.push(dataUri);
+				showImagePreview(selectedImages);
+			}
+		};
+		reader.readAsDataURL(file);
+	}
 }
 
 // 显示图片预览
-function showImagePreview(imageData) {
+function showImagePreview(images) {
 	const preview = document.getElementById('imagePreview');
-	preview.className = 'image-preview active';
+	const imgs = Array.isArray(images) ? images : images ? [images] : [];
+	preview.className =
+		imgs.length > 0 ? 'image-preview active' : 'image-preview';
+
+	if (imgs.length === 0) {
+		preview.innerHTML = '';
+		return;
+	}
+
 	preview.innerHTML = `
-			<img src="${imageData}" alt="预览图片" />
-			<button class="remove-image" onclick="clearImagePreview()">移除</button>
+		<div class="image-preview-toolbar">
+			<div>已选择 ${imgs.length} 张</div>
+			<button class="remove-image" onclick="clearImagePreview()">清空</button>
+		</div>
+		<div class="image-preview-grid">
+			${imgs
+				.map(
+					(src, idx) => `
+						<div class="image-preview-item">
+							<img src="${src}" alt="预览图片 ${idx + 1}" />
+							<button class="remove-image" onclick="removeSelectedImage(${idx})">移除</button>
+						</div>
+					`,
+				)
+				.join('')}
+		</div>
 		`;
 }
 
 // 清除图片预览
+function removeSelectedImage(index) {
+	if (!Array.isArray(selectedImages)) selectedImages = [];
+	selectedImages.splice(index, 1);
+	showImagePreview(selectedImages);
+	// 只有在清空后才重置 input，避免用户连续追加选择时丢失状态
+	if (selectedImages.length === 0) {
+		document.getElementById('imageInput').value = '';
+	}
+}
+
 function clearImagePreview() {
 	const preview = document.getElementById('imagePreview');
 	preview.className = 'image-preview';
 	preview.innerHTML = '';
-	selectedImage = null;
+	selectedImages = [];
 	document.getElementById('imageInput').value = '';
 }
 
@@ -1242,25 +1297,29 @@ function clearImagePreview() {
 window.addEventListener('load', () => {
 	updateStatus(false);
 
-	// 图片上传事件
+	// 图片上传事件（支持多选）
 	const imageInput = document.getElementById('imageInput');
 	imageInput.addEventListener('change', e => {
-		if (e.target.files.length > 0) {
-			handleImageSelect(e.target.files[0]);
+		const files = Array.from(e.target.files || []);
+		if (files.length > 0) {
+			handleImageSelect(files);
 		}
 	});
 
-	// 粘贴图片支持
+	// 粘贴图片支持（支持多张）
 	const messageInput = document.getElementById('messageInput');
 	messageInput.addEventListener('paste', e => {
-		const items = e.clipboardData.items;
-		for (let i = 0; i < items.length; i++) {
-			if (items[i].type.indexOf('image') !== -1) {
-				const file = items[i].getAsFile();
-				handleImageSelect(file);
-				e.preventDefault();
-				break;
+		const items = Array.from(e.clipboardData?.items || []);
+		const imageFiles = [];
+		for (const item of items) {
+			if (String(item.type || '').indexOf('image') !== -1) {
+				const file = item.getAsFile();
+				if (file) imageFiles.push(file);
 			}
+		}
+		if (imageFiles.length > 0) {
+			handleImageSelect(imageFiles);
+			e.preventDefault();
 		}
 	});
 });
