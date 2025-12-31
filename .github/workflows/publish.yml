@@ -58,14 +58,11 @@ jobs:
             
             ### What's New
 
-            - Added `messageStatus` field to the Message interface for better tracking of message states (pending, success, error).
-            - Updated MessageRenderer to utilize the new `messageStatus` field for rendering tool statuses instead of relying on content prefixes.
-            - Introduced SSEServerStatus component to display server status and logs in a structured format.
-            - Modified HeadlessModeScreen to correctly pass user content to the conversation handler.
-            - Refactored fileUtils to return content and editorContext separately for improved data handling.
-            - Updated sessionConverter to manage message statuses during session message conversion.
-            - Implemented SSEManager for managing server events and client interactions, including handling tool confirmations and user questions.
-            - Enhanced taskExecutor to log message lengths accurately and pass user content correctly to the conversation handler.
+            - Service mode adds process guardian
+            - Supports two scopes: global and project-level for ROLE.md
+            - Service mode improves some content of session management
+            - Improve the internationalization of some interfaces
+            - Improve the anti-stupidity validation of the configuration file
             
             ### Installation
             ```bash

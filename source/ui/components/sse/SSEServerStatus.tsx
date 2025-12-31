@@ -76,6 +76,18 @@ export const SSEServerStatus: React.FC<SSEServerStatusProps> = ({
 				<Text dimColor>{t.sseServer.endpoints}:</Text>
 				<Text color="blue"> http://localhost:{port}/events</Text>
 				<Text color="blue"> POST http://localhost:{port}/message</Text>
+				<Text color="blue"> POST http://localhost:{port}/session/create</Text>
+				<Text color="blue"> POST http://localhost:{port}/session/load</Text>
+				<Text color="blue"> GET http://localhost:{port}/session/list</Text>
+				<Text color="blue">
+					{' '}
+					GET http://localhost:{port}
+					/session/rollback-points?sessionId=:sessionId
+				</Text>
+				<Text color="blue">
+					{' '}
+					DELETE http://localhost:{port}/session/:sessionId
+				</Text>
 				<Text color="blue"> GET http://localhost:{port}/health</Text>
 			</Box>
 

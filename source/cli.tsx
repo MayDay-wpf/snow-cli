@@ -11,7 +11,7 @@ const major = parseInt(currentVersion.slice(1).split('.')[0] || '0', 10);
 
 if (major < MIN_NODE_VERSION) {
 	console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-	console.error('  ⚠️  Node.js Version Compatibility Error');
+	console.error('  Node.js Version Compatibility Error');
 	console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 	console.error(`Current Node.js version: ${currentVersion}`);
 	console.error(`Required: Node.js >= ${MIN_NODE_VERSION}.x\n`);
@@ -245,14 +245,14 @@ Options
 
 // Handle update flag
 if (cli.flags.update) {
-	console.log('🔄 Updating snow-ai to latest version...');
+	console.log('Updating snow-ai to latest version...');
 	try {
 		execSync('npm install -g snow-ai@latest', {stdio: 'inherit'});
-		console.log('✅ Update completed successfully!');
+		console.log('Update completed successfully');
 		process.exit(0);
 	} catch (error) {
 		console.error(
-			'❌ Update failed:',
+			'Update failed:',
 			error instanceof Error ? error.message : error,
 		);
 		process.exit(1);
@@ -473,9 +473,9 @@ const Startup = ({
 			if (isDevMode) {
 				deps.enableDevMode();
 				const userId = deps.getDevUserId();
-				console.log('🔧 Developer mode enabled');
-				console.log(`📝 Using persistent userId: ${userId}`);
-				console.log(`📂 Stored in: ~/.snow/dev-user-id\n`);
+				console.log('Developer mode enabled');
+				console.log(`Using persistent userId: ${userId}`);
+				console.log(`Stored in: ~/.snow/dev-user-id\n`);
 			}
 
 			// Start resource monitoring in development/debug mode
@@ -484,7 +484,7 @@ const Startup = ({
 				setInterval(() => {
 					const {hasLeak, reasons} = deps.resourceMonitor.checkForLeaks();
 					if (hasLeak) {
-						console.error('⚠️ Potential memory leak detected:');
+						console.error('Potential memory leak detected:');
 						reasons.forEach((reason: string) => console.error(`  - ${reason}`));
 					}
 				}, 5 * 60 * 1000);

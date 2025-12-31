@@ -20,7 +20,7 @@ _面向开发者的智能 AI 命令行工具_
 
 ## 感谢赞助商 💖
 
-* [UUCode](https://www.uucode.org/)
+* [UUCode](https://www.uucode.org/auth?ref=X6P4N8N0)
 
 ## << [点击查看详细完整文档](docs/usage/zh/0.目录.md) >>
 

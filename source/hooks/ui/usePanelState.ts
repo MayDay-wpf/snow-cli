@@ -13,6 +13,8 @@ export type PanelState = {
 	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showRoleCreation: boolean;
+	showRoleDeletion: boolean;
 	showWorkingDirPanel: boolean;
 	showProfilePanel: boolean;
 	profileSelectedIndex: number;
@@ -27,6 +29,8 @@ export type PanelActions = {
 	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
+	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
+	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
@@ -49,6 +53,8 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
+	const [showRoleCreation, setShowRoleCreation] = useState(false);
+	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
 	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
@@ -74,6 +80,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showHelpPanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showRoleCreation ||
+			showRoleDeletion ||
 			showProfilePanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
@@ -138,6 +146,16 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		if (showRoleCreation) {
+			setShowRoleCreation(false);
+			return true;
+		}
+
+		if (showRoleDeletion) {
+			setShowRoleDeletion(false);
+			return true;
+		}
+
 		if (showWorkingDirPanel) {
 			setShowWorkingDirPanel(false);
 			return true;
@@ -159,6 +177,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showHelpPanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showRoleCreation ||
+			showRoleDeletion ||
 			showWorkingDirPanel ||
 			showProfilePanel
 		);
@@ -172,6 +192,8 @@ export function usePanelState(): PanelState & PanelActions {
 		showHelpPanel,
 		showCustomCommandConfig,
 		showSkillsCreation,
+		showRoleCreation,
+		showRoleDeletion,
 		showWorkingDirPanel,
 		showProfilePanel,
 		profileSelectedIndex,
@@ -184,6 +206,8 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowHelpPanel,
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
+		setShowRoleCreation,
+		setShowRoleDeletion,
 		setShowWorkingDirPanel,
 		setShowProfilePanel,
 		setProfileSelectedIndex,

@@ -908,6 +908,46 @@ export const en: TranslationKeys = {
 		createErrorMessage: 'Failed to create skill: {error}',
 		errorUnknown: 'Unknown error',
 	},
+	roleCreation: {
+		title: 'Create ROLE.md',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/ROLE.md)',
+		locationGlobalInfo: 'Available across all projects',
+		locationProject: 'Project (./ROLE.md in project root)',
+		locationProjectInfo: 'Only available in this project',
+		confirmQuestion: 'Create ROLE.md?',
+		confirmYes: 'Yes, Create',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		warningExistsGlobal:
+			'Warning: Global ROLE.md already exists (~/.snow/ROLE.md)',
+		warningExistsProject: 'Warning: Project ROLE.md already exists (./ROLE.md)',
+		createSuccessMessage:
+			'Created ROLE.md successfully! ｜ Location: {location} ｜ Path: {path}',
+		createErrorMessage: 'Failed to create ROLE.md: {error}',
+		errorUnknown: 'Unknown error',
+	},
+	roleDeletion: {
+		title: 'Delete ROLE.md',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/ROLE.md)',
+		locationGlobalInfo: 'ROLE.md for all projects',
+		locationProject: 'Project (./ROLE.md in project root)',
+		locationProjectInfo: 'ROLE.md for current project only',
+		confirmQuestion: 'Confirm deletion of ROLE.md?',
+		confirmYes: 'Yes, Delete',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		warningNotExistsGlobal:
+			'Warning: Global ROLE.md does not exist (~/.snow/ROLE.md)',
+		warningNotExistsProject:
+			'Warning: Project ROLE.md does not exist (./ROLE.md)',
+		deleteSuccessMessage:
+			'Deleted ROLE.md successfully! ｜ Location: {location} ｜ Path: {path}',
+		deleteErrorMessage: 'Failed to delete ROLE.md: {error}',
+		errorNotFound: 'ROLE.md file does not exist',
+		errorUnknown: 'Unknown error',
+	},
 	askUser: {
 		header: '[User Input Required]',
 		customInputOption: 'Custom input...',

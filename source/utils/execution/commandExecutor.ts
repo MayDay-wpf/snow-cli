@@ -27,6 +27,8 @@ export interface CommandResult {
 		| 'executeTerminalCommand'
 		| 'deleteCustomCommand'
 		| 'showSkillsCreation'
+		| 'showRoleCreation'
+		| 'showRoleDeletion'
 		| 'showPermissionsPanel'
 		| 'reindexCodebase'
 		| 'quit';

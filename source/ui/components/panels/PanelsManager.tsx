@@ -5,12 +5,15 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {CustomCommandConfigPanel} from './CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from './SkillsCreationPanel.js';
+import {RoleCreationPanel} from './RoleCreationPanel.js';
+import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
 	SkillLocation,
 } from '../../../utils/commands/skills.js';
+import type {RoleLocation} from '../../../utils/commands/role.js';
 
 // Lazy load panel components
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
@@ -27,10 +30,14 @@ type PanelsManagerProps = {
 	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showRoleCreation: boolean;
+	showRoleDeletion: boolean;
 	showWorkingDirPanel: boolean;
 	setShowSessionPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
+	setShowRoleCreation: (show: boolean) => void;
+	setShowRoleDeletion: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 	onCustomCommandSave: (
@@ -45,6 +52,8 @@ type PanelsManagerProps = {
 		location: SkillLocation,
 		generated?: GeneratedSkillContent,
 	) => Promise<void>;
+	onRoleSave: (location: RoleLocation) => Promise<void>;
+	onRoleDelete: (location: RoleLocation) => Promise<void>;
 };
 
 export default function PanelsManager({
@@ -56,14 +65,20 @@ export default function PanelsManager({
 	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
+	showRoleCreation,
+	showRoleDeletion,
 	showWorkingDirPanel,
 	setShowSessionPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
+	setShowRoleCreation,
+	setShowRoleDeletion,
 	setShowWorkingDirPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
+	onRoleSave,
+	onRoleDelete,
 }: PanelsManagerProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -145,6 +160,28 @@ export default function PanelsManager({
 						projectRoot={workingDirectory}
 						onSave={onSkillsSave}
 						onCancel={() => setShowSkillsCreation(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show role creation panel if active */}
+			{showRoleCreation && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleCreationPanel
+						projectRoot={workingDirectory}
+						onSave={onRoleSave}
+						onCancel={() => setShowRoleCreation(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show role deletion panel if active */}
+			{showRoleDeletion && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleDeletionPanel
+						projectRoot={workingDirectory}
+						onDelete={onRoleDelete}
+						onCancel={() => setShowRoleDeletion(false)}
 					/>
 				</Box>
 			)}

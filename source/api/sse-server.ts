@@ -14,7 +14,9 @@ export type SSEEventType =
 	| 'error'
 	| 'complete'
 	| 'tool_confirmation_request'
-	| 'user_question_request';
+	| 'user_question_request'
+	| 'rollback_request'
+	| 'rollback_result';
 
 /**
  * SSE 事件数据结构
@@ -35,7 +37,8 @@ export interface ClientMessage {
 		| 'image'
 		| 'tool_confirmation_response'
 		| 'user_question_response'
-		| 'abort'; // 中断当前任务
+		| 'abort' // 中断当前任务
+		| 'rollback'; // 回滚会话/快照
 	content?: string;
 	images?: Array<{
 		data: string; // base64 data URI (data:image/png;base64,...)
@@ -45,6 +48,13 @@ export interface ClientMessage {
 	response?: any; // 响应数据
 	sessionId?: string; // 会话ID，用于连续对话
 	yoloMode?: boolean; // YOLO 模式，自动批准所有工具
+	rollback?: {
+		messageIndex: number;
+		rollbackFiles: boolean;
+		selectedFiles?: string[];
+		crossSessionRollback?: boolean;
+		originalSessionId?: string;
+	};
 }
 
 /**
@@ -229,6 +239,38 @@ export class SSEServer {
 	}
 
 	/**
+	 * 读取 JSON 请求体
+	 */
+	private async readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
+		return new Promise((resolve, reject) => {
+			let body = '';
+			req.on('data', chunk => {
+				body += chunk.toString();
+			});
+			req.on('end', () => {
+				try {
+					resolve(body ? (JSON.parse(body) as T) : ({} as T));
+				} catch (error) {
+					reject(error);
+				}
+			});
+		});
+	}
+
+	/**
+	 * 获取一个可用连接（优先指定 connectionId）
+	 */
+	private getActiveConnectionId(preferred?: string): string | undefined {
+		if (preferred && this.connections.has(preferred)) {
+			return preferred;
+		}
+		const firstConnection = this.connections.values().next().value as
+			| SSEConnection
+			| undefined;
+		return firstConnection?.getId();
+	}
+
+	/**
 	 * 处理 HTTP 请求
 	 */
 	private handleRequest(req: IncomingMessage, res: ServerResponse): void {
@@ -239,7 +281,7 @@ export class SSEServer {
 		if (req.method === 'OPTIONS') {
 			res.writeHead(200, {
 				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+				'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 				'Access-Control-Allow-Headers': 'Content-Type',
 			});
 			res.end();
@@ -249,6 +291,43 @@ export class SSEServer {
 		// SSE 连接端点
 		if (pathname === '/events' && req.method === 'GET') {
 			this.handleSSEConnection(req, res);
+			return;
+		}
+
+		// 会话创建端点
+		if (pathname === '/session/create' && req.method === 'POST') {
+			this.handleSessionCreate(req, res);
+			return;
+		}
+
+		// 会话加载端点
+		if (pathname === '/session/load' && req.method === 'POST') {
+			this.handleSessionLoad(req, res);
+			return;
+		}
+
+		// 回滚点列表端点（demo 使用）
+		if (pathname === '/session/rollback-points' && req.method === 'GET') {
+			this.handleSessionRollbackPoints(
+				res,
+				parsedUrl.query as Record<string, unknown>,
+			);
+			return;
+		}
+
+		// 会话列表端点
+		if (pathname === '/session/list' && req.method === 'GET') {
+			this.handleSessionList(
+				req,
+				res,
+				parsedUrl.query as Record<string, unknown>,
+			);
+			return;
+		}
+
+		// 会话删除端点
+		if (pathname?.startsWith('/session/') && req.method === 'DELETE') {
+			this.handleSessionDelete(req, res, pathname);
 			return;
 		}
 
@@ -273,6 +352,306 @@ export class SSEServer {
 		// 未知端点
 		res.writeHead(404);
 		res.end('Not Found');
+	}
+
+	private handleSessionCreate(req: IncomingMessage, res: ServerResponse): void {
+		void (async () => {
+			try {
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+
+				const body = await this.readJsonBody<{connectionId?: string}>(req);
+				const connectionId = this.getActiveConnectionId(body.connectionId);
+				if (!connectionId) {
+					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.end(JSON.stringify({error: 'No active connection'}));
+					return;
+				}
+
+				const session = await sessionManager.createNewSession();
+				this.bindSessionToConnection(session.id, connectionId);
+
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify({success: true, session}));
+			} catch (error) {
+				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.end(
+					JSON.stringify({
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
+	}
+
+	private handleSessionLoad(req: IncomingMessage, res: ServerResponse): void {
+		void (async () => {
+			try {
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+
+				const body = await this.readJsonBody<{
+					sessionId?: string;
+					connectionId?: string;
+				}>(req);
+				if (!body.sessionId) {
+					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.end(JSON.stringify({error: 'Missing sessionId'}));
+					return;
+				}
+
+				const session = await sessionManager.loadSession(body.sessionId);
+				if (!session) {
+					res.writeHead(404, {'Content-Type': 'application/json'});
+					res.end(JSON.stringify({error: 'Session not found'}));
+					return;
+				}
+
+				sessionManager.setCurrentSession(session);
+				const connectionId = this.getActiveConnectionId(body.connectionId);
+				if (connectionId) {
+					this.bindSessionToConnection(session.id, connectionId);
+				}
+
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify({success: true, session}));
+			} catch (error) {
+				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.end(
+					JSON.stringify({
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
+	}
+
+	private handleSessionRollbackPoints(
+		res: ServerResponse,
+		query?: Record<string, unknown>,
+	): void {
+		void (async () => {
+			try {
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+				const {hashBasedSnapshotManager} = await import(
+					'../utils/codebase/hashBasedSnapshot.js'
+				);
+
+				const sessionIdRaw = query?.['sessionId'];
+				const sessionId =
+					typeof sessionIdRaw === 'string' ? sessionIdRaw.trim() : '';
+				if (!sessionId) {
+					res.writeHead(400, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(JSON.stringify({success: false, error: 'Missing sessionId'}));
+					return;
+				}
+
+				const session = await sessionManager.loadSession(sessionId);
+				if (!session) {
+					res.writeHead(404, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(JSON.stringify({success: false, error: 'Session not found'}));
+					return;
+				}
+
+				const snapshots = await hashBasedSnapshotManager.listSnapshots(
+					sessionId,
+				);
+				const snapshotByIndex = new Map<
+					number,
+					{timestamp: number; fileCount: number}
+				>();
+				for (const s of snapshots) {
+					snapshotByIndex.set(s.messageIndex, {
+						timestamp: s.timestamp,
+						fileCount: s.fileCount,
+					});
+				}
+
+				const points: Array<{
+					messageIndex: number;
+					role: 'user';
+					timestamp: number;
+					summary: string;
+					hasSnapshot: boolean;
+					snapshot?: {timestamp: number; fileCount: number};
+					filesToRollbackCount: number;
+				}> = [];
+
+				const maxSummaryLen = 120;
+				for (let i = 0; i < session.messages.length; i++) {
+					const m: any = session.messages[i];
+					if (!m || m.role !== 'user') continue;
+					const content = typeof m.content === 'string' ? m.content : '';
+					const normalized = content.replace(/\s+/g, ' ').trim();
+					const summary =
+						normalized.length > maxSummaryLen
+							? normalized.slice(0, maxSummaryLen) + '…'
+							: normalized;
+
+					// Snapshot 的 messageIndex 和 session.messages 的索引并不总是一致。
+					// 实测快照通常对应“下一条消息写入前”的索引（例如首条 user 消息后快照会落在 1）。
+					const snapAtNext = snapshotByIndex.get(i + 1);
+					const snapAtCurrent = snapshotByIndex.get(i);
+					const snap = snapAtNext ?? snapAtCurrent;
+					const rollbackIndex = snapAtNext ? i + 1 : i;
+
+					let filesToRollbackCount = 0;
+					if (snap && snap.fileCount > 0) {
+						const files = await hashBasedSnapshotManager.getFilesToRollback(
+							sessionId,
+							rollbackIndex,
+						);
+						filesToRollbackCount = Array.isArray(files) ? files.length : 0;
+					}
+
+					points.push({
+						messageIndex: i,
+						role: 'user',
+						timestamp: typeof m.timestamp === 'number' ? m.timestamp : 0,
+						summary,
+						hasSnapshot: !!snap && snap.fileCount > 0,
+						snapshot: snap,
+						filesToRollbackCount,
+					});
+
+					// 如果快照存在但落在 i+1（常见），让前端能直接用 messageIndex 作为回滚点索引。
+					if (
+						snapAtNext &&
+						snapAtNext.fileCount > 0 &&
+						i + 1 < session.messages.length
+					) {
+						// 这里不改变 messageIndex 的语义，仅用于确保 hasSnapshot 展示正确。
+					}
+				}
+
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify({success: true, sessionId, points}));
+			} catch (error) {
+				res.writeHead(500, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(
+					JSON.stringify({
+						success: false,
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
+	}
+
+	private handleSessionList(
+		_req: IncomingMessage,
+		res: ServerResponse,
+		query?: Record<string, unknown>,
+	): void {
+		void (async () => {
+			try {
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+
+				const pageRaw = query?.['page'];
+				const pageSizeRaw = query?.['pageSize'];
+				const searchQueryRaw = query?.['q'];
+
+				const page = Math.max(
+					0,
+					Number.parseInt(String(pageRaw ?? '0'), 10) || 0,
+				);
+				const pageSize = Math.min(
+					200,
+					Math.max(1, Number.parseInt(String(pageSizeRaw ?? '20'), 10) || 20),
+				);
+				const searchQuery =
+					typeof searchQueryRaw === 'string' && searchQueryRaw.trim()
+						? searchQueryRaw.trim()
+						: undefined;
+
+				const result = await sessionManager.listSessionsPaginated(
+					page,
+					pageSize,
+					searchQuery,
+				);
+
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(
+					JSON.stringify({
+						success: true,
+						page,
+						pageSize,
+						searchQuery,
+						...result,
+					}),
+				);
+			} catch (error) {
+				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.end(
+					JSON.stringify({
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
+	}
+
+	private handleSessionDelete(
+		_req: IncomingMessage,
+		res: ServerResponse,
+		pathname: string,
+	): void {
+		void (async () => {
+			try {
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+
+				const parts = pathname.split('/').filter(Boolean);
+				const sessionId = parts[1];
+				if (!sessionId) {
+					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.end(JSON.stringify({error: 'Missing sessionId'}));
+					return;
+				}
+
+				const deleted = await sessionManager.deleteSession(sessionId);
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify({success: true, deleted}));
+			} catch (error) {
+				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.end(
+					JSON.stringify({
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
 	}
 
 	/**

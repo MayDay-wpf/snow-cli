@@ -574,30 +574,252 @@ class SessionManager {
 		pageSize: number = 20,
 		searchQuery?: string,
 	): Promise<PaginatedSessionList> {
-		let allSessions = await this.listSessions();
+		await this.ensureSessionsDir();
 
-		// Filter by search query if provided
-		if (searchQuery && searchQuery.trim()) {
-			const query = searchQuery.toLowerCase().trim();
-			allSessions = allSessions.filter(session => {
-				const titleMatch = session.title.toLowerCase().includes(query);
-				const summaryMatch = session.summary?.toLowerCase().includes(query);
-				const idMatch = session.id.toLowerCase().includes(query);
-				return titleMatch || summaryMatch || idMatch;
-			});
-		}
+		const normalizedQuery = searchQuery?.toLowerCase().trim();
+		const matchesQuery = (session: SessionListItem): boolean => {
+			if (!normalizedQuery) return true;
+			const titleMatch = session.title.toLowerCase().includes(normalizedQuery);
+			const summaryMatch = session.summary
+				?.toLowerCase()
+				.includes(normalizedQuery);
+			const idMatch = session.id.toLowerCase().includes(normalizedQuery);
+			return titleMatch || summaryMatch || idMatch;
+		};
 
-		const total = allSessions.length;
 		const startIndex = page * pageSize;
 		const endIndex = startIndex + pageSize;
-		const sessions = allSessions.slice(startIndex, endIndex);
+		const k = endIndex;
+
+		type HeapItem = {updatedAt: number; session: SessionListItem};
+		const heap: HeapItem[] = [];
+
+		const heapSwap = (i: number, j: number) => {
+			const tmp = heap[i]!;
+			heap[i] = heap[j]!;
+			heap[j] = tmp;
+		};
+
+		const heapSiftUp = (idx: number) => {
+			let i = idx;
+			while (i > 0) {
+				const p = Math.floor((i - 1) / 2);
+				if (heap[p]!.updatedAt <= heap[i]!.updatedAt) break;
+				heapSwap(i, p);
+				i = p;
+			}
+		};
+
+		const heapSiftDown = (idx: number) => {
+			let i = idx;
+			while (true) {
+				const l = i * 2 + 1;
+				const r = i * 2 + 2;
+				let smallest = i;
+				if (l < heap.length && heap[l]!.updatedAt < heap[smallest]!.updatedAt) {
+					smallest = l;
+				}
+				if (r < heap.length && heap[r]!.updatedAt < heap[smallest]!.updatedAt) {
+					smallest = r;
+				}
+				if (smallest === i) break;
+				heapSwap(i, smallest);
+				i = smallest;
+			}
+		};
+
+		const heapPush = (item: HeapItem) => {
+			heap.push(item);
+			heapSiftUp(heap.length - 1);
+		};
+
+		const heapReplaceRoot = (item: HeapItem) => {
+			heap[0] = item;
+			heapSiftDown(0);
+		};
+
+		const consider = (session: SessionListItem) => {
+			if (!matchesQuery(session)) return;
+			if (k <= 0) return;
+
+			const item: HeapItem = {updatedAt: session.updatedAt, session};
+			if (heap.length < k) {
+				heapPush(item);
+				return;
+			}
+
+			if (heap[0] && item.updatedAt > heap[0].updatedAt) {
+				heapReplaceRoot(item);
+			}
+		};
+
+		const scanNewFormat = async (): Promise<number> => {
+			let total = 0;
+			try {
+				const projectDir = this.getProjectSessionsDir();
+				const dateFolders = await fs.readdir(projectDir);
+				for (const dateFolder of dateFolders) {
+					if (!isDateFolder(dateFolder)) continue;
+					const datePath = path.join(projectDir, dateFolder);
+					let files: string[];
+					try {
+						files = await fs.readdir(datePath);
+					} catch {
+						continue;
+					}
+
+					for (const file of files) {
+						if (!file.endsWith('.json')) continue;
+						try {
+							const sessionPath = path.join(datePath, file);
+							const data = await fs.readFile(sessionPath, 'utf-8');
+							const session: Session = JSON.parse(data);
+							const item: SessionListItem = {
+								id: session.id,
+								title: this.cleanTitle(session.title),
+								summary: session.summary,
+								createdAt: session.createdAt,
+								updatedAt: session.updatedAt,
+								messageCount: session.messageCount,
+								projectPath: session.projectPath,
+								projectId: session.projectId,
+								compressedFrom: session.compressedFrom,
+								compressedAt: session.compressedAt,
+							};
+							if (!matchesQuery(item)) continue;
+							total += 1;
+							consider(item);
+						} catch {
+							continue;
+						}
+					}
+				}
+			} catch {
+				return 0;
+			}
+			return total;
+		};
+
+		const scanLegacyFormat = async (): Promise<number> => {
+			let total = 0;
+			try {
+				const files = await fs.readdir(this.sessionsDir);
+				for (const file of files) {
+					const filePath = path.join(this.sessionsDir, file);
+					let stat;
+					try {
+						stat = await fs.stat(filePath);
+					} catch {
+						continue;
+					}
+
+					if (
+						stat.isDirectory() &&
+						isDateFolder(file) &&
+						!isProjectFolder(file)
+					) {
+						let legacyFiles: string[];
+						try {
+							legacyFiles = await fs.readdir(filePath);
+						} catch {
+							continue;
+						}
+						for (const legacyFile of legacyFiles) {
+							if (!legacyFile.endsWith('.json')) continue;
+							try {
+								const sessionPath = path.join(filePath, legacyFile);
+								const data = await fs.readFile(sessionPath, 'utf-8');
+								const session: Session = JSON.parse(data);
+
+								if (
+									session.projectPath &&
+									session.projectPath !== this.currentProjectPath
+								) {
+									continue;
+								}
+								if (
+									session.projectId &&
+									session.projectId !== this.currentProjectId
+								) {
+									continue;
+								}
+
+								const item: SessionListItem = {
+									id: session.id,
+									title: this.cleanTitle(session.title),
+									summary: session.summary,
+									createdAt: session.createdAt,
+									updatedAt: session.updatedAt,
+									messageCount: session.messageCount,
+									projectPath: session.projectPath,
+									projectId: session.projectId,
+									compressedFrom: session.compressedFrom,
+									compressedAt: session.compressedAt,
+								};
+								if (!matchesQuery(item)) continue;
+								total += 1;
+								consider(item);
+							} catch {
+								continue;
+							}
+						}
+					}
+
+					if (file.endsWith('.json')) {
+						try {
+							const data = await fs.readFile(filePath, 'utf-8');
+							const session: Session = JSON.parse(data);
+
+							if (
+								session.projectPath &&
+								session.projectPath !== this.currentProjectPath
+							) {
+								continue;
+							}
+							if (
+								session.projectId &&
+								session.projectId !== this.currentProjectId
+							) {
+								continue;
+							}
+
+							const item: SessionListItem = {
+								id: session.id,
+								title: this.cleanTitle(session.title),
+								summary: session.summary,
+								createdAt: session.createdAt,
+								updatedAt: session.updatedAt,
+								messageCount: session.messageCount,
+								projectPath: session.projectPath,
+								projectId: session.projectId,
+								compressedFrom: session.compressedFrom,
+								compressedAt: session.compressedAt,
+							};
+							if (!matchesQuery(item)) continue;
+							total += 1;
+							consider(item);
+						} catch {
+							continue;
+						}
+					}
+				}
+			} catch {
+				return 0;
+			}
+			return total;
+		};
+
+		const totalNew = await scanNewFormat();
+		const total = totalNew > 0 ? totalNew : await scanLegacyFormat();
+
+		const topK = heap
+			.map(h => h.session)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+
+		const sessions = topK.slice(startIndex, endIndex);
 		const hasMore = endIndex < total;
 
-		return {
-			sessions,
-			total,
-			hasMore,
-		};
+		return {sessions, total, hasMore};
 	}
 
 	private async readSessionsFromDir(

@@ -89,14 +89,22 @@ body {
 .right-column {
 	display: flex;
 	flex-direction: column;
+	gap: 12px;
 	min-height: 0;
 	min-width: 0;
 	overflow: hidden;
 }
 
 .right-column .panel {
-	flex: 1;
 	min-height: 0;
+}
+
+.sessions-panel {
+	flex: 0 0 46%;
+}
+
+.right-column .panel:last-child {
+	flex: 1;
 }
 
 .panel {
@@ -420,6 +428,131 @@ button:disabled {
 .event.success .type {
 	color: #8f8;
 }
+
+.sessions-toolbar {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.sessions-toolbar input[type='text'] {
+	flex: 1;
+	padding: 6px 10px;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	font-size: 12px;
+	background: white;
+}
+
+.sessions-toolbar select {
+	padding: 6px 8px;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	background: white;
+	font-size: 12px;
+}
+
+.sessions-meta {
+	font-size: 12px;
+	color: #555;
+	margin-bottom: 8px;
+}
+
+.sessions-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	background: #fafafa;
+}
+
+.session-item {
+	padding: 8px 10px;
+	border-bottom: 1px solid #eee;
+	cursor: pointer;
+}
+
+.session-item:hover {
+	background: #f0f0f0;
+}
+
+.session-item.selected {
+	background: #e8e8e8;
+	border-left: 3px solid #000;
+}
+
+.session-item .row1 {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.session-item .title {
+	font-size: 12px;
+	font-weight: 600;
+	color: #222;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.session-item .time {
+	font-size: 11px;
+	color: #666;
+	flex-shrink: 0;
+}
+
+.session-item .row2 {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #666;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.session-item .row3 {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #888;
+	font-family: 'Monaco', 'Courier New', monospace;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sessions-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.sessions-actions button {
+	flex: 1;
+}
+
+.sessions-pagination {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.sessions-pagination button {
+	flex: 1;
+}
+
+.sessions-panel .panel-body {
+	gap: 0;
+}
+.event.error .type {
+	color: #f88;
+}
+
+.event.success .type {
+	color: #8f8;
+}
 .config-section {
 	margin-bottom: 10px;
 }
@@ -606,6 +739,94 @@ button:disabled {
 	margin: 0;
 	font-size: 13px;
 	color: #333;
+}
+
+.rollback-list {
+	margin: 10px 0;
+}
+
+.rollback-item {
+	display: flex;
+	align-items: flex-start;
+	padding: 10px 12px;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	margin-bottom: 8px;
+	cursor: pointer;
+	transition: all 0.2s;
+	background: white;
+}
+
+.rollback-item:hover {
+	border-color: #666;
+	background: #f8f8f8;
+}
+
+.rollback-item.selected {
+	border-color: #000;
+	background: #f0f0f0;
+}
+
+.rollback-item input[type='radio'] {
+	margin-right: 10px;
+	margin-top: 3px;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.rollback-item label {
+	flex: 1;
+	cursor: pointer;
+	margin: 0;
+	font-size: 13px;
+	color: #333;
+}
+
+.rollback-row1 {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	align-items: baseline;
+}
+
+.rollback-title {
+	font-weight: 600;
+	color: #222;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 70%;
+}
+
+.rollback-time {
+	font-size: 11px;
+	color: #666;
+	flex-shrink: 0;
+}
+
+.rollback-row2 {
+	margin-top: 4px;
+	font-size: 12px;
+	color: #555;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rollback-row3 {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #888;
+	font-family: 'Monaco', 'Courier New', monospace;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rollback-hint {
+	margin-top: 10px;
+	font-size: 12px;
+	color: #666;
 }
 
 .custom-input-section {

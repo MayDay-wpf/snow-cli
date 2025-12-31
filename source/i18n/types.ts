@@ -854,6 +854,41 @@ export type TranslationKeys = {
 		createErrorMessage: string;
 		errorUnknown: string;
 	};
+	roleCreation: {
+		title: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		warningExistsGlobal: string;
+		warningExistsProject: string;
+		createSuccessMessage: string;
+		createErrorMessage: string;
+		errorUnknown: string;
+	};
+	roleDeletion: {
+		title: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		warningNotExistsGlobal: string;
+		warningNotExistsProject: string;
+		deleteSuccessMessage: string;
+		deleteErrorMessage: string;
+		errorNotFound: string;
+		errorUnknown: string;
+	};
 	// AskUserQuestion Component
 	askUser: {
 		header: string;

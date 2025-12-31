@@ -9,6 +9,7 @@ import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 
 /**
  * Get the system prompt with ROLE.md content if it exists
+ * Priority: Project ROLE.md > Global ROLE.md > Default prompt
  * @param basePrompt - The base prompt template to modify
  * @param defaultRoleText - The default role text to replace (e.g., "You are Snow AI CLI")
  * @returns The prompt with ROLE.md content or original prompt
@@ -19,13 +20,23 @@ export function getSystemPromptWithRole(
 ): string {
 	try {
 		const cwd = process.cwd();
-		const roleFilePath = path.join(cwd, 'ROLE.md');
 
-		// Check if ROLE.md exists and is not empty
-		if (fs.existsSync(roleFilePath)) {
-			const roleContent = fs.readFileSync(roleFilePath, 'utf-8').trim();
+		// First check project ROLE.md
+		const projectRolePath = path.join(cwd, 'ROLE.md');
+		if (fs.existsSync(projectRolePath)) {
+			const roleContent = fs.readFileSync(projectRolePath, 'utf-8').trim();
 			if (roleContent) {
-				// Replace the default role description with ROLE.md content
+				// Replace the default role description with project ROLE.md content
+				return basePrompt.replace(defaultRoleText, roleContent);
+			}
+		}
+
+		// If no project ROLE.md, check global ROLE.md
+		const globalRolePath = path.join(os.homedir(), '.snow', 'ROLE.md');
+		if (fs.existsSync(globalRolePath)) {
+			const roleContent = fs.readFileSync(globalRolePath, 'utf-8').trim();
+			if (roleContent) {
+				// Replace the default role description with global ROLE.md content
 				return basePrompt.replace(defaultRoleText, roleContent);
 			}
 		}

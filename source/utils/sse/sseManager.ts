@@ -1,6 +1,7 @@
 import {SSEServer, SSEEvent, ClientMessage} from '../../api/sse-server.js';
 import {handleConversationWithTools} from '../../hooks/conversation/useConversation.js';
 import {sessionManager} from '../session/sessionManager.js';
+import {hashBasedSnapshotManager} from '../codebase/hashBasedSnapshot.js';
 import type {ToolCall} from '../execution/toolExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {UserQuestionResult} from '../../hooks/conversation/useConversation.js';
@@ -131,6 +132,12 @@ class SSEManager {
 				return;
 			}
 
+			// 处理回滚请求
+			if (message.type === 'rollback') {
+				await this.handleRollbackRequest(message, sendEvent);
+				return;
+			}
+
 			// 处理普通聊天消息
 			if (message.type === 'chat' || message.type === 'image') {
 				await this.handleChatMessage(message, sendEvent, connectionId);
@@ -218,6 +225,91 @@ class SSEManager {
 				`No active task found for session: ${message.sessionId}`,
 				'info',
 			);
+		}
+	}
+
+	/**
+	 * 处理回滚请求（会话截断 + 可选文件回滚）
+	 */
+	private async handleRollbackRequest(
+		message: ClientMessage,
+		sendEvent: (event: SSEEvent) => void,
+	): Promise<void> {
+		const sessionId = message.sessionId;
+		const rollback = message.rollback;
+
+		if (!sessionId) {
+			sendEvent({
+				type: 'rollback_result',
+				data: {success: false, error: 'Missing sessionId'},
+				timestamp: new Date().toISOString(),
+				requestId: message.requestId,
+			});
+			return;
+		}
+
+		if (!rollback) {
+			sendEvent({
+				type: 'rollback_result',
+				data: {success: false, error: 'Missing rollback payload'},
+				timestamp: new Date().toISOString(),
+				requestId: message.requestId,
+			});
+			return;
+		}
+
+		try {
+			const currentSession = await sessionManager.loadSession(sessionId);
+			if (!currentSession) {
+				sendEvent({
+					type: 'rollback_result',
+					data: {success: false, error: 'Session not found', sessionId},
+					timestamp: new Date().toISOString(),
+					requestId: message.requestId,
+				});
+				return;
+			}
+
+			sessionManager.setCurrentSession(currentSession);
+
+			let filesRolledBack = 0;
+			if (rollback.rollbackFiles) {
+				filesRolledBack = await hashBasedSnapshotManager.rollbackToMessageIndex(
+					sessionId,
+					rollback.messageIndex,
+					rollback.selectedFiles,
+				);
+			}
+
+			await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
+				sessionId,
+				rollback.messageIndex,
+			);
+
+			await sessionManager.truncateMessages(rollback.messageIndex);
+
+			sendEvent({
+				type: 'rollback_result',
+				data: {
+					success: true,
+					sessionId,
+					messageIndex: rollback.messageIndex,
+					filesRolledBack,
+				},
+				timestamp: new Date().toISOString(),
+				requestId: message.requestId,
+			});
+		} catch (error) {
+			sendEvent({
+				type: 'rollback_result',
+				data: {
+					success: false,
+					sessionId,
+					error: error instanceof Error ? error.message : 'Unknown error',
+				},
+				timestamp: new Date().toISOString(),
+				requestId: message.requestId,
+			});
 		}
 	}
 

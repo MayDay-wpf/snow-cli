@@ -250,6 +250,8 @@ type CommandHandlerOptions = {
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
@@ -505,6 +507,22 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showSkillsCreation') {
 				options.setShowSkillsCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showRoleCreation') {
+				options.setShowRoleCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showRoleDeletion') {
+				options.setShowRoleDeletion(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

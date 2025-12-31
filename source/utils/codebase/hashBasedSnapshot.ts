@@ -223,7 +223,7 @@ class HashBasedSnapshotManager {
 		try {
 			const files = await fs.readdir(this.snapshotsDir);
 			for (const file of files) {
-				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+				if (file.startsWith(`${sessionId}_`) && file.endsWith('.json')) {
 					const snapshotPath = path.join(this.snapshotsDir, file);
 					const content = await fs.readFile(snapshotPath, 'utf-8');
 					const metadata: SnapshotMetadata = JSON.parse(content);
@@ -255,7 +255,7 @@ class HashBasedSnapshotManager {
 			const filesToRollback = new Set<string>();
 
 			for (const file of files) {
-				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+				if (file.startsWith(`${sessionId}_`) && file.endsWith('.json')) {
 					const snapshotPath = path.join(this.snapshotsDir, file);
 					const content = await fs.readFile(snapshotPath, 'utf-8');
 					const metadata: SnapshotMetadata = JSON.parse(content);
@@ -295,7 +295,7 @@ class HashBasedSnapshotManager {
 
 			// First pass: just collect snapshot file paths (minimal memory)
 			for (const file of files) {
-				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+				if (file.startsWith(`${sessionId}_`) && file.endsWith('.json')) {
 					const snapshotPath = path.join(this.snapshotsDir, file);
 					const content = await fs.readFile(snapshotPath, 'utf-8');
 					const metadata: SnapshotMetadata = JSON.parse(content);
@@ -376,7 +376,7 @@ class HashBasedSnapshotManager {
 			let deletedCount = 0;
 
 			for (const file of files) {
-				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+				if (file.startsWith(`${sessionId}_`) && file.endsWith('.json')) {
 					const snapshotPath = path.join(this.snapshotsDir, file);
 					const content = await fs.readFile(snapshotPath, 'utf-8');
 					const metadata: SnapshotMetadata = JSON.parse(content);
@@ -410,7 +410,7 @@ class HashBasedSnapshotManager {
 		try {
 			const files = await fs.readdir(this.snapshotsDir);
 			for (const file of files) {
-				if (file.startsWith(sessionId) && file.endsWith('.json')) {
+				if (file.startsWith(`${sessionId}_`) && file.endsWith('.json')) {
 					const filePath = path.join(this.snapshotsDir, file);
 					await fs.unlink(filePath);
 				}

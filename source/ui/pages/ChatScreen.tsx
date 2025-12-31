@@ -836,6 +836,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowHelpPanel: panelState.setShowHelpPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
+		setShowRoleCreation: panelState.setShowRoleCreation,
+		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowPermissionsPanel,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
@@ -1331,10 +1333,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				showHelpPanel={panelState.showHelpPanel}
 				showCustomCommandConfig={panelState.showCustomCommandConfig}
 				showSkillsCreation={panelState.showSkillsCreation}
+				showRoleCreation={panelState.showRoleCreation}
+				showRoleDeletion={panelState.showRoleDeletion}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}
+				setShowRoleCreation={panelState.setShowRoleCreation}
+				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (name, command, type, location) => {
@@ -1417,6 +1423,72 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						setMessages(prev => [...prev, errorMessage]);
 					}
 				}}
+				onRoleSave={async location => {
+					const {createRoleFile} = await import('../../utils/commands/role.js');
+					const result = await createRoleFile(location, workingDirectory);
+					panelState.setShowRoleCreation(false);
+
+					if (result.success) {
+						const locationDesc =
+							location === 'global'
+								? t.roleCreation.locationGlobal
+								: t.roleCreation.locationProject;
+						const content = t.roleCreation.createSuccessMessage
+							.replace('{location}', locationDesc)
+							.replace('{path}', result.path);
+						const successMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role',
+						};
+						setMessages(prev => [...prev, successMessage]);
+					} else {
+						const errorText = result.error || t.roleCreation.errorUnknown;
+						const content = t.roleCreation.createErrorMessage.replace(
+							'{error}',
+							errorText,
+						);
+						const errorMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role',
+						};
+						setMessages(prev => [...prev, errorMessage]);
+					}
+				}}
+				onRoleDelete={async location => {
+					const {deleteRoleFile} = await import('../../utils/commands/role.js');
+					const result = await deleteRoleFile(location, workingDirectory);
+					panelState.setShowRoleDeletion(false);
+
+					if (result.success) {
+						const locationDesc =
+							location === 'global'
+								? t.roleDeletion.locationGlobal
+								: t.roleDeletion.locationProject;
+						const content = t.roleDeletion.deleteSuccessMessage
+							.replace('{location}', locationDesc)
+							.replace('{path}', result.path);
+						const successMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role',
+						};
+						setMessages(prev => [...prev, successMessage]);
+					} else {
+						const errorText = result.error || t.roleDeletion.errorUnknown;
+						const content = t.roleDeletion.deleteErrorMessage.replace(
+							'{error}',
+							errorText,
+						);
+						const errorMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role',
+						};
+						setMessages(prev => [...prev, errorMessage]);
+					}
+				}}
 			/>
 
 			{/* Show permissions panel if active */}
@@ -1450,7 +1522,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
+			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
@@ -1461,6 +1533,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					panelState.showHelpPanel ||
 					panelState.showCustomCommandConfig ||
 					panelState.showSkillsCreation ||
+					panelState.showRoleCreation ||
+					panelState.showRoleDeletion ||
 					panelState.showWorkingDirPanel ||
 					showPermissionsPanel
 				) &&
