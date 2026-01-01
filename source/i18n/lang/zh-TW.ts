@@ -167,7 +167,7 @@ export const zhTW: TranslationKeys = {
 		advancedModel: '進階模型(輸入後可以搜尋):',
 		basicModel: '基礎模型(輸入後可以搜尋):',
 		maxContextTokens: '最大上下文令牌:',
-		maxTokens: '最大令牌數:',
+		maxTokens: '最大回复令牌數:',
 		editSimilarityThreshold: '檔案編輯相似度閾值(0-1, 非必要不改):',
 		notSet: '未設定',
 		enabled: '[✓] 已啟用',

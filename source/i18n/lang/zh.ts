@@ -167,7 +167,7 @@ export const zh: TranslationKeys = {
 		advancedModel: '高级模型(键入可搜索):',
 		basicModel: '基础模型(键入可搜索):',
 		maxContextTokens: '最大上下文令牌:',
-		maxTokens: '最大令牌数:',
+		maxTokens: '最大回复令牌数:',
 		editSimilarityThreshold: '文件编辑相似度阈值(0-1, 非必要不改):',
 		notSet: '未设置',
 		enabled: '[✓] 已启用',
