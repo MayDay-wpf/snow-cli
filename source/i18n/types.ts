@@ -455,6 +455,7 @@ export type TranslationKeys = {
 			role: string;
 			usage: string;
 			backend: string;
+			profiles: string;
 			export: string;
 			custom: string;
 			skills: string;

@@ -14,10 +14,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			{name: 'clear', description: t.commandPanel.commands.clear},
 			{name: 'resume', description: t.commandPanel.commands.resume},
 			{name: 'mcp', description: t.commandPanel.commands.mcp},
-			{
-				name: 'yolo',
-				description: t.commandPanel.commands.yolo,
-			},
+			{name: 'yolo', description: t.commandPanel.commands.yolo},
 			{
 				name: 'plan',
 				description: t.commandPanel.commands.plan,
@@ -48,6 +45,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'backend',
 				description:
 					t.commandPanel.commands.backend || 'Show background processes',
+			},
+			{
+				name: 'profiles',
+				description: t.commandPanel.commands.profiles,
 			},
 			{
 				name: 'export',

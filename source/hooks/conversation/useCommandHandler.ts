@@ -255,6 +255,7 @@ type CommandHandlerOptions = {
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
+	onSwitchProfile: () => void;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -470,14 +471,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (result.success && result.action === 'showMcpPanel') {
-				options.setShowMcpPanel(true);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showProfilePanel') {
+				// Open profile switching panel (same logic as shortcut)
+				options.onSwitchProfile();
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'home') {
+				// Reset terminal before navigating to welcome screen
+				resetTerminal(stdout);
+				navigateTo('welcome');
 			} else if (result.success && result.action === 'showUsagePanel') {
 				options.setShowUsagePanel(true);
 				const commandMessage: Message = {

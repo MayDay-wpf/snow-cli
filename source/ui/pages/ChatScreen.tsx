@@ -225,6 +225,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		// Use Promise.all to load all commands in parallel
 		Promise.all([
 			import('../../utils/commands/clear.js'),
+			import('../../utils/commands/profiles.js'),
 			import('../../utils/commands/resume.js'),
 			import('../../utils/commands/mcp.js'),
 			import('../../utils/commands/yolo.js'),
@@ -840,6 +841,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowPermissionsPanel,
+		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
 		setPlanMode,
@@ -1110,14 +1112,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	});
 
 	// Handle profile switching (Ctrl+P shortcut) - delegated to panelState
-	const handleSwitchProfile = () => {
+	function handleSwitchProfile() {
 		panelState.handleSwitchProfile({
 			isStreaming: streamingState.isStreaming,
 			hasPendingRollback: !!snapshotState.pendingRollback,
 			hasPendingToolConfirmation: !!pendingToolConfirmation,
 			hasPendingUserQuestion: !!pendingUserQuestion,
 		});
-	};
+	}
 
 	// Handle profile selection - delegated to panelState
 	const handleProfileSelect = panelState.handleProfileSelect;

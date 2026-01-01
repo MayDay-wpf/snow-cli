@@ -21,6 +21,7 @@ export interface CommandResult {
 		| 'exportChat'
 		| 'showAgentPicker'
 		| 'showTodoPicker'
+		| 'showProfilePanel'
 		| 'showHelpPanel'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'

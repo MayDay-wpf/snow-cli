@@ -496,6 +496,7 @@ export const en: TranslationKeys = {
 				'Rebuild codebase index, detect changed, deleted, new and modified files',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
+			profiles: 'Switch configuration profiles',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			quit: 'Exit the application',

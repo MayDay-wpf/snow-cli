@@ -463,6 +463,7 @@ export const zhTW: TranslationKeys = {
 			permissions: '管理永遠允許的工具權限',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			backend: '顯示背景處理程序面板',
+			profiles: '開啟設定檔切換面板',
 			quit: '退出應用程式',
 		},
 	},
@@ -869,8 +870,7 @@ export const zhTW: TranslationKeys = {
 		escCancel: '按 ESC 取消',
 		warningExistsGlobal: '警告：全局 ROLE.md 已存在 (~/.snow/ROLE.md)',
 		warningExistsProject: '警告：項目 ROLE.md 已存在 (./ROLE.md)',
-		createSuccessMessage:
-			'創建 ROLE.md 成功\n位置: {location}\n路徑: {path}',
+		createSuccessMessage: '創建 ROLE.md 成功\n位置: {location}\n路徑: {path}',
 		createErrorMessage: '創建 ROLE.md 失敗：{error}',
 		errorUnknown: '未知錯誤',
 	},
@@ -887,8 +887,7 @@ export const zhTW: TranslationKeys = {
 		escCancel: '按 ESC 取消',
 		warningNotExistsGlobal: '警告：全局 ROLE.md 不存在 (~/.snow/ROLE.md)',
 		warningNotExistsProject: '警告：項目 ROLE.md 不存在 (./ROLE.md)',
-		deleteSuccessMessage:
-			'刪除 ROLE.md 成功！\n位置: {location}\n路徑: {path}',
+		deleteSuccessMessage: '刪除 ROLE.md 成功！\n位置: {location}\n路徑: {path}',
 		deleteErrorMessage: '刪除 ROLE.md 失敗：{error}',
 		errorNotFound: 'ROLE.md 檔案不存在',
 		errorUnknown: '未知錯誤',
