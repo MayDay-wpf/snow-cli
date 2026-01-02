@@ -58,9 +58,8 @@ jobs:
             
             ### What's New
 
-            - Optimize most display effects
-            - The todo list automatically inherits after compression
-            
+            - fix some bugs 
+                      
             ### Installation
             ```bash
             npm install -g snow-ai

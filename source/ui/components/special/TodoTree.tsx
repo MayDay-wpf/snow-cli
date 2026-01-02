@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import chalk from 'chalk';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
 interface TodoItem {
@@ -73,15 +74,20 @@ export default function TodoTree({todos}: TodoTreeProps) {
 			childPrefixes.push(isLast ? '  ' : '│ ');
 		}
 
+		// 使用 chalk 直接着色，避免 ink 自动换行时颜色丢失
+		// statusColor 可能是命名颜色(如 'gray')或 hex 格式(如 '#666666')
+		const applyColor = (text: string) => {
+			return statusColor.startsWith('#')
+				? chalk.hex(statusColor)(text)
+				: (chalk as any)[statusColor]?.(text) ?? text;
+		};
+
 		return (
 			<Box key={todo.id} flexDirection="column">
 				<Text>
-					<Text dimColor>{prefix}</Text>
-					<Text color={statusColor}>{statusIcon}</Text>
-					<Text color={statusColor} dimColor={todo.status === 'completed'}>
-						{' '}
-						{todo.content}
-					</Text>
+					{applyColor(prefix)}
+					{applyColor(statusIcon)}
+					{applyColor(' ' + todo.content)}
 				</Text>
 				{children.map((child, index) =>
 					renderTodo(

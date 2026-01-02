@@ -32,6 +32,7 @@ export interface CommandResult {
 		| 'showRoleDeletion'
 		| 'showPermissionsPanel'
 		| 'reindexCodebase'
+		| 'sendAsMessage'
 		| 'quit';
 	prompt?: string;
 	location?: 'global' | 'project'; // For custom commands to specify location
@@ -55,9 +56,10 @@ export async function executeCommand(
 	const handler = commandHandlers[commandName];
 
 	if (!handler) {
+		// Unknown command should be sent as a normal message to AI
 		return {
-			success: false,
-			message: `Unknown command: ${commandName}`,
+			success: true,
+			action: 'sendAsMessage',
 		};
 	}
 

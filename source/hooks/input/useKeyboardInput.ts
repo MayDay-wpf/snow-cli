@@ -932,6 +932,29 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 						// Execute command with arguments
 						executeCommand(commandName, commandArgs).then(result => {
+							// If command is unknown, send the original message as a normal message
+							if (result.action === 'sendAsMessage') {
+								// Get images data for the message
+								const currentText = buffer.text;
+								const allImages = buffer.getImages();
+								const validImages = allImages
+									.filter(img => currentText.includes(img.placeholder))
+									.map(img => ({
+										data: img.data,
+										mimeType: img.mimeType,
+									}));
+
+								// Save to persistent history
+								saveToHistory(message);
+
+								// Send as normal message
+								onSubmit(
+									message,
+									validImages.length > 0 ? validImages : undefined,
+								);
+								return;
+							}
+
 							// Record command usage for frequency-based sorting
 							commandUsageManager.recordUsage(commandName);
 							if (onCommand) {
