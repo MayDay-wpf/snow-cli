@@ -484,6 +484,7 @@ export const zhTW: TranslationKeys = {
 		escHint: '按 ESC 關閉',
 		activeLabel: '(目前)',
 		searchLabel: '搜尋:',
+		noResults: '未找到符合的設定檔',
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',

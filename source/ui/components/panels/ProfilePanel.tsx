@@ -60,11 +60,6 @@ const ProfilePanel = memo(
 			return null;
 		}
 
-		// Don't show panel if no profiles found
-		if (profiles.length === 0) {
-			return null;
-		}
-
 		return (
 			<Box flexDirection="column">
 				<Box width="100%">
@@ -84,32 +79,42 @@ const ProfilePanel = memo(
 								</Text>
 							</Box>
 						)}
-						{displayedProfiles.map((profile, index) => (
-							<Box key={profile.name} flexDirection="column" width="100%">
-								<Text
-									color={
-										index === displayedSelectedIndex
-											? theme.colors.menuSelected
-											: theme.colors.menuNormal
-									}
-									bold
-								>
-									{index === displayedSelectedIndex ? '> ' : '  '}
-									{profile.displayName}
-									{profile.isActive && ` ${t.profilePanel.activeLabel}`}
-								</Text>
-							</Box>
-						))}
-						{profiles.length > effectiveMaxItems && (
+						{profiles.length === 0 ? (
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuSecondary} dimColor>
-									{t.profilePanel.scrollHint} ·{' '}
-									{t.profilePanel.moreHidden.replace(
-										'{count}',
-										(profiles.length - effectiveMaxItems).toString(),
-									)}
+									{t.profilePanel.noResults}
 								</Text>
 							</Box>
+						) : (
+							<>
+								{displayedProfiles.map((profile, index) => (
+									<Box key={profile.name} flexDirection="column" width="100%">
+										<Text
+											color={
+												index === displayedSelectedIndex
+													? theme.colors.menuSelected
+													: theme.colors.menuNormal
+											}
+											bold
+										>
+											{index === displayedSelectedIndex ? '> ' : '  '}
+											{profile.displayName}
+											{profile.isActive && ` ${t.profilePanel.activeLabel}`}
+										</Text>
+									</Box>
+								))}
+								{profiles.length > effectiveMaxItems && (
+									<Box marginTop={1}>
+										<Text color={theme.colors.menuSecondary} dimColor>
+											{t.profilePanel.scrollHint} ·{' '}
+											{t.profilePanel.moreHidden.replace(
+												'{count}',
+												(profiles.length - effectiveMaxItems).toString(),
+											)}
+										</Text>
+									</Box>
+								)}
+							</>
 						)}
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>

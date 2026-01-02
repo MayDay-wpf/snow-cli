@@ -128,12 +128,24 @@ interface BashCommandExecutionStatusProps {
 	command: string;
 	timeout?: number;
 	terminalWidth: number;
+	output?: string[];
+}
+
+/**
+ * Truncate text to prevent overflow
+ */
+function truncateText(text: string, maxWidth: number = 80): string {
+	if (text.length <= maxWidth) {
+		return text;
+	}
+	return text.slice(0, maxWidth - 3) + '...';
 }
 
 export function BashCommandExecutionStatus({
 	command,
 	timeout = 30000,
 	terminalWidth,
+	output = [],
 }: BashCommandExecutionStatusProps) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -160,6 +172,16 @@ export function BashCommandExecutionStatus({
 			<Box paddingLeft={2}>
 				<Text dimColor>{displayCommand}</Text>
 			</Box>
+			{/* Real-time output lines */}
+			{output.length > 0 && (
+				<Box flexDirection="column" paddingLeft={2} marginTop={1}>
+					{output.slice(-10).map((line, index) => (
+						<Text key={index} wrap="truncate" dimColor>
+							{truncateText(line, maxCommandWidth)}
+						</Text>
+					))}
+				</Box>
+			)}
 			<Box flexDirection="column" gap={0}>
 				<Box>
 					<Text dimColor>

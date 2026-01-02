@@ -484,6 +484,7 @@ export const zh: TranslationKeys = {
 		escHint: '按 ESC 关闭',
 		activeLabel: '(当前)',
 		searchLabel: '搜索:',
+		noResults: '未找到匹配的配置',
 	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',

@@ -22,6 +22,7 @@ export interface BashModeState {
 	isExecuting: boolean;
 	currentCommand: string | null;
 	currentTimeout: number | null; // 当前命令的超时时间
+	output: string[]; // 实时输出行
 	executionResults: Map<string, CommandExecutionResult>;
 }
 
@@ -30,6 +31,7 @@ export function useBashMode() {
 		isExecuting: false,
 		currentCommand: null,
 		currentTimeout: null,
+		output: [],
 		executionResults: new Map(),
 	});
 
@@ -84,6 +86,7 @@ export function useBashMode() {
 				isExecuting: true,
 				currentCommand: command,
 				currentTimeout: timeout,
+				output: [],
 			}));
 
 			return new Promise(resolve => {
@@ -105,10 +108,32 @@ export function useBashMode() {
 
 				child.stdout?.on('data', (data: Buffer) => {
 					stdout += data.toString();
+					// 实时更新输出到 UI
+					const lines = data
+						.toString()
+						.split('\n')
+						.filter((line: string) => line.trim());
+					if (lines.length > 0) {
+						setState(prev => ({
+							...prev,
+							output: [...prev.output, ...lines],
+						}));
+					}
 				});
 
 				child.stderr?.on('data', (data: Buffer) => {
 					stderr += data.toString();
+					// 实时更新输出到 UI
+					const lines = data
+						.toString()
+						.split('\n')
+						.filter((line: string) => line.trim());
+					if (lines.length > 0) {
+						setState(prev => ({
+							...prev,
+							output: [...prev.output, ...lines],
+						}));
+					}
 				});
 
 				child.on(
@@ -131,6 +156,7 @@ export function useBashMode() {
 								isExecuting: false,
 								currentCommand: null,
 								currentTimeout: null,
+								output: [],
 								executionResults: newResults,
 							};
 						});
@@ -157,6 +183,7 @@ export function useBashMode() {
 							isExecuting: false,
 							currentCommand: null,
 							currentTimeout: null,
+							output: [],
 							executionResults: newResults,
 						};
 					});
@@ -275,6 +302,7 @@ export function useBashMode() {
 			isExecuting: false,
 			currentCommand: null,
 			currentTimeout: null,
+			output: [],
 			executionResults: new Map(),
 		});
 	}, []);

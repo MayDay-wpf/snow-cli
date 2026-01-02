@@ -94,9 +94,9 @@ export function BackgroundProcessPanel({
 			flexDirection="column"
 			borderStyle="round"
 			borderColor={theme.colors.menuInfo}
-			paddingX={1}
+			paddingX={0}
 			paddingY={0}
-			width={terminalWidth - 2}
+			width={terminalWidth}
 		>
 			<Box paddingTop={1} paddingX={1}>
 				<Text bold color={theme.colors.menuInfo}>
@@ -127,9 +127,9 @@ export function BackgroundProcessPanel({
 										{truncateCommand(process.command, maxCommandWidth)}
 									</Text>
 								</Box>
-								<Box paddingLeft={4}>
+								<Box paddingX={1}>
 									<Text dimColor>
-										PID: {process.pid} | {t.backgroundProcesses.status}:{' '}
+										{'    '}PID: {process.pid} | {t.backgroundProcesses.status}:{' '}
 									</Text>
 									<Text color={getStatusColor(process.status)}>
 										{getStatusText(process)}

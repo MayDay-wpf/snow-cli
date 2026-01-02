@@ -20,6 +20,7 @@ import {
 	BashCommandConfirmation,
 	BashCommandExecutionStatus,
 } from '../components/bash/BashCommandConfirmation.js';
+import {CustomCommandExecutionDisplay} from '../components/bash/CustomCommandExecutionDisplay.js';
 import FileRollbackConfirmation from '../components/tools/FileRollbackConfirmation.js';
 import MessageRenderer from '../components/chat/MessageRenderer.js';
 import ChatHeader from '../components/special/ChatHeader.js';
@@ -60,9 +61,7 @@ import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {validateGitignore} from '../../utils/codebase/gitignoreValidator.js';
-import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
-import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
 import {logger} from '../../utils/core/logger.js';
@@ -93,6 +92,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	const currentContextPercentageRef = useRef(0); // Use ref to avoid closure issues
 	const [isExecutingTerminalCommand, setIsExecutingTerminalCommand] =
 		useState(false); // Track terminal command execution
+	const [customCommandExecution, setCustomCommandExecution] = useState<{
+		commandName: string;
+		command: string;
+		isRunning: boolean;
+		output: string[];
+		exitCode?: number | null;
+		error?: string;
+	} | null>(null); // Track custom command execution state
 
 	// Sync state to ref
 	useEffect(() => {
@@ -677,6 +684,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		handleHistorySelect,
 		handleRollbackConfirm,
 		handleUserQuestionAnswer,
+		handleSessionPanelSelect,
+		handleQuit,
+		handleReindexCodebase,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -705,124 +715,16 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setBashSensitiveCommand,
 		pendingUserQuestion,
 		setPendingUserQuestion,
+		initializeFromSession,
+		setShowSessionPanel: panelState.setShowSessionPanel,
+		exitApp: exit,
+		codebaseAgentRef,
+		setCodebaseIndexing,
+		setCodebaseProgress,
+		setFileUpdateNotification,
+		setWatcherEnabled,
+		exitingApplicationText: t.hooks.exitingApplication,
 	});
-	// Handle quit command - clean up resources and exit application
-	const handleQuit = async () => {
-		// Show exiting message
-		setMessages(prev => [
-			...prev,
-			{
-				role: 'command',
-				content: t.hooks.exitingApplication,
-			},
-		]);
-
-		// 设置超时机制，防止卡死
-		const quitTimeout = setTimeout(() => {
-			// 超时后强制退出
-			process.exit(0);
-		}, 3000); // 3秒超时
-
-		try {
-			// Stop codebase indexing agent with timeout
-			if (codebaseAgentRef.current) {
-				const agent = codebaseAgentRef.current;
-				await Promise.race([
-					(async () => {
-						await agent.stop();
-						agent.stopWatching();
-					})(),
-					new Promise(resolve => setTimeout(resolve, 2000)), // 2秒超时
-				]);
-			}
-
-			// Stop VSCode connection (同步操作，不需要超时)
-			if (
-				vscodeConnection.isConnected() ||
-				vscodeConnection.isClientRunning()
-			) {
-				vscodeConnection.stop();
-			}
-
-			// 清除超时计时器
-			clearTimeout(quitTimeout);
-
-			// Exit the application
-			exit();
-		} catch (error) {
-			// 出现错误时也要清除超时计时器
-			clearTimeout(quitTimeout);
-			// 强制退出
-			process.exit(0);
-		}
-	};
-
-	// Handle reindex codebase command
-	const handleReindexCodebase = async () => {
-		const workingDirectory = process.cwd();
-
-		setCodebaseIndexing(true);
-
-		try {
-			// Use the reindexCodebase utility function
-			const agent = await reindexCodebase(
-				workingDirectory,
-				codebaseAgentRef.current,
-				progressData => {
-					setCodebaseProgress({
-						totalFiles: progressData.totalFiles,
-						processedFiles: progressData.processedFiles,
-						totalChunks: progressData.totalChunks,
-						currentFile: progressData.currentFile,
-						status: progressData.status,
-						error: progressData.error,
-					});
-
-					if (
-						progressData.status === 'completed' ||
-						progressData.status === 'error'
-					) {
-						setCodebaseIndexing(false);
-					}
-				},
-			);
-
-			// Update the agent reference
-			codebaseAgentRef.current = agent;
-
-			// Start file watcher after reindexing is completed
-			if (agent) {
-				agent.startWatching(watcherProgressData => {
-					setCodebaseProgress({
-						totalFiles: watcherProgressData.totalFiles,
-						processedFiles: watcherProgressData.processedFiles,
-						totalChunks: watcherProgressData.totalChunks,
-						currentFile: watcherProgressData.currentFile,
-						status: watcherProgressData.status,
-						error: watcherProgressData.error,
-					});
-
-					if (
-						watcherProgressData.totalFiles === 0 &&
-						watcherProgressData.currentFile
-					) {
-						setFileUpdateNotification({
-							file: watcherProgressData.currentFile,
-							timestamp: Date.now(),
-						});
-
-						setTimeout(() => {
-							setFileUpdateNotification(null);
-						}, 3000);
-					}
-				});
-				setWatcherEnabled(true);
-			}
-		} catch (error) {
-			setCodebaseIndexing(false);
-			throw error;
-		}
-	};
 
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
@@ -850,6 +752,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setCurrentContextPercentage,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		setIsExecutingTerminalCommand,
+		setCustomCommandExecution,
 		processMessage,
 		onQuit: handleQuit,
 		onReindexCodebase: handleReindexCodebase,
@@ -1139,58 +1042,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 	// Handle profile selection - delegated to panelState
 	const handleProfileSelect = panelState.handleProfileSelect;
 
-	const handleSessionPanelSelect = async (sessionId: string) => {
-		panelState.setShowSessionPanel(false);
-		try {
-			const session = await sessionManager.loadSession(sessionId);
-			if (session) {
-				// Convert API format messages to UI format for proper rendering
-				const uiMessages = convertSessionMessagesToUI(session.messages);
-
-				initializeFromSession(session.messages);
-				setMessages(uiMessages);
-				setPendingMessages([]);
-				streamingState.setIsStreaming(false);
-				setRemountKey(prev => prev + 1);
-
-				// Load snapshot file counts for the loaded session
-				const snapshots = await hashBasedSnapshotManager.listSnapshots(
-					session.id,
-				);
-				const counts = new Map<number, number>();
-				for (const snapshot of snapshots) {
-					counts.set(snapshot.messageIndex, snapshot.fileCount);
-				}
-				snapshotState.setSnapshotFileCount(counts);
-
-				// Display warning AFTER loading session (if any)
-				if (sessionManager.lastLoadHookWarning) {
-					console.log(sessionManager.lastLoadHookWarning);
-				}
-			} else {
-				// Session load failed - check if it's due to hook failure
-				if (sessionManager.lastLoadHookError) {
-					// Display hook error using HookErrorDisplay component
-					const errorMessage: Message = {
-						role: 'assistant',
-						content: '', // Content will be rendered by HookErrorDisplay
-						hookError: sessionManager.lastLoadHookError,
-					};
-					setMessages(prev => [...prev, errorMessage]);
-				} else {
-					// Generic error
-					const errorMessage: Message = {
-						role: 'assistant',
-						content: 'Failed to load session.',
-					};
-					setMessages(prev => [...prev, errorMessage]);
-				}
-			}
-		} catch (error) {
-			console.error('Failed to load session:', error);
-		}
-	};
-
 	// Show warning if terminal is too small
 	if (terminalHeight < MIN_TERMINAL_HEIGHT) {
 		return (
@@ -1314,6 +1165,21 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						command={bashMode.state.currentCommand}
 						timeout={bashMode.state.currentTimeout || 30000}
 						terminalWidth={terminalWidth}
+						output={bashMode.state.output}
+					/>
+				</Box>
+			)}
+
+			{/* Show custom command execution status */}
+			{customCommandExecution && (
+				<Box paddingX={1} width={terminalWidth}>
+					<CustomCommandExecutionDisplay
+						command={customCommandExecution.command}
+						commandName={customCommandExecution.commandName}
+						isRunning={customCommandExecution.isRunning}
+						output={customCommandExecution.output}
+						exitCode={customCommandExecution.exitCode}
+						error={customCommandExecution.error}
 					/>
 				</Box>
 			)}
@@ -1327,6 +1193,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							command={terminalExecutionState.state.command}
 							timeout={terminalExecutionState.state.timeout || 30000}
 							terminalWidth={terminalWidth}
+							output={terminalExecutionState.state.output}
 						/>
 					</Box>
 				)}

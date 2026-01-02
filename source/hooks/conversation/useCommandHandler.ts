@@ -282,6 +282,16 @@ type CommandHandlerOptions = {
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
 	>;
 	setIsExecutingTerminalCommand: React.Dispatch<React.SetStateAction<boolean>>;
+	setCustomCommandExecution: React.Dispatch<
+		React.SetStateAction<{
+			commandName: string;
+			command: string;
+			isRunning: boolean;
+			output: string[];
+			exitCode?: number | null;
+			error?: string;
+		} | null>
+	>;
 	processMessage: (
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
@@ -583,21 +593,18 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.prompt
 			) {
 				// Execute terminal command (execute type - run in terminal)
-				const {spawn} = require('child_process');
-
-				// Disable input while command is executing
+				// Use customCommandExecution state for real-time output display in dynamic area
 				options.setIsExecutingTerminalCommand(true);
-
-				// Show executing status
-				const statusMessage: Message = {
-					role: 'command',
-					content: 'Executing...',
+				options.setCustomCommandExecution({
 					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, statusMessage]);
+					command: result.prompt,
+					isRunning: true,
+					output: [],
+					exitCode: null,
+				});
 
-				// Use spawn for streaming output
-				// Windows 使用 cmd.exe，Unix-like 系统使用 sh
+				// Execute the command using spawn
+				const {spawn} = require('child_process');
 				const isWindows = process.platform === 'win32';
 				const shell = isWindows ? 'cmd' : 'sh';
 				const shellArgs = isWindows
@@ -608,74 +615,56 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					timeout: 30000,
 				});
 
-				let outputBuffer = '';
+				let outputLines: string[] = [];
 
 				// Stream stdout
 				child.stdout.on('data', (data: Buffer) => {
 					const text = data.toString();
-					outputBuffer += text;
-
-					// Add new message for each chunk (plain output, no icons)
-					const chunkMessage: Message = {
-						role: 'assistant',
-						content: text,
-						plainOutput: true,
-					};
-					options.setMessages(prev => [...prev, chunkMessage]);
+					const newLines = text
+						.split('\n')
+						.filter((line: string) => line.length > 0);
+					outputLines = [...outputLines, ...newLines].slice(-20); // Keep last 20 lines
+					options.setCustomCommandExecution(prev =>
+						prev ? {...prev, output: outputLines} : null,
+					);
 				});
 
 				// Stream stderr
 				child.stderr.on('data', (data: Buffer) => {
 					const text = data.toString();
-					outputBuffer += text;
-
-					// Add new message for each chunk (plain output, no icons)
-					const chunkMessage: Message = {
-						role: 'assistant',
-						content: text,
-						plainOutput: true,
-					};
-					options.setMessages(prev => [...prev, chunkMessage]);
+					const newLines = text
+						.split('\n')
+						.filter((line: string) => line.length > 0);
+					outputLines = [...outputLines, ...newLines].slice(-20);
+					options.setCustomCommandExecution(prev =>
+						prev ? {...prev, output: outputLines} : null,
+					);
 				});
 
 				// Handle completion
-				child.on('close', () => {
-					// Re-enable input
+				child.on('close', (code: number | null) => {
 					options.setIsExecutingTerminalCommand(false);
-
-					// Remove executing status message
-					options.setMessages(prev =>
-						prev.filter(msg => msg !== statusMessage),
+					options.setCustomCommandExecution(prev =>
+						prev ? {...prev, isRunning: false, exitCode: code} : null,
 					);
-
-					// If no output, add a message
-					if (!outputBuffer) {
-						const noOutputMessage: Message = {
-							role: 'command',
-							content: 'Command executed (no output)',
-							commandName: commandName,
-						};
-						options.setMessages(prev => [...prev, noOutputMessage]);
-					}
+					// Clear after 3 seconds
+					setTimeout(() => {
+						options.setCustomCommandExecution(null);
+					}, 3000);
 				});
 
 				// Handle error
 				child.on('error', (error: any) => {
-					// Re-enable input
 					options.setIsExecutingTerminalCommand(false);
-
-					// Remove executing status message
-					options.setMessages(prev =>
-						prev.filter(msg => msg !== statusMessage),
+					options.setCustomCommandExecution(prev =>
+						prev
+							? {...prev, isRunning: false, exitCode: -1, error: error.message}
+							: null,
 					);
-
-					// Add error message
-					const errorMessage: Message = {
-						role: 'command',
-						content: `Command failed: ${error.message}`,
-						commandName: commandName,
-					};
-					options.setMessages(prev => [...prev, errorMessage]);
+					// Clear after 5 seconds for errors
+					setTimeout(() => {
+						options.setCustomCommandExecution(null);
+					}, 5000);
 				});
 			} else if (
 				result.success &&

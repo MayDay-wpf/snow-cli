@@ -14,6 +14,8 @@ import {
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
+import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
+import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 
 interface UseChatLogicProps {
 	messages: Message[];
@@ -82,6 +84,31 @@ interface UseChatLogicProps {
 			}) => void;
 		} | null>
 	>;
+	// Session panel handlers
+	initializeFromSession: (messages: any[]) => void;
+	setShowSessionPanel: (show: boolean) => void;
+	// Quit and reindex handlers
+	exitApp: () => void;
+	codebaseAgentRef: React.MutableRefObject<any>;
+	setCodebaseIndexing: React.Dispatch<React.SetStateAction<boolean>>;
+	setCodebaseProgress: React.Dispatch<
+		React.SetStateAction<{
+			totalFiles: number;
+			processedFiles: number;
+			totalChunks: number;
+			currentFile: string;
+			status: string;
+			error?: string;
+		} | null>
+	>;
+	setFileUpdateNotification: React.Dispatch<
+		React.SetStateAction<{
+			file: string;
+			timestamp: number;
+		} | null>
+	>;
+	setWatcherEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	exitingApplicationText: string;
 }
 
 export function useChatLogic(props: UseChatLogicProps) {
@@ -113,6 +140,15 @@ export function useChatLogic(props: UseChatLogicProps) {
 		setBashSensitiveCommand,
 		pendingUserQuestion,
 		setPendingUserQuestion,
+		initializeFromSession,
+		setShowSessionPanel,
+		exitApp,
+		codebaseAgentRef,
+		setCodebaseIndexing,
+		setCodebaseProgress,
+		setFileUpdateNotification,
+		setWatcherEnabled,
+		exitingApplicationText,
 	} = props;
 
 	const processMessageRef =
@@ -1077,6 +1113,176 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 	};
 
+	const handleSessionPanelSelect = async (sessionId: string) => {
+		setShowSessionPanel(false);
+		try {
+			const session = await sessionManager.loadSession(sessionId);
+			if (session) {
+				// Convert API format messages to UI format for proper rendering
+				const uiMessages = convertSessionMessagesToUI(session.messages);
+
+				initializeFromSession(session.messages);
+				setMessages(uiMessages);
+				setPendingMessages([]);
+				streamingState.setIsStreaming(false);
+				setRemountKey(prev => prev + 1);
+
+				// Load snapshot file counts for the loaded session
+				const snapshots = await hashBasedSnapshotManager.listSnapshots(
+					session.id,
+				);
+				const counts = new Map<number, number>();
+				for (const snapshot of snapshots) {
+					counts.set(snapshot.messageIndex, snapshot.fileCount);
+				}
+				snapshotState.setSnapshotFileCount(counts);
+
+				// Display warning AFTER loading session (if any)
+				if (sessionManager.lastLoadHookWarning) {
+					console.log(sessionManager.lastLoadHookWarning);
+				}
+			} else {
+				// Session load failed - check if it's due to hook failure
+				if (sessionManager.lastLoadHookError) {
+					// Display hook error using HookErrorDisplay component
+					const errorMessage: Message = {
+						role: 'assistant',
+						content: '', // Content will be rendered by HookErrorDisplay
+						hookError: sessionManager.lastLoadHookError,
+					};
+					setMessages(prev => [...prev, errorMessage]);
+				} else {
+					// Generic error
+					const errorMessage: Message = {
+						role: 'assistant',
+						content: 'Failed to load session.',
+					};
+					setMessages(prev => [...prev, errorMessage]);
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load session:', error);
+		}
+	};
+
+	// Handle quit command - clean up resources and exit application
+	const handleQuit = async () => {
+		// Show exiting message
+		setMessages(prev => [
+			...prev,
+			{
+				role: 'command',
+				content: exitingApplicationText,
+			},
+		]);
+
+		// 设置超时机制，防止卡死
+		const quitTimeout = setTimeout(() => {
+			// 超时后强制退出
+			process.exit(0);
+		}, 3000); // 3秒超时
+
+		try {
+			// Stop codebase indexing agent with timeout
+			if (codebaseAgentRef.current) {
+				const agent = codebaseAgentRef.current;
+				await Promise.race([
+					(async () => {
+						await agent.stop();
+						agent.stopWatching();
+					})(),
+					new Promise(resolve => setTimeout(resolve, 2000)), // 2秒超时
+				]);
+			}
+
+			// Stop VSCode connection (同步操作，不需要超时)
+			if (
+				vscodeConnection.isConnected() ||
+				vscodeConnection.isClientRunning()
+			) {
+				vscodeConnection.stop();
+			}
+
+			// 清除超时计时器
+			clearTimeout(quitTimeout);
+
+			// Exit the application
+			exitApp();
+		} catch (error) {
+			// 出现错误时也要清除超时计时器
+			clearTimeout(quitTimeout);
+			// 强制退出
+			process.exit(0);
+		}
+	};
+
+	// Handle reindex codebase command
+	const handleReindexCodebase = async () => {
+		const workingDirectory = process.cwd();
+
+		setCodebaseIndexing(true);
+
+		try {
+			// Use the reindexCodebase utility function
+			const agent = await reindexCodebase(
+				workingDirectory,
+				codebaseAgentRef.current,
+				progressData => {
+					setCodebaseProgress({
+						totalFiles: progressData.totalFiles,
+						processedFiles: progressData.processedFiles,
+						totalChunks: progressData.totalChunks,
+						currentFile: progressData.currentFile,
+						status: progressData.status,
+						error: progressData.error,
+					});
+
+					if (
+						progressData.status === 'completed' ||
+						progressData.status === 'error'
+					) {
+						setCodebaseIndexing(false);
+					}
+				},
+			);
+
+			// Update the agent reference
+			codebaseAgentRef.current = agent;
+
+			// Start file watcher after reindexing is completed
+			if (agent) {
+				agent.startWatching(watcherProgressData => {
+					setCodebaseProgress({
+						totalFiles: watcherProgressData.totalFiles,
+						processedFiles: watcherProgressData.processedFiles,
+						totalChunks: watcherProgressData.totalChunks,
+						currentFile: watcherProgressData.currentFile,
+						status: watcherProgressData.status,
+						error: watcherProgressData.error,
+					});
+
+					if (
+						watcherProgressData.totalFiles === 0 &&
+						watcherProgressData.currentFile
+					) {
+						setFileUpdateNotification({
+							file: watcherProgressData.currentFile,
+							timestamp: Date.now(),
+						});
+
+						setTimeout(() => {
+							setFileUpdateNotification(null);
+						}, 3000);
+					}
+				});
+				setWatcherEnabled(true);
+			}
+		} catch (error) {
+			setCodebaseIndexing(false);
+			throw error;
+		}
+	};
+
 	return {
 		handleMessageSubmit,
 		processMessage: processMessageRef.current!,
@@ -1084,6 +1290,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 		handleHistorySelect,
 		handleRollbackConfirm,
 		handleUserQuestionAnswer,
+		handleSessionPanelSelect,
+		handleQuit,
+		handleReindexCodebase,
 		rollbackViaSSE,
 	};
 }

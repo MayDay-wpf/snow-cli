@@ -7,6 +7,7 @@ import {
 	truncateOutput,
 } from './utils/bash/security.utils.js';
 import {processManager} from '../utils/core/processManager.js';
+import {appendTerminalOutput} from '../hooks/execution/useTerminalExecutionState.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -147,10 +148,20 @@ export class TerminalCommandService {
 
 				childProcess.stdout?.on('data', chunk => {
 					stdoutData += chunk;
+					// Send real-time output to UI
+					const lines = String(chunk)
+						.split('\n')
+						.filter(line => line.trim());
+					lines.forEach(line => appendTerminalOutput(line));
 				});
 
 				childProcess.stderr?.on('data', chunk => {
 					stderrData += chunk;
+					// Send real-time output to UI
+					const lines = String(chunk)
+						.split('\n')
+						.filter(line => line.trim());
+					lines.forEach(line => appendTerminalOutput(line));
 				});
 
 				childProcess.on('error', error => {

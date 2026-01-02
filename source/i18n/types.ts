@@ -476,6 +476,7 @@ export type TranslationKeys = {
 		escHint: string;
 		activeLabel: string;
 		searchLabel: string;
+		noResults: string;
 	};
 
 	// Permissions Panel

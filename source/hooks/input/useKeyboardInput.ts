@@ -369,7 +369,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				const userMessages = getUserMessages();
 				if (userMessages.length > 0) {
 					setShowHistoryMenu(true);
-					setHistorySelectedIndex(0); // Reset selection to first item
+					setHistorySelectedIndex(userMessages.length - 1); // Reset selection to last item
 					setEscapeKeyCount(0);
 					if (escapeKeyTimer.current) {
 						clearTimeout(escapeKeyTimer.current);

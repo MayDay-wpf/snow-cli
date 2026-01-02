@@ -5,10 +5,12 @@ export interface TerminalExecutionState {
 	command: string | null;
 	timeout: number | null;
 	isBackgrounded: boolean;
+	output: string[];
 }
 
 // Global state for terminal execution (shared across components)
 let globalSetState: ((state: TerminalExecutionState) => void) | null = null;
+let globalState: TerminalExecutionState | null = null;
 
 /**
  * Hook to manage terminal execution state
@@ -20,11 +22,13 @@ export function useTerminalExecutionState() {
 		command: null,
 		timeout: null,
 		isBackgrounded: false,
+		output: [],
 	});
 
 	// Always update global setter to ensure it's current
 	// This prevents race conditions where setState might be stale or null
 	globalSetState = setState;
+	globalState = state;
 
 	const startExecution = useCallback((command: string, timeout: number) => {
 		setState({
@@ -32,6 +36,7 @@ export function useTerminalExecutionState() {
 			command,
 			timeout,
 			isBackgrounded: false,
+			output: [],
 		});
 	}, []);
 
@@ -41,6 +46,7 @@ export function useTerminalExecutionState() {
 			command: null,
 			timeout: null,
 			isBackgrounded: false,
+			output: [],
 		});
 	}, []);
 
@@ -66,5 +72,18 @@ export function useTerminalExecutionState() {
 export function setTerminalExecutionState(state: TerminalExecutionState) {
 	if (globalSetState) {
 		globalSetState(state);
+	}
+}
+
+/**
+ * Append output line to terminal execution state
+ * Called from bash.ts during command execution
+ */
+export function appendTerminalOutput(line: string) {
+	if (globalSetState && globalState) {
+		globalSetState({
+			...globalState,
+			output: [...globalState.output, line],
+		});
 	}
 }

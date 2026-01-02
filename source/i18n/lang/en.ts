@@ -519,6 +519,7 @@ export const en: TranslationKeys = {
 		escHint: 'Press ESC to close',
 		activeLabel: '(active)',
 		searchLabel: 'Search:',
+		noResults: 'No matching profiles found',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Press Ctrl+C again to exit',

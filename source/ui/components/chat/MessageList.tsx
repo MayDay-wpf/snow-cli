@@ -45,6 +45,15 @@ export interface Message {
 		exitCode?: number;
 		command?: string;
 	};
+	// Custom command execution state
+	customCommandExecution?: {
+		command: string;
+		commandName: string;
+		isRunning: boolean;
+		output: string[];
+		exitCode?: number | null;
+		error?: string;
+	};
 	subAgent?: {
 		agentId: string;
 		agentName: string;
