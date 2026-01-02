@@ -686,7 +686,7 @@ export const en: TranslationKeys = {
 		toolRejected: '✗ Rejected',
 		// Parallel execution
 		parallelStart: '┌─ Parallel execution',
-		parallelEnd: '└─ End parallel execution',
+		parallelEnd: '└─ Execution completed',
 		// Messages
 		userMessage: 'You',
 		assistantMessage: 'Assistant',

@@ -647,7 +647,7 @@ export const zh: TranslationKeys = {
 		toolRejected: '✗ 已拒绝',
 		// Parallel execution
 		parallelStart: '┌─ 并行执行',
-		parallelEnd: '└─ 结束并行执行',
+		parallelEnd: '└─ 执行完成',
 		// Messages
 		userMessage: '你',
 		assistantMessage: '助手',

@@ -65,17 +65,14 @@ export default function MessageRenderer({
 			filteredMessages[index - 1]?.messageStatus === 'pending');
 
 	// Check if this is the last message in the parallel group
-	// Only show end indicator if:
-	// 1. This is truly the last message, OR
-	// 2. Next message has a DIFFERENT non-null parallelGroup (not just undefined)
+	// Show end indicator if next message is not in the same parallel group
 	const nextMessage = filteredMessages[index + 1];
-	const nextHasDifferentGroup =
+	const nextInSameGroup =
 		nextMessage &&
 		nextMessage.parallelGroup !== undefined &&
 		nextMessage.parallelGroup !== null &&
-		nextMessage.parallelGroup !== message.parallelGroup;
-	const isLastInGroup =
-		shouldShowParallelIndicator && (!nextMessage || nextHasDifferentGroup);
+		nextMessage.parallelGroup === message.parallelGroup;
+	const isLastInGroup = shouldShowParallelIndicator && !nextInSameGroup;
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
@@ -110,7 +107,7 @@ export default function MessageRenderer({
 					{isFirstInGroup && (
 						<Box marginBottom={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
-								┌─ Parallel execution
+								{t.chatScreen.parallelStart}
 							</Text>
 						</Box>
 					)}
@@ -453,7 +450,7 @@ export default function MessageRenderer({
 					{!message.plainOutput && isLastInGroup && (
 						<Box marginTop={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
-								└─ End parallel execution
+								{t.chatScreen.parallelEnd}
 							</Text>
 						</Box>
 					)}
