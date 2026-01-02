@@ -1,6 +1,5 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import TodoTree from '../special/TodoTree.js';
 
 interface ToolResultPreviewProps {
 	toolName: string;
@@ -538,6 +537,19 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 		);
 	}
 
-	// Use the TodoTree component to display the TODO list
-	return <TodoTree todos={todoData.todos} />;
+	// 只显示简洁的 TODO 状态提示，不显示完整的 TodoTree
+	const totalTodos = todoData.todos.length;
+	const completedTodos = todoData.todos.filter(
+		(todo: any) => todo.status === 'completed',
+	).length;
+	const pendingTodos = totalTodos - completedTodos;
+
+	return (
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ TODO: {pendingTodos} pending, {completedTodos} completed (total:{' '}
+				{totalTodos})
+			</Text>
+		</Box>
+	);
 }

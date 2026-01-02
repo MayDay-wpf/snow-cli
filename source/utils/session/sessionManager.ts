@@ -60,6 +60,10 @@ class SessionManager {
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
 	private readonly currentProjectPath: string;
+	// 会话列表缓存
+	private sessionListCache: SessionListItem[] | null = null;
+	private cacheTimestamp: number = 0;
+	private readonly CACHE_TTL = 5000; // 缓存有效期 5 秒
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
@@ -201,6 +205,9 @@ class SessionManager {
 			session.projectId,
 		);
 		await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
+
+		// 保存会话后使缓存失效
+		this.invalidateCache();
 	}
 
 	/**
@@ -497,7 +504,13 @@ class SessionManager {
 			}
 
 			// Sort by updatedAt (newest first)
-			return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+			const sorted = sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+
+			// 更新缓存
+			this.sessionListCache = sorted;
+			this.cacheTimestamp = Date.now();
+
+			return sorted;
 		} catch (error) {
 			return [];
 		}
@@ -574,7 +587,19 @@ class SessionManager {
 		pageSize: number = 20,
 		searchQuery?: string,
 	): Promise<PaginatedSessionList> {
-		await this.ensureSessionsDir();
+		// 检查缓存是否有效
+		const now = Date.now();
+		const cacheValid =
+			this.sessionListCache && now - this.cacheTimestamp < this.CACHE_TTL;
+
+		// 如果缓存有效且没有搜索条件，直接使用缓存
+		let allSessions: SessionListItem[];
+		if (cacheValid && !searchQuery) {
+			allSessions = this.sessionListCache!;
+		} else {
+			// 缓存失效或有搜索条件，重新加载
+			allSessions = await this.listSessions();
+		}
 
 		const normalizedQuery = searchQuery?.toLowerCase().trim();
 		const matchesQuery = (session: SessionListItem): boolean => {
@@ -587,239 +612,27 @@ class SessionManager {
 			return titleMatch || summaryMatch || idMatch;
 		};
 
+		// 过滤和分页
+		const filtered = normalizedQuery
+			? allSessions.filter(matchesQuery)
+			: allSessions;
+		const total = filtered.length;
 		const startIndex = page * pageSize;
 		const endIndex = startIndex + pageSize;
-		const k = endIndex;
 
-		type HeapItem = {updatedAt: number; session: SessionListItem};
-		const heap: HeapItem[] = [];
-
-		const heapSwap = (i: number, j: number) => {
-			const tmp = heap[i]!;
-			heap[i] = heap[j]!;
-			heap[j] = tmp;
-		};
-
-		const heapSiftUp = (idx: number) => {
-			let i = idx;
-			while (i > 0) {
-				const p = Math.floor((i - 1) / 2);
-				if (heap[p]!.updatedAt <= heap[i]!.updatedAt) break;
-				heapSwap(i, p);
-				i = p;
-			}
-		};
-
-		const heapSiftDown = (idx: number) => {
-			let i = idx;
-			while (true) {
-				const l = i * 2 + 1;
-				const r = i * 2 + 2;
-				let smallest = i;
-				if (l < heap.length && heap[l]!.updatedAt < heap[smallest]!.updatedAt) {
-					smallest = l;
-				}
-				if (r < heap.length && heap[r]!.updatedAt < heap[smallest]!.updatedAt) {
-					smallest = r;
-				}
-				if (smallest === i) break;
-				heapSwap(i, smallest);
-				i = smallest;
-			}
-		};
-
-		const heapPush = (item: HeapItem) => {
-			heap.push(item);
-			heapSiftUp(heap.length - 1);
-		};
-
-		const heapReplaceRoot = (item: HeapItem) => {
-			heap[0] = item;
-			heapSiftDown(0);
-		};
-
-		const consider = (session: SessionListItem) => {
-			if (!matchesQuery(session)) return;
-			if (k <= 0) return;
-
-			const item: HeapItem = {updatedAt: session.updatedAt, session};
-			if (heap.length < k) {
-				heapPush(item);
-				return;
-			}
-
-			if (heap[0] && item.updatedAt > heap[0].updatedAt) {
-				heapReplaceRoot(item);
-			}
-		};
-
-		const scanNewFormat = async (): Promise<number> => {
-			let total = 0;
-			try {
-				const projectDir = this.getProjectSessionsDir();
-				const dateFolders = await fs.readdir(projectDir);
-				for (const dateFolder of dateFolders) {
-					if (!isDateFolder(dateFolder)) continue;
-					const datePath = path.join(projectDir, dateFolder);
-					let files: string[];
-					try {
-						files = await fs.readdir(datePath);
-					} catch {
-						continue;
-					}
-
-					for (const file of files) {
-						if (!file.endsWith('.json')) continue;
-						try {
-							const sessionPath = path.join(datePath, file);
-							const data = await fs.readFile(sessionPath, 'utf-8');
-							const session: Session = JSON.parse(data);
-							const item: SessionListItem = {
-								id: session.id,
-								title: this.cleanTitle(session.title),
-								summary: session.summary,
-								createdAt: session.createdAt,
-								updatedAt: session.updatedAt,
-								messageCount: session.messageCount,
-								projectPath: session.projectPath,
-								projectId: session.projectId,
-								compressedFrom: session.compressedFrom,
-								compressedAt: session.compressedAt,
-							};
-							if (!matchesQuery(item)) continue;
-							total += 1;
-							consider(item);
-						} catch {
-							continue;
-						}
-					}
-				}
-			} catch {
-				return 0;
-			}
-			return total;
-		};
-
-		const scanLegacyFormat = async (): Promise<number> => {
-			let total = 0;
-			try {
-				const files = await fs.readdir(this.sessionsDir);
-				for (const file of files) {
-					const filePath = path.join(this.sessionsDir, file);
-					let stat;
-					try {
-						stat = await fs.stat(filePath);
-					} catch {
-						continue;
-					}
-
-					if (
-						stat.isDirectory() &&
-						isDateFolder(file) &&
-						!isProjectFolder(file)
-					) {
-						let legacyFiles: string[];
-						try {
-							legacyFiles = await fs.readdir(filePath);
-						} catch {
-							continue;
-						}
-						for (const legacyFile of legacyFiles) {
-							if (!legacyFile.endsWith('.json')) continue;
-							try {
-								const sessionPath = path.join(filePath, legacyFile);
-								const data = await fs.readFile(sessionPath, 'utf-8');
-								const session: Session = JSON.parse(data);
-
-								if (
-									session.projectPath &&
-									session.projectPath !== this.currentProjectPath
-								) {
-									continue;
-								}
-								if (
-									session.projectId &&
-									session.projectId !== this.currentProjectId
-								) {
-									continue;
-								}
-
-								const item: SessionListItem = {
-									id: session.id,
-									title: this.cleanTitle(session.title),
-									summary: session.summary,
-									createdAt: session.createdAt,
-									updatedAt: session.updatedAt,
-									messageCount: session.messageCount,
-									projectPath: session.projectPath,
-									projectId: session.projectId,
-									compressedFrom: session.compressedFrom,
-									compressedAt: session.compressedAt,
-								};
-								if (!matchesQuery(item)) continue;
-								total += 1;
-								consider(item);
-							} catch {
-								continue;
-							}
-						}
-					}
-
-					if (file.endsWith('.json')) {
-						try {
-							const data = await fs.readFile(filePath, 'utf-8');
-							const session: Session = JSON.parse(data);
-
-							if (
-								session.projectPath &&
-								session.projectPath !== this.currentProjectPath
-							) {
-								continue;
-							}
-							if (
-								session.projectId &&
-								session.projectId !== this.currentProjectId
-							) {
-								continue;
-							}
-
-							const item: SessionListItem = {
-								id: session.id,
-								title: this.cleanTitle(session.title),
-								summary: session.summary,
-								createdAt: session.createdAt,
-								updatedAt: session.updatedAt,
-								messageCount: session.messageCount,
-								projectPath: session.projectPath,
-								projectId: session.projectId,
-								compressedFrom: session.compressedFrom,
-								compressedAt: session.compressedAt,
-							};
-							if (!matchesQuery(item)) continue;
-							total += 1;
-							consider(item);
-						} catch {
-							continue;
-						}
-					}
-				}
-			} catch {
-				return 0;
-			}
-			return total;
-		};
-
-		const totalNew = await scanNewFormat();
-		const total = totalNew > 0 ? totalNew : await scanLegacyFormat();
-
-		const topK = heap
-			.map(h => h.session)
-			.sort((a, b) => b.updatedAt - a.updatedAt);
-
-		const sessions = topK.slice(startIndex, endIndex);
+		// 直接从已过滤的数据中分页，不需要堆排序
+		const sessions = filtered.slice(startIndex, endIndex);
 		const hasMore = endIndex < total;
 
 		return {sessions, total, hasMore};
+	}
+
+	/**
+	 * 使缓存失效
+	 */
+	private invalidateCache(): void {
+		this.sessionListCache = null;
+		this.cacheTimestamp = 0;
 	}
 
 	private async readSessionsFromDir(

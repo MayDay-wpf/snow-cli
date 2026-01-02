@@ -9,6 +9,8 @@ import type {
 } from './types/todo.types.js';
 // Utility functions
 import {formatDateForFolder} from './utils/todo/date.utils.js';
+// Event emitter
+import {todoEvents} from '../utils/events/todoEvents.js';
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
@@ -82,6 +84,10 @@ export class TodoService {
 		};
 
 		await fs.writeFile(todoPath, JSON.stringify(todoList, null, 2));
+
+		// 触发 TODO 更新事件
+		todoEvents.emitTodoUpdate(sessionId, todos);
+
 		return todoList;
 	}
 

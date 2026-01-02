@@ -58,7 +58,8 @@ jobs:
             
             ### What's New
 
-            - fix some bugs
+            - Optimize the display of TODO Tree
+            - Optimize the performance of Resume when retrieving the conversation list
             
             ### Installation
             ```bash

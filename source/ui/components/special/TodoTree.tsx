@@ -14,7 +14,7 @@ interface TodoTreeProps {
 }
 
 /**
- * TODO Tree 组件 - 显示带复选框的任务树
+ * TODO Tree 组件 - 显示带连接线的紧凑任务树
  */
 export default function TodoTree({todos}: TodoTreeProps) {
 	const {theme} = useTheme();
@@ -22,6 +22,10 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	if (todos.length === 0) {
 		return null;
 	}
+
+	// 统计完成进度
+	const completedCount = todos.filter(t => t.status === 'completed').length;
+	const totalCount = todos.length;
 
 	// 按照层级关系组织 TODO
 	const rootTodos = todos.filter(t => !t.parentId);
@@ -36,63 +40,72 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	});
 
 	const getStatusIcon = (status: TodoItem['status']) => {
-		switch (status) {
-			case 'completed':
-				return '[✓]';
-			case 'pending':
-				return '[ ]';
-			default:
-				return '[ ]';
-		}
+		return status === 'completed' ? '✓' : '○';
 	};
 
 	const getStatusColor = (status: TodoItem['status']) => {
-		switch (status) {
-			case 'completed':
-				return theme.colors.success;
-			case 'pending':
-				return theme.colors.menuSecondary;
-		}
+		return status === 'completed'
+			? theme.colors.success
+			: theme.colors.menuSecondary;
 	};
 
-	const renderTodo = (todo: TodoItem, depth: number = 0): React.ReactNode => {
+	// 渲染单个 TODO 项，带连接线
+	const renderTodo = (
+		todo: TodoItem,
+		depth: number = 0,
+		isLast: boolean = true,
+		parentPrefixes: string[] = [],
+	): React.ReactNode => {
 		const children = childTodosMap.get(todo.id) || [];
-		const indent = '  '.repeat(depth);
 		const statusIcon = getStatusIcon(todo.status);
 		const statusColor = getStatusColor(todo.status);
 
+		// 构建前缀：继承父级的连接线状态
+		let prefix = '';
+		if (depth > 0) {
+			prefix = parentPrefixes.join('');
+			prefix += isLast ? '└─' : '├─';
+		}
+
+		// 为子节点准备的前缀
+		const childPrefixes = [...parentPrefixes];
+		if (depth > 0) {
+			childPrefixes.push(isLast ? '  ' : '│ ');
+		}
+
 		return (
 			<Box key={todo.id} flexDirection="column">
-				<Box>
-					<Text color={statusColor}>
-						{indent}
-						{statusIcon} {todo.content}
+				<Text>
+					<Text dimColor>{prefix}</Text>
+					<Text color={statusColor}>{statusIcon}</Text>
+					<Text color={statusColor} dimColor={todo.status === 'completed'}>
+						{' '}
+						{todo.content}
 					</Text>
-				</Box>
-				{children.map(child => renderTodo(child, depth + 1))}
+				</Text>
+				{children.map((child, index) =>
+					renderTodo(
+						child,
+						depth + 1,
+						index === children.length - 1,
+						childPrefixes,
+					),
+				)}
 			</Box>
 		);
 	};
 
 	return (
-		<Box
-			flexDirection="column"
-			borderStyle="round"
-			borderColor={theme.colors.menuInfo}
-			paddingX={1}
-			marginBottom={1}
-		>
-			<Box marginBottom={0}>
-				<Text bold color={theme.colors.menuInfo}>
-					TODO List
+		<Box flexDirection="column" paddingLeft={2}>
+			<Text>
+				<Text dimColor>TODO </Text>
+				<Text color={theme.colors.menuInfo}>
+					({completedCount}/{totalCount})
 				</Text>
-			</Box>
-			{rootTodos.map(todo => renderTodo(todo))}
-			<Box marginTop={0}>
-				<Text dimColor color={theme.colors.menuSecondary}>
-					[ ] Pending · [✓] Completed
-				</Text>
-			</Box>
+			</Text>
+			{rootTodos.map((todo, index) =>
+				renderTodo(todo, 0, index === rootTodos.length - 1, []),
+			)}
 		</Box>
 	);
 }

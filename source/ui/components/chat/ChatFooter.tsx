@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import ChatInput from './ChatInput.js';
@@ -7,6 +7,10 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import type {Message} from './MessageList.js';
 import {BackgroundProcessPanel} from '../bash/BackgroundProcessPanel.js';
 import type {BackgroundProcess} from '../../../hooks/execution/useBackgroundProcesses.js';
+import TodoTree from '../special/TodoTree.js';
+import type {TodoItem} from '../../../mcp/types/todo.types.js';
+import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {todoEvents} from '../../../utils/events/todoEvents.js';
 
 type ChatFooterProps = {
 	onSubmit: (
@@ -89,6 +93,48 @@ type ChatFooterProps = {
 
 export default function ChatFooter(props: ChatFooterProps) {
 	const {t} = useI18n();
+	const [todos, setTodos] = useState<TodoItem[]>([]);
+	const [showTodos, setShowTodos] = useState(false);
+
+	// 使用事件监听 TODO 更新，替代轮询
+	useEffect(() => {
+		const currentSession = sessionManager.getCurrentSession();
+		if (!currentSession) {
+			setShowTodos(false);
+			setTodos([]);
+			return;
+		}
+
+		const handleTodoUpdate = (data: {sessionId: string; todos: TodoItem[]}) => {
+			// 只处理当前会话的 TODO 更新
+			if (data.sessionId === currentSession.id) {
+				setTodos(data.todos);
+				if (data.todos.length > 0 && props.isProcessing) {
+					setShowTodos(true);
+				}
+			}
+		};
+
+		// 监听 TODO 更新事件
+		todoEvents.onTodoUpdate(handleTodoUpdate);
+
+		// 清理监听器
+		return () => {
+			todoEvents.offTodoUpdate(handleTodoUpdate);
+		};
+	}, [props.isProcessing]);
+
+	// 对话结束后自动隐藏
+	useEffect(() => {
+		if (!props.isProcessing && showTodos) {
+			const timeoutId = setTimeout(() => {
+				setShowTodos(false);
+			}, 1000);
+
+			return () => clearTimeout(timeoutId);
+		}
+		return undefined;
+	}, [props.isProcessing, showTodos]);
 
 	return (
 		<>
@@ -120,6 +166,13 @@ export default function ChatFooter(props: ChatFooterProps) {
 				setProfileSearchQuery={props.setProfileSearchQuery}
 				onSwitchProfile={props.onSwitchProfile}
 			/>
+
+			{/* 显示 TODO Tree 在 ChatInput 下方 */}
+			{showTodos && todos.length > 0 && (
+				<Box marginTop={1}>
+					<TodoTree todos={todos} />
+				</Box>
+			)}
 
 			<StatusLine
 				yoloMode={props.yoloMode}
