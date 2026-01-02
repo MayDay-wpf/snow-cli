@@ -1098,6 +1098,21 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
 
+			// Restore pending messages to input instead of discarding them
+			if (pendingMessages.length > 0) {
+				// Get the first pending message (usually there's only one)
+				const firstPending = pendingMessages[0];
+				if (firstPending) {
+					setRestoreInputContent({
+						text: firstPending.text,
+						images: firstPending.images?.map(img => ({
+							type: 'image' as const,
+							data: img.data,
+							mimeType: img.mimeType,
+						})),
+					});
+				}
+			}
 			// Clear pending messages to prevent auto-send after abort
 			setPendingMessages([]);
 

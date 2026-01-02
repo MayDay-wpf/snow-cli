@@ -3,6 +3,7 @@ import {useCallback} from 'react';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
+import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
 import {navigateTo} from '../integration/useGlobalNavigation.js';
 import type {UsageInfo} from '../../api/chat.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
@@ -145,7 +146,11 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 
 		// 创建新会话而不是覆盖旧会话
 		// 这样可以保留压缩前的完整历史，支持回滚到压缩前的任意快照点
-		const compressedSession = await sessionManager.createNewSession(false);
+		// skipEmptyTodo=true: 跳过自动创建空TODO，因为后面会继承原会话的TODO
+		const compressedSession = await sessionManager.createNewSession(
+			false,
+			true,
+		);
 
 		// 设置新会话的消息
 		compressedSession.messages = newSessionMessages;
@@ -164,6 +169,18 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 
 		// 保存新会话
 		await sessionManager.saveSession(compressedSession);
+
+		// 继承原会话的 TODO 列表到新会话
+		try {
+			const todoService = getTodoService();
+			await todoService.copyTodoList(currentSession.id, compressedSession.id);
+			console.log(
+				`TODO list inherited from session ${currentSession.id} to ${compressedSession.id}`,
+			);
+		} catch (error) {
+			// TODO 继承失败不应该影响压缩流程，记录日志即可
+			console.warn('Failed to inherit TODO list:', error);
+		}
 
 		// CRITICAL: Reload the new session from disk after compression
 		// This ensures the in-memory session object is fully synchronized with the persisted data

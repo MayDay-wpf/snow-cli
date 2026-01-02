@@ -138,7 +138,10 @@ class SessionManager {
 			.trim(); // Remove leading/trailing spaces
 	}
 
-	async createNewSession(isTemporary = false): Promise<Session> {
+	async createNewSession(
+		isTemporary = false,
+		skipEmptyTodo = false,
+	): Promise<Session> {
 		await this.ensureSessionsDir(new Date());
 
 		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
@@ -163,8 +166,10 @@ class SessionManager {
 			await this.saveSession(session);
 		}
 
-		// 🔥 新增：自动创建空TODO
-		await this.createEmptyTodoForSession(sessionId);
+		// 自动创建空TODO（压缩流程会跳过，因为需要继承原会话的TODO）
+		if (!skipEmptyTodo) {
+			await this.createEmptyTodoForSession(sessionId);
+		}
 
 		return session;
 	}

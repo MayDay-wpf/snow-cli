@@ -235,6 +235,37 @@ export class TodoService {
 	}
 
 	/**
+	 * 复制 TODO 列表到新会话（用于会话压缩时继承 TODO）
+	 * @param fromSessionId - 源会话ID
+	 * @param toSessionId - 目标会话ID
+	 * @returns 复制后的 TODO 列表，如果源会话没有 TODO 则返回 null
+	 */
+	async copyTodoList(
+		fromSessionId: string,
+		toSessionId: string,
+	): Promise<TodoList | null> {
+		// 获取源会话的 TODO 列表
+		const sourceTodoList = await this.getTodoList(fromSessionId);
+
+		// 如果源会话没有 TODO 或 TODO 为空，不需要复制
+		if (!sourceTodoList || sourceTodoList.todos.length === 0) {
+			return null;
+		}
+
+		// 复制 TODO 项到新会话（保留原有的 TODO 项，但更新时间戳）
+		const now = new Date().toISOString();
+		const copiedTodos: TodoItem[] = sourceTodoList.todos.map(todo => ({
+			...todo,
+			// 保留原有的 id、content、status、parentId
+			// 更新时间戳
+			updatedAt: now,
+		}));
+
+		// 保存到新会话
+		return this.saveTodoList(toSessionId, copiedTodos, null);
+	}
+
+	/**
 	 * 删除整个会话的 TODO 列表
 	 */
 	async deleteTodoList(sessionId: string): Promise<boolean> {
@@ -435,6 +466,11 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 					// 兜底机制：如果TODO不存在，自动创建空TODO
 					if (!result) {
 						result = await this.createEmptyTodo(sessionId);
+					}
+
+					// 触发 TODO 更新事件，确保 UI 显示 TodoTree
+					if (result && result.todos.length > 0) {
+						todoEvents.emitTodoUpdate(sessionId, result.todos);
 					}
 
 					return {
