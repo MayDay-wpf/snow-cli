@@ -9,6 +9,7 @@
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 	<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+	<script src="json-viewer.js"></script>
 	<script src="dialogs.js"></script>
 </head>
 
@@ -76,6 +77,17 @@
 								</label>
 							</div>
 						</div>
+						<div class="config-section">
+							<label>上下文压缩</label>
+							<div style="display: flex; gap: 8px">
+								<button onclick="compressCurrentSession()" id="compressBtn">
+									压缩当前会话
+								</button>
+								<button onclick="compressCustomMessages()" id="compressCustomBtn">
+									压缩自定义消息
+								</button>
+							</div>
+						</div>
 
 					</div>
 				</div>
@@ -120,16 +132,20 @@
 							<button onclick="prevSessionPage()" id="prevPageBtn" disabled>上一页</button>
 							<button onclick="nextSessionPage()" id="nextPageBtn" disabled>下一页</button>
 						</div>
+					<div class="panel">
+					<div class="panel-header">
+						<span>事件日志 <span id="eventCount" class="event-count-badge">0</span></span>
+						<div style="display: flex; gap: 4px;">
+							<button onclick="expandAllEvents()" class="header-btn">全部展开</button>
+							<button onclick="collapseAllEvents()" class="header-btn">全部收起</button>
+							<button onclick="clearLog()" class="header-btn">清空</button>
+						</div>
 					</div>
-				</div>
-
-				<div class="panel">
-					<div class="panel-header">事件日志</div>
 					<div class="panel-body">
 						<div class="event-log" id="eventLog"></div>
-						<button onclick="clearLog()" style="margin-top: 10px; width: 100%">
-							清空日志
-						</button>
+					</div>
+				</div>
+				</div>
 					</div>
 				</div>
 			</div>

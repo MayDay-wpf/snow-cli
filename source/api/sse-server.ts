@@ -349,6 +349,12 @@ export class SSEServer {
 			return;
 		}
 
+		// 上下文压缩端点
+		if (pathname === '/context/compress' && req.method === 'POST') {
+			this.handleContextCompress(req, res);
+			return;
+		}
+
 		// 未知端点
 		res.writeHead(404);
 		res.end('Not Found');
@@ -647,6 +653,129 @@ export class SSEServer {
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({
+						error: error instanceof Error ? error.message : 'Unknown error',
+					}),
+				);
+			}
+		})();
+	}
+
+	/**
+	 * 处理上下文压缩请求
+	 * POST /context/compress
+	 * Body: { messages: ChatMessage[] } 或 { sessionId: string }
+	 * Response: { success: true, result: CompressionResult } 或 { success: false, error: string }
+	 */
+	private handleContextCompress(
+		req: IncomingMessage,
+		res: ServerResponse,
+	): void {
+		void (async () => {
+			try {
+				const {compressContext} = await import(
+					'../utils/core/contextCompressor.js'
+				);
+				const {sessionManager} = await import(
+					'../utils/session/sessionManager.js'
+				);
+
+				const body = await this.readJsonBody<{
+					messages?: Array<{role: string; content: string; [key: string]: any}>;
+					sessionId?: string;
+				}>(req);
+
+				let messages: Array<{
+					role: string;
+					content: string;
+					[key: string]: any;
+				}>;
+
+				// 支持两种方式：直接传入 messages 或通过 sessionId 获取
+				if (body.messages && Array.isArray(body.messages)) {
+					messages = body.messages;
+				} else if (body.sessionId) {
+					const session = await sessionManager.loadSession(body.sessionId);
+					if (!session) {
+						res.writeHead(404, {
+							'Content-Type': 'application/json',
+							'Access-Control-Allow-Origin': '*',
+						});
+						res.end(
+							JSON.stringify({success: false, error: 'Session not found'}),
+						);
+						return;
+					}
+					messages = session.messages || [];
+				} else {
+					res.writeHead(400, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(
+						JSON.stringify({
+							success: false,
+							error: 'Missing required field: messages or sessionId',
+						}),
+					);
+					return;
+				}
+
+				if (messages.length === 0) {
+					res.writeHead(400, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(
+						JSON.stringify({success: false, error: 'No messages to compress'}),
+					);
+					return;
+				}
+
+				const result = await compressContext(messages as any);
+
+				if (result === null) {
+					res.writeHead(200, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(
+						JSON.stringify({
+							success: true,
+							result: null,
+							message: 'Compression skipped (no history to compress)',
+						}),
+					);
+					return;
+				}
+
+				if (result.hookFailed) {
+					res.writeHead(200, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
+					res.end(
+						JSON.stringify({
+							success: false,
+							hookFailed: true,
+							hookErrorDetails: result.hookErrorDetails,
+						}),
+					);
+					return;
+				}
+
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify({success: true, result}));
+			} catch (error) {
+				res.writeHead(500, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(
+					JSON.stringify({
+						success: false,
 						error: error instanceof Error ? error.message : 'Unknown error',
 					}),
 				);

@@ -88,6 +88,7 @@ export const SSEServerStatus: React.FC<SSEServerStatusProps> = ({
 					{' '}
 					DELETE http://localhost:{port}/session/:sessionId
 				</Text>
+				<Text color="blue"> POST http://localhost:{port}/context/compress</Text>
 				<Text color="blue"> GET http://localhost:{port}/health</Text>
 			</Box>
 

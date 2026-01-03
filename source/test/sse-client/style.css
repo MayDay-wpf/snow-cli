@@ -137,10 +137,24 @@ body {
 	cursor: pointer;
 	font-size: 12px;
 	font-weight: 500;
+	min-width: 24px;
 }
 
 .header-btn:hover {
 	background: #333;
+}
+
+.event-count-badge {
+	display: inline-block;
+	background: #444;
+	color: #fff;
+	font-size: 11px;
+	padding: 1px 6px;
+	border-radius: 10px;
+	margin-left: 4px;
+	font-weight: normal;
+	min-width: 18px;
+	text-align: center;
 }
 
 .panel-body {
@@ -398,13 +412,236 @@ button:disabled {
 	overflow-y: auto;
 	background: #1a1a1a;
 	color: #e0e0e0;
-	padding: 10px;
+	padding: 0;
 	font-family: 'Monaco', 'Courier New', monospace;
 	font-size: 11px;
 	line-height: 1.5;
 	min-height: 0;
+	border-radius: 3px;
 }
 
+/* 可展开事件项 */
+.event-item {
+	border-bottom: 1px solid #333;
+}
+
+.event-item:last-child {
+	border-bottom: none;
+}
+
+.event-header {
+	display: flex;
+	align-items: center;
+	padding: 6px 10px;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.event-header:hover {
+	background: #2a2a2a;
+}
+
+.event-expand {
+	width: 14px;
+	color: #888;
+	font-weight: bold;
+	flex-shrink: 0;
+	font-family: monospace;
+}
+
+.event-timestamp {
+	color: #666;
+	margin-right: 8px;
+	flex-shrink: 0;
+}
+
+.event-type {
+	font-weight: 600;
+	margin-right: 10px;
+	flex-shrink: 0;
+	color: #8f8;
+}
+
+.event-item.error .event-type {
+	color: #f88;
+}
+
+.event-preview {
+	color: #aaa;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
+	min-width: 0;
+}
+
+.event-maximize {
+	color: #666;
+	margin-left: 8px;
+	cursor: pointer;
+	flex-shrink: 0;
+	font-family: monospace;
+	font-weight: bold;
+	padding: 0 4px;
+	border-radius: 2px;
+	transition: color 0.15s, background 0.15s;
+}
+
+.event-maximize:hover {
+	color: #fff;
+	background: #444;
+}
+
+.log-detail-container {
+	max-height: 70vh;
+	overflow: auto;
+}
+
+.log-detail-info {
+	margin-bottom: 8px;
+	font-size: 13px;
+	color: #ccc;
+}
+
+.log-detail-label {
+	color: #888;
+	margin-right: 6px;
+}
+
+.log-detail-content {
+	background: #0d0d0d;
+	border: 1px solid #333;
+	border-radius: 4px;
+	padding: 12px;
+	margin-top: 12px;
+	max-height: 50vh;
+	overflow: auto;
+}
+
+.log-detail-content pre {
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-all;
+	color: #d4d4d4;
+	font-size: 12px;
+	line-height: 1.5;
+	font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* JSON Viewer 样式 */
+.json-viewer {
+	margin: 0;
+	padding: 12px;
+	background: #0d0d0d;
+	border-radius: 4px;
+	overflow: auto;
+}
+
+.json-viewer code {
+	font-family: 'Consolas', 'Monaco', monospace;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.json-tree {
+	font-family: 'Consolas', 'Monaco', monospace;
+	font-size: 12px;
+	line-height: 1.6;
+	color: #d4d4d4;
+}
+
+.json-toggle {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	line-height: 16px;
+	text-align: center;
+	cursor: pointer;
+	color: #888;
+	font-weight: bold;
+	margin-right: 4px;
+	border-radius: 2px;
+	user-select: none;
+	background: #333;
+	border: 1px solid #555;
+	position: relative;
+	z-index: 1;
+}
+
+.json-toggle:hover {
+	background: #444;
+	color: #fff;
+}
+
+.json-bracket {
+	color: #888;
+}
+
+.json-key {
+	color: #9cdcfe;
+}
+
+.json-colon {
+	color: #888;
+}
+
+.json-comma {
+	color: #888;
+}
+
+.json-string {
+	color: #ce9178;
+}
+
+.json-number {
+	color: #b5cea8;
+}
+
+.json-boolean {
+	color: #569cd6;
+}
+
+.json-null {
+	color: #569cd6;
+}
+
+.json-size {
+	color: #666;
+	font-size: 11px;
+	margin-left: 6px;
+}
+
+.json-index {
+	color: #666;
+}
+
+.json-content {
+	padding-left: 20px;
+	border-left: 1px solid #333;
+	margin-left: 6px;
+}
+
+.json-item {
+	margin: 2px 0;
+}
+
+.event-details {
+	background: #0d0d0d;
+	border-top: 1px solid #333;
+	padding: 10px 12px 10px 24px;
+	overflow-x: auto;
+}
+
+.event-details pre {
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-all;
+	color: #ccc;
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+/* 旧样式保留兼容 */
 .event {
 	margin-bottom: 6px;
 	padding: 2px 0;
@@ -546,13 +783,7 @@ button:disabled {
 .sessions-panel .panel-body {
 	gap: 0;
 }
-.event.error .type {
-	color: #f88;
-}
 
-.event.success .type {
-	color: #8f8;
-}
 .config-section {
 	margin-bottom: 10px;
 }

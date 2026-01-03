@@ -465,26 +465,214 @@ function addSystemMessage(content) {
 // 日志
 // ----------------------------------------------------------------------------
 
-// 添加事件到右侧日志面板
+// 事件计数器
+let eventCounter = 0;
+
+// 添加事件到右侧日志面板（可展开列表）
 function logEvent(type, data, isError = false) {
 	const eventLog = document.getElementById('eventLog');
+	const eventId = `event_${++eventCounter}`;
+
 	const eventDiv = document.createElement('div');
-	eventDiv.className = `event ${isError ? 'error' : 'success'}`;
+	eventDiv.className = `event-item ${isError ? 'error' : 'success'}`;
+	eventDiv.id = eventId;
 
 	const timestamp = new Date().toLocaleTimeString();
-	eventDiv.innerHTML = `
-             <span class="timestamp">[${timestamp}]</span>
-             <span class="type">${type}</span>
-             <span>${JSON.stringify(data, null, 2)}</span>
-         `;
+	const dataPreview = getDataPreview(data);
+	const hasDetails =
+		data && typeof data === 'object' && Object.keys(data).length > 0;
 
+	eventDiv.innerHTML = `
+		<div class="event-header" onclick="toggleEventDetails('${eventId}')">
+			<span class="event-expand">${hasDetails ? '+' : ' '}</span>
+			<span class="event-timestamp">[${timestamp}]</span>
+			<span class="event-type">${type}</span>
+			<span class="event-preview">${escapeHtml(dataPreview)}</span>
+			${
+				hasDetails
+					? `<span class="event-maximize" onclick="event.stopPropagation(); showLogDetail('${eventId}', '${type}', ${escapeHtml(
+							JSON.stringify(JSON.stringify(data)),
+					  )});" title="查看完整日志">[+]</span>`
+					: ''
+			}
+		</div>
+		${
+			hasDetails
+				? `
+		<div class="event-details" id="${eventId}_details" style="display: none;">
+			<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+		</div>
+		`
+				: ''
+		}
+	`;
+
+	// 顺序插入：新事件追加到末尾
 	eventLog.appendChild(eventDiv);
+	// 自动滚动到底部
 	eventLog.scrollTop = eventLog.scrollHeight;
+
+	// 更新事件计数
+	updateEventCount();
+}
+
+// 获取数据预览（简短摘要）
+function getDataPreview(data) {
+	if (!data) return '';
+	if (typeof data === 'string')
+		return data.length > 50 ? data.slice(0, 50) + '...' : data;
+	if (typeof data !== 'object') return String(data);
+
+	// 提取关键字段作为预览
+	const keys = Object.keys(data);
+	if (keys.length === 0) return '{}';
+
+	const previewParts = [];
+	const importantKeys = [
+		'success',
+		'error',
+		'message',
+		'sessionId',
+		'id',
+		'type',
+		'content',
+	];
+
+	for (const key of importantKeys) {
+		if (data[key] !== undefined) {
+			let val = data[key];
+			if (typeof val === 'string' && val.length > 30) {
+				val = val.slice(0, 30) + '...';
+			} else if (typeof val === 'object') {
+				val = Array.isArray(val) ? `[${val.length}]` : '{...}';
+			}
+			previewParts.push(`${key}: ${val}`);
+			if (previewParts.length >= 2) break;
+		}
+	}
+
+	if (previewParts.length === 0) {
+		return `{${keys.length} fields}`;
+	}
+
+	return previewParts.join(', ');
+}
+
+// 切换事件详情展开/收起
+function toggleEventDetails(eventId) {
+	const details = document.getElementById(`${eventId}_details`);
+	const header = document.querySelector(`#${eventId} .event-expand`);
+
+	if (!details) return;
+
+	if (details.style.display === 'none') {
+		details.style.display = 'block';
+		if (header) header.textContent = '-';
+	} else {
+		details.style.display = 'none';
+		if (header) header.textContent = '+';
+	}
+}
+
+// 展开所有事件
+function expandAllEvents() {
+	document.querySelectorAll('.event-details').forEach(el => {
+		el.style.display = 'block';
+	});
+	document.querySelectorAll('.event-expand').forEach(el => {
+		if (el.textContent === '+') el.textContent = '-';
+	});
+}
+
+// 收起所有事件
+function collapseAllEvents() {
+	document.querySelectorAll('.event-details').forEach(el => {
+		el.style.display = 'none';
+	});
+	document.querySelectorAll('.event-expand').forEach(el => {
+		if (el.textContent === '-') el.textContent = '+';
+	});
+}
+
+// 更新事件计数显示
+function updateEventCount() {
+	const countEl = document.getElementById('eventCount');
+	if (countEl) {
+		countEl.textContent = eventCounter;
+	}
 }
 
 // 清空日志
 function clearLog() {
 	document.getElementById('eventLog').innerHTML = '';
+	eventCounter = 0;
+	updateEventCount();
+}
+
+// 弹窗显示完整日志详情
+function showLogDetail(eventId, type, dataJson) {
+	const modal = document.getElementById('userQuestionModal');
+	const title = document.getElementById('userQuestionTitle');
+	const body = document.getElementById('userQuestionBody');
+	const footer = document.getElementById('userQuestionFooter');
+
+	title.textContent = `日志详情 - ${type}`;
+
+	let jsonData = null;
+	let formattedData = '';
+	try {
+		jsonData = JSON.parse(dataJson);
+		formattedData = JSON.stringify(jsonData, null, 2);
+	} catch (e) {
+		formattedData = dataJson;
+	}
+
+	// 使用 JsonViewer 渲染可折叠的 JSON 树
+	const jsonHtml =
+		jsonData !== null
+			? JsonViewer.renderTree(jsonData, {maxDepth: 3})
+			: `<pre class="json-viewer"><code>${escapeHtml(
+					formattedData,
+			  )}</code></pre>`;
+
+	body.innerHTML = `
+		<div class="log-detail-container">
+			<div class="log-detail-info">
+				<span class="log-detail-label">事件ID:</span> ${escapeHtml(eventId)}
+			</div>
+			<div class="log-detail-info">
+				<span class="log-detail-label">类型:</span> ${escapeHtml(type)}
+			</div>
+			<div class="log-detail-content">
+				${jsonHtml}
+			</div>
+		</div>
+	`;
+
+	footer.innerHTML = '';
+
+	const copyBtn = document.createElement('button');
+	copyBtn.className = 'btn-secondary';
+	copyBtn.textContent = '复制';
+	copyBtn.onclick = () => {
+		navigator.clipboard.writeText(formattedData).then(() => {
+			copyBtn.textContent = '已复制';
+			setTimeout(() => {
+				copyBtn.textContent = '复制';
+			}, 1500);
+		});
+	};
+	footer.appendChild(copyBtn);
+
+	const closeBtn = document.createElement('button');
+	closeBtn.className = 'btn-primary';
+	closeBtn.textContent = '关闭';
+	closeBtn.onclick = () => {
+		modal.style.display = 'none';
+	};
+	footer.appendChild(closeBtn);
+
+	modal.style.display = 'flex';
 }
 
 // ----------------------------------------------------------------------------
@@ -627,6 +815,198 @@ async function deleteCurrentSession() {
 	} catch (error) {
 		logEvent('SESSION_DELETE_ERROR', {message: error.message}, true);
 	}
+}
+
+// ----------------------------------------------------------------------------
+// 上下文压缩
+// ----------------------------------------------------------------------------
+
+// 压缩当前会话的上下文
+async function compressCurrentSession() {
+	if (!currentSessionId) {
+		addSystemMessage('没有活动的会话，无法压缩');
+		return;
+	}
+
+	try {
+		addSystemMessage('正在压缩上下文...');
+		const response = await fetch(`${serverUrl}/context/compress`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({sessionId: currentSessionId}),
+		});
+
+		const data = await response.json();
+		logEvent('CONTEXT_COMPRESS', data, !response.ok);
+
+		if (!response.ok) {
+			addSystemMessage(`压缩失败: ${data?.error || 'Unknown error'}`);
+			return;
+		}
+
+		if (!data?.success) {
+			if (data?.hookFailed) {
+				addSystemMessage(
+					`压缩被 Hook 阻止: exitCode=${data?.hookErrorDetails?.exitCode}`,
+				);
+			} else {
+				addSystemMessage(`压缩失败: ${data?.error || 'Unknown error'}`);
+			}
+			return;
+		}
+
+		if (data?.result === null) {
+			addSystemMessage(data?.message || '无需压缩（没有历史可压缩）');
+			return;
+		}
+
+		const result = data.result;
+		addSystemMessage(
+			`压缩成功! 摘要长度: ${result?.summary?.length || 0} 字符, ` +
+				`Token 使用: ${result?.usage?.total_tokens || 0}`,
+		);
+
+		// 显示压缩摘要预览
+		if (result?.summary) {
+			const preview =
+				result.summary.length > 500
+					? result.summary.slice(0, 500) + '...'
+					: result.summary;
+			addMessage('system', `[压缩摘要预览]\n${preview}`);
+		}
+	} catch (error) {
+		addSystemMessage(`压缩失败: ${error.message}`);
+		logEvent('CONTEXT_COMPRESS_ERROR', {message: error.message}, true);
+	}
+}
+
+// 压缩自定义消息（用于测试）
+async function compressCustomMessages() {
+	const messagesJson = await showCompressMessagesDialog();
+	if (!messagesJson) return;
+
+	let messages;
+	try {
+		messages = JSON.parse(messagesJson);
+		if (!Array.isArray(messages)) {
+			addSystemMessage('消息必须是数组格式');
+			return;
+		}
+	} catch (e) {
+		addSystemMessage(`JSON 解析失败: ${e.message}`);
+		return;
+	}
+
+	try {
+		addSystemMessage('正在压缩自定义消息...');
+		const response = await fetch(`${serverUrl}/context/compress`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({messages}),
+		});
+
+		const data = await response.json();
+		logEvent('CONTEXT_COMPRESS_CUSTOM', data, !response.ok);
+
+		if (!response.ok || !data?.success) {
+			addSystemMessage(`压缩失败: ${data?.error || 'Unknown error'}`);
+			return;
+		}
+
+		if (data?.result === null) {
+			addSystemMessage(data?.message || '无需压缩');
+			return;
+		}
+
+		const result = data.result;
+		addSystemMessage(
+			`压缩成功! 摘要长度: ${result?.summary?.length || 0} 字符`,
+		);
+
+		if (result?.summary) {
+			addMessage('system', `[压缩摘要]\n${result.summary}`);
+		}
+	} catch (error) {
+		addSystemMessage(`压缩失败: ${error.message}`);
+		logEvent('CONTEXT_COMPRESS_ERROR', {message: error.message}, true);
+	}
+}
+
+// 显示压缩消息输入对话框
+function showCompressMessagesDialog() {
+	return new Promise(resolve => {
+		const modal = document.getElementById('userQuestionModal');
+		const title = document.getElementById('userQuestionTitle');
+		const body = document.getElementById('userQuestionBody');
+		const footer = document.getElementById('userQuestionFooter');
+
+		title.textContent = '压缩自定义消息';
+
+		const defaultMessages = JSON.stringify(
+			[
+				{role: 'user', content: 'Hello, how are you?'},
+				{role: 'assistant', content: 'I am doing well, thank you for asking!'},
+				{role: 'user', content: 'Can you help me with coding?'},
+				{
+					role: 'assistant',
+					content: 'Of course! I would be happy to help you with coding.',
+				},
+			],
+			null,
+			2,
+		);
+
+		body.innerHTML = `
+			<div class="compress-dialog">
+				<p style="margin-bottom: 12px; color: #666; font-size: 13px;">
+					输入要压缩的消息数组 (JSON 格式)，每条消息需包含 role 和 content 字段。
+				</p>
+				<textarea 
+					id="compressMessagesInput" 
+					style="width: 100%; height: 280px; font-family: monospace; font-size: 12px; padding: 10px; border: 1px solid #444; border-radius: 4px; background: #1e1e1e; color: #d4d4d4; resize: vertical;"
+					spellcheck="false"
+				>${defaultMessages}</textarea>
+				<div style="margin-top: 8px; font-size: 12px; color: #888;">
+					提示: role 可以是 "user"、"assistant" 或 "system"
+				</div>
+			</div>
+		`;
+
+		footer.innerHTML = '';
+
+		const cancelBtn = document.createElement('button');
+		cancelBtn.className = 'btn-secondary';
+		cancelBtn.textContent = '取消';
+		cancelBtn.onclick = () => {
+			modal.style.display = 'none';
+			resolve(null);
+		};
+		footer.appendChild(cancelBtn);
+
+		const confirmBtn = document.createElement('button');
+		confirmBtn.className = 'btn-primary';
+		confirmBtn.textContent = '压缩';
+		confirmBtn.onclick = () => {
+			const input = document
+				.getElementById('compressMessagesInput')
+				.value.trim();
+			modal.style.display = 'none';
+			resolve(input || null);
+		};
+		footer.appendChild(confirmBtn);
+
+		modal.style.display = 'flex';
+
+		// 自动聚焦到输入框
+		setTimeout(() => {
+			const textarea = document.getElementById('compressMessagesInput');
+			if (textarea) textarea.focus();
+		}, 100);
+	});
 }
 
 // 更新顶部状态文本
