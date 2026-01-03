@@ -55,16 +55,17 @@ export function CustomCommandExecutionDisplay({
 				)}
 			</Box>
 
-			{/* Output lines */}
-			{output.length > 0 && (
-				<Box flexDirection="column" paddingLeft={2}>
-					{output.slice(-10).map((line, index) => (
+			{/* Output lines - fixed height to prevent layout jitter, handle multi-line output */}
+			<Box flexDirection="column" paddingLeft={2} height={5}>
+				{output
+					.flatMap(line => line.split(/\r?\n/))
+					.slice(-5)
+					.map((line, index) => (
 						<Text key={index} wrap="truncate" dimColor>
 							{truncateText(line, 100)}
 						</Text>
 					))}
-				</Box>
-			)}
+			</Box>
 
 			{/* Error message */}
 			{error && (

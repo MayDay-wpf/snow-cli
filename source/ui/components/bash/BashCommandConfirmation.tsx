@@ -155,15 +155,11 @@ export function BashCommandExecutionStatus({
 	const maxCommandWidth = Math.max(40, terminalWidth - 10);
 	const displayCommand = truncateCommand(command, maxCommandWidth);
 
+	// Process output: split by newlines and limit total lines
+	const processedOutput = output.flatMap(line => line.split(/\r?\n/)).slice(-5);
+
 	return (
-		<Box
-			flexDirection="column"
-			borderStyle="round"
-			borderColor={theme.colors.menuInfo}
-			paddingX={2}
-			paddingY={0}
-			width={terminalWidth - 2}
-		>
+		<Box flexDirection="column" paddingX={1}>
 			<Box>
 				<Text bold color={theme.colors.menuInfo}>
 					<Spinner type="dots" /> {t.bash.executingCommand}
@@ -172,16 +168,14 @@ export function BashCommandExecutionStatus({
 			<Box paddingLeft={2}>
 				<Text dimColor>{displayCommand}</Text>
 			</Box>
-			{/* Real-time output lines */}
-			{output.length > 0 && (
-				<Box flexDirection="column" paddingLeft={2} marginTop={1}>
-					{output.slice(-10).map((line, index) => (
-						<Text key={index} wrap="truncate" dimColor>
-							{truncateText(line, maxCommandWidth)}
-						</Text>
-					))}
-				</Box>
-			)}
+			{/* Real-time output lines - fixed height to prevent layout jitter */}
+			<Box flexDirection="column" paddingLeft={2} marginTop={1} height={5}>
+				{processedOutput.map((line, index) => (
+					<Text key={index} wrap="truncate" dimColor>
+						{truncateText(line, maxCommandWidth)}
+					</Text>
+				))}
+			</Box>
 			<Box flexDirection="column" gap={0}>
 				<Box>
 					<Text dimColor>

@@ -28,12 +28,35 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	const completedCount = todos.filter(t => t.status === 'completed').length;
 	const totalCount = todos.length;
 
-	// 按照层级关系组织 TODO
-	const rootTodos = todos.filter(t => !t.parentId);
+	// 已完成项隐藏逻辑：保底5条，溢出部分隐藏
+	// pending 永远全部展示
+	const MAX_VISIBLE_COMPLETED = 5;
+	const pendingTodos = todos.filter(t => t.status === 'pending');
+	const completedTodos = todos.filter(t => t.status === 'completed');
+
+	// 已完成项按时间倒序（假设id包含时间戳，后创建的id更大）
+	// 只保留最近的 MAX_VISIBLE_COMPLETED 条
+	const visibleCompletedTodos = completedTodos.slice(-MAX_VISIBLE_COMPLETED);
+	const hiddenCompletedCount =
+		completedTodos.length - visibleCompletedTodos.length;
+
+	// 可见的todo集合
+	const visibleTodoIds = new Set([
+		...pendingTodos.map(t => t.id),
+		...visibleCompletedTodos.map(t => t.id),
+	]);
+	const visibleTodos = [...pendingTodos, ...visibleCompletedTodos];
+
+	// 按照层级关系组织 TODO（仅基于可见的todos）
+	// 若父节点不可见但子节点可见，子节点提升为root
+	const rootTodos = visibleTodos.filter(
+		t => !t.parentId || !visibleTodoIds.has(t.parentId),
+	);
 	const childTodosMap = new Map<string, TodoItem[]>();
 
-	todos.forEach(todo => {
-		if (todo.parentId) {
+	visibleTodos.forEach(todo => {
+		// 只有当父节点也可见时，才作为子节点
+		if (todo.parentId && visibleTodoIds.has(todo.parentId)) {
 			const children = childTodosMap.get(todo.parentId) || [];
 			children.push(todo);
 			childTodosMap.set(todo.parentId, children);
@@ -108,6 +131,9 @@ export default function TodoTree({todos}: TodoTreeProps) {
 				<Text color={theme.colors.menuInfo}>
 					({completedCount}/{totalCount})
 				</Text>
+				{hiddenCompletedCount > 0 && (
+					<Text dimColor> +{hiddenCompletedCount} completed hidden</Text>
+				)}
 			</Text>
 			{rootTodos.map((todo, index) =>
 				renderTodo(todo, 0, index === rootTodos.length - 1, []),
