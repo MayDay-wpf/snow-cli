@@ -26,60 +26,62 @@ export interface CompressionResult {
 }
 
 /**
- * Compression request prompt - asks AI to create a detailed, structured summary
- * that preserves critical information for task continuity
+ * Compression request prompt - asks AI to create a detailed handover document
+ * that preserves critical information with rigorous technical accuracy
  */
-const COMPRESSION_PROMPT = `**YOUR ONLY TASK: Compress the conversation history into a structured summary. DO NOT ask questions, DO NOT seek clarification, DO NOT interact with users.**
+const COMPRESSION_PROMPT = `**TASK: Create a comprehensive handover document from the conversation history above.**
 
-You are a context compression system. Your job is to extract and preserve all critical information from the conversation history, regardless of its length or complexity. Even for short or simple conversations, you MUST produce a comprehensive summary.
+You are creating a technical handover document. Extract and preserve all critical information with rigorous detail and accuracy. This is NOT a task continuation prompt - this is archival documentation.
 
-Create a detailed summary following this structure:
+**OUTPUT FORMAT - Structured Handover Document:**
 
-## Current Task & Goals
-- What is the main task or project being worked on?
-- What are the specific objectives and desired outcomes?
-- What is the current progress status?
+## Project/Task Overview
+- Project or task being worked on
+- Objectives and expected outcomes
+- Current completion status
 
-## Technical Context
-- Key technologies, frameworks, libraries, and tools being used
-- Important file paths, function names, and code locations mentioned
-- Architecture decisions and design patterns chosen
-- Configuration settings and environment details
+## Technical Environment
+- Technologies, frameworks, libraries, and tools in use
+- **EXACT** file paths (full paths, not relative)
+- **EXACT** function names, class names, variable names
+- Architecture patterns and design decisions
+- Configuration details and environment specifics
 
-## Key Decisions & Approaches
-- Important decisions made and their rationale
-- Chosen approaches and methodologies
-- Solutions to problems encountered
-- Best practices or patterns agreed upon
+## Implementation Details
+- Technical decisions made and rationale
+- Chosen approaches and implementation methods
+- Solutions applied to specific problems
+- Code patterns and best practices used
+- **EXACT** code snippets where relevant (preserve syntax)
 
-## Completed Work
-- What has been successfully implemented or resolved?
-- Important code changes, fixes, or features added
-- Test results or validation performed
+## Work Completed
+- Features implemented (with file references)
+- Bugs fixed (with root cause analysis)
+- Code modifications made (with before/after context)
+- Test results and validation outcomes
 
-## Pending & In-Progress Work
-- What tasks are currently unfinished?
-- Known issues or blockers that need addressing
-- Next steps planned or discussed
-- Open questions or areas needing clarification
+## Work In Progress
+- Incomplete tasks (with specific blocking reasons)
+- Known issues and their diagnostic details
+- Planned next steps (concrete, actionable)
+- Open questions requiring decisions
 
-## Critical Information
-- Important data, values, IDs, or credentials referenced (sanitized)
-- Error messages, warnings, or diagnostic information
-- User preferences, requirements, or constraints
-- Any other context essential for seamless continuation
+## Critical Reference Data
+- Important IDs, keys, values (sanitize credentials)
+- Error messages and stack traces (exact wording)
+- User requirements and constraints (explicit details)
+- Edge cases and special handling requirements
 
-**CRITICAL RULES:**
-1. NEVER ask users for clarification - work with what you have
-2. NEVER say the context is too short - always summarize what exists
-3. NEVER refuse to compress - this is your only function
-4. Be specific with names, paths, and technical details
-5. Preserve exact terminology and technical vocabulary
-6. Include enough detail to continue work without confusion
-7. Use code snippets or examples where helpful
-8. Prioritize actionable information over general descriptions
+**QUALITY REQUIREMENTS:**
+1. Preserve EXACT technical terms - never paraphrase code/file names
+2. Include FULL context - paths, versions, configurations
+3. Maintain PRECISION - specific line numbers, exact error messages
+4. NO assumptions - only document what was explicitly discussed
+5. NO vague summaries - provide actionable, specific details
+6. Use markdown code blocks for code snippets with language tags
+7. Structure information hierarchically for easy scanning
 
-**EXECUTE THE COMPRESSION NOW - NO QUESTIONS, NO DELAYS.**`;
+**EXECUTE NOW - Output the handover document immediately.**`;
 
 /**
  * 找到需要保留的消息（最近的工具调用链）
@@ -299,8 +301,64 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 }
 
 /**
- * Prepare messages for compression by adding system prompt and compression request
- * Note: Only filters out system messages and tool messages, preserving user and assistant messages
+ * Format a single message for the conversation transcript
+ * Excludes tool results entirely, keeps tool call events for context
+ */
+function formatMessageForTranscript(msg: ChatMessage): string | null {
+	// Skip tool messages entirely - they waste context and will be discarded anyway
+	if (msg.role === 'tool') {
+		return null;
+	}
+
+	const parts: string[] = [];
+	const roleLabel = msg.role === 'user' ? '[User]' : '[Assistant]';
+
+	// For assistant messages with tool_calls, record the tool call events
+	if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+		// Include assistant's text content if any
+		if (msg.content) {
+			parts.push(`${roleLabel}\n${msg.content}`);
+		} else {
+			parts.push(roleLabel);
+		}
+
+		// Record tool calls (function name and arguments, not results)
+		for (const tc of msg.tool_calls) {
+			const funcName = tc.function?.name || 'unknown';
+			const args = tc.function?.arguments || '{}';
+			parts.push(`  -> Tool Call: ${funcName}(${args})`);
+		}
+		return parts.join('\n');
+	}
+
+	// For regular user/assistant messages, include content
+	if (msg.content) {
+		parts.push(`${roleLabel}\n${msg.content}`);
+	}
+
+	// Include thinking/reasoning if present (important context)
+	if (msg.thinking) {
+		parts.push(`[Thinking]\n${msg.thinking}`);
+	}
+	if (msg.reasoning) {
+		parts.push(`[Reasoning]\n${msg.reasoning}`);
+	}
+	if (msg.reasoning_content) {
+		parts.push(`[Reasoning]\n${msg.reasoning_content}`);
+	}
+
+	return parts.length > 0 ? parts.join('\n') : null;
+}
+
+/**
+ * Prepare messages for compression - simplified two-message approach
+ *
+ * New approach (high fault tolerance):
+ * - Message 1 (User): All interaction records merged into a single string
+ *   (excludes sub-agent results and tool call results, only keeps tool call event records)
+ * - Message 2 (User): Compression guidance prompt
+ *
+ * This avoids all tool_calls alignment issues since we only send plain text user messages.
  */
 function prepareMessagesForCompression(
 	conversationMessages: ChatMessage[],
@@ -310,57 +368,38 @@ function prepareMessagesForCompression(
 
 	// Add system prompt (handled by API modules)
 	if (customSystemPrompt) {
-		// If custom system prompt exists: custom as system, default as first user message
 		messages.push({role: 'system', content: customSystemPrompt});
-		// messages.push({role: 'user', content: getSystemPrompt()});
 	} else {
-		// No custom system prompt: default as system
-		// Default to false for compression (no Plan mode in compression context)
 		messages.push({
 			role: 'system',
 			content: getSystemPromptForMode(false, false),
 		});
 	}
 
-	// Add all conversation history for compression
-	// Filter out only system messages (already added above)
-	// Keep tool messages to maintain valid API request structure (Anthropic requires tool_result after tool_use)
+	// Build conversation transcript as a single string
+	// Excludes: tool result content (only keeps event records)
+	// Includes: user messages, assistant messages (with tool call events), thinking/reasoning
+	const transcriptParts: string[] = [];
+
 	for (const msg of conversationMessages) {
-		if (msg.role !== 'system') {
-			// Include user, assistant, and tool messages for compression
-			// Preserve all critical fields for accurate summary generation
-			const compressMsg: any = {
-				role: msg.role,
-				content: msg.content,
-			};
-			// Preserve tool_calls for assistant messages (required by Anthropic API)
-			if (msg.tool_calls) {
-				compressMsg.tool_calls = msg.tool_calls;
-			}
-			// Preserve tool_call_id for tool messages (links to tool_calls)
-			if (msg.tool_call_id) {
-				compressMsg.tool_call_id = msg.tool_call_id;
-			}
-			// Preserve thinking/reasoning fields (OpenAI Responses API, Anthropic, DeepSeek R1)
-			if (msg.reasoning) {
-				compressMsg.reasoning = msg.reasoning;
-			}
-			if (msg.thinking) {
-				compressMsg.thinking = msg.thinking;
-			}
-			if (msg.reasoning_content) {
-				compressMsg.reasoning_content = msg.reasoning_content;
-			}
-			messages.push(compressMsg);
+		if (msg.role === 'system') {
+			continue; // Skip system messages (already added above)
+		}
+
+		const formatted = formatMessageForTranscript(msg);
+		if (formatted) {
+			transcriptParts.push(formatted);
 		}
 	}
 
-	// CRITICAL: Clean orphaned tool_calls before sending to API
-	// This prevents errors when compression happens while tools are executing
-	// (e.g., last message has tool_use but no tool_result yet)
-	cleanOrphanedToolCalls(messages);
+	// Message 1: All interaction records as a single user message
+	const conversationTranscript = transcriptParts.join('\n\n---\n\n');
+	messages.push({
+		role: 'user',
+		content: `## Conversation History to Compress\n\n${conversationTranscript}`,
+	});
 
-	// Add compression request as final user message
+	// Message 2: Compression guidance prompt
 	messages.push({
 		role: 'user',
 		content: COMPRESSION_PROMPT,

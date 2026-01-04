@@ -58,9 +58,8 @@ jobs:
             
             ### What's New
 
-            - The todo list automatically hides to reduce redundant content
-            - Ultra-long command output is displayed in a scrolling manner
-            - Fix the bug where the MCP Info panel is not displayed
+            - New context compression logic
+            - Service mode adds context compression API
                       
             ### Installation
             ```bash
