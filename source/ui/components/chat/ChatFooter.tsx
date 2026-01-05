@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, Suspense, lazy} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import ChatInput from './ChatInput.js';
@@ -11,6 +11,9 @@ import TodoTree from '../special/TodoTree.js';
 import type {TodoItem} from '../../../mcp/types/todo.types.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
+
+const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
+import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
 
 type ChatFooterProps = {
 	onSubmit: (
@@ -30,6 +33,14 @@ type ChatFooterProps = {
 		message: string,
 		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => Promise<void>;
+
+	// Review commit panel props
+	showReviewCommitPanel: boolean;
+	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	onReviewCommitConfirm: (
+		selection: ReviewCommitSelection[],
+		notes: string,
+	) => void | Promise<void>;
 
 	disabled: boolean;
 	isStopping: boolean;
@@ -80,7 +91,6 @@ type ChatFooterProps = {
 	watcherEnabled: boolean;
 	fileUpdateNotification: {file: string; timestamp: number} | null;
 	currentProfileName: string;
-
 	isCompressing: boolean;
 	compressionError: string | null;
 
@@ -131,89 +141,115 @@ export default function ChatFooter(props: ChatFooterProps) {
 				setShowTodos(false);
 			}, 1000);
 
-			return () => clearTimeout(timeoutId);
+			return () => {
+				clearTimeout(timeoutId);
+			};
 		}
-		return undefined;
+
+		return;
 	}, [props.isProcessing, showTodos]);
 
 	return (
 		<>
-			<ChatInput
-				onSubmit={props.onSubmit}
-				onCommand={props.onCommand}
-				placeholder={t.chatScreen.inputPlaceholder}
-				disabled={props.disabled || props.isStopping}
-				disableKeyboardNavigation={props.showBackgroundPanel}
-				isProcessing={props.isProcessing}
-				chatHistory={props.chatHistory}
-				onHistorySelect={props.handleHistorySelect}
-				yoloMode={props.yoloMode}
-				setYoloMode={props.setYoloMode}
-				planMode={props.planMode}
-				setPlanMode={props.setPlanMode}
-				vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-				setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
-				contextUsage={props.contextUsage}
-				initialContent={props.initialContent}
-				onContextPercentageChange={props.onContextPercentageChange}
-				showProfilePicker={props.showProfilePicker}
-				setShowProfilePicker={props.setShowProfilePicker}
-				profileSelectedIndex={props.profileSelectedIndex}
-				setProfileSelectedIndex={props.setProfileSelectedIndex}
-				getFilteredProfiles={props.getFilteredProfiles}
-				handleProfileSelect={props.handleProfileSelect}
-				profileSearchQuery={props.profileSearchQuery}
-				setProfileSearchQuery={props.setProfileSearchQuery}
-				onSwitchProfile={props.onSwitchProfile}
-			/>
+			{!props.showReviewCommitPanel && (
+				<>
+					<ChatInput
+						onSubmit={props.onSubmit}
+						onCommand={props.onCommand}
+						placeholder={t.chatScreen.inputPlaceholder}
+						disabled={props.disabled || props.isStopping}
+						disableKeyboardNavigation={props.showBackgroundPanel}
+						isProcessing={props.isProcessing}
+						chatHistory={props.chatHistory}
+						onHistorySelect={props.handleHistorySelect}
+						yoloMode={props.yoloMode}
+						setYoloMode={props.setYoloMode}
+						planMode={props.planMode}
+						setPlanMode={props.setPlanMode}
+						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+						setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
+						contextUsage={props.contextUsage}
+						initialContent={props.initialContent}
+						onContextPercentageChange={props.onContextPercentageChange}
+						showProfilePicker={props.showProfilePicker}
+						setShowProfilePicker={props.setShowProfilePicker}
+						profileSelectedIndex={props.profileSelectedIndex}
+						setProfileSelectedIndex={props.setProfileSelectedIndex}
+						getFilteredProfiles={props.getFilteredProfiles}
+						handleProfileSelect={props.handleProfileSelect}
+						profileSearchQuery={props.profileSearchQuery}
+						setProfileSearchQuery={props.setProfileSearchQuery}
+						onSwitchProfile={props.onSwitchProfile}
+					/>
 
-			{/* 显示 TODO Tree 在 ChatInput 下方 */}
-			{showTodos && todos.length > 0 && (
-				<Box marginTop={1}>
-					<TodoTree todos={todos} />
-				</Box>
+					{showTodos && todos.length > 0 && (
+						<Box marginTop={1}>
+							<TodoTree todos={todos} />
+						</Box>
+					)}
+
+					<StatusLine
+						yoloMode={props.yoloMode}
+						planMode={props.planMode}
+						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+						vscodeConnectionStatus={props.vscodeConnectionStatus}
+						editorContext={props.editorContext}
+						contextUsage={props.contextUsage}
+						codebaseIndexing={props.codebaseIndexing}
+						codebaseProgress={props.codebaseProgress}
+						watcherEnabled={props.watcherEnabled}
+						fileUpdateNotification={props.fileUpdateNotification}
+						currentProfileName={props.currentProfileName}
+					/>
+
+					{props.isCompressing && (
+						<Box marginTop={1}>
+							<Text color="cyan">
+								<Spinner type="dots" /> {t.chatScreen.compressionInProgress}
+							</Text>
+						</Box>
+					)}
+
+					{props.compressionError && (
+						<Box marginTop={1}>
+							<Text color="red">
+								{t.chatScreen.compressionFailed.replace(
+									'{error}',
+									props.compressionError,
+								)}
+							</Text>
+						</Box>
+					)}
+
+					{props.showBackgroundPanel && (
+						<BackgroundProcessPanel
+							processes={props.backgroundProcesses}
+							selectedIndex={props.selectedProcessIndex}
+							terminalWidth={props.terminalWidth}
+						/>
+					)}
+				</>
 			)}
 
-			<StatusLine
-				yoloMode={props.yoloMode}
-				planMode={props.planMode}
-				vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-				vscodeConnectionStatus={props.vscodeConnectionStatus}
-				editorContext={props.editorContext}
-				contextUsage={props.contextUsage}
-				codebaseIndexing={props.codebaseIndexing}
-				codebaseProgress={props.codebaseProgress}
-				watcherEnabled={props.watcherEnabled}
-				fileUpdateNotification={props.fileUpdateNotification}
-				currentProfileName={props.currentProfileName}
-			/>
-
-			{props.isCompressing && (
+			{props.showReviewCommitPanel && (
 				<Box marginTop={1}>
-					<Text color="cyan">
-						<Spinner type="dots" /> {t.chatScreen.compressionInProgress}
-					</Text>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<ReviewCommitPanel
+							visible={props.showReviewCommitPanel}
+							onClose={() => props.setShowReviewCommitPanel(false)}
+							onConfirm={props.onReviewCommitConfirm}
+							maxHeight={6}
+						/>
+					</Suspense>
 				</Box>
-			)}
-
-			{props.compressionError && (
-				<Box marginTop={1}>
-					<Text color="red">
-						{t.chatScreen.compressionFailed.replace(
-							'{error}',
-							props.compressionError,
-						)}
-					</Text>
-				</Box>
-			)}
-
-			{/* Show background process panel if enabled */}
-			{props.showBackgroundPanel && (
-				<BackgroundProcessPanel
-					processes={props.backgroundProcesses}
-					selectedIndex={props.selectedProcessIndex}
-					terminalWidth={props.terminalWidth}
-				/>
 			)}
 		</>
 	);

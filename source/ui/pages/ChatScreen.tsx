@@ -687,6 +687,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		handleSessionPanelSelect,
 		handleQuit,
 		handleReindexCodebase,
+		handleReviewCommitConfirm,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -717,6 +718,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setPendingUserQuestion,
 		initializeFromSession,
 		setShowSessionPanel: panelState.setShowSessionPanel,
+		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		exitApp: exit,
 		codebaseAgentRef,
 		setCodebaseIndexing,
@@ -742,6 +744,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
+		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowPermissionsPanel,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
@@ -1038,7 +1041,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 			hasPendingUserQuestion: !!pendingUserQuestion,
 		});
 	}
-
 	// Handle profile selection - delegated to panelState
 	const handleProfileSelect = panelState.handleProfileSelect;
 
@@ -1207,7 +1209,6 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Panels Manager - handles all panel displays */}
 			<PanelsManager
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
@@ -1430,6 +1431,9 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						onSwitchProfile={handleSwitchProfile}
 						handleProfileSelect={handleProfileSelect}
 						handleHistorySelect={handleHistorySelect}
+						showReviewCommitPanel={panelState.showReviewCommitPanel}
+						setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+						onReviewCommitConfirm={handleReviewCommitConfirm}
 						disabled={
 							!!pendingToolConfirmation ||
 							!!bashSensitiveCommand ||

@@ -479,6 +479,19 @@ export type TranslationKeys = {
 		noResults: string;
 	};
 
+	reviewCommitPanel: {
+		title: string;
+		loadingCommits: string;
+		workingTreeLabel: string;
+		hintEscClose: string;
+		hintNavigation: string;
+		loadingMoreSuffix: string;
+		notesLabel: string;
+		notesOptional: string;
+		selectedLabel: string;
+		errorSelectAtLeastOne: string;
+	};
+
 	// Permissions Panel
 	permissionsPanel: {
 		title: string;
@@ -698,6 +711,15 @@ export type TranslationKeys = {
 		compressionInProgress: string;
 		compressionSuccess: string;
 		compressionFailed: string;
+		// Review
+		reviewStartTitle: string;
+		reviewSelectedSummary: string;
+		reviewSelectedWorkingTreePrefix: string;
+		reviewCommitsLine: string;
+		reviewCommitsMoreSuffix: string;
+		reviewNotesLine: string;
+		reviewGenerating: string;
+		reviewInterruptHint: string;
 		// Retry
 		retryAttempt: string;
 		retryIn: string;

@@ -6,7 +6,8 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 interface TodoItem {
 	id: string;
 	content: string;
-	status: 'pending' | 'completed';
+	// 运行时可能出现非标准值，仅将 'completed' 视为已完成；其他值一律按未完成处理。
+	status: string;
 	parentId?: string;
 }
 
@@ -15,7 +16,7 @@ interface TodoTreeProps {
 }
 
 /**
- * TODO Tree 组件 - 显示带连接线的紧凑任务树
+ * TODO Tree 组件 - 显示紧凑任务列表
  */
 export default function TodoTree({todos}: TodoTreeProps) {
 	const {theme} = useTheme();
@@ -24,81 +25,71 @@ export default function TodoTree({todos}: TodoTreeProps) {
 		return null;
 	}
 
-	// 统计完成进度
-	const completedCount = todos.filter(t => t.status === 'completed').length;
+	const MAX_VISIBLE_TOTAL = 5;
 	const totalCount = todos.length;
-
-	// 已完成项隐藏逻辑：保底5条，溢出部分隐藏
-	// pending 永远全部展示
-	const MAX_VISIBLE_COMPLETED = 5;
-	const pendingTodos = todos.filter(t => t.status === 'pending');
-	const completedTodos = todos.filter(t => t.status === 'completed');
-
-	// 已完成项按时间倒序（假设id包含时间戳，后创建的id更大）
-	// 只保留最近的 MAX_VISIBLE_COMPLETED 条
-	const visibleCompletedTodos = completedTodos.slice(-MAX_VISIBLE_COMPLETED);
-	const hiddenCompletedCount =
-		completedTodos.length - visibleCompletedTodos.length;
-
-	// 可见的todo集合
-	const visibleTodoIds = new Set([
-		...pendingTodos.map(t => t.id),
-		...visibleCompletedTodos.map(t => t.id),
-	]);
-	const visibleTodos = [...pendingTodos, ...visibleCompletedTodos];
-
-	// 按照层级关系组织 TODO（仅基于可见的todos）
-	// 若父节点不可见但子节点可见，子节点提升为root
-	const rootTodos = visibleTodos.filter(
-		t => !t.parentId || !visibleTodoIds.has(t.parentId),
+	const completedCount = todos.reduce(
+		(acc, t) => acc + (t.status === 'completed' ? 1 : 0),
+		0,
 	);
-	const childTodosMap = new Map<string, TodoItem[]>();
 
-	visibleTodos.forEach(todo => {
-		// 只有当父节点也可见时，才作为子节点
-		if (todo.parentId && visibleTodoIds.has(todo.parentId)) {
-			const children = childTodosMap.get(todo.parentId) || [];
-			children.push(todo);
-			childTodosMap.set(todo.parentId, children);
+	let visibleTodos: TodoItem[];
+	let hiddenCompletedCount = 0;
+
+	// 全是未完成（包含非标准 status）：全部显示
+	if (completedCount === 0) {
+		visibleTodos = todos;
+	} else if (completedCount === totalCount) {
+		// 全是已完成：只显示最后 5 条
+		visibleTodos = todos.slice(-MAX_VISIBLE_TOTAL);
+		hiddenCompletedCount = Math.max(0, totalCount - visibleTodos.length);
+	} else {
+		// 混合：按规则裁剪已完成
+		const pendingCount = totalCount - completedCount;
+		const EXTRA_COMPLETED_WHEN_PENDING_AT_LEAST_MAX = 2;
+
+		// 先标记所有未完成可见（未完成始终全部显示）
+		const visibleMask = new Array<boolean>(totalCount).fill(false);
+		for (let i = 0; i < totalCount; i++) {
+			if (todos[i]!.status !== 'completed') visibleMask[i] = true;
 		}
-	});
 
-	const getStatusIcon = (status: TodoItem['status']) => {
+		// 再从尾部补齐已完成：
+		// - 未完成 < 5：补齐到总数最多 5 条
+		// - 未完成 >= 5：额外显示 2 条已完成（总可见数会超过 5）
+		let remainingSlots =
+			pendingCount >= MAX_VISIBLE_TOTAL
+				? EXTRA_COMPLETED_WHEN_PENDING_AT_LEAST_MAX
+				: MAX_VISIBLE_TOTAL - pendingCount;
+		for (let i = totalCount - 1; i >= 0 && remainingSlots > 0; i--) {
+			if (todos[i]!.status === 'completed' && !visibleMask[i]) {
+				visibleMask[i] = true;
+				remainingSlots--;
+			}
+		}
+
+		visibleTodos = todos.filter((_, i) => visibleMask[i]!);
+
+		const visibleCompletedCount = visibleTodos.reduce(
+			(acc, t) => acc + (t.status === 'completed' ? 1 : 0),
+			0,
+		);
+		hiddenCompletedCount = Math.max(0, completedCount - visibleCompletedCount);
+	}
+
+	const getStatusIcon = (status: string) => {
 		return status === 'completed' ? '✓' : '○';
 	};
 
-	const getStatusColor = (status: TodoItem['status']) => {
+	const getStatusColor = (status: string) => {
 		return status === 'completed'
 			? theme.colors.success
 			: theme.colors.menuSecondary;
 	};
 
-	// 渲染单个 TODO 项，带连接线
-	const renderTodo = (
-		todo: TodoItem,
-		depth: number = 0,
-		isLast: boolean = true,
-		parentPrefixes: string[] = [],
-	): React.ReactNode => {
-		const children = childTodosMap.get(todo.id) || [];
+	const renderTodoLine = (todo: TodoItem, index: number): React.ReactNode => {
 		const statusIcon = getStatusIcon(todo.status);
 		const statusColor = getStatusColor(todo.status);
 
-		// 构建前缀：继承父级的连接线状态
-		let prefix = '';
-		if (depth > 0) {
-			prefix = parentPrefixes.join('');
-			prefix += isLast ? '└─' : '├─';
-		}
-
-		// 为子节点准备的前缀
-		const childPrefixes = [...parentPrefixes];
-		if (depth > 0) {
-			childPrefixes.push(isLast ? '  ' : '│ ');
-		}
-
-		// 使用 chalk 直接着色，避免 ink 自动换行时颜色丢失
-		// statusColor 可能是命名颜色(如 'gray')或 hex 格式(如 '#666666')
 		const applyColor = (text: string) => {
 			return statusColor.startsWith('#')
 				? chalk.hex(statusColor)(text)
@@ -106,21 +97,10 @@ export default function TodoTree({todos}: TodoTreeProps) {
 		};
 
 		return (
-			<Box key={todo.id} flexDirection="column">
-				<Text>
-					{applyColor(prefix)}
-					{applyColor(statusIcon)}
-					{applyColor(' ' + todo.content)}
-				</Text>
-				{children.map((child, index) =>
-					renderTodo(
-						child,
-						depth + 1,
-						index === children.length - 1,
-						childPrefixes,
-					),
-				)}
-			</Box>
+			<Text key={`${todo.id}:${index}`}>
+				{applyColor(statusIcon)}
+				{applyColor(' ' + todo.content)}
+			</Text>
 		);
 	};
 
@@ -135,9 +115,7 @@ export default function TodoTree({todos}: TodoTreeProps) {
 					<Text dimColor> +{hiddenCompletedCount} completed hidden</Text>
 				)}
 			</Text>
-			{rootTodos.map((todo, index) =>
-				renderTodo(todo, 0, index === rootTodos.length - 1, []),
-			)}
+			{visibleTodos.map((todo, index) => renderTodoLine(todo, index))}
 		</Box>
 	);
 }

@@ -11,6 +11,8 @@ export function latexToUnicode(latex: string, displayMode = false): string {
 			displayMode,
 			throwOnError: false,
 			output: 'html',
+			// 不在控制台打印 KaTeX strict-mode 警告（仍然尽力渲染）
+			strict: 'ignore',
 		});
 
 		// 从HTML中提取文本并转换为Unicode数学符号
@@ -156,7 +158,10 @@ export function simpleLatexToUnicode(latex: string): string {
 
 	// 替换LaTeX命令为Unicode符号
 	for (const [latexCmd, unicodeChar] of Object.entries(LATEX_TO_UNICODE_MAP)) {
-		result = result.replace(new RegExp(latexCmd.replace(/\\/g, '\\\\'), 'g'), unicodeChar);
+		result = result.replace(
+			new RegExp(latexCmd.replace(/\\/g, '\\\\'), 'g'),
+			unicodeChar,
+		);
 	}
 
 	// 处理上标 (^)

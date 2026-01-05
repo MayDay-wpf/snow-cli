@@ -482,7 +482,7 @@ export const en: TranslationKeys = {
 			compact: 'Compress conversation history using compact model',
 			home: 'Return to welcome screen to modify settings',
 			review:
-				'Review git changes and identify potential issues. Support: /review [optional note]',
+				'Review changes in the working tree and selected commits. Opens a picker panel where you can select items and add notes.',
 			role: 'Open or create ROLE.md file to customize AI assistant role',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
@@ -520,6 +520,19 @@ export const en: TranslationKeys = {
 		activeLabel: '(active)',
 		searchLabel: 'Search:',
 		noResults: 'No matching profiles found',
+	},
+	reviewCommitPanel: {
+		title: 'Review: Select Changes',
+		loadingCommits: 'Loading commits...',
+		workingTreeLabel: 'Working tree (staged + unstaged)',
+		hintEscClose: 'Press ESC to close',
+		hintNavigation:
+			'↑/↓ navigate · Space toggle · Enter confirm · Type to add notes',
+		loadingMoreSuffix: '(loading more...)',
+		notesLabel: 'Notes',
+		notesOptional: '(optional)',
+		selectedLabel: 'Selected',
+		errorSelectAtLeastOne: 'Please select at least one item to review.',
 	},
 	hooks: {
 		pressCtrlCAgain: 'Press Ctrl+C again to exit',
@@ -734,6 +747,16 @@ export const en: TranslationKeys = {
 		compressionInProgress: 'Compressing conversation history...',
 		compressionSuccess: 'Compression complete',
 		compressionFailed: '✗ Compression failed: {error}',
+		// Review
+		reviewStartTitle: 'Preparing to start code review',
+		reviewSelectedSummary:
+			'Selected: {workingTreePrefix}{commitCount} commit(s)',
+		reviewSelectedWorkingTreePrefix: 'Working Tree + ',
+		reviewCommitsLine: 'Commits: {commitList}{moreSuffix}',
+		reviewCommitsMoreSuffix: ' and {commitCount} total',
+		reviewNotesLine: 'Notes: {notes}',
+		reviewGenerating: 'Generating diff/patch and requesting model review...',
+		reviewInterruptHint: 'Tip: press ESC to interrupt',
 		// Retry
 		retryAttempt: 'Retry {current}/{max}',
 		retryIn: 'in {seconds}s...',

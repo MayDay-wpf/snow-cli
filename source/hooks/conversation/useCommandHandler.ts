@@ -270,6 +270,7 @@ type CommandHandlerOptions = {
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
@@ -474,14 +475,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setMessages([commandMessage]);
 					}
 				})();
-			} else if (result.success && result.action === 'showSessionPanel') {
-				options.setShowSessionPanel(true);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showReviewCommitPanel') {
+				options.setShowReviewCommitPanel(true);
+				// 面板唤醒时不输出 command 消息；避免在用户确认选择前污染消息区
+				// 真正开始 review 的摘要会在 onConfirm 后由 handleReviewCommitConfirm 输出
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
 				const commandMessage: Message = {
@@ -567,6 +564,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showWorkingDirPanel') {
 				options.setShowWorkingDirPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showReviewCommitPanel') {
+				options.setShowReviewCommitPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

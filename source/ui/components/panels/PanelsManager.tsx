@@ -40,6 +40,7 @@ type PanelsManagerProps = {
 	setShowRoleDeletion: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
+
 	onCustomCommandSave: (
 		name: string,
 		command: string,

@@ -8,7 +8,7 @@ import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
 import type {RequestMethod} from '../utils/config/apiConfig.js';
-import {execSync} from 'child_process';
+import {execSync, spawnSync} from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -157,6 +157,120 @@ export class ReviewAgent {
 			logger.error('Failed to get git diff:', error);
 			throw new Error(
 				'Failed to get git changes: ' +
+					(error instanceof Error ? error.message : 'Unknown error'),
+			);
+		}
+	}
+
+	private runGit(
+		gitRoot: string,
+		args: string[],
+	): {stdout: string; stderr: string; status: number | null} {
+		const result = spawnSync('git', args, {
+			cwd: gitRoot,
+			encoding: 'utf-8',
+			maxBuffer: 10 * 1024 * 1024,
+		});
+
+		return {
+			stdout: result.stdout ?? '',
+			stderr: result.stderr ?? '',
+			status: result.status,
+		};
+	}
+
+	private assertSafeCommitSha(sha: string): void {
+		if (!/^[0-9a-f]{7,40}$/i.test(sha)) {
+			throw new Error('Invalid commit SHA');
+		}
+	}
+
+	private normalizeNonNegativeInt(value: number, name: string): number {
+		if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+			throw new Error(`Invalid ${name}`);
+		}
+		return value;
+	}
+
+	listCommitsPaginated(
+		gitRoot: string,
+		skip: number,
+		limit: number,
+	): {
+		commits: Array<{
+			sha: string;
+			authorName: string;
+			dateIso: string;
+			subject: string;
+		}>;
+		hasMore: boolean;
+		nextSkip: number;
+	} {
+		const safeSkip = this.normalizeNonNegativeInt(skip, 'skip');
+		const safeLimit = this.normalizeNonNegativeInt(limit, 'limit');
+
+		// Use a unit separator as field delimiter for robust parsing
+		const format = '%H%x1f%an%x1f%ad%x1f%s';
+		const {stdout, stderr, status} = this.runGit(gitRoot, [
+			'log',
+			'--date=iso-strict',
+			`--pretty=format:${format}`,
+			`--skip=${safeSkip}`,
+			'-n',
+			String(safeLimit),
+		]);
+
+		if (status !== 0) {
+			throw new Error(
+				`Failed to list commits: ${stderr.trim() || 'Unknown error'}`,
+			);
+		}
+
+		const lines = stdout
+			.split('\n')
+			.map(l => l.trim())
+			.filter(Boolean);
+
+		const commits = lines
+			.map(line => {
+				const parts = line.split('\x1f');
+				if (parts.length < 4) return null;
+				const [sha, authorName, dateIso, subject] = parts;
+				return {sha, authorName, dateIso, subject};
+			})
+			.filter(Boolean) as Array<{
+			sha: string;
+			authorName: string;
+			dateIso: string;
+			subject: string;
+		}>;
+
+		return {
+			commits,
+			hasMore: commits.length === safeLimit,
+			nextSkip: safeSkip + commits.length,
+		};
+	}
+
+	getCommitPatch(gitRoot: string, sha: string): string {
+		this.assertSafeCommitSha(sha);
+
+		try {
+			const {stdout, stderr, status} = this.runGit(gitRoot, [
+				'show',
+				'--no-color',
+				sha,
+			]);
+
+			if (status !== 0) {
+				throw new Error(stderr.trim() || 'Unknown error');
+			}
+
+			return stdout;
+		} catch (error) {
+			logger.error('Failed to get commit patch:', error);
+			throw new Error(
+				'Failed to get commit patch: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
 			);
 		}

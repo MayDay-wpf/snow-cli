@@ -18,6 +18,7 @@ export interface CommandResult {
 		| 'showWorkingDirPanel'
 		| 'home'
 		| 'review'
+		| 'showReviewCommitPanel'
 		| 'exportChat'
 		| 'showAgentPicker'
 		| 'showTodoPicker'

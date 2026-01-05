@@ -16,6 +16,7 @@ export type PanelState = {
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showWorkingDirPanel: boolean;
+	showReviewCommitPanel: boolean;
 	showProfilePanel: boolean;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
@@ -32,6 +33,7 @@ export type PanelActions = {
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
+	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
@@ -56,6 +58,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
 	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
+	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
 	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
 	const [profileSearchQuery, setProfileSearchQuery] = useState('');
@@ -82,6 +85,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showSkillsCreation ||
 			showRoleCreation ||
 			showRoleDeletion ||
+			showReviewCommitPanel ||
 			showProfilePanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
@@ -161,6 +165,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		if (showReviewCommitPanel) {
+			setShowReviewCommitPanel(false);
+			return true;
+		}
+
 		if (showProfilePanel) {
 			setShowProfilePanel(false);
 			return true;
@@ -180,6 +189,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleCreation ||
 			showRoleDeletion ||
 			showWorkingDirPanel ||
+			showReviewCommitPanel ||
 			showProfilePanel
 		);
 	};
@@ -195,6 +205,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showRoleCreation,
 		showRoleDeletion,
 		showWorkingDirPanel,
+		showReviewCommitPanel,
 		showProfilePanel,
 		profileSelectedIndex,
 		profileSearchQuery,
@@ -209,6 +220,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowRoleCreation,
 		setShowRoleDeletion,
 		setShowWorkingDirPanel,
+		setShowReviewCommitPanel,
 		setShowProfilePanel,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,
