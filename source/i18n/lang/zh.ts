@@ -489,7 +489,9 @@ export const zh: TranslationKeys = {
 	reviewCommitPanel: {
 		title: '代码审查：选择变更',
 		loadingCommits: '正在加载提交记录...',
-		workingTreeLabel: '工作区（已暂存 + 未暂存）',
+		stagedLabel: '已暂存的更改',
+		unstagedLabel: '未暂存的更改',
+		filesLabel: '个文件',
 		hintEscClose: '按 ESC 关闭',
 		hintNavigation: '↑/↓ 导航 · 空格 勾选/取消 · 回车 确认 · 直接输入备注',
 		loadingMoreSuffix: '（加载更多中...）',

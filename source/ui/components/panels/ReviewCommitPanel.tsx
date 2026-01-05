@@ -6,7 +6,8 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import {reviewAgent} from '../../../agents/reviewAgent.js';
 
 export type ReviewCommitSelection =
-	| {type: 'working-tree'}
+	| {type: 'staged'}
+	| {type: 'unstaged'}
 	| {type: 'commit'; sha: string};
 
 type CommitItem = {
@@ -68,17 +69,28 @@ export default function ReviewCommitPanel({
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const [checked, setChecked] = useState<Set<string>>(new Set());
 
+	const [hasStaged, setHasStaged] = useState(false);
+	const [hasUnstaged, setHasUnstaged] = useState(false);
+	const [stagedFileCount, setStagedFileCount] = useState(0);
+	const [unstagedFileCount, setUnstagedFileCount] = useState(0);
+
 	const [notes, setNotes] = useState('');
 
 	const items = useMemo(() => {
 		const base: Array<
-			{kind: 'working-tree'} | {kind: 'commit'; item: CommitItem}
-		> = [{kind: 'working-tree'}];
+			{kind: 'staged'} | {kind: 'unstaged'} | {kind: 'commit'; item: CommitItem}
+		> = [];
+		if (hasStaged) {
+			base.push({kind: 'staged'});
+		}
+		if (hasUnstaged) {
+			base.push({kind: 'unstaged'});
+		}
 		for (const c of commits) {
 			base.push({kind: 'commit', item: c});
 		}
 		return base;
-	}, [commits]);
+	}, [commits, hasStaged, hasUnstaged]);
 
 	const canNavigate = visible && !loading && items.length > 0;
 
@@ -96,6 +108,14 @@ export default function ReviewCommitPanel({
 			}
 
 			setGitRoot(gitCheck.gitRoot);
+
+			// Check working tree status
+			const status = reviewAgent.getWorkingTreeStatus(gitCheck.gitRoot);
+			setHasStaged(status.hasStaged);
+			setHasUnstaged(status.hasUnstaged);
+			setStagedFileCount(status.stagedFileCount);
+			setUnstagedFileCount(status.unstagedFileCount);
+
 			const result = reviewAgent.listCommitsPaginated(
 				gitCheck.gitRoot,
 				0,
@@ -193,7 +213,11 @@ export default function ReviewCommitPanel({
 				if (!current) return;
 
 				const keyId =
-					current.kind === 'working-tree' ? 'working-tree' : current.item.sha;
+					current.kind === 'staged'
+						? 'staged'
+						: current.kind === 'unstaged'
+						? 'unstaged'
+						: current.item.sha;
 
 				setChecked(prev => {
 					const next = new Set(prev);
@@ -206,8 +230,11 @@ export default function ReviewCommitPanel({
 
 			if (key.return) {
 				const selection: ReviewCommitSelection[] = [];
-				if (checked.has('working-tree')) {
-					selection.push({type: 'working-tree'});
+				if (checked.has('staged')) {
+					selection.push({type: 'staged'});
+				}
+				if (checked.has('unstaged')) {
+					selection.push({type: 'unstaged'});
 				}
 				for (const c of commits) {
 					if (checked.has(c.sha)) {
@@ -304,19 +331,25 @@ export default function ReviewCommitPanel({
 					const absoluteIndex = scrollOffset + idx;
 					const isActive = absoluteIndex === selectedIndex;
 					const keyId =
-						it.kind === 'working-tree' ? 'working-tree' : it.item.sha;
+						it.kind === 'staged'
+							? 'staged'
+							: it.kind === 'unstaged'
+							? 'unstaged'
+							: it.item.sha;
 					const isChecked = checked.has(keyId);
 
 					const title =
-						it.kind === 'working-tree'
-							? t.reviewCommitPanel.workingTreeLabel
+						it.kind === 'staged'
+							? `${t.reviewCommitPanel.stagedLabel} (${stagedFileCount} ${t.reviewCommitPanel.filesLabel})`
+							: it.kind === 'unstaged'
+							? `${t.reviewCommitPanel.unstagedLabel} (${unstagedFileCount} ${t.reviewCommitPanel.filesLabel})`
 							: `${formatShortSha(it.item.sha)} ${truncateText(
 									it.item.subject,
 									72,
 							  )}`;
 
 					const subtitle =
-						it.kind === 'working-tree'
+						it.kind === 'staged' || it.kind === 'unstaged'
 							? ''
 							: `${truncateText(it.item.authorName, 24)} · ${formatDate(
 									it.item.dateIso,

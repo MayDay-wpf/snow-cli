@@ -489,7 +489,9 @@ export const zhTW: TranslationKeys = {
 	reviewCommitPanel: {
 		title: '程式碼審查：選擇變更',
 		loadingCommits: '正在載入提交記錄...',
-		workingTreeLabel: '工作區（已暫存 + 未暫存）',
+		stagedLabel: '已暫存的變更',
+		unstagedLabel: '未暫存的變更',
+		filesLabel: '個檔案',
 		hintEscClose: '按 ESC 關閉',
 		hintNavigation: '↑/↓ 導航 · 空格 勾選/取消 · Enter 確認 · 直接輸入備註',
 		loadingMoreSuffix: '（載入更多中...）',

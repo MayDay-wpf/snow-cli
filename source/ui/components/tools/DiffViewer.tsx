@@ -1,7 +1,8 @@
-import React, {useMemo} from 'react';
-import {Box, Text} from 'ink';
+import React, { useMemo } from 'react';
+import { Box, Text } from 'ink';
 import * as Diff from 'diff';
-import {useTheme} from '../../contexts/ThemeContext.js';
+import { useTheme } from '../../contexts/ThemeContext.js';
+import { useTerminalSize } from '../../../hooks/ui/useTerminalSize.js';
 
 interface Props {
 	oldContent?: string;
@@ -37,6 +38,9 @@ function stripLineNumbers(content: string): string {
 		.join('\n');
 }
 
+// Minimum terminal width for side-by-side view (each side needs ~60 chars minimum)
+const MIN_SIDE_BY_SIDE_WIDTH = 120;
+
 export default function DiffViewer({
 	oldContent = '',
 	newContent,
@@ -45,7 +49,11 @@ export default function DiffViewer({
 	completeNewContent,
 	startLineNumber = 1,
 }: Props) {
-	const {theme} = useTheme();
+	const { theme } = useTheme();
+	const { columns } = useTerminalSize();
+
+	// Use side-by-side view when terminal is wide enough
+	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
 
 	// If complete file contents are provided, use them for intelligent diff
 	const useCompleteContent = completeOldContent && completeNewContent;
@@ -73,15 +81,25 @@ export default function DiffViewer({
 					{filename && <Text color="cyan"> {filename}</Text>}
 				</Box>
 				<Box flexDirection="column">
-			{allLines.map((line, index) => (
-				<Text key={index} color="white" backgroundColor={theme.colors.diffAdded}>
-					+ {line}
-				</Text>
-			))}
+					{allLines.map((line, index) => (
+						<Text
+							key={index}
+							color="white"
+							backgroundColor={theme.colors.diffAdded}
+						>
+							+ {line}
+						</Text>
+					))}
 				</Box>
 			</Box>
 		);
-	}, [isNewFile, diffNewContent, filename, theme.colors.text, theme.colors.diffAdded]);
+	}, [
+		isNewFile,
+		diffNewContent,
+		filename,
+		theme.colors.text,
+		theme.colors.diffAdded,
+	]);
 
 	if (isNewFile) {
 		return newFileContent;
@@ -105,27 +123,34 @@ export default function DiffViewer({
 		let newLineNum = startLineNumber;
 
 		diffResult.forEach(part => {
-			const lines = part.value.replace(/\n$/, '').split('\n');
+			// Normalize line endings and remove trailing newline
+			const normalizedValue = part.value
+				.replace(/\r\n/g, '\n')
+				.replace(/\r/g, '\n')
+				.replace(/\n$/, '');
+			const lines = normalizedValue.split('\n');
 
 			lines.forEach(line => {
+				// Remove any remaining \r characters from the line
+				const cleanLine = line.replace(/\r/g, '');
 				if (part.added) {
 					allChanges.push({
 						type: 'added',
-						content: line,
+						content: cleanLine,
 						oldLineNum: null,
 						newLineNum: newLineNum++,
 					});
 				} else if (part.removed) {
 					allChanges.push({
 						type: 'removed',
-						content: line,
+						content: cleanLine,
 						oldLineNum: oldLineNum++,
 						newLineNum: null,
 					});
 				} else {
 					allChanges.push({
 						type: 'unchanged',
-						content: line,
+						content: cleanLine,
 						oldLineNum: oldLineNum++,
 						newLineNum: newLineNum++,
 					});
@@ -199,6 +224,286 @@ export default function DiffViewer({
 		return computedHunks;
 	}, [diffOldContent, diffNewContent, startLineNumber]);
 
+	// Helper function to truncate content to fit panel width
+	const truncateContent = (content: string, maxWidth: number): string => {
+		// Remove any newline characters that might cause extra line breaks
+		const cleanContent = content.replace(/[\r\n]/g, '');
+		if (cleanContent.length <= maxWidth) {
+			return cleanContent.padEnd(maxWidth, ' ');
+		}
+		return cleanContent.slice(0, maxWidth - 1) + '~';
+	};
+
+	// Render side-by-side diff view
+	const renderSideBySide = (hunk: DiffHunk, hunkIndex: number) => {
+		// Calculate panel width: (total - separator) / 2
+		// Format: [lineNum 4] [space 1] [sign 1] [space 1] [content] | [lineNum 4] [space 1] [sign 1] [space 1] [content]
+		const separatorWidth = 3; // " | "
+		const lineNumWidth = 4;
+		const signWidth = 1;
+		const paddingWidth = 2; // spaces around sign
+		const panelWidth = Math.floor((columns - separatorWidth) / 2);
+		const contentWidth = panelWidth - lineNumWidth - signWidth - paddingWidth;
+
+		// Build paired lines for side-by-side view
+		interface SideBySideLine {
+			left: {
+				lineNum: number | null;
+				type: 'removed' | 'unchanged' | 'empty';
+				content: string;
+			};
+			right: {
+				lineNum: number | null;
+				type: 'added' | 'unchanged' | 'empty';
+				content: string;
+			};
+		}
+
+		const pairedLines: SideBySideLine[] = [];
+		let leftIdx = 0;
+		let rightIdx = 0;
+
+		// Separate changes into removed/unchanged (left) and added/unchanged (right)
+		const leftChanges = hunk.changes.filter(
+			c => c.type === 'removed' || c.type === 'unchanged',
+		);
+		const rightChanges = hunk.changes.filter(
+			c => c.type === 'added' || c.type === 'unchanged',
+		);
+
+		// Match unchanged lines and pair removed/added
+		while (leftIdx < leftChanges.length || rightIdx < rightChanges.length) {
+			const leftChange = leftChanges[leftIdx];
+			const rightChange = rightChanges[rightIdx];
+
+			if (
+				leftChange?.type === 'unchanged' &&
+				rightChange?.type === 'unchanged'
+			) {
+				// Both are unchanged - pair them
+				pairedLines.push({
+					left: {
+						lineNum: leftChange.oldLineNum,
+						type: 'unchanged',
+						content: leftChange.content,
+					},
+					right: {
+						lineNum: rightChange.newLineNum,
+						type: 'unchanged',
+						content: rightChange.content,
+					},
+				});
+				leftIdx++;
+				rightIdx++;
+			} else if (
+				leftChange?.type === 'removed' &&
+				rightChange?.type === 'added'
+			) {
+				// Removed on left, added on right - pair them
+				pairedLines.push({
+					left: {
+						lineNum: leftChange.oldLineNum,
+						type: 'removed',
+						content: leftChange.content,
+					},
+					right: {
+						lineNum: rightChange.newLineNum,
+						type: 'added',
+						content: rightChange.content,
+					},
+				});
+				leftIdx++;
+				rightIdx++;
+			} else if (leftChange?.type === 'removed') {
+				// Only removed on left
+				pairedLines.push({
+					left: {
+						lineNum: leftChange.oldLineNum,
+						type: 'removed',
+						content: leftChange.content,
+					},
+					right: { lineNum: null, type: 'empty', content: '' },
+				});
+				leftIdx++;
+			} else if (rightChange?.type === 'added') {
+				// Only added on right
+				pairedLines.push({
+					left: { lineNum: null, type: 'empty', content: '' },
+					right: {
+						lineNum: rightChange.newLineNum,
+						type: 'added',
+						content: rightChange.content,
+					},
+				});
+				rightIdx++;
+			} else {
+				// Skip any remaining
+				if (leftIdx < leftChanges.length) leftIdx++;
+				if (rightIdx < rightChanges.length) rightIdx++;
+			}
+		}
+
+		// Build all lines data for rendering
+		const lines = pairedLines.map((pair, idx) => {
+			const leftLineNum = pair.left.lineNum
+				? String(pair.left.lineNum).padStart(lineNumWidth, ' ')
+				: ''.padStart(lineNumWidth, ' ');
+			const rightLineNum = pair.right.lineNum
+				? String(pair.right.lineNum).padStart(lineNumWidth, ' ')
+				: ''.padStart(lineNumWidth, ' ');
+
+			const leftSign =
+				pair.left.type === 'removed'
+					? '-'
+					: pair.left.type === 'unchanged'
+						? ' '
+						: ' ';
+			const rightSign =
+				pair.right.type === 'added'
+					? '+'
+					: pair.right.type === 'unchanged'
+						? ' '
+						: ' ';
+
+			const leftContent = truncateContent(pair.left.content, contentWidth);
+			const rightContent = truncateContent(pair.right.content, contentWidth);
+
+			return {
+				idx,
+				leftLineNum,
+				leftSign,
+				leftContent,
+				rightLineNum,
+				rightSign,
+				rightContent,
+				leftType: pair.left.type,
+				rightType: pair.right.type,
+			};
+		});
+
+		// Build header decorations
+		const headerDash = '-'.repeat(Math.floor((panelWidth - 5) / 2));
+
+		return (
+			<Box key={hunkIndex} flexDirection="column">
+				{/* Hunk header */}
+				<Text color="cyan" dimColor>
+					@@ Lines {hunk.startLine}-{hunk.endLine} @@
+				</Text>
+				{/* Separator line with headers - Box left/center/right structure */}
+				<Box flexDirection="row">
+					{/* Left panel header */}
+					<Box width={panelWidth}>
+						<Text dimColor>{headerDash}</Text>
+						<Text color="red" bold>
+							{' OLD '}
+						</Text>
+						<Text dimColor>{headerDash}</Text>
+					</Box>
+					{/* Center separator */}
+					<Box width={separatorWidth}>
+						<Text dimColor>{' | '}</Text>
+					</Box>
+					{/* Right panel header */}
+					<Box width={panelWidth}>
+						<Text dimColor>{headerDash}</Text>
+						<Text color="green" bold>
+							{' NEW '}
+						</Text>
+						<Text dimColor>{headerDash}</Text>
+					</Box>
+				</Box>
+				{/* Paired lines - Box left/center/right structure */}
+				{lines.map(line => (
+					<Box key={line.idx} flexDirection="row">
+						{/* Left panel (OLD) */}
+						<Box width={panelWidth}>
+							{line.leftType === 'removed' ? (
+								<Text color="white" backgroundColor={theme.colors.diffRemoved}>
+									{line.leftLineNum} {line.leftSign} {line.leftContent}
+								</Text>
+							) : (
+								<Text>
+									{line.leftLineNum} {line.leftSign} {line.leftContent}
+								</Text>
+							)}
+						</Box>
+						{/* Center separator */}
+						<Box width={separatorWidth}>
+							<Text dimColor>
+								{' | '}
+							</Text>
+						</Box>
+						{/* Right panel (NEW) */}
+						<Box width={panelWidth}>
+							{line.rightType === 'added' ? (
+								<Text color="white" backgroundColor={theme.colors.diffAdded}>
+									{line.rightLineNum} {line.rightSign} {line.rightContent}
+								</Text>
+							) : (
+								<Text>
+									{line.rightLineNum} {line.rightSign} {line.rightContent}
+								</Text>
+							)}
+						</Box>
+					</Box>
+				))}
+			</Box>
+		);
+	};
+
+	// Render unified diff view (original implementation)
+	const renderUnified = (hunk: DiffHunk, hunkIndex: number) => {
+		return (
+			<Box key={hunkIndex} flexDirection="column" marginBottom={1}>
+				{/* Hunk header showing line range */}
+				<Text color="cyan" dimColor>
+					@@ Lines {hunk.startLine}-{hunk.endLine} @@
+				</Text>
+				{/* Hunk changes */}
+				{hunk.changes.map((change, changeIndex) => {
+					// Calculate line number to display
+					const lineNum =
+						change.type === 'added' ? change.newLineNum : change.oldLineNum;
+					const lineNumStr = lineNum
+						? String(lineNum).padStart(4, ' ')
+						: '    ';
+
+					if (change.type === 'added') {
+						return (
+							<Text
+								key={changeIndex}
+								color="white"
+								backgroundColor={theme.colors.diffAdded}
+							>
+								{lineNumStr} + {change.content}
+							</Text>
+						);
+					}
+
+					if (change.type === 'removed') {
+						return (
+							<Text
+								key={changeIndex}
+								color="white"
+								backgroundColor={theme.colors.diffRemoved}
+							>
+								{lineNumStr} - {change.content}
+							</Text>
+						);
+					}
+
+					// Unchanged lines (context)
+					return (
+						<Text key={changeIndex} dimColor>
+							{lineNumStr} {change.content}
+						</Text>
+					);
+				})}
+			</Box>
+		);
+	};
+
 	return (
 		<Box flexDirection="column">
 			<Box marginBottom={1}>
@@ -206,56 +511,14 @@ export default function DiffViewer({
 					[File Modified]
 				</Text>
 				{filename && <Text color="cyan"> {filename}</Text>}
+				{useSideBySide && <Text dimColor> (side-by-side)</Text>}
 			</Box>
 			<Box flexDirection="column">
-				{hunks.map((hunk, hunkIndex) => (
-					<Box key={hunkIndex} flexDirection="column" marginBottom={1}>
-						{/* Hunk header showing line range */}
-						<Text color="cyan" dimColor>
-							@@ Lines {hunk.startLine}-{hunk.endLine} @@
-						</Text>
-						{/* Hunk changes */}
-						{hunk.changes.map((change, changeIndex) => {
-							// Calculate line number to display
-							const lineNum =
-								change.type === 'added' ? change.newLineNum : change.oldLineNum;
-							const lineNumStr = lineNum
-								? String(lineNum).padStart(4, ' ')
-								: '    ';
-
-				if (change.type === 'added') {
-					return (
-						<Text
-							key={changeIndex}
-							color="white"
-							backgroundColor={theme.colors.diffAdded}
-						>
-							{lineNumStr} + {change.content}
-						</Text>
-					);
-				}
-
-				if (change.type === 'removed') {
-					return (
-						<Text
-							key={changeIndex}
-							color="white"
-							backgroundColor={theme.colors.diffRemoved}
-						>
-							{lineNumStr} - {change.content}
-						</Text>
-					);
-				}
-
-							// Unchanged lines (context)
-							return (
-								<Text key={changeIndex} dimColor>
-									{lineNumStr} {change.content}
-								</Text>
-							);
-						})}
-					</Box>
-				))}
+				{hunks.map((hunk, hunkIndex) =>
+					useSideBySide
+						? renderSideBySide(hunk, hunkIndex)
+						: renderUnified(hunk, hunkIndex),
+				)}
 
 				{/* Show total changes summary if there are multiple hunks */}
 				{hunks.length > 1 && (

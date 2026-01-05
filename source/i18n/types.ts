@@ -482,7 +482,9 @@ export type TranslationKeys = {
 	reviewCommitPanel: {
 		title: string;
 		loadingCommits: string;
-		workingTreeLabel: string;
+		stagedLabel: string;
+		unstagedLabel: string;
+		filesLabel: string;
 		hintEscClose: string;
 		hintNavigation: string;
 		loadingMoreSuffix: string;

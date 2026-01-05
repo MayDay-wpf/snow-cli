@@ -524,7 +524,9 @@ export const en: TranslationKeys = {
 	reviewCommitPanel: {
 		title: 'Review: Select Changes',
 		loadingCommits: 'Loading commits...',
-		workingTreeLabel: 'Working tree (staged + unstaged)',
+		stagedLabel: 'Staged changes',
+		unstagedLabel: 'Unstaged changes',
+		filesLabel: 'files',
 		hintEscClose: 'Press ESC to close',
 		hintNavigation:
 			'↑/↓ navigate · Space toggle · Enter confirm · Type to add notes',

@@ -1305,8 +1305,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 			const parts: string[] = [];
 
 			for (const item of selection) {
-				if (item.type === 'working-tree') {
-					const diff = reviewAgent.getGitDiff(gitRoot);
+				if (item.type === 'staged') {
+					const diff = reviewAgent.getStagedDiff(gitRoot);
+					parts.push(diff);
+				} else if (item.type === 'unstaged') {
+					const diff = reviewAgent.getUnstagedDiff(gitRoot);
 					parts.push(diff);
 				} else {
 					const patch = reviewAgent.getCommitPatch(gitRoot, item.sha);
@@ -1358,7 +1361,7 @@ Please provide your review in a clear, structured format.`;
 			streamingState.setContextUsage(null);
 
 			const selectedWorkingTree = selection.some(
-				s => s.type === 'working-tree',
+				s => s.type === 'staged' || s.type === 'unstaged',
 			);
 			const selectedCommits = selection.filter(s => s.type === 'commit');
 			const commitShas = selectedCommits.map(s => s.sha).filter(Boolean);

@@ -119,6 +119,120 @@ export class ReviewAgent {
 	}
 
 	/**
+	 * Check if there are staged or unstaged changes
+	 * @param gitRoot - Git repository root directory
+	 * @returns Object with hasStaged and hasUnstaged flags
+	 */
+	getWorkingTreeStatus(gitRoot: string): {
+		hasStaged: boolean;
+		hasUnstaged: boolean;
+		stagedFileCount: number;
+		unstagedFileCount: number;
+	} {
+		let hasStaged = false;
+		let hasUnstaged = false;
+		let stagedFileCount = 0;
+		let unstagedFileCount = 0;
+
+		try {
+			execSync('git diff --cached --quiet', {
+				cwd: gitRoot,
+				encoding: 'utf-8',
+			});
+		} catch {
+			hasStaged = true;
+			// Count staged files
+			try {
+				const stagedFiles = execSync('git diff --cached --name-only', {
+					cwd: gitRoot,
+					encoding: 'utf-8',
+				});
+				stagedFileCount = stagedFiles.trim().split('\n').filter(Boolean).length;
+			} catch {
+				// Ignore errors
+			}
+		}
+
+		try {
+			execSync('git diff --quiet', {
+				cwd: gitRoot,
+				encoding: 'utf-8',
+			});
+		} catch {
+			hasUnstaged = true;
+			// Count unstaged files
+			try {
+				const unstagedFiles = execSync('git diff --name-only', {
+					cwd: gitRoot,
+					encoding: 'utf-8',
+				});
+				unstagedFileCount = unstagedFiles
+					.trim()
+					.split('\n')
+					.filter(Boolean).length;
+			} catch {
+				// Ignore errors
+			}
+		}
+
+		return {hasStaged, hasUnstaged, stagedFileCount, unstagedFileCount};
+	}
+
+	/**
+	 * Get staged changes diff only
+	 * @param gitRoot - Git repository root directory
+	 * @returns Staged diff output
+	 */
+	getStagedDiff(gitRoot: string): string {
+		try {
+			const stagedDiff = execSync('git diff --cached', {
+				cwd: gitRoot,
+				encoding: 'utf-8',
+				maxBuffer: 10 * 1024 * 1024,
+			});
+
+			if (!stagedDiff) {
+				return 'No staged changes detected.';
+			}
+
+			return '# Staged Changes\n\n' + stagedDiff;
+		} catch (error) {
+			logger.error('Failed to get staged diff:', error);
+			throw new Error(
+				'Failed to get staged changes: ' +
+					(error instanceof Error ? error.message : 'Unknown error'),
+			);
+		}
+	}
+
+	/**
+	 * Get unstaged changes diff only
+	 * @param gitRoot - Git repository root directory
+	 * @returns Unstaged diff output
+	 */
+	getUnstagedDiff(gitRoot: string): string {
+		try {
+			const unstagedDiff = execSync('git diff', {
+				cwd: gitRoot,
+				encoding: 'utf-8',
+				maxBuffer: 10 * 1024 * 1024,
+			});
+
+			if (!unstagedDiff) {
+				return 'No unstaged changes detected.';
+			}
+
+			return '# Unstaged Changes\n\n' + unstagedDiff;
+		} catch (error) {
+			logger.error('Failed to get unstaged diff:', error);
+			throw new Error(
+				'Failed to get unstaged changes: ' +
+					(error instanceof Error ? error.message : 'Unknown error'),
+			);
+		}
+	}
+
+	/**
 	 * Get git diff for uncommitted changes
 	 * @param gitRoot - Git repository root directory
 	 * @returns Git diff output

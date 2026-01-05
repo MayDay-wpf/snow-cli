@@ -58,8 +58,9 @@ jobs:
             
             ### What's New
 
-            - New context compression logic
-            - Service mode adds context compression API
+            - Fix the BUG where the TODO List display is missing
+            - Add a new /review mode
+            - Add two Diffviewer display modes
                       
             ### Installation
             ```bash
