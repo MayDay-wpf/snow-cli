@@ -85,18 +85,7 @@ export default function LoadingIndicator({
 
 	return (
 		<Box marginBottom={1} paddingX={1} width={terminalWidth}>
-			<Text
-				color={
-					[
-						theme.colors.menuInfo,
-						theme.colors.success,
-						theme.colors.menuSelected,
-						theme.colors.menuInfo,
-						theme.colors.menuSecondary,
-					][animationFrame] as any
-				}
-				bold
-			>
+			<Text color={['#00FFFF', '#1ACEB0'][animationFrame % 2] as any} bold>
 				❆
 			</Text>
 			<Box marginLeft={1} marginBottom={1} flexDirection="column">
@@ -140,7 +129,7 @@ export default function LoadingIndicator({
 						) : codebaseSearchStatus && !codebaseSearchStatus.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
 						) : (
-							<Text color={theme.colors.menuSecondary} dimColor>
+							<Text color={theme.colors.menuSecondary} dimColor bold>
 								<ShimmerText
 									text={
 										isReasoning
@@ -149,7 +138,7 @@ export default function LoadingIndicator({
 											? t.chatScreen.statusWriting
 											: t.chatScreen.statusThinking
 									}
-								/>{' '}
+								/>
 								(
 								{currentModel && (
 									<>

@@ -58,8 +58,8 @@ jobs:
             
             ### What's New
 
-            - Optimize the codebases indexing experience
-            - Add `/reindex -force` to force rebuild the index
+            - Fix some bugs
+            - Make minor adjustments to the UI
                       
             ### Installation
             ```bash

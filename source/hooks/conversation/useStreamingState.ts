@@ -48,8 +48,8 @@ export function useStreamingState() {
 		if (!isStreaming) return;
 
 		const interval = setInterval(() => {
-			setAnimationFrame(prev => (prev + 1) % 5);
-		}, 300);
+			setAnimationFrame(prev => (prev + 1) % 2);
+		}, 500);
 
 		return () => {
 			clearInterval(interval);

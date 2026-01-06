@@ -28,11 +28,11 @@ export default function ShimmerText({text}: ShimmerTextProps) {
 
 		// Bright cyan shimmer in the center (distance 0-1)
 		if (distance <= 1) {
-			output += chalk.hex('#00FFFF')(char); // Bright cyan/aqua
+			output += chalk.bold.hex('#00FFFF')(char); // Bright cyan/aqua
 		}
 		// Deep blue for the rest (base color)
 		else {
-			output += chalk.hex('#1ACEB0')(char); // Steel blue
+			output += chalk.bold.hex('#1ACEB0')(char); // Steel blue
 		}
 	}
 

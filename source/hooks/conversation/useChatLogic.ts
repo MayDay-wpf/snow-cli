@@ -854,18 +854,15 @@ export function useChatLogic(props: UseChatLogicProps) {
 			}
 		}
 
-		let totalFileCount = 0;
-		for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
-			if (index >= selectedIndex) {
-				totalFileCount += count;
-			}
-		}
+		// CRITICAL: Always read from disk to get accurate snapshot info
+		// The in-memory snapshotFileCount cache may be stale if files were edited
+		// but messagesLength hasn't changed yet (e.g., during streaming)
+		const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
+			currentSession.id,
+			selectedIndex,
+		);
 
-		if (totalFileCount > 0) {
-			const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
-				currentSession.id,
-				selectedIndex,
-			);
+		if (filePaths.length > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length,
