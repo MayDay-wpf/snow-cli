@@ -300,7 +300,7 @@ type CommandHandlerOptions = {
 		hideUserMessage?: boolean,
 	) => Promise<void>;
 	onQuit?: () => void;
-	onReindexCodebase?: () => Promise<void>;
+	onReindexCodebase?: (force?: boolean) => Promise<void>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -867,7 +867,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Handle reindex codebase command - silent execution
 				if (options.onReindexCodebase) {
 					try {
-						await options.onReindexCodebase();
+						await options.onReindexCodebase(result.forceReindex);
 					} catch (error) {
 						const errorMsg =
 							error instanceof Error ? error.message : 'Unknown error';

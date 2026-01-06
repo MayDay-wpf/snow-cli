@@ -13,7 +13,7 @@
 
 **QQ Group**: 910298558
 
-_An intelligent AI-powered CLI tool for developers_
+_Agentic coding in your terminal_
 
 </div>
 
@@ -98,12 +98,12 @@ npm run link   # builds and globally links snow
 
 #### VSCode Extension
 
-- Extension source located in `vscode-extension/` directory
+- Extension source located in `VSIX/` directory
 - Download release: [mufasa.snow-cli](https://marketplace.visualstudio.com/items?itemName=mufasa.snow-cli)
 
 #### JetBrains Plugin
 
-- Plugin source located in `jetbrains-plugin/` directory
+- Plugin source located in `Jetbrains/` directory
 - Download release: [JetBrains plugin](https://plugins.jetbrains.com/plugin/28715-snow-cli/edit)
 
 ### Project Structure
@@ -122,7 +122,6 @@ npm run link   # builds and globally links snow
 ├── hooks/                  # Workflow hooks
 ├── sse-daemons/            # SSE daemon processes
 ├── sse-logs/               # SSE service logs
-├── ui-sessions/            # UI session data
 ├── usage/                  # Usage statistics
 ├── active-profile.json     # Current active profile
 ├── config.json             # API configuration
@@ -138,6 +137,13 @@ npm run link   # builds and globally links snow
 ├── history.json            # History settings
 └── system-prompt.json      # Custom system prompts
 ```
+
+---
+
+## QQ Group
+
+![alt text](docs/images/qq_group_qr.jpg)
+
 
 ---
 

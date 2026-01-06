@@ -58,9 +58,8 @@ jobs:
             
             ### What's New
 
-            - Fix the BUG where the TODO List display is missing
-            - Add a new /review mode
-            - Add two Diffviewer display modes
+            - Optimize the codebases indexing experience
+            - Add `/reindex -force` to force rebuild the index
                       
             ### Installation
             ```bash

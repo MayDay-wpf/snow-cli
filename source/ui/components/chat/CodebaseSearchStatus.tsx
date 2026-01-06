@@ -26,6 +26,14 @@ type Props = {
 	status: CodebaseSearchStatusData;
 };
 
+// 截断Query字符串，避免过长影响观感
+function truncateQuery(query: string, maxLength: number = 50): string {
+	if (query.length <= maxLength) {
+		return query;
+	}
+	return query.slice(0, maxLength) + '...';
+}
+
 export default function CodebaseSearchStatus({status}: Props) {
 	const {theme} = useTheme();
 
@@ -45,7 +53,7 @@ export default function CodebaseSearchStatus({status}: Props) {
 					{/* Show current query */}
 					{status.query && (
 						<Text color="magenta" dimColor>
-							Query: "{status.query}"
+							Query: "{truncateQuery(status.query)}"
 						</Text>
 					)}
 					{/* Show original results count if reviewing */}
@@ -56,9 +64,7 @@ export default function CodebaseSearchStatus({status}: Props) {
 					)}
 					{/* Show basic message if no detailed info yet */}
 					{status.originalResultsCount === undefined && (
-						<Text color={theme.colors.menuSecondary}>
-							{status.message}
-						</Text>
+						<Text color={theme.colors.menuSecondary}>{status.message}</Text>
 					)}
 				</Box>
 			</Box>
@@ -83,7 +89,8 @@ export default function CodebaseSearchStatus({status}: Props) {
 								Found {status.reviewResults.originalCount} results
 							</Text>
 							<Text color="cyan" dimColor>
-								AI filtered to {status.reviewResults.filteredCount} relevant results
+								AI filtered to {status.reviewResults.filteredCount} relevant
+								results
 							</Text>
 							{status.reviewResults.highConfidenceFiles &&
 								status.reviewResults.highConfidenceFiles.length > 0 && (
@@ -93,7 +100,9 @@ export default function CodebaseSearchStatus({status}: Props) {
 											.slice(0, 3)
 											.join(', ')}
 										{status.reviewResults.highConfidenceFiles.length > 3 &&
-											` (+${status.reviewResults.highConfidenceFiles.length - 3})`}
+											` (+${
+												status.reviewResults.highConfidenceFiles.length - 3
+											})`}
 									</Text>
 								)}
 						</>

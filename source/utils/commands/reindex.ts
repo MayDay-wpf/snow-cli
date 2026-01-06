@@ -5,8 +5,9 @@ import {
 import {loadCodebaseConfig} from '../config/codebaseConfig.js';
 
 // Reindex command handler - Rebuild codebase index
+// Supports -force flag to delete existing database and rebuild from scratch
 registerCommand('reindex', {
-	execute: (): CommandResult => {
+	execute: (args?: string): CommandResult => {
 		// Check if codebase is enabled
 		const config = loadCodebaseConfig();
 
@@ -18,9 +19,13 @@ registerCommand('reindex', {
 			};
 		}
 
+		// Parse -force flag
+		const forceReindex = args?.includes('-force') ?? false;
+
 		return {
 			success: true,
 			action: 'reindexCodebase',
+			forceReindex,
 		};
 	},
 });

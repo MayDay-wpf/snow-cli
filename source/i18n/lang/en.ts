@@ -493,7 +493,7 @@ export const en: TranslationKeys = {
 			addDir:
 				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
-				'Rebuild codebase index, detect changed, deleted, new and modified files',
+				'Rebuild codebase index. Use -force to delete existing database and rebuild from scratch',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
 			profiles: 'Switch configuration profiles',

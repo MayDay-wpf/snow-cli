@@ -38,6 +38,7 @@ export interface CommandResult {
 	prompt?: string;
 	location?: 'global' | 'project'; // For custom commands to specify location
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
+	forceReindex?: boolean; // For /reindex -force to delete existing database and rebuild
 }
 
 export interface CommandHandler {

@@ -459,7 +459,7 @@ export const zhTW: TranslationKeys = {
 			agent: '選擇並使用子代理處理特定任務',
 			todo: '從專案檔案搜尋並選擇 TODO 註釋',
 			addDir: '新增工作目錄以支援多專案上下文。用法: /add-dir 或 /add-dir 路徑',
-			reindex: '重建代碼庫索引，檢測變更、刪除、新增和修改的檔案',
+			reindex: '重建代碼庫索引。使用 -force 刪除現有資料庫並完全重建',
 			permissions: '管理永遠允許的工具權限',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			backend: '顯示背景處理程序面板',

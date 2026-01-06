@@ -459,7 +459,7 @@ export const zh: TranslationKeys = {
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
 			addDir: '添加工作目录以支持多项目上下文。用法: /add-dir 或 /add-dir 路径',
-			reindex: '重建代码库索引，检测变更、删除、新增和修改的文件',
+			reindex: '重建代码库索引。使用 -force 删除现有数据库并完全重建',
 			permissions: '管理始终批准的工具权限',
 			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
 			backend: '显示后台进程面板',

@@ -13,7 +13,7 @@
 
 **QQ 群**: 910298558
 
-_面向开发者的智能 AI 命令行工具_
+_在终端中进行 Agentic 编程_
 
 </div>
 
@@ -98,12 +98,12 @@ npm run link   # 构建并全局链接 snow
 
 #### VSCode 扩展
 
-- 扩展源码位于 `vscode-extension/` 目录
+- 扩展源码位于 `VSIX/` 目录
 - 下载发布版: [mufasa.snow-cli](https://marketplace.visualstudio.com/items?itemName=mufasa.snow-cli)
 
 #### JetBrains 插件
 
-- 插件源码位于 `jetbrains-plugin/` 目录
+- 插件源码位于 `Jetbrains/` 目录
 - 下载发布版: [JetBrains 插件](https://plugins.jetbrains.com/plugin/28715-snow-cli/edit)
 
 ### 项目结构
@@ -122,7 +122,6 @@ npm run link   # 构建并全局链接 snow
 ├── hooks/                  # 工作流钩子
 ├── sse-daemons/            # SSE 守护进程
 ├── sse-logs/               # SSE 服务日志
-├── ui-sessions/            # UI 会话数据
 ├── usage/                  # 使用统计
 ├── active-profile.json     # 当前活动配置
 ├── config.json             # API 配置
@@ -138,6 +137,12 @@ npm run link   # 构建并全局链接 snow
 ├── history.json            # 历史设置
 └── system-prompt.json      # 自定义系统提示词
 ```
+
+---
+
+## QQ交流群
+
+![alt text](docs/images/qq_group_qr.jpg)
 
 ---
 

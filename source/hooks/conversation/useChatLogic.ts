@@ -1222,7 +1222,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 	};
 
-	const handleReindexCodebase = async () => {
+	const handleReindexCodebase = async (force?: boolean) => {
 		const workingDirectory = process.cwd();
 
 		setCodebaseIndexing(true);
@@ -1249,6 +1249,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 						setCodebaseIndexing(false);
 					}
 				},
+				force,
 			);
 
 			// Update the agent reference

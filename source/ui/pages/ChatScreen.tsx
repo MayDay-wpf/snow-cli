@@ -313,8 +313,10 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				// Check if indexing is needed
 				const progress = await agent.getProgress();
 
-				// If indexing is already completed, start watcher and return early
+				// If indexing is already completed, run incremental index to sync any offline changes
+				// then start watcher. Shows indexing progress UI like normal indexing.
 				if (progress.status === 'completed' && progress.totalChunks > 0) {
+					// Start watcher first for real-time updates
 					agent.startWatching(
 						(progressData: {
 							totalFiles: number;
@@ -348,7 +350,39 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 						},
 					);
 					setWatcherEnabled(true);
-					setCodebaseIndexing(false); // Ensure loading UI is hidden
+
+					// Run incremental index to catch any changes made while CLI was closed
+					// Show indexing progress UI so user knows what's happening
+					setCodebaseIndexing(true);
+
+					agent.start(
+						(progressData: {
+							totalFiles: number;
+							processedFiles: number;
+							totalChunks: number;
+							currentFile: string;
+							status: string;
+							error?: string;
+						}) => {
+							setCodebaseProgress({
+								totalFiles: progressData.totalFiles,
+								processedFiles: progressData.processedFiles,
+								totalChunks: progressData.totalChunks,
+								currentFile: progressData.currentFile,
+								status: progressData.status,
+								error: progressData.error,
+							});
+
+							// Stop indexing UI when completed or error
+							if (
+								progressData.status === 'completed' ||
+								progressData.status === 'error'
+							) {
+								setCodebaseIndexing(false);
+							}
+						},
+					);
+
 					return;
 				}
 
