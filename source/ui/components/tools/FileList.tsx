@@ -590,6 +590,7 @@ const FileList = memo(
 										: 'white'
 								}
 							>
+								{index === displaySelectedIndex ? '❯ ' : '  '}
 								{searchMode === 'content' && file.lineNumber !== undefined
 									? `${file.path}:${file.lineNumber}`
 									: file.isDirectory

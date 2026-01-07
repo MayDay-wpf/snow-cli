@@ -59,7 +59,9 @@ jobs:
             ### What's New
 
             - Fix some bugs
-            - Make minor adjustments to the UI
+            - Add snapshot lock to prevent race conditions when writing files
+            - Simplify sub-agent configuration
+            - Optimize DIffViewer display
                       
             ### Installation
             ```bash
