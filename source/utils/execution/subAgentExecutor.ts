@@ -856,8 +856,6 @@ OPEN QUESTIONS:
 								sessionId: currentSession?.id,
 								//disableThinking: true, // Sub-agents 不使用 Extended Thinking
 								configProfile: agent.configProfile,
-								customSystemPromptId: agent.customSystemPrompt,
-								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
 					  )
@@ -869,8 +867,6 @@ OPEN QUESTIONS:
 								temperature: 0,
 								tools: allowedTools,
 								configProfile: agent.configProfile,
-								customSystemPromptId: agent.customSystemPrompt,
-								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
 					  )
@@ -883,8 +879,6 @@ OPEN QUESTIONS:
 								tools: allowedTools,
 								prompt_cache_key: currentSession?.id,
 								configProfile: agent.configProfile,
-								customSystemPromptId: agent.customSystemPrompt,
-								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
 					  )
@@ -895,8 +889,6 @@ OPEN QUESTIONS:
 								temperature: 0,
 								tools: allowedTools,
 								configProfile: agent.configProfile,
-								customSystemPromptId: agent.customSystemPrompt,
-								customHeaders: agent.customHeaders,
 							},
 							abortSignal,
 					  );

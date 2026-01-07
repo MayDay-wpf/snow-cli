@@ -1,7 +1,7 @@
 import {
 	getOpenAiConfig,
-	getCustomSystemPrompt,
-	getCustomHeaders,
+	getCustomSystemPromptForConfig,
+	getCustomHeadersForConfig,
 } from '../utils/config/apiConfig.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
@@ -116,8 +116,7 @@ function convertToGeminiMessages(
 	systemInstruction?: string;
 	contents: any[];
 } {
-	const customSystemPrompt =
-		customSystemPromptOverride || getCustomSystemPrompt();
+	const customSystemPrompt = customSystemPromptOverride;
 	let systemInstruction: string | undefined;
 	const contents: any[] = [];
 
@@ -411,6 +410,9 @@ export async function* createStreamingGeminiCompletion(
 		}
 	}
 
+	// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
+	customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
+
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
@@ -459,8 +461,9 @@ export async function* createStreamingGeminiCompletion(
 
 			const url = `${baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
 
-			// Use custom headers from options if provided, otherwise get from main config
-			const customHeaders = options.customHeaders || getCustomHeaders();
+			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+			const customHeaders =
+				options.customHeaders || getCustomHeadersForConfig(config);
 
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',

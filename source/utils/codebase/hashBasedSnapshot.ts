@@ -33,6 +33,11 @@ interface SnapshotMetadata {
  */
 class HashBasedSnapshotManager {
 	private readonly snapshotsDir: string;
+	/**
+	 * Lock map to prevent concurrent writes to the same snapshot file
+	 * Key: snapshot file path, Value: Promise that resolves when lock is released
+	 */
+	private readonly fileLocks: Map<string, Promise<void>> = new Map();
 
 	constructor() {
 		const projectId = getProjectId();
@@ -42,6 +47,30 @@ class HashBasedSnapshotManager {
 			'snapshots',
 			projectId,
 		);
+	}
+
+	/**
+	 * Acquire a lock for a specific file path
+	 * Ensures sequential access to prevent race conditions
+	 */
+	private async acquireLock(filePath: string): Promise<() => void> {
+		// Wait for any existing lock to be released
+		while (this.fileLocks.has(filePath)) {
+			await this.fileLocks.get(filePath);
+		}
+
+		// Create a new lock
+		let releaseLock: () => void;
+		const lockPromise = new Promise<void>(resolve => {
+			releaseLock = resolve;
+		});
+		this.fileLocks.set(filePath, lockPromise);
+
+		// Return the release function
+		return () => {
+			this.fileLocks.delete(filePath);
+			releaseLock!();
+		};
 	}
 
 	/**
@@ -75,12 +104,16 @@ class HashBasedSnapshotManager {
 		existed: boolean,
 		originalContent?: string,
 	): Promise<void> {
+		const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
+
+		// Acquire lock to prevent concurrent writes to the same snapshot file
+		const releaseLock = await this.acquireLock(snapshotPath);
+
 		try {
 			logger.info(
 				`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
 			);
 			await this.ensureSnapshotsDir();
-			const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
 			logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
 
 			// Calculate relative path
@@ -130,6 +163,9 @@ class HashBasedSnapshotManager {
 			// If backup already exists, keep the original (first backup wins)
 		} catch (error) {
 			logger.warn(`[Snapshot] Failed to backup file ${filePath}:`, error);
+		} finally {
+			// Always release the lock
+			releaseLock();
 		}
 	}
 
@@ -145,9 +181,12 @@ class HashBasedSnapshotManager {
 		filePath: string,
 		workspaceRoot: string,
 	): Promise<void> {
-		try {
-			const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
+		const snapshotPath = this.getSnapshotPath(sessionId, messageIndex);
 
+		// Acquire lock to prevent concurrent writes to the same snapshot file
+		const releaseLock = await this.acquireLock(snapshotPath);
+
+		try {
 			// Load existing snapshot
 			try {
 				const content = await fs.readFile(snapshotPath, 'utf-8');
@@ -187,6 +226,9 @@ class HashBasedSnapshotManager {
 				`[Snapshot] Failed to remove file backup ${filePath}:`,
 				error,
 			);
+		} finally {
+			// Always release the lock
+			releaseLock();
 		}
 	}
 

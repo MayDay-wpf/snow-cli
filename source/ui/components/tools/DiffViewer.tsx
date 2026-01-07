@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
-import { Box, Text } from 'ink';
+import React, {useMemo} from 'react';
+import {Box, Text} from 'ink';
 import * as Diff from 'diff';
-import { useTheme } from '../../contexts/ThemeContext.js';
-import { useTerminalSize } from '../../../hooks/ui/useTerminalSize.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 
 interface Props {
 	oldContent?: string;
@@ -49,8 +49,8 @@ export default function DiffViewer({
 	completeNewContent,
 	startLineNumber = 1,
 }: Props) {
-	const { theme } = useTheme();
-	const { columns } = useTerminalSize();
+	const {theme} = useTheme();
+	const {columns} = useTerminalSize();
 
 	// Use side-by-side view when terminal is wide enough
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
@@ -75,10 +75,18 @@ export default function DiffViewer({
 		return (
 			<Box flexDirection="column">
 				<Box marginBottom={1}>
-					<Text bold color="green">
-						[New File]
-					</Text>
-					{filename && <Text color="cyan"> {filename}</Text>}
+					{filename ? (
+						<>
+							<Text bold color="cyan">
+								{filename}
+							</Text>
+							<Text color="green"> (new)</Text>
+						</>
+					) : (
+						<Text bold color="green">
+							New File
+						</Text>
+					)}
 				</Box>
 				<Box flexDirection="column">
 					{allLines.map((line, index) => (
@@ -224,14 +232,9 @@ export default function DiffViewer({
 		return computedHunks;
 	}, [diffOldContent, diffNewContent, startLineNumber]);
 
-	// Helper function to truncate content to fit panel width
-	const truncateContent = (content: string, maxWidth: number): string => {
-		// Remove any newline characters that might cause extra line breaks
-		const cleanContent = content.replace(/[\r\n]/g, '');
-		if (cleanContent.length <= maxWidth) {
-			return cleanContent.padEnd(maxWidth, ' ');
-		}
-		return cleanContent.slice(0, maxWidth - 1) + '~';
+	// Helper function to clean content (remove newlines that cause extra line breaks)
+	const cleanContent = (content: string): string => {
+		return content.replace(/[\r\n]/g, '');
 	};
 
 	// Render side-by-side diff view
@@ -240,10 +243,7 @@ export default function DiffViewer({
 		// Format: [lineNum 4] [space 1] [sign 1] [space 1] [content] | [lineNum 4] [space 1] [sign 1] [space 1] [content]
 		const separatorWidth = 3; // " | "
 		const lineNumWidth = 4;
-		const signWidth = 1;
-		const paddingWidth = 2; // spaces around sign
 		const panelWidth = Math.floor((columns - separatorWidth) / 2);
-		const contentWidth = panelWidth - lineNumWidth - signWidth - paddingWidth;
 
 		// Build paired lines for side-by-side view
 		interface SideBySideLine {
@@ -322,13 +322,13 @@ export default function DiffViewer({
 						type: 'removed',
 						content: leftChange.content,
 					},
-					right: { lineNum: null, type: 'empty', content: '' },
+					right: {lineNum: null, type: 'empty', content: ''},
 				});
 				leftIdx++;
 			} else if (rightChange?.type === 'added') {
 				// Only added on right
 				pairedLines.push({
-					left: { lineNum: null, type: 'empty', content: '' },
+					left: {lineNum: null, type: 'empty', content: ''},
 					right: {
 						lineNum: rightChange.newLineNum,
 						type: 'added',
@@ -356,17 +356,17 @@ export default function DiffViewer({
 				pair.left.type === 'removed'
 					? '-'
 					: pair.left.type === 'unchanged'
-						? ' '
-						: ' ';
+					? ' '
+					: ' ';
 			const rightSign =
 				pair.right.type === 'added'
 					? '+'
 					: pair.right.type === 'unchanged'
-						? ' '
-						: ' ';
+					? ' '
+					: ' ';
 
-			const leftContent = truncateContent(pair.left.content, contentWidth);
-			const rightContent = truncateContent(pair.right.content, contentWidth);
+			const leftContent = cleanContent(pair.left.content);
+			const rightContent = cleanContent(pair.right.content);
 
 			return {
 				idx,
@@ -430,9 +430,7 @@ export default function DiffViewer({
 						</Box>
 						{/* Center separator */}
 						<Box width={separatorWidth}>
-							<Text dimColor>
-								{' | '}
-							</Text>
+							<Text dimColor>{' | '}</Text>
 						</Box>
 						{/* Right panel (NEW) */}
 						<Box width={panelWidth}>
@@ -507,10 +505,18 @@ export default function DiffViewer({
 	return (
 		<Box flexDirection="column">
 			<Box marginBottom={1}>
-				<Text bold color="yellow">
-					[File Modified]
-				</Text>
-				{filename && <Text color="cyan"> {filename}</Text>}
+				{filename ? (
+					<>
+						<Text bold color="cyan">
+							{filename}
+						</Text>
+						<Text color="yellow"> (modified)</Text>
+					</>
+				) : (
+					<Text bold color="yellow">
+						File Modified
+					</Text>
+				)}
 				{useSideBySide && <Text dimColor> (side-by-side)</Text>}
 			</Box>
 			<Box flexDirection="column">

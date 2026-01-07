@@ -1,7 +1,7 @@
 import {
 	getOpenAiConfig,
-	getCustomSystemPrompt,
-	getCustomHeaders,
+	getCustomSystemPromptForConfig,
+	getCustomHeadersForConfig,
 } from '../utils/config/apiConfig.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
@@ -176,8 +176,7 @@ function convertToResponseInput(
 	input: any[];
 	systemInstructions: string;
 } {
-	const customSystemPrompt =
-		customSystemPromptOverride || getCustomSystemPrompt();
+	const customSystemPrompt = customSystemPromptOverride;
 	const result: any[] = [];
 
 	for (const msg of messages) {
@@ -453,6 +452,9 @@ export async function* createStreamingResponse(
 		}
 	}
 
+	// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
+	customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
+
 	// 提取系统提示词和转换后的消息
 	const {input: requestInput, systemInstructions} = convertToResponseInput(
 		options.messages,
@@ -486,8 +488,9 @@ export async function* createStreamingResponse(
 
 			const url = `${config.baseUrl}/responses`;
 
-			// Use custom headers from options if provided, otherwise get from main config
-			const customHeaders = options.customHeaders || getCustomHeaders();
+			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+			const customHeaders =
+				options.customHeaders || getCustomHeadersForConfig(config);
 
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',

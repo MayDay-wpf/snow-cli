@@ -524,7 +524,13 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 新版本从 system-prompt.json 读取当前激活的提示词
  */
 export function getCustomSystemPrompt(): string | undefined {
-	const {systemPromptId} = getOpenAiConfig();
+	return getCustomSystemPromptForConfig(getOpenAiConfig());
+}
+
+export function getCustomSystemPromptForConfig(
+	apiConfig: ApiConfig,
+): string | undefined {
+	const {systemPromptId} = apiConfig;
 	const config = getSystemPromptConfig();
 
 	if (!config) {
@@ -557,9 +563,15 @@ export function getCustomSystemPrompt(): string | undefined {
  * 否则返回空对象
  */
 export function getCustomHeaders(): Record<string, string> {
+	return getCustomHeadersForConfig(getOpenAiConfig());
+}
+
+export function getCustomHeadersForConfig(
+	apiConfig: ApiConfig,
+): Record<string, string> {
 	ensureConfigDirectory();
 
-	const {customHeadersSchemeId} = getOpenAiConfig();
+	const {customHeadersSchemeId} = apiConfig;
 	const config = getCustomHeadersConfig();
 	if (!config) {
 		return {};

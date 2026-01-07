@@ -1,8 +1,8 @@
 import {createHash, randomUUID} from 'crypto';
 import {
 	getOpenAiConfig,
-	getCustomSystemPrompt,
-	getCustomHeaders,
+	getCustomSystemPromptForConfig,
+	getCustomHeadersForConfig,
 	type ThinkingConfig,
 } from '../utils/config/apiConfig.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
@@ -170,8 +170,7 @@ function convertToAnthropicMessages(
 	system?: any;
 	messages: AnthropicMessageParam[];
 } {
-	const customSystemPrompt =
-		customSystemPromptOverride || getCustomSystemPrompt();
+	const customSystemPrompt = customSystemPromptOverride;
 	let systemContent: string | undefined;
 	const anthropicMessages: AnthropicMessageParam[] = [];
 
@@ -518,6 +517,9 @@ export async function* createStreamingAnthropicCompletion(
 				}
 			}
 
+			// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
+			customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
+
 			const {system, messages} = convertToAnthropicMessages(
 				options.messages,
 				options.includeBuiltinSystemPrompt !== false, // 默认为 true
@@ -559,8 +561,9 @@ export async function* createStreamingAnthropicCompletion(
 				requestBody.temperature = 1;
 			}
 
-			// Use custom headers from options if provided, otherwise get from main config
-			const customHeaders = options.customHeaders || getCustomHeaders();
+			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+			const customHeaders =
+				options.customHeaders || getCustomHeadersForConfig(config);
 
 			// Prepare headers
 			const headers: Record<string, string> = {

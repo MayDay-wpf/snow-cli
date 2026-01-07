@@ -208,7 +208,10 @@ export function convertSessionMessagesToUI(
 								arguments: {
 									oldContent: resultData.oldContent,
 									newContent: resultData.newContent,
-									filename: resultData.path || resultData.filename,
+									filename:
+										resultData.filePath ||
+										resultData.path ||
+										resultData.filename,
 									completeOldContent: resultData.completeOldContent,
 									completeNewContent: resultData.completeNewContent,
 									contextStartLine: resultData.contextStartLine,
@@ -415,13 +418,14 @@ export function convertSessionMessagesToUI(
 									editDiffData = {
 										oldContent: resultData.oldContent,
 										newContent: resultData.newContent,
-										filename: toolArgs.filePath,
+										filename: resultData.filePath || toolArgs.filePath,
 										completeOldContent: resultData.completeOldContent,
 										completeNewContent: resultData.completeNewContent,
 										contextStartLine: resultData.contextStartLine,
 									};
 									toolArgs.oldContent = resultData.oldContent;
 									toolArgs.newContent = resultData.newContent;
+									toolArgs.filename = resultData.filePath || toolArgs.filePath;
 									toolArgs.completeOldContent = resultData.completeOldContent;
 									toolArgs.completeNewContent = resultData.completeNewContent;
 									toolArgs.contextStartLine = resultData.contextStartLine;
