@@ -49,6 +49,31 @@ export function getSystemPromptWithRole(
 }
 
 /**
+ * Detect if running in PowerShell environment on Windows
+ * Returns: 'pwsh' for PowerShell 7+, 'powershell' for Windows PowerShell 5.x, null if not PowerShell
+ */
+export function detectWindowsPowerShell(): 'pwsh' | 'powershell' | null {
+	const psModulePath = process.env['PSModulePath'] || '';
+	if (!psModulePath) return null;
+
+	// PowerShell Core (pwsh) typically has paths containing "PowerShell\7" or similar
+	if (
+		psModulePath.includes('PowerShell\\7') ||
+		psModulePath.includes('powershell\\7')
+	) {
+		return 'pwsh';
+	}
+
+	// Windows PowerShell 5.x has WindowsPowerShell in path
+	if (psModulePath.toLowerCase().includes('windowspowershell')) {
+		return 'powershell';
+	}
+
+	// Has PSModulePath but can't determine version, assume PowerShell
+	return 'powershell';
+}
+
+/**
  * Get system environment info
  * @param includePowerShellVersion - Whether to include PowerShell version detection
  */
@@ -70,33 +95,15 @@ export function getSystemEnvironmentInfo(
 	})();
 
 	const shell = (() => {
-		// On Windows, detect PowerShell by checking PSModulePath environment variable
-		// This is more reliable than checking ComSpec which always points to cmd.exe
 		const platformType = os.platform();
 		if (platformType === 'win32') {
-			// PSModulePath is set when running in PowerShell
-			const psModulePath = process.env['PSModulePath'] || '';
-			if (psModulePath) {
-				// Check if it's PowerShell Core (pwsh) or Windows PowerShell
-				// PowerShell Core typically has paths containing "PowerShell\7" or similar
-				const isPwsh =
-					psModulePath.includes('PowerShell\\7') ||
-					psModulePath.includes('powershell\\7') ||
-					(process.env['TERM_PROGRAM'] === 'vscode' &&
-						psModulePath.includes('WindowsPowerShell') === false);
-
+			const psType = detectWindowsPowerShell();
+			if (psType) {
 				if (includePowerShellVersion) {
-					if (isPwsh || psModulePath.toLowerCase().includes('powershell\\7')) {
-						return 'PowerShell 7.x';
-					}
-					if (psModulePath.toLowerCase().includes('windowspowershell')) {
-						return 'PowerShell 5.x';
-					}
-					return 'PowerShell';
+					return psType === 'pwsh' ? 'PowerShell 7.x' : 'PowerShell 5.x';
 				}
 				return 'PowerShell';
 			}
-			// Fallback to cmd.exe if no PowerShell indicators
 			return 'cmd.exe';
 		}
 

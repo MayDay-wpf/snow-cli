@@ -8,8 +8,8 @@ import {
 	isCodebaseEnabled,
 	getCurrentTimeInfo,
 	appendSystemContext,
+	detectWindowsPowerShell,
 } from './shared/promptHelpers.js';
-import path from 'path';
 import os from 'os';
 
 /**
@@ -17,28 +17,24 @@ import os from 'os';
  */
 function getPlatformCommandsSection(): string {
 	const platformType = os.platform();
-	const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-	const shellName = path.basename(shellPath).toLowerCase();
 
-	// Windows with cmd.exe
-	if (platformType === 'win32' && shellName.includes('cmd')) {
-		return `## Platform-Specific Command Requirements
+	// Windows platform detection
+	if (platformType === 'win32') {
+		const psType = detectWindowsPowerShell();
 
-**Current Environment: Windows with cmd.exe**
+		if (psType === 'pwsh') {
+			return `## Platform-Specific Command Requirements
 
-- Use: \`del\`, \`copy\`, \`move\`, \`findstr\`, \`type\`, \`dir\`, \`mkdir\`, \`rmdir\`, \`set\`, \`if\`
-- Avoid: Unix commands (\`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`)
-- Avoid: Modern operators (\`&&\`, \`||\` - use \`&\` and \`|\` instead)
+**Current Environment: Windows with PowerShell 7.x+**
+
+- Use: All PowerShell cmdlets (\`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, etc.)
+- Shell operators: \`;\`, \`&&\`, \`||\`, \`-and\`, \`-or\` are all supported
+- Supports cross-platform scripting patterns
 - For complex tasks: Prefer Node.js scripts or npm packages`;
-	}
+		}
 
-	// Windows with PowerShell 5.x
-	if (
-		platformType === 'win32' &&
-		shellName.includes('powershell') &&
-		!shellName.includes('pwsh')
-	) {
-		return `## Platform-Specific Command Requirements
+		if (psType === 'powershell') {
+			return `## Platform-Specific Command Requirements
 
 **Current Environment: Windows with PowerShell 5.x**
 
@@ -47,17 +43,16 @@ function getPlatformCommandsSection(): string {
 - Avoid: Modern pwsh features and operators like \`&&\`, \`||\` (only work in PowerShell 7+)
 - Note: Avoid \`$(...)\` syntax in certain contexts; use \`@()\` array syntax where applicable
 - For complex tasks: Prefer Node.js scripts or npm packages`;
-	}
+		}
 
-	// Windows with PowerShell 7.x+
-	if (platformType === 'win32' && shellName.includes('pwsh')) {
+		// No PowerShell detected, assume cmd.exe
 		return `## Platform-Specific Command Requirements
 
-**Current Environment: Windows with PowerShell 7.x+**
+**Current Environment: Windows with cmd.exe**
 
-- Use: All PowerShell cmdlets (\`Remove-Item\`, \`Copy-Item\`, \`Move-Item\`, \`Select-String\`, \`Get-Content\`, etc.)
-- Shell operators: \`;\`, \`&&\`, \`||\`, \`-and\`, \`-or\` are all supported
-- Supports cross-platform scripting patterns
+- Use: \`del\`, \`copy\`, \`move\`, \`findstr\`, \`type\`, \`dir\`, \`mkdir\`, \`rmdir\`, \`set\`, \`if\`
+- Avoid: Unix commands (\`rm\`, \`cp\`, \`mv\`, \`grep\`, \`cat\`, \`ls\`)
+- Avoid: Modern operators (\`&&\`, \`||\` - use \`&\` and \`|\` instead)
 - For complex tasks: Prefer Node.js scripts or npm packages`;
 	}
 
