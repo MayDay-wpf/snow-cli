@@ -2,8 +2,9 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
-import {type FzfResultItem, AsyncFzf} from 'fzf';
+import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
+import {logger} from '../utils/core/logger.js';
 // Type definitions
 import type {
 	CodeSymbol,
@@ -37,11 +38,23 @@ export class ACECodeSearchService {
 	private basePath: string;
 	private indexCache: Map<string, CodeSymbol[]> = new Map();
 	private lastIndexTime: number = 0;
-	private fzfIndex: AsyncFzf<string[]> | undefined;
+	private fzfIndex: Fzf<string[]> | undefined;
 	private allIndexedFiles: Set<string> = new Set(); // 使用 Set 提高查找性能 O(1)
 	private fileModTimes: Map<string, number> = new Map(); // Track file modification times
 	private customExcludes: string[] = []; // Custom exclusion patterns from config files
 	private excludesLoaded: boolean = false; // Track if exclusions have been loaded
+
+	// Serialize index rebuilds across concurrent/re-entrant tool calls
+	private indexBuildQueue: Promise<void> = Promise.resolve();
+
+	private async withIndexBuildLock<T>(fn: () => Promise<T>): Promise<T> {
+		const next = this.indexBuildQueue.then(fn, fn);
+		this.indexBuildQueue = next.then(
+			() => undefined,
+			() => undefined,
+		);
+		return next;
+	}
 
 	// 文件内容缓存（用于减少重复读取）
 	private fileContentCache: Map<string, {content: string; mtime: number}> =
@@ -81,136 +94,138 @@ export class ACECodeSearchService {
 	 * Build or refresh the code symbol index with incremental updates
 	 */
 	private async buildIndex(forceRefresh: boolean = false): Promise<void> {
-		const now = Date.now();
+		return this.withIndexBuildLock(async () => {
+			const now = Date.now();
 
-		// Use cache if available and not expired
-		if (
-			!forceRefresh &&
-			this.indexCache.size > 0 &&
-			now - this.lastIndexTime < INDEX_CACHE_DURATION
-		) {
-			return;
-		}
+			// Use cache if available and not expired
+			if (
+				!forceRefresh &&
+				this.indexCache.size > 0 &&
+				now - this.lastIndexTime < INDEX_CACHE_DURATION
+			) {
+				return;
+			}
 
-		// Load exclusion patterns
-		await this.loadExclusionPatterns();
+			// Load exclusion patterns
+			await this.loadExclusionPatterns();
 
-		// For force refresh, clear everything
-		if (forceRefresh) {
-			this.indexCache.clear();
-			this.fileModTimes.clear();
-			this.allIndexedFiles.clear();
-			this.fileContentCache.clear();
-		}
+			// For force refresh, clear everything
+			if (forceRefresh) {
+				this.indexCache.clear();
+				this.fileModTimes.clear();
+				this.allIndexedFiles.clear();
+				this.fileContentCache.clear();
+			}
 
-		const filesToProcess: string[] = [];
+			const filesToProcess: string[] = [];
 
-		const searchInDirectory = async (dirPath: string): Promise<void> => {
-			try {
-				const entries = await fs.readdir(dirPath, {withFileTypes: true});
+			const searchInDirectory = async (dirPath: string): Promise<void> => {
+				try {
+					const entries = await fs.readdir(dirPath, {withFileTypes: true});
 
-				for (const entry of entries) {
-					const fullPath = path.join(dirPath, entry.name);
+					for (const entry of entries) {
+						const fullPath = path.join(dirPath, entry.name);
 
-					if (entry.isDirectory()) {
-						// Use configurable exclusion check
-						if (
-							shouldExcludeDirectory(
-								entry.name,
-								fullPath,
-								this.basePath,
-								this.customExcludes,
-								this.regexCache,
-							)
-						) {
-							continue;
-						}
-						await searchInDirectory(fullPath);
-					} else if (entry.isFile()) {
-						const language = detectLanguage(fullPath);
-						if (language) {
-							// Check if file needs to be re-indexed
-							try {
-								const stats = await fs.stat(fullPath);
-								const currentMtime = stats.mtimeMs;
-								const cachedMtime = this.fileModTimes.get(fullPath);
+						if (entry.isDirectory()) {
+							// Use configurable exclusion check
+							if (
+								shouldExcludeDirectory(
+									entry.name,
+									fullPath,
+									this.basePath,
+									this.customExcludes,
+									this.regexCache,
+								)
+							) {
+								continue;
+							}
+							await searchInDirectory(fullPath);
+						} else if (entry.isFile()) {
+							const language = detectLanguage(fullPath);
+							if (language) {
+								// Check if file needs to be re-indexed
+								try {
+									const stats = await fs.stat(fullPath);
+									const currentMtime = stats.mtimeMs;
+									const cachedMtime = this.fileModTimes.get(fullPath);
 
-								// Only process if file is new or modified
-								if (cachedMtime === undefined || currentMtime > cachedMtime) {
-									filesToProcess.push(fullPath);
-									this.fileModTimes.set(fullPath, currentMtime);
+									// Only process if file is new or modified
+									if (cachedMtime === undefined || currentMtime > cachedMtime) {
+										filesToProcess.push(fullPath);
+										this.fileModTimes.set(fullPath, currentMtime);
+									}
+
+									// Track all indexed files (even if not modified)
+									this.allIndexedFiles.add(fullPath);
+								} catch (error) {
+									// If we can't stat the file, skip it
 								}
-
-								// Track all indexed files (even if not modified)
-								this.allIndexedFiles.add(fullPath);
-							} catch (error) {
-								// If we can't stat the file, skip it
 							}
 						}
 					}
+				} catch (error) {
+					// Skip directories that cannot be accessed
 				}
-			} catch (error) {
-				// Skip directories that cannot be accessed
+			};
+
+			await searchInDirectory(this.basePath);
+
+			// Process files in batches for better performance
+			const batches: string[][] = [];
+
+			for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+				batches.push(filesToProcess.slice(i, i + BATCH_SIZE));
 			}
-		};
 
-		await searchInDirectory(this.basePath);
-
-		// Process files in batches for better performance
-		const batches: string[][] = [];
-
-		for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
-			batches.push(filesToProcess.slice(i, i + BATCH_SIZE));
-		}
-
-		// Process batches concurrently
-		for (const batch of batches) {
-			await Promise.all(
-				batch.map(async fullPath => {
-					try {
-						const content = await readFileWithCache(
-							fullPath,
-							this.fileContentCache,
-						);
-						const symbols = await parseFileSymbols(
-							fullPath,
-							content,
-							this.basePath,
-						);
-						if (symbols.length > 0) {
-							this.indexCache.set(fullPath, symbols);
-						} else {
-							// Remove entry if no symbols found
+			// Process batches concurrently
+			for (const batch of batches) {
+				await Promise.all(
+					batch.map(async fullPath => {
+						try {
+							const content = await readFileWithCache(
+								fullPath,
+								this.fileContentCache,
+							);
+							const symbols = await parseFileSymbols(
+								fullPath,
+								content,
+								this.basePath,
+							);
+							if (symbols.length > 0) {
+								this.indexCache.set(fullPath, symbols);
+							} else {
+								// Remove entry if no symbols found
+								this.indexCache.delete(fullPath);
+							}
+						} catch (error) {
+							// Remove from index if file cannot be read
 							this.indexCache.delete(fullPath);
+							this.fileModTimes.delete(fullPath);
 						}
-					} catch (error) {
-						// Remove from index if file cannot be read
-						this.indexCache.delete(fullPath);
-						this.fileModTimes.delete(fullPath);
-					}
-				}),
-			);
-		}
-
-		// Clean up deleted files from cache
-		for (const cachedPath of Array.from(this.indexCache.keys())) {
-			try {
-				await fs.access(cachedPath);
-			} catch {
-				// File no longer exists, remove from all caches
-				this.indexCache.delete(cachedPath);
-				this.fileModTimes.delete(cachedPath);
-				this.allIndexedFiles.delete(cachedPath);
-				this.fileContentCache.delete(cachedPath);
+					}),
+				);
 			}
-		}
 
-		this.lastIndexTime = now;
+			// Clean up deleted files from cache
+			for (const cachedPath of Array.from(this.indexCache.keys())) {
+				try {
+					await fs.access(cachedPath);
+				} catch {
+					// File no longer exists, remove from all caches
+					this.indexCache.delete(cachedPath);
+					this.fileModTimes.delete(cachedPath);
+					this.allIndexedFiles.delete(cachedPath);
+					this.fileContentCache.delete(cachedPath);
+				}
+			}
 
-		// Rebuild fzf index only if files were processed
-		if (filesToProcess.length > 0 || forceRefresh) {
-			this.buildFzfIndex();
-		}
+			this.lastIndexTime = now;
+
+			// Rebuild fzf index only if files were processed
+			if (filesToProcess.length > 0 || forceRefresh) {
+				this.buildFzfIndex();
+			}
+		});
 	}
 
 	/**
@@ -226,13 +241,15 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Remove duplicates and sort
+		// Remove duplicates
 		const uniqueNames = Array.from(new Set(symbolNames));
 
 		// Build fzf index with adaptive algorithm selection
 		// Use v1 for >20k symbols, v2 for ≤20k symbols
 		const fuzzyAlgorithm = uniqueNames.length > 20000 ? 'v1' : 'v2';
-		this.fzfIndex = new AsyncFzf(uniqueNames, {
+
+		// Use sync Fzf to avoid AsyncFzf cancellation/race issues under concurrent tool calls
+		this.fzfIndex = new Fzf(uniqueNames, {
 			fuzzy: fuzzyAlgorithm,
 		});
 	}
@@ -248,6 +265,7 @@ export class ACECodeSearchService {
 	): Promise<SemanticSearchResult> {
 		const startTime = Date.now();
 		await this.buildIndex();
+		await this.indexBuildQueue;
 
 		const symbols: CodeSymbol[] = [];
 
@@ -255,7 +273,7 @@ export class ACECodeSearchService {
 		if (this.fzfIndex) {
 			try {
 				// Get fuzzy matches from fzf
-				const fzfResults = await this.fzfIndex.find(query);
+				const fzfResults = this.fzfIndex.find(query);
 
 				// Build a set of matched symbol names for quick lookup
 				const matchedNames = new Set(
@@ -296,7 +314,11 @@ export class ACECodeSearchService {
 				});
 			} catch (error) {
 				// Fall back to manual scoring if fzf fails
-				console.debug('fzf search failed, falling back to manual scoring');
+				logger.debug(
+					`fzf search failed, falling back to manual scoring: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				);
 				return this.searchSymbolsManual(
 					query,
 					symbolType,
@@ -564,6 +586,7 @@ export class ACECodeSearchService {
 		contextFile?: string,
 	): Promise<CodeSymbol | null> {
 		await this.buildIndex();
+		await this.indexBuildQueue;
 
 		// Search in the same file first if context is provided
 		if (contextFile) {
