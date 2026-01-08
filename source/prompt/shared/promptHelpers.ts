@@ -49,33 +49,6 @@ export function getSystemPromptWithRole(
 }
 
 /**
- * Get PowerShell version
- */
-function getPowerShellVersion(): string | null {
-	try {
-		const platformType = os.platform();
-		if (platformType !== 'win32') return null;
-
-		// Detect PowerShell version from shell path
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-
-		// pwsh typically indicates PowerShell 7+
-		if (shellName.includes('pwsh')) {
-			return '7.x';
-		}
-		// powershell.exe is typically PowerShell 5.x
-		if (shellName.includes('powershell')) {
-			return '5.x';
-		}
-
-		return null;
-	} catch (error) {
-		return null;
-	}
-}
-
-/**
  * Get system environment info
  * @param includePowerShellVersion - Whether to include PowerShell version detection
  */
@@ -97,20 +70,43 @@ export function getSystemEnvironmentInfo(
 	})();
 
 	const shell = (() => {
-		const shellPath = process.env['SHELL'] || process.env['ComSpec'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-		if (shellName.includes('cmd')) return 'cmd.exe';
-		if (shellName.includes('powershell') || shellName.includes('pwsh')) {
-			// Detect PowerShell version if requested
-			if (includePowerShellVersion) {
-				const psVersion = getPowerShellVersion();
-				return psVersion ? `PowerShell ${psVersion}` : 'PowerShell';
+		// On Windows, detect PowerShell by checking PSModulePath environment variable
+		// This is more reliable than checking ComSpec which always points to cmd.exe
+		const platformType = os.platform();
+		if (platformType === 'win32') {
+			// PSModulePath is set when running in PowerShell
+			const psModulePath = process.env['PSModulePath'] || '';
+			if (psModulePath) {
+				// Check if it's PowerShell Core (pwsh) or Windows PowerShell
+				// PowerShell Core typically has paths containing "PowerShell\7" or similar
+				const isPwsh =
+					psModulePath.includes('PowerShell\\7') ||
+					psModulePath.includes('powershell\\7') ||
+					(process.env['TERM_PROGRAM'] === 'vscode' &&
+						psModulePath.includes('WindowsPowerShell') === false);
+
+				if (includePowerShellVersion) {
+					if (isPwsh || psModulePath.toLowerCase().includes('powershell\\7')) {
+						return 'PowerShell 7.x';
+					}
+					if (psModulePath.toLowerCase().includes('windowspowershell')) {
+						return 'PowerShell 5.x';
+					}
+					return 'PowerShell';
+				}
+				return 'PowerShell';
 			}
-			return 'PowerShell';
+			// Fallback to cmd.exe if no PowerShell indicators
+			return 'cmd.exe';
 		}
+
+		// On Unix-like systems, use SHELL environment variable
+		const shellPath = process.env['SHELL'] || '';
+		const shellName = path.basename(shellPath).toLowerCase();
 		if (shellName.includes('zsh')) return 'zsh';
 		if (shellName.includes('bash')) return 'bash';
 		if (shellName.includes('fish')) return 'fish';
+		if (shellName.includes('pwsh')) return 'PowerShell';
 		if (shellName.includes('sh')) return 'sh';
 		return shellName || 'shell';
 	})();
