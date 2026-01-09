@@ -18,6 +18,27 @@ interface BashCommandConfirmationProps {
  * @param maxWidth - Maximum width (defaults to 100)
  * @returns Truncated text with ellipsis if needed
  */
+function normalizeSingleLine(text: string): string {
+	// Prevent Ink from rendering embedded newlines/tabs as multi-line text.
+	// Collapse any whitespace into a single space and trim.
+	return text.replace(/\s+/g, ' ').trim();
+}
+
+function sanitizePreviewLine(text: string): string {
+	// Remove ANSI/control sequences and normalize whitespace to keep preview rendering stable.
+	// This preview is not meant to be an exact terminal emulator.
+	const withoutOsc = text.replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '');
+	const withoutAnsi = withoutOsc.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+	const withoutControls = withoutAnsi.replace(
+		/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
+		'',
+	);
+	const withoutTabs = withoutControls.replace(/\t/g, ' ');
+	return withoutTabs
+		.replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]+$/g, '')
+		.trim();
+}
+
 function truncateCommand(text: string, maxWidth: number = 100): string {
 	if (text.length <= maxWidth) {
 		return text;
@@ -83,7 +104,10 @@ export function BashCommandConfirmation({
 
 	// Calculate max command display width (leave space for padding and borders)
 	const maxCommandWidth = Math.max(40, terminalWidth - 10);
-	const displayCommand = truncateCommand(command, maxCommandWidth);
+	const displayCommand = truncateCommand(
+		normalizeSingleLine(command),
+		maxCommandWidth,
+	);
 
 	return (
 		<Box
@@ -100,7 +124,9 @@ export function BashCommandConfirmation({
 				</Text>
 			</Box>
 			<Box paddingLeft={2}>
-				<Text color={theme.colors.menuInfo}>{displayCommand}</Text>
+				<Text color={theme.colors.menuInfo} wrap="truncate">
+					{displayCommand}
+				</Text>
 			</Box>
 			{sensitiveCheck.isSensitive && sensitiveCheck.matchedCommand && (
 				<>
@@ -153,10 +179,33 @@ export function BashCommandExecutionStatus({
 
 	// Calculate max command display width (leave space for padding and borders)
 	const maxCommandWidth = Math.max(40, terminalWidth - 10);
-	const displayCommand = truncateCommand(command, maxCommandWidth);
+	const displayCommand = truncateCommand(
+		normalizeSingleLine(command),
+		maxCommandWidth,
+	);
 
-	// Process output: split by newlines and limit total lines
-	const processedOutput = output.flatMap(line => line.split(/\r?\n/)).slice(-5);
+	// Process output: split by newlines, trim per-line trailing whitespace, and clamp to a fixed-height window.
+	// IMPORTANT: render a fixed number of rows with stable keys to avoid Ink diff jitter.
+	const maxOutputLines = 5;
+	const allOutputLines = output
+		.flatMap(line => line.split(/\r?\n/))
+		.map(line => sanitizePreviewLine(line))
+		.filter(line => line.length > 0);
+
+	const omittedCount = Math.max(0, allOutputLines.length - maxOutputLines);
+	const visibleOutputLines =
+		omittedCount > 0
+			? allOutputLines.slice(-(maxOutputLines - 1))
+			: allOutputLines.slice(-maxOutputLines);
+	const rawProcessedOutput =
+		omittedCount > 0
+			? [...visibleOutputLines, `... (${omittedCount} lines omitted)`]
+			: visibleOutputLines;
+
+	const processedOutput = [...rawProcessedOutput];
+	while (processedOutput.length < maxOutputLines) {
+		processedOutput.unshift('');
+	}
 
 	return (
 		<Box flexDirection="column" paddingX={1}>
@@ -166,13 +215,20 @@ export function BashCommandExecutionStatus({
 				</Text>
 			</Box>
 			<Box paddingLeft={2}>
-				<Text dimColor>{displayCommand}</Text>
+				<Text dimColor wrap="truncate">
+					{displayCommand}
+				</Text>
 			</Box>
 			{/* Real-time output lines - fixed height to prevent layout jitter */}
-			<Box flexDirection="column" paddingLeft={2} marginTop={1} height={5}>
+			<Box
+				flexDirection="column"
+				paddingLeft={2}
+				marginTop={1}
+				height={maxOutputLines}
+			>
 				{processedOutput.map((line, index) => (
 					<Text key={index} wrap="truncate" dimColor>
-						{truncateText(line, maxCommandWidth)}
+						{truncateText(sanitizePreviewLine(line), maxCommandWidth)}
 					</Text>
 				))}
 			</Box>
