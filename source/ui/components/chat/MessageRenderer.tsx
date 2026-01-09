@@ -8,6 +8,14 @@ import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 
+/**
+ * Clean thinking content by removing XML-like tags
+ * Some third-party APIs may include <think></think> or <thinking></thinking> tags
+ */
+function cleanThinkingContent(content: string): string {
+	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
+}
+
 type Props = {
 	message: Message;
 	index: number;
@@ -203,13 +211,13 @@ export default function MessageRenderer({
 											return (
 												<>
 													{message.thinking && showThinking && (
-														<Box flexDirection="column" marginBottom={0}>
+														<Box flexDirection="column" marginBottom={message.content ? 1 : 0}>
 															<Text
 																color={theme.colors.menuSecondary}
 																dimColor
 																italic
 															>
-																{message.thinking}
+																{cleanThinkingContent(message.thinking)}
 															</Text>
 														</Box>
 													)}
@@ -224,11 +232,11 @@ export default function MessageRenderer({
 																removeAnsiCodes(message.content),
 															)}
 														</Text>
-													) : (
+													) : message.content ? (
 														<MarkdownRenderer
-															content={message.content || ' '}
+															content={message.content}
 														/>
-													)}
+													) : null}
 												</>
 											);
 										})()

@@ -4,6 +4,14 @@ import {formatToolCallMessage} from '../ui/messageFormatter.js';
 import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
 
 /**
+ * Clean thinking content by removing XML-like tags
+ * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
+ */
+function cleanThinkingContent(content: string): string {
+	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
+}
+
+/**
  * Convert API format session messages to UI format messages
  * Process messages in order to maintain correct sequence
  */
@@ -17,22 +25,24 @@ export function convertSessionMessagesToUI(
 
 	// Helper function to extract thinking content from all sources
 	const extractThinkingFromMessage = (msg: any): string | undefined => {
+		let content: string | undefined;
 		// 1. Anthropic Extended Thinking
 		if (msg.thinking?.thinking) {
-			return msg.thinking.thinking;
+			content = msg.thinking.thinking;
 		}
 		// 2. Responses API reasoning summary
-		if (msg.reasoning?.summary && Array.isArray(msg.reasoning.summary)) {
-			return msg.reasoning.summary
+		else if (msg.reasoning?.summary && Array.isArray(msg.reasoning.summary)) {
+			content = msg.reasoning.summary
 				.map((item: any) => item.text)
 				.filter(Boolean)
 				.join('\n');
 		}
 		// 3. DeepSeek R1 reasoning content
-		if (msg.reasoning_content && typeof msg.reasoning_content === 'string') {
-			return msg.reasoning_content;
+		else if (msg.reasoning_content && typeof msg.reasoning_content === 'string') {
+			content = msg.reasoning_content;
 		}
-		return undefined;
+
+		return content ? cleanThinkingContent(content) : undefined;
 	};
 
 	for (let i = 0; i < sessionMessages.length; i++) {
