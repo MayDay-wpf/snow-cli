@@ -294,7 +294,7 @@ export default function StatusLine({
 	}
 
 	return (
-		<Box flexDirection="column" paddingX={1} marginTop={1}>
+		<Box flexDirection="column" paddingX={1}>
 			{/* Token使用信息 - 始终显示在第一行 */}
 			{contextUsage && (
 				<Box>

@@ -1109,13 +1109,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					...messages
 						.filter(m => !m.streaming)
 						.map((message, index, filteredMessages) => {
-							const isLastMessage = index === filteredMessages.length - 1;
 							return (
 								<MessageRenderer
 									key={`msg-${index}`}
 									message={message}
 									index={index}
-									isLastMessage={isLastMessage}
 									filteredMessages={filteredMessages}
 									terminalWidth={terminalWidth}
 									showThinking={showThinking}

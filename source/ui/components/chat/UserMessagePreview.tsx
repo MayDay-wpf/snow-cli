@@ -24,7 +24,6 @@ export default function UserMessagePreview({content}: Props) {
 		<MessageRenderer
 			message={message}
 			index={0}
-			isLastMessage={false}
 			filteredMessages={filteredMessages}
 			terminalWidth={terminalWidth}
 			showThinking={false}
