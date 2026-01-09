@@ -118,6 +118,7 @@ export const en: TranslationKeys = {
 		saveError: 'Failed to save configuration',
 		gitignoreNotFound:
 			'Cannot create index: .gitignore file not found. Please add a .gitignore file to your project to prevent indexing unnecessary files.',
+		enterValue: 'Enter value:',
 	},
 	systemPromptConfig: {
 		title: 'System Prompt Management',
@@ -183,6 +184,7 @@ export const en: TranslationKeys = {
 		basicModel: 'Basic Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
+		toolResultTokenLimit: 'Tool Result Token Limit:',
 		editSimilarityThreshold:
 			'Edit Similarity Threshold(0-1, change with caution):',
 		notSet: 'Not set',

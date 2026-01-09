@@ -456,16 +456,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={embeddingDimensions.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setEmbeddingDimensions(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {embeddingDimensions}
 								</Text>
 							</Box>
 						)}
@@ -493,16 +484,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={batchMaxLines.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setBatchMaxLines(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {batchMaxLines}
 								</Text>
 							</Box>
 						)}
@@ -528,16 +510,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={batchConcurrency.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setBatchConcurrency(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {batchConcurrency}
 								</Text>
 							</Box>
 						)}
@@ -564,16 +537,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={chunkingMaxLinesPerChunk.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setChunkingMaxLinesPerChunk(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {chunkingMaxLinesPerChunk}
 								</Text>
 							</Box>
 						)}
@@ -601,16 +565,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={chunkingMinLinesPerChunk.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setChunkingMinLinesPerChunk(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {chunkingMinLinesPerChunk}
 								</Text>
 							</Box>
 						)}
@@ -638,16 +593,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={chunkingMinCharsPerChunk.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setChunkingMinCharsPerChunk(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {chunkingMinCharsPerChunk}
 								</Text>
 							</Box>
 						)}
@@ -675,16 +621,7 @@ export default function CodeBaseConfigScreen({
 						{isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuInfo}>
-									<TextInput
-										value={chunkingOverlapLines.toString()}
-										onChange={value => {
-											const num = parseInt(stripFocusArtifacts(value) || '0');
-											if (!isNaN(num)) {
-												setChunkingOverlapLines(num);
-											}
-										}}
-										onSubmit={() => setIsEditing(false)}
-									/>
+									{t.codebaseConfig.enterValue} {chunkingOverlapLines}
 								</Text>
 							</Box>
 						)}
@@ -702,6 +639,66 @@ export default function CodeBaseConfigScreen({
 		}
 	};
 
+	// Define numeric fields
+	const numericFields: ConfigField[] = [
+		'embeddingDimensions',
+		'batchMaxLines',
+		'batchConcurrency',
+		'chunkingMaxLinesPerChunk',
+		'chunkingMinLinesPerChunk',
+		'chunkingMinCharsPerChunk',
+		'chunkingOverlapLines',
+	];
+
+	const isNumericField = (field: ConfigField) => numericFields.includes(field);
+
+	const getNumericValue = (field: ConfigField): number => {
+		switch (field) {
+			case 'embeddingDimensions':
+				return embeddingDimensions;
+			case 'batchMaxLines':
+				return batchMaxLines;
+			case 'batchConcurrency':
+				return batchConcurrency;
+			case 'chunkingMaxLinesPerChunk':
+				return chunkingMaxLinesPerChunk;
+			case 'chunkingMinLinesPerChunk':
+				return chunkingMinLinesPerChunk;
+			case 'chunkingMinCharsPerChunk':
+				return chunkingMinCharsPerChunk;
+			case 'chunkingOverlapLines':
+				return chunkingOverlapLines;
+			default:
+				return 0;
+		}
+	};
+
+	const setNumericValue = (field: ConfigField, value: number) => {
+		switch (field) {
+			case 'embeddingDimensions':
+				setEmbeddingDimensions(value);
+				break;
+			case 'batchMaxLines':
+				setBatchMaxLines(value);
+				break;
+			case 'batchConcurrency':
+				setBatchConcurrency(value);
+				break;
+			case 'chunkingMaxLinesPerChunk':
+				setChunkingMaxLinesPerChunk(value);
+				break;
+			case 'chunkingMinLinesPerChunk':
+				setChunkingMinLinesPerChunk(value);
+				break;
+			case 'chunkingMinCharsPerChunk':
+				setChunkingMinCharsPerChunk(value);
+				break;
+			case 'chunkingOverlapLines':
+				setChunkingOverlapLines(value);
+				break;
+		}
+	};
+
 	useInput((rawInput, key) => {
 		const input = stripFocusArtifacts(rawInput);
 
@@ -713,13 +710,38 @@ export default function CodeBaseConfigScreen({
 			return;
 		}
 
-		// When editing, only handle submission
+		// Handle numeric field editing
+		if (isEditing && isNumericField(currentField)) {
+			// Handle digit input
+			if (input && input.match(/[0-9]/)) {
+				const currentValue = getNumericValue(currentField);
+				const newValue = parseInt(currentValue.toString() + input, 10);
+				if (!isNaN(newValue)) {
+					setNumericValue(currentField, newValue);
+				}
+			} else if (key.backspace || key.delete) {
+				// Handle backspace/delete
+				const currentValue = getNumericValue(currentField);
+				const currentStr = currentValue.toString();
+				const newStr = currentStr.slice(0, -1);
+				const newValue = parseInt(newStr, 10);
+				setNumericValue(currentField, !isNaN(newValue) ? newValue : 0);
+			} else if (key.return) {
+				// Confirm and exit editing
+				setIsEditing(false);
+			} else if (key.escape) {
+				// Cancel editing
+				setIsEditing(false);
+				loadConfiguration();
+			}
+			return;
+		}
+
+		// When editing non-numeric fields, only handle escape
 		if (isEditing) {
-			// TextInput handles the actual editing
-			// Escape to cancel editing
 			if (key.escape) {
 				setIsEditing(false);
-				loadConfiguration(); // Reset to saved values
+				loadConfiguration();
 			}
 			return;
 		}

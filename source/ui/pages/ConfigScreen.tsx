@@ -57,6 +57,7 @@ type ConfigField =
 	| 'basicModel'
 	| 'maxContextTokens'
 	| 'maxTokens'
+	| 'toolResultTokenLimit'
 	| 'editSimilarityThreshold';
 
 type ProfileMode = 'normal' | 'creating' | 'deleting';
@@ -155,6 +156,7 @@ export default function ConfigScreen({
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
+	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(100000);
 	const [editSimilarityThreshold, setEditSimilarityThreshold] = useState(0.75);
 
 	// UI state
@@ -228,6 +230,7 @@ export default function ConfigScreen({
 			'basicModel',
 			'maxContextTokens',
 			'maxTokens',
+			'toolResultTokenLimit',
 			'editSimilarityThreshold',
 		];
 	};
@@ -313,6 +316,7 @@ export default function ConfigScreen({
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
+		setToolResultTokenLimit(config.toolResultTokenLimit || 100000);
 		setEditSimilarityThreshold(config.editSimilarityThreshold ?? 0.75);
 
 		const systemPromptConfig = getSystemPromptConfig();
@@ -376,6 +380,8 @@ export default function ConfigScreen({
 		if (currentField === 'basicModel') return basicModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
 		if (currentField === 'maxTokens') return maxTokens.toString();
+		if (currentField === 'toolResultTokenLimit')
+			return toolResultTokenLimit.toString();
 		if (currentField === 'editSimilarityThreshold')
 			return editSimilarityThreshold.toString();
 		if (currentField === 'thinkingBudgetTokens')
@@ -491,6 +497,7 @@ export default function ConfigScreen({
 					basicModel,
 					maxContextTokens,
 					maxTokens,
+					toolResultTokenLimit,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -565,6 +572,7 @@ export default function ConfigScreen({
 				basicModel,
 				maxContextTokens,
 				maxTokens,
+				toolResultTokenLimit,
 				editSimilarityThreshold,
 			};
 
@@ -625,6 +633,7 @@ export default function ConfigScreen({
 						basicModel,
 						maxContextTokens,
 						maxTokens,
+						toolResultTokenLimit,
 						editSimilarityThreshold,
 					},
 				};
@@ -1166,7 +1175,7 @@ export default function ConfigScreen({
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
 						>
-							{isActive ? '❯ ' : '  '}
+							{isActive ? '> ' : '  '}
 							{t.configScreen.maxTokens}
 						</Text>
 						{isCurrentlyEditing && (
@@ -1179,6 +1188,34 @@ export default function ConfigScreen({
 						{!isCurrentlyEditing && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuSecondary}>{maxTokens}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'toolResultTokenLimit':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '> ' : '  '}
+							{t.configScreen.toolResultTokenLimit}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {toolResultTokenLimit}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{toolResultTokenLimit}
+								</Text>
 							</Box>
 						)}
 					</Box>
@@ -1349,6 +1386,7 @@ export default function ConfigScreen({
 			if (
 				currentField === 'maxContextTokens' ||
 				currentField === 'maxTokens' ||
+				currentField === 'toolResultTokenLimit' ||
 				currentField === 'thinkingBudgetTokens' ||
 				currentField === 'geminiThinkingBudget' ||
 				currentField === 'editSimilarityThreshold'
@@ -1399,6 +1437,8 @@ export default function ConfigScreen({
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
+							: currentField === 'toolResultTokenLimit'
+							? toolResultTokenLimit
 							: currentField === 'thinkingBudgetTokens'
 							? thinkingBudgetTokens
 							: geminiThinkingBudget;
@@ -1408,6 +1448,8 @@ export default function ConfigScreen({
 							setMaxContextTokens(newValue);
 						} else if (currentField === 'maxTokens') {
 							setMaxTokens(newValue);
+						} else if (currentField === 'toolResultTokenLimit') {
+							setToolResultTokenLimit(newValue);
 						} else if (currentField === 'thinkingBudgetTokens') {
 							setThinkingBudgetTokens(newValue);
 						} else {
@@ -1420,6 +1462,8 @@ export default function ConfigScreen({
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
+							: currentField === 'toolResultTokenLimit'
+							? toolResultTokenLimit
 							: currentField === 'thinkingBudgetTokens'
 							? thinkingBudgetTokens
 							: geminiThinkingBudget;
@@ -1430,6 +1474,8 @@ export default function ConfigScreen({
 						setMaxContextTokens(!isNaN(newValue) ? newValue : 0);
 					} else if (currentField === 'maxTokens') {
 						setMaxTokens(!isNaN(newValue) ? newValue : 0);
+					} else if (currentField === 'toolResultTokenLimit') {
+						setToolResultTokenLimit(!isNaN(newValue) ? newValue : 0);
 					} else if (currentField === 'thinkingBudgetTokens') {
 						setThinkingBudgetTokens(!isNaN(newValue) ? newValue : 0);
 					} else {
@@ -1441,6 +1487,8 @@ export default function ConfigScreen({
 							? 4000
 							: currentField === 'maxTokens'
 							? 100
+							: currentField === 'toolResultTokenLimit'
+							? 1000
 							: currentField === 'thinkingBudgetTokens'
 							? 1000
 							: 1;
@@ -1449,6 +1497,8 @@ export default function ConfigScreen({
 							? maxContextTokens
 							: currentField === 'maxTokens'
 							? maxTokens
+							: currentField === 'toolResultTokenLimit'
+							? toolResultTokenLimit
 							: currentField === 'thinkingBudgetTokens'
 							? thinkingBudgetTokens
 							: geminiThinkingBudget;
@@ -1457,6 +1507,8 @@ export default function ConfigScreen({
 						setMaxContextTokens(finalValue);
 					} else if (currentField === 'maxTokens') {
 						setMaxTokens(finalValue);
+					} else if (currentField === 'toolResultTokenLimit') {
+						setToolResultTokenLimit(finalValue);
 					} else if (currentField === 'thinkingBudgetTokens') {
 						setThinkingBudgetTokens(finalValue);
 					} else {
@@ -1507,6 +1559,7 @@ export default function ConfigScreen({
 				} else if (
 					currentField === 'maxContextTokens' ||
 					currentField === 'maxTokens' ||
+					currentField === 'toolResultTokenLimit' ||
 					currentField === 'thinkingBudgetTokens' ||
 					currentField === 'geminiThinkingBudget'
 				) {

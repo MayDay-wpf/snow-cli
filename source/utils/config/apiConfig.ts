@@ -47,6 +47,8 @@ export interface ApiConfig {
 	customHeadersSchemeId?: string;
 	// 文件搜索编辑相似度阈值 (0.0-1.0, 默认: 0.75, 建议非必要不修改)
 	editSimilarityThreshold?: number;
+	// 工具返回结果的最大 token 限制 (默认: 100000)
+	toolResultTokenLimit?: number;
 }
 
 export interface MCPServer {

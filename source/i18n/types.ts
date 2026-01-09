@@ -106,6 +106,7 @@ export type TranslationKeys = {
 		chunkingOverlapLines: string;
 		saveError: string;
 		gitignoreNotFound: string;
+		enterValue: string;
 	};
 	// System Prompt Config Screen
 	systemPromptConfig: {
@@ -169,6 +170,7 @@ export type TranslationKeys = {
 		basicModel: string;
 		maxContextTokens: string;
 		maxTokens: string;
+		toolResultTokenLimit: string;
 		editSimilarityThreshold: string;
 		notSet: string;
 		enabled: string;

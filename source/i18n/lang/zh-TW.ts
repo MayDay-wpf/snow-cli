@@ -107,6 +107,7 @@ export const zhTW: TranslationKeys = {
 		saveError: '儲存配置失敗',
 		gitignoreNotFound:
 			'無法建立索引：未找到 .gitignore 檔案。請在專案中新增 .gitignore 檔案以防止索引不必要的檔案。',
+		enterValue: '輸入值:',
 	},
 	systemPromptConfig: {
 		title: '系統提示詞管理',
@@ -168,6 +169,7 @@ export const zhTW: TranslationKeys = {
 		basicModel: '基礎模型(輸入後可以搜尋):',
 		maxContextTokens: '最大上下文令牌:',
 		maxTokens: '最大回复令牌數:',
+		toolResultTokenLimit: '工具返回Token限制:',
 		editSimilarityThreshold: '檔案編輯相似度閾值(0-1, 非必要不改):',
 		notSet: '未設定',
 		enabled: '[✓] 已啟用',

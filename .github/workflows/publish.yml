@@ -58,10 +58,10 @@ jobs:
             
             ### What's New
 
-            - Fix some bugs
-            - Add snapshot lock to prevent race conditions when writing files
-            - Simplify sub-agent configuration
-            - Optimize DIffViewer display
+            - Add the distinction between delete and backspace
+            - Optimize the input effect of the input box
+            - The configurable tool can respond to the maximum Token limit, and throw an exception to be truncated.
+            - Optimize the problem of command execution window jitter
                       
             ### Installation
             ```bash

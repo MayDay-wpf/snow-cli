@@ -107,6 +107,7 @@ export const zh: TranslationKeys = {
 		saveError: '保存配置失败',
 		gitignoreNotFound:
 			'无法创建索引：未找到 .gitignore 文件。请在项目中添加 .gitignore 文件以防止索引不必要的文件。',
+		enterValue: '输入值:',
 	},
 	systemPromptConfig: {
 		title: '系统提示词管理',
@@ -168,6 +169,7 @@ export const zh: TranslationKeys = {
 		basicModel: '基础模型(键入可搜索):',
 		maxContextTokens: '最大上下文令牌:',
 		maxTokens: '最大回复令牌数:',
+		toolResultTokenLimit: '工具返回Token限制:',
 		editSimilarityThreshold: '文件编辑相似度阈值(0-1, 非必要不改):',
 		notSet: '未设置',
 		enabled: '[✓] 已启用',
