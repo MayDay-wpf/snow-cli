@@ -18,12 +18,6 @@ interface BashCommandConfirmationProps {
  * @param maxWidth - Maximum width (defaults to 100)
  * @returns Truncated text with ellipsis if needed
  */
-function normalizeSingleLine(text: string): string {
-	// Prevent Ink from rendering embedded newlines/tabs as multi-line text.
-	// Collapse any whitespace into a single space and trim.
-	return text.replace(/\s+/g, ' ').trim();
-}
-
 function sanitizePreviewLine(text: string): string {
 	// Remove ANSI/control sequences and normalize whitespace to keep preview rendering stable.
 	// This preview is not meant to be an exact terminal emulator.
@@ -103,11 +97,8 @@ export function BashCommandConfirmation({
 	}, [command, sensitiveCheck.isSensitive]);
 
 	// Calculate max command display width (leave space for padding and borders)
-	const maxCommandWidth = Math.max(40, terminalWidth - 10);
-	const displayCommand = truncateCommand(
-		normalizeSingleLine(command),
-		maxCommandWidth,
-	);
+	const maxCommandWidth = Math.max(40, terminalWidth - 20);
+	const displayCommand = truncateCommand(command, maxCommandWidth);
 
 	return (
 		<Box
@@ -159,12 +150,15 @@ interface BashCommandExecutionStatusProps {
 
 /**
  * Truncate text to prevent overflow
+ * Strips leading/trailing whitespace and normalizes tabs to prevent render jitter
  */
 function truncateText(text: string, maxWidth: number = 80): string {
-	if (text.length <= maxWidth) {
-		return text;
+	// Normalize: trim and replace tabs with spaces (tab width varies in terminals)
+	const normalized = text.trim().replace(/\t/g, '  ');
+	if (normalized.length <= maxWidth) {
+		return normalized;
 	}
-	return text.slice(0, maxWidth - 3) + '...';
+	return normalized.slice(0, maxWidth - 3) + '...';
 }
 
 export function BashCommandExecutionStatus({
@@ -178,11 +172,8 @@ export function BashCommandExecutionStatus({
 	const timeoutSeconds = Math.round(timeout / 1000);
 
 	// Calculate max command display width (leave space for padding and borders)
-	const maxCommandWidth = Math.max(40, terminalWidth - 10);
-	const displayCommand = truncateCommand(
-		normalizeSingleLine(command),
-		maxCommandWidth,
-	);
+	const maxCommandWidth = Math.max(40, terminalWidth - 20);
+	const displayCommand = truncateCommand(command, maxCommandWidth);
 
 	// Process output: split by newlines, trim per-line trailing whitespace, and clamp to a fixed-height window.
 	// IMPORTANT: render a fixed number of rows with stable keys to avoid Ink diff jitter.
