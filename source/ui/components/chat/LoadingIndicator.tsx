@@ -25,6 +25,7 @@ type LoadingIndicatorProps = {
 	isSaving: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
+	hasBlockingOverlay: boolean;
 	terminalWidth: number;
 	animationFrame: number;
 	retryStatus: {
@@ -62,6 +63,7 @@ export default function LoadingIndicator({
 	isSaving,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
+	hasBlockingOverlay,
 	terminalWidth,
 	animationFrame,
 	retryStatus,
@@ -78,7 +80,8 @@ export default function LoadingIndicator({
 	if (
 		(!isStreaming && !isSaving && !isStopping) ||
 		hasPendingToolConfirmation ||
-		hasPendingUserQuestion
+		hasPendingUserQuestion ||
+		hasBlockingOverlay
 	) {
 		return null;
 	}
