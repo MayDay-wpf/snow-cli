@@ -1,184 +1,242 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Snow AI SSE 客户端测试</title>
+		<link rel="stylesheet" href="style.css" />
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+		/>
+		<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+		<script src="json-viewer.js"></script>
+		<script src="dialogs.js"></script>
+	</head>
 
-<head>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>Snow AI SSE 客户端测试</title>
-	<link rel="stylesheet" href="style.css" />
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-	<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-	<script src="json-viewer.js"></script>
-	<script src="dialogs.js"></script>
-</head>
-
-<body>
-	<div class="container">
-		<div class="header">
-			<h1>Snow AI SSE 客户端测试</h1>
-			<div class="status" id="status">未连接</div>
-		</div>
-
-		<div class="content">
-			<!-- 左侧列 -->
-			<div class="left-column">
-				<!-- 聊天面板 -->
-				<div class="panel">
-					<div class="panel-header">
-						聊天界面
-						<button onclick="newSession()" class="header-btn" title="新建会话">
-							新建会话
-						</button>
-					</div>
-					<div class="panel-body">
-						<div class="chat-box" id="chatBox"></div>
-						<div class="image-preview" id="imagePreview"></div>
-						<div class="input-group">
-					<input type="file" id="imageInput" accept="image/*" multiple style="display: none" />
-					<button onclick="document.getElementById('imageInput').click()" id="imageBtn" title="选择图片">
-						图片
-					</button>
-					<input type="text" id="messageInput" placeholder="输入消息或粘贴图片..."
-						onkeypress="if(event.key==='Enter') sendMessage()" />
-					<button onclick="sendMessage()" id="sendBtn">发送</button>
-					<button onclick="abortTask()" id="abortBtn" disabled style="background-color: #dc3545">
-						终止
-					</button>
-					<button onclick="rollbackSession()" id="rollbackBtn" disabled style="background-color: #6c757d">
-						回滚
-					</button>
-				</div>
-					</div>
-				</div>
-
-				<!-- 配置面板 -->
-				<div class="panel">
-					<div class="panel-header">连接配置</div>
-					<div class="panel-body">
-						<div class="config-section">
-							<label for="serverUrl">服务器地址</label>
-							<input type="text" id="serverUrl" value="http://localhost:3000" style="width: 100%" />
-						</div>
-						<div class="config-section">
-							<label>连接控制</label>
-							<div style="display: flex; gap: 8px">
-								<button onclick="connect()" id="connectBtn">连接</button>
-								<button onclick="disconnect()" id="disconnectBtn" disabled>
-									断开
-								</button>
-							</div>
-						</div>
-						<div class="config-section">
-							<div class="checkbox-option">
-								<input type="checkbox" id="yoloModeCheckbox" />
-								<label for="yoloModeCheckbox">
-									启用 YOLO 模式（自动批准所有工具调用）
-								</label>
-							</div>
-						</div>
-						<div class="config-section">
-							<label>上下文压缩</label>
-							<div style="display: flex; gap: 8px">
-								<button onclick="compressCurrentSession()" id="compressBtn">
-									压缩当前会话
-								</button>
-								<button onclick="compressCustomMessages()" id="compressCustomBtn">
-									压缩自定义消息
-								</button>
-							</div>
-						</div>
-
-					</div>
-				</div>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Snow AI SSE 客户端测试</h1>
+				<div class="status" id="status">未连接</div>
 			</div>
 
-			<!-- 右侧列: 会话列表 + 事件日志 -->
-			<div class="right-column">
-				<div class="panel sessions-panel">
-					<div class="panel-header">会话列表</div>
-					<div class="panel-body">
-						<div class="sessions-toolbar">
-							<input
-								type="text"
-								id="sessionSearchInput"
-								placeholder="搜索标题/摘要/ID"
-								oninput="onSessionSearchChange()"
-							/>
-							<select id="sessionPageSize" onchange="onSessionPageSizeChange()">
-								<option value="10">10</option>
-								<option value="20" selected>20</option>
-								<option value="50">50</option>
-								<option value="100">100</option>
-							</select>
-							<button onclick="refreshSessionList()" id="refreshSessionsBtn" disabled>
-								刷新
-							</button>
-						</div>
-
-						<div class="sessions-meta" id="sessionsMeta">未加载</div>
-						<div class="sessions-list" id="sessionsList"></div>
-
-						<div class="sessions-actions">
-							<button onclick="loadSelectedSession()" id="loadSelectedSessionBtn" disabled>
-								加载到聊天
-							</button>
-							<button onclick="deleteSelectedSession()" id="deleteSelectedSessionBtn" disabled>
-								删除选中
-							</button>
-						</div>
-
-						<div class="sessions-pagination">
-							<button onclick="prevSessionPage()" id="prevPageBtn" disabled>上一页</button>
-							<button onclick="nextSessionPage()" id="nextPageBtn" disabled>下一页</button>
-						</div>
+			<div class="content">
+				<!-- 左侧列 -->
+				<div class="left-column">
+					<!-- 聊天面板 -->
 					<div class="panel">
-					<div class="panel-header">
-						<span>事件日志 <span id="eventCount" class="event-count-badge">0</span></span>
-						<div style="display: flex; gap: 4px;">
-							<button onclick="expandAllEvents()" class="header-btn">全部展开</button>
-							<button onclick="collapseAllEvents()" class="header-btn">全部收起</button>
-							<button onclick="clearLog()" class="header-btn">清空</button>
+						<div class="panel-header">
+							聊天界面
+							<button
+								onclick="newSession()"
+								class="header-btn"
+								title="新建会话"
+							>
+								新建会话
+							</button>
+						</div>
+						<div class="panel-body">
+							<div class="chat-box" id="chatBox"></div>
+							<div class="image-preview" id="imagePreview"></div>
+							<div class="input-group">
+								<input
+									type="file"
+									id="imageInput"
+									accept="image/*"
+									multiple
+									style="display: none"
+								/>
+								<button
+									onclick="document.getElementById('imageInput').click()"
+									id="imageBtn"
+									title="选择图片"
+								>
+									图片
+								</button>
+								<input
+									type="text"
+									id="messageInput"
+									placeholder="输入消息或粘贴图片..."
+									onkeypress="if(event.key==='Enter') sendMessage()"
+								/>
+								<button onclick="sendMessage()" id="sendBtn">发送</button>
+								<button
+									onclick="abortTask()"
+									id="abortBtn"
+									disabled
+									style="background-color: #dc3545"
+								>
+									终止
+								</button>
+								<button
+									onclick="rollbackSession()"
+									id="rollbackBtn"
+									disabled
+									style="background-color: #6c757d"
+								>
+									回滚
+								</button>
+							</div>
 						</div>
 					</div>
-					<div class="panel-body">
-						<div class="event-log" id="eventLog"></div>
+
+					<!-- 配置面板 -->
+					<div class="panel">
+						<div class="panel-header">连接配置</div>
+						<div class="panel-body">
+							<div class="config-section">
+								<label for="serverUrl">服务器地址</label>
+								<input
+									type="text"
+									id="serverUrl"
+									value="http://localhost:3000"
+									style="width: 100%"
+								/>
+							</div>
+							<div class="config-section">
+								<label>连接控制</label>
+								<div style="display: flex; gap: 8px">
+									<button onclick="connect()" id="connectBtn">连接</button>
+									<button onclick="disconnect()" id="disconnectBtn" disabled>
+										断开
+									</button>
+								</div>
+							</div>
+							<div class="config-section">
+								<div class="checkbox-option">
+									<input type="checkbox" id="yoloModeCheckbox" />
+									<label for="yoloModeCheckbox">
+										启用 YOLO 模式（自动批准所有工具调用）
+									</label>
+								</div>
+							</div>
+							<div class="config-section">
+								<label>上下文压缩</label>
+								<div style="display: flex; gap: 8px">
+									<button onclick="compressCurrentSession()" id="compressBtn">
+										压缩当前会话
+									</button>
+									<button
+										onclick="compressCustomMessages()"
+										id="compressCustomBtn"
+									>
+										压缩自定义消息
+									</button>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
-				</div>
+
+				<!-- 右侧列: 会话列表 + 事件日志 -->
+				<div class="right-column">
+					<div class="panel sessions-panel">
+						<div class="panel-header">会话列表</div>
+						<div class="panel-body">
+							<div class="sessions-toolbar">
+								<input
+									type="text"
+									id="sessionSearchInput"
+									placeholder="搜索标题/摘要/ID"
+									oninput="onSessionSearchChange()"
+								/>
+								<select
+									id="sessionPageSize"
+									onchange="onSessionPageSizeChange()"
+								>
+									<option value="10">10</option>
+									<option value="20" selected>20</option>
+									<option value="50">50</option>
+									<option value="100">100</option>
+								</select>
+								<button
+									onclick="refreshSessionList()"
+									id="refreshSessionsBtn"
+									disabled
+								>
+									刷新
+								</button>
+							</div>
+
+							<div class="sessions-meta" id="sessionsMeta">未加载</div>
+							<div class="sessions-list" id="sessionsList"></div>
+
+							<div class="sessions-actions">
+								<button
+									onclick="loadSelectedSession()"
+									id="loadSelectedSessionBtn"
+									disabled
+								>
+									加载到聊天
+								</button>
+								<button
+									onclick="deleteSelectedSession()"
+									id="deleteSelectedSessionBtn"
+									disabled
+								>
+									删除选中
+								</button>
+							</div>
+
+							<div class="sessions-pagination">
+								<button onclick="prevSessionPage()" id="prevPageBtn" disabled>
+									上一页
+								</button>
+								<button onclick="nextSessionPage()" id="nextPageBtn" disabled>
+									下一页
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<div class="panel">
+						<div class="panel-header">
+							<span
+								>事件日志
+								<span id="eventCount" class="event-count-badge">0</span></span
+							>
+							<div style="display: flex; gap: 4px">
+								<button onclick="expandAllEvents()" class="header-btn">
+									全部展开
+								</button>
+								<button onclick="collapseAllEvents()" class="header-btn">
+									全部收起
+								</button>
+								<button onclick="clearLog()" class="header-btn">清空</button>
+							</div>
+						</div>
+						<div class="panel-body">
+							<div class="event-log" id="eventLog"></div>
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
-	</div>
-	</div>
-</div>
 
-<!-- 工具确认对话框 -->
-<div id="toolConfirmationModal" class="modal-overlay" style="display: none">
-	<div class="modal-dialog">
-		<div class="modal-header">
-			<h3>工具执行确认</h3>
+		<!-- 工具确认对话框 -->
+		<div id="toolConfirmationModal" class="modal-overlay" style="display: none">
+			<div class="modal-dialog">
+				<div class="modal-header">
+					<h3>工具执行确认</h3>
+				</div>
+				<div class="modal-body" id="toolConfirmationBody"></div>
+				<div class="modal-footer" id="toolConfirmationFooter"></div>
+			</div>
 		</div>
-		<div class="modal-body" id="toolConfirmationBody"></div>
-		<div class="modal-footer" id="toolConfirmationFooter"></div>
-	</div>
-</div>
 
-<!-- 用户问题对话框 -->
-<div id="userQuestionModal" class="modal-overlay" style="display: none">
-	<div class="modal-dialog">
-		<div class="modal-header">
-			<h3 id="userQuestionTitle">问题</h3>
+		<!-- 用户问题对话框 -->
+		<div id="userQuestionModal" class="modal-overlay" style="display: none">
+			<div class="modal-dialog">
+				<div class="modal-header">
+					<h3 id="userQuestionTitle">问题</h3>
+				</div>
+				<div class="modal-body" id="userQuestionBody"></div>
+				<div class="modal-footer" id="userQuestionFooter"></div>
+			</div>
 		</div>
-		<div class="modal-body" id="userQuestionBody"></div>
-		<div class="modal-footer" id="userQuestionFooter"></div>
-	</div>
-</div>
 
-<script src="app.js"></script>
-
-</body>
-
+		<script src="app.js"></script>
+	</body>
 </html>

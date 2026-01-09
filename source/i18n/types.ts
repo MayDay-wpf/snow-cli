@@ -600,13 +600,16 @@ export type TranslationKeys = {
 			enterToSave: string;
 		};
 	};
-	// Custom Command Config
 	customCommand: {
 		title: string;
 		nameLabel: string;
 		namePlaceholder: string;
 		commandLabel: string;
 		commandPlaceholder: string;
+		descriptionLabel: string;
+		descriptionPlaceholder: string;
+		descriptionHint: string;
+		descriptionNotSet: string;
 		typeLabel: string;
 		typeExecute: string;
 		typePrompt: string;
