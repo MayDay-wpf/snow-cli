@@ -200,6 +200,31 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		};
 	}, []);
 
+	// Track if Delete key was pressed (detected via raw stdin)
+	const deleteKeyPressed = useRef<boolean>(false);
+
+	// Listen to raw stdin to detect Delete key (escape sequence \x1b[3~)
+	// ink's useInput doesn't distinguish between Backspace and Delete
+	useEffect(() => {
+		const handleRawInput = (data: Buffer) => {
+			const str = data.toString();
+			// Delete key sends escape sequence: ESC [ 3 ~
+			if (str === '\x1b[3~') {
+				deleteKeyPressed.current = true;
+			}
+		};
+
+		if (process.stdin.isTTY) {
+			process.stdin.on('data', handleRawInput);
+		}
+
+		return () => {
+			if (process.stdin.isTTY) {
+				process.stdin.off('data', handleRawInput);
+			}
+		};
+	}, []);
+
 	// Force immediate state update for critical operations like backspace
 	const forceStateUpdate = () => {
 		const text = buffer.getFullText();
@@ -747,8 +772,20 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Backspace
-		if (key.backspace || key.delete) {
+		// Delete key - delete character after cursor
+		// Detected via raw stdin listener because ink doesn't distinguish Delete from Backspace
+		if (deleteKeyPressed.current) {
+			deleteKeyPressed.current = false;
+			buffer.delete();
+			forceStateUpdate();
+			return;
+		}
+
+		// Backspace - delete character before cursor
+		// Check both ink's key detection and raw input codes
+		const isBackspace =
+			key.backspace || key.delete || input === '\x7f' || input === '\x08';
+		if (isBackspace) {
 			buffer.backspace();
 			forceStateUpdate();
 			return;
