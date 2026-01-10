@@ -46,6 +46,7 @@ type PanelsManagerProps = {
 		command: string,
 		type: 'execute' | 'prompt',
 		location: CommandLocation,
+		description?: string,
 	) => Promise<void>;
 	onSkillsSave: (
 		skillName: string,

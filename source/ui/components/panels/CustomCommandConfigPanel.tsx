@@ -15,6 +15,7 @@ interface Props {
 		command: string,
 		type: 'execute' | 'prompt',
 		location: CommandLocation,
+		description?: string,
 	) => Promise<void>;
 	onCancel: () => void;
 	projectRoot?: string;
@@ -28,10 +29,11 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 	const {theme} = useTheme();
 	const {t} = useI18n();
 	const [step, setStep] = useState<
-		'name' | 'command' | 'type' | 'location' | 'confirm'
+		'name' | 'command' | 'description' | 'type' | 'location' | 'confirm'
 	>('name');
 	const [commandName, setCommandName] = useState('');
 	const [commandText, setCommandText] = useState('');
+	const [commandDescription, setCommandDescription] = useState('');
 	const [commandType, setCommandType] = useState<'execute' | 'prompt'>(
 		'execute',
 	);
@@ -121,13 +123,28 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 	const handleCommandSubmit = useCallback((value: string) => {
 		if (value.trim()) {
 			setCommandText(value.trim());
-			setStep('type');
+			setStep('description');
 		}
 	}, []);
 
+	const handleDescriptionSubmit = useCallback((value: string) => {
+		setCommandDescription(value.trim());
+		setStep('type');
+	}, []);
+
 	const handleConfirm = useCallback(async () => {
-		await onSave(commandName, commandText, commandType, location);
-	}, [commandName, commandText, commandType, location, onSave]);
+		const trimmedDescription = commandDescription.trim();
+		const description =
+			trimmedDescription.length > 0 ? trimmedDescription : undefined;
+		await onSave(commandName, commandText, commandType, location, description);
+	}, [
+		commandName,
+		commandText,
+		commandType,
+		location,
+		commandDescription,
+		onSave,
+	]);
 
 	const handleCancel = useCallback(() => {
 		onCancel();
@@ -184,6 +201,40 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					<TextInput
 						placeholder={t.customCommand.commandPlaceholder}
 						onSubmit={handleCommandSubmit}
+					/>
+					<Box marginTop={1}>
+						<Text dimColor>{t.customCommand.escCancel}</Text>
+					</Box>
+				</Box>
+			)}
+
+			{step === 'description' && (
+				<Box flexDirection="column">
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.nameLabel}{' '}
+							<Text bold color={theme.colors.success}>
+								{commandName}
+							</Text>
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.commandLabel}{' '}
+							<Text color={theme.colors.menuNormal}>{commandText}</Text>
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.descriptionLabel}
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text dimColor>{t.customCommand.descriptionHint}</Text>
+					</Box>
+					<TextInput
+						placeholder={t.customCommand.descriptionPlaceholder}
+						onSubmit={handleDescriptionSubmit}
 					/>
 					<Box marginTop={1}>
 						<Text dimColor>{t.customCommand.escCancel}</Text>
@@ -254,6 +305,14 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 							</Text>
 						</Text>
 					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.descriptionLabel}{' '}
+							<Text color={theme.colors.menuNormal}>
+								{commandDescription || t.customCommand.descriptionNotSet}
+							</Text>
+						</Text>
+					</Box>
 					<Box marginBottom={1} marginTop={1}>
 						<Text color={theme.colors.text}>
 							{t.customCommand.locationLabel}
@@ -314,6 +373,14 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 								{commandType === 'execute'
 									? t.customCommand.typeExecute
 									: t.customCommand.typePrompt}
+							</Text>
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.descriptionLabel}{' '}
+							<Text color={theme.colors.menuNormal}>
+								{commandDescription || t.customCommand.descriptionNotSet}
 							</Text>
 						</Text>
 					</Box>

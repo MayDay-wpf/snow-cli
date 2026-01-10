@@ -1263,12 +1263,18 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
-				onCustomCommandSave={async (name, command, type, location) => {
+				onCustomCommandSave={async (
+					name,
+					command,
+					type,
+					location,
+					description,
+				) => {
 					await saveCustomCommand(
 						name,
 						command,
 						type,
-						undefined,
+						description,
 						location,
 						workingDirectory,
 					);
