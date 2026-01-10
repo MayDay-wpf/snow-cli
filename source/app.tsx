@@ -1,6 +1,7 @@
 import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
+import {useCursorHide} from './hooks/ui/useCursorHide.js';
 
 // Lazy load all page components to improve startup time
 // Only load components when they are actually needed
@@ -54,6 +55,9 @@ function ShowTaskListWrapper() {
 		});
 	const {columns: terminalWidth} = useTerminalSize();
 	const loadingFallback = null;
+
+	// Hide terminal cursor to prevent flickering during page transitions
+	useCursorHide();
 
 	// Global exit handler
 	useGlobalExit(setExitNotification);
@@ -138,6 +142,9 @@ function AppContent({
 
 	// Get terminal size for proper width calculation
 	const {columns: terminalWidth} = useTerminalSize();
+
+	// Hide terminal cursor to prevent flickering during page transitions
+	useCursorHide();
 
 	// Global exit handler (must be inside I18nProvider)
 	useGlobalExit(setExitNotification);
