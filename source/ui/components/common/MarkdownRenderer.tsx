@@ -30,9 +30,13 @@ md.use(terminal, {
 // Override paragraph rules to reduce excessive blank lines from markdown-it-terminal
 // The library adds newline(2) after paragraphs which creates too much whitespace
 const HEADING_STYLE = {open: '\x1b[32m\x1b[1m', close: '\x1b[22m\x1b[39m'};
-const FIRST_HEADING_STYLE = {open: '\x1b[35m\x1b[4m\x1b[1m', close: '\x1b[22m\x1b[24m\x1b[39m'};
+const FIRST_HEADING_STYLE = {
+	open: '\x1b[35m\x1b[4m\x1b[1m',
+	close: '\x1b[22m\x1b[24m\x1b[39m',
+};
 
-md.renderer.rules['paragraph_open'] = (tokens, idx) => tokens[idx]?.hidden ? '' : '';
+md.renderer.rules['paragraph_open'] = (tokens, idx) =>
+	tokens[idx]?.hidden ? '' : '';
 md.renderer.rules['paragraph_close'] = (tokens, idx) => {
 	if (tokens[idx]?.hidden) {
 		return tokens[idx + 1]?.type?.endsWith('close') ? '' : '\n';
@@ -57,6 +61,14 @@ md.renderer.rules['bullet_list_close'] = () => '\n';
 md.renderer.rules['ordered_list_open'] = () => '';
 md.renderer.rules['ordered_list_close'] = () => '\n';
 md.renderer.rules['list_item_close'] = () => '\n';
+
+// Override hr rule to fix width calculation issue
+// markdown-it-terminal uses new Array(n).join('-') which produces n-1 chars
+// Subtract 3 to account for ink framework rendering margins
+md.renderer.rules['hr'] = () => {
+	const width = (process.stdout.columns || 80) - 4;
+	return '\n' + '-'.repeat(width) + '\n\n';
+};
 
 // Add markdown-it-math plugin for LaTeX math rendering
 md.use(markdownItMath, {
