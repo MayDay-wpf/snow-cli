@@ -96,7 +96,28 @@ export function getSystemEnvironmentInfo(
 
 	const shell = (() => {
 		const platformType = os.platform();
+
+		// Helper to detect Unix shell from SHELL env
+		const getUnixShell = (): string | null => {
+			const shellPath = process.env['SHELL'] || '';
+			const shellName = path.basename(shellPath).toLowerCase();
+			if (shellName.includes('zsh')) return 'zsh';
+			if (shellName.includes('bash')) return 'bash';
+			if (shellName.includes('fish')) return 'fish';
+			if (shellName.includes('pwsh')) return 'PowerShell';
+			if (shellName.includes('sh')) return 'sh';
+			return shellName || null;
+		};
+
 		if (platformType === 'win32') {
+			// Check for Unix-like environments first (MSYS2, Git Bash, Cygwin)
+			const msystem = process.env['MSYSTEM']; // MSYS2/Git Bash
+			if (msystem) {
+				const unixShell = getUnixShell();
+				return unixShell || 'bash';
+			}
+
+			// Fallback to native Windows shell detection
 			const psType = detectWindowsPowerShell();
 			if (psType) {
 				if (includePowerShellVersion) {
@@ -108,14 +129,7 @@ export function getSystemEnvironmentInfo(
 		}
 
 		// On Unix-like systems, use SHELL environment variable
-		const shellPath = process.env['SHELL'] || '';
-		const shellName = path.basename(shellPath).toLowerCase();
-		if (shellName.includes('zsh')) return 'zsh';
-		if (shellName.includes('bash')) return 'bash';
-		if (shellName.includes('fish')) return 'fish';
-		if (shellName.includes('pwsh')) return 'PowerShell';
-		if (shellName.includes('sh')) return 'sh';
-		return shellName || 'shell';
+		return getUnixShell() || 'shell';
 	})();
 
 	const workingDirectory = process.cwd();
