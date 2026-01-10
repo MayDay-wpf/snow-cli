@@ -1,4 +1,4 @@
-import {exec} from 'child_process';
+import {exec, spawn} from 'child_process';
 // Type definitions
 import type {CommandExecutionResult} from './types/bash.types.js';
 // Utility functions
@@ -66,11 +66,17 @@ export class TerminalCommandService {
 				);
 			}
 
-			// Execute command using system default shell and register the process
-			const childProcess = exec(command, {
+			// Execute command using system default shell and register the process.
+			// Using spawn (instead of exec) avoids relying on inherited stdio and is
+			// more resilient in some terminals where `exec` can fail with `spawn EBADF`.
+			const isWindows = process.platform === 'win32';
+			const shell = isWindows ? 'cmd' : 'sh';
+			const shellArgs = isWindows ? ['/c', command] : ['-c', command];
+
+			const childProcess = spawn(shell, shellArgs, {
 				cwd: this.workingDirectory,
-				timeout,
-				maxBuffer: this.maxOutputLength,
+				stdio: ['ignore', 'pipe', 'pipe'],
+				windowsHide: true,
 				env: {
 					...process.env,
 					...(process.platform !== 'win32' && {

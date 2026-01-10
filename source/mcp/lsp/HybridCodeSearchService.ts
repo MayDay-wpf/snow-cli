@@ -7,6 +7,7 @@ export class HybridCodeSearchService {
 	private lspManager: LSPManager;
 	private regexSearch: ACECodeSearchService;
 	private lspTimeout = 3000; // 3秒超时
+	private csharpLspTimeout = 15000; // csharp-ls cold start / solution load can be slow
 
 	constructor(basePath: string = process.cwd()) {
 		this.lspManager = new LSPManager(basePath);
@@ -46,21 +47,53 @@ export class HybridCodeSearchService {
 	): Promise<CodeSymbol | null> {
 		let position: {line: number; column: number} | null = null;
 
-		// If line and column are provided, use them directly
+		const fs = await import('fs/promises');
+		const content = await fs.readFile(contextFile, 'utf-8');
+		const lines = content.split('\n');
+
+		// If line and column are provided, prefer them, but for C# verify/adjust
+		// the column so it points to the actual symbol token.
 		if (line !== undefined && column !== undefined) {
-			position = {line, column};
+			let adjustedLine = line;
+			let adjustedColumn = column;
+
+			if (contextFile.endsWith('.cs')) {
+				const tryFindOnLine = (lineIndex: number): number | null => {
+					const textLine = lines[lineIndex];
+					if (!textLine) return null;
+					const symbolRegex = new RegExp(`\\b${symbolName}\\b`);
+					const match = symbolRegex.exec(textLine);
+					return match ? match.index : null;
+				};
+
+				const foundOnSameLine =
+					adjustedLine >= 0 && adjustedLine < lines.length
+						? tryFindOnLine(adjustedLine)
+						: null;
+				const foundOnPrevLine =
+					foundOnSameLine === null &&
+					adjustedLine - 1 >= 0 &&
+					adjustedLine - 1 < lines.length
+						? tryFindOnLine(adjustedLine - 1)
+						: null;
+
+				if (foundOnSameLine !== null) {
+					adjustedColumn = foundOnSameLine;
+				} else if (foundOnPrevLine !== null) {
+					adjustedLine = adjustedLine - 1;
+					adjustedColumn = foundOnPrevLine;
+				}
+			}
+
+			position = {line: adjustedLine, column: adjustedColumn};
 		} else {
 			// Otherwise, find the first occurrence of the symbol in contextFile
-			const fs = await import('fs/promises');
-			const content = await fs.readFile(contextFile, 'utf-8');
-			const lines = content.split('\n');
-
 			for (let i = 0; i < lines.length; i++) {
-				const line = lines[i];
-				if (!line) continue;
+				const textLine = lines[i];
+				if (!textLine) continue;
 
 				const symbolRegex = new RegExp(`\\b${symbolName}\\b`);
-				const match = symbolRegex.exec(line);
+				const match = symbolRegex.exec(textLine);
 
 				if (match) {
 					position = {line: i, column: match.index};
@@ -74,8 +107,11 @@ export class HybridCodeSearchService {
 		}
 
 		// Now ask LSP to find the definition (which may be in another file)
+		const timeoutMs = contextFile.endsWith('.cs')
+			? this.csharpLspTimeout
+			: this.lspTimeout;
 		const timeoutPromise = new Promise<null>(resolve =>
-			setTimeout(() => resolve(null), this.lspTimeout),
+			setTimeout(() => resolve(null), timeoutMs),
 		);
 
 		const lspPromise = this.lspManager.findDefinition(

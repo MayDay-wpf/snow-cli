@@ -59,10 +59,10 @@ export const DEFAULT_LSP_SERVERS: Record<string, LSPServerConfig> = {
 		initializationOptions: {},
 	},
 	csharp: {
-		command: 'omnisharp',
-		args: ['--languageserver'],
+		command: 'csharp-ls',
+		args: [],
 		fileExtensions: ['.cs'],
-		installCommand: 'brew install omnisharp',
+		installCommand: 'dotnet tool install --global csharp-ls',
 		initializationOptions: {},
 	},
 };

@@ -1,4 +1,5 @@
 import {spawn, type ChildProcess} from 'child_process';
+import {promises as fs} from 'fs';
 import * as path from 'path';
 import {
 	createMessageConnection,
@@ -37,8 +38,39 @@ export class LSPClient {
 	private isInitialized = false;
 	private openDocuments: Set<string> = new Set();
 	private documentVersions: Map<string, number> = new Map();
+	private csharpSolutionLoaded = false;
+	private csharpSolutionLoadPromise?: Promise<void>;
+	private resolveCsharpSolutionLoad?: () => void;
 
 	constructor(private config: LSPClientConfig) {}
+
+	private async findCsharpSolutionFile(
+		rootPath: string,
+	): Promise<string | null> {
+		// If caller passes a .sln path directly, respect it.
+		if (rootPath.toLowerCase().endsWith('.sln')) {
+			return rootPath;
+		}
+
+		try {
+			const entries = await fs.readdir(rootPath, {withFileTypes: true});
+			const solutions = entries
+				.filter(
+					entry => entry.isFile() && entry.name.toLowerCase().endsWith('.sln'),
+				)
+				.map(entry => entry.name)
+				.sort((a, b) => a.localeCompare(b));
+
+			if (solutions.length === 0) return null;
+			if (solutions.length === 1) return path.join(rootPath, solutions[0]!);
+
+			const preferredName = `${path.basename(rootPath)}.sln`;
+			const preferred = solutions.find(s => s === preferredName);
+			return path.join(rootPath, preferred ?? solutions[0]!);
+		} catch {
+			return null;
+		}
+	}
 
 	async start(): Promise<void> {
 		if (this.isInitialized) {
@@ -46,14 +78,28 @@ export class LSPClient {
 		}
 
 		try {
-			// For OmniSharp and JDTLS, pass the project root as an argument
 			const args = [...this.config.args];
-			if (
-				this.config.language === 'csharp' ||
-				this.config.language === 'java'
-			) {
-				// OmniSharp: omnisharp --languageserver -s <project_path>
-				// JDTLS: jdtls -data <workspace>
+
+			if (this.config.language === 'csharp') {
+				// csharp-ls: --solution/-s <solution>
+				// Compatibility: if rootPath is a directory, auto-pick a .sln in it.
+				const hasSolutionArg =
+					args.includes('-s') || args.includes('--solution');
+				if (!hasSolutionArg) {
+					const slnPath = await this.findCsharpSolutionFile(
+						this.config.rootPath,
+					);
+					if (slnPath) {
+						// Pass absolute path to avoid ambiguity; csharp-ls accepts absolute.
+						args.push('-s', slnPath);
+					} else {
+						console.log(
+							`[LSP:csharp] No .sln found under rootPath=${this.config.rootPath}; skip -s and rely on fallback.`,
+						);
+					}
+				}
+			} else if (this.config.language === 'java') {
+				// Keep existing behavior: pass project root for Java servers that need it.
 				args.push('-s', this.config.rootPath);
 			}
 
@@ -69,7 +115,33 @@ export class LSPClient {
 				new StreamMessageWriter(this.process.stdin!),
 			);
 
+			// Some servers (notably csharp-ls) will call back into the client.
+			// If we don't implement these, the server may crash with RemoteMethodNotFound.
+			this.connection.onRequest('window/workDoneProgress/create', () => null);
+			this.connection.onRequest('client/registerCapability', () => null);
+			this.connection.onRequest('workspace/configuration', () => []);
+			this.connection.onNotification('window/logMessage', (params: any) => {
+				const message =
+					typeof params?.message === 'string' ? params.message : '';
+				if (
+					!this.csharpSolutionLoaded &&
+					message.includes('Finished loading solution')
+				) {
+					this.csharpSolutionLoaded = true;
+					this.resolveCsharpSolutionLoad?.();
+				}
+			});
+			this.connection.onNotification('window/showMessage', (_params: any) => {
+				// ignored
+			});
+
 			this.connection.listen();
+			if (this.config.language === 'csharp') {
+				this.csharpSolutionLoaded = false;
+				this.csharpSolutionLoadPromise = new Promise<void>(resolve => {
+					this.resolveCsharpSolutionLoad = resolve;
+				});
+			}
 			const initParams: InitializeParams = {
 				processId: process.pid,
 				rootPath: this.config.rootPath,
@@ -217,6 +289,13 @@ export class LSPClient {
 	async gotoDefinition(uri: string, position: Position): Promise<Location[]> {
 		if (!this.connection || !this.isInitialized) {
 			throw new Error('LSP client not initialized');
+		}
+
+		if (this.config.language === 'csharp' && this.csharpSolutionLoadPromise) {
+			await Promise.race([
+				this.csharpSolutionLoadPromise,
+				new Promise<void>(resolve => setTimeout(resolve, 15000)),
+			]);
 		}
 
 		if (!this.capabilities?.definitionProvider) {

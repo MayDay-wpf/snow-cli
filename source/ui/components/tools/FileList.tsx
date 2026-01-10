@@ -154,8 +154,9 @@ const FileList = memo(
 								}
 
 								// Skip hidden files and ignore patterns
+								// Note: .snow directory is explicitly allowed
 								if (
-									entry.name.startsWith('.') ||
+									(entry.name.startsWith('.') && entry.name !== '.snow') ||
 									ignorePatterns.includes(entry.name)
 								) {
 									continue;
