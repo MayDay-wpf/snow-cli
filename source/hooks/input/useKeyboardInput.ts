@@ -391,14 +391,24 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// Check for double escape
 			if (escapeKeyCount >= 1) {
 				// This will be 2 after increment
-				const userMessages = getUserMessages();
-				if (userMessages.length > 0) {
-					setShowHistoryMenu(true);
-					setHistorySelectedIndex(userMessages.length - 1); // Reset selection to last item
-					setEscapeKeyCount(0);
-					if (escapeKeyTimer.current) {
-						clearTimeout(escapeKeyTimer.current);
-						escapeKeyTimer.current = null;
+				setEscapeKeyCount(0);
+				if (escapeKeyTimer.current) {
+					clearTimeout(escapeKeyTimer.current);
+					escapeKeyTimer.current = null;
+				}
+
+				// If input has content, clear it; otherwise open history menu
+				const text = buffer.getFullText();
+				if (text.trim().length > 0) {
+					// Clear input content
+					buffer.setText('');
+					forceStateUpdate();
+				} else {
+					// Open history menu
+					const userMessages = getUserMessages();
+					if (userMessages.length > 0) {
+						setShowHistoryMenu(true);
+						setHistorySelectedIndex(userMessages.length - 1); // Reset selection to last item
 					}
 				}
 			}

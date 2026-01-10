@@ -6,6 +6,14 @@ import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 
+/**
+ * Clean thinking content by removing XML-like tags
+ * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
+ */
+function cleanThinkingContent(content: string): string {
+	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
+}
+
 export interface CompressionResult {
 	summary: string;
 	usage: {
@@ -338,13 +346,18 @@ function formatMessageForTranscript(msg: ChatMessage): string | null {
 
 	// Include thinking/reasoning if present (important context)
 	if (msg.thinking) {
-		parts.push(`[Thinking]\n${msg.thinking}`);
+		const thinkingContent = typeof msg.thinking === 'string'
+			? msg.thinking
+			: msg.thinking.thinking;
+		if (thinkingContent) {
+			parts.push(`[Thinking]\n${cleanThinkingContent(thinkingContent)}`);
+		}
 	}
 	if (msg.reasoning) {
 		parts.push(`[Reasoning]\n${msg.reasoning}`);
 	}
 	if (msg.reasoning_content) {
-		parts.push(`[Reasoning]\n${msg.reasoning_content}`);
+		parts.push(`[Reasoning]\n${cleanThinkingContent(msg.reasoning_content)}`);
 	}
 
 	return parts.length > 0 ? parts.join('\n') : null;

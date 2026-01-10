@@ -599,9 +599,8 @@ const Startup = ({
 
 // Disable bracketed paste mode on startup
 process.stdout.write('\x1b[?2004l');
-// Clear the early loading indicator and show cursor
-process.stdout.write('\x1b[2K\r'); // Clear line
-process.stdout.write('\x1b[?25h'); // Show cursor
+// Clear the early loading indicator
+process.stdout.write('\x1b[2K\r');
 
 // Track cleanup state to prevent multiple cleanup calls
 let isCleaningUp = false;
@@ -609,6 +608,8 @@ let isCleaningUp = false;
 // Synchronous cleanup for 'exit' event (cannot be async)
 const cleanupSync = () => {
 	process.stdout.write('\x1b[?2004l');
+	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
+	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
 	const deps = (global as any).__deps;
 	if (deps) {
 		// Kill all child processes synchronously
@@ -624,6 +625,8 @@ const cleanupAsync = async () => {
 	isCleaningUp = true;
 
 	process.stdout.write('\x1b[?2004l');
+	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
+	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
 	const deps = (global as any).__deps;
 	if (deps) {
 		// Close MCP connections first (graceful shutdown with timeout)

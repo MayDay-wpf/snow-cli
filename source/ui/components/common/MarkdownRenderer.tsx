@@ -27,6 +27,49 @@ md.use(terminal, {
 	unescape: true,
 });
 
+// Override paragraph rules to reduce excessive blank lines from markdown-it-terminal
+// The library adds newline(2) after paragraphs which creates too much whitespace
+const HEADING_STYLE = {open: '\x1b[32m\x1b[1m', close: '\x1b[22m\x1b[39m'};
+const FIRST_HEADING_STYLE = {
+	open: '\x1b[35m\x1b[4m\x1b[1m',
+	close: '\x1b[22m\x1b[24m\x1b[39m',
+};
+
+md.renderer.rules['paragraph_open'] = (tokens, idx) =>
+	tokens[idx]?.hidden ? '' : '';
+md.renderer.rules['paragraph_close'] = (tokens, idx) => {
+	if (tokens[idx]?.hidden) {
+		return tokens[idx + 1]?.type?.endsWith('close') ? '' : '\n';
+	}
+	return '\n';
+};
+
+md.renderer.rules['heading_open'] = (tokens, idx) => {
+	if (tokens[idx + 1]?.content === '') return '';
+	const style = tokens[idx]?.tag === 'h1' ? FIRST_HEADING_STYLE : HEADING_STYLE;
+	return '\n' + style.open;
+};
+
+md.renderer.rules['heading_close'] = (tokens, idx) => {
+	if (tokens[idx - 1]?.content === '') return '';
+	const style = tokens[idx]?.tag === 'h1' ? FIRST_HEADING_STYLE : HEADING_STYLE;
+	return style.close + '\n\n';
+};
+
+md.renderer.rules['bullet_list_open'] = () => '';
+md.renderer.rules['bullet_list_close'] = () => '\n';
+md.renderer.rules['ordered_list_open'] = () => '';
+md.renderer.rules['ordered_list_close'] = () => '\n';
+md.renderer.rules['list_item_close'] = () => '\n';
+
+// Override hr rule to fix width calculation issue
+// markdown-it-terminal uses new Array(n).join('-') which produces n-1 chars
+// Subtract 3 to account for ink framework rendering margins
+md.renderer.rules['hr'] = () => {
+	const width = (process.stdout.columns || 80) - 4;
+	return '\n' + '-'.repeat(width) + '\n\n';
+};
+
 // Add markdown-it-math plugin for LaTeX math rendering
 md.use(markdownItMath, {
 	inlineOpen: '$',
@@ -195,6 +238,31 @@ function renderFallback(content: string): React.ReactElement {
 	);
 }
 
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
+function isEmptyLine(line: string): boolean {
+	return line.replace(ANSI_PATTERN, '').trim() === '';
+}
+
+/** Trim leading/trailing empty lines and collapse consecutive empty lines */
+function trimLines(lines: string[]): string[] {
+	const result: string[] = [];
+	let lastWasEmpty = true; // Start true to skip leading empty lines
+
+	for (const line of lines) {
+		const isEmpty = isEmptyLine(line);
+		if (isEmpty && lastWasEmpty) continue;
+		result.push(line);
+		lastWasEmpty = isEmpty;
+	}
+
+	// Trim trailing empty lines
+	while (result.length > 0 && isEmptyLine(result[result.length - 1]!)) {
+		result.pop();
+	}
+	return result;
+}
+
 export default function MarkdownRenderer({content}: Props) {
 	// Use hybrid rendering: marked for tables, markdown-it for everything else
 
@@ -223,15 +291,7 @@ export default function MarkdownRenderer({content}: Props) {
 			.split('\n')
 			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
 
-		// Remove leading empty lines
-		while (lines.length > 0 && lines[0]?.trim() === '') {
-			lines.shift();
-		}
-
-		// Remove trailing empty lines
-		while (lines.length > 0 && lines[lines.length - 1]?.trim() === '') {
-			lines.pop();
-		}
+		lines = trimLines(lines);
 
 		// Safety check: prevent rendering issues with excessively long output
 		if (lines.length > 500) {

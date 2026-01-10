@@ -91,7 +91,7 @@ export default function LoadingIndicator({
 			<Text color={['#00FFFF', '#1ACEB0'][animationFrame % 2] as any} bold>
 				❆
 			</Text>
-			<Box marginLeft={1} marginBottom={1} flexDirection="column">
+			<Box marginLeft={1} flexDirection="column">
 				{isStopping ? (
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.statusStopping}
