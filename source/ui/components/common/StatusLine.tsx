@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
+import {smartTruncatePath} from '../../../utils/ui/messageFormatter.js';
 
 // 根据平台返回快捷键显示文本: Windows/Linux使用 Alt+P, macOS使用 Ctrl+P
 const getProfileShortcut = () =>
@@ -444,7 +445,7 @@ export default function StatusLine({
 									{editorContext?.activeFile &&
 										t.chatScreen.ideActiveFile.replace(
 											'{file}',
-											editorContext.activeFile,
+											smartTruncatePath(editorContext.activeFile),
 										)}
 									{editorContext?.selectedText &&
 										t.chatScreen.ideSelectedText.replace(
