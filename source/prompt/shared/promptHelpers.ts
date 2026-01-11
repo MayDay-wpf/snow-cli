@@ -18,31 +18,66 @@ export function getSystemPromptWithRole(
 	basePrompt: string,
 	defaultRoleText: string,
 ): string {
-	try {
-		const cwd = process.cwd();
+	const tryReadRole = (rolePath: string): string | null => {
+		try {
+			if (!fs.existsSync(rolePath)) return null;
+			const content = fs.readFileSync(rolePath, 'utf-8').trim();
+			return content || null;
+		} catch {
+			return null;
+		}
+	};
 
-		// First check project ROLE.md
-		const projectRolePath = path.join(cwd, 'ROLE.md');
-		if (fs.existsSync(projectRolePath)) {
-			const roleContent = fs.readFileSync(projectRolePath, 'utf-8').trim();
+	const getActiveRolePath = (location: 'project' | 'global'): string | null => {
+		try {
+			const baseDir =
+				location === 'project'
+					? process.cwd()
+					: path.join(os.homedir(), '.snow');
+			const configPath =
+				location === 'project'
+					? path.join(baseDir, '.snow', 'role.json')
+					: path.join(baseDir, 'role.json');
+
+			let activeRoleId: string | undefined;
+			if (fs.existsSync(configPath)) {
+				try {
+					const raw = fs.readFileSync(configPath, 'utf-8');
+					const parsed = JSON.parse(raw) as {activeRoleId?: string};
+					activeRoleId = parsed.activeRoleId;
+				} catch {
+					// ignore
+				}
+			}
+
+			if (!activeRoleId || activeRoleId === 'active') {
+				return path.join(baseDir, 'ROLE.md');
+			}
+			return path.join(baseDir, `ROLE-${activeRoleId}.md`);
+		} catch {
+			return null;
+		}
+	};
+
+	try {
+		// Priority: Project active (via .snow/role.json) > Global active (via ~/.snow/role.json)
+		const projectActivePath = getActiveRolePath('project');
+		if (projectActivePath) {
+			const roleContent = tryReadRole(projectActivePath);
 			if (roleContent) {
-				// Replace the default role description with project ROLE.md content
 				return basePrompt.replace(defaultRoleText, roleContent);
 			}
 		}
 
-		// If no project ROLE.md, check global ROLE.md
-		const globalRolePath = path.join(os.homedir(), '.snow', 'ROLE.md');
-		if (fs.existsSync(globalRolePath)) {
-			const roleContent = fs.readFileSync(globalRolePath, 'utf-8').trim();
+		const globalActivePath = getActiveRolePath('global');
+		if (globalActivePath) {
+			const roleContent = tryReadRole(globalActivePath);
 			if (roleContent) {
-				// Replace the default role description with global ROLE.md content
 				return basePrompt.replace(defaultRoleText, roleContent);
 			}
 		}
 	} catch (error) {
-		// If reading fails, fall back to default
-		console.error('Failed to read ROLE.md:', error);
+		console.error('Failed to read ROLE configuration:', error);
 	}
 
 	return basePrompt;

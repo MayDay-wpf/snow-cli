@@ -15,6 +15,7 @@ export type PanelState = {
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
+	showRoleList: boolean;
 	showWorkingDirPanel: boolean;
 	showReviewCommitPanel: boolean;
 	showProfilePanel: boolean;
@@ -32,6 +33,7 @@ export type PanelActions = {
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
+	setShowRoleList: Dispatch<SetStateAction<boolean>>;
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
@@ -57,6 +59,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
 	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
+	const [showRoleList, setShowRoleList] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
@@ -85,6 +88,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showSkillsCreation ||
 			showRoleCreation ||
 			showRoleDeletion ||
+			showRoleList ||
 			showReviewCommitPanel ||
 			showProfilePanel ||
 			options.hasPendingRollback ||
@@ -160,6 +164,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		if (showRoleList) {
+			setShowRoleList(false);
+			return true;
+		}
+
 		if (showWorkingDirPanel) {
 			setShowWorkingDirPanel(false);
 			return true;
@@ -188,6 +197,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showSkillsCreation ||
 			showRoleCreation ||
 			showRoleDeletion ||
+			showRoleList ||
 			showWorkingDirPanel ||
 			showReviewCommitPanel ||
 			showProfilePanel
@@ -204,6 +214,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showSkillsCreation,
 		showRoleCreation,
 		showRoleDeletion,
+		showRoleList,
 		showWorkingDirPanel,
 		showReviewCommitPanel,
 		showProfilePanel,
@@ -219,6 +230,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowSkillsCreation,
 		setShowRoleCreation,
 		setShowRoleDeletion,
+		setShowRoleList,
 		setShowWorkingDirPanel,
 		setShowReviewCommitPanel,
 		setShowProfilePanel,

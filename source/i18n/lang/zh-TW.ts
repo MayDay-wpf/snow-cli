@@ -921,6 +921,22 @@ export const zhTW: TranslationKeys = {
 		errorNotFound: 'ROLE.md 檔案不存在',
 		errorUnknown: '未知錯誤',
 	},
+	roleList: {
+		title: 'ROLE 管理',
+		tabGlobal: '全局',
+		tabProject: '項目',
+		noRoles: '沒有找到角色。按 N 創建一個。',
+		active: '啟用',
+		switchSuccess: '角色切換成功',
+		createSuccess: '角色創建成功',
+		deleteSuccess: '角色刪除成功',
+		loading: '處理中...',
+		hints: 'Tab: 切換作用域 | Enter: 啟用 | N: 新建 | D: 刪除 | ESC: 關閉',
+		cannotDeleteActive: '無法刪除啟用的角色',
+		confirmDelete: '確認刪除該角色？',
+		confirmDeleteHint: '按 Y 確認，按 N 取消',
+	},
+
 	askUser: {
 		header: '[需要使用者輸入]',
 		customInputOption: '自訂輸入...',

@@ -976,11 +976,28 @@ export const en: TranslationKeys = {
 		warningNotExistsProject:
 			'Warning: Project ROLE.md does not exist (./ROLE.md)',
 		deleteSuccessMessage:
-			'Deleted ROLE.md successfully! ｜ Location: {location} ｜ Path: {path}',
+			'Deleted ROLE.md successfully! | Location: {location} | Path: {path}',
 		deleteErrorMessage: 'Failed to delete ROLE.md: {error}',
 		errorNotFound: 'ROLE.md file does not exist',
 		errorUnknown: 'Unknown error',
 	},
+	roleList: {
+		title: 'ROLE Management',
+		tabGlobal: 'Global',
+		tabProject: 'Project',
+		noRoles: 'No roles found. Press N to create one.',
+		active: 'Active',
+		switchSuccess: 'Role switched successfully',
+		createSuccess: 'Role created successfully',
+		deleteSuccess: 'Role deleted successfully',
+		loading: 'Processing...',
+		hints:
+			'Tab: Switch scope | Enter: Activate | N: New | D: Delete | ESC: Close',
+		cannotDeleteActive: 'Cannot delete active role',
+		confirmDelete: 'Confirm delete this role?',
+		confirmDeleteHint: 'Press Y to confirm, N to cancel',
+	},
+
 	askUser: {
 		header: '[User Input Required]',
 		customInputOption: 'Custom input...',

@@ -922,6 +922,22 @@ export const zh: TranslationKeys = {
 		errorNotFound: 'ROLE.md 文件不存在',
 		errorUnknown: '未知错误',
 	},
+	roleList: {
+		title: 'ROLE 管理',
+		tabGlobal: '全局',
+		tabProject: '项目',
+		noRoles: '没有找到角色。按 N 创建一个。',
+		active: '激活',
+		switchSuccess: '角色切换成功',
+		createSuccess: '角色创建成功',
+		deleteSuccess: '角色删除成功',
+		loading: '处理中...',
+		hints: 'Tab: 切换作用域 | Enter: 激活 | N: 新建 | D: 删除 | ESC: 关闭',
+		cannotDeleteActive: '无法删除激活的角色',
+		confirmDelete: '确认删除该角色？',
+		confirmDeleteHint: '按 Y 确认，按 N 取消',
+	},
+
 	askUser: {
 		header: '[需要用户输入]',
 		customInputOption: '自定义输入...',

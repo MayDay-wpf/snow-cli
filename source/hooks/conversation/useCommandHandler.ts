@@ -269,6 +269,7 @@ type CommandHandlerOptions = {
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleList: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -564,6 +565,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showRoleDeletion') {
 				options.setShowRoleDeletion(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showRoleList') {
+				options.setShowRoleList(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

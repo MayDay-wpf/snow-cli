@@ -920,6 +920,21 @@ export type TranslationKeys = {
 		errorNotFound: string;
 		errorUnknown: string;
 	};
+	roleList: {
+		title: string;
+		tabGlobal: string;
+		tabProject: string;
+		noRoles: string;
+		active: string;
+		switchSuccess: string;
+		createSuccess: string;
+		deleteSuccess: string;
+		loading: string;
+		hints: string;
+		cannotDeleteActive: string;
+		confirmDelete: string;
+		confirmDeleteHint: string;
+	};
 	// AskUserQuestion Component
 	askUser: {
 		header: string;

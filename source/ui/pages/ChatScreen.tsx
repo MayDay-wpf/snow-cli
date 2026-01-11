@@ -773,6 +773,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
+		setShowRoleList: panelState.setShowRoleList,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowPermissionsPanel,
@@ -1257,12 +1258,14 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				showSkillsCreation={panelState.showSkillsCreation}
 				showRoleCreation={panelState.showRoleCreation}
 				showRoleDeletion={panelState.showRoleDeletion}
+				showRoleList={panelState.showRoleList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}
 				setShowRoleCreation={panelState.setShowRoleCreation}
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
+				setShowRoleList={panelState.setShowRoleList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (
@@ -1450,7 +1453,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
+			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
@@ -1463,6 +1466,7 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 					panelState.showSkillsCreation ||
 					panelState.showRoleCreation ||
 					panelState.showRoleDeletion ||
+					panelState.showRoleList ||
 					panelState.showWorkingDirPanel ||
 					showPermissionsPanel
 				) &&

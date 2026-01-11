@@ -898,7 +898,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							return;
 						}
 						// Execute command instead of inserting text
-						executeCommand(selectedCommand.name).then(result => {
+						// If the user has typed args after the command name (e.g. "/role -l"),
+						// pass them through so sub-commands work from the command panel.
+						const fullText = buffer.getFullText();
+						const commandMatch = fullText.match(/^\/([^\s]+)(?:\s+(.+))?$/);
+						const commandArgs = commandMatch?.[2];
+						executeCommand(selectedCommand.name, commandArgs).then(result => {
 							// Record command usage for frequency-based sorting
 							commandUsageManager.recordUsage(selectedCommand.name);
 							if (onCommand) {

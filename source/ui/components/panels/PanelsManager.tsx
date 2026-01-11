@@ -7,6 +7,7 @@ import {CustomCommandConfigPanel} from './CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from './SkillsCreationPanel.js';
 import {RoleCreationPanel} from './RoleCreationPanel.js';
 import {RoleDeletionPanel} from './RoleDeletionPanel.js';
+import {RoleListPanel} from './RoleListPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
@@ -32,12 +33,14 @@ type PanelsManagerProps = {
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
+	showRoleList: boolean;
 	showWorkingDirPanel: boolean;
 	setShowSessionPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
 	setShowRoleDeletion: (show: boolean) => void;
+	setShowRoleList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 
@@ -69,12 +72,14 @@ export default function PanelsManager({
 	showSkillsCreation,
 	showRoleCreation,
 	showRoleDeletion,
+	showRoleList,
 	showWorkingDirPanel,
 	setShowSessionPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
 	setShowRoleCreation,
 	setShowRoleDeletion,
+	setShowRoleList,
 	setShowWorkingDirPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
@@ -184,6 +189,16 @@ export default function PanelsManager({
 						projectRoot={workingDirectory}
 						onDelete={onRoleDelete}
 						onCancel={() => setShowRoleDeletion(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show role list panel if active */}
+			{showRoleList && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleListPanel
+						projectRoot={workingDirectory}
+						onClose={() => setShowRoleList(false)}
 					/>
 				</Box>
 			)}

@@ -31,6 +31,7 @@ export interface CommandResult {
 		| 'showSkillsCreation'
 		| 'showRoleCreation'
 		| 'showRoleDeletion'
+		| 'showRoleList'
 		| 'showPermissionsPanel'
 		| 'reindexCodebase'
 		| 'sendAsMessage'
