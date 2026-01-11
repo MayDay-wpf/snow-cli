@@ -1,7 +1,7 @@
 {
 	"name": "snow-ai",
 	"version": "0.6.11",
-	"description": "Intelligent Command Line Assistant powered by AI",
+	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
 		"snow": "bundle/cli.mjs"

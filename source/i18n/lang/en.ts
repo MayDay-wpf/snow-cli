@@ -3,7 +3,7 @@ import type {TranslationKeys} from '../types.js';
 export const en: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
-		subtitle: 'Intelligent Command Line Assistant',
+		subtitle: 'Agentic coding in your terminal',
 		startChat: 'Start',
 		startChatInfo: 'Start a new chat conversation',
 		resumeLastChat: 'Resume Last Chat',

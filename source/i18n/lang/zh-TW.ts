@@ -3,7 +3,7 @@ import type {TranslationKeys} from '../types.js';
 export const zhTW: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
-		subtitle: '智慧命令列助手',
+		subtitle: '終端程式設計智能體',
 		startChat: '開始對話',
 		startChatInfo: '開始新的對話',
 		resumeLastChat: '繼續上次對話',
