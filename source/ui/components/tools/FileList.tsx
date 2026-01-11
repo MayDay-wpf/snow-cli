@@ -11,6 +11,7 @@ import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getWorkingDirectories} from '../../../utils/config/workingDirConfig.js';
 
@@ -53,6 +54,7 @@ const FileList = memo(
 			},
 			ref,
 		) => {
+			const {t} = useI18n();
 			const {theme} = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
@@ -469,10 +471,13 @@ const FileList = memo(
 				hasMoreDepth,
 			]);
 
-			// Display with scrolling window
-			const filteredFiles = useMemo(() => {
+			const fileWindow = useMemo(() => {
 				if (allFilteredFiles.length <= effectiveMaxItems) {
-					return allFilteredFiles;
+					return {
+						items: allFilteredFiles,
+						startIndex: 0,
+						endIndex: allFilteredFiles.length,
+					};
 				}
 
 				// Show files around the selected index
@@ -488,8 +493,19 @@ const FileList = memo(
 					startIndex = Math.max(0, endIndex - effectiveMaxItems);
 				}
 
-				return allFilteredFiles.slice(startIndex, endIndex);
+				return {
+					items: allFilteredFiles.slice(startIndex, endIndex),
+					startIndex,
+					endIndex,
+				};
 			}, [allFilteredFiles, selectedIndex, effectiveMaxItems]);
+
+			const filteredFiles = fileWindow.items;
+			const hiddenAboveCount = fileWindow.startIndex;
+			const hiddenBelowCount = Math.max(
+				0,
+				allFilteredFiles.length - fileWindow.endIndex,
+			);
 
 			// Notify parent of filtered count changes
 			useEffect(() => {
@@ -622,8 +638,25 @@ const FileList = memo(
 					{allFilteredFiles.length > effectiveMaxItems && (
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								↑↓ to scroll · {allFilteredFiles.length - effectiveMaxItems}{' '}
-								more hidden
+								{t.commandPanel.scrollHint}
+								{hiddenAboveCount > 0 && (
+									<>
+										·{' '}
+										{t.commandPanel.moreAbove.replace(
+											'{count}',
+											hiddenAboveCount.toString(),
+										)}
+									</>
+								)}
+								{hiddenBelowCount > 0 && (
+									<>
+										·{' '}
+										{t.commandPanel.moreBelow.replace(
+											'{count}',
+											hiddenBelowCount.toString(),
+										)}
+									</>
+								)}
 							</Text>
 						</Box>
 					)}

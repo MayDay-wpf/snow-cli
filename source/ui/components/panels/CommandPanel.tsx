@@ -35,10 +35,13 @@ const CommandPanel = memo(
 			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
 			: MAX_DISPLAY_ITEMS;
 
-		// Limit displayed commands
-		const displayedCommands = useMemo(() => {
+		const displayWindow = useMemo(() => {
 			if (commands.length <= effectiveMaxItems) {
-				return commands;
+				return {
+					items: commands,
+					startIndex: 0,
+					endIndex: commands.length,
+				};
 			}
 
 			// Show commands around the selected index
@@ -51,8 +54,19 @@ const CommandPanel = memo(
 				startIndex = Math.max(0, endIndex - effectiveMaxItems);
 			}
 
-			return commands.slice(startIndex, endIndex);
+			return {
+				items: commands.slice(startIndex, endIndex),
+				startIndex,
+				endIndex,
+			};
 		}, [commands, selectedIndex, effectiveMaxItems]);
+
+		const displayedCommands = displayWindow.items;
+		const hiddenAboveCount = displayWindow.startIndex;
+		const hiddenBelowCount = Math.max(
+			0,
+			commands.length - displayWindow.endIndex,
+		);
 
 		// Calculate actual selected index in the displayed subset
 		const displayedSelectedIndex = useMemo(() => {
@@ -133,10 +147,33 @@ const CommandPanel = memo(
 						{commands.length > effectiveMaxItems && (
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuSecondary} dimColor>
-									{t.commandPanel.scrollHint} ·{' '}
-									{t.commandPanel.moreHidden.replace(
-										'{count}',
-										(commands.length - effectiveMaxItems).toString(),
+									{t.commandPanel.scrollHint}
+									{hiddenAboveCount > 0 && (
+										<>
+											·{' '}
+											{t.commandPanel.moreAbove.replace(
+												'{count}',
+												hiddenAboveCount.toString(),
+											)}
+										</>
+									)}
+									{hiddenBelowCount > 0 && (
+										<>
+											·{' '}
+											{t.commandPanel.moreBelow.replace(
+												'{count}',
+												hiddenBelowCount.toString(),
+											)}
+										</>
+									)}
+									{hiddenAboveCount === 0 && hiddenBelowCount === 0 && (
+										<>
+											·{' '}
+											{t.commandPanel.moreHidden.replace(
+												'{count}',
+												(commands.length - effectiveMaxItems).toString(),
+											)}
+										</>
 									)}
 								</Text>
 							</Box>

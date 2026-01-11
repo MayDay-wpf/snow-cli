@@ -440,6 +440,8 @@ export const zhTW: TranslationKeys = {
 		processingMessage: '請等待對話完成後再使用命令',
 		scrollHint: '↑↓ 捲動',
 		moreHidden: '隱藏 {count} 個',
+		moreAbove: '上方還有 {count} 項',
+		moreBelow: '下方還有 {count} 項',
 		interactionHint: 'Tab: 補全 • Enter: 執行',
 		commands: {
 			help: '顯示快捷鍵和說明資訊',

@@ -440,6 +440,8 @@ export const zh: TranslationKeys = {
 		processingMessage: '请等待对话完成后再使用命令',
 		scrollHint: '↑↓ 滚动',
 		moreHidden: '隐藏 {count} 个',
+		moreAbove: '上方还有 {count} 项',
+		moreBelow: '下方还有 {count} 项',
 		interactionHint: 'Tab: 补全 • Enter: 执行',
 		commands: {
 			help: '显示快捷键和帮助信息',

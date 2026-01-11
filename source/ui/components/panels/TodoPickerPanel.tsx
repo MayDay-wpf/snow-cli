@@ -2,6 +2,7 @@ import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {TodoItem} from '../../../utils/core/todoScanner.js';
+import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
 interface Props {
@@ -26,6 +27,7 @@ const TodoPickerPanel = memo(
 		searchQuery = '',
 		totalCount = 0,
 	}: Props) => {
+		const {t} = useI18n();
 		const {theme} = useTheme();
 		// Fixed maximum display items to prevent rendering issues
 		const MAX_DISPLAY_ITEMS = 5;
@@ -33,10 +35,13 @@ const TodoPickerPanel = memo(
 			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
 			: MAX_DISPLAY_ITEMS;
 
-		// Limit displayed todos
-		const displayedTodos = useMemo(() => {
+		const todoWindow = useMemo(() => {
 			if (todos.length <= effectiveMaxItems) {
-				return todos;
+				return {
+					items: todos,
+					startIndex: 0,
+					endIndex: todos.length,
+				};
 			}
 
 			// Show todos around the selected index
@@ -49,8 +54,16 @@ const TodoPickerPanel = memo(
 				startIndex = Math.max(0, endIndex - effectiveMaxItems);
 			}
 
-			return todos.slice(startIndex, endIndex);
+			return {
+				items: todos.slice(startIndex, endIndex),
+				startIndex,
+				endIndex,
+			};
 		}, [todos, selectedIndex, effectiveMaxItems]);
+
+		const displayedTodos = todoWindow.items;
+		const hiddenAboveCount = todoWindow.startIndex;
+		const hiddenBelowCount = Math.max(0, todos.length - todoWindow.endIndex);
 
 		// Calculate actual selected index in the displayed subset
 		const displayedSelectedIndex = useMemo(() => {
@@ -193,7 +206,25 @@ const TodoPickerPanel = memo(
 						{todos.length > effectiveMaxItems && (
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuSecondary} dimColor>
-									↑↓ to scroll · {todos.length - effectiveMaxItems} more hidden
+									{t.commandPanel.scrollHint}
+									{hiddenAboveCount > 0 && (
+										<>
+											·{' '}
+											{t.commandPanel.moreAbove.replace(
+												'{count}',
+												hiddenAboveCount.toString(),
+											)}
+										</>
+									)}
+									{hiddenBelowCount > 0 && (
+										<>
+											·{' '}
+											{t.commandPanel.moreBelow.replace(
+												'{count}',
+												hiddenBelowCount.toString(),
+											)}
+										</>
+									)}
 								</Text>
 							</Box>
 						)}

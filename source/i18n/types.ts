@@ -441,6 +441,8 @@ export type TranslationKeys = {
 		processingMessage: string;
 		scrollHint: string;
 		moreHidden: string;
+		moreAbove: string;
+		moreBelow: string;
 		interactionHint: string;
 		commands: {
 			help: string;

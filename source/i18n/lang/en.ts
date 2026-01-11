@@ -471,6 +471,8 @@ export const en: TranslationKeys = {
 			'Please wait for the conversation to complete before using commands',
 		scrollHint: '↑↓ to scroll',
 		moreHidden: '{count} more hidden',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
 		interactionHint: 'Tab: Autocomplete • Enter: Execute',
 		commands: {
 			help: 'Show keyboard shortcuts and help information',
