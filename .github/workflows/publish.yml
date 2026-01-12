@@ -18,11 +18,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -34,19 +34,19 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-        
+
       - name: Build project
         run: npm run build
-        
+
       - name: Update version (manual trigger)
         if: github.event_name == 'workflow_dispatch'
         run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
-        
+
       - name: Publish to NPM
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          
+
       - name: Create GitHub Release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -55,19 +55,26 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: |
             ## 🚀 Snow CLI ${{ github.ref_name }}
-            
+
             ### What's New
 
-            - Add the distinction between delete and backspace
-            - Optimize the input effect of the input box
-            - The configurable tool can respond to the maximum Token limit, and throw an exception to be truncated.
-            - Optimize the problem of command execution window jitter
+            - Add ROLE management panel functionality
+            - Support csharp-ls and optimize LSP client implementation
+            - Add smart path truncation with clickable file links
+            - Double-ESC clears input when has content, opens history when empty
+            - Add useCursorHide hook to prevent cursor flickering during transitions
+            - Add custom command description support
+            - Fix horizontal rule width overflow in markdown rendering
+            - Fix thinking content spacing and clean XML tags from reasoning output
+            - Reduce excessive blank lines in markdown rendering output
+            - Fix Unix-like shells detection on Windows (MSYS2/Git Bash)
+            - Add translation keys for scrolling window hidden items indicator
                       
             ### Installation
             ```bash
             npm install -g snow-ai
             ```
-            
+
             ### Usage
             ```bash
             snow
