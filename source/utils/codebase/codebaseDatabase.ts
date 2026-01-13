@@ -4,6 +4,36 @@ import fs from 'node:fs';
 import {logger} from '../core/logger.js';
 
 /**
+ * sql.js singleton cache
+ * Prevents loading multiple WASM instances which can cause conflicts
+ */
+let sqlJsStatic: any = null;
+let sqlJsInitPromise: Promise<any> | null = null;
+
+/**
+ * Get sql.js static instance (singleton pattern)
+ * Ensures WASM module is only loaded once per process
+ */
+async function getSqlJs(): Promise<any> {
+	if (sqlJsStatic) {
+		return sqlJsStatic;
+	}
+
+	if (sqlJsInitPromise) {
+		return sqlJsInitPromise;
+	}
+
+	sqlJsInitPromise = initSqlJs().then((SQL) => {
+		sqlJsStatic = SQL;
+		sqlJsInitPromise = null;
+		logger.debug('sql.js WASM module loaded');
+		return SQL;
+	});
+
+	return sqlJsInitPromise;
+}
+
+/**
  * Code chunk with embedding
  */
 export interface CodeChunk {
@@ -57,7 +87,7 @@ export class CodebaseDatabase {
 		if (this.initialized) return;
 
 		try {
-			const SQL = await initSqlJs();
+			const SQL = await getSqlJs();
 
 			// Load existing database if it exists
 			if (fs.existsSync(this.dbPath)) {
