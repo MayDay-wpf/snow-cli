@@ -34,14 +34,19 @@ interface Props {
 }
 
 // Helper function to format argument values with truncation
-function formatArgumentValue(value: any, maxLength: number = 100): string {
+function formatArgumentValue(
+	value: any,
+	maxLength: number = 100,
+	noTruncate: boolean = false,
+): string {
 	if (value === null || value === undefined) {
 		return String(value);
 	}
 
 	const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
 
-	if (stringValue.length <= maxLength) {
+	// Skip truncation if noTruncate is true
+	if (noTruncate || stringValue.length <= maxLength) {
 		return stringValue;
 	}
 
@@ -73,10 +78,16 @@ function formatArgumentsAsTree(
 		excludeFields.add('signature'); // Function signatures can be verbose
 	}
 
+	// For terminal-execute, show full command without truncation
+	const noTruncateFields = new Set<string>();
+	if (toolName === 'terminal-execute') {
+		noTruncateFields.add('command');
+	}
+
 	const keys = Object.keys(args).filter(key => !excludeFields.has(key));
 	return keys.map((key, index) => ({
 		key,
-		value: formatArgumentValue(args[key]),
+		value: formatArgumentValue(args[key], 100, noTruncateFields.has(key)),
 		isLast: index === keys.length - 1,
 	}));
 }
