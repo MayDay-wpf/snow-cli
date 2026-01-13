@@ -5,6 +5,12 @@ import {spawn} from 'child_process';
 import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
 import {logger} from '../utils/core/logger.js';
+// SSH support for remote file operations
+import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
+import {
+	getWorkingDirectories,
+	type SSHConfig,
+} from '../utils/config/workingDirConfig.js';
 // Type definitions
 import type {
 	CodeSymbol,
@@ -64,6 +70,77 @@ export class ACECodeSearchService {
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = path.resolve(basePath);
+	}
+
+	/**
+	 * Check if a path is a remote SSH URL
+	 * @param filePath - Path to check
+	 * @returns True if the path is an SSH URL
+	 */
+	private isSSHPath(filePath: string): boolean {
+		return filePath.startsWith('ssh://');
+	}
+
+	/**
+	 * Get SSH config for a remote path from working directories
+	 * @param sshUrl - SSH URL to find config for
+	 * @returns SSH config if found, null otherwise
+	 */
+	private async getSSHConfigForPath(sshUrl: string): Promise<SSHConfig | null> {
+		const workingDirs = await getWorkingDirectories();
+		for (const dir of workingDirs) {
+			if (dir.isRemote && dir.sshConfig && sshUrl.startsWith(dir.path)) {
+				return dir.sshConfig;
+			}
+		}
+		// Try to match by host/user
+		const parsed = parseSSHUrl(sshUrl);
+		if (parsed) {
+			for (const dir of workingDirs) {
+				if (dir.isRemote && dir.sshConfig) {
+					const dirParsed = parseSSHUrl(dir.path);
+					if (
+						dirParsed &&
+						dirParsed.host === parsed.host &&
+						dirParsed.username === parsed.username &&
+						dirParsed.port === parsed.port
+					) {
+						return dir.sshConfig;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Read file content from remote SSH server
+	 * @param sshUrl - SSH URL of the file
+	 * @returns File content as string
+	 */
+	private async readRemoteFile(sshUrl: string): Promise<string> {
+		const parsed = parseSSHUrl(sshUrl);
+		if (!parsed) {
+			throw new Error(`Invalid SSH URL: ${sshUrl}`);
+		}
+
+		const sshConfig = await this.getSSHConfigForPath(sshUrl);
+		if (!sshConfig) {
+			throw new Error(`No SSH configuration found for: ${sshUrl}`);
+		}
+
+		const client = new SSHClient();
+		const connectResult = await client.connect(sshConfig);
+		if (!connectResult.success) {
+			throw new Error(`SSH connection failed: ${connectResult.error}`);
+		}
+
+		try {
+			const content = await client.readFile(parsed.path);
+			return content;
+		} finally {
+			client.disconnect();
+		}
 	}
 
 	/**
@@ -1101,6 +1178,7 @@ export class ACECodeSearchService {
 
 	/**
 	 * Get code outline for a file (all symbols in the file)
+	 * Supports both local files and remote SSH files (ssh://user@host:port/path)
 	 */
 	async getFileOutline(
 		filePath: string,
@@ -1110,11 +1188,29 @@ export class ACECodeSearchService {
 			symbolTypes?: SymbolType[];
 		},
 	): Promise<CodeSymbol[]> {
-		const fullPath = path.resolve(this.basePath, filePath);
+		// Check if this is a remote SSH path
+		const isRemote = this.isSSHPath(filePath);
+		let content: string;
+		let effectivePath: string;
 
 		try {
-			const content = await fs.readFile(fullPath, 'utf-8');
-			let symbols = await parseFileSymbols(fullPath, content, this.basePath);
+			if (isRemote) {
+				// Read from remote SSH server
+				content = await this.readRemoteFile(filePath);
+				// Extract the file path from SSH URL for symbol parsing
+				const parsed = parseSSHUrl(filePath);
+				effectivePath = parsed?.path || filePath;
+			} else {
+				// Read from local filesystem
+				effectivePath = path.resolve(this.basePath, filePath);
+				content = await fs.readFile(effectivePath, 'utf-8');
+			}
+
+			let symbols = await parseFileSymbols(
+				effectivePath,
+				content,
+				this.basePath,
+			);
 
 			// Filter by symbol types if specified
 			if (options?.symbolTypes && options.symbolTypes.length > 0) {

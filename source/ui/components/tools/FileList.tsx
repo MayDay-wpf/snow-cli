@@ -95,6 +95,16 @@ const FileList = memo(
 								continue;
 							}
 
+							// Add the remote working directory itself to the list
+							const remoteDirName =
+								sshInfo.path.split('/').pop() || sshInfo.host;
+							allFiles.push({
+								name: remoteDirName,
+								path: dirPath, // Show full SSH URL as path
+								isDirectory: true,
+								sourceDir: dirPath,
+							});
+
 							const sshClient = new SSHClient();
 							const connectResult = await sshClient.connect(
 								workingDir.sshConfig,
@@ -213,6 +223,15 @@ const FileList = memo(
 					}
 
 					// Handle local directories
+					// Add the local working directory itself to the list
+					const localDirName = path.basename(dirPath) || dirPath;
+					allFiles.push({
+						name: localDirName,
+						path: dirPath, // Show full path
+						isDirectory: true,
+						sourceDir: dirPath,
+					});
+
 					// Read .gitignore patterns for this directory
 					const gitignorePath = path.join(dirPath, '.gitignore');
 					let gitignorePatterns: string[] = [];
@@ -542,8 +561,12 @@ const FileList = memo(
 						const filtered = files.filter(file => {
 							const fileName = file.name.toLowerCase();
 							const filePath = file.path.toLowerCase();
+							// Also search in sourceDir for working directory entries
+							const sourceDir = (file.sourceDir || '').toLowerCase();
 							return (
-								fileName.includes(queryLower) || filePath.includes(queryLower)
+								fileName.includes(queryLower) ||
+								filePath.includes(queryLower) ||
+								sourceDir.includes(queryLower)
 							);
 						});
 

@@ -981,6 +981,9 @@ export const zh: TranslationKeys = {
 		timeout: '超时时间:',
 		customTimeout: '(自定义)',
 		backgroundHint: 'Ctrl+B 移至后台',
+		inputRequired: '需要输入',
+		inputPlaceholder: '输入内容后按 Enter 提交',
+		inputHint: '按 Enter 提交输入',
 	},
 	backgroundProcesses: {
 		title: '后台进程',

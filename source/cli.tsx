@@ -204,10 +204,11 @@ Options
 		-c            Skip welcome screen and resume last conversation
 		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
 		--task        Create a background AI task (headless mode, saves session)
-		--task-list   Open task manager to view and manage background tasks
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
+		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
+
 		--sse         Start SSE server mode for external integration (foreground)
 		--sse-daemon  Start SSE server as background daemon
 		--sse-stop    Stop SSE daemon server
@@ -227,9 +228,6 @@ Options
 				type: 'boolean',
 				default: false,
 			},
-			ask: {
-				type: 'string',
-			},
 			task: {
 				type: 'string',
 			},
@@ -246,6 +244,11 @@ Options
 				type: 'boolean',
 				default: false,
 			},
+			yoloP: {
+				type: 'boolean',
+				default: false,
+				alias: 'yolo-p',
+			},
 			cYolo: {
 				type: 'boolean',
 				default: false,
@@ -255,6 +258,7 @@ Options
 				type: 'boolean',
 				default: false,
 			},
+
 			sse: {
 				type: 'boolean',
 				default: false,
@@ -493,6 +497,7 @@ const Startup = ({
 	showTaskList,
 	isDevMode,
 	enableYolo,
+	enablePlan,
 }: {
 	version: string | undefined;
 	skipWelcome: boolean;
@@ -502,6 +507,7 @@ const Startup = ({
 	showTaskList?: boolean;
 	isDevMode: boolean;
 	enableYolo: boolean;
+	enablePlan?: boolean;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
 	const [AppComponent, setAppComponent] = React.useState<any>(null);
@@ -593,6 +599,7 @@ const Startup = ({
 			headlessSessionId={headlessSessionId}
 			showTaskList={showTaskList}
 			enableYolo={enableYolo}
+			enablePlan={enablePlan}
 		/>
 	);
 };
@@ -657,13 +664,20 @@ process.on('SIGTERM', async () => {
 render(
 	<Startup
 		version={VERSION}
-		skipWelcome={Boolean(cli.flags.c || cli.flags.yolo || cli.flags.cYolo)}
+		skipWelcome={Boolean(
+			cli.flags.c || cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo,
+		)}
 		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
-		headlessPrompt={cli.flags.ask}
+		headlessPrompt={
+			typeof cli.flags['ask'] === 'string'
+				? (cli.flags['ask'] as string)
+				: undefined
+		}
 		headlessSessionId={cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
-		enableYolo={Boolean(cli.flags.yolo || cli.flags.cYolo)}
+		enableYolo={Boolean(cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo)}
+		enablePlan={Boolean(cli.flags.yoloP)}
 	/>,
 	{
 		exitOnCtrlC: false,

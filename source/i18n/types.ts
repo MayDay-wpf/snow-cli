@@ -978,6 +978,9 @@ export type TranslationKeys = {
 		timeout: string;
 		customTimeout: string;
 		backgroundHint: string;
+		inputRequired: string;
+		inputPlaceholder: string;
+		inputHint: string;
 	};
 	backgroundProcesses: {
 		title: string;

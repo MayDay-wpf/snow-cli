@@ -1043,6 +1043,9 @@ export const en: TranslationKeys = {
 		timeout: 'Timeout:',
 		customTimeout: '(custom)',
 		backgroundHint: 'Ctrl+B to move to background',
+		inputRequired: 'INPUT REQUIRED',
+		inputPlaceholder: 'Type your input and press Enter',
+		inputHint: 'Press Enter to submit input',
 	},
 	backgroundProcesses: {
 		title: 'Background Processes',

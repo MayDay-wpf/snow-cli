@@ -980,6 +980,9 @@ export const zhTW: TranslationKeys = {
 		timeout: '逾時時間:',
 		customTimeout: '(自訂)',
 		backgroundHint: 'Ctrl+B 移至背景',
+		inputRequired: '需要輸入',
+		inputPlaceholder: '輸入內容後按 Enter 提交',
+		inputHint: '按 Enter 提交輸入',
 	},
 	backgroundProcesses: {
 		title: '背景處理程序',

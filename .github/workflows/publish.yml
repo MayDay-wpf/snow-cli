@@ -58,18 +58,12 @@ jobs:
 
             ### What's New
 
-            - Add ROLE management panel functionality
-            - Support csharp-ls and optimize LSP client implementation
-            - Add smart path truncation with clickable file links
-            - Double-ESC clears input when has content, opens history when empty
-            - Add useCursorHide hook to prevent cursor flickering during transitions
-            - Add custom command description support
-            - Fix horizontal rule width overflow in markdown rendering
-            - Fix thinking content spacing and clean XML tags from reasoning output
-            - Reduce excessive blank lines in markdown rendering output
-            - Fix Unix-like shells detection on Windows (MSYS2/Git Bash)
-            - Add translation keys for scrolling window hidden items indicator
-                      
+            - Support SSH remote directories in working directory management (add via panel with `S`)
+            - Fix codebase indexing and terminal execution tool conflict
+            - Improve Bash tool integration and command confirmation UI
+            - Enhance file list and chat screen behaviors for tool outputs
+            - Fix and normalize internal docs links/sections (EN/ZH usage guides)
+
             ### Installation
             ```bash
             npm install -g snow-ai

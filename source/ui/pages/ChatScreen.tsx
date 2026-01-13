@@ -72,9 +72,14 @@ import {logger} from '../../utils/core/logger.js';
 type Props = {
 	autoResume?: boolean;
 	enableYolo?: boolean;
+	enablePlan?: boolean;
 };
 
-export default function ChatScreen({autoResume, enableYolo}: Props) {
+export default function ChatScreen({
+	autoResume,
+	enableYolo,
+	enablePlan,
+}: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
 	const {exit} = useApp();
@@ -120,7 +125,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 		}
 	});
 	const [planMode, setPlanMode] = useState(() => {
-		// Load plan mode from localStorage on initialization
+		// If enablePlan prop is provided (from --yolo-p flag), use it
+		if (enablePlan !== undefined) {
+			return enablePlan;
+		}
+		// Otherwise load plan mode from localStorage on initialization
 		try {
 			const saved = localStorage.getItem('snow-plan-mode');
 			return saved === 'true';
@@ -1234,6 +1243,8 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 							timeout={terminalExecutionState.state.timeout || 30000}
 							terminalWidth={terminalWidth}
 							output={terminalExecutionState.state.output}
+							needsInput={terminalExecutionState.state.needsInput}
+							inputPrompt={terminalExecutionState.state.inputPrompt}
 						/>
 					</Box>
 				)}
@@ -1453,10 +1464,11 @@ export default function ChatScreen({autoResume, enableYolo}: Props) {
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or permissions panel or rollback confirmation or user question. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
+			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or permissions panel or rollback confirmation or user question or terminal interactive input. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
+				!terminalExecutionState.state.needsInput &&
 				!(
 					panelState.showSessionPanel ||
 					panelState.showMcpPanel ||

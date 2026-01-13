@@ -1369,6 +1369,19 @@ export async function executeMCPTool(
 
 			switch (actualToolName) {
 				case 'execute':
+					// Validate required workingDirectory parameter
+					if (!args.workingDirectory) {
+						throw new Error(
+							`Missing required parameter 'workingDirectory' for terminal-execute tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: You MUST specify the workingDirectory where the command should run. ` +
+								`Use the project root path or a specific directory path.`,
+						);
+					}
+
+					// Set working directory from AI-provided parameter
+					terminalService.setWorkingDirectory(args.workingDirectory);
+
 					// Set execution state to show UI
 					setTerminalExecutionState({
 						isExecuting: true,
@@ -1376,6 +1389,8 @@ export async function executeMCPTool(
 						timeout: args.timeout || 30000,
 						isBackgrounded: false,
 						output: [],
+						needsInput: false,
+						inputPrompt: null,
 					});
 
 					try {
@@ -1383,6 +1398,7 @@ export async function executeMCPTool(
 							args.command,
 							args.timeout,
 							abortSignal, // Pass abort signal to support ESC key interruption
+							args.isInteractive ?? false, // Pass isInteractive flag for AI-determined interactive commands
 						);
 					} finally {
 						// Clear execution state
@@ -1392,6 +1408,8 @@ export async function executeMCPTool(
 							timeout: null,
 							isBackgrounded: false,
 							output: [],
+							needsInput: false,
+							inputPrompt: null,
 						});
 					}
 					break;

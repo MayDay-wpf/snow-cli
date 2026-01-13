@@ -1,10 +1,12 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
+import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
+import {sendTerminalInput} from '../../../hooks/execution/useTerminalExecutionState.js';
 
 interface BashCommandConfirmationProps {
 	command: string;
@@ -146,6 +148,8 @@ interface BashCommandExecutionStatusProps {
 	timeout?: number;
 	terminalWidth: number;
 	output?: string[];
+	needsInput?: boolean;
+	inputPrompt?: string | null;
 }
 
 /**
@@ -154,7 +158,7 @@ interface BashCommandExecutionStatusProps {
  */
 function truncateText(text: string, maxWidth: number = 80): string {
 	// Normalize: trim and replace tabs with spaces (tab width varies in terminals)
-	const normalized = text.trim().replace(/\t/g, '  ');
+	const normalized = text.trim().replace(/\\t/g, '  ');
 	if (normalized.length <= maxWidth) {
 		return normalized;
 	}
@@ -166,10 +170,13 @@ export function BashCommandExecutionStatus({
 	timeout = 30000,
 	terminalWidth,
 	output = [],
+	needsInput = false,
+	inputPrompt = null,
 }: BashCommandExecutionStatusProps) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
 	const timeoutSeconds = Math.round(timeout / 1000);
+	const [inputValue, setInputValue] = useState('');
 
 	// Calculate max command display width (leave space for padding and borders)
 	const maxCommandWidth = Math.max(40, terminalWidth - 20);
@@ -198,6 +205,12 @@ export function BashCommandExecutionStatus({
 		processedOutput.unshift('');
 	}
 
+	// Handle input submission
+	const handleInputSubmit = (value: string) => {
+		sendTerminalInput(value);
+		setInputValue('');
+	};
+
 	return (
 		<Box flexDirection="column" paddingX={1}>
 			<Box>
@@ -223,6 +236,31 @@ export function BashCommandExecutionStatus({
 					</Text>
 				))}
 			</Box>
+			{/* Interactive input area - shown when command needs input */}
+			{needsInput && (
+				<Box flexDirection="column" marginTop={1} paddingLeft={2}>
+					<Box>
+						<Text color={theme.colors.warning}>{t.bash.inputRequired}</Text>
+					</Box>
+					{inputPrompt && (
+						<Box>
+							<Text dimColor>{inputPrompt}</Text>
+						</Box>
+					)}
+					<Box>
+						<Text color={theme.colors.menuInfo}>&gt; </Text>
+						<TextInput
+							value={inputValue}
+							onChange={setInputValue}
+							onSubmit={handleInputSubmit}
+							placeholder={t.bash.inputPlaceholder}
+						/>
+					</Box>
+					<Box>
+						<Text dimColor>{t.bash.inputHint}</Text>
+					</Box>
+				</Box>
+			)}
 			<Box flexDirection="column" gap={0}>
 				<Box>
 					<Text dimColor>

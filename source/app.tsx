@@ -42,6 +42,7 @@ type Props = {
 	headlessSessionId?: string;
 	showTaskList?: boolean;
 	enableYolo?: boolean;
+	enablePlan?: boolean;
 };
 
 // ShowTaskListWrapper: Handles task list mode with session conversion support
@@ -108,11 +109,13 @@ function AppContent({
 	skipWelcome,
 	autoResume,
 	enableYolo,
+	enablePlan,
 }: {
 	version?: string;
 	skipWelcome?: boolean;
 	autoResume?: boolean;
 	enableYolo?: boolean;
+	enablePlan?: boolean;
 }) {
 	const [currentView, setCurrentView] = useState<
 		| 'welcome'
@@ -216,6 +219,7 @@ function AppContent({
 							key={chatScreenKey}
 							autoResume={autoResume || shouldAutoResume}
 							enableYolo={enableYolo}
+							enablePlan={enablePlan}
 						/>
 					</Suspense>
 				);
@@ -299,6 +303,7 @@ export default function App({
 	headlessSessionId,
 	showTaskList,
 	enableYolo,
+	enablePlan,
 }: Props) {
 	// If headless prompt is provided, use headless mode
 	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
@@ -339,6 +344,7 @@ export default function App({
 					skipWelcome={skipWelcome}
 					autoResume={autoResume}
 					enableYolo={enableYolo}
+					enablePlan={enablePlan}
 				/>
 			</ThemeProvider>
 		</I18nProvider>

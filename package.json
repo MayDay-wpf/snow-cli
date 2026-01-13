@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.6.12",
+	"version": "0.6.13",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -46,6 +46,9 @@
 		"bundle",
 		"scripts"
 	],
+	"dependencies": {
+		"ssh2": "^1.17.0"
+	},
 	"devDependencies": {
 		"@inkjs/ui": "^2.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
@@ -98,7 +101,6 @@
 		"puppeteer-core": "^24.25.0",
 		"react": "^18.2.0",
 		"sql.js": "^1.13.0",
-		"ssh2": "^1.17.0",
 		"string-width": "^7.2.0",
 		"tiktoken": "^1.0.22",
 		"ts-node": "^10.9.1",
