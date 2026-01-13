@@ -11,6 +11,12 @@ import {
 	trimPairIfPossible,
 	isOverEscaped,
 } from '../utils/ui/escapeHandler.js';
+// SSH support for remote file operations
+import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
+import {
+	getWorkingDirectories,
+	type SSHConfig,
+} from '../utils/config/workingDirConfig.js';
 // Type definitions
 import type {
 	EditBySearchConfig,
@@ -86,6 +92,109 @@ export class FilesystemMCPService {
 
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = resolve(basePath);
+	}
+
+	/**
+	 * Check if a path is a remote SSH URL
+	 * @param filePath - Path to check
+	 * @returns True if the path is an SSH URL
+	 */
+	private isSSHPath(filePath: string): boolean {
+		return filePath.startsWith('ssh://');
+	}
+
+	/**
+	 * Get SSH config for a remote path from working directories
+	 * @param sshUrl - SSH URL to find config for
+	 * @returns SSH config if found, null otherwise
+	 */
+	private async getSSHConfigForPath(sshUrl: string): Promise<SSHConfig | null> {
+		const workingDirs = await getWorkingDirectories();
+		for (const dir of workingDirs) {
+			if (dir.isRemote && dir.sshConfig && sshUrl.startsWith(dir.path)) {
+				return dir.sshConfig;
+			}
+		}
+		// Try to match by host/user
+		const parsed = parseSSHUrl(sshUrl);
+		if (parsed) {
+			for (const dir of workingDirs) {
+				if (dir.isRemote && dir.sshConfig) {
+					const dirParsed = parseSSHUrl(dir.path);
+					if (
+						dirParsed &&
+						dirParsed.host === parsed.host &&
+						dirParsed.username === parsed.username &&
+						dirParsed.port === parsed.port
+					) {
+						return dir.sshConfig;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Read file content from remote SSH server
+	 * @param sshUrl - SSH URL of the file
+	 * @returns File content as string
+	 */
+	private async readRemoteFile(sshUrl: string): Promise<string> {
+		const parsed = parseSSHUrl(sshUrl);
+		if (!parsed) {
+			throw new Error(`Invalid SSH URL: ${sshUrl}`);
+		}
+
+		const sshConfig = await this.getSSHConfigForPath(sshUrl);
+		if (!sshConfig) {
+			throw new Error(`No SSH configuration found for: ${sshUrl}`);
+		}
+
+		const client = new SSHClient();
+		const connectResult = await client.connect(sshConfig);
+		if (!connectResult.success) {
+			throw new Error(`SSH connection failed: ${connectResult.error}`);
+		}
+
+		try {
+			const content = await client.readFile(parsed.path);
+			return content;
+		} finally {
+			client.disconnect();
+		}
+	}
+
+	/**
+	 * Write file content to remote SSH server
+	 * @param sshUrl - SSH URL of the file
+	 * @param content - Content to write
+	 */
+	private async writeRemoteFile(
+		sshUrl: string,
+		content: string,
+	): Promise<void> {
+		const parsed = parseSSHUrl(sshUrl);
+		if (!parsed) {
+			throw new Error(`Invalid SSH URL: ${sshUrl}`);
+		}
+
+		const sshConfig = await this.getSSHConfigForPath(sshUrl);
+		if (!sshConfig) {
+			throw new Error(`No SSH configuration found for: ${sshUrl}`);
+		}
+
+		const client = new SSHClient();
+		const connectResult = await client.connect(sshConfig);
+		if (!connectResult.success) {
+			throw new Error(`SSH connection failed: ${connectResult.error}`);
+		}
+
+		try {
+			await client.writeFile(parsed.path, content);
+		} finally {
+			client.disconnect();
+		}
 	}
 
 	/**
@@ -551,6 +660,44 @@ export class FilesystemMCPService {
 			}
 
 			// Original single file logic
+			// Check if this is a remote SSH path
+			if (this.isSSHPath(filePath)) {
+				// Handle remote SSH file
+				const content = await this.readRemoteFile(filePath);
+				const lines = content.split('\n');
+				const totalLines = lines.length;
+
+				const actualStartLine = startLine ?? 1;
+				const actualEndLine = endLine ?? totalLines;
+
+				if (actualStartLine < 1) {
+					throw new Error('Start line must be greater than 0');
+				}
+				if (actualEndLine < actualStartLine) {
+					throw new Error(
+						'End line must be greater than or equal to start line',
+					);
+				}
+
+				const start = Math.min(actualStartLine, totalLines);
+				const end = Math.min(totalLines, actualEndLine);
+				const selectedLines = lines.slice(start - 1, end);
+
+				const numberedLines = selectedLines.map((line, index) => {
+					const lineNum = start + index;
+					return `${lineNum}->${line}`;
+				});
+
+				const fileContent = numberedLines.join('\n');
+
+				return {
+					content: fileContent,
+					startLine: start,
+					endLine: end,
+					totalLines,
+				};
+			}
+
 			const fullPath = this.resolvePath(filePath);
 
 			// For absolute paths, skip validation to allow access outside base path
@@ -933,15 +1080,27 @@ export class FilesystemMCPService {
 		contextLines: number,
 	): Promise<EditBySearchSingleResult> {
 		try {
-			const fullPath = this.resolvePath(filePath);
+			// Check if this is a remote SSH path
+			const isRemote = this.isSSHPath(filePath);
+			let content: string;
+			let fullPath: string;
 
-			// For absolute paths, skip validation to allow access outside base path
-			if (!isAbsolute(filePath)) {
-				await this.validatePath(fullPath);
+			if (isRemote) {
+				// Handle remote SSH file
+				content = await this.readRemoteFile(filePath);
+				fullPath = filePath;
+			} else {
+				fullPath = this.resolvePath(filePath);
+
+				// For absolute paths, skip validation to allow access outside base path
+				if (!isAbsolute(filePath)) {
+					await this.validatePath(fullPath);
+				}
+
+				// Read the entire file
+				content = await fs.readFile(fullPath, 'utf-8');
 			}
 
-			// Read the entire file
-			const content = await fs.readFile(fullPath, 'utf-8');
 			const lines = content.split('\n');
 
 			// Backup for rollback (file modification)
@@ -1258,7 +1417,11 @@ export class FilesystemMCPService {
 				.join('\n');
 
 			// Write the modified content
-			await fs.writeFile(fullPath, modifiedContent, 'utf-8');
+			if (isRemote) {
+				await this.writeRemoteFile(fullPath, modifiedContent);
+			} else {
+				await fs.writeFile(fullPath, modifiedContent, 'utf-8');
+			}
 
 			// Format with Prettier asynchronously (non-blocking)
 			let finalContent = modifiedContent;
@@ -1284,7 +1447,11 @@ export class FilesystemMCPService {
 					});
 
 					// Write formatted content back to file
-					await fs.writeFile(fullPath, finalContent, 'utf-8');
+					if (isRemote) {
+						await this.writeRemoteFile(fullPath, finalContent);
+					} else {
+						await fs.writeFile(fullPath, finalContent, 'utf-8');
+					}
 					finalLines = finalContent.split('\n');
 					finalTotalLines = finalLines.length;
 
@@ -1541,15 +1708,27 @@ export class FilesystemMCPService {
 		contextLines: number,
 	): Promise<EditByLineSingleResult> {
 		try {
-			const fullPath = this.resolvePath(filePath);
+			// Check if this is a remote SSH path
+			const isRemote = this.isSSHPath(filePath);
+			let content: string;
+			let fullPath: string;
 
-			// For absolute paths, skip validation to allow access outside base path
-			if (!isAbsolute(filePath)) {
-				await this.validatePath(fullPath);
+			if (isRemote) {
+				// Handle remote SSH file
+				content = await this.readRemoteFile(filePath);
+				fullPath = filePath;
+			} else {
+				fullPath = this.resolvePath(filePath);
+
+				// For absolute paths, skip validation to allow access outside base path
+				if (!isAbsolute(filePath)) {
+					await this.validatePath(fullPath);
+				}
+
+				// Read the entire file
+				content = await fs.readFile(fullPath, 'utf-8');
 			}
 
-			// Read the entire file
-			const content = await fs.readFile(fullPath, 'utf-8');
 			const lines = content.split('\n');
 			const totalLines = lines.length;
 
@@ -1647,7 +1826,11 @@ export class FilesystemMCPService {
 				.join('\n');
 
 			// Write the modified content back to file
-			await fs.writeFile(fullPath, modifiedLines.join('\n'), 'utf-8');
+			if (isRemote) {
+				await this.writeRemoteFile(fullPath, modifiedLines.join('\n'));
+			} else {
+				await fs.writeFile(fullPath, modifiedLines.join('\n'), 'utf-8');
+			}
 
 			// Format the file with Prettier after editing to ensure consistent code style
 			let finalLines = modifiedLines;
@@ -1671,7 +1854,11 @@ export class FilesystemMCPService {
 					});
 
 					// Write formatted content back to file
-					await fs.writeFile(fullPath, formattedContent, 'utf-8');
+					if (isRemote) {
+						await this.writeRemoteFile(fullPath, formattedContent);
+					} else {
+						await fs.writeFile(fullPath, formattedContent, 'utf-8');
+					}
 					finalLines = formattedContent.split('\n');
 					finalTotalLines = finalLines.length;
 
@@ -1916,7 +2103,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers. Supports text files, images, Office documents, and directories. **PATH REQUIREMENT**: Use EXACT paths from search results or user input, never undefined/null/empty/placeholders. **WORKFLOW**: (1) Use search tools FIRST to locate files, (2) Read only when you have the exact path. **SUPPORTS**: Single file (string), multiple files (array of strings), or per-file ranges (array of {path, startLine?, endLine?}). Returns content with line numbers (format: "123→code").',
+			'Read file content with line numbers. Supports text files, images, Office documents, and directories. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **PATH REQUIREMENT**: Use EXACT paths from search results or user input, never undefined/null/empty/placeholders. **WORKFLOW**: (1) Use search tools FIRST to locate files, (2) Read only when you have the exact path. **SUPPORTS**: Single file (string), multiple files (array of strings), or per-file ranges (array of {path, startLine?, endLine?}). Returns content with line numbers (format: "123->code").',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -2005,7 +2192,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit_search',
 		description:
-			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: entire function from declaration to final closing brace `}`, complete HTML/XML/JSX tags from opening `<tag>` to closing `</tag>`, full code blocks with ALL matching brackets/braces/parentheses, (3) Copy the COMPLETE code block (without line numbers) - verify you have captured ALL opening and closing symbols, (4) MANDATORY verification: Count and match ALL pairs - every `{` must have `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, (5) Use THIS tool only after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit partial functions (missing closing brace), NEVER edit incomplete markup (missing closing tag), NEVER edit partial code blocks (unmatched brackets), NEVER copy line numbers from filesystem-read output. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace `}`), incomplete markup tags (HTML/Vue/JSX missing `</tag>`), partial code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), copying line numbers from filesystem-read output. You MUST include complete syntactic units with ALL opening/closing pairs verified and matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
+			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: entire function from declaration to final closing brace `}`, complete HTML/XML/JSX tags from opening `<tag>` to closing `</tag>`, full code blocks with ALL matching brackets/braces/parentheses, (3) Copy the COMPLETE code block (without line numbers) - verify you have captured ALL opening and closing symbols, (4) MANDATORY verification: Count and match ALL pairs - every `{` must have `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, (5) Use THIS tool only after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit partial functions (missing closing brace), NEVER edit incomplete markup (missing closing tag), NEVER edit partial code blocks (unmatched brackets), NEVER copy line numbers from filesystem-read output. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace `}`), incomplete markup tags (HTML/Vue/JSX missing `</tag>`), partial code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), copying line numbers from filesystem-read output. You MUST include complete syntactic units with ALL opening/closing pairs verified and matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -2082,7 +2269,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit',
 		description:
-			'Line-based editing for precise control. **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: for functions - include opening declaration to final closing brace `}`; for HTML/XML/JSX markup tags - include opening `<tag>` to closing `</tag>`; for code blocks - include ALL matching braces/brackets/parentheses, (3) MANDATORY verification before editing: count opening and closing symbols in your target range - every `{` must have matching `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, verify indentation levels are consistent, (4) Use THIS tool with exact startLine/endLine ONLY after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit line range that stops mid-function (missing closing brace `}`), NEVER edit partial markup tags (missing `</tag>`), NEVER edit incomplete code blocks (unmatched brackets), NEVER edit without verifying boundaries first. **BEST PRACTICE**: Keep edits small (under 15 lines recommended) for better accuracy. For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. **WHY LINE-BASED IS RISKIER**: Line numbers can shift during editing, making it easy to target wrong lines. Search-replace avoids this by matching actual content. **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, line range stops mid-function (missing closing brace `}`), partial markup tags (missing `</tag>`), incomplete code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), targeting wrong lines after file changes, not verifying boundaries with filesystem-read first. You MUST verify complete syntactic units with ALL opening/closing pairs matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
+			'Line-based editing for precise control. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: for functions - include opening declaration to final closing brace `}`; for HTML/XML/JSX markup tags - include opening `<tag>` to closing `</tag>`; for code blocks - include ALL matching braces/brackets/parentheses, (3) MANDATORY verification before editing: count opening and closing symbols in your target range - every `{` must have matching `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, verify indentation levels are consistent, (4) Use THIS tool with exact startLine/endLine ONLY after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit line range that stops mid-function (missing closing brace `}`), NEVER edit partial markup tags (missing `</tag>`), NEVER edit incomplete code blocks (unmatched brackets), NEVER edit without verifying boundaries first. **BEST PRACTICE**: Keep edits small (under 15 lines recommended) for better accuracy. For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. **WHY LINE-BASED IS RISKIER**: Line numbers can shift during editing, making it easy to target wrong lines. Search-replace avoids this by matching actual content. **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, line range stops mid-function (missing closing brace `}`), partial markup tags (missing `</tag>`), incomplete code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), targeting wrong lines after file changes, not verifying boundaries with filesystem-read first. You MUST verify complete syntactic units with ALL opening/closing pairs matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
 		inputSchema: {
 			type: 'object',
 			properties: {

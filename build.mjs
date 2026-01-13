@@ -67,6 +67,9 @@ if (typeof globalThis.FormData === 'undefined') {
 		...builtinModules.map(m => `node:${m}`),
 		// Optional native dependencies (dynamically imported in code)
 		'sharp',
+		// SSH2 has native bindings that cannot be bundled
+		'ssh2',
+		'cpu-features',
 		// Note: katex and markdown-it-math are bundled (not external)
 	],
 	plugins: [stubPlugin],

@@ -6,10 +6,28 @@ import {logger} from '../core/logger.js';
 const SNOW_DIR = '.snow';
 const WORKING_DIR_FILE = 'working-dirs.json';
 
+export interface SSHConfig {
+	host: string;
+	port: number;
+	username: string;
+	// Authentication method: 'password' | 'privateKey' | 'agent'
+	authMethod: 'password' | 'privateKey' | 'agent';
+	// For password auth
+	password?: string;
+	// For privateKey auth
+	privateKeyPath?: string;
+	passphrase?: string;
+}
+
 export interface WorkingDirectory {
 	path: string;
 	isDefault: boolean;
 	addedAt: number;
+	// SSH remote directory support
+	isRemote?: boolean;
+	sshConfig?: SSHConfig;
+	// Display name for remote directories
+	displayName?: string;
 }
 
 export interface WorkingDirConfig {
@@ -142,4 +160,44 @@ export async function removeWorkingDirectories(paths: string[]): Promise<void> {
 export async function getWorkingDirectories(): Promise<WorkingDirectory[]> {
 	const config = await loadWorkingDirConfig();
 	return config.directories;
+}
+
+/**
+ * Add a new SSH remote working directory
+ */
+export async function addSSHWorkingDirectory(
+	sshConfig: SSHConfig,
+	remotePath: string,
+	displayName?: string,
+): Promise<boolean> {
+	const config = await loadWorkingDirConfig();
+
+	// Generate unique identifier for SSH directory
+	const sshIdentifier = `ssh://${sshConfig.username}@${sshConfig.host}:${sshConfig.port}${remotePath}`;
+
+	// Check if directory already exists
+	if (config.directories.some(d => d.path === sshIdentifier)) {
+		return false;
+	}
+
+	// Add new SSH directory
+	config.directories.push({
+		path: sshIdentifier,
+		isDefault: false,
+		addedAt: Date.now(),
+		isRemote: true,
+		sshConfig: {
+			host: sshConfig.host,
+			port: sshConfig.port,
+			username: sshConfig.username,
+			authMethod: sshConfig.authMethod,
+			privateKeyPath: sshConfig.privateKeyPath,
+			password: sshConfig.password, // Store password for remote file access
+		},
+		displayName:
+			displayName || `${sshConfig.username}@${sshConfig.host}:${remotePath}`,
+	});
+
+	await saveWorkingDirConfig(config);
+	return true;
 }

@@ -1043,6 +1043,7 @@ export type TranslationKeys = {
 		loading: string;
 		noDirectories: string;
 		defaultLabel: string;
+		remoteLabel: string;
 		markedCount: string;
 		markedCountSingular: string;
 		markedCountPlural: string;
@@ -1055,6 +1056,28 @@ export type TranslationKeys = {
 		addErrorEmpty: string;
 		addErrorFailed: string;
 		addHint: string;
+		// SSH mode
+		sshTitle: string;
+		sshHostLabel: string;
+		sshHostPlaceholder: string;
+		sshPortLabel: string;
+		sshUsernameLabel: string;
+		sshUsernamePlaceholder: string;
+		sshAuthMethodLabel: string;
+		sshAuthPassword: string;
+		sshAuthPrivateKey: string;
+		sshAuthAgent: string;
+		sshPasswordLabel: string;
+		sshPrivateKeyLabel: string;
+		sshPrivateKeyPlaceholder: string;
+		sshRemotePathLabel: string;
+		sshRemotePathPlaceholder: string;
+		sshConnecting: string;
+		sshTestSuccess: string;
+		sshTestFailed: string;
+		sshAddSuccess: string;
+		sshAddFailed: string;
+		sshHint: string;
 		// Delete confirmation
 		confirmDeleteTitle: string;
 		confirmDeleteMessage: string;
