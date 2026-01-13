@@ -8,6 +8,7 @@ import {
 } from './utils/bash/security.utils.js';
 import {processManager} from '../utils/core/processManager.js';
 import {appendTerminalOutput} from '../hooks/execution/useTerminalExecutionState.js';
+import {logger} from '../utils/core/logger.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -172,6 +173,18 @@ export class TerminalCommandService {
 
 				childProcess.on('error', error => {
 					clearInterval(backgroundCheckInterval);
+
+					// Enhanced error logging for debugging spawn failures
+					const errnoError = error as NodeJS.ErrnoException;
+					logger.error('Spawn process failed', {
+						command,
+						errorMessage: error.message,
+						errorCode: errnoError.code,
+						errno: errnoError.errno,
+						syscall: errnoError.syscall,
+						cwd: this.workingDirectory,
+					});
+
 					// Update process status
 					if (backgroundProcessId) {
 						import('../hooks/execution/useBackgroundProcesses.js')

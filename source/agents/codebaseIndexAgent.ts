@@ -351,23 +351,34 @@ export class CodebaseIndexAgent {
 		}
 
 		try {
-			// Use chokidar for better cross-platform performance and reliability
-			// Reuse existing ignoreFilter to keep consistency with scanFiles
-			this.fileWatcher = chokidar.watch(this.projectRoot, {
-				ignored: (filePath: string) => {
-					const relativePath = path.relative(this.projectRoot, filePath);
-					// Skip empty paths (the root directory itself) and check ignore filter
-					if (!relativePath || relativePath === '.') {
-						return false;
-					}
-					return this.ignoreFilter.ignores(relativePath);
-				},
-				ignoreInitial: true, // Don't trigger events for initial scan
-				awaitWriteFinish: {
-					stabilityThreshold: 1000, // Wait 1s after last change
-					pollInterval: 100,
-				},
+			// Use glob patterns to only watch code files, reducing file descriptor usage
+			const patterns = Array.from(CodebaseIndexAgent.CODE_EXTENSIONS).map(
+				ext => path.join(this.projectRoot, '**', `*${ext}`),
+			);
+
+			this.fileWatcher = chokidar.watch(patterns, {
+				ignored: [
+					'**/node_modules/**',
+					'**/.git/**',
+					'**/.snow/**',
+					'**/dist/**',
+					'**/build/**',
+					'**/out/**',
+					'**/coverage/**',
+					'**/.next/**',
+					'**/.nuxt/**',
+					'**/.cache/**',
+					'**/*.min.js',
+					'**/*.min.css',
+					'**/*.map',
+					'**/package-lock.json',
+					'**/yarn.lock',
+					'**/pnpm-lock.yaml',
+				],
+				ignoreInitial: true,
 				persistent: true,
+				depth: 20,
+				// Removed awaitWriteFinish - using debounce instead to reduce polling overhead
 			});
 
 			// Handle file added or changed
