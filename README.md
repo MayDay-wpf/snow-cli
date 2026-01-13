@@ -19,7 +19,10 @@ _Agentic coding in your terminal_
 
 ## Thanks Developer
 
-<img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
+<a href="https://github.com/MayDay-wpf/snow-cli/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
+</a>
+
 
 ## Thanks Support
 

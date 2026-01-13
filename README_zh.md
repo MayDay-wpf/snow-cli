@@ -19,7 +19,9 @@ _在终端中进行 Agentic 编程_
 
 ## 感谢开发者
 
-<img alt="contributors" src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli"/>
+<a href="https://github.com/MayDay-wpf/snow-cli/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
+</a>
 
 ## 感谢赞助商
 
