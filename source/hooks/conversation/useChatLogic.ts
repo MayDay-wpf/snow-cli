@@ -171,7 +171,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
 	) => {
-		if (streamingState.isStreaming) {
+		if (streamingState.streamStatus !== 'idle') {
 			setPendingMessages(prev => [...prev, {text: message, images}]);
 			return;
 		}

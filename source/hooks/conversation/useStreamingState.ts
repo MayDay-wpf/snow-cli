@@ -27,9 +27,42 @@ export type CodebaseSearchStatus = {
 	};
 };
 
+export type StreamStatus = 'idle' | 'streaming' | 'stopping';
+
 export function useStreamingState() {
-	const [isStreaming, setIsStreaming] = useState(false);
-	const [isStopping, setIsStopping] = useState(false);
+	const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
+	const isStreaming = streamStatus === 'streaming';
+	const isStopping = streamStatus === 'stopping';
+
+	const setIsStreaming: React.Dispatch<
+		React.SetStateAction<boolean>
+	> = action => {
+		setStreamStatus(prev => {
+			const currentIsStreaming = prev === 'streaming';
+			const nextIsStreaming =
+				typeof action === 'function' ? action(currentIsStreaming) : action;
+
+			if (nextIsStreaming) return 'streaming';
+			// When streaming ends (setIsStreaming(false)), always go to idle.
+			// This includes the 'stopping' state - if stream has ended, we're done.
+			return 'idle';
+		});
+	};
+
+	const setIsStopping: React.Dispatch<
+		React.SetStateAction<boolean>
+	> = action => {
+		setStreamStatus(prev => {
+			const currentIsStopping = prev === 'stopping';
+			const nextIsStopping =
+				typeof action === 'function' ? action(currentIsStopping) : action;
+
+			if (nextIsStopping) return 'stopping';
+			if (prev === 'stopping') return 'idle';
+			return prev;
+		});
+	};
+
 	const [streamTokenCount, setStreamTokenCount] = useState(0);
 	const [isReasoning, setIsReasoning] = useState(false);
 	const [abortController, setAbortController] =
@@ -126,6 +159,8 @@ export function useStreamingState() {
 	}, [retryStatus?.isRetrying]); // ✅ 移除 remainingSeconds 避免循环
 
 	return {
+		streamStatus,
+		setStreamStatus,
 		isStreaming,
 		setIsStreaming,
 		isStopping,

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
@@ -182,19 +182,102 @@ export function BashCommandExecutionStatus({
 	const maxCommandWidth = Math.max(40, terminalWidth - 20);
 	const displayCommand = truncateCommand(command, maxCommandWidth);
 
-	// Process output: split by newlines, trim per-line trailing whitespace, and clamp to a fixed-height window.
-	// IMPORTANT: render a fixed number of rows with stable keys to avoid Ink diff jitter.
 	const maxOutputLines = 5;
-	const allOutputLines = output
-		.flatMap(line => line.split(/\r?\n/))
-		.map(line => sanitizePreviewLine(line))
-		.filter(line => line.length > 0);
 
-	const omittedCount = Math.max(0, allOutputLines.length - maxOutputLines);
+	// Batch output updates to reduce Ink re-render churn when the command streams output line-by-line.
+	// We buffer incoming lines and only commit to rendered state in groups of 5, with a short
+	// debounce flush for the final <5 lines so the UI doesn't "stick".
+	const maxStoredOutputLines = 200;
+	const [displayOutputLines, setDisplayOutputLines] = useState<string[]>([]);
+	const totalCommittedLineCountRef = useRef(0);
+	const lastSeenInputLineCountRef = useRef(0);
+	const pendingLinesRef = useRef<string[]>([]);
+	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Reset buffers when command changes (avoid mixing outputs across commands).
+	useEffect(() => {
+		lastSeenInputLineCountRef.current = 0;
+		totalCommittedLineCountRef.current = 0;
+		pendingLinesRef.current = [];
+		if (flushTimerRef.current) {
+			clearTimeout(flushTimerRef.current);
+			flushTimerRef.current = null;
+		}
+		setDisplayOutputLines([]);
+	}, [command]);
+
+	useEffect(() => {
+		const incomingLines = output
+			.flatMap(line => line.split(/\r?\n/))
+			.map(line => sanitizePreviewLine(line))
+			.filter(line => line.length > 0);
+
+		const prevCount = lastSeenInputLineCountRef.current;
+		if (incomingLines.length <= prevCount) {
+			return;
+		}
+
+		const newLines = incomingLines.slice(prevCount);
+		lastSeenInputLineCountRef.current = incomingLines.length;
+		pendingLinesRef.current.push(...newLines);
+
+		// Commit full groups of 5 lines immediately.
+		const fullBatchCount =
+			pendingLinesRef.current.length - (pendingLinesRef.current.length % 5);
+		if (fullBatchCount > 0) {
+			const toCommit = pendingLinesRef.current.splice(0, fullBatchCount);
+			totalCommittedLineCountRef.current += toCommit.length;
+			setDisplayOutputLines(prev => {
+				const next = [...prev, ...toCommit];
+				return next.length > maxStoredOutputLines
+					? next.slice(-maxStoredOutputLines)
+					: next;
+			});
+		}
+
+		// Debounce-flush any remainder (<5) so it still shows up when output pauses.
+		if (flushTimerRef.current) {
+			clearTimeout(flushTimerRef.current);
+		}
+		flushTimerRef.current = setTimeout(() => {
+			flushTimerRef.current = null;
+			if (pendingLinesRef.current.length === 0) {
+				return;
+			}
+			const remainder = pendingLinesRef.current.splice(
+				0,
+				pendingLinesRef.current.length,
+			);
+			totalCommittedLineCountRef.current += remainder.length;
+			setDisplayOutputLines(prev => {
+				const next = [...prev, ...remainder];
+				return next.length > maxStoredOutputLines
+					? next.slice(-maxStoredOutputLines)
+					: next;
+			});
+		}, 150);
+		// NOTE: No cleanup here - we intentionally keep the debounce timer running
+		// across output updates. Cleanup is handled by the unmount effect below.
+	}, [output]);
+
+	// Cleanup timer only on component unmount
+	useEffect(() => {
+		return () => {
+			if (flushTimerRef.current) {
+				clearTimeout(flushTimerRef.current);
+				flushTimerRef.current = null;
+			}
+		};
+	}, []);
+
+	const omittedCount = Math.max(
+		0,
+		totalCommittedLineCountRef.current - maxOutputLines,
+	);
 	const visibleOutputLines =
 		omittedCount > 0
-			? allOutputLines.slice(-(maxOutputLines - 1))
-			: allOutputLines.slice(-maxOutputLines);
+			? displayOutputLines.slice(-(maxOutputLines - 1))
+			: displayOutputLines.slice(-maxOutputLines);
 	const rawProcessedOutput =
 		omittedCount > 0
 			? [...visibleOutputLines, `... (${omittedCount} lines omitted)`]

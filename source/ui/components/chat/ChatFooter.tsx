@@ -157,7 +157,7 @@ export default function ChatFooter(props: ChatFooterProps) {
 						onSubmit={props.onSubmit}
 						onCommand={props.onCommand}
 						placeholder={t.chatScreen.inputPlaceholder}
-						disabled={props.disabled || props.isStopping}
+						disabled={props.disabled}
 						disableKeyboardNavigation={props.showBackgroundPanel}
 						isProcessing={props.isProcessing}
 						chatHistory={props.chatHistory}

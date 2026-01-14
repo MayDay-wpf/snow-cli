@@ -280,6 +280,7 @@ type CommandHandlerOptions = {
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
+	currentContextPercentageRef: React.MutableRefObject<number>;
 	setVscodeConnectionStatus: React.Dispatch<
 		React.SetStateAction<'disconnected' | 'connecting' | 'connected' | 'error'>
 	>;
@@ -444,6 +445,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setRemountKey(prev => prev + 1);
 						options.setContextUsage(null);
 						options.setCurrentContextPercentage(0);
+						// CRITICAL: Also reset the ref immediately to prevent auto-compress trigger
+						// before useEffect syncs the state to ref
+						options.currentContextPercentageRef.current = 0;
 
 						// Add command message
 						const commandMessage: Message = {
@@ -467,6 +471,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setRemountKey(prev => prev + 1);
 						options.setContextUsage(null);
 						options.setCurrentContextPercentage(0);
+						// CRITICAL: Also reset the ref immediately to prevent auto-compress trigger
+						// before useEffect syncs the state to ref
+						options.currentContextPercentageRef.current = 0;
 
 						const commandMessage: Message = {
 							role: 'command',

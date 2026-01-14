@@ -793,6 +793,7 @@ export default function ChatScreen({
 		setVulnerabilityHuntingMode,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
+		currentContextPercentageRef,
 		setVscodeConnectionStatus: vscodeState.setVscodeConnectionStatus,
 		setIsExecutingTerminalCommand,
 		setCustomCommandExecution,
@@ -855,7 +856,7 @@ export default function ChatScreen({
 	// Pending messages are now handled inline during tool execution in useConversation
 	// Auto-send pending messages when streaming completely stops (as fallback)
 	useEffect(() => {
-		if (!streamingState.isStreaming && pendingMessages.length > 0) {
+		if (streamingState.streamStatus === 'idle' && pendingMessages.length > 0) {
 			const timer = setTimeout(() => {
 				// Set isStreaming=true BEFORE processing to show LoadingIndicator
 				streamingState.setIsStreaming(true);
@@ -864,7 +865,7 @@ export default function ChatScreen({
 			return () => clearTimeout(timer);
 		}
 		return undefined;
-	}, [streamingState.isStreaming, pendingMessages.length]);
+	}, [streamingState.streamStatus, pendingMessages.length]);
 
 	// Listen to codebase search events
 	useEffect(() => {
@@ -1021,6 +1022,16 @@ export default function ChatScreen({
 			return;
 		}
 
+		// 如果已经处于 stopping，但流已结束：允许再次按 ESC 直接解除卡死状态
+		if (
+			key.escape &&
+			streamingState.isStopping &&
+			!streamingState.isStreaming
+		) {
+			streamingState.setIsStopping(false);
+			return;
+		}
+
 		// Only handle ESC interrupt if terminal has focus
 		if (
 			key.escape &&
@@ -1028,7 +1039,6 @@ export default function ChatScreen({
 			streamingState.abortController &&
 			hasFocus
 		) {
-			// Mark that user manually interrupted
 			userInterruptedRef.current = true;
 
 			// Set stopping state to show "Stopping..." spinner
@@ -1142,7 +1152,7 @@ export default function ChatScreen({
 			{/* Show loading indicator when streaming or saving */}
 			<LoadingIndicator
 				isStreaming={streamingState.isStreaming}
-				isStopping={streamingState.isStopping || false}
+				isStopping={streamingState.isStopping}
 				isSaving={isSaving}
 				hasPendingToolConfirmation={!!pendingToolConfirmation}
 				hasPendingUserQuestion={!!pendingUserQuestion}
@@ -1497,9 +1507,10 @@ export default function ChatScreen({
 							!!pendingToolConfirmation ||
 							!!bashSensitiveCommand ||
 							isExecutingTerminalCommand ||
-							isCompressing
+							isCompressing ||
+							streamingState.isStopping
 						}
-						isStopping={streamingState.isStopping || false}
+						isStopping={streamingState.isStopping}
 						isProcessing={
 							streamingState.isStreaming ||
 							isSaving ||
