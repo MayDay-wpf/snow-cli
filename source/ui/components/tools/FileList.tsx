@@ -678,11 +678,17 @@ const FileList = memo(
 							// Use sourceDir if available, otherwise use rootPath
 							const baseDir = selectedFile.sourceDir || rootPath;
 
-							// Handle SSH URLs - don't use path.join for remote paths
+							// Build the full path for the selected item.
+							// Note: working-directory entries store a fully-qualified path/SSH URL in `selectedFile.path`.
+							// If we naively join it with baseDir, we end up with duplicated paths like:
+							//   ssh://host/path/ssh://host/path
 							let fullPath: string;
-							if (baseDir.startsWith('ssh://')) {
-								// For SSH URLs, construct path manually
-								// Remove trailing slash from baseDir and leading ./ from relativePath
+							if (selectedFile.path.startsWith('ssh://')) {
+								fullPath = selectedFile.path;
+							} else if (path.isAbsolute(selectedFile.path)) {
+								fullPath = selectedFile.path;
+							} else if (baseDir.startsWith('ssh://')) {
+								// For SSH base dirs, construct path manually.
 								const cleanBase = baseDir.replace(/\/$/, '');
 								const cleanRelative = selectedFile.path
 									.replace(/^\.\//, '')
