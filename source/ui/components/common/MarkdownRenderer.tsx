@@ -56,11 +56,35 @@ md.renderer.rules['heading_close'] = (tokens, idx) => {
 	return style.close + '\n\n';
 };
 
-md.renderer.rules['bullet_list_open'] = () => '';
-md.renderer.rules['bullet_list_close'] = () => '\n';
-md.renderer.rules['ordered_list_open'] = () => '';
-md.renderer.rules['ordered_list_close'] = () => '\n';
-md.renderer.rules['list_item_close'] = () => '\n';
+// Keep markdown-it-terminal's internal list state consistent.
+// We call the original rule for side effects, but override the returned string
+// to reduce excessive blank lines.
+const originalBulletListOpen = md.renderer.rules['bullet_list_open'];
+const originalBulletListClose = md.renderer.rules['bullet_list_close'];
+const originalOrderedListOpen = md.renderer.rules['ordered_list_open'];
+const originalOrderedListClose = md.renderer.rules['ordered_list_close'];
+const originalListItemClose = md.renderer.rules['list_item_close'];
+
+md.renderer.rules['bullet_list_open'] = (tokens, idx, options, env, self) => {
+	originalBulletListOpen?.(tokens, idx, options, env, self);
+	return '';
+};
+md.renderer.rules['bullet_list_close'] = (tokens, idx, options, env, self) => {
+	originalBulletListClose?.(tokens, idx, options, env, self);
+	return '\n';
+};
+md.renderer.rules['ordered_list_open'] = (tokens, idx, options, env, self) => {
+	originalOrderedListOpen?.(tokens, idx, options, env, self);
+	return '';
+};
+md.renderer.rules['ordered_list_close'] = (tokens, idx, options, env, self) => {
+	originalOrderedListClose?.(tokens, idx, options, env, self);
+	return '\n';
+};
+md.renderer.rules['list_item_close'] = (tokens, idx, options, env, self) => {
+	originalListItemClose?.(tokens, idx, options, env, self);
+	return '\n';
+};
 
 // Override hr rule to fix width calculation issue
 // markdown-it-terminal uses new Array(n).join('-') which produces n-1 chars
