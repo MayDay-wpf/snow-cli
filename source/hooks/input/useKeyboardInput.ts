@@ -237,6 +237,27 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		forceUpdate({});
 	};
 
+	const flushPendingInput = () => {
+		if (!inputBuffer.current) return;
+
+		if (inputTimer.current) {
+			clearTimeout(inputTimer.current);
+			inputTimer.current = null;
+		}
+
+		const accumulated = inputBuffer.current;
+		const savedCursorPosition = inputStartCursorPos.current;
+		inputBuffer.current = '';
+
+		// Keep these flags consistent; otherwise a single-char insert can race a pending flush.
+		isPasting.current = false;
+		isProcessingInput.current = false;
+
+		buffer.setCursorPosition(savedCursorPosition);
+		buffer.insert(accumulated);
+		inputStartCursorPos.current = buffer.getCursorPosition();
+	};
+
 	// Handle input using useInput hook
 	useInput((input, key) => {
 		if (disabled) return;
@@ -651,6 +672,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+A - Move to beginning of line
 		if (key.ctrl && input === 'a') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			// Find start of current line
@@ -662,6 +684,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+E - Move to end of line
 		if (key.ctrl && input === 'e') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			// Find end of current line
@@ -674,6 +697,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Alt+F - Forward one word
 		if (key.meta && input === 'f') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const newPos = findWordBoundary(text, cursorPos, 'forward');
@@ -684,6 +708,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Alt+B - Backward one word
 		if (key.meta && input === 'b') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const newPos = findWordBoundary(text, cursorPos, 'backward');
@@ -694,6 +719,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+K - Delete from cursor to end of line (readline compatible)
 		if (key.ctrl && input === 'k') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			// Find end of current line
@@ -709,6 +735,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+U - Delete from cursor to beginning of line (readline compatible)
 		if (key.ctrl && input === 'u') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			// Find start of current line
@@ -724,6 +751,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+W - Delete word before cursor
 		if (key.ctrl && input === 'w') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const wordStart = findWordBoundary(text, cursorPos, 'backward');
@@ -738,6 +766,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+D - Delete character at cursor (readline compatible)
 		if (key.ctrl && input === 'd') {
+			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			if (cursorPos < text.length) {
@@ -751,6 +780,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+L - Clear from cursor to beginning (legacy, kept for compatibility)
 		if (key.ctrl && input === 'l') {
+			flushPendingInput();
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const afterCursor = displayText.slice(cursorPos);
@@ -762,6 +792,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+R - Clear from cursor to end (legacy, kept for compatibility)
 		if (key.ctrl && input === 'r') {
+			flushPendingInput();
 			const displayText = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const beforeCursor = displayText.slice(0, cursorPos);
@@ -786,6 +817,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		// Detected via raw stdin listener because ink doesn't distinguish Delete from Backspace
 		if (deleteKeyPressed.current) {
 			deleteKeyPressed.current = false;
+			flushPendingInput();
 			buffer.delete();
 			forceStateUpdate();
 			return;
@@ -796,6 +828,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		const isBackspace =
 			key.backspace || key.delete || input === '\x7f' || input === '\x08';
 		if (isBackspace) {
+			flushPendingInput();
 			buffer.backspace();
 			forceStateUpdate();
 			return;
@@ -928,6 +961,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+Enter - Insert newline
 		if (key.ctrl && key.return) {
+			flushPendingInput();
 			buffer.insert('\n');
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
@@ -939,6 +973,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Enter - submit message or insert newline after '/'
 		if (key.return) {
+			flushPendingInput();
 			// Prevent submission if multi-char input (paste/IME) is still being processed
 			if (isProcessingInput.current) {
 				return; // Ignore Enter key while processing
@@ -1048,24 +1083,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Arrow keys for cursor movement
 		if (key.leftArrow) {
-			// If there's accumulated input, process it immediately before moving cursor
-			if (inputBuffer.current) {
-				if (inputTimer.current) {
-					clearTimeout(inputTimer.current);
-					inputTimer.current = null;
-				}
-				const accumulated = inputBuffer.current;
-				const savedCursorPosition = inputStartCursorPos.current;
-				inputBuffer.current = '';
-				isPasting.current = false;
-
-				// Insert at saved position
-				buffer.setCursorPosition(savedCursorPosition);
-				buffer.insert(accumulated);
-
-				// Reset inputStartCursorPos after processing
-				inputStartCursorPos.current = buffer.getCursorPosition();
-			}
+			flushPendingInput();
 
 			buffer.moveLeft();
 			const text = buffer.getFullText();
@@ -1077,24 +1095,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		}
 
 		if (key.rightArrow) {
-			// If there's accumulated input, process it immediately before moving cursor
-			if (inputBuffer.current) {
-				if (inputTimer.current) {
-					clearTimeout(inputTimer.current);
-					inputTimer.current = null;
-				}
-				const accumulated = inputBuffer.current;
-				const savedCursorPosition = inputStartCursorPos.current;
-				inputBuffer.current = '';
-				isPasting.current = false;
-
-				// Insert at saved position
-				buffer.setCursorPosition(savedCursorPosition);
-				buffer.insert(accumulated);
-
-				// Reset inputStartCursorPos after processing
-				inputStartCursorPos.current = buffer.getCursorPosition();
-			}
+			flushPendingInput();
 
 			buffer.moveRight();
 			const text = buffer.getFullText();
@@ -1111,24 +1112,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			!showFilePicker &&
 			!disableKeyboardNavigation
 		) {
-			// If there's accumulated input, process it immediately before moving cursor
-			if (inputBuffer.current) {
-				if (inputTimer.current) {
-					clearTimeout(inputTimer.current);
-					inputTimer.current = null;
-				}
-				const accumulated = inputBuffer.current;
-				const savedCursorPosition = inputStartCursorPos.current;
-				inputBuffer.current = '';
-				isPasting.current = false;
-
-				// Insert at saved position
-				buffer.setCursorPosition(savedCursorPosition);
-				buffer.insert(accumulated);
-
-				// Reset inputStartCursorPos after processing
-				inputStartCursorPos.current = buffer.getCursorPosition();
-			}
+			flushPendingInput();
 
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
@@ -1167,24 +1151,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			!showFilePicker &&
 			!disableKeyboardNavigation
 		) {
-			// If there's accumulated input, process it immediately before moving cursor
-			if (inputBuffer.current) {
-				if (inputTimer.current) {
-					clearTimeout(inputTimer.current);
-					inputTimer.current = null;
-				}
-				const accumulated = inputBuffer.current;
-				const savedCursorPosition = inputStartCursorPos.current;
-				inputBuffer.current = '';
-				isPasting.current = false;
-
-				// Insert at saved position
-				buffer.setCursorPosition(savedCursorPosition);
-				buffer.insert(accumulated);
-
-				// Reset inputStartCursorPos after processing
-				inputStartCursorPos.current = buffer.getCursorPosition();
-			}
+			flushPendingInput();
 
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
