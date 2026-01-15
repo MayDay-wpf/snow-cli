@@ -1544,8 +1544,14 @@ export default function ChatScreen({
 						getFilteredProfiles={() => {
 							const allProfiles = getAllProfiles();
 							const query = panelState.profileSearchQuery.toLowerCase();
-							if (!query) return allProfiles;
-							return allProfiles.filter(
+							// 基于内存状态重新计算 isActive，而非依赖文件状态
+							const currentName = panelState.currentProfileName;
+							const profilesWithMemoryState = allProfiles.map(profile => ({
+								...profile,
+								isActive: profile.displayName === currentName,
+							}));
+							if (!query) return profilesWithMemoryState;
+							return profilesWithMemoryState.filter(
 								profile =>
 									profile.name.toLowerCase().includes(query) ||
 									profile.displayName.toLowerCase().includes(query),
