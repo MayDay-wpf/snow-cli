@@ -138,7 +138,7 @@ export const themes: Record<ThemeType, Theme> = {
 		type: 'light',
 		colors: {
 			background: '#ffffff',
-			text: '#ffffff',
+			text: '#000000',
 			border: '#e0e0e0',
 			diffAdded: '#006400',
 			diffRemoved: '#8B0000',

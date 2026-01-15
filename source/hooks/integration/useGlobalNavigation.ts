@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import {EventEmitter} from 'events';
 
 // Global navigation event emitter
 const navigationEmitter = new EventEmitter();
@@ -8,12 +8,19 @@ navigationEmitter.setMaxListeners(20);
 export const NAVIGATION_EVENT = 'navigate';
 
 export interface NavigationEvent {
-	destination: 'welcome' | 'chat' | 'settings' | 'mcp' | 'systemprompt' | 'customheaders';
+	destination:
+		| 'welcome'
+		| 'chat'
+		| 'help'
+		| 'settings'
+		| 'mcp'
+		| 'systemprompt'
+		| 'customheaders';
 }
 
 // Emit navigation event
 export function navigateTo(destination: NavigationEvent['destination']) {
-	navigationEmitter.emit(NAVIGATION_EVENT, { destination });
+	navigationEmitter.emit(NAVIGATION_EVENT, {destination});
 }
 
 // Subscribe to navigation events

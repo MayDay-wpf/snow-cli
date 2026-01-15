@@ -263,8 +263,8 @@ type CommandHandlerOptions = {
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	setShowSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
+
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
@@ -535,14 +535,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (result.success && result.action === 'showHelpPanel') {
-				options.setShowHelpPanel(true);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'help') {
+				// Help uses a dedicated screen to avoid chat layout overflow.
+				navigateTo('help');
+				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
 				result.action === 'showCustomCommandConfig'

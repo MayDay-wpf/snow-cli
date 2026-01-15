@@ -10,7 +10,6 @@ export type PanelState = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
-	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
@@ -28,7 +27,6 @@ export type PanelActions = {
 	setShowSessionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
-	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
@@ -54,7 +52,6 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
-	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
@@ -83,7 +80,6 @@ export function usePanelState(): PanelState & PanelActions {
 			showSessionPanel ||
 			showMcpPanel ||
 			showUsagePanel ||
-			showHelpPanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
 			showRoleCreation ||
@@ -139,11 +135,6 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
-		if (showHelpPanel) {
-			setShowHelpPanel(false);
-			return true;
-		}
-
 		if (showCustomCommandConfig) {
 			setShowCustomCommandConfig(false);
 			return true;
@@ -192,7 +183,6 @@ export function usePanelState(): PanelState & PanelActions {
 			showSessionPanel ||
 			showMcpPanel ||
 			showUsagePanel ||
-			showHelpPanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
 			showRoleCreation ||
@@ -209,7 +199,6 @@ export function usePanelState(): PanelState & PanelActions {
 		showSessionPanel,
 		showMcpPanel,
 		showUsagePanel,
-		showHelpPanel,
 		showCustomCommandConfig,
 		showSkillsCreation,
 		showRoleCreation,
@@ -225,7 +214,6 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowSessionPanel,
 		setShowMcpPanel,
 		setShowUsagePanel,
-		setShowHelpPanel,
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
 		setShowRoleCreation,

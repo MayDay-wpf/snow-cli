@@ -20,7 +20,6 @@ import type {RoleLocation} from '../../../utils/commands/role.js';
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
 const SessionListPanel = lazy(() => import('./SessionListPanel.js'));
 const UsagePanel = lazy(() => import('./UsagePanel.js'));
-const HelpPanel = lazy(() => import('./HelpPanel.js'));
 
 type PanelsManagerProps = {
 	terminalWidth: number;
@@ -28,7 +27,6 @@ type PanelsManagerProps = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
-	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
@@ -67,7 +65,6 @@ export default function PanelsManager({
 	showSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
-	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
 	showRoleCreation,
@@ -137,15 +134,6 @@ export default function PanelsManager({
 							{t.chatScreen.pressEscToClose}
 						</Text>
 					</Box>
-				</Box>
-			)}
-
-			{/* Show help panel if active - replaces input */}
-			{showHelpPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<Suspense fallback={loadingFallback}>
-						<HelpPanel />
-					</Suspense>
 				</Box>
 			)}
 

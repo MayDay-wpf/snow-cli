@@ -23,7 +23,7 @@ export interface CommandResult {
 		| 'showAgentPicker'
 		| 'showTodoPicker'
 		| 'showProfilePanel'
-		| 'showHelpPanel'
+		| 'help'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'
 		| 'executeTerminalCommand'

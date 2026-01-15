@@ -54,15 +54,15 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: |
-            ## 🚀 Snow CLI ${{ github.ref_name }}
+            ## Snow CLI ${{ github.ref_name }}
 
             ### What's New
 
-            - Support SSH remote directories in working directory management (add via panel with `S`)
-            - Fix codebase indexing and terminal execution tool conflict
-            - Improve Bash tool integration and command confirmation UI
-            - Enhance file list and chat screen behaviors for tool outputs
-            - Fix and normalize internal docs links/sections (EN/ZH usage guides)
+            - Added a dedicated HelpScreen to prevent help content from overflowing the chat layout
+            - Updated the `help` command to navigate to the help screen, with `Esc` / `q` to exit back
+            - Added `help` to global navigation and removed the legacy HelpPanel state/rendering path
+            - Improved streaming state management: merged streaming/stopping states and fixed stuck stop + input-disable behavior
+            - Optimized Bash output rendering: batched line updates and capped cached output to reduce memory usage
 
             ### Installation
             ```bash
