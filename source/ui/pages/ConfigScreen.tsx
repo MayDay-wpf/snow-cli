@@ -240,6 +240,36 @@ export default function ConfigScreen({
 	const currentFieldIndex = allFields.indexOf(currentField);
 	const totalFields = allFields.length;
 
+	const fieldsDisplayWindow = React.useMemo(() => {
+		if (allFields.length <= MAX_VISIBLE_FIELDS) {
+			return {
+				items: allFields,
+				startIndex: 0,
+				endIndex: allFields.length,
+			};
+		}
+
+		const halfWindow = Math.floor(MAX_VISIBLE_FIELDS / 2);
+		let startIndex = Math.max(0, currentFieldIndex - halfWindow);
+		let endIndex = Math.min(allFields.length, startIndex + MAX_VISIBLE_FIELDS);
+
+		if (endIndex - startIndex < MAX_VISIBLE_FIELDS) {
+			startIndex = Math.max(0, endIndex - MAX_VISIBLE_FIELDS);
+		}
+
+		return {
+			items: allFields.slice(startIndex, endIndex),
+			startIndex,
+			endIndex,
+		};
+	}, [allFields, currentFieldIndex]);
+
+	const hiddenAboveFieldsCount = fieldsDisplayWindow.startIndex;
+	const hiddenBelowFieldsCount = Math.max(
+		0,
+		allFields.length - fieldsDisplayWindow.endIndex,
+	);
+
 	useEffect(() => {
 		loadProfilesAndConfig();
 	}, []);
@@ -1823,6 +1853,24 @@ export default function ConfigScreen({
 				{totalFields > MAX_VISIBLE_FIELDS && (
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.configScreen.scrollHint}
+						{hiddenAboveFieldsCount > 0 && (
+							<>
+								·{' '}
+								{t.configScreen.moreAbove.replace(
+									'{count}',
+									hiddenAboveFieldsCount.toString(),
+								)}
+							</>
+						)}
+						{hiddenBelowFieldsCount > 0 && (
+							<>
+								·{' '}
+								{t.configScreen.moreBelow.replace(
+									'{count}',
+									hiddenBelowFieldsCount.toString(),
+								)}
+							</>
+						)}
 					</Text>
 				)}
 			</Box>
@@ -2011,29 +2059,7 @@ export default function ConfigScreen({
 			) : (
 				<Box flexDirection="column">
 					{/* Scrollable field list */}
-					{(() => {
-						// Calculate visible window
-						if (allFields.length <= MAX_VISIBLE_FIELDS) {
-							// Show all fields if less than max
-							return allFields.map(field => renderField(field));
-						}
-
-						// Calculate scroll window
-						const halfWindow = Math.floor(MAX_VISIBLE_FIELDS / 2);
-						let startIndex = Math.max(0, currentFieldIndex - halfWindow);
-						let endIndex = Math.min(
-							allFields.length,
-							startIndex + MAX_VISIBLE_FIELDS,
-						);
-
-						// Adjust if we're near the end
-						if (endIndex - startIndex < MAX_VISIBLE_FIELDS) {
-							startIndex = Math.max(0, endIndex - MAX_VISIBLE_FIELDS);
-						}
-
-						const visibleFields = allFields.slice(startIndex, endIndex);
-						return visibleFields.map(field => renderField(field));
-					})()}
+					{fieldsDisplayWindow.items.map(field => renderField(field))}
 				</Box>
 			)}
 

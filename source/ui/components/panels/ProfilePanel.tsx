@@ -28,10 +28,13 @@ const ProfilePanel = memo(
 			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
 			: MAX_DISPLAY_ITEMS;
 
-		// Limit displayed profiles
-		const displayedProfiles = useMemo(() => {
+		const displayWindow = useMemo(() => {
 			if (profiles.length <= effectiveMaxItems) {
-				return profiles;
+				return {
+					items: profiles,
+					startIndex: 0,
+					endIndex: profiles.length,
+				};
 			}
 
 			// Show profiles around the selected index
@@ -44,8 +47,19 @@ const ProfilePanel = memo(
 				startIndex = Math.max(0, endIndex - effectiveMaxItems);
 			}
 
-			return profiles.slice(startIndex, endIndex);
+			return {
+				items: profiles.slice(startIndex, endIndex),
+				startIndex,
+				endIndex,
+			};
 		}, [profiles, selectedIndex, effectiveMaxItems]);
+
+		const displayedProfiles = displayWindow.items;
+		const hiddenAboveCount = displayWindow.startIndex;
+		const hiddenBelowCount = Math.max(
+			0,
+			profiles.length - displayWindow.endIndex,
+		);
 
 		// Calculate actual selected index in the displayed subset
 		const displayedSelectedIndex = useMemo(() => {
@@ -106,10 +120,33 @@ const ProfilePanel = memo(
 								{profiles.length > effectiveMaxItems && (
 									<Box marginTop={1}>
 										<Text color={theme.colors.menuSecondary} dimColor>
-											{t.profilePanel.scrollHint} ·{' '}
-											{t.profilePanel.moreHidden.replace(
-												'{count}',
-												(profiles.length - effectiveMaxItems).toString(),
+											{t.profilePanel.scrollHint}
+											{hiddenAboveCount > 0 && (
+												<>
+													·{' '}
+													{t.profilePanel.moreAbove.replace(
+														'{count}',
+														hiddenAboveCount.toString(),
+													)}
+												</>
+											)}
+											{hiddenBelowCount > 0 && (
+												<>
+													·{' '}
+													{t.profilePanel.moreBelow.replace(
+														'{count}',
+														hiddenBelowCount.toString(),
+													)}
+												</>
+											)}
+											{hiddenAboveCount === 0 && hiddenBelowCount === 0 && (
+												<>
+													·{' '}
+													{t.profilePanel.moreHidden.replace(
+														'{count}',
+														(profiles.length - effectiveMaxItems).toString(),
+													)}
+												</>
 											)}
 										</Text>
 									</Box>
