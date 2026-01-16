@@ -1111,6 +1111,9 @@ export type TranslationKeys = {
 		scrollToLoadMore: string;
 		untitled: string;
 		now: string;
+		renamePrompt: string;
+		renaming: string;
+		renamePlaceholder: string;
 	};
 	mcpInfoPanel: {
 		title: string;

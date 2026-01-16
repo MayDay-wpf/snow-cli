@@ -1105,12 +1105,15 @@ export const zhTW: TranslationKeys = {
 		searchPlaceholder: '輸入以搜尋',
 		searching: '搜尋中...',
 		navigationHint:
-			'輸入以搜尋 • ↑↓ 導航 • 空格 標記 • D 刪除 • Enter 選擇 • ESC 關閉',
+			'輸入以搜尋 • ↑↓ 導航 • 空格 標記 • D 刪除 • R 重新命名 • Enter 選擇 • ESC 關閉',
 		moreAbove: '↑ 上方還有 {count} 個',
 		moreBelow: '↓ 下方還有 {count} 個',
 		scrollToLoadMore: '(滾動載入更多)',
 		untitled: '無標題',
 		now: '現在',
+		renamePrompt: '重新命名會話',
+		renaming: '重新命名中...',
+		renamePlaceholder: '輸入新的標題',
 	},
 	mcpInfoPanel: {
 		title: 'MCP 服務',

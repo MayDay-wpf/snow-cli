@@ -24,6 +24,11 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const [totalCount, setTotalCount] = useState(0);
 	const [searchInput, setSearchInput] = useState('');
 	const [debouncedSearch, setDebouncedSearch] = useState('');
+	const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
+		null,
+	);
+	const [renameInput, setRenameInput] = useState('');
+	const [isRenaming, setIsRenaming] = useState(false);
 
 	const VISIBLE_ITEMS = 5;
 	const PAGE_SIZE = 20;
@@ -104,6 +109,62 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 
 	useInput((input, key) => {
 		if (loading) return;
+
+		// If in rename mode, handle rename input
+		if (renamingSessionId) {
+			if (key.escape) {
+				setRenamingSessionId(null);
+				setRenameInput('');
+				return;
+			}
+
+			if (key.return && renameInput.trim()) {
+				const handleRename = async () => {
+					setIsRenaming(true);
+					const success = await sessionManager.updateSessionTitle(
+						renamingSessionId,
+						renameInput.trim(),
+					);
+					if (success) {
+						// Reload sessions to show updated title
+						const result = await sessionManager.listSessionsPaginated(
+							0,
+							PAGE_SIZE,
+							debouncedSearch,
+						);
+						setSessions(result.sessions);
+						setHasMore(result.hasMore);
+						setTotalCount(result.total);
+						setCurrentPage(0);
+					}
+					setRenamingSessionId(null);
+					setRenameInput('');
+					setIsRenaming(false);
+				};
+				void handleRename();
+				return;
+			}
+
+			if (key.backspace || key.delete) {
+				setRenameInput(prev => prev.slice(0, -1));
+				return;
+			}
+
+			if (input && !key.ctrl && !key.meta) {
+				if (
+					!key.upArrow &&
+					!key.downArrow &&
+					!key.leftArrow &&
+					!key.rightArrow &&
+					!key.return &&
+					!key.escape &&
+					!key.tab
+				) {
+					setRenameInput(prev => prev + input);
+				}
+			}
+			return;
+		}
 
 		if (key.escape) {
 			if (searchInput) {
@@ -199,6 +260,15 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			return;
 		}
 
+		if (input === 'r' || input === 'R') {
+			const currentSession = sessions[selectedIndex];
+			if (currentSession) {
+				setRenamingSessionId(currentSession.id);
+				setRenameInput(currentSession.title || '');
+			}
+			return;
+		}
+
 		if (key.return && sessions.length > 0) {
 			const selectedSession = sessions[selectedIndex];
 			if (selectedSession) {
@@ -242,7 +312,9 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 					{t.sessionListPanel.title} ({selectedIndex + 1}/{sessions.length}
 					{totalCount > sessions.length && ` of ${totalCount}`})
 					{currentSession &&
-						` • ${currentSession.messageCount} ${t.sessionListPanel.messages.replace('{count}', '')}`}
+						` • ${
+							currentSession.messageCount
+						} ${t.sessionListPanel.messages.replace('{count}', '')}`}
 					{markedSessions.size > 0 && (
 						<Text color="yellow">
 							{' '}
@@ -262,6 +334,14 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 						{t.sessionListPanel.searchLabel} {searchInput}
 						{searchInput !== debouncedSearch && (
 							<Text color="gray"> ({t.sessionListPanel.searching})</Text>
+						)}
+					</Text>
+				) : renamingSessionId ? (
+					<Text color="yellow">
+						{t.sessionListPanel.renamePrompt}:{' '}
+						<Text color="white">{renameInput}</Text>
+						{isRenaming && (
+							<Text color="gray"> ({t.sessionListPanel.renaming})</Text>
 						)}
 					</Text>
 				) : (

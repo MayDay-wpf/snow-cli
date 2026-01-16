@@ -816,6 +816,51 @@ class SessionManager {
 		this.currentSession = null;
 	}
 
+	/**
+	 * Update the title of a session
+	 * @param sessionId - Session ID to update
+	 * @param newTitle - New title for the session
+	 */
+	async updateSessionTitle(
+		sessionId: string,
+		newTitle: string,
+	): Promise<boolean> {
+		try {
+			// Find the session first
+			const session = await this.findSessionInDateFolders(sessionId);
+			if (!session) {
+				logger.warn('Session not found for title update:', {sessionId});
+				return false;
+			}
+
+			// Update title and timestamp
+			session.title = this.cleanTitle(newTitle);
+			session.updatedAt = Date.now();
+
+			// Save the updated session
+			await this.saveSession(session);
+
+			// If this is the current session, update it
+			if (this.currentSession?.id === sessionId) {
+				this.currentSession.title = session.title;
+				this.currentSession.updatedAt = session.updatedAt;
+			}
+
+			logger.info('Session title updated:', {
+				sessionId,
+				newTitle: session.title,
+			});
+
+			return true;
+		} catch (error) {
+			logger.error('Failed to update session title:', {
+				sessionId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return false;
+		}
+	}
+
 	async deleteSession(sessionId: string): Promise<boolean> {
 		let sessionDeleted = false;
 

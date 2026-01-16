@@ -1110,12 +1110,15 @@ export const zh: TranslationKeys = {
 		searchPlaceholder: '输入以搜索',
 		searching: '搜索中...',
 		navigationHint:
-			'输入以搜索 • ↑↓ 导航 • 空格 标记 • D 删除 • Enter 选择 • ESC 关闭',
+			'输入以搜索 • ↑↓ 导航 • 空格 标记 • D 删除 • R 重命名 • Enter 选择 • ESC 关闭',
 		moreAbove: '↑ 上方还有 {count} 个',
 		moreBelow: '↓ 下方还有 {count} 个',
 		scrollToLoadMore: '(滚动加载更多)',
 		untitled: '无标题',
 		now: '现在',
+		renamePrompt: '重命名会话',
+		renaming: '重命名中...',
+		renamePlaceholder: '输入新的标题',
 	},
 	mcpInfoPanel: {
 		title: 'MCP 服务',

@@ -1174,12 +1174,15 @@ export const en: TranslationKeys = {
 		searchPlaceholder: 'Type to search',
 		searching: 'searching...',
 		navigationHint:
-			'Type to search • ↑↓ navigate • Space mark • D delete • Enter select • ESC close',
+			'Type to search • ↑↓ navigate • Space mark • D delete • R rename • Enter select • ESC close',
 		moreAbove: '↑ {count} more above',
 		moreBelow: '↓ {count} more below',
 		scrollToLoadMore: '(scroll to load more)',
 		untitled: 'Untitled',
 		now: 'now',
+		renamePrompt: 'Rename Session',
+		renaming: 'Renaming...',
+		renamePlaceholder: 'Enter new title',
 	},
 	mcpInfoPanel: {
 		title: 'MCP Services',
