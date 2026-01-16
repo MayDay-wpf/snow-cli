@@ -210,20 +210,36 @@ function convertToAnthropicMessages(
 
 				toolResultContent = contentArray;
 			} else {
-				// Text-only tool result
-				toolResultContent = msg.content;
+				// Text-only tool result - ensure content is never undefined
+				toolResultContent = msg.content ?? '';
 			}
 
-			anthropicMessages.push({
-				role: 'user',
-				content: [
-					{
-						type: 'tool_result',
-						tool_use_id: msg.tool_call_id,
-						content: toolResultContent,
-					},
-				],
-			});
+			const toolResultBlock = {
+				type: 'tool_result',
+				tool_use_id: msg.tool_call_id,
+				content: toolResultContent,
+			};
+
+			// Check if the last message is already a user message with tool_result
+			// If so, append to it instead of creating a new message
+			// This is required because Anthropic API requires user/assistant messages to alternate
+			const lastMsg = anthropicMessages[anthropicMessages.length - 1];
+			if (
+				lastMsg &&
+				lastMsg.role === 'user' &&
+				Array.isArray(lastMsg.content) &&
+				lastMsg.content.length > 0 &&
+				lastMsg.content[0]?.type === 'tool_result'
+			) {
+				// Append to existing user message with tool_results
+				lastMsg.content.push(toolResultBlock);
+			} else {
+				// Create new user message
+				anthropicMessages.push({
+					role: 'user',
+					content: [toolResultBlock],
+				});
+			}
 			continue;
 		}
 
@@ -317,10 +333,14 @@ function convertToAnthropicMessages(
 					content,
 				});
 			} else {
-				anthropicMessages.push({
-					role: msg.role,
-					content: msg.content,
-				});
+				// Ensure content is never undefined or empty for API compatibility
+				const messageContent = msg.content || (msg.role === 'user' ? '(empty)' : '');
+				if (messageContent || msg.role === 'assistant') {
+					anthropicMessages.push({
+						role: msg.role,
+						content: messageContent,
+					});
+				}
 			}
 		}
 	}
