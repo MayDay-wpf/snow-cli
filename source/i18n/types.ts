@@ -469,6 +469,7 @@ export type TranslationKeys = {
 			todo: string;
 			addDir: string;
 			reindex: string;
+			codebase: string;
 			permissions: string;
 			vulnerabilityHunting: string;
 			quit: string;

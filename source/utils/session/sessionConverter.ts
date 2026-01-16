@@ -38,7 +38,10 @@ export function convertSessionMessagesToUI(
 				.join('\n');
 		}
 		// 3. DeepSeek R1 reasoning content
-		else if (msg.reasoning_content && typeof msg.reasoning_content === 'string') {
+		else if (
+			msg.reasoning_content &&
+			typeof msg.reasoning_content === 'string'
+		) {
 			content = msg.reasoning_content;
 		}
 
@@ -162,7 +165,8 @@ export function convertSessionMessagesToUI(
 			// For time-consuming tools, always show result with full details
 			if (isTimeConsumingTool) {
 				const statusIcon = isError ? '✗' : '✓';
-				const statusText = isError ? `\n  └─ ${msg.content}` : '';
+				// UI only shows simple failure message, detailed error is sent to AI via msg.content
+				const statusText = '';
 
 				let terminalResultData:
 					| {
@@ -265,10 +269,10 @@ export function convertSessionMessagesToUI(
 				// For quick tools, only show errors
 				// Success results are handled by updating pendingToolIds in the compact message
 				if (isError) {
-					const statusText = `\n  └─ ${msg.content}`;
+					// UI only shows simple failure message, detailed error is sent to AI
 					uiMessages.push({
 						role: 'subagent',
-						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m${statusText}`,
+						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m`,
 						streaming: false,
 						messageStatus: 'error',
 						subAgentInternal: true,
@@ -362,10 +366,10 @@ export function convertSessionMessagesToUI(
 			const isError = status === 'error';
 			const statusIcon = isError ? '✗' : '✓';
 
+			// UI only shows simple failure message, detailed error is sent to AI via msg.content
 			let statusText = '';
-			if (isError) {
-				statusText = `\n  └─ ${msg.content}`;
-			} else if (isRejectedWithReply) {
+			// Keep rejection reason display for user feedback (not error details)
+			if (isRejectedWithReply) {
 				// Extract rejection reason
 				const reason =
 					msg.content.split('Tool execution rejected by user:')[1]?.trim() ||

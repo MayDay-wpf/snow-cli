@@ -68,6 +68,15 @@ export class ACECodeSearchService {
 	// 正则表达式缓存（用于 shouldExcludeDirectory）
 	private regexCache: Map<string, RegExp> = new Map();
 
+	// 命令可用性缓存（避免重复 spawn which 进程）
+	private commandAvailabilityCache: Map<string, boolean> = new Map();
+	// Git 仓库状态缓存
+	private isGitRepoCache: boolean | null = null;
+	// 文件修改时间缓存（用于 sortResultsByRecency）
+	private fileStatCache: Map<string, {mtimeMs: number; cachedAt: number}> =
+		new Map();
+	private static readonly STAT_CACHE_TTL = 60 * 1000; // 60秒过期
+
 	constructor(basePath: string = process.cwd()) {
 		this.basePath = path.resolve(basePath);
 	}
@@ -153,16 +162,40 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Check if a directory is a Git repository
+	 * Check if a command is available (with caching)
+	 */
+	private async isCommandAvailableCached(command: string): Promise<boolean> {
+		const cached = this.commandAvailabilityCache.get(command);
+		if (cached !== undefined) {
+			return cached;
+		}
+		const available = await isCommandAvailable(command);
+		this.commandAvailabilityCache.set(command, available);
+		return available;
+	}
+
+	/**
+	 * Check if a directory is a Git repository (with caching)
 	 */
 	private async isGitRepository(
 		directory: string = this.basePath,
 	): Promise<boolean> {
+		// Only cache for basePath
+		if (directory === this.basePath && this.isGitRepoCache !== null) {
+			return this.isGitRepoCache;
+		}
 		try {
 			const gitDir = path.join(directory, '.git');
 			const stats = await fs.stat(gitDir);
-			return stats.isDirectory();
+			const isRepo = stats.isDirectory();
+			if (directory === this.basePath) {
+				this.isGitRepoCache = isRepo;
+			}
+			return isRepo;
 		} catch {
+			if (directory === this.basePath) {
+				this.isGitRepoCache = false;
+			}
 			return false;
 		}
 	}
@@ -772,11 +805,10 @@ export class ACECodeSearchService {
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
+		grepCommand: 'rg' | 'grep' = 'grep',
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
-		// Prefer ripgrep (rg) over grep if available
-		const grepCommand = (await isCommandAvailable('rg')) ? 'rg' : 'grep';
 		const isRipgrep = grepCommand === 'rg';
 
 		return new Promise((resolve, reject) => {
@@ -1065,42 +1097,45 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		// Check command availability once (cached)
+		const [isGitRepo, gitAvailable, rgAvailable, grepAvailable] =
+			await Promise.all([
+				this.isGitRepository(),
+				this.isCommandAvailableCached('git'),
+				this.isCommandAvailableCached('rg'),
+				this.isCommandAvailableCached('grep'),
+			]);
+
 		// Strategy 1: Try git grep first
-		if (await this.isGitRepository()) {
+		if (isGitRepo && gitAvailable) {
 			try {
-				const gitAvailable = await isCommandAvailable('git');
-				if (gitAvailable) {
-					const results = await this.gitGrepSearch(
-						pattern,
-						fileGlob,
-						maxResults,
-						isRegex,
-					);
-					if (results.length > 0) {
-						return await this.sortResultsByRecency(results);
-					}
+				const results = await this.gitGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					isRegex,
+				);
+				if (results.length > 0) {
+					return await this.sortResultsByRecency(results);
 				}
 			} catch (error) {
 				// Fall through to next strategy
-				//console.debug('git grep failed, falling back to system grep');
 			}
 		}
 
-		// Strategy 2: Try system grep/ripgrep
-		try {
-			const grepAvailable =
-				(await isCommandAvailable('rg')) || (await isCommandAvailable('grep'));
-			if (grepAvailable) {
+		// Strategy 2: Try system grep/ripgrep (pass which command to use)
+		if (rgAvailable || grepAvailable) {
+			try {
 				const results = await this.systemGrepSearch(
 					pattern,
 					fileGlob,
 					maxResults,
+					rgAvailable ? 'rg' : 'grep',
 				);
 				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				// Fall through to JavaScript fallback
 			}
-		} catch (error) {
-			// Fall through to JavaScript fallback
-			//console.debug('system grep failed, falling back to JavaScript search');
 		}
 
 		// Strategy 3: JavaScript fallback (always works)
@@ -1116,7 +1151,7 @@ export class ACECodeSearchService {
 	/**
 	 * Sort search results by file modification time (recent files first)
 	 * Files modified within last 24 hours are prioritized
-	 * Uses parallel stat calls for better performance
+	 * Uses cached stat calls for better performance
 	 */
 	private async sortResultsByRecency(
 		results: Array<{
@@ -1136,25 +1171,45 @@ export class ACECodeSearchService {
 		// Get unique file paths
 		const uniqueFiles = Array.from(new Set(results.map(r => r.filePath)));
 
-		// Fetch file modification times in parallel using Promise.allSettled
-		const statResults = await Promise.allSettled(
-			uniqueFiles.map(async filePath => {
-				const fullPath = path.resolve(this.basePath, filePath);
-				const stats = await fs.stat(fullPath);
-				return {filePath, mtimeMs: stats.mtimeMs};
-			}),
-		);
-
-		// Build map of file modification times
+		// Fetch file modification times with caching
 		const fileModTimes = new Map<string, number>();
-		statResults.forEach((result, index) => {
-			if (result.status === 'fulfilled') {
-				fileModTimes.set(result.value.filePath, result.value.mtimeMs);
+		const uncachedFiles: string[] = [];
+
+		// Check cache first
+		for (const filePath of uniqueFiles) {
+			const cached = this.fileStatCache.get(filePath);
+			if (
+				cached &&
+				now - cached.cachedAt < ACECodeSearchService.STAT_CACHE_TTL
+			) {
+				fileModTimes.set(filePath, cached.mtimeMs);
 			} else {
-				// If we can't get stats, treat as old file
-				fileModTimes.set(uniqueFiles[index]!, 0);
+				uncachedFiles.push(filePath);
 			}
-		});
+		}
+
+		// Fetch uncached files in parallel
+		if (uncachedFiles.length > 0) {
+			const statResults = await Promise.allSettled(
+				uncachedFiles.map(async filePath => {
+					const fullPath = path.resolve(this.basePath, filePath);
+					const stats = await fs.stat(fullPath);
+					return {filePath, mtimeMs: stats.mtimeMs};
+				}),
+			);
+
+			statResults.forEach((result, index) => {
+				const filePath = uncachedFiles[index]!;
+				if (result.status === 'fulfilled') {
+					const mtimeMs = result.value.mtimeMs;
+					fileModTimes.set(filePath, mtimeMs);
+					this.fileStatCache.set(filePath, {mtimeMs, cachedAt: now});
+				} else {
+					// If we can't get stats, treat as old file
+					fileModTimes.set(filePath, 0);
+				}
+			});
+		}
 
 		// Sort results: recent files first, then by original order
 		return results.sort((a, b) => {

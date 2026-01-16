@@ -500,6 +500,8 @@ export const en: TranslationKeys = {
 				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
 				'Rebuild codebase index. Use -force to delete existing database and rebuild from scratch',
+			codebase:
+				'Toggle codebase indexing for current project. Usage: /codebase [on|off|status]',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
 			profiles: 'Switch configuration profiles',

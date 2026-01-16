@@ -303,6 +303,7 @@ type CommandHandlerOptions = {
 	) => Promise<void>;
 	onQuit?: () => void;
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
+	onToggleCodebase?: (mode?: string) => Promise<void>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -886,6 +887,22 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const errorMessage: Message = {
 							role: 'command',
 							content: `Failed to rebuild codebase index: ${errorMsg}`,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+					}
+				}
+			} else if (result.success && result.action === 'toggleCodebase') {
+				// Handle toggle codebase command
+				if (options.onToggleCodebase) {
+					try {
+						await options.onToggleCodebase(result.prompt);
+					} catch (error) {
+						const errorMsg =
+							error instanceof Error ? error.message : 'Unknown error';
+						const errorMessage: Message = {
+							role: 'command',
+							content: `Failed to toggle codebase: ${errorMsg}`,
 							commandName: commandName,
 						};
 						options.setMessages(prev => [...prev, errorMessage]);

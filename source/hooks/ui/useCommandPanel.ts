@@ -79,6 +79,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.reindex,
 			},
 			{
+				name: 'codebase',
+				description:
+					t.commandPanel.commands.codebase ||
+					'Toggle codebase indexing for current project',
+			},
+			{
 				name: 'permissions',
 				description:
 					t.commandPanel.commands.permissions || 'Manage tool permissions',

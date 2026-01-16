@@ -34,6 +34,7 @@ export interface CommandResult {
 		| 'showRoleList'
 		| 'showPermissionsPanel'
 		| 'reindexCodebase'
+		| 'toggleCodebase'
 		| 'sendAsMessage'
 		| 'quit';
 	prompt?: string;

@@ -1286,6 +1286,55 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 	};
 
+	// Handle toggle codebase command
+	const handleToggleCodebase = async (mode?: string) => {
+		const workingDirectory = process.cwd();
+		const {loadCodebaseConfig, saveCodebaseConfig} = await import(
+			'../../utils/config/codebaseConfig.js'
+		);
+
+		const config = loadCodebaseConfig(workingDirectory);
+
+		// Determine new enabled state
+		let newEnabled: boolean;
+		if (mode === 'on') {
+			newEnabled = true;
+		} else if (mode === 'off') {
+			newEnabled = false;
+		} else {
+			// Toggle
+			newEnabled = !config.enabled;
+		}
+
+		// Update config
+		config.enabled = newEnabled;
+		saveCodebaseConfig(config, workingDirectory);
+
+		// Show message
+		const statusMessage: Message = {
+			role: 'command',
+			content: `Codebase indexing ${
+				newEnabled ? 'enabled' : 'disabled'
+			} for this project`,
+			commandName: 'codebase',
+		};
+		setMessages(prev => [...prev, statusMessage]);
+
+		// If enabling, start indexing
+		if (newEnabled) {
+			await handleReindexCodebase();
+		} else {
+			// If disabling, stop the agent
+			if (codebaseAgentRef.current) {
+				await codebaseAgentRef.current.stop();
+				codebaseAgentRef.current.stopWatching();
+				codebaseAgentRef.current = null;
+				setCodebaseIndexing(false);
+				setWatcherEnabled(false);
+			}
+		}
+	};
+
 	const handleReviewCommitConfirm = async (
 		selection: ReviewCommitSelection[],
 		notes: string,
@@ -1436,6 +1485,7 @@ Please provide your review in a clear, structured format.`;
 		handleSessionPanelSelect,
 		handleQuit,
 		handleReindexCodebase,
+		handleToggleCodebase,
 		handleReviewCommitConfirm,
 		rollbackViaSSE,
 	};
