@@ -213,6 +213,10 @@ export class SSHClient {
 	 */
 	async exec(
 		command: string,
+		options?: {
+			timeout?: number;
+			signal?: AbortSignal;
+		},
 	): Promise<{stdout: string; stderr: string; code: number}> {
 		if (!this.connected) {
 			throw new Error('Not connected');
@@ -227,9 +231,81 @@ export class SSHClient {
 
 				let stdout = '';
 				let stderr = '';
+				let settled = false;
+
+				const safeResolve = (value: {
+					stdout: string;
+					stderr: string;
+					code: number;
+				}) => {
+					if (settled) return;
+					settled = true;
+					safeCleanup();
+					resolve(value);
+				};
+				const safeReject = (error: any) => {
+					if (settled) return;
+					settled = true;
+					safeCleanup();
+					reject(error);
+				};
+
+				let timeoutTimer: NodeJS.Timeout | null = null;
+				const safeCleanup = () => {
+					if (timeoutTimer) {
+						clearTimeout(timeoutTimer);
+						timeoutTimer = null;
+					}
+					if (options?.signal && abortHandler) {
+						options.signal.removeEventListener('abort', abortHandler);
+					}
+				};
+
+				const abortHandler = options?.signal
+					? () => {
+							const abortError: any = new Error('SSH command aborted');
+							abortError.code = 'ABORT_ERR';
+							abortError.stdout = stdout;
+							abortError.stderr = stderr;
+							try {
+								stream.close();
+								stream.destroy();
+							} catch {
+								// Ignore.
+							}
+							safeReject(abortError);
+					  }
+					: null;
+
+				if (options?.signal && abortHandler) {
+					if (options.signal.aborted) {
+						abortHandler();
+						return;
+					}
+					options.signal.addEventListener('abort', abortHandler);
+				}
+
+				const timeoutMs = options?.timeout;
+				if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+					timeoutTimer = setTimeout(() => {
+						const timeoutError: any = new Error(
+							`SSH command timed out after ${timeoutMs}ms`,
+						);
+						timeoutError.code = 'ETIMEDOUT';
+						timeoutError.stdout = stdout;
+						timeoutError.stderr = stderr;
+						try {
+							stream.close();
+							stream.destroy();
+						} catch {
+							// Ignore.
+						}
+						safeReject(timeoutError);
+					}, timeoutMs);
+				}
 
 				stream.on('close', (code: number) => {
-					resolve({stdout, stderr, code});
+					safeResolve({stdout, stderr, code});
 				});
 
 				stream.on('data', (data: Buffer) => {

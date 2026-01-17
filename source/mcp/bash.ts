@@ -99,7 +99,8 @@ export class TerminalCommandService {
 		command: string,
 		remotePath: string,
 		sshConfig: SSHConfig,
-		_timeout: number,
+		timeout: number,
+		abortSignal?: AbortSignal,
 	): Promise<{stdout: string; stderr: string; exitCode: number}> {
 		const sshClient = new SSHClient();
 
@@ -122,8 +123,11 @@ export class TerminalCommandService {
 			// Send initial output to UI
 			appendTerminalOutput(`[SSH] Executing on ${sshConfig.host}: ${command}`);
 
-			// Execute command on remote server
-			const result = await sshClient.exec(fullCommand);
+			// Execute command on remote server with timeout/abort support.
+			const result = await sshClient.exec(fullCommand, {
+				timeout,
+				signal: abortSignal,
+			});
 
 			// Send output to UI
 			if (result.stdout) {
@@ -190,6 +194,7 @@ export class TerminalCommandService {
 					parsed.path,
 					sshConfig,
 					timeout,
+					abortSignal,
 				);
 
 				return {
@@ -281,6 +286,51 @@ export class TerminalCommandService {
 				stdout: string;
 				stderr: string;
 			}>((resolve, reject) => {
+				let timeoutTimer: NodeJS.Timeout | null = null;
+				let timedOut = false;
+
+				const safeClearTimeout = () => {
+					if (timeoutTimer) {
+						clearTimeout(timeoutTimer);
+						timeoutTimer = null;
+					}
+				};
+
+				const triggerTimeout = () => {
+					if (timedOut) return;
+					timedOut = true;
+					safeClearTimeout();
+
+					// Kill the underlying process tree so we don't keep waiting on streams.
+					if (childProcess.pid && !childProcess.killed) {
+						try {
+							if (process.platform === 'win32') {
+								exec(`taskkill /PID ${childProcess.pid} /T /F 2>NUL`, {
+									windowsHide: true,
+								});
+							} else {
+								childProcess.kill('SIGTERM');
+							}
+						} catch {
+							// Ignore.
+						}
+					}
+
+					const timeoutError: any = new Error(
+						`Command timed out after ${timeout}ms: ${command}`,
+					);
+					timeoutError.code = 'ETIMEDOUT';
+					reject(timeoutError);
+				};
+
+				if (typeof timeout === 'number' && timeout > 0) {
+					timeoutTimer = setTimeout(triggerTimeout, timeout);
+				}
+				if (abortSignal) {
+					abortSignal.addEventListener('abort', () => {
+						safeClearTimeout();
+					});
+				}
 				let stdoutData = '';
 				let stderrData = '';
 				let backgroundProcessId: string | null = null;
@@ -361,9 +411,10 @@ export class TerminalCommandService {
 				// Check background flag periodically
 				const backgroundCheckInterval = setInterval(() => {
 					if (shouldMoveToBackground) {
+						safeClearTimeout();
 						clearInterval(backgroundCheckInterval);
 						if (inputCheckInterval) clearInterval(inputCheckInterval);
-						// Reset flag for next command
+
 						resetBackgroundFlag();
 						// Resolve immediately with partial output
 						resolve({
@@ -374,10 +425,10 @@ export class TerminalCommandService {
 						});
 					}
 				}, 100);
-
 				childProcess.stdout?.on('data', chunk => {
 					stdoutData += chunk;
 					lastOutputTime = Date.now();
+
 					// Clear input prompt when new output arrives
 					setTerminalNeedsInput(false);
 					// Send real-time output to UI
@@ -386,10 +437,10 @@ export class TerminalCommandService {
 						.filter(line => line.trim());
 					lines.forEach(line => appendTerminalOutput(line));
 				});
-
 				childProcess.stderr?.on('data', chunk => {
 					stderrData += chunk;
 					lastOutputTime = Date.now();
+
 					// Clear input prompt when new output arrives
 					setTerminalNeedsInput(false);
 					// Send real-time output to UI
@@ -400,6 +451,7 @@ export class TerminalCommandService {
 				});
 
 				childProcess.on('error', error => {
+					safeClearTimeout();
 					clearInterval(backgroundCheckInterval);
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);
@@ -432,6 +484,7 @@ export class TerminalCommandService {
 				});
 
 				childProcess.on('close', (code, signal) => {
+					safeClearTimeout();
 					clearInterval(backgroundCheckInterval);
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);
@@ -460,7 +513,11 @@ export class TerminalCommandService {
 						// Process was killed by signal (e.g., timeout, manual kill, ESC key)
 						// CRITICAL: Still preserve stdout/stderr for debugging
 						const error: any = new Error(`Process killed by signal ${signal}`);
-						error.code = code || 1;
+						if (timedOut) {
+							error.code = 'ETIMEDOUT';
+						} else {
+							error.code = code || 1;
+						}
 						error.stdout = stdoutData;
 						error.stderr = stderrData;
 						error.signal = signal;

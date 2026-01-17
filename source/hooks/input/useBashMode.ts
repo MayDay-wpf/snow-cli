@@ -99,12 +99,75 @@ export function useBashMode() {
 
 				const child = spawn(shell, shellArgs, {
 					cwd: process.cwd(),
-					timeout,
 					env: process.env,
 				});
 
 				let stdout = '';
 				let stderr = '';
+				let settled = false;
+				let timeoutTimer: NodeJS.Timeout | null = null;
+
+				const safeCleanup = () => {
+					if (timeoutTimer) {
+						clearTimeout(timeoutTimer);
+						timeoutTimer = null;
+					}
+				};
+
+				const safeResolve = (result: CommandExecutionResult) => {
+					if (settled) return;
+					settled = true;
+					safeCleanup();
+
+					setState(prev => {
+						const newResults = new Map(prev.executionResults);
+						newResults.set(command, result);
+						return {
+							...prev,
+							isExecuting: false,
+							currentCommand: null,
+							currentTimeout: null,
+							output: [],
+							executionResults: newResults,
+						};
+					});
+
+					resolve(result);
+				};
+
+				const killProcessTree = () => {
+					if (!child.pid || child.killed) return;
+					try {
+						if (process.platform === 'win32') {
+							// /T: kill child processes; /F: force
+							const {exec} = require('child_process');
+							exec(`taskkill /PID ${child.pid} /T /F 2>NUL`, {
+								windowsHide: true,
+							});
+						} else {
+							child.kill('SIGTERM');
+						}
+					} catch {
+						// Ignore.
+					}
+				};
+
+				const triggerTimeout = () => {
+					// 超时后：杀进程树 + 返回一个失败结果，避免 UI 一直卡在 isExecuting=true。
+					killProcessTree();
+					safeResolve({
+						success: false,
+						stdout: stdout.trim(),
+						stderr: `Command timed out after ${timeout}ms: ${command}`,
+						command,
+						exitCode: null,
+						signal: 'SIGTERM',
+					});
+				};
+
+				if (typeof timeout === 'number' && timeout > 0) {
+					timeoutTimer = setTimeout(triggerTimeout, timeout);
+				}
 
 				child.stdout?.on('data', (data: Buffer) => {
 					stdout += data.toString();
@@ -139,56 +202,27 @@ export function useBashMode() {
 				child.on(
 					'close',
 					(code: number | null, signal: NodeJS.Signals | null) => {
-						const result: CommandExecutionResult = {
+						// 正常退出：返回真实 code/signal
+						safeResolve({
 							success: code === 0,
 							stdout: stdout.trim(),
 							stderr: stderr.trim(),
 							command,
 							exitCode: code,
 							signal,
-						};
-
-						setState(prev => {
-							const newResults = new Map(prev.executionResults);
-							newResults.set(command, result);
-							return {
-								...prev,
-								isExecuting: false,
-								currentCommand: null,
-								currentTimeout: null,
-								output: [],
-								executionResults: newResults,
-							};
 						});
-
-						resolve(result);
 					},
 				);
 
 				child.on('error', (error: Error) => {
-					const result: CommandExecutionResult = {
+					safeResolve({
 						success: false,
 						stdout: '',
 						stderr: error.message,
 						command,
 						exitCode: null,
 						signal: null,
-					};
-
-					setState(prev => {
-						const newResults = new Map(prev.executionResults);
-						newResults.set(command, result);
-						return {
-							...prev,
-							isExecuting: false,
-							currentCommand: null,
-							currentTimeout: null,
-							output: [],
-							executionResults: newResults,
-						};
 					});
-
-					resolve(result);
 				});
 			});
 		},
