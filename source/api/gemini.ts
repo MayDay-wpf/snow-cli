@@ -460,7 +460,6 @@ export async function* createStreamingGeminiCompletion(
 					: 'https://generativelanguage.googleapis.com/v1beta';
 
 			const urlObj = new URL(`${baseUrl}/${modelName}:streamGenerateContent`);
-			urlObj.searchParams.set('key', config.apiKey);
 			urlObj.searchParams.set('alt', 'sse');
 			const url = urlObj.toString();
 
@@ -473,6 +472,7 @@ export async function* createStreamingGeminiCompletion(
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
+					'x-goog-api-key': config.apiKey,
 					'x-snow': getVersionHeader(),
 					...customHeaders,
 				},

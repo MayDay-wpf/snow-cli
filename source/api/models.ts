@@ -75,16 +75,13 @@ async function fetchGeminiModels(
 	baseUrl: string,
 	apiKey: string,
 ): Promise<Model[]> {
-	// Gemini uses API key as query parameter.
-	// Do NOT string-concatenate the key into the URL; URLSearchParams will encode safely.
-	const urlObj = new URL(`${baseUrl}/models`);
-	urlObj.searchParams.set('key', apiKey);
-	const url = urlObj.toString();
+	const url = `${baseUrl}/models`;
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',
+			'x-goog-api-key': apiKey,
 		},
 	});
 	const response = await fetch(url, fetchOptions);
