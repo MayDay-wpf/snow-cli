@@ -459,7 +459,10 @@ export async function* createStreamingGeminiCompletion(
 					? config.baseUrl
 					: 'https://generativelanguage.googleapis.com/v1beta';
 
-			const url = `${baseUrl}/${modelName}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
+			const urlObj = new URL(`${baseUrl}/${modelName}:streamGenerateContent`);
+			urlObj.searchParams.set('key', config.apiKey);
+			urlObj.searchParams.set('alt', 'sse');
+			const url = urlObj.toString();
 
 			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 			const customHeaders =
