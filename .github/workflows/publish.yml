@@ -58,11 +58,10 @@ jobs:
 
             ### What's New
 
-            - Added a dedicated HelpScreen to prevent help content from overflowing the chat layout
-            - Updated the `help` command to navigate to the help screen, with `Esc` / `q` to exit back
-            - Added `help` to global navigation and removed the legacy HelpPanel state/rendering path
-            - Improved streaming state management: merged streaming/stopping states and fixed stuck stop + input-disable behavior
-            - Optimized Bash output rendering: batched line updates and capped cached output to reduce memory usage
+            - Fix the issue where terminal command execution timeout fails
+            - Modify the location for adding the Gemini request APIKEY
+            - Fix the display of active options when switching configuration files
+            - Add the session renaming function
 
             ### Installation
             ```bash
