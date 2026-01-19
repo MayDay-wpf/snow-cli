@@ -189,6 +189,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
 	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
 	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
+	const inputSessionId = useRef<number>(0); // Invalidates stale buffered input timers
 	const componentMountTime = useRef<number>(Date.now()); // Track when component mounted
 
 	// Cleanup timer on unmount
@@ -244,6 +245,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			clearTimeout(inputTimer.current);
 			inputTimer.current = null;
 		}
+
+		// Invalidate any queued timer work from older input batches.
+		inputSessionId.current += 1;
 
 		const accumulated = inputBuffer.current;
 		const savedCursorPosition = inputStartCursorPos.current;
@@ -1222,6 +1226,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				if (isStartingNewInput) {
 					inputStartCursorPos.current = buffer.getCursorPosition();
 					isProcessingInput.current = true; // Mark that we're processing multi-char input
+					inputSessionId.current += 1;
 				}
 
 				// Accumulate input for paste detection
@@ -1231,6 +1236,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				if (inputTimer.current) {
 					clearTimeout(inputTimer.current);
 				}
+
+				const activeSessionId = inputSessionId.current;
 
 				// Detect large paste: if accumulated buffer is getting large, extend timeout
 				// This prevents splitting large pastes into multiple insert() calls
@@ -1252,6 +1259,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 				// Set timer to process accumulated input - fixed 100ms
 				inputTimer.current = setTimeout(() => {
+					if (activeSessionId !== inputSessionId.current) {
+						return;
+					}
+
 					const accumulated = inputBuffer.current;
 					const savedCursorPosition = inputStartCursorPos.current;
 					const wasPasting = isPasting.current; // Save pasting state before clearing

@@ -1,4 +1,11 @@
-import {cpLen, cpSlice, visualWidth, toCodePoints} from '../core/textUtils.js';
+import {
+	codePointToVisualPos,
+	cpLen,
+	cpSlice,
+	visualPosToCodePoint,
+	visualWidth,
+	toCodePoints,
+} from '../core/textUtils.js';
 
 export interface Viewport {
 	width: number;
@@ -537,14 +544,22 @@ export class TextBuffer {
 
 		for (let i = this.visualLines.length - 1; i >= 0; i--) {
 			const start = this.visualLineStarts[i] ?? 0;
-			if (clamped >= start) {
+			const nextStart = this.visualLineStarts[i + 1];
+			const lineEnd =
+				typeof nextStart === 'number' ? nextStart - 1 : totalLength;
+			if (clamped >= start && clamped <= lineEnd) {
 				const line = this.visualLines[i] ?? '';
-				const col = Math.min(cpLen(line), clamped - start);
+				const lineOffset = Math.max(0, clamped - start);
+				const withinLine = cpSlice(this.content, start, start + lineOffset);
+				const col = Math.min(
+					visualWidth(line),
+					codePointToVisualPos(withinLine, cpLen(withinLine)),
+				);
 				return [i, col];
 			}
 		}
 
-		return [0, clamped];
+		return [0, 0];
 	}
 
 	private moveCursorToVisualRow(targetRow: number): void {
@@ -557,11 +572,12 @@ export class TextBuffer {
 		const row = Math.max(0, Math.min(targetRow, this.visualLines.length - 1));
 		const start = this.visualLineStarts[row] ?? 0;
 		const line = this.visualLines[row] ?? '';
-		const lineLength = cpLen(line);
-		const column = Math.min(this.preferredVisualCol, lineLength);
+		const lineVisualWidth = visualWidth(line);
+		const visualColumn = Math.min(this.preferredVisualCol, lineVisualWidth);
+		const codePointOffset = visualPosToCodePoint(line, visualColumn);
 
-		this.cursorIndex = start + column;
-		this.visualCursorPos = [row, column];
+		this.cursorIndex = start + codePointOffset;
+		this.visualCursorPos = [row, visualColumn];
 	}
 
 	private recomputeVisualCursorOnly(): void {

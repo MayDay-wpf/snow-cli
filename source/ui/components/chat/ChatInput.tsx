@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import {Box, Text} from 'ink';
 import {Viewport} from '../../../utils/ui/textBuffer.js';
-import {cpSlice} from '../../../utils/core/textUtils.js';
+import {cpSlice, visualPosToCodePoint} from '../../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
@@ -482,9 +482,10 @@ export default function ChatInput({
 
 				if (i === cursorRow) {
 					// This line contains the cursor
-					const beforeCursor = cpSlice(line, 0, cursorCol);
-					const atCursor = cpSlice(line, cursorCol, cursorCol + 1) || ' ';
-					const afterCursor = cpSlice(line, cursorCol + 1);
+					const cursorIndex = visualPosToCodePoint(line, cursorCol);
+					const beforeCursor = cpSlice(line, 0, cursorIndex);
+					const atCursor = cpSlice(line, cursorIndex, cursorIndex + 1) || ' ';
+					const afterCursor = cpSlice(line, cursorIndex + 1);
 
 					renderedLines.push(
 						<Box key={i} flexDirection="row">
