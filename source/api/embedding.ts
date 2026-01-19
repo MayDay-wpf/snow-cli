@@ -36,6 +36,15 @@ interface OllamaEmbeddingResponse {
 	prompt_eval_count?: number;
 }
 
+interface GeminiEmbeddingResponse {
+	embedding?: {
+		values: number[];
+	};
+	embeddings?: Array<{
+		values: number[];
+	}>;
+}
+
 function isOpenAIEmbeddingsResponse(data: any): data is EmbeddingResponse {
 	return (
 		Boolean(data) &&
@@ -56,6 +65,13 @@ function isOllamaEmbedResponse(data: any): data is OllamaEmbeddingResponse {
 		Boolean(data) &&
 		typeof data.model === 'string' &&
 		Array.isArray(data.embeddings)
+	);
+}
+
+function isGeminiEmbedResponse(data: any): data is GeminiEmbeddingResponse {
+	return (
+		Boolean(data) &&
+		(Boolean(data.embedding?.values) || Boolean(data.embeddings))
 	);
 }
 
@@ -205,6 +221,81 @@ function normalizeOllamaResponse(params: {
 	);
 }
 
+function normalizeGeminiResponse(params: {
+	data: unknown;
+	model: string;
+	expectedDimensions?: number;
+}): EmbeddingResponse {
+	const {data, model, expectedDimensions} = params;
+
+	if (!isGeminiEmbedResponse(data)) {
+		throw new Error('Unexpected Gemini embeddings response format');
+	}
+
+	// Handle single embedding response
+	if (data.embedding?.values) {
+		const actualDimensions = data.embedding.values.length;
+
+		if (expectedDimensions && actualDimensions !== expectedDimensions) {
+			logger.warn(
+				`Gemini embedding dimension mismatch (expected ${expectedDimensions}, got ${actualDimensions})`,
+				{model, expectedDimensions, actualDimensions},
+			);
+		}
+
+		return {
+			model,
+			object: 'list',
+			usage: {
+				total_tokens: 0,
+				prompt_tokens: 0,
+			},
+			data: [
+				{
+					object: 'embedding',
+					index: 0,
+					embedding: data.embedding.values,
+				},
+			],
+		};
+	}
+
+	// Handle batch embeddings response
+	if (data.embeddings && Array.isArray(data.embeddings)) {
+		const actualDimensions =
+			data.embeddings.length > 0
+				? data.embeddings[0]?.values?.length
+				: undefined;
+
+		if (
+			expectedDimensions &&
+			actualDimensions &&
+			actualDimensions !== expectedDimensions
+		) {
+			logger.warn(
+				`Gemini embedding dimension mismatch (expected ${expectedDimensions}, got ${actualDimensions})`,
+				{model, expectedDimensions, actualDimensions},
+			);
+		}
+
+		return {
+			model,
+			object: 'list',
+			usage: {
+				total_tokens: 0,
+				prompt_tokens: 0,
+			},
+			data: data.embeddings.map((emb, index) => ({
+				object: 'embedding',
+				index,
+				embedding: emb.values,
+			})),
+		};
+	}
+
+	throw new Error('Gemini response missing embedding data');
+}
+
 /**
  * Create embeddings for text array (single API call)
  * @param options Embedding options
@@ -236,27 +327,42 @@ export async function createEmbeddings(
 		throw new Error('Input texts are required');
 	}
 
-	// Build request body
-	const requestBody: {
-		model: string;
-		input: string[];
-		task?: string;
-		dimensions?: number;
-	} = {
-		model,
-		input,
-	};
-
-	if (task) {
-		requestBody.task = task;
-	}
-
-	if (dimensions) {
-		requestBody.dimensions = dimensions;
-	}
-
 	// Determine endpoint based on provider type
 	const embeddingType = config.embedding.type || 'jina';
+
+	// Build request body based on provider type
+	let requestBody: any;
+
+	if (embeddingType === 'gemini') {
+		// Gemini API format
+		requestBody = {
+			content: {
+				parts: input.map(text => ({text})),
+			},
+		};
+
+		if (task) {
+			requestBody.taskType = task;
+		}
+
+		if (dimensions) {
+			requestBody.output_dimensionality = dimensions;
+		}
+	} else {
+		// OpenAI-compatible format (Jina, Ollama, etc.)
+		requestBody = {
+			model,
+			input,
+		};
+
+		if (task) {
+			requestBody.task = task;
+		}
+
+		if (dimensions) {
+			requestBody.dimensions = dimensions;
+		}
+	}
 	let url: string;
 	let ollamaMode: OllamaEmbeddingsMode | undefined;
 
@@ -264,6 +370,9 @@ export async function createEmbeddings(
 		const resolved = resolveOllamaEmbeddingsEndpoint(baseUrl);
 		url = resolved.url;
 		ollamaMode = resolved.mode;
+	} else if (embeddingType === 'gemini') {
+		// Gemini embeddings endpoint
+		url = `${baseUrl.trim().replace(/\/+$/, '')}/models/${model}:embedContent`;
 	} else {
 		// Jina/OpenAI-compatible embeddings endpoint
 		url = resolveOpenAICompatibleEmbeddingsEndpoint(baseUrl);
@@ -274,8 +383,16 @@ export async function createEmbeddings(
 		'Content-Type': 'application/json',
 		'x-snow': getVersionHeader(),
 	};
-	if (apiKey) {
-		headers['Authorization'] = `Bearer ${apiKey}`;
+
+	if (embeddingType === 'gemini') {
+		// Gemini uses x-goog-api-key header instead of Authorization
+		if (apiKey) {
+			headers['x-goog-api-key'] = apiKey;
+		}
+	} else {
+		if (apiKey) {
+			headers['Authorization'] = `Bearer ${apiKey}`;
+		}
 	}
 
 	const fetchOptions = addProxyToFetchOptions(url, {
@@ -300,6 +417,14 @@ export async function createEmbeddings(
 			model,
 			expectedDimensions: dimensions,
 			url,
+		});
+	}
+
+	if (embeddingType === 'gemini') {
+		return normalizeGeminiResponse({
+			data,
+			model,
+			expectedDimensions: dimensions,
 		});
 	}
 

@@ -85,7 +85,9 @@ export default function CodeBaseConfigScreen({
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
-	const [embeddingType, setEmbeddingType] = useState<'jina' | 'ollama'>('jina');
+	const [embeddingType, setEmbeddingType] = useState<
+		'jina' | 'ollama' | 'gemini'
+	>('jina');
 	const [embeddingModelName, setEmbeddingModelName] = useState('');
 	const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState('');
 	const [embeddingApiKey, setEmbeddingApiKey] = useState('');
@@ -125,6 +127,7 @@ export default function CodeBaseConfigScreen({
 	const embeddingTypeOptions = [
 		{label: 'Jina & OpenAI', value: 'jina' as const},
 		{label: 'Ollama', value: 'ollama' as const},
+		{label: 'Gemini', value: 'gemini' as const},
 	];
 
 	const currentFieldIndex = allFields.indexOf(currentField);
@@ -320,7 +323,9 @@ export default function CodeBaseConfigScreen({
 									)}
 									isFocused={true}
 									onSelect={item => {
-										setEmbeddingType(item.value as 'jina' | 'ollama');
+										setEmbeddingType(
+											item.value as 'jina' | 'ollama' | 'gemini',
+										);
 										setIsEditing(false);
 									}}
 								/>

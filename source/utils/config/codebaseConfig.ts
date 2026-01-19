@@ -6,7 +6,7 @@ export interface CodebaseConfig {
 	enabled: boolean;
 	enableAgentReview: boolean;
 	embedding: {
-		type?: 'jina' | 'ollama'; // 请求类型，默认为jina
+		type?: 'jina' | 'ollama' | 'gemini'; // 请求类型，默认为jina
 		modelName: string;
 		baseUrl: string;
 		apiKey: string;
