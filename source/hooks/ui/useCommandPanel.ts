@@ -51,6 +51,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.profiles,
 			},
 			{
+				name: 'models',
+				description: t.commandPanel.commands.models,
+			},
+			{
 				name: 'export',
 				description: t.commandPanel.commands.export,
 			},

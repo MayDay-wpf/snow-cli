@@ -8,6 +8,7 @@ import {SkillsCreationPanel} from './SkillsCreationPanel.js';
 import {RoleCreationPanel} from './RoleCreationPanel.js';
 import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import {RoleListPanel} from './RoleListPanel.js';
+import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
@@ -27,13 +28,17 @@ type PanelsManagerProps = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
+	showModelsPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
 	showWorkingDirPanel: boolean;
+	advancedModel: string;
+	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
+	setShowModelsPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
@@ -65,13 +70,17 @@ export default function PanelsManager({
 	showSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
+	showModelsPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
 	showRoleCreation,
 	showRoleDeletion,
 	showRoleList,
 	showWorkingDirPanel,
+	advancedModel,
+	basicModel,
 	setShowSessionPanel,
+	setShowModelsPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
 	setShowRoleCreation,
@@ -134,6 +143,18 @@ export default function PanelsManager({
 							{t.chatScreen.pressEscToClose}
 						</Text>
 					</Box>
+				</Box>
+			)}
+
+			{/* Show models panel if active - replaces input */}
+			{showModelsPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<ModelsPanel
+						advancedModel={advancedModel}
+						basicModel={basicModel}
+						visible={showModelsPanel}
+						onClose={() => setShowModelsPanel(false)}
+					/>
 				</Box>
 			)}
 

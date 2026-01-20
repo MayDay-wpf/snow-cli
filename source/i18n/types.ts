@@ -462,6 +462,7 @@ export type TranslationKeys = {
 			usage: string;
 			backend: string;
 			profiles: string;
+			models: string;
 			export: string;
 			custom: string;
 			skills: string;
@@ -513,6 +514,38 @@ export type TranslationKeys = {
 		confirmClearAll: string;
 		yes: string;
 		no: string;
+	};
+
+	modelsPanel: {
+		title: string;
+		subtitle: string;
+		tabAdvanced: string;
+		tabBasic: string;
+		tabThinking: string;
+		currentModel: string;
+		notSet: string;
+		loadingModels: string;
+		hint: string;
+		manualInputTitle: string;
+		manualInputHint: string;
+		filterLabel: string;
+		manualInputOption: string;
+		requestMethod: string;
+		showThinkingProcess: string;
+		enableThinking: string;
+		thinkingStrength: string;
+		inputNumberHint: string;
+		escCancel: string;
+		navigationHint: string;
+		notSupported: string;
+		advancedModelLabel: string;
+		basicModelLabel: string;
+		thinkingLabel: string;
+		requestMethodNotSupportedForThinking: string;
+		requestMethodNotSupportedForThinkingStrength: string;
+		saveFailed: string;
+		modelSaveFailed: string;
+		tipLabel: string;
 	};
 
 	// Hooks

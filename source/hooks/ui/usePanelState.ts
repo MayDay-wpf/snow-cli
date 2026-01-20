@@ -18,6 +18,7 @@ export type PanelState = {
 	showWorkingDirPanel: boolean;
 	showReviewCommitPanel: boolean;
 	showProfilePanel: boolean;
+	showModelsPanel: boolean;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
 	currentProfileName: string;
@@ -35,6 +36,7 @@ export type PanelActions = {
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
+	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
 	handleSwitchProfile: (options: {
@@ -60,6 +62,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
+	const [showModelsPanel, setShowModelsPanel] = useState(false);
 	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
 	const [profileSearchQuery, setProfileSearchQuery] = useState('');
 	const [currentProfileName, setCurrentProfileName] = useState(() => {
@@ -87,6 +90,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleList ||
 			showReviewCommitPanel ||
 			showProfilePanel ||
+			showModelsPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
 			options.hasPendingUserQuestion ||
@@ -175,6 +179,12 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		// ModelsPanel handles its own ESC key logic internally
+		// Don't close it here - let the panel decide when to close
+		if (showModelsPanel) {
+			return false; // Let ModelsPanel handle ESC
+		}
+
 		return false; // ESC not handled
 	};
 
@@ -190,7 +200,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleList ||
 			showWorkingDirPanel ||
 			showReviewCommitPanel ||
-			showProfilePanel
+			showProfilePanel ||
+			showModelsPanel
 		);
 	};
 
@@ -207,6 +218,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showWorkingDirPanel,
 		showReviewCommitPanel,
 		showProfilePanel,
+		showModelsPanel,
 		profileSelectedIndex,
 		profileSearchQuery,
 		currentProfileName,
@@ -222,6 +234,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowWorkingDirPanel,
 		setShowReviewCommitPanel,
 		setShowProfilePanel,
+		setShowModelsPanel,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,
 		handleSwitchProfile,
