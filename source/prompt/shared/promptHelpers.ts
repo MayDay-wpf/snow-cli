@@ -189,12 +189,12 @@ export function isCodebaseEnabled(): boolean {
 /**
  * Get current time information
  */
-export function getCurrentTimeInfo(): {year: number; month: number} {
+export function getCurrentTimeInfo(): {date: string} {
 	const now = new Date();
-	return {
-		year: now.getFullYear(),
-		month: now.getMonth() + 1, // getMonth() returns 0-11
-	};
+	const year = now.getFullYear();
+	const month = String(now.getMonth() + 1).padStart(2, '0');
+	const day = String(now.getDate()).padStart(2, '0');
+	return {date: `${year}-${month}-${day}`};
 }
 
 /**
@@ -203,16 +203,12 @@ export function getCurrentTimeInfo(): {year: number; month: number} {
 export function appendSystemContext(
 	prompt: string,
 	systemEnv: string,
-	timeInfo: {year: number; month: number},
+	timeInfo: {date: string},
 ): string {
 	return `${prompt}
 
-## System Environment
-
+System Environment:
 ${systemEnv}
 
-## Current Time
-
-Year: ${timeInfo.year}
-Month: ${timeInfo.month}`;
+Current Date: ${timeInfo.date}`;
 }
