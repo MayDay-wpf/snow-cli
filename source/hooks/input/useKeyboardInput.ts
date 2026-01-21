@@ -1204,13 +1204,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// events may arrive out of order or be filtered by sanitizeInput
 			ensureFocus();
 
-			// Detect if this is a single character input (normal typing) or multi-character (paste/IME)
+			// ink 在 IME 场景下可能一次性提交多个字符（通常很短），这不是“粘贴”。
+			// 如果仍按“多字符=粘贴/IME，延迟缓冲”处理，用户在提交前移动光标会让插入位置/显示状态产生竞态，
+			// 表现为光标插入错位、内容渲染像“总是显示末尾”。
+			// 因此：短的多字符输入直接落盘；只对明显的粘贴/大输入走缓冲。
 			const isSingleCharInput = input.length === 1;
+			const isSmallMultiCharInput = input.length > 1 && !input.includes('\n');
 
-			// Check if we're currently processing multi-char input (IME/paste)
-			// If yes, queue single-char input to preserve order
+			// 单字符：正常键入，直接插入
 			if (isSingleCharInput && !isProcessingInput.current) {
-				// For single character input (normal typing), insert immediately
 				// This prevents the "disappearing text" issue at line start
 				buffer.insert(input);
 				const text = buffer.getFullText();
@@ -1218,37 +1220,97 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
-				// No need to call triggerUpdate() here - buffer.insert() already triggers update via scheduleUpdate()
-			} else {
-				// For multi-character input (paste/IME), use the buffering mechanism
-				// Save cursor position when starting new input accumulation
-				const isStartingNewInput = inputBuffer.current === '';
-				if (isStartingNewInput) {
+				return;
+			}
+
+			// IME commit / 小段粘贴（无换行、长度不大）统一直接落盘，避免进入 100ms 缓冲。
+			// 这能避免“先移动光标再输入”场景下仍走缓冲，导致插入位置/内容被错误合并。
+			if (isSmallMultiCharInput && !isProcessingInput.current) {
+				flushPendingInput();
+				buffer.insert(input);
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
+				return;
+			}
+
+			// 其余（含换行/已有缓冲会话/大段输入）：使用缓冲机制
+			// Save cursor position when starting new input accumulation
+			const isStartingNewInput = inputBuffer.current === '';
+			if (isStartingNewInput) {
+				inputStartCursorPos.current = buffer.getCursorPosition();
+				isProcessingInput.current = true; // Mark that we're processing multi-char input
+				inputSessionId.current += 1;
+			}
+
+			// Accumulate input for paste detection
+			inputBuffer.current += input;
+
+			// Clear existing timer
+			if (inputTimer.current) {
+				clearTimeout(inputTimer.current);
+			}
+
+			const activeSessionId = inputSessionId.current;
+
+			const currentLength = inputBuffer.current.length;
+
+			// Show pasting indicator for large text (>300 chars)
+			// Simple static message - no progress animation
+			if (currentLength > 300 && !isPasting.current) {
+				isPasting.current = true;
+				buffer.insertPastingIndicator();
+				// Trigger UI update to show the indicator
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
+				triggerUpdate();
+			}
+
+			// Set timer to process accumulated input - fixed 100ms
+			inputTimer.current = setTimeout(() => {
+				if (activeSessionId !== inputSessionId.current) {
+					return;
+				}
+
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				const wasPasting = isPasting.current; // Save pasting state before clearing
+				inputBuffer.current = '';
+				isPasting.current = false; // Reset pasting state
+				isProcessingInput.current = false; // Reset processing flag
+
+				// If we accumulated input, insert it at the saved cursor position
+				// The insert() method will automatically remove the pasting indicator
+				if (accumulated) {
+					// Get current cursor position to calculate if user moved cursor during input
+					const currentCursor = buffer.getCursorPosition();
+
+					// If cursor hasn't moved from where we started (or only moved due to pasting indicator),
+					// insert at the saved position
+					// Otherwise, insert at current position (user deliberately moved cursor)
+					// Note: wasPasting check uses saved state, not current isPasting.current
+					if (
+						currentCursor === savedCursorPosition ||
+						(wasPasting && currentCursor > savedCursorPosition)
+					) {
+						// Temporarily set cursor to saved position for insertion
+						// This is safe because we're in a timeout, not during active cursor movement
+						buffer.setCursorPosition(savedCursorPosition);
+						buffer.insert(accumulated);
+						// No need to restore cursor - insert() moves it naturally
+					} else {
+						// User moved cursor during input, insert at current position
+						buffer.insert(accumulated);
+					}
+
+					// Reset inputStartCursorPos after processing to prevent stale position
 					inputStartCursorPos.current = buffer.getCursorPosition();
-					isProcessingInput.current = true; // Mark that we're processing multi-char input
-					inputSessionId.current += 1;
-				}
 
-				// Accumulate input for paste detection
-				inputBuffer.current += input;
-
-				// Clear existing timer
-				if (inputTimer.current) {
-					clearTimeout(inputTimer.current);
-				}
-
-				const activeSessionId = inputSessionId.current;
-
-				// Detect large paste: if accumulated buffer is getting large, extend timeout
-				// This prevents splitting large pastes into multiple insert() calls
-				const currentLength = inputBuffer.current.length;
-
-				// Show pasting indicator for large text (>300 chars)
-				// Simple static message - no progress animation
-				if (currentLength > 300 && !isPasting.current) {
-					isPasting.current = true;
-					buffer.insertPastingIndicator();
-					// Trigger UI update to show the indicator
 					const text = buffer.getFullText();
 					const cursorPos = buffer.getCursorPosition();
 					updateCommandPanelState(text);
@@ -1256,56 +1318,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					updateAgentPickerState(text, cursorPos);
 					triggerUpdate();
 				}
-
-				// Set timer to process accumulated input - fixed 100ms
-				inputTimer.current = setTimeout(() => {
-					if (activeSessionId !== inputSessionId.current) {
-						return;
-					}
-
-					const accumulated = inputBuffer.current;
-					const savedCursorPosition = inputStartCursorPos.current;
-					const wasPasting = isPasting.current; // Save pasting state before clearing
-					inputBuffer.current = '';
-					isPasting.current = false; // Reset pasting state
-					isProcessingInput.current = false; // Reset processing flag
-
-					// If we accumulated input, insert it at the saved cursor position
-					// The insert() method will automatically remove the pasting indicator
-					if (accumulated) {
-						// Get current cursor position to calculate if user moved cursor during input
-						const currentCursor = buffer.getCursorPosition();
-
-						// If cursor hasn't moved from where we started (or only moved due to pasting indicator),
-						// insert at the saved position
-						// Otherwise, insert at current position (user deliberately moved cursor)
-						// Note: wasPasting check uses saved state, not current isPasting.current
-						if (
-							currentCursor === savedCursorPosition ||
-							(wasPasting && currentCursor > savedCursorPosition)
-						) {
-							// Temporarily set cursor to saved position for insertion
-							// This is safe because we're in a timeout, not during active cursor movement
-							buffer.setCursorPosition(savedCursorPosition);
-							buffer.insert(accumulated);
-							// No need to restore cursor - insert() moves it naturally
-						} else {
-							// User moved cursor during input, insert at current position
-							buffer.insert(accumulated);
-						}
-
-						// Reset inputStartCursorPos after processing to prevent stale position
-						inputStartCursorPos.current = buffer.getCursorPosition();
-
-						const text = buffer.getFullText();
-						const cursorPos = buffer.getCursorPosition();
-						updateCommandPanelState(text);
-						updateFilePickerState(text, cursorPos);
-						updateAgentPickerState(text, cursorPos);
-						triggerUpdate();
-					}
-				}, 100); // Fixed 100ms
-			}
+			}, 100); // Fixed 100ms
 		}
 	});
 }

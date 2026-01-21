@@ -310,10 +310,15 @@ export default function MarkdownRenderer({content}: Props) {
 		}
 
 		// Stage 4: Clean up and split lines
-		// Fix: markdown-it-terminal bug - removes "undefined" prefix before ANSI codes
-		let lines = rendered
-			.split('\n')
-			.map(line => line.replace(/^undefined(\x1b\[)/g, '$1'));
+		// Fix: markdown-it-terminal/renderer concat bug - occasionally prefixes literal "undefined".
+		// We strip it only when more non-whitespace content follows, so a line that is exactly
+		// "undefined" (user content) is preserved.
+		let lines = rendered.split('\n').map(line =>
+			line
+				.replace(/^undefined\s*(?=\S)/, '')
+				// markdown-it-terminal uses "*" for bullet lists; keep UI output aligned with user input.
+				.replace(/^(\s*(?:\x1b\[[0-9;]*m)*)\*\s+(?=\S)/, '$1- '),
+		);
 
 		lines = trimLines(lines);
 
