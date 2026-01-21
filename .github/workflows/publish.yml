@@ -58,10 +58,11 @@ jobs:
 
             ### What's New
 
-            - Fix the issue where terminal command execution timeout fails
-            - Modify the location for adding the Gemini request APIKEY
-            - Fix the display of active options when switching configuration files
-            - Add the session renaming function
+            - Add Gemini embedded request scheme support to the code base
+            - Fix the problem of timeout failure of some instructions
+            - Add the `/models` command to conveniently switch models and thinking intensity
+            - Fix the misalignment of Chinese display in some input scenes
+            - Optimize Snow CLI system prompts
 
             ### Installation
             ```bash
