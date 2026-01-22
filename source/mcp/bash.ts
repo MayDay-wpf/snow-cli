@@ -220,11 +220,13 @@ export class TerminalCommandService {
 				if (psType) {
 					// Use PowerShell (pwsh for 7.x, powershell for 5.x)
 					shell = psType === 'pwsh' ? 'pwsh' : 'powershell';
-					shellArgs = ['-NoProfile', '-Command', command];
+					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command} }`;
+					shellArgs = ['-NoProfile', '-Command', utf8WrappedCommand];
 				} else {
 					// Fallback to cmd if not in PowerShell environment
 					shell = 'cmd';
-					shellArgs = ['/c', command];
+					const utf8Command = `chcp 65001>nul && ${command}`;
+					shellArgs = ['/c', utf8Command];
 				}
 			} else {
 				shell = 'sh';

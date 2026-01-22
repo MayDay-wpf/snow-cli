@@ -9,6 +9,7 @@ type KeyboardInputOptions = {
 	buffer: TextBuffer;
 	disabled: boolean;
 	disableKeyboardNavigation?: boolean;
+	isProcessing?: boolean; // Prevent command execution during AI response/tool execution
 	triggerUpdate: () => void;
 	forceUpdate: React.Dispatch<React.SetStateAction<{}>>;
 	// Mode state
@@ -26,6 +27,7 @@ type KeyboardInputOptions = {
 	getFilteredCommands: () => Array<{name: string; description: string}>;
 	updateCommandPanelState: (text: string) => void;
 	onCommand?: (commandName: string, result: any) => void;
+	getAllCommands?: () => Array<{name: string; description: string}>; // Get all available commands for validation
 	// File picker
 	showFilePicker: boolean;
 	setShowFilePicker: (show: boolean) => void;
@@ -109,6 +111,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		buffer,
 		disabled,
 		disableKeyboardNavigation = false,
+		isProcessing = false,
 		triggerUpdate,
 		forceUpdate,
 		yoloMode,
@@ -124,6 +127,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		getFilteredCommands,
 		updateCommandPanelState,
 		onCommand,
+		getAllCommands,
 		showFilePicker,
 		setShowFilePicker,
 		fileSelectedIndex,
@@ -934,6 +938,23 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							triggerUpdate();
 							return;
 						}
+						// Block command execution if AI is processing
+						// Only block if it's a valid command (not a path like /usr/bin)
+						if (isProcessing && getAllCommands) {
+							const allCommands = getAllCommands();
+							const isValidCommand = allCommands.some(
+								cmd => cmd.name === selectedCommand.name,
+							);
+							if (isValidCommand) {
+								// Don't execute command, just close the panel
+								buffer.setText('');
+								setShowCommands(false);
+								setCommandSelectedIndex(0);
+								triggerUpdate();
+								return;
+							}
+						}
+
 						// Execute command instead of inserting text
 						// If the user has typed args after the command name (e.g. "/role -l"),
 						// pass them through so sub-commands work from the command panel.
@@ -1020,6 +1041,21 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					if (commandMatch && commandMatch[1]) {
 						const commandName = commandMatch[1];
 						const commandArgs = commandMatch[2];
+
+						// Block command execution if AI is processing
+						// Only block if it's a valid command (not a path like /usr/bin)
+						if (isProcessing && getAllCommands) {
+							const allCommands = getAllCommands();
+							const isValidCommand = allCommands.some(
+								cmd => cmd.name === commandName,
+							);
+							if (isValidCommand) {
+								// Don't execute command, just clear the input
+								buffer.setText('');
+								triggerUpdate();
+								return;
+							}
+						}
 
 						// Execute command with arguments
 						executeCommand(commandName, commandArgs).then(result => {

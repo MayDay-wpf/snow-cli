@@ -179,6 +179,7 @@ export default function ChatInput({
 		getFilteredCommands,
 		updateCommandPanelState,
 		isProcessing: commandPanelIsProcessing,
+		getAllCommands,
 	} = useCommandPanel(buffer, isProcessing);
 
 	// Use file picker hook
@@ -257,6 +258,7 @@ export default function ChatInput({
 		buffer,
 		disabled,
 		disableKeyboardNavigation,
+		isProcessing,
 		triggerUpdate,
 		forceUpdate,
 		yoloMode,
@@ -272,6 +274,7 @@ export default function ChatInput({
 		getFilteredCommands,
 		updateCommandPanelState,
 		onCommand,
+		getAllCommands,
 		showFilePicker,
 		setShowFilePicker,
 		fileSelectedIndex,
