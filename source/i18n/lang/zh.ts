@@ -154,6 +154,7 @@ export const zh: TranslationKeys = {
 		baseUrl: 'Base URL:',
 		apiKey: 'API 密钥:',
 		requestMethod: '请求方式:',
+		requestUrlLabel: '请求 URL: ',
 		anthropicBeta: 'Anthropic Beta:',
 		anthropicCacheTTL: 'Anthropic 缓存时效:',
 		anthropicCacheTTL5m: '5分钟（默认）',

@@ -253,6 +253,10 @@ export default function ChatInput({
 		triggerUpdate,
 	);
 
+	const pasteShortcutTimeoutMs = 800;
+	const pasteFlushDebounceMs = 250;
+	const pasteIndicatorThreshold = 300;
+
 	// Use keyboard input hook
 	useKeyboardInput({
 		buffer,
@@ -302,6 +306,9 @@ export default function ChatInput({
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
+		pasteShortcutTimeoutMs,
+		pasteFlushDebounceMs,
+		pasteIndicatorThreshold,
 		onSubmit,
 		ensureFocus,
 		showAgentPicker,

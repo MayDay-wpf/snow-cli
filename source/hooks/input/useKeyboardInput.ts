@@ -63,6 +63,10 @@ type KeyboardInputOptions = {
 	saveToHistory: (content: string) => Promise<void>;
 	// Clipboard
 	pasteFromClipboard: () => Promise<void>;
+	// Paste detection
+	pasteShortcutTimeoutMs?: number;
+	pasteFlushDebounceMs?: number;
+	pasteIndicatorThreshold?: number;
 	// Submit
 	onSubmit: (
 		message: string,
@@ -153,6 +157,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
+		pasteShortcutTimeoutMs = 800,
+		pasteFlushDebounceMs = 250,
+		pasteIndicatorThreshold = 300,
 		onSubmit,
 		ensureFocus,
 		showAgentPicker,
@@ -194,6 +201,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
 	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
 	const inputSessionId = useRef<number>(0); // Invalidates stale buffered input timers
+	const lastPasteShortcutAt = useRef<number>(0); // Track recent paste shortcut usage
 	const componentMountTime = useRef<number>(Date.now()); // Track when component mounted
 
 	// Cleanup timer on unmount
@@ -817,6 +825,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				: key.meta && input === 'v';
 
 		if (isPasteShortcut) {
+			lastPasteShortcutAt.current = Date.now();
 			pasteFromClipboard();
 			return;
 		}
@@ -1240,6 +1249,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// events may arrive out of order or be filtered by sanitizeInput
 			ensureFocus();
 
+			const now = Date.now();
+			const isPasteShortcutActive =
+				now - lastPasteShortcutAt.current <= pasteShortcutTimeoutMs;
+
 			// ink 在 IME 场景下可能一次性提交多个字符（通常很短），这不是“粘贴”。
 			// 如果仍按“多字符=粘贴/IME，延迟缓冲”处理，用户在提交前移动光标会让插入位置/显示状态产生竞态，
 			// 表现为光标插入错位、内容渲染像“总是显示末尾”。
@@ -1261,7 +1274,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 			// IME commit / 小段粘贴（无换行、长度不大）统一直接落盘，避免进入 100ms 缓冲。
 			// 这能避免“先移动光标再输入”场景下仍走缓冲，导致插入位置/内容被错误合并。
-			if (isSmallMultiCharInput && !isProcessingInput.current) {
+			if (
+				isSmallMultiCharInput &&
+				!isProcessingInput.current &&
+				!isPasteShortcutActive
+			) {
 				flushPendingInput();
 				buffer.insert(input);
 				const text = buffer.getFullText();
@@ -1290,12 +1307,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 
 			const activeSessionId = inputSessionId.current;
-
 			const currentLength = inputBuffer.current.length;
+			const shouldShowIndicator =
+				isPasteShortcutActive || currentLength > pasteIndicatorThreshold;
 
-			// Show pasting indicator for large text (>300 chars)
+			// Show pasting indicator for large text or explicit paste
 			// Simple static message - no progress animation
-			if (currentLength > 300 && !isPasting.current) {
+			if (shouldShowIndicator && !isPasting.current) {
 				isPasting.current = true;
 				buffer.insertPastingIndicator();
 				// Trigger UI update to show the indicator
@@ -1307,7 +1325,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				triggerUpdate();
 			}
 
-			// Set timer to process accumulated input - fixed 100ms
+			// Set timer to process accumulated input
+			const flushDelay = isPasteShortcutActive
+				? pasteShortcutTimeoutMs
+				: pasteFlushDebounceMs;
 			inputTimer.current = setTimeout(() => {
 				if (activeSessionId !== inputSessionId.current) {
 					return;
@@ -1354,7 +1375,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					updateAgentPickerState(text, cursorPos);
 					triggerUpdate();
 				}
-			}, 100); // Fixed 100ms
+			}, flushDelay);
 		}
 	});
 }

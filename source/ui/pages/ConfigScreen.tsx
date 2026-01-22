@@ -429,6 +429,56 @@ export default function ConfigScreen({
 	const getCustomHeadersSchemeNameById = (id: string) =>
 		customHeaderSchemes.find(s => s.id === id)?.name || id;
 
+	const getNormalizedBaseUrl = (value: string) =>
+		value.trim().replace(/\/+$/, '');
+
+	const getResolvedBaseUrl = (method: RequestMethod) => {
+		const defaultOpenAiBaseUrl = 'https://api.openai.com/v1';
+		const trimmedBaseUrl = getNormalizedBaseUrl(baseUrl || '');
+		const shouldUseCustomBaseUrl =
+			trimmedBaseUrl.length > 0 && trimmedBaseUrl !== defaultOpenAiBaseUrl;
+
+		if (method === 'anthropic') {
+			const anthropicBaseUrl = shouldUseCustomBaseUrl
+				? trimmedBaseUrl
+				: 'https://api.anthropic.com/v1';
+			return getNormalizedBaseUrl(anthropicBaseUrl);
+		}
+
+		if (method === 'gemini') {
+			const geminiBaseUrl = shouldUseCustomBaseUrl
+				? trimmedBaseUrl
+				: 'https://generativelanguage.googleapis.com/v1beta';
+			return getNormalizedBaseUrl(geminiBaseUrl);
+		}
+
+		const openAiBaseUrl = trimmedBaseUrl || defaultOpenAiBaseUrl;
+		return getNormalizedBaseUrl(openAiBaseUrl);
+	};
+
+	const getRequestUrl = () => {
+		const resolvedBaseUrl = getResolvedBaseUrl(requestMethod);
+
+		if (requestMethod === 'responses') {
+			return `${resolvedBaseUrl}/responses`;
+		}
+
+		if (requestMethod === 'anthropic') {
+			const endpoint = anthropicBeta ? '/messages?beta=true' : '/messages';
+			return `${resolvedBaseUrl}${endpoint}`;
+		}
+
+		if (requestMethod === 'gemini') {
+			const effectiveModel = advancedModel || 'model-id';
+			const modelName = effectiveModel.startsWith('models/')
+				? effectiveModel
+				: `models/${effectiveModel}`;
+			return `${resolvedBaseUrl}/${modelName}:streamGenerateContent?alt=sse`;
+		}
+
+		return `${resolvedBaseUrl}/chat/completions`;
+	};
+
 	const getSystemPromptSelectItems = () => {
 		const activeLabel = activeSystemPromptId
 			? t.configScreen.followGlobalWithParentheses.replace(
@@ -2088,16 +2138,18 @@ export default function ConfigScreen({
 					currentField === 'responsesReasoningEffort')
 			) && (
 				<Box flexDirection="column" marginTop={1}>
-					{isEditing ? (
-						<Alert variant="info">
-							{currentField === 'maxContextTokens' ||
-							currentField === 'maxTokens'
-								? t.configScreen.editingHintNumeric
-								: t.configScreen.editingHintGeneral}
-						</Alert>
-					) : (
-						<Alert variant="info">{t.configScreen.navigationHint}</Alert>
-					)}
+					<Alert variant="info">
+						{isEditing
+							? `${
+									currentField === 'maxContextTokens' ||
+									currentField === 'maxTokens'
+										? t.configScreen.editingHintNumeric
+										: t.configScreen.editingHintGeneral
+							  }
+${t.configScreen.requestUrlLabel}${getRequestUrl()}`
+							: `${t.configScreen.navigationHint}
+${t.configScreen.requestUrlLabel}${getRequestUrl()}`}
+					</Alert>
 				</Box>
 			)}
 		</Box>

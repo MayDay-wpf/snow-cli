@@ -154,6 +154,7 @@ export const zhTW: TranslationKeys = {
 		baseUrl: 'Base URL:',
 		apiKey: 'API 金鑰:',
 		requestMethod: '請求方式:',
+		requestUrlLabel: '請求 URL: ',
 		anthropicBeta: 'Anthropic Beta:',
 		anthropicCacheTTL: 'Anthropic 快取時效:',
 		anthropicCacheTTL5m: '5分鐘（預設）',

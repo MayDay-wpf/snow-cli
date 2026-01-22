@@ -65,6 +65,8 @@ export class TextBuffer {
 	private onUpdateCallback?: () => void; // 更新回调函数
 	private isDestroyed: boolean = false; // 标记是否已销毁
 	private tempPastingPlaceholder: string | null = null; // 临时"粘贴中"占位符文本
+	private lastTextPlaceholderId: string | null = null; // 合并同一批次粘贴
+	private lastTextPlaceholderAt = 0; // 最近一次文本占位符更新时间
 
 	private visualLines: string[] = [''];
 	private visualLineStarts: number[] = [0];
@@ -193,6 +195,49 @@ export class TextBuffer {
 		// 如果之前显示了"粘贴中"占位符，或者是大文本（>300字符），创建占位符
 		// 使用 || 确保只要显示过"粘贴中"就一定创建占位符，防止sanitize后长度变化导致不一致
 		if (hasPastingIndicator || charCount > 300) {
+			const now = Date.now();
+			const shouldMerge =
+				this.lastTextPlaceholderId !== null &&
+				now - this.lastTextPlaceholderAt < 1200;
+
+			if (shouldMerge && this.lastTextPlaceholderId) {
+				const existing = this.placeholderStorage.get(
+					this.lastTextPlaceholderId,
+				);
+				if (existing && existing.type === 'text') {
+					existing.content += sanitized;
+					existing.charCount += charCount;
+					const lineCount = (existing.content.match(/\n/g) || []).length + 1;
+					const nextPlaceholder = `[Paste ${lineCount} lines #${existing.index}] `;
+					existing.placeholder = nextPlaceholder;
+					const placeholderPattern = new RegExp(
+						`\\[Paste \\d+ lines #${existing.index}\\] `,
+						'g',
+					);
+					const match = placeholderPattern.exec(this.content);
+					if (match) {
+						const placeholderIndex = match.index;
+						const previousLength = match[0].length;
+						const nextLength = nextPlaceholder.length;
+						const delta = nextLength - previousLength;
+						if (delta !== 0 && this.cursorIndex > placeholderIndex) {
+							this.cursorIndex = Math.max(
+								placeholderIndex,
+								this.cursorIndex + delta,
+							);
+						}
+					}
+					this.content = this.content.replace(
+						placeholderPattern,
+						nextPlaceholder,
+					);
+					this.lastTextPlaceholderAt = now;
+					this.recalculateVisualState();
+					this.scheduleUpdate();
+					return;
+				}
+			}
+
 			this.textPlaceholderCounter++;
 			const pasteId = `paste_${Date.now()}_${this.textPlaceholderCounter}`;
 			// 计算行数
@@ -208,9 +253,14 @@ export class TextBuffer {
 				placeholder: placeholderText,
 			});
 
+			this.lastTextPlaceholderId = pasteId;
+			this.lastTextPlaceholderAt = now;
+
 			// 插入占位符而不是原文本
 			this.insertPlainText(placeholderText);
 		} else {
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
 			// 普通输入，直接插入文本
 			this.insertPlainText(sanitized);
 		}

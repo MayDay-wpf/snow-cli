@@ -169,6 +169,7 @@ export const en: TranslationKeys = {
 		baseUrl: 'Base URL:',
 		apiKey: 'API Key:',
 		requestMethod: 'Request Method:',
+		requestUrlLabel: 'Request URL: ',
 		anthropicBeta: 'Anthropic Beta:',
 		anthropicCacheTTL: 'Anthropic Cache TTL:',
 		anthropicCacheTTL5m: '5 minutes (default)',

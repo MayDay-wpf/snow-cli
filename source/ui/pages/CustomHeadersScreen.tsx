@@ -1,6 +1,6 @@
 import React, {useState, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
-import Gradient from 'ink-gradient';
+
 import {Alert} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
 import {
@@ -419,21 +419,6 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box
-					marginBottom={1}
-					borderStyle="round"
-					borderColor={theme.colors.menuInfo}
-					paddingX={2}
-					paddingY={1}
-				>
-					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.customHeaders.title}</Gradient>
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.customHeaders.subtitle}
-						</Text>
-					</Box>
-				</Box>
-
 				{error && (
 					<Box marginBottom={1}>
 						<Alert variant="error">{error}</Alert>
@@ -547,20 +532,6 @@ export default function CustomHeadersScreen({onBack}: Props) {
 
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box
-					marginBottom={1}
-					borderStyle="round"
-					borderColor={theme.colors.menuInfo}
-					paddingX={2}
-					paddingY={1}
-				>
-					<Gradient name="rainbow">
-						{view === 'add'
-							? t.customHeaders.addNewTitle
-							: t.customHeaders.editTitle}
-					</Gradient>
-				</Box>
-
 				{error && (
 					<Box marginBottom={1}>
 						<Alert variant="error">{error}</Alert>
@@ -641,18 +612,6 @@ export default function CustomHeadersScreen({onBack}: Props) {
 	if (view === 'editHeaders') {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Box
-					marginBottom={1}
-					borderStyle="round"
-					borderColor={theme.colors.menuInfo}
-					paddingX={2}
-					paddingY={1}
-				>
-					<Gradient name="rainbow">
-						{t.customHeaders.editHeadersTitle} - {editName}
-					</Gradient>
-				</Box>
-
 				{headerEditingIndex === -1 ? (
 					<>
 						<Box marginBottom={1}>

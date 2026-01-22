@@ -155,6 +155,7 @@ export type TranslationKeys = {
 		baseUrl: string;
 		apiKey: string;
 		requestMethod: string;
+		requestUrlLabel: string;
 		anthropicBeta: string;
 		anthropicCacheTTL: string;
 		anthropicCacheTTL5m: string;
