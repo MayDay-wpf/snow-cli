@@ -738,16 +738,51 @@ OPEN QUESTIONS:
 		// Filter tools based on sub-agent's allowed tools
 		const allowedTools = allTools.filter((tool: MCPTool) => {
 			const toolName = tool.function.name;
+			const normalizedToolName = toolName.replace(/_/g, '-');
+			const builtInPrefixes = new Set([
+				'todo-',
+				'notebook-',
+				'filesystem-',
+				'terminal-',
+				'ace-',
+				'websearch-',
+				'ide-',
+				'codebase-',
+				'askuser-',
+				'skill-',
+				'subagent-',
+			]);
+
 			return agent.tools.some((allowedTool: string) => {
 				// Normalize both tool names: replace underscores with hyphens for comparison
-				const normalizedToolName = toolName.replace(/_/g, '-');
 				const normalizedAllowedTool = allowedTool.replace(/_/g, '-');
+				const isQualifiedAllowed =
+					normalizedAllowedTool.includes('-') ||
+					Array.from(builtInPrefixes).some(prefix =>
+						normalizedAllowedTool.startsWith(prefix),
+					);
 
 				// Support both exact match and prefix match (e.g., "filesystem" matches "filesystem-read")
-				return (
+				if (
 					normalizedToolName === normalizedAllowedTool ||
 					normalizedToolName.startsWith(`${normalizedAllowedTool}-`)
+				) {
+					return true;
+				}
+
+				// Backward compatibility: allow unqualified external tool names (missing service prefix)
+				const isExternalTool = !Array.from(builtInPrefixes).some(prefix =>
+					normalizedToolName.startsWith(prefix),
 				);
+				if (
+					!isQualifiedAllowed &&
+					isExternalTool &&
+					normalizedToolName.endsWith(`-${normalizedAllowedTool}`)
+				) {
+					return true;
+				}
+
+				return false;
 			});
 		});
 

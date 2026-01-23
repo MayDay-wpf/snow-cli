@@ -259,7 +259,9 @@ export default function SubAgentConfigScreen({
 			if (!service.isBuiltIn && service.connected && service.tools.length > 0) {
 				categories.push({
 					name: `${service.serviceName} ${t.subAgentConfig.categoryMCP}`,
-					tools: service.tools.map(t => t.name),
+					tools: service.tools.map(
+						tool => `${service.serviceName}-${tool.name}`,
+					),
 				});
 			}
 		}
