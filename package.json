@@ -51,6 +51,8 @@
 	},
 	"devDependencies": {
 		"@inkjs/ui": "^2.0.0",
+		"chardet": "^2.1.1",
+		"iconv-lite": "^0.7.2",
 		"@modelcontextprotocol/sdk": "^1.17.3",
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
