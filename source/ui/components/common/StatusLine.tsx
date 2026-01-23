@@ -20,7 +20,7 @@ type EditorContext = {
 	activeFile?: string;
 	selectedText?: string;
 	cursorPosition?: {line: number; character: number};
-	workspacePath?: string;
+	workspaceFolder?: string;
 };
 
 type ContextUsage = {

@@ -77,7 +77,7 @@ type ChatFooterProps = {
 		activeFile?: string;
 		selectedText?: string;
 		cursorPosition?: {line: number; character: number};
-		workspacePath?: string;
+		workspaceFolder?: string;
 	};
 	codebaseIndexing: boolean;
 	codebaseProgress: {

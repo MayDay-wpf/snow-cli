@@ -298,11 +298,13 @@ class VSCodeConnectionManager {
 				for (const [workspace, port] of Object.entries(portInfo)) {
 					const normalizedWorkspace = this.normalizePath(workspace);
 
-					// Check if cwd is within this workspace
-					if (
+					// Check if cwd is within this workspace or workspace is within cwd
+					const cwdInWorkspace =
 						cwd.startsWith(normalizedWorkspace + '/') ||
-						cwd === normalizedWorkspace
-					) {
+						cwd === normalizedWorkspace;
+					const workspaceInCwd = normalizedWorkspace.startsWith(cwd + '/');
+
+					if (cwdInWorkspace || workspaceInCwd) {
 						matches.push({
 							workspace: normalizedWorkspace,
 							port: port as number,
