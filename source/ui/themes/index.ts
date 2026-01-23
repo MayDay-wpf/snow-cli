@@ -29,6 +29,7 @@ export interface ThemeColors {
 	error: string;
 	warning: string;
 	success: string;
+	cyan: string; // 用于 Bash 代码块高亮
 	// Logo gradient colors (3 colors for gradient effect)
 	logoGradient: [string, string, string];
 	// User message background
@@ -51,6 +52,7 @@ export const defaultCustomColors: ThemeColors = {
 	error: 'red',
 	warning: 'yellow',
 	success: 'green',
+	cyan: 'cyan',
 	logoGradient: ['#d3d3d3', '#808080', '#505050'],
 	userMessageBackground: '#2a4a2a',
 };
@@ -98,6 +100,7 @@ export interface Theme {
 		error: string;
 		warning: string;
 		success: string;
+		cyan: string;
 		// Logo gradient colors
 		logoGradient: [string, string, string];
 		// User message background
@@ -127,6 +130,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: 'red',
 			warning: 'yellow',
 			success: 'green',
+			cyan: 'cyan',
 			// Logo gradient - gray gradient
 			logoGradient: ['#d3d3d3', '#808080', '#505050'],
 			// User message background - dark green
@@ -154,6 +158,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#cc0000',
 			warning: '#cc6600',
 			success: '#006400',
+			cyan: '#0066cc',
 			// Logo gradient - darker for light theme
 			logoGradient: ['#606060', '#404040', '#202020'],
 			// User message background - light green
@@ -181,6 +186,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#f85149',
 			warning: '#d29922',
 			success: '#3fb950',
+			cyan: '#58a6ff',
 			// Logo gradient - GitHub blue tones
 			logoGradient: ['#58a6ff', '#1f6feb', '#0d419d'],
 			// User message background - GitHub dark green
@@ -208,6 +214,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#ff006e',
 			warning: '#ffbe0b',
 			success: '#06ffa5',
+			cyan: '#00f5ff',
 			// Logo gradient - rainbow colors
 			logoGradient: ['#ff006e', '#8338ec', '#00f5ff'],
 			// User message background - rainbow green
@@ -235,6 +242,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#dc322f',
 			warning: '#b58900',
 			success: '#859900',
+			cyan: '#2aa198',
 			// Logo gradient - Solarized accent colors
 			logoGradient: ['#2aa198', '#268bd2', '#6c71c4'],
 			// User message background - Solarized green
@@ -262,6 +270,7 @@ export const themes: Record<ThemeType, Theme> = {
 			error: '#bf616a',
 			warning: '#ebcb8b',
 			success: '#a3be8c',
+			cyan: '#88c0d0',
 			// Logo gradient - Nord frost colors
 			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
 			// User message background - Nord green

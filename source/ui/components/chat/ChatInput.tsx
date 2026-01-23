@@ -143,7 +143,7 @@ export default function ChatInput({
 	const {theme} = useTheme();
 
 	// Use bash mode hook for command detection
-	const {parseBashCommands} = useBashMode();
+	const {parseBashCommands, parsePureBashCommands} = useBashMode();
 
 	// Use terminal size hook to listen for resize events
 	const {columns: terminalWidth} = useTerminalSize();
@@ -168,6 +168,7 @@ export default function ChatInput({
 
 	// Track bash mode state with debounce to avoid high-frequency updates
 	const [isBashMode, setIsBashMode] = React.useState(false);
+	const [isPureBashMode, setIsPureBashMode] = React.useState(false);
 	const bashModeDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
 	// Use command panel hook
@@ -441,10 +442,19 @@ export default function ChatInput({
 		// Set new timer
 		bashModeDebounceTimer.current = setTimeout(() => {
 			const text = buffer.getFullText();
-			const commands = parseBashCommands(text);
-			const hasBashCommands = commands.length > 0;
+
+			// 先检查纯 Bash 模式（双感叹号）
+			const pureBashCommands = parsePureBashCommands(text);
+			const hasPureBashCommands = pureBashCommands.length > 0;
+
+			// 再检查命令注入模式（单感叹号）
+			const bashCommands = parseBashCommands(text);
+			const hasBashCommands = bashCommands.length > 0;
 
 			// Only update state if changed
+			if (hasPureBashCommands !== isPureBashMode) {
+				setIsPureBashMode(hasPureBashCommands);
+			}
 			if (hasBashCommands !== isBashMode) {
 				setIsBashMode(hasBashCommands);
 			}
@@ -456,7 +466,13 @@ export default function ChatInput({
 				clearTimeout(bashModeDebounceTimer.current);
 			}
 		};
-	}, [buffer.text, parseBashCommands, isBashMode]);
+	}, [
+		buffer.text,
+		parseBashCommands,
+		parsePureBashCommands,
+		isBashMode,
+		isPureBashMode,
+	]);
 
 	// Render cursor based on focus state
 	const renderCursor = useCallback(
@@ -636,7 +652,11 @@ export default function ChatInput({
 					<Box flexDirection="column" width={terminalWidth - 2}>
 						<Text
 							color={
-								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+								isPureBashMode
+									? theme.colors.cyan
+									: isBashMode
+									? theme.colors.success
+									: theme.colors.menuSecondary
 							}
 						>
 							{'─'.repeat(terminalWidth - 2)}
@@ -644,17 +664,25 @@ export default function ChatInput({
 						<Box flexDirection="row">
 							<Text
 								color={
-									isBashMode ? theme.colors.success : theme.colors.menuInfo
+									isPureBashMode
+										? theme.colors.cyan
+										: isBashMode
+										? theme.colors.success
+										: theme.colors.menuInfo
 								}
 								bold
 							>
-								{isBashMode ? '>_' : '❯'}{' '}
+								{isPureBashMode ? '!!' : isBashMode ? '>_' : '❯'}{' '}
 							</Text>
 							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
 						<Text
 							color={
-								isBashMode ? theme.colors.success : theme.colors.menuSecondary
+								isPureBashMode
+									? theme.colors.cyan
+									: isBashMode
+									? theme.colors.success
+									: theme.colors.menuSecondary
 							}
 						>
 							{'─'.repeat(terminalWidth - 2)}

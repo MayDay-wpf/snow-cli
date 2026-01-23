@@ -211,6 +211,74 @@ export function useChatLogic(props: UseChatLogicProps) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
 
+		// 先检查纯 Bash 模式（双感叹号）
+		try {
+			const pureBashResult = await bashMode.processPureBashMessage(
+				message,
+				async (command: string) => {
+					return new Promise<boolean>(resolve => {
+						setBashSensitiveCommand({command, resolve});
+					});
+				},
+			);
+
+			if (pureBashResult.hasCommands) {
+				// 纯 Bash 模式：执行命令但不发送给 AI。
+				// 由于 bash 执行面板只在 isExecuting=true 时显示，命令结束后会消失；
+				// 这里把最终结果写入 messages，确保用户能看到输出。
+				if (pureBashResult.hasRejectedCommands) {
+					setRestoreInputContent({
+						text: message,
+						images: images?.map(img => ({type: 'image' as const, ...img})),
+					});
+					return;
+				}
+
+				const formatted = pureBashResult.results
+					.map(
+						(r: {
+							stdout: string;
+							stderr: string;
+							command: string;
+							exitCode: number | null;
+						}) => {
+							const stdout = (r.stdout || '').trim();
+							const stderr = (r.stderr || '').trim();
+							const combined = [stdout, stderr].filter(Boolean).join('\n');
+							const output = combined.length > 0 ? combined : '(no output)';
+							const exitInfo =
+								r.exitCode === null || r.exitCode === undefined
+									? 'exit: (unknown)'
+									: `exit: ${r.exitCode}`;
+							return [
+								'```text',
+								`$ ${r.command}`,
+								output,
+								`(${exitInfo})`,
+								'```',
+							].join('\n');
+						},
+					)
+					.join('\n\n');
+
+				const bashOutputMessage: Message = {
+					role: 'assistant',
+					content: formatted || '```text\n(no output)\n```',
+				};
+
+				setMessages(prev => [...prev, bashOutputMessage]);
+				try {
+					await saveMessage(bashOutputMessage);
+				} catch (error) {
+					console.error('Failed to save pure bash output message:', error);
+				}
+				return; // 不继续处理，不发送给 AI
+			}
+		} catch (error) {
+			console.error('Failed to process pure bash commands:', error);
+		}
+
+		// 再检查命令注入模式（单感叹号）
 		try {
 			const result = await bashMode.processBashMessage(
 				message,

@@ -361,19 +361,23 @@ export async function registerCustomCommands(
 				}
 
 				if (cmd.type === 'execute') {
+					// 支持补充输入：将args叠加到命令后面
+					const finalCommand = args ? `${cmd.command} ${args}` : cmd.command;
 					return {
 						success: true,
-						message: `Executing: ${cmd.command}`,
+						message: `Executing: ${finalCommand}`,
 						action: 'executeTerminalCommand',
-						prompt: cmd.command,
+						prompt: finalCommand,
 					};
 				}
 
+				// 支持补充输入：将args叠加到prompt后面
+				const finalPrompt = args ? `${cmd.command} ${args}` : cmd.command;
 				return {
 					success: true,
-					message: `Sending to AI: ${cmd.command}`,
+					message: `Sending to AI: ${finalPrompt}`,
 					action: 'executeCustomCommand',
-					prompt: cmd.command,
+					prompt: finalPrompt,
 				};
 			},
 		});
