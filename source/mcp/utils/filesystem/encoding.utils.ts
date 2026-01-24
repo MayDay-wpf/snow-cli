@@ -2,6 +2,27 @@ import {promises as fs} from 'fs';
 import * as chardet from 'chardet';
 import * as iconv from 'iconv-lite';
 
+function isUtf8Buffer(buffer: Buffer): boolean {
+	// UTF-8 BOM
+	if (
+		buffer.length >= 3 &&
+		buffer[0] === 0xef &&
+		buffer[1] === 0xbb &&
+		buffer[2] === 0xbf
+	) {
+		return true;
+	}
+
+	try {
+		// Use a fatal decoder to validate UTF-8 bytes
+		const decoder = new TextDecoder('utf-8', {fatal: true});
+		decoder.decode(buffer);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Detect file encoding and read content with proper encoding
  * @param filePath - Full path to the file
@@ -11,6 +32,11 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 	try {
 		// Read file as buffer first
 		const buffer = await fs.readFile(filePath);
+
+		// Always prefer valid UTF-8 to avoid mis-detection
+		if (isUtf8Buffer(buffer)) {
+			return buffer.toString('utf-8');
+		}
 
 		// Detect encoding
 		const detectedEncoding = chardet.detect(buffer);
@@ -70,26 +96,30 @@ export async function writeFileWithEncoding(
 
 		try {
 			const existingBuffer = await fs.readFile(filePath);
-			const detectedEncoding = chardet.detect(existingBuffer);
+			if (isUtf8Buffer(existingBuffer)) {
+				targetEncoding = 'utf-8';
+			} else {
+				const detectedEncoding = chardet.detect(existingBuffer);
 
-			// If file exists with non-UTF-8 encoding, preserve it
-			if (
-				detectedEncoding &&
-				detectedEncoding !== 'UTF-8' &&
-				detectedEncoding !== 'ascii'
-			) {
-				let encoding = detectedEncoding;
+				// If file exists with non-UTF-8 encoding, preserve it
 				if (
-					encoding === 'GB2312' ||
-					encoding === 'GBK' ||
-					encoding === 'GB18030'
+					detectedEncoding &&
+					detectedEncoding !== 'UTF-8' &&
+					detectedEncoding !== 'ascii'
 				) {
-					// GB18030 is a superset of GBK and GB2312, use it for better compatibility
-					encoding = 'GB18030';
-				}
+					let encoding = detectedEncoding;
+					if (
+						encoding === 'GB2312' ||
+						encoding === 'GBK' ||
+						encoding === 'GB18030'
+					) {
+						// GB18030 is a superset of GBK and GB2312, use it for better compatibility
+						encoding = 'GB18030';
+					}
 
-				if (iconv.encodingExists(encoding)) {
-					targetEncoding = encoding;
+					if (iconv.encodingExists(encoding)) {
+						targetEncoding = encoding;
+					}
 				}
 			}
 		} catch {
