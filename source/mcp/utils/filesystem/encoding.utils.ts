@@ -14,22 +14,29 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 
 		// Detect encoding
 		const detectedEncoding = chardet.detect(buffer);
-		
+
 		// If no encoding detected or it's already UTF-8, return as UTF-8
-		if (!detectedEncoding || detectedEncoding === 'UTF-8' || detectedEncoding === 'ascii') {
+		if (
+			!detectedEncoding ||
+			detectedEncoding === 'UTF-8' ||
+			detectedEncoding === 'ascii'
+		) {
 			return buffer.toString('utf-8');
 		}
 
 		// Convert from detected encoding to UTF-8
 		// Handle common encoding aliases
 		let encoding = detectedEncoding;
-		if (encoding === 'GB2312' || encoding === 'GBK') {
-			encoding = 'GBK'; // iconv-lite uses GBK for GB2312
+		if (encoding === 'GB2312' || encoding === 'GBK' || encoding === 'GB18030') {
+			// GB18030 is a superset of GBK and GB2312, use it for better compatibility
+			encoding = 'GB18030';
 		}
 
 		// Check if encoding is supported
 		if (!iconv.encodingExists(encoding)) {
-			console.warn(`Unsupported encoding detected: ${encoding}, falling back to UTF-8`);
+			console.warn(
+				`Unsupported encoding detected: ${encoding}, falling back to UTF-8`,
+			);
 			return buffer.toString('utf-8');
 		}
 
@@ -38,7 +45,10 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 		return decoded;
 	} catch (error) {
 		// Fallback to UTF-8 if encoding detection fails
-		console.warn(`Encoding detection failed for ${filePath}, using UTF-8:`, error);
+		console.warn(
+			`Encoding detection failed for ${filePath}, using UTF-8:`,
+			error,
+		);
 		return await fs.readFile(filePath, 'utf-8');
 	}
 }
@@ -57,18 +67,27 @@ export async function writeFileWithEncoding(
 	try {
 		// Check if file exists to determine encoding
 		let targetEncoding = 'utf-8';
-		
+
 		try {
 			const existingBuffer = await fs.readFile(filePath);
 			const detectedEncoding = chardet.detect(existingBuffer);
-			
+
 			// If file exists with non-UTF-8 encoding, preserve it
-			if (detectedEncoding && detectedEncoding !== 'UTF-8' && detectedEncoding !== 'ascii') {
+			if (
+				detectedEncoding &&
+				detectedEncoding !== 'UTF-8' &&
+				detectedEncoding !== 'ascii'
+			) {
 				let encoding = detectedEncoding;
-				if (encoding === 'GB2312' || encoding === 'GBK') {
-					encoding = 'GBK';
+				if (
+					encoding === 'GB2312' ||
+					encoding === 'GBK' ||
+					encoding === 'GB18030'
+				) {
+					// GB18030 is a superset of GBK and GB2312, use it for better compatibility
+					encoding = 'GB18030';
 				}
-				
+
 				if (iconv.encodingExists(encoding)) {
 					targetEncoding = encoding;
 				}
@@ -86,7 +105,10 @@ export async function writeFileWithEncoding(
 		}
 	} catch (error) {
 		// Fallback to UTF-8 if encoding handling fails
-		console.warn(`Encoding handling failed for ${filePath}, using UTF-8:`, error);
+		console.warn(
+			`Encoding handling failed for ${filePath}, using UTF-8:`,
+			error,
+		);
 		await fs.writeFile(filePath, content, 'utf-8');
 	}
 }
