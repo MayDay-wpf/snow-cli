@@ -72,9 +72,20 @@ export function convertSessionMessagesToUI(
 					toolArgs = {};
 				}
 
+				// Build parameter display for terminal-execute
+				let paramDisplay = '';
+				if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
+					paramDisplay = ` "${toolArgs.command}"`;
+				} else if (toolDisplay.args.length > 0) {
+					const params = toolDisplay.args
+						.map((arg: any) => `${arg.key}: ${arg.value}`)
+						.join(', ');
+					paramDisplay = ` (${params})`;
+				}
+
 				uiMessages.push({
 					role: 'subagent',
-					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}\x1b[0m`,
+					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 					streaming: false,
 					toolCall: {
 						name: toolCall.function.name,

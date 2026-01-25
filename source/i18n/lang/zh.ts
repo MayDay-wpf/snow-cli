@@ -463,6 +463,7 @@ export const zh: TranslationKeys = {
 			export: '将聊天对话导出到带保存对话框的文本文件',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
 			skills: '创建包含文档和示例的技能模板',
+			skillsPicker: '选择 Skill 并将其 SKILL.md 内容注入到输入框',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
 			addDir: '添加工作目录以支持多项目上下文。用法: /add-dir 或 /add-dir 路径',

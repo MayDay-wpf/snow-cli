@@ -216,6 +216,14 @@ ${skillsList}
 /**
  * Get MCP tools for skills (dynamic generation based on available skills)
  */
+export async function listAvailableSkills(
+	projectRoot?: string,
+): Promise<Skill[]> {
+	const skills = await loadAvailableSkills(projectRoot);
+	// Stable sort by id for deterministic UI.
+	return Array.from(skills.values()).sort((a, b) => a.id.localeCompare(b.id));
+}
+
 export async function getMCPTools(projectRoot?: string) {
 	const skills = await loadAvailableSkills(projectRoot);
 

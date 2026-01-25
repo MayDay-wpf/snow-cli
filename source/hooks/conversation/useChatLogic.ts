@@ -850,6 +850,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => {
 		streamingState.setContextUsage(null);
+		// CRITICAL: Also reset context percentage ref to prevent auto-compress trigger
+		// after rollback when user continues conversation
+		currentContextPercentageRef.current = 0;
 
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;

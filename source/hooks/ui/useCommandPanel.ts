@@ -75,6 +75,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.todo,
 			},
 			{
+				name: 'skills-',
+				description:
+					t.commandPanel.commands.skillsPicker ||
+					'Select a skill and inject its content into the input',
+			},
+			{
 				name: 'add-dir',
 				description: t.commandPanel.commands.addDir || 'Add working directory',
 			},

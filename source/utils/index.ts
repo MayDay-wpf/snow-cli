@@ -19,6 +19,7 @@ import './commands/resume.js';
 import './commands/review.js';
 import './commands/role.js';
 import './commands/skills.js';
+import './commands/skillsPicker.js';
 import './commands/todoPicker.js';
 import './commands/usage.js';
 import './commands/vulnerability-hunting.js';

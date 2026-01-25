@@ -283,6 +283,45 @@ export class TextBuffer {
 		this.scheduleUpdate();
 	}
 
+	/**
+	 * 插入文本占位符：显示 placeholderText，但 getFullText() 会还原为原始 content。
+	 * 用于 skills 注入等“只做视觉隐藏”的场景。
+	 */
+	insertTextPlaceholder(content: string, placeholderText: string): void {
+		const sanitizedContent = sanitizeInput(content);
+		const sanitizedPlaceholder = sanitizeInput(placeholderText);
+		if (!sanitizedPlaceholder) return;
+
+		this.textPlaceholderCounter++;
+		const id = `text_${Date.now()}_${this.textPlaceholderCounter}`;
+
+		this.placeholderStorage.set(id, {
+			id,
+			type: 'text',
+			content: sanitizedContent,
+			charCount: sanitizedContent.length,
+			index: this.textPlaceholderCounter,
+			placeholder: sanitizedPlaceholder,
+		});
+
+		// 直接插入占位符文本，不触发“大文本粘贴占位符”逻辑。
+		this.insertPlainText(sanitizedPlaceholder);
+		this.scheduleUpdate();
+	}
+
+	/**
+	 * 用于“回滚恢复”场景的插入：不触发大文本粘贴占位符逻辑。
+	 * 这样可以把历史消息原样恢复到输入框，而不是显示为 [Paste ...]。
+	 */
+	insertRestoredText(input: string): void {
+		const sanitized = sanitizeInput(input);
+		if (!sanitized) return;
+		this.lastTextPlaceholderId = null;
+		this.lastTextPlaceholderAt = 0;
+		this.insertPlainText(sanitized);
+		this.scheduleUpdate();
+	}
+
 	private insertPlainText(text: string): void {
 		if (!text) {
 			return;
@@ -504,16 +543,20 @@ export class TextBuffer {
 				}
 
 				if (closePos < codePoints.length && codePoints[closePos] === ']') {
-					const placeholderText = codePoints
-						.slice(openPos, closePos + 1)
-						.join('');
+					const baseText = codePoints.slice(openPos, closePos + 1).join('');
+					const hasTrailingSpace = codePoints[closePos + 1] === ' ';
+					const placeholderText = hasTrailingSpace ? `${baseText} ` : baseText;
+					const end = hasTrailingSpace ? closePos + 2 : closePos + 1;
+
 					// Check if it's a valid placeholder
 					if (
-						placeholderText.match(/^\[Paste \d+ lines #\d+\]$/) ||
-						placeholderText.match(/^\[image #\d+\]$/) ||
-						placeholderText === '[Pasting...]'
+						placeholderText.match(/^\[Paste \d+ lines #\d+\] ?$/) ||
+						placeholderText.match(/^\[image #\d+\] ?$/) ||
+						placeholderText === '[Pasting...]' ||
+						placeholderText === '[Pasting...] ' ||
+						placeholderText.match(/^\[Skill:[^\]]+\] ?$/)
 					) {
-						return {start: openPos, end: closePos + 1};
+						return {start: openPos, end};
 					}
 				}
 			}

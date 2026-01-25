@@ -93,6 +93,26 @@ type KeyboardInputOptions = {
 	confirmTodoSelection: () => void;
 	todoSearchQuery: string;
 	setTodoSearchQuery: (query: string) => void;
+	// Skills picker
+	showSkillsPicker: boolean;
+	setShowSkillsPicker: (show: boolean) => void;
+	skillsSelectedIndex: number;
+	setSkillsSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	skills: Array<{
+		id: string;
+		name: string;
+		description: string;
+		location: string;
+	}>;
+	skillsIsLoading: boolean;
+	skillsSearchQuery: string;
+	skillsAppendText: string;
+	skillsFocus: 'search' | 'append';
+	toggleSkillsFocus: () => void;
+	appendSkillsChar: (ch: string) => void;
+	backspaceSkillsField: () => void;
+	confirmSkillsSelection: () => void;
+	closeSkillsPicker: () => void;
 	// Profile picker
 	showProfilePicker: boolean;
 	setShowProfilePicker: (show: boolean) => void;
@@ -179,6 +199,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
+		showSkillsPicker,
+		setShowSkillsPicker,
+		setSkillsSelectedIndex,
+		skills,
+		toggleSkillsFocus,
+		appendSkillsChar,
+		backspaceSkillsField,
+		confirmSkillsSelection,
+		closeSkillsPicker,
 		showProfilePicker,
 		setShowProfilePicker,
 		profileSelectedIndex,
@@ -376,6 +405,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
+			// Close skills picker if open
+			if (showSkillsPicker) {
+				closeSkillsPicker();
+				return;
+			}
+
 			// Close todo picker if open
 			if (showTodoPicker) {
 				setShowTodoPicker(false);
@@ -449,6 +484,58 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					}
 				}
 			}
+			return;
+		}
+
+		// Handle skills picker navigation
+		if (showSkillsPicker) {
+			// Up arrow - 循环导航:第一项 → 最后一项
+			if (key.upArrow) {
+				setSkillsSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, skills.length - 1),
+				);
+				return;
+			}
+
+			// Down arrow - 循环导航:最后一项 → 第一项
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, skills.length - 1);
+				setSkillsSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+				return;
+			}
+
+			// Tab - toggle focus between search/append
+			if (key.tab) {
+				toggleSkillsFocus();
+				return;
+			}
+
+			// Enter - confirm selection
+			if (key.return) {
+				confirmSkillsSelection();
+				return;
+			}
+
+			// Backspace/Delete - remove last character from focused field
+			if (key.backspace || key.delete) {
+				backspaceSkillsField();
+				return;
+			}
+
+			// Type - update focused field (accept multi-byte like Chinese)
+			if (
+				input &&
+				!key.ctrl &&
+				!key.meta &&
+				!key.escape &&
+				input !== '\\x1b' &&
+				input !== '\\u001b' &&
+				!/[\\x00-\\x1F]/.test(input)
+			) {
+				appendSkillsChar(input);
+				return;
+			}
+
 			return;
 		}
 
@@ -944,6 +1031,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							setShowCommands(false);
 							setCommandSelectedIndex(0);
 							setShowAgentPicker(true);
+							triggerUpdate();
+							return;
+						}
+						// Special handling for skills- command
+						if (selectedCommand.name === 'skills-') {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowSkillsPicker(true);
 							triggerUpdate();
 							return;
 						}

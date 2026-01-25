@@ -495,6 +495,8 @@ export const en: TranslationKeys = {
 			export: 'Export chat conversation to text file with save dialog',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
+			skillsPicker:
+				'Pick a skill and inject its SKILL.md content into the input',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
 			addDir:

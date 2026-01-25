@@ -24,6 +24,7 @@ export interface CommandResult {
 		| 'showTodoPicker'
 		| 'showProfilePanel'
 		| 'showModelsPanel'
+		| 'showSkillsPicker'
 		| 'help'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'

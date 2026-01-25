@@ -467,6 +467,7 @@ export type TranslationKeys = {
 			export: string;
 			custom: string;
 			skills: string;
+			skillsPicker: string;
 			agent: string;
 			todo: string;
 			addDir: string;
