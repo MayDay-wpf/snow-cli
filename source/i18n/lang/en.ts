@@ -1082,6 +1082,9 @@ export const en: TranslationKeys = {
 		requiresConfirmation:
 			'This command requires confirmation even in YOLO/Always-Approved mode',
 		arguments: 'Arguments:',
+		commandPagerTitle: 'Command (paged):',
+		commandPagerStatus: '{page}/{total}',
+		commandPagerHint: 'Tab: Next page (wraps)',
 		selectAction: 'Select action:',
 		enterRejectionReason: 'Enter rejection reason:',
 		pressEnterToSubmit: 'Press Enter to submit',

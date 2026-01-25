@@ -1,5 +1,5 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text, useInput, useStdout} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
@@ -78,16 +78,13 @@ function formatArgumentsAsTree(
 		excludeFields.add('signature'); // Function signatures can be verbose
 	}
 
-	// For terminal-execute, show full command without truncation
-	const noTruncateFields = new Set<string>();
-	if (toolName === 'terminal-execute') {
-		noTruncateFields.add('command');
-	}
+	// terminal-execute 的 command 默认也要截断，避免确认框过长。
+	// 需要查看完整命令时，由下方的“翻阅窗口(Tab)”提供分页浏览。
 
 	const keys = Object.keys(args).filter(key => !excludeFields.has(key));
 	return keys.map((key, index) => ({
 		key,
-		value: formatArgumentValue(args[key], 100, noTruncateFields.has(key)),
+		value: formatArgumentValue(args[key], 100, false),
 		isLast: index === keys.length - 1,
 	}));
 }
@@ -101,11 +98,38 @@ export default function ToolConfirmation({
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	const {stdout} = useStdout();
+	const [terminalColumns, setTerminalColumns] = useState<number>(
+		stdout?.columns ?? process.stdout.columns ?? 80,
+	);
+
+	useEffect(() => {
+		const next = stdout?.columns ?? process.stdout.columns;
+		if (typeof next === 'number') {
+			setTerminalColumns(next);
+		}
+
+		// Ink 的 stdout 通常是 TTY stream，resize 时更新 columns。
+		const handler = () => {
+			const cols = stdout?.columns ?? process.stdout.columns;
+			if (typeof cols === 'number') {
+				setTerminalColumns(cols);
+			}
+		};
+
+		stdout?.on?.('resize', handler);
+		return () => {
+			stdout?.off?.('resize', handler);
+		};
+	}, [stdout]);
 	const [hasSelected, setHasSelected] = useState(false);
 	const [showRejectInput, setShowRejectInput] = useState(false);
 	const [rejectReason, setRejectReason] = useState('');
 	const [menuKey, setMenuKey] = useState(0);
 	const [initialMenuIndex, setInitialMenuIndex] = useState(0);
+
+	// terminal-execute 命令翻阅窗口：固定高度分页，Tab 循环翻阅，不一次性完整显示。
+	const [commandPageOffset, setCommandPageOffset] = useState(0);
 
 	// Check if this is a sensitive command (for terminal-execute)
 	const sensitiveCommandCheck = useMemo(() => {
@@ -137,6 +161,64 @@ export default function ToolConfirmation({
 			return null;
 		}
 	}, [toolArguments, toolName]);
+
+	// 仅 terminal-execute 展示命令翻阅窗口
+	const terminalCommand = useMemo(() => {
+		if (toolName !== 'terminal-execute' || !toolArguments) {
+			return null;
+		}
+
+		try {
+			const parsed = JSON.parse(toolArguments);
+			const command = parsed.command;
+			return typeof command === 'string' ? command : null;
+		} catch {
+			return null;
+		}
+	}, [toolName, toolArguments]);
+
+	useEffect(() => {
+		// 切换到新命令时重置翻阅位置
+		setCommandPageOffset(0);
+	}, [terminalCommand]);
+
+	const commandPager = useMemo(() => {
+		if (!terminalCommand) return null;
+		const maxLines = 3;
+		const reserved = 24;
+		const lineWidth = Math.max(20, terminalColumns - reserved);
+		const windowChars = lineWidth * maxLines;
+
+		const totalPages = Math.max(
+			1,
+			Math.ceil(terminalCommand.length / windowChars),
+		);
+		const normalizedOffset =
+			totalPages <= 1
+				? 0
+				: ((commandPageOffset % (totalPages * windowChars)) +
+						totalPages * windowChars) %
+				  (totalPages * windowChars);
+
+		const slice = terminalCommand.slice(
+			normalizedOffset,
+			normalizedOffset + windowChars,
+		);
+		const lines: string[] = [];
+		for (let i = 0; i < maxLines; i++) {
+			lines.push(slice.slice(i * lineWidth, (i + 1) * lineWidth));
+		}
+
+		return {
+			lines,
+			maxLines,
+			lineWidth,
+			windowChars,
+			totalPages,
+			pageIndex: Math.floor(normalizedOffset / windowChars) + 1,
+			canPage: totalPages > 1,
+		};
+	}, [terminalCommand, commandPageOffset, terminalColumns]);
 
 	// Trigger toolConfirmation Hook when component mounts
 	useEffect(() => {
@@ -440,8 +522,20 @@ export default function ToolConfirmation({
 		return baseItems;
 	}, [sensitiveCommandCheck.isSensitive, t]);
 
-	// Handle ESC key to exit reject input mode
 	useInput((_input, key) => {
+		// Tab - terminal-execute 命令翻阅（循环）
+		if (
+			key.tab &&
+			!hasSelected &&
+			!showRejectInput &&
+			toolName === 'terminal-execute' &&
+			commandPager?.canPage
+		) {
+			setCommandPageOffset(prev => prev + commandPager.windowChars);
+			return;
+		}
+
+		// ESC - exit reject input mode
 		if (showRejectInput && key.escape) {
 			setShowRejectInput(false);
 			setRejectReason('');
@@ -513,13 +607,6 @@ export default function ToolConfirmation({
 										{sensitiveCommandCheck.matchedCommand?.pattern}
 									</Text>
 								</Box>
-
-								<Box marginTop={0}>
-									<Text dimColor>{t.toolConfirmation.reason} </Text>
-									<Text color="white">
-										{sensitiveCommandCheck.matchedCommand?.description}
-									</Text>
-								</Box>
 							</Box>
 
 							<Box marginTop={1} paddingX={1} paddingY={0}>
@@ -531,17 +618,43 @@ export default function ToolConfirmation({
 					)}
 
 					{/* Display tool arguments in tree format */}
-					{formattedArgs && formattedArgs.length > 0 && (
+					{toolName !== 'terminal-execute' &&
+						formattedArgs &&
+						formattedArgs.length > 0 && (
+							<Box flexDirection="column" marginBottom={1}>
+								<Text dimColor>{t.toolConfirmation.arguments}</Text>
+								{formattedArgs.map((arg, index) => (
+									<Box key={index} flexDirection="column">
+										<Text color={theme.colors.menuSecondary} dimColor>
+											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+											<Text color="white">{arg.value}</Text>
+										</Text>
+									</Box>
+								))}
+							</Box>
+						)}
+
+					{/* terminal-execute: 命令翻阅窗口（固定高度，Tab 循环翻页） */}
+					{toolName === 'terminal-execute' && commandPager && (
 						<Box flexDirection="column" marginBottom={1}>
-							<Text dimColor>{t.toolConfirmation.arguments}</Text>
-							{formattedArgs.map((arg, index) => (
-								<Box key={index} flexDirection="column">
-									<Text color={theme.colors.menuSecondary} dimColor>
-										{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-										<Text color="white">{arg.value}</Text>
+							<Text dimColor>
+								{t.toolConfirmation.commandPagerTitle}{' '}
+								<Text color={theme.colors.menuInfo}>
+									{t.toolConfirmation.commandPagerStatus
+										.replace('{page}', String(commandPager.pageIndex))
+										.replace('{total}', String(commandPager.totalPages))}
+								</Text>
+							</Text>
+							<Box flexDirection="column" paddingLeft={2}>
+								{commandPager.lines.map((line, idx) => (
+									<Text key={idx} color="white" wrap="truncate">
+										{line}
 									</Text>
-								</Box>
-							))}
+								))}
+							</Box>
+							{commandPager.canPage && (
+								<Text dimColor>{t.toolConfirmation.commandPagerHint}</Text>
+							)}
 						</Box>
 					)}
 				</>
