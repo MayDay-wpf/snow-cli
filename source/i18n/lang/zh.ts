@@ -531,6 +531,21 @@ export const zh: TranslationKeys = {
 		searchLabel: '搜索:',
 		noResults: '未找到匹配的配置',
 	},
+
+	skillsPickerPanel: {
+		title: '选择技能',
+		keyboardHint: '(ESC: 取消 · Tab: 切换 · Enter: 确认)',
+		loading: '正在加载技能...',
+		searchLabel: '搜索:',
+		appendLabel: '追加:',
+		empty: '(空)',
+		noSkillsFound: '未找到技能',
+		noDescription: '无描述',
+		scrollHint: '↑↓ 滚动',
+		moreAbove: '上方 {count} 项',
+		moreBelow: '下方 {count} 项',
+	},
+
 	reviewCommitPanel: {
 		title: '代码审查：选择变更',
 		loadingCommits: '正在加载提交记录...',

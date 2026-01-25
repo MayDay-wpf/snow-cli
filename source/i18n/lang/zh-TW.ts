@@ -531,6 +531,21 @@ export const zhTW: TranslationKeys = {
 		searchLabel: '搜尋:',
 		noResults: '未找到符合的設定檔',
 	},
+
+	skillsPickerPanel: {
+		title: '選擇技能',
+		keyboardHint: '(ESC: 取消 · Tab: 切換 · Enter: 確認)',
+		loading: '正在載入技能...',
+		searchLabel: '搜尋:',
+		appendLabel: '追加:',
+		empty: '(空)',
+		noSkillsFound: '未找到技能',
+		noDescription: '無描述',
+		scrollHint: '↑↓ 捲動',
+		moreAbove: '上方 {count} 項',
+		moreBelow: '下方 {count} 項',
+	},
+
 	reviewCommitPanel: {
 		title: '程式碼審查：選擇變更',
 		loadingCommits: '正在載入提交記錄...',

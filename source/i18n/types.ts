@@ -491,6 +491,21 @@ export type TranslationKeys = {
 		noResults: string;
 	};
 
+	// Skills Picker Panel
+	skillsPickerPanel: {
+		title: string;
+		keyboardHint: string;
+		loading: string;
+		searchLabel: string;
+		appendLabel: string;
+		empty: string;
+		noSkillsFound: string;
+		noDescription: string;
+		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
+	};
+
 	reviewCommitPanel: {
 		title: string;
 		loadingCommits: string;

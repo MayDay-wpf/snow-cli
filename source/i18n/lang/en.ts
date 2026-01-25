@@ -568,6 +568,21 @@ export const en: TranslationKeys = {
 		searchLabel: 'Search:',
 		noResults: 'No matching profiles found',
 	},
+
+	skillsPickerPanel: {
+		title: 'Select Skill',
+		keyboardHint: '(ESC: cancel · Tab: switch · Enter: confirm)',
+		loading: 'Loading skills...',
+		searchLabel: 'Search:',
+		appendLabel: 'Append:',
+		empty: '(empty)',
+		noSkillsFound: 'No skills found',
+		noDescription: 'No description',
+		scrollHint: '↑↓ to scroll',
+		moreAbove: '{count} above',
+		moreBelow: '{count} below',
+	},
+
 	reviewCommitPanel: {
 		title: 'Review: Select Changes',
 		loadingCommits: 'Loading commits...',

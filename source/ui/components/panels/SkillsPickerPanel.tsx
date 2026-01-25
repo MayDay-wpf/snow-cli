@@ -1,5 +1,6 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
+import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
 export type SkillsPickerFocus = 'search' | 'append';
@@ -33,6 +34,7 @@ const SkillsPickerPanel = memo(
 		appendText = '',
 		focus = 'search',
 	}: Props) => {
+		const {t} = useI18n();
 		const {theme} = useTheme();
 		const MAX_DISPLAY_ITEMS = 5;
 		const effectiveMaxItems = maxHeight
@@ -64,7 +66,10 @@ const SkillsPickerPanel = memo(
 
 		const displayedSkills = displayWindow.items;
 		const hiddenAboveCount = displayWindow.startIndex;
-		const hiddenBelowCount = Math.max(0, skills.length - displayWindow.endIndex);
+		const hiddenBelowCount = Math.max(
+			0,
+			skills.length - displayWindow.endIndex,
+		);
 
 		const displayedSelectedIndex = useMemo(() => {
 			return displayedSkills.findIndex(skill => {
@@ -82,34 +87,36 @@ const SkillsPickerPanel = memo(
 				<Box width="100%" flexDirection="column">
 					<Box>
 						<Text color={theme.colors.warning} bold>
-							Select Skill{' '}
+							{t.skillsPickerPanel.title}{' '}
 							{skills.length > effectiveMaxItems &&
 								`(${selectedIndex + 1}/${skills.length})`}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							(ESC: cancel · Tab: switch · Enter: confirm)
+							{t.skillsPickerPanel.keyboardHint}
 						</Text>
 					</Box>
 
 					{isLoading ? (
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								Loading skills...
+								{t.skillsPickerPanel.loading}
 							</Text>
 						</Box>
 					) : (
 						<>
 							<Box marginTop={1} flexDirection="column">
 								<Text color={theme.colors.menuInfo}>
-									{focus === 'search' ? '▶ ' : '  '}Search:{' '}
+									{focus === 'search' ? '▶ ' : '  '}
+									{t.skillsPickerPanel.searchLabel}{' '}
 									<Text color={theme.colors.menuSelected}>
-										{searchQuery || '(empty)'}
+										{searchQuery || t.skillsPickerPanel.empty}
 									</Text>
 								</Text>
 								<Text color={theme.colors.menuInfo}>
-									{focus === 'append' ? '▶ ' : '  '}Append:{' '}
+									{focus === 'append' ? '▶ ' : '  '}
+									{t.skillsPickerPanel.appendLabel}{' '}
 									<Text color={theme.colors.menuSelected}>
-										{appendText || '(empty)'}
+										{appendText || t.skillsPickerPanel.empty}
 									</Text>
 								</Text>
 							</Box>
@@ -117,7 +124,7 @@ const SkillsPickerPanel = memo(
 							{skills.length === 0 ? (
 								<Box marginTop={1}>
 									<Text color={theme.colors.menuSecondary} dimColor>
-										No skills found
+										{t.skillsPickerPanel.noSkillsFound}
 									</Text>
 								</Box>
 							) : (
@@ -132,11 +139,8 @@ const SkillsPickerPanel = memo(
 												}
 												bold
 											>
-												{index === displayedSelectedIndex ? '❯ ' : '  '}#{skill.id}
-												{' '}
-												<Text dimColor>
-													({skill.location})
-												</Text>
+												{index === displayedSelectedIndex ? '❯ ' : '  '}#
+												{skill.id} <Text dimColor>({skill.location})</Text>
 											</Text>
 											<Box marginLeft={3}>
 												<Text
@@ -147,7 +151,10 @@ const SkillsPickerPanel = memo(
 													}
 													dimColor
 												>
-													└─ {skill.description || skill.name || 'No description'}
+													└─{' '}
+													{skill.description ||
+														skill.name ||
+														t.skillsPickerPanel.noDescription}
 												</Text>
 											</Box>
 										</Box>
@@ -156,8 +163,25 @@ const SkillsPickerPanel = memo(
 									{skills.length > effectiveMaxItems && (
 										<Box marginTop={1}>
 											<Text color={theme.colors.menuSecondary} dimColor>
-												↑↓ to scroll · {hiddenAboveCount > 0 && `${hiddenAboveCount} above`} 
-												{hiddenBelowCount > 0 && `${hiddenBelowCount} below`}
+												{t.skillsPickerPanel.scrollHint}
+												{hiddenAboveCount > 0 && (
+													<>
+														·{' '}
+														{t.skillsPickerPanel.moreAbove.replace(
+															'{count}',
+															hiddenAboveCount.toString(),
+														)}
+													</>
+												)}
+												{hiddenBelowCount > 0 && (
+													<>
+														·{' '}
+														{t.skillsPickerPanel.moreBelow.replace(
+															'{count}',
+															hiddenBelowCount.toString(),
+														)}
+													</>
+												)}
 											</Text>
 										</Box>
 									)}
