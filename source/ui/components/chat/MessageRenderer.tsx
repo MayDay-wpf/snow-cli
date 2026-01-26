@@ -110,7 +110,12 @@ export default function MessageRenderer({
 		} else if (message.messageStatus === 'error') {
 			toolStatusColor = 'red';
 		} else {
-			toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
+			// subAgentInternal 消息使用 cyan，其他 subagent 消息使用 magenta
+			if (message.role === 'subagent' && message.subAgentInternal === true) {
+				toolStatusColor = 'cyan';
+			} else {
+				toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
+			}
 		}
 	}
 
@@ -216,16 +221,33 @@ export default function MessageRenderer({
 											// For tool messages with status, render as plain text with color
 											// instead of using MarkdownRenderer which ignores the toolStatusColor
 											const hasToolStatus = message.messageStatus !== undefined;
+											const isSubAgentInternal =
+												message.subAgentInternal === true;
 
 											if (
-												hasToolStatus &&
+												(hasToolStatus || isSubAgentInternal) &&
 												(message.role === 'assistant' ||
 													message.role === 'subagent')
 											) {
+												// Parse content to separate title and tool tree
+												const content = message.content || ' ';
+												const lines = content.split('\n');
+												const titleLine = lines[0] || '';
+												const treeLines = lines.slice(1);
+
 												return (
-													<Text color={toolStatusColor}>
-														{removeAnsiCodes(message.content || ' ')}
-													</Text>
+													<>
+														<Text color={toolStatusColor}>
+															{removeAnsiCodes(titleLine)}
+														</Text>
+														{treeLines.length > 0 && (
+															<Text color={theme.colors.menuSecondary}>
+																{treeLines
+																	.map(line => removeAnsiCodes(line || ''))
+																	.join('\n')}
+															</Text>
+														)}
+													</>
 												);
 											}
 

@@ -119,6 +119,9 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Reduces cognitive load - AI doesn't need to remember everything
 - Enables recovery if conversation is interrupted
 
+**Formatting rule:**
+- TODO item content SHOULD start with a numeric prefix to explicitly mark execution order, e.g. "1. ...", "2. ...", "3. ..."
+
 **WHEN TO USE (Default for most work):**
 - ANY task touching 2+ files
 - Features, refactoring, bug fixes
@@ -132,27 +135,28 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **STANDARD WORKFLOW - Always Plan First:**
 1. **Receive task** → Immediately create TODO with todo-add (batch add all steps at once)
-2. **Execute** → Update progress with todo-update as you complete each step  
-3. **Complete** → Clean up with todo-delete for obsolete items
+2. **Execute** → Before any todo-update / todo-delete, run todo-get (paired with an action tool) to retrieve the latest IDs and current list
+3. **Execute** → Update progress with todo-update as each step is completed
+4. **Complete** → Clean up obsolete, incorrect, or superseded items with todo-delete
 
 **PARALLEL CALLS RULE:**
 ALWAYS pair TODO tools with action tools in same call:
-- CORRECT: todo-get + filesystem-read | todo-update + filesystem-edit | todo-add + filesystem-read
+- CORRECT: todo-get + filesystem-read | todo-get + filesystem-edit | todo-update + filesystem-edit
 - WRONG: Call todo-get alone, wait for result, then act
 
 **Available tools:**
 - **todo-add**: Create task list (supports batch: pass string array to add multiple at once)
-- **todo-get**: Check current progress (always pair with other tools)
-- **todo-update**: Mark tasks completed as you go
+- **todo-get**: Get the current TODO list (always pair with other tools)
+- **todo-update**: Update TODO status/content
 - **todo-delete**: Remove obsolete/redundant items
 
 **Examples:**
 \`\`\`
 User: "Fix authentication bug and add logging"
-AI: todo-add(content=["Fix auth bug in auth.ts", "Add logging to login flow", "Test login with new logs"]) + filesystem-read("auth.ts")
+AI: todo-add(content=["1. Fix auth bug in auth.ts", "2. Add logging to login flow", "3. Test login with new logs"]) + filesystem-read("auth.ts")
 
 User: "Refactor utils module"  
-AI: todo-add(content=["Read utils module structure", "Identify refactor targets", "Extract common functions", "Update imports", "Run tests"]) + filesystem-read("utils/")
+AI: todo-add(content=["1. Read utils module structure", "2. Identify refactor targets", "3. Extract common functions", "4. Update imports", "5. Run tests"]) + filesystem-read("utils/")
 \`\`\`
 
 

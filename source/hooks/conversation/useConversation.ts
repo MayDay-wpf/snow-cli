@@ -750,9 +750,9 @@ export async function handleConversationWithTools(
 
 										const uiMsg = {
 											role: 'subagent' as const,
-											content: `\x1b[38;2;184;122;206m⚇ ${
+											content: `\x1b[36m⚇ ${
 												subAgentMessage.agentName
-											}${toolLines.join('')}\x1b[0m`,
+											}\x1b[0m${toolLines.join('')}`,
 											streaming: false,
 											subAgent: {
 												agentId: subAgentMessage.agentId,
@@ -905,6 +905,7 @@ export async function handleConversationWithTools(
 										role: 'subagent' as const,
 										content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
 										streaming: false,
+										messageStatus: isError ? 'error' : 'success',
 										toolResult: !isError ? msg.content : undefined,
 										terminalResult: terminalResultData,
 										toolCall: terminalResultData
@@ -932,6 +933,7 @@ export async function handleConversationWithTools(
 										role: 'subagent' as const,
 										content: `\x1b[38;2;255;100;100m⚇✗ ${msg.tool_name}\x1b[0m`,
 										streaming: false,
+										messageStatus: 'error' as const,
 										subAgent: {
 											agentId: subAgentMessage.agentId,
 											agentName: subAgentMessage.agentName,
