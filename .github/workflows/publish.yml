@@ -58,11 +58,8 @@ jobs:
 
             ### What's New
 
-            - Fixed the issue of garbled Chinese characters in non-UTF-8 files during file editing
-            - Custom instructions allow users to freely add content
-            - Added the `/skills-` command to enforce a certain skill
-            - Enhanced the stability of IDE connections
-            - Optimized the display effect and interactive experience of some UI
+            - Fix vscode work area connection bug
+            - Fix the todolist jitter problem
 
             ### Installation
             ```bash

@@ -2,7 +2,7 @@
 	"name": "snow-cli",
 	"displayName": "Snow CLI",
 	"description": "Snow AI CLI with ACE Code Search - Intelligent code navigation and search powered by AI",
-	"version": "0.3.7",
+	"version": "0.3.8",
 	"publisher": "mufasa",
 	"repository": {
 		"type": "git",

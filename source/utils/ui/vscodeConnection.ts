@@ -35,6 +35,14 @@ class VSCodeConnectionManager {
 	private editorContext: EditorContext = {};
 	private listeners: Array<(context: EditorContext) => void> = [];
 	private currentWorkingDirectory = process.cwd();
+	// In multi-root workspaces a single VSCode window serves multiple workspace folders on the same port.
+	// Cache the workspace folders mapped to the connected port so we can accept context from any of them.
+	private connectedWorkspaceFolders: Set<string> = new Set();
+	private connectedPortHasCwdMatch = false;
+	// Once we've received at least one valid context message, trust subsequent context updates from this server.
+	// This is important for multi-root workspaces where the active file can move across workspace folders while
+	// the terminal cwd stays fixed.
+	private trustContextFromConnectedServer = false;
 	// Connection state management
 	private connectingPromise: Promise<void> | null = null;
 	private connectionTimeout: NodeJS.Timeout | null = null;
@@ -98,9 +106,11 @@ class VSCodeConnectionManager {
 					this.client.on('open', () => {
 						if (!isSettled) {
 							isSettled = true;
+							this.trustContextFromConnectedServer = false;
 							// Reset reconnect attempts on successful connection
 							this.reconnectAttempts = 0;
 							this.port = port;
+							this.refreshConnectedWorkspaceFolders();
 							// Clear connection state
 							if (this.connectionTimeout) {
 								clearTimeout(this.connectionTimeout);
@@ -337,6 +347,12 @@ class VSCodeConnectionManager {
 			return true;
 		}
 
+		// After the first valid context update, accept further context updates even if the workspace folder differs.
+		// This avoids dropping context when moving between folders in a multi-root workspace.
+		if (data.type === 'context' && this.trustContextFromConnectedServer) {
+			return true;
+		}
+
 		// Normalize paths for consistent comparison across platforms
 		const cwd = this.normalizePath(this.currentWorkingDirectory);
 		const workspaceFolder = this.normalizePath(data.workspaceFolder);
@@ -352,7 +368,56 @@ class VSCodeConnectionManager {
 		// Check if workspace is within cwd (workspace is more specific)
 		const workspaceInCwd = workspaceFolder.startsWith(cwd + '/');
 
-		return cwdInWorkspace || workspaceInCwd;
+		if (cwdInWorkspace || workspaceInCwd) {
+			return true;
+		}
+
+		// Multi-root workspace support: once we know this terminal's cwd belongs to the connected port,
+		// accept context messages for any workspace folder that maps to the same port.
+		if (
+			this.connectedPortHasCwdMatch &&
+			this.connectedWorkspaceFolders.size > 0 &&
+			this.connectedWorkspaceFolders.has(workspaceFolder)
+		) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private refreshConnectedWorkspaceFolders(): void {
+		this.connectedWorkspaceFolders.clear();
+		this.connectedPortHasCwdMatch = false;
+
+		try {
+			const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
+			if (!fs.existsSync(portInfoPath)) {
+				return;
+			}
+
+			const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
+			for (const [workspace, port] of Object.entries(portInfo)) {
+				if (typeof port !== 'number' || port !== this.port) {
+					continue;
+				}
+				const normalizedWorkspace = this.normalizePath(workspace);
+				if (normalizedWorkspace) {
+					this.connectedWorkspaceFolders.add(normalizedWorkspace);
+				}
+			}
+
+			const cwd = this.normalizePath(this.currentWorkingDirectory);
+			for (const ws of this.connectedWorkspaceFolders) {
+				if (cwd === ws || cwd.startsWith(ws + '/') || ws.startsWith(cwd + '/')) {
+					this.connectedPortHasCwdMatch = true;
+					break;
+				}
+			}
+		} catch (error) {
+			// Ignore errors; fall back to path-based matching.
+			this.connectedWorkspaceFolders.clear();
+			this.connectedPortHasCwdMatch = false;
+		}
 	}
 
 	private scheduleReconnect(): void {
@@ -402,6 +467,9 @@ class VSCodeConnectionManager {
 			this.client = null;
 		}
 
+		this.trustContextFromConnectedServer = false;
+		this.connectedWorkspaceFolders.clear();
+		this.connectedPortHasCwdMatch = false;
 		this.reconnectAttempts = 0;
 	}
 
@@ -426,6 +494,7 @@ class VSCodeConnectionManager {
 
 	private handleMessage(data: any): void {
 		if (data.type === 'context') {
+			this.trustContextFromConnectedServer = true;
 			this.editorContext = {
 				activeFile: data.activeFile,
 				selectedText: data.selectedText,

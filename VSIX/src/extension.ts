@@ -54,9 +54,6 @@ function startWebSocketServer() {
 				const fs = require('fs');
 				const os = require('os');
 				const path = require('path');
-				const workspaceFolder =
-					normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) ||
-					'';
 				const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 				try {
@@ -64,7 +61,13 @@ function startWebSocketServer() {
 					if (fs.existsSync(portInfoPath)) {
 						portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
 					}
-					portInfo[workspaceFolder] = actualPort;
+
+					// Map *every* workspace folder in this VSCode window to the same port.
+					// This keeps multi-root workspaces working regardless of which folder the terminal is bound to.
+					for (const workspaceFolder of getWorkspaceFolderKeys()) {
+						portInfo[workspaceFolder] = actualPort;
+					}
+
 					fs.writeFileSync(portInfoPath, JSON.stringify(portInfo, null, 2));
 				} catch (err) {
 					console.error('Failed to write port info:', err);
@@ -116,6 +119,31 @@ function normalizePath(filePath: string | undefined): string | undefined {
 	return normalized;
 }
 
+function getWorkspaceFolderKeys(): string[] {
+	const folders = vscode.workspace.workspaceFolders ?? [];
+	const keys = folders
+		.map(folder => normalizePath(folder.uri.fsPath))
+		.filter((p): p is string => Boolean(p));
+
+	// Preserve existing behavior for "single file" mode (no workspace folders).
+	if (keys.length === 0) {
+		return [''];
+	}
+
+	// De-dupe in case VSCode reports duplicates.
+	return Array.from(new Set(keys));
+}
+
+function getWorkspaceFolderForEditor(
+	editor: vscode.TextEditor,
+): string | undefined {
+	const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+	return (
+		normalizePath(folder?.uri.fsPath) ??
+		normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath)
+	);
+}
+
 function sendEditorContext() {
 	if (clients.size === 0) {
 		return;
@@ -133,9 +161,8 @@ function sendEditorContext() {
 
 	const context: any = {
 		type: 'context',
-		workspaceFolder: normalizePath(
-			vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-		),
+		// In multi-root workspaces, tie context to the workspace folder owning the active file.
+		workspaceFolder: getWorkspaceFolderForEditor(editor),
 		activeFile: normalizePath(editor.document.uri.fsPath),
 		cursorPosition: {
 			line: editor.selection.active.line,
@@ -387,9 +414,16 @@ export function activate(context: vscode.ExtensionContext) {
 	const disposable = vscode.commands.registerCommand(
 		'snow-cli.openTerminal',
 		() => {
+			const editor = vscode.window.activeTextEditor;
+			const cwd =
+				editor &&
+				vscode.workspace.getWorkspaceFolder(editor.document.uri)?.uri.fsPath;
+
 			// Create a new terminal split to the right in editor area
 			const terminal = vscode.window.createTerminal({
 				name: 'Snow CLI',
+				// Ensure the CLI starts in the workspace folder of the active file (important for multi-root workspaces).
+				cwd: cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
 				location: {
 					viewColumn: vscode.ViewColumn.Beside,
 					preserveFocus: false,
@@ -573,13 +607,13 @@ export function deactivate() {
 		const fs = require('fs');
 		const os = require('os');
 		const path = require('path');
-		const workspaceFolder =
-			normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
 		const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
 
 		if (fs.existsSync(portInfoPath)) {
 			const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
-			delete portInfo[workspaceFolder];
+			for (const workspaceFolder of getWorkspaceFolderKeys()) {
+				delete portInfo[workspaceFolder];
+			}
 			if (Object.keys(portInfo).length === 0) {
 				fs.unlinkSync(portInfoPath);
 			} else {
