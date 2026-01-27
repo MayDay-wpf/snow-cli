@@ -9,6 +9,13 @@ interface ToolResultPreviewProps {
 }
 
 /**
+ * Remove ANSI escape codes from text to prevent style leakage
+ */
+function removeAnsiCodes(text: string): string {
+	return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+/**
  * Display a compact preview of tool execution results
  * Shows a tree-like structure with limited content
  */
@@ -118,7 +125,7 @@ function renderTerminalExecutePreview(
 						<Box marginLeft={2} flexDirection="column">
 							{stdoutPreview.lines.map((line: string, idx: number) => (
 								<Text key={idx} color="white">
-									{line}
+									{removeAnsiCodes(line)}
 								</Text>
 							))}
 							{stdoutPreview.truncated && (
@@ -138,7 +145,7 @@ function renderTerminalExecutePreview(
 						<Box marginLeft={2} flexDirection="column">
 							{stderrPreview.lines.map((line: string, idx: number) => (
 								<Text key={idx} color={hasError ? 'red' : 'gray'}>
-									{line}
+									{removeAnsiCodes(line)}
 								</Text>
 							))}
 							{stderrPreview.truncated && (
@@ -188,7 +195,7 @@ function renderTerminalExecutePreview(
 					<Box marginLeft={2} flexDirection="column">
 						{data.stdout.split('\n').map((line: string, idx: number) => (
 							<Text key={idx} color="white">
-								{line}
+								{removeAnsiCodes(line)}
 							</Text>
 						))}
 					</Box>
@@ -227,7 +234,7 @@ function renderTerminalExecutePreview(
 					<Box marginLeft={2} flexDirection="column">
 						{data.stdout.split('\n').map((line: string, idx: number) => (
 							<Text key={idx} color="yellow">
-								{line}
+								{removeAnsiCodes(line)}
 							</Text>
 						))}
 					</Box>
@@ -243,7 +250,7 @@ function renderTerminalExecutePreview(
 					<Box marginLeft={2} flexDirection="column">
 						{data.stderr.split('\n').map((line: string, idx: number) => (
 							<Text key={idx} color="red">
-								{line}
+								{removeAnsiCodes(line)}
 							</Text>
 						))}
 					</Box>

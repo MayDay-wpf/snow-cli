@@ -35,13 +35,19 @@ const FIRST_HEADING_STYLE = {
 	close: '\x1b[22m\x1b[24m\x1b[39m',
 };
 
+// Save original paragraph_close rule to preserve ANSI reset codes
+const originalParagraphClose = md.renderer.rules['paragraph_close'];
+
 md.renderer.rules['paragraph_open'] = (tokens, idx) =>
 	tokens[idx]?.hidden ? '' : '';
-md.renderer.rules['paragraph_close'] = (tokens, idx) => {
+md.renderer.rules['paragraph_close'] = (tokens, idx, options, env, self) => {
 	if (tokens[idx]?.hidden) {
 		return tokens[idx + 1]?.type?.endsWith('close') ? '' : '\n';
 	}
-	return '\n';
+	// Call original rule to get ANSI reset code, then replace double newline with single
+	const original =
+		originalParagraphClose?.(tokens, idx, options, env, self) || '\n';
+	return original.replace(/\n\n$/, '\n');
 };
 
 md.renderer.rules['heading_open'] = (tokens, idx) => {
