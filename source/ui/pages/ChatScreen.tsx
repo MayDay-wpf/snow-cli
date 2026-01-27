@@ -546,7 +546,10 @@ export default function ChatScreen({
 		(global as any).__stopCodebaseIndexing = async () => {
 			if (codebaseAgentRef.current) {
 				await codebaseAgentRef.current.stop();
+				codebaseAgentRef.current.stopWatching();
 				setCodebaseIndexing(false);
+				setWatcherEnabled(false);
+				setCodebaseProgress(null);
 			}
 		};
 

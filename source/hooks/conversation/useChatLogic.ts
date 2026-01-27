@@ -1400,9 +1400,13 @@ export function useChatLogic(props: UseChatLogicProps) {
 				await codebaseAgentRef.current.stop();
 				codebaseAgentRef.current.stopWatching();
 				codebaseAgentRef.current = null;
-				setCodebaseIndexing(false);
-				setWatcherEnabled(false);
 			}
+
+			// Reset all codebase-related UI state so the index UI disappears immediately
+			setCodebaseIndexing(false);
+			setWatcherEnabled(false);
+			setCodebaseProgress(null);
+			setFileUpdateNotification(null);
 		}
 	};
 

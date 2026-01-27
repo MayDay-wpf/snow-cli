@@ -48,6 +48,8 @@ export default function ToolResultPreview({
 			return renderACEPreview(toolName, data, maxLines);
 		} else if (toolName.startsWith('todo-')) {
 			return renderTodoPreview(toolName, data, maxLines);
+		} else if (toolName === 'ide-get_diagnostics') {
+			return renderIdeDiagnosticsPreview(data);
 		} else if (toolName === 'skill-execute') {
 			// skill-execute returns a string message, no preview needed
 			// (the skill content is displayed elsewhere)
@@ -617,6 +619,58 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 			<Text color="gray" dimColor>
 				└─ TODO: {pendingTodos} pending, {completedTodos} completed (total:{' '}
 				{totalTodos})
+			</Text>
+		</Box>
+	);
+}
+
+function renderIdeDiagnosticsPreview(data: any) {
+	// Handle ide-get_diagnostics result
+	// Data format: { diagnostics: Diagnostic[], formatted: string, summary: string }
+	if (!data.diagnostics || !Array.isArray(data.diagnostics)) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ No diagnostics data
+				</Text>
+			</Box>
+		);
+	}
+
+	const diagnosticsCount = data.diagnostics.length;
+	if (diagnosticsCount === 0) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ No diagnostics found
+				</Text>
+			</Box>
+		);
+	}
+
+	// Count by severity
+	const errorCount = data.diagnostics.filter(
+		(d: any) => d.severity === 'error',
+	).length;
+	const warningCount = data.diagnostics.filter(
+		(d: any) => d.severity === 'warning',
+	).length;
+	const infoCount = data.diagnostics.filter(
+		(d: any) => d.severity === 'info',
+	).length;
+	const hintCount = data.diagnostics.filter(
+		(d: any) => d.severity === 'hint',
+	).length;
+
+	return (
+		<Box marginLeft={2}>
+			<Text color="gray" dimColor>
+				└─ Found {diagnosticsCount} diagnostic(s)
+				{errorCount > 0 && ` (${errorCount} error${errorCount > 1 ? 's' : ''})`}
+				{warningCount > 0 &&
+					` (${warningCount} warning${warningCount > 1 ? 's' : ''})`}
+				{infoCount > 0 && ` (${infoCount} info)`}
+				{hintCount > 0 && ` (${hintCount} hint${hintCount > 1 ? 's' : ''})`}
 			</Text>
 		</Box>
 	);
