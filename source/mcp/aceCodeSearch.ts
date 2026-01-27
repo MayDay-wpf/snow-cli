@@ -1097,6 +1097,11 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		// Auto-detect regex if not explicitly specified
+		// Check for common regex special characters that indicate regex intent
+		const regexIndicators = /[|*+?\[\](){}^$\\]/;
+		const autoDetectedRegex = isRegex || regexIndicators.test(pattern);
+
 		// Check command availability once (cached)
 		const [isGitRepo, gitAvailable, rgAvailable, grepAvailable] =
 			await Promise.all([
@@ -1113,7 +1118,7 @@ export class ACECodeSearchService {
 					pattern,
 					fileGlob,
 					maxResults,
-					isRegex,
+					autoDetectedRegex,
 				);
 				if (results.length > 0) {
 					return await this.sortResultsByRecency(results);
@@ -1142,7 +1147,7 @@ export class ACECodeSearchService {
 		const results = await this.jsTextSearch(
 			pattern,
 			fileGlob,
-			isRegex,
+			autoDetectedRegex,
 			maxResults,
 		);
 		return await this.sortResultsByRecency(results);
@@ -1535,7 +1540,7 @@ export const mcpTools = [
 				pattern: {
 					type: 'string',
 					description:
-						'Text pattern or regex to search for (e.g., "TODO:", "import.*from", "throw new Error")',
+						'Text pattern or regex to search for. Examples: "TODO:" (literal), "import.*from" (regex), "tool_call|toolCall" (regex with OR). IMPORTANT: If using regex special characters (|, *, +, ?, [], etc.), you MUST set isRegex to true.',
 				},
 				fileGlob: {
 					type: 'string',
@@ -1545,7 +1550,7 @@ export const mcpTools = [
 				isRegex: {
 					type: 'boolean',
 					description:
-						'Whether the pattern is a regular expression (default: false for literal text search)',
+						'Whether to force regex mode. If not specified, the tool will auto-detect regex patterns by checking for special characters (|, *, +, ?, [], (), {}, ^, $, \\). Set to true to force regex mode, false to force literal string search. Auto-detection works for most cases.',
 					default: false,
 				},
 				maxResults: {
