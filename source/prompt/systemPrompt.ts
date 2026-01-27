@@ -283,6 +283,8 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 		// When codebase tool is available, prioritize it heavily
 		return `**Code Search Strategy:**
 
+**CRITICAL: Use code search tools to find code. Only use terminal-execute to run build/test commands, NEVER for searching code.**
+
 **PRIMARY TOOL - \`codebase-search\` (Semantic Search):**
 - **USE THIS FIRST for 90% of code exploration tasks**
 - Query by MEANING and intent: "authentication logic", "error handling patterns", "validation flow"

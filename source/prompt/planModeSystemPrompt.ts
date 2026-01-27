@@ -373,14 +373,18 @@ Remember: You are a COORDINATOR. You design the plan AND orchestrate its executi
  */
 function getAnalysisToolsSection(hasCodebase: boolean): string {
 	if (hasCodebase) {
-		return `- \`codebase-search\` - PRIMARY tool for code exploration (semantic search across entire codebase)
+		return `**CRITICAL: Use code search tools to find code. Only use terminal-execute to run build/test commands, NEVER for searching code.**
+
+- \`codebase-search\` - PRIMARY tool for code exploration (semantic search across entire codebase)
 - \`filesystem-read\` - Read current code to understand implementation
 - \`ace-find_definition\` - Locate exact symbol definitions (when you know the symbol name)
 - \`ace-find_references\` - See where code is used throughout the project
 - \`ace-file_outline\` - Get structure overview of specific files
 - \`ide-get_diagnostics\` - Check for existing errors/warnings that might affect the plan`;
 	} else {
-		return `- \`ace-semantic_search\` - Find relevant code by semantic meaning
+		return `**CRITICAL: Use code search tools to find code. Only use terminal-execute to run build/test commands, NEVER for searching code.**
+
+- \`ace-semantic_search\` - Find relevant code by semantic meaning
 - \`ace-find_definition\` - Locate where symbols are defined
 - \`ace-find_references\` - See where code is used throughout the project
 - \`ace-file_outline\` - Get structure overview of specific files
