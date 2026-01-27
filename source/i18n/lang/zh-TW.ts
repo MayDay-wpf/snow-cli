@@ -835,6 +835,10 @@ export const zhTW: TranslationKeys = {
 		// Pending
 		pendingMessageWaiting: '待處理訊息等待中...',
 		pendingToolConfirmation: '需要工具確認',
+		pendingMessagesTitle: '待處理訊息',
+		pendingMessagesFooter: '工具執行完成後將自動傳送',
+		pendingMessagesEscHint: '按 ESC 可撤回到輸入框，不會中斷目前流程',
+		pendingMessagesImagesAttached: '已附帶 {count} 張圖片',
 		// Press keys hints
 		pressEscToClose: '按 ESC 關閉',
 		pressEnterToToggle: '按 Enter 切換',

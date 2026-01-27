@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/index.js';
 
 interface PendingMessage {
 	text: string;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function PendingMessages({pendingMessages}: Props) {
 	const {theme} = useTheme();
+	const {t} = useI18n();
 
 	if (pendingMessages.length === 0) {
 		return null;
@@ -26,7 +28,7 @@ export default function PendingMessages({pendingMessages}: Props) {
 			paddingX={1}
 		>
 			<Text color={theme.colors.warning} bold>
-				⬑ Pending Messages ({pendingMessages.length})
+				{t.chatScreen.pendingMessagesTitle} ({pendingMessages.length})
 			</Text>
 			{pendingMessages.map((message, index) => (
 				<Box key={index} marginLeft={1} marginY={0} flexDirection="column">
@@ -45,15 +47,21 @@ export default function PendingMessages({pendingMessages}: Props) {
 					{message.images && message.images.length > 0 && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								└─ {message.images.length} image
-								{message.images.length > 1 ? 's' : ''} attached
+								└─{' '}
+								{t.chatScreen.pendingMessagesImagesAttached.replace(
+									'{count}',
+									String(message.images.length),
+								)}
 							</Text>
 						</Box>
 					)}
 				</Box>
 			))}
 			<Text color={theme.colors.warning} dimColor>
-				Will be sent after tool execution completes
+				{t.chatScreen.pendingMessagesFooter}
+			</Text>
+			<Text color={theme.colors.warning} dimColor>
+				{t.chatScreen.pendingMessagesEscHint}
 			</Text>
 		</Box>
 	);

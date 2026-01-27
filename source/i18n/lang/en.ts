@@ -879,6 +879,11 @@ export const en: TranslationKeys = {
 		// Pending
 		pendingMessageWaiting: 'Pending message waiting...',
 		pendingToolConfirmation: 'Tool confirmation required',
+		pendingMessagesTitle: 'Pending Messages',
+		pendingMessagesFooter: 'Will be sent after tool execution completes',
+		pendingMessagesEscHint:
+			'Press ESC to restore to input (does not interrupt the current process)',
+		pendingMessagesImagesAttached: '{count} images attached',
 		// Press keys hints
 		pressEscToClose: 'Press ESC to close',
 		pressEnterToToggle: 'Press Enter to toggle',

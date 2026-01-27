@@ -165,6 +165,12 @@ export default function ChatScreen({
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null>(null);
+
+	// 输入框草稿：用于输入区域被条件隐藏后恢复时，保持输入内容
+	const [inputDraftContent, setInputDraftContent] = useState<{
+		text: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	} | null>(null);
 	// BashMode sensitive command confirmation state
 	const [bashSensitiveCommand, setBashSensitiveCommand] = useState<{
 		command: string;
@@ -1066,6 +1072,30 @@ export default function ChatScreen({
 			streamingState.abortController &&
 			hasFocus
 		) {
+			// 当 AI 正在生成且存在 pending 消息：优先撤回 pending，合并写回输入框。
+			// 该按键仅做撤回，不触发中断；下一次按 ESC 再进入中断流程。
+			if (pendingMessages.length > 0) {
+				const mergedText = pendingMessages
+					.map(m => (m.text || '').trim())
+					.filter(Boolean)
+					.join('\n\n');
+				const mergedImages = pendingMessages.flatMap(m => m.images ?? []);
+
+				setRestoreInputContent({
+					text: mergedText,
+					images:
+						mergedImages.length > 0
+							? mergedImages.map(img => ({
+									type: 'image' as const,
+									data: img.data,
+									mimeType: img.mimeType,
+							  }))
+							: undefined,
+				});
+				setPendingMessages([]);
+				return;
+			}
+
 			userInterruptedRef.current = true;
 
 			// Set stopping state to show "Stopping..." spinner
@@ -1081,21 +1111,6 @@ export default function ChatScreen({
 			// Remove all pending tool call messages (those with toolPending: true)
 			setMessages(prev => prev.filter(msg => !msg.toolPending));
 
-			// Restore pending messages to input instead of discarding them
-			if (pendingMessages.length > 0) {
-				// Get the first pending message (usually there's only one)
-				const firstPending = pendingMessages[0];
-				if (firstPending) {
-					setRestoreInputContent({
-						text: firstPending.text,
-						images: firstPending.images?.map(img => ({
-							type: 'image' as const,
-							data: img.data,
-							mimeType: img.mimeType,
-						})),
-					});
-				}
-			}
 			// Clear pending messages to prevent auto-send after abort
 			setPendingMessages([]);
 
@@ -1569,6 +1584,8 @@ export default function ChatScreen({
 								: undefined
 						}
 						initialContent={restoreInputContent}
+						draftContent={inputDraftContent}
+						onDraftChange={setInputDraftContent}
 						onContextPercentageChange={setCurrentContextPercentage}
 						showProfilePicker={panelState.showProfilePanel}
 						setShowProfilePicker={panelState.setShowProfilePanel}

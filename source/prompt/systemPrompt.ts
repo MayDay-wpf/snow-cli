@@ -121,6 +121,7 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **Formatting rule:**
 - TODO item content SHOULD start with a numeric prefix to explicitly mark execution order, e.g. "1. ...", "2. ...", "3. ..."
+- In continuous conversations, BEFORE calling todo-add, run todo-get (paired with an action tool) to inspect existing items and choose the next available sequence number (typically max(existingPrefix)+1). This prevents duplicate numbering across multiple turns.
 
 **WHEN TO USE (Default for most work):**
 - ANY task touching 2+ files
@@ -134,8 +135,8 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Simple queries that don't change code
 
 **STANDARD WORKFLOW - Always Plan First:**
-1. **Receive task** → Immediately create TODO with todo-add (batch add all steps at once)
-2. **Execute** → Before any todo-update / todo-delete, run todo-get (paired with an action tool) to retrieve the latest IDs and current list
+1. **Receive task** → Run todo-get (paired with an action tool) to see current list and determine the next sequence number
+2. **Plan** → Create TODO with todo-add (batch add all steps at once, using the next available sequence number)
 3. **Execute** → Update progress with todo-update as each step is completed
 4. **Complete** → Clean up obsolete, incorrect, or superseded items with todo-delete
 

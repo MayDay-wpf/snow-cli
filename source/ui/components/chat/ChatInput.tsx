@@ -166,6 +166,17 @@ type Props = {
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
+	// 输入框草稿内容：用于父组件条件隐藏输入区域后恢复时保留输入内容
+	draftContent?: {
+		text: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	} | null;
+	onDraftChange?: (
+		content: {
+			text: string;
+			images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		} | null,
+	) => void;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
 	// Profile picker
 	showProfilePicker?: boolean;
@@ -202,6 +213,8 @@ export default function ChatInput({
 	setVulnerabilityHuntingMode,
 	contextUsage,
 	initialContent = null,
+	draftContent = null,
+	onDraftChange,
 	onContextPercentageChange,
 	showProfilePicker = false,
 	setShowProfilePicker,
@@ -503,6 +516,77 @@ export default function ChatInput({
 		// Only run when initialContent changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [initialContent]);
+
+	// Restore draft content when input gets remounted (e.g., ChatFooter is conditionally hidden)
+	useEffect(() => {
+		if (!draftContent) return;
+		if (initialContent) return;
+		// 仅在输入框为空时恢复，避免覆盖当前编辑内容
+		if (buffer.text.length > 0) return;
+
+		buffer.setText('');
+
+		const text = draftContent.text;
+		const images = draftContent.images || [];
+
+		if (images.length === 0) {
+			if (text) {
+				restoreTextWithSkillPlaceholders(buffer, text);
+			}
+		} else {
+			const imagePlaceholderPattern = /\[image #\d+\]/g;
+			const parts = text.split(imagePlaceholderPattern);
+
+			for (let i = 0; i < parts.length; i++) {
+				const part = parts[i];
+				if (part) {
+					restoreTextWithSkillPlaceholders(buffer, part);
+				}
+
+				if (i < images.length) {
+					const img = images[i];
+					if (img) {
+						let base64Data = img.data;
+						if (base64Data.startsWith('data:')) {
+							const base64Index = base64Data.indexOf('base64,');
+							if (base64Index !== -1) {
+								base64Data = base64Data.substring(base64Index + 7);
+							}
+						}
+						buffer.insertImage(base64Data, img.mimeType);
+					}
+				}
+			}
+		}
+
+		triggerUpdate();
+	}, [draftContent, initialContent, buffer, triggerUpdate]);
+
+	// Report draft changes to parent, so it can persist across conditional unmount/mount
+	useEffect(() => {
+		if (!onDraftChange) return;
+
+		const text = buffer.getFullText();
+		const currentText = buffer.text;
+		const allImages = buffer.getImages();
+		const images = allImages
+			.filter(img => currentText.includes(img.placeholder))
+			.map(img => ({
+				type: 'image' as const,
+				data: img.data,
+				mimeType: img.mimeType,
+			}));
+
+		if (!text && images.length === 0) {
+			onDraftChange(null);
+			return;
+		}
+
+		onDraftChange({
+			text,
+			images: images.length > 0 ? images : undefined,
+		});
+	}, [buffer.text, buffer, onDraftChange]);
 
 	// Force full re-render when file picker visibility changes to prevent artifacts
 	useEffect(() => {

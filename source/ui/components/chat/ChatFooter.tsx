@@ -63,6 +63,17 @@ type ChatFooterProps = {
 		text: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 	} | null;
+	// 输入框草稿内容：用于 ChatFooter 被条件隐藏后恢复时，保留输入框内容
+	draftContent: {
+		text: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	} | null;
+	onDraftChange: (
+		content: {
+			text: string;
+			images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		} | null,
+	) => void;
 	onContextPercentageChange: (percentage: number) => void;
 	showProfilePicker: boolean;
 	setShowProfilePicker: (value: boolean | ((prev: boolean) => boolean)) => void;
@@ -170,6 +181,8 @@ export default function ChatFooter(props: ChatFooterProps) {
 						setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
 						contextUsage={props.contextUsage}
 						initialContent={props.initialContent}
+						draftContent={props.draftContent}
+						onDraftChange={props.onDraftChange}
 						onContextPercentageChange={props.onContextPercentageChange}
 						showProfilePicker={props.showProfilePicker}
 						setShowProfilePicker={props.setShowProfilePicker}
