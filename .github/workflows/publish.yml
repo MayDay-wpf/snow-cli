@@ -58,8 +58,11 @@ jobs:
 
             ### What's New
 
-            - Fix vscode work area connection bug
-            - Fix the todolist jitter problem
+            - Optimize Grep search accuracy
+            - Optimize interface rendering effects
+            - Add ESC recall function to Pending messages
+            - Back up input box content to avoid content loss caused by confirmation pop-ups
+            - Optimize the flexibility of codebase creation
 
             ### Installation
             ```bash

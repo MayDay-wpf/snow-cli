@@ -247,7 +247,7 @@ export class HybridCodeSearchService {
 	async textSearch(
 		pattern: string,
 		fileGlob?: string,
-		isRegex = false,
+		isRegex = true,
 		maxResults = 100,
 	) {
 		return this.regexSearch.textSearch(pattern, fileGlob, isRegex, maxResults);
