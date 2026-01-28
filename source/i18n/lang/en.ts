@@ -490,7 +490,7 @@ export const en: TranslationKeys = {
 			home: 'Return to welcome screen to modify settings',
 			review:
 				'Review changes in the working tree and selected commits. Opens a picker panel where you can select items and add notes.',
-			role: 'Open or create ROLE.md file to customize AI assistant role',
+			role: 'Open or create ROLE.md file to customize AI assistant role. Use -l or --list to list all roles',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
 			custom: 'Add custom command and save to ~/.snow/commands',

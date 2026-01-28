@@ -458,7 +458,7 @@ export const zhTW: TranslationKeys = {
 			compact: '使用壓縮模型壓縮對話歷史',
 			home: '返回歡迎畫面修改設定',
 			review: '審查工作區變更與選定提交。會開啟選擇面板，可多選並輸入備註。',
-			role: '開啟或建立 ROLE.md 檔案以自訂 AI 助手角色',
+			role: '開啟或建立 ROLE.md 檔案以自訂 AI 助手角色。使用 -l 或 --list 參數列出所有角色',
 			usage: '查看帶有互動式圖表的令牌使用統計',
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
 			custom: '新增自訂命令並儲存到 ~/.snow/commands',
