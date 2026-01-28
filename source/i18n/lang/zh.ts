@@ -461,6 +461,7 @@ export const zh: TranslationKeys = {
 			role: '打开或创建 ROLE.md 文件以自定义 AI 助手角色。使用 -l 或 --list 参数列出所有角色',
 			usage: '查看带有交互式图表的令牌使用统计',
 			export: '将聊天对话导出到带保存对话框的文本文件',
+			git: 'Git 工具：通过 /git pr 使用 AI 自动创建 PR',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
 			skills: '创建包含文档和示例的技能模板',
 			skillsPicker: '选择 Skill 并将其 SKILL.md 内容注入到输入框',

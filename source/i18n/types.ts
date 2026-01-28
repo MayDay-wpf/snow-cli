@@ -465,6 +465,7 @@ export type TranslationKeys = {
 			profiles: string;
 			models: string;
 			export: string;
+			git: string;
 			custom: string;
 			skills: string;
 			skillsPicker: string;

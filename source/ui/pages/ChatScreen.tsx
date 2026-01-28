@@ -290,6 +290,7 @@ export default function ChatScreen({
 			import('../../utils/commands/compact.js'),
 			import('../../utils/commands/home.js'),
 			import('../../utils/commands/review.js'),
+			import('../../utils/commands/git.js'),
 			import('../../utils/commands/role.js'),
 			import('../../utils/commands/usage.js'),
 			import('../../utils/commands/export.js'),

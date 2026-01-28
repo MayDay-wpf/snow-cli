@@ -493,6 +493,7 @@ export const en: TranslationKeys = {
 			role: 'Open or create ROLE.md file to customize AI assistant role. Use -l or --list to list all roles',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
+			git: 'Git helpers: create PR via /git pr (uses AI prompt)',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
 			skillsPicker:
