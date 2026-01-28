@@ -1,6 +1,7 @@
 import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
+import {editTextWithNotepad} from '../../utils/ui/externalEditor.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import type {SubAgent} from '../../utils/config/subAgentConfig.js';
@@ -795,6 +796,38 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (lineEnd === -1) lineEnd = text.length;
 			buffer.setCursorPosition(lineEnd);
 			triggerUpdate();
+			return;
+		}
+
+		// Ctrl+G - 使用外部编辑器编辑输入内容（Windows: Notepad）
+		if (key.ctrl && input === 'g') {
+			flushPendingInput();
+
+			// 非 Windows 平台安全降级：吞掉快捷键但不执行任何操作
+			if (process.platform !== 'win32') {
+				return;
+			}
+
+			const initialText = buffer.getFullText();
+
+			// useInput 回调不是 async，这里用 Promise 链处理。
+			editTextWithNotepad(initialText)
+				.then(editedText => {
+					// 完全覆盖输入：先清空以清理占位符/图片残留，再恢复文本（避免触发 [Paste ...]）
+					buffer.setText('');
+					if (editedText) {
+						buffer.insertRestoredText(editedText);
+						buffer.setCursorPosition(editedText.length);
+					} else {
+						buffer.setCursorPosition(0);
+					}
+					forceStateUpdate();
+				})
+				.catch(() => {
+					// 失败时不阻断输入，只做一次刷新避免 UI 卡住
+					forceStateUpdate();
+				});
+
 			return;
 		}
 

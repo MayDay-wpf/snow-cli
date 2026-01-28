@@ -731,7 +731,7 @@ export const en: TranslationKeys = {
 		headerYolo:
 			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
 		headerShortcuts:
-			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
+			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+G (edit in Notepad) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerWorkingDirectory: 'Working directory: {directory}',
 		// Status messages
 		statusThinking: 'Thinking...',
