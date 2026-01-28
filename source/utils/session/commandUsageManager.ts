@@ -181,12 +181,7 @@ class CommandUsageManager {
 export const commandUsageManager = new CommandUsageManager();
 
 // 注册进程退出钩子，确保数据被保存
+// 注意：SIGINT 处理在 cli.tsx 中统一管理，避免重复处理
 process.on('beforeExit', async () => {
 	await commandUsageManager.dispose();
-});
-
-// 处理 SIGINT (Ctrl+C) 信号
-process.on('SIGINT', async () => {
-	await commandUsageManager.dispose();
-	process.exit(0);
 });

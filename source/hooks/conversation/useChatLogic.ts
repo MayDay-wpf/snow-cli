@@ -92,7 +92,6 @@ interface UseChatLogicProps {
 	setShowSessionPanel: (show: boolean) => void;
 	setShowReviewCommitPanel: (show: boolean) => void;
 	// Quit and reindex handlers
-	exitApp: () => void;
 	codebaseAgentRef: React.MutableRefObject<any>;
 	setCodebaseIndexing: React.Dispatch<React.SetStateAction<boolean>>;
 	setCodebaseProgress: React.Dispatch<
@@ -148,7 +147,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		initializeFromSession,
 		setShowSessionPanel,
 		setShowReviewCommitPanel,
-		exitApp,
 		codebaseAgentRef,
 		setCodebaseIndexing,
 		setCodebaseProgress,
@@ -1280,8 +1278,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 			// 清除超时计时器
 			clearTimeout(quitTimeout);
 
-			// Exit the application
-			exitApp();
+			// Exit the application immediately
+			// Use process.exit directly instead of ink's exit to avoid delays
+			process.exit(0);
 		} catch (error) {
 			// 出现错误时也要清除超时计时器
 			clearTimeout(quitTimeout);

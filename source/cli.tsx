@@ -634,6 +634,16 @@ const cleanupAsync = async () => {
 	process.stdout.write('\x1b[?2004l');
 	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
 	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
+
+	// Import and cleanup command usage manager with timeout
+	const {commandUsageManager} = await import(
+		'./utils/session/commandUsageManager.js'
+	);
+	await Promise.race([
+		commandUsageManager.dispose(),
+		new Promise(resolve => setTimeout(resolve, 500)), // 500ms timeout for saving usage data
+	]);
+
 	const deps = (global as any).__deps;
 	if (deps) {
 		// Close MCP connections first (graceful shutdown with timeout)

@@ -6,7 +6,7 @@ import React, {
 	lazy,
 	Suspense,
 } from 'react';
-import {Box, Text, useInput, Static, useStdout, useApp} from 'ink';
+import {Box, Text, useInput, Static, useStdout} from 'ink';
 import Spinner from 'ink-spinner';
 import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
@@ -83,7 +83,6 @@ export default function ChatScreen({
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
-	const {exit} = useApp();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<
@@ -789,7 +788,6 @@ export default function ChatScreen({
 		initializeFromSession,
 		setShowSessionPanel: panelState.setShowSessionPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
-		exitApp: exit,
 		codebaseAgentRef,
 		setCodebaseIndexing,
 		setCodebaseProgress,
