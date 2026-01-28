@@ -251,8 +251,22 @@ export class TerminalCommandService {
 
 			// Setup abort signal handler if provided
 			let abortHandler: (() => void) | undefined;
+			let killTimeout: NodeJS.Timeout | null = null;
 			if (abortSignal) {
 				abortHandler = () => {
+					// CRITICAL: Set abort flag first to stop data processing immediately
+					isAborted = true;
+
+					// CRITICAL: Destroy stdout/stderr streams immediately to stop data flow
+					// This is more aggressive than pause() - it clears the internal buffer
+					// and ensures no more 'data' events will be emitted
+					childProcess.stdout?.destroy();
+					childProcess.stderr?.destroy();
+
+					// Also pause as a safety measure
+					childProcess.stdout?.pause();
+					childProcess.stderr?.pause();
+
 					if (childProcess.pid && !childProcess.killed) {
 						// Kill the process immediately when abort signal is triggered
 						try {
@@ -262,8 +276,22 @@ export class TerminalCommandService {
 									windowsHide: true,
 								});
 							} else {
-								// Unix: Send SIGTERM
+								// Unix: Send SIGTERM first, then SIGKILL immediately as fallback
+								// For commands like 'find' that produce massive output,
+								// we need immediate termination
 								childProcess.kill('SIGTERM');
+
+								// Force SIGKILL after a very short delay (100ms) to ensure termination
+								// This is necessary because SIGTERM may be ignored or delayed
+								killTimeout = setTimeout(() => {
+									if (!childProcess.killed) {
+										try {
+											childProcess.kill('SIGKILL');
+										} catch {
+											// Ignore errors
+										}
+									}
+								}, 100);
 							}
 						} catch {
 							// Ignore errors if process already dead
@@ -282,6 +310,10 @@ export class TerminalCommandService {
 				}
 			};
 			registerInputCallback(inputHandler);
+
+			// CRITICAL: Flag to prevent data processing after abort
+			// Must be defined outside Promise so abortHandler can access it
+			let isAborted = false;
 
 			// Convert to promise
 			const {stdout, stderr} = await new Promise<{
@@ -339,6 +371,7 @@ export class TerminalCommandService {
 				let lastOutputTime = Date.now();
 				let inputCheckInterval: NodeJS.Timeout | null = null;
 				let inputPromptTriggered = false;
+				// Note: isAborted is defined outside Promise so abortHandler can access it
 
 				// Patterns that indicate the command is waiting for input (from output)
 				const inputPromptPatterns = [
@@ -428,6 +461,9 @@ export class TerminalCommandService {
 					}
 				}, 100);
 				childProcess.stdout?.on('data', chunk => {
+					// CRITICAL: Skip processing if aborted to prevent event loop blocking
+					if (isAborted) return;
+
 					stdoutData += chunk;
 					lastOutputTime = Date.now();
 
@@ -440,6 +476,9 @@ export class TerminalCommandService {
 					lines.forEach(line => appendTerminalOutput(line));
 				});
 				childProcess.stderr?.on('data', chunk => {
+					// CRITICAL: Skip processing if aborted to prevent event loop blocking
+					if (isAborted) return;
+
 					stderrData += chunk;
 					lastOutputTime = Date.now();
 
@@ -487,6 +526,11 @@ export class TerminalCommandService {
 
 				childProcess.on('close', (code, signal) => {
 					safeClearTimeout();
+					// Clean up kill timeout to prevent memory leaks
+					if (killTimeout) {
+						clearTimeout(killTimeout);
+						killTimeout = null;
+					}
 					clearInterval(backgroundCheckInterval);
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);

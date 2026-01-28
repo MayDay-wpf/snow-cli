@@ -83,9 +83,23 @@ export function useBackgroundProcesses() {
 					updateProcessStatus(id, 'failed', 130);
 				});
 			} else {
-				// Unix: Send SIGTERM
+				// Unix: Send SIGTERM first, then SIGKILL as fallback
 				try {
 					global.process.kill(pid, 'SIGTERM');
+
+					// Force SIGKILL after a short delay to ensure termination
+					// This handles processes that may ignore or delay responding to SIGTERM
+					setTimeout(() => {
+						try {
+							// Check if process is still running by sending signal 0
+							global.process.kill(pid, 0);
+							// If we get here, process is still alive, send SIGKILL
+							global.process.kill(pid, 'SIGKILL');
+						} catch {
+							// Process already dead or no permission, ignore
+						}
+					}, 100);
+
 					// Update status after kill
 					updateProcessStatus(id, 'failed', 130);
 				} catch {
