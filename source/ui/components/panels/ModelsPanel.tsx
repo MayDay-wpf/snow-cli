@@ -197,6 +197,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				setSearchTerm('');
 				setManualInputMode(true);
 				setManualInputValue(currentModel);
+				setHasStartedLoading(false);
 				return;
 			}
 
@@ -206,6 +207,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 			setIsSelecting(false);
 			setSearchTerm('');
+			setHasStartedLoading(false);
 		},
 		[applyModel, currentModel, modelTarget],
 	);
