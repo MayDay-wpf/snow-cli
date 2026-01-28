@@ -28,7 +28,7 @@
 		"npm": ">=8.3.0"
 	},
 	"scripts": {
-		"build": "tsc && node build.mjs",
+		"build": "node scripts/clean-build.cjs && tsc && node build.mjs",
 		"build:ts": "tsc",
 		"build:bundle": "node build.mjs",
 		"dev": "tsc --watch",
