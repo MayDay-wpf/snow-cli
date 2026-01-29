@@ -689,7 +689,7 @@ export const zh: TranslationKeys = {
 		headerYolo:
 			'按 Shift+Tab/Ctrl+Y: 切换 YOLO/Plan 模式(循环: YOLO → YOLO+Plan → Plan → 关闭)',
 		headerShortcuts:
-			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • Ctrl+G (Notepad 编辑) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
+			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerWorkingDirectory: '工作目录: {directory}',
 		// Status messages
 		statusThinking: '思考中...',

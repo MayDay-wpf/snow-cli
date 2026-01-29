@@ -65,6 +65,9 @@ export default function ChatHeader({
 								)}`;
 							})()}
 						</Text>
+						{process.platform === 'win32' && (
+							<Text>• Ctrl+G (Notepad edit)</Text>
+						)}
 						<Text color={theme.colors.menuSecondary} dimColor>
 							•{' '}
 							{t.chatScreen.headerWorkingDirectory.replace(
