@@ -58,11 +58,11 @@ jobs:
 
             ### What's New
 
-            - Optimize Grep search accuracy
-            - Optimize interface rendering effects
-            - Add ESC recall function to Pending messages
-            - Back up input box content to avoid content loss caused by confirmation pop-ups
-            - Optimize the flexibility of codebase creation
+            - Add Ctrl+G external editor (Notepad) support for editing long messages (Windows only)
+            - Enhanced cleanup process with command usage manager on exit
+            - Improved process termination handling with better abort logic
+            - Reset loading state when model selection is cleared
+            - Updated role customization instructions with role listing options
 
             ### Installation
             ```bash
