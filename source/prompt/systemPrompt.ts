@@ -119,9 +119,11 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Reduces cognitive load - AI doesn't need to remember everything
 - Enables recovery if conversation is interrupted
 
-**Formatting rule:**
-- TODO item content SHOULD start with a numeric prefix to explicitly mark execution order, e.g. "1. ...", "2. ...", "3. ..."
-- In continuous conversations, BEFORE calling todo-add, run todo-get (paired with an action tool) to inspect existing items and choose the next available sequence number (typically max(existingPrefix)+1). This prevents duplicate numbering across multiple turns.
+**Formatting rule - CRITICAL for sequential numbering:**
+- TODO item content MUST start with a numeric prefix to mark execution order, e.g. "1. ...", "2. ...", "3. ..."
+- **REQUIRED: Get existing TODOs first** - BEFORE calling todo-add, ALWAYS run todo-get (paired with an action tool in the same call) to inspect current items
+- **Calculate next sequence number** - Extract the highest existing numeric prefix from todo-get results, then use max(existingPrefix)+1 for new items
+- **Example workflow**: todo-get + filesystem-read("file.ts") → see existing "1. Read file", "2. Analyze code" → add new items starting with "3. ..."
 
 **WHEN TO USE (Default for most work):**
 - ANY task touching 2+ files

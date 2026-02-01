@@ -373,6 +373,12 @@ This ensures efficient workflow and prevents unnecessary wait times.`,
 PARALLEL CALLS ONLY: MUST pair with other tools (todo-add + filesystem-read/etc).
 NEVER call todo-add alone - always combine with an action tool.
 
+SEQUENCE NUMBERING - CRITICAL:
+- ALWAYS run todo-get FIRST (in the same parallel call) to check existing items before adding new ones
+- Extract the highest numeric prefix from existing TODOs, then continue from max+1
+- Example: If todo-get returns "1. Read file", "2. Analyze code", new items must start with "3. ..."
+- This prevents duplicate numbering in continuous conversations
+
 WHEN TO USE (Very common):
 - Start ANY multi-step task → Create TODO list immediately
 - User adds new requirements → Add tasks for new work
@@ -382,7 +388,8 @@ SUPPORTS BATCH ADDING:
 - Single: content="Task description"
 - Multiple: content=["Task 1", "Task 2", "Task 3"] (recommended for multi-step work)
 
-EXAMPLE: todo-add(content=["Read file", "Modify code", "Test changes"]) + filesystem-read("file.ts")`,
+EXAMPLE (FIRST TIME): todo-add(content=["1. Read file", "2. Modify code"]) + filesystem-read("file.ts")
+EXAMPLE (CONTINUING): todo-get + todo-add(content=["3. Test changes", "4. Run build"])`,
 				inputSchema: {
 					type: 'object',
 					properties: {
