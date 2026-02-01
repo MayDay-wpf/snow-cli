@@ -924,8 +924,16 @@ class SessionManager {
 			}
 		}
 
-		// 如果会话删除成功，同时删除对应的TODO列表
+		// 如果会话删除成功，同时删除对应的TODO列表，并让会话列表缓存失效
 		if (sessionDeleted) {
+			// 删除会话会影响 listSessionsPaginated 的结果；必须失效缓存，否则 UI 会看到旧列表。
+			this.invalidateCache();
+
+			// 如果删除的是当前会话，清理当前会话引用，避免后续使用到已删除会话。
+			if (this.currentSession?.id === sessionId) {
+				this.clearCurrentSession();
+			}
+
 			try {
 				const todoService = getTodoService();
 				await todoService.deleteTodoList(sessionId);
