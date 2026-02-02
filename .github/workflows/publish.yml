@@ -58,9 +58,7 @@ jobs:
 
             ### What's New
 
-            - Optimize long text recovery logic for better content restoration
-            - Update TODO formatting rules with sequential numbering and improved item retrieval
-            - Invalidate cache and clear current session on successful session deletion
+            - Enhance TODO management with new status options and performance improvements in output handling
 
             ### Installation
             ```bash
