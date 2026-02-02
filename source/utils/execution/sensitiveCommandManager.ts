@@ -23,184 +23,212 @@ export interface SensitiveCommandsConfig {
 export const PRESET_SENSITIVE_COMMANDS: SensitiveCommand[] = [
 	{
 		id: 'rm',
-		pattern: '*rm*',
+		pattern: 'rm ',
 		description: 'Delete files or directories (rm, rm -rf, etc.)',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'rmdir',
-		pattern: '*rmdir*',
+		pattern: 'rmdir ',
 		description: 'Remove directories',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'unlink',
-		pattern: '*unlink*',
+		pattern: 'unlink ',
 		description: 'Delete files using unlink command',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'mv-to-trash',
-		pattern: '*mv * /tmp*',
+		pattern: 'mv * /tmp',
 		description: 'Move files to trash/tmp (potential data loss)',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'chmod',
-		pattern: '*chmod*',
+		pattern: 'chmod ',
 		description: 'Change file permissions',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'chown',
-		pattern: '*chown*',
+		pattern: 'chown ',
 		description: 'Change file ownership',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'dd',
-		pattern: '*dd*',
+		pattern: 'dd ',
 		description: 'Low-level data copy (disk operations)',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'mkfs',
-		pattern: '*mkfs*',
+		pattern: 'mkfs',
 		description: 'Format filesystem',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'fdisk',
-		pattern: '*fdisk*',
+		pattern: 'fdisk ',
 		description: 'Disk partition manipulation',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'killall',
-		pattern: '*killall*',
+		pattern: 'killall ',
 		description: 'Kill all processes by name',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'pkill',
-		pattern: '*pkill*',
+		pattern: 'pkill ',
 		description: 'Kill processes by pattern',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'reboot',
-		pattern: '*reboot*',
+		pattern: 'reboot',
 		description: 'Reboot the system',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'shutdown',
-		pattern: '*shutdown*',
+		pattern: 'shutdown ',
 		description: 'Shutdown the system',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'sudo',
-		pattern: '*sudo*',
+		pattern: 'sudo ',
 		description: 'Execute commands with superuser privileges',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'su',
-		pattern: '*su*',
+		pattern: 'su ',
 		description: 'Switch user',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'curl-post',
-		pattern: '*curl*-X POST*',
+		pattern: 'curl*-X POST',
 		description: 'HTTP POST requests (potential data transmission)',
 		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'wget',
-		pattern: '*wget*',
+		pattern: 'wget ',
 		description: 'Download files from internet',
 		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'git-push',
-		pattern: 'git push*',
+		pattern: 'git push',
 		description: 'Push code to remote repository',
 		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'git-force-push',
-		pattern: '*git push*--force*',
+		pattern: 'git push*--force',
 		description: 'Force push to remote repository (destructive)',
 		enabled: true,
 		isPreset: true,
 	},
 	{
+		id: 'git-force-push-short',
+		pattern: 'git push*-f ',
+		description: 'Force push to remote repository with -f flag (destructive)',
+		enabled: true,
+		isPreset: true,
+	},
+	{
 		id: 'git-reset-hard',
-		pattern: '*git reset*--hard*',
+		pattern: 'git reset*--hard',
 		description: 'Hard reset git repository (destructive)',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'git-clean',
-		pattern: '*git clean*',
+		pattern: 'git clean*-f',
 		description: 'Remove untracked files from git repository',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'git-revert',
-		pattern: '*git revert*',
+		pattern: 'git revert',
 		description: 'Revert git commits',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'git-reset',
-		pattern: '*git reset*',
+		pattern: 'git reset ',
 		description: 'Reset git repository state',
-		enabled: true,
+		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'npm-publish',
-		pattern: '*npm publish*',
+		pattern: 'npm publish',
 		description: 'Publish package to npm registry',
 		enabled: true,
 		isPreset: true,
 	},
 	{
 		id: 'docker-rm',
-		pattern: '*docker rm*',
+		pattern: 'docker rm',
 		description: 'Remove Docker containers',
 		enabled: false,
 		isPreset: true,
 	},
 	{
 		id: 'docker-rmi',
-		pattern: '*docker rmi*',
+		pattern: 'docker rmi',
 		description: 'Remove Docker images',
 		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'powershell-remove-item',
+		pattern: 'Remove-Item ',
+		description: 'PowerShell delete files or directories',
+		enabled: true,
+		isPreset: true,
+	},
+	{
+		id: 'powershell-remove-item-recurse',
+		pattern: 'Remove-Item*-Recurse',
+		description: 'PowerShell recursive delete (destructive)',
+		enabled: true,
+		isPreset: true,
+	},
+	{
+		id: 'format-volume',
+		pattern: 'Format-Volume',
+		description: 'Format disk volume (destructive)',
+		enabled: true,
 		isPreset: true,
 	},
 ];
@@ -349,8 +377,24 @@ function patternToRegex(pattern: string): RegExp {
 		.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
 		.replace(/\*/g, '.*');
 
-	// 使用 ^ 和 $ 确保完整匹配，但允许参数
-	return new RegExp(`^${escaped}`, 'i');
+	// 匹配命令边界：命令开头或分隔符后
+	// 支持的分隔符：; && || | (管道) 以及换行符
+	return new RegExp(`(^|[;&|\\n])\\s*${escaped}`, 'i');
+}
+
+/**
+ * 分割组合命令为单个命令
+ * 支持 ; && || | 等分隔符
+ */
+function splitCommand(command: string): string[] {
+	// 清理命令，移除多余的空格
+	const cleanCommand = command.trim().replace(/\s+/g, ' ');
+
+	// 使用正则分割命令，保留命令分隔符的上下文
+	// 支持: ; && || | (管道) 以及换行符
+	const parts = cleanCommand.split(/\s*(?:;|&&|\|\||\||\n)\s*/);
+
+	return parts.filter(part => part.trim().length > 0);
 }
 
 /**
@@ -363,13 +407,19 @@ export function isSensitiveCommand(command: string): {
 	const config = loadSensitiveCommands();
 	const enabledCommands = config.commands.filter(cmd => cmd.enabled);
 
-	// 清理命令，移除多余的空格
-	const cleanCommand = command.trim().replace(/\s+/g, ' ');
+	// 分割组合命令
+	const commandParts = splitCommand(command);
 
-	for (const cmd of enabledCommands) {
-		const regex = patternToRegex(cmd.pattern);
-		if (regex.test(cleanCommand)) {
-			return {isSensitive: true, matchedCommand: cmd};
+	// 检查每个子命令
+	for (const part of commandParts) {
+		const trimmedPart = part.trim();
+
+		for (const cmd of enabledCommands) {
+			const regex = patternToRegex(cmd.pattern);
+			// 为了支持边界匹配，在命令前添加虚拟边界
+			if (regex.test(`\n${trimmedPart}`) || regex.test(trimmedPart)) {
+				return {isSensitive: true, matchedCommand: cmd};
+			}
 		}
 	}
 
