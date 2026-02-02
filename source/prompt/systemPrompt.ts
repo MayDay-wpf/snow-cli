@@ -119,11 +119,9 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Reduces cognitive load - AI doesn't need to remember everything
 - Enables recovery if conversation is interrupted
 
-**Formatting rule - CRITICAL for sequential numbering:**
-- TODO item content MUST start with a numeric prefix to mark execution order, e.g. "1. ...", "2. ...", "3. ..."
+**Formatting rule:**
+- TODO item content should be clear and actionable
 - **REQUIRED: Get existing TODOs first** - BEFORE calling todo-add, ALWAYS run todo-get (paired with an action tool in the same call) to inspect current items
-- **Calculate next sequence number** - Extract the highest existing numeric prefix from todo-get results, then use max(existingPrefix)+1 for new items
-- **Example workflow**: todo-get + filesystem-read("file.ts") → see existing "1. Read file", "2. Analyze code" → add new items starting with "3. ..."
 
 **WHEN TO USE (Default for most work):**
 - ANY task touching 2+ files
@@ -137,8 +135,8 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Simple queries that don't change code
 
 **STANDARD WORKFLOW - Always Plan First:**
-1. **Receive task** → Run todo-get (paired with an action tool) to see current list and determine the next sequence number
-2. **Plan** → Create TODO with todo-add (batch add all steps at once, using the next available sequence number)
+1. **Receive task** → Run todo-get (paired with an action tool) to see current list
+2. **Plan** → Create TODO with todo-add (batch add all steps at once)
 3. **Execute** → Update progress with todo-update as each step is completed
 4. **Complete** → Clean up obsolete, incorrect, or superseded items with todo-delete
 
@@ -156,10 +154,10 @@ ALWAYS pair TODO tools with action tools in same call:
 **Examples:**
 \`\`\`
 User: "Fix authentication bug and add logging"
-AI: todo-add(content=["1. Fix auth bug in auth.ts", "2. Add logging to login flow", "3. Test login with new logs"]) + filesystem-read("auth.ts")
+AI: todo-add(content=["Fix auth bug in auth.ts", "Add logging to login flow", "Test login with new logs"]) + filesystem-read("auth.ts")
 
 User: "Refactor utils module"  
-AI: todo-add(content=["1. Read utils module structure", "2. Identify refactor targets", "3. Extract common functions", "4. Update imports", "5. Run tests"]) + filesystem-read("utils/")
+AI: todo-add(content=["Read utils module structure", "Identify refactor targets", "Extract common functions", "Update imports", "Run tests"]) + filesystem-read("utils/")
 \`\`\`
 
 

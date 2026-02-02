@@ -49,6 +49,9 @@ export function useTerminalExecutionState() {
 	}, []);
 
 	const endExecution = useCallback(() => {
+		// Flush any remaining buffered output before ending execution
+		flushOutputBuffer();
+
 		setState({
 			isExecuting: false,
 			command: null,
@@ -85,17 +88,56 @@ export function setTerminalExecutionState(state: TerminalExecutionState) {
 	}
 }
 
+// Batch buffer for output lines to reduce state updates
+let outputBuffer: string[] = [];
+let outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const OUTPUT_BATCH_SIZE = 10; // Flush every 10 lines
+const OUTPUT_FLUSH_DELAY = 50; // Or flush after 50ms of inactivity
+
+/**
+ * Flush buffered output lines to state
+ * Exported to allow manual flushing when needed (e.g., before command ends)
+ */
+export function flushOutputBuffer() {
+	if (outputFlushTimer) {
+		clearTimeout(outputFlushTimer);
+		outputFlushTimer = null;
+	}
+
+	if (outputBuffer.length === 0 || !globalSetState || !globalState) {
+		return;
+	}
+
+	const linesToFlush = outputBuffer.splice(0, outputBuffer.length);
+	globalSetState({
+		...globalState,
+		output: [...globalState.output, ...linesToFlush],
+	});
+}
+
 /**
  * Append output line to terminal execution state
  * Called from bash.ts during command execution
+ * PERFORMANCE: Batches multiple lines to reduce state updates
  */
 export function appendTerminalOutput(line: string) {
-	if (globalSetState && globalState) {
-		globalSetState({
-			...globalState,
-			output: [...globalState.output, line],
-		});
+	if (!globalSetState || !globalState) {
+		return;
 	}
+
+	outputBuffer.push(line);
+
+	// Flush immediately if buffer is full
+	if (outputBuffer.length >= OUTPUT_BATCH_SIZE) {
+		flushOutputBuffer();
+		return;
+	}
+
+	// Otherwise, debounce flush
+	if (outputFlushTimer) {
+		clearTimeout(outputFlushTimer);
+	}
+	outputFlushTimer = setTimeout(flushOutputBuffer, OUTPUT_FLUSH_DELAY);
 }
 
 /**

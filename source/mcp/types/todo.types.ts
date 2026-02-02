@@ -8,7 +8,7 @@
 export interface TodoItem {
 	id: string;
 	content: string;
-	status: 'pending' | 'completed';
+	status: 'pending' | 'inProgress' | 'completed';
 	createdAt: string;
 	updatedAt: string;
 	parentId?: string;

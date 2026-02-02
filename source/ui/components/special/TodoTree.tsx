@@ -7,8 +7,7 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 interface TodoItem {
 	id: string;
 	content: string;
-	// 运行时可能出现非标准值，仅将 'completed' 视为已完成；其他值一律按未完成处理。
-	status: string;
+	status: 'pending' | 'inProgress' | 'completed' | string;
 	parentId?: string;
 }
 
@@ -35,14 +34,20 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	);
 
 	const sortedTodos = useMemo(() => {
-		// 未完成优先；同一组内保持原始顺序（稳定排序）。
+		// 排序优先级：inProgress > pending > completed
 		return todos
 			.map((t, originalIndex) => ({t, originalIndex}))
 			.slice()
 			.sort((a, b) => {
-				const aCompleted = a.t.status === 'completed' ? 1 : 0;
-				const bCompleted = b.t.status === 'completed' ? 1 : 0;
-				if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+				const getPriority = (status: string) => {
+					if (status === 'inProgress') return 0;
+					if (status === 'pending') return 1;
+					if (status === 'completed') return 2;
+					return 1; // 未知状态按 pending 处理
+				};
+				const aPriority = getPriority(a.t.status);
+				const bPriority = getPriority(b.t.status);
+				if (aPriority !== bPriority) return aPriority - bPriority;
 				return a.originalIndex - b.originalIndex;
 			})
 			.map(({t}) => t);
@@ -70,13 +75,15 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	const hiddenCount = Math.max(0, sortedTodos.length - visibleTodos.length);
 
 	const getStatusIcon = (status: string) => {
-		return status === 'completed' ? '✓' : '○';
+		if (status === 'completed') return '✓';
+		if (status === 'inProgress') return '~';
+		return '○';
 	};
 
 	const getStatusColor = (status: string) => {
-		return status === 'completed'
-			? theme.colors.success
-			: theme.colors.menuSecondary;
+		if (status === 'completed') return theme.colors.success;
+		if (status === 'inProgress') return theme.colors.warning;
+		return theme.colors.menuSecondary;
 	};
 
 	const renderTodoLine = (todo: TodoItem, index: number): React.ReactNode => {

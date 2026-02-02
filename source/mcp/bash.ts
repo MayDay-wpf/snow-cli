@@ -11,6 +11,7 @@ import {
 	appendTerminalOutput,
 	setTerminalNeedsInput,
 	registerInputCallback,
+	flushOutputBuffer,
 } from '../hooks/execution/useTerminalExecutionState.js';
 import {logger} from '../utils/core/logger.js';
 // SSH support
@@ -535,6 +536,9 @@ export class TerminalCommandService {
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);
 					setTerminalNeedsInput(false);
+
+					// PERFORMANCE: Flush any remaining buffered output before command ends
+					flushOutputBuffer();
 
 					// Update process status
 					if (backgroundProcessId) {

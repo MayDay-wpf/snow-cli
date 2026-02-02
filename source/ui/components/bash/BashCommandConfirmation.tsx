@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
@@ -23,14 +23,12 @@ interface BashCommandConfirmationProps {
 function sanitizePreviewLine(text: string): string {
 	// Remove ANSI/control sequences and normalize whitespace to keep preview rendering stable.
 	// This preview is not meant to be an exact terminal emulator.
-	const withoutOsc = text.replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '');
-	const withoutAnsi = withoutOsc.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
-	const withoutControls = withoutAnsi.replace(
-		/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
-		'',
-	);
-	const withoutTabs = withoutControls.replace(/\t/g, ' ');
-	return withoutTabs
+	// Optimized: combine multiple replace operations to reduce regex overhead
+	return text
+		.replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
+		.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+		.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+		.replace(/\t/g, ' ')
 		.replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]+$/g, '')
 		.trim();
 }
@@ -270,23 +268,27 @@ export function BashCommandExecutionStatus({
 		};
 	}, []);
 
-	const omittedCount = Math.max(
-		0,
-		totalCommittedLineCountRef.current - maxOutputLines,
-	);
-	const visibleOutputLines =
-		omittedCount > 0
-			? displayOutputLines.slice(-(maxOutputLines - 1))
-			: displayOutputLines.slice(-maxOutputLines);
-	const rawProcessedOutput =
-		omittedCount > 0
-			? [...visibleOutputLines, `... (${omittedCount} lines omitted)`]
-			: visibleOutputLines;
+	// Use useMemo to cache processed output and avoid recalculation on every render
+	const processedOutput = useMemo(() => {
+		const omittedCount = Math.max(
+			0,
+			totalCommittedLineCountRef.current - maxOutputLines,
+		);
+		const visibleOutputLines =
+			omittedCount > 0
+				? displayOutputLines.slice(-(maxOutputLines - 1))
+				: displayOutputLines.slice(-maxOutputLines);
+		const rawProcessedOutput =
+			omittedCount > 0
+				? [...visibleOutputLines, `... (${omittedCount} lines omitted)`]
+				: visibleOutputLines;
 
-	const processedOutput = [...rawProcessedOutput];
-	while (processedOutput.length < maxOutputLines) {
-		processedOutput.unshift('');
-	}
+		const output = [...rawProcessedOutput];
+		while (output.length < maxOutputLines) {
+			output.unshift('');
+		}
+		return output;
+	}, [displayOutputLines, maxOutputLines]);
 
 	// Handle input submission
 	const handleInputSubmit = (value: string) => {
@@ -315,7 +317,7 @@ export function BashCommandExecutionStatus({
 			>
 				{processedOutput.map((line, index) => (
 					<Text key={index} wrap="truncate" dimColor>
-						{truncateText(sanitizePreviewLine(line), maxCommandWidth)}
+						{truncateText(line, maxCommandWidth)}
 					</Text>
 				))}
 			</Box>
