@@ -36,23 +36,51 @@ function parseSkillIdFromHeaderLine(line: string): string {
 	return line.replace(/^# Skill:\s*/i, '').trim() || 'unknown';
 }
 
+type RestoreTextWithSkillPlaceholdersOptions = {
+	/**
+	 * true: 当普通文本片段非常长时，使用 [Paste ...] 占位符写入输入框，避免渲染/复制巨量文本。
+	 * false: 始终把普通文本按原样写回输入框。
+	 */
+	usePastePlaceholderForLongPlainText?: boolean;
+	/**
+	 * 触发粘贴占位符的阈值。保持与 TextBuffer.insert 的默认阈值一致。
+	 */
+	pastePlaceholderThreshold?: number;
+};
+
 function restoreTextWithSkillPlaceholders(
 	buffer: {
 		insertRestoredText: (t: string) => void;
 		insertTextPlaceholder: (c: string, p: string) => void;
+		insert: (t: string) => void;
 	},
 	text: string,
+	options: RestoreTextWithSkillPlaceholdersOptions = {},
 ) {
 	if (!text) return;
+
+	const {
+		usePastePlaceholderForLongPlainText = false,
+		pastePlaceholderThreshold = 300,
+	} = options;
 
 	const lines = text.split('\n');
 	let plain = '';
 
 	const flushPlain = () => {
-		if (plain) {
+		if (!plain) return;
+
+		if (
+			usePastePlaceholderForLongPlainText &&
+			plain.length > pastePlaceholderThreshold
+		) {
+			// 使用 TextBuffer.insert() 触发其内置的大文本占位逻辑。
+			buffer.insert(plain);
+		} else {
 			buffer.insertRestoredText(plain);
-			plain = '';
 		}
+
+		plain = '';
 	};
 
 	let i = 0;
@@ -477,7 +505,9 @@ export default function ChatInput({
 				// - doesn't get treated as a "paste" placeholder
 				// - rebuilds Skill injection blocks back into [Skill:id] placeholders
 				if (text) {
-					restoreTextWithSkillPlaceholders(buffer, text);
+					restoreTextWithSkillPlaceholders(buffer, text, {
+						usePastePlaceholderForLongPlainText: true,
+					});
 				}
 			} else {
 				// Split text by image placeholders and reconstruct with actual images
@@ -490,7 +520,9 @@ export default function ChatInput({
 					// Insert text part
 					const part = parts[i];
 					if (part) {
-						restoreTextWithSkillPlaceholders(buffer, part);
+						restoreTextWithSkillPlaceholders(buffer, part, {
+							usePastePlaceholderForLongPlainText: true,
+						});
 					}
 
 					// Insert image after this text part (if exists)
