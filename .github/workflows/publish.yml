@@ -58,11 +58,9 @@ jobs:
 
             ### What's New
 
-            - Add Ctrl+G external editor (Notepad) support for editing long messages (Windows only)
-            - Enhanced cleanup process with command usage manager on exit
-            - Improved process termination handling with better abort logic
-            - Reset loading state when model selection is cleared
-            - Updated role customization instructions with role listing options
+            - Optimize long text recovery logic for better content restoration
+            - Update TODO formatting rules with sequential numbering and improved item retrieval
+            - Invalidate cache and clear current session on successful session deletion
 
             ### Installation
             ```bash
