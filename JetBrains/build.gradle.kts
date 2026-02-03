@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.snow"
-version = "0.4.2"
+version = "0.4.3"
 
 repositories {
     mavenCentral()
@@ -43,6 +43,16 @@ tasks {
 
     publishPlugin {
         token.set(System.getenv("PUBLISH_TOKEN"))
+    }
+
+    // Skip instrumentCode task to avoid JDK path issues
+    instrumentCode {
+        enabled = false
+    }
+
+    // Skip buildSearchableOptions to avoid coroutines-javaagent issues
+    buildSearchableOptions {
+        enabled = false
     }
 }
 

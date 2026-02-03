@@ -248,27 +248,26 @@ class SnowWebSocketManager private constructor() {
         override fun onOpen(conn: WebSocket, handshake: ClientHandshake?) {
             clients.add(conn)
 
-            // Send cached context immediately on connection
+            // Always send current context on new connection
+            // This ensures CLI always receives the latest editor state
+            ApplicationManager.getApplication().invokeLater {
+                val projects = com.intellij.openapi.project.ProjectManager.getInstance().openProjects
+                for (project in projects) {
+                    try {
+                        sendEditorContextForProject(project)
+                    } catch (e: Exception) {
+                        logger.warn("Failed to send context for project ${project.name}", e)
+                    }
+                }
+            }
+
+            // Also send cached context immediately if available (fast path)
             lastValidContext?.let { context ->
                 try {
                     val json = buildJsonString(context)
                     conn.send(json)
                 } catch (e: Exception) {
                     logger.warn("Failed to send cached context", e)
-                }
-            }
-
-            // If no cached context, try to get current context
-            if (lastValidContext == null) {
-                ApplicationManager.getApplication().invokeLater {
-                    val projects = com.intellij.openapi.project.ProjectManager.getInstance().openProjects
-                    for (project in projects) {
-                        try {
-                            sendEditorContextForProject(project)
-                        } catch (e: Exception) {
-                            logger.warn("Failed to send context for project ${project.name}", e)
-                        }
-                    }
                 }
             }
         }

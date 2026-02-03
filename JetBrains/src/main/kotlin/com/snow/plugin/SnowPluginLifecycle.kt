@@ -51,10 +51,17 @@ class SnowPluginLifecycle : AppLifecycleListener {
             trackers[project] = tracker
             handlers[project] = handler
 
-            // Send initial context after a small delay to ensure WebSocket is ready
+            // Send initial context immediately and retry multiple times
+            // This ensures CLI receives context even if it connects later
             ApplicationManager.getApplication().executeOnPooledThread {
-                Thread.sleep(500) // Wait for WebSocket connection
+                // Send immediately
                 tracker.sendEditorContext()
+                
+                // Retry 3 times with 1 second intervals
+                for (i in 1..3) {
+                    Thread.sleep(1000)
+                    tracker.sendEditorContext()
+                }
             }
         }
     }
