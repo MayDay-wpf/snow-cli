@@ -188,18 +188,12 @@ export default function WorkingDirectoryPanel({onClose}: Props) {
 					return;
 				}
 
-				// ESC to close
-				if (key.escape) {
-					if (confirmDelete) {
+				// If in delete confirmation mode - check before main ESC handler
+				if (confirmDelete) {
+					if (key.escape) {
 						setConfirmDelete(false);
 						return;
 					}
-					onClose();
-					return;
-				}
-
-				// If in delete confirmation mode
-				if (confirmDelete) {
 					if (input.toLowerCase() === 'y') {
 						// Confirm delete
 						const pathsToDelete = Array.from(markedDirs);
@@ -222,6 +216,12 @@ export default function WorkingDirectoryPanel({onClose}: Props) {
 						// Cancel delete
 						setConfirmDelete(false);
 					}
+					return;
+				}
+
+				// ESC to close - only when not in any sub-mode
+				if (key.escape) {
+					onClose();
 					return;
 				}
 

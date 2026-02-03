@@ -58,7 +58,11 @@ jobs:
 
             ### What's New
 
-            - Enhance TODO management with new status options and performance improvements in output handling
+            - Update sensitive command patterns and enhance command boundary matching
+            - Improve ESC key navigation in panels (CustomCommand, Skills, Role, WorkingDirectory) with sequential back navigation
+            - Optimize file watcher to use unified ignoreFilter for consistency
+            - Fix CodebaseSearchStatus to show completion state when no results found
+            - Switch back to ink-text-input for better text input handling
 
             ### Installation
             ```bash

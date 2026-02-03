@@ -38,7 +38,11 @@ export const RoleCreationPanel: React.FC<Props> = ({
 	useInput(
 		(input, key) => {
 			if (key.escape) {
-				handleCancel();
+				if (step === 'confirm') {
+					setStep('location');
+				} else {
+					handleCancel();
+				}
 				return;
 			}
 
@@ -57,7 +61,7 @@ export const RoleCreationPanel: React.FC<Props> = ({
 				if (input.toLowerCase() === 'y') {
 					handleConfirm();
 				} else if (input.toLowerCase() === 'n') {
-					handleCancel();
+					setStep('location');
 				}
 			}
 		},

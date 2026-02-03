@@ -1,6 +1,6 @@
 import React, {useState, useCallback} from 'react';
 import {Box, Text, useInput} from 'ink';
-import {TextInput} from '@inkjs/ui';
+import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {
@@ -40,11 +40,24 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 	const [location, setLocation] = useState<CommandLocation>('global');
 	const [errorMessage, setErrorMessage] = useState<string>('');
 
-	// Handle keyboard input for type, location and confirmation steps
+	// Handle keyboard input for navigation and ESC
 	useInput(
 		(input, key) => {
 			if (key.escape) {
-				handleCancel();
+				// Sequential back navigation
+				if (step === 'confirm') {
+					setStep('location');
+				} else if (step === 'location') {
+					setStep('type');
+				} else if (step === 'type') {
+					setStep('description');
+				} else if (step === 'description') {
+					setStep('command');
+				} else if (step === 'command') {
+					setStep('name');
+				} else if (step === 'name') {
+					handleCancel();
+				}
 				return;
 			}
 
@@ -68,11 +81,11 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 				if (input.toLowerCase() === 'y') {
 					handleConfirm();
 				} else if (input.toLowerCase() === 'n') {
-					handleCancel();
+					setStep('location');
 				}
 			}
 		},
-		{isActive: step === 'type' || step === 'location' || step === 'confirm'},
+		{isActive: true}, // Always active for ESC handling
 	);
 
 	const handleNameSubmit = useCallback(
@@ -170,6 +183,8 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.customCommand.namePlaceholder}
+						value={commandName}
+						onChange={setCommandName}
 						onSubmit={handleNameSubmit}
 					/>
 					{errorMessage && (
@@ -200,6 +215,8 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.customCommand.commandPlaceholder}
+						value={commandText}
+						onChange={setCommandText}
 						onSubmit={handleCommandSubmit}
 					/>
 					<Box marginTop={1}>
@@ -234,6 +251,8 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.customCommand.descriptionPlaceholder}
+						value={commandDescription}
+						onChange={setCommandDescription}
 						onSubmit={handleDescriptionSubmit}
 					/>
 					<Box marginTop={1}>

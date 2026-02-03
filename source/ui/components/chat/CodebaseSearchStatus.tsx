@@ -112,5 +112,21 @@ export default function CodebaseSearchStatus({status}: Props) {
 		);
 	}
 
+	// 搜索已完成但没有 reviewResults（例如没有找到结果）
+	if (!status.isSearching) {
+		return (
+			<Box flexDirection="column" paddingLeft={1}>
+				<Box flexDirection="row" gap={1}>
+					<Text color="green">✔ Search Complete</Text>
+				</Box>
+				<Box flexDirection="column" paddingLeft={2}>
+					<Text color="cyan" dimColor>
+						No relevant results found
+					</Text>
+				</Box>
+			</Box>
+		);
+	}
+
 	return null;
 }

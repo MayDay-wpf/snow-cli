@@ -1,7 +1,7 @@
 import React, {useState, useCallback, useEffect, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import Spinner from 'ink-spinner';
-import {TextInput} from '@inkjs/ui';
+import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {
@@ -218,19 +218,34 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 		};
 	}, [step, requirement, projectRoot, t.skillsCreation.errorGeneration]);
 
-	const keyHandlingActive =
-		step === 'mode' ||
-		step === 'location' ||
-		step === 'confirm' ||
-		step === 'ai-location' ||
-		step === 'ai-generating' ||
-		step === 'ai-preview' ||
-		step === 'ai-error';
-
 	useInput(
 		(input, key) => {
 			if (key.escape) {
-				handleCancel();
+				// Sequential back navigation based on current step and mode
+				if (step === 'confirm') {
+					setStep('location');
+				} else if (step === 'location') {
+					setStep('description');
+				} else if (step === 'description') {
+					setStep('name');
+				} else if (step === 'name') {
+					setStep('mode');
+				} else if (step === 'ai-edit-name') {
+					setStep('ai-preview');
+				} else if (step === 'ai-preview') {
+					setStep('ai-location');
+				} else if (step === 'ai-location') {
+					setStep('ai-requirement');
+				} else if (step === 'ai-requirement') {
+					setStep('mode');
+				} else if (step === 'ai-error') {
+					setStep('ai-location');
+				} else if (step === 'ai-generating') {
+					// Cancel generation and close panel
+					handleCancel();
+				} else if (step === 'mode') {
+					handleCancel();
+				}
 				return;
 			}
 
@@ -265,7 +280,7 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 				if (input.toLowerCase() === 'y') {
 					handleConfirmManual();
 				} else if (input.toLowerCase() === 'n') {
-					handleCancel();
+					setStep('location');
 				}
 				return;
 			}
@@ -301,7 +316,7 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 				}
 			}
 		},
-		{isActive: keyHandlingActive},
+		{isActive: true},
 	);
 
 	return (
@@ -355,6 +370,8 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.skillsCreation.namePlaceholder}
+						value={skillName}
+						onChange={setSkillName}
 						onSubmit={handleNameSubmit}
 					/>
 					{errorMessage && (
@@ -388,6 +405,8 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.skillsCreation.descriptionPlaceholder}
+						value={description}
+						onChange={setDescription}
 						onSubmit={handleDescriptionSubmit}
 					/>
 					<Box marginTop={1}>
@@ -515,6 +534,8 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.skillsCreation.requirementPlaceholder}
+						value={requirement}
+						onChange={setRequirement}
 						onSubmit={handleRequirementSubmit}
 					/>
 					<Box marginTop={1}>
@@ -715,6 +736,8 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 					</Box>
 					<TextInput
 						placeholder={t.skillsCreation.editNamePlaceholder}
+						value={skillName}
+						onChange={setSkillName}
 						onSubmit={handleEditNameSubmit}
 					/>
 					{errorMessage && (
