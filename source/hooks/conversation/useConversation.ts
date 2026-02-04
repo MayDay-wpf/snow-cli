@@ -171,10 +171,18 @@ export async function handleConversationWithTools(
 		const {setConversationContext} = await import(
 			'../../utils/codebase/conversationContext.js'
 		);
-		// Use session.messages.length as messageIndex (after user message is saved)
+		// Use UI history length as messageIndex (after user message is saved)
+		// Snapshots are created during tool execution. Session messages include role === 'tool' records,
+		// but UI history is derived from convertSessionMessagesToUI which may merge/transform tool records.
+		// When tools run in parallel, multiple tool result messages may exist for a single assistant turn.
+		// Using session.messages.length would shift snapshot indices and break rollback mapping.
 		const updatedSession = sessionManager.getCurrentSession();
 		if (updatedSession) {
-			setConversationContext(updatedSession.id, updatedSession.messages.length);
+			const {convertSessionMessagesToUI} = await import(
+				'../../utils/session/sessionConverter.js'
+			);
+			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
+			setConversationContext(updatedSession.id, uiMessages.length);
 		}
 	} catch (error) {
 		console.error('Failed to set conversation context:', error);
