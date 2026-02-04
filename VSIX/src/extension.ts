@@ -258,6 +258,12 @@ function handleMessage(message: string) {
 		} else if (data.type === 'closeDiff') {
 			// Close diff view by calling the closeDiff command
 			vscode.commands.executeCommand('snow-cli.closeDiff');
+		} else if (data.type === 'showGitDiff') {
+			// Show git diff for a file in VSCode
+			const filePath = data.filePath;
+			if (filePath) {
+				showGitDiff(filePath);
+			}
 		}
 	} catch (error) {
 		// Ignore invalid messages
@@ -401,6 +407,77 @@ async function handleGetSymbols(filePath: string, requestId: string) {
 				symbols: [],
 			}),
 		);
+	}
+}
+
+/**
+ * Show git diff for a file in VSCode
+ * Opens the file's git changes in a diff view
+ */
+async function showGitDiff(filePath: string) {
+	console.log('[Snow Extension] showGitDiff called for:', filePath);
+	try {
+		const path = require('path');
+		const fs = require('fs');
+		const {execFile} = require('child_process');
+
+		// Ensure absolute path
+		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const absolutePath = path.isAbsolute(filePath)
+			? filePath
+			: path.join(workspaceRoot || '', filePath);
+
+		const fileUri = vscode.Uri.file(absolutePath);
+		const repoRoot =
+			vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath ?? workspaceRoot;
+
+		if (!repoRoot) {
+			throw new Error('No workspace folder found for git diff');
+		}
+
+		// Compute path relative to repo root for git show
+		const relPath = path.relative(repoRoot, absolutePath).replace(/\\/g, '/');
+
+		const newContent = fs.readFileSync(absolutePath, 'utf8');
+
+		let originalContent = '';
+		try {
+			originalContent = await new Promise((resolve, reject) => {
+				execFile(
+					'git',
+					['show', `HEAD:${relPath}`],
+					{cwd: repoRoot, maxBuffer: 50 * 1024 * 1024},
+					(error: any, stdout: string, stderr: string) => {
+						if (error) {
+							reject(new Error(stderr || String(error)));
+							return;
+						}
+						resolve(stdout);
+					},
+				);
+			});
+		} catch (error) {
+			// File may be new/untracked or missing in HEAD; fall back to empty original content
+			console.log(
+				'[Snow Extension] git show failed, using empty base:',
+				error instanceof Error ? error.message : String(error),
+			);
+		}
+
+		await vscode.commands.executeCommand('snow-cli.showDiff', {
+			filePath: absolutePath,
+			originalContent,
+			newContent,
+			label: 'Git Diff',
+		});
+	} catch (error) {
+		console.error('[Snow Extension] Failed to show git diff:', error);
+		try {
+			const uri = vscode.Uri.file(filePath);
+			await vscode.window.showTextDocument(uri, {preview: true});
+		} catch {
+			// Ignore errors
+		}
 	}
 }
 

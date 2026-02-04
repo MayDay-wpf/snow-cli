@@ -408,7 +408,11 @@ class VSCodeConnectionManager {
 
 			const cwd = this.normalizePath(this.currentWorkingDirectory);
 			for (const ws of this.connectedWorkspaceFolders) {
-				if (cwd === ws || cwd.startsWith(ws + '/') || ws.startsWith(cwd + '/')) {
+				if (
+					cwd === ws ||
+					cwd.startsWith(ws + '/') ||
+					ws.startsWith(cwd + '/')
+				) {
 					this.connectedPortHasCwdMatch = true;
 					break;
 				}
@@ -637,6 +641,33 @@ class VSCodeConnectionManager {
 				this.client.send(
 					JSON.stringify({
 						type: 'closeDiff',
+					}),
+				);
+				resolve();
+			} catch (error) {
+				reject(error);
+			}
+		});
+	}
+
+	/**
+	 * Show git diff for a file in VSCode
+	 * Displays the diff between working tree and HEAD for the specified file
+	 * @param filePath - Absolute path to the file
+	 * @returns Promise that resolves when diff is shown or rejects if not connected
+	 */
+	async showGitDiff(filePath: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+				reject(new Error('VSCode extension not connected'));
+				return;
+			}
+
+			try {
+				this.client.send(
+					JSON.stringify({
+						type: 'showGitDiff',
+						filePath,
 					}),
 				);
 				resolve();

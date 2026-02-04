@@ -33,6 +33,114 @@ interface SnapshotMetadata {
  */
 class HashBasedSnapshotManager {
 	private readonly snapshotsDir: string;
+
+	/**
+	 * Compute rollback preview content for a specific file.
+	 * It simulates rollbackToMessageIndex for that file only, but does not touch disk.
+	 */
+	async getRollbackPreviewForFile(
+		sessionId: string,
+		targetMessageIndex: number,
+		filePath: string,
+	): Promise<{
+		workspaceRoot: string;
+		absolutePath: string;
+		relativePath: string;
+		currentContent: string;
+		rollbackContent: string;
+		wouldDelete: boolean;
+	}> {
+		await this.ensureSnapshotsDir();
+
+		const files = await fs.readdir(this.snapshotsDir);
+		const snapshotFiles: Array<{messageIndex: number; path: string}> = [];
+
+		for (const file of files) {
+			if (!file.startsWith(`${sessionId}_`) || !file.endsWith('.json')) {
+				continue;
+			}
+
+			const snapshotPath = path.join(this.snapshotsDir, file);
+			const content = await fs.readFile(snapshotPath, 'utf-8');
+			const metadata: SnapshotMetadata = JSON.parse(content);
+
+			if (metadata.messageIndex >= targetMessageIndex) {
+				snapshotFiles.push({
+					messageIndex: metadata.messageIndex,
+					path: snapshotPath,
+				});
+			}
+		}
+
+		// Most recent first (matches rollbackToMessageIndex processing order)
+		snapshotFiles.sort((a, b) => b.messageIndex - a.messageIndex);
+
+		let workspaceRoot = '';
+		let relativePath = filePath;
+		let absolutePath = filePath;
+
+		// Resolve workspaceRoot and normalize relative/absolute path
+		if (snapshotFiles.length > 0) {
+			const first = snapshotFiles[0];
+			if (first) {
+				const firstContent = await fs.readFile(first.path, 'utf-8');
+				const firstMetadata: SnapshotMetadata = JSON.parse(firstContent);
+				workspaceRoot = firstMetadata.workspaceRoot;
+			}
+		}
+
+		if (workspaceRoot && path.isAbsolute(filePath)) {
+			relativePath = path.relative(workspaceRoot, filePath).replace(/\\/g, '/');
+			absolutePath = filePath;
+		} else if (workspaceRoot && !path.isAbsolute(filePath)) {
+			relativePath = filePath.replace(/\\/g, '/');
+			absolutePath = path.join(workspaceRoot, relativePath);
+		} else {
+			// Fallback: treat provided path as absolute if it looks absolute; otherwise use cwd.
+			relativePath = filePath.replace(/\\/g, '/');
+			absolutePath = path.isAbsolute(filePath)
+				? filePath
+				: path.join(process.cwd(), relativePath);
+			workspaceRoot = path.dirname(absolutePath);
+		}
+
+		let currentContent = '';
+		try {
+			currentContent = await fs.readFile(absolutePath, 'utf-8');
+		} catch {
+			currentContent = '';
+		}
+
+		let rollbackContent = currentContent;
+		let wouldDelete = false;
+
+		for (const snapshotFile of snapshotFiles) {
+			const content = await fs.readFile(snapshotFile.path, 'utf-8');
+			const metadata: SnapshotMetadata = JSON.parse(content);
+			const backup = metadata.backups.find(b => b.path === relativePath);
+			if (!backup) {
+				continue;
+			}
+
+			if (backup.existed && backup.content !== null) {
+				rollbackContent = backup.content;
+				wouldDelete = false;
+			} else if (!backup.existed) {
+				rollbackContent = '';
+				wouldDelete = true;
+			}
+		}
+
+		return {
+			workspaceRoot,
+			absolutePath,
+			relativePath,
+			currentContent,
+			rollbackContent,
+			wouldDelete,
+		};
+	}
+
 	/**
 	 * Lock map to prevent concurrent writes to the same snapshot file
 	 * Key: snapshot file path, Value: Promise that resolves when lock is released

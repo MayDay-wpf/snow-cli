@@ -1513,6 +1513,8 @@ export default function ChatScreen({
 				<FileRollbackConfirmation
 					fileCount={snapshotState.pendingRollback.fileCount}
 					filePaths={snapshotState.pendingRollback.filePaths || []}
+					previewSessionId={sessionManager.getCurrentSession()?.id}
+					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
 					onConfirm={handleRollbackConfirm}
 				/>
 			)}

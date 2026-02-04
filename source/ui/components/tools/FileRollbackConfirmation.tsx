@@ -1,16 +1,22 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
+import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
 
 type Props = {
 	fileCount: number;
 	filePaths: string[];
+	previewSessionId?: string;
+	previewTargetMessageIndex?: number;
 	onConfirm: (rollbackFiles: boolean | null, selectedFiles?: string[]) => void; // null means cancel, selectedFiles for partial rollback
 };
 
 export default function FileRollbackConfirmation({
 	fileCount,
 	filePaths,
+	previewSessionId,
+	previewTargetMessageIndex,
 	onConfirm,
 }: Props) {
 	const {t} = useI18n();
@@ -22,6 +28,74 @@ export default function FileRollbackConfirmation({
 	); // Default all selected
 	const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
 
+	const closePreviewDiff = () => {
+		if (vscodeConnection.isConnected()) {
+			vscodeConnection.closeDiff().catch(() => {
+				// Silently ignore close errors
+			});
+		}
+	};
+
+	// Close diff when leaving file list mode, and also when component unmounts
+	useEffect(() => {
+		if (!showFullList) {
+			closePreviewDiff();
+		}
+		return () => {
+			closePreviewDiff();
+		};
+	}, [showFullList]);
+
+	// Show rollback preview diff when highlighted file changes in full list mode
+	useEffect(() => {
+		if (!showFullList || !filePaths[highlightedFileIndex]) {
+			return;
+		}
+
+		const filePath = filePaths[highlightedFileIndex];
+		const sessionId = previewSessionId;
+		const targetMessageIndex = previewTargetMessageIndex;
+
+		// Use setTimeout to debounce and avoid flickering during rapid navigation
+		const timeoutId = setTimeout(() => {
+			// Ensure old diff is closed before opening a new one
+			closePreviewDiff();
+
+			if (sessionId !== undefined && targetMessageIndex !== undefined) {
+				hashBasedSnapshotManager
+					.getRollbackPreviewForFile(sessionId, targetMessageIndex, filePath)
+					.then(preview =>
+						vscodeConnection.showDiff(
+							preview.absolutePath,
+							preview.currentContent,
+							preview.rollbackContent,
+							'Rollback Preview',
+						),
+					)
+					.catch(() => {
+						// Silently ignore diff preview errors
+					});
+				return;
+			}
+
+			// Fallback to git diff when preview context is missing
+			vscodeConnection.showGitDiff(filePath).catch(() => {
+				// Silently ignore git diff errors
+			});
+		}, 100);
+
+		return () => {
+			clearTimeout(timeoutId);
+			closePreviewDiff();
+		};
+	}, [
+		highlightedFileIndex,
+		showFullList,
+		filePaths,
+		previewSessionId,
+		previewTargetMessageIndex,
+	]);
+
 	const options = [
 		{label: t.fileRollback.yesRollbackFiles, value: true},
 		{label: t.fileRollback.noConversationOnly, value: false},
@@ -30,6 +104,10 @@ export default function FileRollbackConfirmation({
 	useInput((input, key) => {
 		// Tab - toggle full file list view
 		if (key.tab) {
+			// Leaving file list mode should close the diff
+			if (showFullList) {
+				closePreviewDiff();
+			}
 			setShowFullList(prev => !prev);
 			setFileScrollIndex(0); // Reset scroll when toggling
 			setHighlightedFileIndex(0); // Reset highlight when toggling
@@ -133,10 +211,12 @@ export default function FileRollbackConfirmation({
 		// ESC - exit full list mode or cancel rollback
 		if (key.escape) {
 			if (showFullList) {
+				closePreviewDiff();
 				setShowFullList(false);
 				setFileScrollIndex(0);
 				setHighlightedFileIndex(0);
 			} else {
+				closePreviewDiff();
 				onConfirm(null); // null means cancel everything
 			}
 			return;
