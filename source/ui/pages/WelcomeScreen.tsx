@@ -16,6 +16,7 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../i18n/index.js';
 import {getUpdateNotice, onUpdateNotice} from '../../utils/ui/updateNotice.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import UpdateNotice from '../components/common/UpdateNotice.js';
 
 // Lazy load all configuration screens for better startup performance
 const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
@@ -341,41 +342,11 @@ export default function WelcomeScreen({
 			</Static>
 
 			{inlineView === 'menu' && updateNotice && (
-				<Box paddingX={1} marginBottom={1}>
-					<Box
-						borderStyle="double"
-						borderColor="cyan"
-						paddingX={2}
-						paddingY={1}
-						width={terminalWidth - 2}
-					>
-						<Box flexDirection="column">
-							<Text bold color="cyan">
-								{t.welcome.updateNoticeTitle}
-							</Text>
-							<Text color="gray" dimColor>
-								{t.welcome.updateNoticeCurrent}:{' '}
-								<Text color="gray">{updateNotice.currentVersion}</Text>
-							</Text>
-							<Text color="gray" dimColor>
-								{t.welcome.updateNoticeLatest}:{' '}
-								<Text color="yellow" bold>
-									{updateNotice.latestVersion}
-								</Text>
-							</Text>
-							<Text color="gray" dimColor>
-								{t.welcome.updateNoticeRun}:{' '}
-								<Text color="yellow" bold>
-									snow --update
-								</Text>
-							</Text>
-							<Text color="gray" dimColor>
-								{t.welcome.updateNoticeGithub}:{' '}
-								https://github.com/MayDay-wpf/snow-cli
-							</Text>
-						</Box>
-					</Box>
-				</Box>
+				<UpdateNotice
+					currentVersion={updateNotice.currentVersion}
+					latestVersion={updateNotice.latestVersion}
+					terminalWidth={terminalWidth}
+				/>
 			)}
 
 			{/* Menu must be outside Static to receive input */}
