@@ -1180,6 +1180,34 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						const commandName = commandMatch[1];
 						const commandArgs = commandMatch[2];
 
+						// Special handling for picker-style commands.
+						// These commands are UI interactions and should open the picker panel
+						// instead of going through the generic command execution flow.
+						if (commandName === 'todo-' && !commandArgs) {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowTodoPicker(true);
+							triggerUpdate();
+							return;
+						}
+						if (commandName === 'agent-' && !commandArgs) {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowAgentPicker(true);
+							triggerUpdate();
+							return;
+						}
+						if (commandName === 'skills-' && !commandArgs) {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowSkillsPicker(true);
+							triggerUpdate();
+							return;
+						}
+
 						// Block command execution if AI is processing
 						// Only block if it's a valid command (not a path like /usr/bin)
 						if (isProcessing && getAllCommands) {
