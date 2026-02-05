@@ -58,7 +58,9 @@ jobs:
 
             ### What's New
 
-            - File rollback support to view differences (only vscode)
+            - Added UpdateNotice component - Integrated UpdateNotice component in WelcomeScreen to display version update information
+            - Simplified codebase search state management - Removed reviewResults-related attributes, reduced 143 lines of code, improved maintainability
+            - Improved message snapshot mapping logic - Use UI history length for message index handling, optimized conversation state management
 
             ### Installation
             ```bash
