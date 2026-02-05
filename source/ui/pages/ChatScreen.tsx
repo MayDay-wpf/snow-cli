@@ -909,31 +909,10 @@ export default function ChatScreen({
 			query?: string;
 			originalResultsCount?: number;
 			suggestion?: string;
-			reviewResults?: {
-				originalCount: number;
-				filteredCount: number;
-				removedCount: number;
-				highConfidenceFiles?: string[];
-				reviewFailed?: boolean;
-			};
 		}) => {
 			if (event.type === 'search-complete') {
-				// Show completion status briefly
-				streamingState.setCodebaseSearchStatus({
-					isSearching: false,
-					attempt: event.attempt,
-					maxAttempts: event.maxAttempts,
-					currentTopN: event.currentTopN,
-					message: event.message,
-					query: event.query,
-					originalResultsCount: event.originalResultsCount,
-					suggestion: event.suggestion,
-					reviewResults: event.reviewResults,
-				});
-				// Clear status after a delay to show completion
-				setTimeout(() => {
-					streamingState.setCodebaseSearchStatus(null);
-				}, 2000);
+				// Clear status immediately
+				streamingState.setCodebaseSearchStatus(null);
 			} else {
 				// Update search status
 				streamingState.setCodebaseSearchStatus({
@@ -945,7 +924,6 @@ export default function ChatScreen({
 					query: event.query,
 					originalResultsCount: event.originalResultsCount,
 					suggestion: undefined,
-					reviewResults: undefined,
 				});
 			}
 		};

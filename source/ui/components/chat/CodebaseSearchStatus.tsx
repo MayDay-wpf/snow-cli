@@ -2,14 +2,6 @@ import React from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
-type ReviewResults = {
-	originalCount: number;
-	filteredCount: number;
-	removedCount: number;
-	highConfidenceFiles?: string[];
-	reviewFailed?: boolean;
-};
-
 export type CodebaseSearchStatusData = {
 	isSearching: boolean;
 	attempt?: number;
@@ -19,7 +11,6 @@ export type CodebaseSearchStatusData = {
 	query?: string;
 	originalResultsCount?: number;
 	suggestion?: string;
-	reviewResults?: ReviewResults;
 };
 
 type Props = {
@@ -66,63 +57,6 @@ export default function CodebaseSearchStatus({status}: Props) {
 					{status.originalResultsCount === undefined && (
 						<Text color={theme.colors.menuSecondary}>{status.message}</Text>
 					)}
-				</Box>
-			</Box>
-		);
-	}
-
-	if (status.reviewResults) {
-		// 搜索完成状态
-		return (
-			<Box flexDirection="column" paddingLeft={1}>
-				<Box flexDirection="row" gap={1}>
-					<Text color="green">✔ Search Complete</Text>
-				</Box>
-				<Box flexDirection="column" paddingLeft={2}>
-					{status.reviewResults.reviewFailed ? (
-						<Text color="yellow" dimColor>
-							AI review failed, showing all results
-						</Text>
-					) : (
-						<>
-							<Text color="cyan" dimColor>
-								Found {status.reviewResults.originalCount} results
-							</Text>
-							<Text color="cyan" dimColor>
-								AI filtered to {status.reviewResults.filteredCount} relevant
-								results
-							</Text>
-							{status.reviewResults.highConfidenceFiles &&
-								status.reviewResults.highConfidenceFiles.length > 0 && (
-									<Text color="green" dimColor>
-										High confidence:{' '}
-										{status.reviewResults.highConfidenceFiles
-											.slice(0, 3)
-											.join(', ')}
-										{status.reviewResults.highConfidenceFiles.length > 3 &&
-											` (+${
-												status.reviewResults.highConfidenceFiles.length - 3
-											})`}
-									</Text>
-								)}
-						</>
-					)}
-				</Box>
-			</Box>
-		);
-	}
-
-	// 搜索已完成但没有 reviewResults（例如没有找到结果）
-	if (!status.isSearching) {
-		return (
-			<Box flexDirection="column" paddingLeft={1}>
-				<Box flexDirection="row" gap={1}>
-					<Text color="green">✔ Search Complete</Text>
-				</Box>
-				<Box flexDirection="column" paddingLeft={2}>
-					<Text color="cyan" dimColor>
-						No relevant results found
-					</Text>
 				</Box>
 			</Box>
 		);

@@ -43,13 +43,6 @@ type LoadingIndicatorProps = {
 		query?: string;
 		originalResultsCount?: number;
 		suggestion?: string;
-		reviewResults?: {
-			originalCount: number;
-			filteredCount: number;
-			removedCount: number;
-			highConfidenceFiles?: string[];
-			reviewFailed?: boolean;
-		};
 	} | null;
 	isReasoning: boolean;
 	streamTokenCount: number;
@@ -128,8 +121,6 @@ export default function LoadingIndicator({
 								)}
 							</Box>
 						) : codebaseSearchStatus?.isSearching ? (
-							<CodebaseSearchStatus status={codebaseSearchStatus} />
-						) : codebaseSearchStatus && !codebaseSearchStatus.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
 						) : (
 							<Text color={theme.colors.menuSecondary} dimColor bold>

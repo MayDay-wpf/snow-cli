@@ -265,16 +265,6 @@ class CodebaseSearchService {
 						message: `Search complete`,
 						query: currentQuery,
 						suggestion,
-						reviewResults:
-							enableAgentReview && lastResults
-								? {
-										originalCount: lastResults.originalResultsCount,
-										filteredCount: lastResults.resultsCount,
-										removedCount: lastResults.removedCount,
-										highConfidenceFiles: [],
-										reviewFailed: lastResults.reviewFailed,
-								  }
-								: undefined,
 					});
 
 					db.close();
@@ -294,16 +284,6 @@ class CodebaseSearchService {
 						message: `Search complete`,
 						query: currentQuery,
 						suggestion,
-						reviewResults:
-							enableAgentReview && lastResults
-								? {
-										originalCount: lastResults.originalResultsCount,
-										filteredCount: lastResults.resultsCount,
-										removedCount: lastResults.removedCount,
-										highConfidenceFiles: [],
-										reviewFailed: lastResults.reviewFailed,
-								  }
-								: undefined,
 					});
 
 					db.close();
@@ -325,15 +305,6 @@ class CodebaseSearchService {
 						message: `Search complete`,
 						query: currentQuery,
 						suggestion,
-						reviewResults: enableAgentReview
-							? {
-									originalCount: formattedResults.length,
-									filteredCount: finalResults.length,
-									removedCount,
-									highConfidenceFiles,
-									reviewFailed,
-							  }
-							: undefined,
 					});
 
 					db.close();

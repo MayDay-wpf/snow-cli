@@ -18,13 +18,6 @@ export type CodebaseSearchStatus = {
 	query?: string;
 	originalResultsCount?: number;
 	suggestion?: string;
-	reviewResults?: {
-		originalCount: number;
-		filteredCount: number;
-		removedCount: number;
-		highConfidenceFiles?: string[];
-		reviewFailed?: boolean;
-	};
 };
 
 export type StreamStatus = 'idle' | 'streaming' | 'stopping';

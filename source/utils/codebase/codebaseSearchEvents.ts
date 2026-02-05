@@ -9,14 +9,6 @@ export type CodebaseSearchEvent = {
 	query?: string;
 	// Original results count (before AI review)
 	originalResultsCount?: number;
-	// AI review results
-	reviewResults?: {
-		originalCount: number;
-		filteredCount: number;
-		removedCount: number;
-		highConfidenceFiles?: string[];
-		reviewFailed?: boolean;
-	};
 	// AI suggested search query (single best suggestion)
 	suggestion?: string;
 };
