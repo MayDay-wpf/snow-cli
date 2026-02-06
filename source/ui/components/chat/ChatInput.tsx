@@ -222,6 +222,7 @@ type Props = {
 	profileSearchQuery?: string;
 	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
+	onPasteReceivingChange?: (isReceiving: boolean, charCount: number) => void;
 	disableKeyboardNavigation?: boolean; // Disable arrow keys and Ctrl+K when background panel is active
 };
 
@@ -253,6 +254,7 @@ export default function ChatInput({
 	profileSearchQuery = '',
 	setProfileSearchQuery,
 	onSwitchProfile,
+	onPasteReceivingChange,
 	disableKeyboardNavigation = false,
 }: Props) {
 	// Use i18n hook for translations
@@ -389,10 +391,6 @@ export default function ChatInput({
 		triggerUpdate,
 	);
 
-	const pasteShortcutTimeoutMs = 800;
-	const pasteFlushDebounceMs = 250;
-	const pasteIndicatorThreshold = 300;
-
 	// Use keyboard input hook
 	useKeyboardInput({
 		buffer,
@@ -442,9 +440,6 @@ export default function ChatInput({
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
-		pasteShortcutTimeoutMs,
-		pasteFlushDebounceMs,
-		pasteIndicatorThreshold,
 		onSubmit,
 		ensureFocus,
 		showAgentPicker,
@@ -488,6 +483,7 @@ export default function ChatInput({
 		profileSearchQuery,
 		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
+		onPasteReceivingChange,
 	});
 
 	// Set initial content when provided (e.g., when rolling back to first message)

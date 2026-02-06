@@ -116,6 +116,16 @@ export default function ChatFooter(props: ChatFooterProps) {
 	const {t} = useI18n();
 	const [todos, setTodos] = useState<TodoItem[]>([]);
 	const [showTodos, setShowTodos] = useState(false);
+	const [isPasteReceiving, setIsPasteReceiving] = useState(false);
+	const [pasteReceivingCharCount, setPasteReceivingCharCount] = useState(0);
+
+	const handlePasteReceivingChange = (
+		isReceiving: boolean,
+		charCount: number,
+	) => {
+		setIsPasteReceiving(isReceiving);
+		setPasteReceivingCharCount(isReceiving ? charCount : 0);
+	};
 
 	// 使用事件监听 TODO 更新，替代轮询
 	useEffect(() => {
@@ -193,6 +203,7 @@ export default function ChatFooter(props: ChatFooterProps) {
 						profileSearchQuery={props.profileSearchQuery}
 						setProfileSearchQuery={props.setProfileSearchQuery}
 						onSwitchProfile={props.onSwitchProfile}
+						onPasteReceivingChange={handlePasteReceivingChange}
 					/>
 
 					{showTodos && todos.length > 0 && (
@@ -213,6 +224,8 @@ export default function ChatFooter(props: ChatFooterProps) {
 						watcherEnabled={props.watcherEnabled}
 						fileUpdateNotification={props.fileUpdateNotification}
 						currentProfileName={props.currentProfileName}
+						pasteReceiving={isPasteReceiving}
+						pasteReceivingCharCount={pasteReceivingCharCount}
 					/>
 
 					{props.isCompressing && (

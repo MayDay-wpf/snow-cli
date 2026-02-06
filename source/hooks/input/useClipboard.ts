@@ -162,35 +162,31 @@ end try'`;
 			}
 
 			// If no image, try to read text from clipboard
-			try {
-				let clipboardText = '';
-				if (process.platform === 'win32') {
-					clipboardText = execSync('powershell -Command "Get-Clipboard"', {
-						encoding: 'utf-8',
-						timeout: 2000,
-					}).trim();
-				} else if (process.platform === 'darwin') {
-					clipboardText = execSync('pbpaste', {
-						encoding: 'utf-8',
-						timeout: 2000,
-					}).trim();
-				} else {
-					clipboardText = execSync('xclip -selection clipboard -o', {
-						encoding: 'utf-8',
-						timeout: 2000,
-					}).trim();
-				}
+			let clipboardText = '';
+			if (process.platform === 'win32') {
+				clipboardText = execSync('powershell -Command "Get-Clipboard"', {
+					encoding: 'utf-8',
+					timeout: 2000,
+				}).trim();
+			} else if (process.platform === 'darwin') {
+				clipboardText = execSync('pbpaste', {
+					encoding: 'utf-8',
+					timeout: 2000,
+				}).trim();
+			} else {
+				clipboardText = execSync('xclip -selection clipboard -o', {
+					encoding: 'utf-8',
+					timeout: 2000,
+				}).trim();
+			}
 
-				if (clipboardText) {
-					buffer.insert(clipboardText);
-					const fullText = buffer.getFullText();
-					const cursorPos = buffer.getCursorPosition();
-					updateCommandPanelState(fullText);
-					updateFilePickerState(fullText, cursorPos);
-					triggerUpdate();
-				}
-			} catch (textError) {
-				logger.error('Failed to read text from clipboard:', textError);
+			if (clipboardText) {
+				buffer.insert(clipboardText);
+				const fullText = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(fullText);
+				updateFilePickerState(fullText, cursorPos);
+				triggerUpdate();
 			}
 		} catch (error) {
 			logger.error('Failed to read from clipboard:', error);

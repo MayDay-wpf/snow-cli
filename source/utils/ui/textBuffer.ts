@@ -64,9 +64,6 @@ export class TextBuffer {
 	private imagePlaceholderCounter = 0; // 图片占位符计数器
 	private onUpdateCallback?: () => void; // 更新回调函数
 	private isDestroyed: boolean = false; // 标记是否已销毁
-	private tempPastingPlaceholder: string | null = null; // 临时"粘贴中"占位符文本
-	private lastTextPlaceholderId: string | null = null; // 合并同一批次粘贴
-	private lastTextPlaceholderAt = 0; // 最近一次文本占位符更新时间
 
 	private visualLines: string[] = [''];
 	private visualLineStarts: number[] = [0];
@@ -161,86 +158,9 @@ export class TextBuffer {
 		}
 
 		const charCount = sanitized.length;
-
-		// 检查是否存在临时"粘贴中"占位符
-		const hasPastingIndicator = this.tempPastingPlaceholder !== null;
-
-		// 如果存在临时"粘贴中"占位符，先移除它，并调整光标位置
-		if (this.tempPastingPlaceholder) {
-			const placeholderIndex = this.content.indexOf(
-				this.tempPastingPlaceholder,
-			);
-			if (placeholderIndex !== -1) {
-				// 找到占位符的位置
-				const placeholderLength = cpLen(this.tempPastingPlaceholder);
-
-				// 移除占位符
-				this.content =
-					this.content.slice(0, placeholderIndex) +
-					this.content.slice(
-						placeholderIndex + this.tempPastingPlaceholder.length,
-					);
-
-				// 调整光标位置:如果光标在占位符之后,需要向前移动
-				if (this.cursorIndex > placeholderIndex) {
-					this.cursorIndex = Math.max(
-						placeholderIndex,
-						this.cursorIndex - placeholderLength,
-					);
-				}
-			}
-			this.tempPastingPlaceholder = null;
-		}
-
-		// 如果之前显示了"粘贴中"占位符，或者是大文本（>300字符），创建占位符
-		// 使用 || 确保只要显示过"粘贴中"就一定创建占位符，防止sanitize后长度变化导致不一致
-		if (hasPastingIndicator || charCount > 300) {
-			const now = Date.now();
-			const shouldMerge =
-				this.lastTextPlaceholderId !== null &&
-				now - this.lastTextPlaceholderAt < 1200;
-
-			if (shouldMerge && this.lastTextPlaceholderId) {
-				const existing = this.placeholderStorage.get(
-					this.lastTextPlaceholderId,
-				);
-				if (existing && existing.type === 'text') {
-					existing.content += sanitized;
-					existing.charCount += charCount;
-					const lineCount = (existing.content.match(/\n/g) || []).length + 1;
-					const nextPlaceholder = `[Paste ${lineCount} lines #${existing.index}] `;
-					existing.placeholder = nextPlaceholder;
-					const placeholderPattern = new RegExp(
-						`\\[Paste \\d+ lines #${existing.index}\\] `,
-						'g',
-					);
-					const match = placeholderPattern.exec(this.content);
-					if (match) {
-						const placeholderIndex = match.index;
-						const previousLength = match[0].length;
-						const nextLength = nextPlaceholder.length;
-						const delta = nextLength - previousLength;
-						if (delta !== 0 && this.cursorIndex > placeholderIndex) {
-							this.cursorIndex = Math.max(
-								placeholderIndex,
-								this.cursorIndex + delta,
-							);
-						}
-					}
-					this.content = this.content.replace(
-						placeholderPattern,
-						nextPlaceholder,
-					);
-					this.lastTextPlaceholderAt = now;
-					this.recalculateVisualState();
-					this.scheduleUpdate();
-					return;
-				}
-			}
-
+		if (charCount > 300) {
 			this.textPlaceholderCounter++;
 			const pasteId = `paste_${Date.now()}_${this.textPlaceholderCounter}`;
-			// 计算行数
 			const lineCount = (sanitized.match(/\n/g) || []).length + 1;
 			const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
 
@@ -248,38 +168,16 @@ export class TextBuffer {
 				id: pasteId,
 				type: 'text',
 				content: sanitized,
-				charCount: charCount,
+				charCount,
 				index: this.textPlaceholderCounter,
 				placeholder: placeholderText,
 			});
 
-			this.lastTextPlaceholderId = pasteId;
-			this.lastTextPlaceholderAt = now;
-
-			// 插入占位符而不是原文本
 			this.insertPlainText(placeholderText);
 		} else {
-			this.lastTextPlaceholderId = null;
-			this.lastTextPlaceholderAt = 0;
-			// 普通输入，直接插入文本
 			this.insertPlainText(sanitized);
 		}
 
-		this.scheduleUpdate();
-	}
-
-	/**
-	 * 插入临时"粘贴中"占位符，用于大文本粘贴时的用户反馈
-	 */
-	insertPastingIndicator(): void {
-		// 如果已经有临时占位符，不需要重复插入
-		if (this.tempPastingPlaceholder) {
-			return;
-		}
-
-		// 创建静态的临时占位符（简单明了）
-		this.tempPastingPlaceholder = `[Pasting...]`;
-		this.insertPlainText(this.tempPastingPlaceholder);
 		this.scheduleUpdate();
 	}
 
@@ -316,8 +214,6 @@ export class TextBuffer {
 	insertRestoredText(input: string): void {
 		const sanitized = sanitizeInput(input);
 		if (!sanitized) return;
-		this.lastTextPlaceholderId = null;
-		this.lastTextPlaceholderAt = 0;
 		this.insertPlainText(sanitized);
 		this.scheduleUpdate();
 	}
@@ -552,8 +448,6 @@ export class TextBuffer {
 					if (
 						placeholderText.match(/^\[Paste \d+ lines #\d+\] ?$/) ||
 						placeholderText.match(/^\[image #\d+\] ?$/) ||
-						placeholderText === '[Pasting...]' ||
-						placeholderText === '[Pasting...] ' ||
 						placeholderText.match(/^\[Skill:[^\]]+\] ?$/)
 					) {
 						return {start: openPos, end};
