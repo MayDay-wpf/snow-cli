@@ -1428,18 +1428,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 			ensureFocus();
 
-			const stripTerminalFocusNoise = (raw: string): string => {
-				// Windows shift+drag sometimes injects focus tokens into the same input chunk.
-				// Only use this for classification; don't destructively rewrite normal user input.
-				return (
-					raw
-						// Real focus escape sequences.
-						.replace(/\x1b\[[IO]/g, '')
-						// Stray "[I"/"[O]" tokens that can precede drag-and-drop payloads.
-						.replace(/(^|\s+)\[(?:I|O)(?=(?:\s|$|["'~\\/]|[A-Za-z]:))/g, '$1')
-				);
-			};
-
 			const normalizePathLine = (line: string): string => {
 				const trimmed = line.trim();
 				if (
@@ -1498,10 +1486,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return existsSync(resolvedPath);
 			};
 
-			const classificationInput = stripTerminalFocusNoise(input);
-			const hasLongOrMultilineShape =
-				classificationInput.includes('\n') || classificationInput.length > 32;
-			const normalizedInput = classificationInput
+			const hasLongOrMultilineShape = input.includes('\n') || input.length > 32;
+			const normalizedInput = input
 				.replace(/\r\n/g, '\n')
 				.replace(/\r/g, '\n')
 				.trim();
@@ -1519,10 +1505,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (isLongPasteLikeInput) {
 				const now = Date.now();
 				const streamState = ensureLongInputStream(now);
-				markPasteReceiving(
-					classificationInput.length,
-					streamState.streamExpired,
-				);
+				markPasteReceiving(input.length, streamState.streamExpired);
 				const streamAlreadyTriggered = streamState.alreadyTriggered;
 				const guardActive = now <= clipboardPasteGuardUntil.current;
 
@@ -1536,12 +1519,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			if (isDroppedFilePathPayload) {
-				// Show file paths directly (without surrounding quotes), instead of treating it as paste.
-				buffer.insert(pathLines.map(normalizePathLine).join('\n'));
-			} else {
-				buffer.insert(input);
-			}
+			buffer.insert(input);
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			updateCommandPanelState(text);
