@@ -1494,6 +1494,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				const accumulated = inputBuffer.current;
 				const savedCursorPosition = inputStartCursorPos.current;
 				const wasPasting = isPasting.current; // Save pasting state before clearing
+
 				inputBuffer.current = '';
 				isPasting.current = false; // Reset pasting state
 				isProcessingInput.current = false; // Reset processing flag

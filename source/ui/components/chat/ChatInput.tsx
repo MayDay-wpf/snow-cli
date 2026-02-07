@@ -47,12 +47,28 @@ function restoreTextWithSkillPlaceholders(
 
 	const lines = text.split('\n');
 	let plain = '';
+	let rollbackPasteCounter = 0;
+
+	const insertPlainOrPastePlaceholder = (chunk: string) => {
+		if (!chunk) return;
+		const lineCount = chunk.split('\n').length;
+		const shouldMaskAsPaste = chunk.length >= 400 || lineCount >= 12;
+		if (!shouldMaskAsPaste) {
+			buffer.insertRestoredText(chunk);
+			return;
+		}
+
+		rollbackPasteCounter++;
+		buffer.insertTextPlaceholder(
+			chunk,
+			`[Paste ${lineCount} lines #${rollbackPasteCounter}] `,
+		);
+	};
 
 	const flushPlain = () => {
-		if (plain) {
-			buffer.insertRestoredText(plain);
-			plain = '';
-		}
+		if (!plain) return;
+		insertPlainOrPastePlaceholder(plain);
+		plain = '';
 	};
 
 	let i = 0;
@@ -697,6 +713,7 @@ export default function ChatInput({
 			// Use visual lines for proper wrapping and multi-line support
 			const visualLines = buffer.viewportVisualLines;
 			const [cursorRow, cursorCol] = buffer.visualCursor;
+
 			const renderedLines: React.ReactNode[] = [];
 
 			for (let i = 0; i < visualLines.length; i++) {

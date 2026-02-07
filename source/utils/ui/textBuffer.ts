@@ -192,52 +192,52 @@ export class TextBuffer {
 			this.tempPastingPlaceholder = null;
 		}
 
+		const now = Date.now();
+		const shouldMerge =
+			this.lastTextPlaceholderId !== null &&
+			now - this.lastTextPlaceholderAt < 1200;
+
+		// 优先处理“同一批粘贴的后续分片”：即使本片段 <=300 也应继续合并，
+		// 否则会把尾部分片作为普通文本插到占位符后面，出现“标签泄露”。
+		if (shouldMerge && this.lastTextPlaceholderId) {
+			const existing = this.placeholderStorage.get(this.lastTextPlaceholderId);
+			if (existing && existing.type === 'text') {
+				existing.content += sanitized;
+				existing.charCount += charCount;
+				const lineCount = (existing.content.match(/\n/g) || []).length + 1;
+				const nextPlaceholder = `[Paste ${lineCount} lines #${existing.index}] `;
+				existing.placeholder = nextPlaceholder;
+				const placeholderPattern = new RegExp(
+					`\\[Paste \\d+ lines #${existing.index}\\] `,
+					'g',
+				);
+				const match = placeholderPattern.exec(this.content);
+				if (match) {
+					const placeholderIndex = match.index;
+					const previousLength = match[0].length;
+					const nextLength = nextPlaceholder.length;
+					const delta = nextLength - previousLength;
+					if (delta !== 0 && this.cursorIndex > placeholderIndex) {
+						this.cursorIndex = Math.max(
+							placeholderIndex,
+							this.cursorIndex + delta,
+						);
+					}
+				}
+				this.content = this.content.replace(
+					placeholderPattern,
+					nextPlaceholder,
+				);
+				this.lastTextPlaceholderAt = now;
+				this.recalculateVisualState();
+				this.scheduleUpdate();
+				return;
+			}
+		}
+
 		// 如果之前显示了"粘贴中"占位符，或者是大文本（>300字符），创建占位符
 		// 使用 || 确保只要显示过"粘贴中"就一定创建占位符，防止sanitize后长度变化导致不一致
 		if (hasPastingIndicator || charCount > 300) {
-			const now = Date.now();
-			const shouldMerge =
-				this.lastTextPlaceholderId !== null &&
-				now - this.lastTextPlaceholderAt < 1200;
-
-			if (shouldMerge && this.lastTextPlaceholderId) {
-				const existing = this.placeholderStorage.get(
-					this.lastTextPlaceholderId,
-				);
-				if (existing && existing.type === 'text') {
-					existing.content += sanitized;
-					existing.charCount += charCount;
-					const lineCount = (existing.content.match(/\n/g) || []).length + 1;
-					const nextPlaceholder = `[Paste ${lineCount} lines #${existing.index}] `;
-					existing.placeholder = nextPlaceholder;
-					const placeholderPattern = new RegExp(
-						`\\[Paste \\d+ lines #${existing.index}\\] `,
-						'g',
-					);
-					const match = placeholderPattern.exec(this.content);
-					if (match) {
-						const placeholderIndex = match.index;
-						const previousLength = match[0].length;
-						const nextLength = nextPlaceholder.length;
-						const delta = nextLength - previousLength;
-						if (delta !== 0 && this.cursorIndex > placeholderIndex) {
-							this.cursorIndex = Math.max(
-								placeholderIndex,
-								this.cursorIndex + delta,
-							);
-						}
-					}
-					this.content = this.content.replace(
-						placeholderPattern,
-						nextPlaceholder,
-					);
-					this.lastTextPlaceholderAt = now;
-					this.recalculateVisualState();
-					this.scheduleUpdate();
-					return;
-				}
-			}
-
 			this.textPlaceholderCounter++;
 			const pasteId = `paste_${Date.now()}_${this.textPlaceholderCounter}`;
 			// 计算行数
@@ -261,6 +261,7 @@ export class TextBuffer {
 		} else {
 			this.lastTextPlaceholderId = null;
 			this.lastTextPlaceholderAt = 0;
+
 			// 普通输入，直接插入文本
 			this.insertPlainText(sanitized);
 		}
