@@ -706,8 +706,6 @@ export type TranslationKeys = {
 		statusWatcherActiveShort: string;
 		statusFileUpdated: string;
 		statusFileUpdatedShort: string;
-		statusPasteReceiving: string;
-		statusPasteReceivingShort: string;
 		statusCreating: string;
 		statusSaving: string;
 		statusCompressing: string;

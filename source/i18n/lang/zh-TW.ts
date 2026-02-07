@@ -702,8 +702,6 @@ export const zhTW: TranslationKeys = {
 		statusWatcherActiveShort: '檔案監視',
 		statusFileUpdated: '已更新: {file}',
 		statusFileUpdatedShort: '已更新',
-		statusPasteReceiving: '正在接收貼上內容，已接收 {count} 字元，暫時無法輸入',
-		statusPasteReceivingShort: '貼上接收中 {count} 字元',
 		statusCreating: '建立中...',
 		statusSaving: '儲存中...',
 		statusCompressing: '壓縮中...',

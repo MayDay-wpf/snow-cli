@@ -744,9 +744,6 @@ export const en: TranslationKeys = {
 		statusWatcherActiveShort: 'Watcher',
 		statusFileUpdated: 'Updated: {file}',
 		statusFileUpdatedShort: 'Updated',
-		statusPasteReceiving:
-			'Receiving pasted content: {count} chars, input is temporarily unavailable',
-		statusPasteReceivingShort: 'Pasting {count}',
 		statusCreating: 'Creating...',
 		statusSaving: 'Saving...',
 		statusCompressing: 'Compressing...',

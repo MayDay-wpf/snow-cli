@@ -1,9 +1,5 @@
 import {useRef, useEffect} from 'react';
 import {useInput} from 'ink';
-import {existsSync} from 'node:fs';
-import {homedir} from 'node:os';
-import {resolve as resolvePath} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {editTextWithNotepad} from '../../utils/ui/externalEditor.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
@@ -68,7 +64,10 @@ type KeyboardInputOptions = {
 	saveToHistory: (content: string) => Promise<void>;
 	// Clipboard
 	pasteFromClipboard: () => Promise<void>;
-	onPasteReceivingChange?: (isReceiving: boolean, charCount: number) => void;
+	// Paste detection
+	pasteShortcutTimeoutMs?: number;
+	pasteFlushDebounceMs?: number;
+	pasteIndicatorThreshold?: number;
 	// Submit
 	onSubmit: (
 		message: string,
@@ -179,7 +178,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
-		onPasteReceivingChange,
+		pasteShortcutTimeoutMs = 800,
+		pasteFlushDebounceMs = 250,
+		pasteIndicatorThreshold = 300,
 		onSubmit,
 		ensureFocus,
 		showAgentPicker,
@@ -223,73 +224,22 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	void todoSelectedIndex;
 	void selectedTodos;
 
+	// Track paste detection
+	const inputBuffer = useRef<string>('');
+	const inputTimer = useRef<NodeJS.Timeout | null>(null);
+	const isPasting = useRef<boolean>(false); // Track if we're in pasting mode
+	const inputStartCursorPos = useRef<number>(0); // Track cursor position when input starts accumulating
+	const isProcessingInput = useRef<boolean>(false); // Track if multi-char input is being processed
+	const inputSessionId = useRef<number>(0); // Invalidates stale buffered input timers
+	const lastPasteShortcutAt = useRef<number>(0); // Track recent paste shortcut usage
 	const componentMountTime = useRef<number>(Date.now()); // Track when component mounted
-	const clipboardPasteGuardUntil = useRef<number>(0);
-	const longInputStreamLastSeenAt = useRef<number>(0);
-	const longInputStreamTriggered = useRef<boolean>(false);
-	const longInputStreamIdleMs = 500;
-	const pasteReceiving = useRef<boolean>(false);
-	const pasteReceivingCharCount = useRef<number>(0);
-	const pasteReceivingResetTimer = useRef<NodeJS.Timeout | null>(null);
 
-	const setPasteReceiving = (isReceiving: boolean, charCount: number) => {
-		if (
-			pasteReceiving.current === isReceiving &&
-			pasteReceivingCharCount.current === charCount
-		) {
-			return;
-		}
-		pasteReceiving.current = isReceiving;
-		pasteReceivingCharCount.current = charCount;
-		onPasteReceivingChange?.(isReceiving, charCount);
-	};
-
-	const markPasteReceiving = (addedChars: number, resetCharCount: boolean) => {
-		const normalizedAddedChars = Math.max(0, addedChars);
-		const nextCharCount = resetCharCount
-			? normalizedAddedChars
-			: pasteReceivingCharCount.current + normalizedAddedChars;
-		setPasteReceiving(true, nextCharCount);
-		if (pasteReceivingResetTimer.current) {
-			clearTimeout(pasteReceivingResetTimer.current);
-		}
-		pasteReceivingResetTimer.current = setTimeout(() => {
-			pasteReceivingResetTimer.current = null;
-			setPasteReceiving(false, 0);
-		}, longInputStreamIdleMs);
-	};
-
-	const ensureLongInputStream = (now: number) => {
-		const idleForMs =
-			longInputStreamLastSeenAt.current === 0
-				? Number.POSITIVE_INFINITY
-				: now - longInputStreamLastSeenAt.current;
-		const streamExpired = idleForMs > longInputStreamIdleMs;
-		if (streamExpired) {
-			longInputStreamTriggered.current = false;
-		}
-		longInputStreamLastSeenAt.current = now;
-		return {
-			alreadyTriggered: longInputStreamTriggered.current,
-			streamExpired,
-		};
-	};
-
-	const markLongInputStreamTriggered = () => {
-		longInputStreamTriggered.current = true;
-	};
-
-	const triggerClipboardPaste = () => {
-		pasteFromClipboard();
-	};
-
+	// Cleanup timer on unmount
 	useEffect(() => {
 		return () => {
-			if (pasteReceivingResetTimer.current) {
-				clearTimeout(pasteReceivingResetTimer.current);
-				pasteReceivingResetTimer.current = null;
+			if (inputTimer.current) {
+				clearTimeout(inputTimer.current);
 			}
-			setPasteReceiving(false, 0);
 		};
 	}, []);
 
@@ -330,7 +280,29 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		forceUpdate({});
 	};
 
-	const flushPendingInput = () => {};
+	const flushPendingInput = () => {
+		if (!inputBuffer.current) return;
+
+		if (inputTimer.current) {
+			clearTimeout(inputTimer.current);
+			inputTimer.current = null;
+		}
+
+		// Invalidate any queued timer work from older input batches.
+		inputSessionId.current += 1;
+
+		const accumulated = inputBuffer.current;
+		const savedCursorPosition = inputStartCursorPos.current;
+		inputBuffer.current = '';
+
+		// Keep these flags consistent; otherwise a single-char insert can race a pending flush.
+		isPasting.current = false;
+		isProcessingInput.current = false;
+
+		buffer.setCursorPosition(savedCursorPosition);
+		buffer.insert(accumulated);
+		inputStartCursorPos.current = buffer.getCursorPosition();
+	};
 
 	// Handle input using useInput hook
 	useInput((input, key) => {
@@ -971,12 +943,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			process.platform === 'darwin'
 				? key.ctrl && input === 'v'
 				: key.meta && input === 'v';
+
 		if (isPasteShortcut) {
-			const now = Date.now();
-			ensureLongInputStream(now);
-			markLongInputStreamTriggered();
-			clipboardPasteGuardUntil.current = now + 300;
-			triggerClipboardPaste();
+			lastPasteShortcutAt.current = Date.now();
+			pasteFromClipboard();
 			return;
 		}
 
@@ -1167,6 +1137,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		// Enter - submit message or insert newline after '/'
 		if (key.return) {
 			flushPendingInput();
+			// Prevent submission if multi-char input (paste/IME) is still being processed
+			if (isProcessingInput.current) {
+				return; // Ignore Enter key while processing
+			}
 
 			// Check if we should insert newline instead of submitting
 			// Condition: If text ends with '/' and there's non-whitespace content before it
@@ -1422,110 +1396,143 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
+			// Reset history navigation when user starts typing
 			if (currentHistoryIndex !== -1) {
 				resetHistoryNavigation();
 			}
 
+			// Ensure focus is active when user is typing (handles delayed focus events)
+			// This is especially important for drag-and-drop operations where focus
+			// events may arrive out of order or be filtered by sanitizeInput
 			ensureFocus();
 
-			const normalizePathLine = (line: string): string => {
-				const trimmed = line.trim();
-				if (
-					(trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-					(trimmed.startsWith('"') && trimmed.endsWith('"'))
-				) {
-					return trimmed.slice(1, -1).trim();
-				}
-				return trimmed;
-			};
+			const now = Date.now();
+			const isPasteShortcutActive =
+				now - lastPasteShortcutAt.current <= pasteShortcutTimeoutMs;
 
-			const hasPathPrefix = (normalizedLine: string): boolean => {
-				if (!normalizedLine) {
-					return false;
-				}
-				return (
-					normalizedLine.startsWith('/') ||
-					normalizedLine.startsWith('./') ||
-					normalizedLine.startsWith('../') ||
-					normalizedLine.startsWith('~/') ||
-					normalizedLine.startsWith('file://') ||
-					/^[A-Za-z]:[\\/]/.test(normalizedLine)
-				);
-			};
+			// ink 在 IME 场景下可能一次性提交多个字符（通常很短），这不是“粘贴”。
+			// 如果仍按“多字符=粘贴/IME，延迟缓冲”处理，用户在提交前移动光标会让插入位置/显示状态产生竞态，
+			// 表现为光标插入错位、内容渲染像“总是显示末尾”。
+			// 因此：短的多字符输入直接落盘；只对明显的粘贴/大输入走缓冲。
+			const isSingleCharInput = input.length === 1;
+			const isSmallMultiCharInput = input.length > 1 && !input.includes('\n');
 
-			const resolvePathLine = (line: string): string | null => {
-				const normalized = normalizePathLine(line);
-				if (!hasPathPrefix(normalized)) {
-					return null;
-				}
-
-				if (normalized.startsWith('file://')) {
-					try {
-						return fileURLToPath(normalized);
-					} catch {
-						return null;
-					}
-				}
-
-				if (normalized.startsWith('~/')) {
-					return resolvePath(homedir(), normalized.slice(2));
-				}
-
-				if (normalized.startsWith('./') || normalized.startsWith('../')) {
-					return resolvePath(process.cwd(), normalized);
-				}
-
-				return normalized;
-			};
-
-			const isExistingPathLine = (line: string): boolean => {
-				const resolvedPath = resolvePathLine(line);
-				if (!resolvedPath) {
-					return false;
-				}
-				return existsSync(resolvedPath);
-			};
-
-			const hasLongOrMultilineShape = input.includes('\n') || input.length > 32;
-			const normalizedInput = input
-				.replace(/\r\n/g, '\n')
-				.replace(/\r/g, '\n')
-				.trim();
-			const pathLines = normalizedInput
-				.split('\n')
-				.map(line => line.trim())
-				.filter(line => line.length > 0);
-			const isDroppedFilePathPayload =
-				hasLongOrMultilineShape &&
-				pathLines.length > 0 &&
-				pathLines.every(isExistingPathLine);
-
-			const isLongPasteLikeInput =
-				hasLongOrMultilineShape && !isDroppedFilePathPayload;
-			if (isLongPasteLikeInput) {
-				const now = Date.now();
-				const streamState = ensureLongInputStream(now);
-				markPasteReceiving(input.length, streamState.streamExpired);
-				const streamAlreadyTriggered = streamState.alreadyTriggered;
-				const guardActive = now <= clipboardPasteGuardUntil.current;
-
-				if (streamAlreadyTriggered || guardActive) {
-					return;
-				}
-
-				clipboardPasteGuardUntil.current = now + 300;
-				markLongInputStreamTriggered();
-				triggerClipboardPaste();
+			// 单字符：正常键入，直接插入
+			if (isSingleCharInput && !isProcessingInput.current) {
+				// This prevents the "disappearing text" issue at line start
+				buffer.insert(input);
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
 				return;
 			}
 
-			buffer.insert(input);
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateCommandPanelState(text);
-			updateFilePickerState(text, cursorPos);
-			updateAgentPickerState(text, cursorPos);
-			return;
+			// IME commit / 小段粘贴（无换行、长度不大）统一直接落盘，避免进入 100ms 缓冲。
+			// 这能避免“先移动光标再输入”场景下仍走缓冲，导致插入位置/内容被错误合并。
+			if (
+				isSmallMultiCharInput &&
+				!isProcessingInput.current &&
+				!isPasteShortcutActive
+			) {
+				flushPendingInput();
+				buffer.insert(input);
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
+				return;
+			}
+
+			// 其余（含换行/已有缓冲会话/大段输入）：使用缓冲机制
+			// Save cursor position when starting new input accumulation
+			const isStartingNewInput = inputBuffer.current === '';
+			if (isStartingNewInput) {
+				inputStartCursorPos.current = buffer.getCursorPosition();
+				isProcessingInput.current = true; // Mark that we're processing multi-char input
+				inputSessionId.current += 1;
+			}
+
+			// Accumulate input for paste detection
+			inputBuffer.current += input;
+
+			// Clear existing timer
+			if (inputTimer.current) {
+				clearTimeout(inputTimer.current);
+			}
+
+			const activeSessionId = inputSessionId.current;
+			const currentLength = inputBuffer.current.length;
+			const shouldShowIndicator =
+				isPasteShortcutActive || currentLength > pasteIndicatorThreshold;
+
+			// Show pasting indicator for large text or explicit paste
+			// Simple static message - no progress animation
+			if (shouldShowIndicator && !isPasting.current) {
+				isPasting.current = true;
+				buffer.insertPastingIndicator();
+				// Trigger UI update to show the indicator
+				const text = buffer.getFullText();
+				const cursorPos = buffer.getCursorPosition();
+				updateCommandPanelState(text);
+				updateFilePickerState(text, cursorPos);
+				updateAgentPickerState(text, cursorPos);
+				triggerUpdate();
+			}
+
+			// Set timer to process accumulated input
+			const flushDelay = isPasteShortcutActive
+				? pasteShortcutTimeoutMs
+				: pasteFlushDebounceMs;
+			inputTimer.current = setTimeout(() => {
+				if (activeSessionId !== inputSessionId.current) {
+					return;
+				}
+
+				const accumulated = inputBuffer.current;
+				const savedCursorPosition = inputStartCursorPos.current;
+				const wasPasting = isPasting.current; // Save pasting state before clearing
+				inputBuffer.current = '';
+				isPasting.current = false; // Reset pasting state
+				isProcessingInput.current = false; // Reset processing flag
+
+				// If we accumulated input, insert it at the saved cursor position
+				// The insert() method will automatically remove the pasting indicator
+				if (accumulated) {
+					// Get current cursor position to calculate if user moved cursor during input
+					const currentCursor = buffer.getCursorPosition();
+
+					// If cursor hasn't moved from where we started (or only moved due to pasting indicator),
+					// insert at the saved position
+					// Otherwise, insert at current position (user deliberately moved cursor)
+					// Note: wasPasting check uses saved state, not current isPasting.current
+					if (
+						currentCursor === savedCursorPosition ||
+						(wasPasting && currentCursor > savedCursorPosition)
+					) {
+						// Temporarily set cursor to saved position for insertion
+						// This is safe because we're in a timeout, not during active cursor movement
+						buffer.setCursorPosition(savedCursorPosition);
+						buffer.insert(accumulated);
+						// No need to restore cursor - insert() moves it naturally
+					} else {
+						// User moved cursor during input, insert at current position
+						buffer.insert(accumulated);
+					}
+
+					// Reset inputStartCursorPos after processing to prevent stale position
+					inputStartCursorPos.current = buffer.getCursorPosition();
+
+					const text = buffer.getFullText();
+					const cursorPos = buffer.getCursorPosition();
+					updateCommandPanelState(text);
+					updateFilePickerState(text, cursorPos);
+					updateAgentPickerState(text, cursorPos);
+					triggerUpdate();
+				}
+			}, flushDelay);
 		}
 	});
 }
