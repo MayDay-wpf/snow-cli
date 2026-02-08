@@ -1212,6 +1212,15 @@ export const zh: TranslationKeys = {
 		navigationHint: '↑↓ 导航 • Enter 重连服务 • Tab 启停服务',
 		pleaseWait: '请稍候...',
 	},
+	runningAgentsPanel: {
+		title: '运行中的子智能体',
+		noAgentsRunning: '当前没有运行中的子智能体',
+		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
+		selected: '已选择: {count}',
+		scrollHint: '↑↓ 滚动',
+		moreAbove: '上方还有 {count} 个',
+		moreBelow: '下方还有 {count} 个',
+	},
 	sseServer: {
 		started: '✓ SSE 服务器已启动',
 		port: '端口',

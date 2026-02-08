@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {RunningSubAgent} from '../../../utils/execution/runningSubAgentTracker.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 
 interface Props {
 	agents: RunningSubAgent[];
@@ -47,6 +48,7 @@ function formatElapsed(startedAt: Date): string {
 const RunningAgentsPanel = memo(
 	({agents, selectedIndex, selectedAgents, visible, maxHeight}: Props) => {
 		const {theme} = useTheme();
+		const {t} = useI18n();
 		// Fixed maximum display items to prevent rendering issues
 		const MAX_DISPLAY_ITEMS = 5;
 		const effectiveMaxItems = maxHeight
@@ -107,12 +109,12 @@ const RunningAgentsPanel = memo(
 						<Box flexDirection="column" width="100%">
 							<Box>
 								<Text color={theme.colors.cyan} bold>
-									{'>> '}Running Sub-Agents
+									{'>> '}{t.runningAgentsPanel.title}
 								</Text>
 							</Box>
 							<Box marginTop={1}>
 								<Alert variant="info">
-									No sub-agents are currently running
+									{t.runningAgentsPanel.noAgentsRunning}
 								</Alert>
 							</Box>
 						</Box>
@@ -127,17 +129,17 @@ const RunningAgentsPanel = memo(
 					<Box flexDirection="column" width="100%">
 						<Box>
 							<Text color={theme.colors.cyan} bold>
-								{'>> '}Running Sub-Agents
+								{'>> '}{t.runningAgentsPanel.title}
 								{' '}
 							</Text>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								(Space: toggle · Enter: confirm · Esc: cancel)
+								{t.runningAgentsPanel.keyboardHint}
 							</Text>
 						</Box>
 						{selectedAgents.size > 0 && (
 							<Box>
 								<Text color={theme.colors.menuInfo}>
-									Selected: {selectedAgents.size}
+									{t.runningAgentsPanel.selected.replace('{count}', String(selectedAgents.size))}
 								</Text>
 							</Box>
 						)}
@@ -200,9 +202,9 @@ const RunningAgentsPanel = memo(
 						{agents.length > effectiveMaxItems && (
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuSecondary} dimColor>
-									↑↓ to scroll
-									{hiddenAboveCount > 0 && ` · ${hiddenAboveCount} more above`}
-									{hiddenBelowCount > 0 && ` · ${hiddenBelowCount} more below`}
+									{t.runningAgentsPanel.scrollHint}
+									{hiddenAboveCount > 0 && ` · ${t.runningAgentsPanel.moreAbove.replace('{count}', String(hiddenAboveCount))}`}
+									{hiddenBelowCount > 0 && ` · ${t.runningAgentsPanel.moreBelow.replace('{count}', String(hiddenBelowCount))}`}
 								</Text>
 							</Box>
 						)}

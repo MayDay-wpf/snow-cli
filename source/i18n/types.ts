@@ -1206,6 +1206,16 @@ export type TranslationKeys = {
 		navigationHint: string;
 		pleaseWait: string;
 	};
+	// Running Agents Panel
+	runningAgentsPanel: {
+		title: string;
+		noAgentsRunning: string;
+		keyboardHint: string;
+		selected: string;
+		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
+	};
 	sseServer: {
 		started: string;
 		port: string;

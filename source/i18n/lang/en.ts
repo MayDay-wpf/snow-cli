@@ -1281,6 +1281,15 @@ export const en: TranslationKeys = {
 		navigationHint: '↑↓ Navigate • Enter Reconnect • Tab Toggle Service',
 		pleaseWait: 'Please wait...',
 	},
+	runningAgentsPanel: {
+		title: 'Running Sub-Agents',
+		noAgentsRunning: 'No sub-agents are currently running',
+		keyboardHint: '(Space: toggle · Enter: confirm · Esc: cancel)',
+		selected: 'Selected: {count}',
+		scrollHint: '↑↓ to scroll',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
+	},
 	sseServer: {
 		started: '✓ SSE Server Started',
 		port: 'Port',

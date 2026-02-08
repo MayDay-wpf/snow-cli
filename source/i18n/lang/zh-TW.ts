@@ -1207,6 +1207,15 @@ export const zhTW: TranslationKeys = {
 		navigationHint: '↑↓ 導航 • Enter 重新連線 • Tab 啟停服務',
 		pleaseWait: '請稍候...',
 	},
+	runningAgentsPanel: {
+		title: '執行中的子智能體',
+		noAgentsRunning: '目前沒有執行中的子智能體',
+		keyboardHint: '(空白鍵: 切換 · Enter: 確認 · Esc: 取消)',
+		selected: '已選擇: {count}',
+		scrollHint: '↑↓ 捲動',
+		moreAbove: '上方還有 {count} 個',
+		moreBelow: '下方還有 {count} 個',
+	},
 	sseServer: {
 		started: '✓ SSE 伺服器已啟動',
 		port: '連接埠',
