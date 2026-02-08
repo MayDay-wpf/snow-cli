@@ -19,6 +19,29 @@
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
+		"configuration": {
+			"title": "Snow CLI",
+			"properties": {
+				"snow-cli.terminalMode": {
+					"type": "string",
+					"default": "split",
+					"enum": [
+						"sidebar",
+						"split"
+					],
+					"enumDescriptions": [
+						"Embedded terminal in the sidebar (xterm.js + node-pty)",
+						"Split editor right and open a terminal in the editor area"
+					],
+					"description": "Choose the terminal display mode. 'sidebar' embeds a terminal in the sidebar panel; 'split' opens a terminal in a right-side editor split."
+				},
+				"snow-cli.startupCommand": {
+					"type": "string",
+					"default": "snow",
+					"description": "The command to run when the terminal starts."
+				}
+			}
+		},
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -33,7 +56,8 @@
 				{
 					"type": "webview",
 					"id": "snowCliTerminal",
-					"name": "Terminal"
+					"name": "Terminal",
+					"when": "snow-cli.sidebarMode"
 				}
 			]
 		},

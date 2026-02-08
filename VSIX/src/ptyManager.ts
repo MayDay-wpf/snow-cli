@@ -1,6 +1,13 @@
-import * as pty from 'node-pty';
 import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
+
+// Lazy-load node-pty to prevent extension activation failure
+// when the native module is incompatible with the current Electron ABI
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+function loadPty(): any {
+	return require('node-pty');
+}
 
 export interface PtyManagerEvents {
 	onData: (data: string) => void;
@@ -8,10 +15,14 @@ export interface PtyManagerEvents {
 }
 
 export class PtyManager {
-	private ptyProcess: pty.IPty | undefined;
+	private ptyProcess: any;
 	private events: PtyManagerEvents | undefined;
 
-	public start(cwd: string, events: PtyManagerEvents): void {
+	public start(
+		cwd: string,
+		events: PtyManagerEvents,
+		startupCommand?: string,
+	): void {
 		if (this.ptyProcess) {
 			return;
 		}
@@ -21,6 +32,10 @@ export class PtyManager {
 		const shellArgs = this.getShellArgs();
 
 		try {
+			// Ensure spawn-helper has execute permission (may be lost during VSIX extraction)
+			this.fixSpawnHelperPermissions();
+
+			const pty = loadPty();
 			this.ptyProcess = pty.spawn(shell, shellArgs, {
 				name: 'xterm-256color',
 				cols: 80,
@@ -38,10 +53,13 @@ export class PtyManager {
 				this.ptyProcess = undefined;
 			});
 
-			// 延迟执行 snow 命令
-			setTimeout(() => {
-				this.write('snow\r');
-			}, 500);
+			// 延迟执行启动命令
+			const cmd = startupCommand ?? 'snow';
+			if (cmd) {
+				setTimeout(() => {
+					this.write(cmd + '\r');
+				}, 500);
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			vscode.window.showErrorMessage(`Failed to start terminal: ${message}`);
@@ -69,6 +87,41 @@ export class PtyManager {
 
 	public isRunning(): boolean {
 		return this.ptyProcess !== undefined;
+	}
+
+	/**
+	 * Fix spawn-helper execute permission that may be lost during VSIX extraction
+	 */
+	private fixSpawnHelperPermissions(): void {
+		if (os.platform() === 'win32') return;
+		try {
+			const fs = require('fs');
+			const dirs = [
+				'build/Release',
+				'build/Debug',
+				`prebuilds/${process.platform}-${process.arch}`,
+			];
+			for (const dir of dirs) {
+				for (const rel of ['..', '.']) {
+					const helperPath = path.join(
+						__dirname,
+						'..',
+						'node_modules',
+						'node-pty',
+						'lib',
+						rel,
+						dir,
+						'spawn-helper',
+					);
+					if (fs.existsSync(helperPath)) {
+						fs.chmodSync(helperPath, 0o755);
+						return;
+					}
+				}
+			}
+		} catch {
+			// Ignore permission fix errors
+		}
 	}
 
 	/**

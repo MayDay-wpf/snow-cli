@@ -14,33 +14,101 @@ import {SidebarTerminalProvider} from './sidebarTerminalProvider';
 
 let sidebarProvider: SidebarTerminalProvider | undefined;
 
+/** Read a configuration value with fallback */
+function getConfig<T>(key: string, fallback: T): T {
+	return vscode.workspace.getConfiguration('snow-cli').get<T>(key, fallback);
+}
+
+/** Apply the context key so the sidebar view shows/hides accordingly */
+function applySidebarContext(): void {
+	const mode = getConfig<string>('terminalMode', 'split');
+	vscode.commands.executeCommand(
+		'setContext',
+		'snow-cli.sidebarMode',
+		mode === 'sidebar',
+	);
+}
+
+/** Create a new split terminal in the right editor column (allows multiple instances) */
+async function openSplitTerminal(): Promise<void> {
+	const startupCommand = getConfig<string>('startupCommand', 'snow');
+
+	// 1. Split the editor area to the right
+	await vscode.commands.executeCommand('workbench.action.splitEditorRight');
+
+	const workspaceFolder =
+		vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+	// 2. Create a new terminal in the editor area (each call creates a new instance)
+	const terminal = vscode.window.createTerminal({
+		name: 'Snow CLI',
+		cwd: workspaceFolder,
+		location: vscode.TerminalLocation.Editor,
+	});
+
+	terminal.show();
+
+	if (startupCommand) {
+		terminal.sendText(startupCommand);
+	}
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Snow CLI extension activating...');
 
-	// 1. 启动 WebSocket 服务器
-	startWebSocketServer();
+	// 0. Apply context key for sidebar visibility
+	applySidebarContext();
 
-	// 2. 注册 Diff 命令
-	const diffDisposables = registerDiffCommands(context);
-	context.subscriptions.push(...diffDisposables);
+	try {
+		// 1. 启动 WebSocket 服务器
+		startWebSocketServer();
+	} catch (err) {
+		console.error('Failed to start WebSocket server:', err);
+	}
 
-	// 3. 注册 Sidebar Terminal Provider
-	sidebarProvider = new SidebarTerminalProvider(context.extensionUri);
-	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			SidebarTerminalProvider.viewType,
-			sidebarProvider,
-			{webviewOptions: {retainContextWhenHidden: true}},
-		),
-	);
+	try {
+		// 2. 注册 Diff 命令
+		const diffDisposables = registerDiffCommands(context);
+		context.subscriptions.push(...diffDisposables);
+	} catch (err) {
+		console.error('Failed to register diff commands:', err);
+	}
+
+	try {
+		// 3. 注册 Sidebar Terminal Provider (always register; view visibility controlled by 'when' clause)
+		const startupCommand = getConfig<string>('startupCommand', 'snow');
+		sidebarProvider = new SidebarTerminalProvider(
+			context.extensionUri,
+			startupCommand,
+		);
+		context.subscriptions.push(
+			vscode.window.registerWebviewViewProvider(
+				SidebarTerminalProvider.viewType,
+				sidebarProvider,
+				{webviewOptions: {retainContextWhenHidden: true}},
+			),
+		);
+	} catch (err) {
+		console.error('Failed to register sidebar terminal:', err);
+	}
 
 	// 4. 注册命令
 	context.subscriptions.push(
 		vscode.commands.registerCommand('snow-cli.openTerminal', () => {
-			vscode.commands.executeCommand('snowCliTerminal.focus');
+			const mode = getConfig<string>('terminalMode', 'split');
+			if (mode === 'sidebar') {
+				vscode.commands.executeCommand('snowCliTerminal.focus');
+			} else {
+				openSplitTerminal();
+			}
 		}),
 		vscode.commands.registerCommand('snow-cli.focusSidebar', () => {
-			vscode.commands.executeCommand('snowCliTerminal.focus');
+			const mode = getConfig<string>('terminalMode', 'split');
+			if (mode === 'sidebar') {
+				vscode.commands.executeCommand('snowCliTerminal.focus');
+			} else {
+				openSplitTerminal();
+			}
 		}),
 	);
 
@@ -51,6 +119,28 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 		vscode.window.onDidChangeTextEditorSelection(() => {
 			sendEditorContext();
+		}),
+	);
+
+	// 6. 监听配置变化
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration('snow-cli.terminalMode')) {
+				applySidebarContext();
+				vscode.window.showInformationMessage(
+					'Snow CLI: Terminal mode changed. Please reload the window for full effect.',
+					'Reload',
+				).then(choice => {
+					if (choice === 'Reload') {
+						vscode.commands.executeCommand('workbench.action.reloadWindow');
+					}
+				});
+			}
+
+			if (e.affectsConfiguration('snow-cli.startupCommand')) {
+				const newCommand = getConfig<string>('startupCommand', 'snow');
+				sidebarProvider?.setStartupCommand(newCommand);
+			}
 		}),
 	);
 

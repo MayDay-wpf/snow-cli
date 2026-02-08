@@ -93,6 +93,127 @@
         vscode.postMessage({ type: 'input', data: data });
       });
 
+      // Shift+Drag file path support — drop files to type path into terminal
+      function quoteIfSpaces(p) {
+        return p.indexOf(' ') >= 0 ? '"' + p + '"' : p;
+      }
+
+      container.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        container.style.outline = '2px dashed #007acc';
+        container.style.outlineOffset = '-2px';
+      });
+
+      container.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        container.style.outline = 'none';
+      });
+
+      // Parse a single URI string into a local file path
+      function uriToPath(uri) {
+        try {
+          var u = new URL(uri.trim());
+          if (u.protocol === 'file:') {
+            var p = decodeURIComponent(u.pathname);
+            if (/^\/[a-zA-Z]:/.test(p)) p = p.substring(1);
+            return p || null;
+          }
+        } catch(ex) {}
+        return null;
+      }
+
+      // Check if a string looks like a local file path
+      function looksLikePath(s) {
+        return s.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(s) || s.startsWith('file://');
+      }
+
+      container.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = 'none';
+
+        var paths = [];
+        var types = e.dataTransfer.types || [];
+
+        // Pass 1: scan ALL available data transfer types for URIs / paths
+        for (var t = 0; t < types.length; t++) {
+          if (paths.length > 0) break;
+          var mimeType = types[t];
+          if (mimeType === 'Files') continue;
+
+          var data = '';
+          try { data = e.dataTransfer.getData(mimeType); } catch(ex) { continue; }
+          if (!data) continue;
+
+          if (mimeType.indexOf('uri') >= 0 || mimeType.indexOf('url') >= 0) {
+            var lines = data.split(/\r?\n/);
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i].trim();
+              if (!line || line.charAt(0) === '#') continue;
+              var fp = uriToPath(line);
+              if (fp) { paths.push(fp); }
+              else if (looksLikePath(line)) { paths.push(line); }
+            }
+          } else if (mimeType.indexOf('code') >= 0 || mimeType.indexOf('resource') >= 0) {
+            try {
+              var json = JSON.parse(data);
+              var items = Array.isArray(json) ? json : [json];
+              for (var k = 0; k < items.length; k++) {
+                var item = items[k];
+                var raw = (item && (item.uri || item.fsPath || item.path || item.externalUri)) || '';
+                if (typeof raw === 'object') raw = raw.fsPath || raw.path || '';
+                if (raw) {
+                  var fp = uriToPath(raw);
+                  paths.push(fp || raw);
+                }
+              }
+            } catch(ex) {}
+          } else if (mimeType === 'text/plain') {
+            var lines = data.split(/\r?\n/);
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i].trim();
+              if (!line) continue;
+              if (line.startsWith('file://')) {
+                var fp = uriToPath(line);
+                if (fp) paths.push(fp);
+              } else if (looksLikePath(line)) {
+                paths.push(line);
+              }
+            }
+          }
+        }
+
+        // Pass 2: File objects (external drops from OS file manager)
+        if (paths.length === 0 && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          for (var j = 0; j < e.dataTransfer.files.length; j++) {
+            var f = e.dataTransfer.files[j];
+            if (f.path) paths.push(f.path);
+            else if (f.name) paths.push(f.name);
+          }
+        }
+
+        // Pass 3: last resort — take any non-empty text data
+        if (paths.length === 0) {
+          for (var t = 0; t < types.length; t++) {
+            if (types[t] === 'Files') continue;
+            var data = '';
+            try { data = e.dataTransfer.getData(types[t]); } catch(ex) { continue; }
+            if (data && data.trim()) {
+              paths.push(data.trim());
+              break;
+            }
+          }
+        }
+
+        if (paths.length > 0) {
+          var result = paths.map(quoteIfSpaces).join(' ');
+          vscode.postMessage({ type: 'input', data: result });
+          term.focus();
+        }
+      });
+
       window.addEventListener('message', event => {
         const message = event.data;
         switch (message.type) {
@@ -104,6 +225,12 @@
             break;
           case 'exit':
             term.write('\r\n\r\n[Process exited with code ' + message.code + ']\r\n');
+            break;
+          case 'fileDrop':
+            if (message.paths && message.paths.length > 0) {
+              var result = message.paths.map(quoteIfSpaces).join(' ');
+              vscode.postMessage({ type: 'input', data: result });
+            }
             break;
         }
       });
