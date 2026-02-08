@@ -144,26 +144,59 @@ export default function MessageRenderer({
 						</Box>
 					)}
 
-					<Box>
-						<Text
-							color={
-								message.role === 'user'
-									? 'green'
-									: message.role === 'command'
-									? theme.colors.menuSecondary
-									: toolStatusColor
-							}
-							bold
-						>
-							{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
-							{message.role === 'user'
-								? '❯'
+				<Box>
+					<Text
+						color={
+							message.role === 'user'
+								? message.subAgentDirected
+									? 'magenta'
+									: 'green'
 								: message.role === 'command'
-								? '⌘'
-								: '❆'}
-						</Text>
-						<Box marginLeft={1} flexDirection="column">
-							{message.role === 'command' ? (
+								? theme.colors.menuSecondary
+								: toolStatusColor
+						}
+						bold
+					>
+						{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
+						{message.role === 'user'
+							? message.subAgentDirected
+								? '»'
+								: '❯'
+							: message.role === 'command'
+							? '⌘'
+							: '❆'}
+					</Text>
+					<Box marginLeft={1} flexDirection="column">
+						{/* Show target sub-agent tree for directed messages */}
+						{message.role === 'user' &&
+							message.subAgentDirected &&
+							message.subAgentDirected.targets.length > 0 && (
+								<Box flexDirection="column">
+									{message.subAgentDirected.targets.map(
+										(target, ti, arr) => {
+											const isLast = ti === arr.length - 1;
+											const branch = isLast ? '└─' : '├─';
+											return (
+												<Box key={ti}>
+													<Text color="magenta" dimColor>
+														{branch}{' '}
+													</Text>
+													<Text color="magenta">
+														{target.agentName}
+													</Text>
+													{target.promptSnippet ? (
+														<Text color="gray" dimColor>
+															{' '}
+															{target.promptSnippet}
+														</Text>
+													) : null}
+												</Box>
+											);
+										},
+									)}
+								</Box>
+							)}
+						{message.role === 'command' ? (
 								<>
 									{!message.hideCommandName && (
 										<Text color={theme.colors.menuSecondary} dimColor>

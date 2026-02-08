@@ -475,6 +475,7 @@ export type TranslationKeys = {
 			codebase: string;
 			permissions: string;
 			vulnerabilityHunting: string;
+			worktree: string; // Git branch management panel
 			quit: string;
 		};
 	};
@@ -995,6 +996,24 @@ export type TranslationKeys = {
 		cannotDeleteActive: string;
 		confirmDelete: string;
 		confirmDeleteHint: string;
+	};
+	// Branch Panel
+	branchPanel: {
+		title: string;
+		notGitRepo: string;
+		noBranches: string;
+		current: string;
+		newBranchLabel: string;
+		newBranchPlaceholder: string;
+		createHint: string;
+		confirmDelete: string;
+		confirmDeleteHint: string;
+		cannotDeleteCurrent: string;
+		stashConfirm: string;
+		stashConfirmHint: string;
+		loading: string;
+		hints: string;
+		pressEscToClose: string;
 	};
 	// AskUserQuestion Component
 	askUser: {

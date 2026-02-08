@@ -10,6 +10,7 @@ import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import {RoleListPanel} from './RoleListPanel.js';
 import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
+import {BranchPanel} from './BranchPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
@@ -35,6 +36,7 @@ type PanelsManagerProps = {
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
 	showWorkingDirPanel: boolean;
+	showBranchPanel: boolean;
 	advancedModel: string;
 	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
@@ -45,6 +47,7 @@ type PanelsManagerProps = {
 	setShowRoleDeletion: (show: boolean) => void;
 	setShowRoleList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
+	setShowBranchPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 
 	onCustomCommandSave: (
@@ -77,6 +80,7 @@ export default function PanelsManager({
 	showRoleDeletion,
 	showRoleList,
 	showWorkingDirPanel,
+	showBranchPanel,
 	advancedModel,
 	basicModel,
 	setShowSessionPanel,
@@ -87,6 +91,7 @@ export default function PanelsManager({
 	setShowRoleDeletion,
 	setShowRoleList,
 	setShowWorkingDirPanel,
+	setShowBranchPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
@@ -217,6 +222,15 @@ export default function PanelsManager({
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<WorkingDirectoryPanel
 						onClose={() => setShowWorkingDirPanel(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show branch management panel if active */}
+			{showBranchPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<BranchPanel
+						onClose={() => setShowBranchPanel(false)}
 					/>
 				</Box>
 			)}

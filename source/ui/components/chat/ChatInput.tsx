@@ -17,6 +17,9 @@ const AgentPickerPanel = lazy(() => import('../panels/AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('../panels/TodoPickerPanel.js'));
 const SkillsPickerPanel = lazy(() => import('../panels/SkillsPickerPanel.js'));
 const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
+const RunningAgentsPanel = lazy(
+	() => import('../panels/RunningAgentsPanel.js'),
+);
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
@@ -28,6 +31,7 @@ import {useTerminalFocus} from '../../../hooks/ui/useTerminalFocus.js';
 import {useAgentPicker} from '../../../hooks/picker/useAgentPicker.js';
 import {useTodoPicker} from '../../../hooks/picker/useTodoPicker.js';
 import {useSkillsPicker} from '../../../hooks/picker/useSkillsPicker.js';
+import {useRunningAgentsPicker} from '../../../hooks/picker/useRunningAgentsPicker.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useBashMode} from '../../../hooks/input/useBashMode.js';
@@ -161,7 +165,7 @@ type Props = {
 	placeholder?: string;
 	disabled?: boolean;
 	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
-	chatHistory?: Array<{role: string; content: string}>;
+	chatHistory?: Array<{role: string; content: string; subAgentDirected?: unknown}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	setYoloMode?: (value: boolean) => void;
@@ -369,6 +373,20 @@ export default function ChatInput({
 		closeSkillsPicker,
 	} = useSkillsPicker(buffer, triggerUpdate);
 
+	// Use running agents picker hook
+	const {
+		showRunningAgentsPicker,
+		setShowRunningAgentsPicker,
+		runningAgentsSelectedIndex,
+		setRunningAgentsSelectedIndex,
+		runningAgents,
+		selectedRunningAgents,
+		toggleRunningAgentSelection,
+		confirmRunningAgentsSelection,
+		closeRunningAgentsPicker,
+		updateRunningAgentsPickerState,
+	} = useRunningAgentsPicker(buffer, triggerUpdate);
+
 	// Use clipboard hook
 	const {pasteFromClipboard} = useClipboard(
 		buffer,
@@ -476,6 +494,17 @@ export default function ChatInput({
 		profileSearchQuery,
 		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
+		// Running agents picker
+		showRunningAgentsPicker,
+		setShowRunningAgentsPicker,
+		runningAgentsSelectedIndex,
+		setRunningAgentsSelectedIndex,
+		runningAgents,
+		selectedRunningAgents,
+		toggleRunningAgentSelection,
+		confirmRunningAgentsSelection,
+		closeRunningAgentsPicker,
+		updateRunningAgentsPickerState,
 	});
 
 	// Set initial content when provided (e.g., when rolling back to first message)
@@ -984,6 +1013,15 @@ export default function ChatInput({
 							visible={showProfilePicker}
 							maxHeight={5}
 							searchQuery={profileSearchQuery}
+						/>
+					</Suspense>
+					<Suspense fallback={null}>
+						<RunningAgentsPanel
+							agents={runningAgents}
+							selectedIndex={runningAgentsSelectedIndex}
+							selectedAgents={selectedRunningAgents}
+							visible={showRunningAgentsPicker}
+							maxHeight={5}
 						/>
 					</Suspense>
 					{/* Status information moved to StatusLine component */}

@@ -31,6 +31,8 @@ export interface SubAgentResult {
 	result: string;
 	error?: string;
 	usage?: TokenUsage;
+	/** User messages injected from the main session during sub-agent execution */
+	injectedUserMessages?: string[];
 }
 
 export interface ToolConfirmationCallback {
@@ -83,6 +85,7 @@ export async function executeSubAgent(
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	requestUserQuestion?: UserQuestionCallback,
+	instanceId?: string,
 ): Promise<SubAgentResult> {
 	try {
 		// Handle built-in agents (hardcoded or user copy)
@@ -813,6 +816,8 @@ OPEN QUESTIONS:
 		let hasError = false;
 		let errorMessage = '';
 		let totalUsage: TokenUsage | undefined;
+		// Track all user messages injected from the main session
+		const collectedInjectedMessages: string[] = [];
 
 		// Local session-approved tools for this sub-agent execution
 		// This ensures tools approved during execution are immediately recognized
@@ -838,6 +843,39 @@ OPEN QUESTIONS:
 					result: finalResponse,
 					error: 'Sub-agent execution aborted',
 				};
+			}
+
+			// Inject any pending user messages from the main flow.
+			// The main flow enqueues messages via runningSubAgentTracker.enqueueMessage()
+			// when the user directs a pending message to this specific sub-agent instance.
+			if (instanceId) {
+				const {runningSubAgentTracker} = await import(
+					'./runningSubAgentTracker.js'
+				);
+				const injectedMessages =
+					runningSubAgentTracker.dequeueMessages(instanceId);
+				for (const injectedMsg of injectedMessages) {
+					// Collect for inclusion in the final result
+					collectedInjectedMessages.push(injectedMsg);
+
+					messages.push({
+						role: 'user',
+						content: `[User message from main session]\n${injectedMsg}`,
+					});
+
+					// Notify UI about the injected message
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'user_injected',
+								content: injectedMsg,
+							},
+						});
+					}
+				}
 			}
 
 			// Get current session
@@ -1396,6 +1434,10 @@ OPEN QUESTIONS:
 			success: true,
 			result: finalResponse,
 			usage: totalUsage,
+			injectedUserMessages:
+				collectedInjectedMessages.length > 0
+					? collectedInjectedMessages
+					: undefined,
 		};
 	} catch (error) {
 		return {

@@ -274,6 +274,7 @@ type CommandHandlerOptions = {
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -610,6 +611,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showPermissionsPanel') {
 				options.setShowPermissionsPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showBranchPanel') {
+				options.setShowBranchPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

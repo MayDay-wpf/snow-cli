@@ -1,5 +1,6 @@
 import {executeMCPTool} from './mcpToolsManager.js';
 import {subAgentService} from '../../mcp/subagent.js';
+import {runningSubAgentTracker} from './runningSubAgentTracker.js';
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
@@ -297,6 +298,30 @@ export async function executeToolCall(
 		// Check if this is a sub-agent tool
 		if (toolCall.function.name.startsWith('subagent-')) {
 			const agentId = toolCall.function.name.substring('subagent-'.length);
+			const subAgentPrompt = (args['prompt'] as string) || '';
+
+			// Look up agent name from config for tracking
+			let agentName = agentId;
+			try {
+				const {getSubAgent} = await import(
+					'../config/subAgentConfig.js'
+				);
+				const agentConfig = getSubAgent(agentId);
+				if (agentConfig) {
+					agentName = agentConfig.name;
+				}
+			} catch {
+				// Fallback to agentId if lookup fails
+			}
+
+			// Register this sub-agent as running
+			runningSubAgentTracker.register({
+				instanceId: toolCall.id,
+				agentId,
+				agentName,
+				prompt: subAgentPrompt,
+				startedAt: new Date(),
+			});
 
 			// Create a tool confirmation adapter for sub-agent
 			const subAgentToolConfirmation = requestToolConfirmation
@@ -314,32 +339,63 @@ export async function executeToolCall(
 				  }
 				: undefined;
 
-			const subAgentResult = await subAgentService.execute({
-				agentId,
-				prompt: args['prompt'] as string,
-				onMessage: onSubAgentMessage,
-				abortSignal,
-				requestToolConfirmation: subAgentToolConfirmation
-					? async (toolCall: ToolCall) => {
-							// Use the adapter to convert to the expected signature
-							const args = safeParseToolArguments(toolCall.function.arguments);
-							return await subAgentToolConfirmation(
-								toolCall.function.name,
-								args,
-							);
-					  }
-					: undefined,
-				isToolAutoApproved,
-				yoloMode,
-				addToAlwaysApproved,
-				requestUserQuestion: onUserInteractionNeeded,
-			});
+			try {
+				const subAgentResult = await subAgentService.execute({
+					agentId,
+					prompt: subAgentPrompt,
+					instanceId: toolCall.id,
+					onMessage: onSubAgentMessage,
+					abortSignal,
+					requestToolConfirmation: subAgentToolConfirmation
+						? async (toolCall: ToolCall) => {
+								// Use the adapter to convert to the expected signature
+								const args = safeParseToolArguments(
+									toolCall.function.arguments,
+								);
+								return await subAgentToolConfirmation(
+									toolCall.function.name,
+									args,
+								);
+						  }
+						: undefined,
+					isToolAutoApproved,
+					yoloMode,
+					addToAlwaysApproved,
+					requestUserQuestion: onUserInteractionNeeded,
+				});
 
-			result = {
-				tool_call_id: toolCall.id,
-				role: 'tool',
-				content: JSON.stringify(subAgentResult),
-			};
+				// Build sub-agent result content.
+				// If the user injected messages to this sub-agent during execution,
+				// append a summary so the main-flow AI is aware of the user–sub-agent
+				// communication and can avoid information gaps.
+				let subAgentContent: string;
+				if (
+					subAgentResult.injectedUserMessages &&
+					subAgentResult.injectedUserMessages.length > 0
+				) {
+					const injectedSummary = subAgentResult.injectedUserMessages
+						.map(
+							(msg: string, i: number) =>
+								`  ${i + 1}. ${msg}`,
+						)
+						.join('\n');
+					subAgentContent = JSON.stringify({
+						...subAgentResult,
+						_userMessagesNote: `During execution, the user sent ${subAgentResult.injectedUserMessages.length} message(s) directly to this sub-agent:\n${injectedSummary}`,
+					});
+				} else {
+					subAgentContent = JSON.stringify(subAgentResult);
+				}
+
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: subAgentContent,
+				};
+			} finally {
+				// Always unregister the sub-agent when it completes (success or error)
+				runningSubAgentTracker.unregister(toolCall.id);
+			}
 		} else {
 			// Regular tool execution
 			const toolResult = await executeMCPTool(

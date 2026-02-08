@@ -10,6 +10,8 @@ type ChatMessage = {
 	role: string;
 	content: string;
 	images?: Array<{type: 'image'; data: string; mimeType: string}>;
+	/** Present when a user message was directed to specific running sub-agents */
+	subAgentDirected?: unknown;
 };
 
 export function useHistoryNavigation(
@@ -56,11 +58,18 @@ export function useHistoryNavigation(
 		};
 	}, []);
 
-	// Get user messages from chat history for navigation
+	// Get user messages from chat history for navigation (rollback panel).
+	// Exclude messages directed to sub-agents — those belong to the sub-agent
+	// flow, not the main conversation, and should not appear as rollback targets.
 	const getUserMessages = useCallback(() => {
 		const userMessages = chatHistory
 			.map((msg, index) => ({...msg, originalIndex: index}))
-			.filter(msg => msg.role === 'user' && msg.content.trim());
+			.filter(
+				msg =>
+					msg.role === 'user' &&
+					msg.content.trim() &&
+					!msg.subAgentDirected,
+			);
 
 		// Keep original order (oldest first, newest last) and map with display numbers
 		return userMessages.map((msg, index) => {

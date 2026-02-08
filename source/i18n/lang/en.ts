@@ -511,6 +511,8 @@ export const en: TranslationKeys = {
 			models: 'Open model switching panel',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
+			worktree:
+				'Open Git branch management panel for switching, creating and deleting branches',
 			quit: 'Exit the application',
 		},
 	},
@@ -1061,6 +1063,26 @@ export const en: TranslationKeys = {
 		cannotDeleteActive: 'Cannot delete active role',
 		confirmDelete: 'Confirm delete this role?',
 		confirmDeleteHint: 'Press Y to confirm, N to cancel',
+	},
+
+	branchPanel: {
+		title: 'Git Branch Management',
+		notGitRepo:
+			'Current directory is not a Git repository. Cannot manage branches.',
+		noBranches: 'No branches found. Press N to create one.',
+		current: 'current',
+		newBranchLabel: 'New branch name:',
+		newBranchPlaceholder: 'feature/my-new-branch',
+		createHint: 'Enter to confirm, ESC to cancel',
+		confirmDelete: 'Delete branch "{branch}"?',
+		confirmDeleteHint: 'Press Y to confirm, N to cancel',
+		cannotDeleteCurrent: 'Cannot delete the currently checked-out branch',
+		stashConfirm:
+			'Local changes detected. Stash changes and switch to "{branch}"?',
+		stashConfirmHint: 'Press Y to stash & switch, N to cancel',
+		loading: 'Processing...',
+		hints: '↑↓: Navigate | Enter: Switch | N: New branch | D: Delete | ESC: Close',
+		pressEscToClose: 'Press ESC to close',
 	},
 
 	askUser: {

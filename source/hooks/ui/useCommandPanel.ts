@@ -106,6 +106,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Toggle vulnerability hunting mode',
 			},
 			{
+				name: 'worktree',
+				description:
+					t.commandPanel.commands.worktree ||
+					'Open Git branch management panel',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

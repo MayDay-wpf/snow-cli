@@ -19,6 +19,39 @@ import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.j
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
+import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
+
+/**
+ * Parse "# SubAgentTarget:instanceId:agentName" markers from a message.
+ * These are injected by the running-agents picker via TextBuffer placeholders.
+ * Returns the target sub-agent info and the clean message (markers stripped).
+ */
+function parseSubAgentTargets(message: string): {
+	targets: Array<{instanceId: string; agentName: string}>;
+	cleanMessage: string;
+} {
+	const targets: Array<{instanceId: string; agentName: string}> = [];
+	const lines = message.split('\n');
+	const cleanLines: string[] = [];
+
+	for (const line of lines) {
+		if (line.startsWith('# SubAgentTarget:')) {
+			const rest = line.slice('# SubAgentTarget:'.length);
+			const colonIdx = rest.indexOf(':');
+			if (colonIdx !== -1) {
+				const instanceId = rest.slice(0, colonIdx);
+				const agentName = rest.slice(colonIdx + 1);
+				targets.push({instanceId, agentName});
+			}
+		} else {
+			cleanLines.push(line);
+		}
+	}
+
+	// Remove leading/trailing empty lines caused by marker removal
+	const cleanMessage = cleanLines.join('\n').trim();
+	return {targets, cleanMessage};
+}
 
 interface UseChatLogicProps {
 	messages: Message[];
@@ -169,6 +202,70 @@ export function useChatLogic(props: UseChatLogicProps) {
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
 	) => {
+		// Parse sub-agent target markers (injected by >> running-agents picker)
+		const {targets: subAgentTargets, cleanMessage: messageWithoutTargets} =
+			parseSubAgentTargets(message);
+
+		// If sub-agent targets are present, route the message to those sub-agents
+		// instead of the normal pending/main flow.
+		if (subAgentTargets.length > 0 && messageWithoutTargets) {
+			const injectedTargets: Array<{
+				agentName: string;
+				promptSnippet: string;
+			}> = [];
+
+			for (const target of subAgentTargets) {
+				const success = runningSubAgentTracker.enqueueMessage(
+					target.instanceId,
+					messageWithoutTargets,
+				);
+				if (success) {
+					// Get the prompt snippet from the tracker to distinguish parallel agents
+					const runningAgents =
+						runningSubAgentTracker.getRunningAgents();
+					const agentInfo = runningAgents.find(
+						a => a.instanceId === target.instanceId,
+					);
+					const rawPrompt = agentInfo?.prompt || '';
+					const snippet = rawPrompt
+						.replace(/[\r\n]+/g, ' ')
+						.replace(/\s+/g, ' ')
+						.trim();
+					const maxLen = 30;
+					const promptSnippet =
+						snippet.length > maxLen
+							? snippet.slice(0, maxLen) + '…'
+							: snippet;
+					injectedTargets.push({
+						agentName: target.agentName,
+						promptSnippet,
+					});
+				}
+			}
+
+			if (injectedTargets.length > 0) {
+				// Show a user message with sub-agent directed indicator
+				setMessages(prev => [
+					...prev,
+					{
+						role: 'user',
+						content: messageWithoutTargets,
+						subAgentDirected: {
+							targets: injectedTargets,
+						},
+					},
+				]);
+				return;
+			}
+
+			// If all target agents have finished, fall through to normal processing
+			// with markers stripped
+			message = messageWithoutTargets;
+		} else if (subAgentTargets.length > 0) {
+			// Targets present but no actual message content - just strip markers
+			message = messageWithoutTargets;
+		}
+
 		if (streamingState.streamStatus !== 'idle') {
 			setPendingMessages(prev => [...prev, {text: message, images}]);
 			return;

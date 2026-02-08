@@ -12,6 +12,7 @@ import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {configEvents} from '../../utils/config/configEvents.js';
+import {isPickerActive, setPickerActive} from '../../utils/ui/pickerState.js';
 import ChatFooter from '../components/chat/ChatFooter.js';
 import {type Message} from '../components/chat/MessageList.js';
 import PendingMessages from '../components/chat/PendingMessages.js';
@@ -305,6 +306,7 @@ export default function ChatScreen({
 			import('../../utils/commands/permissions.js'),
 			import('../../utils/commands/backend.js'),
 			import('../../utils/commands/models.js'),
+			import('../../utils/commands/worktree.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -816,6 +818,7 @@ export default function ChatScreen({
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowPermissionsPanel,
+		setShowBranchPanel: panelState.setShowBranchPanel,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
@@ -1028,6 +1031,14 @@ export default function ChatScreen({
 
 		// Handle panel closing with ESC
 		if (key.escape && panelState.handleEscapeKey()) {
+			return;
+		}
+
+		// If a picker panel in ChatInput consumed this ESC, skip all streaming abort logic.
+		// In ink, multiple useInput hooks fire for the same keypress, so we must coordinate.
+		if (key.escape && isPickerActive()) {
+			// Reset the flag immediately so the next ESC is not blocked
+			setPickerActive(false);
 			return;
 		}
 
@@ -1299,6 +1310,7 @@ export default function ChatScreen({
 				showRoleDeletion={panelState.showRoleDeletion}
 				showRoleList={panelState.showRoleList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
+				showBranchPanel={panelState.showBranchPanel}
 				advancedModel={advancedModel}
 				basicModel={basicModel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
@@ -1309,6 +1321,7 @@ export default function ChatScreen({
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowRoleList={panelState.setShowRoleList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
+				setShowBranchPanel={panelState.setShowBranchPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (
 					name,
@@ -1513,6 +1526,7 @@ export default function ChatScreen({
 					panelState.showRoleDeletion ||
 					panelState.showRoleList ||
 					panelState.showWorkingDirPanel ||
+					panelState.showBranchPanel ||
 					showPermissionsPanel
 				) &&
 				!snapshotState.pendingRollback && (

@@ -471,6 +471,7 @@ export const zhTW: TranslationKeys = {
 			codebase: '切換當前專案的代碼庫索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理永遠允許的工具權限',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
+			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			backend: '顯示背景處理程序面板',
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
@@ -997,6 +998,24 @@ export const zhTW: TranslationKeys = {
 		cannotDeleteActive: '無法刪除啟用的角色',
 		confirmDelete: '確認刪除該角色？',
 		confirmDeleteHint: '按 Y 確認，按 N 取消',
+	},
+
+	branchPanel: {
+		title: 'Git 分支管理',
+		notGitRepo: '目前目錄不是 Git 倉庫，無法管理分支。',
+		noBranches: '沒有找到分支。按 N 建立一個新分支。',
+		current: '目前',
+		newBranchLabel: '新分支名稱:',
+		newBranchPlaceholder: 'feature/my-new-branch',
+		createHint: 'Enter 確認，ESC 取消',
+		confirmDelete: '確定刪除分支 "{branch}" 嗎？',
+		confirmDeleteHint: '按 Y 確認，按 N 取消',
+		cannotDeleteCurrent: '無法刪除目前正在使用的分支',
+		stashConfirm: '偵測到本地未提交的改動，是否暫存(stash)後切換到 "{branch}"？',
+		stashConfirmHint: '按 Y 暫存並切換，按 N 取消',
+		loading: '處理中...',
+		hints: '↑↓: 導航 | Enter: 切換 | N: 新建分支 | D: 刪除 | ESC: 關閉',
+		pressEscToClose: '按 ESC 關閉',
 	},
 
 	askUser: {

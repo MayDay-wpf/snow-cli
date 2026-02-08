@@ -7,6 +7,8 @@ import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.j
 export interface SubAgentToolExecutionOptions {
 	agentId: string;
 	prompt: string;
+	/** Unique execution instance ID for message injection from the main flow */
+	instanceId?: string;
 	onMessage?: (message: SubAgentMessage) => void;
 	abortSignal?: AbortSignal;
 	requestToolConfirmation?: (
@@ -36,6 +38,7 @@ export class SubAgentService {
 		const {
 			agentId,
 			prompt,
+			instanceId,
 			onMessage,
 			abortSignal,
 			requestToolConfirmation,
@@ -71,6 +74,7 @@ export class SubAgentService {
 			yoloMode,
 			addToAlwaysApproved,
 			requestUserQuestion,
+			instanceId,
 		);
 
 		if (!result.success) {
@@ -81,6 +85,7 @@ export class SubAgentService {
 			success: true,
 			result: result.result,
 			usage: result.usage,
+			injectedUserMessages: result.injectedUserMessages,
 		};
 	}
 

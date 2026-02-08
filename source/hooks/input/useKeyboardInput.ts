@@ -4,6 +4,7 @@ import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {editTextWithNotepad} from '../../utils/ui/externalEditor.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
+import {setPickerActive} from '../../utils/ui/pickerState.js';
 import type {SubAgent} from '../../utils/config/subAgentConfig.js';
 
 type KeyboardInputOptions = {
@@ -129,6 +130,25 @@ type KeyboardInputOptions = {
 	setProfileSearchQuery: (query: string) => void;
 	// Profile switching
 	onSwitchProfile?: () => void;
+	// Running agents picker
+	showRunningAgentsPicker: boolean;
+	setShowRunningAgentsPicker: (show: boolean) => void;
+	runningAgentsSelectedIndex: number;
+	setRunningAgentsSelectedIndex: (
+		index: number | ((prev: number) => number),
+	) => void;
+	runningAgents: Array<{
+		instanceId: string;
+		agentId: string;
+		agentName: string;
+		prompt: string;
+		startedAt: Date;
+	}>;
+	selectedRunningAgents: Set<string>;
+	toggleRunningAgentSelection: () => void;
+	confirmRunningAgentsSelection: () => any[];
+	closeRunningAgentsPicker: () => void;
+	updateRunningAgentsPickerState: (text: string, cursorPos: number) => void;
 };
 
 export function useKeyboardInput(options: KeyboardInputOptions) {
@@ -218,11 +238,22 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		profileSearchQuery,
 		setProfileSearchQuery,
 		onSwitchProfile,
+		showRunningAgentsPicker,
+		runningAgentsSelectedIndex,
+		setRunningAgentsSelectedIndex,
+		runningAgents,
+		selectedRunningAgents,
+		toggleRunningAgentSelection,
+		confirmRunningAgentsSelection,
+		closeRunningAgentsPicker,
+		updateRunningAgentsPickerState,
 	} = options;
 
 	// Mark variables as used (they are used in useInput closure below)
 	void todoSelectedIndex;
 	void selectedTodos;
+	void runningAgentsSelectedIndex;
+	void selectedRunningAgents;
 
 	// Track paste detection
 	const inputBuffer = useRef<string>('');
@@ -275,6 +306,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
+		updateRunningAgentsPickerState(text, cursorPos);
 		updateCommandPanelState(text);
 
 		forceUpdate({});
@@ -403,12 +435,21 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				setShowProfilePicker(false);
 				setProfileSelectedIndex(0);
 				setProfileSearchQuery(''); // Reset search query
+				setPickerActive(true); // Signal ChatScreen to skip ESC abort
 				return;
 			}
 
 			// Close skills picker if open
 			if (showSkillsPicker) {
 				closeSkillsPicker();
+				setPickerActive(true);
+				return;
+			}
+
+			// Close running agents picker if open
+			if (showRunningAgentsPicker) {
+				closeRunningAgentsPicker();
+				setPickerActive(true);
 				return;
 			}
 
@@ -416,6 +457,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (showTodoPicker) {
 				setShowTodoPicker(false);
 				setTodoSelectedIndex(0);
+				setPickerActive(true);
 				return;
 			}
 
@@ -423,6 +465,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (showAgentPicker) {
 				setShowAgentPicker(false);
 				setAgentSelectedIndex(0);
+				setPickerActive(true);
 				return;
 			}
 
@@ -432,6 +475,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				setFileSelectedIndex(0);
 				setFileQuery('');
 				setAtSymbolPosition(-1);
+				setPickerActive(true);
 				return;
 			}
 
@@ -439,8 +483,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (showCommands) {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
+				setPickerActive(true);
 				return;
 			}
+
+			// No picker was active for this ESC press
+			setPickerActive(false);
 
 			// Handle history navigation
 			if (showHistoryMenu) {
@@ -603,6 +651,50 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 			// For any other key in profile picker, just return to prevent interference
 			return;
+		}
+
+		// Handle running agents picker navigation
+		if (showRunningAgentsPicker) {
+			// Up arrow - circular navigation
+			if (key.upArrow) {
+				setRunningAgentsSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, runningAgents.length - 1),
+				);
+				return;
+			}
+
+			// Down arrow - circular navigation
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, runningAgents.length - 1);
+				setRunningAgentsSelectedIndex(prev =>
+					prev < maxIndex ? prev + 1 : 0,
+				);
+				return;
+			}
+
+			// Space - toggle multi-selection
+			if (input === ' ') {
+				toggleRunningAgentSelection();
+				return;
+			}
+
+			// Enter - confirm selection and insert visual tags.
+			// If nothing was explicitly toggled with Space, the currently
+			// highlighted agent is auto-selected inside confirmRunningAgentsSelection().
+			if (key.return) {
+				confirmRunningAgentsSelection();
+				forceStateUpdate();
+				return;
+			}
+
+			// Backspace / Delete — let it through so >> can be deleted
+			// and updateRunningAgentsPickerState will auto-close the panel.
+			if (key.backspace || key.delete) {
+				// Don't return — fall through to normal backspace handling below
+			} else {
+				// For any other key in running agents picker, block to prevent interference
+				return;
+			}
 		}
 
 		// Handle todo picker navigation
@@ -1131,6 +1223,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			updateCommandPanelState(text);
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateRunningAgentsPickerState(text, cursorPos);
 			return;
 		}
 
@@ -1161,6 +1254,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					updateCommandPanelState(text);
 					updateFilePickerState(text, newCursorPos);
 					updateAgentPickerState(text, newCursorPos);
+					updateRunningAgentsPickerState(text, newCursorPos);
 					return;
 				}
 			}
@@ -1296,6 +1390,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateRunningAgentsPickerState(text, cursorPos);
 			// No need to call triggerUpdate() - buffer.moveLeft() already triggers update via scheduleUpdate()
 			return;
 		}
@@ -1308,6 +1403,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			const cursorPos = buffer.getCursorPosition();
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateRunningAgentsPickerState(text, cursorPos);
 			// No need to call triggerUpdate() - buffer.moveRight() already triggers update via scheduleUpdate()
 			return;
 		}
@@ -1338,6 +1434,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						buffer.getFullText(),
 						buffer.getCursorPosition(),
 					);
+					updateRunningAgentsPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
 					triggerUpdate();
 					return;
 				}
@@ -1347,6 +1447,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			buffer.moveUp();
 			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
 			// No need to call triggerUpdate() - buffer.moveUp() already triggers update via scheduleUpdate()
 			return;
 		}
@@ -1381,6 +1482,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						buffer.getFullText(),
 						buffer.getCursorPosition(),
 					);
+					updateRunningAgentsPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
 					triggerUpdate();
 					return;
 				}
@@ -1390,6 +1495,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			buffer.moveDown();
 			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
 			// No need to call triggerUpdate() - buffer.moveDown() already triggers update via scheduleUpdate()
 			return;
 		}
@@ -1426,6 +1532,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
+				updateRunningAgentsPickerState(text, cursorPos);
 				return;
 			}
 
@@ -1443,6 +1550,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
+				updateRunningAgentsPickerState(text, cursorPos);
 				return;
 			}
 
@@ -1479,6 +1587,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
+				updateRunningAgentsPickerState(text, cursorPos);
 				triggerUpdate();
 			}
 
@@ -1531,6 +1640,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					updateCommandPanelState(text);
 					updateFilePickerState(text, cursorPos);
 					updateAgentPickerState(text, cursorPos);
+					updateRunningAgentsPickerState(text, cursorPos);
 					triggerUpdate();
 				}
 			}, flushDelay);
