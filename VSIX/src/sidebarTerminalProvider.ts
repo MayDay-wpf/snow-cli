@@ -262,6 +262,22 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ type: 'input', data: data });
       });
 
+      // 使用 xterm.js 的自定义键盘事件处理器来处理 Ctrl+V 粘贴
+      term.attachCustomKeyEventHandler((e) => {
+        // 检测粘贴快捷键: Ctrl+V (Windows/Linux) 或 Cmd+V (macOS)
+        const isPasteShortcut = (e.ctrlKey || e.metaKey) && e.key === 'v';
+        if (isPasteShortcut) {
+          e.preventDefault();
+          navigator.clipboard.readText().then(text => {
+            if (text) {
+              vscode.postMessage({ type: 'input', data: text });
+            }
+          }).catch(() => {});
+          return false; // 返回 false 表示 xterm.js 不应处理此事件
+        }
+        return true; // 其他按键让 xterm.js 正常处理
+      });
+
       // 选中文本时自动复制到剪贴板
       term.onSelectionChange(() => {
         const selection = term.getSelection();
@@ -444,9 +460,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	 * Send file paths to the terminal (e.g. from explorer drag-and-drop)
 	 */
 	public sendFilePaths(paths: string[]): void {
-		const pathStr = paths
-			.map(p => (p.includes(' ') ? `"${p}"` : p))
-			.join(' ');
+		const pathStr = paths.map(p => (p.includes(' ') ? `"${p}"` : p)).join(' ');
 		this.ptyManager.write(pathStr);
 	}
 

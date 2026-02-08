@@ -106,7 +106,7 @@ import {render, Text, Box} from 'ink';
 import {setUpdateNotice} from './utils/ui/updateNotice.js';
 import Spinner from 'ink-spinner';
 import meow from 'meow';
-import {execSync} from 'child_process';
+import {spawn} from 'child_process';
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import {fileURLToPath} from 'url';
@@ -301,11 +301,51 @@ Options
 	},
 );
 
+// Helper to run npm command and filter out --force warnings
+function runNpmCommand(args: string[]): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = spawn('npm', args, {
+			stdio: ['inherit', 'inherit', 'pipe'],
+		});
+
+		// Filter stderr to hide --force warnings
+		child.stderr?.on('data', (data: Buffer) => {
+			const lines = data.toString().split('\n');
+			const filtered = lines
+				.filter(
+					line =>
+						!line.includes('using --force') &&
+						!line.includes('Recommended protections disabled'),
+				)
+				.join('\n');
+			if (filtered.trim()) {
+				process.stderr.write(filtered);
+			}
+		});
+
+		child.on('close', code => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(new Error(`npm exited with code ${code}`));
+			}
+		});
+
+		child.on('error', reject);
+	});
+}
+
 // Handle update flag
 if (cli.flags.update) {
 	console.log('Updating snow-ai to latest version...');
 	try {
-		execSync('npm install -g snow-ai@latest', {stdio: 'inherit'});
+		// Clean npm cache first to avoid EPERM issues on Windows
+		console.log('Cleaning npm cache...');
+		await runNpmCommand(['cache', 'clean', '--force']);
+
+		// Install with --force to bypass lock conflicts
+		console.log('Installing latest version...');
+		await runNpmCommand(['install', '-g', 'snow-ai@latest', '--force']);
 		console.log('Update completed successfully');
 		process.exit(0);
 	} catch (error) {
