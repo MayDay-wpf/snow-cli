@@ -58,9 +58,10 @@ jobs:
 
             ### What's New
 
-            - Added UpdateNotice component - Integrated UpdateNotice component in WelcomeScreen to display version update information
-            - Simplified codebase search state management - Removed reviewResults-related attributes, reduced 143 lines of code, improved maintainability
-            - Improved message snapshot mapping logic - Use UI history length for message index handling, optimized conversation state management
+            - VSCode Extension - Run SNOW CLI in VSCode sidebar with integrated terminal
+            - Git Branch Panel - Visual branch management (create, switch, delete, search)
+            - Sub-Agent Tracking - Monitor and inject messages into running sub-agents
+            - Input Improvements - Better paste handling and keyboard interaction
 
             ### Installation
             ```bash
