@@ -33,20 +33,22 @@ function applySidebarContext(): void {
 async function openSplitTerminal(): Promise<void> {
 	const startupCommand = getConfig<string>('startupCommand', 'snow');
 
-	// 1. Split the editor area to the right
-	await vscode.commands.executeCommand('workbench.action.splitEditorRight');
+	const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-	const workspaceFolder =
-		vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-	// 2. Create a new terminal in the editor area (each call creates a new instance)
+	// 1. Create a new terminal in the editor area (initially in current column)
 	const terminal = vscode.window.createTerminal({
 		name: 'Snow CLI',
 		cwd: workspaceFolder,
 		location: vscode.TerminalLocation.Editor,
 	});
 
+	// 2. Show the terminal first
 	terminal.show();
+
+	// 3. Move the terminal to the right group (creates right split if needed)
+	await vscode.commands.executeCommand(
+		'workbench.action.moveEditorToRightGroup',
+	);
 
 	if (startupCommand) {
 		terminal.sendText(startupCommand);
@@ -127,14 +129,16 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('snow-cli.terminalMode')) {
 				applySidebarContext();
-				vscode.window.showInformationMessage(
-					'Snow CLI: Terminal mode changed. Please reload the window for full effect.',
-					'Reload',
-				).then(choice => {
-					if (choice === 'Reload') {
-						vscode.commands.executeCommand('workbench.action.reloadWindow');
-					}
-				});
+				vscode.window
+					.showInformationMessage(
+						'Snow CLI: Terminal mode changed. Please reload the window for full effect.',
+						'Reload',
+					)
+					.then(choice => {
+						if (choice === 'Reload') {
+							vscode.commands.executeCommand('workbench.action.reloadWindow');
+						}
+					});
 			}
 
 			if (e.affectsConfiguration('snow-cli.startupCommand')) {
