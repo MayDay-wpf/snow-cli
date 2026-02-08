@@ -58,10 +58,7 @@ jobs:
 
             ### What's New
 
-            - VSCode Extension - Run SNOW CLI in VSCode sidebar with integrated terminal
-            - Git Branch Panel - Visual branch management (create, switch, delete, search)
-            - Sub-Agent Tracking - Monitor and inject messages into running sub-agents
-            - Input Improvements - Better paste handling and keyboard interaction
+            - Fixed some bugs
 
             ### Installation
             ```bash

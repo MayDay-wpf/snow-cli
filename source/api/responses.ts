@@ -166,6 +166,19 @@ export function resetOpenAIClient(): void {
 	// No-op: kept for backward compatibility
 }
 
+function toResponseImageUrl(image: {data: string; mimeType?: string}): string {
+	const data = image.data?.trim() || '';
+	if (!data) return '';
+
+	// Keep remote URLs and existing data URLs unchanged.
+	if (/^https?:\/\//i.test(data) || /^data:/i.test(data)) {
+		return data;
+	}
+
+	const mimeType = image.mimeType?.trim() || 'image/png';
+	return `data:${mimeType};base64,${data}`;
+}
+
 function convertToResponseInput(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
@@ -204,7 +217,7 @@ function convertToResponseInput(
 				for (const image of msg.images) {
 					contentParts.push({
 						type: 'input_image',
-						image_url: image.data,
+						image_url: toResponseImageUrl(image),
 					});
 				}
 			}
@@ -271,7 +284,7 @@ function convertToResponseInput(
 				for (const image of msg.images) {
 					outputContent.push({
 						type: 'input_image',
-						image_url: `data:${image.mimeType};base64,${image.data}`,
+						image_url: toResponseImageUrl(image),
 					});
 				}
 

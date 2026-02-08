@@ -64,10 +64,57 @@ let geminiConfig: {
 		budget: number;
 	};
 } | null = null;
-
 // Deprecated: Client reset is no longer needed with new config loading approach
 export function resetGeminiClient(): void {
 	geminiConfig = null;
+}
+
+/**
+ * 将图片数据转换为 Gemini API 所需的格式
+ * 处理三种情况：
+ * 1. 远程 URL (http/https): 返回 fileData 格式
+ * 2. 已经是 data URL: 返回 inlineData 格式，并确保 data 带 data: 头
+ * 3. 纯 base64 数据: 使用提供的 mimeType 补齐 data URL 格式
+ */
+function toGeminiImagePart(image: {
+	data: string;
+	mimeType?: string;
+}):
+	| {inlineData: {mimeType: string; data: string}}
+	| {fileData: {mimeType: string; fileUri: string}}
+	| null {
+	const data = image.data?.trim() || '';
+	if (!data) return null;
+
+	// 远程 URL (http/https) - Gemini 支持通过 fileData 提供
+	if (/^https?:\/\//i.test(data)) {
+		return {
+			fileData: {
+				mimeType: image.mimeType?.trim() || 'image/png',
+				fileUri: data,
+			},
+		};
+	}
+
+	// 已经是 data URL 格式，直接使用原值作为 data
+	const dataUrlMatch = data.match(/^data:([^;]+);base64,(.+)$/);
+	if (dataUrlMatch) {
+		return {
+			inlineData: {
+				mimeType: dataUrlMatch[1] || image.mimeType || 'image/png',
+				data: image.data, // 保留完整的 data URL
+			},
+		};
+	}
+
+	// 纯 base64 数据，补齐 data URL 格式
+	const mimeType = image.mimeType?.trim() || 'image/png';
+	return {
+		inlineData: {
+			mimeType,
+			data: `data:${mimeType};base64,${data}`, // 补齐 data: 头
+		},
+	};
 }
 
 /**
@@ -287,12 +334,10 @@ function convertToGeminiMessages(
 				// Handle images from tool result
 				if (toolResp.images && toolResp.images.length > 0) {
 					for (const image of toolResp.images) {
-						parts.push({
-							inlineData: {
-								mimeType: image.mimeType,
-								data: image.data,
-							},
-						});
+						const imagePart = toGeminiImagePart(image);
+						if (imagePart) {
+							parts.push(imagePart);
+						}
 					}
 				}
 			}
@@ -316,14 +361,9 @@ function convertToGeminiMessages(
 		// Add images for user messages
 		if (msg.role === 'user' && msg.images && msg.images.length > 0) {
 			for (const image of msg.images) {
-				const base64Match = image.data.match(/^data:([^;]+);base64,(.+)$/);
-				if (base64Match) {
-					parts.push({
-						inlineData: {
-							mimeType: base64Match[1] || image.mimeType,
-							data: base64Match[2] || '',
-						},
-					});
+				const imagePart = toGeminiImagePart(image);
+				if (imagePart) {
+					parts.push(imagePart);
 				}
 			}
 		}

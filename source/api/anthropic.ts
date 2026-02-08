@@ -86,6 +86,50 @@ let anthropicConfig: {
 // Persistent userId that remains the same until application restart
 let persistentUserId: string | null = null;
 
+/**
+ * 将图片数据转换为 Anthropic API 所需的格式
+ * 处理三种情况：
+ * 1. 远程 URL (http/https): 返回 URL 类型（Anthropic 支持某些图片 URL）
+ * 2. 已经是 data URL: 解析出 media_type 和 base64 数据
+ * 3. 纯 base64 数据: 使用提供的 mimeType 补齐为完整格式
+ */
+function toAnthropicImageSource(image: {
+	data: string;
+	mimeType?: string;
+}):
+	| {type: 'base64'; media_type: string; data: string}
+	| {type: 'url'; url: string}
+	| null {
+	const data = image.data?.trim() || '';
+	if (!data) return null;
+
+	// 远程 URL (http/https) - Anthropic 支持某些图片 URL
+	if (/^https?:\/\//i.test(data)) {
+		return {
+			type: 'url',
+			url: data,
+		};
+	}
+
+	// 已经是 data URL 格式，解析它
+	const dataUrlMatch = data.match(/^data:([^;]+);base64,(.+)$/);
+	if (dataUrlMatch) {
+		return {
+			type: 'base64',
+			media_type: dataUrlMatch[1] || image.mimeType || 'image/png',
+			data: dataUrlMatch[2] || '',
+		};
+	}
+
+	// 纯 base64 数据，补齐格式
+	const mimeType = image.mimeType?.trim() || 'image/png';
+	return {
+		type: 'base64',
+		media_type: mimeType,
+		data: data,
+	};
+}
+
 // Deprecated: Client reset is no longer needed with new config loading approach
 export function resetAnthropicClient(): void {
 	anthropicConfig = null;
@@ -196,16 +240,25 @@ function convertToAnthropicMessages(
 					});
 				}
 
-				// Add images
+				// Add images - 使用辅助函数处理各种格式的图片数据
 				for (const image of msg.images) {
-					contentArray.push({
-						type: 'image',
-						source: {
-							type: 'base64',
-							media_type: image.mimeType,
-							data: image.data,
-						},
-					});
+					const imageSource = toAnthropicImageSource(image);
+					if (imageSource) {
+						if (imageSource.type === 'url') {
+							contentArray.push({
+								type: 'image',
+								source: {
+									type: 'url',
+									url: imageSource.url,
+								},
+							});
+						} else {
+							contentArray.push({
+								type: 'image',
+								source: imageSource,
+							});
+						}
+					}
 				}
 
 				toolResultContent = contentArray;
@@ -237,17 +290,24 @@ function convertToAnthropicMessages(
 				});
 			}
 
+			// 使用辅助函数处理各种格式的图片数据，补齐纯 base64 数据
 			for (const image of msg.images) {
-				const base64Match = image.data.match(/^data:([^;]+);base64,(.+)$/);
-				if (base64Match) {
-					content.push({
-						type: 'image',
-						source: {
-							type: 'base64',
-							media_type: base64Match[1] || image.mimeType,
-							data: base64Match[2] || '',
-						},
-					});
+				const imageSource = toAnthropicImageSource(image);
+				if (imageSource) {
+					if (imageSource.type === 'url') {
+						content.push({
+							type: 'image',
+							source: {
+								type: 'url',
+								url: imageSource.url,
+							},
+						});
+					} else {
+						content.push({
+							type: 'image',
+							source: imageSource,
+						});
+					}
 				}
 			}
 

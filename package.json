@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.6.27",
+	"version": "0.6.28",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
