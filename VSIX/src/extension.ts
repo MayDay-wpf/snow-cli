@@ -29,11 +29,22 @@ function applySidebarContext(): void {
 	);
 }
 
+function getWorkspaceFolderForActiveEditor(): string | undefined {
+	const editor = vscode.window.activeTextEditor;
+	const folder = editor
+		? vscode.workspace.getWorkspaceFolder(editor.document.uri)
+		: undefined;
+	return (
+		folder?.uri.fsPath ??
+		vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+	);
+}
+
 /** Create a new split terminal in the right editor column (allows multiple instances) */
 async function openSplitTerminal(): Promise<void> {
 	const startupCommand = getConfig<string>('startupCommand', 'snow');
 
-	const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	const workspaceFolder = getWorkspaceFolderForActiveEditor();
 
 	// 1. Create a new terminal in the editor area (initially in current column)
 	const terminal = vscode.window.createTerminal({
