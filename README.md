@@ -23,7 +23,6 @@ _Agentic coding in your terminal_
   <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
 </a>
 
-
 ## Thanks Support
 
 - [UUCode](https://www.uucode.org)
@@ -60,6 +59,12 @@ _Agentic coding in your terminal_
 - [Skills Command Detailed Guide](docs/usage/en/18.Skills%20Command%20Detailed%20Guide.md) - Skill creation, usage methods, Claude Code Skills compatibility, tool restrictions
 - [LSP Configuration and Usage](docs/usage/en/19.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
 - [SSE Service Mode](docs/usage/en/20.SSE%20Service%20Mode.md) - SSE server startup, API endpoints explanation, tool confirmation flow, permission configuration, YOLO mode, client integration examples
+
+### Recommended ROLE.md
+
+- [Recommended ROLE.md](docs/role/en/01.Snow%20CLI%20Plan%20Every%20Step.md) - Recommended behavior guidelines, work mode, and quality standards for the Snow CLI terminal programming assistant
+  - Bilingual documentation: English (primary) / [Chinese](docs/role/zh/01.Snow%20CLI%20一步一规划.md)
+  - Maintenance rule: Keep Chinese and English structures aligned; tool names remain unchanged
 
 ---
 
@@ -146,7 +151,6 @@ npm run link   # builds and globally links snow
 ## QQ Group
 
 ![alt text](docs/images/qq_group_qr.jpg)
-
 
 ---
 

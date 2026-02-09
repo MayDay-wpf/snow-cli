@@ -669,8 +669,12 @@ export async function handleConversationWithTools(
 				}
 
 				// Execute approved tools with sub-agent message callback and terminal output callback
-				// Track sub-agent content for token counting
+				// Track sub-agent content for token counting and throttle UI updates
 				let subAgentContentAccumulator = '';
+				let subAgentContentBuffer = '';
+				let subAgentTokenCount = 0;
+				let lastSubAgentFlushTime = 0;
+				const SUB_AGENT_FLUSH_INTERVAL = 100;
 				const toolResults = await executeToolCalls(
 					approvedTools,
 					controller.signal,
@@ -988,24 +992,37 @@ export async function handleConversationWithTools(
 									m.role === 'subagent' &&
 									m.subAgent?.agentId === subAgentMessage.agentId &&
 									!m.subAgent?.isComplete &&
+									m.streaming === true &&
 									!m.pendingToolIds, // Don't match pending tool messages
 							);
 
 							// Extract content from the sub-agent message
-							let content = '';
+							let contentToApply = '';
 							if (subAgentMessage.message.type === 'content') {
-								content = subAgentMessage.message.content;
-								// Update token count for sub-agent content
-								subAgentContentAccumulator += content;
+								const incomingContent = subAgentMessage.message.content;
+								subAgentContentAccumulator += incomingContent;
+								subAgentContentBuffer += incomingContent;
 								try {
-									const tokens = encoder.encode(subAgentContentAccumulator);
-									setStreamTokenCount(tokens.length);
+									const deltaTokens = encoder.encode(incomingContent);
+									subAgentTokenCount += deltaTokens.length;
 								} catch (e) {
-									// Ignore encoding errors
+									// Ignore encoding errors and continue streaming updates
+								}
+								const now = Date.now();
+								if (now - lastSubAgentFlushTime >= SUB_AGENT_FLUSH_INTERVAL) {
+									setStreamTokenCount(subAgentTokenCount);
+									lastSubAgentFlushTime = now;
+									contentToApply = subAgentContentBuffer;
+									subAgentContentBuffer = '';
+								} else {
+									return prev;
 								}
 							} else if (subAgentMessage.message.type === 'done') {
-								// Mark as complete and reset token counter
+								contentToApply = subAgentContentBuffer;
 								subAgentContentAccumulator = '';
+								subAgentContentBuffer = '';
+								subAgentTokenCount = 0;
+								lastSubAgentFlushTime = 0;
 								setStreamTokenCount(0);
 								if (existingIndex !== -1) {
 									const updated = [...prev];
@@ -1013,6 +1030,8 @@ export async function handleConversationWithTools(
 									if (existing && existing.subAgent) {
 										updated[existingIndex] = {
 											...existing,
+											content: (existing.content || '') + contentToApply,
+											streaming: false,
 											subAgent: {
 												...existing.subAgent,
 												isComplete: true,
@@ -1021,36 +1040,26 @@ export async function handleConversationWithTools(
 									}
 									return updated;
 								}
+								// Keep original behavior: do not create a new final sub-agent reply on done.
 								return prev;
 							}
 
-							if (existingIndex !== -1) {
+							if (existingIndex !== -1 && contentToApply) {
 								// Update existing message
 								const updated = [...prev];
 								const existing = updated[existingIndex];
 								if (existing) {
 									updated[existingIndex] = {
 										...existing,
-										content: (existing.content || '') + content,
+										content: (existing.content || '') + contentToApply,
 										streaming: true,
 									};
 								}
 								return updated;
-							} else if (content) {
-								// Add new sub-agent message
-								return [
-									...prev,
-									{
-										role: 'subagent' as const,
-										content,
-										streaming: true,
-										subAgent: {
-											agentId: subAgentMessage.agentId,
-											agentName: subAgentMessage.agentName,
-											isComplete: false,
-										},
-									},
-								];
+							} else if (contentToApply) {
+								// Do not create text-only sub-agent message from content chunks.
+								// Sub-agent UI messages are created by tool_calls/tool_result flows only.
+								return prev;
 							}
 
 							return prev;

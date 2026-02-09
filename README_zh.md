@@ -60,6 +60,12 @@ _在终端中进行 Agentic 编程_
 - [LSP 配置与用法](docs/usage/zh/19.LSP配置.md) - LSP 配置文件、语言服务器安装、ACE 工具用法(跳转/大纲)
 - [SSE 服务模式](docs/usage/zh/20.SSE服务模式.md) - SSE 服务器启动、API 端点说明、工具确认流程、权限配置、YOLO 模式、客户端集成示例
 
+### 推荐使用的 ROLE.md
+
+- [推荐使用的 ROLE.md](docs/role/zh/01.Snow%20CLI%20一步一规划.md) - Snow CLI 终端编程助手推荐使用的行为准则、工作模式与质量标准
+  - 双语文档：中文（主版本）/[英文](docs/role/en/01.Snow%20CLI%20Plan%20Every%20Step.md)
+  - 维护规则：保持中英文结构对齐，工具名称保持不变
+
 ---
 
 ## 开发指南
@@ -142,7 +148,7 @@ npm run link   # 构建并全局链接 snow
 
 ---
 
-## QQ交流群
+## QQ 交流群
 
 ![alt text](docs/images/qq_group_qr.jpg)
 
