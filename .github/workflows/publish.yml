@@ -58,7 +58,10 @@ jobs:
 
             ### What's New
 
-            - Fixed some bugs
+            - Fixed image URL handling and browser closing errors in chat functionality
+            - Fixed issue where startupCommand was not executed after moving sidebar multiple times
+            - Fixed workspace folder retrieval issue
+            - Fixed terminal splitting and configuration change prompt display issues
 
             ### Installation
             ```bash

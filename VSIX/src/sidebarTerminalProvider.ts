@@ -24,8 +24,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			? vscode.workspace.getWorkspaceFolder(editor.document.uri)
 			: undefined;
 		return (
-			folder?.uri.fsPath ??
-			vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+			folder?.uri.fsPath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 		);
 	}
 
@@ -309,11 +308,24 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ type: 'input', data: data });
       });
 
+      // Prevent duplicate paste handling between custom shortcut logic and xterm internals
+      let pasteLock = false;
+      const PASTE_LOCK_TIMEOUT = 80;
+
       // 使用 xterm.js 的自定义键盘事件处理器来处理 Ctrl+V 粘贴
       term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== 'keydown') {
+          return true;
+        }
+
         // 检测粘贴快捷键: Ctrl+V (Windows/Linux) 或 Cmd+V (macOS)
-        const isPasteShortcut = (e.ctrlKey || e.metaKey) && e.key === 'v';
+        const isPasteShortcut = (e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V');
         if (isPasteShortcut) {
+          pasteLock = true;
+          setTimeout(() => {
+            pasteLock = false;
+          }, PASTE_LOCK_TIMEOUT);
+
           e.preventDefault();
           navigator.clipboard.readText().then(text => {
             if (text) {
@@ -324,6 +336,14 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         }
         return true; // 其他按键让 xterm.js 正常处理
       });
+
+      // Capture native paste to avoid duplicate input when shortcut handler already sent content
+      container.addEventListener('paste', (e) => {
+        if (pasteLock) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
 
       // 选中文本时自动复制到剪贴板
       term.onSelectionChange(() => {
