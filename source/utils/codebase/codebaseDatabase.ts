@@ -23,7 +23,7 @@ async function getSqlJs(): Promise<any> {
 		return sqlJsInitPromise;
 	}
 
-	sqlJsInitPromise = initSqlJs().then((SQL) => {
+	sqlJsInitPromise = initSqlJs().then(SQL => {
 		sqlJsStatic = SQL;
 		sqlJsInitPromise = null;
 		logger.debug('sql.js WASM module loaded');
@@ -237,6 +237,7 @@ export class CodebaseDatabase {
 		);
 
 		if (results.length === 0) return false;
+		if (!results[0]!.values || results[0]!.values.length === 0) return false;
 		const count = results[0]!.values[0]![0] as number;
 		return count > 0;
 	}
@@ -249,6 +250,7 @@ export class CodebaseDatabase {
 
 		const results = this.db.exec('SELECT COUNT(*) as count FROM code_chunks');
 		if (results.length === 0) return 0;
+		if (!results[0]!.values || results[0]!.values.length === 0) return 0;
 		return results[0]!.values[0]![0] as number;
 	}
 
@@ -425,6 +427,7 @@ export class CodebaseDatabase {
 		);
 
 		if (results.length === 0) return false;
+		if (!results[0]!.values || results[0]!.values.length === 0) return false;
 		return (results[0]!.values[0]![0] as number) === 1;
 	}
 

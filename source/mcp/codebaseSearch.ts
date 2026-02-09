@@ -313,10 +313,10 @@ class CodebaseSearchService {
 
 				// Too few results, need to retry with more candidates
 				if (searchAttempt < MAX_SEARCH_RETRIES) {
-					const removedPercentage = (
-						(removedCount / formattedResults.length) *
-						100
-					).toFixed(1);
+					const removedPercentage =
+						formattedResults.length > 0
+							? ((removedCount / formattedResults.length) * 100).toFixed(1)
+							: '0.0';
 
 					// Priority 1: Try AI suggested query if available and not yet tried
 					if (suggestion && !queriedTerms.has(suggestion.toLowerCase())) {

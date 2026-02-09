@@ -221,8 +221,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 				);
 				if (success) {
 					// Get the prompt snippet from the tracker to distinguish parallel agents
-					const runningAgents =
-						runningSubAgentTracker.getRunningAgents();
+					const runningAgents = runningSubAgentTracker.getRunningAgents();
 					const agentInfo = runningAgents.find(
 						a => a.instanceId === target.instanceId,
 					);
@@ -233,9 +232,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 						.trim();
 					const maxLen = 30;
 					const promptSnippet =
-						snippet.length > maxLen
-							? snippet.slice(0, maxLen) + '…'
-							: snippet;
+						snippet.length > maxLen ? snippet.slice(0, maxLen) + '…' : snippet;
 					injectedTargets.push({
 						agentName: target.agentName,
 						promptSnippet,
@@ -514,18 +511,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 				data: img.data,
 				mimeType: img.mimeType,
 			})),
-			...imageFiles.map(f => {
-				let base64Data = f.imageData!;
-				const base64Match = base64Data.match(/^data:[^;]+;base64,(.+)$/);
-				if (base64Match && base64Match[1]) {
-					base64Data = base64Match[1];
-				}
-				return {
-					type: 'image' as const,
-					data: base64Data,
-					mimeType: f.mimeType!,
-				};
-			}),
+			...imageFiles.map(f => ({
+				type: 'image' as const,
+				data: f.imageData!,
+				mimeType: f.mimeType!,
+			})),
 		];
 
 		if (!hideUserMessage) {
@@ -775,17 +765,10 @@ export function useChatLogic(props: UseChatLogicProps) {
 		const allImages = messagesToProcess
 			.flatMap(m => m.images || [])
 			.concat(
-				imageFiles.map(f => {
-					let base64Data = f.imageData!;
-					const base64Match = base64Data.match(/^data:[^;]+;base64,(.+)$/);
-					if (base64Match && base64Match[1]) {
-						base64Data = base64Match[1];
-					}
-					return {
-						data: base64Data,
-						mimeType: f.mimeType!,
-					};
-				}),
+				imageFiles.map(f => ({
+					data: f.imageData!,
+					mimeType: f.mimeType!,
+				})),
 			);
 
 		const imageContents =

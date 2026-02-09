@@ -1,5 +1,7 @@
 import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {getProxyConfig} from '../utils/config/proxyConfig.js';
 // Type definitions
 import type {
@@ -28,11 +30,16 @@ export class WebSearchService {
 	private browser: Browser | null = null;
 	private executablePath: string | null = null;
 	private isWSLMode: boolean = false;
+	private userDataDir: string | undefined;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
 		// Detect WSL environment once
 		this.isWSLMode = isWSL();
+		// Windows native mode: use a fixed profile dir to avoid temp lockfile cleanup errors
+		if (process.platform === 'win32' && !this.isWSLMode) {
+			this.userDataDir = join(tmpdir(), 'snow-cli-puppeteer-profile');
+		}
 	}
 
 	/**
@@ -151,6 +158,7 @@ export class WebSearchService {
 				executablePath: this.executablePath,
 				headless: true,
 				args: launchArgs,
+				userDataDir: this.userDataDir,
 			});
 		} catch (error: unknown) {
 			const errorMessage =
@@ -173,9 +181,17 @@ export class WebSearchService {
 		if (this.browser) {
 			if (this.isWSLMode) {
 				// In WSL mode, just disconnect (don't close the Windows browser)
-				this.browser.disconnect();
+				try {
+					this.browser.disconnect();
+				} catch {
+					// Ignore disconnect errors
+				}
 			} else {
-				await this.browser.close();
+				try {
+					await this.browser.close();
+				} catch {
+					// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
+				}
 			}
 			this.browser = null;
 		}
