@@ -16,6 +16,17 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.startupCommand = startupCommand ?? 'snow';
 	}
 
+	private getWorkspaceFolderForActiveEditor(): string | undefined {
+		const editor = vscode.window.activeTextEditor;
+		const folder = editor
+			? vscode.workspace.getWorkspaceFolder(editor.document.uri)
+			: undefined;
+		return (
+			folder?.uri.fsPath ??
+			vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+		);
+	}
+
 	/**
 	 * Update the startup command (e.g. when settings change)
 	 */
@@ -93,7 +104,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	}
 
 	private startTerminal(): void {
-		const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const workspaceFolder = this.getWorkspaceFolderForActiveEditor();
 		const cwd = workspaceFolder || process.cwd();
 
 		this.ptyManager.start(
