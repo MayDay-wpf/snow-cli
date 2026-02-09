@@ -7,6 +7,8 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private view?: vscode.WebviewView;
 	private ptyManager: PtyManager;
 	private startupCommand: string;
+	private webviewReady = false;
+	private restartTimer: NodeJS.Timeout | undefined;
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
@@ -40,6 +42,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		_token: vscode.CancellationToken,
 	): void {
 		this.view = webviewView;
+		this.webviewReady = false;
 
 		webviewView.webview.options = {
 			enableScripts: true,
@@ -75,7 +78,18 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			this.handleMessage(message);
 		});
 
+		webviewView.onDidChangeVisibility(() => {
+			if (webviewView.visible) {
+				this.scheduleRestart();
+			}
+		});
+
 		webviewView.onDidDispose(() => {
+			this.webviewReady = false;
+			if (this.restartTimer) {
+				clearTimeout(this.restartTimer);
+				this.restartTimer = undefined;
+			}
 			this.ptyManager.kill();
 		});
 	}
@@ -88,7 +102,8 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	}): void {
 		switch (message.type) {
 			case 'ready':
-				this.startTerminal();
+				this.webviewReady = true;
+				this.scheduleRestart();
 				break;
 			case 'input':
 				if (message.data) {
@@ -119,6 +134,27 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			},
 			this.startupCommand,
 		);
+	}
+
+	private scheduleRestart(): void {
+		if (!this.view) return;
+		if (!this.webviewReady) {
+			return;
+		}
+
+		if (this.restartTimer) {
+			clearTimeout(this.restartTimer);
+		}
+
+		this.restartTimer = setTimeout(() => {
+			this.restartTimer = undefined;
+			this.restartTerminal();
+		}, 50);
+	}
+
+	private restartTerminal(): void {
+		this.ptyManager.kill();
+		this.startTerminal();
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview): string {
