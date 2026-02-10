@@ -1,4 +1,4 @@
-import {useRef} from 'react';
+import {useRef, useEffect} from 'react';
 import {useI18n} from '../../i18n/index.js';
 import {type Message} from '../../ui/components/chat/MessageList.js';
 import type {ReviewCommitSelection} from '../../ui/components/panels/ReviewCommitPanel.js';
@@ -442,6 +442,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 		}
 	};
 
+	// Ref to track YOLO mode in real-time during conversation
+	const yoloModeRef = useRef(yoloMode);
+
+	// Sync yoloMode to ref whenever it changes
+	useEffect(() => {
+		yoloModeRef.current = yoloMode;
+	}, [yoloMode]);
+
 	const processMessage = async (
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
@@ -576,7 +584,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					requestUserQuestion,
 					isToolAutoApproved,
 					addMultipleToAlwaysApproved,
-					yoloMode,
+					yoloModeRef,
 					planMode,
 					vulnerabilityHuntingMode,
 					setContextUsage: streamingState.setContextUsage,
@@ -814,7 +822,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					requestUserQuestion,
 					isToolAutoApproved,
 					addMultipleToAlwaysApproved,
-					yoloMode,
+					yoloModeRef,
 					planMode,
 					vulnerabilityHuntingMode,
 					setContextUsage: streamingState.setContextUsage,

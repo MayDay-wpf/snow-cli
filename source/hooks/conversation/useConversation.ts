@@ -65,7 +65,7 @@ export type ConversationHandlerOptions = {
 	) => Promise<UserQuestionResult>;
 	isToolAutoApproved: (toolName: string) => boolean;
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
-	yoloMode: boolean;
+	yoloModeRef: React.MutableRefObject<boolean>;
 	planMode?: boolean; // Plan mode flag (optional, defaults to false)
 	vulnerabilityHuntingMode?: boolean; // Vulnerability Hunting mode flag (optional, defaults to false)
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
@@ -115,7 +115,7 @@ export async function handleConversationWithTools(
 		requestUserQuestion,
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
-		yoloMode,
+		yoloModeRef,
 		setContextUsage,
 		setIsReasoning,
 		setRetryStatus,
@@ -547,10 +547,13 @@ export async function handleConversationWithTools(
 				let approvedTools: ToolCall[] = [...autoApprovedTools];
 
 				// In YOLO mode, auto-approve all tools EXCEPT sensitive commands
-				if (yoloMode) {
+				if (yoloModeRef.current) {
 					// Use the unified permission checker to filter tools
 					const {sensitiveTools, nonSensitiveTools} =
-						await filterToolsBySensitivity(toolsNeedingConfirmation, yoloMode);
+						await filterToolsBySensitivity(
+							toolsNeedingConfirmation,
+							yoloModeRef.current,
+						);
 
 					// Auto-approve non-sensitive tools
 					approvedTools.push(...nonSensitiveTools);
@@ -1067,7 +1070,7 @@ export async function handleConversationWithTools(
 					},
 					requestToolConfirmation,
 					isToolAutoApproved,
-					yoloMode,
+					yoloModeRef.current,
 					addToAlwaysApproved,
 					//添加 onUserInteractionNeeded 回调用于子代理 askuser 工具
 					async (

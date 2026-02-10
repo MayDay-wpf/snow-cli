@@ -639,7 +639,7 @@ export default function HeadlessModeScreen({
 				},
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
-				yoloMode: true, // Always use YOLO mode in headless
+				yoloModeRef: {current: true}, // Always use YOLO mode in headless
 				planMode: false, // HeadlessMode doesn't support Plan mode
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel: false,

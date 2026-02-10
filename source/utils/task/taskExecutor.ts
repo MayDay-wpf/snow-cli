@@ -326,7 +326,7 @@ export async function executeTask(
 				},
 				isToolAutoApproved: () => true,
 				addMultipleToAlwaysApproved: () => {},
-				yoloMode: true,
+				yoloModeRef: {current: true},
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel: false,
 				getPendingMessages: () => [],
