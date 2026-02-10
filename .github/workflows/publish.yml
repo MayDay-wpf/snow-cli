@@ -58,10 +58,9 @@ jobs:
 
             ### What's New
 
-            - Fixed image URL handling and browser closing errors in chat functionality
-            - Fixed issue where startupCommand was not executed after moving sidebar multiple times
-            - Fixed workspace folder retrieval issue
-            - Fixed terminal splitting and configuration change prompt display issues
+            - Real-time switching of YOLO mode is now supported
+            - Added anti-shake for sub-proxy output
+            - Fixed logical conflicts in some states
 
             ### Installation
             ```bash

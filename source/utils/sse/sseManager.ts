@@ -623,7 +623,7 @@ class SSEManager {
 				requestUserQuestion,
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
-				yoloMode: message.yoloMode || false, // 支持客户端传递 YOLO 模式
+				yoloModeRef: {current: message.yoloMode || false}, // 支持客户端传递 YOLO 模式
 				setContextUsage,
 			});
 
