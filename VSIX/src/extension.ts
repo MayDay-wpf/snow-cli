@@ -107,20 +107,31 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// 4. 注册命令
 	context.subscriptions.push(
-		vscode.commands.registerCommand('snow-cli.openTerminal', () => {
+		vscode.commands.registerCommand('snow-cli.openTerminal', async () => {
 			const mode = getConfig<string>('terminalMode', 'split');
 			if (mode === 'sidebar') {
-				vscode.commands.executeCommand('snowCliTerminal.focus');
+				await vscode.commands.executeCommand('snowCliTerminal.focus');
+				sidebarProvider?.ensureTerminal({focus: true});
 			} else {
-				openSplitTerminal();
+				await openSplitTerminal();
 			}
 		}),
-		vscode.commands.registerCommand('snow-cli.focusSidebar', () => {
+		vscode.commands.registerCommand('snow-cli.restartSidebarTerminal', () => {
+			sidebarProvider?.restartTerminal({reason: 'manual'});
+		}),
+		vscode.commands.registerCommand('snow-cli.openSnowSettings', async () => {
+			await vscode.commands.executeCommand(
+				'workbench.action.openSettings',
+				'@ext:mufasa.snow-cli',
+			);
+		}),
+		vscode.commands.registerCommand('snow-cli.focusSidebar', async () => {
 			const mode = getConfig<string>('terminalMode', 'split');
 			if (mode === 'sidebar') {
-				vscode.commands.executeCommand('snowCliTerminal.focus');
+				await vscode.commands.executeCommand('snowCliTerminal.focus');
+				sidebarProvider?.ensureTerminal({focus: true});
 			} else {
-				openSplitTerminal();
+				await openSplitTerminal();
 			}
 		}),
 	);

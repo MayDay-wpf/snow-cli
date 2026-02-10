@@ -1,6 +1,71 @@
 import * as vscode from 'vscode';
 import {PtyManager} from './ptyManager';
 
+type LaunchPolicy = 'ensure' | 'restart';
+type Trigger =
+	| 'viewReady'
+	| 'viewRecreate'
+	| 'openOrFocus'
+	| 'manualRestart'
+	| 'visibility'
+	| 'configChange';
+type RestartReason = 'manual' | 'viewRecreate' | 'configChange';
+type LifecycleAction = {
+	policy: LaunchPolicy;
+	focus: boolean;
+	resetFrontend: boolean;
+	suppressExitBanner: boolean;
+	restartReason?: RestartReason;
+};
+
+const RESTART_REASON_PRIORITY: Record<RestartReason, number> = {
+	configChange: 1,
+	viewRecreate: 2,
+	manual: 3,
+};
+
+const TRIGGER_ACTIONS: Record<Trigger, LifecycleAction> = {
+	viewReady: {
+		policy: 'ensure',
+		focus: false,
+		resetFrontend: false,
+		suppressExitBanner: false,
+	},
+	visibility: {
+		policy: 'ensure',
+		focus: false,
+		resetFrontend: false,
+		suppressExitBanner: false,
+	},
+	openOrFocus: {
+		policy: 'ensure',
+		focus: true,
+		resetFrontend: false,
+		suppressExitBanner: false,
+	},
+	manualRestart: {
+		policy: 'restart',
+		focus: false,
+		resetFrontend: true,
+		suppressExitBanner: true,
+		restartReason: 'manual',
+	},
+	viewRecreate: {
+		policy: 'restart',
+		focus: false,
+		resetFrontend: true,
+		suppressExitBanner: true,
+		restartReason: 'viewRecreate',
+	},
+	configChange: {
+		policy: 'restart',
+		focus: false,
+		resetFrontend: true,
+		suppressExitBanner: false,
+		restartReason: 'configChange',
+	},
+};
+
 export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'snowCliTerminal';
 
@@ -8,7 +73,11 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private ptyManager: PtyManager;
 	private startupCommand: string;
 	private webviewReady = false;
-	private restartTimer: NodeJS.Timeout | undefined;
+	private ensureRunningTimer: NodeJS.Timeout | undefined;
+	private hasResolvedViewOnce = false;
+	private pendingAction: LifecycleAction | undefined;
+	private suppressNextExitBanner = false;
+	private latestTerminalSize: {cols: number; rows: number} | undefined;
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
@@ -35,11 +104,37 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.startupCommand = command;
 	}
 
+	public ensureTerminal(options?: {focus?: boolean}): void {
+		this.runLifecycleAction('openOrFocus', {focus: options?.focus ?? false});
+	}
+
+	public restartTerminal(options?: {reason: RestartReason}): void {
+		const reason = options?.reason ?? 'manual';
+		const trigger: Trigger =
+			reason === 'manual'
+				? 'manualRestart'
+				: reason === 'viewRecreate'
+					? 'viewRecreate'
+					: 'configChange';
+		this.runLifecycleAction(trigger);
+	}
+
+	public onViewReady(): void {
+		this.webviewReady = true;
+		this.runLifecycleAction('viewReady');
+	}
+
+	public onViewRecreate(): void {
+		this.runLifecycleAction('viewRecreate');
+	}
+
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		_context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	): void {
+		const isViewRecreate = this.hasResolvedViewOnce;
+		this.hasResolvedViewOnce = true;
 		this.view = webviewView;
 		this.webviewReady = false;
 
@@ -79,18 +174,22 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 
 		webviewView.onDidChangeVisibility(() => {
 			if (webviewView.visible) {
-				this.scheduleRestart();
+				this.scheduleEnsureRunning();
 			}
 		});
 
 		webviewView.onDidDispose(() => {
 			this.webviewReady = false;
-			if (this.restartTimer) {
-				clearTimeout(this.restartTimer);
-				this.restartTimer = undefined;
+			if (this.ensureRunningTimer) {
+				clearTimeout(this.ensureRunningTimer);
+				this.ensureRunningTimer = undefined;
 			}
 			this.ptyManager.kill();
 		});
+
+		if (isViewRecreate) {
+			this.onViewRecreate();
+		}
 	}
 
 	private handleMessage(message: {
@@ -101,8 +200,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	}): void {
 		switch (message.type) {
 			case 'ready':
-				this.webviewReady = true;
-				this.scheduleRestart();
+				this.onViewReady();
 				break;
 			case 'input':
 				if (message.data) {
@@ -110,8 +208,16 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				}
 				break;
 			case 'resize':
-				if (message.cols && message.rows) {
-					this.ptyManager.resize(message.cols, message.rows);
+				if (
+					typeof message.cols === 'number' &&
+					typeof message.rows === 'number'
+				) {
+					const cols = Math.floor(message.cols);
+					const rows = Math.floor(message.rows);
+					if (cols > 0 && rows > 0) {
+						this.latestTerminalSize = {cols, rows};
+						this.ptyManager.resize(cols, rows);
+					}
 				}
 				break;
 		}
@@ -127,33 +233,145 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				onData: (data: string) => {
 					this.view?.webview.postMessage({type: 'output', data});
 				},
-				onExit: (code: number) => {
+				onExit: (code: number, context?: {suppressed?: boolean; reason?: string}) => {
+					if (context?.suppressed || this.suppressNextExitBanner) {
+						this.suppressNextExitBanner = false;
+						return;
+					}
 					this.view?.webview.postMessage({type: 'exit', code});
 				},
 			},
 			this.startupCommand,
+			this.latestTerminalSize,
 		);
 	}
 
-	private scheduleRestart(): void {
-		if (!this.view) return;
-		if (!this.webviewReady) {
-			return;
+	private scheduleEnsureRunning(): void {
+		if (!this.view || !this.webviewReady) return;
+
+		if (this.ensureRunningTimer) {
+			clearTimeout(this.ensureRunningTimer);
 		}
 
-		if (this.restartTimer) {
-			clearTimeout(this.restartTimer);
-		}
-
-		this.restartTimer = setTimeout(() => {
-			this.restartTimer = undefined;
-			this.restartTerminal();
+		this.ensureRunningTimer = setTimeout(() => {
+			this.ensureRunningTimer = undefined;
+			this.runLifecycleAction('visibility');
 		}, 50);
 	}
 
-	private restartTerminal(): void {
-		this.ptyManager.kill();
+	private ensureTerminalRunning(): void {
+		if (this.ptyManager.isRunning()) {
+			return;
+		}
 		this.startTerminal();
+	}
+
+	private runLifecycleAction(
+		trigger: Trigger,
+		options?: {focus?: boolean},
+	): void {
+		const defaultAction = TRIGGER_ACTIONS[trigger];
+		const action: LifecycleAction = {
+			...defaultAction,
+			focus: options?.focus ?? defaultAction.focus,
+		};
+		this.applyLifecycleAction(action);
+	}
+
+	private applyLifecycleAction(action: LifecycleAction): void {
+		if (action.focus) {
+			void vscode.commands.executeCommand('snowCliTerminal.focus');
+		}
+
+		if (!this.view || !this.webviewReady) {
+			this.queuePendingAction(action);
+			return;
+		}
+
+		const effectiveAction = this.pendingAction
+			? this.mergeActions(this.consumePendingAction(), action)
+			: action;
+		this.executeLifecycleAction(effectiveAction);
+	}
+
+	private executeLifecycleAction(action: LifecycleAction): void {
+		if (action.policy === 'restart') {
+			this.executeRestart(action);
+			return;
+		}
+		this.ensureTerminalRunning();
+	}
+
+	private queuePendingAction(action: LifecycleAction): void {
+		if (!this.pendingAction) {
+			this.pendingAction = {...action};
+			return;
+		}
+		this.pendingAction = this.mergeActions(this.pendingAction, action);
+	}
+
+	private consumePendingAction(): LifecycleAction {
+		const action = this.pendingAction ?? {
+			policy: 'ensure',
+			focus: false,
+			resetFrontend: false,
+			suppressExitBanner: false,
+		};
+		this.pendingAction = undefined;
+		return action;
+	}
+
+	private mergeActions(
+		base: LifecycleAction,
+		incoming: LifecycleAction,
+	): LifecycleAction {
+		const policy: LaunchPolicy =
+			base.policy === 'restart' || incoming.policy === 'restart'
+				? 'restart'
+				: 'ensure';
+		const restartReason = this.pickRestartReason(
+			base.restartReason,
+			incoming.restartReason,
+		);
+		return {
+			policy,
+			focus: base.focus || incoming.focus,
+			resetFrontend: base.resetFrontend || incoming.resetFrontend,
+			suppressExitBanner: base.suppressExitBanner || incoming.suppressExitBanner,
+			restartReason,
+		};
+	}
+
+	private pickRestartReason(
+		first?: RestartReason,
+		second?: RestartReason,
+	): RestartReason | undefined {
+		if (!first) return second;
+		if (!second) return first;
+		return RESTART_REASON_PRIORITY[second] >= RESTART_REASON_PRIORITY[first]
+			? second
+			: first;
+	}
+
+	private executeRestart(action: LifecycleAction): void {
+		if (action.policy !== 'restart') {
+			return;
+		}
+		if (this.ensureRunningTimer) {
+			clearTimeout(this.ensureRunningTimer);
+			this.ensureRunningTimer = undefined;
+		}
+
+		if (action.suppressExitBanner) {
+			this.suppressNextExitBanner = true;
+		}
+
+		this.ptyManager.kill();
+		if (action.resetFrontend) {
+			this.view?.webview.postMessage({type: 'reset'});
+		}
+		this.startTerminal();
+		this.view?.webview.postMessage({type: 'fit'});
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview): string {
@@ -212,7 +430,6 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
     #terminal-container {
       height: 100%;
       width: 100%;
-      padding: 4px;
     }
     .xterm {
       height: 100%;
@@ -221,7 +438,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
-  <div id="terminal-container"></div>
+    <div id="terminal-container"></div>
   
   <script src="${xtermJsUri}"></script>
   <script src="${xtermFitUri}"></script>
@@ -285,15 +502,15 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       term.loadAddon(fitAddon);
 
       term.open(container);
-      
+
       function fitTerminal() {
         try {
           fitAddon.fit();
-          vscode.postMessage({
-            type: 'resize',
-            cols: term.cols,
-            rows: term.rows
-          });
+            vscode.postMessage({
+              type: 'resize',
+              cols: term.cols,
+              rows: term.rows
+            });
         } catch (e) {}
       }
 
@@ -303,6 +520,11 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       resizeObserver.observe(container);
 
       setTimeout(fitTerminal, 100);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+          fitTerminal();
+        }).catch(() => {});
+      }
 
       term.onData(data => {
         vscode.postMessage({ type: 'input', data: data });
@@ -498,6 +720,13 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
             break;
           case 'clear':
             term.clear();
+            break;
+          case 'reset':
+            term.reset();
+            fitTerminal();
+            break;
+          case 'fit':
+            fitTerminal();
             break;
           case 'exit':
             term.write('\\r\\n\\r\\n[Process exited with code ' + message.code + ']\\r\\n');
