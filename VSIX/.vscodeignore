@@ -6,6 +6,7 @@ out/**
 node_modules/**
 !node_modules/node-pty/**
 !node_modules/node-pty/build/Release/*.node
+!node_modules/node-pty/build/Release/*.dll
 !node_modules/@xterm/**
 !node_modules/@xterm/xterm/**
 !node_modules/@xterm/xterm/css/**
@@ -15,6 +16,8 @@ node_modules/**
 !node_modules/@xterm/addon-fit/**
 !node_modules/@xterm/addon-fit/lib/**
 !node_modules/@xterm/addon-fit/lib/addon-fit.js
+!node_modules/ws/**
+!node_modules/ws/lib/**
 **/*.ts
 !**/*.d.ts
 **/*.map
