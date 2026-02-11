@@ -11,17 +11,19 @@ function loadPty(): any {
 
 export interface PtyManagerEvents {
 	onData: (data: string) => void;
-	onExit: (code: number) => void;
+	onExit: (code: number, context?: {suppressed?: boolean; reason?: string}) => void;
 }
 
 export class PtyManager {
 	private ptyProcess: any;
 	private events: PtyManagerEvents | undefined;
+	private startupSendTimer: NodeJS.Timeout | undefined;
 
 	public start(
 		cwd: string,
 		events: PtyManagerEvents,
 		startupCommand?: string,
+		initialSize?: {cols: number; rows: number},
 	): void {
 		if (this.ptyProcess) {
 			return;
@@ -35,30 +37,63 @@ export class PtyManager {
 			// Ensure spawn-helper has execute permission (may be lost during VSIX extraction)
 			this.fixSpawnHelperPermissions();
 
+			const cols = this.normalizeDimension(initialSize?.cols, 80);
+			const rows = this.normalizeDimension(initialSize?.rows, 30);
+
 			const pty = loadPty();
-			this.ptyProcess = pty.spawn(shell, shellArgs, {
+			const processInstance = pty.spawn(shell, shellArgs, {
 				name: 'xterm-256color',
-				cols: 80,
-				rows: 30,
+				cols,
+				rows,
 				cwd: cwd,
 				env: process.env as {[key: string]: string},
 			});
+			this.ptyProcess = processInstance;
 
-			this.ptyProcess.onData((data: string) => {
+			// Send startup command as soon as terminal starts producing output,
+			// with a short fallback timer in case no early output is emitted.
+			const cmd = startupCommand ?? 'snow';
+			let startupSent = false;
+			const sendStartupCommand = () => {
+				if (startupSent || !cmd) {
+					return;
+				}
+				if (this.ptyProcess !== processInstance) {
+					return;
+				}
+				startupSent = true;
+				if (this.startupSendTimer) {
+					clearTimeout(this.startupSendTimer);
+					this.startupSendTimer = undefined;
+				}
+				processInstance.write(cmd + '\r');
+			};
+
+			processInstance.onData((data: string) => {
+				if (this.ptyProcess !== processInstance) {
+					return;
+				}
+				sendStartupCommand();
 				this.events?.onData(data);
 			});
 
-			this.ptyProcess.onExit((e: {exitCode: number}) => {
-				this.events?.onExit(e.exitCode);
+			processInstance.onExit((e: {exitCode: number}) => {
+				if (this.ptyProcess !== processInstance) {
+					return;
+				}
+				if (this.startupSendTimer) {
+					clearTimeout(this.startupSendTimer);
+					this.startupSendTimer = undefined;
+				}
 				this.ptyProcess = undefined;
+				this.events?.onExit(e.exitCode);
 			});
 
-			// 延迟执行启动命令
-			const cmd = startupCommand ?? 'snow';
 			if (cmd) {
-				setTimeout(() => {
-					this.write(cmd + '\r');
-				}, 500);
+				this.startupSendTimer = setTimeout(() => {
+					this.startupSendTimer = undefined;
+					sendStartupCommand();
+				}, 200);
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -79,6 +114,10 @@ export class PtyManager {
 	}
 
 	public kill(): void {
+		if (this.startupSendTimer) {
+			clearTimeout(this.startupSendTimer);
+			this.startupSendTimer = undefined;
+		}
 		if (this.ptyProcess) {
 			this.ptyProcess.kill();
 			this.ptyProcess = undefined;
@@ -87,6 +126,14 @@ export class PtyManager {
 
 	public isRunning(): boolean {
 		return this.ptyProcess !== undefined;
+	}
+
+	private normalizeDimension(value: number | undefined, fallback: number): number {
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			return fallback;
+		}
+		const normalized = Math.floor(value);
+		return normalized > 0 ? normalized : fallback;
 	}
 
 	/**

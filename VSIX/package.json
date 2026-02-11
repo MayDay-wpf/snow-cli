@@ -71,6 +71,16 @@
 				}
 			},
 			{
+				"command": "snow-cli.restartSidebarTerminal",
+				"title": "Restart Terminal",
+				"icon": "$(debug-rerun)"
+			},
+			{
+				"command": "snow-cli.openSnowSettings",
+				"title": "Snow CLI Settings",
+				"icon": "$(settings-gear)"
+			},
+			{
 				"command": "snow-cli.focusSidebar",
 				"title": "Focus Snow CLI Sidebar"
 			}
@@ -87,6 +97,18 @@
 				{
 					"command": "snow-cli.openTerminal",
 					"group": "navigation"
+				}
+			],
+			"view/title": [
+				{
+					"command": "snow-cli.restartSidebarTerminal",
+					"when": "view == snowCliTerminal && snow-cli.sidebarMode",
+					"group": "navigation@1"
+				},
+				{
+					"command": "snow-cli.openSnowSettings",
+					"when": "view == snowCliTerminal && snow-cli.sidebarMode",
+					"group": "navigation@2"
 				}
 			]
 		}
