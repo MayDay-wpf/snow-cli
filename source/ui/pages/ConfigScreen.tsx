@@ -117,6 +117,7 @@ export default function ConfigScreen({
 	const [activeProfile, setActiveProfile] = useState('');
 	const [profileMode, setProfileMode] = useState<ProfileMode>('normal');
 	const [newProfileName, setNewProfileName] = useState('');
+	const [markedProfiles, setMarkedProfiles] = useState<Set<string>>(new Set());
 
 	// API settings
 	const [baseUrl, setBaseUrl] = useState('');
@@ -594,20 +595,38 @@ export default function ConfigScreen({
 		}
 	};
 
-	const handleDeleteProfile = () => {
+	const handleBatchDeleteProfiles = () => {
+		if (markedProfiles.size === 0) return;
+
 		try {
-			deleteProfile(activeProfile);
+			let hasError = false;
+			let firstError: Error | null = null;
+
+			markedProfiles.forEach(profileName => {
+				try {
+					deleteProfile(profileName);
+				} catch (err) {
+					hasError = true;
+					if (!firstError && err instanceof Error) {
+						firstError = err;
+					}
+				}
+			});
+
 			// Important: Update activeProfile state BEFORE loading profiles
-			// because deleteProfile switches to 'default' if the active profile is deleted
 			const newActiveProfile = getActiveProfileName();
 			setActiveProfile(newActiveProfile);
 			loadProfilesAndConfig();
+			setMarkedProfiles(new Set());
 			setProfileMode('normal');
 			setIsEditing(false);
 			setErrors([]);
+			if (hasError && firstError) {
+				setErrors([(firstError as Error).message]);
+			}
 		} catch (err) {
 			setErrors([
-				err instanceof Error ? err.message : 'Failed to delete profile',
+				err instanceof Error ? err.message : 'Failed to delete profiles',
 			]);
 			setProfileMode('normal');
 		}
@@ -1361,7 +1380,7 @@ export default function ConfigScreen({
 		// Handle profile deletion confirmation
 		if (profileMode === 'deleting') {
 			if (input === 'y' || input === 'Y') {
-				handleDeleteProfile();
+				handleBatchDeleteProfiles();
 			} else if (input === 'n' || input === 'N' || key.escape) {
 				setProfileMode('normal');
 				setErrors([]);
@@ -1387,8 +1406,14 @@ export default function ConfigScreen({
 			currentField === 'profile' &&
 			(input === 'd' || input === 'D')
 		) {
-			// Handle profile deletion (works in both normal and editing mode)
-			if (activeProfile === 'default') {
+			// Handle profile deletion - only when profiles are marked
+			if (markedProfiles.size === 0) {
+				setErrors([t.configScreen.noProfilesMarked]);
+				setIsEditing(false);
+				return;
+			}
+			// Check if trying to delete 'default' profile
+			if (markedProfiles.has('default')) {
 				setErrors([t.configScreen.cannotDeleteDefault]);
 				setIsEditing(false);
 				return;
@@ -1737,6 +1762,7 @@ export default function ConfigScreen({
 
 	// Render profile deletion confirmation
 	if (profileMode === 'deleting') {
+		const profilesToDelete = Array.from(markedProfiles);
 		return (
 			<Box flexDirection="column" padding={1}>
 				{!inlineMode && (
@@ -1757,9 +1783,18 @@ export default function ConfigScreen({
 
 				<Box flexDirection="column">
 					<Text color={theme.colors.warning}>
-						Are you sure you want to delete the profile &quot;{activeProfile}
-						&quot;?
+						{t.configScreen.confirmDeleteProfiles.replace(
+							'{count}',
+							String(profilesToDelete.length),
+						)}
 					</Text>
+					<Box marginTop={1} flexDirection="column">
+						{profilesToDelete.map(profileName => (
+							<Text key={profileName} color={theme.colors.menuSecondary}>
+								• {profileName}
+							</Text>
+						))}
+					</Box>
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.configScreen.deleteWarning}
 					</Text>
@@ -1961,10 +1996,9 @@ export default function ConfigScreen({
 								)}
 								<ScrollableSelectInput
 									items={profiles.map(p => ({
-										label: p.isActive
-											? `${p.displayName} \x1b[32m✓\x1b[0m`
-											: p.displayName,
+										label: p.displayName,
 										value: p.name,
+										isActive: p.name === activeProfile,
 									}))}
 									limit={5}
 									initialIndex={Math.max(
@@ -1972,10 +2006,44 @@ export default function ConfigScreen({
 										profiles.findIndex(p => p.name === activeProfile),
 									)}
 									isFocused={true}
+									selectedValues={markedProfiles}
+									renderItem={({label, isSelected, isMarked, isActive}) => {
+										return (
+											<Text>
+												<Text
+													color={
+														isMarked ? 'yellow' : isSelected ? 'cyan' : 'white'
+													}
+												>
+													{isMarked ? '✓ ' : '  '}
+												</Text>
+												{isActive && <Text color="green">[active] </Text>}
+												<Text color={isSelected ? 'cyan' : 'white'}>
+													{label}
+												</Text>
+											</Text>
+										);
+									}}
 									onSelect={item => {
 										switchProfile(item.value);
 										loadProfilesAndConfig();
 										setIsEditing(false);
+										setErrors([]);
+									}}
+									onToggleItem={item => {
+										if (item.value === 'default') {
+											setErrors([t.configScreen.cannotDeleteDefault]);
+											return;
+										}
+										setMarkedProfiles(prev => {
+											const next = new Set(prev);
+											if (next.has(item.value)) {
+												next.delete(item.value);
+											} else {
+												next.add(item.value);
+											}
+											return next;
+										});
 										setErrors([]);
 									}}
 								/>
@@ -1986,11 +2054,22 @@ export default function ConfigScreen({
 										</Text>
 										<Text color={theme.colors.menuSecondary}> (n)</Text>
 									</Box>
+									<Box marginRight={2}>
+										<Text color={theme.colors.warning}>
+											{t.configScreen.mark}
+										</Text>
+										<Text color={theme.colors.menuSecondary}> (space)</Text>
+									</Box>
 									<Box>
 										<Text color={theme.colors.error}>
 											{t.configScreen.deleteProfileShort}
 										</Text>
 										<Text color={theme.colors.menuSecondary}> (d)</Text>
+										{markedProfiles.size > 0 && (
+											<Text color={theme.colors.warning}>
+												[{markedProfiles.size}]
+											</Text>
+										)}
 									</Box>
 								</Box>
 							</Box>

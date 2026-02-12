@@ -58,9 +58,12 @@ jobs:
 
             ### What's New
 
-            - Real-time switching of YOLO mode is now supported
-            - Added anti-shake for sub-proxy output
-            - Fixed logical conflicts in some states
+            - Updated build configuration to include DLL files and `ws` dependencies
+            - Fixed incorrect editor action button behavior and improved sidebar terminal controls
+            - Added batch profile deletion (mark with Space, then confirm delete)
+            - Added deletion confirmation list for selected profiles and default-profile protection
+            - Fixed response conversion to preserve assistant text when tool calls are present
+            - Added i18n texts for batch profile deletion in English, Simplified Chinese, and Traditional Chinese
 
             ### Installation
             ```bash

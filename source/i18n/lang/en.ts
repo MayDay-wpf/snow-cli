@@ -233,6 +233,10 @@ export const en: TranslationKeys = {
 		requestMethodSelectHint: '↑↓ to select, Enter to confirm, Esc to cancel',
 		newProfile: '+ New',
 		deleteProfileShort: '🆇 Delete',
+		mark: '✓ Mark',
+		noProfilesMarked: 'Please use Space to select profiles to delete',
+		confirmDeleteProfiles:
+			'Are you sure you want to delete the following {count} profiles?',
 		fetchingModels: 'Fetching models from API...',
 		fetchingHint:
 			'This may take a few seconds depending on your network connection',
@@ -1081,7 +1085,8 @@ export const en: TranslationKeys = {
 			'Local changes detected. Stash changes and switch to "{branch}"?',
 		stashConfirmHint: 'Press Y to stash & switch, N to cancel',
 		loading: 'Processing...',
-		hints: '↑↓: Navigate | Enter: Switch | N: New branch | D: Delete | ESC: Close',
+		hints:
+			'↑↓: Navigate | Enter: Switch | N: New branch | D: Delete | ESC: Close',
 		pressEscToClose: 'Press ESC to close',
 	},
 

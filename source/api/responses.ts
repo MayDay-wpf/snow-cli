@@ -237,6 +237,20 @@ function convertToResponseInput(
 			msg.tool_calls &&
 			msg.tool_calls.length > 0
 		) {
+			// 如果存在自然语言说明内容，先添加文本消息
+			if (msg.content) {
+				result.push({
+					type: 'message',
+					role: 'assistant',
+					content: [
+						{
+							type: 'output_text',
+							text: msg.content,
+						},
+					],
+				});
+			}
+
 			// 为每个工具调用添加 function_call 项
 			for (const toolCall of msg.tool_calls) {
 				result.push({
