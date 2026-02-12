@@ -9,6 +9,7 @@ import {
 	getMCPConfig,
 	updateMCPConfig,
 } from '../../../utils/config/apiConfig.js';
+import {toggleBuiltInService} from '../../../utils/config/disabledBuiltInTools.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 
 interface MCPConnectionStatus {
@@ -51,9 +52,9 @@ export default function MCPInfoPanel() {
 				connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
 				isBuiltIn: service.isBuiltIn,
 				error: service.error,
-				enabled:
-					service.isBuiltIn ||
-					mcpConfig.mcpServers[service.serviceName]?.enabled !== false,
+				enabled: service.isBuiltIn
+					? service.enabled !== false
+					: mcpConfig.mcpServers[service.serviceName]?.enabled !== false,
 			}));
 
 			setMcpStatus(statusList);
@@ -129,29 +130,33 @@ export default function MCPInfoPanel() {
 			return;
 		}
 
-		// Tab key to toggle enabled/disabled for non-system MCP services
+		// Tab key to toggle enabled/disabled for all MCP services (including built-in)
 		if (key.tab) {
 			const currentItem = selectItems[selectedIndex];
 
-			// Skip if it's the refresh-all option or a built-in service
-			if (currentItem && !currentItem.isRefreshAll && !currentItem.isBuiltIn) {
+			// Skip if it's the refresh-all option
+			if (currentItem && !currentItem.isRefreshAll) {
 				try {
 					setTogglingService(currentItem.value);
-					const config = getMCPConfig();
 					const serviceName = currentItem.value;
 
-					if (config.mcpServers[serviceName]) {
-						// Toggle enabled state (default to true if undefined)
-						const currentEnabled =
-							config.mcpServers[serviceName].enabled !== false;
-						config.mcpServers[serviceName].enabled = !currentEnabled;
-
-						updateMCPConfig(config);
-
-						// Refresh MCP tools cache and reload status
-						await refreshMCPToolsCache();
-						await loadMCPStatus();
+					if (currentItem.isBuiltIn) {
+						// Toggle built-in service via .snow/disabled-builtin-tools.json
+						toggleBuiltInService(serviceName);
+					} else {
+						// Toggle external MCP service via global config
+						const config = getMCPConfig();
+						if (config.mcpServers[serviceName]) {
+							const currentEnabled =
+								config.mcpServers[serviceName].enabled !== false;
+							config.mcpServers[serviceName].enabled = !currentEnabled;
+							updateMCPConfig(config);
+						}
 					}
+
+					// Refresh MCP tools cache and reload status
+					await refreshMCPToolsCache();
+					await loadMCPStatus();
 				} catch (error) {
 					setErrorMessage(
 						error instanceof Error ? error.message : 'Failed to toggle service',
@@ -237,10 +242,10 @@ export default function MCPInfoPanel() {
 							: item.connected
 							? 'green'
 							: 'red';
-						const suffix = item.isBuiltIn
-							? t.mcpInfoPanel.statusSystem
-							: !isEnabled
+						const suffix = !isEnabled
 							? t.mcpInfoPanel.statusDisabled
+							: item.isBuiltIn
+							? t.mcpInfoPanel.statusSystem
 							: item.connected
 							? t.mcpInfoPanel.statusExternal
 							: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;

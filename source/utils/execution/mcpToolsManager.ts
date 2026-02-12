@@ -25,6 +25,10 @@ import {
 	executeSkillTool,
 } from '../../mcp/skills.js';
 import {sessionManager} from '../session/sessionManager.js';
+import {
+	isBuiltInServiceEnabled,
+	getDisabledBuiltInServices,
+} from '../config/disabledBuiltInTools.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
 import os from 'os';
@@ -62,6 +66,7 @@ export interface MCPServiceTools {
 	isBuiltIn: boolean;
 	connected: boolean;
 	error?: string;
+	enabled?: boolean;
 }
 
 // Cache for MCP tools to avoid reconnecting on every message
@@ -169,6 +174,7 @@ async function generateConfigHash(): Promise<string> {
 			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
 			skills: skillTools.map(t => t.name), // Include skill names in hash
 			codebaseEnabled: codebaseConfig.enabled, // 🔥 Must include to invalidate cache on enable/disable
+			disabledBuiltInServices: getDisabledBuiltInServices(), // Include disabled built-in services in hash
 		});
 	} catch {
 		return '';
@@ -207,229 +213,115 @@ async function refreshToolsCache(): Promise<void> {
 	const allTools: MCPTool[] = [];
 	const servicesInfo: MCPServiceTools[] = [];
 
-	// Add built-in filesystem tools (always available)
-	const filesystemServiceTools = filesystemTools.map(tool => ({
-		name: tool.name.replace('filesystem-', ''),
-		description: tool.description,
-		inputSchema: tool.inputSchema,
-	}));
+	// Helper: Add a built-in service, respecting disabled state
+	// Disabled services are added to servicesInfo (for MCP panel display) but NOT to allTools (AI cannot use them)
+	const addBuiltInService = (
+		serviceName: string,
+		tools: Array<{name: string; description: string; inputSchema: any}>,
+		prefix: string,
+	) => {
+		const enabled = isBuiltInServiceEnabled(serviceName);
+		const serviceTools = tools.map(tool => ({
+			name: tool.name.replace(`${prefix}-`, ''),
+			description: tool.description,
+			inputSchema: tool.inputSchema,
+		}));
 
-	servicesInfo.push({
-		serviceName: 'filesystem',
-		tools: filesystemServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
-
-	for (const tool of filesystemTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.inputSchema,
-			},
+		servicesInfo.push({
+			serviceName,
+			tools: serviceTools,
+			isBuiltIn: true,
+			connected: true,
+			enabled,
 		});
-	}
 
-	// Add built-in terminal tools (always available)
-	const terminalServiceTools = terminalTools.map(tool => ({
-		name: tool.name.replace('terminal-', ''),
-		description: tool.description,
-		inputSchema: tool.inputSchema,
-	}));
+		// Only add to allTools if enabled
+		if (enabled) {
+			for (const tool of tools) {
+				allTools.push({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description,
+						parameters: tool.inputSchema,
+					},
+				});
+			}
+		}
+	};
 
-	servicesInfo.push({
-		serviceName: 'terminal',
-		tools: terminalServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
+	// Add built-in filesystem tools
+	addBuiltInService('filesystem', filesystemTools, 'filesystem');
 
-	for (const tool of terminalTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.inputSchema,
-			},
-		});
-	}
+	// Add built-in terminal tools
+	addBuiltInService('terminal', terminalTools, 'terminal');
 
-	// Add built-in TODO tools (always available)
-	const todoSvc = getTodoService(); // This will never return null after lazy init
+	// Add built-in TODO tools
+	const todoSvc = getTodoService();
 	await todoSvc.initialize();
 	const todoTools = todoSvc.getTools();
-	const todoServiceTools = todoTools.map(tool => ({
-		name: tool.name.replace('todo-', ''),
-		description: tool.description || '',
-		inputSchema: tool.inputSchema,
-	}));
+	addBuiltInService(
+		'todo',
+		todoTools.map(t => ({
+			name: t.name,
+			description: t.description || '',
+			inputSchema: t.inputSchema,
+		})),
+		'todo',
+	);
 
-	servicesInfo.push({
-		serviceName: 'todo',
-		tools: todoServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
+	// Add built-in Notebook tools
+	addBuiltInService(
+		'notebook',
+		notebookTools.map(t => ({
+			name: t.name,
+			description: t.description || '',
+			inputSchema: t.inputSchema,
+		})),
+		'notebook',
+	);
 
-	for (const tool of todoTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description || '',
-				parameters: tool.inputSchema,
-			},
-		});
-	}
+	// Add built-in ACE Code Search tools
+	addBuiltInService('ace', aceCodeSearchTools, 'ace');
 
-	// Add built-in Notebook tools (always available)
-	const notebookServiceTools = notebookTools.map(tool => ({
-		name: tool.name.replace('notebook-', ''),
-		description: tool.description || '',
-		inputSchema: tool.inputSchema,
-	}));
+	// Add built-in Web Search tools
+	addBuiltInService('websearch', websearchTools, 'websearch');
 
-	servicesInfo.push({
-		serviceName: 'notebook',
-		tools: notebookServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
+	// Add built-in IDE Diagnostics tools
+	addBuiltInService('ide', ideDiagnosticsTools, 'ide');
 
-	for (const tool of notebookTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description || '',
-				parameters: tool.inputSchema,
-			},
-		});
-	}
-
-	// Add built-in ACE Code Search tools (always available)
-	const aceServiceTools = aceCodeSearchTools.map(tool => ({
-		name: tool.name.replace('ace-', ''),
-		description: tool.description,
-		inputSchema: tool.inputSchema,
-	}));
-
-	servicesInfo.push({
-		serviceName: 'ace',
-		tools: aceServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
-
-	for (const tool of aceCodeSearchTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.inputSchema,
-			},
-		});
-	}
-
-	// Add built-in Web Search tools (always available)
-	const websearchServiceTools = websearchTools.map(tool => ({
-		name: tool.name.replace('websearch-', ''),
-		description: tool.description,
-		inputSchema: tool.inputSchema,
-	}));
-
-	servicesInfo.push({
-		serviceName: 'websearch',
-		tools: websearchServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
-
-	for (const tool of websearchTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.inputSchema,
-			},
-		});
-	}
-
-	// Add built-in IDE Diagnostics tools (always available)
-	const ideDiagnosticsServiceTools = ideDiagnosticsTools.map(tool => ({
-		name: tool.name.replace('ide-', ''),
-		description: tool.description,
-		inputSchema: tool.inputSchema,
-	}));
-
-	servicesInfo.push({
-		serviceName: 'ide',
-		tools: ideDiagnosticsServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
-
-	for (const tool of ideDiagnosticsTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.inputSchema,
-			},
-		});
-	}
-
-	// Add built-in Ask User Question tools (always available)
-	const askUserQuestionServiceTools = askUserQuestionTools.map(tool => ({
-		name: tool.function.name.replace('askuser-', ''),
+	// Add built-in Ask User Question tools
+	const askUserToolsNormalized = askUserQuestionTools.map(tool => ({
+		name: tool.function.name,
 		description: tool.function.description,
 		inputSchema: tool.function.parameters,
 	}));
-
-	servicesInfo.push({
-		serviceName: 'askuser',
-		tools: askUserQuestionServiceTools,
-		isBuiltIn: true,
-		connected: true,
-	});
-
-	for (const tool of askUserQuestionTools) {
-		allTools.push({
-			type: 'function',
-			function: {
-				name: tool.function.name,
-				description: tool.function.description,
-				parameters: tool.function.parameters,
-			},
-		});
-	}
+	addBuiltInService('askuser', askUserToolsNormalized, 'askuser');
 
 	// Add sub-agent tools (dynamically generated from configuration)
 	const subAgentTools = getSubAgentTools();
 
 	if (subAgentTools.length > 0) {
+		const enabled = isBuiltInServiceEnabled('subagent');
 		servicesInfo.push({
 			serviceName: 'subagent',
 			tools: subAgentTools,
 			isBuiltIn: true,
 			connected: true,
+			enabled,
 		});
 
-		for (const tool of subAgentTools) {
-			allTools.push({
-				type: 'function',
-				function: {
-					name: `subagent-${tool.name}`,
-					description: tool.description,
-					parameters: tool.inputSchema,
-				},
-			});
+		if (enabled) {
+			for (const tool of subAgentTools) {
+				allTools.push({
+					type: 'function',
+					function: {
+						name: `subagent-${tool.name}`,
+						description: tool.description,
+						parameters: tool.inputSchema,
+					},
+				});
+			}
 		}
 	}
 
@@ -438,22 +330,26 @@ async function refreshToolsCache(): Promise<void> {
 	const skillTools = await getSkillTools(projectRoot);
 
 	if (skillTools.length > 0) {
+		const enabled = isBuiltInServiceEnabled('skill');
 		servicesInfo.push({
 			serviceName: 'skill',
 			tools: skillTools,
 			isBuiltIn: true,
 			connected: true,
+			enabled,
 		});
 
-		for (const tool of skillTools) {
-			allTools.push({
-				type: 'function',
-				function: {
-					name: tool.name,
-					description: tool.description,
-					parameters: tool.inputSchema,
-				},
-			});
+		if (enabled) {
+			for (const tool of skillTools) {
+				allTools.push({
+					type: 'function',
+					function: {
+						name: tool.name,
+						description: tool.description,
+						parameters: tool.inputSchema,
+					},
+				});
+			}
 		}
 	}
 
@@ -1230,6 +1126,30 @@ export async function executeMCPTool(
 		if (!serviceName || !actualToolName) {
 			throw new Error(
 				`Invalid tool name format: ${toolName}. Expected format: serviceName-toolName`,
+			);
+		}
+
+		// Check if built-in service is disabled
+		const builtInServices = [
+			'todo',
+			'notebook',
+			'filesystem',
+			'terminal',
+			'ace',
+			'websearch',
+			'ide',
+			'codebase',
+			'askuser',
+			'skill',
+			'subagent',
+		];
+		if (
+			builtInServices.includes(serviceName) &&
+			!isBuiltInServiceEnabled(serviceName)
+		) {
+			throw new Error(
+				`Built-in service "${serviceName}" is currently disabled. ` +
+					`You can re-enable it in the MCP panel (Tab key to toggle).`,
 			);
 		}
 
