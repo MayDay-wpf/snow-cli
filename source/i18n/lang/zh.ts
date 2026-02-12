@@ -1217,8 +1217,8 @@ export const zh: TranslationKeys = {
 		pleaseWait: '请稍候...',
 	},
 	runningAgentsPanel: {
-		title: '运行中的子智能体',
-		noAgentsRunning: '当前没有运行中的子智能体',
+		title: '运行中的子代理',
+		noAgentsRunning: '当前没有运行中的子代理',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
 		selected: '已选择: {count}',
 		scrollHint: '↑↓ 滚动',

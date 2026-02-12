@@ -1212,8 +1212,8 @@ export const zhTW: TranslationKeys = {
 		pleaseWait: '請稍候...',
 	},
 	runningAgentsPanel: {
-		title: '執行中的子智能體',
-		noAgentsRunning: '目前沒有執行中的子智能體',
+		title: '執行中的子代理',
+		noAgentsRunning: '目前沒有執行中的子代理',
 		keyboardHint: '(空白鍵: 切換 · Enter: 確認 · Esc: 取消)',
 		selected: '已選擇: {count}',
 		scrollHint: '↑↓ 捲動',
