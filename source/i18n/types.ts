@@ -300,6 +300,7 @@ export type TranslationKeys = {
 		userInteractionTools: string;
 		skillTools: string;
 		configProfile: string;
+		followGlobal: string;
 		customSystemPrompt: string;
 		customHeaders: string;
 		noItems: string;

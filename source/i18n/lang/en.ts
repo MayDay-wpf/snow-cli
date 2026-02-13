@@ -328,6 +328,7 @@ export const en: TranslationKeys = {
 		userInteractionTools: 'User Interaction Tools',
 		skillTools: 'Skill Tools',
 		configProfile: 'Config Profile (Optional):',
+		followGlobal: 'Follow Global ({name})',
 		customSystemPrompt: 'Custom System Prompt (Optional):',
 		customHeaders: 'Custom Headers (Optional):',
 		noItems: 'No items available',

@@ -299,6 +299,7 @@ export const zh: TranslationKeys = {
 		userInteractionTools: '用户交互工具',
 		skillTools: '技能工具',
 		configProfile: '配置文件(可选):',
+		followGlobal: '跟随全局 ({name})',
 		customSystemPrompt: '自定义系统提示词(可选):',
 		customHeaders: '自定义请求头(可选):',
 		noItems: '暂无可用项',

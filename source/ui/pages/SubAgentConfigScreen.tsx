@@ -164,21 +164,23 @@ export default function SubAgentConfigScreen({
 		return profiles.map(p => p.name);
 	}, []);
 
+	// 在可用配置列表前添加"跟随全局"选项
+	// index 0 = 跟随全局（动态使用当前活跃配置），index 1..n = 指定配置文件
+	const profileOptions = useMemo(() => {
+		const activeProfile = getActiveProfileName() || 'default';
+		const followGlobalLabel = t.subAgentConfig.followGlobal.replace(
+			'{name}',
+			activeProfile,
+		);
+		return [followGlobalLabel, ...availableProfiles];
+	}, [availableProfiles, t]);
+
 	// Initialize with current active configurations (non-edit mode)
 	useEffect(() => {
 		if (!agentId) {
-			const activeProfile = getActiveProfileName();
-
-			// 设置配置文件索引（同时设置光标和确认索引）
-			if (activeProfile && availableProfiles.length > 0) {
-				const profileIndex = availableProfiles.findIndex(
-					p => p === activeProfile,
-				);
-				if (profileIndex >= 0) {
-					setSelectedConfigProfileIndex(profileIndex);
-					setConfirmedConfigProfileIndex(profileIndex);
-				}
-			}
+			// 默认选中"跟随全局"（index 0），这样全局配置变化时子代理也会动态跟随
+			setSelectedConfigProfileIndex(0);
+			setConfirmedConfigProfileIndex(0);
 		}
 	}, [availableProfiles, agentId]);
 
@@ -204,28 +206,19 @@ export default function SubAgentConfigScreen({
 
 		// 加载配置文件索引
 		if (agent.configProfile) {
+			// 已指定配置文件 → 在 profileOptions 中找到对应项（index 0 是跟随全局，所以 +1）
 			const profileIndex = availableProfiles.findIndex(
 				p => p === agent.configProfile,
 			);
 			if (profileIndex >= 0) {
-				setSelectedConfigProfileIndex(profileIndex);
-				setConfirmedConfigProfileIndex(profileIndex);
+				setSelectedConfigProfileIndex(profileIndex + 1);
+				setConfirmedConfigProfileIndex(profileIndex + 1);
 			}
-		} else if (agent.builtin) {
-			// 第一次编辑内置代理（创建副本），使用全局配置作为默认值
-			const activeProfile = getActiveProfileName();
-			if (activeProfile && availableProfiles.length > 0) {
-				const profileIndex = availableProfiles.findIndex(
-					p => p === activeProfile,
-				);
-				if (profileIndex >= 0) {
-					setSelectedConfigProfileIndex(profileIndex);
-					setConfirmedConfigProfileIndex(profileIndex);
-				}
-			}
+		} else {
+			// 没有指定配置文件 → 默认选中"跟随全局"（index 0）
+			setSelectedConfigProfileIndex(0);
+			setConfirmedConfigProfileIndex(0);
 		}
-		// 编辑已有副本时，如果副本没有设置配置，不自动使用全局配置
-		// 保持 confirmedConfigProfileIndex 为 -1
 	}, [agentId, availableProfiles]);
 
 	// Load MCP services on mount
@@ -337,9 +330,11 @@ export default function SubAgentConfigScreen({
 
 		try {
 			// 使用 confirmedIndex，确保保存用户通过Space键确认的选择
+			// index 0 = 跟随全局（不保存具体配置名，运行时动态使用全局配置）
+			// index > 0 = 指定配置文件（保存具体配置名）
 			const selectedProfile =
-				confirmedConfigProfileIndex >= 0
-					? availableProfiles[confirmedConfigProfileIndex]
+				confirmedConfigProfileIndex > 0
+					? availableProfiles[confirmedConfigProfileIndex - 1]
 					: undefined;
 
 			if (isEditMode && agentId) {
@@ -425,7 +420,7 @@ export default function SubAgentConfigScreen({
 			// 配置列表字段：在列表内导航，到达顶部时跳到上一个主字段
 			if (currentField === 'configProfile') {
 				if (
-					availableProfiles.length === 0 ||
+					profileOptions.length === 0 ||
 					selectedConfigProfileIndex === 0
 				) {
 					// 跳到上一个主字段
@@ -460,8 +455,8 @@ export default function SubAgentConfigScreen({
 			// 配置列表字段：在列表内导航，到达底部时跳到下一个主字段
 			if (currentField === 'configProfile') {
 				if (
-					availableProfiles.length === 0 ||
-					selectedConfigProfileIndex >= availableProfiles.length - 1
+					profileOptions.length === 0 ||
+					selectedConfigProfileIndex >= profileOptions.length - 1
 				) {
 					// 跳到下一个主字段
 					setCurrentField('tools');
@@ -936,7 +931,7 @@ export default function SubAgentConfigScreen({
 					</Text>
 					<Box marginLeft={2}>
 						{renderScrollableList(
-							availableProfiles,
+							profileOptions,
 							selectedConfigProfileIndex,
 							confirmedConfigProfileIndex, // 确认选中的项
 							currentField === 'configProfile',
