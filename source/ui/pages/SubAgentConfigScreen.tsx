@@ -194,7 +194,7 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		const isBuiltin = ['agent_explore', 'agent_plan', 'agent_general'].includes(
+		const isBuiltin = ['agent_explore', 'agent_plan', 'agent_general', 'agent_analyze', 'agent_debug'].includes(
 			agentId,
 		);
 		setIsBuiltinAgent(isBuiltin);

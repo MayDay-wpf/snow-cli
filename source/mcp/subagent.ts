@@ -150,6 +150,38 @@ export class SubAgentService {
 					required: ['prompt'],
 				},
 			},
+			{
+				name: 'agent_analyze',
+				description:
+					'Requirement Analysis Agent: Specialized for analyzing user requirements. Outputs comprehensive requirement specifications to guide the main workflow. Must confirm analysis with user before completing.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description:
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) Full user request or requirement description, (2) Any background or existing context about the project, (3) Known constraints, preferences, or non-functional requirements, (4) Relevant code or architecture information. The agent will analyze requirements and confirm with the user before completing.',
+						},
+					},
+					required: ['prompt'],
+				},
+			},
+			{
+				name: 'agent_debug',
+				description:
+					'Debug Assistant: Specialized for inserting structured file-based logging into project code. Writes all logs to .snow/log/ directory as .txt files with structured format. If the project lacks a logger helper, it will write one first. Reports log file locations upon completion.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description:
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) Which code/functions/modules need debug logging, (2) What specific behavior or bug you are trying to trace, (3) Known file paths and code locations, (4) Project type and language. The agent will insert structured logging that writes to .snow/log/*.txt files and report the log storage location.',
+						},
+					},
+					required: ['prompt'],
+				},
+			},
 		];
 
 		// Built-in agent IDs (used to filter out duplicates)
@@ -157,6 +189,8 @@ export class SubAgentService {
 			'agent_explore',
 			'agent_plan',
 			'agent_general',
+			'agent_analyze',
+			'agent_debug',
 		]);
 
 		// Add user-configured agents (filter out duplicates with built-in)

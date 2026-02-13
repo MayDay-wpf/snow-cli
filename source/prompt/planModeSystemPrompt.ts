@@ -308,6 +308,8 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 **Sub-Agent Delegation**:
 - \`subagent-agent_general\` - Delegate implementation work in phases (DEFAULT for complex tasks)
 - \`subagent-agent_explore\` - Use for code exploration if needed before planning
+- \`subagent-agent_analyze\` - Analyze complex requirements and produce structured specs
+- \`subagent-agent_debug\` - Insert structured debug logging into code (writes to .snow/log/*.txt)
 
 **TODO Management (FOR YOUR USE ONLY)**:
 - \`todo-add\` - Add TODO items to track phase execution
