@@ -1040,11 +1040,121 @@ Inserted log points:
 			};
 		}
 
+		// ── Inject the inter-agent messaging tool ──
+		// This tool is always available to all sub-agents (not part of MCP tools)
+		const {runningSubAgentTracker} = await import(
+			'./runningSubAgentTracker.js'
+		);
+
+		const sendMessageTool: MCPTool = {
+			type: 'function' as const,
+			function: {
+				name: 'send_message_to_agent',
+				description:
+					'Send a message to another running sub-agent. Use this to share information, findings, or coordinate work with other agents that are executing in parallel. The message will be injected into the target agent\'s context. IMPORTANT: Use query_agents_status first to check if the target agent is still running before sending.',
+				parameters: {
+					type: 'object',
+					properties: {
+						target_agent_id: {
+							type: 'string',
+							description:
+								'The agent ID (type) of the target sub-agent (e.g., "agent_explore", "agent_general"). If multiple instances of the same type are running, the message is sent to the first found instance.',
+						},
+						target_instance_id: {
+							type: 'string',
+							description:
+								'(Optional) The specific instance ID of the target sub-agent. Use this for precise targeting when multiple instances of the same agent type are running.',
+						},
+						message: {
+							type: 'string',
+							description:
+								'The message content to send to the target agent. Be clear and specific about what information you are sharing or what action you are requesting.',
+						},
+					},
+					required: ['message'],
+				},
+			},
+		};
+
+		const queryAgentsStatusTool: MCPTool = {
+			type: 'function' as const,
+			function: {
+				name: 'query_agents_status',
+				description:
+					'Query the current status of all running sub-agents. Returns a list of currently active agents with their IDs, names, prompts, and how long they have been running. Use this to check if a target agent is still running before sending it a message, or to discover new agents that have started.',
+				parameters: {
+					type: 'object',
+					properties: {},
+					required: [],
+				},
+			},
+		};
+
+		const spawnSubAgentTool: MCPTool = {
+			type: 'function' as const,
+			function: {
+				name: 'spawn_sub_agent',
+				description:
+					'Request the main workflow to spawn a new sub-agent that runs in parallel. The spawned agent executes independently and its results are automatically reported back to the main workflow. Use this when you discover that additional specialized work is needed that another agent type would handle better. Available agent types: agent_explore (code exploration, read-only), agent_plan (planning, read-only), agent_general (full access, code modification), agent_analyze (requirement analysis), agent_debug (debug logging).',
+				parameters: {
+					type: 'object',
+					properties: {
+						agent_id: {
+							type: 'string',
+							description:
+								'The agent type to spawn (e.g., "agent_explore", "agent_plan", "agent_general", "agent_analyze", "agent_debug", or a user-defined agent ID).',
+						},
+						prompt: {
+							type: 'string',
+							description:
+								'CRITICAL: The task prompt for the spawned agent. Must include COMPLETE context since the spawned agent has NO access to your conversation history. Include all relevant file paths, findings, constraints, and requirements.',
+						},
+					},
+					required: ['agent_id', 'prompt'],
+				},
+			},
+		};
+
+		allowedTools.push(sendMessageTool, queryAgentsStatusTool, spawnSubAgentTool);
+
+		// ── Build other agents' status info for context ──
+		const otherAgents = runningSubAgentTracker
+			.getRunningAgents()
+			.filter(a => a.instanceId !== instanceId);
+
+		let otherAgentsContext = '';
+		if (otherAgents.length > 0) {
+			const agentList = otherAgents
+				.map(
+					a =>
+						`- ${a.agentName} (id: ${a.agentId}, instance: ${a.instanceId}): "${a.prompt ? a.prompt.substring(0, 120) : 'N/A'}"`,
+				)
+				.join('\n');
+			otherAgentsContext = `\n\n## Currently Running Peer Agents
+The following sub-agents are running in parallel with you. You can use \`query_agents_status\` to get real-time status, \`send_message_to_agent\` to communicate, or \`spawn_sub_agent\` to request new agents.
+
+${agentList}
+
+If you discover information useful to another agent, proactively share it. If additional specialized work is needed, consider spawning a new agent.`;
+		} else {
+			otherAgentsContext = `\n\n## Agent Collaboration Tools
+You have access to these collaboration tools:
+- \`query_agents_status\`: Check which sub-agents are currently running
+- \`send_message_to_agent\`: Send a message to a running peer agent (check status first!)
+- \`spawn_sub_agent\`: Request the main workflow to start a new sub-agent for additional work
+
+Use \`spawn_sub_agent\` when you discover tasks that would benefit from a specialized agent.`;
+		}
+
 		// Build conversation history for sub-agent
 		// Append role to prompt if configured
 		let finalPrompt = prompt;
 		if (agent.role) {
 			finalPrompt = `${prompt}\n\n${agent.role}`;
+		}
+		// Append other agents context
+		if (otherAgentsContext) {
+			finalPrompt = `${finalPrompt}${otherAgentsContext}`;
 		}
 
 		const messages: ChatMessage[] = [
@@ -1061,6 +1171,10 @@ Inserted log points:
 		let totalUsage: TokenUsage | undefined;
 		// Track all user messages injected from the main session
 		const collectedInjectedMessages: string[] = [];
+
+		// Track instanceIds of sub-agents spawned by THIS agent via spawn_sub_agent.
+		// Used to prevent this agent from finishing while its children are still running.
+		const spawnedChildInstanceIds = new Set<string>();
 
 		// Local session-approved tools for this sub-agent execution
 		// This ensures tools approved during execution are immediately recognized
@@ -1092,9 +1206,6 @@ Inserted log points:
 			// The main flow enqueues messages via runningSubAgentTracker.enqueueMessage()
 			// when the user directs a pending message to this specific sub-agent instance.
 			if (instanceId) {
-				const {runningSubAgentTracker} = await import(
-					'./runningSubAgentTracker.js'
-				);
 				const injectedMessages =
 					runningSubAgentTracker.dequeueMessages(instanceId);
 				for (const injectedMsg of injectedMessages) {
@@ -1115,6 +1226,31 @@ Inserted log points:
 							message: {
 								type: 'user_injected',
 								content: injectedMsg,
+							},
+						});
+					}
+				}
+
+				// Inject any pending inter-agent messages from other sub-agents
+				const interAgentMessages =
+					runningSubAgentTracker.dequeueInterAgentMessages(instanceId);
+				for (const iaMsg of interAgentMessages) {
+					messages.push({
+						role: 'user',
+						content: `[Inter-agent message from ${iaMsg.fromAgentName} (${iaMsg.fromAgentId})]\n${iaMsg.content}`,
+					});
+
+					// Notify UI about the inter-agent message reception
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'inter_agent_received',
+								fromAgentId: iaMsg.fromAgentId,
+								fromAgentName: iaMsg.fromAgentName,
+								content: iaMsg.content,
 							},
 						});
 					}
@@ -1324,8 +1460,78 @@ Inserted log points:
 				messages.push(assistantMessage);
 				finalResponse = currentContent;
 			}
-			// If no tool calls, we're done
+			// If no tool calls, we're done — BUT first check for spawned children
 			if (toolCalls.length === 0) {
+				// ── Wait for spawned child agents before finishing ──
+				// If this agent spawned children via spawn_sub_agent, we must
+				// wait for them and feed their results back before we exit.
+				// This prevents the parent from finishing (and thus the main flow
+				// from considering this tool call "done") while children still run.
+				const runningChildren = Array.from(spawnedChildInstanceIds).filter(
+					id => runningSubAgentTracker.isRunning(id),
+				);
+
+				if (
+					runningChildren.length > 0 ||
+					runningSubAgentTracker.hasSpawnedResults()
+				) {
+					// Wait for running children to complete
+					if (runningChildren.length > 0) {
+						await runningSubAgentTracker.waitForSpawnedAgents(
+							300_000, // 5 min timeout
+							abortSignal,
+						);
+					}
+
+					// Drain all spawned results and inject as user context
+					const spawnedResults =
+						runningSubAgentTracker.drainSpawnedResults();
+					if (spawnedResults.length > 0) {
+						for (const sr of spawnedResults) {
+							const statusIcon = sr.success ? '✓' : '✗';
+							const resultSummary = sr.success
+								? sr.result.length > 800
+									? sr.result.substring(0, 800) + '...'
+									: sr.result
+								: sr.error || 'Unknown error';
+
+							messages.push({
+								role: 'user',
+								content: `[Spawned Sub-Agent Result] ${statusIcon} ${sr.agentName} (${sr.agentId})\nPrompt: ${sr.prompt}\nResult: ${resultSummary}`,
+							});
+
+							// Notify UI about the spawned agent completion
+							if (onMessage) {
+								onMessage({
+									type: 'sub_agent_message',
+									agentId: agent.id,
+									agentName: agent.name,
+									message: {
+										type: 'spawned_agent_completed',
+										spawnedAgentId: sr.agentId,
+										spawnedAgentName: sr.agentName,
+										success: sr.success,
+									} as any,
+								});
+							}
+						}
+
+						// Don't break — continue the loop so the AI sees spawned results
+						// and can incorporate them into its final response
+						if (onMessage) {
+							onMessage({
+								type: 'sub_agent_message',
+								agentId: agent.id,
+								agentName: agent.name,
+								message: {
+									type: 'done',
+								},
+							});
+						}
+						continue;
+					}
+				}
+
 				// 执行 onSubAgentComplete 钩子（在子代理任务完成前）
 				try {
 					const hookResult = await unifiedHooksExecutor.executeHooks(
@@ -1394,6 +1600,332 @@ Inserted log points:
 				}
 
 				break;
+			}
+
+			// 拦截 send_message_to_agent 工具：子代理间通信，内部处理，不需要外部执行
+			const sendMsgTools = toolCalls.filter(
+				tc => tc.function.name === 'send_message_to_agent',
+			);
+
+			if (sendMsgTools.length > 0 && instanceId) {
+				for (const sendMsgTool of sendMsgTools) {
+					let targetAgentId: string | undefined;
+					let targetInstanceId: string | undefined;
+					let msgContent = '';
+
+					try {
+						const args = JSON.parse(sendMsgTool.function.arguments);
+						targetAgentId = args.target_agent_id;
+						targetInstanceId = args.target_instance_id;
+						msgContent = args.message || '';
+					} catch (error) {
+						console.error(
+							'Failed to parse send_message_to_agent arguments:',
+							error,
+						);
+					}
+
+					let success = false;
+					let resultText = '';
+
+					if (!msgContent) {
+						resultText = 'Error: message content is empty';
+					} else if (targetInstanceId) {
+						// Send to specific instance
+						success = runningSubAgentTracker.sendInterAgentMessage(
+							instanceId,
+							targetInstanceId,
+							msgContent,
+						);
+						if (success) {
+							const targetAgent =
+								runningSubAgentTracker.getRunningAgents().find(
+									a => a.instanceId === targetInstanceId,
+								);
+							resultText = `Message sent to ${targetAgent?.agentName || targetInstanceId}`;
+						} else {
+							resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
+						}
+					} else if (targetAgentId) {
+						// Find by agent type ID
+						const targetAgent =
+							runningSubAgentTracker.findInstanceByAgentId(targetAgentId);
+						if (targetAgent && targetAgent.instanceId !== instanceId) {
+							success = runningSubAgentTracker.sendInterAgentMessage(
+								instanceId,
+								targetAgent.instanceId,
+								msgContent,
+							);
+							if (success) {
+								resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
+							} else {
+								resultText = `Error: Failed to send message to ${targetAgentId}`;
+							}
+						} else if (
+							targetAgent &&
+							targetAgent.instanceId === instanceId
+						) {
+							resultText =
+								'Error: Cannot send a message to yourself';
+						} else {
+							resultText = `Error: No running agent found with ID "${targetAgentId}"`;
+						}
+					} else {
+						resultText =
+							'Error: Either target_agent_id or target_instance_id must be provided';
+					}
+
+					// Build tool result
+					const toolResultMessage = {
+						role: 'tool' as const,
+						tool_call_id: sendMsgTool.id,
+						content: JSON.stringify({success, result: resultText}),
+					};
+					messages.push(toolResultMessage);
+
+					// Notify UI about the inter-agent message sending
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'inter_agent_sent',
+								targetAgentId: targetAgentId || targetInstanceId || 'unknown',
+								targetAgentName:
+									(targetInstanceId
+										? runningSubAgentTracker
+												.getRunningAgents()
+												.find(a => a.instanceId === targetInstanceId)
+												?.agentName
+										: targetAgentId
+										? runningSubAgentTracker.findInstanceByAgentId(
+												targetAgentId,
+										  )?.agentName
+										: undefined) || targetAgentId || 'unknown',
+								content: msgContent,
+								success,
+							} as any,
+						});
+					}
+				}
+
+				// Remove send_message_to_agent from toolCalls
+				toolCalls = toolCalls.filter(
+					tc => tc.function.name !== 'send_message_to_agent',
+				);
+
+				if (toolCalls.length === 0) {
+					continue;
+				}
+			}
+
+			// 拦截 query_agents_status 工具：返回当前所有子代理的状态
+			const queryStatusTools = toolCalls.filter(
+				tc => tc.function.name === 'query_agents_status',
+			);
+
+			if (queryStatusTools.length > 0) {
+				for (const queryTool of queryStatusTools) {
+					const allAgents = runningSubAgentTracker.getRunningAgents();
+					const statusList = allAgents.map(a => ({
+						instanceId: a.instanceId,
+						agentId: a.agentId,
+						agentName: a.agentName,
+						prompt: a.prompt
+							? a.prompt.substring(0, 150)
+							: 'N/A',
+						runningFor: `${Math.floor((Date.now() - a.startedAt.getTime()) / 1000)}s`,
+						isSelf: a.instanceId === instanceId,
+					}));
+
+					const toolResultMessage = {
+						role: 'tool' as const,
+						tool_call_id: queryTool.id,
+						content: JSON.stringify({
+							totalRunning: allAgents.length,
+							agents: statusList,
+						}),
+					};
+					messages.push(toolResultMessage);
+				}
+
+				toolCalls = toolCalls.filter(
+					tc => tc.function.name !== 'query_agents_status',
+				);
+
+				if (toolCalls.length === 0) {
+					continue;
+				}
+			}
+
+			// 拦截 spawn_sub_agent 工具：异步启动新子代理，结果注入主流程
+			const spawnTools = toolCalls.filter(
+				tc => tc.function.name === 'spawn_sub_agent',
+			);
+
+			if (spawnTools.length > 0 && instanceId) {
+				for (const spawnTool of spawnTools) {
+					let spawnAgentId = '';
+					let spawnPrompt = '';
+
+					try {
+						const args = JSON.parse(spawnTool.function.arguments);
+						spawnAgentId = args.agent_id || '';
+						spawnPrompt = args.prompt || '';
+					} catch (error) {
+						console.error(
+							'Failed to parse spawn_sub_agent arguments:',
+							error,
+						);
+					}
+
+					if (!spawnAgentId || !spawnPrompt) {
+						const toolResultMessage = {
+							role: 'tool' as const,
+							tool_call_id: spawnTool.id,
+							content: JSON.stringify({
+								success: false,
+								error: 'Both agent_id and prompt are required',
+							}),
+						};
+						messages.push(toolResultMessage);
+						continue;
+					}
+
+					// Look up agent name
+					let spawnAgentName = spawnAgentId;
+					try {
+						const agentConfig = getSubAgent(spawnAgentId);
+						if (agentConfig) {
+							spawnAgentName = agentConfig.name;
+						}
+					} catch {
+						// Built-in agents aren't resolved by getSubAgent, use ID-based name mapping
+						const builtinNames: Record<string, string> = {
+							agent_explore: 'Explore Agent',
+							agent_plan: 'Plan Agent',
+							agent_general: 'General Purpose Agent',
+							agent_analyze: 'Requirement Analysis Agent',
+							agent_debug: 'Debug Assistant',
+						};
+						spawnAgentName =
+							builtinNames[spawnAgentId] || spawnAgentId;
+					}
+
+					// Generate unique instance ID
+					const spawnInstanceId = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+					// Get current agent info for the "spawnedBy" record
+					const spawnerInfo = {
+						instanceId,
+						agentId: agent.id,
+						agentName: agent.name,
+					};
+
+					// Track this child so we can wait for it before finishing
+					spawnedChildInstanceIds.add(spawnInstanceId);
+
+					// Register spawned agent in tracker
+					runningSubAgentTracker.register({
+						instanceId: spawnInstanceId,
+						agentId: spawnAgentId,
+						agentName: spawnAgentName,
+						prompt: spawnPrompt,
+						startedAt: new Date(),
+					});
+
+					// Fire-and-forget: start the spawned agent asynchronously
+					// Its result will be stored in the tracker for the main flow to pick up
+					executeSubAgent(
+						spawnAgentId,
+						spawnPrompt,
+						onMessage, // Same UI callback — spawned agent's messages are visible
+						abortSignal, // Same abort signal — ESC stops everything
+						requestToolConfirmation,
+						isToolAutoApproved,
+						yoloMode,
+						addToAlwaysApproved,
+						requestUserQuestion,
+						spawnInstanceId,
+					)
+						.then(result => {
+							// Store the result for the main flow to pick up
+							runningSubAgentTracker.storeSpawnedResult({
+								instanceId: spawnInstanceId,
+								agentId: spawnAgentId,
+								agentName: spawnAgentName,
+								prompt:
+									spawnPrompt.length > 200
+										? spawnPrompt.substring(0, 200) + '...'
+										: spawnPrompt,
+								success: result.success,
+								result: result.result,
+								error: result.error,
+								completedAt: new Date(),
+								spawnedBy: spawnerInfo,
+							});
+						})
+						.catch(error => {
+							runningSubAgentTracker.storeSpawnedResult({
+								instanceId: spawnInstanceId,
+								agentId: spawnAgentId,
+								agentName: spawnAgentName,
+								prompt:
+									spawnPrompt.length > 200
+										? spawnPrompt.substring(0, 200) + '...'
+										: spawnPrompt,
+								success: false,
+								result: '',
+								error:
+									error instanceof Error
+										? error.message
+										: 'Unknown error',
+								completedAt: new Date(),
+								spawnedBy: spawnerInfo,
+							});
+						})
+						.finally(() => {
+							// Unregister the spawned agent (it may have already been unregistered
+							// inside executeSubAgent, but calling again is safe due to the delete check)
+							runningSubAgentTracker.unregister(spawnInstanceId);
+						});
+
+					// Notify UI that a spawn happened
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'agent_spawned',
+								spawnedAgentId: spawnAgentId,
+								spawnedAgentName: spawnAgentName,
+								spawnedInstanceId: spawnInstanceId,
+								spawnedPrompt: spawnPrompt,
+							} as any,
+						});
+					}
+
+					// Return immediate result to spawning sub-agent
+					const toolResultMessage = {
+						role: 'tool' as const,
+						tool_call_id: spawnTool.id,
+						content: JSON.stringify({
+							success: true,
+							result: `Agent "${spawnAgentName}" (${spawnAgentId}) has been spawned and is now running in the background with instance ID "${spawnInstanceId}". Its results will be automatically reported to the main workflow when it completes.`,
+						}),
+					};
+					messages.push(toolResultMessage);
+				}
+
+				toolCalls = toolCalls.filter(
+					tc => tc.function.name !== 'spawn_sub_agent',
+				);
+
+				if (toolCalls.length === 0) {
+					continue;
+				}
 			}
 
 			// 拦截 askuser 工具：子智能体调用时需要显示主会话的蓝色边框 UI，而不是工具确认界面
