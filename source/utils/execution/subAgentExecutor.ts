@@ -63,6 +63,12 @@ export interface UserQuestionCallback {
 }
 
 /**
+ * Maximum spawn depth to prevent infinite recursive spawning.
+ * A sub-agent at depth >= MAX_SPAWN_DEPTH cannot spawn further sub-agents.
+ */
+const MAX_SPAWN_DEPTH = 1;
+
+/**
  * 执行子智能体作为工具
  * @param agentId - 子智能体 ID
  * @param prompt - 发送给子智能体的任务提示
@@ -73,6 +79,7 @@ export interface UserQuestionCallback {
  * @param yoloMode - 是否启用 YOLO 模式（自动批准所有工具）
  * @param addToAlwaysApproved - 添加工具到始终批准列表的回调
  * @param requestUserQuestion - 用户问题回调，用于子智能体调用 askuser 工具时显示主会话的蓝色边框 UI
+ * @param spawnDepth - 当前 spawn 嵌套深度（0 = 主流程直接调起的子代理）
  * @returns 子智能体的最终结果
  */
 export async function executeSubAgent(
@@ -86,6 +93,7 @@ export async function executeSubAgent(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	requestUserQuestion?: UserQuestionCallback,
 	instanceId?: string,
+	spawnDepth: number = 0,
 ): Promise<SubAgentResult> {
 	try {
 		// Handle built-in agents (hardcoded or user copy)
@@ -1115,13 +1123,17 @@ Inserted log points:
 			},
 		};
 
-		allowedTools.push(sendMessageTool, queryAgentsStatusTool, spawnSubAgentTool);
+		allowedTools.push(sendMessageTool, queryAgentsStatusTool);
+		if (spawnDepth < MAX_SPAWN_DEPTH) {
+			allowedTools.push(spawnSubAgentTool);
+		}
 
 		// ── Build other agents' status info for context ──
 		const otherAgents = runningSubAgentTracker
 			.getRunningAgents()
 			.filter(a => a.instanceId !== instanceId);
 
+		const canSpawn = spawnDepth < MAX_SPAWN_DEPTH;
 		let otherAgentsContext = '';
 		if (otherAgents.length > 0) {
 			const agentList = otherAgents
@@ -1130,20 +1142,29 @@ Inserted log points:
 						`- ${a.agentName} (id: ${a.agentId}, instance: ${a.instanceId}): "${a.prompt ? a.prompt.substring(0, 120) : 'N/A'}"`,
 				)
 				.join('\n');
+			const spawnHint = canSpawn
+				? ', or `spawn_sub_agent` to request new agents'
+				: '';
+			const spawnAdvice = canSpawn
+				? ' If additional specialized work is needed, consider spawning a new agent.'
+				: '';
 			otherAgentsContext = `\n\n## Currently Running Peer Agents
-The following sub-agents are running in parallel with you. You can use \`query_agents_status\` to get real-time status, \`send_message_to_agent\` to communicate, or \`spawn_sub_agent\` to request new agents.
+The following sub-agents are running in parallel with you. You can use \`query_agents_status\` to get real-time status, \`send_message_to_agent\` to communicate${spawnHint}.
 
 ${agentList}
 
-If you discover information useful to another agent, proactively share it. If additional specialized work is needed, consider spawning a new agent.`;
+If you discover information useful to another agent, proactively share it.${spawnAdvice}`;
 		} else {
+			const spawnToolLine = canSpawn
+				? '\n- `spawn_sub_agent`: Request the main workflow to start a new sub-agent for additional work'
+				: '';
+			const spawnUsage = canSpawn
+				? '\n\nUse `spawn_sub_agent` when you discover tasks that would benefit from a specialized agent.'
+				: '';
 			otherAgentsContext = `\n\n## Agent Collaboration Tools
 You have access to these collaboration tools:
 - \`query_agents_status\`: Check which sub-agents are currently running
-- \`send_message_to_agent\`: Send a message to a running peer agent (check status first!)
-- \`spawn_sub_agent\`: Request the main workflow to start a new sub-agent for additional work
-
-Use \`spawn_sub_agent\` when you discover tasks that would benefit from a specialized agent.`;
+- \`send_message_to_agent\`: Send a message to a running peer agent (check status first!)${spawnToolLine}${spawnUsage}`;
 		}
 
 		// Build conversation history for sub-agent
@@ -1848,6 +1869,7 @@ Use \`spawn_sub_agent\` when you discover tasks that would benefit from a specia
 						addToAlwaysApproved,
 						requestUserQuestion,
 						spawnInstanceId,
+						spawnDepth + 1, // Increase depth to enforce MAX_SPAWN_DEPTH limit
 					)
 						.then(result => {
 							// Store the result for the main flow to pick up
