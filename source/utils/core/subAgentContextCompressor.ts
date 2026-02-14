@@ -1,13 +1,16 @@
 /**
  * Sub-Agent Context Compressor
  *
- * Two-phase hybrid compression for sub-agent context management:
- * Phase 1: Smart truncation — replace old tool results with compact placeholders (zero extra cost)
- * Phase 2: AI summary compression — if truncation is insufficient, use AI to summarize history
+ * AI summary compression for sub-agent context management.
+ * Follows the same pattern as the main flow's contextCompressor.ts:
+ * - Determine which recent messages to preserve (recent tool call rounds)
+ * - Send older messages to AI for summarization (excluding tool results, only keeping event records)
+ * - Replace old messages with summary + preserved recent messages
  *
  * This prevents sub-agents from failing due to context_length_exceeded errors.
  */
 
+import {encoding_for_model} from 'tiktoken';
 import {createStreamingChatCompletion} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
@@ -16,42 +19,108 @@ import type {ChatMessage} from '../../api/types.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 
 /** Threshold percentage to trigger compression */
-const COMPRESS_THRESHOLD = 70;
+const COMPRESS_THRESHOLD = 80;
 
-/** Number of recent tool call rounds to preserve during truncation */
-const KEEP_RECENT_ROUNDS = 3;
-
-/** Minimum tool result length to consider for truncation */
-const MIN_TRUNCATION_LENGTH = 500;
+/** Default number of recent tool call rounds to preserve */
+const DEFAULT_KEEP_RECENT_ROUNDS = 3;
 
 /**
- * Compression prompt for sub-agent context — more concise than main session,
- * focused on preserving task progress and tool call context.
+ * Compression prompt for sub-agent context — follows the same pattern as the main flow's
+ * COMPRESSION_PROMPT but is more concise (sub-agents have simpler conversations).
  */
-const SUB_AGENT_COMPRESSION_PROMPT = `**TASK: Summarize the sub-agent conversation above into a concise handover document.**
+const SUB_AGENT_COMPRESSION_PROMPT = `**TASK: Create a concise handover document from the sub-agent conversation history above.**
 
-You are summarizing a tool-using AI agent's work session. Preserve:
+You are creating a technical handover document for a tool-using AI agent. Extract and preserve all critical information with rigorous detail.
 
-1. **Task objective** — what the agent was asked to do
-2. **Key findings** — important information discovered via tool calls (file paths, code snippets, search results)
-3. **Actions taken** — files read/modified, commands run, tools used and their outcomes
-4. **Current progress** — what's done, what's remaining
-5. **Critical context** — exact file paths, function names, error messages, variable values
+**OUTPUT FORMAT:**
 
-**Rules:**
-- Preserve EXACT technical terms, file paths, and code identifiers
-- Be concise but complete — no vague summaries
-- Focus on information the agent needs to continue its task
-- Use structured format with clear sections
+## Task Objective
+- What the agent was asked to do
+- Current completion status
 
-**Output the summary now.**`;
+## Key Findings
+- Important information discovered via tool calls
+- **EXACT** file paths, function names, code identifiers
+- Search results, code patterns, architecture details
+
+## Actions Taken
+- Files read/modified (with exact paths)
+- Commands executed and their outcomes
+- Tools used and their results (key details only)
+
+## Work In Progress
+- Incomplete tasks with specific reasons
+- Planned next steps (concrete, actionable)
+- Known issues and blockers
+
+## Critical Reference Data
+- Important values, IDs, error messages (exact wording)
+- User requirements and constraints
+- Edge cases and special handling
+
+**QUALITY REQUIREMENTS:**
+1. Preserve EXACT technical terms — never paraphrase code/file names
+2. Include FULL context — paths, versions, configurations
+3. NO vague summaries — provide actionable, specific details
+4. Use markdown code blocks for code snippets
+
+**EXECUTE NOW — Output the handover document immediately.**`;
+
+// ── Singleton tiktoken encoder (lazy-initialized) ──
+let _encoder: any = null;
+
+function getEncoder() {
+	if (!_encoder) {
+		try {
+			_encoder = encoding_for_model('gpt-4o');
+		} catch {
+			_encoder = encoding_for_model('gpt-3.5-turbo');
+		}
+	}
+	return _encoder;
+}
 
 export interface SubAgentCompressionResult {
 	compressed: boolean;
 	messages: ChatMessage[];
-	phase: 'none' | 'truncation' | 'ai_summary';
 	beforeTokens?: number;
 	afterTokensEstimate?: number;
+}
+
+/**
+ * Count total tokens in a messages array using tiktoken.
+ * Used as fallback when the API doesn't return usage data.
+ */
+export function countMessagesTokens(messages: ChatMessage[]): number {
+	try {
+		const encoder = getEncoder();
+		let total = 0;
+		for (const msg of messages) {
+			// Count content tokens
+			if (msg.content) {
+				total += encoder.encode(msg.content).length;
+			}
+			// Count tool_calls arguments tokens
+			if (msg.tool_calls) {
+				for (const tc of msg.tool_calls) {
+					if (tc.function?.arguments) {
+						total += encoder.encode(tc.function.arguments).length;
+					}
+					if (tc.function?.name) {
+						total += encoder.encode(tc.function.name).length;
+					}
+				}
+			}
+			// Overhead per message (role, formatting, etc.) ~4 tokens
+			total += 4;
+		}
+		return total;
+	} catch (error) {
+		console.error('[SubAgentCompressor] tiktoken counting failed:', error);
+		// Rough fallback: ~4 chars per token
+		const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+		return Math.round(totalChars / 4);
+	}
 }
 
 /**
@@ -59,26 +128,36 @@ export interface SubAgentCompressionResult {
  * @returns percentage of context used (0-100)
  */
 export function getContextPercentage(
-	latestInputTokens: number,
+	totalTokens: number,
 	maxContextTokens: number,
 ): number {
 	if (!maxContextTokens || maxContextTokens <= 0) return 0;
-	return Math.min(100, (latestInputTokens / maxContextTokens) * 100);
+	return Math.min(100, (totalTokens / maxContextTokens) * 100);
 }
 
 /**
  * Check if compression should be triggered.
  */
 export function shouldCompressSubAgentContext(
-	latestInputTokens: number,
+	totalTokens: number,
 	maxContextTokens: number,
 ): boolean {
-	return getContextPercentage(latestInputTokens, maxContextTokens) >= COMPRESS_THRESHOLD;
+	return getContextPercentage(totalTokens, maxContextTokens) >= COMPRESS_THRESHOLD;
+}
+
+/**
+ * Determine how many recent rounds to preserve based on context pressure.
+ * Higher pressure = fewer rounds preserved = more aggressive compression.
+ */
+function getAdaptiveKeepRounds(percentage: number): number {
+	if (percentage >= 95) return 1; // Extreme pressure: keep only last round
+	if (percentage >= 85) return 2; // High pressure: keep 2 rounds
+	return DEFAULT_KEEP_RECENT_ROUNDS; // Normal (80-84%): keep 3 rounds
 }
 
 /**
  * Find the start index of the "recent rounds" to preserve.
- * We count backwards from the end, counting N complete tool-call rounds
+ * Counts backwards from the end, counting N complete tool-call rounds
  * (assistant with tool_calls + corresponding tool results = 1 round).
  */
 function findRecentRoundsStartIndex(
@@ -91,7 +170,6 @@ function findRecentRoundsStartIndex(
 	while (i >= 0 && roundCount < keepRounds) {
 		const msg = messages[i];
 
-		// When we find tool result messages, trace back to the assistant with tool_calls
 		if (msg?.role === 'tool') {
 			// Skip all consecutive tool messages (they belong to the same round)
 			while (i >= 0 && messages[i]?.role === 'tool') {
@@ -103,88 +181,34 @@ function findRecentRoundsStartIndex(
 				i--;
 			}
 		} else {
-			// user or assistant without tool_calls
 			i--;
 		}
 	}
 
-	// Return the index after i (start of the preserved region)
 	return Math.max(0, i + 1);
 }
 
 /**
- * Phase 1: Smart truncation — replace old large tool results with placeholders.
- * This is instant and costs zero additional tokens.
- *
- * @returns new messages array (shallow copy with truncated tool messages)
- */
-export function truncateToolResults(
-	messages: ChatMessage[],
-	keepRecentRounds: number = KEEP_RECENT_ROUNDS,
-): ChatMessage[] {
-	if (messages.length === 0) return [];
-
-	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRecentRounds);
-	const result: ChatMessage[] = [];
-
-	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i];
-		if (!msg) continue;
-
-		// Messages in the preserved region are kept as-is
-		if (i >= preserveStartIndex) {
-			result.push(msg);
-			continue;
-		}
-
-		// For old tool messages, truncate large results
-		if (msg.role === 'tool' && msg.content && msg.content.length > MIN_TRUNCATION_LENGTH) {
-			// Try to extract tool name from the corresponding assistant message
-			let toolName = 'unknown';
-			for (let j = i - 1; j >= 0; j--) {
-				const prev = messages[j];
-				if (prev?.role === 'assistant' && prev.tool_calls) {
-					const matchingCall = prev.tool_calls.find(tc => tc.id === msg.tool_call_id);
-					if (matchingCall) {
-						toolName = matchingCall.function.name;
-						break;
-					}
-				}
-				if (prev?.role !== 'tool') break;
-			}
-
-			result.push({
-				...msg,
-				content: `[Tool result truncated: ${toolName}, original ${msg.content.length} chars]`,
-			});
-		} else {
-			result.push(msg);
-		}
-	}
-
-	return result;
-}
-
-/**
- * Format a single message for the sub-agent compression transcript.
- * Similar to contextCompressor's formatMessageForTranscript but tailored for sub-agents.
+ * Format a single message for the compression transcript.
+ * Follows the same pattern as the main flow's formatMessageForTranscript:
+ * - Excludes tool result content entirely (only keeps tool call event records)
+ * - This is key to effective compression — tool results are the bulk of the context
  */
 function formatMessageForTranscript(msg: ChatMessage): string | null {
-	if (msg.role === 'system') return null;
-
-	// For tool results, include a brief summary
+	// Skip tool messages entirely — they are the bulk of context and will be discarded
 	if (msg.role === 'tool') {
-		const content = msg.content || '';
-		const summary =
-			content.length > 300
-				? content.substring(0, 300) + `... [truncated, ${content.length} chars total]`
-				: content;
-		return `[Tool Result (${msg.tool_call_id || 'unknown'})]\n${summary}`;
+		return null;
+	}
+
+	// Skip system messages
+	if (msg.role === 'system') {
+		return null;
 	}
 
 	const parts: string[] = [];
 	const roleLabel = msg.role === 'user' ? '[User]' : '[Assistant]';
 
+	// For assistant messages with tool_calls, record the tool call events (not results)
 	if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
 		if (msg.content) {
 			parts.push(`${roleLabel}\n${msg.content}`);
@@ -202,6 +226,7 @@ function formatMessageForTranscript(msg: ChatMessage): string | null {
 		return parts.join('\n');
 	}
 
+	// For regular messages, include content
 	if (msg.content) {
 		parts.push(`${roleLabel}\n${msg.content}`);
 	}
@@ -211,7 +236,10 @@ function formatMessageForTranscript(msg: ChatMessage): string | null {
 
 /**
  * Prepare sub-agent messages for AI compression.
- * Converts the conversation into a two-message format for the compression AI.
+ * Follows the same two-message approach as the main flow:
+ * - Message 1 (User): All interaction records as a single transcript string
+ *   (excludes tool results, only keeps tool call event records)
+ * - Message 2 (User): Compression guidance prompt
  */
 function prepareMessagesForAICompression(
 	conversationMessages: ChatMessage[],
@@ -222,10 +250,10 @@ function prepareMessagesForAICompression(
 	messages.push({
 		role: 'system',
 		content:
-			'You are a technical summarization assistant. Your job is to compress a tool-using AI agent\'s conversation history into a concise but complete summary.',
+			'You are a technical summarization assistant. Your job is to compress a tool-using AI agent\'s conversation history into a concise but complete handover document.',
 	});
 
-	// Build transcript
+	// Build transcript (excluding tool results)
 	const transcriptParts: string[] = [];
 	for (const msg of conversationMessages) {
 		const formatted = formatMessageForTranscript(msg);
@@ -249,17 +277,20 @@ function prepareMessagesForAICompression(
 }
 
 /**
- * Phase 2: AI summary compression — call the AI to generate a summary of old messages.
+ * Perform AI summary compression — call the AI to generate a handover document.
  * Preserves recent tool call rounds and replaces older history with a summary.
  *
+ * @param messages - all sub-agent messages
+ * @param keepRounds - number of recent rounds to preserve
+ * @param config - API configuration
  * @returns new messages array with summary + preserved recent messages
  */
 async function aiSummaryCompress(
 	messages: ChatMessage[],
+	keepRounds: number,
 	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
 ): Promise<ChatMessage[]> {
-	// Find where to split: preserve recent rounds
-	const preserveStartIndex = findRecentRoundsStartIndex(messages, KEEP_RECENT_ROUNDS);
+	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRounds);
 
 	// If there's nothing to compress (all messages are "recent"), return as-is
 	if (preserveStartIndex === 0) {
@@ -330,7 +361,6 @@ async function aiSummaryCompress(
 		}
 	} catch (error) {
 		console.error('[SubAgentCompressor] AI compression failed:', error);
-		// If AI compression fails, return truncated messages as fallback
 		return messages;
 	}
 
@@ -352,74 +382,139 @@ async function aiSummaryCompress(
 }
 
 /**
+ * Fallback: smart truncation — replace old large tool results with compact placeholders.
+ * Used when AI summary compression fails. This is instant and costs zero additional tokens.
+ *
+ * @param messages - current messages array
+ * @param keepRounds - number of recent rounds to preserve
+ * @returns new messages array with truncated tool results
+ */
+function truncateToolResults(
+	messages: ChatMessage[],
+	keepRounds: number,
+): ChatMessage[] {
+	if (messages.length === 0) return [];
+
+	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRounds);
+	const result: ChatMessage[] = [];
+
+	/** Minimum tool result length to consider for truncation */
+	const MIN_TRUNCATION_LENGTH = 500;
+	/** Max chars to keep in preserved region */
+	const MAX_PRESERVED_CHARS = 2000;
+
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i];
+		if (!msg) continue;
+
+		// Helper: find tool name for a tool message
+		const findToolName = (): string => {
+			for (let j = i - 1; j >= 0; j--) {
+				const prev = messages[j];
+				if (prev?.role === 'assistant' && prev.tool_calls) {
+					const match = prev.tool_calls.find(tc => tc.id === msg.tool_call_id);
+					if (match) return match.function.name;
+				}
+				if (prev?.role !== 'tool') break;
+			}
+			return 'unknown';
+		};
+
+		// OLD messages: aggressive truncation (placeholders only)
+		if (i < preserveStartIndex) {
+			if (msg.role === 'tool' && msg.content && msg.content.length > MIN_TRUNCATION_LENGTH) {
+				result.push({
+					...msg,
+					content: `[Tool result truncated: ${findToolName()}, original ${msg.content.length} chars]`,
+				});
+			} else {
+				result.push(msg);
+			}
+			continue;
+		}
+
+		// PRESERVED (recent) messages: truncate oversized tool results but keep more content
+		if (msg.role === 'tool' && msg.content && msg.content.length > MAX_PRESERVED_CHARS) {
+			const toolName = findToolName();
+			const keepStart = Math.floor(MAX_PRESERVED_CHARS * 0.6);
+			const keepEnd = Math.floor(MAX_PRESERVED_CHARS * 0.3);
+			const truncated = msg.content.length - keepStart - keepEnd;
+			result.push({
+				...msg,
+				content:
+					msg.content.substring(0, keepStart) +
+					`\n\n[... ${truncated} chars truncated from ${toolName} result ...]\n\n` +
+					msg.content.substring(msg.content.length - keepEnd),
+			});
+		} else {
+			result.push(msg);
+		}
+	}
+
+	return result;
+}
+
+/**
  * Main compression function for sub-agent context.
- * Implements the two-phase hybrid strategy:
- * Phase 1: Smart truncation (instant, zero cost)
- * Phase 2: AI summary (if truncation is insufficient)
+ * Primary: AI summarization (same approach as the main flow's contextCompressor.ts)
+ * Fallback: Smart truncation (if AI fails — replace old tool results with placeholders)
  *
  * @param messages - current sub-agent messages array
- * @param latestInputTokens - most recent prompt_tokens from API usage
+ * @param totalTokens - total token count (from API usage or tiktoken fallback)
  * @param maxContextTokens - model's max context window size
- * @param config - API configuration for AI compression
+ * @param config - API configuration for compression
  * @returns compression result with new messages array
  */
 export async function compressSubAgentContext(
 	messages: ChatMessage[],
-	latestInputTokens: number,
+	totalTokens: number,
 	maxContextTokens: number,
 	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
 ): Promise<SubAgentCompressionResult> {
-	const percentage = getContextPercentage(latestInputTokens, maxContextTokens);
+	const percentage = getContextPercentage(totalTokens, maxContextTokens);
 
 	if (percentage < COMPRESS_THRESHOLD) {
 		return {
 			compressed: false,
 			messages,
-			phase: 'none',
 		};
 	}
 
-	// Phase 1: Smart truncation
-	const truncatedMessages = truncateToolResults(messages);
+	// Determine adaptive keep rounds based on context pressure
+	const keepRounds = getAdaptiveKeepRounds(percentage);
 
-	// Estimate token reduction from truncation.
-	// A rough heuristic: calculate character ratio as a proxy for token reduction.
-	const originalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
-	const truncatedChars = truncatedMessages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
-	const reductionRatio = originalChars > 0 ? truncatedChars / originalChars : 1;
-	const estimatedTokensAfterTruncation = Math.round(latestInputTokens * reductionRatio);
-	const estimatedPercentageAfterTruncation = getContextPercentage(
-		estimatedTokensAfterTruncation,
-		maxContextTokens,
-	);
+	// Primary: AI summary compression (same pattern as main flow)
+	const compressedMessages = await aiSummaryCompress(messages, keepRounds, config);
 
-	// If truncation alone brings us below threshold, use it
-	if (estimatedPercentageAfterTruncation < COMPRESS_THRESHOLD) {
+	// If AI compression succeeded (returned different messages), use it
+	if (compressedMessages !== messages) {
+		const afterTokens = countMessagesTokens(compressedMessages);
+		return {
+			compressed: true,
+			messages: compressedMessages,
+			beforeTokens: totalTokens,
+			afterTokensEstimate: afterTokens,
+		};
+	}
+
+	// Fallback: AI compression returned original messages (failed or nothing to compress).
+	// Try smart truncation as a last resort to free some context space.
+	console.warn(`[SubAgentCompressor] AI compression ineffective, falling back to truncation`);
+	const truncatedMessages = truncateToolResults(messages, keepRounds);
+	const afterTokens = countMessagesTokens(truncatedMessages);
+
+	// Only report as compressed if truncation actually reduced tokens
+	if (afterTokens < totalTokens) {
 		return {
 			compressed: true,
 			messages: truncatedMessages,
-			phase: 'truncation',
-			beforeTokens: latestInputTokens,
-			afterTokensEstimate: estimatedTokensAfterTruncation,
+			beforeTokens: totalTokens,
+			afterTokensEstimate: afterTokens,
 		};
 	}
 
-	// Phase 2: AI summary compression (truncation wasn't enough)
-	const compressedMessages = await aiSummaryCompress(truncatedMessages, config);
-
-	// Estimate final token count
-	const compressedChars = compressedMessages.reduce(
-		(sum, m) => sum + (m.content?.length || 0),
-		0,
-	);
-	const compressedRatio = originalChars > 0 ? compressedChars / originalChars : 1;
-	const estimatedTokensAfterCompression = Math.round(latestInputTokens * compressedRatio);
-
 	return {
-		compressed: true,
-		messages: compressedMessages,
-		phase: 'ai_summary',
-		beforeTokens: latestInputTokens,
-		afterTokensEstimate: estimatedTokensAfterCompression,
+		compressed: false,
+		messages,
 	};
 }

@@ -761,10 +761,9 @@ export async function handleConversationWithTools(
 							// Handle sub-agent context compressed notification
 							if (subAgentMessage.message.type === 'context_compressed') {
 								const msg = subAgentMessage.message as any;
-								const phaseLabel = msg.phase === 'ai_summary' ? 'AI summary' : 'truncation';
 								const uiMsg = {
 									role: 'subagent' as const,
-									content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[32m✵ Context compressed via ${phaseLabel} (~${formatTokenCount(msg.beforeTokens)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
+									content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[32m✵ Context compressed (~${formatTokenCount(msg.beforeTokens)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
 									streaming: false,
 									messageStatus: 'success' as const,
 									subAgent: {

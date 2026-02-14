@@ -12,6 +12,7 @@ import {
 	shouldCompressSubAgentContext,
 	getContextPercentage,
 	compressSubAgentContext,
+	countMessagesTokens,
 } from '../core/subAgentContextCompressor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {MCPTool} from './mcpToolsManager.js';
@@ -1209,9 +1210,10 @@ You have access to these collaboration tools:
 		let hasError = false;
 		let errorMessage = '';
 		let totalUsage: TokenUsage | undefined;
-		// Latest prompt_tokens from the most recent API call (= current messages total tokens)
-		// Unlike totalUsage which accumulates, this reflects the actual context size per round
-		let latestInputTokens = 0;
+		// Latest total_tokens from the most recent API call (prompt + completion).
+		// Unlike totalUsage which accumulates across rounds, this reflects the actual
+		// context size for the current round — used for context window monitoring.
+		let latestTotalTokens = 0;
 		// Track all user messages injected from the main session
 		const collectedInjectedMessages: string[] = [];
 
@@ -1417,9 +1419,11 @@ You have access to these collaboration tools:
 				// Capture usage from stream events
 				if (event.type === 'usage' && event.usage) {
 					const eventUsage = event.usage;
-					// Track the latest prompt_tokens for context window monitoring
-					// This represents the actual token count of the current messages array
-					latestInputTokens = eventUsage.prompt_tokens || 0;
+					// Track total_tokens (prompt + completion) for context window monitoring.
+					// total_tokens better reflects actual context consumption because the model's
+					// response (completion_tokens) will also be added to the messages array,
+					// contributing to the next round's input.
+					latestTotalTokens = eventUsage.total_tokens || (eventUsage.prompt_tokens || 0) + (eventUsage.completion_tokens || 0);
 
 					if (!totalUsage) {
 						totalUsage = {
@@ -1446,16 +1450,18 @@ You have access to these collaboration tools:
 
 					// Notify UI of context usage DURING the stream (before 'done' marks message complete)
 					// This ensures the streaming message still exists for the UI to update
-					if (onMessage && config.maxContextTokens && latestInputTokens > 0) {
-						const ctxPct = getContextPercentage(latestInputTokens, config.maxContextTokens);
+					if (onMessage && config.maxContextTokens && latestTotalTokens > 0) {
+						const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+						// Use Math.max(1, ...) so the first API call (small prompt) still shows ≥1%
+						// instead of rounding to 0% and hiding the bar entirely
 						onMessage({
 							type: 'sub_agent_message',
 							agentId: agent.id,
 							agentName: agent.name,
 							message: {
 								type: 'context_usage',
-								percentage: Math.round(ctxPct),
-								inputTokens: latestInputTokens,
+								percentage: Math.max(1, Math.round(ctxPct)),
+								inputTokens: latestTotalTokens,
 								maxTokens: config.maxContextTokens,
 							},
 						});
@@ -1525,16 +1531,40 @@ You have access to these collaboration tools:
 				finalResponse = currentContent;
 			}
 
+			// ── Fallback: count tokens with tiktoken when API doesn't return usage ──
+			// Some third-party APIs or proxy servers may not include usage data in responses.
+			// In that case, use tiktoken to estimate the token count from the messages array.
+			if (latestTotalTokens === 0 && config.maxContextTokens) {
+				latestTotalTokens = countMessagesTokens(messages);
+
+				// Send context_usage event with the tiktoken-estimated count
+				if (onMessage && latestTotalTokens > 0) {
+					const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: agent.id,
+						agentName: agent.name,
+						message: {
+							type: 'context_usage',
+							percentage: Math.max(1, Math.round(ctxPct)),
+							inputTokens: latestTotalTokens,
+							maxTokens: config.maxContextTokens,
+						},
+					});
+				}
+			}
+
 			// ── Context compression check ──
 			// After each API round, check if context is approaching the limit.
 			// If so, compress messages to prevent context_length_exceeded errors.
 			// Note: context_usage UI notification is sent during the stream (in the usage event handler above)
 			// to ensure the streaming message still exists for the UI to attach the progress bar.
-			if (latestInputTokens > 0 && config.maxContextTokens) {
+			let justCompressed = false;
+			if (latestTotalTokens > 0 && config.maxContextTokens) {
 				// Trigger compression if above threshold
-				if (shouldCompressSubAgentContext(latestInputTokens, config.maxContextTokens)) {
+				if (shouldCompressSubAgentContext(latestTotalTokens, config.maxContextTokens)) {
 					const ctxPercentage = getContextPercentage(
-						latestInputTokens,
+						latestTotalTokens,
 						config.maxContextTokens,
 					);
 					// Notify UI that compression is starting
@@ -1553,7 +1583,7 @@ You have access to these collaboration tools:
 					try {
 						const compressionResult = await compressSubAgentContext(
 							messages,
-							latestInputTokens,
+							latestTotalTokens,
 							config.maxContextTokens,
 							{
 								model,
@@ -1567,6 +1597,13 @@ You have access to these collaboration tools:
 							// Replace messages array contents
 							messages.length = 0;
 							messages.push(...compressionResult.messages);
+							justCompressed = true;
+
+							// Reset latestTotalTokens to the estimated post-compression value
+							// so the next context_usage event reflects the compressed state
+							if (compressionResult.afterTokensEstimate) {
+								latestTotalTokens = compressionResult.afterTokensEstimate;
+							}
 
 							// Notify UI that compression is complete
 							if (onMessage) {
@@ -1576,7 +1613,6 @@ You have access to these collaboration tools:
 									agentName: agent.name,
 									message: {
 										type: 'context_compressed',
-										phase: compressionResult.phase,
 										beforeTokens: compressionResult.beforeTokens,
 										afterTokensEstimate: compressionResult.afterTokensEstimate,
 									},
@@ -1584,7 +1620,7 @@ You have access to these collaboration tools:
 							}
 
 							console.log(
-								`[SubAgent:${agent.name}] Context compressed (${compressionResult.phase}): ` +
+								`[SubAgent:${agent.name}] Context compressed: ` +
 								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
 							);
 						}
@@ -1597,6 +1633,23 @@ You have access to these collaboration tools:
 						// or will fail with context_length_exceeded on the next round
 					}
 				}
+			}
+
+			// ── After compression: force continuation if agent was about to exit ──
+			// When context was compressed and the model gave a "final" response (no tool_calls),
+			// the response was likely generated under context pressure. Remove it and ask the
+			// agent to continue working with the now-compressed context.
+			if (justCompressed && toolCalls.length === 0) {
+				// Remove the last assistant message (premature exit under context pressure)
+				while (messages.length > 0 && messages[messages.length - 1]?.role === 'assistant') {
+					messages.pop();
+				}
+				// Inject continuation instruction
+				messages.push({
+					role: 'user',
+					content: '[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
+				});
+				continue;
 			}
 
 			// If no tool calls, we're done — BUT first check for spawned children
