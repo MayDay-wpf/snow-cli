@@ -66,6 +66,11 @@ export interface Message {
 		cacheCreationInputTokens?: number;
 		cacheReadInputTokens?: number;
 	};
+	subAgentContextUsage?: {
+		percentage: number;
+		inputTokens: number;
+		maxTokens: number;
+	};
 	parallelGroup?: string; // Group ID for parallel tool execution (same ID = executed together)
 	hookError?: {
 		type: 'warning' | 'error';

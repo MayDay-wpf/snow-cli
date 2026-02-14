@@ -36,6 +36,17 @@ export type UserQuestionResult = {
 	customInput?: string;
 };
 
+/**
+ * Format token count for display (e.g., 1234 → "1.2K", 123456 → "123K")
+ */
+function formatTokenCount(tokens: number | undefined): string {
+	if (!tokens) return '0';
+	if (tokens >= 1000) {
+		return `${(tokens / 1000).toFixed(1)}K`;
+	}
+	return String(tokens);
+}
+
 export type ConversationHandlerOptions = {
 	userContent: string;
 	editorContext?: {
@@ -678,6 +689,10 @@ export async function handleConversationWithTools(
 				let subAgentTokenCount = 0;
 				let lastSubAgentFlushTime = 0;
 				const SUB_AGENT_FLUSH_INTERVAL = 100;
+				// Track latest context usage per sub-agent (keyed by agentId).
+				// This persists across setMessages calls so newly created tool_calls messages
+				// can inherit the latest context usage from the same agent.
+				const latestSubAgentCtxUsage: Record<string, { percentage: number; inputTokens: number; maxTokens: number }> = {};
 				const toolResults = await executeToolCalls(
 					approvedTools,
 					controller.signal,
@@ -686,6 +701,82 @@ export async function handleConversationWithTools(
 					async subAgentMessage => {
 						// Handle sub-agent messages - display and save to session
 						setMessages(prev => {
+							// Handle sub-agent context usage update
+							if (subAgentMessage.message.type === 'context_usage') {
+								// Cache latest context usage for this agent in closure variable.
+								// This ensures newly created tool_calls messages (which are created AFTER
+								// the usage event fires) can inherit the latest context usage.
+								const ctxData = {
+									percentage: subAgentMessage.message.percentage,
+									inputTokens: subAgentMessage.message.inputTokens,
+									maxTokens: subAgentMessage.message.maxTokens,
+								};
+								latestSubAgentCtxUsage[subAgentMessage.agentId] = ctxData;
+
+								// Also try to update the most recent existing message for this agent
+								let targetIndex = -1;
+								for (let i = prev.length - 1; i >= 0; i--) {
+									const m = prev[i];
+									if (
+										m &&
+										m.role === 'subagent' &&
+										m.subAgent?.agentId === subAgentMessage.agentId
+									) {
+										targetIndex = i;
+										break;
+									}
+								}
+								if (targetIndex !== -1) {
+									const updated = [...prev];
+									const existing = updated[targetIndex];
+									if (existing) {
+										updated[targetIndex] = {
+											...existing,
+											subAgentContextUsage: ctxData,
+										};
+									}
+									return updated;
+								}
+								// No existing message yet (first round) — data is cached in
+								// latestSubAgentCtxUsage and will be picked up when tool_calls creates messages.
+								return prev;
+							}
+
+							// Handle sub-agent context compressing notification
+							if (subAgentMessage.message.type === 'context_compressing') {
+								const uiMsg = {
+									role: 'subagent' as const,
+									content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[33m✵ Auto-compressing context (${subAgentMessage.message.percentage}%)...\x1b[0m`,
+									streaming: false,
+									subAgent: {
+										agentId: subAgentMessage.agentId,
+										agentName: subAgentMessage.agentName,
+										isComplete: false,
+									},
+									subAgentInternal: true,
+								};
+								return [...prev, uiMsg];
+							}
+
+							// Handle sub-agent context compressed notification
+							if (subAgentMessage.message.type === 'context_compressed') {
+								const msg = subAgentMessage.message as any;
+								const phaseLabel = msg.phase === 'ai_summary' ? 'AI summary' : 'truncation';
+								const uiMsg = {
+									role: 'subagent' as const,
+									content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[32m✵ Context compressed via ${phaseLabel} (~${formatTokenCount(msg.beforeTokens)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
+									streaming: false,
+									messageStatus: 'success' as const,
+									subAgent: {
+										agentId: subAgentMessage.agentId,
+										agentName: subAgentMessage.agentName,
+										isComplete: false,
+									},
+									subAgentInternal: true,
+								};
+								return [...prev, uiMsg];
+							}
+
 							// Handle inter-agent message sent event
 							if (subAgentMessage.message.type === 'inter_agent_sent') {
 								const msg = subAgentMessage.message as any;
@@ -806,6 +897,9 @@ export async function handleConversationWithTools(
 
 									const newMessages: any[] = [];
 
+									// Inherit latest context usage for this agent (cached from usage events)
+									const inheritedCtxUsage = latestSubAgentCtxUsage[subAgentMessage.agentId];
+
 									// Display time-consuming tools individually with full details (Diff, etc.)
 									for (const toolCall of timeConsumingTools) {
 										const toolDisplay = formatToolCallMessage(toolCall);
@@ -847,6 +941,7 @@ export async function handleConversationWithTools(
 												isComplete: false,
 											},
 											subAgentInternal: true,
+											subAgentContextUsage: inheritedCtxUsage,
 										};
 										newMessages.push(uiMsg);
 									}
@@ -883,6 +978,7 @@ export async function handleConversationWithTools(
 											subAgentInternal: true,
 											// Store pending tool call IDs for later status update
 											pendingToolIds: quickTools.map((tc: any) => tc.id),
+											subAgentContextUsage: inheritedCtxUsage,
 										};
 										newMessages.push(uiMsg);
 									}

@@ -8,6 +8,11 @@ import {getOpenAiConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
+import {
+	shouldCompressSubAgentContext,
+	getContextPercentage,
+	compressSubAgentContext,
+} from '../core/subAgentContextCompressor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import type {ChatMessage} from '../../api/chat.js';
@@ -1103,14 +1108,28 @@ Inserted log points:
 			function: {
 				name: 'spawn_sub_agent',
 				description:
-					'Request the main workflow to spawn a new sub-agent that runs in parallel. The spawned agent executes independently and its results are automatically reported back to the main workflow. Use this when you discover that additional specialized work is needed that another agent type would handle better. Available agent types: agent_explore (code exploration, read-only), agent_plan (planning, read-only), agent_general (full access, code modification), agent_analyze (requirement analysis), agent_debug (debug logging).',
+					`Spawn a NEW sub-agent of a DIFFERENT type to get specialized help. The spawned agent runs in parallel and results are reported back automatically.
+
+**WHEN TO USE** — Only spawn when you genuinely need a different agent's specialization:
+- You are an Explore Agent and need code modifications → spawn agent_general
+- You are a General Purpose Agent and need deep code analysis → spawn agent_explore
+- You need a detailed implementation plan → spawn agent_plan
+- You need requirement clarification with user → spawn agent_analyze
+
+**WHEN NOT TO USE** — Do NOT spawn to offload YOUR OWN work:
+- NEVER spawn an agent of the same type as yourself to delegate your task — that is lazy and wasteful
+- NEVER spawn an agent just to "break work into pieces" if you can do it yourself
+- NEVER spawn when you are simply stuck — try harder or ask the user instead
+- If you can complete the task with your own tools, DO IT YOURSELF
+
+Available agent types: agent_explore (code exploration, read-only), agent_plan (planning, read-only), agent_general (full access, code modification), agent_analyze (requirement analysis), agent_debug (debug logging).`,
 				parameters: {
 					type: 'object',
 					properties: {
 						agent_id: {
 							type: 'string',
 							description:
-								'The agent type to spawn (e.g., "agent_explore", "agent_plan", "agent_general", "agent_analyze", "agent_debug", or a user-defined agent ID).',
+								'The agent type to spawn. Must be a DIFFERENT type from yourself unless you have a very strong justification. (e.g., "agent_explore", "agent_plan", "agent_general", "agent_analyze", "agent_debug", or a user-defined agent ID).',
 						},
 						prompt: {
 							type: 'string',
@@ -1143,10 +1162,10 @@ Inserted log points:
 				)
 				.join('\n');
 			const spawnHint = canSpawn
-				? ', or `spawn_sub_agent` to request new agents'
+				? ', or `spawn_sub_agent` to request a DIFFERENT type of agent for specialized help'
 				: '';
 			const spawnAdvice = canSpawn
-				? ' If additional specialized work is needed, consider spawning a new agent.'
+				? '\n\n**Spawn rules**: Only spawn agents of a DIFFERENT type for work you CANNOT do with your own tools. Complete your own task first — do NOT delegate it.'
 				: '';
 			otherAgentsContext = `\n\n## Currently Running Peer Agents
 The following sub-agents are running in parallel with you. You can use \`query_agents_status\` to get real-time status, \`send_message_to_agent\` to communicate${spawnHint}.
@@ -1156,10 +1175,10 @@ ${agentList}
 If you discover information useful to another agent, proactively share it.${spawnAdvice}`;
 		} else {
 			const spawnToolLine = canSpawn
-				? '\n- `spawn_sub_agent`: Request the main workflow to start a new sub-agent for additional work'
+				? '\n- `spawn_sub_agent`: Spawn a DIFFERENT type of agent for specialized help (do NOT spawn your own type to offload work)'
 				: '';
 			const spawnUsage = canSpawn
-				? '\n\nUse `spawn_sub_agent` when you discover tasks that would benefit from a specialized agent.'
+				? '\n\n**Spawn rules**: Only use `spawn_sub_agent` when you genuinely need a different agent\'s specialization (e.g., you are read-only but need code changes). NEVER spawn to delegate your own task or to "parallelize" work you should do yourself.'
 				: '';
 			otherAgentsContext = `\n\n## Agent Collaboration Tools
 You have access to these collaboration tools:
@@ -1190,6 +1209,9 @@ You have access to these collaboration tools:
 		let hasError = false;
 		let errorMessage = '';
 		let totalUsage: TokenUsage | undefined;
+		// Latest prompt_tokens from the most recent API call (= current messages total tokens)
+		// Unlike totalUsage which accumulates, this reflects the actual context size per round
+		let latestInputTokens = 0;
 		// Track all user messages injected from the main session
 		const collectedInjectedMessages: string[] = [];
 
@@ -1395,6 +1417,10 @@ You have access to these collaboration tools:
 				// Capture usage from stream events
 				if (event.type === 'usage' && event.usage) {
 					const eventUsage = event.usage;
+					// Track the latest prompt_tokens for context window monitoring
+					// This represents the actual token count of the current messages array
+					latestInputTokens = eventUsage.prompt_tokens || 0;
+
 					if (!totalUsage) {
 						totalUsage = {
 							inputTokens: eventUsage.prompt_tokens || 0,
@@ -1416,6 +1442,23 @@ You have access to these collaboration tools:
 								(totalUsage.cacheReadInputTokens || 0) +
 								eventUsage.cache_read_input_tokens;
 						}
+					}
+
+					// Notify UI of context usage DURING the stream (before 'done' marks message complete)
+					// This ensures the streaming message still exists for the UI to update
+					if (onMessage && config.maxContextTokens && latestInputTokens > 0) {
+						const ctxPct = getContextPercentage(latestInputTokens, config.maxContextTokens);
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'context_usage',
+								percentage: Math.round(ctxPct),
+								inputTokens: latestInputTokens,
+								maxTokens: config.maxContextTokens,
+							},
+						});
 					}
 				}
 
@@ -1481,6 +1524,81 @@ You have access to these collaboration tools:
 				messages.push(assistantMessage);
 				finalResponse = currentContent;
 			}
+
+			// ── Context compression check ──
+			// After each API round, check if context is approaching the limit.
+			// If so, compress messages to prevent context_length_exceeded errors.
+			// Note: context_usage UI notification is sent during the stream (in the usage event handler above)
+			// to ensure the streaming message still exists for the UI to attach the progress bar.
+			if (latestInputTokens > 0 && config.maxContextTokens) {
+				// Trigger compression if above threshold
+				if (shouldCompressSubAgentContext(latestInputTokens, config.maxContextTokens)) {
+					const ctxPercentage = getContextPercentage(
+						latestInputTokens,
+						config.maxContextTokens,
+					);
+					// Notify UI that compression is starting
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: agent.id,
+							agentName: agent.name,
+							message: {
+								type: 'context_compressing',
+								percentage: Math.round(ctxPercentage),
+							},
+						});
+					}
+
+					try {
+						const compressionResult = await compressSubAgentContext(
+							messages,
+							latestInputTokens,
+							config.maxContextTokens,
+							{
+								model,
+								requestMethod: config.requestMethod,
+								maxTokens: config.maxTokens,
+								configProfile: agent.configProfile,
+							},
+						);
+
+						if (compressionResult.compressed) {
+							// Replace messages array contents
+							messages.length = 0;
+							messages.push(...compressionResult.messages);
+
+							// Notify UI that compression is complete
+							if (onMessage) {
+								onMessage({
+									type: 'sub_agent_message',
+									agentId: agent.id,
+									agentName: agent.name,
+									message: {
+										type: 'context_compressed',
+										phase: compressionResult.phase,
+										beforeTokens: compressionResult.beforeTokens,
+										afterTokensEstimate: compressionResult.afterTokensEstimate,
+									},
+								});
+							}
+
+							console.log(
+								`[SubAgent:${agent.name}] Context compressed (${compressionResult.phase}): ` +
+								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+							);
+						}
+					} catch (compressError) {
+						console.error(
+							`[SubAgent:${agent.name}] Context compression failed:`,
+							compressError,
+						);
+						// Continue without compression — the API call may still succeed
+						// or will fail with context_length_exceeded on the next round
+					}
+				}
+			}
+
 			// If no tool calls, we're done — BUT first check for spawned children
 			if (toolCalls.length === 0) {
 				// ── Wait for spawned child agents before finishing ──
@@ -1808,6 +1926,22 @@ You have access to these collaboration tools:
 							content: JSON.stringify({
 								success: false,
 								error: 'Both agent_id and prompt are required',
+							}),
+						};
+						messages.push(toolResultMessage);
+						continue;
+					}
+
+					// ── Soft guard: warn when spawning the same agent type as yourself ──
+					// This prevents lazy behavior where an agent spawns a clone of itself
+					// to offload its own work instead of completing it directly.
+					if (spawnAgentId === agent.id) {
+						const toolResultMessage = {
+							role: 'tool' as const,
+							tool_call_id: spawnTool.id,
+							content: JSON.stringify({
+								success: false,
+								error: `REJECTED: You (${agent.name}) attempted to spawn another "${spawnAgentId}" which is the SAME type as yourself. This is not allowed because it wastes resources and delegates work you should complete yourself. If you need help from a DIFFERENT specialization, spawn a different agent type. If the task is within your capabilities, do it yourself.`,
 							}),
 						};
 						messages.push(toolResultMessage);

@@ -268,6 +268,10 @@ export default function MessageRenderer({
 												const titleLine = lines[0] || '';
 												const treeLines = lines.slice(1);
 
+												// Calculate context usage bar for sub-agent messages
+												const ctxUsage = message.subAgentContextUsage;
+												const showCtxBar = ctxUsage && ctxUsage.percentage > 0;
+
 												return (
 													<>
 														<Text color={toolStatusColor}>
@@ -280,6 +284,20 @@ export default function MessageRenderer({
 																	.join('\n')}
 															</Text>
 														)}
+														{showCtxBar && (() => {
+															const pct = ctxUsage.percentage;
+															const barWidth = 10;
+															const filled = Math.round((pct / 100) * barWidth);
+															const empty = barWidth - filled;
+															const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+															const barColor =
+																pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
+															return (
+																<Text color={barColor} dimColor>
+																	{'└─ Context: '}{pct}{'% '}{bar}
+																</Text>
+															);
+														})()}
 													</>
 												);
 											}
@@ -347,6 +365,8 @@ export default function MessageRenderer({
 												</Text>
 											);
 										})()}
+								{/* Sub-agent context usage progress bar is rendered inside the
+								   subAgentInternal IIFE path above (line ~287). Do NOT duplicate here. */}
 									{message.toolDisplay &&
 										message.toolDisplay.args.length > 0 &&
 										// Hide tool arguments for sub-agent internal tools
