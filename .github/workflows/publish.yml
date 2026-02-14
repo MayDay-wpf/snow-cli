@@ -58,9 +58,12 @@ jobs:
 
             ### What's New
 
-            - Add general logging specifications for the system sub-agent "Debugging Assistant"
-            - Sub-agents add an option to follow the global configuration file
-            - The system's built-in MCP service supports start-stop control
+            - Fix LSP client process management and connection error handling
+            - Implement notebook rollback functionality
+            - Optimize sub-agent context compression strategy
+            - Add sub-agent context compression functionality
+            - Add depth limit for spawning sub-agents to prevent infinite recursion
+            - Add collaborative message passing among sub-agents
 
             ### Installation
             ```bash
