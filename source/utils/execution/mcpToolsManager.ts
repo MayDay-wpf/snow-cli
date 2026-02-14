@@ -1678,8 +1678,31 @@ ${combinedOutput}`;
 }
 
 /**
+ * Check if an error is a connection/transport error that warrants a retry
+ */
+function isConnectionError(error: unknown): boolean {
+	if (error instanceof Error) {
+		const msg = error.message.toLowerCase();
+		return (
+			msg.includes('stream') ||
+			msg.includes('destroyed') ||
+			msg.includes('closed') ||
+			msg.includes('ended') ||
+			msg.includes('econnreset') ||
+			msg.includes('econnrefused') ||
+			msg.includes('epipe') ||
+			msg.includes('not connected') ||
+			msg.includes('transport') ||
+			(error as any).code === 'ERR_STREAM_DESTROYED'
+		);
+	}
+	return false;
+}
+
+/**
  * Execute a tool on an external MCP service
  * Uses persistent connections to avoid reconnecting on every call
+ * Automatically retries with a fresh connection on transport errors
  */
 async function executeOnExternalMCPService(
 	serviceName: string,
@@ -1689,28 +1712,56 @@ async function executeOnExternalMCPService(
 ): Promise<any> {
 	// 🔥 FIX: Always use persistent connection for external MCP services
 	// MCP protocol supports multiple calls - no need to reconnect each time
-	const client = await getPersistentClient(serviceName, server);
+	let retried = false;
 
-	logger.debug(
-		`Using persistent MCP client for ${serviceName} tool ${toolName}`,
-	);
+	const attemptCall = async (): Promise<any> => {
+		const client = await getPersistentClient(serviceName, server);
 
-	// 获取 timeout 配置，默认 5 分钟
-	const timeout = server.timeout ?? 300000;
+		logger.debug(
+			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
+		);
 
-	// Execute the tool with the original tool name (not prefixed)
-	const result = await client.callTool(
-		{
-			name: toolName,
-			arguments: args,
-		},
-		undefined,
-		{
-			timeout,
-			resetTimeoutOnProgress: true,
-		},
-	);
-	logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
+		// 获取 timeout 配置，默认 5 分钟
+		const timeout = server.timeout ?? 300000;
 
-	return result.content;
+		// Execute the tool with the original tool name (not prefixed)
+		const result = await client.callTool(
+			{
+				name: toolName,
+				arguments: args,
+			},
+			undefined,
+			{
+				timeout,
+				resetTimeoutOnProgress: true,
+			},
+		);
+		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
+
+		return result.content;
+	};
+
+	try {
+		return await attemptCall();
+	} catch (error) {
+		// If it's a connection error, remove stale client and retry once
+		if (!retried && isConnectionError(error)) {
+			retried = true;
+			logger.info(
+				`Connection error for ${serviceName}, reconnecting and retrying...`,
+			);
+			const clientInfo = persistentClients.get(serviceName);
+			if (clientInfo) {
+				try {
+					await clientInfo.client.close();
+				} catch {
+					// Ignore close errors on stale client
+				}
+				resourceMonitor.trackMCPConnectionClosed(serviceName);
+				persistentClients.delete(serviceName);
+			}
+			return await attemptCall();
+		}
+		throw error;
+	}
 }

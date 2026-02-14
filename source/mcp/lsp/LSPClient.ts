@@ -36,6 +36,7 @@ export class LSPClient {
 	private connection?: MessageConnection;
 	private capabilities?: ServerCapabilities;
 	private isInitialized = false;
+	private isProcessAlive = false;
 	private openDocuments: Set<string> = new Set();
 	private documentVersions: Map<string, number> = new Map();
 	private csharpSolutionLoaded = false;
@@ -103,39 +104,67 @@ export class LSPClient {
 				args.push('-s', this.config.rootPath);
 			}
 
-			this.process = spawn(this.config.command, args, {
-				stdio: ['pipe', 'pipe', 'pipe'],
-				cwd: this.config.rootPath,
-			});
+		this.process = spawn(this.config.command, args, {
+			stdio: ['pipe', 'pipe', 'pipe'],
+			cwd: this.config.rootPath,
+		});
 
-			processManager.register(this.process);
+		this.isProcessAlive = true;
 
-			this.connection = createMessageConnection(
-				new StreamMessageReader(this.process.stdout!),
-				new StreamMessageWriter(this.process.stdin!),
-			);
+		// Detect when the LSP server process exits unexpectedly
+		this.process.on('exit', () => {
+			this.isProcessAlive = false;
+		});
+		this.process.on('error', () => {
+			this.isProcessAlive = false;
+		});
 
-			// Some servers (notably csharp-ls) will call back into the client.
-			// If we don't implement these, the server may crash with RemoteMethodNotFound.
-			this.connection.onRequest('window/workDoneProgress/create', () => null);
-			this.connection.onRequest('client/registerCapability', () => null);
-			this.connection.onRequest('workspace/configuration', () => []);
-			this.connection.onNotification('window/logMessage', (params: any) => {
-				const message =
-					typeof params?.message === 'string' ? params.message : '';
-				if (
-					!this.csharpSolutionLoaded &&
-					message.includes('Finished loading solution')
-				) {
-					this.csharpSolutionLoaded = true;
-					this.resolveCsharpSolutionLoad?.();
-				}
-			});
-			this.connection.onNotification('window/showMessage', (_params: any) => {
-				// ignored
-			});
+		// 🔥 KEY FIX: Suppress 'error' events on stdin to prevent ERR_STREAM_DESTROYED
+		// When a child process dies, Node.js destroys stdin. Subsequent writes via
+		// vscode-jsonrpc's StreamMessageWriter trigger BOTH a callback error (handled
+		// by the Promise) AND an 'error' event on the stream. Without this listener,
+		// the 'error' event becomes an uncaught exception.
+		this.process.stdin?.on('error', () => {
+			this.isProcessAlive = false;
+		});
 
-			this.connection.listen();
+		processManager.register(this.process);
+
+		this.connection = createMessageConnection(
+			new StreamMessageReader(this.process.stdout!),
+			new StreamMessageWriter(this.process.stdin!),
+		);
+
+		// Handle connection-level errors and closure
+		this.connection.onError(([error]) => {
+			console.debug('LSP connection error:', error?.message || error);
+		});
+		this.connection.onClose(() => {
+			this.isInitialized = false;
+			this.isProcessAlive = false;
+		});
+
+		// Some servers (notably csharp-ls) will call back into the client.
+		// If we don't implement these, the server may crash with RemoteMethodNotFound.
+		this.connection.onRequest('window/workDoneProgress/create', () => null);
+		this.connection.onRequest('client/registerCapability', () => null);
+		this.connection.onRequest('workspace/configuration', () => []);
+		this.connection.onNotification('window/logMessage', (params: any) => {
+			const message =
+				typeof params?.message === 'string' ? params.message : '';
+			if (
+				!this.csharpSolutionLoaded &&
+				message.includes('Finished loading solution')
+			) {
+				this.csharpSolutionLoaded = true;
+				this.resolveCsharpSolutionLoad?.();
+			}
+		});
+		this.connection.onNotification('window/showMessage', (_params: any) => {
+			// ignored
+		});
+
+		this.connection.listen();
 			if (this.config.language === 'csharp') {
 				this.csharpSolutionLoaded = false;
 				this.csharpSolutionLoadPromise = new Promise<void>(resolve => {
@@ -215,12 +244,29 @@ export class LSPClient {
 		}
 
 		try {
-			for (const uri of this.openDocuments) {
-				await this.closeDocument(uri);
-			}
+			// Only send protocol messages if the process is still alive
+			if (this.isProcessAlive) {
+				for (const uri of [...this.openDocuments]) {
+					try {
+						await this.closeDocument(uri);
+					} catch {
+						// Process likely dead mid-loop, stop trying
+						break;
+					}
+				}
 
-			await this.connection.sendRequest('shutdown', null);
-			await this.connection.sendNotification('exit', null);
+				try {
+					await this.connection.sendRequest('shutdown', null);
+				} catch {
+					// Server may already be dead
+				}
+
+				try {
+					await this.connection.sendNotification('exit', null);
+				} catch {
+					// Server may have exited after shutdown request
+				}
+			}
 		} catch (error) {
 			console.debug('Error during LSP shutdown:', error);
 		} finally {
@@ -230,16 +276,25 @@ export class LSPClient {
 
 	private async cleanup(): Promise<void> {
 		if (this.connection) {
-			this.connection.dispose();
+			try {
+				this.connection.dispose();
+			} catch {
+				// Connection may already be disposed or broken
+			}
 			this.connection = undefined;
 		}
 
 		if (this.process) {
-			this.process.kill();
+			try {
+				this.process.kill();
+			} catch {
+				// Process may already be dead
+			}
 			this.process = undefined;
 		}
 
 		this.isInitialized = false;
+		this.isProcessAlive = false;
 		this.openDocuments.clear();
 		this.documentVersions.clear();
 	}
@@ -451,6 +506,6 @@ export class LSPClient {
 	}
 
 	isReady(): boolean {
-		return this.isInitialized;
+		return this.isInitialized && this.isProcessAlive;
 	}
 }

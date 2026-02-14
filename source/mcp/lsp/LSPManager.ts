@@ -16,6 +16,13 @@ export class LSPManager {
 			if (client.isReady()) {
 				return client;
 			}
+			// Client is dead or not initialized, clean it up before recreating
+			try {
+				await client.shutdown();
+			} catch {
+				// Ignore cleanup errors for dead clients
+			}
+			this.clients.delete(language);
 		}
 
 		const config = LSPServerRegistry.getConfig(language);
