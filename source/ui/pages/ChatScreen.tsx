@@ -1504,6 +1504,7 @@ export default function ChatScreen({
 				<FileRollbackConfirmation
 					fileCount={snapshotState.pendingRollback.fileCount}
 					filePaths={snapshotState.pendingRollback.filePaths || []}
+					notebookCount={snapshotState.pendingRollback.notebookCount}
 					previewSessionId={sessionManager.getCurrentSession()?.id}
 					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
 					onConfirm={handleRollbackConfirm}

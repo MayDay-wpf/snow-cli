@@ -10,6 +10,7 @@ export function useSnapshotState(messagesLength: number) {
 		messageIndex: number;
 		fileCount: number;
 		filePaths?: string[];
+		notebookCount?: number; // 需要回滚的 notebook 数量
 		message?: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 		crossSessionRollback?: boolean; // 是否跨会话回滚

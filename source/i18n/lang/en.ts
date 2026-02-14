@@ -1157,6 +1157,7 @@ export const en: TranslationKeys = {
 		filesCount: '{count} file(s) will be rolled back',
 		filesCountWithSelection:
 			'{count} file(s) will be rolled back ({selected}/{total} selected)',
+		notebookCount: '{count} notebook(s) will also be rolled back',
 		question: 'Do you want to rollback the files as well?',
 		yesRollbackFiles: 'Yes, rollback files and conversation',
 		noConversationOnly: 'No, rollback conversation only',

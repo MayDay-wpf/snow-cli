@@ -1087,6 +1087,7 @@ export const zhTW: TranslationKeys = {
 		filesCount: '{count} 個檔案將被回滾',
 		filesCountWithSelection:
 			'{count} 個檔案將被回滾 ({selected}/{total} 已選擇)',
+		notebookCount: '{count} 條備忘錄也將被回滾',
 		question: '是否同時回滾檔案？',
 		yesRollbackFiles: '是，回滾檔案和對話',
 		noConversationOnly: '否，僅回滾對話',

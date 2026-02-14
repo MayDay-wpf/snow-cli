@@ -1082,6 +1082,7 @@ export type TranslationKeys = {
 		description: string;
 		filesCount: string;
 		filesCountWithSelection: string;
+		notebookCount: string;
 		question: string;
 		yesRollbackFiles: string;
 		noConversationOnly: string;

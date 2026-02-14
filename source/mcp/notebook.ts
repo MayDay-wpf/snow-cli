@@ -5,7 +5,12 @@ import {
 	updateNotebook,
 	deleteNotebook,
 	getNotebooksByFile,
+	findNotebookById,
+	recordNotebookAddition,
+	recordNotebookUpdate,
+	recordNotebookDeletion,
 } from '../utils/core/notebookManager.js';
+import {getConversationContext} from '../utils/codebase/conversationContext.js';
 
 /**
  * Notebook MCP 工具定义
@@ -183,6 +188,21 @@ export async function executeNotebookTool(
 				}
 
 				const entry = addNotebook(filePath, note);
+
+				// 记录 notebook 添加到快照追踪（用于会话回滚时同步删除）
+				try {
+					const context = getConversationContext();
+					if (context) {
+						recordNotebookAddition(
+							context.sessionId,
+							context.messageIndex,
+							entry.id,
+						);
+					}
+				} catch {
+					// 不影响主流程
+				}
+
 				return {
 					content: [
 						{
@@ -267,6 +287,10 @@ export async function executeNotebookTool(
 					};
 				}
 
+				// 更新前先获取旧内容，用于回滚
+				const previousEntry = findNotebookById(notebookId);
+				const previousNote = previousEntry?.note;
+
 				const updatedEntry = updateNotebook(notebookId, note);
 				if (!updatedEntry) {
 					return {
@@ -285,6 +309,21 @@ export async function executeNotebookTool(
 						],
 						isError: true,
 					};
+				}
+
+				// 记录 notebook 更新到快照追踪（用于会话回滚时恢复旧内容）
+				try {
+					const context = getConversationContext();
+					if (context && previousNote !== undefined) {
+						recordNotebookUpdate(
+							context.sessionId,
+							context.messageIndex,
+							notebookId,
+							previousNote,
+						);
+					}
+				} catch {
+					// 不影响主流程
 				}
 
 				return {
@@ -324,6 +363,9 @@ export async function executeNotebookTool(
 					};
 				}
 
+				// 删除前先获取完整条目，用于回滚时恢复
+				const entryToDelete = findNotebookById(notebookId);
+
 				const deleted = deleteNotebook(notebookId);
 				if (!deleted) {
 					return {
@@ -342,6 +384,20 @@ export async function executeNotebookTool(
 						],
 						isError: true,
 					};
+				}
+
+				// 记录 notebook 删除到快照追踪（用于会话回滚时恢复）
+				try {
+					const context = getConversationContext();
+					if (context && entryToDelete) {
+						recordNotebookDeletion(
+							context.sessionId,
+							context.messageIndex,
+							entryToDelete,
+						);
+					}
+				} catch {
+					// 不影响主流程
 				}
 
 				return {

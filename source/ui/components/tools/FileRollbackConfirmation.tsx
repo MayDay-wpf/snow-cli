@@ -7,6 +7,7 @@ import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapsho
 type Props = {
 	fileCount: number;
 	filePaths: string[];
+	notebookCount?: number;
 	previewSessionId?: string;
 	previewTargetMessageIndex?: number;
 	onConfirm: (rollbackFiles: boolean | null, selectedFiles?: string[]) => void; // null means cancel, selectedFiles for partial rollback
@@ -15,6 +16,7 @@ type Props = {
 export default function FileRollbackConfirmation({
 	fileCount,
 	filePaths,
+	notebookCount,
 	previewSessionId,
 	previewTargetMessageIndex,
 	onConfirm,
@@ -297,6 +299,15 @@ export default function FileRollbackConfirmation({
 					</Text>
 				)}
 			</Box>
+
+			{/* Notebook rollback info */}
+			{notebookCount !== undefined && notebookCount > 0 && (
+				<Box marginBottom={1} marginLeft={2}>
+					<Text color="magenta">
+						{t.fileRollback.notebookCount.replace('{count}', String(notebookCount))}
+					</Text>
+				</Box>
+			)}
 
 			{!showFullList && (
 				<>

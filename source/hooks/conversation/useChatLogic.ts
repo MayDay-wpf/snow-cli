@@ -20,6 +20,12 @@ import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.j
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
+import {
+	getNotebookRollbackCount,
+	rollbackNotebooks,
+	deleteNotebookSnapshotsFromIndex,
+	clearAllNotebookSnapshots,
+} from '../../utils/core/notebookManager.js';
 
 /**
  * Parse "# SubAgentTarget:instanceId:agentName" markers from a message.
@@ -960,10 +966,15 @@ export function useChatLogic(props: UseChatLogicProps) {
 					currentSession.id,
 					selectedIndex,
 				);
+				const nbCount = getNotebookRollbackCount(
+					currentSession.id,
+					selectedIndex,
+				);
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
 					fileCount: filePaths.length,
 					filePaths,
+					notebookCount: nbCount,
 					message: cleanIDEContext(message),
 					images,
 					crossSessionRollback: true,
@@ -1019,11 +1030,18 @@ export function useChatLogic(props: UseChatLogicProps) {
 			selectedIndex,
 		);
 
-		if (filePaths.length > 0) {
+		// 同时检查是否有需要回滚的 notebook
+		const nbCount = getNotebookRollbackCount(
+			currentSession.id,
+			selectedIndex,
+		);
+
+		if (filePaths.length > 0 || nbCount > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length,
 				filePaths,
+				notebookCount: nbCount,
 				message: cleanIDEContext(message),
 				images,
 			});
@@ -1057,6 +1075,13 @@ export function useChatLogic(props: UseChatLogicProps) {
 					currentSession.id,
 					selectedIndex,
 				);
+			}
+
+			// 回滚文件时同步回滚 notebook（文件改坏了，对应的 notebook 大概率也是错的）
+			try {
+				rollbackNotebooks(currentSession.id, selectedIndex);
+			} catch (error) {
+				console.error('Failed to rollback notebooks:', error);
 			}
 		}
 
@@ -1113,6 +1138,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 			if (sessionTruncateIndex === 0 && currentSession) {
 				await hashBasedSnapshotManager.clearAllSnapshots(currentSession.id);
 
+				// 同时清空 notebook 快照追踪
+				clearAllNotebookSnapshots(currentSession.id);
+
 				await sessionManager.deleteSession(currentSession.id);
 
 				sessionManager.clearCurrentSession();
@@ -1135,6 +1163,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 				currentSession.id,
 				selectedIndex,
 			);
+
+			// 如果未选择回滚文件，仍需清理 notebook 快照追踪记录（会话截断后这些记录已无意义）
+			if (!rollbackFiles) {
+				deleteNotebookSnapshotsFromIndex(currentSession.id, selectedIndex);
+			}
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,

@@ -558,6 +558,17 @@ function getToolResourceType(toolName: string): string {
 		return 'todo-state';
 	}
 
+	// Notebook tools all modify the same notebook file - must be sequential
+	if (
+		toolName === 'notebook-add' ||
+		toolName === 'notebook-update' ||
+		toolName === 'notebook-delete' ||
+		toolName === 'notebook-list' ||
+		toolName === 'notebook-query'
+	) {
+		return 'notebook-state';
+	}
+
 	// Terminal commands must be sequential to avoid race conditions
 	// (e.g., npm install -> npm build, port conflicts, file locks)
 	if (toolName === 'terminal-execute') {
@@ -587,6 +598,10 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 
 	if (resourceType === 'todo-state') {
 		return 'todo-state'; // All TODO operations share same resource
+	}
+
+	if (resourceType === 'notebook-state') {
+		return 'notebook-state'; // All Notebook operations share same resource
 	}
 
 	if (resourceType === 'terminal-execution') {
