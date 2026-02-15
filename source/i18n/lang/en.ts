@@ -1287,6 +1287,13 @@ export const en: TranslationKeys = {
 		statusFailed: 'Failed',
 		navigationHint: '↑↓ Navigate • Enter Reconnect • Tab Toggle Service',
 		pleaseWait: 'Please wait...',
+		skillsTitle: 'Skills',
+		noSkills: 'No skills available',
+		skillLocationProject: '(Project)',
+		skillLocationGlobal: '(Global)',
+		scrollHint: '↑↓ to scroll',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
 	},
 	runningAgentsPanel: {
 		title: 'Running Sub-Agents',

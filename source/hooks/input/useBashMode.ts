@@ -296,41 +296,70 @@ export function useBashMode() {
 						timeoutTimer = setTimeout(triggerTimeout, timeout);
 					}
 
+					// PERFORMANCE: Batch output lines to avoid excessive setState calls
+					// When commands produce output extremely fast (e.g. recursive dir listing),
+					// unbatched setState per data event can trigger "Maximum update depth exceeded".
+					const outputBuffer: string[] = [];
+					let outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
+					const OUTPUT_BATCH_SIZE = 15; // Flush every 15 lines
+					const OUTPUT_FLUSH_DELAY = 80; // Or flush after 80ms of inactivity
+
+					const flushOutputBuffer = () => {
+						if (outputFlushTimer) {
+							clearTimeout(outputFlushTimer);
+							outputFlushTimer = null;
+						}
+						if (outputBuffer.length === 0) return;
+						const linesToFlush = outputBuffer.splice(0, outputBuffer.length);
+						setState(prev => ({
+							...prev,
+							output: [...prev.output, ...linesToFlush],
+						}));
+					};
+
+					const appendOutputLines = (lines: string[]) => {
+						outputBuffer.push(...lines);
+						if (outputBuffer.length >= OUTPUT_BATCH_SIZE) {
+							flushOutputBuffer();
+							return;
+						}
+						if (outputFlushTimer) {
+							clearTimeout(outputFlushTimer);
+						}
+						outputFlushTimer = setTimeout(flushOutputBuffer, OUTPUT_FLUSH_DELAY);
+					};
+
 					child.stdout?.on('data', (data: Buffer) => {
 						const text = selected.decode(data);
 						stdout += text;
-						// 实时更新输出到 UI
+						// 实时更新输出到 UI（批处理）
 						const lines = text
 							.split('\n')
 							.map((line: string) => line.replace(/\r$/, ''))
 							.filter((line: string) => line.trim());
 						if (lines.length > 0) {
-							setState(prev => ({
-								...prev,
-								output: [...prev.output, ...lines],
-							}));
+							appendOutputLines(lines);
 						}
 					});
 
 					child.stderr?.on('data', (data: Buffer) => {
 						const text = selected.decode(data);
 						stderr += text;
-						// 实时更新输出到 UI
+						// 实时更新输出到 UI（批处理）
 						const lines = text
 							.split('\n')
 							.map((line: string) => line.replace(/\r$/, ''))
 							.filter((line: string) => line.trim());
 						if (lines.length > 0) {
-							setState(prev => ({
-								...prev,
-								output: [...prev.output, ...lines],
-							}));
+							appendOutputLines(lines);
 						}
 					});
 
 					child.on(
 						'close',
 						(code: number | null, signal: NodeJS.Signals | null) => {
+							// Flush any remaining buffered output before resolving
+							flushOutputBuffer();
 							// 正常退出：返回真实 code/signal
 							safeResolve({
 								success: code === 0,

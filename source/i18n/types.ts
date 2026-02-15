@@ -1210,6 +1210,13 @@ export type TranslationKeys = {
 		statusFailed: string;
 		navigationHint: string;
 		pleaseWait: string;
+		skillsTitle: string;
+		noSkills: string;
+		skillLocationProject: string;
+		skillLocationGlobal: string;
+		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
 	};
 	// Running Agents Panel
 	runningAgentsPanel: {

@@ -112,7 +112,7 @@ type ChatFooterProps = {
 	terminalWidth: number;
 };
 
-export default function ChatFooter(props: ChatFooterProps) {
+const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 	const {t} = useI18n();
 	const [todos, setTodos] = useState<TodoItem[]>([]);
 	const [showTodos, setShowTodos] = useState(false);
@@ -266,4 +266,6 @@ export default function ChatFooter(props: ChatFooterProps) {
 			)}
 		</>
 	);
-}
+});
+
+export default ChatFooter;

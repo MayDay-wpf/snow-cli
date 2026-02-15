@@ -1212,6 +1212,13 @@ export const zhTW: TranslationKeys = {
 		statusFailed: '失敗',
 		navigationHint: '↑↓ 導航 • Enter 重新連線 • Tab 啟停服務',
 		pleaseWait: '請稍候...',
+		skillsTitle: '技能',
+		noSkills: '沒有可用的技能',
+		skillLocationProject: '(專案)',
+		skillLocationGlobal: '(全域)',
+		scrollHint: '↑↓ 捲動',
+		moreAbove: '上方還有 {count} 項',
+		moreBelow: '下方還有 {count} 項',
 	},
 	runningAgentsPanel: {
 		title: '執行中的子代理',

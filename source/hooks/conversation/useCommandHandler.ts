@@ -668,6 +668,27 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				});
 
 				let outputLines: string[] = [];
+				// PERFORMANCE: Batch output updates to avoid excessive re-renders
+				let cmdOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
+				const CMD_OUTPUT_FLUSH_DELAY = 80;
+
+				const flushCmdOutput = () => {
+					if (cmdOutputFlushTimer) {
+						clearTimeout(cmdOutputFlushTimer);
+						cmdOutputFlushTimer = null;
+					}
+					const snapshot = outputLines;
+					options.setCustomCommandExecution(prev =>
+						prev ? {...prev, output: snapshot} : null,
+					);
+				};
+
+				const scheduleCmdOutputFlush = () => {
+					if (cmdOutputFlushTimer) {
+						clearTimeout(cmdOutputFlushTimer);
+					}
+					cmdOutputFlushTimer = setTimeout(flushCmdOutput, CMD_OUTPUT_FLUSH_DELAY);
+				};
 
 				// Stream stdout
 				child.stdout.on('data', (data: Buffer) => {
@@ -676,9 +697,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						.split('\n')
 						.filter((line: string) => line.length > 0);
 					outputLines = [...outputLines, ...newLines].slice(-20); // Keep last 20 lines
-					options.setCustomCommandExecution(prev =>
-						prev ? {...prev, output: outputLines} : null,
-					);
+					scheduleCmdOutputFlush();
 				});
 
 				// Stream stderr
@@ -688,13 +707,13 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						.split('\n')
 						.filter((line: string) => line.length > 0);
 					outputLines = [...outputLines, ...newLines].slice(-20);
-					options.setCustomCommandExecution(prev =>
-						prev ? {...prev, output: outputLines} : null,
-					);
+					scheduleCmdOutputFlush();
 				});
 
 				// Handle completion
 				child.on('close', (code: number | null) => {
+					// Flush any remaining output before closing
+					flushCmdOutput();
 					options.setIsExecutingTerminalCommand(false);
 					options.setCustomCommandExecution(prev =>
 						prev ? {...prev, isRunning: false, exitCode: code} : null,

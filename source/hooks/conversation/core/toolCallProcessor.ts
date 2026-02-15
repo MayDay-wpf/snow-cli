@@ -88,6 +88,9 @@ export async function processToolCallsAfterStream(
 			? `parallel-${Date.now()}-${Math.random()}`
 			: undefined;
 
+	// Batch all two-step display messages into a single setMessages call
+	// to avoid triggering multiple re-renders in rapid succession
+	const pendingDisplayMessages: Message[] = [];
 	for (const toolCall of receivedToolCalls) {
 		const toolDisplay = formatToolCallMessage(toolCall);
 		let toolArgs;
@@ -98,24 +101,25 @@ export async function processToolCallsAfterStream(
 		}
 
 		if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
-			setMessages(prev => [
-				...prev,
-				{
-					role: 'assistant',
-					content: `⚡ ${toolDisplay.toolName}`,
-					streaming: false,
-					toolCall: {
-						name: toolCall.function.name,
-						arguments: toolArgs,
-					},
-					toolDisplay,
-					toolCallId: toolCall.id,
-					toolPending: true,
-					messageStatus: 'pending',
-					parallelGroup: parallelGroupId,
+			pendingDisplayMessages.push({
+				role: 'assistant',
+				content: `⚡ ${toolDisplay.toolName}`,
+				streaming: false,
+				toolCall: {
+					name: toolCall.function.name,
+					arguments: toolArgs,
 				},
-			]);
+				toolDisplay,
+				toolCallId: toolCall.id,
+				toolPending: true,
+				messageStatus: 'pending',
+				parallelGroup: parallelGroupId,
+			});
 		}
+	}
+
+	if (pendingDisplayMessages.length > 0) {
+		setMessages(prev => [...prev, ...pendingDisplayMessages]);
 	}
 
 	return {parallelGroupId};

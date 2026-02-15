@@ -1217,6 +1217,13 @@ export const zh: TranslationKeys = {
 		statusFailed: '失败',
 		navigationHint: '↑↓ 导航 • Enter 重连服务 • Tab 启停服务',
 		pleaseWait: '请稍候...',
+		skillsTitle: '技能',
+		noSkills: '没有可用的技能',
+		skillLocationProject: '(项目)',
+		skillLocationGlobal: '(全局)',
+		scrollHint: '↑↓ 滚动',
+		moreAbove: '上方还有 {count} 项',
+		moreBelow: '下方还有 {count} 项',
 	},
 	runningAgentsPanel: {
 		title: '运行中的子代理',

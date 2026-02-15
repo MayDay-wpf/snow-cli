@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo, useCallback} from 'react';
 import {Box, Text} from 'ink';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -37,7 +37,7 @@ function formatDuration(start: Date, end?: Date): string {
 	return `${minutes}m ${remainingSeconds}s`;
 }
 
-export function BackgroundProcessPanel({
+export const BackgroundProcessPanel = React.memo(function BackgroundProcessPanel({
 	processes,
 	selectedIndex,
 	terminalWidth,
@@ -46,11 +46,13 @@ export function BackgroundProcessPanel({
 	const {theme} = useTheme();
 
 	// Only show running processes first, then completed/failed
-	const sortedProcesses = [...processes].sort((a, b) => {
-		if (a.status === 'running' && b.status !== 'running') return -1;
-		if (a.status !== 'running' && b.status === 'running') return 1;
-		return b.startedAt.getTime() - a.startedAt.getTime();
-	});
+	const sortedProcesses = useMemo(() => {
+		return [...processes].sort((a, b) => {
+			if (a.status === 'running' && b.status !== 'running') return -1;
+			if (a.status !== 'running' && b.status === 'running') return 1;
+			return b.startedAt.getTime() - a.startedAt.getTime();
+		});
+	}, [processes]);
 
 	// Calculate max command width
 	const maxCommandWidth = Math.max(30, terminalWidth - 35);
@@ -68,12 +70,11 @@ export function BackgroundProcessPanel({
 		);
 	}
 
-	const visibleProcesses = sortedProcesses.slice(
-		scrollOffset,
-		scrollOffset + maxVisibleItems,
-	);
+	const visibleProcesses = useMemo(() => {
+		return sortedProcesses.slice(scrollOffset, scrollOffset + maxVisibleItems);
+	}, [sortedProcesses, scrollOffset, maxVisibleItems]);
 
-	const getStatusText = (process: BackgroundProcess) => {
+	const getStatusText = useCallback((process: BackgroundProcess) => {
 		if (process.status === 'running') {
 			return t.backgroundProcesses.statusRunning;
 		}
@@ -81,13 +82,13 @@ export function BackgroundProcessPanel({
 			return t.backgroundProcesses.statusCompleted;
 		}
 		return t.backgroundProcesses.statusFailed;
-	};
+	}, [t]);
 
-	const getStatusColor = (status: string) => {
+	const getStatusColor = useCallback((status: string) => {
 		if (status === 'running') return theme.colors.menuInfo;
 		if (status === 'completed') return theme.colors.success;
 		return theme.colors.error;
-	};
+	}, [theme]);
 
 	return (
 		<Box
@@ -164,4 +165,4 @@ export function BackgroundProcessPanel({
 			)}
 		</Box>
 	);
-}
+});

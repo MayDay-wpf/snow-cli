@@ -3,6 +3,7 @@ import {existsSync} from 'fs';
 import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import matter from 'gray-matter';
+import {getDisabledSkills} from '../utils/config/disabledSkills.js';
 
 export interface SkillMetadata {
 	name: string;
@@ -227,6 +228,12 @@ export async function listAvailableSkills(
 export async function getMCPTools(projectRoot?: string) {
 	const skills = await loadAvailableSkills(projectRoot);
 
+	// Filter out disabled skills
+	const disabledSkills = getDisabledSkills();
+	for (const skillId of disabledSkills) {
+		skills.delete(skillId);
+	}
+
 	// If no skills available, return empty array
 	if (skills.size === 0) {
 		return [];
@@ -333,6 +340,12 @@ export async function executeSkillTool(
 	}
 
 	const skillId = normalizeSkillId(requestedSkillId);
+
+	// Check if skill is disabled
+	const disabledSkills = getDisabledSkills();
+	if (disabledSkills.includes(skillId)) {
+		throw new Error(`Skill "${skillId}" is currently disabled`);
+	}
 
 	// Load available skills
 	const skills = await loadAvailableSkills(projectRoot);

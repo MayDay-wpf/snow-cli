@@ -902,6 +902,10 @@ export default function ChatScreen({
 	}, [streamingState.streamStatus, pendingMessages.length]);
 
 	// Listen to codebase search events
+	// NOTE: streamingState.setCodebaseSearchStatus is a stable useState setter,
+	// so we extract it to avoid depending on the entire streamingState object
+	// (which creates a new reference on every render and causes infinite re-subscriptions).
+	const setCodebaseSearchStatus = streamingState.setCodebaseSearchStatus;
 	useEffect(() => {
 		const handleSearchEvent = (event: {
 			type: 'search-start' | 'search-retry' | 'search-complete';
@@ -915,10 +919,10 @@ export default function ChatScreen({
 		}) => {
 			if (event.type === 'search-complete') {
 				// Clear status immediately
-				streamingState.setCodebaseSearchStatus(null);
+				setCodebaseSearchStatus(null);
 			} else {
 				// Update search status
-				streamingState.setCodebaseSearchStatus({
+				setCodebaseSearchStatus({
 					isSearching: true,
 					attempt: event.attempt,
 					maxAttempts: event.maxAttempts,
@@ -936,7 +940,7 @@ export default function ChatScreen({
 		return () => {
 			codebaseSearchEvents.removeSearchEventListener(handleSearchEvent);
 		};
-	}, [streamingState]);
+	}, [setCodebaseSearchStatus]);
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((input, key) => {
