@@ -163,6 +163,34 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 					'addon-fit',
 					'lib',
 				),
+				vscode.Uri.joinPath(
+					this.extensionUri,
+					'node_modules',
+					'@xterm',
+					'addon-web-links',
+					'lib',
+				),
+				vscode.Uri.joinPath(
+					this.extensionUri,
+					'node_modules',
+					'@xterm',
+					'addon-search',
+					'lib',
+				),
+				vscode.Uri.joinPath(
+					this.extensionUri,
+					'node_modules',
+					'@xterm',
+					'addon-webgl',
+					'lib',
+				),
+				vscode.Uri.joinPath(
+					this.extensionUri,
+					'node_modules',
+					'@xterm',
+					'addon-unicode11',
+					'lib',
+				),
 			],
 		};
 
@@ -405,6 +433,46 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				'addon-fit.js',
 			),
 		);
+		const xtermWebLinksUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this.extensionUri,
+				'node_modules',
+				'@xterm',
+				'addon-web-links',
+				'lib',
+				'addon-web-links.js',
+			),
+		);
+		const xtermSearchUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this.extensionUri,
+				'node_modules',
+				'@xterm',
+				'addon-search',
+				'lib',
+				'addon-search.js',
+			),
+		);
+		const xtermWebglUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this.extensionUri,
+				'node_modules',
+				'@xterm',
+				'addon-webgl',
+				'lib',
+				'addon-webgl.js',
+			),
+		);
+		const xtermUnicode11Uri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this.extensionUri,
+				'node_modules',
+				'@xterm',
+				'addon-unicode11',
+				'lib',
+				'addon-unicode11.js',
+			),
+		);
 
 		const cspSource = webview.cspSource;
 
@@ -425,7 +493,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       height: 100%; 
       width: 100%;
       overflow: hidden;
-      background-color: #1e1e1e;
+      background-color: #181818;
     }
     #terminal-container {
       height: 100%;
@@ -435,6 +503,22 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       height: 100%;
       width: 100%;
     }
+    .xterm .xterm-viewport {
+      overflow: hidden !important;
+      background-color: #181818 !important;
+    }
+    .xterm .xterm-scrollable-element {
+      height: 100%;
+      background-color: #181818 !important;
+    }
+    .xterm .xterm-scrollable-element > .scrollbar.vertical {
+      box-sizing: border-box;
+      border-left: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.12));
+    }
+    .xterm .xterm-scrollable-element > .scrollbar.horizontal {
+      box-sizing: border-box;
+      border-top: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.12));
+    }
   </style>
 </head>
 <body>
@@ -442,6 +526,10 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
   
   <script src="${xtermJsUri}"></script>
   <script src="${xtermFitUri}"></script>
+  <script src="${xtermWebLinksUri}"></script>
+  <script src="${xtermSearchUri}"></script>
+  <script src="${xtermWebglUri}"></script>
+  <script src="${xtermUnicode11Uri}"></script>
   <script>
     (function() {
       const vscode = acquireVsCodeApi();
@@ -465,16 +553,55 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         showError('FitAddon failed to load.');
         return;
       }
+      if (typeof WebLinksAddon === 'undefined') {
+        showError('WebLinksAddon failed to load.');
+        return;
+      }
+      if (typeof SearchAddon === 'undefined') {
+        showError('SearchAddon failed to load.');
+        return;
+      }
 
       try {
-      
       const term = new Terminal({
         cursorBlink: true,
-        fontSize: 13,
-        fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace',
-        scrollback: 10000,
+        fontFamily: 'monospace',
+        fontSize: 14,
+        altClickMovesCursor: true,
+        drawBoldTextInBrightColors: true,
+        minimumContrastRatio: 4.5,
+        tabStopWidth: 8,
+        macOptionIsMeta: false,
+        rightClickSelectsWord: false,
+        fastScrollModifier: 'alt',
+        fastScrollSensitivity: 5,
+        scrollSensitivity: 1,
+        scrollback: 1000,
+        scrollOnUserInput: true,
+        wordSeparator: " ()[]{}',\\\"\`─''|",
+        allowTransparency: false,
+        rescaleOverlappingGlyphs: true,
+        allowProposedApi: true,
+        cursorStyle: 'block',
+        cursorInactiveStyle: 'outline',
+        cursorWidth: 1,
+        convertEol: false,
+        disableStdin: false,
+        screenReaderMode: false,
+        windowOptions: {
+          restoreWin: false,
+          minimizeWin: false,
+          setWinPosition: false,
+          setWinSizePixels: false,
+          raiseWin: false,
+          lowerWin: false,
+          refreshWin: false,
+          setWinSizeChars: false,
+          maximizeWin: false,
+          fullscreenWin: false,
+        },
         theme: {
-          background: '#1e1e1e',
+          background: '#181818',
           foreground: '#d4d4d4',
           cursor: '#aeafad',
           cursorAccent: '#000000',
@@ -499,18 +626,73 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       });
 
       const fitAddon = new FitAddon.FitAddon();
+      const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+      const searchAddon = new SearchAddon.SearchAddon();
       term.loadAddon(fitAddon);
+      term.loadAddon(webLinksAddon);
+      term.loadAddon(searchAddon);
+
+      if (typeof Unicode11Addon !== 'undefined'
+        && Unicode11Addon
+        && typeof Unicode11Addon.Unicode11Addon === 'function') {
+        try {
+          const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+          term.loadAddon(unicode11Addon);
+          try {
+            term.unicode.activeVersion = '11';
+          } catch (unicodeActivationErr) {
+            console.warn('Failed to activate Unicode version 11:', unicodeActivationErr);
+          }
+        } catch (e) {
+          console.warn('Unicode11Addon failed to load:', e);
+        }
+      } else {
+        console.warn('Unicode11Addon unavailable.');
+      }
+
+      if (typeof WebglAddon !== 'undefined'
+        && WebglAddon
+        && typeof WebglAddon.WebglAddon === 'function') {
+        try {
+          const webglAddon = new WebglAddon.WebglAddon();
+          term.loadAddon(webglAddon);
+        } catch (e) {
+          console.warn('WebGL addon failed to load:', e);
+        }
+      }
 
       term.open(container);
+
+      function syncTerminalSizeToHost() {
+        const core = term && term._core;
+        const cssDims = core
+          && core._renderService
+          && core._renderService.dimensions
+          && core._renderService.dimensions.css;
+        const cellHeight = cssDims && cssDims.cell ? cssDims.cell.height : 0;
+        if (!cellHeight || cellHeight <= 0) {
+          return;
+        }
+
+        const availableHeight = container.getBoundingClientRect().height;
+        const usedHeight = term.rows * cellHeight;
+        const remainingHeight = availableHeight - usedHeight;
+
+        // Some layouts leave almost a full-row gap at the bottom; fill it when safe.
+        if (remainingHeight >= cellHeight - 2) {
+          term.resize(term.cols, term.rows + 1);
+        }
+      }
 
       function fitTerminal() {
         try {
           fitAddon.fit();
-            vscode.postMessage({
-              type: 'resize',
-              cols: term.cols,
-              rows: term.rows
-            });
+          syncTerminalSizeToHost();
+          vscode.postMessage({
+            type: 'resize',
+            cols: term.cols,
+            rows: term.rows
+          });
         } catch (e) {}
       }
 
@@ -567,17 +749,16 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         }
       }, true);
 
-      // 选中文本时自动复制到剪贴板
-      term.onSelectionChange(() => {
+      // 右键行为：有选中时复制并清除选中；无选中时粘贴（阻止默认右键菜单）
+      container.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
         const selection = term.getSelection();
         if (selection) {
           navigator.clipboard.writeText(selection).catch(() => {});
+          term.clearSelection();
+          return;
         }
-      });
 
-      // 右键直接粘贴（阻止默认右键菜单）
-      container.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
         navigator.clipboard.readText().then(text => {
           if (text) {
             vscode.postMessage({ type: 'input', data: text });
