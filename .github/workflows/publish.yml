@@ -58,12 +58,12 @@ jobs:
 
             ### What's New
 
-            - Fix LSP client process management and connection error handling
-            - Implement notebook rollback functionality
-            - Optimize sub-agent context compression strategy
-            - Add sub-agent context compression functionality
-            - Add depth limit for spawning sub-agents to prevent infinite recursion
-            - Add collaborative message passing among sub-agents
+            - Fix Chinese character rendering issues in sidebar terminal
+            - Optimize UI rendering performance and enhance MCP panel functionality
+            - Enhance AskUser question component with dynamic option management
+            - Add ESC key support to cancel AskUser prompts
+            - Support adding custom input as selectable options in AskUser dialogs
+            - Skills support refined start and stop
 
             ### Installation
             ```bash

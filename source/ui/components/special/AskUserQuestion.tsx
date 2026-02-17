@@ -40,18 +40,21 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	const [customInput, setCustomInput] = useState('');
 	const [highlightedIndex, setHighlightedIndex] = useState(0);
 	const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
+	// 动态选项列表，支持添加自定义输入
+	const [dynamicOptions, setDynamicOptions] = useState<string[]>([]);
 
 	//Custom input选项的值标识符
 	const CUSTOM_INPUT_VALUE = 'custom';
 	//Cancel选项的值标识符
 	const CANCEL_VALUE = 'cancel';
 
-	//构建选项列表：建议选项 + Custom input + Cancel
+	//构建选项列表：建议选项 + 动态添加的选项 + Custom input + Cancel
 	//防御性检查：确保 options 是数组
 	const safeOptions = Array.isArray(options) ? options : [];
+	const allOptions = [...safeOptions, ...dynamicOptions];
 	const items = useMemo(
 		() => [
-			...safeOptions.map((option, index) => ({
+			...allOptions.map((option, index) => ({
 				label: option,
 				value: `option-${index}`,
 				index,
@@ -67,7 +70,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				index: -2,
 			},
 		],
-		[safeOptions, t.askUser.customInputOption, t.askUser.cancelOption],
+		[allOptions, t.askUser.customInputOption, t.askUser.cancelOption],
 	);
 
 	const handleSubmit = useCallback(() => {
@@ -94,7 +97,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		// 始终支持多选：如果有勾选项则返回数组，否则返回当前高亮项（单个）
 		const selectedOptions = Array.from(checkedIndices)
 			.sort((a, b) => a - b)
-			.map(idx => safeOptions[idx] as string)
+			.map(idx => allOptions[idx] as string)
 			.filter(Boolean);
 
 		setHasAnswered(true);
@@ -115,19 +118,25 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		items,
 		highlightedIndex,
 		checkedIndices,
-		safeOptions,
+		allOptions,
 		onAnswer,
 	]);
 
 	const handleCustomInputSubmit = useCallback(() => {
-		if (!hasAnswered && customInput.trim()) {
-			setHasAnswered(true);
-			onAnswer({
-				selected: t.askUser.customInputLabel,
-				customInput: customInput.trim(),
-			});
+		if (customInput.trim()) {
+			// 将自定义输入添加到动态选项列表中
+			const newOption = customInput.trim();
+			if (!allOptions.includes(newOption)) {
+				setDynamicOptions(prev => [...prev, newOption]);
+			}
+			// 回到选择页面
+			setShowCustomInput(false);
+			setCustomInput('');
+			// 高亮新添加的选项
+			const newIndex = allOptions.length; // 新选项会在下次渲染时出现在这个位置
+			setHighlightedIndex(newIndex);
 		}
-	}, [hasAnswered, customInput, onAnswer, t.askUser.customInputLabel]);
+	}, [customInput, allOptions]);
 
 	const toggleCheck = useCallback((index: number) => {
 		// 不允许勾选特殊选项
@@ -176,7 +185,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 			//数字键快速切换选项勾选状态
 			const num = parseInt(input, 10);
-			if (!isNaN(num) && num >= 1 && num <= safeOptions.length) {
+			if (!isNaN(num) && num >= 1 && num <= allOptions.length) {
 				const idx = num - 1;
 				toggleCheck(idx);
 				return;
@@ -185,6 +194,16 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			//回车确认
 			if (key.return) {
 				handleSubmit();
+				return;
+			}
+
+			//ESC键取消
+			if (key.escape) {
+				setHasAnswered(true);
+				onAnswer({
+					selected: '',
+					cancelled: true,
+				});
 				return;
 			}
 
