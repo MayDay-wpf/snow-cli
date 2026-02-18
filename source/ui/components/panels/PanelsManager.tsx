@@ -22,6 +22,7 @@ import type {RoleLocation} from '../../../utils/commands/role.js';
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
 const SessionListPanel = lazy(() => import('./SessionListPanel.js'));
 const UsagePanel = lazy(() => import('./UsagePanel.js'));
+const DiffReviewPanel = lazy(() => import('./DiffReviewPanel.js'));
 
 type PanelsManagerProps = {
 	terminalWidth: number;
@@ -37,6 +38,14 @@ type PanelsManagerProps = {
 	showRoleList: boolean;
 	showWorkingDirPanel: boolean;
 	showBranchPanel: boolean;
+	showDiffReviewPanel: boolean;
+	diffReviewMessages: Array<{
+		role: string;
+		content: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		subAgentDirected?: unknown;
+	}>;
+	diffReviewSnapshotFileCount: Map<number, number>;
 	advancedModel: string;
 	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
@@ -48,6 +57,7 @@ type PanelsManagerProps = {
 	setShowRoleList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
+	setShowDiffReviewPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 
 	onCustomCommandSave: (
@@ -81,6 +91,9 @@ export default function PanelsManager({
 	showRoleList,
 	showWorkingDirPanel,
 	showBranchPanel,
+	showDiffReviewPanel,
+	diffReviewMessages,
+	diffReviewSnapshotFileCount,
 	advancedModel,
 	basicModel,
 	setShowSessionPanel,
@@ -92,6 +105,7 @@ export default function PanelsManager({
 	setShowRoleList,
 	setShowWorkingDirPanel,
 	setShowBranchPanel,
+	setShowDiffReviewPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
@@ -232,6 +246,19 @@ export default function PanelsManager({
 					<BranchPanel
 						onClose={() => setShowBranchPanel(false)}
 					/>
+				</Box>
+			)}
+
+			{/* Show diff review panel if active */}
+			{showDiffReviewPanel && (
+				<Box paddingX={1} width={terminalWidth}>
+					<Suspense fallback={loadingFallback}>
+						<DiffReviewPanel
+							messages={diffReviewMessages}
+							snapshotFileCount={diffReviewSnapshotFileCount}
+							onClose={() => setShowDiffReviewPanel(false)}
+						/>
+					</Suspense>
 				</Box>
 			)}
 		</>

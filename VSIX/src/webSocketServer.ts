@@ -96,9 +96,21 @@ export function sendEditorContext(): void {
 
 	const editor = vscode.window.activeTextEditor;
 
-	// If no active editor (focus lost), use cached context
 	if (!editor) {
-		if (lastValidContext.activeFile) {
+		if (vscode.window.visibleTextEditors.length === 0) {
+			// All editors closed — clear cached context and notify clients
+			lastValidContext = {
+				type: 'context',
+				workspaceFolder: normalizePath(
+					vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+				),
+				activeFile: undefined,
+				cursorPosition: undefined,
+				selectedText: undefined,
+			};
+			broadcast(JSON.stringify(lastValidContext));
+		} else if (lastValidContext.activeFile) {
+			// Focus moved to non-editor area but files are still open — use cached context
 			broadcast(JSON.stringify(lastValidContext));
 		}
 		return;
@@ -173,6 +185,12 @@ function handleMessage(message: string): void {
 		} else if (data.type === 'closeDiff') {
 			// Close diff view by calling the closeDiff command
 			vscode.commands.executeCommand('snow-cli.closeDiff');
+		} else if (data.type === 'showDiffReview') {
+			// Show multiple file diffs for diff review
+			const files = data.files;
+			if (Array.isArray(files)) {
+				vscode.commands.executeCommand('snow-cli.showDiffReview', {files});
+			}
 		} else if (data.type === 'showGitDiff') {
 			// Show git diff for a file in VSCode
 			const filePath = data.filePath;

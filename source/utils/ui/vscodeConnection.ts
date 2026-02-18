@@ -651,6 +651,38 @@ class VSCodeConnectionManager {
 	}
 
 	/**
+	 * Show multiple file diffs in IDE for diff review
+	 * @param files - Array of file diffs to show
+	 * @returns Promise that resolves when all diffs are sent
+	 */
+	async showDiffReview(
+		files: Array<{
+			filePath: string;
+			originalContent: string;
+			newContent: string;
+		}>,
+	): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+				reject(new Error('VSCode extension not connected'));
+				return;
+			}
+
+			try {
+				this.client.send(
+					JSON.stringify({
+						type: 'showDiffReview',
+						files,
+					}),
+				);
+				resolve();
+			} catch (error) {
+				reject(error);
+			}
+		});
+	}
+
+	/**
 	 * Show git diff for a file in VSCode
 	 * Displays the diff between working tree and HEAD for the specified file
 	 * @param filePath - Absolute path to the file

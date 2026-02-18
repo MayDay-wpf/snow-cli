@@ -476,6 +476,7 @@ export const zhTW: TranslationKeys = {
 			permissions: '管理永遠允許的工具權限',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
+			diff: '在 IDE 中查看對話的檔案修改 Diff',
 			backend: '顯示背景處理程序面板',
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
@@ -1175,6 +1176,11 @@ export const zhTW: TranslationKeys = {
 		confirmDeleteMessagePlural: '確定要刪除 {count} 個目錄嗎？',
 		confirmHint: 'Y 確認, N 取消',
 		alertDefaultCannotDelete: '預設目錄不能被刪除',
+	},
+	diffReviewPanel: {
+		title: 'Diff 審查',
+		noSnapshots: '該會話沒有找到檔案變更記錄',
+		navigationHint: '↑↓ 導航 • Tab 查看檔案 • Enter 開啟全部 • ESC 關閉',
 	},
 	sessionListPanel: {
 		title: '恢復會話',

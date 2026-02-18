@@ -38,6 +38,7 @@ export interface CommandResult {
 		| 'reindexCodebase'
 		| 'toggleCodebase'
 		| 'showBranchPanel'
+		| 'showDiffReviewPanel'
 		| 'sendAsMessage'
 		| 'quit';
 	prompt?: string;

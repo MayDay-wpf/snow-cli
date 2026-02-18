@@ -480,6 +480,7 @@ export type TranslationKeys = {
 			permissions: string;
 			vulnerabilityHunting: string;
 			worktree: string; // Git branch management panel
+			diff: string;
 			quit: string;
 		};
 	};
@@ -1174,6 +1175,11 @@ export type TranslationKeys = {
 		confirmHint: string;
 		// Alert messages
 		alertDefaultCannotDelete: string;
+	};
+	diffReviewPanel: {
+		title: string;
+		noSnapshots: string;
+		navigationHint: string;
 	};
 	sessionListPanel: {
 		title: string;

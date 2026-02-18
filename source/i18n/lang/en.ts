@@ -518,6 +518,7 @@ export const en: TranslationKeys = {
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
+			diff: 'Review file changes from a conversation in IDE diff view',
 			quit: 'Exit the application',
 		},
 	},
@@ -1250,6 +1251,11 @@ export const en: TranslationKeys = {
 		confirmHint: 'Y to confirm, N to cancel',
 		// Alert messages
 		alertDefaultCannotDelete: 'Default directory cannot be deleted',
+	},
+	diffReviewPanel: {
+		title: 'Diff Review',
+		noSnapshots: 'No file changes found in this session',
+		navigationHint: '↑↓ navigate • Tab view files • Enter open all • ESC close',
 	},
 	sessionListPanel: {
 		title: 'Resume',

@@ -58,12 +58,8 @@ jobs:
 
             ### What's New
 
-            - Fix Chinese character rendering issues in sidebar terminal
-            - Optimize UI rendering performance and enhance MCP panel functionality
-            - Enhance AskUser question component with dynamic option management
-            - Add ESC key support to cancel AskUser prompts
-            - Support adding custom input as selectable options in AskUser dialogs
-            - Skills support refined start and stop
+            - Optimize user interaction tools
+            - Add the `/diff` command to view differences in session files
 
             ### Installation
             ```bash

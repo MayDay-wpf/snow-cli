@@ -245,6 +245,10 @@ class SnowWebSocketManager private constructor() {
      * Inner WebSocket server implementation
      */
     private inner class WebSocketServerImpl(address: InetSocketAddress) : WebSocketServer(address) {
+        init {
+            connectionLostTimeout = 0
+        }
+
         override fun onOpen(conn: WebSocket, handshake: ClientHandshake?) {
             clients.add(conn)
 

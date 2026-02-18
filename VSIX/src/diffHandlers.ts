@@ -143,7 +143,7 @@ export function registerDiffCommands(
 						},
 					});
 
-				// Show diff view with preview:false to prevent tabs from being replaced
+				// Show diff view without stealing focus from the terminal
 				const fileName = filePath.split('/').pop() || 'file';
 				const title = `${label}: ${fileName}`;
 				await vscode.commands.executeCommand(
@@ -152,23 +152,10 @@ export function registerDiffCommands(
 					newUri,
 					title,
 					{
-						preview: false, // Changed to false to keep multiple tabs open
+						preview: false,
+						preserveFocus: true,
 					},
 				);
-
-				// Force focus back to terminal after diff is shown
-				// Multiple attempts to ensure focus is restored
-				setTimeout(() => {
-					if (activeTerminal) {
-						activeTerminal.show(false); // false = preserveFocus, focuses the terminal
-					}
-				}, 50);
-
-				setTimeout(() => {
-					if (activeTerminal) {
-						activeTerminal.show(false);
-					}
-				}, 150);
 
 				// Cleanup providers after a delay
 				setTimeout(() => {
@@ -179,6 +166,43 @@ export function registerDiffCommands(
 			} catch (error) {
 				vscode.window.showErrorMessage(
 					`Failed to show diff: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				);
+			}
+		},
+	);
+
+	// Register command to show diff review (multiple files)
+	const showDiffReviewDisposable = vscode.commands.registerCommand(
+		'snow-cli.showDiffReview',
+		async (data: {
+			files: Array<{
+				filePath: string;
+				originalContent: string;
+				newContent: string;
+			}>;
+		}) => {
+			try {
+				const {files} = data;
+				if (!files || files.length === 0) {
+					vscode.window.showInformationMessage(
+						'No file changes to review',
+					);
+					return;
+				}
+
+				for (const file of files) {
+					await vscode.commands.executeCommand('snow-cli.showDiff', {
+						filePath: file.filePath,
+						originalContent: file.originalContent,
+						newContent: file.newContent,
+						label: 'Diff Review',
+					});
+				}
+			} catch (error) {
+				vscode.window.showErrorMessage(
+					`Failed to show diff review: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
 				);
@@ -219,7 +243,7 @@ export function registerDiffCommands(
 		},
 	);
 
-	disposables.push(showDiffDisposable, closeDiffDisposable);
+	disposables.push(showDiffDisposable, showDiffReviewDisposable, closeDiffDisposable);
 
 	return disposables;
 }

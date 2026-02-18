@@ -20,6 +20,7 @@ export type PanelState = {
 	showBranchPanel: boolean;
 	showProfilePanel: boolean;
 	showModelsPanel: boolean;
+	showDiffReviewPanel: boolean;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
 	currentProfileName: string;
@@ -39,6 +40,7 @@ export type PanelActions = {
 	setShowBranchPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
 	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
+	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
 	handleSwitchProfile: (options: {
@@ -66,6 +68,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showBranchPanel, setShowBranchPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
+	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
 	const [profileSearchQuery, setProfileSearchQuery] = useState('');
 	const [currentProfileName, setCurrentProfileName] = useState(() => {
@@ -95,6 +98,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showBranchPanel ||
 			showProfilePanel ||
 			showModelsPanel ||
+			showDiffReviewPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
 			options.hasPendingUserQuestion ||
@@ -185,6 +189,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let BranchPanel handle ESC
 		}
 
+		if (showDiffReviewPanel) {
+			setShowDiffReviewPanel(false);
+			return true;
+		}
+
 		if (showProfilePanel) {
 			setShowProfilePanel(false);
 			return true;
@@ -213,7 +222,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
-			showModelsPanel
+			showModelsPanel ||
+			showDiffReviewPanel
 		);
 	};
 
@@ -232,6 +242,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showBranchPanel,
 		showProfilePanel,
 		showModelsPanel,
+		showDiffReviewPanel,
 		profileSelectedIndex,
 		profileSearchQuery,
 		currentProfileName,
@@ -249,6 +260,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowBranchPanel,
 		setShowProfilePanel,
 		setShowModelsPanel,
+		setShowDiffReviewPanel,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,
 		handleSwitchProfile,

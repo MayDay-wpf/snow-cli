@@ -144,6 +144,9 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeTextEditorSelection(() => {
 			sendEditorContext();
 		}),
+		vscode.window.onDidChangeVisibleTextEditors(() => {
+			sendEditorContext();
+		}),
 	);
 
 	// 6. 监听配置变化

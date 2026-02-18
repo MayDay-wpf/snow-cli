@@ -273,6 +273,7 @@ type CommandHandlerOptions = {
 	setShowRoleList: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
@@ -498,6 +499,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showDiffReviewPanel') {
+				options.setShowDiffReviewPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
 				const commandMessage: Message = {

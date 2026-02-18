@@ -817,6 +817,7 @@ export default function ChatScreen({
 		setShowRoleList: panelState.setShowRoleList,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
+		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
 		onSwitchProfile: handleSwitchProfile,
@@ -1320,6 +1321,9 @@ export default function ChatScreen({
 				showRoleList={panelState.showRoleList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showBranchPanel={panelState.showBranchPanel}
+				showDiffReviewPanel={panelState.showDiffReviewPanel}
+				diffReviewMessages={messages}
+				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
 				advancedModel={advancedModel}
 				basicModel={basicModel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
@@ -1331,6 +1335,7 @@ export default function ChatScreen({
 				setShowRoleList={panelState.setShowRoleList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
+				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (
 					name,
@@ -1537,6 +1542,7 @@ export default function ChatScreen({
 					panelState.showRoleList ||
 					panelState.showWorkingDirPanel ||
 					panelState.showBranchPanel ||
+					panelState.showDiffReviewPanel ||
 					showPermissionsPanel
 				) &&
 				!snapshotState.pendingRollback && (

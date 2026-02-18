@@ -112,6 +112,10 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Open Git branch management panel',
 			},
 			{
+				name: 'diff',
+				description: t.commandPanel.commands.diff || 'Review file changes from a conversation in IDE diff view',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},
