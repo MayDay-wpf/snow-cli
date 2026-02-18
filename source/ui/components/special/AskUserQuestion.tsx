@@ -138,6 +138,12 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		}
 	}, [customInput, allOptions]);
 
+	const handleCustomInputCancel = useCallback(() => {
+		// 取消自定义输入，返回选择列表
+		setShowCustomInput(false);
+		setCustomInput('');
+	}, []);
+
 	const toggleCheck = useCallback((index: number) => {
 		// 不允许勾选特殊选项
 		if (index < 0) return;
@@ -153,7 +159,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		});
 	}, []);
 
-	//处理键盘输入
+	//处理键盘输入 - 选择列表模式
 	useInput(
 		(input, key) => {
 			if (showCustomInput || hasAnswered) {
@@ -222,6 +228,22 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			}
 		},
 		{isActive: !showCustomInput && !hasAnswered},
+	);
+
+	//处理键盘输入 - 自定义输入模式
+	useInput(
+		(_input, key) => {
+			if (!showCustomInput || hasAnswered) {
+				return;
+			}
+
+			//ESC键返回选择列表
+			if (key.escape) {
+				handleCustomInputCancel();
+				return;
+			}
+		},
+		{isActive: showCustomInput && !hasAnswered},
 	);
 
 	return (

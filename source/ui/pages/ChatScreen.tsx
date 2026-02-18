@@ -1004,6 +1004,11 @@ export default function ChatScreen({
 			return;
 		}
 
+		// Skip ESC handling when user question is showing (let AskUserQuestion handle it)
+		if (pendingUserQuestion) {
+			return;
+		}
+
 		// Handle bash sensitive command confirmation
 		if (bashSensitiveCommand) {
 			if (input.toLowerCase() === 'y') {
