@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -57,12 +57,19 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vsix
-          files: VSIX/snow-cli-${{ env.PACKAGE_VERSION }}.vsix
-          name: Release VSCode extension
+          tag_name: vsix-v${{ env.PACKAGE_VERSION }}
+          files: snow-cli-${{ env.PACKAGE_VERSION }}.vsix
+          name: VSCode Extension v${{ env.PACKAGE_VERSION }}
           body: |
-            ## 🚀 Snow CLI VSCode extension 
-            Latest release version: `v${{ env.PACKAGE_VERSION }}`
+            ## 🚀 Snow CLI VSCode Extension v${{ env.PACKAGE_VERSION }}
+
+            ### Installation
+
+            1. Download the `.vsix` file from this release
+            2. Open VSCode
+            3. Go to Extensions view (Ctrl+Shift+X)
+            4. Click the "..." menu → "Install from VSIX..."
+            5. Select the downloaded file
 
             ### Requirements
 
@@ -78,5 +85,12 @@ jobs:
             2. Click the **Snow icon** button in the editor toolbar (top right)
             3. A terminal opens with Snow CLI running
             4. The extension automatically connects via WebSocket
+
+            ### Features
+
+            - Integrated terminal with Snow CLI
+            - WebSocket-based communication
+            - ACE Code Search integration
+            - Sidebar and split terminal modes
           draft: false
           prerelease: false
