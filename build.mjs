@@ -59,6 +59,58 @@ if (typeof globalThis.FormData === 'undefined') {
       return this._data.get(key);
     }
   };
+}
+
+// Polyfill browser APIs required by pdfjs-dist in Node.js environment.
+// pdfjs-dist uses DOMMatrix/ImageData/Path2D at module level, so these must
+// exist before any bundled pdfjs code executes.
+// Only stubs are needed — we only do text extraction, not rendering.
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  globalThis.DOMMatrix = class DOMMatrix {
+    constructor(init) {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+      this.m11 = 1; this.m12 = 0; this.m13 = 0; this.m14 = 0;
+      this.m21 = 0; this.m22 = 1; this.m23 = 0; this.m24 = 0;
+      this.m31 = 0; this.m32 = 0; this.m33 = 1; this.m34 = 0;
+      this.m41 = 0; this.m42 = 0; this.m43 = 0; this.m44 = 1;
+      this.is2D = true; this.isIdentity = true;
+      if (Array.isArray(init) && init.length === 6) {
+        this.a = init[0]; this.b = init[1]; this.c = init[2];
+        this.d = init[3]; this.e = init[4]; this.f = init[5];
+        this.m11 = this.a; this.m12 = this.b;
+        this.m21 = this.c; this.m22 = this.d;
+        this.m41 = this.e; this.m42 = this.f;
+      }
+    }
+    inverse() { return new DOMMatrix(); }
+    multiply() { return new DOMMatrix(); }
+    translate() { return new DOMMatrix(); }
+    scale() { return new DOMMatrix(); }
+    rotate() { return new DOMMatrix(); }
+    scaleSelf() { return this; }
+    translateSelf() { return this; }
+    transformPoint() { return { x: 0, y: 0, z: 0, w: 1 }; }
+  };
+}
+if (typeof globalThis.ImageData === 'undefined') {
+  globalThis.ImageData = class ImageData {
+    constructor(sw, sh) {
+      if (sw instanceof Uint8ClampedArray) {
+        this.data = sw; this.width = sh; this.height = sw.length / (4 * sh);
+      } else {
+        this.width = sw; this.height = sh;
+        this.data = new Uint8ClampedArray(sw * sh * 4);
+      }
+    }
+  };
+}
+if (typeof globalThis.Path2D === 'undefined') {
+  globalThis.Path2D = class Path2D {
+    constructor() {}
+    addPath() {} closePath() {} moveTo() {} lineTo() {}
+    bezierCurveTo() {} quadraticCurveTo() {} arc() {} arcTo() {}
+    ellipse() {} rect() {}
+  };
 }`,
 	},
 	external: [

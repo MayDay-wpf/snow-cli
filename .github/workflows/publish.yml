@@ -58,8 +58,7 @@ jobs:
 
             ### What's New
 
-            - Optimize user interaction tools
-            - Add the `/diff` command to view differences in session files
+            - Fix some bugs
 
             ### Installation
             ```bash
