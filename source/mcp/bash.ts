@@ -4,6 +4,7 @@ import type {CommandExecutionResult} from './types/bash.types.js';
 // Utility functions
 import {
 	isDangerousCommand,
+	isSelfDestructiveCommand,
 	truncateOutput,
 } from './utils/bash/security.utils.js';
 import {processManager} from '../utils/core/processManager.js';
@@ -172,6 +173,15 @@ export class TerminalCommandService {
 			if (isDangerousCommand(command)) {
 				throw new Error(
 					`Dangerous command detected and blocked: ${command.slice(0, 50)}`,
+				);
+			}
+
+			// Self-protection: reject commands that would kill the CLI's own process
+			const selfDestruct = isSelfDestructiveCommand(command);
+			if (selfDestruct.isSelfDestructive) {
+				throw new Error(
+					`[SELF-PROTECTION] Command blocked: ${selfDestruct.reason}. ` +
+						`${selfDestruct.suggestion}`,
 				);
 			}
 

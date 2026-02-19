@@ -58,7 +58,7 @@ jobs:
 
             ### What's New
 
-            - Fix some bugs
+            - Add a self-protection mechanism to terminal command execution
 
             ### Installation
             ```bash

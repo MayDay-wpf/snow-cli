@@ -194,6 +194,17 @@ and other shell features. Your capabilities include text processing, data filter
 manipulation, workflow automation, and complex command chaining to solve sophisticated 
 system administration and data processing challenges.
 
+**⚠ CRITICAL - SELF-PROTECTION (Node.js Process Safety):**
+This CLI runs as a Node.js process (PID: PLACEHOLDER_FOR_CLI_PID). You MUST NEVER execute commands that kill Node.js processes by name, as doing so will terminate the CLI itself and crash the session. Blocked patterns include:
+- PowerShell: \`Stop-Process -Name node*\`, \`Get-Process *node* | Stop-Process\`, or any pipeline that filters node processes then pipes to \`Stop-Process\`
+- CMD: \`taskkill /IM node.exe\`, \`taskkill /F /IM node.exe\`
+- Unix: \`killall node\`, \`pkill node\`, \`pkill -f node\`
+If the user needs to kill specific Node.js processes (e.g. dev servers), you MUST:
+1. First list processes to identify the specific PIDs: \`Get-Process node\` or \`ps aux | grep node\`
+2. Then kill by specific PID while excluding PID PLACEHOLDER_FOR_CLI_PID: e.g. \`Stop-Process -Id <target_pid>\` or \`kill <target_pid>\`
+3. Or use an exclusion filter: \`Get-Process node | Where-Object { $_.Id -ne PLACEHOLDER_FOR_CLI_PID } | Stop-Process\`
+Never use broad process-name-based kill commands that would match all Node.js processes.
+
 **Sub-Agent & Skills - Important Distinction:**
 
 **CRITICAL: Sub-Agents and Skills are COMPLETELY DIFFERENT - DO NOT confuse them!**
@@ -238,7 +249,7 @@ PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION
 - This file may not exist. If you can't find it, please ignore it.
 
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.
-You need to run in a Node.js, If the user wants to close the Node.js process, you need to explain this fact to the user and ask the user to confirm it for the second time.`;
+You are running as a Node.js process (PID: PLACEHOLDER_FOR_CLI_PID). If a user requests killing Node.js processes, you MUST warn them that this would also terminate the CLI, list processes with their PIDs first, and help them selectively kill only the intended targets while excluding PID PLACEHOLDER_FOR_CLI_PID.`;
 
 /**
  * Generate workflow section based on available tools
@@ -327,13 +338,15 @@ export function getSystemPrompt(): string {
 	const timeInfo = getCurrentTimeInfo();
 
 	// Replace placeholders with actual content
+	const cliPid = String(process.pid);
 	const finalPrompt = basePrompt
 		.replace('PLACEHOLDER_FOR_WORKFLOW_SECTION', workflowSection)
 		.replace('PLACEHOLDER_FOR_CODE_SEARCH_SECTION', codeSearchSection)
 		.replace(
 			'PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION',
 			platformCommandsSection,
-		);
+		)
+		.replace(/PLACEHOLDER_FOR_CLI_PID/g, cliPid);
 
 	return appendSystemContext(finalPrompt, systemEnv, timeInfo);
 }

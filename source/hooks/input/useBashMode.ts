@@ -1,5 +1,6 @@
 import {useState, useCallback} from 'react';
 import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
+import {isSelfDestructiveCommand} from '../../mcp/utils/bash/security.utils.js';
 
 export interface BashCommand {
 	id: string;
@@ -117,6 +118,20 @@ export function useBashMode() {
 			command: string,
 			timeout: number = 30000,
 		): Promise<CommandExecutionResult> => {
+			// Self-protection: block commands that would kill the CLI process
+			const selfDestruct = isSelfDestructiveCommand(command);
+			if (selfDestruct.isSelfDestructive) {
+				setState(prev => ({...prev, isExecuting: false}));
+				return {
+					success: false,
+					stdout: '',
+					stderr: `[SELF-PROTECTION] ${selfDestruct.reason}\n${selfDestruct.suggestion}`,
+					command,
+					exitCode: 1,
+					signal: null,
+				};
+			}
+
 			setState(prev => ({
 				...prev,
 				isExecuting: true,
