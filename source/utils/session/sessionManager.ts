@@ -762,12 +762,17 @@ class SessionManager {
 			return;
 		}
 
+		// Capture session reference and ID at start to prevent cross-session pollution.
+		// The async API call below can take seconds; by the time it completes,
+		// this.currentSession may point to a different session (e.g. after /home → new chat).
+		const targetSession = this.currentSession;
+		const targetSessionId = targetSession.id;
+
 		try {
-			// Extract first user and assistant messages
-			const firstUserMessage = this.currentSession.messages.find(
+			const firstUserMessage = targetSession.messages.find(
 				m => m.role === 'user',
 			);
-			const firstAssistantMessage = this.currentSession.messages.find(
+			const firstAssistantMessage = targetSession.messages.find(
 				m => m.role === 'assistant',
 			);
 
@@ -778,28 +783,46 @@ class SessionManager {
 				return;
 			}
 
-			// Generate summary using summary agent
 			const result = await summaryAgent.generateSummary(
 				firstUserMessage.content,
 				firstAssistantMessage.content,
 			);
 
 			if (result) {
-				// Update session with generated summary
-				this.currentSession.title = result.title;
-				this.currentSession.summary = result.summary;
+				// Verify session hasn't changed during the async API call
+				if (
+					!this.currentSession ||
+					this.currentSession.id !== targetSessionId
+				) {
+					// Session switched (e.g. /home was used). Write directly to the
+					// captured session object and persist it, without touching the
+					// now-different currentSession.
+					targetSession.title = result.title;
+					targetSession.summary = result.summary;
+					await this.saveSession(targetSession);
 
-				// Save updated session
-				await this.saveSession(this.currentSession);
+					logger.info(
+						'Summary agent: Updated detached session summary',
+						{
+							sessionId: targetSessionId,
+							title: result.title,
+							summary: result.summary,
+						},
+					);
+					return;
+				}
+
+				targetSession.title = result.title;
+				targetSession.summary = result.summary;
+				await this.saveSession(targetSession);
 
 				logger.info('Summary agent: Successfully updated session summary', {
-					sessionId: this.currentSession.id,
+					sessionId: targetSessionId,
 					title: result.title,
 					summary: result.summary,
 				});
 			}
 		} catch (error) {
-			// Silently fail - don't disrupt main conversation flow
 			logger.error('Summary agent: Failed to generate summary', error);
 		}
 	}

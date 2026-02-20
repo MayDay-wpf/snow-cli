@@ -537,11 +537,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Open profile switching panel (same logic as shortcut)
 				options.onSwitchProfile();
 				// Don't add command message to keep UI clean
-			} else if (result.success && result.action === 'home') {
-				// Reset terminal before navigating to welcome screen
-				resetTerminal(stdout);
-				navigateTo('welcome');
-			} else if (result.success && result.action === 'showUsagePanel') {
+		} else if (result.success && result.action === 'home') {
+			// Clear session BEFORE navigating to prevent stale session leaking into new chat
+			sessionManager.clearCurrentSession();
+			options.clearSavedMessages();
+			// Reset terminal before navigating to welcome screen
+			resetTerminal(stdout);
+			navigateTo('welcome');
+		} else if (result.success && result.action === 'showUsagePanel') {
 				options.setShowUsagePanel(true);
 				const commandMessage: Message = {
 					role: 'command',
@@ -774,11 +777,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				}
-			} else if (result.success && result.action === 'home') {
-				// Reset terminal before navigating to welcome screen
-				resetTerminal(stdout);
-				navigateTo('welcome');
-			} else if (result.success && result.action === 'toggleYolo') {
+		} else if (result.success && result.action === 'home') {
+			// Clear session BEFORE navigating to prevent stale session leaking into new chat
+			sessionManager.clearCurrentSession();
+			options.clearSavedMessages();
+			// Reset terminal before navigating to welcome screen
+			resetTerminal(stdout);
+			navigateTo('welcome');
+		} else if (result.success && result.action === 'toggleYolo') {
 				// Toggle YOLO mode without adding command message
 				options.setYoloMode(prev => !prev);
 				// Don't add command message to keep UI clean
