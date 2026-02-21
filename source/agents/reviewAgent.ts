@@ -433,15 +433,15 @@ Please provide your review in a clear, structured format.`;
 		}
 
 		// Get custom system prompt if configured
-		const customSystemPrompt = getCustomSystemPrompt();
+		const customSystemPrompts = getCustomSystemPrompt();
 
 		// If custom system prompt exists, prepend it to messages
 		let processedMessages = messages;
-		if (customSystemPrompt) {
+		if (customSystemPrompts && customSystemPrompts.length > 0) {
 			processedMessages = [
 				{
 					role: 'system',
-					content: customSystemPrompt,
+					content: customSystemPrompts.join('\n\n'),
 				},
 				...messages,
 			];

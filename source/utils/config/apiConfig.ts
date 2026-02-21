@@ -41,8 +41,8 @@ export interface ApiConfig {
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	showThinking?: boolean; // Show AI thinking process in UI (default: true)
-	// 选填：覆盖 system-prompt.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
-	systemPromptId?: string;
+	// 选填：覆盖 system-prompt.json 的 active（undefined=跟随全局；''=不使用；string=按ID选择；string[]=多选）
+	systemPromptId?: string | string[];
 	// 选填：覆盖 custom-headers.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
 	customHeadersSchemeId?: string;
 	// 文件搜索编辑相似度阈值 (0.0-1.0, 默认: 0.75, 建议非必要不修改)
@@ -83,7 +83,7 @@ export interface SystemPromptItem {
  * 系统提示词配置
  */
 export interface SystemPromptConfig {
-	active: string; // 当前激活的提示词 ID
+	active: string[]; // 当前激活的提示词 ID 列表（支持多选）
 	prompts: SystemPromptItem[]; // 提示词列表
 }
 
@@ -445,7 +445,7 @@ function migrateSystemPromptFromTxt(): void {
 
 		// 创建默认配置，将旧内容作为默认项
 		const config: SystemPromptConfig = {
-			active: 'default',
+			active: ['default'],
 			prompts: [
 				{
 					id: 'default',
@@ -494,7 +494,15 @@ export function getSystemPromptConfig(): SystemPromptConfig | undefined {
 			return undefined;
 		}
 
-		const config: SystemPromptConfig = JSON.parse(content);
+		const config = JSON.parse(content) as SystemPromptConfig;
+
+		// 向后兼容：将旧版 active: string 自动迁移为 string[]
+		if (typeof config.active === 'string') {
+			config.active = config.active ? [config.active] : [];
+		} else if (!Array.isArray(config.active)) {
+			config.active = [];
+		}
+
 		return config;
 	} catch (error) {
 		console.error('Failed to read system prompt config:', error);
@@ -524,14 +532,15 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 读取自定义系统提示词（当前激活的）
  * 兼容旧版本 system-prompt.txt
  * 新版本从 system-prompt.json 读取当前激活的提示词
+ * 返回激活提示词内容数组，每个元素对应一个提示词
  */
-export function getCustomSystemPrompt(): string | undefined {
+export function getCustomSystemPrompt(): string[] | undefined {
 	return getCustomSystemPromptForConfig(getOpenAiConfig());
 }
 
 export function getCustomSystemPromptForConfig(
 	apiConfig: ApiConfig,
-): string | undefined {
+): string[] | undefined {
 	const {systemPromptId} = apiConfig;
 	const config = getSystemPromptConfig();
 
@@ -544,19 +553,26 @@ export function getCustomSystemPromptForConfig(
 		return undefined;
 	}
 
-	// profile 覆盖：允许选择列表中的任意项（不依赖 active 状态）
+	// profile 覆盖：支持 string（单选兼容）和 string[]（多选）
 	if (systemPromptId) {
-		const prompt = config.prompts.find(p => p.id === systemPromptId);
-		return prompt?.content;
+		const ids = Array.isArray(systemPromptId)
+			? systemPromptId
+			: [systemPromptId];
+		const contents = ids
+			.map(id => config.prompts.find(p => p.id === id)?.content)
+			.filter((c): c is string => typeof c === 'string' && c.length > 0);
+		return contents.length > 0 ? contents : undefined;
 	}
 
-	// 默认行为：跟随全局激活
-	if (!config.active) {
+	// 默认行为：跟随全局激活列表
+	if (!config.active || config.active.length === 0) {
 		return undefined;
 	}
 
-	const activePrompt = config.prompts.find(p => p.id === config.active);
-	return activePrompt?.content;
+	const contents = config.active
+		.map(id => config.prompts.find(p => p.id === id)?.content)
+		.filter((c): c is string => typeof c === 'string' && c.length > 0);
+	return contents.length > 0 ? contents : undefined;
 }
 
 /**

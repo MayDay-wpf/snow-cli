@@ -96,7 +96,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 	const [config, setConfig] = useState<SystemPromptConfig>(() => {
 		return (
 			getSystemPromptConfig() || {
-				active: '',
+				active: [],
 				prompts: [],
 			}
 		);
@@ -114,7 +114,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 	const actions: ListAction[] =
 		config.prompts.length > 0
-			? config.active
+			? config.active.length > 0
 				? ['activate', 'deactivate', 'edit', 'delete', 'add', 'back']
 				: ['activate', 'edit', 'delete', 'add', 'back']
 			: ['add', 'back'];
@@ -153,9 +153,15 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 			return;
 
 		const prompt = config.prompts[selectedIndex]!;
+		const isAlreadyActive = config.active.includes(prompt.id);
+
+		const newActive = isAlreadyActive
+			? config.active.filter(id => id !== prompt.id)
+			: [...config.active, prompt.id];
+
 		const newConfig: SystemPromptConfig = {
 			...config,
-			active: prompt.id,
+			active: newActive,
 		};
 
 		if (saveAndRefresh(newConfig)) {
@@ -166,7 +172,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 	const handleDeactivate = () => {
 		const newConfig: SystemPromptConfig = {
 			...config,
-			active: '',
+			active: [],
 		};
 
 		if (saveAndRefresh(newConfig)) {
@@ -275,12 +281,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 		const promptToDelete = config.prompts[selectedIndex]!;
 		const newPrompts = config.prompts.filter((_, i) => i !== selectedIndex);
-		const newActive =
-			config.active === promptToDelete.id && newPrompts.length > 0
-				? newPrompts[0]!.id
-				: config.active === promptToDelete.id
-				? ''
-				: config.active;
+		const newActive = config.active.filter(id => id !== promptToDelete.id);
 
 		const newConfig: SystemPromptConfig = {
 			active: newActive,
@@ -311,7 +312,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 		const newConfig: SystemPromptConfig = {
 			...config,
 			prompts: [...config.prompts, newPrompt],
-			active: config.prompts.length === 0 ? newPrompt.id : config.active,
+			active: config.prompts.length === 0 ? [newPrompt.id] : config.active,
 		};
 
 		if (saveAndRefresh(newConfig)) {
@@ -361,6 +362,9 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 						prev < config.prompts.length - 1 ? prev + 1 : 0,
 					);
 				}
+			} else if (_input === ' ') {
+				// 空格键快速切换当前选中项的激活状态
+				handleActivate();
 			} else if (key.leftArrow) {
 				const currentIdx = actions.indexOf(currentAction);
 				setCurrentAction(
@@ -446,7 +450,10 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 
 	// Render list view
 	if (view === 'list') {
-		const activePrompt = config.prompts.find(p => p.id === config.active);
+		const activePromptNames = config.active
+			.map(id => config.prompts.find(p => p.id === id)?.name)
+			.filter(Boolean)
+			.join(', ');
 
 		return (
 			<Box flexDirection="column" padding={1}>
@@ -460,8 +467,17 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 					<Text bold>
 						{t.systemPromptConfig.activePrompt}{' '}
 						<Text color={theme.colors.success}>
-							{activePrompt?.name || t.systemPromptConfig.none}
+							{activePromptNames || t.systemPromptConfig.none}
 						</Text>
+						{config.active.length > 0 && (
+							<Text dimColor>
+								{' '}
+								({t.systemPromptConfig.activeCount.replace(
+									'{count}',
+									String(config.active.length),
+								)})
+							</Text>
+						)}
 					</Text>
 				</Box>
 
@@ -482,21 +498,22 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 									color={
 										index === selectedIndex
 											? theme.colors.menuSelected
-											: prompt.id === config.active
+											: config.active.includes(prompt.id)
 											? theme.colors.menuInfo
 											: theme.colors.menuNormal
 									}
 								>
-									{index === selectedIndex ? '❯ ' : '  '}
-									{prompt.id === config.active ? '✓ ' : '  '}
+									{index === selectedIndex ? '> ' : '  '}
+									{config.active.includes(prompt.id) ? '[x] ' : '[ ] '}
 									{prompt.name}
-									{prompt.content && (
-										<Text dimColor>
-											{' '}
-											- {prompt.content.substring(0, 50)}
-											{prompt.content.length > 50 ? '...' : ''}
-										</Text>
-									)}
+									{typeof prompt.content === 'string' &&
+										prompt.content.length > 0 && (
+											<Text dimColor>
+												{' '}
+												- {prompt.content.substring(0, 50)}
+												{prompt.content.length > 50 ? '...' : ''}
+											</Text>
+										)}
 								</Text>
 							</Box>
 						))}

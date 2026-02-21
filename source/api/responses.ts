@@ -182,14 +182,14 @@ function toResponseImageUrl(image: {data: string; mimeType?: string}): string {
 function convertToResponseInput(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string,
+	customSystemPromptOverride?: string[],
 	planMode: boolean = false, // When true, use Plan mode system prompt
 	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): {
 	input: any[];
 	systemInstructions: string;
 } {
-	const customSystemPrompt = customSystemPromptOverride;
+	const customSystemPrompts = customSystemPromptOverride;
 	const result: any[] = [];
 
 	for (const msg of messages) {
@@ -321,9 +321,9 @@ function convertToResponseInput(
 	// 确定系统提示词：参考 anthropic.ts 的逻辑
 	let systemInstructions: string;
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompt) {
-		// 有自定义系统提示词：自定义作为 instructions
-		systemInstructions = customSystemPrompt;
+	if (customSystemPrompts && customSystemPrompts.length > 0) {
+		// 有自定义系统提示词：拼接多条作为 instructions
+		systemInstructions = customSystemPrompts.join('\n\n');
 		if (includeBuiltinSystemPrompt) {
 			// 默认系统提示词作为第一条用户消息
 			result.unshift({
@@ -465,7 +465,7 @@ export async function* createStreamingResponse(
 	}
 
 	// Get system prompt (with custom override support)
-	let customSystemPromptContent: string | undefined;
+	let customSystemPromptContent: string[] | undefined;
 	if (options.customSystemPromptId) {
 		const {getSystemPromptConfig} = await import(
 			'../utils/config/apiConfig.js'
@@ -474,8 +474,8 @@ export async function* createStreamingResponse(
 		const customPrompt = systemPromptConfig?.prompts.find(
 			p => p.id === options.customSystemPromptId,
 		);
-		if (customPrompt) {
-			customSystemPromptContent = customPrompt.content;
+		if (customPrompt?.content) {
+			customSystemPromptContent = [customPrompt.content];
 		}
 	}
 

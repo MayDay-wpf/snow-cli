@@ -123,16 +123,21 @@ export default function ConfigScreen({
 	const [baseUrl, setBaseUrl] = useState('');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
-	const [systemPromptId, setSystemPromptId] = useState<string | undefined>(
-		undefined,
-	);
+	const [systemPromptId, setSystemPromptId] = useState<
+		string | string[] | undefined
+	>(undefined);
 	const [customHeadersSchemeId, setCustomHeadersSchemeId] = useState<
 		string | undefined
 	>(undefined);
 	const [systemPrompts, setSystemPrompts] = useState<
 		Array<{id: string; name: string}>
 	>([]);
-	const [activeSystemPromptId, setActiveSystemPromptId] = useState('');
+	const [activeSystemPromptIds, setActiveSystemPromptIds] = useState<string[]>(
+		[],
+	);
+	const [pendingPromptIds, setPendingPromptIds] = useState<Set<string>>(
+		new Set(),
+	);
 	const [customHeaderSchemes, setCustomHeaderSchemes] = useState<
 		Array<{id: string; name: string}>
 	>([]);
@@ -354,7 +359,7 @@ export default function ConfigScreen({
 		setSystemPrompts(
 			(systemPromptConfig?.prompts || []).map(p => ({id: p.id, name: p.name})),
 		);
-		setActiveSystemPromptId(systemPromptConfig?.active || '');
+		setActiveSystemPromptIds(systemPromptConfig?.active || []);
 
 		const customHeadersConfig = getCustomHeadersConfig();
 		setCustomHeaderSchemes(
@@ -481,10 +486,13 @@ export default function ConfigScreen({
 	};
 
 	const getSystemPromptSelectItems = () => {
-		const activeLabel = activeSystemPromptId
+		const activeNames = activeSystemPromptIds
+			.map(id => getSystemPromptNameById(id))
+			.join(', ');
+		const activeLabel = activeNames
 			? t.configScreen.followGlobalWithParentheses.replace(
 					'{name}',
-					getSystemPromptNameById(activeSystemPromptId),
+					activeNames,
 			  )
 			: t.configScreen.followGlobalNoneWithParentheses;
 		return [
@@ -499,6 +507,7 @@ export default function ConfigScreen({
 
 	const getSystemPromptSelectedValue = () => {
 		if (systemPromptId === '') return '__DISABLED__';
+		if (Array.isArray(systemPromptId)) return '__FOLLOW__';
 		if (systemPromptId) return systemPromptId;
 		return '__FOLLOW__';
 	};
@@ -866,12 +875,25 @@ export default function ConfigScreen({
 				let display = t.configScreen.followGlobalNone;
 				if (systemPromptId === '') {
 					display = t.configScreen.notUse;
-				} else if (systemPromptId) {
+				} else if (
+					Array.isArray(systemPromptId) &&
+					systemPromptId.length > 0
+				) {
+					display = systemPromptId
+						.map(id => getSystemPromptNameById(id))
+						.join(', ');
+				} else if (
+					systemPromptId &&
+					typeof systemPromptId === 'string'
+				) {
 					display = getSystemPromptNameById(systemPromptId);
-				} else if (activeSystemPromptId) {
+				} else if (activeSystemPromptIds.length > 0) {
+					const activeNames = activeSystemPromptIds
+						.map(id => getSystemPromptNameById(id))
+						.join(', ');
 					display = t.configScreen.followGlobal.replace(
 						'{name}',
-						getSystemPromptNameById(activeSystemPromptId),
+						activeNames,
 					);
 				}
 				return (
@@ -1472,6 +1494,9 @@ export default function ConfigScreen({
 		) {
 			setIsEditing(false);
 			setSearchTerm('');
+			if (currentField === 'systemPromptId') {
+				setPendingPromptIds(new Set());
+			}
 			// Force re-render to clear Select component artifacts
 			forceUpdate(prev => prev + 1);
 			return;
@@ -1690,6 +1715,19 @@ export default function ConfigScreen({
 							setManualInputValue(getCurrentValue());
 						});
 				} else {
+					// 进入编辑模式时，为 systemPromptId 初始化多选临时状态
+					if (currentField === 'systemPromptId') {
+						if (Array.isArray(systemPromptId)) {
+							setPendingPromptIds(new Set(systemPromptId));
+						} else if (
+							systemPromptId &&
+							systemPromptId !== ''
+						) {
+							setPendingPromptIds(new Set([systemPromptId]));
+						} else {
+							setPendingPromptIds(new Set());
+						}
+					}
 					setIsEditing(true);
 				}
 			}
@@ -2092,19 +2130,111 @@ export default function ConfigScreen({
 								const items = getSystemPromptSelectItems();
 								const selected = getSystemPromptSelectedValue();
 								return (
-									<ScrollableSelectInput
-										items={items}
-										limit={10}
-										initialIndex={Math.max(
-											0,
-											items.findIndex(opt => opt.value === selected),
-										)}
-										isFocused={true}
-										onSelect={item => {
-											applySystemPromptSelectValue(item.value);
-											setIsEditing(false);
-										}}
-									/>
+									<Box flexDirection="column">
+										<ScrollableSelectInput
+											items={items}
+											limit={10}
+											initialIndex={Math.max(
+												0,
+												items.findIndex(
+													opt => opt.value === selected,
+												),
+											)}
+											isFocused={true}
+											selectedValues={pendingPromptIds}
+											renderItem={({
+												label,
+												value,
+												isSelected,
+												isMarked,
+											}) => {
+												const isMeta =
+													value === '__FOLLOW__' ||
+													value === '__DISABLED__';
+												return (
+													<Text
+														color={
+															isSelected
+																? 'cyan'
+																: isMarked
+																? theme.colors.menuInfo
+																: 'white'
+														}
+													>
+														{isMeta
+															? ''
+															: isMarked
+															? '[x] '
+															: '[ ] '}
+														{label}
+													</Text>
+												);
+											}}
+											onToggleItem={item => {
+												if (
+													item.value === '__FOLLOW__' ||
+													item.value === '__DISABLED__'
+												) {
+													applySystemPromptSelectValue(
+														item.value,
+													);
+													setPendingPromptIds(new Set());
+													setIsEditing(false);
+													return;
+												}
+												setPendingPromptIds(prev => {
+													const next = new Set(prev);
+													if (next.has(item.value)) {
+														next.delete(item.value);
+													} else {
+														next.add(item.value);
+													}
+													return next;
+												});
+											}}
+											onSelect={item => {
+												if (
+													item.value === '__FOLLOW__' ||
+													item.value === '__DISABLED__'
+												) {
+													applySystemPromptSelectValue(
+														item.value,
+													);
+													setPendingPromptIds(new Set());
+													setIsEditing(false);
+													return;
+												}
+												// Enter 确认：取 pendingPromptIds 或当前项
+												const finalIds =
+													pendingPromptIds.size > 0
+														? Array.from(pendingPromptIds)
+														: [item.value];
+												if (
+													pendingPromptIds.size > 0 &&
+													!pendingPromptIds.has(item.value)
+												) {
+													finalIds.push(item.value);
+												}
+												setSystemPromptId(
+													finalIds.length === 1
+														? finalIds[0]!
+														: finalIds,
+												);
+												setPendingPromptIds(new Set());
+												setIsEditing(false);
+											}}
+										/>
+										<Box marginTop={1}>
+											<Text
+												color={theme.colors.menuSecondary}
+												dimColor
+											>
+												{t.configScreen
+													.systemPromptMultiSelectHint ||
+													'Space: toggle | Enter: confirm | Esc: cancel'}
+											</Text>
+										</Box>
+									</Box>
 								);
 							})()}
 						{currentField === 'customHeadersSchemeId' &&

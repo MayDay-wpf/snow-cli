@@ -98,11 +98,11 @@ export interface ChatCompletionMessageParam {
 function convertToOpenAIMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string,
+	customSystemPromptOverride?: string[],
 	planMode: boolean = false, // When true, use Plan mode system prompt
 	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): ChatCompletionMessageParam[] {
-	const customSystemPrompt = customSystemPromptOverride;
+	const customSystemPrompts = customSystemPromptOverride;
 
 	let result = messages.map(msg => {
 		// 如果消息包含图片，使用 content 数组格式
@@ -216,13 +216,16 @@ function convertToOpenAIMessages(
 	}
 
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompt) {
+	if (customSystemPrompts && customSystemPrompts.length > 0) {
 		if (includeBuiltinSystemPrompt) {
-			// 自定义系统提示词作为 system 消息，默认系统提示词作为第一条 user 消息
+			// 自定义系统提示词作为 system 消息（多条独立内容块），默认系统提示词作为第一条 user 消息
 			result = [
 				{
 					role: 'system',
-					content: customSystemPrompt,
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
 				} as ChatCompletionMessageParam,
 				{
 					role: 'user',
@@ -235,7 +238,10 @@ function convertToOpenAIMessages(
 			result = [
 				{
 					role: 'system',
-					content: customSystemPrompt,
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
 				} as ChatCompletionMessageParam,
 				...result,
 			];
@@ -392,7 +398,7 @@ export async function* createStreamingChatCompletion(
 	}
 
 	// Get system prompt (with custom override support)
-	let customSystemPromptContent: string | undefined;
+	let customSystemPromptContent: string[] | undefined;
 	if (options.customSystemPromptId) {
 		const {getSystemPromptConfig} = await import(
 			'../utils/config/apiConfig.js'
@@ -401,8 +407,8 @@ export async function* createStreamingChatCompletion(
 		const customPrompt = systemPromptConfig?.prompts.find(
 			p => p.id === options.customSystemPromptId,
 		);
-		if (customPrompt) {
-			customSystemPromptContent = customPrompt.content;
+		if (customPrompt?.content) {
+			customSystemPromptContent = [customPrompt.content];
 		}
 	}
 
