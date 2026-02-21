@@ -504,7 +504,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 									}
 								>
 									{index === selectedIndex ? '> ' : '  '}
-									{config.active.includes(prompt.id) ? '[x] ' : '[ ] '}
+									{config.active.includes(prompt.id) ? '[✓] ' : '[ ] '}
 									{prompt.name}
 									{typeof prompt.content === 'string' &&
 										prompt.content.length > 0 && (

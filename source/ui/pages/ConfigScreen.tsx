@@ -2164,7 +2164,7 @@ export default function ConfigScreen({
 														{isMeta
 															? ''
 															: isMarked
-															? '[x] '
+															? '[✓] '
 															: '[ ] '}
 														{label}
 													</Text>
