@@ -205,7 +205,7 @@ function convertToolsToAnthropic(
 function convertToAnthropicMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string, // Allow override for sub-agents
+	customSystemPromptOverride?: string[], // Allow override for sub-agents
 	cacheTTL: '5m' | '1h' = '5m', // Cache TTL configuration
 	disableThinking: boolean = false, // When true, strip thinking blocks from messages
 	planMode: boolean = false, // When true, use Plan mode system prompt
@@ -214,13 +214,13 @@ function convertToAnthropicMessages(
 	system?: any;
 	messages: AnthropicMessageParam[];
 } {
-	const customSystemPrompt = customSystemPromptOverride;
-	let systemContent: string | undefined;
+	const customSystemPrompts = customSystemPromptOverride;
+	let systemContents: string[] | undefined;
 	const anthropicMessages: AnthropicMessageParam[] = [];
 
 	for (const msg of messages) {
 		if (msg.role === 'system') {
-			systemContent = msg.content;
+			systemContents = [msg.content];
 			continue;
 		}
 
@@ -386,8 +386,8 @@ function convertToAnthropicMessages(
 	}
 
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompt) {
-		systemContent = customSystemPrompt;
+	if (customSystemPrompts && customSystemPrompts.length > 0) {
+		systemContents = customSystemPrompts;
 		if (includeBuiltinSystemPrompt) {
 			// 将默认系统提示词作为第一条用户消息
 			anthropicMessages.unshift({
@@ -400,19 +400,18 @@ function convertToAnthropicMessages(
 					},
 				] as any,
 			});
-		} else if (!systemContent && includeBuiltinSystemPrompt) {
-			// 没有自定义系统提示词，但需要添加默认系统提示词
-			systemContent = getSystemPromptForMode(
-				planMode,
-				vulnerabilityHuntingMode,
-			);
 		}
+	} else if (!systemContents && includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
+		systemContents = [
+			getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+		];
 	}
 
 	let lastUserMessageIndex = -1;
 	for (let i = anthropicMessages.length - 1; i >= 0; i--) {
 		if (anthropicMessages[i]?.role === 'user') {
-			if (customSystemPrompt && i === 0) {
+			if (customSystemPrompts && customSystemPrompts.length > 0 && i === 0) {
 				continue;
 			}
 			lastUserMessageIndex = i;
@@ -441,15 +440,17 @@ function convertToAnthropicMessages(
 		}
 	}
 
-	const system = systemContent
-		? [
-				{
+	// 构造 system 字段：每个提示词作为独立的 text 对象
+	const system =
+		systemContents && systemContents.length > 0
+			? systemContents.map((text, index) => ({
 					type: 'text',
-					text: systemContent,
-					cache_control: {type: 'ephemeral', ttl: cacheTTL},
-				},
-		  ]
-		: undefined;
+					text,
+					...(index === systemContents!.length - 1
+						? {cache_control: {type: 'ephemeral', ttl: cacheTTL}}
+						: {}),
+			  }))
+			: undefined;
 
 	return {system, messages: anthropicMessages};
 }
@@ -563,7 +564,7 @@ export async function* createStreamingAnthropicCompletion(
 			}
 
 			// Get system prompt (with custom override support)
-			let customSystemPromptContent: string | undefined;
+			let customSystemPromptContent: string[] | undefined;
 			if (options.customSystemPromptId) {
 				const {getSystemPromptConfig} = await import(
 					'../utils/config/apiConfig.js'
@@ -572,8 +573,8 @@ export async function* createStreamingAnthropicCompletion(
 				const customPrompt = systemPromptConfig?.prompts.find(
 					p => p.id === options.customSystemPromptId,
 				);
-				if (customPrompt) {
-					customSystemPromptContent = customPrompt.content;
+				if (customPrompt?.content) {
+					customSystemPromptContent = [customPrompt.content];
 				}
 			}
 

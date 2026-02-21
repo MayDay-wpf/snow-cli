@@ -375,13 +375,13 @@ function formatMessageForTranscript(msg: ChatMessage): string | null {
  */
 function prepareMessagesForCompression(
 	conversationMessages: ChatMessage[],
-	customSystemPrompt: string | null,
+	customSystemPrompts: string[] | null,
 ): ChatMessage[] {
 	const messages: ChatMessage[] = [];
 
 	// Add system prompt (handled by API modules)
-	if (customSystemPrompt) {
-		messages.push({role: 'system', content: customSystemPrompt});
+	if (customSystemPrompts && customSystemPrompts.length > 0) {
+		messages.push({role: 'system', content: customSystemPrompts.join('\n\n')});
 	} else {
 		messages.push({
 			role: 'system',
@@ -427,11 +427,11 @@ function prepareMessagesForCompression(
 async function compressWithChatCompletions(
 	modelName: string,
 	conversationMessages: ChatMessage[],
-	customSystemPrompt: string | null,
+	customSystemPrompts: string[] | null,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
-		customSystemPrompt,
+		customSystemPrompts,
 	);
 
 	let summary = '';
@@ -474,11 +474,11 @@ async function compressWithChatCompletions(
 async function compressWithResponses(
 	modelName: string,
 	conversationMessages: ChatMessage[],
-	customSystemPrompt: string | null,
+	customSystemPrompts: string[] | null,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
-		customSystemPrompt,
+		customSystemPrompts,
 	);
 
 	let summary = '';
@@ -522,11 +522,11 @@ async function compressWithResponses(
 async function compressWithGemini(
 	modelName: string,
 	conversationMessages: ChatMessage[],
-	customSystemPrompt: string | null,
+	customSystemPrompts: string[] | null,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
-		customSystemPrompt,
+		customSystemPrompts,
 	);
 
 	let summary = '';
@@ -569,11 +569,11 @@ async function compressWithGemini(
 async function compressWithAnthropic(
 	modelName: string,
 	conversationMessages: ChatMessage[],
-	customSystemPrompt: string | null,
+	customSystemPrompts: string[] | null,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
-		customSystemPrompt,
+		customSystemPrompts,
 	);
 
 	let summary = '';

@@ -156,15 +156,15 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 function convertToGeminiMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string, // Allow override for sub-agents
+	customSystemPromptOverride?: string[], // Allow override for sub-agents
 	planMode: boolean = false, // When true, use Plan mode system prompt
 	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
 ): {
-	systemInstruction?: string;
+	systemInstruction?: string[];
 	contents: any[];
 } {
-	const customSystemPrompt = customSystemPromptOverride;
-	let systemInstruction: string | undefined;
+	const customSystemPrompts = customSystemPromptOverride;
+	let systemInstruction: string[] | undefined;
 	const contents: any[] = [];
 
 	// Build tool_call_id to function_name mapping for parallel calls
@@ -176,7 +176,7 @@ function convertToGeminiMessages(
 
 		// Extract system message as systemInstruction
 		if (msg.role === 'system') {
-			systemInstruction = msg.content;
+			systemInstruction = [msg.content];
 			continue;
 		}
 
@@ -375,8 +375,8 @@ function convertToGeminiMessages(
 
 	// Handle system instruction
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompt) {
-		systemInstruction = customSystemPrompt;
+	if (customSystemPrompts && customSystemPrompts.length > 0) {
+		systemInstruction = customSystemPrompts;
 		if (includeBuiltinSystemPrompt) {
 			// Prepend default system prompt as first user message
 			contents.unshift({
@@ -385,13 +385,12 @@ function convertToGeminiMessages(
 					{text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode)},
 				],
 			});
-		} else if (!systemInstruction && includeBuiltinSystemPrompt) {
-			// 没有自定义系统提示词，但需要添加默认系统提示词
-			systemInstruction = getSystemPromptForMode(
-				planMode,
-				vulnerabilityHuntingMode,
-			);
 		}
+	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
+		systemInstruction = [
+			getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+		];
 	}
 
 	return {systemInstruction, contents};
@@ -436,7 +435,7 @@ export async function* createStreamingGeminiCompletion(
 	}
 
 	// Get system prompt (with custom override support)
-	let customSystemPromptContent: string | undefined;
+	let customSystemPromptContent: string[] | undefined;
 	if (options.customSystemPromptId) {
 		const {getSystemPromptConfig} = await import(
 			'../utils/config/apiConfig.js'
@@ -445,8 +444,8 @@ export async function* createStreamingGeminiCompletion(
 		const customPrompt = systemPromptConfig?.prompts.find(
 			p => p.id === options.customSystemPromptId,
 		);
-		if (customPrompt) {
-			customSystemPromptContent = customPrompt.content;
+		if (customPrompt?.content) {
+			customSystemPromptContent = [customPrompt.content];
 		}
 	}
 
@@ -467,7 +466,7 @@ export async function* createStreamingGeminiCompletion(
 			const requestBody: any = {
 				contents,
 				systemInstruction: systemInstruction
-					? {parts: [{text: systemInstruction}]}
+					? {parts: systemInstruction.map(text => ({text}))}
 					: undefined,
 			};
 

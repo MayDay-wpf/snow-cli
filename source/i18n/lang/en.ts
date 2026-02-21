@@ -122,21 +122,21 @@ export const en: TranslationKeys = {
 	},
 	systemPromptConfig: {
 		title: 'System Prompt Management',
-		subtitle: 'Manage multiple system prompts and switch between them',
-		activePrompt: 'Active Prompt:',
+		subtitle: 'Manage multiple system prompts (multi-select supported)',
+		activePrompt: 'Active Prompts:',
 		none: 'None',
 		noPromptsConfigured:
 			'No system prompts configured. Press Enter to add one.',
 		availablePrompts: 'Available Prompts:',
 		actions: 'Actions:',
-		activate: 'Activate',
-		deactivate: 'Deactivate',
+		activate: 'Toggle',
+		deactivate: 'Deactivate All',
 		edit: 'Edit',
 		delete: 'Delete',
 		addNew: 'Add New',
 		escBack: '[ESC] Back',
 		navigationHint:
-			'Use ↑↓ to select prompt, ←→ to select action, Enter to confirm',
+			'↑↓ Select prompt | Space Toggle | ←→ Select action | Enter Confirm',
 		addNewTitle: 'Add New System Prompt',
 		editTitle: 'Edit System Prompt',
 		nameLabel: 'Name:',
@@ -156,6 +156,7 @@ export const en: TranslationKeys = {
 		deleteConfirmMessage: 'Are you sure you want to delete',
 		confirmHint: 'Press Y to confirm, N or ESC to cancel',
 		saveError: 'Failed to save',
+		activeCount: '{count} active',
 	},
 	configScreen: {
 		title: 'API & Model Configuration',
@@ -247,6 +248,7 @@ export const en: TranslationKeys = {
 		followGlobalWithParentheses: 'Follow Global ({name})',
 		followGlobalNoneWithParentheses: 'Follow Global (None)',
 		notUse: 'Not Use',
+		systemPromptMultiSelectHint: 'Space: toggle | Enter: confirm | Esc: cancel',
 	},
 	customHeaders: {
 		title: 'Custom Headers Management',
