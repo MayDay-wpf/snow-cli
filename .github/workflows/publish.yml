@@ -58,7 +58,8 @@ jobs:
 
             ### What's New
 
-            - Add a self-protection mechanism to terminal command execution
+            - Fix the status overflow issue when returning to the homepage
+            - Support multiple selection of system prompts
 
             ### Installation
             ```bash
