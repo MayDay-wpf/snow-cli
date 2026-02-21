@@ -14,10 +14,17 @@ export interface PtyManagerEvents {
 	onExit: (code: number, context?: {suppressed?: boolean; reason?: string}) => void;
 }
 
+export type ShellType = 'auto' | 'powershell' | 'cmd';
+
 export class PtyManager {
 	private ptyProcess: any;
 	private events: PtyManagerEvents | undefined;
 	private startupSendTimer: NodeJS.Timeout | undefined;
+	private shellType: ShellType = 'powershell';
+
+	public setShellType(type: ShellType): void {
+		this.shellType = type;
+	}
 
 	public start(
 		cwd: string,
@@ -197,22 +204,33 @@ export class PtyManager {
 	}
 
 	private getDefaultShell(): string {
-		if (os.platform() === 'win32') {
-			const pwshType = this.detectWindowsPowerShell();
-			if (pwshType === 'pwsh') {
-				return 'pwsh.exe';
-			}
-			return 'powershell.exe';
+		if (os.platform() !== 'win32') {
+			return process.env.SHELL || '/bin/bash';
 		}
-		return process.env.SHELL || '/bin/bash';
+
+		switch (this.shellType) {
+			case 'cmd':
+				return 'cmd.exe';
+			case 'powershell': {
+				const pwshType = this.detectWindowsPowerShell();
+				return pwshType === 'pwsh' ? 'pwsh.exe' : 'powershell.exe';
+			}
+			case 'auto':
+			default: {
+				const pwshType = this.detectWindowsPowerShell();
+				return pwshType === 'pwsh' ? 'pwsh.exe' : 'powershell.exe';
+			}
+		}
 	}
 
 	private getShellArgs(): string[] {
-		if (os.platform() === 'win32') {
-			// -NoLogo: 隐藏启动信息
-			// -NoExit: 保持 Shell 运行
-			return ['-NoLogo', '-NoExit'];
+		if (os.platform() !== 'win32') {
+			return ['-l'];
 		}
-		return ['-l'];
+
+		if (this.shellType === 'cmd') {
+			return [];
+		}
+		return ['-NoLogo', '-NoExit'];
 	}
 }

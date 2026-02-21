@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import {PtyManager} from './ptyManager';
+import {PtyManager, ShellType} from './ptyManager';
 
 type LaunchPolicy = 'ensure' | 'restart';
 type Trigger =
@@ -85,6 +85,23 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	) {
 		this.ptyManager = new PtyManager();
 		this.startupCommand = startupCommand ?? 'snow';
+		this.applyShellType();
+	}
+
+	private getTerminalConfig() {
+		const cfg = vscode.workspace.getConfiguration('snow-cli.terminal');
+		return {
+			shellType: cfg.get<ShellType>('shellType', 'auto'),
+			fontFamily: cfg.get<string>('fontFamily', ''),
+			fontSize: cfg.get<number>('fontSize', 14),
+			fontWeight: cfg.get<string>('fontWeight', 'normal'),
+			lineHeight: cfg.get<number>('lineHeight', 1.0),
+		};
+	}
+
+	private applyShellType(): void {
+		const {shellType} = this.getTerminalConfig();
+		this.ptyManager.setShellType(shellType);
 	}
 
 	private getWorkspaceFolderForActiveEditor(): string | undefined {
@@ -252,6 +269,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	}
 
 	private startTerminal(): void {
+		this.applyShellType();
 		const workspaceFolder = this.getWorkspaceFolderForActiveEditor();
 		const cwd = workspaceFolder || process.cwd();
 
@@ -398,8 +416,29 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		if (action.resetFrontend) {
 			this.view?.webview.postMessage({type: 'reset'});
 		}
+		this.sendFontConfig();
 		this.startTerminal();
 		this.view?.webview.postMessage({type: 'fit'});
+	}
+
+	private sendFontConfig(): void {
+		const cfg = this.getTerminalConfig();
+		this.view?.webview.postMessage({
+			type: 'updateFont',
+			fontFamily: cfg.fontFamily || 'monospace',
+			fontSize: Math.max(8, Math.min(32, cfg.fontSize)),
+			fontWeight: cfg.fontWeight || 'normal',
+			lineHeight: Math.max(0.8, Math.min(2.0, cfg.lineHeight)),
+		});
+	}
+
+	private escapeHtml(str: string): string {
+		return str
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview): string {
@@ -475,6 +514,11 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		);
 
 		const cspSource = webview.cspSource;
+		const termCfg = this.getTerminalConfig();
+		const fontFamily = this.escapeHtml(termCfg.fontFamily || 'monospace');
+		const fontSize = Math.max(8, Math.min(32, termCfg.fontSize));
+		const fontWeight = this.escapeHtml(termCfg.fontWeight || 'normal');
+		const lineHeight = Math.max(0.8, Math.min(2.0, termCfg.lineHeight));
 
 		return `<!DOCTYPE html>
 <html lang="en">
@@ -485,7 +529,8 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         content="default-src 'none'; 
                  style-src ${cspSource} 'unsafe-inline'; 
                  script-src ${cspSource} 'unsafe-inline';
-                 font-src ${cspSource};">
+                 font-src ${cspSource};
+                 worker-src ${cspSource} blob:;">
   <link rel="stylesheet" href="${xtermCssUri}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -565,8 +610,10 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
       try {
       const term = new Terminal({
         cursorBlink: true,
-        fontFamily: 'monospace',
-        fontSize: 14,
+        fontFamily: '${fontFamily}',
+        fontSize: ${fontSize},
+        fontWeight: '${fontWeight}',
+        lineHeight: ${lineHeight},
         altClickMovesCursor: true,
         drawBoldTextInBrightColors: true,
         minimumContrastRatio: 4.5,
@@ -650,18 +697,21 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
         console.warn('Unicode11Addon unavailable.');
       }
 
+      term.open(container);
+
       if (typeof WebglAddon !== 'undefined'
         && WebglAddon
         && typeof WebglAddon.WebglAddon === 'function') {
         try {
           const webglAddon = new WebglAddon.WebglAddon();
+          webglAddon.onContextLoss(() => {
+            webglAddon.dispose();
+          });
           term.loadAddon(webglAddon);
         } catch (e) {
-          console.warn('WebGL addon failed to load:', e);
+          console.warn('WebGL addon failed to load, falling back to canvas:', e);
         }
       }
-
-      term.open(container);
 
       function syncTerminalSizeToHost() {
         const core = term && term._core;
@@ -907,6 +957,13 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
             fitTerminal();
             break;
           case 'fit':
+            fitTerminal();
+            break;
+          case 'updateFont':
+            if (message.fontFamily) term.options.fontFamily = message.fontFamily;
+            if (message.fontSize) term.options.fontSize = message.fontSize;
+            if (message.fontWeight) term.options.fontWeight = message.fontWeight;
+            if (message.lineHeight) term.options.lineHeight = message.lineHeight;
             fitTerminal();
             break;
           case 'exit':

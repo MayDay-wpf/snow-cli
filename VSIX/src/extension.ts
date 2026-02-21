@@ -170,6 +170,10 @@ export function activate(context: vscode.ExtensionContext) {
 				const newCommand = getConfig<string>('startupCommand', 'snow');
 				sidebarProvider?.setStartupCommand(newCommand);
 			}
+
+			if (e.affectsConfiguration('snow-cli.terminal')) {
+				sidebarProvider?.restartTerminal({reason: 'configChange'});
+			}
 		}),
 	);
 
