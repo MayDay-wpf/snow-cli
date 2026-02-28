@@ -30,6 +30,7 @@ import {buildEditorContextContent} from './core/editorContextBuilder.js';
 import {initializeConversationSession} from './core/sessionInitializer.js';
 import {handleToolRejection} from './core/toolRejectionHandler.js';
 import {processToolCallsAfterStream} from './core/toolCallProcessor.js';
+import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 
 export type UserQuestionResult = {
 	selected: string | string[];
@@ -575,6 +576,19 @@ export async function handleConversationWithTools(
 						const allTools =
 							sensitiveTools.length > 1 ? sensitiveTools : undefined;
 
+						// Notify server that tool confirmation is needed (only if connected)
+						if (connectionManager.isConnected()) {
+							await connectionManager.notifyToolConfirmationNeeded(
+								firstTool.function.name,
+								firstTool.function.arguments,
+								firstTool.id,
+								allTools?.map(t => ({
+									name: t.function.name,
+									arguments: t.function.arguments,
+								})),
+							);
+						}
+
 						const confirmation = await requestToolConfirmation(
 							firstTool,
 							undefined,
@@ -615,6 +629,19 @@ export async function handleConversationWithTools(
 						toolsNeedingConfirmation.length > 1
 							? toolsNeedingConfirmation
 							: undefined;
+
+					// Notify server that tool confirmation is needed (only if connected)
+					if (connectionManager.isConnected()) {
+						await connectionManager.notifyToolConfirmationNeeded(
+							firstTool.function.name,
+							firstTool.function.arguments,
+							firstTool.id,
+							allTools?.map(t => ({
+								name: t.function.name,
+								arguments: t.function.arguments,
+							})),
+						);
+					}
 
 					const confirmation = await requestToolConfirmation(
 						firstTool,
@@ -692,7 +719,10 @@ export async function handleConversationWithTools(
 				// Track latest context usage per sub-agent (keyed by agentId).
 				// This persists across setMessages calls so newly created tool_calls messages
 				// can inherit the latest context usage from the same agent.
-				const latestSubAgentCtxUsage: Record<string, { percentage: number; inputTokens: number; maxTokens: number }> = {};
+				const latestSubAgentCtxUsage: Record<
+					string,
+					{percentage: number; inputTokens: number; maxTokens: number}
+				> = {};
 				const toolResults = await executeToolCalls(
 					approvedTools,
 					controller.signal,
@@ -763,7 +793,11 @@ export async function handleConversationWithTools(
 								const msg = subAgentMessage.message as any;
 								const uiMsg = {
 									role: 'subagent' as const,
-									content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[32m✵ Context compressed (~${formatTokenCount(msg.beforeTokens)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
+									content: `\x1b[36m⚇ ${
+										subAgentMessage.agentName
+									}\x1b[0m \x1b[32m✵ Context compressed (~${formatTokenCount(
+										msg.beforeTokens,
+									)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
 									streaming: false,
 									messageStatus: 'success' as const,
 									subAgent: {
@@ -868,15 +902,14 @@ export async function handleConversationWithTools(
 								const toolCalls = subAgentMessage.message.tool_calls;
 								if (toolCalls && toolCalls.length > 0) {
 									// Filter out internal agent collaboration tools — they are
-								// handled internally and displayed via dedicated events.
+									// handled internally and displayed via dedicated events.
 									const internalAgentTools = new Set([
 										'send_message_to_agent',
 										'query_agents_status',
 										'spawn_sub_agent',
 									]);
 									const displayableToolCalls = toolCalls.filter(
-										(tc: any) =>
-											!internalAgentTools.has(tc.function.name),
+										(tc: any) => !internalAgentTools.has(tc.function.name),
 									);
 
 									// If all tool calls were inter-agent messages, skip UI update
@@ -886,18 +919,17 @@ export async function handleConversationWithTools(
 
 									// Separate time-consuming tools and quick tools
 									const timeConsumingTools = displayableToolCalls.filter(
-										(tc: any) =>
-											isToolNeedTwoStepDisplay(tc.function.name),
+										(tc: any) => isToolNeedTwoStepDisplay(tc.function.name),
 									);
 									const quickTools = displayableToolCalls.filter(
-										(tc: any) =>
-											!isToolNeedTwoStepDisplay(tc.function.name),
+										(tc: any) => !isToolNeedTwoStepDisplay(tc.function.name),
 									);
 
 									const newMessages: any[] = [];
 
 									// Inherit latest context usage for this agent (cached from usage events)
-									const inheritedCtxUsage = latestSubAgentCtxUsage[subAgentMessage.agentId];
+									const inheritedCtxUsage =
+										latestSubAgentCtxUsage[subAgentMessage.agentId];
 
 									// Display time-consuming tools individually with full details (Diff, etc.)
 									for (const toolCall of timeConsumingTools) {
@@ -1269,7 +1301,22 @@ export async function handleConversationWithTools(
 							return prev;
 						});
 					},
-					requestToolConfirmation,
+					async (toolCall, batchToolNames, allTools) => {
+						// Notify server for sub-agent tool confirmations as well.
+						// Main-agent confirmations are notified earlier in the loop.
+						if (connectionManager.isConnected()) {
+							await connectionManager.notifyToolConfirmationNeeded(
+								toolCall.function.name,
+								toolCall.function.arguments,
+								toolCall.id,
+								allTools?.map(t => ({
+									name: t.function.name,
+									arguments: t.function.arguments,
+								})),
+							);
+						}
+						return requestToolConfirmation(toolCall, batchToolNames, allTools);
+					},
 					isToolAutoApproved,
 					yoloModeRef.current,
 					addToAlwaysApproved,
@@ -1279,6 +1326,16 @@ export async function handleConversationWithTools(
 						options: string[],
 						multiSelect?: boolean,
 					) => {
+						// Notify server that user interaction is needed (only if connected)
+						if (connectionManager.isConnected()) {
+							await connectionManager.notifyUserInteractionNeeded(
+								question,
+								options,
+								'fake-tool-call',
+								multiSelect,
+							);
+						}
+
 						return await requestUserQuestion(
 							question,
 							options,
@@ -1604,8 +1661,7 @@ export async function handleConversationWithTools(
 					const {runningSubAgentTracker} = await import(
 						'../../utils/execution/runningSubAgentTracker.js'
 					);
-					const spawnedResults =
-						runningSubAgentTracker.drainSpawnedResults();
+					const spawnedResults = runningSubAgentTracker.drainSpawnedResults();
 					if (spawnedResults.length > 0) {
 						for (const sr of spawnedResults) {
 							const statusIcon = sr.success ? '✓' : '✗';
@@ -1630,16 +1686,17 @@ export async function handleConversationWithTools(
 									content: spawnedContent,
 								});
 							} catch (error) {
-								console.error(
-									'Failed to save spawned agent result:',
-									error,
-								);
+								console.error('Failed to save spawned agent result:', error);
 							}
 
 							// Display in UI
 							const uiMsg: Message = {
 								role: 'subagent',
-								content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${sr.agentName}\x1b[0m (by ${sr.spawnedBy.agentName}): ${sr.success ? 'completed' : 'failed'}`,
+								content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${
+									sr.agentName
+								}\x1b[0m (by ${sr.spawnedBy.agentName}): ${
+									sr.success ? 'completed' : 'failed'
+								}`,
 								streaming: false,
 								messageStatus: sr.success ? 'success' : 'error',
 								subAgent: {
@@ -1653,10 +1710,7 @@ export async function handleConversationWithTools(
 						}
 					}
 				} catch (error) {
-					console.error(
-						'Failed to process spawned agent results:',
-						error,
-					);
+					console.error('Failed to process spawned agent results:', error);
 				}
 
 				// Check if there are pending user messages to insert
@@ -1933,6 +1987,13 @@ export async function handleConversationWithTools(
 		// Even if an error occurs or the process is aborted
 		if (options.setIsStreaming) {
 			options.setIsStreaming(false);
+		}
+
+		// Notify Web that this message lifecycle has ended.
+		try {
+			await connectionManager.notifyMessageProcessingCompleted();
+		} catch {
+			// Ignore notification errors to avoid affecting local flow
 		}
 
 		// 同步提交所有待处理快照 - 确保快照保存可靠性

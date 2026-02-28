@@ -64,6 +64,10 @@ class SessionManager {
 	private sessionListCache: SessionListItem[] | null = null;
 	private cacheTimestamp: number = 0;
 	private readonly CACHE_TTL = 5000; // 缓存有效期 5 秒
+	// 消息变化监听器（单个消息添加）
+	private messageListeners: Array<(message: ChatMessage) => void> = [];
+	// 消息列表变化监听器（任何消息列表变化：添加、删除、截断、切换会话等）
+	private messagesChangedListeners: Array<() => void> = [];
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
@@ -321,7 +325,7 @@ class SessionManager {
 				this.lastLoadHookWarning = hookResult.warningMessage;
 			}
 
-			this.currentSession = session;
+			this.setCurrentSession(session);
 			return session;
 		} catch (error) {
 			// 旧格式不存在，搜索日期文件夹
@@ -346,7 +350,7 @@ class SessionManager {
 					this.lastLoadHookWarning = hookResult.warningMessage;
 				}
 				// Set as current session before returning
-				this.currentSession = session;
+				this.setCurrentSession(session);
 				return session;
 			}
 		} catch (error) {
@@ -724,6 +728,11 @@ class SessionManager {
 		this.currentSession.messageCount = this.currentSession.messages.length;
 		this.currentSession.updatedAt = Date.now();
 
+		// 通知监听器有新消息
+		this.notifyMessageListeners(message);
+		// 通知消息列表已变化
+		this.notifyMessagesChanged();
+
 		// Generate simple title and summary from first user message
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
 			// Use first 50 chars as title, first 100 chars as summary
@@ -801,14 +810,11 @@ class SessionManager {
 					targetSession.summary = result.summary;
 					await this.saveSession(targetSession);
 
-					logger.info(
-						'Summary agent: Updated detached session summary',
-						{
-							sessionId: targetSessionId,
-							title: result.title,
-							summary: result.summary,
-						},
-					);
+					logger.info('Summary agent: Updated detached session summary', {
+						sessionId: targetSessionId,
+						title: result.title,
+						summary: result.summary,
+					});
 					return;
 				}
 
@@ -833,12 +839,65 @@ class SessionManager {
 
 	setCurrentSession(session: Session): void {
 		this.currentSession = session;
+		this.notifyMessagesChanged();
 	}
 
 	clearCurrentSession(): void {
 		this.currentSession = null;
+		this.notifyMessagesChanged();
 	}
 
+	/**
+	 * 订阅消息变化事件（单个消息添加）
+	 */
+	onMessageAdded(listener: (message: ChatMessage) => void): () => void {
+		this.messageListeners.push(listener);
+		return () => {
+			const index = this.messageListeners.indexOf(listener);
+			if (index > -1) {
+				this.messageListeners.splice(index, 1);
+			}
+		};
+	}
+
+	/**
+	 * 订阅消息列表变化事件（任何变化：添加、删除、截断、切换会话等）
+	 */
+	onMessagesChanged(listener: () => void): () => void {
+		this.messagesChangedListeners.push(listener);
+		return () => {
+			const index = this.messagesChangedListeners.indexOf(listener);
+			if (index > -1) {
+				this.messagesChangedListeners.splice(index, 1);
+			}
+		};
+	}
+
+	/**
+	 * 通知所有监听器有新消息
+	 */
+	private notifyMessageListeners(message: ChatMessage): void {
+		for (const listener of this.messageListeners) {
+			try {
+				listener(message);
+			} catch (error) {
+				logger.error('Error in message listener:', error);
+			}
+		}
+	}
+
+	/**
+	 * 通知所有监听器消息列表发生变化
+	 */
+	private notifyMessagesChanged(): void {
+		for (const listener of this.messagesChangedListeners) {
+			try {
+				listener();
+			} catch (error) {
+				logger.error('Error in messages changed listener:', error);
+			}
+		}
+	}
 	/**
 	 * Update the title of a session
 	 * @param sessionId - Session ID to update
@@ -1093,6 +1152,9 @@ class SessionManager {
 		);
 		this.currentSession.messageCount = this.currentSession.messages.length;
 		this.currentSession.updatedAt = Date.now();
+
+		// 通知监听器消息列表已变化
+		this.notifyMessagesChanged();
 
 		await this.saveSession(this.currentSession);
 	}

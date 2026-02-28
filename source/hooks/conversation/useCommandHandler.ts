@@ -264,6 +264,11 @@ type CommandHandlerOptions = {
 	setIsCompressing: React.Dispatch<React.SetStateAction<boolean>>;
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	setShowSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	onResumeSessionById?: (sessionId: string) => Promise<void>;
+	setShowConnectionPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setConnectionPanelApiUrl: React.Dispatch<
+		React.SetStateAction<string | undefined>
+	>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -494,6 +499,20 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setShowReviewCommitPanel(true);
 				// 面板唤醒时不输出 command 消息；避免在用户确认选择前污染消息区
 				// 真正开始 review 的摘要会在 onConfirm 后由 handleReviewCommitConfirm 输出
+			} else if (
+				result.success &&
+				result.action === 'resume' &&
+				result.sessionId
+			) {
+				if (options.onResumeSessionById) {
+					await options.onResumeSessionById(result.sessionId);
+				}
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showSessionPanel') {
 				options.setShowSessionPanel(true);
 				const commandMessage: Message = {
@@ -504,6 +523,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showDiffReviewPanel') {
 				options.setShowDiffReviewPanel(true);
+			} else if (result.success && result.action === 'showConnectionPanel') {
+				options.setConnectionPanelApiUrl(result.apiUrl);
+				options.setShowConnectionPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
 				const commandMessage: Message = {

@@ -58,7 +58,8 @@ jobs:
 
             ### What's New
 
-            - Add Anthropic request signature parameter padding strategy
+            - Fix the issue where the networking tool is unavailable in the Windows terminal
+            - Add remote support
 
             ### Installation
             ```bash

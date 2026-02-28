@@ -448,6 +448,47 @@ export type TranslationKeys = {
 		tipInterrupt: string;
 		closeHint: string;
 	};
+	connectionPanel: {
+		errorPrefix: string;
+		loggingIn: string;
+		connectingToHub: string;
+		connectedSuccessfully: string;
+		title: string;
+		statusLabel: string;
+		statusConnected: string;
+		statusConnecting: string;
+		statusDisconnected: string;
+		savedConfigFound: string;
+		apiUrlLabel: string;
+		usernameLabel: string;
+		instanceLabel: string;
+		savedConfigHint: string;
+		confirmDeletePrefix: string;
+		confirmDeleteSuffix: string;
+		clearSavedPrefix: string;
+		clearSavedSuffix: string;
+		apiBaseUrlLabel: string;
+		apiBaseUrlPlaceholder: string;
+		enterContinueEscCancel: string;
+		authenticationTitle: string;
+		usernameFieldLabel: string;
+		usernamePlaceholder: string;
+		passwordFieldLabel: string;
+		passwordPlaceholder: string;
+		enterContinueEscBack: string;
+		instanceConfigTitle: string;
+		loggedInAs: string;
+		instanceIdLabel: string;
+		instanceIdPlaceholder: string;
+		instanceNameLabel: string;
+		instanceNamePlaceholder: string;
+		enterConnectEscBack: string;
+		pleaseWait: string;
+		connectedSuccessfullyWithIcon: string;
+		pressEscToClose: string;
+		useCommandPrefix: string;
+		useCommandSuffix: string;
+	};
 	// Command Panel
 	commandPanel: {
 		title: string;
@@ -489,6 +530,9 @@ export type TranslationKeys = {
 			vulnerabilityHunting: string;
 			worktree: string; // Git branch management panel
 			diff: string;
+			connect: string;
+			disconnect: string;
+			connectionStatus: string;
 			quit: string;
 		};
 		copyLastFeedback: {

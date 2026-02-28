@@ -41,6 +41,14 @@ type Props = {
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
 	editorContext?: EditorContext;
 
+	// 实例连接信息
+	connectionStatus?:
+		| 'disconnected'
+		| 'connecting'
+		| 'connected'
+		| 'reconnecting';
+	connectionInstanceName?: string;
+
 	// Token消耗信息
 	contextUsage?: ContextUsage;
 
@@ -89,6 +97,8 @@ export default function StatusLine({
 	vulnerabilityHuntingMode = false,
 	vscodeConnectionStatus,
 	editorContext,
+	connectionStatus,
+	connectionInstanceName,
 	contextUsage,
 	codebaseIndexing = false,
 	codebaseProgress,
@@ -106,6 +116,7 @@ export default function StatusLine({
 		planMode ||
 		vulnerabilityHuntingMode ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
+		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
 		codebaseIndexing ||
 		watcherEnabled ||
@@ -153,6 +164,29 @@ export default function StatusLine({
 				statusItems.push({text: '● IDE', color: 'green'});
 			} else if (vscodeConnectionStatus === 'error') {
 				statusItems.push({text: '○ IDE', color: 'gray'});
+			}
+		}
+
+		// 实例连接状态 - 只显示连接状态，不显示断开
+		if (connectionStatus && connectionStatus !== 'disconnected') {
+			if (connectionStatus === 'connecting') {
+				statusItems.push({
+					text: '◐ Backend',
+					color: 'yellow',
+				});
+			} else if (connectionStatus === 'reconnecting') {
+				statusItems.push({
+					text: '↻ Backend',
+					color: 'yellow',
+				});
+			} else if (connectionStatus === 'connected') {
+				const instanceLabel = connectionInstanceName
+					? `● ${connectionInstanceName}`
+					: '● Backend';
+				statusItems.push({
+					text: instanceLabel,
+					color: 'green',
+				});
 			}
 		}
 
@@ -452,6 +486,39 @@ export default function StatusLine({
 											'{count}',
 											editorContext.selectedText.length.toString(),
 										)}
+								</>
+							)}
+						</Text>
+					</Box>
+				)}
+
+			{/* 实例连接状态 - 只显示连接中或已连接，不显示断开 */}
+			{connectionStatus &&
+				(connectionStatus === 'connecting' ||
+					connectionStatus === 'connected' ||
+					connectionStatus === 'reconnecting') && (
+					<Box>
+						<Text
+							color={
+								connectionStatus === 'connecting' ||
+								connectionStatus === 'reconnecting'
+									? 'yellow'
+									: 'green'
+							}
+							dimColor
+						>
+							{connectionStatus === 'connecting' ? (
+								<>
+									<Spinner type="dots" /> 正在连接后端服务...
+								</>
+							) : connectionStatus === 'reconnecting' ? (
+								<>
+									<Spinner type="dots" /> 正在重连后端服务...
+								</>
+							) : (
+								<>
+									● 已连接后端服务
+									{connectionInstanceName && ` (${connectionInstanceName})`}
 								</>
 							)}
 						</Text>

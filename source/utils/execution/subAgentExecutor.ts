@@ -8,6 +8,7 @@ import {getOpenAiConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
+import {connectionManager} from '../connection/ConnectionManager.js';
 import {
 	shouldCompressSubAgentContext,
 	getContextPercentage,
@@ -1065,7 +1066,7 @@ Inserted log points:
 			function: {
 				name: 'send_message_to_agent',
 				description:
-					'Send a message to another running sub-agent. Use this to share information, findings, or coordinate work with other agents that are executing in parallel. The message will be injected into the target agent\'s context. IMPORTANT: Use query_agents_status first to check if the target agent is still running before sending.',
+					"Send a message to another running sub-agent. Use this to share information, findings, or coordinate work with other agents that are executing in parallel. The message will be injected into the target agent's context. IMPORTANT: Use query_agents_status first to check if the target agent is still running before sending.",
 				parameters: {
 					type: 'object',
 					properties: {
@@ -1108,8 +1109,7 @@ Inserted log points:
 			type: 'function' as const,
 			function: {
 				name: 'spawn_sub_agent',
-				description:
-					`Spawn a NEW sub-agent of a DIFFERENT type to get specialized help. The spawned agent runs in parallel and results are reported back automatically.
+				description: `Spawn a NEW sub-agent of a DIFFERENT type to get specialized help. The spawned agent runs in parallel and results are reported back automatically.
 
 **WHEN TO USE** — Only spawn when you genuinely need a different agent's specialization:
 - You are an Explore Agent and need code modifications → spawn agent_general
@@ -1159,7 +1159,9 @@ Available agent types: agent_explore (code exploration, read-only), agent_plan (
 			const agentList = otherAgents
 				.map(
 					a =>
-						`- ${a.agentName} (id: ${a.agentId}, instance: ${a.instanceId}): "${a.prompt ? a.prompt.substring(0, 120) : 'N/A'}"`,
+						`- ${a.agentName} (id: ${a.agentId}, instance: ${a.instanceId}): "${
+							a.prompt ? a.prompt.substring(0, 120) : 'N/A'
+						}"`,
 				)
 				.join('\n');
 			const spawnHint = canSpawn
@@ -1423,7 +1425,10 @@ You have access to these collaboration tools:
 					// total_tokens better reflects actual context consumption because the model's
 					// response (completion_tokens) will also be added to the messages array,
 					// contributing to the next round's input.
-					latestTotalTokens = eventUsage.total_tokens || (eventUsage.prompt_tokens || 0) + (eventUsage.completion_tokens || 0);
+					latestTotalTokens =
+						eventUsage.total_tokens ||
+						(eventUsage.prompt_tokens || 0) +
+							(eventUsage.completion_tokens || 0);
 
 					if (!totalUsage) {
 						totalUsage = {
@@ -1451,7 +1456,10 @@ You have access to these collaboration tools:
 					// Notify UI of context usage DURING the stream (before 'done' marks message complete)
 					// This ensures the streaming message still exists for the UI to update
 					if (onMessage && config.maxContextTokens && latestTotalTokens > 0) {
-						const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+						const ctxPct = getContextPercentage(
+							latestTotalTokens,
+							config.maxContextTokens,
+						);
 						// Use Math.max(1, ...) so the first API call (small prompt) still shows ≥1%
 						// instead of rounding to 0% and hiding the bar entirely
 						onMessage({
@@ -1539,7 +1547,10 @@ You have access to these collaboration tools:
 
 				// Send context_usage event with the tiktoken-estimated count
 				if (onMessage && latestTotalTokens > 0) {
-					const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+					const ctxPct = getContextPercentage(
+						latestTotalTokens,
+						config.maxContextTokens,
+					);
 					onMessage({
 						type: 'sub_agent_message',
 						agentId: agent.id,
@@ -1562,7 +1573,12 @@ You have access to these collaboration tools:
 			let justCompressed = false;
 			if (latestTotalTokens > 0 && config.maxContextTokens) {
 				// Trigger compression if above threshold
-				if (shouldCompressSubAgentContext(latestTotalTokens, config.maxContextTokens)) {
+				if (
+					shouldCompressSubAgentContext(
+						latestTotalTokens,
+						config.maxContextTokens,
+					)
+				) {
 					const ctxPercentage = getContextPercentage(
 						latestTotalTokens,
 						config.maxContextTokens,
@@ -1621,7 +1637,7 @@ You have access to these collaboration tools:
 
 							console.log(
 								`[SubAgent:${agent.name}] Context compressed: ` +
-								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
 							);
 						}
 					} catch (compressError) {
@@ -1641,13 +1657,17 @@ You have access to these collaboration tools:
 			// agent to continue working with the now-compressed context.
 			if (justCompressed && toolCalls.length === 0) {
 				// Remove the last assistant message (premature exit under context pressure)
-				while (messages.length > 0 && messages[messages.length - 1]?.role === 'assistant') {
+				while (
+					messages.length > 0 &&
+					messages[messages.length - 1]?.role === 'assistant'
+				) {
 					messages.pop();
 				}
 				// Inject continuation instruction
 				messages.push({
 					role: 'user',
-					content: '[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
+					content:
+						'[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
 				});
 				continue;
 			}
@@ -1659,8 +1679,8 @@ You have access to these collaboration tools:
 				// wait for them and feed their results back before we exit.
 				// This prevents the parent from finishing (and thus the main flow
 				// from considering this tool call "done") while children still run.
-				const runningChildren = Array.from(spawnedChildInstanceIds).filter(
-					id => runningSubAgentTracker.isRunning(id),
+				const runningChildren = Array.from(spawnedChildInstanceIds).filter(id =>
+					runningSubAgentTracker.isRunning(id),
 				);
 
 				if (
@@ -1676,8 +1696,7 @@ You have access to these collaboration tools:
 					}
 
 					// Drain all spawned results and inject as user context
-					const spawnedResults =
-						runningSubAgentTracker.drainSpawnedResults();
+					const spawnedResults = runningSubAgentTracker.drainSpawnedResults();
 					if (spawnedResults.length > 0) {
 						for (const sr of spawnedResults) {
 							const statusIcon = sr.success ? '✓' : '✗';
@@ -1830,11 +1849,12 @@ You have access to these collaboration tools:
 							msgContent,
 						);
 						if (success) {
-							const targetAgent =
-								runningSubAgentTracker.getRunningAgents().find(
-									a => a.instanceId === targetInstanceId,
-								);
-							resultText = `Message sent to ${targetAgent?.agentName || targetInstanceId}`;
+							const targetAgent = runningSubAgentTracker
+								.getRunningAgents()
+								.find(a => a.instanceId === targetInstanceId);
+							resultText = `Message sent to ${
+								targetAgent?.agentName || targetInstanceId
+							}`;
 						} else {
 							resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
 						}
@@ -1853,12 +1873,8 @@ You have access to these collaboration tools:
 							} else {
 								resultText = `Error: Failed to send message to ${targetAgentId}`;
 							}
-						} else if (
-							targetAgent &&
-							targetAgent.instanceId === instanceId
-						) {
-							resultText =
-								'Error: Cannot send a message to yourself';
+						} else if (targetAgent && targetAgent.instanceId === instanceId) {
+							resultText = 'Error: Cannot send a message to yourself';
 						} else {
 							resultText = `Error: No running agent found with ID "${targetAgentId}"`;
 						}
@@ -1888,13 +1904,14 @@ You have access to these collaboration tools:
 									(targetInstanceId
 										? runningSubAgentTracker
 												.getRunningAgents()
-												.find(a => a.instanceId === targetInstanceId)
-												?.agentName
+												.find(a => a.instanceId === targetInstanceId)?.agentName
 										: targetAgentId
 										? runningSubAgentTracker.findInstanceByAgentId(
 												targetAgentId,
 										  )?.agentName
-										: undefined) || targetAgentId || 'unknown',
+										: undefined) ||
+									targetAgentId ||
+									'unknown',
 								content: msgContent,
 								success,
 							} as any,
@@ -1924,10 +1941,10 @@ You have access to these collaboration tools:
 						instanceId: a.instanceId,
 						agentId: a.agentId,
 						agentName: a.agentName,
-						prompt: a.prompt
-							? a.prompt.substring(0, 150)
-							: 'N/A',
-						runningFor: `${Math.floor((Date.now() - a.startedAt.getTime()) / 1000)}s`,
+						prompt: a.prompt ? a.prompt.substring(0, 150) : 'N/A',
+						runningFor: `${Math.floor(
+							(Date.now() - a.startedAt.getTime()) / 1000,
+						)}s`,
 						isSelf: a.instanceId === instanceId,
 					}));
 
@@ -1966,10 +1983,7 @@ You have access to these collaboration tools:
 						spawnAgentId = args.agent_id || '';
 						spawnPrompt = args.prompt || '';
 					} catch (error) {
-						console.error(
-							'Failed to parse spawn_sub_agent arguments:',
-							error,
-						);
+						console.error('Failed to parse spawn_sub_agent arguments:', error);
 					}
 
 					if (!spawnAgentId || !spawnPrompt) {
@@ -2017,12 +2031,13 @@ You have access to these collaboration tools:
 							agent_analyze: 'Requirement Analysis Agent',
 							agent_debug: 'Debug Assistant',
 						};
-						spawnAgentName =
-							builtinNames[spawnAgentId] || spawnAgentId;
+						spawnAgentName = builtinNames[spawnAgentId] || spawnAgentId;
 					}
 
 					// Generate unique instance ID
-					const spawnInstanceId = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+					const spawnInstanceId = `spawn-${Date.now()}-${Math.random()
+						.toString(36)
+						.slice(2, 8)}`;
 
 					// Get current agent info for the "spawnedBy" record
 					const spawnerInfo = {
@@ -2086,10 +2101,7 @@ You have access to these collaboration tools:
 										: spawnPrompt,
 								success: false,
 								result: '',
-								error:
-									error instanceof Error
-										? error.message
-										: 'Unknown error',
+								error: error instanceof Error ? error.message : 'Unknown error',
 								completedAt: new Date(),
 								spawnedBy: spawnerInfo,
 							});
@@ -2159,6 +2171,16 @@ You have access to these collaboration tools:
 					}
 				} catch (error) {
 					console.error('Failed to parse askuser tool arguments:', error);
+				}
+
+				// Notify server that user interaction is needed (only if connected)
+				if (connectionManager.isConnected()) {
+					await connectionManager.notifyUserInteractionNeeded(
+						question,
+						options,
+						askUserTool.id,
+						multiSelect,
+					);
 				}
 
 				const userAnswer = await requestUserQuestion(

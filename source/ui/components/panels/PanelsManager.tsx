@@ -11,6 +11,7 @@ import {RoleListPanel} from './RoleListPanel.js';
 import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
+import {ConnectionPanel} from './ConnectionPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
@@ -39,6 +40,8 @@ type PanelsManagerProps = {
 	showWorkingDirPanel: boolean;
 	showBranchPanel: boolean;
 	showDiffReviewPanel: boolean;
+	showConnectionPanel: boolean;
+	connectionPanelApiUrl?: string;
 	diffReviewMessages: Array<{
 		role: string;
 		content: string;
@@ -58,6 +61,7 @@ type PanelsManagerProps = {
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
 	setShowDiffReviewPanel: (show: boolean) => void;
+	setShowConnectionPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 
 	onCustomCommandSave: (
@@ -92,6 +96,8 @@ export default function PanelsManager({
 	showWorkingDirPanel,
 	showBranchPanel,
 	showDiffReviewPanel,
+	showConnectionPanel,
+	connectionPanelApiUrl,
 	diffReviewMessages,
 	diffReviewSnapshotFileCount,
 	advancedModel,
@@ -106,6 +112,7 @@ export default function PanelsManager({
 	setShowWorkingDirPanel,
 	setShowBranchPanel,
 	setShowDiffReviewPanel,
+	setShowConnectionPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
@@ -243,9 +250,7 @@ export default function PanelsManager({
 			{/* Show branch management panel if active */}
 			{showBranchPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<BranchPanel
-						onClose={() => setShowBranchPanel(false)}
-					/>
+					<BranchPanel onClose={() => setShowBranchPanel(false)} />
 				</Box>
 			)}
 
@@ -259,6 +264,16 @@ export default function PanelsManager({
 							onClose={() => setShowDiffReviewPanel(false)}
 						/>
 					</Suspense>
+				</Box>
+			)}
+
+			{/* Show connection panel if active */}
+			{showConnectionPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<ConnectionPanel
+						onClose={() => setShowConnectionPanel(false)}
+						initialApiUrl={connectionPanelApiUrl}
+					/>
 				</Box>
 			)}
 		</>

@@ -40,12 +40,15 @@ export interface CommandResult {
 		| 'toggleCodebase'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
+		| 'showConnectionPanel'
 		| 'sendAsMessage'
 		| 'quit';
 	prompt?: string;
+	sessionId?: string; // For /resume <sessionId> direct session loading
 	location?: 'global' | 'project'; // For custom commands to specify location
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 	forceReindex?: boolean; // For /reindex -force to delete existing database and rebuild
+	apiUrl?: string; // For /connect command to pass API URL
 }
 
 export interface CommandHandler {

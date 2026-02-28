@@ -18,6 +18,7 @@ import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
+import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
 import {
@@ -203,6 +204,18 @@ export function useChatLogic(props: UseChatLogicProps) {
 				hideUserMessage?: boolean,
 			) => Promise<void>
 		>();
+
+	useEffect(() => {
+		const pendingRollback = snapshotState.pendingRollback;
+		if (!pendingRollback) {
+			return;
+		}
+
+		void connectionManager.notifyRollbackConfirmationNeeded({
+			filePaths: pendingRollback.filePaths || [],
+			notebookCount: pendingRollback.notebookCount || 0,
+		});
+	}, [snapshotState.pendingRollback]);
 
 	const handleMessageSubmit = async (
 		message: string,

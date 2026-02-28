@@ -68,6 +68,8 @@ import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
 import {logger} from '../../utils/core/logger.js';
+import {connectionManager} from '../../utils/connection/ConnectionManager.js';
+import {executeCommand} from '../../utils/execution/commandExecutor.js';
 
 // Commands will be loaded dynamically after mount to avoid blocking initial render
 
@@ -806,6 +808,7 @@ export default function ChatScreen({
 		setIsCompressing,
 		setCompressionError,
 		setShowSessionPanel: panelState.setShowSessionPanel,
+		onResumeSessionById: handleSessionPanelSelect,
 		setShowMcpPanel: panelState.setShowMcpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
@@ -818,6 +821,8 @@ export default function ChatScreen({
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
+		setShowConnectionPanel: panelState.setShowConnectionPanel,
+		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
 		onSwitchProfile: handleSwitchProfile,
@@ -836,6 +841,231 @@ export default function ChatScreen({
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
 	});
+
+	// Subscribe to remote messages from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'remote_message',
+			(data: any) => {
+				if (data?.message && typeof data.message === 'string') {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: 'Remote message received from Web',
+							streaming: false,
+						},
+					]);
+					handleMessageSubmit(data.message);
+				}
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [handleMessageSubmit]);
+
+	// Subscribe to tool confirmation results from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'tool_confirmation_result',
+			(data: any) => {
+				if (!pendingToolConfirmation) {
+					return;
+				}
+
+				const result = data?.result;
+				if (
+					result !== 'approve' &&
+					result !== 'approve_always' &&
+					result !== 'reject' &&
+					result !== 'reject_with_reply'
+				) {
+					return;
+				}
+
+				if (result === 'reject_with_reply') {
+					pendingToolConfirmation.resolve({
+						type: 'reject_with_reply',
+						reason: data?.reason || '',
+					});
+					return;
+				}
+
+				pendingToolConfirmation.resolve(result);
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [pendingToolConfirmation]);
+
+	// Subscribe to ask-user answers from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'user_question_result',
+			(data: any) => {
+				if (!pendingUserQuestion) {
+					return;
+				}
+
+				let selected: string | string[] = data?.selected;
+				if (typeof selected === 'string') {
+					const trimmed = selected.trim();
+					if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+						try {
+							const parsed = JSON.parse(trimmed);
+							if (Array.isArray(parsed)) {
+								selected = parsed.filter(item => typeof item === 'string');
+							}
+						} catch {
+							// Keep original selected value if parsing fails
+						}
+					}
+				}
+
+				handleUserQuestionAnswer({
+					selected,
+					customInput:
+						typeof data?.customInput === 'string'
+							? data.customInput
+							: undefined,
+					cancelled: Boolean(data?.cancelled),
+				});
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [pendingUserQuestion, handleUserQuestionAnswer]);
+
+	// Subscribe to interrupt signal from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'interrupt_message_processing',
+			() => {
+				if (!streamingState.isStreaming || !streamingState.abortController) {
+					return;
+				}
+
+				userInterruptedRef.current = true;
+				streamingState.setIsStopping(true);
+				streamingState.setRetryStatus(null);
+				streamingState.setCodebaseSearchStatus(null);
+				streamingState.abortController.abort();
+				setMessages(prev => prev.filter(msg => !msg.toolPending));
+				setPendingMessages([]);
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [streamingState, setMessages, setPendingMessages]);
+
+	// Subscribe to clear-session signal from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage('clear_session', () => {
+			executeCommand('clear')
+				.then(result => handleCommandExecution('clear', result))
+				.catch(() => {
+					// Ignore command execution errors to avoid breaking remote control flow
+				});
+		});
+
+		return () => {
+			unsubscribe();
+		};
+	}, [handleCommandExecution]);
+
+	// Subscribe to resume-session signal from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'resume_session',
+			(data: any) => {
+				const sessionId =
+					typeof data?.sessionId === 'string' ? data.sessionId.trim() : '';
+				if (!sessionId) {
+					return;
+				}
+				executeCommand('resume', sessionId)
+					.then(result => handleCommandExecution('resume', result))
+					.catch(() => {
+						// Ignore command execution errors to avoid breaking remote control flow
+					});
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [handleCommandExecution]);
+
+	// Subscribe to rollback signal from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'rollback_message',
+			(data: any) => {
+				if (streamingState.isStreaming) {
+					return;
+				}
+
+				const userMessageOrder = Number(data?.userMessageOrder);
+				if (!Number.isInteger(userMessageOrder) || userMessageOrder <= 0) {
+					return;
+				}
+
+				const userMessageEntries = messages
+					.map((msg, index) => ({msg, index}))
+					.filter(entry => entry.msg.role === 'user');
+				const targetEntry = userMessageEntries[userMessageOrder - 1];
+				if (!targetEntry) {
+					return;
+				}
+
+				handleHistorySelect(
+					targetEntry.index,
+					targetEntry.msg.content || '',
+					targetEntry.msg.images,
+				).catch(() => {
+					// Ignore rollback errors from remote trigger
+				});
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [messages, streamingState.isStreaming, handleHistorySelect]);
+
+	// Subscribe to rollback confirmation result from Web client via SignalR
+	useEffect(() => {
+		const unsubscribe = connectionManager.onMessage(
+			'rollback_confirmation_result',
+			(data: any) => {
+				if (!snapshotState.pendingRollback) {
+					return;
+				}
+
+				const rollbackFiles =
+					typeof data?.rollbackFiles === 'boolean' ? data.rollbackFiles : null;
+				const selectedFiles = Array.isArray(data?.selectedFiles)
+					? data.selectedFiles.filter(
+							(x: unknown): x is string => typeof x === 'string',
+					  )
+					: undefined;
+
+				void handleRollbackConfirm(rollbackFiles, selectedFiles);
+			},
+		);
+
+		return () => {
+			unsubscribe();
+		};
+	}, [snapshotState.pendingRollback, handleRollbackConfirm]);
 
 	useEffect(() => {
 		// Wait for commands to be loaded before attempting auto-connect
@@ -1322,6 +1552,8 @@ export default function ChatScreen({
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showBranchPanel={panelState.showBranchPanel}
 				showDiffReviewPanel={panelState.showDiffReviewPanel}
+				showConnectionPanel={panelState.showConnectionPanel}
+				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
 				diffReviewMessages={messages}
 				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
 				advancedModel={advancedModel}
@@ -1336,6 +1568,7 @@ export default function ChatScreen({
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
 				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
+				setShowConnectionPanel={panelState.setShowConnectionPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (
 					name,
@@ -1525,7 +1758,7 @@ export default function ChatScreen({
 				/>
 			)}
 
-			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or permissions panel or rollback confirmation or user question or terminal interactive input. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
+			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or branch panel or diff review panel or connection panel or permissions panel or rollback confirmation or user question or terminal interactive input. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
 			{!pendingToolConfirmation &&
 				!pendingUserQuestion &&
 				!bashSensitiveCommand &&
@@ -1543,6 +1776,7 @@ export default function ChatScreen({
 					panelState.showWorkingDirPanel ||
 					panelState.showBranchPanel ||
 					panelState.showDiffReviewPanel ||
+					panelState.showConnectionPanel ||
 					showPermissionsPanel
 				) &&
 				!snapshotState.pendingRollback && (

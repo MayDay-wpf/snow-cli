@@ -124,6 +124,24 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Review file changes from a conversation in IDE diff view',
 			},
 			{
+				name: 'connect',
+				description:
+					t.commandPanel.commands.connect ||
+					'Connect to a Snow Instance for AI processing',
+			},
+			{
+				name: 'disconnect',
+				description:
+					t.commandPanel.commands.disconnect ||
+					'Disconnect from the current Snow Instance',
+			},
+			{
+				name: 'connection-status',
+				description:
+					t.commandPanel.commands.connectionStatus ||
+					'Show current connection status',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

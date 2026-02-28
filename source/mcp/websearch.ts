@@ -36,9 +36,13 @@ export class WebSearchService {
 		this.maxResults = maxResults;
 		// Detect WSL environment once
 		this.isWSLMode = isWSL();
-		// Windows native mode: use a fixed profile dir to avoid temp lockfile cleanup errors
+		// Windows native mode: keep a stable profile per CLI process to avoid
+		// lockfile cleanup issues while preventing cross-terminal profile conflicts.
 		if (process.platform === 'win32' && !this.isWSLMode) {
-			this.userDataDir = join(tmpdir(), 'snow-cli-puppeteer-profile');
+			this.userDataDir = join(
+				tmpdir(),
+				`snow-cli-puppeteer-profile-${process.pid}`,
+			);
 		}
 	}
 
