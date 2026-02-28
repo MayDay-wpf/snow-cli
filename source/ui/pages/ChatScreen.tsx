@@ -214,6 +214,12 @@ export default function ChatScreen({
 	// Use custom hooks
 	const streamingState = useStreamingState();
 
+	// Sync CLI streaming state to ConnectionManager
+	// This allows ConnectionManager.getInFlightState() to accurately reflect CLI status
+	useEffect(() => {
+		connectionManager.setStreamingState(streamingState.streamStatus);
+	}, [streamingState.streamStatus]);
+
 	// When bash confirmation panel shows/hides, suppress the loading indicator briefly
 	// to avoid visual jitter and stale lines in some terminals.
 	useEffect(() => {
