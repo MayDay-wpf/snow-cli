@@ -36,6 +36,24 @@ class ConnectionManager {
 	private config: ConnectionConfig | null = null;
 	private messageListenerUnsubscribe: (() => void) | null = null;
 	private readonly MAX_RECONNECT_ATTEMPTS = 3;
+	private isMessageProcessing = false;
+	private pendingToolConfirmations = new Map<
+		string,
+		{toolName: string; toolArguments: string; toolCallId: string}
+	>();
+	private pendingQuestions = new Map<
+		string,
+		{
+			question: string;
+			options: string[];
+			toolCallId: string;
+			multiSelect: boolean;
+		}
+	>();
+	private pendingRollbackConfirmation: {
+		filePaths: string[];
+		notebookCount: number;
+	} | null = null;
 
 	// Subscribe to status changes
 	onStatusChange(callback: StatusChangeCallback): () => void {
@@ -250,6 +268,7 @@ class ConnectionManager {
 
 			// Handle receiving message from Web client (via server)
 			this.connection.on('receivemessage', (message: string) => {
+				this.isMessageProcessing = true;
 				this.notifyMessage('remote_message', {
 					type: 'remote_message',
 					message: message,
@@ -265,6 +284,7 @@ class ConnectionManager {
 					result: 'approve' | 'approve_always' | 'reject' | 'reject_with_reply';
 					reason?: string;
 				}) => {
+					this.pendingToolConfirmations.delete(result.toolCallId);
 					this.notifyMessage('tool_confirmation_result', {
 						type: 'tool_confirmation_result',
 						...result,
@@ -282,6 +302,7 @@ class ConnectionManager {
 					customInput?: string;
 					cancelled?: boolean;
 				}) => {
+					this.pendingQuestions.delete(result.toolCallId);
 					this.notifyMessage('user_question_result', {
 						type: 'user_question_result',
 						...result,
@@ -294,6 +315,10 @@ class ConnectionManager {
 			this.connection.on(
 				'receivemessageprocessingcompleted',
 				(instanceId: string) => {
+					this.isMessageProcessing = false;
+					this.pendingToolConfirmations.clear();
+					this.pendingQuestions.clear();
+					this.pendingRollbackConfirmation = null;
 					this.notifyMessage('message_processing_completed', {
 						type: 'message_processing_completed',
 						instanceId,
@@ -556,6 +581,7 @@ class ConnectionManager {
 				sessionTitle: currentSession.title,
 				messageCount: currentSession.messageCount,
 				messages: messages,
+				inFlightState: this.getInFlightState(),
 				timestamp: new Date().toISOString(),
 			});
 		} catch (error) {
@@ -757,6 +783,39 @@ class ConnectionManager {
 		return {...this.state};
 	}
 
+	getInFlightState(): {
+		isMessageProcessing: boolean;
+		pendingToolConfirmations: Array<{
+			toolName: string;
+			toolArguments: string;
+			toolCallId: string;
+		}>;
+		pendingQuestions: Array<{
+			question: string;
+			options: string[];
+			toolCallId: string;
+			multiSelect: boolean;
+		}>;
+		pendingRollbackConfirmation: {
+			filePaths: string[];
+			notebookCount: number;
+		} | null;
+	} {
+		return {
+			isMessageProcessing: this.isMessageProcessing,
+			pendingToolConfirmations: Array.from(
+				this.pendingToolConfirmations.values(),
+			),
+			pendingQuestions: Array.from(this.pendingQuestions.values()),
+			pendingRollbackConfirmation: this.pendingRollbackConfirmation
+				? {
+						filePaths: [...this.pendingRollbackConfirmation.filePaths],
+						notebookCount: this.pendingRollbackConfirmation.notebookCount,
+				  }
+				: null,
+		};
+	}
+
 	// Check if connected
 	isConnected(): boolean {
 		return this.state.status === 'connected';
@@ -782,6 +841,13 @@ class ConnectionManager {
 			return; // Silently fail if not connected
 		}
 
+		this.isMessageProcessing = true;
+		this.pendingToolConfirmations.set(toolCallId, {
+			toolName,
+			toolArguments,
+			toolCallId,
+		});
+
 		try {
 			await this.connection.invoke(
 				'NotifyToolConfirmationNeeded',
@@ -806,6 +872,14 @@ class ConnectionManager {
 			return; // Silently fail if not connected
 		}
 
+		this.isMessageProcessing = true;
+		this.pendingQuestions.set(toolCallId, {
+			question,
+			options,
+			toolCallId,
+			multiSelect: multiSelect ?? false,
+		});
+
 		try {
 			await this.connection.invoke(
 				'NotifyUserInteractionNeeded',
@@ -828,6 +902,12 @@ class ConnectionManager {
 			return;
 		}
 
+		this.isMessageProcessing = true;
+		this.pendingRollbackConfirmation = {
+			filePaths: payload.filePaths || [],
+			notebookCount: payload.notebookCount ?? 0,
+		};
+
 		try {
 			await this.connection.invoke(
 				'NotifyRollbackConfirmationNeeded',
@@ -848,6 +928,8 @@ class ConnectionManager {
 		if (!this.isConnected() || !this.connection) {
 			return;
 		}
+
+		this.pendingToolConfirmations.delete(toolCallId);
 
 		try {
 			await this.connection.invoke(
@@ -871,6 +953,8 @@ class ConnectionManager {
 		if (!this.isConnected() || !this.connection) {
 			return;
 		}
+
+		this.pendingQuestions.delete(toolCallId);
 
 		try {
 			await this.connection.invoke(

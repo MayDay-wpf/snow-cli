@@ -58,8 +58,7 @@ jobs:
 
             ### What's New
 
-            - Fix the issue where the networking tool is unavailable in the Windows terminal
-            - Add remote support
+            - Some issues in connection management have been fixed, improving stability.
 
             ### Installation
             ```bash
