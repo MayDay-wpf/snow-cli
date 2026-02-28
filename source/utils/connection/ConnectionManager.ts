@@ -55,6 +55,21 @@ class ConnectionManager {
 		notebookCount: number;
 	} | null = null;
 
+	private hasPendingInteractions(): boolean {
+		return (
+			this.pendingToolConfirmations.size > 0 ||
+			this.pendingQuestions.size > 0 ||
+			this.pendingRollbackConfirmation !== null
+		);
+	}
+
+	private clearInFlightInteractions(markProcessing = false): void {
+		this.pendingToolConfirmations.clear();
+		this.pendingQuestions.clear();
+		this.pendingRollbackConfirmation = null;
+		this.isMessageProcessing = markProcessing;
+	}
+
 	// Subscribe to status changes
 	onStatusChange(callback: StatusChangeCallback): () => void {
 		this.statusCallbacks.push(callback);
@@ -199,6 +214,7 @@ class ConnectionManager {
 			this.connection.onclose(() => {
 				this.stopHeartbeat();
 				this.cleanupMessageListener();
+				this.clearInFlightInteractions(false);
 				this.updateState({status: 'disconnected'});
 				this.notifyMessage('system', {
 					type: 'closed',
@@ -285,6 +301,7 @@ class ConnectionManager {
 					reason?: string;
 				}) => {
 					this.pendingToolConfirmations.delete(result.toolCallId);
+					this.isMessageProcessing = this.hasPendingInteractions();
 					this.notifyMessage('tool_confirmation_result', {
 						type: 'tool_confirmation_result',
 						...result,
@@ -303,6 +320,7 @@ class ConnectionManager {
 					cancelled?: boolean;
 				}) => {
 					this.pendingQuestions.delete(result.toolCallId);
+					this.isMessageProcessing = this.hasPendingInteractions();
 					this.notifyMessage('user_question_result', {
 						type: 'user_question_result',
 						...result,
@@ -315,10 +333,7 @@ class ConnectionManager {
 			this.connection.on(
 				'receivemessageprocessingcompleted',
 				(instanceId: string) => {
-					this.isMessageProcessing = false;
-					this.pendingToolConfirmations.clear();
-					this.pendingQuestions.clear();
-					this.pendingRollbackConfirmation = null;
+					this.clearInFlightInteractions(false);
 					this.notifyMessage('message_processing_completed', {
 						type: 'message_processing_completed',
 						instanceId,
@@ -329,6 +344,7 @@ class ConnectionManager {
 
 			// Handle interrupt signal from Web client (via server)
 			this.connection.on('receiveinterruptmessageprocessing', () => {
+				this.clearInFlightInteractions(false);
 				this.notifyMessage('interrupt_message_processing', {
 					type: 'interrupt_message_processing',
 					timestamp: new Date().toISOString(),
@@ -337,6 +353,7 @@ class ConnectionManager {
 
 			// Handle clear-session signal from Web client (via server)
 			this.connection.on('receiveclearsession', () => {
+				this.clearInFlightInteractions(false);
 				this.notifyMessage('clear_session', {
 					type: 'clear_session',
 					timestamp: new Date().toISOString(),
@@ -357,6 +374,8 @@ class ConnectionManager {
 			this.connection.on(
 				'receiverollbackmessage',
 				(userMessageOrder: number) => {
+					// 新回滚流程开始前清空旧交互状态，避免把历史 pending 带入新上下文
+					this.clearInFlightInteractions(true);
 					this.notifyMessage('rollback_message', {
 						type: 'rollback_message',
 						userMessageOrder,
@@ -378,6 +397,9 @@ class ConnectionManager {
 			this.connection.on(
 				'receiverollbackconfirmationresult',
 				(result: {rollbackFiles: boolean | null; selectedFiles?: string[]}) => {
+					// 回滚确认已给出，必须立即清理待确认状态，避免后续上下文持续携带旧状态
+					this.pendingRollbackConfirmation = null;
+					this.isMessageProcessing = this.hasPendingInteractions();
 					this.notifyMessage('rollback_confirmation_result', {
 						type: 'rollback_confirmation_result',
 						...result,
@@ -522,6 +544,7 @@ class ConnectionManager {
 	async disconnect(): Promise<{success: boolean; message: string}> {
 		this.stopHeartbeat();
 		this.cleanupMessageListener();
+		this.clearInFlightInteractions(false);
 
 		// Unlock instance ID
 		if (this.config?.instanceId) {
@@ -802,7 +825,8 @@ class ConnectionManager {
 		} | null;
 	} {
 		return {
-			isMessageProcessing: this.isMessageProcessing,
+			isMessageProcessing:
+				this.isMessageProcessing || this.hasPendingInteractions(),
 			pendingToolConfirmations: Array.from(
 				this.pendingToolConfirmations.values(),
 			),

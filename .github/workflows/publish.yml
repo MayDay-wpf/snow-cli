@@ -58,7 +58,7 @@ jobs:
 
             ### What's New
 
-            - Some issues in connection management have been fixed, improving stability.
+            - Status repair
 
             ### Installation
             ```bash
