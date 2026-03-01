@@ -60,7 +60,7 @@ jobs:
 
             - Alignment ESM <--> CJS
             - Fix fetch-cookie export inconsistency when mixing ESM/CJS.
-              
+
             ### Installation
             ```bash
             npm install -g snow-ai
