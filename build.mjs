@@ -31,13 +31,21 @@ await esbuild.build({
 	banner: {
 		js: `import { createRequire as _createRequire } from 'module';
 import { fileURLToPath as _fileURLToPath } from 'url';
-const require = _createRequire(import.meta.url);
+const __snow_raw_require = _createRequire(import.meta.url);
+const require = Object.assign((moduleName) => {
+  const moduleValue = __snow_raw_require(moduleName);
+  if (moduleName === 'fetch-cookie' && typeof moduleValue !== 'function' && typeof moduleValue?.default === 'function') {
+    return moduleValue.default;
+  }
+  return moduleValue;
+}, __snow_raw_require);
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));
 
 // Polyfill for @microsoft/signalr dynamic require
 // SignalR uses: const requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
-// We need to ensure require() works for bundled dependencies
+// Keep __non_webpack_require__ aligned with our wrapped require for both branches.
+const __non_webpack_require__ = require;
 if (typeof globalThis.__non_webpack_require__ === 'undefined') {
   globalThis.__non_webpack_require__ = require;
 }
