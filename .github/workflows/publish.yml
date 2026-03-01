@@ -70,6 +70,7 @@ jobs:
             ```bash
             snow
             ```
+
             ### Update
             ```bash
             snow --update
