@@ -58,9 +58,7 @@ jobs:
 
             ### What's New
 
-            - Add active compression communication
-            - ws adds self-containment
-            - ws solution automatic selection
+            - Incorporate the self-contained nature of SignalR
 
             ### Installation
             ```bash
