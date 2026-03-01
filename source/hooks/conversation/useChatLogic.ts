@@ -1,4 +1,4 @@
-import {useRef, useEffect} from 'react';
+import {useRef, useEffect, useCallback} from 'react';
 import {useI18n} from '../../i18n/index.js';
 import {type Message} from '../../ui/components/chat/MessageList.js';
 import type {ReviewCommitSelection} from '../../ui/components/panels/ReviewCommitPanel.js';
@@ -21,12 +21,14 @@ import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {reindexCodebase} from '../../utils/codebase/reindexCodebase.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
+import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
 import {
 	getNotebookRollbackCount,
 	rollbackNotebooks,
 	deleteNotebookSnapshotsFromIndex,
 	clearAllNotebookSnapshots,
 } from '../../utils/core/notebookManager.js';
+import {executeContextCompression} from './useCommandHandler.js';
 
 /**
  * Parse "# SubAgentTarget:instanceId:agentName" markers from a message.
@@ -152,6 +154,32 @@ interface UseChatLogicProps {
 	>;
 	setWatcherEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	exitingApplicationText: string;
+	// New props for migrated logic
+	commandsLoaded?: boolean;
+	terminalExecutionState?: any;
+	backgroundProcesses?: any;
+	panelState?: any;
+	setIsExecutingTerminalCommand?: React.Dispatch<React.SetStateAction<boolean>>;
+	setHookError?: React.Dispatch<React.SetStateAction<any>>;
+	hasFocus?: boolean;
+	setSuppressLoadingIndicator?: React.Dispatch<React.SetStateAction<boolean>>;
+	bashSensitiveCommand?: {
+		command: string;
+		resolve: (proceed: boolean) => void;
+	} | null;
+	handleCommandExecution?: (command: string, result: any) => void;
+	// Tool confirmation state from useToolConfirmation hook
+	pendingToolConfirmation?: {
+		tool: {
+			function: {
+				name: string;
+				arguments: string;
+			};
+		};
+		allTools?: any[];
+		batchToolNames?: string;
+		resolve: (result: any) => void;
+	} | null;
 }
 
 export function useChatLogic(props: UseChatLogicProps) {
@@ -193,6 +221,12 @@ export function useChatLogic(props: UseChatLogicProps) {
 		setFileUpdateNotification,
 		setWatcherEnabled,
 		exitingApplicationText,
+		commandsLoaded,
+		terminalExecutionState,
+		backgroundProcesses,
+		hasFocus,
+		handleCommandExecution,
+		pendingToolConfirmation,
 	} = props;
 
 	const processMessageRef =
@@ -1680,6 +1714,514 @@ Please provide your review in a clear, structured format.`;
 		}
 	};
 
+	// ==================== MIGRATED LOGIC FROM CHATSCREEN ====================
+
+	// SignalR event subscriptions
+	useEffect(() => {
+		const unsubscribeRemoteMessage = connectionManager.onMessage(
+			'remote_message',
+			(data: any) => {
+				if (data?.message && typeof data.message === 'string') {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: 'Remote message received from Web',
+							streaming: false,
+						},
+					]);
+					handleMessageSubmit(data.message);
+				}
+			},
+		);
+
+		return () => {
+			unsubscribeRemoteMessage();
+		};
+	}, [handleMessageSubmit]);
+
+	useEffect(() => {
+		const unsubscribeToolConfirmation = connectionManager.onMessage(
+			'tool_confirmation_result',
+			(data: any) => {
+				if (!pendingToolConfirmation) {
+					return;
+				}
+
+				const result = data?.result;
+				if (
+					result !== 'approve' &&
+					result !== 'approve_always' &&
+					result !== 'reject' &&
+					result !== 'reject_with_reply'
+				) {
+					return;
+				}
+
+				if (result === 'reject_with_reply') {
+					pendingToolConfirmation.resolve({
+						type: 'reject_with_reply',
+						reason: data?.reason || '',
+					});
+					return;
+				}
+
+				pendingToolConfirmation.resolve(result);
+			},
+		);
+
+		return () => {
+			unsubscribeToolConfirmation();
+		};
+	}, [pendingToolConfirmation]);
+
+	useEffect(() => {
+		const unsubscribeUserQuestion = connectionManager.onMessage(
+			'user_question_result',
+			(data: any) => {
+				if (!pendingUserQuestion) {
+					return;
+				}
+
+				let selected: string | string[] = data?.selected;
+				if (typeof selected === 'string') {
+					const trimmed = selected.trim();
+					if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+						try {
+							const parsed = JSON.parse(trimmed);
+							if (Array.isArray(parsed)) {
+								selected = parsed.filter(item => typeof item === 'string');
+							}
+						} catch {
+							// Keep original selected value if parsing fails
+						}
+					}
+				}
+
+				handleUserQuestionAnswer({
+					selected,
+					customInput:
+						typeof data?.customInput === 'string'
+							? data.customInput
+							: undefined,
+					cancelled: Boolean(data?.cancelled),
+				});
+			},
+		);
+
+		return () => {
+			unsubscribeUserQuestion();
+		};
+	}, [pendingUserQuestion, handleUserQuestionAnswer]);
+
+	useEffect(() => {
+		const unsubscribeInterrupt = connectionManager.onMessage(
+			'interrupt_message_processing',
+			() => {
+				if (!streamingState.isStreaming || !streamingState.abortController) {
+					return;
+				}
+
+				userInterruptedRef.current = true;
+				streamingState.setIsStopping(true);
+				streamingState.setRetryStatus(null);
+				streamingState.setCodebaseSearchStatus(null);
+				streamingState.abortController.abort();
+				setMessages(prev => prev.filter(msg => !msg.toolPending));
+				setPendingMessages([]);
+			},
+		);
+
+		return () => {
+			unsubscribeInterrupt();
+		};
+	}, [streamingState, setMessages, setPendingMessages]);
+
+	useEffect(() => {
+		const unsubscribeClearSession = connectionManager.onMessage(
+			'clear_session',
+			() => {
+				import('../../utils/execution/commandExecutor.js').then(
+					({executeCommand}) => {
+						executeCommand('clear')
+							.then(result => {
+								if (handleCommandExecution) {
+									handleCommandExecution('clear', result);
+								}
+							})
+							.catch(() => {
+								// Ignore command execution errors
+							});
+					},
+				);
+			},
+		);
+
+		return () => {
+			unsubscribeClearSession();
+		};
+	}, [handleCommandExecution]);
+
+	useEffect(() => {
+		const unsubscribeResumeSession = connectionManager.onMessage(
+			'resume_session',
+			(data: any) => {
+				const sessionId =
+					typeof data?.sessionId === 'string' ? data.sessionId.trim() : '';
+				if (!sessionId) {
+					return;
+				}
+				import('../../utils/execution/commandExecutor.js').then(
+					({executeCommand}) => {
+						executeCommand('resume', sessionId)
+							.then(result => {
+								if (handleCommandExecution) {
+									handleCommandExecution('resume', result);
+								}
+							})
+							.catch(() => {
+								// Ignore command execution errors
+							});
+					},
+				);
+			},
+		);
+
+		return () => {
+			unsubscribeResumeSession();
+		};
+	}, [handleCommandExecution]);
+
+	useEffect(() => {
+		const unsubscribeRollback = connectionManager.onMessage(
+			'rollback_message',
+			(data: any) => {
+				if (streamingState.isStreaming) {
+					return;
+				}
+
+				const userMessageOrder = Number(data?.userMessageOrder);
+				if (!Number.isInteger(userMessageOrder) || userMessageOrder <= 0) {
+					return;
+				}
+
+				const userMessageEntries = messages
+					.map((msg, index) => ({msg, index}))
+					.filter(entry => entry.msg.role === 'user');
+				const targetEntry = userMessageEntries[userMessageOrder - 1];
+				if (!targetEntry) {
+					return;
+				}
+
+				handleHistorySelect(
+					targetEntry.index,
+					targetEntry.msg.content || '',
+					targetEntry.msg.images,
+				).catch(() => {
+					// Ignore rollback errors from remote trigger
+				});
+			},
+		);
+
+		return () => {
+			unsubscribeRollback();
+		};
+	}, [messages, streamingState.isStreaming, handleHistorySelect]);
+
+	useEffect(() => {
+		const unsubscribeRollbackConfirm = connectionManager.onMessage(
+			'rollback_confirmation_result',
+			(data: any) => {
+				if (!snapshotState.pendingRollback) {
+					return;
+				}
+
+				const rollbackFiles =
+					typeof data?.rollbackFiles === 'boolean' ? data.rollbackFiles : null;
+				const selectedFiles = Array.isArray(data?.selectedFiles)
+					? data.selectedFiles.filter(
+							(x: unknown): x is string => typeof x === 'string',
+					  )
+					: undefined;
+
+				void handleRollbackConfirm(rollbackFiles, selectedFiles);
+			},
+		);
+
+		return () => {
+			unsubscribeRollbackConfirm();
+		};
+	}, [snapshotState.pendingRollback, handleRollbackConfirm]);
+
+	// Handle compact request from Web client
+	useEffect(() => {
+		const unsubscribeCompactRequest = connectionManager.onMessage(
+			'compact_request',
+			async () => {
+				// Don't compress if currently streaming
+				if (streamingState.isStreaming) {
+					console.log(
+						'[Compact] Ignoring compact request: streaming in progress',
+					);
+					return;
+				}
+
+				console.log('[Compact] Received compact request from Web');
+				setIsCompressing(true);
+				setCompressionError(null);
+
+				try {
+					// Notify Web that compression started
+					await connectionManager.notifyCompactStarted();
+
+					// Get current session
+					const currentSession = sessionManager.getCurrentSession();
+					if (!currentSession) {
+						throw new Error('No active session to compress');
+					}
+
+					// Execute compression
+					const compressionResult = await executeContextCompression(
+						currentSession.id,
+					);
+
+					if (!compressionResult) {
+						throw new Error('Compression failed');
+					}
+
+					console.log('[Compact] Compression completed successfully');
+
+					// Update UI
+					clearSavedMessages();
+					setMessages(compressionResult.uiMessages);
+					setRemountKey(prev => prev + 1);
+
+					// Notify Web that compression completed
+					await connectionManager.notifyCompactCompleted({
+						success: true,
+						messageCount: compressionResult.uiMessages.length,
+					});
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error
+							? error.message
+							: 'Unknown compression error';
+					console.error('[Compact] Compression error:', errorMsg);
+					setCompressionError(errorMsg);
+
+					// Notify Web that compression failed
+					await connectionManager.notifyCompactCompleted({
+						success: false,
+						error: errorMsg,
+					});
+				} finally {
+					setIsCompressing(false);
+				}
+			},
+		);
+
+		return () => {
+			unsubscribeCompactRequest();
+		};
+	}, [
+		streamingState.isStreaming,
+		setIsCompressing,
+		setCompressionError,
+		clearSavedMessages,
+		setMessages,
+		setRemountKey,
+	]);
+
+	// VSCode auto-connect logic
+	const hasAttemptedAutoVscodeConnect = useRef(false);
+	useEffect(() => {
+		if (!commandsLoaded) {
+			return;
+		}
+
+		if (hasAttemptedAutoVscodeConnect.current) {
+			return;
+		}
+
+		if (vscodeState.vscodeConnectionStatus !== 'disconnected') {
+			hasAttemptedAutoVscodeConnect.current = true;
+			return;
+		}
+
+		hasAttemptedAutoVscodeConnect.current = true;
+
+		const timer = setTimeout(() => {
+			(async () => {
+				try {
+					if (
+						vscodeConnection.isConnected() ||
+						vscodeConnection.isClientRunning()
+					) {
+						vscodeConnection.stop();
+						vscodeConnection.resetReconnectAttempts();
+						await new Promise(resolve => setTimeout(resolve, 100));
+					}
+
+					vscodeState.setVscodeConnectionStatus('connecting');
+					await vscodeConnection.start();
+				} catch (error) {
+					vscodeState.setVscodeConnectionStatus('error');
+				}
+			})();
+		}, 0);
+
+		return () => clearTimeout(timer);
+	}, [commandsLoaded, vscodeState]);
+
+	// Auto-send pending messages when streaming stops
+	useEffect(() => {
+		if (streamingState.streamStatus === 'idle' && pendingMessages.length > 0) {
+			const timer = setTimeout(() => {
+				streamingState.setIsStreaming(true);
+				processPendingMessages();
+			}, 100);
+			return () => clearTimeout(timer);
+		}
+		return undefined;
+	}, [streamingState.streamStatus, pendingMessages.length]);
+
+	// Codebase search events
+	const setCodebaseSearchStatus = streamingState.setCodebaseSearchStatus;
+	useEffect(() => {
+		const handleSearchEvent = (event: {
+			type: 'search-start' | 'search-retry' | 'search-complete';
+			attempt: number;
+			maxAttempts: number;
+			currentTopN: number;
+			message: string;
+			query?: string;
+			originalResultsCount?: number;
+			suggestion?: string;
+		}) => {
+			if (event.type === 'search-complete') {
+				setCodebaseSearchStatus(null);
+			} else {
+				setCodebaseSearchStatus({
+					isSearching: true,
+					attempt: event.attempt,
+					maxAttempts: event.maxAttempts,
+					currentTopN: event.currentTopN,
+					message: event.message,
+					query: event.query,
+					originalResultsCount: event.originalResultsCount,
+					suggestion: undefined,
+				});
+			}
+		};
+
+		codebaseSearchEvents.onSearchEvent(handleSearchEvent);
+
+		return () => {
+			codebaseSearchEvents.removeSearchEventListener(handleSearchEvent);
+		};
+	}, [setCodebaseSearchStatus]);
+
+	// ESC interrupt handler (can be called from ChatScreen's useInput)
+	const handleInterrupt = useCallback(() => {
+		if (!streamingState.isStreaming || !streamingState.abortController) {
+			return false;
+		}
+
+		userInterruptedRef.current = true;
+		streamingState.setIsStopping(true);
+		streamingState.setRetryStatus(null);
+		streamingState.setCodebaseSearchStatus(null);
+		streamingState.abortController.abort();
+		setMessages(prev => prev.filter(msg => !msg.toolPending));
+		setPendingMessages([]);
+		return true;
+	}, [streamingState, setMessages, setPendingMessages]);
+
+	// Consolidated ESC key handler
+	const handleEscKey = useCallback(
+		(key: {escape: boolean; ctrl: boolean}, input: string) => {
+			// Handle background process panel
+			if (backgroundProcesses?.showPanel) {
+				if (key.escape) {
+					backgroundProcesses.hidePanel();
+					return true;
+				}
+				return false;
+			}
+
+			// Handle Ctrl+B for backgrounding terminal command
+			if (
+				key.ctrl &&
+				input === 'b' &&
+				terminalExecutionState?.state.isExecuting &&
+				!terminalExecutionState?.state.isBackgrounded
+			) {
+				Promise.all([
+					import('../../mcp/bash.js'),
+					import('../../hooks/execution/useBackgroundProcesses.js'),
+				]).then(([{markCommandAsBackgrounded}, {showBackgroundPanel}]) => {
+					markCommandAsBackgrounded();
+					showBackgroundPanel();
+				});
+				terminalExecutionState.moveToBackground();
+				return true;
+			}
+
+			if (!key.escape) return false;
+
+			// Handle stopping state recovery
+			if (streamingState.isStopping && !streamingState.isStreaming) {
+				streamingState.setIsStopping(false);
+				return true;
+			}
+
+			// Only handle ESC interrupt if terminal has focus and is streaming
+			if (
+				streamingState.isStreaming &&
+				streamingState.abortController &&
+				hasFocus
+			) {
+				// If pending messages exist, restore them to input
+				if (pendingMessages.length > 0) {
+					const mergedText = pendingMessages
+						.map(m => (m.text || '').trim())
+						.filter(Boolean)
+						.join('\n\n');
+					const mergedImages = pendingMessages.flatMap(m => m.images ?? []);
+
+					setRestoreInputContent({
+						text: mergedText,
+						images:
+							mergedImages.length > 0
+								? mergedImages.map(img => ({
+										type: 'image' as const,
+										data: img.data,
+										mimeType: img.mimeType,
+								  }))
+								: undefined,
+					});
+					setPendingMessages([]);
+					return true;
+				}
+
+				// Perform interrupt
+				return handleInterrupt();
+			}
+
+			return false;
+		},
+		[
+			backgroundProcesses,
+			terminalExecutionState,
+			streamingState,
+			hasFocus,
+			pendingMessages,
+			handleInterrupt,
+			setRestoreInputContent,
+			setPendingMessages,
+		],
+	);
+
 	return {
 		handleMessageSubmit,
 		processMessage: processMessageRef.current!,
@@ -1693,5 +2235,11 @@ Please provide your review in a clear, structured format.`;
 		handleToggleCodebase,
 		handleReviewCommitConfirm,
 		rollbackViaSSE,
+		// Migrated handlers
+		handleInterrupt,
+		handleEscKey,
 	};
 }
+
+// Helper type for the hook return value
+export type UseChatLogicReturn = ReturnType<typeof useChatLogic>;

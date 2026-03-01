@@ -61,15 +61,13 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
-import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {validateGitignore} from '../../utils/codebase/gitignoreValidator.js';
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
-import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js';
 import {logger} from '../../utils/core/logger.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
-import {executeCommand} from '../../utils/execution/commandExecutor.js';
+import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
 
 // Commands will be loaded dynamically after mount to avoid blocking initial render
 
@@ -94,7 +92,6 @@ export default function ChatScreen({
 	const pendingMessagesRef = useRef<
 		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>([]);
-	const hasAttemptedAutoVscodeConnect = useRef(false);
 	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
 	const [remountKey, setRemountKey] = useState(0);
 	const [currentContextPercentage, setCurrentContextPercentage] = useState(0); // Track context percentage from ChatInput
@@ -753,12 +750,14 @@ export default function ChatScreen({
 
 	// Minimum terminal height required for proper rendering
 	const MIN_TERMINAL_HEIGHT = 10;
+	const handleCommandExecutionRef = useRef<
+		((command: string, result: any) => void) | undefined
+	>(undefined);
 
 	// Use chat logic hook to handle all AI interaction business logic
 	const {
 		handleMessageSubmit,
 		processMessage,
-		processPendingMessages,
 		handleHistorySelect,
 		handleRollbackConfirm,
 		handleUserQuestionAnswer,
@@ -767,6 +766,7 @@ export default function ChatScreen({
 		handleReindexCodebase,
 		handleToggleCodebase,
 		handleReviewCommitConfirm,
+		handleEscKey,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -804,6 +804,20 @@ export default function ChatScreen({
 		setFileUpdateNotification,
 		setWatcherEnabled,
 		exitingApplicationText: t.hooks.exitingApplication,
+		// New props for migrated logic
+		commandsLoaded,
+		terminalExecutionState,
+		backgroundProcesses,
+		panelState,
+		setIsExecutingTerminalCommand,
+		setHookError,
+		hasFocus,
+		setSuppressLoadingIndicator,
+		bashSensitiveCommand,
+		handleCommandExecution: (command, result) => {
+			handleCommandExecutionRef.current?.(command, result);
+		},
+		pendingToolConfirmation,
 	});
 
 	const {handleCommandExecution} = useCommandHandler({
@@ -848,336 +862,28 @@ export default function ChatScreen({
 		onToggleCodebase: handleToggleCodebase,
 	});
 
-	// Subscribe to remote messages from Web client via SignalR
 	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'remote_message',
-			(data: any) => {
-				if (data?.message && typeof data.message === 'string') {
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: 'Remote message received from Web',
-							streaming: false,
-						},
-					]);
-					handleMessageSubmit(data.message);
-				}
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [handleMessageSubmit]);
-
-	// Subscribe to tool confirmation results from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'tool_confirmation_result',
-			(data: any) => {
-				if (!pendingToolConfirmation) {
-					return;
-				}
-
-				const result = data?.result;
-				if (
-					result !== 'approve' &&
-					result !== 'approve_always' &&
-					result !== 'reject' &&
-					result !== 'reject_with_reply'
-				) {
-					return;
-				}
-
-				if (result === 'reject_with_reply') {
-					pendingToolConfirmation.resolve({
-						type: 'reject_with_reply',
-						reason: data?.reason || '',
-					});
-					return;
-				}
-
-				pendingToolConfirmation.resolve(result);
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [pendingToolConfirmation]);
-
-	// Subscribe to ask-user answers from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'user_question_result',
-			(data: any) => {
-				if (!pendingUserQuestion) {
-					return;
-				}
-
-				let selected: string | string[] = data?.selected;
-				if (typeof selected === 'string') {
-					const trimmed = selected.trim();
-					if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-						try {
-							const parsed = JSON.parse(trimmed);
-							if (Array.isArray(parsed)) {
-								selected = parsed.filter(item => typeof item === 'string');
-							}
-						} catch {
-							// Keep original selected value if parsing fails
-						}
-					}
-				}
-
-				handleUserQuestionAnswer({
-					selected,
-					customInput:
-						typeof data?.customInput === 'string'
-							? data.customInput
-							: undefined,
-					cancelled: Boolean(data?.cancelled),
-				});
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [pendingUserQuestion, handleUserQuestionAnswer]);
-
-	// Subscribe to interrupt signal from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'interrupt_message_processing',
-			() => {
-				if (!streamingState.isStreaming || !streamingState.abortController) {
-					return;
-				}
-
-				userInterruptedRef.current = true;
-				streamingState.setIsStopping(true);
-				streamingState.setRetryStatus(null);
-				streamingState.setCodebaseSearchStatus(null);
-				streamingState.abortController.abort();
-				setMessages(prev => prev.filter(msg => !msg.toolPending));
-				setPendingMessages([]);
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [streamingState, setMessages, setPendingMessages]);
-
-	// Subscribe to clear-session signal from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage('clear_session', () => {
-			executeCommand('clear')
-				.then(result => handleCommandExecution('clear', result))
-				.catch(() => {
-					// Ignore command execution errors to avoid breaking remote control flow
-				});
-		});
-
-		return () => {
-			unsubscribe();
-		};
+		handleCommandExecutionRef.current = handleCommandExecution;
 	}, [handleCommandExecution]);
 
-	// Subscribe to resume-session signal from Web client via SignalR
+	// Sync contextUsage to global storage for Web client display
 	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'resume_session',
-			(data: any) => {
-				const sessionId =
-					typeof data?.sessionId === 'string' ? data.sessionId.trim() : '';
-				if (!sessionId) {
-					return;
-				}
-				executeCommand('resume', sessionId)
-					.then(result => handleCommandExecution('resume', result))
-					.catch(() => {
-						// Ignore command execution errors to avoid breaking remote control flow
-					});
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [handleCommandExecution]);
-
-	// Subscribe to rollback signal from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'rollback_message',
-			(data: any) => {
-				if (streamingState.isStreaming) {
-					return;
-				}
-
-				const userMessageOrder = Number(data?.userMessageOrder);
-				if (!Number.isInteger(userMessageOrder) || userMessageOrder <= 0) {
-					return;
-				}
-
-				const userMessageEntries = messages
-					.map((msg, index) => ({msg, index}))
-					.filter(entry => entry.msg.role === 'user');
-				const targetEntry = userMessageEntries[userMessageOrder - 1];
-				if (!targetEntry) {
-					return;
-				}
-
-				handleHistorySelect(
-					targetEntry.index,
-					targetEntry.msg.content || '',
-					targetEntry.msg.images,
-				).catch(() => {
-					// Ignore rollback errors from remote trigger
-				});
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [messages, streamingState.isStreaming, handleHistorySelect]);
-
-	// Subscribe to rollback confirmation result from Web client via SignalR
-	useEffect(() => {
-		const unsubscribe = connectionManager.onMessage(
-			'rollback_confirmation_result',
-			(data: any) => {
-				if (!snapshotState.pendingRollback) {
-					return;
-				}
-
-				const rollbackFiles =
-					typeof data?.rollbackFiles === 'boolean' ? data.rollbackFiles : null;
-				const selectedFiles = Array.isArray(data?.selectedFiles)
-					? data.selectedFiles.filter(
-							(x: unknown): x is string => typeof x === 'string',
-					  )
-					: undefined;
-
-				void handleRollbackConfirm(rollbackFiles, selectedFiles);
-			},
-		);
-
-		return () => {
-			unsubscribe();
-		};
-	}, [snapshotState.pendingRollback, handleRollbackConfirm]);
-
-	useEffect(() => {
-		// Wait for commands to be loaded before attempting auto-connect
-		if (!commandsLoaded) {
-			return;
+		if (streamingState.contextUsage) {
+			updateGlobalTokenUsage({
+				prompt_tokens: streamingState.contextUsage.prompt_tokens || 0,
+				completion_tokens: streamingState.contextUsage.completion_tokens || 0,
+				total_tokens: streamingState.contextUsage.total_tokens || 0,
+				cache_creation_input_tokens:
+					streamingState.contextUsage.cache_creation_input_tokens,
+				cache_read_input_tokens:
+					streamingState.contextUsage.cache_read_input_tokens,
+				cached_tokens: streamingState.contextUsage.cached_tokens,
+				max_tokens: getOpenAiConfig().maxContextTokens || 128000,
+			});
+		} else {
+			updateGlobalTokenUsage(null);
 		}
-
-		if (hasAttemptedAutoVscodeConnect.current) {
-			return;
-		}
-
-		if (vscodeState.vscodeConnectionStatus !== 'disconnected') {
-			hasAttemptedAutoVscodeConnect.current = true;
-			return;
-		}
-
-		hasAttemptedAutoVscodeConnect.current = true;
-
-		// Auto-connect IDE in background without blocking UI
-		// Use setTimeout to defer execution and make it fully async
-		const timer = setTimeout(() => {
-			// Fire and forget - don't wait for result
-			(async () => {
-				try {
-					// Clean up any existing connection state first (like manual /ide does)
-					if (
-						vscodeConnection.isConnected() ||
-						vscodeConnection.isClientRunning()
-					) {
-						vscodeConnection.stop();
-						vscodeConnection.resetReconnectAttempts();
-						await new Promise(resolve => setTimeout(resolve, 100));
-					}
-
-					// Set connecting status after cleanup
-					vscodeState.setVscodeConnectionStatus('connecting');
-
-					// Now try to connect
-					await vscodeConnection.start();
-
-					// If we get here, connection succeeded
-					// Status will be updated by useVSCodeState hook monitoring
-				} catch (error) {
-					// Silently handle connection failure - set error status instead of throwing
-					vscodeState.setVscodeConnectionStatus('error');
-				}
-			})();
-		}, 0);
-
-		return () => clearTimeout(timer);
-	}, [commandsLoaded]);
-
-	// Pending messages are now handled inline during tool execution in useConversation
-	// Auto-send pending messages when streaming completely stops (as fallback)
-	useEffect(() => {
-		if (streamingState.streamStatus === 'idle' && pendingMessages.length > 0) {
-			const timer = setTimeout(() => {
-				// Set isStreaming=true BEFORE processing to show LoadingIndicator
-				streamingState.setIsStreaming(true);
-				processPendingMessages();
-			}, 100);
-			return () => clearTimeout(timer);
-		}
-		return undefined;
-	}, [streamingState.streamStatus, pendingMessages.length]);
-
-	// Listen to codebase search events
-	// NOTE: streamingState.setCodebaseSearchStatus is a stable useState setter,
-	// so we extract it to avoid depending on the entire streamingState object
-	// (which creates a new reference on every render and causes infinite re-subscriptions).
-	const setCodebaseSearchStatus = streamingState.setCodebaseSearchStatus;
-	useEffect(() => {
-		const handleSearchEvent = (event: {
-			type: 'search-start' | 'search-retry' | 'search-complete';
-			attempt: number;
-			maxAttempts: number;
-			currentTopN: number;
-			message: string;
-			query?: string;
-			originalResultsCount?: number;
-			suggestion?: string;
-		}) => {
-			if (event.type === 'search-complete') {
-				// Clear status immediately
-				setCodebaseSearchStatus(null);
-			} else {
-				// Update search status
-				setCodebaseSearchStatus({
-					isSearching: true,
-					attempt: event.attempt,
-					maxAttempts: event.maxAttempts,
-					currentTopN: event.currentTopN,
-					message: event.message,
-					query: event.query,
-					originalResultsCount: event.originalResultsCount,
-					suggestion: undefined,
-				});
-			}
-		};
-
-		codebaseSearchEvents.onSearchEvent(handleSearchEvent);
-
-		return () => {
-			codebaseSearchEvents.removeSearchEventListener(handleSearchEvent);
-		};
-	}, [setCodebaseSearchStatus]);
+	}, [streamingState.contextUsage]);
 
 	// ESC key handler to interrupt streaming or close overlays
 	useInput((input, key) => {
@@ -1288,72 +994,9 @@ export default function ChatScreen({
 			return;
 		}
 
-		// 如果已经处于 stopping，但流已结束：允许再次按 ESC 直接解除卡死状态
-		if (
-			key.escape &&
-			streamingState.isStopping &&
-			!streamingState.isStreaming
-		) {
-			streamingState.setIsStopping(false);
+		// Delegate ESC handling to useChatLogic for interrupt logic
+		if (handleEscKey(key, input)) {
 			return;
-		}
-
-		// Only handle ESC interrupt if terminal has focus
-		if (
-			key.escape &&
-			streamingState.isStreaming &&
-			streamingState.abortController &&
-			hasFocus
-		) {
-			// 当 AI 正在生成且存在 pending 消息：优先撤回 pending，合并写回输入框。
-			// 该按键仅做撤回，不触发中断；下一次按 ESC 再进入中断流程。
-			if (pendingMessages.length > 0) {
-				const mergedText = pendingMessages
-					.map(m => (m.text || '').trim())
-					.filter(Boolean)
-					.join('\n\n');
-				const mergedImages = pendingMessages.flatMap(m => m.images ?? []);
-
-				setRestoreInputContent({
-					text: mergedText,
-					images:
-						mergedImages.length > 0
-							? mergedImages.map(img => ({
-									type: 'image' as const,
-									data: img.data,
-									mimeType: img.mimeType,
-							  }))
-							: undefined,
-				});
-				setPendingMessages([]);
-				return;
-			}
-
-			userInterruptedRef.current = true;
-
-			// Set stopping state to show "Stopping..." spinner
-			streamingState.setIsStopping(true);
-
-			// Clear retry and search status to prevent flashing
-			streamingState.setRetryStatus(null);
-			streamingState.setCodebaseSearchStatus(null);
-
-			// Abort the controller
-			streamingState.abortController.abort();
-
-			// Remove all pending tool call messages (those with toolPending: true)
-			setMessages(prev => prev.filter(msg => !msg.toolPending));
-
-			// Clear pending messages to prevent auto-send after abort
-			setPendingMessages([]);
-
-			// Note: Don't manually clear isStopping here!
-			// It will be cleared automatically in useConversation's finally block
-			// when setIsStreaming(false) is called, ensuring "Stopping..." spinner
-			// is visible until "user discontinue" message appears
-
-			// Note: discontinued message will be added in processMessage/processPendingMessages finally block
-			// Note: session cleanup will be handled in processMessage/processPendingMessages finally block
 		}
 	});
 

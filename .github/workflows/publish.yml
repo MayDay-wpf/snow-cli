@@ -58,7 +58,9 @@ jobs:
 
             ### What's New
 
-            - Status repair
+            - Add active compression communication
+            - ws adds self-containment
+            - ws solution automatic selection
 
             ### Installation
             ```bash

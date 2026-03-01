@@ -86,12 +86,22 @@ export const ConnectionPanel: React.FC<Props> = ({onClose, initialApiUrl}) => {
 
 				// Navigate back to previous step based on current step
 				if (step === 'auth') {
+					// If on password field, go back to username field first
+					if (focus === 'password') {
+						setFocus('username');
+						return;
+					}
 					setStep('url');
 					setStatusMessage('');
 					return;
 				}
 
 				if (step === 'instance') {
+					// If on name field, go back to id field first
+					if (focus === 'name') {
+						setFocus('id');
+						return;
+					}
 					setStep('auth');
 					setFocus('password');
 					setStatusMessage('');
@@ -128,6 +138,21 @@ export const ConnectionPanel: React.FC<Props> = ({onClose, initialApiUrl}) => {
 			if (confirmingDelete) {
 				setConfirmingDelete(false);
 				return;
+			}
+
+			// Handle arrow keys for navigation between fields
+			if (step === 'auth') {
+				if (key.upArrow || key.downArrow) {
+					setFocus(prev => (prev === 'username' ? 'password' : 'username'));
+					return;
+				}
+			}
+
+			if (step === 'instance') {
+				if (key.upArrow || key.downArrow) {
+					setFocus(prev => (prev === 'id' ? 'name' : 'id'));
+					return;
+				}
 			}
 
 			if (key.return) {
