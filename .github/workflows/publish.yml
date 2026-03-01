@@ -58,26 +58,20 @@ jobs:
 
             ### What's New
 
-            - Alignment ESM/CJS
-            - Fix fetch-cookie export inconsistency when mixing ESM/CJS.
+            - Fix some bugs
 
             ### Installation
-
             ```bash
             npm install -g snow-ai
             ```
 
             ### Usage
-
             ```bash
             snow
             ```
-
             ### Update
-
             ```bash
             snow --update
             ```
-
           draft: false
           prerelease: false
