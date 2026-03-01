@@ -35,6 +35,13 @@ const require = _createRequire(import.meta.url);
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));
 
+// Polyfill for @microsoft/signalr dynamic require
+// SignalR uses: const requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
+// We need to ensure require() works for bundled dependencies
+if (typeof globalThis.__non_webpack_require__ === 'undefined') {
+  globalThis.__non_webpack_require__ = require;
+}
+
 // Polyfill for undici's web API dependencies
 // undici uses File, Blob, etc. which are only available in Node.js 20+
 // For Node.js 16-18, we provide minimal polyfills
@@ -123,6 +130,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 		'ssh2',
 		'cpu-features',
 		// Note: katex and markdown-it-math are bundled (not external)
+		// Note: @microsoft/signalr dependencies (eventsource, fetch-cookie, tough-cookie) are now bundled
 	],
 	plugins: [stubPlugin],
 	minify: false,
