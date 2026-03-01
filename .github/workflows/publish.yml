@@ -58,7 +58,7 @@ jobs:
 
             ### What's New
 
-            - Alignment ESM <--> CJS
+            - Alignment ESM/CJS
             - Fix fetch-cookie export inconsistency when mixing ESM/CJS.
 
             ### Installation
