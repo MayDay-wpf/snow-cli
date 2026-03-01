@@ -62,18 +62,22 @@ jobs:
             - Fix fetch-cookie export inconsistency when mixing ESM/CJS.
 
             ### Installation
+
             ```bash
             npm install -g snow-ai
             ```
 
             ### Usage
+
             ```bash
             snow
             ```
 
             ### Update
+
             ```bash
             snow --update
             ```
+
           draft: false
           prerelease: false
