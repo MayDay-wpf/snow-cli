@@ -341,7 +341,10 @@ export function useBashMode() {
 						if (outputFlushTimer) {
 							clearTimeout(outputFlushTimer);
 						}
-						outputFlushTimer = setTimeout(flushOutputBuffer, OUTPUT_FLUSH_DELAY);
+						outputFlushTimer = setTimeout(
+							flushOutputBuffer,
+							OUTPUT_FLUSH_DELAY,
+						);
 					};
 
 					child.stdout?.on('data', (data: Buffer) => {
@@ -388,13 +391,14 @@ export function useBashMode() {
 					);
 
 					child.on('error', (error: any) => {
-						// 常见：Windows 没安装 pwsh 时会触发 ENOENT，这里自动回退。
 						if (
 							isWindows &&
 							error &&
 							(error.code === 'ENOENT' ||
 								String(error.message || '').includes('ENOENT'))
 						) {
+							settled = true;
+							safeCleanup();
 							spawnWithFallback(index + 1);
 							return;
 						}
