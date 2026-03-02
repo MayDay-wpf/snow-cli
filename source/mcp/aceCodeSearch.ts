@@ -827,7 +827,7 @@ export class ACECodeSearchService {
 
 		return new Promise((resolve, reject) => {
 			const args = isRipgrep
-				? ['-n', '-i', '--no-heading', pattern]
+				? ['-n', '-i', '--no-heading']
 				: ['-r', '-n', '-H', '-E', '-i'];
 
 			// Add exclusion patterns
@@ -863,12 +863,13 @@ export class ACECodeSearchService {
 					const expandedGlobs = expandGlobBraces(normalizedGlob);
 					expandedGlobs.forEach(glob => args.push(`--include=${glob}`));
 				}
-				args.push(pattern, '.');
 			}
+			args.push(pattern, '.');
 
 			const child = spawn(grepCommand, args, {
 				cwd: this.basePath,
 				windowsHide: true,
+				stdio: ['ignore', 'pipe', 'pipe'],
 			});
 
 			// Register child process for cleanup
