@@ -91,7 +91,13 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 const args = process.argv.slice(2);
 const isQuickCommand = args.some(
 	arg =>
-		arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h',
+		arg === '--version' ||
+		arg === '-v' ||
+		arg === '--help' ||
+		arg === '-h' ||
+		arg === '--acp' ||
+		arg === '--sse' ||
+		arg === '--sse-daemon',
 );
 
 // Show loading indicator only for non-quick commands
@@ -216,6 +222,8 @@ Options
 		--sse-port    SSE server port (default: 3000)
 		--sse-timeout SSE server interaction timeout in milliseconds (default: 300000, i.e. 5 minutes)
 		--work-dir    Working directory for SSE server (default: current directory)
+		--acp         Start ACP (Agent Client Protocol) server mode for external integration
+			              Uses stdin/stdout for JSON-RPC 2.0 communication
 `,
 	{
 		importMeta: import.meta,
@@ -296,6 +304,10 @@ Options
 			workDir: {
 				type: 'string',
 				alias: 'work-dir',
+			},
+			acp: {
+				type: 'boolean',
+				default: false,
 			},
 		},
 	},
@@ -488,6 +500,15 @@ if (cli.flags.sse) {
 		// 阻止进程退出
 		await new Promise(() => {});
 	}
+}
+
+// Handle ACP (Agent Client Protocol) server mode
+if (cli.flags.acp) {
+	const {acpManager} = await import('./utils/acp/acpManager.js');
+
+	// Start ACP server with stdin/stdout
+	await acpManager.start(process.stdin, process.stdout);
+	process.exit(0);
 }
 
 // Handle task creation - create and execute in background
