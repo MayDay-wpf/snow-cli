@@ -741,6 +741,7 @@ export class ACECodeSearchService {
 
 	/**
 	 * Strategy 1: Use git grep for fast searching in Git repositories
+	 * Enhanced with timeout protection to prevent hanging
 	 */
 	private async gitGrepSearch(
 		pattern: string,
@@ -750,6 +751,9 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		// Set timeout to prevent hanging
+		const timeoutMs = 15000;
+
 		return new Promise((resolve, reject) => {
 			const args = ['grep', '--untracked', '-n', '--ignore-case'];
 
@@ -764,7 +768,7 @@ export class ACECodeSearchService {
 
 			if (fileGlob) {
 				// Normalize path separators for Windows compatibility
-				let gitGlob = fileGlob.replace(/\\/g, '/');
+				let gitGlob = fileGlob.replace(/\\\\/g, '/');
 				// Convert ** to * as git grep has limited ** support
 				gitGlob = gitGlob.replace(/\*\*/g, '*');
 
@@ -783,26 +787,52 @@ export class ACECodeSearchService {
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
+			let isCompleted = false;
+
+			// Set up timeout to prevent hanging
+			const timeoutId = setTimeout(() => {
+				if (!isCompleted) {
+					isCompleted = true;
+					child.kill('SIGTERM');
+					logger.warn(
+						`git grep timed out after ${timeoutMs}ms, killing process`,
+					);
+					reject(new Error(`git grep timed out after ${timeoutMs}ms`));
+				}
+			}, timeoutMs);
 
 			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
 			child.stderr.on('data', chunk => stderrChunks.push(chunk));
 
 			child.on('error', err => {
-				reject(new Error(`Failed to start git grep: ${err.message}`));
+				if (!isCompleted) {
+					isCompleted = true;
+					clearTimeout(timeoutId);
+					reject(new Error(`Failed to start git grep: ${err.message}`));
+				}
 			});
 
 			child.on('close', code => {
-				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
-				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
+				if (!isCompleted) {
+					isCompleted = true;
+					clearTimeout(timeoutId);
 
-				if (code === 0) {
-					const results = parseGrepOutput(stdoutData, this.basePath);
-					resolve(results.slice(0, maxResults));
-				} else if (code === 1) {
-					// No matches found
-					resolve([]);
-				} else {
-					reject(new Error(`git grep exited with code ${code}: ${stderrData}`));
+					const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+					const stderrData = Buffer.concat(stderrChunks)
+						.toString('utf8')
+						.trim();
+
+					if (code === 0) {
+						const results = parseGrepOutput(stdoutData, this.basePath);
+						resolve(results.slice(0, maxResults));
+					} else if (code === 1) {
+						// No matches found
+						resolve([]);
+					} else {
+						reject(
+							new Error(`git grep exited with code ${code}: ${stderrData}`),
+						);
+					}
 				}
 			});
 		});
@@ -821,9 +851,8 @@ export class ACECodeSearchService {
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		const isRipgrep = grepCommand === 'rg';
-		// Shorter timeout for ripgrep on Windows (it tends to hang)
-		const isWindows = process.platform === 'win32';
-		const timeoutMs = isWindows && isRipgrep ? 10000 : 15000;
+		// Set timeout for all commands to prevent hanging
+		const timeoutMs = 15000;
 
 		return new Promise((resolve, reject) => {
 			const args = isRipgrep
@@ -1300,7 +1329,7 @@ export class ACECodeSearchService {
 				this.isCommandAvailableCached('grep'),
 			]);
 
-		// Strategy 1: Try git grep first
+		// Strategy 1: Try git grep first (fastest in git repos)
 		if (isGitRepo && gitAvailable) {
 			try {
 				const results = await this.gitGrepSearch(
@@ -1317,10 +1346,23 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 2: Try system grep first (more reliable, especially on Windows)
-		// Strategy 3: Try ripgrep as fallback (rg can hang on Windows with large repos)
-		const isWindows = process.platform === 'win32';
+		// Strategy 2: Try ripgrep (fast and reliable, with timeout protection)
+		if (rgAvailable) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					'rg',
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('Ripgrep failed, trying next strategy');
+				// Fall through to system grep or JavaScript fallback
+			}
+		}
 
+		// Strategy 3: Try system grep as fallback
 		if (grepAvailable) {
 			try {
 				const results = await this.systemGrepSearch(
@@ -1331,23 +1373,7 @@ export class ACECodeSearchService {
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
-				logger.info('System grep failed, trying next strategy');
-				// Fall through to ripgrep or JavaScript fallback
-			}
-		}
-
-		// Try ripgrep only on non-Windows platforms or if grep is not available
-		if (rgAvailable && !isWindows) {
-			try {
-				const results = await this.systemGrepSearch(
-					pattern,
-					fileGlob,
-					maxResults,
-					'rg',
-				);
-				return await this.sortResultsByRecency(results);
-			} catch (error) {
-				logger.info('Ripgrep failed, falling back to JavaScript search');
+				logger.info('System grep failed, falling back to JavaScript search');
 				// Fall through to JavaScript fallback
 			}
 		}
