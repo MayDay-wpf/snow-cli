@@ -1,4 +1,4 @@
-import {exec, spawn} from 'child_process';
+import {exec, spawn, spawnSync} from 'child_process';
 // Type definitions
 import type {CommandExecutionResult} from './types/bash.types.js';
 // Utility functions
@@ -152,6 +152,58 @@ export class TerminalCommandService {
 	}
 
 	/**
+	 * Select an available local shell on Windows.
+	 * Tries preferred shell first, then falls back to alternatives.
+	 */
+	private selectAvailableWindowsShell(
+		preferred: 'pwsh' | 'powershell' | null,
+	): {
+		shell: 'pwsh' | 'powershell' | 'cmd';
+		isPowerShell: boolean;
+	} {
+		const candidates: Array<'pwsh' | 'powershell' | 'cmd'> = [];
+		if (preferred === 'pwsh') {
+			candidates.push('pwsh', 'powershell', 'cmd');
+		} else if (preferred === 'powershell') {
+			candidates.push('powershell', 'pwsh', 'cmd');
+		} else {
+			candidates.push('powershell', 'pwsh', 'cmd');
+		}
+
+		for (const candidate of candidates) {
+			try {
+				if (candidate === 'cmd') {
+					const probe = spawnSync('cmd', ['/c', 'echo'], {
+						windowsHide: true,
+						stdio: 'ignore',
+					});
+					if (!probe.error) {
+						return {shell: 'cmd', isPowerShell: false};
+					}
+					continue;
+				}
+
+				const probe = spawnSync(
+					candidate,
+					['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'],
+					{
+						windowsHide: true,
+						stdio: 'ignore',
+					},
+				);
+
+				if (!probe.error) {
+					return {shell: candidate, isPowerShell: true};
+				}
+			} catch {
+				// Ignore probe errors and continue fallback.
+			}
+		}
+
+		return {shell: 'cmd', isPowerShell: false};
+	}
+
+	/**
 	 * Execute a terminal command in the working directory
 	 * Supports both local and remote SSH directories
 	 * @param command - The command to execute (e.g., "npm -v", "git status")
@@ -227,15 +279,15 @@ export class TerminalCommandService {
 			let shellArgs: string[];
 
 			if (isWindows) {
-				const psType = detectWindowsPowerShell();
-				if (psType) {
-					// Use PowerShell (pwsh for 7.x, powershell for 5.x)
-					shell = psType === 'pwsh' ? 'pwsh' : 'powershell';
+				const preferredPowerShell = detectWindowsPowerShell();
+				const selectedShell =
+					this.selectAvailableWindowsShell(preferredPowerShell);
+				shell = selectedShell.shell;
+
+				if (selectedShell.isPowerShell) {
 					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command} }`;
 					shellArgs = ['-NoProfile', '-Command', utf8WrappedCommand];
 				} else {
-					// Fallback to cmd if not in PowerShell environment
-					shell = 'cmd';
 					const utf8Command = `chcp 65001>nul && ${command}`;
 					shellArgs = ['/c', utf8Command];
 				}
