@@ -1,6 +1,7 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import Spinner from 'ink-spinner';
+import {Alert} from '@inkjs/ui';
 import ScrollableSelectInput from '../common/ScrollableSelectInput.js';
 import {
 	fetchAvailableModels,
@@ -60,6 +61,10 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [hasStartedLoading, setHasStartedLoading] = useState(false);
 
+	// 使用 ref 同步追踪选择状态，解决 ESC 键需要按两次的问题
+	const isSelectingRef = useRef(false);
+	const manualInputModeRef = useRef(false);
+
 	// Thinking settings (aligned with ConfigScreen)
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [showThinking, setShowThinking] = useState(true);
@@ -98,8 +103,10 @@ export const ModelsPanel: React.FC<Props> = ({
 
 		// Reset transient UI state
 		setIsSelecting(false);
+		isSelectingRef.current = false;
 		setSearchTerm('');
 		setManualInputMode(false);
+		manualInputModeRef.current = false;
 		setManualInputValue('');
 		setHasStartedLoading(false);
 		setThinkingFocusIndex(0);
@@ -129,6 +136,17 @@ export const ModelsPanel: React.FC<Props> = ({
 			(cfg as any).responsesReasoning?.effort || 'high',
 		);
 	}, [visible, advancedModel, basicModel]);
+
+	// Auto-hide error message after 3 seconds
+	useEffect(() => {
+		if (errorMessage) {
+			const timer = setTimeout(() => {
+				setErrorMessage('');
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+		return undefined;
+	}, [errorMessage]);
 
 	const modelTarget: 'advanced' | 'basic' | 'thinking' =
 		activeTab === 'basic'
@@ -206,8 +224,10 @@ export const ModelsPanel: React.FC<Props> = ({
 	const handleModelSelect = useCallback(
 		(value: string) => {
 			if (value === '__MANUAL_INPUT__') {
+				isSelectingRef.current = false;
 				setIsSelecting(false);
 				setSearchTerm('');
+				manualInputModeRef.current = true;
 				setManualInputMode(true);
 				setManualInputValue(currentModel);
 				setHasStartedLoading(false);
@@ -218,6 +238,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			if (modelTarget !== 'thinking') {
 				void applyModel(value, modelTarget);
 			}
+			isSelectingRef.current = false;
 			setIsSelecting(false);
 			setSearchTerm('');
 			setHasStartedLoading(false);
@@ -230,9 +251,11 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (cleaned && modelTarget !== 'thinking') {
 			void applyModel(cleaned, modelTarget);
 		}
+		manualInputModeRef.current = false;
 		setManualInputMode(false);
 		setManualInputValue('');
 		setSearchTerm('');
+		setHasStartedLoading(false);
 	}, [applyModel, manualInputValue, modelTarget]);
 
 	const thinkingEnabledValue = useMemo(() => {
@@ -476,6 +499,7 @@ export const ModelsPanel: React.FC<Props> = ({
 
 			if (key.escape) {
 				// 子视图内 ESC 仅收起回到默认视图。
+				// 使用 ref 同步检查状态，避免 React 状态更新延迟导致需要按两次 ESC
 				if (thinkingInputMode) {
 					setThinkingInputMode(null);
 					setThinkingInputValue('');
@@ -489,14 +513,16 @@ export const ModelsPanel: React.FC<Props> = ({
 					setIsThinkingEffortSelecting(false);
 					return;
 				}
-				if (manualInputMode) {
+				if (manualInputModeRef.current || manualInputMode) {
+					manualInputModeRef.current = false;
 					setManualInputMode(false);
 					setManualInputValue('');
 					setSearchTerm('');
 					setHasStartedLoading(false);
 					return;
 				}
-				if (isSelecting) {
+				if (isSelectingRef.current || isSelecting) {
+					isSelectingRef.current = false;
 					setIsSelecting(false);
 					setSearchTerm('');
 					setHasStartedLoading(false);
@@ -652,8 +678,12 @@ export const ModelsPanel: React.FC<Props> = ({
 				// 标记已开始加载流程
 				setHasStartedLoading(true);
 				void loadModels()
-					.then(() => setIsSelecting(true))
+					.then(() => {
+						isSelectingRef.current = true;
+						setIsSelecting(true);
+					})
 					.catch(() => {
+						manualInputModeRef.current = true;
 						setManualInputMode(true);
 						setManualInputValue(currentModel);
 					});
@@ -661,6 +691,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 
 			if ((input === 'm' || input === 'M') && isModelTab) {
+				manualInputModeRef.current = true;
 				setManualInputMode(true);
 				setManualInputValue(currentModel);
 			}
@@ -737,12 +768,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			)}
 
 			{errorMessage && !loading && (
-				<Box flexDirection="column">
-					<Text color={theme.colors.warning}>{t.modelsPanel.tipLabel}</Text>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{errorMessage}
-					</Text>
-				</Box>
+				<Alert variant="error">{errorMessage}</Alert>
 			)}
 
 			{activeTab === 'thinking' ? (
@@ -950,7 +976,7 @@ export const ModelsPanel: React.FC<Props> = ({
 						limit={10}
 						disableNumberShortcuts={true}
 						initialIndex={selectedIndex}
-						isFocused={true}
+						isFocused={isSelecting}
 						onSelect={item => handleModelSelect(item.value)}
 					/>
 				</Box>
