@@ -1,7 +1,8 @@
 //Autonomous Coding Engine
-import {promises as fs} from 'fs';
+import {promises as fs, createReadStream} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
+import {createInterface} from 'readline';
 import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
 import {logger} from '../utils/core/logger.js';
@@ -34,10 +35,19 @@ import {
 	isCommandAvailable,
 	parseGrepOutput,
 	expandGlobBraces,
+	isSafeRegexPattern,
+	processWithConcurrency,
+	createTimeoutPromise,
 } from './utils/aceCodeSearch/search.utils.js';
 import {
 	INDEX_CACHE_DURATION,
 	BATCH_SIZE,
+	BINARY_EXTENSIONS,
+	LARGE_FILE_THRESHOLD,
+	FILE_READ_CHUNK_SIZE,
+	TEXT_SEARCH_TIMEOUT_MS,
+	MAX_CONCURRENT_FILE_READS,
+	MAX_REGEX_COMPLEXITY_SCORE,
 } from './utils/aceCodeSearch/constants.utils.js';
 
 export class ACECodeSearchService {
@@ -424,7 +434,7 @@ export class ACECodeSearchService {
 				});
 			} catch (error) {
 				// Fall back to manual scoring if fzf fails
-				logger.debug(
+				logger.info(
 					`fzf search failed, falling back to manual scoring: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
@@ -800,6 +810,7 @@ export class ACECodeSearchService {
 
 	/**
 	 * Strategy 2: Use system grep (or ripgrep if available) for fast searching
+	 * Enhanced with timeout protection to prevent hanging on Windows
 	 */
 	private async systemGrepSearch(
 		pattern: string,
@@ -810,6 +821,9 @@ export class ACECodeSearchService {
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		const isRipgrep = grepCommand === 'rg';
+		// Shorter timeout for ripgrep on Windows (it tends to hang)
+		const isWindows = process.platform === 'win32';
+		const timeoutMs = isWindows && isRipgrep ? 10000 : 15000;
 
 		return new Promise((resolve, reject) => {
 			const args = isRipgrep
@@ -862,6 +876,19 @@ export class ACECodeSearchService {
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
+			let isCompleted = false;
+
+			// Set up timeout to prevent hanging
+			const timeoutId = setTimeout(() => {
+				if (!isCompleted) {
+					isCompleted = true;
+					child.kill('SIGTERM');
+					logger.warn(
+						`${grepCommand} timed out after ${timeoutMs}ms, killing process`,
+					);
+					reject(new Error(`${grepCommand} timed out after ${timeoutMs}ms`));
+				}
+			}, timeoutMs);
 
 			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
 			child.stderr.on('data', chunk => {
@@ -876,26 +903,39 @@ export class ACECodeSearchService {
 			});
 
 			child.on('error', err => {
-				reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
+				if (!isCompleted) {
+					isCompleted = true;
+					clearTimeout(timeoutId);
+					reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
+				}
 			});
 
 			child.on('close', code => {
-				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
-				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
+				if (!isCompleted) {
+					isCompleted = true;
+					clearTimeout(timeoutId);
 
-				if (code === 0) {
-					const results = parseGrepOutput(stdoutData, this.basePath);
-					resolve(results.slice(0, maxResults));
-				} else if (code === 1) {
-					// No matches found
-					resolve([]);
-				} else if (stderrData) {
-					reject(
-						new Error(`${grepCommand} exited with code ${code}: ${stderrData}`),
-					);
-				} else {
-					// Exit code > 1 but no stderr, likely just suppressed errors
-					resolve([]);
+					const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+					const stderrData = Buffer.concat(stderrChunks)
+						.toString('utf8')
+						.trim();
+
+					if (code === 0) {
+						const results = parseGrepOutput(stdoutData, this.basePath);
+						resolve(results.slice(0, maxResults));
+					} else if (code === 1) {
+						// No matches found
+						resolve([]);
+					} else if (stderrData) {
+						reject(
+							new Error(
+								`${grepCommand} exited with code ${code}: ${stderrData}`,
+							),
+						);
+					} else {
+						// Exit code > 1 but no stderr, likely just suppressed errors
+						resolve([]);
+					}
 				}
 			});
 		});
@@ -930,6 +970,11 @@ export class ACECodeSearchService {
 
 	/**
 	 * Strategy 3: Pure JavaScript fallback search
+	 * Enhanced with performance protections:
+	 * - File size limits (skip files > 5MB)
+	 * - Timeout protection (30s max)
+	 * - ReDoS protection (regex complexity check)
+	 * - Concurrent read limiting
 	 */
 	private async jsTextSearch(
 		pattern: string,
@@ -946,13 +991,30 @@ export class ACECodeSearchService {
 			content: string;
 		}> = [];
 
+		// Track if search should be aborted
+		let isAborted = false;
+		const startTime = Date.now();
+
+		// Check timeout periodically
+		const checkTimeout = (): void => {
+			if (Date.now() - startTime > TEXT_SEARCH_TIMEOUT_MS) {
+				isAborted = true;
+				logger.warn(`Text search timeout after ${TEXT_SEARCH_TIMEOUT_MS}ms`);
+			}
+		};
+
 		// Load exclusion patterns
 		await this.loadExclusionPatterns();
 
-		// Compile search pattern
+		// Compile search pattern with ReDoS protection
 		let searchRegex: RegExp;
 		try {
 			if (isRegex) {
+				// Check for ReDoS vulnerabilities
+				const safety = isSafeRegexPattern(pattern, MAX_REGEX_COMPLEXITY_SCORE);
+				if (!safety.isSafe) {
+					throw new Error(`Potentially unsafe regex pattern: ${safety.reason}`);
+				}
 				searchRegex = new RegExp(pattern, 'gi');
 			} else {
 				// Escape special regex characters for literal search
@@ -960,56 +1022,32 @@ export class ACECodeSearchService {
 				searchRegex = new RegExp(escaped, 'gi');
 			}
 		} catch (error) {
+			if (error instanceof Error) {
+				throw error;
+			}
 			throw new Error(`Invalid regex pattern: ${pattern}`);
 		}
 
 		// Parse glob pattern if provided using improved glob parser
 		const globRegex = fileGlob ? this.globPatternToRegex(fileGlob) : null;
 
-		// Binary file extensions (using Set for O(1) lookup)
-		const binaryExts = new Set([
-			'.jpg',
-			'.jpeg',
-			'.png',
-			'.gif',
-			'.bmp',
-			'.ico',
-			'.svg',
-			'.pdf',
-			'.zip',
-			'.tar',
-			'.gz',
-			'.rar',
-			'.7z',
-			'.exe',
-			'.dll',
-			'.so',
-			'.dylib',
-			'.mp3',
-			'.mp4',
-			'.avi',
-			'.mov',
-			'.woff',
-			'.woff2',
-			'.ttf',
-			'.eot',
-			'.class',
-			'.jar',
-			'.war',
-			'.o',
-			'.a',
-			'.lib',
-		]);
+		// Collect all files to search first
+		interface FileToSearch {
+			fullPath: string;
+			relativePath: string;
+		}
+		const filesToSearch: FileToSearch[] = [];
 
-		// Search recursively
-		const searchInDirectory = async (dirPath: string): Promise<void> => {
-			if (results.length >= maxResults) return;
+		// Search recursively to collect files
+		const collectFiles = async (dirPath: string): Promise<void> => {
+			if (isAborted || filesToSearch.length >= maxResults * 10) return;
+			checkTimeout();
 
 			try {
 				const entries = await fs.readdir(dirPath, {withFileTypes: true});
 
 				for (const entry of entries) {
-					if (results.length >= maxResults) break;
+					if (isAborted || filesToSearch.length >= maxResults * 10) break;
 
 					const fullPath = path.join(dirPath, entry.name);
 
@@ -1026,51 +1064,24 @@ export class ACECodeSearchService {
 						) {
 							continue;
 						}
-						await searchInDirectory(fullPath);
+						await collectFiles(fullPath);
 					} else if (entry.isFile()) {
 						// Filter by glob if specified
-						if (globRegex) {
-							// Use relative path from basePath for glob matching
-							const relativePath = path
-								.relative(this.basePath, fullPath)
-								.replace(/\\/g, '/');
-							if (!globRegex.test(relativePath)) {
-								continue;
-							}
+						const relativePath = path
+							.relative(this.basePath, fullPath)
+							.replace(/\\/g, '/');
+
+						if (globRegex && !globRegex.test(relativePath)) {
+							continue;
 						}
 
 						// Skip binary files (using Set for fast lookup)
 						const ext = path.extname(entry.name).toLowerCase();
-						if (binaryExts.has(ext)) {
+						if (BINARY_EXTENSIONS.has(ext)) {
 							continue;
 						}
 
-						try {
-							const content = await fs.readFile(fullPath, 'utf-8');
-							const lines = content.split('\n');
-
-							for (let i = 0; i < lines.length; i++) {
-								if (results.length >= maxResults) break;
-
-								const line = lines[i];
-								if (!line) continue;
-
-								// Reset regex for each line
-								searchRegex.lastIndex = 0;
-								const match = searchRegex.exec(line);
-
-								if (match) {
-									results.push({
-										filePath: path.relative(this.basePath, fullPath),
-										line: i + 1,
-										column: match.index + 1,
-										content: line.trim(),
-									});
-								}
-							}
-						} catch (error) {
-							// Skip files that cannot be read (binary, permissions, etc.)
-						}
+						filesToSearch.push({fullPath, relativePath});
 					}
 				}
 			} catch (error) {
@@ -1078,8 +1089,153 @@ export class ACECodeSearchService {
 			}
 		};
 
-		await searchInDirectory(this.basePath);
+		await collectFiles(this.basePath);
+
+		// Process files with limited concurrency
+		const processFile = async (fileInfo: FileToSearch): Promise<void> => {
+			if (isAborted || results.length >= maxResults) return;
+			checkTimeout();
+
+			try {
+				// Check file size to decide reading strategy
+				const stats = await fs.stat(fileInfo.fullPath);
+
+				if (stats.size <= LARGE_FILE_THRESHOLD) {
+					// Small file: read entirely for better performance
+					const content = await fs.readFile(fileInfo.fullPath, 'utf-8');
+					const lines = content.split('\n');
+
+					for (let i = 0; i < lines.length; i++) {
+						if (isAborted || results.length >= maxResults) break;
+
+						const line = lines[i];
+						if (!line) continue;
+
+						// Reset regex for each line
+						searchRegex.lastIndex = 0;
+						const match = searchRegex.exec(line);
+
+						if (match) {
+							results.push({
+								filePath: fileInfo.relativePath,
+								line: i + 1,
+								column: match.index + 1,
+								content: line.trim(),
+							});
+						}
+					}
+				} else {
+					// Large file: use streaming to control memory
+					logger.info(
+						`Streaming large file (${stats.size} bytes): ${fileInfo.relativePath}`,
+					);
+					await this.searchInLargeFile(
+						fileInfo,
+						searchRegex,
+						results,
+						maxResults,
+						() => isAborted,
+					);
+				}
+			} catch (error) {
+				// Skip files that cannot be read (binary, permissions, etc.)
+			}
+		};
+
+		// Process files with concurrency limit
+		await processWithConcurrency(
+			filesToSearch,
+			processFile,
+			MAX_CONCURRENT_FILE_READS,
+		);
+
+		if (isAborted) {
+			logger.warn(
+				`Text search aborted after ${Date.now() - startTime}ms, returning ${
+					results.length
+				} partial results`,
+			);
+		}
+
 		return results;
+	}
+
+	/**
+	 * Search within a large file using streaming to control memory usage.
+	 * Processes the file line by line without loading entire content into memory.
+	 */
+	private async searchInLargeFile(
+		fileInfo: {fullPath: string; relativePath: string},
+		searchRegex: RegExp,
+		results: Array<{
+			filePath: string;
+			line: number;
+			column: number;
+			content: string;
+		}>,
+		maxResults: number,
+		isAborted: () => boolean,
+	): Promise<void> {
+		return new Promise(resolve => {
+			const stream = createReadStream(fileInfo.fullPath, {
+				highWaterMark: FILE_READ_CHUNK_SIZE,
+				encoding: 'utf-8',
+			});
+
+			const rl = createInterface({
+				input: stream,
+				crlfDelay: Infinity,
+			});
+
+			let lineNumber = 0;
+			let hasError = false;
+
+			rl.on('line', (line: string) => {
+				if (hasError || isAborted() || results.length >= maxResults) {
+					rl.close();
+					stream.destroy();
+					return;
+				}
+
+				lineNumber++;
+
+				// Skip empty lines for efficiency
+				if (!line) return;
+
+				// Reset regex for each line
+				searchRegex.lastIndex = 0;
+				const match = searchRegex.exec(line);
+
+				if (match) {
+					results.push({
+						filePath: fileInfo.relativePath,
+						line: lineNumber,
+						column: match.index + 1,
+						content: line.trim(),
+					});
+				}
+			});
+
+			rl.on('close', () => {
+				resolve();
+			});
+
+			rl.on('error', (err: Error) => {
+				hasError = true;
+				logger.info(
+					`Error reading large file ${fileInfo.relativePath}: ${err.message}`,
+				);
+				resolve(); // Resolve gracefully to skip this file
+			});
+
+			stream.on('error', (err: Error) => {
+				hasError = true;
+				logger.info(
+					`Stream error for ${fileInfo.relativePath}: ${err.message}`,
+				);
+				resolve(); // Resolve gracefully to skip this file
+			});
+		});
 	}
 
 	/**
@@ -1088,8 +1244,45 @@ export class ACECodeSearchService {
 	 * Strategy 2: system grep/ripgrep (fast, system-optimized)
 	 * Strategy 3: JavaScript fallback (slower, but always works)
 	 * Searches for text patterns across files with glob filtering
+	 *
+	 * Enhanced with global timeout protection to prevent runaway searches
 	 */
 	async textSearch(
+		pattern: string,
+		fileGlob?: string,
+		isRegex: boolean = true,
+		maxResults: number = 100,
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
+		// Wrap the entire search with timeout protection
+		const searchPromise = this.executeTextSearch(
+			pattern,
+			fileGlob,
+			isRegex,
+			maxResults,
+		);
+
+		// Race against timeout
+		return Promise.race([
+			searchPromise,
+			createTimeoutPromise(
+				TEXT_SEARCH_TIMEOUT_MS,
+				`Text search exceeded ${TEXT_SEARCH_TIMEOUT_MS}ms timeout. Try using a more specific pattern or fileGlob filter.`,
+			),
+		]);
+	}
+
+	/**
+	 * Internal text search implementation (separated for timeout wrapping)
+	 *
+	 * Strategy priority:
+	 * 1. git grep (fastest, works in git repos)
+	 * 2. system grep (reliable on all platforms, especially Windows)
+	 * 3. ripgrep (fast but can hang on Windows)
+	 * 4. JavaScript fallback (always works)
+	 */
+	private async executeTextSearch(
 		pattern: string,
 		fileGlob?: string,
 		isRegex: boolean = true,
@@ -1123,22 +1316,43 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 2: Try system grep/ripgrep (pass which command to use)
-		if (rgAvailable || grepAvailable) {
+		// Strategy 2: Try system grep first (more reliable, especially on Windows)
+		// Strategy 3: Try ripgrep as fallback (rg can hang on Windows with large repos)
+		const isWindows = process.platform === 'win32';
+
+		if (grepAvailable) {
 			try {
 				const results = await this.systemGrepSearch(
 					pattern,
 					fileGlob,
 					maxResults,
-					rgAvailable ? 'rg' : 'grep',
+					'grep',
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
+				logger.info('System grep failed, trying next strategy');
+				// Fall through to ripgrep or JavaScript fallback
+			}
+		}
+
+		// Try ripgrep only on non-Windows platforms or if grep is not available
+		if (rgAvailable && !isWindows) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					'rg',
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('Ripgrep failed, falling back to JavaScript search');
 				// Fall through to JavaScript fallback
 			}
 		}
 
-		// Strategy 3: JavaScript fallback (always works)
+		// Strategy 4: JavaScript fallback (always works)
+		logger.info('Using JavaScript fallback for text search');
 		const results = await this.jsTextSearch(
 			pattern,
 			fileGlob,

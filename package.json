@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.6.50",
+	"version": "0.6.51",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -47,11 +47,11 @@
 		"scripts"
 	],
 	"dependencies": {
-		"@agentclientprotocol/sdk": "^0.14.1",
 		"ssh2": "^1.17.0",
 		"ws": "^8.14.2"
 	},
 	"devDependencies": {
+		"@agentclientprotocol/sdk": "^0.14.1",
 		"@inkjs/ui": "^2.0.0",
 		"@microsoft/signalr": "^10.0.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",

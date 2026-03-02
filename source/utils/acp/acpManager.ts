@@ -34,6 +34,7 @@ import {sessionManager} from '../session/sessionManager.js';
 import {
 	loadPermissionsConfig,
 	addMultipleToolsToPermissions,
+	addToolToPermissions,
 } from '../config/permissionsConfig.js';
 import {isSensitiveCommand} from '../execution/sensitiveCommandManager.js';
 import {randomUUID} from 'crypto';
@@ -41,8 +42,15 @@ import {
 	createStreamingChatCompletion,
 	type ChatMessage,
 } from '../../api/chat.js';
+import {createStreamingResponse} from '../../api/responses.js';
+import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
+import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {collectAllMCPTools} from '../execution/mcpToolsManager.js';
 import {getOpenAiConfig} from '../config/apiConfig.js';
+import type {ResponseStreamChunk} from '../../api/responses.js';
+import type {AnthropicStreamChunk} from '../../api/anthropic.js';
+import type {GeminiStreamChunk} from '../../api/gemini.js';
+import type {StreamChunk} from '../../api/chat.js';
 import {executeToolCall, type ToolCall} from '../execution/toolExecutor.js';
 
 // ACP 协议版本
@@ -341,6 +349,10 @@ class AcpManager {
 
 		// 思考内容缓冲区
 		let reasoningContent = '';
+		// Anthropic thinking 需要保存完整的 thinking 对象（包含 signature）
+		let thinkingBlock:
+			| {type: 'thinking'; thinking: string; signature?: string}
+			| undefined;
 
 		// 发送思考内容块
 		const onReasoningChunk = async (chunk: string) => {
@@ -358,37 +370,128 @@ class AcpManager {
 				.catch(() => {});
 		};
 
-		// 创建流式响应
-		const stream = createStreamingChatCompletion(
-			{
-				messages: session.messages,
-				model,
-				tools: mcpTools,
-			},
-			controller.signal,
-		);
+		// 根据配置的 requestMethod 选择正确的 API 链路
+		const requestMethod = config.requestMethod || 'chat';
+
+		// 处理流式响应的通用逻辑
+		const processStreamChunk = async (
+			part:
+				| StreamChunk
+				| ResponseStreamChunk
+				| AnthropicStreamChunk
+				| GeminiStreamChunk,
+		) => {
+			if (isCancelled()) return false; // false = 不终止，继续处理
+
+			// 处理内容块
+			if ('content' in part && part.content) {
+				await onChunk(part.content, false);
+			}
+			// 处理思考内容 (reasoning_delta)
+			if (part.type === 'reasoning_delta' && 'delta' in part && part.delta) {
+				await onReasoningChunk(part.delta);
+			}
+			// 处理思考开始事件
+			if (part.type === 'reasoning_started') {
+				// 思考开始，不需要特殊处理，delta 事件会发送内容
+			}
+			// 处理工具调用
+			if (
+				part.type === 'tool_calls' &&
+				'tool_calls' in part &&
+				part.tool_calls
+			) {
+				toolCalls.push(...part.tool_calls);
+				// 发送 tool_call 事件创建工具调用（客户端需要这个来显示工具）
+				for (const tc of part.tool_calls) {
+					await conn
+						.sessionUpdate({
+							sessionId: session.id,
+							update: {
+								sessionUpdate: 'tool_call',
+								toolCallId: tc.id,
+								title: tc.function.name,
+								status: 'pending',
+							} as SessionUpdate,
+						})
+						.catch(() => {});
+				}
+			}
+			// 处理完成信号 - 捕获 thinking 对象（Anthropic/Gemini 需要）
+			if (part.type === 'done') {
+				// 从 done 事件中提取 thinking 对象（Anthropic 返回 thinking，Chat API 返回 reasoning_content）
+				if ('thinking' in part && part.thinking) {
+					thinkingBlock = part.thinking as typeof thinkingBlock;
+				}
+				return true; // true = 完成
+			}
+			return false;
+		};
 
 		// 处理流式响应
 		try {
-			for await (const part of stream) {
-				if (isCancelled()) {
-					return 'cancelled';
+			switch (requestMethod) {
+				case 'responses': {
+					const stream = createStreamingResponse(
+						{
+							messages: session.messages,
+							model,
+							tools: mcpTools,
+							store: false,
+						},
+						controller.signal,
+					);
+					for await (const part of stream) {
+						const done = await processStreamChunk(part);
+						if (done) break;
+					}
+					break;
 				}
-				// 处理内容块
-				if (part.content) {
-					await onChunk(part.content, false);
+				case 'anthropic': {
+					const stream = createStreamingAnthropicCompletion(
+						{
+							messages: session.messages,
+							model,
+							tools: mcpTools,
+						},
+						controller.signal,
+					);
+					for await (const part of stream) {
+						const done = await processStreamChunk(part);
+						if (done) break;
+					}
+					break;
 				}
-				// 处理思考内容
-				if (part.type === 'reasoning_delta' && part.delta) {
-					await onReasoningChunk(part.delta);
+				case 'gemini': {
+					const stream = createStreamingGeminiCompletion(
+						{
+							messages: session.messages,
+							model,
+							tools: mcpTools,
+						},
+						controller.signal,
+					);
+					for await (const part of stream) {
+						const done = await processStreamChunk(part);
+						if (done) break;
+					}
+					break;
 				}
-				// 处理思考开始事件
-				if (part.type === 'reasoning_started') {
-					// 思考开始，不需要特殊处理，delta 事件会发送内容
-				}
-				// 处理工具调用
-				if (part.type === 'tool_calls' && part.tool_calls) {
-					toolCalls.push(...part.tool_calls);
+				case 'chat':
+				default: {
+					const stream = createStreamingChatCompletion(
+						{
+							messages: session.messages,
+							model,
+							tools: mcpTools,
+						},
+						controller.signal,
+					);
+					for await (const part of stream) {
+						const done = await processStreamChunk(part);
+						if (done) break;
+					}
+					break;
 				}
 			}
 		} catch (error) {
@@ -407,6 +510,11 @@ class AcpManager {
 		// 如果有思考内容，添加到消息中（thinking 模型需要）
 		if (reasoningContent) {
 			(assistantMessage as any).reasoning_content = reasoningContent;
+		}
+
+		// 如果有完整的 thinking 对象（Anthropic/Gemini），保存它（用于 tool_calls 场景）
+		if (thinkingBlock) {
+			(assistantMessage as any).thinking = thinkingBlock;
 		}
 
 		// 如果有工具调用，添加到消息中
@@ -459,6 +567,7 @@ class AcpManager {
 						session.id,
 						toolCall,
 						conn,
+						workingDirectory,
 					);
 				}
 
@@ -546,8 +655,7 @@ class AcpManager {
 		const update: SessionUpdate = {
 			sessionUpdate: 'tool_call_update',
 			toolCallId: toolCall.id,
-			name: toolCall.function.name,
-			arguments: toolCall.function.arguments,
+			title: toolCall.function.name,
 			status: status as any,
 			result,
 		} as any;
@@ -567,6 +675,7 @@ class AcpManager {
 		sessionId: string,
 		toolCall: ToolCall,
 		conn: AgentSideConnection,
+		workingDirectory: string,
 	): Promise<boolean> {
 		if (!this.connection) {
 			return false;
@@ -609,11 +718,10 @@ class AcpManager {
 			kind: 'reject_once' as PermissionOptionKind,
 		});
 
-		// 构建工具调用更新
+		// 构建工具调用更新 - 使用 title 字段显示工具名（ACP 协议要求）
 		const toolCallUpdate: ToolCallUpdate = {
 			toolCallId: toolCall.id,
-			name: toolCall.function.name,
-			arguments: toolCall.function.arguments,
+			title: toolCall.function.name,
 		} as ToolCallUpdate;
 
 		try {
@@ -628,10 +736,16 @@ class AcpManager {
 			}
 
 			const selectedOptionId = response.outcome.optionId;
-			return (
+			const approved =
 				selectedOptionId === 'approve_once' ||
-				selectedOptionId === 'approve_always'
-			);
+				selectedOptionId === 'approve_always';
+
+			// 如果用户选择"总是同意"，保存到权限配置文件
+			if (approved && selectedOptionId === 'approve_always') {
+				addToolToPermissions(workingDirectory, toolCall.function.name);
+			}
+
+			return approved;
 		} catch {
 			return false;
 		}

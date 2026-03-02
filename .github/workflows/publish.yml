@@ -58,7 +58,9 @@ jobs:
 
             ### What's New
 
-            - Fix some bugs
+            - Add ACP communication protocol compatibility
+            - Optimize the ACE search algorithm
+            - Fix known bugs
 
             ### Installation
             ```bash

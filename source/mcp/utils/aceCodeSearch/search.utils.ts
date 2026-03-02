@@ -205,6 +205,127 @@ export function globPatternToRegex(globPattern: string): RegExp {
 }
 
 /**
+ * Calculate regex pattern complexity score for ReDoS protection
+ * Higher scores indicate higher risk of catastrophic backtracking
+ * @param pattern - Regex pattern string
+ * @returns Complexity score (0 = safe, >100 = dangerous)
+ */
+export function calculateRegexComplexity(pattern: string): number {
+	let score = 0;
+
+	// Count nested quantifiers (e.g., (a+)+, (a*)*)
+	const nestedQuantifierPattern = /\([^)]*[+?*]\)[+?*]/g;
+	const nestedMatches = pattern.match(nestedQuantifierPattern);
+	if (nestedMatches) {
+		score += nestedMatches.length * 30;
+	}
+
+	// Count overlapping quantifiers (e.g., a+a*, a*a?)
+	const overlappingPattern = /[+?*][+?*]/g;
+	const overlappingMatches = pattern.match(overlappingPattern);
+	if (overlappingMatches) {
+		score += overlappingMatches.length * 20;
+	}
+
+	// Count alternations inside groups with quantifiers
+	const altInGroupPattern = /\([^)]*\|[^)]*\)[+?*]/g;
+	const altMatches = pattern.match(altInGroupPattern);
+	if (altMatches) {
+		score += altMatches.length * 25;
+	}
+
+	// Count nested groups with quantifiers
+	const depth = (pattern.match(/\(/g) || []).length;
+	if (depth > 3) {
+		score += (depth - 3) * 10;
+	}
+
+	// Penalize patterns with many wildcards
+	const wildcardCount = (pattern.match(/\.\*/g) || []).length;
+	if (wildcardCount > 5) {
+		score += (wildcardCount - 5) * 5;
+	}
+
+	return score;
+}
+
+/**
+ * Check if a regex pattern is safe from ReDoS attacks
+ * @param pattern - Regex pattern string
+ * @param maxComplexity - Maximum allowed complexity score
+ * @returns Object with isSafe flag and reason if unsafe
+ */
+export function isSafeRegexPattern(
+	pattern: string,
+	maxComplexity: number = 100,
+): {isSafe: boolean; reason?: string} {
+	try {
+		// Test if pattern is valid regex
+		new RegExp(pattern);
+	} catch (error) {
+		return {isSafe: false, reason: 'Invalid regex pattern'};
+	}
+
+	const complexity = calculateRegexComplexity(pattern);
+	if (complexity > maxComplexity) {
+		return {
+			isSafe: false,
+			reason: `Pattern too complex (score: ${complexity}, max: ${maxComplexity}). Simplify to avoid ReDoS attacks.`,
+		};
+	}
+
+	return {isSafe: true};
+}
+
+/**
+ * Process an array of items with limited concurrency
+ * Prevents EMFILE/ENFILE errors when processing many files
+ * @param items - Array of items to process
+ * @param processor - Async function to process each item
+ * @param concurrency - Maximum concurrent operations
+ * @returns Array of results
+ */
+export async function processWithConcurrency<T, R>(
+	items: T[],
+	processor: (item: T) => Promise<R>,
+	concurrency: number = 10,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let index = 0;
+
+	async function processNext(): Promise<void> {
+		const currentIndex = index++;
+		if (currentIndex >= items.length) return;
+
+		results[currentIndex] = await processor(items[currentIndex]!);
+		await processNext();
+	}
+
+	// Start initial batch of workers
+	const workers = Array(Math.min(concurrency, items.length))
+		.fill(null)
+		.map(() => processNext());
+
+	await Promise.all(workers);
+	return results;
+}
+
+/**
+ * Create a timeout promise that rejects after specified milliseconds
+ * @param ms - Timeout in milliseconds
+ * @param message - Error message
+ * @returns Promise that rejects after timeout
+ */
+export function createTimeoutPromise(
+	ms: number,
+	message: string,
+): Promise<never> {
+	return new Promise((_, reject) => {
+		setTimeout(() => reject(new Error(message)), ms);
+	});
+}
+
+/**
  * Sort search results by file modification time (recent files first)
  * Files modified within last 24 hours are prioritized
  * @param results - Array of search results
