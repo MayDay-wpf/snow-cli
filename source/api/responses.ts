@@ -37,6 +37,7 @@ export interface ResponseOptions {
 	store?: boolean;
 	include?: string[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides
@@ -555,10 +556,11 @@ export async function* createStreamingResponse(
 				tools: convertToolsForResponses(options.tools),
 				tool_choice: options.tool_choice,
 				parallel_tool_calls: true,
-				// 只有当 reasoning 启用时才添加 reasoning 字段
-				...(configuredReasoning && {
-					reasoning: configuredReasoning,
-				}),
+				// 只有当 reasoning 启用且未禁用思考功能时才添加 reasoning 字段
+				...(configuredReasoning &&
+					!options.disableThinking && {
+						reasoning: configuredReasoning,
+					}),
 				store: false,
 				stream: true,
 				include: ['reasoning.encrypted_content'],

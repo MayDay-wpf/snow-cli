@@ -83,6 +83,7 @@ export interface ToolResult {
 	role: 'tool';
 	content: string;
 	images?: ImageContent[]; // Support multimodal content with images
+	messageStatus?: 'pending' | 'success' | 'error'; // Message status for UI rendering
 	hookFailed?: boolean; // Indicates if a hook failed and AI flow should be interrupted
 	hookErrorDetails?: {
 		type: 'warning' | 'error';
@@ -303,9 +304,7 @@ export async function executeToolCall(
 			// Look up agent name from config for tracking
 			let agentName = agentId;
 			try {
-				const {getSubAgent} = await import(
-					'../config/subAgentConfig.js'
-				);
+				const {getSubAgent} = await import('../config/subAgentConfig.js');
 				const agentConfig = getSubAgent(agentId);
 				if (agentConfig) {
 					agentName = agentConfig.name;
@@ -374,10 +373,7 @@ export async function executeToolCall(
 					subAgentResult.injectedUserMessages.length > 0
 				) {
 					const injectedSummary = subAgentResult.injectedUserMessages
-						.map(
-							(msg: string, i: number) =>
-								`  ${i + 1}. ${msg}`,
-						)
+						.map((msg: string, i: number) => `  ${i + 1}. ${msg}`)
 						.join('\n');
 					subAgentContent = JSON.stringify({
 						...subAgentResult,
@@ -434,8 +430,15 @@ export async function executeToolCall(
 
 				// 检查用户是否取消
 				if (response.cancelled) {
-					// 抛出错误以触发中断流程
-					throw new Error('User cancelled the interaction');
+					// 用户取消时，返回拒绝结果而不是抛出错误
+					// 这样工具记录会保留在 session 中
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: 'Error: User cancelled the question interaction',
+						messageStatus: 'error' as const,
+					};
+					return result;
 				}
 
 				//返回用户的响应作为工具结果

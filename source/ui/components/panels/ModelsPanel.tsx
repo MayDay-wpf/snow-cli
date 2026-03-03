@@ -578,12 +578,11 @@ export const ModelsPanel: React.FC<Props> = ({
 					return;
 				}
 
-				if (input && /[a-zA-Z0-9-_./:]/.test(input)) {
+				if (input) {
 					setManualInputValue(prev => prev + input);
 				}
 				return;
 			}
-
 			// Model selecting filter input
 			if (isSelecting) {
 				if (input && /[a-zA-Z0-9-_.]/.test(input)) {

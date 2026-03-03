@@ -44,6 +44,7 @@ export interface ChatCompletionOptions {
 		| 'required'
 		| {type: 'function'; function: {name: string}};
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
+	disableThinking?: boolean; // 禁用思考功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	// Sub-agent configuration overrides

@@ -1578,7 +1578,7 @@ export default function ConfigScreen({
 				setManualInputValue('');
 			} else if (key.backspace || key.delete) {
 				setManualInputValue(prev => prev.slice(0, -1));
-			} else if (input && input.match(/[a-zA-Z0-9-_./:]/)) {
+			} else if (input) {
 				setManualInputValue(prev => prev + stripFocusArtifacts(input));
 			}
 			return;

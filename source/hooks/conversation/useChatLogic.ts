@@ -482,8 +482,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 					streamingState.abortController.abort();
 				}
 
-				// 清空pending状态
-				setMessages(prev => prev.filter(msg => !msg.toolPending));
+				// 不再删除toolPending消息，保留工具记录到session
+				// setMessages(prev => prev.filter(msg => !msg.toolPending));
 				setPendingMessages([]);
 
 				return;
