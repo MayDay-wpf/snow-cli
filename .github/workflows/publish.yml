@@ -58,9 +58,9 @@ jobs:
 
             ### What's New
 
-            - Add ACP communication protocol compatibility
-            - Optimize the ACE search algorithm
-            - Fix known bugs
+            - Optimize the input compatibility of custom models
+            - Optimize rg search for Windows systems
+            - Unify the thinking intensity of basic models
 
             ### Installation
             ```bash

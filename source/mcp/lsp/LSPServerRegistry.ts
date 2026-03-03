@@ -243,8 +243,11 @@ export class LSPServerRegistry {
 
 		try {
 			const {command} = config;
+			// 使用 where.exe 而不是 where，避免与 PowerShell 的 Where-Object 别名冲突
 			const testCommand =
-				process.platform === 'win32' ? `where ${command}` : `which ${command}`;
+				process.platform === 'win32'
+					? `where.exe ${command}`
+					: `which ${command}`;
 
 			await execAsync(testCommand);
 			this.installedServers.set(language, true);
