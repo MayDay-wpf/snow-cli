@@ -10,6 +10,10 @@ const stubPlugin = {
 			path: 'react-devtools-core',
 			namespace: 'stub-ns',
 		}));
+		build.onResolve({filter: /^@napi-rs\/canvas$/}, () => ({
+			path: '@napi-rs/canvas',
+			namespace: 'stub-ns',
+		}));
 		build.onLoad({filter: /.*/, namespace: 'stub-ns'}, () => ({
 			contents: 'export default {}',
 		}));

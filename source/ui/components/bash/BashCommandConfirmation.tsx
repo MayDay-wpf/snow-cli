@@ -182,28 +182,25 @@ export function BashCommandExecutionStatus({
 
 	const maxOutputLines = 5;
 
-	// Batch output updates to reduce Ink re-render churn when the command streams output line-by-line.
-	// We buffer incoming lines and only commit to rendered state in groups of 5, with a short
-	// debounce flush for the final <5 lines so the UI doesn't "stick".
+	// Decouple data buffering from state updates: the output effect only writes
+	// into a ref buffer; a fixed-interval timer flushes the buffer into state,
+	// capping re-render frequency at ~5/s regardless of output speed.
 	const maxStoredOutputLines = 200;
 	const [displayOutputLines, setDisplayOutputLines] = useState<string[]>([]);
 	const totalCommittedLineCountRef = useRef(0);
 	const lastSeenInputLineCountRef = useRef(0);
 	const pendingLinesRef = useRef<string[]>([]);
-	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	// Reset buffers when command changes (avoid mixing outputs across commands).
 	useEffect(() => {
 		lastSeenInputLineCountRef.current = 0;
 		totalCommittedLineCountRef.current = 0;
 		pendingLinesRef.current = [];
-		if (flushTimerRef.current) {
-			clearTimeout(flushTimerRef.current);
-			flushTimerRef.current = null;
-		}
 		setDisplayOutputLines([]);
 	}, [command]);
 
+	// Accumulate new output lines into the pending buffer (no setState here).
 	useEffect(() => {
 		const incomingLines = output
 			.flatMap(line => line.split(/\r?\n/))
@@ -218,12 +215,18 @@ export function BashCommandExecutionStatus({
 		const newLines = incomingLines.slice(prevCount);
 		lastSeenInputLineCountRef.current = incomingLines.length;
 		pendingLinesRef.current.push(...newLines);
+	}, [output]);
 
-		// Commit full groups of 5 lines immediately.
-		const fullBatchCount =
-			pendingLinesRef.current.length - (pendingLinesRef.current.length % 5);
-		if (fullBatchCount > 0) {
-			const toCommit = pendingLinesRef.current.splice(0, fullBatchCount);
+	// Fixed-interval flush: commit buffered lines to render state.
+	useEffect(() => {
+		flushIntervalRef.current = setInterval(() => {
+			if (pendingLinesRef.current.length === 0) {
+				return;
+			}
+			const toCommit = pendingLinesRef.current.splice(
+				0,
+				pendingLinesRef.current.length,
+			);
 			totalCommittedLineCountRef.current += toCommit.length;
 			setDisplayOutputLines(prev => {
 				const next = [...prev, ...toCommit];
@@ -231,39 +234,11 @@ export function BashCommandExecutionStatus({
 					? next.slice(-maxStoredOutputLines)
 					: next;
 			});
-		}
+		}, 200);
 
-		// Debounce-flush any remainder (<5) so it still shows up when output pauses.
-		if (flushTimerRef.current) {
-			clearTimeout(flushTimerRef.current);
-		}
-		flushTimerRef.current = setTimeout(() => {
-			flushTimerRef.current = null;
-			if (pendingLinesRef.current.length === 0) {
-				return;
-			}
-			const remainder = pendingLinesRef.current.splice(
-				0,
-				pendingLinesRef.current.length,
-			);
-			totalCommittedLineCountRef.current += remainder.length;
-			setDisplayOutputLines(prev => {
-				const next = [...prev, ...remainder];
-				return next.length > maxStoredOutputLines
-					? next.slice(-maxStoredOutputLines)
-					: next;
-			});
-		}, 150);
-		// NOTE: No cleanup here - we intentionally keep the debounce timer running
-		// across output updates. Cleanup is handled by the unmount effect below.
-	}, [output]);
-
-	// Cleanup timer only on component unmount
-	useEffect(() => {
 		return () => {
-			if (flushTimerRef.current) {
-				clearTimeout(flushTimerRef.current);
-				flushTimerRef.current = null;
+			if (flushIntervalRef.current) {
+				clearInterval(flushIntervalRef.current);
 			}
 		};
 	}, []);

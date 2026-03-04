@@ -58,7 +58,7 @@ jobs:
 
             ### What's New
 
-            - codebase supports embedding office class files
+            - fix some bugs
 
             ### Installation
             ```bash
