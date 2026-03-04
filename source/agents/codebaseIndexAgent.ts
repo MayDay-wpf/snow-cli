@@ -14,6 +14,7 @@ import {
 	type CodebaseConfig,
 } from '../utils/config/codebaseConfig.js';
 import {withRetry} from '../utils/core/retryUtils.js';
+import {readOfficeDocument} from '../mcp/utils/filesystem/office-parser.utils.js';
 
 /**
  * Progress callback for UI updates
@@ -70,6 +71,7 @@ export class CodebaseIndexAgent {
 		'.sh',
 		'.bash',
 		'.sql',
+		'.txt',
 		'.graphql',
 		'.proto',
 		'.json',
@@ -83,6 +85,17 @@ export class CodebaseIndexAgent {
 		'.less',
 		'.vue',
 		'.svelte',
+	]);
+
+	// Supported office/document file extensions
+	private static readonly OFFICE_EXTENSIONS = new Set([
+		'.pdf',
+		'.docx',
+		'.doc',
+		'.xlsx',
+		'.xls',
+		'.pptx',
+		'.ppt',
 	]);
 
 	constructor(projectRoot: string) {
@@ -368,8 +381,11 @@ export class CodebaseIndexAgent {
 
 			// Handle file added or changed
 			this.fileWatcher.on('add', (filePath: string) => {
-				const ext = path.extname(filePath);
-				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+				const ext = path.extname(filePath).toLowerCase();
+				if (
+					!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext) &&
+					!CodebaseIndexAgent.OFFICE_EXTENSIONS.has(ext)
+				) {
 					return;
 				}
 
@@ -379,8 +395,11 @@ export class CodebaseIndexAgent {
 			});
 
 			this.fileWatcher.on('change', (filePath: string) => {
-				const ext = path.extname(filePath);
-				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+				const ext = path.extname(filePath).toLowerCase();
+				if (
+					!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext) &&
+					!CodebaseIndexAgent.OFFICE_EXTENSIONS.has(ext)
+				) {
 					return;
 				}
 
@@ -391,8 +410,11 @@ export class CodebaseIndexAgent {
 
 			// Handle file deleted
 			this.fileWatcher.on('unlink', (filePath: string) => {
-				const ext = path.extname(filePath);
-				if (!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+				const ext = path.extname(filePath).toLowerCase();
+				if (
+					!CodebaseIndexAgent.CODE_EXTENSIONS.has(ext) &&
+					!CodebaseIndexAgent.OFFICE_EXTENSIONS.has(ext)
+				) {
 					return;
 				}
 
@@ -569,7 +591,10 @@ export class CodebaseIndexAgent {
 					scanDir(fullPath);
 				} else if (entry.isFile()) {
 					const ext = path.extname(entry.name);
-					if (CodebaseIndexAgent.CODE_EXTENSIONS.has(ext)) {
+					if (
+						CodebaseIndexAgent.CODE_EXTENSIONS.has(ext) ||
+						CodebaseIndexAgent.OFFICE_EXTENSIONS.has(ext)
+					) {
 						files.push(fullPath);
 					}
 				}
@@ -621,14 +646,27 @@ export class CodebaseIndexAgent {
 				status: 'indexing',
 			});
 
-			// Read file content
-			const content = fs.readFileSync(filePath, 'utf-8');
+			const ext = path.extname(filePath).toLowerCase();
+			const isOfficeFile = CodebaseIndexAgent.OFFICE_EXTENSIONS.has(ext);
 
-			// Calculate file hash for change detection
-			const fileHash = crypto
-				.createHash('sha256')
-				.update(content)
-				.digest('hex');
+			let content: string;
+			let fileHash: string;
+
+			if (isOfficeFile) {
+				// Parse Office document to extract text
+				const docContent = await readOfficeDocument(filePath);
+				if (!docContent) {
+					logger.warn(`Failed to parse Office document: ${relativePath}`);
+					return;
+				}
+				content = docContent.text;
+				// Calculate hash based on extracted content (not binary file)
+				fileHash = crypto.createHash('sha256').update(content).digest('hex');
+			} else {
+				// Read regular text file
+				content = fs.readFileSync(filePath, 'utf-8');
+				fileHash = crypto.createHash('sha256').update(content).digest('hex');
+			}
 
 			// Check if file has been indexed and unchanged
 			if (this.db.hasFileHash(fileHash)) {
@@ -639,8 +677,10 @@ export class CodebaseIndexAgent {
 			// Delete old chunks for this file
 			this.db.deleteChunksByFile(relativePath);
 
-			// Split content into chunks
-			const chunks = this.splitIntoChunks(content, relativePath);
+			// Split content into chunks using appropriate method
+			const chunks = isOfficeFile
+				? this.splitDocumentIntoChunks(content, relativePath)
+				: this.splitIntoChunks(content, relativePath);
 
 			if (chunks.length === 0) {
 				logger.debug(`No chunks generated for: ${relativePath}`);
@@ -809,6 +849,100 @@ export class CodebaseIndexAgent {
 			});
 		}
 
+		return chunks;
+	}
+
+	/**
+	 * Split document content into chunks based on semantic boundaries
+	 * Documents (PDF, Word, etc.) need different chunking than code files
+	 * - Uses paragraph boundaries instead of fixed line counts
+	 * - Respects heading structures
+	 * - Maintains semantic coherence
+	 */
+	private splitDocumentIntoChunks(
+		content: string,
+		filePath: string,
+	): CodeChunk[] {
+		const chunks: CodeChunk[] = [];
+
+		// Document chunking configuration
+		const MAX_CHUNK_CHARS = 3000; // Maximum characters per chunk
+		const MIN_CHUNK_CHARS = 200; // Minimum characters per chunk
+
+		// Split by paragraphs (double newlines) while preserving single newlines within paragraphs
+		const paragraphs = content
+			.split(/\n{2,}/)
+			.map(p => p.trim())
+			.filter(p => p.length > 0);
+
+		if (paragraphs.length === 0) {
+			return chunks;
+		}
+
+		let currentChunk: string[] = [];
+		let currentCharCount = 0;
+		let startParagraph = 0;
+
+		for (let i = 0; i < paragraphs.length; i++) {
+			const paragraph = paragraphs[i]!;
+			const paraLength = paragraph.length;
+
+			// Check if adding this paragraph would exceed max size
+			if (
+				currentCharCount + paraLength > MAX_CHUNK_CHARS &&
+				currentChunk.length > 0
+			) {
+				// Save current chunk
+				const chunkContent = currentChunk.join('\n\n');
+				if (chunkContent.length >= MIN_CHUNK_CHARS) {
+					chunks.push({
+						filePath,
+						content: chunkContent,
+						startLine: startParagraph + 1, // Use paragraph index (1-based)
+						endLine: i, // End paragraph index
+						embedding: [],
+						fileHash: '',
+						createdAt: 0,
+						updatedAt: 0,
+					});
+				}
+
+				// Start new chunk with overlap
+				const overlapStart = Math.max(0, currentChunk.length - 1);
+				currentChunk = currentChunk.slice(overlapStart);
+				currentCharCount = currentChunk.reduce((sum, p) => sum + p.length, 0);
+				startParagraph = i - currentChunk.length;
+			}
+
+			currentChunk.push(paragraph);
+			currentCharCount += paraLength;
+		}
+
+		// Don't forget the last chunk
+		if (currentChunk.length > 0) {
+			const chunkContent = currentChunk.join('\n\n');
+			if (chunkContent.length >= MIN_CHUNK_CHARS) {
+				chunks.push({
+					filePath,
+					content: chunkContent,
+					startLine: startParagraph + 1,
+					endLine: paragraphs.length,
+					embedding: [],
+					fileHash: '',
+					createdAt: 0,
+					updatedAt: 0,
+				});
+			} else if (chunks.length > 0) {
+				// Merge small last chunk with previous chunk
+				const lastChunk = chunks[chunks.length - 1]!;
+				lastChunk.content += '\n\n' + chunkContent;
+				lastChunk.endLine = paragraphs.length;
+			}
+		}
+
+		logger.debug(
+			`Document split into ${chunks.length} semantic chunks for: ${filePath}`,
+		);
 		return chunks;
 	}
 

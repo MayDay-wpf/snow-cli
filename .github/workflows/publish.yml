@@ -58,9 +58,7 @@ jobs:
 
             ### What's New
 
-            - Optimize the input compatibility of custom models
-            - Optimize rg search for Windows systems
-            - Unify the thinking intensity of basic models
+            - codebase supports embedding office class files
 
             ### Installation
             ```bash
