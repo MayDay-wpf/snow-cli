@@ -18,7 +18,11 @@
 	];
 	for (const [name, type] of requiredAddons) {
 		if (type === 'undefined') {
-			showError(`${name} failed to load.${name === 'Terminal' ? ' Check CSP or resource paths.' : ''}`);
+			showError(
+				`${name} failed to load.${
+					name === 'Terminal' ? ' Check CSP or resource paths.' : ''
+				}`,
+			);
 			return;
 		}
 	}
@@ -215,7 +219,11 @@
 			paths.push(...extractPathsFromMimeData(mimeType, data));
 		}
 
-		if (paths.length === 0 && dataTransfer.files && dataTransfer.files.length > 0) {
+		if (
+			paths.length === 0 &&
+			dataTransfer.files &&
+			dataTransfer.files.length > 0
+		) {
 			for (const file of dataTransfer.files) {
 				if (file.path) {
 					paths.push(file.path);
@@ -370,8 +378,6 @@
 		let rendererStallReportedAt = 0;
 		let lastReportedCols = 0;
 		let lastReportedRows = 0;
-		let pasteLock = false;
-		const PASTE_LOCK_TIMEOUT = 80;
 
 		const reportSize = () => {
 			const cols = term.cols;
@@ -439,7 +445,8 @@
 		const getMeasuredRowHeight = () => {
 			const screenCanvas = container.querySelector('.xterm-screen canvas');
 			if (screenCanvas instanceof HTMLCanvasElement && term.rows > 0) {
-				const measured = screenCanvas.getBoundingClientRect().height / term.rows;
+				const measured =
+					screenCanvas.getBoundingClientRect().height / term.rows;
 				if (measured > 0) {
 					return measured;
 				}
@@ -448,7 +455,9 @@
 			const fontSize =
 				typeof term.options.fontSize === 'number' ? term.options.fontSize : 14;
 			const lineHeight =
-				typeof term.options.lineHeight === 'number' ? term.options.lineHeight : 1;
+				typeof term.options.lineHeight === 'number'
+					? term.options.lineHeight
+					: 1;
 			const estimated = fontSize * lineHeight;
 			return estimated > 0 ? estimated : 0;
 		};
@@ -616,33 +625,11 @@
 			}),
 		);
 
+		// Don't intercept paste shortcuts - let them pass through to CLI
+		// CLI handles paste via its own keyboard shortcuts (Ctrl+V on MacOS, Alt+V on Windows)
 		term.attachCustomKeyEventHandler(event => {
-			if (event.type !== 'keydown') {
-				return true;
-			}
-
-			const isPasteShortcut =
-				(event.ctrlKey || event.metaKey) &&
-				(event.key === 'v' || event.key === 'V');
-			if (!isPasteShortcut) {
-				return true;
-			}
-
-			pasteLock = true;
-			setTimeout(() => {
-				pasteLock = false;
-			}, PASTE_LOCK_TIMEOUT);
-
-			event.preventDefault();
-			navigator.clipboard
-				.readText()
-				.then(text => {
-					sendInput(text);
-				})
-				.catch(() => {
-					// Ignore clipboard read failures.
-				});
-			return false;
+			// Always return true to let events pass through to CLI
+			return true;
 		});
 
 		const handleWindowMessage = event => {
@@ -731,14 +718,6 @@
 			}
 		};
 
-		const handleContainerPasteCapture = event => {
-			if (!pasteLock) {
-				return;
-			}
-			event.preventDefault();
-			event.stopPropagation();
-		};
-
 		const handleContextMenu = event => {
 			event.preventDefault();
 			const selection = term.getSelection();
@@ -771,7 +750,6 @@
 		addManagedListener(window, 'focus', () => {
 			scheduleFocusRecovery();
 		});
-		addManagedListener(container, 'paste', handleContainerPasteCapture, true);
 		addManagedListener(container, 'contextmenu', handleContextMenu);
 		addManagedListener(container, 'dragover', handleDragOver);
 		addManagedListener(container, 'dragleave', handleDragLeave);
