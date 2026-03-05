@@ -626,9 +626,10 @@
 		);
 
 	// On macOS, Ctrl+V passes through to CLI which handles paste (including images).
-	// On Windows/Linux, Ctrl+V must be intercepted here because:
-	//   1. xterm would send raw \x16 which CLI doesn't recognise as paste
-	//   2. CLI expects Alt+V for its own clipboard paste on Windows
+	// On Windows/Linux, Ctrl+V must be intercepted to suppress the raw \x16 that
+	// xterm would otherwise emit.  We return false so xterm ignores the keydown,
+	// but do NOT call preventDefault — the browser / VS Code webview will still
+	// fire a paste event which xterm's built-in paste handler processes via onData.
 	const isMacPlatform = /mac/i.test(navigator.platform);
 	term.attachCustomKeyEventHandler(event => {
 		if (
@@ -640,14 +641,6 @@
 			!event.metaKey &&
 			event.key.toLowerCase() === 'v'
 		) {
-			navigator.clipboard
-				.readText()
-				.then(text => {
-					if (text) {
-						sendInput(text);
-					}
-				})
-				.catch(() => {});
 			return false;
 		}
 		return true;

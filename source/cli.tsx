@@ -324,7 +324,7 @@ Options
 if (cli.flags.update) {
 	console.log('Updating snow-ai to latest version...');
 	try {
-		const child = spawn('npm', ['i', '-g', 'snow-ai'], {
+		const child = spawn('npm i -g snow-ai', {
 			stdio: 'inherit',
 			shell: true,
 		});
