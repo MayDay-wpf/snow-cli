@@ -59,7 +59,7 @@ jobs:
             ### What's New
 
             - Fix some known bugs
-            - Add fast mode start/stop for the model panel
+            - Add fast mode start and stop for the model panel
             - Optimize the flexibility of input box expansion
 
             ### Installation
