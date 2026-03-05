@@ -39,7 +39,7 @@ jobs:
         run: npm run build
 
       - name: Update version (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
 
       - name: Publish to NPM
@@ -48,7 +48,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
