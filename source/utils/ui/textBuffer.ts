@@ -373,6 +373,21 @@ export class TextBuffer {
 			return;
 		}
 
+		if (this._expandedView) {
+			const phPositions = this.getTextPlaceholderCpPositions();
+			for (const ph of phPositions) {
+				if (
+					this.cursorIndex > ph.cpStart &&
+					this.cursorIndex <= ph.cpStart + ph.phCpLen
+				) {
+					this.cursorIndex = ph.cpStart;
+					this.recalculateVisualState();
+					this.scheduleUpdate();
+					return;
+				}
+			}
+		}
+
 		this.cursorIndex -= 1;
 		this.recalculateVisualState();
 		this.scheduleUpdate();
@@ -381,6 +396,21 @@ export class TextBuffer {
 	moveRight(): void {
 		if (this.cursorIndex >= cpLen(this.content)) {
 			return;
+		}
+
+		if (this._expandedView) {
+			const phPositions = this.getTextPlaceholderCpPositions();
+			for (const ph of phPositions) {
+				if (
+					this.cursorIndex >= ph.cpStart &&
+					this.cursorIndex < ph.cpStart + ph.phCpLen
+				) {
+					this.cursorIndex = ph.cpStart + ph.phCpLen;
+					this.recalculateVisualState();
+					this.scheduleUpdate();
+					return;
+				}
+			}
 		}
 
 		this.cursorIndex += 1;

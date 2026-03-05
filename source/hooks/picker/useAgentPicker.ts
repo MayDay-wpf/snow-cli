@@ -42,6 +42,12 @@ export function useAgentPicker(buffer: TextBuffer, triggerUpdate: () => void) {
 						position = -1;
 						break;
 					}
+					// Check if # is part of a placeholder like [Paste N lines #M] or [image #M]
+					const textBeforeHash = displayText.slice(0, i);
+					if (/\[(?:Paste \d+ lines |image )$/.test(textBeforeHash)) {
+						position = -1;
+						break;
+					}
 					position = i;
 					const afterHash = beforeCursor.slice(i + 1);
 					// Only activate if no space/newline after #
