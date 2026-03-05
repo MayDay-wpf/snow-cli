@@ -142,6 +142,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Show current connection status',
 			},
 			{
+				name: 'new-prompt',
+				description:
+					t.commandPanel.commands.newPrompt ||
+					'Generate a refined prompt from your requirement using AI',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

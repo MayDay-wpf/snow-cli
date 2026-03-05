@@ -38,6 +38,7 @@ export interface ApiConfig {
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
 	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
+	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	showThinking?: boolean; // Show AI thinking process in UI (default: true)

@@ -42,6 +42,7 @@ export interface CommandResult {
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'
 		| 'sendAsMessage'
+		| 'showNewPromptPanel'
 		| 'quit';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading

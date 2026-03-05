@@ -162,14 +162,17 @@ export class CompactAgent {
 			let chunkCount = 0;
 
 			// Initialize token encoder for token counting
-			let encoder;
+		let encoder;
+		try {
+			const {encoding_for_model} = await import('tiktoken');
 			try {
-				const {encoding_for_model} = await import('tiktoken');
 				encoder = encoding_for_model('gpt-5');
-			} catch (e) {
-				const {encoding_for_model} = await import('tiktoken');
-				encoder = encoding_for_model('gpt-5');
+			} catch {
+				encoder = encoding_for_model('gpt-3.5-turbo');
 			}
+		} catch (e) {
+			// tiktoken unavailable, token counting will be skipped
+		}
 
 			try {
 				for await (const chunk of streamGenerator) {

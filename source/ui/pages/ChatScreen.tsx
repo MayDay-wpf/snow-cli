@@ -35,6 +35,9 @@ import PanelsManager from '../components/panels/PanelsManager.js';
 const PermissionsPanel = lazy(
 	() => import('../components/panels/PermissionsPanel.js'),
 );
+const NewPromptPanel = lazy(
+	() => import('../components/panels/NewPromptPanel.js'),
+);
 import {
 	saveCustomCommand,
 	registerCustomCommands,
@@ -312,6 +315,7 @@ export default function ChatScreen({
 			import('../../utils/commands/backend.js'),
 			import('../../utils/commands/models.js'),
 			import('../../utils/commands/worktree.js'),
+			import('../../utils/commands/newPrompt.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -845,6 +849,7 @@ export default function ChatScreen({
 		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
+		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
@@ -1373,6 +1378,31 @@ export default function ChatScreen({
 				}}
 			/>
 
+			{/* Show new prompt panel if active */}
+			{panelState.showNewPromptPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<NewPromptPanel
+							onAccept={(prompt: string) => {
+								panelState.setShowNewPromptPanel(false);
+								setRestoreInputContent({text: prompt});
+							}}
+							onCancel={() => {
+								panelState.setShowNewPromptPanel(false);
+							}}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
 			{/* Show permissions panel if active */}
 			{showPermissionsPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
@@ -1426,6 +1456,7 @@ export default function ChatScreen({
 					panelState.showBranchPanel ||
 					panelState.showDiffReviewPanel ||
 					panelState.showConnectionPanel ||
+					panelState.showNewPromptPanel ||
 					showPermissionsPanel
 				) &&
 				!snapshotState.pendingRollback && (

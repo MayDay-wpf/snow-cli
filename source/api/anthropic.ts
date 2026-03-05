@@ -918,16 +918,17 @@ export async function* createStreamingAnthropicCompletion(
 					}
 				} else if (event.type === 'message_start') {
 					if (event.message.usage) {
+						const cacheCreation = (event.message.usage as any).cache_creation_input_tokens || 0;
+						const cacheRead = (event.message.usage as any).cache_read_input_tokens || 0;
 						usageData = {
 							prompt_tokens: event.message.usage.input_tokens || 0,
 							completion_tokens: event.message.usage.output_tokens || 0,
 							total_tokens:
 								(event.message.usage.input_tokens || 0) +
-								(event.message.usage.output_tokens || 0),
-							cache_creation_input_tokens: (event.message.usage as any)
-								.cache_creation_input_tokens,
-							cache_read_input_tokens: (event.message.usage as any)
-								.cache_read_input_tokens,
+								(event.message.usage.output_tokens || 0) +
+								cacheCreation + cacheRead,
+							cache_creation_input_tokens: cacheCreation || undefined,
+							cache_read_input_tokens: cacheRead || undefined,
 						};
 					}
 				} else if (event.type === 'message_delta') {
@@ -944,8 +945,6 @@ export async function* createStreamingAnthropicCompletion(
 							usageData.prompt_tokens = event.usage.input_tokens;
 						}
 						usageData.completion_tokens = event.usage.output_tokens || 0;
-						usageData.total_tokens =
-							usageData.prompt_tokens + usageData.completion_tokens;
 						if (
 							(event.usage as any).cache_creation_input_tokens !== undefined
 						) {
@@ -958,6 +957,11 @@ export async function* createStreamingAnthropicCompletion(
 								event.usage as any
 							).cache_read_input_tokens;
 						}
+						usageData.total_tokens =
+							usageData.prompt_tokens +
+							usageData.completion_tokens +
+							(usageData.cache_creation_input_tokens || 0) +
+							(usageData.cache_read_input_tokens || 0);
 					}
 				}
 			}

@@ -174,6 +174,7 @@ export const zhTW: TranslationKeys = {
 		geminiThinkingBudget: 'Gemini 思考預算:',
 		responsesReasoningEnabled: '啟用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理強度:',
+		responsesFastMode: 'Responses Fast (priority):',
 		advancedModel: '進階模型(輸入後可以搜尋):',
 		basicModel: '基礎模型(輸入後可以搜尋):',
 		maxContextTokens: '最大上下文令牌:',
@@ -420,6 +421,7 @@ export const zhTW: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - 從游標刪除到開頭(舊版)',
 		deleteToEnd: 'Ctrl+R - 從游標刪除到末尾(舊版)',
 		pasteImages: '{pasteKey} - 從剪貼簿貼上圖片',
+		toggleExpandedView: 'Ctrl+T - 切換貼上文字的展開/摺疊顯示',
 		readlineTitle: '🚀 Readline 快捷鍵:',
 		moveToLineStart: 'Ctrl+A - 移動到行首',
 		moveToLineEnd: 'Ctrl+E - 移動到行尾',
@@ -533,6 +535,7 @@ export const zhTW: TranslationKeys = {
 			connect: '連接到 Snow Instance 進行 AI 處理',
 			disconnect: '斷開目前 Snow Instance 連接',
 			connectionStatus: '顯示目前 Snow Instance 連接狀態',
+			newPrompt: '根據需求使用 AI 生成精煉的提示詞',
 			quit: '退出應用程式',
 		},
 		copyLastFeedback: {
@@ -757,6 +760,7 @@ export const zhTW: TranslationKeys = {
 			'按 Shift+Tab/Ctrl+Y: 切換 YOLO/Plan 模式(循環: YOLO → YOLO+Plan → Plan → 關閉)',
 		headerShortcuts:
 			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
+		headerExpandedView: '按 Ctrl+T: 切換貼上文字的展開/摺疊顯示',
 		headerWorkingDirectory: '工作目錄: {directory}',
 		// Status messages
 		statusThinking: '思考中...',
@@ -926,6 +930,7 @@ export const zhTW: TranslationKeys = {
 		typeToFilterCommands: '輸入以過濾命令',
 		contentSearchHint: '內容搜尋 • Tab/Enter 選擇 • ESC 取消',
 		fileSearchHint: '輸入以過濾檔案 • Tab/Enter 選擇 • ESC 取消',
+		expandedViewHint: '展開檢視 • Ctrl+T 切換',
 		yoloModeActive: '❁ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
 		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',
 		vulnerabilityHuntingModeActive:
@@ -1342,5 +1347,21 @@ export const zhTW: TranslationKeys = {
 		stopCommand: '停止',
 		invalidPidsStopped: '發現 {count} 個無效的PID檔案（行程已停止）',
 		autoCleanupHint: '這些檔案會在下次停止操作時自動清理',
+	},
+	newPrompt: {
+		title: '✦ 提示詞產生器',
+		inputHint: '描述你的需求，AI 將產生精煉的提示詞：',
+		placeholder: '輸入你的需求...',
+		escHint: 'ESC 取消',
+		generating: '正在產生提示詞...',
+		previewTitle: '✓ 提示詞已產生：',
+		moreLines: '(還有 {count} 行)',
+		actionAccept: '寫入輸入框',
+		actionReject: '放棄',
+		actionRegenerate: '重新產生',
+		actionRetry: '重試',
+		actionCancel: '取消',
+		errorPrefix: '錯誤：',
+		scrollHint: '↑↓ 捲動瀏覽',
 	},
 };

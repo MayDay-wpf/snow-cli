@@ -58,7 +58,12 @@ jobs:
 
             ### What's New
 
-            - fix some bugs
+            - Fixed file list warnings caused by files with the same name in different working directories
+            - Fixed warnings for old version packages
+            - Added Ctrl+T shortcut to toggle input box expandable display mode
+            - Responses request to join Fast mode
+            - Added /new-prompt command to optimize prompt words with AI
+            - Attempted to modify the image paste issue under WSL
 
             ### Installation
             ```bash

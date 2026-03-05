@@ -737,15 +737,47 @@ export default function ChatInput({
 	);
 
 	// Render content with cursor (treat all text including placeholders as plain text)
+	const INPUT_MAX_LINES = 6;
+	const EXPANDED_MAX_LINES = 12;
+
 	const renderContent = () => {
 		if (buffer.text.length > 0) {
 			// Use visual lines for proper wrapping and multi-line support
 			const visualLines = buffer.viewportVisualLines;
 			const [cursorRow, cursorCol] = buffer.visualCursor;
 
+			let startLine = 0;
+			let endLine = visualLines.length;
+
+			// Limit visible lines and scroll to keep cursor visible
+			const maxLines = buffer.isExpandedView
+				? EXPANDED_MAX_LINES
+				: INPUT_MAX_LINES;
+			if (visualLines.length > maxLines) {
+				const halfWindow = Math.floor(maxLines / 2);
+				startLine = Math.max(0, cursorRow - halfWindow);
+				startLine = Math.min(
+					startLine,
+					visualLines.length - maxLines,
+				);
+				endLine = startLine + maxLines;
+			}
+
 			const renderedLines: React.ReactNode[] = [];
 
-			for (let i = 0; i < visualLines.length; i++) {
+			// Scroll-up indicator
+			if (startLine > 0) {
+				renderedLines.push(
+					<Text key="scroll-up" color={theme.colors.menuSecondary} dimColor>
+						{t.chatScreen.moreAbove.replace(
+							'{count}',
+							startLine.toString(),
+						)}
+					</Text>,
+				);
+			}
+
+			for (let i = startLine; i < endLine; i++) {
 				const line = visualLines[i] || '';
 
 				if (i === cursorRow) {
@@ -766,6 +798,22 @@ export default function ChatInput({
 					// No cursor in this line
 					renderedLines.push(<Text key={i}>{line || ' '}</Text>);
 				}
+			}
+
+			// Scroll-down indicator
+			if (endLine < visualLines.length) {
+				renderedLines.push(
+					<Text
+						key="scroll-down"
+						color={theme.colors.menuSecondary}
+						dimColor
+					>
+						{t.chatScreen.moreBelow.replace(
+							'{count}',
+							(visualLines.length - endLine).toString(),
+						)}
+					</Text>,
+				);
 			}
 
 			return <Box flexDirection="column">{renderedLines}</Box>;
@@ -891,45 +939,68 @@ export default function ChatInput({
 			)}
 			{!showHistoryMenu && (
 				<>
-					<Box flexDirection="column" width={terminalWidth - 2}>
-						<Text
-							color={
-								isPureBashMode
-									? theme.colors.cyan
-									: isBashMode
-									? theme.colors.success
-									: theme.colors.menuSecondary
-							}
-						>
-							{'─'.repeat(terminalWidth - 2)}
-						</Text>
-						<Box flexDirection="row">
-							<Text
-								color={
-									isPureBashMode
-										? theme.colors.cyan
-										: isBashMode
-										? theme.colors.success
-										: theme.colors.menuInfo
-								}
-								bold
-							>
-								{isPureBashMode ? '!!' : isBashMode ? '>_' : '❯'}{' '}
+				<Box flexDirection="column" width={terminalWidth - 2}>
+				<Text
+					color={
+						isPureBashMode
+							? theme.colors.cyan
+							: isBashMode
+							? theme.colors.success
+							: buffer.isExpandedView
+							? theme.colors.menuInfo
+							: theme.colors.menuSecondary
+					}
+				>
+					{buffer.isExpandedView
+						? '═'.repeat(terminalWidth - 2)
+						: '─'.repeat(terminalWidth - 2)}
+				</Text>
+				<Box flexDirection="row">
+					<Text
+						color={
+							isPureBashMode
+								? theme.colors.cyan
+								: isBashMode
+								? theme.colors.success
+								: theme.colors.menuInfo
+						}
+						bold
+					>
+						{isPureBashMode
+							? '!!'
+							: isBashMode
+							? '>_'
+							: buffer.isExpandedView
+							? '⤢'
+							: '❯'}{' '}
+					</Text>
+					<Box flexGrow={1}>{renderContent()}</Box>
+				</Box>
+				<Box flexDirection="row">
+					<Text
+						color={
+							isPureBashMode
+								? theme.colors.cyan
+								: isBashMode
+								? theme.colors.success
+								: buffer.isExpandedView
+								? theme.colors.menuInfo
+								: theme.colors.menuSecondary
+					}
+					>
+						{buffer.isExpandedView
+							? '═'.repeat(terminalWidth - 2)
+							: '─'.repeat(terminalWidth - 2)}
+					</Text>
+				</Box>
+					{buffer.isExpandedView && (
+						<Box>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.chatScreen.expandedViewHint}
 							</Text>
-							<Box flexGrow={1}>{renderContent()}</Box>
 						</Box>
-						<Text
-							color={
-								isPureBashMode
-									? theme.colors.cyan
-									: isBashMode
-									? theme.colors.success
-									: theme.colors.menuSecondary
-							}
-						>
-							{'─'.repeat(terminalWidth - 2)}
-						</Text>
-					</Box>
+					)}
+				</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
 					showFilePicker ? (
 						<Box marginTop={1}>

@@ -313,51 +313,26 @@ Options
 	},
 );
 
-// Helper to run npm command and filter out --force warnings
-function runNpmCommand(args: string[]): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const child = spawn('npm', args, {
-			stdio: ['inherit', 'inherit', 'pipe'],
-		});
-
-		// Filter stderr to hide --force warnings
-		child.stderr?.on('data', (data: Buffer) => {
-			const lines = data.toString().split('\n');
-			const filtered = lines
-				.filter(
-					line =>
-						!line.includes('using --force') &&
-						!line.includes('Recommended protections disabled'),
-				)
-				.join('\n');
-			if (filtered.trim()) {
-				process.stderr.write(filtered);
-			}
-		});
-
-		child.on('close', code => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(new Error(`npm exited with code ${code}`));
-			}
-		});
-
-		child.on('error', reject);
-	});
-}
-
 // Handle update flag
 if (cli.flags.update) {
 	console.log('Updating snow-ai to latest version...');
 	try {
-		// Clean npm cache first to avoid EPERM issues on Windows
-		console.log('Cleaning npm cache...');
-		await runNpmCommand(['cache', 'clean', '--force']);
+		const child = spawn('npm', ['i', '-g', 'snow-ai'], {
+			stdio: 'inherit',
+			shell: true,
+		});
 
-		// Install with --force to bypass lock conflicts
-		console.log('Installing latest version...');
-		await runNpmCommand(['install', '-g', 'snow-ai@latest', '--force']);
+		await new Promise<void>((resolve, reject) => {
+			child.on('close', code => {
+				if (code === 0) {
+					resolve();
+				} else {
+					reject(new Error(`npm exited with code ${code}`));
+				}
+			});
+			child.on('error', reject);
+		});
+
 		console.log('Update completed successfully');
 		process.exit(0);
 	} catch (error) {
@@ -365,6 +340,7 @@ if (cli.flags.update) {
 			'Update failed:',
 			error instanceof Error ? error.message : error,
 		);
+		console.log('\nYou can also update manually:\n  npm i -g snow-ai');
 		process.exit(1);
 	}
 }

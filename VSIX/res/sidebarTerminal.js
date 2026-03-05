@@ -625,12 +625,33 @@
 			}),
 		);
 
-		// Don't intercept paste shortcuts - let them pass through to CLI
-		// CLI handles paste via its own keyboard shortcuts (Ctrl+V on MacOS, Alt+V on Windows)
-		term.attachCustomKeyEventHandler(event => {
-			// Always return true to let events pass through to CLI
-			return true;
-		});
+	// On macOS, Ctrl+V passes through to CLI which handles paste (including images).
+	// On Windows/Linux, Ctrl+V must be intercepted here because:
+	//   1. xterm would send raw \x16 which CLI doesn't recognise as paste
+	//   2. CLI expects Alt+V for its own clipboard paste on Windows
+	const isMacPlatform = /mac/i.test(navigator.platform);
+	term.attachCustomKeyEventHandler(event => {
+		if (
+			!isMacPlatform &&
+			event.type === 'keydown' &&
+			event.ctrlKey &&
+			!event.shiftKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			event.key.toLowerCase() === 'v'
+		) {
+			navigator.clipboard
+				.readText()
+				.then(text => {
+					if (text) {
+						sendInput(text);
+					}
+				})
+				.catch(() => {});
+			return false;
+		}
+		return true;
+	});
 
 		const handleWindowMessage = event => {
 			const message = event.data;

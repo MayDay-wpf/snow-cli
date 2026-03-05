@@ -866,6 +866,14 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 		};
 
+		// Ctrl+T - Toggle expanded/collapsed view for pasted text
+		if (key.ctrl && input === 't') {
+			flushPendingInput();
+			buffer.toggleExpandedView();
+			forceUpdate({});
+			return;
+		}
+
 		// Ctrl+A - Move to beginning of line
 		if (key.ctrl && input === 'a') {
 			flushPendingInput();
@@ -1502,6 +1510,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
+
 			// Reset history navigation when user starts typing
 			if (currentHistoryIndex !== -1) {
 				resetHistoryNavigation();

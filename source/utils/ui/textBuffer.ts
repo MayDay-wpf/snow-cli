@@ -67,6 +67,8 @@ export class TextBuffer {
 	private tempPastingPlaceholder: string | null = null; // 临时"粘贴中"占位符文本
 	private lastTextPlaceholderId: string | null = null; // 合并同一批次粘贴
 	private lastTextPlaceholderAt = 0; // 最近一次文本占位符更新时间
+	private _expandedView = false; // 是否展开显示粘贴内容
+	private _displayText = ''; // 用于视觉渲染的文本（展开/折叠）
 
 	private visualLines: string[] = [''];
 	private visualLineStarts: number[] = [0];
@@ -84,6 +86,7 @@ export class TextBuffer {
 	 */
 	destroy(): void {
 		this.isDestroyed = true;
+		this._expandedView = false;
 		this.placeholderStorage.clear();
 		this.onUpdateCallback = undefined;
 	}
@@ -130,6 +133,10 @@ export class TextBuffer {
 
 	get maxWidth(): number {
 		return this.viewport.width;
+	}
+
+	get isExpandedView(): boolean {
+		return this._expandedView;
 	}
 
 	private scheduleUpdate(): void {
@@ -446,6 +453,25 @@ export class TextBuffer {
 	}
 
 	/**
+	 * 切换展开/折叠显示模式（仅文本占位符，图片不受影响）
+	 */
+	toggleExpandedView(): void {
+		this._expandedView = !this._expandedView;
+		this.recalculateVisualState();
+		this.scheduleUpdate();
+	}
+
+	/**
+	 * 检查是否存在文本占位符
+	 */
+	hasTextPlaceholders(): boolean {
+		for (const ph of this.placeholderStorage.values()) {
+			if (ph.type === 'text') return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Get the character and its visual info at cursor position for proper rendering.
 	 */
 	getCharAtCursor(): {char: string; isWideChar: boolean} {
@@ -468,13 +494,72 @@ export class TextBuffer {
 		}
 	}
 
+	private getTextPlaceholderCpPositions(): Array<{
+		cpStart: number;
+		phCpLen: number;
+		contentCpLen: number;
+	}> {
+		const positions: Array<{
+			cpStart: number;
+			phCpLen: number;
+			contentCpLen: number;
+		}> = [];
+		for (const ph of this.placeholderStorage.values()) {
+			if (ph.type !== 'text' || !ph.placeholder) continue;
+			const strIdx = this.content.indexOf(ph.placeholder);
+			if (strIdx === -1) continue;
+			positions.push({
+				cpStart: cpLen(this.content.substring(0, strIdx)),
+				phCpLen: cpLen(ph.placeholder),
+				contentCpLen: cpLen(ph.content),
+			});
+		}
+		positions.sort((a, b) => a.cpStart - b.cpStart);
+		return positions;
+	}
+
+	private mapCursorToExpandedIndex(contentCursorIdx: number): number {
+		const phPositions = this.getTextPlaceholderCpPositions();
+		let offset = 0;
+		for (const ph of phPositions) {
+			if (contentCursorIdx <= ph.cpStart) break;
+			if (contentCursorIdx < ph.cpStart + ph.phCpLen) {
+				const posInPh = contentCursorIdx - ph.cpStart;
+				return ph.cpStart + offset + Math.min(posInPh, ph.contentCpLen);
+			}
+			offset += ph.contentCpLen - ph.phCpLen;
+		}
+		return contentCursorIdx + offset;
+	}
+
+	private mapExpandedIndexToContent(expandedCursorIdx: number): number {
+		const phPositions = this.getTextPlaceholderCpPositions();
+		let cumulativeOffset = 0;
+		for (const ph of phPositions) {
+			const expandedPhStart = ph.cpStart + cumulativeOffset;
+			const expandedPhEnd = expandedPhStart + ph.contentCpLen;
+			if (expandedCursorIdx < expandedPhStart) {
+				return expandedCursorIdx - cumulativeOffset;
+			}
+			if (expandedCursorIdx < expandedPhEnd) {
+				return ph.cpStart + ph.phCpLen;
+			}
+			cumulativeOffset += ph.contentCpLen - ph.phCpLen;
+		}
+		return expandedCursorIdx - cumulativeOffset;
+	}
+
 	private recalculateVisualState(): void {
 		this.clampCursorIndex();
+
+		this._displayText = this._expandedView
+			? this.getFullText()
+			: this.content;
 
 		const width = this.viewport.width;
 		const effectiveWidth =
 			Number.isFinite(width) && width > 0 ? width : Number.POSITIVE_INFINITY;
-		const rawLines = this.content.split('\n');
+		const rawLines = this._displayText.split('\n');
 		const nextVisualLines: string[] = [];
 		const nextStarts: number[] = [];
 
@@ -509,7 +594,11 @@ export class TextBuffer {
 
 		this.visualLines = nextVisualLines;
 		this.visualLineStarts = nextStarts;
-		this.visualCursorPos = this.computeVisualCursorFromIndex(this.cursorIndex);
+		const displayCursorIdx = this._expandedView
+			? this.mapCursorToExpandedIndex(this.cursorIndex)
+			: this.cursorIndex;
+		this.visualCursorPos =
+			this.computeVisualCursorFromIndex(displayCursorIdx);
 		this.preferredVisualCol = this.visualCursorPos[1];
 	}
 
@@ -633,7 +722,7 @@ export class TextBuffer {
 			return [0, 0];
 		}
 
-		const totalLength = cpLen(this.content);
+		const totalLength = cpLen(this._displayText);
 		const clamped = Math.max(0, Math.min(position, totalLength));
 
 		for (let i = this.visualLines.length - 1; i >= 0; i--) {
@@ -644,7 +733,11 @@ export class TextBuffer {
 			if (clamped >= start && clamped <= lineEnd) {
 				const line = this.visualLines[i] ?? '';
 				const lineOffset = Math.max(0, clamped - start);
-				const withinLine = cpSlice(this.content, start, start + lineOffset);
+				const withinLine = cpSlice(
+					this._displayText,
+					start,
+					start + lineOffset,
+				);
 				const col = Math.min(
 					visualWidth(line),
 					codePointToVisualPos(withinLine, cpLen(withinLine)),
@@ -670,12 +763,18 @@ export class TextBuffer {
 		const visualColumn = Math.min(this.preferredVisualCol, lineVisualWidth);
 		const codePointOffset = visualPosToCodePoint(line, visualColumn);
 
-		this.cursorIndex = start + codePointOffset;
+		const rawPosition = start + codePointOffset;
+		this.cursorIndex = this._expandedView
+			? this.mapExpandedIndexToContent(rawPosition)
+			: rawPosition;
 		this.visualCursorPos = [row, visualColumn];
 	}
 
 	private recomputeVisualCursorOnly(): void {
-		this.visualCursorPos = this.computeVisualCursorFromIndex(this.cursorIndex);
+		const displayIdx = this._expandedView
+			? this.mapCursorToExpandedIndex(this.cursorIndex)
+			: this.cursorIndex;
+		this.visualCursorPos = this.computeVisualCursorFromIndex(displayIdx);
 		this.preferredVisualCol = this.visualCursorPos[1];
 	}
 

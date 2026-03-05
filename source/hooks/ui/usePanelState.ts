@@ -22,6 +22,7 @@ export type PanelState = {
 	showModelsPanel: boolean;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
+	showNewPromptPanel: boolean;
 	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
@@ -31,6 +32,7 @@ export type PanelState = {
 export type PanelActions = {
 	setShowSessionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
+	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
 	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
@@ -74,6 +76,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
 		string | undefined
 	>(undefined);
@@ -108,6 +111,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
+			showNewPromptPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
 			options.hasPendingUserQuestion ||
@@ -219,6 +223,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let ModelsPanel handle ESC
 		}
 
+		// NewPromptPanel handles its own ESC key logic internally
+		if (showNewPromptPanel) {
+			return false; // Let NewPromptPanel handle ESC
+		}
+
 		return false; // ESC not handled
 	};
 
@@ -238,7 +247,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showProfilePanel ||
 			showModelsPanel ||
 			showDiffReviewPanel ||
-			showConnectionPanel
+			showConnectionPanel ||
+			showNewPromptPanel
 		);
 	};
 
@@ -259,6 +269,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showModelsPanel,
 		showDiffReviewPanel,
 		showConnectionPanel,
+		showNewPromptPanel,
 		connectionPanelApiUrl,
 		profileSelectedIndex,
 		profileSearchQuery,
@@ -279,6 +290,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowModelsPanel,
 		setShowDiffReviewPanel,
 		setShowConnectionPanel,
+		setShowNewPromptPanel,
 		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,

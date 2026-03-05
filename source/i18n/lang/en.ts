@@ -188,6 +188,7 @@ export const en: TranslationKeys = {
 		geminiThinkingBudget: 'Gemini Thinking Budget:',
 		responsesReasoningEnabled: 'Responses Reasoning Enabled:',
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
+		responsesFastMode: 'Responses Fast Mode (priority):',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
@@ -449,6 +450,8 @@ export const en: TranslationKeys = {
 		deleteToStart: 'Ctrl+L - Delete from cursor to start (legacy)',
 		deleteToEnd: 'Ctrl+R - Delete from cursor to end (legacy)',
 		pasteImages: '{pasteKey} - Paste images from clipboard',
+		toggleExpandedView:
+			'Ctrl+T - Toggle expanded/collapsed view for pasted text',
 		readlineTitle: '🚀 Readline Shortcuts:',
 		moveToLineStart: 'Ctrl+A - Move to beginning of line',
 		moveToLineEnd: 'Ctrl+E - Move to end of line',
@@ -570,6 +573,8 @@ export const en: TranslationKeys = {
 			connect: 'Connect to a Snow Instance for AI processing',
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
+			newPrompt:
+				'Generate a refined prompt from your requirement using AI',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -800,6 +805,8 @@ export const en: TranslationKeys = {
 			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
 		headerShortcuts:
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
+		headerExpandedView:
+			'Press Ctrl+T: toggle expanded/collapsed view for pasted text',
 		headerWorkingDirectory: 'Working directory: {directory}',
 		// Status messages
 		statusThinking: 'Thinking...',
@@ -973,6 +980,7 @@ export const en: TranslationKeys = {
 		contentSearchHint: 'Content search • Tab/Enter to select • ESC to cancel',
 		fileSearchHint:
 			'Type to filter files • Tab/Enter to select • ESC to cancel',
+		expandedViewHint: 'Expanded view • Ctrl+T to toggle',
 		yoloModeActive:
 			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
@@ -1418,5 +1426,22 @@ export const en: TranslationKeys = {
 		invalidPidsStopped: 'Found {count} invalid PID files (processes stopped)',
 		autoCleanupHint:
 			'These files will be automatically cleaned on next stop operation',
+	},
+	newPrompt: {
+		title: '✦ Prompt Generator',
+		inputHint:
+			'Describe your requirement, AI will generate a refined prompt:',
+		placeholder: 'Enter your requirement...',
+		escHint: 'ESC to cancel',
+		generating: 'Generating prompt...',
+		previewTitle: '✓ Prompt generated:',
+		moreLines: '({count} more lines)',
+		actionAccept: 'Write to input',
+		actionReject: 'Discard',
+		actionRegenerate: 'Regenerate',
+		actionRetry: 'Retry',
+		actionCancel: 'Cancel',
+		errorPrefix: 'Error: ',
+		scrollHint: '↑↓ Scroll',
 	},
 };

@@ -6,6 +6,7 @@ import {
 	readFileSync,
 	writeFileSync,
 	readdirSync,
+	unlinkSync,
 } from 'fs';
 
 /**
@@ -160,8 +161,7 @@ export function saveHookConfig(
 export function deleteHookConfig(hookType: HookType, scope: HookScope): void {
 	const filePath = getHookFilePath(hookType, scope);
 	if (existsSync(filePath)) {
-		const fs = require('fs');
-		fs.unlinkSync(filePath);
+		unlinkSync(filePath);
 	}
 }
 

@@ -2,6 +2,7 @@ import {useCallback} from 'react';
 import {execSync} from 'child_process';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {logger} from '../../utils/core/logger.js';
+import {isWSL} from '../../mcp/utils/websearch/browser.utils.js';
 
 export function useClipboard(
 	buffer: TextBuffer,
@@ -11,9 +12,12 @@ export function useClipboard(
 ) {
 	const pasteFromClipboard = useCallback(async () => {
 		try {
+			const isWslEnv = process.platform === 'linux' && isWSL();
+			const psCmd = isWslEnv ? 'powershell.exe' : 'powershell';
+
 			// Try to read image from clipboard
-			if (process.platform === 'win32') {
-				// Windows: Use PowerShell to read image from clipboard
+			if (process.platform === 'win32' || isWslEnv) {
+				// Windows / WSL: Use PowerShell to read image from clipboard
 				try {
 					// Optimized PowerShell script with compression for large images
 					const psScript =
@@ -47,7 +51,7 @@ export function useClipboard(
 						'}';
 
 					const base64Raw = execSync(
-						`powershell -NoProfile -Command "${psScript}"`,
+						`${psCmd} -NoProfile -Command "${psScript}"`,
 						{
 							encoding: 'utf-8',
 							timeout: 10000,
@@ -164,11 +168,14 @@ end try'`;
 			// If no image, try to read text from clipboard
 			try {
 				let clipboardText = '';
-				if (process.platform === 'win32') {
-					clipboardText = execSync('powershell -Command "Get-Clipboard"', {
-						encoding: 'utf-8',
-						timeout: 2000,
-					}).trim();
+				if (process.platform === 'win32' || isWslEnv) {
+					clipboardText = execSync(
+						`${psCmd} -NoProfile -Command "Get-Clipboard"`,
+						{
+							encoding: 'utf-8',
+							timeout: 2000,
+						},
+					).trim();
 				} else if (process.platform === 'darwin') {
 					clipboardText = execSync('pbpaste', {
 						encoding: 'utf-8',

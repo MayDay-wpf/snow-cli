@@ -719,6 +719,21 @@ const FileList = memo(
 				});
 			}, [filteredFiles, allFilteredFiles, selectedIndex]);
 
+			const selectedFileFullPath = useMemo(() => {
+				const file = allFilteredFiles[selectedIndex];
+				if (!file) return null;
+				const baseDir = file.sourceDir || rootPath;
+				if (file.path.startsWith('ssh://') || path.isAbsolute(file.path)) {
+					return file.path;
+				}
+				if (baseDir.startsWith('ssh://')) {
+					const cleanBase = baseDir.replace(/\/$/, '');
+					const cleanRel = file.path.replace(/^\.\//, '').replace(/^\//, '');
+					return `${cleanBase}/${cleanRel}`;
+				}
+				return path.join(baseDir, file.path);
+			}, [allFilteredFiles, selectedIndex, rootPath]);
+
 			if (!visible) {
 				return null;
 			}
@@ -758,7 +773,7 @@ const FileList = memo(
 					</Box>
 					{filteredFiles.map((file, index) => (
 						<Box
-							key={`${file.path}-${file.lineNumber || 0}`}
+							key={`${file.sourceDir || ''}-${file.path}-${file.lineNumber || 0}`}
 							flexDirection="column"
 						>
 							{/* First line: file path and line number (for content search) or file path (for file search) */}
@@ -826,6 +841,13 @@ const FileList = memo(
 										)}
 									</>
 								)}
+							</Text>
+						</Box>
+					)}
+					{selectedFileFullPath && (
+						<Box marginTop={allFilteredFiles.length > effectiveMaxItems ? 0 : 1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{'⤷ ' + selectedFileFullPath}
 							</Text>
 						</Box>
 					)}
