@@ -69,6 +69,11 @@ export class TextBuffer {
 	private lastTextPlaceholderAt = 0; // 最近一次文本占位符更新时间
 	private _expandedView = false; // 是否展开显示粘贴内容
 	private _displayText = ''; // 用于视觉渲染的文本（展开/折叠）
+	private _expandedSegments: Array<{
+		type: 'gap' | 'placeholder';
+		text: string;
+		originalPlaceholder?: string;
+	}> | null = null;
 
 	private visualLines: string[] = [''];
 	private visualLineStarts: number[] = [0];
@@ -87,6 +92,7 @@ export class TextBuffer {
 	destroy(): void {
 		this.isDestroyed = true;
 		this._expandedView = false;
+		this._expandedSegments = null;
 		this.placeholderStorage.clear();
 		this.onUpdateCallback = undefined;
 	}
@@ -155,6 +161,8 @@ export class TextBuffer {
 			this.placeholderStorage.clear();
 			this.textPlaceholderCounter = 0;
 			this.imagePlaceholderCounter = 0;
+			this._expandedView = false;
+			this._expandedSegments = null;
 		}
 
 		this.recalculateVisualState();
@@ -197,6 +205,15 @@ export class TextBuffer {
 				}
 			}
 			this.tempPastingPlaceholder = null;
+		}
+
+		// 展开视图中直接插入纯文本，不创建粘贴占位符
+		if (this._expandedView) {
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.insertPlainText(sanitized);
+			this.scheduleUpdate();
+			return;
 		}
 
 		const now = Date.now();
@@ -484,9 +501,45 @@ export class TextBuffer {
 
 	/**
 	 * 切换展开/折叠显示模式（仅文本占位符，图片不受影响）
+	 * 展开时将 content 替换为完整文本，允许直接编辑；
+	 * 折叠时通过 gap 文本匹配重建占位符。
 	 */
 	toggleExpandedView(): void {
-		this._expandedView = !this._expandedView;
+		if (!this._expandedView) {
+			if (!this.hasTextPlaceholders()) {
+				this._expandedView = true;
+				this.recalculateVisualState();
+				this.scheduleUpdate();
+				return;
+			}
+
+			this._expandedSegments = this.buildExpandedSegments();
+			const expandedText = this.getFullText();
+			const expandedCursor = this.mapCursorToExpandedIndex(
+				this.cursorIndex,
+			);
+
+			for (const [id, ph] of this.placeholderStorage.entries()) {
+				if (ph.type === 'text') {
+					this.placeholderStorage.delete(id);
+				}
+			}
+			this.textPlaceholderCounter = 0;
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+
+			this.content = expandedText;
+			this.cursorIndex = expandedCursor;
+			this._expandedView = true;
+		} else {
+			if (this._expandedSegments) {
+				this.refoldContent();
+			}
+			this._expandedSegments = null;
+			this._expandedView = false;
+		}
+
+		this.clampCursorIndex();
 		this.recalculateVisualState();
 		this.scheduleUpdate();
 	}
@@ -499,6 +552,349 @@ export class TextBuffer {
 			if (ph.type === 'text') return true;
 		}
 		return false;
+	}
+
+	/**
+	 * 构建展开前的段落列表，交替记录 gap（用户手动输入的文本）
+	 * 和 placeholder（粘贴/Skill 占位符的实际内容）。
+	 */
+	private buildExpandedSegments(): Array<{
+		type: 'gap' | 'placeholder';
+		text: string;
+		originalPlaceholder?: string;
+	}> {
+		const segments: Array<{
+			type: 'gap' | 'placeholder';
+			text: string;
+			originalPlaceholder?: string;
+		}> = [];
+
+		const phEntries: Array<{ph: Placeholder; idx: number}> = [];
+		for (const ph of this.placeholderStorage.values()) {
+			if (ph.type !== 'text') continue;
+			const idx = this.content.indexOf(ph.placeholder);
+			if (idx !== -1) {
+				phEntries.push({ph, idx});
+			}
+		}
+		phEntries.sort((a, b) => a.idx - b.idx);
+
+		if (phEntries.length === 0) {
+			segments.push({type: 'gap', text: this.content});
+			return segments;
+		}
+
+		let pos = 0;
+		for (const entry of phEntries) {
+			if (entry.idx > pos) {
+				segments.push({
+					type: 'gap',
+					text: this.content.substring(pos, entry.idx),
+				});
+			}
+			segments.push({
+				type: 'placeholder',
+				text: entry.ph.content,
+				originalPlaceholder: entry.ph.placeholder,
+			});
+			pos = entry.idx + entry.ph.placeholder.length;
+		}
+
+		if (pos < this.content.length) {
+			segments.push({
+				type: 'gap',
+				text: this.content.substring(pos),
+			});
+		}
+
+		return segments;
+	}
+
+	/**
+	 * 折叠内容：将展开编辑后的文本重新包装为粘贴占位符。
+	 * 优先通过 gap 文本匹配定位原始占位符区域的边界；
+	 * 未修改时精确还原，修改后尽力重建。
+	 */
+	private refoldContent(): void {
+		const segments = this._expandedSegments;
+		if (!segments) return;
+
+		const currentText = this.content;
+		const oldCursor = this.cursorIndex;
+		const originalExpanded = segments.map(s => s.text).join('');
+
+		if (currentText === originalExpanded) {
+			this.restoreExactFromSegments(segments, oldCursor);
+			return;
+		}
+
+		// 收集 gap 段落
+		const gapSegments: Array<{segIdx: number; text: string}> = [];
+		for (let i = 0; i < segments.length; i++) {
+			if (segments[i]!.type === 'gap') {
+				gapSegments.push({segIdx: i, text: segments[i]!.text});
+			}
+		}
+
+		if (gapSegments.length === 0) {
+			this.refoldEntireContent(currentText);
+			return;
+		}
+
+		// 在当前文本中按顺序查找每个 gap 文本
+		const gapPositions: Array<{
+			start: number;
+			end: number;
+			found: boolean;
+		}> = [];
+		let searchFrom = 0;
+		let allFound = true;
+
+		for (const gap of gapSegments) {
+			if (gap.text === '') {
+				gapPositions.push({
+					start: searchFrom,
+					end: searchFrom,
+					found: true,
+				});
+				continue;
+			}
+			const pos = currentText.indexOf(gap.text, searchFrom);
+			if (pos >= searchFrom) {
+				gapPositions.push({
+					start: pos,
+					end: pos + gap.text.length,
+					found: true,
+				});
+				searchFrom = pos + gap.text.length;
+			} else {
+				allFound = false;
+				break;
+			}
+		}
+
+		if (!allFound) {
+			this.refoldEntireContent(currentText);
+			return;
+		}
+
+		// 根据 gap 位置推断 placeholder 区域
+		interface ContentRegion {
+			type: 'gap' | 'placeholder';
+			start: number;
+			end: number;
+		}
+
+		const regions: ContentRegion[] = [];
+		let currentPos = 0;
+
+		for (const gp of gapPositions) {
+			if (gp.start > currentPos) {
+				regions.push({
+					type: 'placeholder',
+					start: currentPos,
+					end: gp.start,
+				});
+			}
+			if (gp.end > gp.start) {
+				regions.push({type: 'gap', start: gp.start, end: gp.end});
+			}
+			currentPos = gp.end;
+		}
+
+		if (currentPos < currentText.length) {
+			regions.push({
+				type: 'placeholder',
+				start: currentPos,
+				end: currentText.length,
+			});
+		}
+
+		// 用区域信息重建带占位符的 content
+		let newContent = '';
+		let newCursor = 0;
+		let cursorMapped = false;
+
+		for (const region of regions) {
+			const regionText = currentText.substring(region.start, region.end);
+
+			if (region.type === 'gap') {
+				if (
+					!cursorMapped &&
+					oldCursor >= region.start &&
+					oldCursor <= region.end
+				) {
+					newCursor =
+						cpLen(newContent) + (oldCursor - region.start);
+					cursorMapped = true;
+				}
+				newContent += regionText;
+			} else if (regionText.length > 0) {
+				const lineCount =
+					(regionText.match(/\n/g) || []).length + 1;
+				const shouldFold =
+					regionText.length >= 400 || lineCount >= 12;
+
+				if (shouldFold) {
+					this.textPlaceholderCounter++;
+					const pasteId = `paste_refold_${Date.now()}_${this.textPlaceholderCounter}`;
+					const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
+
+					this.placeholderStorage.set(pasteId, {
+						id: pasteId,
+						type: 'text',
+						content: regionText,
+						charCount: regionText.length,
+						index: this.textPlaceholderCounter,
+						placeholder: placeholderText,
+					});
+
+					if (
+						!cursorMapped &&
+						oldCursor >= region.start &&
+						oldCursor <= region.end
+					) {
+						newCursor =
+							cpLen(newContent) + cpLen(placeholderText);
+						cursorMapped = true;
+					}
+					newContent += placeholderText;
+				} else {
+					if (
+						!cursorMapped &&
+						oldCursor >= region.start &&
+						oldCursor <= region.end
+					) {
+						newCursor =
+							cpLen(newContent) +
+							(oldCursor - region.start);
+						cursorMapped = true;
+					}
+					newContent += regionText;
+				}
+			}
+		}
+
+		if (!cursorMapped) {
+			newCursor = cpLen(newContent);
+		}
+
+		this.content = newContent;
+		this.cursorIndex = newCursor;
+	}
+
+	/**
+	 * 内容未修改时精确还原所有占位符（保留原始格式如 [Skill:id]）。
+	 */
+	private restoreExactFromSegments(
+		segments: Array<{
+			type: 'gap' | 'placeholder';
+			text: string;
+			originalPlaceholder?: string;
+		}>,
+		oldCursor: number,
+	): void {
+		let newContent = '';
+		let newCursor = 0;
+		let expandedPos = 0;
+		let cursorMapped = false;
+
+		for (const seg of segments) {
+			if (seg.type === 'gap') {
+				if (
+					!cursorMapped &&
+					oldCursor >= expandedPos &&
+					oldCursor <= expandedPos + seg.text.length
+				) {
+					newCursor =
+						cpLen(newContent) + (oldCursor - expandedPos);
+					cursorMapped = true;
+				}
+				newContent += seg.text;
+				expandedPos += seg.text.length;
+			} else {
+				const lineCount =
+					(seg.text.match(/\n/g) || []).length + 1;
+				const shouldFold =
+					seg.text.length >= 400 || lineCount >= 12;
+
+				if (shouldFold) {
+					this.textPlaceholderCounter++;
+					const pasteId = `paste_restore_${Date.now()}_${this.textPlaceholderCounter}`;
+					const placeholderText =
+						seg.originalPlaceholder ||
+						`[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
+
+					this.placeholderStorage.set(pasteId, {
+						id: pasteId,
+						type: 'text',
+						content: seg.text,
+						charCount: seg.text.length,
+						index: this.textPlaceholderCounter,
+						placeholder: placeholderText,
+					});
+
+					if (
+						!cursorMapped &&
+						oldCursor >= expandedPos &&
+						oldCursor <= expandedPos + seg.text.length
+					) {
+						newCursor =
+							cpLen(newContent) + cpLen(placeholderText);
+						cursorMapped = true;
+					}
+					newContent += placeholderText;
+				} else {
+					if (
+						!cursorMapped &&
+						oldCursor >= expandedPos &&
+						oldCursor <= expandedPos + seg.text.length
+					) {
+						newCursor =
+							cpLen(newContent) +
+							(oldCursor - expandedPos);
+						cursorMapped = true;
+					}
+					newContent += seg.text;
+				}
+				expandedPos += seg.text.length;
+			}
+		}
+
+		if (!cursorMapped) {
+			newCursor = cpLen(newContent);
+		}
+
+		this.content = newContent;
+		this.cursorIndex = newCursor;
+	}
+
+	/**
+	 * 回退方案：当 gap 匹配失败时，将整个文本包装为一个占位符。
+	 */
+	private refoldEntireContent(text: string): void {
+		if (text.length === 0) return;
+
+		const lineCount = (text.match(/\n/g) || []).length + 1;
+		const shouldFold = text.length >= 400 || lineCount >= 12;
+
+		if (!shouldFold) return;
+
+		this.textPlaceholderCounter++;
+		const pasteId = `paste_refold_${Date.now()}_${this.textPlaceholderCounter}`;
+		const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
+
+		this.placeholderStorage.set(pasteId, {
+			id: pasteId,
+			type: 'text',
+			content: text,
+			charCount: text.length,
+			index: this.textPlaceholderCounter,
+			placeholder: placeholderText,
+		});
+
+		this.content = placeholderText;
+		this.cursorIndex = cpLen(placeholderText);
 	}
 
 	/**

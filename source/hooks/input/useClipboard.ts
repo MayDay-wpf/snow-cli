@@ -50,14 +50,31 @@ export function useClipboard(
 						'[Convert]::ToBase64String($bytes); ' +
 						'}';
 
-					const base64Raw = execSync(
-						`${psCmd} -NoProfile -Command "${psScript}"`,
-						{
-							encoding: 'utf-8',
-							timeout: 10000,
-							maxBuffer: 50 * 1024 * 1024, // 50MB buffer
-						},
-					);
+					let base64Raw: string;
+					if (isWslEnv) {
+						// WSL: bash expands $var inside double-quotes, mangling the script.
+						// Use -EncodedCommand (base64 UTF-16LE) to bypass all shell interpretation.
+						const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+						base64Raw = execSync(
+							`${psCmd} -NoProfile -EncodedCommand ${encoded}`,
+							{
+								encoding: 'utf-8',
+								timeout: 10000,
+								maxBuffer: 50 * 1024 * 1024,
+								stdio: ['pipe', 'pipe', 'pipe'],
+							},
+						);
+					} else {
+						base64Raw = execSync(
+							`${psCmd} -NoProfile -Command "${psScript}"`,
+							{
+								encoding: 'utf-8',
+								timeout: 10000,
+								maxBuffer: 50 * 1024 * 1024,
+								stdio: ['pipe', 'pipe', 'pipe'],
+							},
+						);
+					}
 
 					// 高效清理：一次性移除所有空白字符
 					const base64 = base64Raw.replace(/\s/g, '');
@@ -174,6 +191,7 @@ end try'`;
 						{
 							encoding: 'utf-8',
 							timeout: 2000,
+							stdio: ['pipe', 'pipe', 'pipe'],
 						},
 					).trim();
 				} else if (process.platform === 'darwin') {

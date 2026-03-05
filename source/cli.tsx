@@ -2,6 +2,8 @@
 
 // Force color support for all chalk instances (must be set before any imports)
 // This ensures syntax highlighting works in cli-highlight and other color libraries
+// Remove NO_COLOR first to prevent conflict warning in Node.js 22+
+delete process.env['NO_COLOR'];
 process.env['FORCE_COLOR'] = '3';
 
 // Check Node.js version before anything else
@@ -79,11 +81,16 @@ if (process.env['SNOW_IGNORE_NODE_OPTIONS'] === '1') {
 	delete process.env['NODE_OPTIONS'];
 }
 
-// Suppress DEP0169 warning from dependencies
+// Suppress known deprecation warnings from dependencies
+const suppressedDepCodes = new Set(['DEP0040', 'DEP0169']);
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function (warning: any, ...args: any[]) {
-	// Check if this is the DEP0169 warning
-	if (args[1] === 'DEP0169') return;
+	// emitWarning(msg, type, code) — positional form
+	if (typeof args[1] === 'string' && suppressedDepCodes.has(args[1])) return;
+	// emitWarning(msg, { code }) — options object form
+	if (args[0] && typeof args[0] === 'object' && suppressedDepCodes.has(args[0].code)) return;
+	// Suppress NO_COLOR/FORCE_COLOR conflict warning (Node.js 22+)
+	if (typeof warning === 'string' && warning.includes("'NO_COLOR'") && warning.includes("'FORCE_COLOR'")) return;
 	return (originalEmitWarning as any).apply(process, [warning, ...args]);
 };
 
