@@ -31,7 +31,7 @@ export interface ResponseOptions {
 	tool_choice?: 'auto' | 'none' | 'required';
 	reasoning?: {
 		summary?: 'auto' | 'none';
-		effort?: 'low' | 'medium' | 'high' | 'xhigh';
+		effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 	} | null; // null means don't pass reasoning parameter (for small models)
 	prompt_cache_key?: string;
 	store?: boolean;
@@ -151,7 +151,7 @@ export interface ResponseStreamChunk {
 }
 
 function getResponsesReasoningConfig(): {
-	effort?: 'low' | 'medium' | 'high' | 'xhigh';
+	effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 	summary?: 'auto' | 'none';
 } | null {
 	const config = getOpenAiConfig();
@@ -165,6 +165,11 @@ function getResponsesReasoningConfig(): {
 		effort: reasoningConfig.effort || 'high',
 		summary: 'auto',
 	};
+}
+
+function getResponsesVerbosityConfig(): 'low' | 'medium' | 'high' {
+	const config = getOpenAiConfig();
+	return config.responsesVerbosity || 'medium';
 }
 
 export function resetOpenAIClient(): void {
@@ -545,6 +550,7 @@ export async function* createStreamingResponse(
 
 	// 获取配置的 reasoning 设置
 	const configuredReasoning = getResponsesReasoningConfig();
+	const configuredVerbosity = getResponsesVerbosityConfig();
 
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
@@ -564,6 +570,9 @@ export async function* createStreamingResponse(
 				...(config.responsesFastMode && {
 					service_tier: 'priority',
 				}),
+				text: {
+					verbosity: configuredVerbosity,
+				},
 				store: false,
 				stream: true,
 				include: ['reasoning.encrypted_content'],

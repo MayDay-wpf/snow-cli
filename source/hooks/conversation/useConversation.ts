@@ -11,7 +11,7 @@ import {
 	executeToolCalls,
 	type ToolCall,
 } from '../../utils/execution/toolExecutor.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getOpenAiConfig, DEFAULT_AUTO_COMPRESS_THRESHOLD} from '../../utils/config/apiConfig.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {unifiedHooksExecutor} from '../../utils/execution/unifiedHooksExecutor.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
@@ -1436,7 +1436,7 @@ export async function handleConversationWithTools(
 				if (
 					config.enableAutoCompress !== false &&
 					options.getCurrentContextPercentage &&
-					shouldAutoCompress(options.getCurrentContextPercentage())
+					shouldAutoCompress(options.getCurrentContextPercentage(), config.autoCompressThreshold ?? DEFAULT_AUTO_COMPRESS_THRESHOLD)
 				) {
 					try {
 						// 显示压缩提示消息
@@ -1717,12 +1717,12 @@ export async function handleConversationWithTools(
 				if (options.getPendingMessages && options.clearPendingMessages) {
 					const pendingMessages = options.getPendingMessages();
 					if (pendingMessages.length > 0) {
-						// 检查 token 占用，如果 >= 80% 先执行自动压缩
+						// 检查 token 占用，先执行自动压缩
 						const config = getOpenAiConfig();
 						if (
 							config.enableAutoCompress !== false &&
 							options.getCurrentContextPercentage &&
-							shouldAutoCompress(options.getCurrentContextPercentage())
+							shouldAutoCompress(options.getCurrentContextPercentage(), config.autoCompressThreshold ?? DEFAULT_AUTO_COMPRESS_THRESHOLD)
 						) {
 							try {
 								// 显示压缩提示消息

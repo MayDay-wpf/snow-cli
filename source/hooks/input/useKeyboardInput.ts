@@ -1416,97 +1416,96 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		if (
-			key.upArrow &&
-			!showCommands &&
-			!showFilePicker &&
-			!disableKeyboardNavigation
-		) {
-			flushPendingInput();
+	if (
+		key.upArrow &&
+		!showCommands &&
+		!showFilePicker &&
+		!disableKeyboardNavigation
+	) {
+		flushPendingInput();
 
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			const isEmpty = text.trim() === '';
+		const text = buffer.getFullText();
+		const cursorPos = buffer.getCursorPosition();
+		const isEmpty = text.trim() === '';
+		const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
 
-			// Terminal-style history navigation:
-			// Only navigate history when cursor is at the very beginning (position 0)
-			// This allows normal cursor movement within the line
-			if (isEmpty || cursorPos === 0) {
-				const navigated = navigateHistoryUp();
-				if (navigated) {
-					updateFilePickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					updateAgentPickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					updateRunningAgentsPickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					triggerUpdate();
-					return;
-				}
+		// For multi-line content, always prioritize cursor movement over history navigation.
+		// Only use history navigation when the input is single-line (or empty) and cursor is at position 0.
+		if (!hasMultipleVisualLines && (isEmpty || cursorPos === 0)) {
+			const navigated = navigateHistoryUp();
+			if (navigated) {
+				updateFilePickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				updateAgentPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				updateRunningAgentsPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				triggerUpdate();
+				return;
 			}
-
-			// Normal cursor movement
-			buffer.moveUp();
-			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			// No need to call triggerUpdate() - buffer.moveUp() already triggers update via scheduleUpdate()
-			return;
 		}
 
+		buffer.moveUp();
+		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		triggerUpdate();
+		return;
+	}
+
+	if (
+		key.downArrow &&
+		!showCommands &&
+		!showFilePicker &&
+		!disableKeyboardNavigation
+	) {
+		flushPendingInput();
+
+		const text = buffer.getFullText();
+		const cursorPos = buffer.getCursorPosition();
+		const isEmpty = text.trim() === '';
+		const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
+
+		// For multi-line content, always prioritize cursor movement over history navigation.
+		// Only use history navigation when the input is single-line (or empty),
+		// cursor is at the end, and we're already in history mode.
 		if (
-			key.downArrow &&
-			!showCommands &&
-			!showFilePicker &&
-			!disableKeyboardNavigation
+			!hasMultipleVisualLines &&
+			(isEmpty || cursorPos === text.length) &&
+			currentHistoryIndex !== -1
 		) {
-			flushPendingInput();
-
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			const isEmpty = text.trim() === '';
-
-			// Terminal-style history navigation:
-			// Only navigate history when cursor is at the very end (position equals text length)
-			// and we're already in history mode (currentHistoryIndex !== -1)
-			// This allows normal cursor movement within the text
-			if (
-				(isEmpty || cursorPos === text.length) &&
-				currentHistoryIndex !== -1
-			) {
-				const navigated = navigateHistoryDown();
-				if (navigated) {
-					updateFilePickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					updateAgentPickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					updateRunningAgentsPickerState(
-						buffer.getFullText(),
-						buffer.getCursorPosition(),
-					);
-					triggerUpdate();
-					return;
-				}
+			const navigated = navigateHistoryDown();
+			if (navigated) {
+				updateFilePickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				updateAgentPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				updateRunningAgentsPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
+				triggerUpdate();
+				return;
 			}
-
-			// Normal cursor movement
-			buffer.moveDown();
-			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
-			// No need to call triggerUpdate() - buffer.moveDown() already triggers update via scheduleUpdate()
-			return;
 		}
+
+		buffer.moveDown();
+		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		triggerUpdate();
+		return;
+	}
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {

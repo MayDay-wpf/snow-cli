@@ -57,6 +57,7 @@ jobs:
             ### What's New
 
             - Fix Some bugs
+            - Add new features of GPT-5.4
 
             ### Installation
             ```bash

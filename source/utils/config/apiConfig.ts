@@ -22,7 +22,7 @@ export interface GeminiThinkingConfig {
 
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
-	effort: 'low' | 'medium' | 'high' | 'xhigh';
+	effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 export interface ApiConfig {
@@ -39,8 +39,10 @@ export interface ApiConfig {
 	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
 	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
+	responsesVerbosity?: 'low' | 'medium' | 'high'; // Responses API text verbosity (default: medium)
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
+	autoCompressThreshold?: number; // Auto compress threshold percentage (default: 80, range: 50-95)
 	showThinking?: boolean; // Show AI thinking process in UI (default: true)
 	// 流式长时无返回超时(单位: 秒,默认: 180)
 	streamIdleTimeoutSec?: number;
@@ -109,6 +111,7 @@ export interface CustomHeadersConfig {
 }
 
 export const DEFAULT_STREAM_IDLE_TIMEOUT_SEC = 180;
+export const DEFAULT_AUTO_COMPRESS_THRESHOLD = 80;
 
 function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {

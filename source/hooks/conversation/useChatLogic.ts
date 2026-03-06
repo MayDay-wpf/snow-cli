@@ -14,7 +14,7 @@ import {
 	shouldAutoCompress,
 	performAutoCompression,
 } from '../../utils/core/autoCompress.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getOpenAiConfig, DEFAULT_AUTO_COMPRESS_THRESHOLD} from '../../utils/config/apiConfig.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {vscodeConnection} from '../../utils/ui/vscodeConnection.js';
@@ -512,7 +512,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		const autoCompressConfig = getOpenAiConfig();
 		if (
 			autoCompressConfig.enableAutoCompress !== false &&
-			shouldAutoCompress(currentContextPercentageRef.current)
+			shouldAutoCompress(currentContextPercentageRef.current, autoCompressConfig.autoCompressThreshold ?? DEFAULT_AUTO_COMPRESS_THRESHOLD)
 		) {
 			setIsCompressing(true);
 			setCompressionError(null);
