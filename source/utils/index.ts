@@ -25,6 +25,7 @@ import './commands/skills.js';
 import './commands/skillsPicker.js';
 import './commands/todoPicker.js';
 import './commands/usage.js';
+import './commands/toolsearch.js';
 import './commands/vulnerability-hunting.js';
 import './commands/yolo.js';
 

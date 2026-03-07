@@ -68,7 +68,8 @@ export function useToolConfirmation(workingDirectory: string) {
 				alwaysApprovedToolsRef.current.has(toolName) ||
 				toolName.startsWith('todo-') ||
 				toolName.startsWith('subagent-') ||
-				toolName === 'askuser-ask_question'
+				toolName === 'askuser-ask_question' ||
+				toolName === 'tool_search'
 			);
 		},
 		[], // No dependencies - ref is always stable

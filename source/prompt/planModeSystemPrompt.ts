@@ -297,7 +297,7 @@ After all phases complete:
 - [Suggested follow-up work]
 \`\`\`
 
-## Available Tools
+PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 
 PLACEHOLDER_FOR_TOOLS_SECTION
 
@@ -429,9 +429,43 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 }
 
 /**
+ * Generate tool discovery section for Plan Mode
+ */
+function getToolDiscoverySection(toolSearchDisabled: boolean): string {
+	if (toolSearchDisabled) {
+		return `## Available Tools
+
+All tools are pre-loaded and available for immediate use. You can call any tool directly without discovery.
+
+**Tool categories:** filesystem, ace, terminal, todo, ide, subagent, codebase, websearch, askuser, notebook, skill`;
+	}
+
+	return `## Tool Discovery (Progressive Loading)
+
+**CRITICAL: Tools are NOT pre-loaded. Use \`tool_search\` to discover and activate tools before using them.**
+
+Call \`tool_search(query="keyword")\` to find tools. Found tools become immediately available. Previously used tools in the conversation are automatically re-loaded.
+
+**Tool categories:**
+- **filesystem** - Read, create, edit files
+- **ace** - Code search, find definitions, references
+- **terminal** - Execute shell commands
+- **todo** - Task management (TODO lists)
+- **ide** - IDE diagnostics (error checking)
+- **subagent** - Delegate tasks to sub-agents
+- **codebase** - Semantic code search
+- **websearch** - Web search
+- **askuser** - Ask user questions
+- **notebook** - Code memory and notes
+- **skill** - Load specialized knowledge
+
+**First action:** Search for the tools you need: \`tool_search(query="filesystem todo subagent")\``;
+}
+
+/**
  * Get the Plan Mode system prompt
  */
-export function getPlanModeSystemPrompt(): string {
+export function getPlanModeSystemPrompt(toolSearchDisabled = false): string {
 	const basePrompt = getSystemPromptWithRoleHelper(
 		PLAN_MODE_SYSTEM_PROMPT,
 		'You are Snow AI CLI',
@@ -446,9 +480,13 @@ export function getPlanModeSystemPrompt(): string {
 	// Get current time info
 	const timeInfo = getCurrentTimeInfo();
 
+	// Generate tool discovery section
+	const toolDiscoverySection = getToolDiscoverySection(toolSearchDisabled);
+
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
 		.replace('PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION', analysisToolsSection)
+		.replace('PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION', toolDiscoverySection)
 		.replace('PLACEHOLDER_FOR_TOOLS_SECTION', availableToolsSection);
 
 	return appendSystemContext(finalPrompt, systemEnv, timeInfo);

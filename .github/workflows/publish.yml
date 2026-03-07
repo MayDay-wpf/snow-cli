@@ -56,8 +56,10 @@ jobs:
 
             ### What's New
 
-            - Fix Some bugs
-            - Add new features of GPT-5.4
+            - Add the Tools Search tool, which is enabled by default. You can use the /tools-search command to start or stop it
+            - Added Undo function when double-clicking ESC to roll back
+            - Optimized Markdown rendering
+            - Unified the processing logic of Hooks
 
             ### Installation
             ```bash

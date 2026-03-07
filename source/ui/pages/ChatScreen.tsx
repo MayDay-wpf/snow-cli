@@ -151,6 +151,14 @@ export default function ChatScreen({
 			}
 		},
 	);
+	const [toolSearchDisabled, setToolSearchDisabled] = useState(() => {
+		try {
+			const saved = localStorage.getItem('snow-tool-search-disabled');
+			return saved === 'true';
+		} catch {
+			return false;
+		}
+	});
 	const [simpleMode, setSimpleMode] = useState(() => {
 		// Load simple mode from config
 		return getSimpleMode();
@@ -316,6 +324,7 @@ export default function ChatScreen({
 			import('../../utils/commands/models.js'),
 			import('../../utils/commands/worktree.js'),
 			import('../../utils/commands/newPrompt.js'),
+			import('../../utils/commands/toolsearch.js'),
 		])
 			.then(async () => {
 				// Load and register custom commands from user directory
@@ -604,6 +613,18 @@ export default function ChatScreen({
 		}
 	}, [vulnerabilityHuntingMode]);
 
+	// Persist tool search disabled to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem(
+				'snow-tool-search-disabled',
+				String(toolSearchDisabled),
+			);
+		} catch {
+			// Ignore localStorage errors
+		}
+	}, [toolSearchDisabled]);
+
 	// Sync simple mode from config periodically to reflect theme settings changes
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -783,6 +804,7 @@ export default function ChatScreen({
 		yoloMode,
 		planMode,
 		vulnerabilityHuntingMode,
+		toolSearchDisabled,
 		saveMessage,
 		clearSavedMessages,
 		setRemountKey,
@@ -855,6 +877,7 @@ export default function ChatScreen({
 		setYoloMode,
 		setPlanMode,
 		setVulnerabilityHuntingMode,
+		setToolSearchDisabled,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		currentContextPercentageRef,
@@ -1491,6 +1514,7 @@ export default function ChatScreen({
 						setPlanMode={setPlanMode}
 						vulnerabilityHuntingMode={vulnerabilityHuntingMode}
 						setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
+						toolSearchDisabled={toolSearchDisabled}
 						contextUsage={
 							streamingState.contextUsage
 								? {

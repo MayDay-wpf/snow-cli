@@ -47,6 +47,7 @@ export interface ChatCompletionOptions {
 	disableThinking?: boolean; // 禁用思考功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -106,6 +107,7 @@ function convertToOpenAIMessages(
 	customSystemPromptOverride?: string[],
 	planMode: boolean = false, // When true, use Plan mode system prompt
 	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	toolSearchDisabled: boolean = false,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompts = customSystemPromptOverride;
 
@@ -234,7 +236,7 @@ function convertToOpenAIMessages(
 				} as ChatCompletionMessageParam,
 				{
 					role: 'user',
-					content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+					content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
 				} as ChatCompletionMessageParam,
 				...result,
 			];
@@ -256,7 +258,7 @@ function convertToOpenAIMessages(
 		result = [
 			{
 				role: 'system',
-				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
@@ -500,6 +502,7 @@ export async function* createStreamingChatCompletion(
 					customSystemPromptContent,
 					options.planMode || false, // Pass planMode to use correct system prompt
 					options.vulnerabilityHuntingMode || false, // Pass vulnerabilityHuntingMode to use correct system prompt
+					options.toolSearchDisabled || false,
 				),
 				stream: true,
 				stream_options: {include_usage: true},

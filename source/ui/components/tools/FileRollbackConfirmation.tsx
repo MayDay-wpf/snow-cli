@@ -4,13 +4,15 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
 
+export type RollbackMode = 'conversation' | 'both' | 'files';
+
 type Props = {
 	fileCount: number;
 	filePaths: string[];
 	notebookCount?: number;
 	previewSessionId?: string;
 	previewTargetMessageIndex?: number;
-	onConfirm: (rollbackFiles: boolean | null, selectedFiles?: string[]) => void; // null means cancel, selectedFiles for partial rollback
+	onConfirm: (mode: RollbackMode | null, selectedFiles?: string[]) => void;
 };
 
 export default function FileRollbackConfirmation({
@@ -98,9 +100,10 @@ export default function FileRollbackConfirmation({
 		previewTargetMessageIndex,
 	]);
 
-	const options = [
-		{label: t.fileRollback.yesRollbackFiles, value: true},
-		{label: t.fileRollback.noConversationOnly, value: false},
+	const options: Array<{label: string; value: RollbackMode}> = [
+		{label: t.fileRollback.conversationOnly, value: 'conversation'},
+		{label: t.fileRollback.conversationAndFiles, value: 'both'},
+		{label: t.fileRollback.filesOnly, value: 'files'},
 	];
 
 	useInput((input, key) => {
@@ -168,14 +171,11 @@ export default function FileRollbackConfirmation({
 			if (key.return) {
 				const selectedFilesArray = Array.from(selectedFiles);
 				if (selectedFilesArray.length === 0) {
-					// If no files selected, treat as conversation only
-					onConfirm(false);
+					onConfirm('conversation');
 				} else if (selectedFilesArray.length === filePaths.length) {
-					// All files selected, rollback all
-					onConfirm(true);
+					onConfirm('both');
 				} else {
-					// Partial selection
-					onConfirm(true, selectedFilesArray);
+					onConfirm('both', selectedFilesArray);
 				}
 				return;
 			}
@@ -193,18 +193,16 @@ export default function FileRollbackConfirmation({
 
 			// Enter - confirm selection (only when not in full list mode)
 			if (key.return) {
-				const choice = options[selectedIndex]?.value ?? false;
-				if (choice) {
-					// If user wants to rollback files, pass all selected files
+				const mode = options[selectedIndex]?.value ?? 'conversation';
+				if (mode === 'both' || mode === 'files') {
 					const selectedFilesArray = Array.from(selectedFiles);
 					if (selectedFilesArray.length === filePaths.length) {
-						onConfirm(true);
+						onConfirm(mode);
 					} else {
-						onConfirm(true, selectedFilesArray);
+						onConfirm(mode, selectedFilesArray);
 					}
 				} else {
-					// Conversation only
-					onConfirm(false);
+					onConfirm('conversation');
 				}
 				return;
 			}

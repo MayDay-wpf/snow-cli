@@ -9,6 +9,7 @@ export interface CommandResult {
 		| 'toggleYolo'
 		| 'togglePlan'
 		| 'toggleVulnerabilityHunting'
+		| 'toggleToolSearch'
 		| 'initProject'
 		| 'compact'
 		| 'showSessionPanel'

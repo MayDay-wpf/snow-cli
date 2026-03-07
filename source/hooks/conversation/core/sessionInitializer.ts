@@ -9,11 +9,13 @@ import {getSystemPromptForMode} from '../../../prompt/systemPrompt.js';
  *
  * @param planMode - Plan mode flag
  * @param vulnerabilityHuntingMode - Vulnerability hunting mode flag
+ * @param toolSearchDisabled - Whether tool search is disabled
  * @returns Initialized conversation messages and session info
  */
 export async function initializeConversationSession(
 	planMode: boolean,
 	vulnerabilityHuntingMode: boolean,
+	toolSearchDisabled = false,
 ): Promise<{
 	conversationMessages: ChatMessage[];
 	currentSession: any;
@@ -34,7 +36,7 @@ export async function initializeConversationSession(
 	const conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
 		},
 	];
 

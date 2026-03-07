@@ -289,6 +289,7 @@ type CommandHandlerOptions = {
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -843,8 +844,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 					return newValue;
 				});
-				// Don't add command message to keep UI clean
-			} else if (
+			// Don't add command message to keep UI clean
+		} else if (result.success && result.action === 'toggleToolSearch') {
+				options.setToolSearchDisabled(prev => !prev);
+		} else if (
 				result.success &&
 				result.action === 'initProject' &&
 				result.prompt

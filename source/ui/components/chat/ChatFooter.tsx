@@ -53,6 +53,7 @@ type ChatFooterProps = {
 	setPlanMode: (value: boolean) => void;
 	vulnerabilityHuntingMode: boolean;
 	setVulnerabilityHuntingMode: (value: boolean) => void;
+	toolSearchDisabled: boolean;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -224,6 +225,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						yoloMode={props.yoloMode}
 						planMode={props.planMode}
 						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+						toolSearchDisabled={props.toolSearchDisabled}
 						vscodeConnectionStatus={props.vscodeConnectionStatus}
 						editorContext={props.editorContext}
 						connectionStatus={connectionStatus}

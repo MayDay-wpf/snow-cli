@@ -381,7 +381,7 @@ class ConnectionManager {
 		// Handle rollback confirmation result from Web client (via server)
 		this.connection.on(
 			'receiverollbackconfirmationresult',
-			(result: {rollbackFiles: boolean | null; selectedFiles?: string[]}) => {
+			(result: {rollbackFiles?: boolean | null; rollbackMode?: string; selectedFiles?: string[]}) => {
 				// 回滚确认已给出，必须立即清理待确认状态，避免后续上下文持续携带旧状态
 				this.stateManager.setPendingRollbackConfirmation(null);
 				this.stateManager.notifyMessage('rollback_confirmation_result', {

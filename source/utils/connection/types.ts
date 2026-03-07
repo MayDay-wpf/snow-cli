@@ -76,7 +76,8 @@ export interface SignalRMessageHandlers {
 	receiverollbackmessage: (userMessageOrder: number) => void;
 	receiveresumesession: (sessionId: string) => void;
 	receiverollbackconfirmationresult: (result: {
-		rollbackFiles: boolean | null;
+		rollbackFiles?: boolean | null;
+		rollbackMode?: 'conversation' | 'both' | 'files';
 		selectedFiles?: string[];
 	}) => void;
 	receivefilelistrequest: (requestId: string) => Promise<void>;

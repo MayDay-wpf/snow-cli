@@ -32,6 +32,7 @@ export interface AnthropicOptions {
 	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -214,6 +215,7 @@ function convertToAnthropicMessages(
 	disableThinking: boolean = false, // When true, strip thinking blocks from messages
 	planMode: boolean = false, // When true, use Plan mode system prompt
 	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	toolSearchDisabled: boolean = false,
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
@@ -420,7 +422,7 @@ function convertToAnthropicMessages(
 				content: [
 					{
 						type: 'text',
-						text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+						text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
 						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
 				] as any,
@@ -429,7 +431,7 @@ function convertToAnthropicMessages(
 	} else if (!systemContents && includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemContents = [
-			getSystemPromptForMode(planMode, vulnerabilityHuntingMode),
+			getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
 		];
 	}
 
@@ -684,6 +686,7 @@ export async function* createStreamingAnthropicCompletion(
 				options.disableThinking || false, // Strip thinking blocks when thinking is disabled
 				options.planMode || false, // Use Plan mode system prompt if enabled
 				options.vulnerabilityHuntingMode || false, // Use Vulnerability Hunting mode system prompt if enabled
+				options.toolSearchDisabled || false,
 			);
 
 			// Use persistent userId that remains the same until application restart

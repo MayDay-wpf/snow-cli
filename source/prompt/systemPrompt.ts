@@ -163,11 +163,11 @@ AI: todo-add(content=["Read utils module structure", "Identify refactor targets"
 
 **Remember: TODO is not extra work - it makes your work better and prevents mistakes.**
 
-## Available Tools
+PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 
-**Filesystem (SUPPORTS BATCH OPERATIONS):**
+## Tool Usage Guidelines
 
-**CRITICAL: BOUNDARY-FIRST EDITING**
+**CRITICAL: BOUNDARY-FIRST EDITING** (for filesystem tools)
 
 **MANDATORY WORKFLOW:**
 1. **READ & VERIFY** - Use \`filesystem-read\` to identify COMPLETE units (functions: entire declaration to final closing brace \`}\`, HTML/XML/JSX markup: full opening \`<tag>\` to closing \`</tag>\` pairs, code blocks: ALL matching brackets/braces/parentheses with proper indentation)
@@ -188,11 +188,7 @@ PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 - Instead of adding md instructions to your project too often, you should use this NoteBook tool for documentation
 
 **Terminal:**
-- \`terminal-execute\` - You have a comprehensive understanding of terminal pipe mechanisms and can help users 
-accomplish a wide range of tasks by combining multiple commands using pipe operators (|) 
-and other shell features. Your capabilities include text processing, data filtering, stream 
-manipulation, workflow automation, and complex command chaining to solve sophisticated 
-system administration and data processing challenges.
+- \`terminal-execute\` - You have a comprehensive understanding of terminal pipe mechanisms and can help users accomplish a wide range of tasks by combining multiple commands using pipe operators (|) and other shell features.
 
 **⚠ CRITICAL - SELF-PROTECTION (Node.js Process Safety):**
 This CLI runs as a Node.js process (PID: PLACEHOLDER_FOR_CLI_PID). You MUST NEVER execute commands that kill Node.js processes by name, as doing so will terminate the CLI itself and crash the session. Blocked patterns include:
@@ -209,8 +205,8 @@ Never use broad process-name-based kill commands that would match all Node.js pr
 
 **CRITICAL: Sub-Agents and Skills are COMPLETELY DIFFERENT - DO NOT confuse them!**
 
-- **Sub-Agents** = Other AI assistants you delegate tasks to (subagent-agent_explore, subagent-agent_plan, subagent-agent_general, subagent-agent_analyze, subagent-agent_debug)
-- **Skills** = Knowledge/instructions you load to expand YOUR capabilities (skill-execute)
+- **Sub-Agents** = Other AI assistants you delegate tasks to (search "subagent" to discover available agents)
+- **Skills** = Knowledge/instructions you load to expand YOUR capabilities (search "skill" to discover)
 - **Direction**: Sub-Agents can use Skills, but Skills CANNOT use Sub-Agents
 
 **Sub-Agent Usage:**
@@ -321,8 +317,62 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 	}
 }
 
+/**
+ * Generate tool discovery section based on whether tool search is enabled
+ */
+function getToolDiscoverySection(toolSearchDisabled: boolean): string {
+	if (toolSearchDisabled) {
+		return `## Available Tools
+
+All tools are pre-loaded and available for immediate use. You can call any tool directly without discovery.
+
+**Tool categories:**
+- **filesystem** - Read, create, edit files (supports batch operations)
+- **ace** - Code search: find symbols, definitions, references, text search
+- **terminal** - Execute shell commands
+- **todo** - Task management (TODO lists)
+- **websearch** - Web search and page fetching
+- **ide** - IDE diagnostics (error checking)
+- **notebook** - Code memory and notes
+- **askuser** - Ask user interactive questions
+- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, debug)
+- **codebase** - Semantic code search across entire codebase
+- **skill** - Load specialized knowledge/instructions`;
+	}
+
+	return `## Tool Discovery (Progressive Loading)
+
+**CRITICAL: Tools are NOT pre-loaded. You MUST use \`tool_search\` to discover and activate tools before using them.**
+
+Tools are loaded on-demand to save context. At the start of each conversation, only \`tool_search\` is available. Call it to discover the tools you need. Previously used tools in the conversation are automatically re-loaded.
+
+**How to use:**
+1. Call \`tool_search(query="your search terms")\` to find relevant tools
+2. Found tools become immediately available for the next call
+3. You can search multiple times for different tool categories
+4. Pair \`tool_search\` with action tools when possible (e.g., search + todo-get)
+
+**Available tool categories (search by these keywords):**
+- **filesystem** - Read, create, edit files (supports batch operations)
+- **ace** - Code search: find symbols, definitions, references, text search
+- **terminal** - Execute shell commands
+- **todo** - Task management (TODO lists)
+- **websearch** - Web search and page fetching
+- **ide** - IDE diagnostics (error checking)
+- **notebook** - Code memory and notes
+- **askuser** - Ask user interactive questions
+- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, debug)
+- **codebase** - Semantic code search across entire codebase
+- **skill** - Load specialized knowledge/instructions
+
+**First action pattern:** When you receive a task, immediately search for the tools you need:
+- For coding tasks: \`tool_search(query="filesystem")\` + \`tool_search(query="ace code search")\`
+- For running commands: \`tool_search(query="terminal")\`
+- For complex tasks: \`tool_search(query="todo")\` + \`tool_search(query="filesystem")\``;
+}
+
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
-export function getSystemPrompt(): string {
+export function getSystemPrompt(toolSearchDisabled = false): string {
 	const basePrompt = getSystemPromptWithRoleHelper(
 		SYSTEM_PROMPT_TEMPLATE,
 		'You are Snow AI CLI, an intelligent command-line assistant.',
@@ -337,6 +387,9 @@ export function getSystemPrompt(): string {
 	// Get current time info
 	const timeInfo = getCurrentTimeInfo();
 
+	// Generate tool discovery section
+	const toolDiscoverySection = getToolDiscoverySection(toolSearchDisabled);
+
 	// Replace placeholders with actual content
 	const cliPid = String(process.pid);
 	const finalPrompt = basePrompt
@@ -346,6 +399,7 @@ export function getSystemPrompt(): string {
 			'PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION',
 			platformCommandsSection,
 		)
+		.replace('PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION', toolDiscoverySection)
 		.replace(/PLACEHOLDER_FOR_CLI_PID/g, cliPid);
 
 	return appendSystemContext(finalPrompt, systemEnv, timeInfo);
@@ -355,11 +409,13 @@ export function getSystemPrompt(): string {
  * Get the appropriate system prompt based on mode status
  * @param planMode - Whether Plan mode is enabled
  * @param vulnerabilityHuntingMode - Whether Vulnerability Hunting mode is enabled
+ * @param toolSearchDisabled - Whether Tool Search is disabled (all tools loaded upfront)
  * @returns System prompt string
  */
 export function getSystemPromptForMode(
 	planMode: boolean,
 	vulnerabilityHuntingMode: boolean,
+	toolSearchDisabled = false,
 ): string {
 	// Vulnerability Hunting mode takes precedence over Plan mode
 	if (vulnerabilityHuntingMode) {
@@ -367,12 +423,12 @@ export function getSystemPromptForMode(
 		const {
 			getVulnerabilityHuntingModeSystemPrompt,
 		} = require('./vulnerabilityHuntingModeSystemPrompt.js');
-		return getVulnerabilityHuntingModeSystemPrompt();
+		return getVulnerabilityHuntingModeSystemPrompt(toolSearchDisabled);
 	}
 	if (planMode) {
 		// Import dynamically to avoid circular dependency
 		const {getPlanModeSystemPrompt} = require('./planModeSystemPrompt.js');
-		return getPlanModeSystemPrompt();
+		return getPlanModeSystemPrompt(toolSearchDisabled);
 	}
-	return getSystemPrompt();
+	return getSystemPrompt(toolSearchDisabled);
 }

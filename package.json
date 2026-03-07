@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.6.58",
+	"version": "0.6.59",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -63,7 +63,6 @@
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/diff": "^7.0.2",
 		"@types/fs-extra": "^11.0.4",
-		"@types/markdown-it": "^14.1.2",
 		"@types/marked-terminal": "^6.1.1",
 		"@types/pdf-parse": "^1.1.5",
 		"@types/prettier": "^2.7.3",
@@ -99,9 +98,6 @@
 		"ink-text-input": "^6.0.0",
 		"katex": "^0.16.27",
 		"mammoth": "^1.11.0",
-		"markdown-it": "^14.1.0",
-		"markdown-it-math": "^5.2.1",
-		"markdown-it-terminal": "^0.4.0",
 		"marked": "^15.0.6",
 		"marked-terminal": "^7.3.0",
 		"meow": "^11.0.0",

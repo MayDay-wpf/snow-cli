@@ -21,6 +21,7 @@ export interface UseChatLogicProps {
 	yoloMode: boolean;
 	planMode: boolean;
 	vulnerabilityHuntingMode: boolean;
+	toolSearchDisabled: boolean;
 	saveMessage: (msg: any) => Promise<void>;
 	clearSavedMessages: () => void;
 	setRemountKey: React.Dispatch<React.SetStateAction<number>>;

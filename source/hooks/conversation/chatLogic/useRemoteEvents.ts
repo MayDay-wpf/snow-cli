@@ -1,5 +1,6 @@
 import {useEffect} from 'react';
 import type {UseChatLogicProps} from './types.js';
+import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {executeContextCompression} from '../useCommandHandler.js';
@@ -20,7 +21,7 @@ interface UseRemoteEventsHandlers {
 		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => Promise<void>;
 	handleRollbackConfirm: (
-		rollbackFiles: boolean | null,
+		mode: RollbackMode | null,
 		selectedFiles?: string[],
 	) => Promise<void>;
 }
@@ -279,15 +280,20 @@ export function useRemoteEvents(
 					return;
 				}
 
-				const rollbackFiles =
-					typeof data?.rollbackFiles === 'boolean' ? data.rollbackFiles : null;
+				let mode: RollbackMode | null = null;
+				if (typeof data?.rollbackMode === 'string') {
+					mode = data.rollbackMode as RollbackMode;
+				} else if (typeof data?.rollbackFiles === 'boolean') {
+					mode = data.rollbackFiles ? 'both' : 'conversation';
+				}
+
 				const selectedFiles = Array.isArray(data?.selectedFiles)
 					? data.selectedFiles.filter(
 							(x: unknown): x is string => typeof x === 'string',
 					  )
 					: undefined;
 
-				void handleRollbackConfirm(rollbackFiles, selectedFiles);
+				void handleRollbackConfirm(mode, selectedFiles);
 			},
 		);
 

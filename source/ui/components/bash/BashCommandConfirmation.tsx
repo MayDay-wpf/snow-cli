@@ -186,35 +186,48 @@ export function BashCommandExecutionStatus({
 	// into a ref buffer; a fixed-interval timer flushes the buffer into state,
 	// capping re-render frequency at ~5/s regardless of output speed.
 	const maxStoredOutputLines = 200;
+	const maxLineLength = 500;
 	const [displayOutputLines, setDisplayOutputLines] = useState<string[]>([]);
 	const totalCommittedLineCountRef = useRef(0);
-	const lastSeenInputLineCountRef = useRef(0);
+	const lastSeenOutputLengthRef = useRef(0);
 	const pendingLinesRef = useRef<string[]>([]);
 	const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	// Reset buffers when command changes (avoid mixing outputs across commands).
 	useEffect(() => {
-		lastSeenInputLineCountRef.current = 0;
+		lastSeenOutputLengthRef.current = 0;
 		totalCommittedLineCountRef.current = 0;
 		pendingLinesRef.current = [];
 		setDisplayOutputLines([]);
 	}, [command]);
 
-	// Accumulate new output lines into the pending buffer (no setState here).
+	// Accumulate only NEW output entries into the pending buffer (no setState here).
+	// Only slices from the last-seen index to avoid re-processing the entire array.
 	useEffect(() => {
-		const incomingLines = output
-			.flatMap(line => line.split(/\r?\n/))
-			.map(line => sanitizePreviewLine(line))
-			.filter(line => line.length > 0);
-
-		const prevCount = lastSeenInputLineCountRef.current;
-		if (incomingLines.length <= prevCount) {
+		const prevLen = lastSeenOutputLengthRef.current;
+		if (output.length <= prevLen) {
 			return;
 		}
+		const newEntries = output.slice(prevLen);
+		lastSeenOutputLengthRef.current = output.length;
 
-		const newLines = incomingLines.slice(prevCount);
-		lastSeenInputLineCountRef.current = incomingLines.length;
-		pendingLinesRef.current.push(...newLines);
+		for (const entry of newEntries) {
+			const lines = entry.split(/\r?\n/);
+			for (const raw of lines) {
+				const capped =
+					raw.length > maxLineLength ? raw.slice(0, maxLineLength) : raw;
+				const cleaned = sanitizePreviewLine(capped);
+				if (cleaned.length > 0) {
+					pendingLinesRef.current.push(cleaned);
+				}
+			}
+		}
+
+		if (pendingLinesRef.current.length > maxStoredOutputLines * 2) {
+			pendingLinesRef.current = pendingLinesRef.current.slice(
+				-maxStoredOutputLines,
+			);
+		}
 	}, [output]);
 
 	// Fixed-interval flush: commit buffered lines to render state.

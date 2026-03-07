@@ -28,7 +28,7 @@ export interface HookHandlerResult {
  *
  * 退出码规则:
  * - 0: 通过,正常继续
- * - 1: 警告,将stderr追加到消息中发送给AI
+ * - 1: 警告,将stderr替代原始消息发送给AI
  * - 2+: 严重错误,阻止发送,直接显示给用户
  *
  * @param hookResult - Hook执行结果
@@ -63,13 +63,11 @@ export function handleHookResult(
 	const {exitCode, command, output, error} = commandError;
 
 	if (exitCode === 1) {
-		// 警告: 追加结构化数据到消息,发送给AI
-		const combinedOutput =
-			[output, error].filter(Boolean).join('\n\n') || '(no output)';
-		const warningMessage = `\n\n[Hook Command Warning]\nCommand: ${command}\nOutput:\n${combinedOutput}`;
+		// 警告: stderr/stdout 替代原始消息发送给AI（优先 stderr，其次 stdout）
+		const replacedMessage = error || output || `[Hook Command Warning] Command: ${command} exited with code 1`;
 		return {
 			shouldContinue: true,
-			modifiedMessage: originalMessage + warningMessage,
+			modifiedMessage: replacedMessage,
 		};
 	} else if (exitCode >= 2 || exitCode < 0) {
 		// 严重错误或异常: 返回结构化数据,由UI组件渲染

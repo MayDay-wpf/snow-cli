@@ -535,7 +535,8 @@ class AcpManager {
 				approvedToolsSet.has(toolName) ||
 				toolName.startsWith('todo-') ||
 				toolName.startsWith('subagent-') ||
-				toolName === 'askuser-ask_question';
+				toolName === 'askuser-ask_question' ||
+				toolName === 'tool_search';
 
 			// 创建单个工具批准的回调
 			const addToAlwaysApproved = (toolName: string) => {

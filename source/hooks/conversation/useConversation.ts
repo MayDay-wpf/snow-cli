@@ -6,7 +6,8 @@ import {
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {collectAllMCPTools} from '../../utils/execution/mcpToolsManager.js';
+import {collectAllMCPTools, getMCPServicesInfo, type MCPTool} from '../../utils/execution/mcpToolsManager.js';
+import {toolSearchService} from '../../utils/execution/toolSearchService.js';
 import {
 	executeToolCalls,
 	type ToolCall,
@@ -80,6 +81,7 @@ export type ConversationHandlerOptions = {
 	yoloModeRef: React.MutableRefObject<boolean>;
 	planMode?: boolean; // Plan mode flag (optional, defaults to false)
 	vulnerabilityHuntingMode?: boolean; // Vulnerability Hunting mode flag (optional, defaults to false)
+	toolSearchDisabled?: boolean; // When true, bypass progressive tool loading and send all tools
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean; // Optional flag to use basicModel instead of advancedModel
 	getPendingMessages?: () => Array<{
@@ -142,10 +144,29 @@ export async function handleConversationWithTools(
 	let {conversationMessages} = await initializeConversationSession(
 		options.planMode || false,
 		options.vulnerabilityHuntingMode || false,
+		options.toolSearchDisabled || false,
 	);
 
-	// Collect all MCP tools
-	const mcpTools = await collectAllMCPTools();
+	// Collect all MCP tools and service metadata (for tool_search awareness)
+	const allMCPTools = await collectAllMCPTools();
+	const servicesInfo = await getMCPServicesInfo();
+	toolSearchService.updateRegistry(allMCPTools, servicesInfo);
+
+	let activeTools: MCPTool[];
+	let discoveredToolNames: Set<string>;
+	const useToolSearch = !options.toolSearchDisabled;
+
+	if (useToolSearch) {
+		// Progressive tool loading: start with tool_search + previously used tools
+		discoveredToolNames = toolSearchService.extractUsedToolNames(
+			conversationMessages as any[],
+		);
+		activeTools = toolSearchService.buildActiveTools(discoveredToolNames);
+	} else {
+		// Tool search disabled: send all tools directly
+		discoveredToolNames = new Set<string>();
+		activeTools = allMCPTools;
+	}
 
 	// LAYER 3 PROTECTION: Clean orphaned tool_calls before sending to API
 	// This prevents API errors if session has incomplete tool_calls due to force quit
@@ -304,12 +325,13 @@ export async function handleConversationWithTools(
 								messages: conversationMessages,
 								temperature: 0,
 								max_tokens: config.maxTokens || 4096,
-								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								tools: activeTools.length > 0 ? activeTools : undefined,
 								sessionId: currentSession?.id,
 								// Disable thinking for basicModel (e.g., init command)
 								disableThinking: options.useBasicModel,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
 								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
+								toolSearchDisabled: options.toolSearchDisabled,
 							},
 							controller.signal,
 							onRetry,
@@ -320,9 +342,10 @@ export async function handleConversationWithTools(
 								model,
 								messages: conversationMessages,
 								temperature: 0,
-								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								tools: activeTools.length > 0 ? activeTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
 								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
+								toolSearchDisabled: options.toolSearchDisabled,
 							},
 							controller.signal,
 							onRetry,
@@ -333,7 +356,7 @@ export async function handleConversationWithTools(
 								model,
 								messages: conversationMessages,
 								temperature: 0,
-								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								tools: activeTools.length > 0 ? activeTools : undefined,
 								tool_choice: 'auto',
 								prompt_cache_key: cacheKey, // Use session ID as cache key
 								// Don't pass reasoning for basicModel (small models may not support it)
@@ -341,6 +364,7 @@ export async function handleConversationWithTools(
 								reasoning: options.useBasicModel ? null : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
 								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
+								toolSearchDisabled: options.toolSearchDisabled,
 							},
 							controller.signal,
 							onRetry,
@@ -350,9 +374,10 @@ export async function handleConversationWithTools(
 								model,
 								messages: conversationMessages,
 								temperature: 0,
-								tools: mcpTools.length > 0 ? mcpTools : undefined,
+								tools: activeTools.length > 0 ? activeTools : undefined,
 								planMode: options.planMode, // Pass planMode to use correct system prompt
 								vulnerabilityHuntingMode: options.vulnerabilityHuntingMode, // Pass vulnerabilityHuntingMode to use correct system prompt
+								toolSearchDisabled: options.toolSearchDisabled,
 							},
 							controller.signal,
 							onRetry,
@@ -1409,6 +1434,31 @@ export async function handleConversationWithTools(
 					}
 					freeEncoder();
 					break;
+				}
+
+				// Progressive tool loading: expand activeTools when tool_search was called
+				if (useToolSearch && receivedToolCalls) {
+					for (const tc of receivedToolCalls) {
+						if (tc.function.name === 'tool_search') {
+							try {
+								const searchArgs = JSON.parse(tc.function.arguments || '{}');
+								const {matchedToolNames} = toolSearchService.search(
+									searchArgs.query || '',
+								);
+								for (const name of matchedToolNames) {
+									if (!discoveredToolNames.has(name)) {
+										discoveredToolNames.add(name);
+										const tool = toolSearchService.getToolByName(name);
+										if (tool) {
+											activeTools.push(tool);
+										}
+									}
+								}
+							} catch {
+								// Ignore parse errors
+							}
+						}
+					}
 				}
 
 				// CRITICAL: 在压缩前，必须先将 toolResults 保存到 conversationMessages 和会话文件

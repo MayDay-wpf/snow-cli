@@ -1,5 +1,6 @@
 import {useEffect} from 'react';
 import type {UseChatLogicProps} from './types.js';
+import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
@@ -40,6 +41,7 @@ export function useRollback(props: UseChatLogicProps) {
 	const performRollback = async (
 		selectedIndex: number,
 		rollbackFiles: boolean,
+		rollbackConversation: boolean,
 		selectedFiles?: string[],
 	) => {
 		const currentSession = sessionManager.getCurrentSession();
@@ -63,6 +65,27 @@ export function useRollback(props: UseChatLogicProps) {
 			} catch (error) {
 				console.error('Failed to rollback notebooks:', error);
 			}
+		}
+
+		if (!rollbackConversation) {
+			if (rollbackFiles && currentSession) {
+				await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
+					currentSession.id,
+					selectedIndex,
+				);
+
+				const snapshots = await hashBasedSnapshotManager.listSnapshots(
+					currentSession.id,
+				);
+				const counts = new Map<number, number>();
+				for (const snapshot of snapshots) {
+					counts.set(snapshot.messageIndex, snapshot.fileCount);
+				}
+				snapshotState.setSnapshotFileCount(counts);
+			}
+
+			snapshotState.setPendingRollback(null);
+			return;
 		}
 
 		if (currentSession) {
@@ -274,21 +297,24 @@ export function useRollback(props: UseChatLogicProps) {
 				text: cleanIDEContext(message),
 				images: images,
 			});
-			await performRollback(selectedIndex, false);
+			await performRollback(selectedIndex, false, true);
 		}
 	};
 
 	const handleRollbackConfirm = async (
-		rollbackFiles: boolean | null,
+		mode: RollbackMode | null,
 		selectedFiles?: string[],
 	) => {
-		if (rollbackFiles === null) {
+		if (mode === null) {
 			snapshotState.setPendingRollback(null);
 			return;
 		}
 
+		const shouldRollbackFiles = mode === 'both' || mode === 'files';
+		const shouldRollbackConversation = mode === 'both' || mode === 'conversation';
+
 		if (snapshotState.pendingRollback) {
-			if (snapshotState.pendingRollback.message) {
+			if (shouldRollbackConversation && snapshotState.pendingRollback.message) {
 				setRestoreInputContent({
 					text: snapshotState.pendingRollback.message,
 					images: snapshotState.pendingRollback.images,
@@ -298,15 +324,16 @@ export function useRollback(props: UseChatLogicProps) {
 			if (snapshotState.pendingRollback.crossSessionRollback) {
 				const {originalSessionId} = snapshotState.pendingRollback;
 
-				if (rollbackFiles) {
+				if (shouldRollbackFiles) {
 					await performRollback(
 						snapshotState.pendingRollback.messageIndex,
 						true,
+						shouldRollbackConversation,
 						selectedFiles,
 					);
 				}
 
-				if (originalSessionId) {
+				if (shouldRollbackConversation && originalSessionId) {
 					try {
 						const originalSession = await sessionManager.loadSession(
 							originalSessionId,
@@ -343,13 +370,16 @@ export function useRollback(props: UseChatLogicProps) {
 						console.error('Failed to switch to original session:', error);
 						snapshotState.setPendingRollback(null);
 					}
+				} else if (!shouldRollbackConversation) {
+					snapshotState.setPendingRollback(null);
 				} else {
 					snapshotState.setPendingRollback(null);
 				}
 			} else {
 				await performRollback(
 					snapshotState.pendingRollback.messageIndex,
-					rollbackFiles,
+					shouldRollbackFiles,
+					shouldRollbackConversation,
 					selectedFiles,
 				);
 			}

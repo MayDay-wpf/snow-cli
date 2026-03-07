@@ -105,12 +105,18 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.permissions || 'Manage tool permissions',
 			},
-			{
-				name: 'vulnerability-hunting',
-				description:
-					t.commandPanel.commands.vulnerabilityHunting ||
-					'Toggle vulnerability hunting mode',
-			},
+		{
+			name: 'vulnerability-hunting',
+			description:
+				t.commandPanel.commands.vulnerabilityHunting ||
+				'Toggle vulnerability hunting mode',
+		},
+		{
+			name: 'tool-search',
+			description:
+				t.commandPanel.commands.toolSearch ||
+				'Toggle Tool Search (progressive tool loading)',
+		},
 			{
 				name: 'worktree',
 				description:

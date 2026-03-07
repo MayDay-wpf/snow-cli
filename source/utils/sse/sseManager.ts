@@ -600,7 +600,8 @@ class SSEManager {
 			approvedToolsSet.has(toolName) ||
 			toolName.startsWith('todo-') ||
 			toolName.startsWith('subagent-') ||
-			toolName === 'askuser-ask_question';
+			toolName === 'askuser-ask_question' ||
+			toolName === 'tool_search';
 
 		// 添加到自动批准列表
 		const addMultipleToAlwaysApproved = (toolNames: string[]) => {
