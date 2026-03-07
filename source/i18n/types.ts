@@ -938,7 +938,7 @@ export type TranslationKeys = {
 	yoloModeActive: string;
 	planModeActive: string;
 	vulnerabilityHuntingModeActive: string;
-	toolSearchDisabled: string;
+	toolSearchEnabled: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

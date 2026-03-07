@@ -938,8 +938,8 @@ export const zhTW: TranslationKeys = {
 		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
-		toolSearchDisabled:
-			'⊘ 工具搜尋已關閉 - 全量載入工具（上下文消耗更高）',
+		toolSearchEnabled:
+			'♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
 		tokens: ' 個token',
 		cached: '已快取',
 		newCache: '新快取',

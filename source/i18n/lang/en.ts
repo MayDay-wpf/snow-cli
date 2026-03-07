@@ -991,8 +991,8 @@ export const en: TranslationKeys = {
 			'⚐ Plan mode active - Specialized planning and coordination agent',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
-		toolSearchDisabled:
-			'⊘ Tool Search OFF - All tools loaded upfront (higher context usage)',
+		toolSearchEnabled:
+			'♾︎ Tool Search ON - Tools loaded on demand',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

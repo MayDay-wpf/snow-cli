@@ -33,7 +33,14 @@ await esbuild.build({
 	format: 'esm',
 	outfile: 'bundle/cli.mjs',
 	banner: {
-		js: `import { createRequire as _createRequire } from 'module';
+		js: `// Suppress DEP0040 (punycode) warning triggered by node-fetch -> whatwg-url -> tr46
+const __origEmit = process.emit;
+process.emit = function(name, data, ...args) {
+  if (name === 'warning' && data?.name === 'DeprecationWarning' && data?.code === 'DEP0040') return false;
+  return __origEmit.call(this, name, data, ...args);
+};
+
+import { createRequire as _createRequire } from 'module';
 import { fileURLToPath as _fileURLToPath } from 'url';
 const __snow_raw_require = _createRequire(import.meta.url);
 const require = Object.assign((moduleName) => {

@@ -937,8 +937,8 @@ export const zh: TranslationKeys = {
 		planModeActive: '⚐ Plan 模式已激活 - 专业规划与协调助手',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting 模式已激活 - 专注漏洞挖掘与安全分析',
-		toolSearchDisabled:
-			'⊘ 工具搜索已关闭 - 全量加载工具（上下文消耗更高）',
+		toolSearchEnabled:
+			'♾︎ 工具搜索已开启 - 按需搜索加载工具',
 		tokens: ' 个token',
 		cached: '已缓存',
 		newCache: '新缓存',

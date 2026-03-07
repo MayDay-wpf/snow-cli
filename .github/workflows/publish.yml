@@ -56,10 +56,7 @@ jobs:
 
             ### What's New
 
-            - Add the Tools Search tool, which is enabled by default. You can use the /tools-search command to start or stop it
-            - Added Undo function when double-clicking ESC to roll back
-            - Optimized Markdown rendering
-            - Unified the processing logic of Hooks
+            - Tool search is disabled by default, with persistent state, optimized markdown rendering, and some warnings blocked.
 
             ### Installation
             ```bash

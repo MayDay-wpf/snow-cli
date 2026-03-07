@@ -47,6 +47,7 @@ import {
 	createSkillTemplate,
 } from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getToolSearchEnabled, setToolSearchEnabled as persistToolSearchEnabled} from '../../utils/config/projectSettings.js';
 import {getSimpleMode} from '../../utils/config/themeConfig.js';
 import {getAllProfiles} from '../../utils/config/configManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
@@ -152,12 +153,7 @@ export default function ChatScreen({
 		},
 	);
 	const [toolSearchDisabled, setToolSearchDisabled] = useState(() => {
-		try {
-			const saved = localStorage.getItem('snow-tool-search-disabled');
-			return saved === 'true';
-		} catch {
-			return false;
-		}
+		return !getToolSearchEnabled();
 	});
 	const [simpleMode, setSimpleMode] = useState(() => {
 		// Load simple mode from config
@@ -613,16 +609,9 @@ export default function ChatScreen({
 		}
 	}, [vulnerabilityHuntingMode]);
 
-	// Persist tool search disabled to localStorage
+	// Persist tool search state to project .snow/settings.json
 	useEffect(() => {
-		try {
-			localStorage.setItem(
-				'snow-tool-search-disabled',
-				String(toolSearchDisabled),
-			);
-		} catch {
-			// Ignore localStorage errors
-		}
+		persistToolSearchEnabled(!toolSearchDisabled);
 	}, [toolSearchDisabled]);
 
 	// Sync simple mode from config periodically to reflect theme settings changes

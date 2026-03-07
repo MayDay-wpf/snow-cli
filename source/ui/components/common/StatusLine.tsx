@@ -96,7 +96,7 @@ export default function StatusLine({
 	yoloMode = false,
 	planMode = false,
 	vulnerabilityHuntingMode = false,
-	toolSearchDisabled = false,
+	toolSearchDisabled = true,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -117,7 +117,7 @@ export default function StatusLine({
 		yoloMode ||
 		planMode ||
 		vulnerabilityHuntingMode ||
-		toolSearchDisabled ||
+		!toolSearchDisabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
@@ -159,9 +159,9 @@ export default function StatusLine({
 			statusItems.push({text: '⍨ Vuln Hunt', color: '#de409aff'});
 		}
 
-		// Tool Search 关闭提示
-		if (toolSearchDisabled) {
-			statusItems.push({text: '⊘ ToolSearch OFF', color: theme.colors.warning});
+		// Tool Search 开启提示
+		if (!toolSearchDisabled) {
+			statusItems.push({text: '♾︎ ToolSearch ON', color: theme.colors.menuInfo});
 		}
 
 		// IDE连接状态
@@ -459,11 +459,11 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* Tool Search 关闭提示 */}
-			{toolSearchDisabled && (
+			{/* Tool Search 开启提示 */}
+			{!toolSearchDisabled && (
 				<Box>
-					<Text color={theme.colors.warning} dimColor>
-						{t.chatScreen.toolSearchDisabled}
+					<Text color={theme.colors.menuInfo} dimColor>
+						{t.chatScreen.toolSearchEnabled}
 					</Text>
 				</Box>
 			)}
