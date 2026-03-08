@@ -33,14 +33,7 @@ await esbuild.build({
 	format: 'esm',
 	outfile: 'bundle/cli.mjs',
 	banner: {
-		js: `// Suppress DEP0040 (punycode) warning triggered by node-fetch -> whatwg-url -> tr46
-const __origEmit = process.emit;
-process.emit = function(name, data, ...args) {
-  if (name === 'warning' && data?.name === 'DeprecationWarning' && data?.code === 'DEP0040') return false;
-  return __origEmit.call(this, name, data, ...args);
-};
-
-import { createRequire as _createRequire } from 'module';
+		js: `import { createRequire as _createRequire } from 'module';
 import { fileURLToPath as _fileURLToPath } from 'url';
 const __snow_raw_require = _createRequire(import.meta.url);
 const require = Object.assign((moduleName) => {
@@ -53,17 +46,22 @@ const require = Object.assign((moduleName) => {
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));
 
-// Pre-load @microsoft/signalr runtime dependencies into require.cache
-// SignalR uses dynamic require() which esbuild cannot bundle statically
-// We load them here so they're available when SignalR tries to require() them
+// Pre-load @microsoft/signalr runtime dependencies into require.cache.
+// SignalR uses dynamic require() which esbuild cannot bundle statically.
+// Avoid eager-loading node-fetch on Node 18+, because that triggers
+// DEP0040 through node-fetch -> whatwg-url -> tr46 -> punycode even though
+// SignalR will use the native fetch implementation when it already exists.
 const __signalr_deps = {
   'abort-controller': require('abort-controller'),
   'eventsource': require('eventsource'),
   'fetch-cookie': require('fetch-cookie'),
-  'node-fetch': require('node-fetch'),
   'tough-cookie': require('tough-cookie'),
   'ws': require('ws')
 };
+
+if (typeof globalThis.fetch === 'undefined') {
+  __signalr_deps['node-fetch'] = require('node-fetch');
+}
 
 // Polyfill for @microsoft/signalr dynamic require
 // SignalR uses: const requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
