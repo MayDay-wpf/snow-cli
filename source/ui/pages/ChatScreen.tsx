@@ -1,56 +1,10 @@
-import React, {
-	useState,
-	useEffect,
-	useRef,
-	useMemo,
-	lazy,
-	Suspense,
-} from 'react';
-import {Box, Text, useInput, Static, useStdout} from 'ink';
-import Spinner from 'ink-spinner';
-import ansiEscapes from 'ansi-escapes';
+import React, {useEffect, useRef} from 'react';
+import {Box, Text} from 'ink';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
-import {configEvents} from '../../utils/config/configEvents.js';
-import {isPickerActive, setPickerActive} from '../../utils/ui/pickerState.js';
 import ChatFooter from '../components/chat/ChatFooter.js';
-import {type Message} from '../components/chat/MessageList.js';
-import PendingMessages from '../components/chat/PendingMessages.js';
-import ToolConfirmation from '../components/tools/ToolConfirmation.js';
-import AskUserQuestion from '../components/special/AskUserQuestion.js';
-import {
-	BashCommandConfirmation,
-	BashCommandExecutionStatus,
-} from '../components/bash/BashCommandConfirmation.js';
-import {CustomCommandExecutionDisplay} from '../components/bash/CustomCommandExecutionDisplay.js';
-import FileRollbackConfirmation from '../components/tools/FileRollbackConfirmation.js';
-import MessageRenderer from '../components/chat/MessageRenderer.js';
-import ChatHeader from '../components/special/ChatHeader.js';
-import LoadingIndicator from '../components/chat/LoadingIndicator.js';
-import {HookErrorDisplay} from '../components/special/HookErrorDisplay.js';
-import type {HookErrorDetails} from '../../utils/execution/hookResultHandler.js';
-
-// Lazy load panel components to reduce initial bundle size
-import PanelsManager from '../components/panels/PanelsManager.js';
-const PermissionsPanel = lazy(
-	() => import('../components/panels/PermissionsPanel.js'),
-);
-const NewPromptPanel = lazy(
-	() => import('../components/panels/NewPromptPanel.js'),
-);
-import {
-	saveCustomCommand,
-	registerCustomCommands,
-} from '../../utils/commands/custom.js';
-import {
-	createSkillFromGenerated,
-	createSkillTemplate,
-} from '../../utils/commands/skills.js';
 import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
-import {getToolSearchEnabled, setToolSearchEnabled as persistToolSearchEnabled} from '../../utils/config/projectSettings.js';
-import {getSimpleMode} from '../../utils/config/themeConfig.js';
 import {getAllProfiles} from '../../utils/config/configManager.js';
-import {sessionManager} from '../../utils/session/sessionManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
 import {useChatLogic} from '../../hooks/conversation/useChatLogic.js';
@@ -65,15 +19,19 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
-import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
-import {validateGitignore} from '../../utils/codebase/gitignoreValidator.js';
-import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
-import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
-import {logger} from '../../utils/core/logger.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
+import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
+import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
+import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
+import {useChatScreenCommands} from './chatScreen/useChatScreenCommands.js';
+import {useChatScreenInputHandler} from './chatScreen/useChatScreenInputHandler.js';
+import {useChatScreenLocalState} from './chatScreen/useChatScreenLocalState.js';
+import {useChatScreenModes} from './chatScreen/useChatScreenModes.js';
+import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLifecycle.js';
+import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
 
-// Commands will be loaded dynamically after mount to avoid blocking initial render
+const MIN_TERMINAL_HEIGHT = 10;
 
 type Props = {
 	autoResume?: boolean;
@@ -88,164 +46,63 @@ export default function ChatScreen({
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
-	const [messages, setMessages] = useState<Message[]>([]);
-	const [isSaving] = useState(false);
-	const [pendingMessages, setPendingMessages] = useState<
-		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
-	>([]);
-	const pendingMessagesRef = useRef<
-		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
-	>([]);
-	const userInterruptedRef = useRef(false); // Track if user manually interrupted via ESC
-	const [remountKey, setRemountKey] = useState(0);
-	const [currentContextPercentage, setCurrentContextPercentage] = useState(0); // Track context percentage from ChatInput
-	const currentContextPercentageRef = useRef(0); // Use ref to avoid closure issues
-	const [isExecutingTerminalCommand, setIsExecutingTerminalCommand] =
-		useState(false); // Track terminal command execution
-	const [customCommandExecution, setCustomCommandExecution] = useState<{
-		commandName: string;
-		command: string;
-		isRunning: boolean;
-		output: string[];
-		exitCode?: number | null;
-		error?: string;
-	} | null>(null); // Track custom command execution state
-
-	// Sync state to ref
-	useEffect(() => {
-		currentContextPercentageRef.current = currentContextPercentage;
-	}, [currentContextPercentage]);
-	const [yoloMode, setYoloMode] = useState(() => {
-		// If enableYolo prop is provided (from --yolo flag), use it
-		if (enableYolo !== undefined) {
-			return enableYolo;
-		}
-		// Otherwise load yolo mode from localStorage on initialization
-		try {
-			const saved = localStorage.getItem('snow-yolo-mode');
-			return saved === 'true';
-		} catch {
-			return false;
-		}
-	});
-	const [planMode, setPlanMode] = useState(() => {
-		// If enablePlan prop is provided (from --yolo-p flag), use it
-		if (enablePlan !== undefined) {
-			return enablePlan;
-		}
-		// Otherwise load plan mode from localStorage on initialization
-		try {
-			const saved = localStorage.getItem('snow-plan-mode');
-			return saved === 'true';
-		} catch {
-			return false;
-		}
-	});
-	const [vulnerabilityHuntingMode, setVulnerabilityHuntingMode] = useState(
-		() => {
-			// Load vulnerability hunting mode from localStorage on initialization
-			try {
-				const saved = localStorage.getItem('snow-vulnerability-hunting-mode');
-				return saved === 'true';
-			} catch {
-				return false;
-			}
-		},
-	);
-	const [toolSearchDisabled, setToolSearchDisabled] = useState(() => {
-		return !getToolSearchEnabled();
-	});
-	const [simpleMode, setSimpleMode] = useState(() => {
-		// Load simple mode from config
-		return getSimpleMode();
-	});
-	const [showThinking, setShowThinking] = useState(() => {
-		// Load showThinking from config (default: true)
-		const config = getOpenAiConfig();
-		return config.showThinking !== false;
-	});
-	const [isCompressing, setIsCompressing] = useState(false);
-	const [compressionError, setCompressionError] = useState<string | null>(null);
-	const [showPermissionsPanel, setShowPermissionsPanel] = useState(false);
-	const [restoreInputContent, setRestoreInputContent] = useState<{
-		text: string;
-		images?: Array<{type: 'image'; data: string; mimeType: string}>;
-	} | null>(null);
-
-	// 输入框草稿：用于输入区域被条件隐藏后恢复时，保持输入内容
-	const [inputDraftContent, setInputDraftContent] = useState<{
-		text: string;
-		images?: Array<{type: 'image'; data: string; mimeType: string}>;
-	} | null>(null);
-	// BashMode sensitive command confirmation state
-	const [bashSensitiveCommand, setBashSensitiveCommand] = useState<{
-		command: string;
-		resolve: (proceed: boolean) => void;
-	} | null>(null);
-	const [suppressLoadingIndicator, setSuppressLoadingIndicator] =
-		useState(false);
-	const hadBashSensitiveCommandRef = useRef(false);
-	// Hook error state for displaying in chat area
-	const [hookError, setHookError] = useState<HookErrorDetails | null>(null);
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
-	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
 	const apiConfig = getOpenAiConfig();
 	const advancedModel = apiConfig.advancedModel || '';
 	const basicModel = apiConfig.basicModel || '';
-	const isInitialMount = useRef(true);
 
-	// Codebase indexing state
-	const [codebaseIndexing, setCodebaseIndexing] = useState(false);
-	const [codebaseProgress, setCodebaseProgress] = useState<{
-		totalFiles: number;
-		processedFiles: number;
-		totalChunks: number;
-		currentFile: string;
-		status: string;
-		error?: string;
-	} | null>(null);
-	const [watcherEnabled, setWatcherEnabled] = useState(false);
-	const [fileUpdateNotification, setFileUpdateNotification] = useState<{
-		file: string;
-		timestamp: number;
-	} | null>(null);
-	const codebaseAgentRef = useRef<CodebaseIndexAgent | null>(null);
-
-	// Hide terminal cursor to prevent flickering
 	useCursorHide();
 
-	// Use custom hooks
+	const {
+		messages,
+		setMessages,
+		isSaving,
+		pendingMessages,
+		setPendingMessages,
+		pendingMessagesRef,
+		userInterruptedRef,
+		remountKey,
+		setRemountKey,
+		setCurrentContextPercentage,
+		currentContextPercentageRef,
+		isExecutingTerminalCommand,
+		setIsExecutingTerminalCommand,
+		customCommandExecution,
+		setCustomCommandExecution,
+		isCompressing,
+		setIsCompressing,
+		compressionError,
+		setCompressionError,
+		showPermissionsPanel,
+		setShowPermissionsPanel,
+		restoreInputContent,
+		setRestoreInputContent,
+		inputDraftContent,
+		setInputDraftContent,
+		bashSensitiveCommand,
+		setBashSensitiveCommand,
+		suppressLoadingIndicator,
+		setSuppressLoadingIndicator,
+		hookError,
+		setHookError,
+		pendingUserQuestion,
+		setPendingUserQuestion,
+		requestUserQuestion,
+	} = useChatScreenLocalState();
+	const {
+		yoloMode,
+		setYoloMode,
+		planMode,
+		setPlanMode,
+		vulnerabilityHuntingMode,
+		setVulnerabilityHuntingMode,
+		toolSearchDisabled,
+		setToolSearchDisabled,
+		simpleMode,
+		showThinking,
+	} = useChatScreenModes({enableYolo, enablePlan});
 	const streamingState = useStreamingState();
-
-	// Sync CLI streaming state to ConnectionManager
-	// This allows ConnectionManager.getInFlightState() to accurately reflect CLI status
-	useEffect(() => {
-		connectionManager.setStreamingState(streamingState.streamStatus);
-	}, [streamingState.streamStatus]);
-
-	// When bash confirmation panel shows/hides, suppress the loading indicator briefly
-	// to avoid visual jitter and stale lines in some terminals.
-	useEffect(() => {
-		const hasPanel = !!bashSensitiveCommand;
-		const hadPanel = hadBashSensitiveCommandRef.current;
-		hadBashSensitiveCommandRef.current = hasPanel;
-
-		if (hasPanel) {
-			setSuppressLoadingIndicator(true);
-			return undefined;
-		}
-
-		if (hadPanel && !hasPanel) {
-			setSuppressLoadingIndicator(true);
-			const timer = setTimeout(() => {
-				setSuppressLoadingIndicator(false);
-			}, 120);
-			return () => clearTimeout(timer);
-		}
-
-		return undefined;
-	}, [bashSensitiveCommand]);
 	const vscodeState = useVSCodeState();
 	const snapshotState = useSnapshotState(messages.length);
 	const bashMode = useBashMode();
@@ -253,477 +110,25 @@ export default function ChatScreen({
 	const backgroundProcesses = useBackgroundProcesses();
 	const panelState = usePanelState();
 	const {hasFocus} = useTerminalFocus();
-
-	// Background process panel state
-	const [selectedProcessIndex, setSelectedProcessIndex] = useState(0);
-
-	// Sort background processes (running first, then by time)
-	const sortedBackgroundProcesses = useMemo(() => {
-		return [...backgroundProcesses.processes].sort((a, b) => {
-			if (a.status === 'running' && b.status !== 'running') return -1;
-			if (a.status !== 'running' && b.status === 'running') return 1;
-			return b.startedAt.getTime() - a.startedAt.getTime();
-		});
-	}, [backgroundProcesses.processes]);
-
-	// Auto-adjust selected index when process count changes
-	useEffect(() => {
-		if (
-			sortedBackgroundProcesses.length > 0 &&
-			selectedProcessIndex >= sortedBackgroundProcesses.length
-		) {
-			setSelectedProcessIndex(sortedBackgroundProcesses.length - 1);
-		}
-	}, [sortedBackgroundProcesses.length, selectedProcessIndex]);
-
-	// Use session save hook
+	const {
+		selectedProcessIndex,
+		setSelectedProcessIndex,
+		sortedBackgroundProcesses,
+	} = useBackgroundProcessSelection(backgroundProcesses.processes);
 	const {saveMessage, clearSavedMessages, initializeFromSession} =
 		useSessionSave();
-
-	// Sync pendingMessages to ref for real-time access in callbacks
-	useEffect(() => {
-		pendingMessagesRef.current = pendingMessages;
-	}, [pendingMessages]);
-
-	// Track if commands are loaded
-	const [commandsLoaded, setCommandsLoaded] = useState(false);
-
-	// Load commands dynamically to avoid blocking initial render
-	useEffect(() => {
-		// Use Promise.all to load all commands in parallel
-		Promise.all([
-			import('../../utils/commands/clear.js'),
-			import('../../utils/commands/profiles.js'),
-			import('../../utils/commands/resume.js'),
-			import('../../utils/commands/mcp.js'),
-			import('../../utils/commands/yolo.js'),
-			import('../../utils/commands/plan.js'),
-			import('../../utils/commands/init.js'),
-			import('../../utils/commands/ide.js'),
-			import('../../utils/commands/compact.js'),
-			import('../../utils/commands/home.js'),
-			import('../../utils/commands/review.js'),
-			import('../../utils/commands/role.js'),
-			import('../../utils/commands/usage.js'),
-			import('../../utils/commands/export.js'),
-			import('../../utils/commands/agent.js'),
-			import('../../utils/commands/todoPicker.js'),
-			import('../../utils/commands/help.js'),
-			import('../../utils/commands/custom.js'),
-			import('../../utils/commands/skills.js'),
-			import('../../utils/commands/quit.js'),
-			import('../../utils/commands/reindex.js'),
-			import('../../utils/commands/codebase.js'),
-			import('../../utils/commands/addDir.js'),
-			import('../../utils/commands/permissions.js'),
-			import('../../utils/commands/backend.js'),
-			import('../../utils/commands/models.js'),
-			import('../../utils/commands/worktree.js'),
-			import('../../utils/commands/newPrompt.js'),
-			import('../../utils/commands/toolsearch.js'),
-		])
-			.then(async () => {
-				// Load and register custom commands from user directory
-				await registerCustomCommands(workingDirectory);
-				setCommandsLoaded(true);
-			})
-			.catch(error => {
-				console.error('Failed to load commands:', error);
-				// Still mark as loaded to allow app to continue
-				setCommandsLoaded(true);
-			});
-	}, []);
-
-	// Auto-start codebase indexing on mount if enabled
-	useEffect(() => {
-		const startCodebaseIndexing = async () => {
-			try {
-				// Always reload config to check for changes (e.g., from /home command)
-				const config = loadCodebaseConfig();
-
-				// Only start if enabled and not already indexing
-				if (!config.enabled || codebaseIndexing) {
-					// If codebase was disabled and agent is running, stop it
-					if (!config.enabled && codebaseAgentRef.current) {
-						logger.info('Codebase feature disabled, stopping agent');
-						await codebaseAgentRef.current.stop();
-						codebaseAgentRef.current.stopWatching();
-						codebaseAgentRef.current = null;
-						setCodebaseIndexing(false);
-						setWatcherEnabled(false);
-					}
-					return;
-				}
-
-				// Check if .gitignore exists before creating agent
-				const validation = validateGitignore(workingDirectory);
-				if (!validation.isValid) {
-					setCodebaseProgress({
-						totalFiles: 0,
-						processedFiles: 0,
-						totalChunks: 0,
-						currentFile: '',
-						status: 'error',
-						error: validation.error,
-					});
-					setWatcherEnabled(false);
-
-					logger.error(validation.error || 'Validation error');
-					return;
-				}
-
-				// Initialize agent
-				const agent = new CodebaseIndexAgent(workingDirectory);
-				codebaseAgentRef.current = agent;
-
-				// Check if indexing is needed
-				const progress = await agent.getProgress();
-
-				// If indexing is already completed, just start watcher for real-time updates
-				// Don't run incremental index on mount as it blocks input
-				if (progress.status === 'completed' && progress.totalChunks > 0) {
-					agent.startWatching(
-						(progressData: {
-							totalFiles: number;
-							processedFiles: number;
-							totalChunks: number;
-							currentFile: string;
-							status: string;
-							error?: string;
-						}) => {
-							setCodebaseProgress({
-								totalFiles: progressData.totalFiles,
-								processedFiles: progressData.processedFiles,
-								totalChunks: progressData.totalChunks,
-								currentFile: progressData.currentFile,
-								status: progressData.status,
-								error: progressData.error,
-							});
-
-							// Handle file update notifications
-							if (progressData.totalFiles === 0 && progressData.currentFile) {
-								setFileUpdateNotification({
-									file: progressData.currentFile,
-									timestamp: Date.now(),
-								});
-
-								// Clear notification after 3 seconds
-								setTimeout(() => {
-									setFileUpdateNotification(null);
-								}, 3000);
-							}
-						},
-					);
-					setWatcherEnabled(true);
-					return;
-				}
-
-				// If watcher was enabled before but indexing not completed, restore it
-				const wasWatcherEnabled = await agent.isWatcherEnabled();
-				if (wasWatcherEnabled) {
-					logger.info('Restoring file watcher from previous session');
-					agent.startWatching(
-						(progressData: {
-							totalFiles: number;
-							processedFiles: number;
-							totalChunks: number;
-							currentFile: string;
-							status: string;
-							error?: string;
-						}) => {
-							setCodebaseProgress({
-								totalFiles: progressData.totalFiles,
-								processedFiles: progressData.processedFiles,
-								totalChunks: progressData.totalChunks,
-								currentFile: progressData.currentFile,
-								status: progressData.status,
-								error: progressData.error,
-							});
-
-							// Handle file update notifications
-							if (progressData.totalFiles === 0 && progressData.currentFile) {
-								setFileUpdateNotification({
-									file: progressData.currentFile,
-									timestamp: Date.now(),
-								});
-
-								// Clear notification after 3 seconds
-								setTimeout(() => {
-									setFileUpdateNotification(null);
-								}, 3000);
-							}
-						},
-					);
-					setWatcherEnabled(true);
-					setCodebaseIndexing(false); // Ensure loading UI is hidden when restoring watcher
-				}
-
-				// Start or resume indexing in background
-				setCodebaseIndexing(true);
-
-				agent.start(
-					(progressData: {
-						totalFiles: number;
-						processedFiles: number;
-						totalChunks: number;
-						currentFile: string;
-						status: string;
-						error?: string;
-					}) => {
-						setCodebaseProgress({
-							totalFiles: progressData.totalFiles,
-							processedFiles: progressData.processedFiles,
-							totalChunks: progressData.totalChunks,
-							currentFile: progressData.currentFile,
-							status: progressData.status,
-							error: progressData.error,
-						});
-
-						// Handle file update notifications (when totalFiles is 0, it's a file update)
-						if (progressData.totalFiles === 0 && progressData.currentFile) {
-							setFileUpdateNotification({
-								file: progressData.currentFile,
-								timestamp: Date.now(),
-							});
-
-							// Clear notification after 3 seconds
-							setTimeout(() => {
-								setFileUpdateNotification(null);
-							}, 3000);
-						}
-
-						// Stop indexing when completed or error
-						if (
-							progressData.status === 'completed' ||
-							progressData.status === 'error'
-						) {
-							setCodebaseIndexing(false);
-
-							// Start file watcher after initial indexing is completed
-							if (progressData.status === 'completed' && agent) {
-								agent.startWatching(
-									(watcherProgressData: {
-										totalFiles: number;
-										processedFiles: number;
-										totalChunks: number;
-										currentFile: string;
-										status: string;
-										error?: string;
-									}) => {
-										setCodebaseProgress({
-											totalFiles: watcherProgressData.totalFiles,
-											processedFiles: watcherProgressData.processedFiles,
-											totalChunks: watcherProgressData.totalChunks,
-											currentFile: watcherProgressData.currentFile,
-											status: watcherProgressData.status,
-											error: watcherProgressData.error,
-										});
-
-										// Handle file update notifications
-										if (
-											watcherProgressData.totalFiles === 0 &&
-											watcherProgressData.currentFile
-										) {
-											setFileUpdateNotification({
-												file: watcherProgressData.currentFile,
-												timestamp: Date.now(),
-											});
-
-											// Clear notification after 3 seconds
-											setTimeout(() => {
-												setFileUpdateNotification(null);
-											}, 3000);
-										}
-									},
-								);
-								setWatcherEnabled(true);
-							}
-						}
-					},
-				);
-			} catch (error) {
-				console.error('Failed to start codebase indexing:', error);
-				setCodebaseIndexing(false);
-			}
-		};
-
-		startCodebaseIndexing();
-
-		// Cleanup on unmount - just stop indexing, don't close database
-		// This allows resuming when returning to chat screen
-		return () => {
-			if (codebaseAgentRef.current) {
-				codebaseAgentRef.current.stop();
-				codebaseAgentRef.current.stopWatching();
-				setWatcherEnabled(false);
-				// Don't call close() - let it resume when returning
-			}
-		};
-	}, []); // Only run once on mount
-
-	// Export stop function for use in commands (like /home)
-	useEffect(() => {
-		// Store global reference to stop function for /home command
-		(global as any).__stopCodebaseIndexing = async () => {
-			if (codebaseAgentRef.current) {
-				await codebaseAgentRef.current.stop();
-				codebaseAgentRef.current.stopWatching();
-				setCodebaseIndexing(false);
-				setWatcherEnabled(false);
-				setCodebaseProgress(null);
-			}
-		};
-
-		return () => {
-			delete (global as any).__stopCodebaseIndexing;
-		};
-	}, []);
-
-	// Persist yolo mode to localStorage
-	useEffect(() => {
-		try {
-			localStorage.setItem('snow-yolo-mode', String(yoloMode));
-		} catch {
-			// Ignore localStorage errors
-		}
-	}, [yoloMode]);
-
-	// Persist plan mode to localStorage
-	useEffect(() => {
-		try {
-			localStorage.setItem('snow-plan-mode', String(planMode));
-		} catch {
-			// Ignore localStorage errors
-		}
-	}, [planMode]);
-
-	// Persist vulnerability hunting mode to localStorage
-	useEffect(() => {
-		try {
-			localStorage.setItem(
-				'snow-vulnerability-hunting-mode',
-				String(vulnerabilityHuntingMode),
-			);
-		} catch {
-			// Ignore localStorage errors
-		}
-	}, [vulnerabilityHuntingMode]);
-
-	// Persist tool search state to project .snow/settings.json
-	useEffect(() => {
-		persistToolSearchEnabled(!toolSearchDisabled);
-	}, [toolSearchDisabled]);
-
-	// Sync simple mode from config periodically to reflect theme settings changes
-	useEffect(() => {
-		const interval = setInterval(() => {
-			const currentSimpleMode = getSimpleMode();
-			if (currentSimpleMode !== simpleMode) {
-				setSimpleMode(currentSimpleMode);
-			}
-		}, 1000); // Check every second
-
-		return () => clearInterval(interval);
-	}, [simpleMode]);
-
-	// Listen to showThinking config changes via event system
-	useEffect(() => {
-		const handleConfigChange = (event: {type: string; value: any}) => {
-			if (event.type === 'showThinking') {
-				setShowThinking(event.value);
-			}
-		};
-
-		configEvents.onConfigChange(handleConfigChange);
-
-		return () => {
-			configEvents.removeConfigChangeListener(handleConfigChange);
-		};
-	}, []);
-
-	// Clear restore input content after it's been used
-	useEffect(() => {
-		if (restoreInputContent !== null) {
-			// Clear after a short delay to ensure ChatInput has processed it
-			const timer = setTimeout(() => {
-				setRestoreInputContent(null);
-			}, 100);
-			return () => clearTimeout(timer);
-		}
-		return undefined;
-	}, [restoreInputContent]);
-
-	// Auto-resume last session when autoResume is true
-	useEffect(() => {
-		if (!autoResume) {
-			// Clear any residual session when entering chat without auto-resume
-			// This ensures a clean start when user hasn't sent first message yet
-			sessionManager.clearCurrentSession();
-			return;
-		}
-
-		const resumeSession = async () => {
-			try {
-				const sessions = await sessionManager.listSessions();
-				if (sessions.length > 0) {
-					// Get the most recent session (already sorted by updatedAt)
-					const latestSession = sessions[0];
-					if (latestSession) {
-						const session = await sessionManager.loadSession(latestSession.id);
-
-						if (session) {
-							// Initialize from session
-							const uiMessages = convertSessionMessagesToUI(session.messages);
-							setMessages(uiMessages);
-							initializeFromSession(session.messages);
-						}
-					}
-				}
-				// If no sessions exist, just stay in chat screen with empty state
-			} catch (error) {
-				// Silently fail - just stay in empty chat screen
-				console.error('Failed to auto-resume session:', error);
-			}
-		};
-
-		resumeSession();
-	}, [autoResume, initializeFromSession]);
-
-	// Clear terminal and remount on terminal width change (like gemini-cli)
-	// Use debounce to avoid flickering during continuous resize
-	useEffect(() => {
-		if (isInitialMount.current) {
-			isInitialMount.current = false;
-			return;
-		}
-
-		const handler = setTimeout(() => {
-			stdout.write(ansiEscapes.clearTerminal);
-			setRemountKey(prev => prev + 1);
-		}, 200); // Wait for resize to stabilize
-
-		return () => {
-			clearTimeout(handler);
-		};
-	}, [terminalWidth]); // stdout 对象可能在每次渲染时变化，移除以避免循环
-
-	// Reload messages from session when remountKey changes (to restore sub-agent messages)
-	useEffect(() => {
-		if (remountKey === 0) return; // Skip initial render
-
-		const reloadMessages = async () => {
-			const currentSession = sessionManager.getCurrentSession();
-			if (currentSession && currentSession.messages.length > 0) {
-				// Convert session messages back to UI format
-				const uiMessages = convertSessionMessagesToUI(currentSession.messages);
-				setMessages(uiMessages);
-			}
-		};
-
-		reloadMessages();
-	}, [remountKey]);
-
-	// Use tool confirmation hook
+	const commandsLoaded = useChatScreenCommands(workingDirectory);
+	const {
+		codebaseIndexing,
+		setCodebaseIndexing,
+		codebaseProgress,
+		setCodebaseProgress,
+		watcherEnabled,
+		setWatcherEnabled,
+		fileUpdateNotification,
+		setFileUpdateNotification,
+		codebaseAgentRef,
+	} = useCodebaseIndexing(workingDirectory);
 	const {
 		pendingToolConfirmation,
 		alwaysApprovedTools,
@@ -733,42 +138,23 @@ export default function ChatScreen({
 		removeFromAlwaysApproved,
 		clearAllAlwaysApproved,
 	} = useToolConfirmation(workingDirectory);
-
-	// State for askuser tool interaction
-	const [pendingUserQuestion, setPendingUserQuestion] = useState<{
-		question: string;
-		options: string[];
-		toolCall: any;
-		resolve: (result: {
-			selected: string | string[];
-			customInput?: string;
-			cancelled?: boolean;
-		}) => void;
-	} | null>(null);
-
-	// Request user question callback for askuser tool
-	const requestUserQuestion = async (
-		question: string,
-		options: string[],
-		toolCall: any,
-	): Promise<{selected: string | string[]; customInput?: string}> => {
-		return new Promise(resolve => {
-			setPendingUserQuestion({
-				question,
-				options,
-				toolCall,
-				resolve,
-			});
-		});
-	};
-
-	// Minimum terminal height required for proper rendering
-	const MIN_TERMINAL_HEIGHT = 10;
 	const handleCommandExecutionRef = useRef<
 		((command: string, result: any) => void) | undefined
 	>(undefined);
 
-	// Use chat logic hook to handle all AI interaction business logic
+	useEffect(() => {
+		connectionManager.setStreamingState(streamingState.streamStatus);
+	}, [streamingState.streamStatus]);
+
+	useChatScreenSessionLifecycle({
+		autoResume,
+		terminalWidth,
+		remountKey,
+		setRemountKey,
+		setMessages,
+		initializeFromSession,
+	});
+
 	const {
 		handleMessageSubmit,
 		processMessage,
@@ -819,7 +205,6 @@ export default function ChatScreen({
 		setFileUpdateNotification,
 		setWatcherEnabled,
 		exitingApplicationText: t.hooks.exitingApplication,
-		// New props for migrated logic
 		commandsLoaded,
 		terminalExecutionState,
 		backgroundProcesses,
@@ -835,6 +220,17 @@ export default function ChatScreen({
 		pendingToolConfirmation,
 	});
 
+	function handleSwitchProfile() {
+		panelState.handleSwitchProfile({
+			isStreaming: streamingState.isStreaming,
+			hasPendingRollback: !!snapshotState.pendingRollback,
+			hasPendingToolConfirmation: !!pendingToolConfirmation,
+			hasPendingUserQuestion: !!pendingUserQuestion,
+		});
+	}
+
+	const handleProfileSelect = panelState.handleProfileSelect;
+
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
 		setMessages,
@@ -848,7 +244,6 @@ export default function ChatScreen({
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
-
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
@@ -883,7 +278,6 @@ export default function ChatScreen({
 		handleCommandExecutionRef.current = handleCommandExecution;
 	}, [handleCommandExecution]);
 
-	// Sync contextUsage to global storage for Web client display
 	useEffect(() => {
 		if (streamingState.contextUsage) {
 			updateGlobalTokenUsage({
@@ -902,134 +296,77 @@ export default function ChatScreen({
 		}
 	}, [streamingState.contextUsage]);
 
-	// ESC key handler to interrupt streaming or close overlays
-	useInput((input, key) => {
-		// Handle background process panel navigation (only when panel is visible)
-		if (backgroundProcesses.showPanel) {
-			// Handle ESC to close panel
-			if (key.escape) {
-				backgroundProcesses.hidePanel();
-				return;
-			}
-
-			// Only handle navigation keys when there are processes to navigate
-			if (sortedBackgroundProcesses.length > 0) {
-				// Handle arrow up/down for process selection
-				if (key.upArrow) {
-					setSelectedProcessIndex(prev =>
-						prev > 0 ? prev - 1 : sortedBackgroundProcesses.length - 1,
-					);
-					return;
-				}
-				if (key.downArrow) {
-					setSelectedProcessIndex(prev =>
-						prev < sortedBackgroundProcesses.length - 1 ? prev + 1 : 0,
-					);
-					return;
-				}
-
-				// Handle Enter to kill selected process
-				if (key.return) {
-					const selectedProcess =
-						sortedBackgroundProcesses[selectedProcessIndex];
-					if (selectedProcess && selectedProcess.status === 'running') {
-						backgroundProcesses.killProcess(selectedProcess.id);
-					}
-					return;
-				}
-			}
-		}
-
-		// Handle Ctrl+B to move terminal command to background
-		if (
-			key.ctrl &&
-			input === 'b' &&
-			terminalExecutionState.state.isExecuting &&
-			!terminalExecutionState.state.isBackgrounded
-		) {
-			// Import background process functions
-			Promise.all([
-				import('../../mcp/bash.js'),
-				import('../../hooks/execution/useBackgroundProcesses.js'),
-			]).then(([{markCommandAsBackgrounded}, {showBackgroundPanel}]) => {
-				markCommandAsBackgrounded();
-				showBackgroundPanel();
-			});
-			terminalExecutionState.moveToBackground();
-			return;
-		}
-
-		// Skip ESC handling when tool confirmation is showing (let ToolConfirmation handle it)
-		if (pendingToolConfirmation) {
-			return;
-		}
-
-		// Skip ESC handling when user question is showing (let AskUserQuestion handle it)
-		if (pendingUserQuestion) {
-			return;
-		}
-
-		// Handle bash sensitive command confirmation
-		if (bashSensitiveCommand) {
-			if (input.toLowerCase() === 'y') {
-				bashSensitiveCommand.resolve(true);
-				setBashSensitiveCommand(null);
-			} else if (input.toLowerCase() === 'n') {
-				bashSensitiveCommand.resolve(false);
-				setBashSensitiveCommand(null);
-			} else if (key.escape) {
-				// Allow ESC to cancel
-				bashSensitiveCommand.resolve(false);
-				setBashSensitiveCommand(null);
-			}
-			return;
-		}
-
-		// Clear hook error on ESC
-		if (hookError && key.escape) {
-			setHookError(null);
-			return;
-		}
-
-		if (snapshotState.pendingRollback) {
-			if (key.escape) {
-				snapshotState.setPendingRollback(null);
-			}
-			return;
-		}
-
-		// Handle panel closing with ESC
-		if (key.escape && panelState.handleEscapeKey()) {
-			return;
-		}
-
-		// If a picker panel in ChatInput consumed this ESC, skip all streaming abort logic.
-		// In ink, multiple useInput hooks fire for the same keypress, so we must coordinate.
-		if (key.escape && isPickerActive()) {
-			// Reset the flag immediately so the next ESC is not blocked
-			setPickerActive(false);
-			return;
-		}
-
-		// Delegate ESC handling to useChatLogic for interrupt logic
-		if (handleEscKey(key, input)) {
-			return;
-		}
+	useChatScreenInputHandler({
+		backgroundProcesses,
+		sortedBackgroundProcesses,
+		selectedProcessIndex,
+		setSelectedProcessIndex,
+		terminalExecutionState,
+		pendingToolConfirmation,
+		pendingUserQuestion,
+		bashSensitiveCommand,
+		setBashSensitiveCommand,
+		hookError,
+		setHookError,
+		snapshotState,
+		panelState,
+		handleEscKey,
 	});
 
-	// Handle profile switching (Ctrl+P shortcut) - delegated to panelState
-	function handleSwitchProfile() {
-		panelState.handleSwitchProfile({
-			isStreaming: streamingState.isStreaming,
-			hasPendingRollback: !!snapshotState.pendingRollback,
-			hasPendingToolConfirmation: !!pendingToolConfirmation,
-			hasPendingUserQuestion: !!pendingUserQuestion,
-		});
-	}
-	// Handle profile selection - delegated to panelState
-	const handleProfileSelect = panelState.handleProfileSelect;
+	const getFilteredProfiles = () => {
+		const allProfiles = getAllProfiles();
+		const query = panelState.profileSearchQuery.toLowerCase();
+		const currentName = panelState.currentProfileName;
+		const profilesWithMemoryState = allProfiles.map(profile => ({
+			...profile,
+			isActive: profile.displayName === currentName,
+		}));
 
-	// Show warning if terminal is too small
+		if (!query) {
+			return profilesWithMemoryState;
+		}
+
+		return profilesWithMemoryState.filter(
+			profile =>
+				profile.name.toLowerCase().includes(query) ||
+				profile.displayName.toLowerCase().includes(query),
+		);
+	};
+
+	const hasBlockingPanel =
+		panelState.showSessionPanel ||
+		panelState.showMcpPanel ||
+		panelState.showUsagePanel ||
+		panelState.showModelsPanel ||
+		panelState.showCustomCommandConfig ||
+		panelState.showSkillsCreation ||
+		panelState.showRoleCreation ||
+		panelState.showRoleDeletion ||
+		panelState.showRoleList ||
+		panelState.showWorkingDirPanel ||
+		panelState.showBranchPanel ||
+		panelState.showDiffReviewPanel ||
+		panelState.showConnectionPanel ||
+		panelState.showNewPromptPanel ||
+		showPermissionsPanel;
+	const shouldShowFooter =
+		!pendingToolConfirmation &&
+		!pendingUserQuestion &&
+		!bashSensitiveCommand &&
+		!terminalExecutionState.state.needsInput &&
+		!hasBlockingPanel &&
+		!snapshotState.pendingRollback;
+	const footerContextUsage = streamingState.contextUsage
+		? {
+				inputTokens: streamingState.contextUsage.prompt_tokens,
+				maxContextTokens: getOpenAiConfig().maxContextTokens || 4000,
+				cacheCreationTokens:
+					streamingState.contextUsage.cache_creation_input_tokens,
+				cacheReadTokens: streamingState.contextUsage.cache_read_input_tokens,
+				cachedTokens: streamingState.contextUsage.cached_tokens,
+		  }
+		: undefined;
+
 	if (terminalHeight < MIN_TERMINAL_HEIGHT) {
 		return (
 			<Box flexDirection="column" padding={2}>
@@ -1056,509 +393,110 @@ export default function ChatScreen({
 
 	return (
 		<Box flexDirection="column" height="100%" width={terminalWidth}>
-			<Static
-				key={remountKey}
-				items={[
-					<ChatHeader
-						key="header"
-						terminalWidth={terminalWidth}
-						simpleMode={simpleMode}
-						workingDirectory={workingDirectory}
-					/>,
-					...messages
-						.filter(m => !m.streaming)
-						.map((message, index, filteredMessages) => {
-							return (
-								<MessageRenderer
-									key={`msg-${index}`}
-									message={message}
-									index={index}
-									filteredMessages={filteredMessages}
-									terminalWidth={terminalWidth}
-									showThinking={showThinking}
-								/>
-							);
-						}),
-				]}
-			>
-				{item => item}
-			</Static>
-
-			{/* Show loading indicator when streaming or saving */}
-			<LoadingIndicator
-				isStreaming={streamingState.isStreaming}
-				isStopping={streamingState.isStopping}
-				isSaving={isSaving}
-				hasPendingToolConfirmation={!!pendingToolConfirmation}
-				hasPendingUserQuestion={!!pendingUserQuestion}
-				hasBlockingOverlay={
-					!!bashSensitiveCommand ||
-					suppressLoadingIndicator ||
-					(bashMode.state.isExecuting && !!bashMode.state.currentCommand) ||
-					(terminalExecutionState.state.isExecuting &&
-						!terminalExecutionState.state.isBackgrounded &&
-						!!terminalExecutionState.state.command) ||
-					(customCommandExecution?.isRunning ?? false)
-				}
-				terminalWidth={terminalWidth}
-				animationFrame={streamingState.animationFrame}
-				retryStatus={streamingState.retryStatus}
-				codebaseSearchStatus={streamingState.codebaseSearchStatus}
-				isReasoning={streamingState.isReasoning}
-				streamTokenCount={streamingState.streamTokenCount}
-				elapsedSeconds={streamingState.elapsedSeconds}
-				currentModel={streamingState.currentModel}
-			/>
-
-			<Box paddingX={1} width={terminalWidth}>
-				<PendingMessages pendingMessages={pendingMessages} />
-			</Box>
-
-			{/* Display Hook error in chat area */}
-			{hookError && (
-				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
-					<HookErrorDisplay details={hookError} />
-				</Box>
-			)}
-
-			{/* Show tool confirmation dialog if pending */}
-			{pendingToolConfirmation && (
-				<ToolConfirmation
-					toolName={
-						pendingToolConfirmation.batchToolNames ||
-						pendingToolConfirmation.tool.function.name
-					}
-					toolArguments={
-						!pendingToolConfirmation.allTools
-							? pendingToolConfirmation.tool.function.arguments
-							: undefined
-					}
-					allTools={pendingToolConfirmation.allTools}
-					onConfirm={pendingToolConfirmation.resolve}
-					onHookError={error => {
-						setHookError(error);
-					}}
-				/>
-			)}
-
-			{/* Show bash sensitive command confirmation if pending */}
-			{bashSensitiveCommand && (
-				<Box paddingX={1} width={terminalWidth}>
-					<BashCommandConfirmation
-						command={bashSensitiveCommand.command}
-						onConfirm={bashSensitiveCommand.resolve}
-						terminalWidth={terminalWidth}
-					/>
-				</Box>
-			)}
-
-			{/* Show bash command execution status */}
-			{bashMode.state.isExecuting && bashMode.state.currentCommand && (
-				<Box paddingX={1} width={terminalWidth}>
-					<BashCommandExecutionStatus
-						command={bashMode.state.currentCommand}
-						timeout={bashMode.state.currentTimeout || 30000}
-						terminalWidth={terminalWidth}
-						output={bashMode.state.output}
-					/>
-				</Box>
-			)}
-
-			{/* Show custom command execution status */}
-			{customCommandExecution && (
-				<Box paddingX={1} width={terminalWidth}>
-					<CustomCommandExecutionDisplay
-						command={customCommandExecution.command}
-						commandName={customCommandExecution.commandName}
-						isRunning={customCommandExecution.isRunning}
-						output={customCommandExecution.output}
-						exitCode={customCommandExecution.exitCode}
-						error={customCommandExecution.error}
-					/>
-				</Box>
-			)}
-
-			{/* Show terminal-execute tool execution status */}
-			{terminalExecutionState.state.isExecuting &&
-				!terminalExecutionState.state.isBackgrounded &&
-				terminalExecutionState.state.command && (
-					<Box paddingX={1} width={terminalWidth}>
-						<BashCommandExecutionStatus
-							command={terminalExecutionState.state.command}
-							timeout={terminalExecutionState.state.timeout || 30000}
-							terminalWidth={terminalWidth}
-							output={terminalExecutionState.state.output}
-							needsInput={terminalExecutionState.state.needsInput}
-							inputPrompt={terminalExecutionState.state.inputPrompt}
-						/>
-					</Box>
-				)}
-
-			{/* Show user question panel if askuser tool is called */}
-			{pendingUserQuestion && (
-				<AskUserQuestion
-					question={pendingUserQuestion.question}
-					options={pendingUserQuestion.options}
-					onAnswer={handleUserQuestionAnswer}
-				/>
-			)}
-
-			<PanelsManager
+			<ChatScreenConversationView
+				remountKey={remountKey}
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
-				showSessionPanel={panelState.showSessionPanel}
-				showMcpPanel={panelState.showMcpPanel}
-				showUsagePanel={panelState.showUsagePanel}
-				showModelsPanel={panelState.showModelsPanel}
-				showCustomCommandConfig={panelState.showCustomCommandConfig}
-				showSkillsCreation={panelState.showSkillsCreation}
-				showRoleCreation={panelState.showRoleCreation}
-				showRoleDeletion={panelState.showRoleDeletion}
-				showRoleList={panelState.showRoleList}
-				showWorkingDirPanel={panelState.showWorkingDirPanel}
-				showBranchPanel={panelState.showBranchPanel}
-				showDiffReviewPanel={panelState.showDiffReviewPanel}
-				showConnectionPanel={panelState.showConnectionPanel}
-				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
-				diffReviewMessages={messages}
-				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
-				advancedModel={advancedModel}
-				basicModel={basicModel}
-				setShowSessionPanel={panelState.setShowSessionPanel}
-				setShowModelsPanel={panelState.setShowModelsPanel}
-				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
-				setShowSkillsCreation={panelState.setShowSkillsCreation}
-				setShowRoleCreation={panelState.setShowRoleCreation}
-				setShowRoleDeletion={panelState.setShowRoleDeletion}
-				setShowRoleList={panelState.setShowRoleList}
-				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
-				setShowBranchPanel={panelState.setShowBranchPanel}
-				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
-				setShowConnectionPanel={panelState.setShowConnectionPanel}
-				handleSessionPanelSelect={handleSessionPanelSelect}
-				onCustomCommandSave={async (
-					name,
-					command,
-					type,
-					location,
-					description,
-				) => {
-					await saveCustomCommand(
-						name,
-						command,
-						type,
-						description,
-						location,
-						workingDirectory,
-					);
-					await registerCustomCommands(workingDirectory);
-					panelState.setShowCustomCommandConfig(false);
-					const typeDesc =
-						type === 'execute'
-							? t.customCommand.resultTypeExecute
-							: t.customCommand.resultTypePrompt;
-					const locationDesc =
-						location === 'global'
-							? t.customCommand.resultLocationGlobal
-							: t.customCommand.resultLocationProject;
-					const content = t.customCommand.saveSuccessMessage
-						.replace('{name}', name)
-						.replace('{type}', typeDesc)
-						.replace('{location}', locationDesc);
-					const successMessage: Message = {
-						role: 'command',
-						content,
-						commandName: 'custom',
-					};
-					setMessages(prev => [...prev, successMessage]);
-				}}
-				onSkillsSave={async (skillName, description, location, generated) => {
-					const result = generated
-						? await createSkillFromGenerated(
-								skillName,
-								description,
-								generated,
-								location,
-								workingDirectory,
-						  )
-						: await createSkillTemplate(
-								skillName,
-								description,
-								location,
-								workingDirectory,
-						  );
-					panelState.setShowSkillsCreation(false);
-
-					if (result.success) {
-						const locationDesc =
-							location === 'global'
-								? t.skillsCreation.locationGlobal
-								: t.skillsCreation.locationProject;
-						const modeDesc = generated
-							? t.skillsCreation.resultModeAi
-							: t.skillsCreation.resultModeManual;
-						const content = t.skillsCreation.createSuccessMessage
-							.replace('{name}', skillName)
-							.replace('{mode}', modeDesc)
-							.replace('{location}', locationDesc)
-							.replace('{path}', result.path);
-						const successMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'skills',
-						};
-						setMessages(prev => [...prev, successMessage]);
-					} else {
-						const errorText = result.error || t.skillsCreation.errorUnknown;
-						const content = t.skillsCreation.createErrorMessage.replace(
-							'{error}',
-							errorText,
-						);
-						const errorMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'skills',
-						};
-						setMessages(prev => [...prev, errorMessage]);
-					}
-				}}
-				onRoleSave={async location => {
-					const {createRoleFile} = await import('../../utils/commands/role.js');
-					const result = await createRoleFile(location, workingDirectory);
-					panelState.setShowRoleCreation(false);
-
-					if (result.success) {
-						const locationDesc =
-							location === 'global'
-								? t.roleCreation.locationGlobal
-								: t.roleCreation.locationProject;
-						const content = t.roleCreation.createSuccessMessage
-							.replace('{location}', locationDesc)
-							.replace('{path}', result.path);
-						const successMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'role',
-						};
-						setMessages(prev => [...prev, successMessage]);
-					} else {
-						const errorText = result.error || t.roleCreation.errorUnknown;
-						const content = t.roleCreation.createErrorMessage.replace(
-							'{error}',
-							errorText,
-						);
-						const errorMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'role',
-						};
-						setMessages(prev => [...prev, errorMessage]);
-					}
-				}}
-				onRoleDelete={async location => {
-					const {deleteRoleFile} = await import('../../utils/commands/role.js');
-					const result = await deleteRoleFile(location, workingDirectory);
-					panelState.setShowRoleDeletion(false);
-
-					if (result.success) {
-						const locationDesc =
-							location === 'global'
-								? t.roleDeletion.locationGlobal
-								: t.roleDeletion.locationProject;
-						const content = t.roleDeletion.deleteSuccessMessage
-							.replace('{location}', locationDesc)
-							.replace('{path}', result.path);
-						const successMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'role',
-						};
-						setMessages(prev => [...prev, successMessage]);
-					} else {
-						const errorText = result.error || t.roleDeletion.errorUnknown;
-						const content = t.roleDeletion.deleteErrorMessage.replace(
-							'{error}',
-							errorText,
-						);
-						const errorMessage: Message = {
-							role: 'command',
-							content,
-							commandName: 'role',
-						};
-						setMessages(prev => [...prev, errorMessage]);
-					}
-				}}
+				simpleMode={simpleMode}
+				messages={messages}
+				showThinking={showThinking}
+				streamingState={streamingState}
+				isSaving={isSaving}
+				pendingMessages={pendingMessages}
+				pendingToolConfirmation={pendingToolConfirmation}
+				pendingUserQuestion={pendingUserQuestion}
+				bashSensitiveCommand={bashSensitiveCommand}
+				terminalExecutionState={terminalExecutionState}
+				customCommandExecution={customCommandExecution}
+				suppressLoadingIndicator={suppressLoadingIndicator}
+				bashMode={bashMode}
+				hookError={hookError}
+				handleUserQuestionAnswer={handleUserQuestionAnswer}
+				setHookError={setHookError}
 			/>
 
-			{/* Show new prompt panel if active */}
-			{panelState.showNewPromptPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<Suspense
-						fallback={
-							<Box>
-								<Text>
-									<Spinner type="dots" /> Loading...
-								</Text>
-							</Box>
-						}
-					>
-						<NewPromptPanel
-							onAccept={(prompt: string) => {
-								panelState.setShowNewPromptPanel(false);
-								setRestoreInputContent({text: prompt});
-							}}
-							onCancel={() => {
-								panelState.setShowNewPromptPanel(false);
-							}}
-						/>
-					</Suspense>
-				</Box>
-			)}
+			<ChatScreenPanels
+				terminalWidth={terminalWidth}
+				workingDirectory={workingDirectory}
+				panelState={panelState}
+				messages={messages}
+				snapshotState={snapshotState}
+				advancedModel={advancedModel}
+				basicModel={basicModel}
+				handleSessionPanelSelect={handleSessionPanelSelect}
+				showPermissionsPanel={showPermissionsPanel}
+				setShowPermissionsPanel={setShowPermissionsPanel}
+				alwaysApprovedTools={alwaysApprovedTools}
+				removeFromAlwaysApproved={removeFromAlwaysApproved}
+				clearAllAlwaysApproved={clearAllAlwaysApproved}
+				setMessages={setMessages}
+				t={t}
+				onPromptAccept={prompt => {
+					setRestoreInputContent({text: prompt});
+				}}
+				handleRollbackConfirm={handleRollbackConfirm}
+			/>
 
-			{/* Show permissions panel if active */}
-			{showPermissionsPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<Suspense
-						fallback={
-							<Box>
-								<Text>
-									<Spinner type="dots" /> Loading...
-								</Text>
-							</Box>
-						}
-					>
-						<PermissionsPanel
-							alwaysApprovedTools={alwaysApprovedTools}
-							onRemoveTool={removeFromAlwaysApproved}
-							onClearAll={clearAllAlwaysApproved}
-							onClose={() => setShowPermissionsPanel(false)}
-						/>
-					</Suspense>
-				</Box>
-			)}
-
-			{/* Show file rollback confirmation if pending */}
-			{snapshotState.pendingRollback && (
-				<FileRollbackConfirmation
-					fileCount={snapshotState.pendingRollback.fileCount}
-					filePaths={snapshotState.pendingRollback.filePaths || []}
-					notebookCount={snapshotState.pendingRollback.notebookCount}
-					previewSessionId={sessionManager.getCurrentSession()?.id}
-					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
-					onConfirm={handleRollbackConfirm}
+			{shouldShowFooter && (
+				<ChatFooter
+					onSubmit={handleMessageSubmit}
+					onCommand={handleCommandExecution}
+					onHistorySelect={handleHistorySelect}
+					onSwitchProfile={handleSwitchProfile}
+					handleProfileSelect={handleProfileSelect}
+					handleHistorySelect={handleHistorySelect}
+					showReviewCommitPanel={panelState.showReviewCommitPanel}
+					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+					onReviewCommitConfirm={handleReviewCommitConfirm}
+					disabled={
+						!!pendingToolConfirmation ||
+						!!bashSensitiveCommand ||
+						isExecutingTerminalCommand ||
+						isCompressing ||
+						streamingState.isStopping
+					}
+					isStopping={streamingState.isStopping}
+					isProcessing={
+						streamingState.isStreaming ||
+						isSaving ||
+						bashMode.state.isExecuting ||
+						isCompressing
+					}
+					chatHistory={messages}
+					yoloMode={yoloMode}
+					setYoloMode={setYoloMode}
+					planMode={planMode}
+					setPlanMode={setPlanMode}
+					vulnerabilityHuntingMode={vulnerabilityHuntingMode}
+					setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
+					toolSearchDisabled={toolSearchDisabled}
+					contextUsage={footerContextUsage}
+					initialContent={restoreInputContent}
+					draftContent={inputDraftContent}
+					onDraftChange={setInputDraftContent}
+					onContextPercentageChange={setCurrentContextPercentage}
+					showProfilePicker={panelState.showProfilePanel}
+					setShowProfilePicker={panelState.setShowProfilePanel}
+					profileSelectedIndex={panelState.profileSelectedIndex}
+					setProfileSelectedIndex={panelState.setProfileSelectedIndex}
+					getFilteredProfiles={getFilteredProfiles}
+					profileSearchQuery={panelState.profileSearchQuery}
+					setProfileSearchQuery={panelState.setProfileSearchQuery}
+					vscodeConnectionStatus={vscodeState.vscodeConnectionStatus}
+					editorContext={vscodeState.editorContext}
+					codebaseIndexing={codebaseIndexing}
+					codebaseProgress={codebaseProgress}
+					watcherEnabled={watcherEnabled}
+					fileUpdateNotification={fileUpdateNotification}
+					currentProfileName={panelState.currentProfileName}
+					isCompressing={isCompressing}
+					compressionError={compressionError}
+					backgroundProcesses={backgroundProcesses.processes}
+					showBackgroundPanel={backgroundProcesses.showPanel}
+					selectedProcessIndex={selectedProcessIndex}
+					terminalWidth={terminalWidth}
 				/>
 			)}
-
-			{/* Hide input during tool confirmation or session panel or MCP panel or usage panel or help panel or custom command config or skills creation or role creation or role deletion or role list or working dir panel or branch panel or diff review panel or connection panel or permissions panel or rollback confirmation or user question or terminal interactive input. ProfilePanel is NOT included because it renders inside ChatInput. Compression spinner is shown inside ChatFooter, so ChatFooter is always rendered. */}
-			{!pendingToolConfirmation &&
-				!pendingUserQuestion &&
-				!bashSensitiveCommand &&
-				!terminalExecutionState.state.needsInput &&
-				!(
-					panelState.showSessionPanel ||
-					panelState.showMcpPanel ||
-					panelState.showUsagePanel ||
-					panelState.showModelsPanel ||
-					panelState.showCustomCommandConfig ||
-					panelState.showSkillsCreation ||
-					panelState.showRoleCreation ||
-					panelState.showRoleDeletion ||
-					panelState.showRoleList ||
-					panelState.showWorkingDirPanel ||
-					panelState.showBranchPanel ||
-					panelState.showDiffReviewPanel ||
-					panelState.showConnectionPanel ||
-					panelState.showNewPromptPanel ||
-					showPermissionsPanel
-				) &&
-				!snapshotState.pendingRollback && (
-					<ChatFooter
-						onSubmit={handleMessageSubmit}
-						onCommand={handleCommandExecution}
-						onHistorySelect={handleHistorySelect}
-						onSwitchProfile={handleSwitchProfile}
-						handleProfileSelect={handleProfileSelect}
-						handleHistorySelect={handleHistorySelect}
-						showReviewCommitPanel={panelState.showReviewCommitPanel}
-						setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
-						onReviewCommitConfirm={handleReviewCommitConfirm}
-						disabled={
-							!!pendingToolConfirmation ||
-							!!bashSensitiveCommand ||
-							isExecutingTerminalCommand ||
-							isCompressing ||
-							streamingState.isStopping
-						}
-						isStopping={streamingState.isStopping}
-						isProcessing={
-							streamingState.isStreaming ||
-							isSaving ||
-							bashMode.state.isExecuting ||
-							isCompressing
-						}
-						chatHistory={messages}
-						yoloMode={yoloMode}
-						setYoloMode={setYoloMode}
-						planMode={planMode}
-						setPlanMode={setPlanMode}
-						vulnerabilityHuntingMode={vulnerabilityHuntingMode}
-						setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
-						toolSearchDisabled={toolSearchDisabled}
-						contextUsage={
-							streamingState.contextUsage
-								? {
-										inputTokens: streamingState.contextUsage.prompt_tokens,
-										maxContextTokens:
-											getOpenAiConfig().maxContextTokens || 4000,
-										cacheCreationTokens:
-											streamingState.contextUsage.cache_creation_input_tokens,
-										cacheReadTokens:
-											streamingState.contextUsage.cache_read_input_tokens,
-										cachedTokens: streamingState.contextUsage.cached_tokens,
-								  }
-								: undefined
-						}
-						initialContent={restoreInputContent}
-						draftContent={inputDraftContent}
-						onDraftChange={setInputDraftContent}
-						onContextPercentageChange={setCurrentContextPercentage}
-						showProfilePicker={panelState.showProfilePanel}
-						setShowProfilePicker={panelState.setShowProfilePanel}
-						profileSelectedIndex={panelState.profileSelectedIndex}
-						setProfileSelectedIndex={panelState.setProfileSelectedIndex}
-						getFilteredProfiles={() => {
-							const allProfiles = getAllProfiles();
-							const query = panelState.profileSearchQuery.toLowerCase();
-							// 基于内存状态重新计算 isActive，而非依赖文件状态
-							const currentName = panelState.currentProfileName;
-							const profilesWithMemoryState = allProfiles.map(profile => ({
-								...profile,
-								isActive: profile.displayName === currentName,
-							}));
-							if (!query) return profilesWithMemoryState;
-							return profilesWithMemoryState.filter(
-								profile =>
-									profile.name.toLowerCase().includes(query) ||
-									profile.displayName.toLowerCase().includes(query),
-							);
-						}}
-						profileSearchQuery={panelState.profileSearchQuery}
-						setProfileSearchQuery={panelState.setProfileSearchQuery}
-						vscodeConnectionStatus={vscodeState.vscodeConnectionStatus}
-						editorContext={vscodeState.editorContext}
-						codebaseIndexing={codebaseIndexing}
-						codebaseProgress={codebaseProgress}
-						watcherEnabled={watcherEnabled}
-						fileUpdateNotification={fileUpdateNotification}
-						currentProfileName={panelState.currentProfileName}
-						isCompressing={isCompressing}
-						compressionError={compressionError}
-						backgroundProcesses={backgroundProcesses.processes}
-						showBackgroundPanel={backgroundProcesses.showPanel}
-						selectedProcessIndex={selectedProcessIndex}
-						terminalWidth={terminalWidth}
-					/>
-				)}
 		</Box>
 	);
 }
