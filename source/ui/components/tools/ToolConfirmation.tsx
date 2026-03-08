@@ -102,18 +102,29 @@ export default function ToolConfirmation({
 	const [terminalColumns, setTerminalColumns] = useState<number>(
 		stdout?.columns ?? process.stdout.columns ?? 80,
 	);
+	const [terminalRows, setTerminalRows] = useState<number>(
+		stdout?.rows ?? process.stdout.rows ?? 24,
+	);
 
 	useEffect(() => {
-		const next = stdout?.columns ?? process.stdout.columns;
-		if (typeof next === 'number') {
-			setTerminalColumns(next);
+		const nextColumns = stdout?.columns ?? process.stdout.columns;
+		const nextRows = stdout?.rows ?? process.stdout.rows;
+		if (typeof nextColumns === 'number') {
+			setTerminalColumns(nextColumns);
+		}
+		if (typeof nextRows === 'number') {
+			setTerminalRows(nextRows);
 		}
 
-		// Ink 的 stdout 通常是 TTY stream，resize 时更新 columns。
+		// Ink 的 stdout 通常是 TTY stream，resize 时更新终端尺寸。
 		const handler = () => {
 			const cols = stdout?.columns ?? process.stdout.columns;
+			const rows = stdout?.rows ?? process.stdout.rows;
 			if (typeof cols === 'number') {
 				setTerminalColumns(cols);
+			}
+			if (typeof rows === 'number') {
+				setTerminalRows(rows);
 			}
 		};
 
@@ -122,14 +133,18 @@ export default function ToolConfirmation({
 			stdout?.off?.('resize', handler);
 		};
 	}, [stdout]);
+
 	const [hasSelected, setHasSelected] = useState(false);
 	const [showRejectInput, setShowRejectInput] = useState(false);
+
 	const [rejectReason, setRejectReason] = useState('');
 	const [menuKey, setMenuKey] = useState(0);
 	const [initialMenuIndex, setInitialMenuIndex] = useState(0);
-
 	// terminal-execute 命令翻阅窗口：固定高度分页，Tab 循环翻阅，不一次性完整显示。
 	const [commandPageOffset, setCommandPageOffset] = useState(0);
+
+	// 多工具并行列表翻阅窗口：固定高度分页，Tab 循环翻阅，避免确认框因列表过高而抖动。
+	const [multiToolPageIndex, setMultiToolPageIndex] = useState(0);
 
 	// Check if this is a sensitive command (for terminal-execute)
 	const sensitiveCommandCheck = useMemo(() => {
@@ -473,24 +488,97 @@ export default function ToolConfirmation({
 	}, [toolName, toolArguments, allTools]);
 
 	// Parse and format all tools arguments for display (multiple tools)
-	const formattedAllTools = useMemo(() => {
+	const formattedAllTools = useMemo<Array<{
+		name: string;
+		args: Array<{key: string; value: string; isLast: boolean}>;
+		estimatedRows: number;
+	}> | null>(() => {
 		if (!allTools || allTools.length === 0) return null;
 
 		return allTools.map(tool => {
 			try {
 				const parsed = JSON.parse(tool.function.arguments);
+				const args = formatArgumentsAsTree(parsed, tool.function.name);
 				return {
 					name: tool.function.name,
-					args: formatArgumentsAsTree(parsed, tool.function.name),
+					args,
+					estimatedRows: 1 + args.length + 1,
 				};
 			} catch {
 				return {
 					name: tool.function.name,
 					args: [],
+					estimatedRows: 2,
 				};
 			}
 		});
 	}, [allTools]);
+
+	useEffect(() => {
+		setMultiToolPageIndex(0);
+	}, [formattedAllTools]);
+
+	const multiToolPager = useMemo<{
+		pageSize: number;
+		totalPages: number;
+		pageIndex: number;
+		pageStartIndex: number;
+		tools: Array<{
+			name: string;
+			args: Array<{key: string; value: string; isLast: boolean}>;
+			estimatedRows: number;
+		}>;
+		canPage: boolean;
+	} | null>(() => {
+		if (!formattedAllTools || formattedAllTools.length === 0) {
+			return null;
+		}
+		const reservedRows = 25;
+
+		const availableRows = Math.max(4, terminalRows - reservedRows);
+
+		const pages: Array<typeof formattedAllTools> = [];
+		let currentPage: typeof formattedAllTools = [];
+		let currentRows = 0;
+
+		for (const tool of formattedAllTools) {
+			const toolRows = Math.max(2, tool.estimatedRows);
+			const wouldOverflow =
+				currentPage.length > 0 && currentRows + toolRows > availableRows;
+
+			if (wouldOverflow) {
+				pages.push(currentPage);
+				currentPage = [];
+				currentRows = 0;
+			}
+
+			currentPage.push(tool);
+			currentRows += toolRows;
+		}
+
+		if (currentPage.length > 0) {
+			pages.push(currentPage);
+		}
+
+		const totalPages = Math.max(1, pages.length);
+		const normalizedPageIndex =
+			totalPages <= 1
+				? 0
+				: ((multiToolPageIndex % totalPages) + totalPages) % totalPages;
+		const currentTools = pages[normalizedPageIndex] ?? [];
+		const pageStartIndex = pages
+			.slice(0, normalizedPageIndex)
+			.reduce((sum, page) => sum + page.length, 0);
+
+		return {
+			pageSize: currentTools.length,
+			totalPages,
+			pageIndex: normalizedPageIndex + 1,
+			pageStartIndex,
+			tools: currentTools,
+			canPage: totalPages > 1,
+		};
+	}, [formattedAllTools, multiToolPageIndex, terminalRows]);
 
 	// Conditionally show "Always approve" based on sensitive command check
 	const items = useMemo(() => {
@@ -523,16 +611,18 @@ export default function ToolConfirmation({
 	}, [sensitiveCommandCheck.isSensitive, t]);
 
 	useInput((_input, key) => {
-		// Tab - terminal-execute 命令翻阅（循环）
-		if (
-			key.tab &&
-			!hasSelected &&
-			!showRejectInput &&
-			toolName === 'terminal-execute' &&
-			commandPager?.canPage
-		) {
-			setCommandPageOffset(prev => prev + commandPager.windowChars);
-			return;
+		if (key.tab && !hasSelected && !showRejectInput) {
+			// Tab - terminal-execute 命令翻阅（循环）
+			if (toolName === 'terminal-execute' && commandPager?.canPage) {
+				setCommandPageOffset(prev => prev + commandPager.windowChars);
+				return;
+			}
+
+			// Tab - 多工具并行列表翻页（循环）
+			if (multiToolPager?.canPage) {
+				setMultiToolPageIndex(prev => prev + 1);
+				return;
+			}
 		}
 
 		// ESC - exit reject input mode
@@ -580,7 +670,7 @@ export default function ToolConfirmation({
 			</Box>
 
 			{/* Display single tool */}
-			{!formattedAllTools && (
+			{!formattedAllTools ? (
 				<>
 					<Box marginBottom={1}>
 						<Text>
@@ -592,7 +682,7 @@ export default function ToolConfirmation({
 					</Box>
 
 					{/* Display sensitive command warning */}
-					{sensitiveCommandCheck.isSensitive && (
+					{sensitiveCommandCheck.isSensitive ? (
 						<Box flexDirection="column" marginBottom={1}>
 							<Box marginBottom={1}>
 								<Text bold color={theme.colors.error}>
@@ -615,27 +705,25 @@ export default function ToolConfirmation({
 								</Text>
 							</Box>
 						</Box>
-					)}
+					) : null}
 
 					{/* Display tool arguments in tree format */}
-					{toolName !== 'terminal-execute' &&
-						formattedArgs &&
-						formattedArgs.length > 0 && (
-							<Box flexDirection="column" marginBottom={1}>
-								<Text dimColor>{t.toolConfirmation.arguments}</Text>
-								{formattedArgs.map((arg, index) => (
-									<Box key={index} flexDirection="column">
-										<Text color={theme.colors.menuSecondary} dimColor>
-											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-											<Text color="white">{arg.value}</Text>
-										</Text>
-									</Box>
-								))}
-							</Box>
-						)}
+					{toolName !== 'terminal-execute' && formattedArgs?.length ? (
+						<Box flexDirection="column" marginBottom={1}>
+							<Text dimColor>{t.toolConfirmation.arguments}</Text>
+							{formattedArgs.map((arg, index) => (
+								<Box key={index} flexDirection="column">
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+										<Text color="white">{arg.value}</Text>
+									</Text>
+								</Box>
+							))}
+						</Box>
+					) : null}
 
 					{/* terminal-execute: 命令翻阅窗口（固定高度，Tab 循环翻页） */}
-					{toolName === 'terminal-execute' && commandPager && (
+					{toolName === 'terminal-execute' && commandPager ? (
 						<Box flexDirection="column" marginBottom={1}>
 							<Text dimColor>
 								{t.toolConfirmation.commandPagerTitle}{' '}
@@ -652,16 +740,16 @@ export default function ToolConfirmation({
 									</Text>
 								))}
 							</Box>
-							{commandPager.canPage && (
+							{commandPager.canPage ? (
 								<Text dimColor>{t.toolConfirmation.commandPagerHint}</Text>
-							)}
+							) : null}
 						</Box>
-					)}
+					) : null}
 				</>
-			)}
+			) : null}
 
 			{/* Display multiple tools */}
-			{formattedAllTools && (
+			{formattedAllTools && multiToolPager ? (
 				<Box flexDirection="column" marginBottom={1}>
 					<Box marginBottom={1}>
 						<Text>
@@ -675,33 +763,47 @@ export default function ToolConfirmation({
 						</Text>
 					</Box>
 
-					{formattedAllTools.map((tool, toolIndex) => (
-						<Box
-							key={toolIndex}
-							flexDirection="column"
-							marginBottom={toolIndex < formattedAllTools.length - 1 ? 1 : 0}
-						>
-							<Text color={theme.colors.menuInfo} bold>
-								{toolIndex + 1}. {tool.name}
-							</Text>
-							{tool.args.length > 0 && (
-								<Box flexDirection="column" paddingLeft={2}>
-									{tool.args.map((arg, argIndex) => (
-										<Text
-											key={argIndex}
-											color={theme.colors.menuSecondary}
-											dimColor
-										>
-											{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
-											<Text color="white">{arg.value}</Text>
-										</Text>
-									))}
-								</Box>
-							)}
-						</Box>
-					))}
+					{multiToolPager.tools.map((tool, toolIndex) => {
+						const absoluteToolIndex = multiToolPager.pageStartIndex + toolIndex;
+
+						return (
+							<Box
+								key={absoluteToolIndex}
+								flexDirection="column"
+								marginBottom={
+									toolIndex < multiToolPager.tools.length - 1 ? 1 : 0
+								}
+							>
+								<Text color={theme.colors.menuInfo} bold>
+									{absoluteToolIndex + 1}. {tool.name}
+								</Text>
+								{tool.args.length > 0 && (
+									<Box flexDirection="column" paddingLeft={2}>
+										{tool.args.map((arg, argIndex) => (
+											<Text
+												key={argIndex}
+												color={theme.colors.menuSecondary}
+												dimColor
+											>
+												{arg.isLast ? '└─' : '├─'} {arg.key}:{' '}
+												<Text color="white">{arg.value}</Text>
+											</Text>
+										))}
+									</Box>
+								)}
+							</Box>
+						);
+					})}
+
+					{multiToolPager.canPage && (
+						<Text dimColor>
+							{t.toolConfirmation.multiToolPagerHint
+								.replace('{page}', String(multiToolPager.pageIndex))
+								.replace('{total}', String(multiToolPager.totalPages))}
+						</Text>
+					)}
 				</Box>
-			)}
+			) : null}
 
 			<Box marginBottom={1}>
 				<Text dimColor>{t.toolConfirmation.selectAction}</Text>
@@ -716,7 +818,7 @@ export default function ToolConfirmation({
 				/>
 			)}
 
-			{showRejectInput && !hasSelected && (
+			{showRejectInput && !hasSelected ? (
 				<Box flexDirection="column">
 					<Box marginBottom={1}>
 						<Text color={theme.colors.warning}>
@@ -735,7 +837,7 @@ export default function ToolConfirmation({
 						<Text dimColor>{t.toolConfirmation.pressEnterToSubmit}</Text>
 					</Box>
 				</Box>
-			)}
+			) : null}
 
 			{hasSelected && (
 				<Box>

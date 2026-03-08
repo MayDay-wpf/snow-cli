@@ -531,9 +531,9 @@ export type TranslationKeys = {
 			reindex: string;
 			codebase: string;
 			permissions: string;
-		vulnerabilityHunting: string;
-		toolSearch: string;
-		worktree: string; // Git branch management panel
+			vulnerabilityHunting: string;
+			toolSearch: string;
+			worktree: string; // Git branch management panel
 			diff: string;
 			connect: string;
 			disconnect: string;
@@ -935,10 +935,10 @@ export type TranslationKeys = {
 		contentSearchHint: string;
 		fileSearchHint: string;
 		expandedViewHint: string;
-	yoloModeActive: string;
-	planModeActive: string;
-	vulnerabilityHuntingModeActive: string;
-	toolSearchEnabled: string;
+		yoloModeActive: string;
+		planModeActive: string;
+		vulnerabilityHuntingModeActive: string;
+		toolSearchEnabled: string;
 		tokens: string;
 		cached: string;
 		newCache: string;
@@ -1116,6 +1116,7 @@ export type TranslationKeys = {
 		commandPagerTitle: string;
 		commandPagerStatus: string;
 		commandPagerHint: string;
+		multiToolPagerHint: string;
 		selectAction: string;
 		enterRejectionReason: string;
 		pressEnterToSubmit: string;

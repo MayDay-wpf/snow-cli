@@ -567,18 +567,17 @@ export const en: TranslationKeys = {
 			backend: 'Show background processes panel',
 			profiles: 'Switch configuration profiles',
 			models: 'Open model switching panel',
-		vulnerabilityHunting:
-			'Toggle vulnerability hunting mode for security-focused code analysis',
-		toolSearch:
-			'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
-		worktree:
+			vulnerabilityHunting:
+				'Toggle vulnerability hunting mode for security-focused code analysis',
+			toolSearch:
+				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
+			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
 			diff: 'Review file changes from a conversation in IDE diff view',
 			connect: 'Connect to a Snow Instance for AI processing',
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
-			newPrompt:
-				'Generate a refined prompt from your requirement using AI',
+			newPrompt: 'Generate a refined prompt from your requirement using AI',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -991,8 +990,7 @@ export const en: TranslationKeys = {
 			'⚐ Plan mode active - Specialized planning and coordination agent',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
-		toolSearchEnabled:
-			'♾︎ Tool Search ON - Tools loaded on demand',
+		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',
@@ -1195,6 +1193,7 @@ export const en: TranslationKeys = {
 		commandPagerTitle: 'Command (paged):',
 		commandPagerStatus: '{page}/{total}',
 		commandPagerHint: 'Tab: Next page (wraps)',
+		multiToolPagerHint: 'Tab: View next tool group ({page}/{total})',
 		selectAction: 'Select action:',
 		enterRejectionReason: 'Enter rejection reason:',
 		pressEnterToSubmit: 'Press Enter to submit',
@@ -1436,8 +1435,7 @@ export const en: TranslationKeys = {
 	},
 	newPrompt: {
 		title: '✦ Prompt Generator',
-		inputHint:
-			'Describe your requirement, AI will generate a refined prompt:',
+		inputHint: 'Describe your requirement, AI will generate a refined prompt:',
 		placeholder: 'Enter your requirement...',
 		escHint: 'ESC to cancel',
 		generating: 'Generating prompt...',
