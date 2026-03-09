@@ -101,8 +101,8 @@ export default function FileRollbackConfirmation({
 	]);
 
 	const options: Array<{label: string; value: RollbackMode}> = [
-		{label: t.fileRollback.conversationOnly, value: 'conversation'},
 		{label: t.fileRollback.conversationAndFiles, value: 'both'},
+		{label: t.fileRollback.conversationOnly, value: 'conversation'},
 		{label: t.fileRollback.filesOnly, value: 'files'},
 	];
 
@@ -302,7 +302,10 @@ export default function FileRollbackConfirmation({
 			{notebookCount !== undefined && notebookCount > 0 && (
 				<Box marginBottom={1} marginLeft={2}>
 					<Text color="magenta">
-						{t.fileRollback.notebookCount.replace('{count}', String(notebookCount))}
+						{t.fileRollback.notebookCount.replace(
+							'{count}',
+							String(notebookCount),
+						)}
 					</Text>
 				</Box>
 			)}

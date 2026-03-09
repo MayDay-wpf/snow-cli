@@ -1008,54 +1008,6 @@ export async function executeMCPTool(
 		}
 	}
 
-	// Execute beforeToolCall hook
-	try {
-		const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');
-		const hookResult = await unifiedHooksExecutor.executeHooks(
-			'beforeToolCall',
-			{
-				toolName,
-				args,
-			},
-		);
-
-		// Handle hook exit codes: 0=continue, 1=block tool and return stderr, 2+=throw
-		if (hookResult && !hookResult.success) {
-			// Find failed command hook
-			const commandError = hookResult.results.find(
-				(r: any) => r.type === 'command' && !r.success,
-			);
-
-			if (commandError && commandError.type === 'command') {
-				const {exitCode, command, output, error} = commandError;
-
-				if (exitCode === 1) {
-					// Exit code 1: Block tool execution, return stderr/stdout as tool result
-					return error || output || `[beforeToolCall Hook Warning] Command: ${command} exited with code 1`;
-				} else if (exitCode >= 2 || exitCode < 0) {
-					// Exit code 2+: Throw error to stop AI conversation
-					const combinedOutput =
-						[output, error].filter(Boolean).join('\n\n') || '(no output)';
-					const hookError = new Error(
-						`beforeToolCall hook failed with exit code ${exitCode}\n` +
-							`Command: ${command}\n` +
-							`Output:\n${combinedOutput}`,
-					) as HookError;
-					hookError.isHookFailure = true;
-					throw hookError;
-				}
-				// Exit code 0: Success, continue silently
-			}
-		}
-	} catch (error) {
-		// Re-throw hook errors to stop AI conversation
-		if ((error as HookError)?.isHookFailure) {
-			throw error;
-		}
-		// Otherwise log and continue - don't block on unexpected errors
-		console.warn('Failed to execute beforeToolCall hook:', error);
-	}
-
 	let result: any;
 	let executionError: Error | null = null;
 
@@ -1619,7 +1571,10 @@ export async function executeMCPTool(
 								`error: ${error || '(empty)'}`,
 						);
 
-						const replacedContent = error || output || `[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
+						const replacedContent =
+							error ||
+							output ||
+							`[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
 
 						if (typeof result === 'string') {
 							result = replacedContent;

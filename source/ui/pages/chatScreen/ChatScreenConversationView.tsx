@@ -127,7 +127,8 @@ export default function ChatScreenConversationView({
 				</Box>
 			)}
 
-			{pendingToolConfirmation && (
+			{/* 当同时存在工具确认和交互问题时，优先显示交互组件（AskUserQuestion）*/}
+			{pendingToolConfirmation && !pendingUserQuestion && (
 				<ToolConfirmation
 					toolName={
 						pendingToolConfirmation.batchToolNames ||
