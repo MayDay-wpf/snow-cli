@@ -1,6 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
-import chalk from 'chalk';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
@@ -90,16 +89,9 @@ export default function TodoTree({todos}: TodoTreeProps) {
 		const statusIcon = getStatusIcon(todo.status);
 		const statusColor = getStatusColor(todo.status);
 
-		const applyColor = (text: string) => {
-			return statusColor.startsWith('#')
-				? chalk.hex(statusColor)(text)
-				: (chalk as any)[statusColor]?.(text) ?? text;
-		};
-
 		return (
-			<Text key={`${todo.id}:${pageIndex}:${index}`}>
-				{applyColor(statusIcon)}
-				{applyColor(' ' + todo.content)}
+			<Text key={`${todo.id}:${pageIndex}:${index}`} color={statusColor}>
+				{statusIcon} {todo.content}
 			</Text>
 		);
 	};
