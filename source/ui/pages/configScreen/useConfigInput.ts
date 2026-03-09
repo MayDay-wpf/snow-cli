@@ -39,6 +39,8 @@ export function useConfigInput(
 		setEnableAutoCompress,
 		showThinking,
 		setShowThinking,
+		streamingDisplay,
+		setStreamingDisplay,
 		thinkingEnabled,
 		setThinkingEnabled,
 		geminiThinkingEnabled,
@@ -383,6 +385,8 @@ export function useConfigInput(
 			setEnableAutoCompress(!enableAutoCompress);
 		} else if (currentField === 'showThinking') {
 			setShowThinking(!showThinking);
+		} else if (currentField === 'streamingDisplay') {
+			setStreamingDisplay(!streamingDisplay);
 		} else if (currentField === 'thinkingEnabled') {
 			setThinkingEnabled(!thinkingEnabled);
 		} else if (currentField === 'geminiThinkingEnabled') {

@@ -179,6 +179,7 @@ export const en: TranslationKeys = {
 		enableAutoCompress: 'Enable Auto Compression:',
 		autoCompressThreshold: 'Auto Compress Threshold (%):',
 		showThinking: 'Show Thinking Process:',
+		streamingDisplay: 'Streaming Line Display:',
 		thinkingEnabled: 'Thinking Enabled:',
 		thinkingMode: 'Thinking Mode:',
 		thinkingModeTokens: 'Input Tokens',

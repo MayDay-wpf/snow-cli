@@ -17,6 +17,7 @@ export type ProcessToolCallsOptions = {
 	saveMessage: (message: any) => Promise<void>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	extractThinkingContent: typeof extractThinkingContent;
+	hasStreamedLines?: boolean;
 };
 
 export async function processToolCallsAfterStream(
@@ -71,16 +72,18 @@ export async function processToolCallsAfterStream(
 		receivedReasoningContent,
 	);
 
-	if ((streamedContent && streamedContent.trim()) || thinkingContent) {
-		setMessages(prev => [
-			...prev,
-			{
-				role: 'assistant',
-				content: streamedContent?.trim() || '',
-				streaming: false,
-				thinking: thinkingContent,
-			},
-		]);
+	if (!options.hasStreamedLines) {
+		if ((streamedContent && streamedContent.trim()) || thinkingContent) {
+			setMessages(prev => [
+				...prev,
+				{
+					role: 'assistant',
+					content: streamedContent?.trim() || '',
+					streaming: false,
+					thinking: thinkingContent,
+				},
+			]);
+		}
 	}
 
 	const parallelGroupId =

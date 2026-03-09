@@ -37,6 +37,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		enableAutoCompress,
 		autoCompressThreshold,
 		showThinking,
+		streamingDisplay,
 		thinkingEnabled,
 		thinkingMode,
 		thinkingBudgetTokens,
@@ -331,6 +332,24 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 					<Box marginLeft={3}>
 						<Text color={theme.colors.menuSecondary}>
 							{showThinking
+								? t.configScreen.enabled
+								: t.configScreen.disabled}{' '}
+							{t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'streamingDisplay':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.streamingDisplay}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{streamingDisplay
 								? t.configScreen.enabled
 								: t.configScreen.disabled}{' '}
 							{t.configScreen.toggleHint}

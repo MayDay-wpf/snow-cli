@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import ChatInput from './ChatInput.js';
 import StatusLine from '../common/StatusLine.js';
+import LoadingIndicator from './LoadingIndicator.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import type {Message} from './MessageList.js';
 import {BackgroundProcessPanel} from '../bash/BackgroundProcessPanel.js';
@@ -112,6 +113,34 @@ type ChatFooterProps = {
 	showBackgroundPanel: boolean;
 	selectedProcessIndex: number;
 	terminalWidth: number;
+
+	// Loading indicator props
+	isStreaming: boolean;
+	isSaving: boolean;
+	hasPendingToolConfirmation: boolean;
+	hasPendingUserQuestion: boolean;
+	hasBlockingOverlay: boolean;
+	animationFrame: number;
+	retryStatus: {
+		isRetrying: boolean;
+		errorMessage?: string;
+		remainingSeconds?: number;
+		attempt: number;
+	} | null;
+	codebaseSearchStatus: {
+		isSearching: boolean;
+		attempt: number;
+		maxAttempts: number;
+		currentTopN: number;
+		message: string;
+		query?: string;
+		originalResultsCount?: number;
+		suggestion?: string;
+	} | null;
+	isReasoning: boolean;
+	streamTokenCount: number;
+	elapsedSeconds: number;
+	currentModel?: string | null;
 };
 
 const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
@@ -184,6 +213,22 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		<>
 			{!props.showReviewCommitPanel && (
 				<>
+					<LoadingIndicator
+						isStreaming={props.isStreaming}
+						isStopping={props.isStopping}
+						isSaving={props.isSaving}
+						hasPendingToolConfirmation={props.hasPendingToolConfirmation}
+						hasPendingUserQuestion={props.hasPendingUserQuestion}
+						hasBlockingOverlay={props.hasBlockingOverlay}
+						terminalWidth={props.terminalWidth}
+						animationFrame={props.animationFrame}
+						retryStatus={props.retryStatus}
+						codebaseSearchStatus={props.codebaseSearchStatus}
+						isReasoning={props.isReasoning}
+						streamTokenCount={props.streamTokenCount}
+						elapsedSeconds={props.elapsedSeconds}
+						currentModel={props.currentModel}
+					/>
 					<ChatInput
 						onSubmit={props.onSubmit}
 						onCommand={props.onCommand}

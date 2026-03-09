@@ -28,7 +28,8 @@ export type ConfigField =
 	| 'maxTokens'
 	| 'streamIdleTimeoutSec'
 	| 'toolResultTokenLimit'
-	| 'editSimilarityThreshold';
+	| 'editSimilarityThreshold'
+	| 'streamingDisplay';
 
 export type ProfileMode = 'normal' | 'creating' | 'deleting';
 
@@ -113,6 +114,7 @@ export const TOGGLE_FIELDS: ConfigField[] = [
 	'anthropicBeta',
 	'enableAutoCompress',
 	'showThinking',
+	'streamingDisplay',
 	'thinkingEnabled',
 	'geminiThinkingEnabled',
 	'responsesReasoningEnabled',

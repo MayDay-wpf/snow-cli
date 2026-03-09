@@ -400,15 +400,12 @@ export default function ChatScreen({
 				simpleMode={simpleMode}
 				messages={messages}
 				showThinking={showThinking}
-				streamingState={streamingState}
-				isSaving={isSaving}
 				pendingMessages={pendingMessages}
 				pendingToolConfirmation={pendingToolConfirmation}
 				pendingUserQuestion={pendingUserQuestion}
 				bashSensitiveCommand={bashSensitiveCommand}
 				terminalExecutionState={terminalExecutionState}
 				customCommandExecution={customCommandExecution}
-				suppressLoadingIndicator={suppressLoadingIndicator}
 				bashMode={bashMode}
 				hookError={hookError}
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
@@ -495,6 +492,27 @@ export default function ChatScreen({
 					showBackgroundPanel={backgroundProcesses.showPanel}
 					selectedProcessIndex={selectedProcessIndex}
 					terminalWidth={terminalWidth}
+					// Loading indicator props
+					isStreaming={streamingState.isStreaming}
+					isSaving={isSaving}
+					hasPendingToolConfirmation={!!pendingToolConfirmation}
+					hasPendingUserQuestion={!!pendingUserQuestion}
+					hasBlockingOverlay={
+						!!bashSensitiveCommand ||
+						suppressLoadingIndicator ||
+						(bashMode.state.isExecuting && !!bashMode.state.currentCommand) ||
+						(terminalExecutionState.state.isExecuting &&
+							!terminalExecutionState.state.isBackgrounded &&
+							!!terminalExecutionState.state.command) ||
+						(customCommandExecution?.isRunning ?? false)
+					}
+					animationFrame={streamingState.animationFrame}
+					retryStatus={streamingState.retryStatus}
+					codebaseSearchStatus={streamingState.codebaseSearchStatus}
+					isReasoning={streamingState.isReasoning}
+					streamTokenCount={streamingState.streamTokenCount}
+					elapsedSeconds={streamingState.elapsedSeconds}
+					currentModel={streamingState.currentModel}
 				/>
 			)}
 		</Box>

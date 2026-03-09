@@ -11,7 +11,6 @@ import {
 import {CustomCommandExecutionDisplay} from '../../components/bash/CustomCommandExecutionDisplay.js';
 import MessageRenderer from '../../components/chat/MessageRenderer.js';
 import ChatHeader from '../../components/special/ChatHeader.js';
-import LoadingIndicator from '../../components/chat/LoadingIndicator.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
 import type {
@@ -28,15 +27,12 @@ type Props = {
 	simpleMode: boolean;
 	messages: Message[];
 	showThinking: boolean;
-	streamingState: any;
-	isSaving: boolean;
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
 	bashSensitiveCommand: BashSensitiveCommandState;
 	terminalExecutionState: any;
 	customCommandExecution: CustomCommandExecutionState;
-	suppressLoadingIndicator: boolean;
 	bashMode: any;
 	hookError: HookErrorDetails | null;
 	handleUserQuestionAnswer: (result: any) => void;
@@ -50,15 +46,12 @@ export default function ChatScreenConversationView({
 	simpleMode,
 	messages,
 	showThinking,
-	streamingState,
-	isSaving,
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
 	bashSensitiveCommand,
 	terminalExecutionState,
 	customCommandExecution,
-	suppressLoadingIndicator,
 	bashMode,
 	hookError,
 	handleUserQuestionAnswer,
@@ -91,31 +84,6 @@ export default function ChatScreenConversationView({
 			>
 				{item => item}
 			</Static>
-
-			<LoadingIndicator
-				isStreaming={streamingState.isStreaming}
-				isStopping={streamingState.isStopping}
-				isSaving={isSaving}
-				hasPendingToolConfirmation={!!pendingToolConfirmation}
-				hasPendingUserQuestion={!!pendingUserQuestion}
-				hasBlockingOverlay={
-					!!bashSensitiveCommand ||
-					suppressLoadingIndicator ||
-					(bashMode.state.isExecuting && !!bashMode.state.currentCommand) ||
-					(terminalExecutionState.state.isExecuting &&
-						!terminalExecutionState.state.isBackgrounded &&
-						!!terminalExecutionState.state.command) ||
-					(customCommandExecution?.isRunning ?? false)
-				}
-				terminalWidth={terminalWidth}
-				animationFrame={streamingState.animationFrame}
-				retryStatus={streamingState.retryStatus}
-				codebaseSearchStatus={streamingState.codebaseSearchStatus}
-				isReasoning={streamingState.isReasoning}
-				streamTokenCount={streamingState.streamTokenCount}
-				elapsedSeconds={streamingState.elapsedSeconds}
-				currentModel={streamingState.currentModel}
-			/>
 
 			<Box paddingX={1} width={terminalWidth}>
 				<PendingMessages pendingMessages={pendingMessages} />

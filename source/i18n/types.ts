@@ -165,6 +165,7 @@ export type TranslationKeys = {
 		enableAutoCompress: string;
 		autoCompressThreshold: string;
 		showThinking: string;
+		streamingDisplay: string;
 		thinkingEnabled: string;
 		thinkingMode: string;
 		thinkingModeTokens: string;

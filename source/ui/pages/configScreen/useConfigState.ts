@@ -72,6 +72,7 @@ export function useConfigState() {
 	const [enableAutoCompress, setEnableAutoCompress] = useState(true);
 	const [autoCompressThreshold, setAutoCompressThreshold] = useState(80);
 	const [showThinking, setShowThinking] = useState(true);
+	const [streamingDisplay, setStreamingDisplay] = useState(true);
 	const [thinkingEnabled, setThinkingEnabled] = useState(false);
 	const [thinkingMode, setThinkingMode] = useState<'tokens' | 'adaptive'>(
 		'tokens',
@@ -146,6 +147,7 @@ export function useConfigState() {
 			'enableAutoCompress',
 			...(enableAutoCompress ? ['autoCompressThreshold' as ConfigField] : []),
 			'showThinking',
+			'streamingDisplay',
 			...(requestMethod === 'anthropic'
 				? [
 						'anthropicBeta' as ConfigField,
@@ -285,6 +287,7 @@ export function useConfigState() {
 		setEnableAutoCompress(config.enableAutoCompress !== false);
 		setAutoCompressThreshold(config.autoCompressThreshold ?? 80);
 		setShowThinking(config.showThinking !== false);
+		setStreamingDisplay(config.streamingDisplay !== false);
 		setThinkingEnabled(
 			config.thinking?.type === 'enabled' ||
 				config.thinking?.type === 'adaptive' ||
@@ -541,6 +544,7 @@ export function useConfigState() {
 					enableAutoCompress,
 					autoCompressThreshold,
 					showThinking,
+					streamingDisplay,
 					thinking: thinkingEnabled
 						? thinkingMode === 'adaptive'
 							? {type: 'adaptive' as const, effort: thinkingEffort}
@@ -639,6 +643,7 @@ export function useConfigState() {
 				enableAutoCompress,
 				autoCompressThreshold,
 				showThinking,
+				streamingDisplay,
 				advancedModel,
 				basicModel,
 				maxContextTokens,
@@ -695,6 +700,7 @@ export function useConfigState() {
 						enableAutoCompress,
 						autoCompressThreshold,
 						showThinking,
+						streamingDisplay,
 						thinking: thinkingEnabled
 							? thinkingMode === 'adaptive'
 								? {type: 'adaptive' as const, effort: thinkingEffort}
@@ -775,6 +781,8 @@ export function useConfigState() {
 		setAutoCompressThreshold,
 		showThinking,
 		setShowThinking,
+		streamingDisplay,
+		setStreamingDisplay,
 		thinkingEnabled,
 		setThinkingEnabled,
 		thinkingMode,

@@ -164,6 +164,7 @@ export const zh: TranslationKeys = {
 		enableAutoCompress: '启用自动压缩:',
 		autoCompressThreshold: '自动压缩阈值 (%):',
 		showThinking: '显示思考过程:',
+		streamingDisplay: '流式逐行显示:',
 		thinkingEnabled: '启用思考模式:',
 		thinkingMode: '思考模式:',
 		thinkingModeTokens: '输入令牌数',

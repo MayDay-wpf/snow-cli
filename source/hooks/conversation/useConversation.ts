@@ -251,6 +251,7 @@ export async function handleConversationWithTools(
 				controller,
 				encoder,
 				setStreamTokenCount,
+				setMessages,
 				setIsReasoning,
 				setRetryStatus,
 				setContextUsage,
@@ -313,18 +314,20 @@ export async function handleConversationWithTools(
 			// ── No tool calls — final text response ──
 
 			if (streamResult.streamedContent.trim()) {
-				const finalAssistantMessage: Message = {
-					role: 'assistant',
-					content: streamResult.streamedContent.trim(),
-					streaming: false,
-					discontinued: controller.signal.aborted,
-					thinking: extractThinkingContent(
-						streamResult.receivedThinking,
-						streamResult.receivedReasoning,
-						streamResult.receivedReasoningContent,
-					),
-				};
-				setMessages(prev => [...prev, finalAssistantMessage]);
+				if (!streamResult.hasStreamedLines) {
+					const finalAssistantMessage: Message = {
+						role: 'assistant',
+						content: streamResult.streamedContent.trim(),
+						streaming: false,
+						discontinued: controller.signal.aborted,
+						thinking: extractThinkingContent(
+							streamResult.receivedThinking,
+							streamResult.receivedReasoning,
+							streamResult.receivedReasoningContent,
+						),
+					};
+					setMessages(prev => [...prev, finalAssistantMessage]);
+				}
 
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
@@ -395,6 +398,7 @@ type StreamRoundResult = {
 		| undefined;
 	receivedReasoningContent: string | undefined;
 	roundUsage: typeof tmpUsage | null;
+	hasStreamedLines: boolean;
 };
 
 // Placeholder type for usage — mirrors the accumulated shape
@@ -415,6 +419,7 @@ async function processStreamRound(ctx: {
 	controller: AbortController;
 	encoder: any;
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
+	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>;
 	setRetryStatus?: React.Dispatch<
 		React.SetStateAction<any>
@@ -430,6 +435,7 @@ async function processStreamRound(ctx: {
 		controller,
 		encoder,
 		setStreamTokenCount,
+		setMessages,
 		setIsReasoning,
 		setRetryStatus,
 		setContextUsage,
@@ -449,6 +455,91 @@ async function processStreamRound(ctx: {
 	const TOKEN_UPDATE_INTERVAL = 100;
 	let chunkCount = 0;
 	let roundUsage: typeof tmpUsage | null = null;
+
+	const streamingEnabled = config.streamingDisplay !== false;
+
+	let thinkingLineBuffer = '';
+	let contentLineBuffer = '';
+	let isFirstStreamLine = true;
+	let hasEmittedThinkingLines = false;
+	let hasStartedContent = false;
+	let hasStreamedLines = false;
+
+	const pendingStreamLines: Message[] = [];
+	let lastFlushTime = 0;
+	const STREAM_FLUSH_INTERVAL = 80;
+
+	const flushStreamLines = () => {
+		if (pendingStreamLines.length === 0) return;
+		const batch = [...pendingStreamLines];
+		pendingStreamLines.length = 0;
+		setMessages(prev => [...prev, ...batch]);
+		lastFlushTime = Date.now();
+	};
+
+	const emitStreamLine = (
+		content: string,
+		isThinking: boolean,
+	) => {
+		if (!streamingEnabled) return;
+		const isFirst = isFirstStreamLine;
+		const isFirstContent = !isThinking && !hasStartedContent;
+		if (isFirst) isFirstStreamLine = false;
+		if (isFirstContent) hasStartedContent = true;
+		if (isThinking) hasEmittedThinkingLines = true;
+		hasStreamedLines = true;
+		pendingStreamLines.push({
+			role: 'assistant' as const,
+			content,
+			streamingLine: true,
+			isThinkingLine: isThinking,
+			isFirstStreamLine: isFirst,
+			isFirstContentLine: isFirstContent,
+		});
+		const now = Date.now();
+		if (now - lastFlushTime >= STREAM_FLUSH_INTERVAL) {
+			flushStreamLines();
+		}
+	};
+
+	let inCodeBlock = false;
+	let codeBlockBuffer = '';
+	let tableBuffer = '';
+
+	const isTableRow = (line: string): boolean => {
+		const t = line.trim();
+		return t.startsWith('|') && t.endsWith('|') && t.length > 2;
+	};
+
+	const processContentLine = (line: string) => {
+		if (inCodeBlock) {
+			codeBlockBuffer += line + '\n';
+			if (line.trimStart().startsWith('```')) {
+				inCodeBlock = false;
+				emitStreamLine(codeBlockBuffer.trimEnd(), false);
+				codeBlockBuffer = '';
+			}
+			return;
+		}
+		if (line.trimStart().startsWith('```')) {
+			if (tableBuffer) {
+				emitStreamLine(tableBuffer.trimEnd(), false);
+				tableBuffer = '';
+			}
+			inCodeBlock = true;
+			codeBlockBuffer = line + '\n';
+			return;
+		}
+		if (isTableRow(line)) {
+			tableBuffer += line + '\n';
+			return;
+		}
+		if (tableBuffer) {
+			emitStreamLine(tableBuffer.trimEnd(), false);
+			tableBuffer = '';
+		}
+		emitStreamLine(line, false);
+	};
 
 	const currentSession = sessionManager.getCurrentSession();
 
@@ -507,10 +598,43 @@ async function processStreamRound(ctx: {
 				hasStartedReasoning = true;
 			}
 			countTokens(chunk.delta);
+
+			thinkingLineBuffer += chunk.delta;
+			const thinkLines = thinkingLineBuffer.split('\n');
+			for (let i = 0; i < thinkLines.length - 1; i++) {
+				const cleaned = (thinkLines[i] ?? '').replace(
+					/\s*<\/?think(?:ing)?>\s*/gi,
+					'',
+				);
+				if (cleaned || hasStreamedLines) {
+					emitStreamLine(cleaned, true);
+				}
+			}
+			thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
 		} else if (chunk.type === 'content' && chunk.content) {
 			setIsReasoning?.(false);
 			streamedContent += chunk.content;
 			countTokens(chunk.content);
+
+			if (hasEmittedThinkingLines && !hasStartedContent) {
+				if (thinkingLineBuffer) {
+					const cleaned = thinkingLineBuffer.replace(
+						/\s*<\/?think(?:ing)?>\s*/gi,
+						'',
+					);
+					if (cleaned.trim()) {
+						emitStreamLine(cleaned, true);
+					}
+					thinkingLineBuffer = '';
+				}
+			}
+
+			contentLineBuffer += chunk.content;
+			const contentLines = contentLineBuffer.split('\n');
+			for (let i = 0; i < contentLines.length - 1; i++) {
+				processContentLine(contentLines[i] ?? '');
+			}
+			contentLineBuffer = contentLines[contentLines.length - 1] ?? '';
 		} else if (chunk.type === 'tool_call_delta' && chunk.delta) {
 			setIsReasoning?.(false);
 			countTokens(chunk.delta);
@@ -539,6 +663,27 @@ async function processStreamRound(ctx: {
 		}
 	}
 
+	if (thinkingLineBuffer) {
+		const cleaned = thinkingLineBuffer.replace(
+			/\s*<\/?think(?:ing)?>\s*/gi,
+			'',
+		);
+		if (cleaned.trim()) {
+			emitStreamLine(cleaned, true);
+		}
+	}
+	if (contentLineBuffer.trim()) {
+		processContentLine(contentLineBuffer);
+		contentLineBuffer = '';
+	}
+	if (codeBlockBuffer) {
+		emitStreamLine(codeBlockBuffer.trimEnd(), false);
+	}
+	if (tableBuffer) {
+		emitStreamLine(tableBuffer.trimEnd(), false);
+	}
+	flushStreamLines();
+
 	return {
 		streamedContent,
 		receivedToolCalls,
@@ -546,6 +691,7 @@ async function processStreamRound(ctx: {
 		receivedThinking,
 		receivedReasoningContent,
 		roundUsage,
+		hasStreamedLines,
 	};
 }
 
@@ -651,6 +797,7 @@ async function handleToolCallRound(ctx: {
 		saveMessage,
 		setMessages,
 		extractThinkingContent,
+		hasStreamedLines: streamResult.hasStreamedLines,
 	});
 
 	// ── Resolve tool confirmations ──

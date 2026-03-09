@@ -80,7 +80,7 @@ export default function LoadingIndicator({
 	}
 
 	return (
-		<Box marginBottom={1} paddingX={1} width={terminalWidth}>
+		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
 			<Text color={['#00FFFF', '#1ACEB0'][animationFrame % 2] as any} bold>
 				❆
 			</Text>
@@ -133,7 +133,7 @@ export default function LoadingIndicator({
 											: t.chatScreen.statusThinking
 									}
 								/>
-								(
+								({' '}
 								{currentModel && (
 									<>
 										{currentModel}
@@ -141,15 +141,17 @@ export default function LoadingIndicator({
 									</>
 								)}
 								{formatElapsedTime(elapsedSeconds)}
-								{' · '}
-								<Text color="cyan">
-									↓{' '}
-									{streamTokenCount >= 1000
-										? `${(streamTokenCount / 1000).toFixed(1)}k`
-										: streamTokenCount}{' '}
-									tokens
-								</Text>
-								)
+								<>
+									{' · '}
+									<Text color="cyan">
+										↓{' '}
+										{streamTokenCount >= 1000
+											? `${(streamTokenCount / 1000).toFixed(1)}k`
+											: streamTokenCount}{' '}
+										tokens
+									</Text>
+								</>
+								{')'}
 							</Text>
 						)}
 					</>

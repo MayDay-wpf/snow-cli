@@ -80,6 +80,10 @@ export interface Message {
 		error?: string;
 	}; // Hook error details for rendering with HookErrorDisplay
 	thinking?: string; // Extended Thinking content from Anthropic
+	streamingLine?: boolean; // Individual line emitted during streaming (rendered in Static area)
+	isThinkingLine?: boolean; // This streaming line is a thinking/reasoning line
+	isFirstStreamLine?: boolean; // First streaming line of the response (shows ❆ icon)
+	isFirstContentLine?: boolean; // First content streaming line (fallback icon when thinking hidden)
 	pendingToolIds?: string[]; // Track pending tool call IDs in sub-agent compact mode
 	/** Present when a user message was directed to specific running sub-agents via >> picker */
 	subAgentDirected?: {

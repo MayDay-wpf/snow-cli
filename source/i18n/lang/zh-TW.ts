@@ -165,6 +165,7 @@ export const zhTW: TranslationKeys = {
 		enableAutoCompress: '啟用自動壓縮:',
 		autoCompressThreshold: '自動壓縮閾值 (%):',
 		showThinking: '顯示思考過程:',
+		streamingDisplay: '流式逐行顯示:',
 		thinkingEnabled: '啟用思考模式:',
 		thinkingMode: '思考模式:',
 		thinkingModeTokens: '輸入令牌數',

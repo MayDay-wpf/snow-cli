@@ -35,6 +35,31 @@ export default function MessageRenderer({
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
+	if (message.streamingLine) {
+		if (message.isThinkingLine && !showThinking) return null;
+
+		const showIcon =
+			message.isFirstStreamLine ||
+			(message.isFirstContentLine === true && !showThinking);
+
+		return (
+			<Box paddingX={1} width={terminalWidth} marginBottom={0}>
+				<Text color="blue" bold>
+					{showIcon ? '❆' : ' '}
+				</Text>
+				<Box marginLeft={1} flexDirection="column">
+					{message.isThinkingLine ? (
+						<Text color={theme.colors.menuSecondary} dimColor italic>
+							{message.content || ' '}
+						</Text>
+					) : (
+						<MarkdownRenderer content={message.content || ' '} />
+					)}
+				</Box>
+			</Box>
+		);
+	}
+
 	// If showThinking is false and message only has thinking content (no actual content),
 	// don't render anything to avoid showing empty ❆ icon
 	if (
