@@ -505,11 +505,15 @@ async function processStreamRound(ctx: {
 	let inCodeBlock = false;
 	let codeBlockBuffer = '';
 	let tableBuffer = '';
+	let listBuffer = '';
 
 	const isTableRow = (line: string): boolean => {
 		const t = line.trim();
 		return t.startsWith('|') && t.endsWith('|') && t.length > 2;
 	};
+
+	const isListItemLine = (line: string): boolean =>
+		/^\s*\d+[.)]\s/.test(line) || /^\s*[-*+]\s/.test(line);
 
 	const processContentLine = (line: string) => {
 		if (inCodeBlock) {
@@ -526,17 +530,37 @@ async function processStreamRound(ctx: {
 				emitStreamLine(tableBuffer.trimEnd(), false);
 				tableBuffer = '';
 			}
+			if (listBuffer) {
+				emitStreamLine(listBuffer.trimEnd(), false);
+				listBuffer = '';
+			}
 			inCodeBlock = true;
 			codeBlockBuffer = line + '\n';
 			return;
 		}
 		if (isTableRow(line)) {
+			if (listBuffer) {
+				emitStreamLine(listBuffer.trimEnd(), false);
+				listBuffer = '';
+			}
 			tableBuffer += line + '\n';
 			return;
 		}
 		if (tableBuffer) {
 			emitStreamLine(tableBuffer.trimEnd(), false);
 			tableBuffer = '';
+		}
+		if (isListItemLine(line)) {
+			listBuffer += line + '\n';
+			return;
+		}
+		if (listBuffer && (line.trim() === '' || /^\s{2,}/.test(line))) {
+			listBuffer += line + '\n';
+			return;
+		}
+		if (listBuffer) {
+			emitStreamLine(listBuffer.trimEnd(), false);
+			listBuffer = '';
 		}
 		emitStreamLine(line, false);
 	};
@@ -681,6 +705,9 @@ async function processStreamRound(ctx: {
 	}
 	if (tableBuffer) {
 		emitStreamLine(tableBuffer.trimEnd(), false);
+	}
+	if (listBuffer) {
+		emitStreamLine(listBuffer.trimEnd(), false);
 	}
 	flushStreamLines();
 
