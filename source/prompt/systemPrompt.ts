@@ -9,6 +9,7 @@ import {
 	getCurrentTimeInfo,
 	appendSystemContext,
 	detectWindowsPowerShell,
+	getToolDiscoverySection as getToolDiscoverySectionHelper,
 } from './shared/promptHelpers.js';
 import os from 'os';
 
@@ -317,12 +318,8 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 	}
 }
 
-/**
- * Generate tool discovery section based on whether tool search is enabled
- */
-function getToolDiscoverySection(toolSearchDisabled: boolean): string {
-	if (toolSearchDisabled) {
-		return `## Available Tools
+const TOOL_DISCOVERY_SECTIONS = {
+	preloaded: `## Available Tools
 
 All tools are pre-loaded and available for immediate use. You can call any tool directly without discovery.
 
@@ -337,10 +334,8 @@ All tools are pre-loaded and available for immediate use. You can call any tool 
 - **askuser** - Ask user interactive questions
 - **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, debug)
 - **codebase** - Semantic code search across entire codebase
-- **skill** - Load specialized knowledge/instructions`;
-	}
-
-	return `## Tool Discovery (Progressive Loading)
+- **skill** - Load specialized knowledge/instructions`,
+	progressive: `## Tool Discovery (Progressive Loading)
 
 **CRITICAL: Tools are NOT pre-loaded. You MUST use \`tool_search\` to discover and activate tools before using them.**
 
@@ -368,8 +363,8 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 **First action pattern:** When you receive a task, immediately search for the tools you need:
 - For coding tasks: \`tool_search(query="filesystem")\` + \`tool_search(query="ace code search")\`
 - For running commands: \`tool_search(query="terminal")\`
-- For complex tasks: \`tool_search(query="todo")\` + \`tool_search(query="filesystem")\``;
-}
+- For complex tasks: \`tool_search(query="todo")\` + \`tool_search(query="filesystem")\``,
+};
 
 // Export SYSTEM_PROMPT as a getter function for real-time ROLE.md updates
 export function getSystemPrompt(toolSearchDisabled = false): string {
@@ -388,7 +383,10 @@ export function getSystemPrompt(toolSearchDisabled = false): string {
 	const timeInfo = getCurrentTimeInfo();
 
 	// Generate tool discovery section
-	const toolDiscoverySection = getToolDiscoverySection(toolSearchDisabled);
+	const toolDiscoverySection = getToolDiscoverySectionHelper(
+		toolSearchDisabled,
+		TOOL_DISCOVERY_SECTIONS,
+	);
 
 	// Replace placeholders with actual content
 	const cliPid = String(process.pid);

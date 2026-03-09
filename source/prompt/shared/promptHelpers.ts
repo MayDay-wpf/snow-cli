@@ -212,3 +212,13 @@ ${systemEnv}
 
 Current Date: ${timeInfo.date}`;
 }
+
+/**
+ * Get the tool discovery section based on whether tool search is disabled
+ */
+export function getToolDiscoverySection(
+	toolSearchDisabled: boolean,
+	sections: {preloaded: string; progressive: string},
+): string {
+	return toolSearchDisabled ? sections.preloaded : sections.progressive;
+}

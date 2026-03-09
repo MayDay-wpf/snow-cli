@@ -11,6 +11,7 @@ import {
 	isCodebaseEnabled,
 	getCurrentTimeInfo,
 	appendSystemContext,
+	getToolDiscoverySection as getToolDiscoverySectionHelper,
 } from './shared/promptHelpers.js';
 
 const PLAN_MODE_SYSTEM_PROMPT = `You are Snow AI CLI - Plan Mode, a specialized task planning and coordination agent.
@@ -428,19 +429,13 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 	}
 }
 
-/**
- * Generate tool discovery section for Plan Mode
- */
-function getToolDiscoverySection(toolSearchDisabled: boolean): string {
-	if (toolSearchDisabled) {
-		return `## Available Tools
+const TOOL_DISCOVERY_SECTIONS = {
+	preloaded: `## Available Tools
 
 All tools are pre-loaded and available for immediate use. You can call any tool directly without discovery.
 
-**Tool categories:** filesystem, ace, terminal, todo, ide, subagent, codebase, websearch, askuser, notebook, skill`;
-	}
-
-	return `## Tool Discovery (Progressive Loading)
+**Tool categories:** filesystem, ace, terminal, todo, ide, subagent, codebase, websearch, askuser, notebook, skill`,
+	progressive: `## Tool Discovery (Progressive Loading)
 
 **CRITICAL: Tools are NOT pre-loaded. Use \`tool_search\` to discover and activate tools before using them.**
 
@@ -459,8 +454,8 @@ Call \`tool_search(query="keyword")\` to find tools. Found tools become immediat
 - **notebook** - Code memory and notes
 - **skill** - Load specialized knowledge
 
-**First action:** Search for the tools you need: \`tool_search(query="filesystem todo subagent")\``;
-}
+**First action:** Search for the tools you need: \`tool_search(query="filesystem todo subagent")\``,
+};
 
 /**
  * Get the Plan Mode system prompt
@@ -481,7 +476,10 @@ export function getPlanModeSystemPrompt(toolSearchDisabled = false): string {
 	const timeInfo = getCurrentTimeInfo();
 
 	// Generate tool discovery section
-	const toolDiscoverySection = getToolDiscoverySection(toolSearchDisabled);
+	const toolDiscoverySection = getToolDiscoverySectionHelper(
+		toolSearchDisabled,
+		TOOL_DISCOVERY_SECTIONS,
+	);
 
 	// Replace placeholders with actual content
 	const finalPrompt = basePrompt
