@@ -23,6 +23,7 @@ export interface CommandResult {
 		| 'exportChat'
 		| 'showAgentPicker'
 		| 'showTodoPicker'
+		| 'showTodoListPanel'
 		| 'showProfilePanel'
 		| 'showModelsPanel'
 		| 'showSkillsPicker'

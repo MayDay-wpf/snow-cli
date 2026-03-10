@@ -70,6 +70,11 @@ type Props = {
 		file: string;
 		timestamp: number;
 	} | null;
+	copyStatusMessage?: {
+		text: string;
+		isError?: boolean;
+		timestamp: number;
+	} | null;
 
 	// Profile 信息
 	currentProfileName?: string;
@@ -106,6 +111,7 @@ export default function StatusLine({
 	codebaseProgress,
 	watcherEnabled = false,
 	fileUpdateNotification,
+	copyStatusMessage,
 	currentProfileName,
 }: Props) {
 	const {t} = useI18n();
@@ -124,6 +130,7 @@ export default function StatusLine({
 		codebaseIndexing ||
 		watcherEnabled ||
 		fileUpdateNotification ||
+		copyStatusMessage ||
 		currentProfileName;
 
 	if (!hasAnyStatus) {
@@ -161,7 +168,10 @@ export default function StatusLine({
 
 		// Tool Search 开启提示
 		if (!toolSearchDisabled) {
-			statusItems.push({text: '♾︎ ToolSearch ON', color: theme.colors.menuInfo});
+			statusItems.push({
+				text: '♾︎ ToolSearch ON',
+				color: theme.colors.menuInfo,
+			});
 		}
 
 		// IDE连接状态
@@ -228,6 +238,15 @@ export default function StatusLine({
 			statusItems.push({
 				text: `⛁ ${t.chatScreen.statusFileUpdatedShort || '已更新'}`,
 				color: 'yellow',
+			});
+		}
+
+		if (copyStatusMessage) {
+			statusItems.push({
+				text: copyStatusMessage.text,
+				color: copyStatusMessage.isError
+					? theme.colors.error
+					: theme.colors.success,
 			});
 		}
 
@@ -586,6 +605,21 @@ export default function StatusLine({
 							'{file}',
 							fileUpdateNotification.file,
 						)}
+					</Text>
+				</Box>
+			)}
+
+			{copyStatusMessage && (
+				<Box>
+					<Text
+						color={
+							copyStatusMessage.isError
+								? theme.colors.error
+								: theme.colors.success
+						}
+						dimColor
+					>
+						{copyStatusMessage.text}
 					</Text>
 				</Box>
 			)}

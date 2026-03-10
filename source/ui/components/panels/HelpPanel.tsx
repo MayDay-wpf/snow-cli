@@ -31,12 +31,13 @@ export default function HelpPanel() {
 				</Text>
 				<Text> • {t.helpPanel.deleteToStart}</Text>
 				<Text> • {t.helpPanel.deleteToEnd}</Text>
-			<Text>
-				{' '}
-				• {t.helpPanel.pasteImages.replace('{pasteKey}', pasteKey)}
-			</Text>
-			<Text> • {t.helpPanel.toggleExpandedView}</Text>
-		</Box>
+				<Text> • {t.helpPanel.copyInput}</Text>
+				<Text>
+					{' '}
+					• {t.helpPanel.pasteImages.replace('{pasteKey}', pasteKey)}
+				</Text>
+				<Text> • {t.helpPanel.toggleExpandedView}</Text>
+			</Box>
 
 			<Box flexDirection="column" marginBottom={1}>
 				<Text bold color="cyan">

@@ -423,6 +423,7 @@ export type TranslationKeys = {
 		textEditingTitle: string;
 		deleteToStart: string;
 		deleteToEnd: string;
+		copyInput: string;
 		pasteImages: string;
 		toggleExpandedView: string;
 		readlineTitle: string;
@@ -528,6 +529,7 @@ export type TranslationKeys = {
 			skillsPicker: string;
 			agent: string;
 			todo: string;
+			todolist: string;
 			addDir: string;
 			reindex: string;
 			codebase: string;
@@ -574,6 +576,21 @@ export type TranslationKeys = {
 		noSkillsFound: string;
 		noDescription: string;
 		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
+	};
+
+	todoListPanel: {
+		title: string;
+		loading: string;
+		deleting: string;
+		empty: string;
+		noActiveSession: string;
+		hint: string;
+		confirmModeHint: string;
+		confirmDelete: string;
+		confirmDeleteHint: string;
+		selectedCount: string;
 		moreAbove: string;
 		moreBelow: string;
 	};
@@ -787,6 +804,8 @@ export type TranslationKeys = {
 		statusConnected: string;
 		statusConnectionFailed: string;
 		statusStopping: string;
+		inputCopySuccess: string;
+		inputCopyFailedPrefix: string;
 		// Profile switch
 		profileCurrent: string;
 		profileSwitchHint: string;

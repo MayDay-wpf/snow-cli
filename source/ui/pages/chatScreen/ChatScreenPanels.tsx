@@ -98,6 +98,7 @@ export default function ChatScreenPanels({
 				showBranchPanel={panelState.showBranchPanel}
 				showDiffReviewPanel={panelState.showDiffReviewPanel}
 				showConnectionPanel={panelState.showConnectionPanel}
+				showTodoListPanel={panelState.showTodoListPanel}
 				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
 				diffReviewMessages={messages}
 				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
@@ -114,6 +115,7 @@ export default function ChatScreenPanels({
 				setShowBranchPanel={panelState.setShowBranchPanel}
 				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
 				setShowConnectionPanel={panelState.setShowConnectionPanel}
+				setShowTodoListPanel={panelState.setShowTodoListPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				onCustomCommandSave={async (
 					name,

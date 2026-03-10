@@ -56,7 +56,11 @@ jobs:
 
             ### What's New
 
-            - Tool search is disabled by default, with persistent state, optimized markdown rendering, and some warnings blocked.
+            - Added a streaming display switch in API configuration to enhance readability
+            - Added /todolist command to manually maintain TODO list
+            - Added Ctrl+O shortcut key to copy text in the input box
+            - Refactored some code to improve code readability
+            - Added more scrolling windows to avoid window jitter in extreme scenarios
 
             ### Installation
             ```bash

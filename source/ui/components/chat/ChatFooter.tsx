@@ -107,6 +107,11 @@ type ChatFooterProps = {
 	currentProfileName: string;
 	isCompressing: boolean;
 	compressionError: string | null;
+	copyStatusMessage?: {
+		text: string;
+		isError?: boolean;
+		timestamp: number;
+	} | null;
 
 	// Background process panel props
 	backgroundProcesses: BackgroundProcess[];
@@ -154,6 +159,11 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 	>('disconnected');
 	const [connectionInstanceName, setConnectionInstanceName] =
 		useState<string>('');
+	const [copyStatusMessage, setCopyStatusMessage] = useState<{
+		text: string;
+		isError?: boolean;
+		timestamp: number;
+	} | null>(null);
 
 	// 订阅连接状态变化
 	useEffect(() => {
@@ -209,6 +219,16 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		return;
 	}, [props.isProcessing, showTodos]);
 
+	useEffect(() => {
+		if (!copyStatusMessage) return;
+		const timeoutId = setTimeout(() => {
+			setCopyStatusMessage(null);
+		}, 2000);
+		return () => {
+			clearTimeout(timeoutId);
+		};
+	}, [copyStatusMessage]);
+
 	return (
 		<>
 			{!props.showReviewCommitPanel && (
@@ -258,6 +278,19 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						profileSearchQuery={props.profileSearchQuery}
 						setProfileSearchQuery={props.setProfileSearchQuery}
 						onSwitchProfile={props.onSwitchProfile}
+						onCopyInputSuccess={() => {
+							setCopyStatusMessage({
+								text: `✔ ${t.chatScreen.inputCopySuccess}`,
+								timestamp: Date.now(),
+							});
+						}}
+						onCopyInputError={errorMessage => {
+							setCopyStatusMessage({
+								text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
+								isError: true,
+								timestamp: Date.now(),
+							});
+						}}
 					/>
 
 					{showTodos && todos.length > 0 && (
@@ -280,6 +313,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						codebaseProgress={props.codebaseProgress}
 						watcherEnabled={props.watcherEnabled}
 						fileUpdateNotification={props.fileUpdateNotification}
+						copyStatusMessage={copyStatusMessage}
 						currentProfileName={props.currentProfileName}
 					/>
 

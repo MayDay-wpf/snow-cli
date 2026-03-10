@@ -24,6 +24,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/export.js'),
 			import('../../../utils/commands/agent.js'),
 			import('../../../utils/commands/todoPicker.js'),
+			import('../../../utils/commands/todolist.js'),
 			import('../../../utils/commands/help.js'),
 			import('../../../utils/commands/custom.js'),
 			import('../../../utils/commands/skills.js'),

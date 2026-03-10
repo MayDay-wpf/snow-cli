@@ -165,7 +165,11 @@ type Props = {
 	placeholder?: string;
 	disabled?: boolean;
 	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
-	chatHistory?: Array<{role: string; content: string; subAgentDirected?: unknown}>;
+	chatHistory?: Array<{
+		role: string;
+		content: string;
+		subAgentDirected?: unknown;
+	}>;
 	onHistorySelect?: (selectedIndex: number, message: string) => void;
 	yoloMode?: boolean;
 	setYoloMode?: (value: boolean) => void;
@@ -214,6 +218,8 @@ type Props = {
 	profileSearchQuery?: string;
 	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
+	onCopyInputSuccess?: () => void;
+	onCopyInputError?: (errorMessage: string) => void;
 	disableKeyboardNavigation?: boolean; // Disable arrow keys and Ctrl+K when background panel is active
 };
 
@@ -245,6 +251,8 @@ export default function ChatInput({
 	profileSearchQuery = '',
 	setProfileSearchQuery,
 	onSwitchProfile,
+	onCopyInputSuccess,
+	onCopyInputError,
 	disableKeyboardNavigation = false,
 }: Props) {
 	// Use i18n hook for translations
@@ -403,6 +411,7 @@ export default function ChatInput({
 	useKeyboardInput({
 		buffer,
 		disabled,
+
 		disableKeyboardNavigation,
 		isProcessing,
 		triggerUpdate,
@@ -448,6 +457,14 @@ export default function ChatInput({
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
+		onCopyInputSuccess: () => {
+			onCopyInputSuccess?.();
+		},
+		onCopyInputError: errorMessage => {
+			onCopyInputError?.(
+				errorMessage || t.commandPanel.copyLastFeedback.unknownError,
+			);
+		},
 		pasteShortcutTimeoutMs,
 		pasteFlushDebounceMs,
 		pasteIndicatorThreshold,
@@ -756,10 +773,7 @@ export default function ChatInput({
 			if (visualLines.length > maxLines) {
 				const halfWindow = Math.floor(maxLines / 2);
 				startLine = Math.max(0, cursorRow - halfWindow);
-				startLine = Math.min(
-					startLine,
-					visualLines.length - maxLines,
-				);
+				startLine = Math.min(startLine, visualLines.length - maxLines);
 				endLine = startLine + maxLines;
 			}
 
@@ -769,10 +783,7 @@ export default function ChatInput({
 			if (startLine > 0) {
 				renderedLines.push(
 					<Text key="scroll-up" color={theme.colors.menuSecondary} dimColor>
-						{t.chatScreen.moreAbove.replace(
-							'{count}',
-							startLine.toString(),
-						)}
+						{t.chatScreen.moreAbove.replace('{count}', startLine.toString())}
 					</Text>,
 				);
 			}
@@ -803,11 +814,7 @@ export default function ChatInput({
 			// Scroll-down indicator
 			if (endLine < visualLines.length) {
 				renderedLines.push(
-					<Text
-						key="scroll-down"
-						color={theme.colors.menuSecondary}
-						dimColor
-					>
+					<Text key="scroll-down" color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.moreBelow.replace(
 							'{count}',
 							(visualLines.length - endLine).toString(),
@@ -939,68 +946,68 @@ export default function ChatInput({
 			)}
 			{!showHistoryMenu && (
 				<>
-				<Box flexDirection="column" width={terminalWidth - 2}>
-				<Text
-					color={
-						isPureBashMode
-							? theme.colors.cyan
-							: isBashMode
-							? theme.colors.success
-							: buffer.isExpandedView
-							? theme.colors.menuInfo
-							: theme.colors.menuSecondary
-					}
-				>
-					{buffer.isExpandedView
-						? '═'.repeat(terminalWidth - 2)
-						: '─'.repeat(terminalWidth - 2)}
-				</Text>
-				<Box flexDirection="row">
-					<Text
-						color={
-							isPureBashMode
-								? theme.colors.cyan
-								: isBashMode
-								? theme.colors.success
-								: theme.colors.menuInfo
-						}
-						bold
-					>
-						{isPureBashMode
-							? '!!'
-							: isBashMode
-							? '>_'
-							: buffer.isExpandedView
-							? '⤢'
-							: '❯'}{' '}
-					</Text>
-					<Box flexGrow={1}>{renderContent()}</Box>
-				</Box>
-				<Box flexDirection="row">
-					<Text
-						color={
-							isPureBashMode
-								? theme.colors.cyan
-								: isBashMode
-								? theme.colors.success
-								: buffer.isExpandedView
-								? theme.colors.menuInfo
-								: theme.colors.menuSecondary
-					}
-					>
-						{buffer.isExpandedView
-							? '═'.repeat(terminalWidth - 2)
-							: '─'.repeat(terminalWidth - 2)}
-					</Text>
-				</Box>
-					{buffer.isExpandedView && (
-						<Box>
-							<Text color={theme.colors.menuSecondary} dimColor>
-								{t.chatScreen.expandedViewHint}
+					<Box flexDirection="column" width={terminalWidth - 2}>
+						<Text
+							color={
+								isPureBashMode
+									? theme.colors.cyan
+									: isBashMode
+									? theme.colors.success
+									: buffer.isExpandedView
+									? theme.colors.menuInfo
+									: theme.colors.menuSecondary
+							}
+						>
+							{buffer.isExpandedView
+								? '═'.repeat(terminalWidth - 2)
+								: '─'.repeat(terminalWidth - 2)}
+						</Text>
+						<Box flexDirection="row">
+							<Text
+								color={
+									isPureBashMode
+										? theme.colors.cyan
+										: isBashMode
+										? theme.colors.success
+										: theme.colors.menuInfo
+								}
+								bold
+							>
+								{isPureBashMode
+									? '!!'
+									: isBashMode
+									? '>_'
+									: buffer.isExpandedView
+									? '⤢'
+									: '❯'}{' '}
+							</Text>
+							<Box flexGrow={1}>{renderContent()}</Box>
+						</Box>
+						<Box flexDirection="row">
+							<Text
+								color={
+									isPureBashMode
+										? theme.colors.cyan
+										: isBashMode
+										? theme.colors.success
+										: buffer.isExpandedView
+										? theme.colors.menuInfo
+										: theme.colors.menuSecondary
+								}
+							>
+								{buffer.isExpandedView
+									? '═'.repeat(terminalWidth - 2)
+									: '─'.repeat(terminalWidth - 2)}
 							</Text>
 						</Box>
-					)}
-				</Box>
+						{buffer.isExpandedView && (
+							<Box>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.chatScreen.expandedViewHint}
+								</Text>
+							</Box>
+						)}
+					</Box>
 					{(showCommands && getFilteredCommands().length > 0) ||
 					showFilePicker ? (
 						<Box marginTop={1}>

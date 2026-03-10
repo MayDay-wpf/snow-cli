@@ -284,6 +284,7 @@ type CommandHandlerOptions = {
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowNewPromptPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -660,6 +661,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showNewPromptPanel') {
 				options.setShowNewPromptPanel(true);
+			} else if (result.success && result.action === 'showTodoListPanel') {
+				options.setShowTodoListPanel(true);
 			} else if (
 				result.success &&
 				result.action === 'executeCustomCommand' &&
@@ -844,10 +847,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 					return newValue;
 				});
-			// Don't add command message to keep UI clean
-		} else if (result.success && result.action === 'toggleToolSearch') {
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'toggleToolSearch') {
 				options.setToolSearchDisabled(prev => !prev);
-		} else if (
+			} else if (
 				result.success &&
 				result.action === 'initProject' &&
 				result.prompt

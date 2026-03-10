@@ -3,6 +3,7 @@ import {useInput} from 'ink';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {editTextWithNotepad} from '../../utils/ui/externalEditor.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
+import {copyToClipboard} from '../../utils/core/clipboard.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import {setPickerActive} from '../../utils/ui/pickerState.js';
 import type {SubAgent} from '../../utils/config/subAgentConfig.js';
@@ -65,6 +66,8 @@ type KeyboardInputOptions = {
 	saveToHistory: (content: string) => Promise<void>;
 	// Clipboard
 	pasteFromClipboard: () => Promise<void>;
+	onCopyInputSuccess?: () => void;
+	onCopyInputError?: (errorMessage: string) => void;
 	// Paste detection
 	pasteShortcutTimeoutMs?: number;
 	pasteFlushDebounceMs?: number;
@@ -198,7 +201,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		resetHistoryNavigation,
 		saveToHistory,
 		pasteFromClipboard,
+		onCopyInputSuccess,
+		onCopyInputError,
+
 		pasteShortcutTimeoutMs = 800,
+
 		pasteFlushDebounceMs = 250,
 		pasteIndicatorThreshold = 300,
 		onSubmit,
@@ -666,9 +673,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			// Down arrow - circular navigation
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, runningAgents.length - 1);
-				setRunningAgentsSelectedIndex(prev =>
-					prev < maxIndex ? prev + 1 : 0,
-				);
+				setRunningAgentsSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
@@ -931,23 +936,29 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
+		// Ctrl+O - Copy current input content to system clipboard
+		if (key.ctrl && input === 'o') {
+			flushPendingInput();
+			const contentToCopy = buffer.getFullText();
+			void copyToClipboard(contentToCopy)
+				.then(() => {
+					onCopyInputSuccess?.();
+				})
+				.catch(error => {
+					console.error('Failed to copy current input to clipboard:', error);
+					onCopyInputError?.(
+						error instanceof Error ? error.message : 'Unknown error',
+					);
+				});
+			return;
+		}
+
 		// Alt+F - Forward one word
 		if (key.meta && input === 'f') {
 			flushPendingInput();
 			const text = buffer.text;
 			const cursorPos = buffer.getCursorPosition();
 			const newPos = findWordBoundary(text, cursorPos, 'forward');
-			buffer.setCursorPosition(newPos);
-			triggerUpdate();
-			return;
-		}
-
-		// Alt+B - Backward one word
-		if (key.meta && input === 'b') {
-			flushPendingInput();
-			const text = buffer.text;
-			const cursorPos = buffer.getCursorPosition();
-			const newPos = findWordBoundary(text, cursorPos, 'backward');
 			buffer.setCursorPosition(newPos);
 			triggerUpdate();
 			return;
@@ -1416,100 +1427,105 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-	if (
-		key.upArrow &&
-		!showCommands &&
-		!showFilePicker &&
-		!disableKeyboardNavigation
-	) {
-		flushPendingInput();
-
-		const text = buffer.getFullText();
-		const cursorPos = buffer.getCursorPosition();
-		const isEmpty = text.trim() === '';
-		const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
-
-		// For multi-line content, always prioritize cursor movement over history navigation.
-		// Only use history navigation when the input is single-line (or empty) and cursor is at position 0.
-		if (!hasMultipleVisualLines && (isEmpty || cursorPos === 0)) {
-			const navigated = navigateHistoryUp();
-			if (navigated) {
-				updateFilePickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateAgentPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateRunningAgentsPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				triggerUpdate();
-				return;
-			}
-		}
-
-		buffer.moveUp();
-		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		triggerUpdate();
-		return;
-	}
-
-	if (
-		key.downArrow &&
-		!showCommands &&
-		!showFilePicker &&
-		!disableKeyboardNavigation
-	) {
-		flushPendingInput();
-
-		const text = buffer.getFullText();
-		const cursorPos = buffer.getCursorPosition();
-		const isEmpty = text.trim() === '';
-		const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
-
-		// For multi-line content, always prioritize cursor movement over history navigation.
-		// Only use history navigation when the input is single-line (or empty),
-		// cursor is at the end, and we're already in history mode.
 		if (
-			!hasMultipleVisualLines &&
-			(isEmpty || cursorPos === text.length) &&
-			currentHistoryIndex !== -1
+			key.upArrow &&
+			!showCommands &&
+			!showFilePicker &&
+			!disableKeyboardNavigation
 		) {
-			const navigated = navigateHistoryDown();
-			if (navigated) {
-				updateFilePickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateAgentPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				updateRunningAgentsPickerState(
-					buffer.getFullText(),
-					buffer.getCursorPosition(),
-				);
-				triggerUpdate();
-				return;
+			flushPendingInput();
+
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			const isEmpty = text.trim() === '';
+			const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
+
+			// For multi-line content, always prioritize cursor movement over history navigation.
+			// Only use history navigation when the input is single-line (or empty) and cursor is at position 0.
+			if (!hasMultipleVisualLines && (isEmpty || cursorPos === 0)) {
+				const navigated = navigateHistoryUp();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateAgentPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateRunningAgentsPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
 			}
+
+			buffer.moveUp();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateRunningAgentsPickerState(
+				buffer.getFullText(),
+				buffer.getCursorPosition(),
+			);
+			triggerUpdate();
+			return;
 		}
 
-		buffer.moveDown();
-		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		updateRunningAgentsPickerState(buffer.getFullText(), buffer.getCursorPosition());
-		triggerUpdate();
-		return;
-	}
+		if (
+			key.downArrow &&
+			!showCommands &&
+			!showFilePicker &&
+			!disableKeyboardNavigation
+		) {
+			flushPendingInput();
+
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			const isEmpty = text.trim() === '';
+			const hasMultipleVisualLines = buffer.viewportVisualLines.length > 1;
+
+			// For multi-line content, always prioritize cursor movement over history navigation.
+			// Only use history navigation when the input is single-line (or empty),
+			// cursor is at the end, and we're already in history mode.
+			if (
+				!hasMultipleVisualLines &&
+				(isEmpty || cursorPos === text.length) &&
+				currentHistoryIndex !== -1
+			) {
+				const navigated = navigateHistoryDown();
+				if (navigated) {
+					updateFilePickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateAgentPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					updateRunningAgentsPickerState(
+						buffer.getFullText(),
+						buffer.getCursorPosition(),
+					);
+					triggerUpdate();
+					return;
+				}
+			}
+
+			buffer.moveDown();
+			updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+			updateRunningAgentsPickerState(
+				buffer.getFullText(),
+				buffer.getCursorPosition(),
+			);
+			triggerUpdate();
+			return;
+		}
 
 		// Regular character input
 		if (input && !key.ctrl && !key.meta && !key.escape) {
-
 			// Reset history navigation when user starts typing
 			if (currentHistoryIndex !== -1) {
 				resetHistoryNavigation();

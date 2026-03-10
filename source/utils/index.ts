@@ -24,6 +24,7 @@ import './commands/role.js';
 import './commands/skills.js';
 import './commands/skillsPicker.js';
 import './commands/todoPicker.js';
+import './commands/todolist.js';
 import './commands/usage.js';
 import './commands/toolsearch.js';
 import './commands/vulnerability-hunting.js';

@@ -423,6 +423,7 @@ export const zhTW: TranslationKeys = {
 		textEditingTitle: '📝 文字編輯:',
 		deleteToStart: 'Ctrl+L - 從游標刪除到開頭(舊版)',
 		deleteToEnd: 'Ctrl+R - 從游標刪除到末尾(舊版)',
+		copyInput: 'Ctrl+O - 複製輸入框內容到系統剪貼簿',
 		pasteImages: '{pasteKey} - 從剪貼簿貼上圖片',
 		toggleExpandedView: 'Ctrl+T - 切換貼上文字的展開/摺疊顯示',
 		readlineTitle: '🚀 Readline 快捷鍵:',
@@ -525,6 +526,7 @@ export const zhTW: TranslationKeys = {
 			skillsPicker: '選擇 Skill 並將其 SKILL.md 內容注入到輸入框',
 			agent: '選擇並使用子代理處理特定任務',
 			todo: '從專案檔案搜尋並選擇 TODO 註釋',
+			todolist: '顯示目前會話的 TODO 樹並支援批次刪除',
 			addDir: '新增工作目錄以支援多專案上下文。用法: /add-dir 或 /add-dir 路徑',
 			reindex: '重建代碼庫索引。使用 -force 刪除現有資料庫並完全重建',
 			codebase: '切換當前專案的代碼庫索引功能。用法: /codebase [on|off|status]',
@@ -618,6 +620,21 @@ export const zhTW: TranslationKeys = {
 		scrollHint: '↑↓ 捲動',
 		moreAbove: '上方 {count} 項',
 		moreBelow: '下方 {count} 項',
+	},
+
+	todoListPanel: {
+		title: '目前會話 TODO',
+		loading: '正在載入 TODO 清單...',
+		deleting: '正在刪除選取的 TODO...',
+		empty: '目前會話還沒有 TODO',
+		noActiveSession: '目前沒有活動會話',
+		hint: '↑↓ 導航 • 空白選取 • D 刪除 • Esc 關閉',
+		confirmModeHint: '確認刪除模式 • Enter/Y/D 確認 • N/Esc 取消',
+		confirmDelete: '確定刪除已選取的 {count} 項嗎？',
+		confirmDeleteHint: '按 Enter、Y 或 D 確認，按 N 或 Esc 取消',
+		selectedCount: '已選 {count} 項',
+		moreAbove: '上方還有 {count} 項',
+		moreBelow: '下方還有 {count} 項',
 	},
 
 	reviewCommitPanel: {
@@ -763,7 +780,7 @@ export const zhTW: TranslationKeys = {
 		headerYolo:
 			'按 Shift+Tab/Ctrl+Y: 切換 YOLO/Plan 模式(循環: YOLO → YOLO+Plan → Plan → 關閉)',
 		headerShortcuts:
-			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
+			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • Ctrl+O (複製輸入) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切換貼上文字的展開/摺疊顯示',
 		headerWorkingDirectory: '工作目錄: {directory}',
 		// Status messages
@@ -785,6 +802,8 @@ export const zhTW: TranslationKeys = {
 		statusConnectionFailed:
 			'連線失敗（這不會影響任何使用） - 請確保在你的 IDE 中安裝並啟用了 Snow CLI 外掛',
 		statusStopping: '停止中...',
+		inputCopySuccess: '已複製輸入框內容到剪貼簿',
+		inputCopyFailedPrefix: '複製輸入框內容失敗',
 		// Profile switch
 		profileCurrent: '目前設定檔',
 		profileSwitchHint: '切換',

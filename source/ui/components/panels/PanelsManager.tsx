@@ -12,6 +12,7 @@ import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
+import TodoListPanel from './TodoListPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
@@ -41,6 +42,7 @@ type PanelsManagerProps = {
 	showBranchPanel: boolean;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
+	showTodoListPanel: boolean;
 	connectionPanelApiUrl?: string;
 	diffReviewMessages: Array<{
 		role: string;
@@ -62,6 +64,7 @@ type PanelsManagerProps = {
 	setShowBranchPanel: (show: boolean) => void;
 	setShowDiffReviewPanel: (show: boolean) => void;
 	setShowConnectionPanel: (show: boolean) => void;
+	setShowTodoListPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 
 	onCustomCommandSave: (
@@ -97,6 +100,7 @@ export default function PanelsManager({
 	showBranchPanel,
 	showDiffReviewPanel,
 	showConnectionPanel,
+	showTodoListPanel,
 	connectionPanelApiUrl,
 	diffReviewMessages,
 	diffReviewSnapshotFileCount,
@@ -113,6 +117,7 @@ export default function PanelsManager({
 	setShowBranchPanel,
 	setShowDiffReviewPanel,
 	setShowConnectionPanel,
+	setShowTodoListPanel,
 	handleSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
@@ -274,6 +279,12 @@ export default function PanelsManager({
 						onClose={() => setShowConnectionPanel(false)}
 						initialApiUrl={connectionPanelApiUrl}
 					/>
+				</Box>
+			)}
+
+			{showTodoListPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<TodoListPanel onClose={() => setShowTodoListPanel(false)} />
 				</Box>
 			)}
 		</>

@@ -422,6 +422,7 @@ export const zh: TranslationKeys = {
 		textEditingTitle: '📝 文本编辑:',
 		deleteToStart: 'Ctrl+L - 从光标删除到开头(旧版)',
 		deleteToEnd: 'Ctrl+R - 从光标删除到末尾(旧版)',
+		copyInput: 'Ctrl+O - 复制输入框内容到系统剪贴板',
 		pasteImages: '{pasteKey} - 从剪贴板粘贴图片',
 		toggleExpandedView: 'Ctrl+T - 切换粘贴文本的展开/折叠显示',
 		readlineTitle: '🚀 Readline 快捷键:',
@@ -524,6 +525,7 @@ export const zh: TranslationKeys = {
 			skillsPicker: '选择 Skill 并将其 SKILL.md 内容注入到输入框',
 			agent: '选择并使用子代理处理特定任务',
 			todo: '从项目文件搜索并选择 TODO 注释',
+			todolist: '显示当前会话的 TODO 树并支持批量删除',
 			addDir: '添加工作目录以支持多项目上下文。用法: /add-dir 或 /add-dir 路径',
 			reindex: '重建代码库索引。使用 -force 删除现有数据库并完全重建',
 			codebase: '切换当前项目的代码库索引功能。用法: /codebase [on|off|status]',
@@ -617,6 +619,21 @@ export const zh: TranslationKeys = {
 		scrollHint: '↑↓ 滚动',
 		moreAbove: '上方 {count} 项',
 		moreBelow: '下方 {count} 项',
+	},
+
+	todoListPanel: {
+		title: '当前会话 TODO',
+		loading: '正在加载 TODO 列表...',
+		deleting: '正在删除选中的 TODO...',
+		empty: '当前会话还没有 TODO',
+		noActiveSession: '当前没有活动会话',
+		hint: '↑↓ 导航 • 空格选中 • D 删除 • Esc 关闭',
+		confirmModeHint: '确认删除模式 • Enter/Y/D 确认 • N/Esc 取消',
+		confirmDelete: '确定删除已选中的 {count} 项吗？',
+		confirmDeleteHint: '按 Enter、Y 或 D 确认，按 N 或 Esc 取消',
+		selectedCount: '已选 {count} 项',
+		moreAbove: '上方还有 {count} 项',
+		moreBelow: '下方还有 {count} 项',
 	},
 
 	reviewCommitPanel: {
@@ -762,7 +779,7 @@ export const zh: TranslationKeys = {
 		headerYolo:
 			'按 Shift+Tab/Ctrl+Y: 切换 YOLO/Plan 模式(循环: YOLO → YOLO+Plan → Plan → 关闭)',
 		headerShortcuts:
-			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
+			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • Ctrl+O (复制输入) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切换粘贴文本的展开/折叠显示',
 		headerWorkingDirectory: '工作目录: {directory}',
 		// Status messages
@@ -784,6 +801,8 @@ export const zh: TranslationKeys = {
 		statusConnectionFailed:
 			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		statusStopping: '停止中...',
+		inputCopySuccess: '已复制输入框内容到剪贴板',
+		inputCopyFailedPrefix: '复制输入框内容失败',
 		// Profile switch
 		profileCurrent: '当前配置',
 		profileSwitchHint: '切换',

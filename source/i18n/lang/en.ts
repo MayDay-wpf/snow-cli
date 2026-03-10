@@ -452,6 +452,7 @@ export const en: TranslationKeys = {
 		textEditingTitle: '📝 Text Editing:',
 		deleteToStart: 'Ctrl+L - Delete from cursor to start (legacy)',
 		deleteToEnd: 'Ctrl+R - Delete from cursor to end (legacy)',
+		copyInput: 'Ctrl+O - Copy input content to system clipboard',
 		pasteImages: '{pasteKey} - Paste images from clipboard',
 		toggleExpandedView:
 			'Ctrl+T - Toggle expanded/collapsed view for pasted text',
@@ -558,6 +559,7 @@ export const en: TranslationKeys = {
 				'Pick a skill and inject its SKILL.md content into the input',
 			agent: 'Select and use a sub-agent to handle specific tasks',
 			todo: 'Search and select TODO comments from project files',
+			todolist: 'Show the current session TODO tree and manage items',
 			addDir:
 				'Add working directory for multi-project context. Usage: /add-dir or /add-dir path',
 			reindex:
@@ -658,6 +660,21 @@ export const en: TranslationKeys = {
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} above',
 		moreBelow: '{count} below',
+	},
+
+	todoListPanel: {
+		title: 'Current Session TODOs',
+		loading: 'Loading TODO list...',
+		deleting: 'Deleting selected TODO items...',
+		empty: 'This session has no TODO items yet',
+		noActiveSession: 'No active session',
+		hint: '↑↓ navigate • Space select • D delete • Esc close',
+		confirmModeHint: 'Confirm delete mode • Enter/Y/D confirm • N/Esc cancel',
+		confirmDelete: 'Delete the {count} selected item(s)?',
+		confirmDeleteHint: 'Press Enter, Y or D to confirm, N or Esc to cancel',
+		selectedCount: '{count} selected',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
 	},
 
 	reviewCommitPanel: {
@@ -808,7 +825,7 @@ export const en: TranslationKeys = {
 		headerYolo:
 			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
 		headerShortcuts:
-			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
+			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+O (copy input) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerExpandedView:
 			'Press Ctrl+T: toggle expanded/collapsed view for pasted text',
 		headerWorkingDirectory: 'Working directory: {directory}',
@@ -831,6 +848,8 @@ export const en: TranslationKeys = {
 		statusConnectionFailed:
 			'Connection Failed (this will not affect any usage) - Make sure Snow CLI plugin is installed and active in your IDE',
 		statusStopping: 'Stopping...',
+		inputCopySuccess: 'Input content copied to clipboard',
+		inputCopyFailedPrefix: 'Failed to copy input content',
 		// Profile switch
 		profileCurrent: 'Profile',
 		profileSwitchHint: 'switch',
