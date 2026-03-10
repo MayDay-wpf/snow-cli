@@ -165,7 +165,11 @@ export async function handleConversationWithTools(
 	});
 
 	try {
-		await saveMessage({role: 'user', content: userContent, images: imageContents});
+		await saveMessage({
+			role: 'user',
+			content: userContent,
+			images: imageContents,
+		});
 	} catch (error) {
 		console.error('Failed to save user message:', error);
 	}
@@ -259,10 +263,7 @@ export async function handleConversationWithTools(
 			});
 
 			setStreamTokenCount(0);
-			accumulatedUsage = mergeUsage(
-				accumulatedUsage,
-				streamResult.roundUsage,
-			);
+			accumulatedUsage = mergeUsage(accumulatedUsage, streamResult.roundUsage);
 
 			// ── Handle tool calls ──
 
@@ -421,9 +422,7 @@ async function processStreamRound(ctx: {
 	setStreamTokenCount: React.Dispatch<React.SetStateAction<number>>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setIsReasoning?: React.Dispatch<React.SetStateAction<boolean>>;
-	setRetryStatus?: React.Dispatch<
-		React.SetStateAction<any>
-	>;
+	setRetryStatus?: React.Dispatch<React.SetStateAction<any>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	options: ConversationHandlerOptions;
 }): Promise<StreamRoundResult> {
@@ -461,7 +460,7 @@ async function processStreamRound(ctx: {
 	let thinkingLineBuffer = '';
 	let contentLineBuffer = '';
 	let isFirstStreamLine = true;
-	let hasEmittedThinkingLines = false;
+	let hasReceivedContentChunk = false;
 	let hasStartedContent = false;
 	let hasStreamedLines = false;
 
@@ -477,16 +476,12 @@ async function processStreamRound(ctx: {
 		lastFlushTime = Date.now();
 	};
 
-	const emitStreamLine = (
-		content: string,
-		isThinking: boolean,
-	) => {
+	const emitStreamLine = (content: string, isThinking: boolean) => {
 		if (!streamingEnabled) return;
 		const isFirst = isFirstStreamLine;
 		const isFirstContent = !isThinking && !hasStartedContent;
 		if (isFirst) isFirstStreamLine = false;
 		if (isFirstContent) hasStartedContent = true;
-		if (isThinking) hasEmittedThinkingLines = true;
 		hasStreamedLines = true;
 		pendingStreamLines.push({
 			role: 'assistant' as const,
@@ -500,6 +495,21 @@ async function processStreamRound(ctx: {
 		if (now - lastFlushTime >= STREAM_FLUSH_INTERVAL) {
 			flushStreamLines();
 		}
+	};
+
+	const flushThinkingBufferToStream = () => {
+		if (hasReceivedContentChunk || !thinkingLineBuffer) {
+			thinkingLineBuffer = '';
+			return;
+		}
+		const cleaned = thinkingLineBuffer.replace(
+			/\s*<\/?think(?:ing)?>\s*/gi,
+			'',
+		);
+		if (cleaned.trim()) {
+			emitStreamLine(cleaned, true);
+		}
+		thinkingLineBuffer = '';
 	};
 
 	let inCodeBlock = false;
@@ -615,13 +625,21 @@ async function processStreamRound(ctx: {
 		}
 
 		if (chunk.type === 'reasoning_started') {
-			setIsReasoning?.(true);
+			if (!hasReceivedContentChunk) {
+				setIsReasoning?.(true);
+			}
 		} else if (chunk.type === 'reasoning_delta' && chunk.delta) {
 			if (!hasStartedReasoning) {
-				setIsReasoning?.(true);
 				hasStartedReasoning = true;
+				if (!hasReceivedContentChunk) {
+					setIsReasoning?.(true);
+				}
 			}
 			countTokens(chunk.delta);
+
+			if (hasReceivedContentChunk) {
+				continue;
+			}
 
 			thinkingLineBuffer += chunk.delta;
 			const thinkLines = thinkingLineBuffer.split('\n');
@@ -636,22 +654,13 @@ async function processStreamRound(ctx: {
 			}
 			thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
 		} else if (chunk.type === 'content' && chunk.content) {
+			if (!hasReceivedContentChunk) {
+				hasReceivedContentChunk = true;
+				flushThinkingBufferToStream();
+			}
 			setIsReasoning?.(false);
 			streamedContent += chunk.content;
 			countTokens(chunk.content);
-
-			if (hasEmittedThinkingLines && !hasStartedContent) {
-				if (thinkingLineBuffer) {
-					const cleaned = thinkingLineBuffer.replace(
-						/\s*<\/?think(?:ing)?>\s*/gi,
-						'',
-					);
-					if (cleaned.trim()) {
-						emitStreamLine(cleaned, true);
-					}
-					thinkingLineBuffer = '';
-				}
-			}
 
 			contentLineBuffer += chunk.content;
 			const contentLines = contentLineBuffer.split('\n');
@@ -679,22 +688,17 @@ async function processStreamRound(ctx: {
 				prompt_tokens: chunk.usage.prompt_tokens || 0,
 				completion_tokens: chunk.usage.completion_tokens || 0,
 				total_tokens: chunk.usage.total_tokens || 0,
-				cache_creation_input_tokens:
-					chunk.usage.cache_creation_input_tokens,
+				cache_creation_input_tokens: chunk.usage.cache_creation_input_tokens,
 				cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
 				cached_tokens: chunk.usage.cached_tokens,
 			};
 		}
 	}
 
-	if (thinkingLineBuffer) {
-		const cleaned = thinkingLineBuffer.replace(
-			/\s*<\/?think(?:ing)?>\s*/gi,
-			'',
-		);
-		if (cleaned.trim()) {
-			emitStreamLine(cleaned, true);
-		}
+	if (!hasReceivedContentChunk) {
+		flushThinkingBufferToStream();
+	} else {
+		thinkingLineBuffer = '';
 	}
 	if (contentLineBuffer.trim()) {
 		processContentLine(contentLineBuffer);
@@ -722,10 +726,7 @@ async function processStreamRound(ctx: {
 	};
 }
 
-function mergeUsage(
-	accumulated: any | null,
-	round: any | null,
-): any | null {
+function mergeUsage(accumulated: any | null, round: any | null): any | null {
 	if (!round) return accumulated;
 	if (!accumulated) return round;
 	return {
@@ -885,9 +886,7 @@ async function handleToolCallRound(ctx: {
 		controller.signal,
 		setStreamTokenCount,
 		async subAgentMessage => {
-			setMessages(prev =>
-				subAgentHandler.handleMessage(prev, subAgentMessage),
-			);
+			setMessages(prev => subAgentHandler.handleMessage(prev, subAgentMessage));
 		},
 		async (toolCall, batchToolNames, allTools) => {
 			if (connectionManager.isConnected()) {
@@ -1008,7 +1007,10 @@ async function handleToolCallRound(ctx: {
 
 	for (const result of toolResults) {
 		const isError = result.content.startsWith('Error:');
-		const resultToSave = {...result, messageStatus: isError ? 'error' : 'success'};
+		const resultToSave = {
+			...result,
+			messageStatus: isError ? 'error' : 'success',
+		};
 		conversationMessages.push(resultToSave as any);
 		try {
 			await saveMessage(resultToSave as any);
@@ -1051,10 +1053,7 @@ async function handleToolCallRound(ctx: {
 		return {type: 'break'};
 	}
 
-	if (
-		compressResult.compressed &&
-		compressResult.updatedConversationMessages
-	) {
+	if (compressResult.compressed && compressResult.updatedConversationMessages) {
 		conversationMessages.length = 0;
 		conversationMessages.push(...compressResult.updatedConversationMessages);
 		if (compressResult.accumulatedUsage) {
@@ -1111,7 +1110,11 @@ async function handleToolCallRound(ctx: {
 
 				const uiMsg: Message = {
 					role: 'subagent',
-					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${sr.agentName}\x1b[0m (by ${sr.spawnedBy.agentName}): ${sr.success ? 'completed' : 'failed'}`,
+					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${
+						sr.agentName
+					}\x1b[0m (by ${sr.spawnedBy.agentName}): ${
+						sr.success ? 'completed' : 'failed'
+					}`,
 					streaming: false,
 					messageStatus: sr.success ? 'success' : 'error',
 					subAgent: {
