@@ -192,6 +192,66 @@ export function useRollback(props: UseChatLogicProps) {
 		}, 0);
 	};
 
+	const switchToOriginalCompressedSession = async (
+		originalSessionId: string,
+		compressedSessionId?: string,
+	) => {
+		try {
+			const originalSession = await sessionManager.loadSession(
+				originalSessionId,
+			);
+			if (!originalSession) {
+				console.error('Failed to load original session for rollback');
+				return false;
+			}
+
+			sessionManager.setCurrentSession(originalSession);
+
+			const uiMessages = convertSessionMessagesToUI(originalSession.messages);
+
+			clearSavedMessages();
+			setMessages(uiMessages);
+
+			const snapshots = await hashBasedSnapshotManager.listSnapshots(
+				originalSession.id,
+			);
+			const counts = new Map<number, number>();
+			for (const snapshot of snapshots) {
+				counts.set(snapshot.messageIndex, snapshot.fileCount);
+			}
+			snapshotState.setSnapshotFileCount(counts);
+
+			if (compressedSessionId && compressedSessionId !== originalSessionId) {
+				try {
+					await hashBasedSnapshotManager.clearAllSnapshots(compressedSessionId);
+					clearAllNotebookSnapshots(compressedSessionId);
+					const deleted = await sessionManager.deleteSession(
+						compressedSessionId,
+					);
+					if (!deleted) {
+						console.warn(
+							`Failed to delete compressed session after rollback: ${compressedSessionId}`,
+						);
+					}
+				} catch (cleanupError) {
+					console.error(
+						'Failed to clean up compressed session after rollback:',
+						cleanupError,
+					);
+				}
+			}
+
+			console.log(
+				`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
+			);
+
+			return true;
+		} catch (error) {
+			console.error('Failed to switch to original session:', error);
+			return false;
+		}
+	};
+
 	const handleHistorySelect = async (
 		selectedIndex: number,
 		message: string,
@@ -238,41 +298,13 @@ export function useRollback(props: UseChatLogicProps) {
 			}
 
 			const originalSessionId = currentSession.compressedFrom;
-
-			try {
-				const originalSession = await sessionManager.loadSession(
-					originalSessionId,
-				);
-				if (!originalSession) {
-					console.error('Failed to load original session for rollback');
-				} else {
-					sessionManager.setCurrentSession(originalSession);
-
-					const uiMessages = convertSessionMessagesToUI(
-						originalSession.messages,
-					);
-
-					clearSavedMessages();
-					setMessages(uiMessages);
-					setRemountKey(prev => prev + 1);
-
-					const snapshots = await hashBasedSnapshotManager.listSnapshots(
-						originalSession.id,
-					);
-					const counts = new Map<number, number>();
-					for (const snapshot of snapshots) {
-						counts.set(snapshot.messageIndex, snapshot.fileCount);
-					}
-					snapshotState.setSnapshotFileCount(counts);
-
-					console.log(
-						`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
-					);
-
-					return;
-				}
-			} catch (error) {
-				console.error('Failed to switch to original session:', error);
+			const switchedToOriginalSession = await switchToOriginalCompressedSession(
+				originalSessionId,
+				currentSession.id,
+			);
+			if (switchedToOriginalSession) {
+				setRemountKey(prev => prev + 1);
+				return;
 			}
 		}
 
@@ -295,7 +327,7 @@ export function useRollback(props: UseChatLogicProps) {
 		} else {
 			setRestoreInputContent({
 				text: cleanIDEContext(message),
-				images: images,
+				images,
 			});
 			await performRollback(selectedIndex, false, true);
 		}
@@ -311,7 +343,8 @@ export function useRollback(props: UseChatLogicProps) {
 		}
 
 		const shouldRollbackFiles = mode === 'both' || mode === 'files';
-		const shouldRollbackConversation = mode === 'both' || mode === 'conversation';
+		const shouldRollbackConversation =
+			mode === 'both' || mode === 'conversation';
 
 		if (snapshotState.pendingRollback) {
 			if (shouldRollbackConversation && snapshotState.pendingRollback.message) {
@@ -323,6 +356,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 			if (snapshotState.pendingRollback.crossSessionRollback) {
 				const {originalSessionId} = snapshotState.pendingRollback;
+				const compressedSessionId = sessionManager.getCurrentSession()?.id;
 
 				if (shouldRollbackFiles) {
 					await performRollback(
@@ -334,44 +368,19 @@ export function useRollback(props: UseChatLogicProps) {
 				}
 
 				if (shouldRollbackConversation && originalSessionId) {
-					try {
-						const originalSession = await sessionManager.loadSession(
+					const switchedToOriginalSession =
+						await switchToOriginalCompressedSession(
 							originalSessionId,
+							shouldRollbackFiles ? undefined : compressedSessionId,
 						);
-						if (originalSession) {
-							sessionManager.setCurrentSession(originalSession);
-
-							const uiMessages = convertSessionMessagesToUI(
-								originalSession.messages,
-							);
-
-							clearSavedMessages();
-							setMessages(uiMessages);
-
-							const snapshots = await hashBasedSnapshotManager.listSnapshots(
-								originalSession.id,
-							);
-							const counts = new Map<number, number>();
-							for (const snapshot of snapshots) {
-								counts.set(snapshot.messageIndex, snapshot.fileCount);
-							}
-							snapshotState.setSnapshotFileCount(counts);
-
-							console.log(
-								`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
-							);
-
-							setTimeout(() => {
-								setRemountKey(prev => prev + 1);
-								snapshotState.setPendingRollback(null);
-							}, 0);
-						}
-					} catch (error) {
-						console.error('Failed to switch to original session:', error);
+					if (switchedToOriginalSession) {
+						setTimeout(() => {
+							setRemountKey(prev => prev + 1);
+							snapshotState.setPendingRollback(null);
+						}, 0);
+					} else {
 						snapshotState.setPendingRollback(null);
 					}
-				} else if (!shouldRollbackConversation) {
-					snapshotState.setPendingRollback(null);
 				} else {
 					snapshotState.setPendingRollback(null);
 				}

@@ -16,6 +16,7 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useTerminalFocus} from '../../hooks/ui/useTerminalFocus.js';
 import {useBashMode} from '../../hooks/input/useBashMode.js';
 import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecutionState.js';
+import {useSchedulerExecutionState} from '../../hooks/execution/useSchedulerExecutionState.js';
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
@@ -89,6 +90,8 @@ export default function ChatScreen({
 		pendingUserQuestion,
 		setPendingUserQuestion,
 		requestUserQuestion,
+		compressionStatus,
+		setCompressionStatus,
 	} = useChatScreenLocalState();
 	const {
 		yoloMode,
@@ -107,6 +110,7 @@ export default function ChatScreen({
 	const snapshotState = useSnapshotState(messages.length);
 	const bashMode = useBashMode();
 	const terminalExecutionState = useTerminalExecutionState();
+	const schedulerExecutionState = useSchedulerExecutionState();
 	const backgroundProcesses = useBackgroundProcesses();
 	const panelState = usePanelState();
 	const {hasFocus} = useTerminalFocus();
@@ -208,6 +212,7 @@ export default function ChatScreen({
 		commandsLoaded,
 		terminalExecutionState,
 		backgroundProcesses,
+		schedulerExecutionState,
 		panelState,
 		setIsExecutingTerminalCommand,
 		setHookError,
@@ -218,6 +223,7 @@ export default function ChatScreen({
 			handleCommandExecutionRef.current?.(command, result);
 		},
 		pendingToolConfirmation,
+		onCompressionStatus: setCompressionStatus,
 	});
 
 	function handleSwitchProfile() {
@@ -273,6 +279,7 @@ export default function ChatScreen({
 		onQuit: handleQuit,
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
+		onCompressionStatus: setCompressionStatus,
 	});
 
 	useEffect(() => {
@@ -356,6 +363,7 @@ export default function ChatScreen({
 		!pendingUserQuestion &&
 		!bashSensitiveCommand &&
 		!terminalExecutionState.state.needsInput &&
+		!schedulerExecutionState.state.isRunning &&
 		!hasBlockingPanel &&
 		!snapshotState.pendingRollback;
 	const footerContextUsage = streamingState.contextUsage
@@ -407,11 +415,13 @@ export default function ChatScreen({
 				pendingUserQuestion={pendingUserQuestion}
 				bashSensitiveCommand={bashSensitiveCommand}
 				terminalExecutionState={terminalExecutionState}
+				schedulerExecutionState={schedulerExecutionState}
 				customCommandExecution={customCommandExecution}
 				bashMode={bashMode}
 				hookError={hookError}
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
 				setHookError={setHookError}
+				compressionStatus={compressionStatus}
 			/>
 
 			<ChatScreenPanels

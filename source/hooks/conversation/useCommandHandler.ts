@@ -1,6 +1,7 @@
 import {useStdout} from 'ink';
 import {useCallback} from 'react';
 import type {Message} from '../../ui/components/chat/MessageList.js';
+import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
@@ -18,44 +19,54 @@ import {useI18n} from '../../i18n/index.js';
 /**
  * 执行上下文压缩
  * @param sessionId - 可选的会话ID，如果提供则使用该ID加载会话进行压缩
+ * @param onStatusUpdate - 可选的状态更新回调，用于在UI中显示压缩进度
  * @returns 返回压缩后的UI消息列表和token使用信息，如果失败返回null
  */
-export async function executeContextCompression(sessionId?: string): Promise<{
+export async function executeContextCompression(
+	sessionId?: string,
+	onStatusUpdate?: (status: CompressionStatus) => void,
+): Promise<{
 	uiMessages: Message[];
 	usage: UsageInfo;
 } | null> {
 	try {
 		// 必须提供 sessionId 才能执行压缩，避免压缩错误的会话
 		if (!sessionId) {
-			console.warn(
-				'Context compression skipped: No active session ID available',
-			);
+			onStatusUpdate?.({
+				step: 'skipped',
+				message: 'No active session ID available',
+			});
 			return null;
 		}
 
 		// CRITICAL: Save current session to disk BEFORE loading for compression
 		// This ensures all recently added messages (including tool_calls) are persisted
 		// Otherwise loadSession might read stale data, causing compressed session to miss tool_calls
-		console.log(`Saving current session ${sessionId} before compression...`);
+		onStatusUpdate?.({step: 'saving', sessionId});
 		const currentSessionBeforeSave = sessionManager.getCurrentSession();
 		if (currentSessionBeforeSave && currentSessionBeforeSave.id === sessionId) {
 			await sessionManager.saveSession(currentSessionBeforeSave);
-			console.log(`Session ${sessionId} saved, now loading for compression...`);
 		}
 
 		// 使用提供的 sessionId 加载会话（从文件读取，确保数据完整）
-		console.log(`Loading session ${sessionId} for compression...`);
+		onStatusUpdate?.({step: 'loading', sessionId});
 		const currentSession = await sessionManager.loadSession(sessionId);
 
 		if (!currentSession) {
-			console.warn(
-				`Context compression skipped: Failed to load session ${sessionId}`,
-			);
+			onStatusUpdate?.({
+				step: 'failed',
+				message: `Failed to load session ${sessionId}`,
+				sessionId,
+			});
 			return null;
 		}
 
 		if (currentSession.messages.length === 0) {
-			console.warn(`Session ${sessionId} has no messages to compress`);
+			onStatusUpdate?.({
+				step: 'skipped',
+				message: 'No messages to compress',
+				sessionId,
+			});
 			return null;
 		}
 
@@ -75,17 +86,26 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 		}));
 
 		// Compress the context (全量压缩，保留最后一轮完整对话)
+		onStatusUpdate?.({step: 'compressing', sessionId});
 		const compressionResult = await compressContext(chatMessages);
 
 		// 如果返回null，说明无法安全压缩（历史不足或只有当前轮次）
 		if (!compressionResult) {
-			console.warn('Compression skipped: not enough history to compress');
+			onStatusUpdate?.({
+				step: 'skipped',
+				message: 'Not enough history to compress',
+				sessionId,
+			});
 			return null;
 		}
 
 		// Check if beforeCompress hook failed
 		if (compressionResult.hookFailed) {
-			console.warn('Compression blocked by beforeCompress hook');
+			onStatusUpdate?.({
+				step: 'failed',
+				message: 'Blocked by beforeCompress hook',
+				sessionId,
+			});
 			// Return a special result with hookFailed flag to abort AI flow
 			// Don't return usage to avoid changing token counts
 			return {
@@ -176,20 +196,28 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 		try {
 			const todoService = getTodoService();
 			await todoService.copyTodoList(currentSession.id, compressedSession.id);
-			console.log(
-				`TODO list inherited from session ${currentSession.id} to ${compressedSession.id}`,
-			);
+			onStatusUpdate?.({
+				step: 'saving',
+				message: `TODO list inherited from session ${currentSession.id}`,
+				sessionId: compressedSession.id,
+			});
 		} catch (error) {
 			// TODO 继承失败不应该影响压缩流程，记录日志即可
-			console.warn('Failed to inherit TODO list:', error);
+			onStatusUpdate?.({
+				step: 'skipped',
+				message: 'Failed to inherit TODO list',
+				sessionId: compressedSession.id,
+			});
 		}
 
 		// CRITICAL: Reload the new session from disk after compression
 		// This ensures the in-memory session object is fully synchronized with the persisted data
 		// Without this, subsequent saveMessage calls might save to the old session file
-		console.log(
-			`Reloading compressed session ${compressedSession.id} from disk...`,
-		);
+		onStatusUpdate?.({
+			step: 'loading',
+			message: `Reloading compressed session from disk...`,
+			sessionId: compressedSession.id,
+		});
 		const reloadedSession = await sessionManager.loadSession(
 			compressedSession.id,
 		);
@@ -197,15 +225,19 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 		if (reloadedSession) {
 			// Set the reloaded session as current (with fresh data from disk)
 			sessionManager.setCurrentSession(reloadedSession);
-			console.log(
-				`Compressed session ${compressedSession.id} reloaded and set as current`,
-			);
+			onStatusUpdate?.({
+				step: 'completed',
+				message: `Session reloaded and set as current`,
+				sessionId: compressedSession.id,
+			});
 		} else {
 			// Fallback: set the in-memory session if reload fails
 			sessionManager.setCurrentSession(compressedSession);
-			console.warn(
-				`Failed to reload compressed session, using in-memory version`,
-			);
+			onStatusUpdate?.({
+				step: 'completed',
+				message: `Using in-memory version (reload failed)`,
+				sessionId: compressedSession.id,
+			});
 		}
 
 		// 新会话有独立的快照系统，不需要重映射旧会话的快照
@@ -251,7 +283,11 @@ export async function executeContextCompression(sessionId?: string): Promise<{
 			},
 		};
 	} catch (error) {
-		console.error('Context compression failed:', error);
+		onStatusUpdate?.({
+			step: 'failed',
+			message:
+				error instanceof Error ? error.message : 'Context compression failed',
+		});
 		return null;
 	}
 }
@@ -270,6 +306,11 @@ type CommandHandlerOptions = {
 		React.SetStateAction<string | undefined>
 	>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	onCompressionStatus?: (
+		status:
+			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
+			| null,
+	) => void;
 
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -341,20 +382,21 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						throw new Error('No active session to compress');
 					}
 
-					console.log(
-						'[Compact] Executing compression for session:',
-						currentSession.id,
-					);
-					// 使用提取的压缩函数，传入当前会话ID
+					// 使用提取的压缩函数，传入当前会话ID和状态回调
 					const compressionResult = await executeContextCompression(
 						currentSession.id,
+						status => {
+							options.onCompressionStatus?.(status);
+						},
 					);
 
 					if (!compressionResult) {
 						throw new Error('Compression failed');
 					}
 
-					console.log('[Compact] Compression completed successfully');
+					// Clear compression status after completion
+					options.onCompressionStatus?.(null);
+
 					// 更新UI
 					options.clearSavedMessages();
 					options.setMessages(compressionResult.uiMessages);
@@ -368,12 +410,15 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						error instanceof Error
 							? error.message
 							: 'Unknown compression error';
-					console.error('[Compact] Compression error:', errorMsg);
+					options.onCompressionStatus?.({
+						step: 'failed',
+						message: errorMsg,
+					});
 					options.setCompressionError(errorMsg);
 
 					const errorMessage: Message = {
 						role: 'assistant',
-						content: `**Compression Failed**\n\n${errorMsg}`,
+						content: `**Compression Failed**\\n\\n${errorMsg}`,
 						streaming: false,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);

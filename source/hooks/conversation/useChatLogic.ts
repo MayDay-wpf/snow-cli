@@ -21,6 +21,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		commandsLoaded,
 		terminalExecutionState,
 		backgroundProcesses,
+		schedulerExecutionState,
 		hasFocus,
 	} = props;
 
@@ -33,11 +34,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 	} = useMessageProcessing(props);
 
 	// Sub-hook: rollback logic
-	const {
-		handleHistorySelect,
-		handleRollbackConfirm,
-		rollbackViaSSE,
-	} = useRollback(props);
+	const {handleHistorySelect, handleRollbackConfirm, rollbackViaSSE} =
+		useRollback(props);
 
 	// Sub-hook: misc handlers (quit, reindex, review, session, user question)
 	const {
@@ -192,6 +190,18 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 			if (!key.escape) return false;
 
+			// Handle scheduler task interruption
+			if (schedulerExecutionState?.state.isRunning) {
+				schedulerExecutionState.resetTask();
+				// Also abort streaming if active
+				if (streamingState.isStreaming && streamingState.abortController) {
+					userInterruptedRef.current = true;
+					streamingState.setIsStopping(true);
+					streamingState.abortController.abort();
+				}
+				return true;
+			}
+
 			if (streamingState.isStopping && !streamingState.isStreaming) {
 				streamingState.setIsStopping(false);
 				return true;
@@ -238,6 +248,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			handleInterrupt,
 			setRestoreInputContent,
 			setPendingMessages,
+			schedulerExecutionState,
 		],
 	);
 

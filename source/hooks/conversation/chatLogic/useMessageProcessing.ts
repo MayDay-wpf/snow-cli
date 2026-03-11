@@ -10,7 +10,10 @@ import {
 	shouldAutoCompress,
 	performAutoCompression,
 } from '../../../utils/core/autoCompress.js';
-import {getOpenAiConfig, DEFAULT_AUTO_COMPRESS_THRESHOLD} from '../../../utils/config/apiConfig.js';
+import {
+	getOpenAiConfig,
+	DEFAULT_AUTO_COMPRESS_THRESHOLD,
+} from '../../../utils/config/apiConfig.js';
 import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTracker.js';
 
 /**
@@ -98,7 +101,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const autoCompressConfig = getOpenAiConfig();
 		if (
 			autoCompressConfig.enableAutoCompress !== false &&
-			shouldAutoCompress(currentContextPercentageRef.current, autoCompressConfig.autoCompressThreshold ?? DEFAULT_AUTO_COMPRESS_THRESHOLD)
+			shouldAutoCompress(
+				currentContextPercentageRef.current,
+				autoCompressConfig.autoCompressThreshold ??
+					DEFAULT_AUTO_COMPRESS_THRESHOLD,
+			)
 		) {
 			setIsCompressing(true);
 			setCompressionError(null);
@@ -237,6 +244,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					getCurrentContextPercentage: () =>
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
+					onCompressionStatus: props.onCompressionStatus,
 				});
 			} finally {
 				// On-demand backup system - snapshot management is automatic
@@ -664,6 +672,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					getCurrentContextPercentage: () =>
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
+					onCompressionStatus: props.onCompressionStatus,
 				});
 			} finally {
 				// Snapshots are now created on-demand during file operations

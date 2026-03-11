@@ -1237,6 +1237,10 @@ export const en: TranslationKeys = {
 		inputPlaceholder: 'Type your input and press Enter',
 		inputHint: 'Press Enter to submit input',
 	},
+	scheduler: {
+		title: 'Scheduled Task',
+		hint: 'AI workflow is paused, waiting for countdown to finish...',
+	},
 	backgroundProcesses: {
 		title: 'Background Processes',
 		status: 'Status',

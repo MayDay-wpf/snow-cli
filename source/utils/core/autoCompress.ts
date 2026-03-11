@@ -1,3 +1,4 @@
+import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
 import {executeContextCompression} from '../../hooks/conversation/useCommandHandler.js';
 
 /**
@@ -16,11 +17,15 @@ export function shouldAutoCompress(
 /**
  * 执行自动压缩
  * @param sessionId - 可选的会话ID，如果提供则使用该ID加载会话进行压缩
+ * @param onStatusUpdate - 可选的状态更新回调，用于在UI中显示压缩进度
  * @returns 压缩结果，如果失败返回null或包含hookFailed的结果
  */
-export async function performAutoCompression(sessionId?: string) {
+export async function performAutoCompression(
+	sessionId?: string,
+	onStatusUpdate?: (status: CompressionStatus) => void,
+) {
 	try {
-		const result = await executeContextCompression(sessionId);
+		const result = await executeContextCompression(sessionId, onStatusUpdate);
 
 		// If beforeCompress hook failed, return the result with hookFailed flag
 		// The caller (useConversation.ts) will handle displaying error and aborting AI flow
@@ -30,7 +35,13 @@ export async function performAutoCompression(sessionId?: string) {
 
 		return result;
 	} catch (error) {
-		console.error('Auto-compression failed:', error);
+		if (onStatusUpdate) {
+			onStatusUpdate({
+				step: 'failed',
+				message: error instanceof Error ? error.message : 'Unknown error',
+				sessionId,
+			});
+		}
 		return null;
 	}
 }

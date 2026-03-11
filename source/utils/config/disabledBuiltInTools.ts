@@ -8,6 +8,9 @@ import path from 'node:path';
 
 const CONFIG_FILE = 'disabled-builtin-tools.json';
 
+// 默认禁用的内置服务列表
+const DEFAULT_DISABLED_SERVICES: string[] = ['scheduler'];
+
 function getConfigPath(): string {
 	return path.join(process.cwd(), '.snow', CONFIG_FILE);
 }
@@ -19,12 +22,13 @@ export function getDisabledBuiltInServices(): string[] {
 	try {
 		const configPath = getConfigPath();
 		if (!fs.existsSync(configPath)) {
-			return [];
+			// 返回默认禁用列表
+			return [...DEFAULT_DISABLED_SERVICES];
 		}
 		const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 		return Array.isArray(data.disabledServices) ? data.disabledServices : [];
 	} catch {
-		return [];
+		return [...DEFAULT_DISABLED_SERVICES];
 	}
 }
 

@@ -92,6 +92,11 @@ export type ConversationHandlerOptions = {
 	>;
 	getCurrentContextPercentage?: () => number;
 	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>;
+	onCompressionStatus?: (
+		status:
+			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
+			| null,
+	) => void;
 };
 
 /**
@@ -616,6 +621,10 @@ async function processStreamRound(ctx: {
 		}
 	};
 
+	// Note: Stream iteration relies on the generator respecting AbortSignal.
+	// The signal is passed to createStreamGenerator which passes it to fetch.
+	// We also check abort status at the start of each iteration.
+
 	for await (const chunk of streamGenerator) {
 		if (controller.signal.aborted) break;
 
@@ -845,6 +854,7 @@ async function handleToolCallRound(ctx: {
 			? (v: boolean) => options.setIsStreaming!(v)
 			: undefined,
 		freeEncoder,
+		abortSignal: controller.signal,
 	});
 
 	if (confirmResult.type === 'rejected') {
@@ -1032,6 +1042,7 @@ async function handleToolCallRound(ctx: {
 		freeEncoder,
 		compressingLabel:
 			'✵ Auto-compressing context before sending tool results...',
+		onCompressionStatus: options.onCompressionStatus,
 	};
 
 	const compressResult = await handleAutoCompression(autoCompressOpts);

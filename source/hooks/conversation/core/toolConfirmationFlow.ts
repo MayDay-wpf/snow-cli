@@ -22,6 +22,7 @@ export type ToolConfirmationFlowOptions = {
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	setIsStreaming?: (isStreaming: boolean) => void;
 	freeEncoder: () => void;
+	abortSignal?: AbortSignal;
 };
 
 export type ToolConfirmationFlowResult =
@@ -31,6 +32,7 @@ export type ToolConfirmationFlowResult =
 async function notifyAndRequestConfirmation(
 	tools: ToolCall[],
 	requestToolConfirmation: ToolConfirmationFlowOptions['requestToolConfirmation'],
+	abortSignal?: AbortSignal,
 ): Promise<ConfirmationResult> {
 	const firstTool = tools[0]!;
 	const allTools = tools.length > 1 ? tools : undefined;
@@ -47,13 +49,37 @@ async function notifyAndRequestConfirmation(
 		);
 	}
 
-	return requestToolConfirmation(firstTool, undefined, allTools);
+	// Check abort before showing confirmation
+	if (abortSignal?.aborted) {
+		return 'reject';
+	}
+
+	// Race between confirmation and abort signal
+	return Promise.race([
+		requestToolConfirmation(firstTool, undefined, allTools),
+		new Promise<never>((_, reject) => {
+			if (abortSignal) {
+				const onAbort = () => reject(new Error('Tool confirmation aborted'));
+				if (abortSignal.aborted) {
+					onAbort();
+				} else {
+					abortSignal.addEventListener('abort', onAbort, {once: true});
+				}
+			}
+		}),
+	]).catch(error => {
+		if (error.message === 'Tool confirmation aborted') {
+			return 'reject';
+		}
+		throw error;
+	});
 }
 
 function isRejection(confirmation: ConfirmationResult): boolean {
 	return (
 		confirmation === 'reject' ||
-		(typeof confirmation === 'object' && confirmation.type === 'reject_with_reply')
+		(typeof confirmation === 'object' &&
+			confirmation.type === 'reject_with_reply')
 	);
 }
 
@@ -71,7 +97,17 @@ export async function resolveToolConfirmations(
 		yoloMode,
 		requestToolConfirmation,
 		addMultipleToAlwaysApproved,
+		abortSignal,
 	} = options;
+
+	// Check abort at the start
+	if (abortSignal?.aborted) {
+		return {
+			type: 'rejected',
+			shouldContinue: false,
+			accumulatedUsage: options.accumulatedUsage,
+		};
+	}
 
 	// Classify each tool call
 	const toolsNeedingConfirmation: ToolCall[] = [];
@@ -109,8 +145,10 @@ export async function resolveToolConfirmations(
 
 	// YOLO mode: auto-approve non-sensitive, confirm sensitive only
 	if (yoloMode) {
-		const {sensitiveTools, nonSensitiveTools} =
-			await filterToolsBySensitivity(toolsNeedingConfirmation, yoloMode);
+		const {sensitiveTools, nonSensitiveTools} = await filterToolsBySensitivity(
+			toolsNeedingConfirmation,
+			yoloMode,
+		);
 
 		approvedTools.push(...nonSensitiveTools);
 
@@ -118,6 +156,7 @@ export async function resolveToolConfirmations(
 			const confirmation = await notifyAndRequestConfirmation(
 				sensitiveTools,
 				requestToolConfirmation,
+				abortSignal,
 			);
 
 			if (isRejection(confirmation)) {
@@ -146,6 +185,7 @@ export async function resolveToolConfirmations(
 		const confirmation = await notifyAndRequestConfirmation(
 			toolsNeedingConfirmation,
 			requestToolConfirmation,
+			abortSignal,
 		);
 
 		if (isRejection(confirmation)) {
@@ -168,9 +208,7 @@ export async function resolveToolConfirmations(
 		}
 
 		if (confirmation === 'approve_always') {
-			const toolNamesToAdd = toolsNeedingConfirmation.map(
-				t => t.function.name,
-			);
+			const toolNamesToAdd = toolsNeedingConfirmation.map(t => t.function.name);
 			addMultipleToAlwaysApproved(toolNamesToAdd);
 			toolNamesToAdd.forEach(name => sessionApprovedTools.add(name));
 		}

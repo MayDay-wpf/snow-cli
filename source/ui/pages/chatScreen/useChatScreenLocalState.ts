@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {
 	BashSensitiveCommandState,
 	CustomCommandExecutionState,
@@ -41,6 +42,8 @@ export function useChatScreenLocalState() {
 	const [hookError, setHookError] = useState<HookErrorDetails | null>(null);
 	const [pendingUserQuestion, setPendingUserQuestion] =
 		useState<PendingUserQuestionState>(null);
+	const [compressionStatus, setCompressionStatus] =
+		useState<CompressionStatus | null>(null);
 
 	useEffect(() => {
 		currentContextPercentageRef.current = currentContextPercentage;
@@ -136,5 +139,7 @@ export function useChatScreenLocalState() {
 		pendingUserQuestion,
 		setPendingUserQuestion,
 		requestUserQuestion,
+		compressionStatus,
+		setCompressionStatus,
 	};
 }

@@ -11,6 +11,7 @@ import {mcpTools as websearchTools} from '../../mcp/websearch.js';
 import {mcpTools as ideDiagnosticsTools} from '../../mcp/ideDiagnostics.js';
 import {mcpTools as codebaseSearchTools} from '../../mcp/codebaseSearch.js';
 import {mcpTools as askUserQuestionTools} from '../../mcp/askUserQuestion.js';
+import {mcpTools as schedulerTools} from '../../mcp/scheduler.js';
 import {TodoService} from '../../mcp/todo.js';
 import {
 	mcpTools as notebookTools,
@@ -130,6 +131,7 @@ export function getRegisteredServicePrefixes(): string[] {
 		'ide-',
 		'codebase-',
 		'askuser-',
+		'scheduler-',
 		'skill-',
 		'subagent-',
 	];
@@ -299,6 +301,14 @@ async function refreshToolsCache(): Promise<void> {
 		inputSchema: tool.function.parameters,
 	}));
 	addBuiltInService('askuser', askUserToolsNormalized, 'askuser');
+
+	// Add built-in Scheduler tools
+	const schedulerToolsNormalized = schedulerTools.map(tool => ({
+		name: tool.function.name,
+		description: tool.function.description,
+		inputSchema: tool.function.parameters,
+	}));
+	addBuiltInService('scheduler', schedulerToolsNormalized, 'scheduler');
 
 	// Add sub-agent tools (dynamically generated from configuration)
 	const subAgentTools = getSubAgentTools();
@@ -500,6 +510,8 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		serviceName === 'ace' ||
 		serviceName === 'websearch' ||
 		serviceName === 'codebase' ||
+		serviceName === 'askuser' ||
+		serviceName === 'scheduler' ||
 		serviceName === 'subagent'
 	) {
 		return;
@@ -1054,6 +1066,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('askuser-')) {
 			serviceName = 'askuser';
 			actualToolName = toolName.substring('askuser-'.length);
+		} else if (toolName.startsWith('scheduler-')) {
+			serviceName = 'scheduler';
+			actualToolName = toolName.substring('scheduler-'.length);
 		} else if (toolName.startsWith('skill-')) {
 			serviceName = 'skill';
 			actualToolName = toolName.substring('skill-'.length);
@@ -1098,6 +1113,7 @@ export async function executeMCPTool(
 			'ide',
 			'codebase',
 			'askuser',
+			'scheduler',
 			'skill',
 			'subagent',
 		];
@@ -1500,6 +1516,119 @@ export async function executeMCPTool(
 					);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
+			}
+		} else if (serviceName === 'scheduler') {
+			// Handle Scheduler tools - block and wait for countdown
+			switch (actualToolName) {
+				case 'schedule_task': {
+					// Validate parameters
+					if (
+						typeof args.duration !== 'number' ||
+						args.duration < 1 ||
+						args.duration > 3600
+					) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: "duration" must be a number between 1 and 3600 seconds.\n\nReceived: ${JSON.stringify(
+										args.duration,
+									)}`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					if (!args.description || typeof args.description !== 'string') {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: `Error: "description" must be a non-empty string.\n\nReceived: ${JSON.stringify(
+										args.description,
+									)}`,
+								},
+							],
+							isError: true,
+						};
+					}
+
+					const duration = args.duration;
+					const description = args.description;
+					const startedAt = new Date().toISOString();
+
+					// Set up UI state for countdown
+					const {
+						startSchedulerTask,
+						updateSchedulerRemainingTime,
+						completeSchedulerTask,
+						resetSchedulerState,
+					} = await import(
+						'../../hooks/execution/useSchedulerExecutionState.js'
+					);
+
+					// Start the task and show UI
+					startSchedulerTask(description, duration);
+
+					// Wait for the specified duration
+					let wasAborted = false;
+					await new Promise<void>(resolve => {
+						const startTime = Date.now();
+						const targetTime = startTime + duration * 1000;
+
+						const updateInterval = setInterval(() => {
+							const remaining = Math.ceil((targetTime - Date.now()) / 1000);
+							if (remaining > 0) {
+								updateSchedulerRemainingTime(remaining);
+							}
+						}, 1000);
+
+						const timeout = setTimeout(() => {
+							clearInterval(updateInterval);
+							completeSchedulerTask();
+							resolve();
+						}, duration * 1000);
+
+						// Handle abort signal
+						if (abortSignal) {
+							const abortHandler = () => {
+								wasAborted = true;
+								clearInterval(updateInterval);
+								clearTimeout(timeout);
+								resetSchedulerState();
+								resolve();
+							};
+							abortSignal.addEventListener('abort', abortHandler, {once: true});
+						}
+					});
+
+					// Return task result
+					if (wasAborted) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: 'Scheduled task was interrupted by user',
+								},
+							],
+							isError: true,
+						};
+					}
+
+					const completedAt = new Date().toISOString();
+
+					return {
+						success: true,
+						description,
+						actualDuration: duration,
+						startedAt,
+						completedAt,
+						message: `Scheduled task completed: ${description}`,
+					};
+				}
+				default:
+					throw new Error(`Unknown scheduler tool: ${actualToolName}`);
 			}
 		} else if (serviceName === 'skill') {
 			// Handle skill tools (no connection needed)

@@ -121,4 +121,22 @@ export interface UseChatLogicProps {
 		batchToolNames?: string;
 		resolve: (result: any) => void;
 	} | null;
+	// Scheduler execution state for ESC interrupt handling
+	schedulerExecutionState?: {
+		state: {
+			isRunning: boolean;
+			description: string | null;
+			totalDuration: number;
+			remainingSeconds: number;
+			startedAt: string | null;
+			isCompleted: boolean;
+			completedAt: string | null;
+		};
+		resetTask: () => void;
+	};
+	onCompressionStatus?: (
+		status:
+			| import('../../../ui/components/compression/CompressionStatus.js').CompressionStatus
+			| null,
+	) => void;
 }

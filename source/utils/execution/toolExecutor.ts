@@ -276,7 +276,10 @@ export async function executeToolCall(
 						return {
 							tool_call_id: toolCall.id,
 							role: 'tool',
-							content: error || output || `[beforeToolCall Hook Warning] Command: ${command} exited with code 1`,
+							content:
+								error ||
+								output ||
+								`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`,
 						};
 					} else if (exitCode >= 2 || exitCode < 0) {
 						// Exit code 2+: Set hookFailed flag and return result immediately
@@ -345,7 +348,8 @@ export async function executeToolCall(
 				: undefined;
 
 			try {
-				const subAgentResult = await subAgentService.execute({
+				// Create an abortable wrapper for sub-agent execution
+				const subAgentPromise = subAgentService.execute({
 					agentId,
 					prompt: subAgentPrompt,
 					instanceId: toolCall.id,
@@ -368,6 +372,22 @@ export async function executeToolCall(
 					addToAlwaysApproved,
 					requestUserQuestion: onUserInteractionNeeded,
 				});
+
+				// Race with abort signal
+				const subAgentResult = abortSignal
+					? await Promise.race([
+							subAgentPromise,
+							new Promise<never>((_, reject) => {
+								const onAbort = () =>
+									reject(new Error('Sub-agent execution aborted'));
+								if (abortSignal.aborted) {
+									onAbort();
+								} else {
+									abortSignal.addEventListener('abort', onAbort, {once: true});
+								}
+							}),
+					  ])
+					: await subAgentPromise;
 
 				// Build sub-agent result content.
 				// If the user injected messages to this sub-agent during execution,
@@ -428,11 +448,33 @@ export async function executeToolCall(
 		if (error instanceof UserInteractionNeededError) {
 			// Call the user interaction callback if provided
 			if (onUserInteractionNeeded) {
+				// Check abort before calling user interaction
+				if (abortSignal?.aborted) {
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: 'Error: User question interaction aborted',
+						messageStatus: 'error' as const,
+					};
+					return result;
+				}
+
 				const response = await onUserInteractionNeeded(
 					error.question,
 					error.options,
 					error.multiSelect,
 				);
+
+				// Check abort after getting response
+				if (abortSignal?.aborted) {
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: 'Error: User question interaction aborted',
+						messageStatus: 'error' as const,
+					};
+					return result;
+				}
 
 				// 检查用户是否取消
 				if (response.cancelled) {
@@ -513,7 +555,10 @@ export async function executeToolCall(
 
 					if (exitCode === 1) {
 						// Exit code 1: Warning - stderr/stdout replaces tool result content
-						const replacedContent = error || output || `[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
+						const replacedContent =
+							error ||
+							output ||
+							`[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
 
 						if (result && typeof result.content === 'string') {
 							result.content = replacedContent;
@@ -666,6 +711,18 @@ export async function executeToolCalls(
 			// Within the same resource group, execute sequentially
 			const groupResults: ToolResult[] = [];
 			for (const toolCall of group) {
+				// Check abort before executing each tool
+				if (abortSignal?.aborted) {
+					const abortedResult: ToolResult = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: 'Error: Tool execution aborted by user',
+						messageStatus: 'error',
+					};
+					groupResults.push(abortedResult);
+					break;
+				}
+
 				const result = await executeToolCall(
 					toolCall,
 					abortSignal,
@@ -679,8 +736,8 @@ export async function executeToolCalls(
 				);
 				groupResults.push(result);
 
-				// If hook failed, stop executing remaining tools
-				if (result.hookFailed) {
+				// If hook failed or aborted, stop executing remaining tools
+				if (result.hookFailed || abortSignal?.aborted) {
 					break;
 				}
 			}

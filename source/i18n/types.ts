@@ -1160,6 +1160,10 @@ export type TranslationKeys = {
 		inputPlaceholder: string;
 		inputHint: string;
 	};
+	scheduler: {
+		title: string;
+		hint: string;
+	};
 	backgroundProcesses: {
 		title: string;
 		status: string;

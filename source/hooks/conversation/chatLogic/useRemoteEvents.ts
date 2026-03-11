@@ -308,13 +308,9 @@ export function useRemoteEvents(
 			'compact_request',
 			async () => {
 				if (streamingState.isStreaming) {
-					console.log(
-						'[Compact] Ignoring compact request: streaming in progress',
-					);
 					return;
 				}
 
-				console.log('[Compact] Received compact request from Web');
 				setIsCompressing(true);
 				setCompressionError(null);
 
@@ -328,13 +324,16 @@ export function useRemoteEvents(
 
 					const compressionResult = await executeContextCompression(
 						currentSession.id,
+						status => {
+							props.onCompressionStatus?.(status);
+						},
 					);
 
 					if (!compressionResult) {
 						throw new Error('Compression failed');
 					}
 
-					console.log('[Compact] Compression completed successfully');
+					props.onCompressionStatus?.(null);
 
 					clearSavedMessages();
 					setMessages(compressionResult.uiMessages);
@@ -349,7 +348,10 @@ export function useRemoteEvents(
 						error instanceof Error
 							? error.message
 							: 'Unknown compression error';
-					console.error('[Compact] Compression error:', errorMsg);
+					props.onCompressionStatus?.({
+						step: 'failed',
+						message: errorMsg,
+					});
 					setCompressionError(errorMsg);
 
 					await connectionManager.notifyCompactCompleted({

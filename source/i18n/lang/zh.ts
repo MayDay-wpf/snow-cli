@@ -1165,6 +1165,10 @@ export const zh: TranslationKeys = {
 		inputPlaceholder: '输入内容后按 Enter 提交',
 		inputHint: '按 Enter 提交输入',
 	},
+	scheduler: {
+		title: '预约任务',
+		hint: 'AI 流程已暂停，等待倒计时结束...',
+	},
 	backgroundProcesses: {
 		title: '后台进程',
 		status: '状态',
