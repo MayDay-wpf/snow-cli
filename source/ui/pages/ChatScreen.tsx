@@ -525,6 +525,7 @@ export default function ChatScreen({
 					streamTokenCount={streamingState.streamTokenCount}
 					elapsedSeconds={streamingState.elapsedSeconds}
 					currentModel={streamingState.currentModel}
+					compressBlockToast={streamingState.compressBlockToast}
 				/>
 			)}
 		</Box>

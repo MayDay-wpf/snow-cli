@@ -6,6 +6,7 @@ import {useMessageProcessing} from './chatLogic/useMessageProcessing.js';
 import {useRollback} from './chatLogic/useRollback.js';
 import {useChatHandlers} from './chatLogic/useChatHandlers.js';
 import {useRemoteEvents} from './chatLogic/useRemoteEvents.js';
+import {useI18n} from '../../i18n/index.js';
 
 export type {UseChatLogicProps};
 
@@ -24,6 +25,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 		schedulerExecutionState,
 		hasFocus,
 	} = props;
+
+	// i18n
+	const {t} = useI18n();
 
 	// Sub-hook: message processing (submit, process, pending)
 	const {
@@ -150,6 +154,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 			return false;
 		}
 
+		if (streamingState.isAutoCompressing) {
+			streamingState.setCompressBlockToast(t.chatScreen.compressionBlockToast);
+			return true;
+		}
+
 		userInterruptedRef.current = true;
 		streamingState.setIsStopping(true);
 		streamingState.setRetryStatus(null);
@@ -158,7 +167,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		setMessages(prev => prev.filter(msg => !msg.toolPending));
 		setPendingMessages([]);
 		return true;
-	}, [streamingState, setMessages, setPendingMessages]);
+	}, [streamingState, setMessages, setPendingMessages, t]);
 
 	// Consolidated ESC key handler
 	const handleEscKey = useCallback(
@@ -189,6 +198,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 			}
 
 			if (!key.escape) return false;
+
+			// Block ESC during auto-compression (including pre-message compression)
+			if (streamingState.isAutoCompressing) {
+				streamingState.setCompressBlockToast(
+					t.chatScreen.compressionBlockToast,
+				);
+				return true;
+			}
 
 			// Handle scheduler task interruption
 			if (schedulerExecutionState?.state.isRunning) {
@@ -249,6 +266,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			setRestoreInputContent,
 			setPendingMessages,
 			schedulerExecutionState,
+			t,
 		],
 	);
 

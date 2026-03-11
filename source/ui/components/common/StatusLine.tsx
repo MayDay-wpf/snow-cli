@@ -78,6 +78,9 @@ type Props = {
 
 	// Profile 信息
 	currentProfileName?: string;
+
+	// 自动压缩禁止中断提示
+	compressBlockToast?: string | null;
 };
 
 function calculateContextPercentage(contextUsage: ContextUsage): number {
@@ -113,6 +116,7 @@ export default function StatusLine({
 	fileUpdateNotification,
 	copyStatusMessage,
 	currentProfileName,
+	compressBlockToast,
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -131,7 +135,8 @@ export default function StatusLine({
 		watcherEnabled ||
 		fileUpdateNotification ||
 		copyStatusMessage ||
-		currentProfileName;
+		currentProfileName ||
+		compressBlockToast;
 
 	if (!hasAnyStatus) {
 		return null;
@@ -247,6 +252,13 @@ export default function StatusLine({
 				color: copyStatusMessage.isError
 					? theme.colors.error
 					: theme.colors.success,
+			});
+		}
+
+		if (compressBlockToast) {
+			statusItems.push({
+				text: compressBlockToast,
+				color: theme.colors.warning,
 			});
 		}
 
@@ -620,6 +632,14 @@ export default function StatusLine({
 						dimColor
 					>
 						{copyStatusMessage.text}
+					</Text>
+				</Box>
+			)}
+
+			{compressBlockToast && (
+				<Box>
+					<Text color={theme.colors.warning} dimColor>
+						{compressBlockToast}
 					</Text>
 				</Box>
 			)}

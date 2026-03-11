@@ -23,6 +23,7 @@ export type AutoCompressOptions = {
 	freeEncoder: () => void;
 	compressingLabel?: string;
 	onCompressionStatus?: (status: CompressionStatus | null) => void;
+	setIsAutoCompressing?: (value: boolean) => void;
 };
 
 export type AutoCompressResult = {
@@ -53,6 +54,8 @@ export async function handleAutoCompression(
 		return {compressed: false, hookFailed: false};
 	}
 
+	options.setIsAutoCompressing?.(true);
+
 	try {
 		const compressingMessage: Message = {
 			role: 'assistant',
@@ -78,6 +81,7 @@ export async function handleAutoCompression(
 
 		// Check if beforeCompress hook failed
 		if (compressionResult && (compressionResult as any).hookFailed) {
+			options.setIsAutoCompressing?.(false);
 			return {
 				compressed: false,
 				hookFailed: true,
@@ -109,6 +113,7 @@ export async function handleAutoCompression(
 				updatedConversationMessages.push(...updatedSession.messages);
 			}
 
+			options.setIsAutoCompressing?.(false);
 			return {
 				compressed: true,
 				hookFailed: false,
@@ -123,5 +128,6 @@ export async function handleAutoCompression(
 		});
 	}
 
+	options.setIsAutoCompressing?.(false);
 	return {compressed: false, hookFailed: false};
 }

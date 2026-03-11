@@ -68,6 +68,19 @@ export function useStreamingState() {
 	const [codebaseSearchStatus, setCodebaseSearchStatus] =
 		useState<CodebaseSearchStatus | null>(null);
 	const [currentModel, setCurrentModel] = useState<string | null>(null);
+	const [isAutoCompressing, setIsAutoCompressing] = useState(false);
+	const [compressBlockToast, setCompressBlockToast] = useState<string | null>(
+		null,
+	);
+
+	// Auto-clear compress block toast after 2 seconds
+	useEffect(() => {
+		if (!compressBlockToast) return;
+		const timeoutId = setTimeout(() => {
+			setCompressBlockToast(null);
+		}, 2000);
+		return () => clearTimeout(timeoutId);
+	}, [compressBlockToast]);
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
@@ -174,5 +187,9 @@ export function useStreamingState() {
 		setCodebaseSearchStatus,
 		currentModel,
 		setCurrentModel,
+		isAutoCompressing,
+		setIsAutoCompressing,
+		compressBlockToast,
+		setCompressBlockToast,
 	};
 }

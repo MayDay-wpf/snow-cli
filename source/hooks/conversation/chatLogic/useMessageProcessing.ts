@@ -108,6 +108,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			)
 		) {
 			setIsCompressing(true);
+			streamingState.setIsAutoCompressing(true);
 			setCompressionError(null);
 
 			try {
@@ -142,9 +143,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				};
 				setMessages(prev => [...prev, errorMessage]);
 				setIsCompressing(false);
+				streamingState.setIsAutoCompressing(false);
 				return;
 			} finally {
 				setIsCompressing(false);
+				streamingState.setIsAutoCompressing(false);
 			}
 		}
 
@@ -245,6 +248,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
 				// On-demand backup system - snapshot management is automatic
@@ -673,6 +677,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
 				// Snapshots are now created on-demand during file operations

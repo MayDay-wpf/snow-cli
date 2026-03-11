@@ -867,6 +867,7 @@ export const zhTW: TranslationKeys = {
 		compressionInProgress: '正在壓縮對話歷史...',
 		compressionSuccess: '對話歷史壓縮成功',
 		compressionFailed: '對話歷史壓縮失敗: {error}',
+		compressionBlockToast: '✵ 正在壓縮上下文，無法中斷，請等待完成...',
 		reviewStartTitle: '準備開始程式碼 Review',
 		reviewSelectedSummary: '已選：{workingTreePrefix}{commitCount} 個提交',
 		reviewSelectedWorkingTreePrefix: 'Working Tree + ',

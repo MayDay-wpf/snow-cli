@@ -868,6 +868,7 @@ export type TranslationKeys = {
 		compressionInProgress: string;
 		compressionSuccess: string;
 		compressionFailed: string;
+		compressionBlockToast: string;
 		// Review
 		reviewStartTitle: string;
 		reviewSelectedSummary: string;

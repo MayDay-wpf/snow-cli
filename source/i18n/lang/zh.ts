@@ -866,6 +866,7 @@ export const zh: TranslationKeys = {
 		compressionInProgress: '正在压缩对话历史...',
 		compressionSuccess: '对话历史压缩成功',
 		compressionFailed: '对话历史压缩失败: {error}',
+		compressionBlockToast: '✵ 正在压缩上下文，无法中断，请等待完成...',
 		reviewStartTitle: '准备开始代码 Review',
 		reviewSelectedSummary: '选中：{workingTreePrefix}{commitCount} 个提交',
 		reviewSelectedWorkingTreePrefix: 'Working Tree + ',

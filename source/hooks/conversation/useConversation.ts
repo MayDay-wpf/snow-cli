@@ -97,6 +97,7 @@ export type ConversationHandlerOptions = {
 			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	setIsAutoCompressing?: (value: boolean) => void;
 };
 
 /**
@@ -1043,6 +1044,7 @@ async function handleToolCallRound(ctx: {
 		compressingLabel:
 			'✵ Auto-compressing context before sending tool results...',
 		onCompressionStatus: options.onCompressionStatus,
+		setIsAutoCompressing: options.setIsAutoCompressing,
 	};
 
 	const compressResult = await handleAutoCompression(autoCompressOpts);

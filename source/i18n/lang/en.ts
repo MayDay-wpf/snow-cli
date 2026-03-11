@@ -913,6 +913,8 @@ export const en: TranslationKeys = {
 		compressionInProgress: 'Compressing conversation history...',
 		compressionSuccess: 'Compression complete',
 		compressionFailed: '✗ Compression failed: {error}',
+		compressionBlockToast:
+			'✵ Compressing context, cannot interrupt, please wait...',
 		// Review
 		reviewStartTitle: 'Preparing to start code review',
 		reviewSelectedSummary:
