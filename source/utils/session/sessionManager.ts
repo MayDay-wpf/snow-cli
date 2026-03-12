@@ -299,70 +299,82 @@ class SessionManager {
 	};
 	lastLoadHookWarning?: string;
 
-	async loadSession(sessionId: string): Promise<Session | null> {
-		// Clear previous error and warning
-		this.lastLoadHookError = undefined;
-		this.lastLoadHookWarning = undefined;
-
+	private async loadSessionFromDisk(
+		sessionId: string,
+	): Promise<Session | null> {
 		// 首先尝试从旧格式加载（向下兼容）
 		try {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
 			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
-
-			// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
-			this.cleanIncompleteToolCalls(session);
-
-			// Execute onSessionStart hook before setting current session
-			const hookResult = await this.executeSessionStartHook(session.messages);
-			if (!hookResult.shouldContinue) {
-				// Hook failed, store error details and abort loading
-				this.lastLoadHookError = hookResult.errorDetails;
-				return null;
-			}
-			// Store warning if exists
-			if (hookResult.warningMessage) {
-				this.lastLoadHookWarning = hookResult.warningMessage;
-			}
-
-			this.setCurrentSession(session);
 			return session;
-		} catch (error) {
+		} catch {
 			// 旧格式不存在，搜索日期文件夹
 		}
 
 		// 在日期文件夹中查找会话
 		try {
-			const session = await this.findSessionInDateFolders(sessionId);
-			if (session) {
-				// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
-				this.cleanIncompleteToolCalls(session);
-
-				// Execute onSessionStart hook before setting current session
-				const hookResult = await this.executeSessionStartHook(session.messages);
-				if (!hookResult.shouldContinue) {
-					// Hook failed, store error details and abort loading
-					this.lastLoadHookError = hookResult.errorDetails;
-					return null;
-				}
-				// Store warning if exists
-				if (hookResult.warningMessage) {
-					this.lastLoadHookWarning = hookResult.warningMessage;
-				}
-				// Set as current session before returning
-				this.setCurrentSession(session);
-				return session;
-			}
-		} catch (error) {
+			return await this.findSessionInDateFolders(sessionId);
+		} catch {
 			// 搜索失败
 		}
 
 		return null;
 	}
 
+	async getLastAssistantMessageFromSession(
+		sessionId: string,
+	): Promise<ChatMessage | null> {
+		const session = await this.loadSessionFromDisk(sessionId);
+		if (!session) {
+			return null;
+		}
+
+		this.cleanIncompleteToolCalls(session);
+
+		for (let i = session.messages.length - 1; i >= 0; i--) {
+			const msg = session.messages[i];
+			if (msg && msg.role === 'assistant' && !msg.subAgentInternal) {
+				return msg;
+			}
+		}
+
+		return null;
+	}
+
+	async loadSession(sessionId: string): Promise<Session | null> {
+		// Clear previous error and warning
+		this.lastLoadHookError = undefined;
+		this.lastLoadHookWarning = undefined;
+
+		const session = await this.loadSessionFromDisk(sessionId);
+		if (!session) {
+			return null;
+		}
+
+		// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
+		this.cleanIncompleteToolCalls(session);
+
+		// Execute onSessionStart hook before setting current session
+		const hookResult = await this.executeSessionStartHook(session.messages);
+		if (!hookResult.shouldContinue) {
+			// Hook failed, store error details and abort loading
+			this.lastLoadHookError = hookResult.errorDetails;
+			return null;
+		}
+
+		// Store warning if exists
+		if (hookResult.warningMessage) {
+			this.lastLoadHookWarning = hookResult.warningMessage;
+		}
+
+		this.setCurrentSession(session);
+		return session;
+	}
 	/**
 	 * 在项目文件夹和日期文件夹中查找会话
 	 * 搜索顺序:
+
 	 * 1. 当前项目的日期文件夹（新格式）
 	 * 2. 其他项目的日期文件夹（跨项目兼容）
 	 * 3. 旧格式的日期文件夹（向后兼容）

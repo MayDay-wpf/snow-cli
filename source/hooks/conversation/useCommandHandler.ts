@@ -1022,17 +1022,27 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				}
 			} else if (result.success && result.action === 'copyLastMessage') {
 				try {
-					const messages = options.messages;
-					let lastAssistantMessage: Message | undefined;
-					for (let i = messages.length - 1; i >= 0; i--) {
-						const msg = messages[i];
-						if (msg && msg.role === 'assistant' && !msg.subAgentInternal) {
-							lastAssistantMessage = msg;
-							break;
+					const currentSession = sessionManager.getCurrentSession();
+					let lastAssistantContent: string | undefined;
+
+					if (currentSession && !currentSession.isTemporary) {
+						await sessionManager.saveSession(currentSession);
+						const lastAssistantMessage =
+							await sessionManager.getLastAssistantMessageFromSession(
+								currentSession.id,
+							);
+						lastAssistantContent = lastAssistantMessage?.content;
+					} else if (currentSession) {
+						for (let i = currentSession.messages.length - 1; i >= 0; i--) {
+							const msg = currentSession.messages[i];
+							if (msg && msg.role === 'assistant' && !msg.subAgentInternal) {
+								lastAssistantContent = msg.content;
+								break;
+							}
 						}
 					}
 
-					if (!lastAssistantMessage) {
+					if (lastAssistantContent === undefined) {
 						const errorMessage: Message = {
 							role: 'command',
 							content: t.commandPanel.copyLastFeedback.noAssistantMessage,
@@ -1042,8 +1052,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						return;
 					}
 
-					const contentToCopy = lastAssistantMessage.content || '';
-					if (!contentToCopy) {
+					if (!lastAssistantContent) {
 						const errorMessage: Message = {
 							role: 'command',
 							content: t.commandPanel.copyLastFeedback.emptyAssistantMessage,
@@ -1053,7 +1062,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						return;
 					}
 
-					await copyToClipboard(contentToCopy);
+					await copyToClipboard(lastAssistantContent);
 
 					const successMessage: Message = {
 						role: 'command',
@@ -1090,7 +1099,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 				}
 			} else if (result.message) {
-				// For commands that just return a message (like /role, /init without AGENTS.md, etc.)
 				// Display the message as a command message
 				const commandMessage: Message = {
 					role: 'command',
