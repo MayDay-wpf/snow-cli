@@ -518,6 +518,7 @@ export type TranslationKeys = {
 			compact: string;
 			home: string;
 			review: string;
+			gitline: string;
 			role: string;
 			usage: string;
 			backend: string;
@@ -609,6 +610,17 @@ export type TranslationKeys = {
 		notesOptional: string;
 		selectedLabel: string;
 		errorSelectAtLeastOne: string;
+	};
+	gitLinePickerPanel: {
+		title: string;
+		loadingCommits: string;
+		loadingMoreSuffix: string;
+		noCommits: string;
+		searchLabel: string;
+		emptySearch: string;
+		hintNavigation: string;
+		selectedLabel: string;
+		scrollToLoadMore: string;
 	};
 
 	// Permissions Panel

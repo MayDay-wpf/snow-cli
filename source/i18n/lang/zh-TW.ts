@@ -518,6 +518,7 @@ export const zhTW: TranslationKeys = {
 			compact: '使用壓縮模型壓縮對話歷史',
 			home: '返回歡迎畫面修改設定',
 			review: '審查工作區變更與選定提交。會開啟選擇面板，可多選並輸入備註。',
+			gitline: '選擇 Git 提交記錄並將提交內容插入到目前輸入框',
 			role: '開啟或建立 ROLE.md 檔案以自訂 AI 助手角色。使用 -l 或 --list 參數列出所有角色',
 			usage: '查看帶有互動式圖表的令牌使用統計',
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
@@ -652,6 +653,17 @@ export const zhTW: TranslationKeys = {
 		selectedLabel: '已選擇',
 		errorSelectAtLeastOne: '請至少選擇一項進行審查。',
 	},
+	gitLinePickerPanel: {
+		title: 'GitLine：選擇提交記錄',
+		loadingCommits: '正在載入提交記錄...',
+		loadingMoreSuffix: '（載入更多中...）',
+		noCommits: '找不到可用的提交記錄',
+		searchLabel: '搜尋:',
+		emptySearch: '(空)',
+		hintNavigation: '↑/↓ 導航 · 空格 勾選 · Enter 確認 · 直接輸入篩選',
+		selectedLabel: '已選擇',
+		scrollToLoadMore: '(滾動載入更多)',
+	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
 		exitingApplication: '正在安全退出...',
@@ -668,6 +680,7 @@ export const zhTW: TranslationKeys = {
 		},
 		hookTypes: {
 			onUserMessage: '使用者發送訊息時觸發',
+
 			beforeToolCall: '在工具呼叫之前執行',
 			afterToolCall: '在工具呼叫完成後執行',
 			toolConfirmation: '工具的第二確認中引起的（包括敏感词汇的確認）',

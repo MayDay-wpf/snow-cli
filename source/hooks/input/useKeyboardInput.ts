@@ -118,6 +118,25 @@ type KeyboardInputOptions = {
 	backspaceSkillsField: () => void;
 	confirmSkillsSelection: () => void;
 	closeSkillsPicker: () => void;
+	// GitLine picker
+	showGitLinePicker: boolean;
+	setShowGitLinePicker: (show: boolean) => void;
+	gitLineSelectedIndex: number;
+	setGitLineSelectedIndex: (index: number | ((prev: number) => number)) => void;
+	gitLineCommits: Array<{
+		sha: string;
+		subject: string;
+		authorName: string;
+		dateIso: string;
+	}>;
+	selectedGitLineCommits: Set<string>;
+	gitLineIsLoading: boolean;
+	gitLineSearchQuery: string;
+	setGitLineSearchQuery: (query: string) => void;
+	gitLineError?: string | null;
+	toggleGitLineCommitSelection: () => void;
+	confirmGitLineSelection: () => void;
+	closeGitLinePicker: () => void;
 	// Profile picker
 	showProfilePicker: boolean;
 	setShowProfilePicker: (show: boolean) => void;
@@ -229,13 +248,31 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		setTodoSearchQuery,
 		showSkillsPicker,
 		setShowSkillsPicker,
+		skillsSelectedIndex,
 		setSkillsSelectedIndex,
 		skills,
+		skillsIsLoading,
+		skillsSearchQuery,
+		skillsAppendText,
+		skillsFocus,
 		toggleSkillsFocus,
 		appendSkillsChar,
 		backspaceSkillsField,
 		confirmSkillsSelection,
 		closeSkillsPicker,
+		showGitLinePicker,
+		setShowGitLinePicker,
+		gitLineSelectedIndex,
+		setGitLineSelectedIndex,
+		gitLineCommits,
+		selectedGitLineCommits,
+		gitLineIsLoading,
+		gitLineSearchQuery,
+		setGitLineSearchQuery,
+		gitLineError,
+		toggleGitLineCommitSelection,
+		confirmGitLineSelection,
+		closeGitLinePicker,
 		showProfilePicker,
 		setShowProfilePicker,
 		profileSelectedIndex,
@@ -259,6 +296,15 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// Mark variables as used (they are used in useInput closure below)
 	void todoSelectedIndex;
 	void selectedTodos;
+	void skillsSelectedIndex;
+	void skillsIsLoading;
+	void skillsSearchQuery;
+	void skillsAppendText;
+	void skillsFocus;
+	void gitLineSelectedIndex;
+	void selectedGitLineCommits;
+	void gitLineIsLoading;
+	void gitLineError;
 	void runningAgentsSelectedIndex;
 	void selectedRunningAgents;
 
@@ -437,30 +483,32 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
-			// Close profile picker if open
 			if (showProfilePicker) {
 				setShowProfilePicker(false);
 				setProfileSelectedIndex(0);
-				setProfileSearchQuery(''); // Reset search query
-				setPickerActive(true); // Signal ChatScreen to skip ESC abort
+				setProfileSearchQuery('');
+				setPickerActive(true);
 				return;
 			}
 
-			// Close skills picker if open
 			if (showSkillsPicker) {
 				closeSkillsPicker();
 				setPickerActive(true);
 				return;
 			}
 
-			// Close running agents picker if open
+			if (showGitLinePicker) {
+				closeGitLinePicker();
+				setPickerActive(true);
+				return;
+			}
+
 			if (showRunningAgentsPicker) {
 				closeRunningAgentsPicker();
 				setPickerActive(true);
 				return;
 			}
 
-			// Close todo picker if open
 			if (showTodoPicker) {
 				setShowTodoPicker(false);
 				setTodoSelectedIndex(0);
@@ -468,7 +516,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// Close agent picker if open
 			if (showAgentPicker) {
 				setShowAgentPicker(false);
 				setAgentSelectedIndex(0);
@@ -476,7 +523,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// Close file picker if open
 			if (showFilePicker) {
 				setShowFilePicker(false);
 				setFileSelectedIndex(0);
@@ -486,7 +532,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// Don't interfere with existing ESC behavior if in command panel
 			if (showCommands) {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
@@ -494,49 +539,39 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// No picker was active for this ESC press
 			setPickerActive(false);
 
-			// Handle history navigation
 			if (showHistoryMenu) {
 				setShowHistoryMenu(false);
 				return;
 			}
 
-			// Count escape key presses for double-ESC detection
 			setEscapeKeyCount(prev => prev + 1);
 
-			// Clear any existing timer
 			if (escapeKeyTimer.current) {
 				clearTimeout(escapeKeyTimer.current);
 			}
 
-			// Set timer to reset count after 500ms
 			escapeKeyTimer.current = setTimeout(() => {
 				setEscapeKeyCount(0);
 			}, 500);
 
-			// Check for double escape
 			if (escapeKeyCount >= 1) {
-				// This will be 2 after increment
 				setEscapeKeyCount(0);
 				if (escapeKeyTimer.current) {
 					clearTimeout(escapeKeyTimer.current);
 					escapeKeyTimer.current = null;
 				}
 
-				// If input has content, clear it; otherwise open history menu
 				const text = buffer.getFullText();
 				if (text.trim().length > 0) {
-					// Clear input content
 					buffer.setText('');
 					forceStateUpdate();
 				} else {
-					// Open history menu
 					const userMessages = getUserMessages();
 					if (userMessages.length > 0) {
 						setShowHistoryMenu(true);
-						setHistorySelectedIndex(userMessages.length - 1); // Reset selection to last item
+						setHistorySelectedIndex(userMessages.length - 1);
 					}
 				}
 			}
@@ -595,11 +630,61 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
+		if (showGitLinePicker) {
+			if (key.upArrow) {
+				setGitLineSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : Math.max(0, gitLineCommits.length - 1),
+				);
+				return;
+			}
+
+			if (key.downArrow) {
+				const maxIndex = Math.max(0, gitLineCommits.length - 1);
+				setGitLineSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+				return;
+			}
+
+			if (input === ' ') {
+				toggleGitLineCommitSelection();
+				return;
+			}
+
+			if (key.return) {
+				confirmGitLineSelection();
+				return;
+			}
+
+			if (key.backspace || key.delete) {
+				if (gitLineSearchQuery.length > 0) {
+					setGitLineSearchQuery(gitLineSearchQuery.slice(0, -1));
+					setGitLineSelectedIndex(0);
+					triggerUpdate();
+				}
+				return;
+			}
+
+			if (
+				input &&
+				!key.ctrl &&
+				!key.meta &&
+				!key.escape &&
+				input !== '\\x1b' &&
+				input !== '\\u001b' &&
+				!/[\\x00-\\x1F]/.test(input)
+			) {
+				setGitLineSearchQuery(gitLineSearchQuery + input);
+				setGitLineSelectedIndex(0);
+				triggerUpdate();
+				return;
+			}
+
+			return;
+		}
+
 		// Handle profile picker navigation
 		if (showProfilePicker) {
 			const filteredProfiles = getFilteredProfiles();
 
-			// Up arrow in profile picker - 循环导航:第一项 → 最后一项
 			if (key.upArrow) {
 				setProfileSelectedIndex(prev =>
 					prev > 0 ? prev - 1 : Math.max(0, filteredProfiles.length - 1),
@@ -607,14 +692,12 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// Down arrow in profile picker - 循环导航:最后一项 → 第一项
 			if (key.downArrow) {
 				const maxIndex = Math.max(0, filteredProfiles.length - 1);
 				setProfileSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
 				return;
 			}
 
-			// Enter - select profile
 			if (key.return) {
 				if (
 					filteredProfiles.length > 0 &&
@@ -628,35 +711,30 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
-			// Backspace - remove last character from search
 			if (key.backspace || key.delete) {
 				if (profileSearchQuery.length > 0) {
 					setProfileSearchQuery(profileSearchQuery.slice(0, -1));
-					setProfileSelectedIndex(0); // Reset to first item
+					setProfileSelectedIndex(0);
 					triggerUpdate();
 				}
 				return;
 			}
 
-			// Type to search - alphanumeric and common characters
-			// Accept complete characters (including multi-byte like Chinese)
-			// but filter out control sequences and incomplete input
 			if (
 				input &&
 				!key.ctrl &&
 				!key.meta &&
 				!key.escape &&
-				input !== '\x1b' && // Ignore escape sequences
-				input !== '\u001b' && // Additional escape check
-				!/[\x00-\x1F]/.test(input) // Ignore other control characters
+				input !== '\x1b' &&
+				input !== '\u001b' &&
+				!/[\x00-\x1F]/.test(input)
 			) {
 				setProfileSearchQuery(profileSearchQuery + input);
-				setProfileSelectedIndex(0); // Reset to first item
+				setProfileSelectedIndex(0);
 				triggerUpdate();
 				return;
 			}
 
-			// For any other key in profile picker, just return to prevent interference
 			return;
 		}
 
@@ -1187,8 +1265,16 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							triggerUpdate();
 							return;
 						}
+						if (selectedCommand.name === 'gitline') {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowGitLinePicker(true);
+							triggerUpdate();
+							return;
+						}
 						// Block command execution if AI is processing
-						// Only block if it's a valid command (not a path like /usr/bin)
+
 						if (isProcessing && getAllCommands) {
 							const allCommands = getAllCommands();
 							const isValidCommand = allCommands.some(
@@ -1320,9 +1406,17 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 							triggerUpdate();
 							return;
 						}
+						if (commandName === 'gitline' && !commandArgs) {
+							buffer.setText('');
+							setShowCommands(false);
+							setCommandSelectedIndex(0);
+							setShowGitLinePicker(true);
+							triggerUpdate();
+							return;
+						}
 
 						// Block command execution if AI is processing
-						// Only block if it's a valid command (not a path like /usr/bin)
+
 						if (isProcessing && getAllCommands) {
 							const allCommands = getAllCommands();
 							const isValidCommand = allCommands.some(

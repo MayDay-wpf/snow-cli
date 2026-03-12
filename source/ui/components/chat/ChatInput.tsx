@@ -16,6 +16,9 @@ const FileList = lazy(() => import('../tools/FileList.js'));
 const AgentPickerPanel = lazy(() => import('../panels/AgentPickerPanel.js'));
 const TodoPickerPanel = lazy(() => import('../panels/TodoPickerPanel.js'));
 const SkillsPickerPanel = lazy(() => import('../panels/SkillsPickerPanel.js'));
+const GitLinePickerPanel = lazy(
+	() => import('../panels/GitLinePickerPanel.js'),
+);
 const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
 const RunningAgentsPanel = lazy(
 	() => import('../panels/RunningAgentsPanel.js'),
@@ -31,6 +34,7 @@ import {useTerminalFocus} from '../../../hooks/ui/useTerminalFocus.js';
 import {useAgentPicker} from '../../../hooks/picker/useAgentPicker.js';
 import {useTodoPicker} from '../../../hooks/picker/useTodoPicker.js';
 import {useSkillsPicker} from '../../../hooks/picker/useSkillsPicker.js';
+import {useGitLinePicker} from '../../../hooks/picker/useGitLinePicker.js';
 import {useRunningAgentsPicker} from '../../../hooks/picker/useRunningAgentsPicker.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -38,6 +42,10 @@ import {useBashMode} from '../../../hooks/input/useBashMode.js';
 
 function parseSkillIdFromHeaderLine(line: string): string {
 	return line.replace(/^# Skill:\s*/i, '').trim() || 'unknown';
+}
+
+function parseGitLineShaFromHeaderLine(line: string): string {
+	return line.replace(/^# GitLine:\s*/i, '').trim() || 'unknown';
 }
 
 function restoreTextWithSkillPlaceholders(
@@ -78,34 +86,36 @@ function restoreTextWithSkillPlaceholders(
 	let i = 0;
 	while (i < lines.length) {
 		const line = lines[i] ?? '';
-		if (!line.startsWith('# Skill:')) {
+		const isSkillBlock = line.startsWith('# Skill:');
+		const isGitLineBlock = line.startsWith('# GitLine:');
+		if (!isSkillBlock && !isGitLineBlock) {
 			plain += line;
 			if (i < lines.length - 1) plain += '\n';
 			i++;
 			continue;
 		}
 
-		// Consume a full skill injection block and rebuild it as a TextBuffer text placeholder.
 		flushPlain();
-		const skillId = parseSkillIdFromHeaderLine(line);
 		const rawLines: string[] = [line];
+		const placeholderText = isSkillBlock
+			? `[Skill:${parseSkillIdFromHeaderLine(line)}] `
+			: `[GitLine:${parseGitLineShaFromHeaderLine(line).slice(0, 8)}] `;
+		const endMarker = isSkillBlock ? '# Skill End' : '# GitLine End';
 		let endFound = false;
 		i++;
 
 		while (i < lines.length) {
 			const next = lines[i] ?? '';
-			if (next.startsWith('# Skill:')) break;
+			if (next.startsWith('# Skill:') || next.startsWith('# GitLine:')) break;
 
-			// Compat: old messages may have "# Skill End<user text>" glued together.
 			const trimmedStart = next.trimStart();
-			if (trimmedStart.startsWith('# Skill End')) {
-				const remainder = trimmedStart.slice('# Skill End'.length);
-				rawLines.push('# Skill End');
+			if (trimmedStart.startsWith(endMarker)) {
+				const remainder = trimmedStart.slice(endMarker.length);
+				rawLines.push(endMarker);
 				endFound = true;
 				i++;
 
 				if (remainder.length > 0) {
-					// Keep user text after end marker in the plain stream.
 					plain += remainder.replace(/^\s+/, '');
 					if (i < lines.length) plain += '\n';
 				}
@@ -117,10 +127,9 @@ function restoreTextWithSkillPlaceholders(
 		}
 
 		let raw = rawLines.join('\n');
-		// Ensure end marker doesn't glue to subsequent user text during masking/rendering.
 		if (endFound && !raw.endsWith('\n')) raw += '\n';
 
-		buffer.insertTextPlaceholder(raw, `[Skill:${skillId}] `);
+		buffer.insertTextPlaceholder(raw, placeholderText);
 	}
 
 	flushPlain();
@@ -381,6 +390,24 @@ export default function ChatInput({
 		closeSkillsPicker,
 	} = useSkillsPicker(buffer, triggerUpdate);
 
+	const {
+		showGitLinePicker,
+		setShowGitLinePicker,
+		gitLineSelectedIndex,
+		setGitLineSelectedIndex,
+		gitLineCommits,
+		selectedGitLineCommits,
+		gitLineHasMore,
+		gitLineIsLoading,
+		gitLineIsLoadingMore,
+		gitLineSearchQuery,
+		setGitLineSearchQuery,
+		gitLineError,
+		toggleGitLineCommitSelection,
+		confirmGitLineSelection,
+		closeGitLinePicker,
+	} = useGitLinePicker(buffer, triggerUpdate);
+
 	// Use running agents picker hook
 	const {
 		showRunningAgentsPicker,
@@ -411,7 +438,6 @@ export default function ChatInput({
 	useKeyboardInput({
 		buffer,
 		disabled,
-
 		disableKeyboardNavigation,
 		isProcessing,
 		triggerUpdate,
@@ -487,7 +513,6 @@ export default function ChatInput({
 		confirmTodoSelection,
 		todoSearchQuery,
 		setTodoSearchQuery,
-		// Skills picker
 		showSkillsPicker,
 		setShowSkillsPicker,
 		skillsSelectedIndex,
@@ -502,6 +527,19 @@ export default function ChatInput({
 		backspaceSkillsField,
 		confirmSkillsSelection,
 		closeSkillsPicker,
+		showGitLinePicker,
+		setShowGitLinePicker,
+		gitLineSelectedIndex,
+		setGitLineSelectedIndex,
+		gitLineCommits,
+		selectedGitLineCommits,
+		gitLineIsLoading,
+		gitLineSearchQuery,
+		setGitLineSearchQuery,
+		gitLineError,
+		toggleGitLineCommitSelection,
+		confirmGitLineSelection,
+		closeGitLinePicker,
 		showProfilePicker,
 		setShowProfilePicker: setShowProfilePicker || (() => {}),
 		profileSelectedIndex,
@@ -511,7 +549,6 @@ export default function ChatInput({
 		profileSearchQuery,
 		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
-		// Running agents picker
 		showRunningAgentsPicker,
 		setShowRunningAgentsPicker,
 		runningAgentsSelectedIndex,
@@ -1046,63 +1083,76 @@ export default function ChatInput({
 								searchMode={searchMode}
 							/>
 						</Suspense>
+						<Suspense fallback={null}>
+							<AgentPickerPanel
+								agents={getFilteredAgents()}
+								selectedIndex={agentSelectedIndex}
+								visible={showAgentPicker}
+								maxHeight={5}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<TodoPickerPanel
+								todos={todos}
+								selectedIndex={todoSelectedIndex}
+								selectedTodos={selectedTodos}
+								visible={showTodoPicker}
+								maxHeight={5}
+								isLoading={todoIsLoading}
+								searchQuery={todoSearchQuery}
+								totalCount={totalTodoCount}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<SkillsPickerPanel
+								skills={skills.map(s => ({
+									id: s.id,
+									name: s.name,
+									description: s.description,
+									location: s.location,
+								}))}
+								selectedIndex={skillsSelectedIndex}
+								visible={showSkillsPicker}
+								maxHeight={5}
+								isLoading={skillsIsLoading}
+								searchQuery={skillsSearchQuery}
+								appendText={skillsAppendText}
+								focus={skillsFocus}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<GitLinePickerPanel
+								commits={gitLineCommits}
+								selectedIndex={gitLineSelectedIndex}
+								selectedCommits={selectedGitLineCommits}
+								visible={showGitLinePicker}
+								maxHeight={5}
+								hasMore={gitLineHasMore}
+								isLoading={gitLineIsLoading}
+								isLoadingMore={gitLineIsLoadingMore}
+								searchQuery={gitLineSearchQuery}
+								error={gitLineError}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<ProfilePanel
+								profiles={getFilteredProfiles ? getFilteredProfiles() : []}
+								selectedIndex={profileSelectedIndex}
+								visible={showProfilePicker}
+								maxHeight={5}
+								searchQuery={profileSearchQuery}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<RunningAgentsPanel
+								agents={runningAgents}
+								selectedIndex={runningAgentsSelectedIndex}
+								selectedAgents={selectedRunningAgents}
+								visible={showRunningAgentsPicker}
+								maxHeight={5}
+							/>
+						</Suspense>
 					</Box>
-					<Suspense fallback={null}>
-						<AgentPickerPanel
-							agents={getFilteredAgents()}
-							selectedIndex={agentSelectedIndex}
-							visible={showAgentPicker}
-							maxHeight={5}
-						/>
-					</Suspense>
-					<Suspense fallback={null}>
-						<TodoPickerPanel
-							todos={todos}
-							selectedIndex={todoSelectedIndex}
-							selectedTodos={selectedTodos}
-							visible={showTodoPicker}
-							maxHeight={5}
-							isLoading={todoIsLoading}
-							searchQuery={todoSearchQuery}
-							totalCount={totalTodoCount}
-						/>
-					</Suspense>
-					<Suspense fallback={null}>
-						<SkillsPickerPanel
-							skills={skills.map(s => ({
-								id: s.id,
-								name: s.name,
-								description: s.description,
-								location: s.location,
-							}))}
-							selectedIndex={skillsSelectedIndex}
-							visible={showSkillsPicker}
-							maxHeight={5}
-							isLoading={skillsIsLoading}
-							searchQuery={skillsSearchQuery}
-							appendText={skillsAppendText}
-							focus={skillsFocus}
-						/>
-					</Suspense>
-					<Suspense fallback={null}>
-						<ProfilePanel
-							profiles={getFilteredProfiles ? getFilteredProfiles() : []}
-							selectedIndex={profileSelectedIndex}
-							visible={showProfilePicker}
-							maxHeight={5}
-							searchQuery={profileSearchQuery}
-						/>
-					</Suspense>
-					<Suspense fallback={null}>
-						<RunningAgentsPanel
-							agents={runningAgents}
-							selectedIndex={runningAgentsSelectedIndex}
-							selectedAgents={selectedRunningAgents}
-							visible={showRunningAgentsPicker}
-							maxHeight={5}
-						/>
-					</Suspense>
-					{/* Status information moved to StatusLine component */}
 				</>
 			)}
 		</Box>

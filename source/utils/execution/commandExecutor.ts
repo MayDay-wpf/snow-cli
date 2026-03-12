@@ -27,6 +27,7 @@ export interface CommandResult {
 		| 'showProfilePanel'
 		| 'showModelsPanel'
 		| 'showSkillsPicker'
+		| 'showGitLinePicker'
 		| 'help'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'

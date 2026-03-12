@@ -12,6 +12,7 @@ import './commands/copyLast.js';
 import './commands/custom.js';
 import './commands/diff.js';
 import './commands/export.js';
+import './commands/gitline.js';
 import './commands/help.js';
 import './commands/home.js';
 import './commands/ide.js';

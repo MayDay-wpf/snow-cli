@@ -40,6 +40,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.review,
 			},
 			{
+				name: 'gitline',
+				description:
+					t.commandPanel.commands.gitline ||
+					'Select git commits and insert them into the chat input',
+			},
+			{
 				name: 'role',
 				description: t.commandPanel.commands.role,
 			},

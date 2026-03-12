@@ -517,6 +517,7 @@ export const zh: TranslationKeys = {
 			compact: '使用压缩模型压缩对话历史',
 			home: '返回欢迎屏幕修改设置',
 			review: '审查工作区变更与选定提交。会打开选择面板，可多选并输入备注。',
+			gitline: '选择 Git 提交记录并将提交内容插入到当前输入框',
 			role: '打开或创建 ROLE.md 文件以自定义 AI 助手角色。使用 -l 或 --list 参数列出所有角色',
 			usage: '查看带有交互式图表的令牌使用统计',
 			export: '将聊天对话导出到带保存对话框的文本文件',
@@ -651,6 +652,17 @@ export const zh: TranslationKeys = {
 		selectedLabel: '已选择',
 		errorSelectAtLeastOne: '请至少选择一项进行审查。',
 	},
+	gitLinePickerPanel: {
+		title: 'GitLine：选择提交记录',
+		loadingCommits: '正在加载提交记录...',
+		loadingMoreSuffix: '（加载更多中...）',
+		noCommits: '未找到可用的提交记录',
+		searchLabel: '搜索:',
+		emptySearch: '(空)',
+		hintNavigation: '↑/↓ 导航 · 空格 勾选 · Enter 确认 · 直接输入筛选',
+		selectedLabel: '已选择',
+		scrollToLoadMore: '(滚动加载更多)',
+	},
 	hooks: {
 		pressCtrlCAgain: '再次按 Ctrl+C 退出',
 		exitingApplication: '正在安全退出...',
@@ -667,6 +679,7 @@ export const zh: TranslationKeys = {
 		},
 		hookTypes: {
 			onUserMessage: '用户发送消息时触发',
+
 			beforeToolCall: '在工具调用之前运行',
 			afterToolCall: '在工具调用完成后运行',
 			toolConfirmation: '工具二次确认时触发（包括敏感词检查）',
