@@ -23,11 +23,6 @@ _在终端中进行 Agentic 编程_
   <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
 </a>
 
-## 感谢赞助商
-
-- [UUCode](https://www.uucode.org)
-
----
 
 ![alt text](docs/images/image_zh.png)
 
@@ -145,14 +140,6 @@ npm run link   # 构建并全局链接 snow
 ├── history.json            # 历史设置
 └── system-prompt.json      # 自定义系统提示词
 ```
-
----
-
-## QQ 交流群
-
-![alt text](docs/images/qq_group_qr.jpg)
-
----
 
 ## Star History
 
