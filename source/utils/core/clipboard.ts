@@ -1,8 +1,36 @@
-import {execSync} from 'child_process';
+import {execFileSync} from 'child_process';
+
+function runClipboardCommand(
+	command: string,
+	args: string[],
+	content: string,
+): void {
+	execFileSync(command, args, {
+		input: content,
+		encoding: 'utf-8',
+		stdio: ['pipe', 'ignore', 'pipe'],
+		windowsHide: true,
+		maxBuffer: Math.max(1024 * 1024, Buffer.byteLength(content, 'utf8') + 1024),
+	});
+}
+
+function getClipboardErrorMessage(error: Error): string {
+	const stderr = (error as Error & {stderr?: Buffer | string}).stderr;
+
+	if (typeof stderr === 'string' && stderr.trim()) {
+		return stderr.trim();
+	}
+
+	if (Buffer.isBuffer(stderr) && stderr.length > 0) {
+		return stderr.toString('utf8').trim();
+	}
+
+	return error.message;
+}
 
 /**
  * Copy content to clipboard using platform-specific method.
- * Supports Windows, macOS, and Linux with Base64 encoding for safe content handling.
+ * Pipes the original text to native clipboard tools to avoid shell escaping and truncation.
  *
  * @param content The string content to copy.
  * @throws Error if clipboard operation fails.
@@ -10,35 +38,30 @@ import {execSync} from 'child_process';
 export async function copyToClipboard(content: string): Promise<void> {
 	return new Promise((resolve, reject) => {
 		try {
-			const base64Content = Buffer.from(content, 'utf-8').toString('base64');
-
 			if (process.platform === 'win32') {
-				execSync(
-					`powershell -NoProfile -Command "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${base64Content}')) | Set-Clipboard"`,
-					{encoding: 'utf-8'},
+				runClipboardCommand(
+					'powershell',
+					[
+						'-NoProfile',
+						'-Command',
+						'[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); $text = [Console]::In.ReadToEnd(); Set-Clipboard -Value $text',
+					],
+					content,
 				);
 				resolve();
 			} else if (process.platform === 'darwin') {
-				execSync(`echo "${base64Content}" | base64 -d | pbcopy`, {
-					encoding: 'utf-8',
-				});
+				runClipboardCommand('pbcopy', [], content);
 				resolve();
 			} else {
 				try {
-					execSync(
-						`echo "${base64Content}" | base64 -d | xclip -selection clipboard`,
-						{encoding: 'utf-8'},
-					);
+					runClipboardCommand('xclip', ['-selection', 'clipboard'], content);
 					resolve();
 				} catch {
 					try {
-						execSync(
-							`echo "${base64Content}" | base64 -d | xsel --clipboard --input`,
-							{encoding: 'utf-8'},
-						);
+						runClipboardCommand('xsel', ['--clipboard', '--input'], content);
 						resolve();
-					} catch {
-						return;
+					} catch (fallbackError) {
+						throw fallbackError;
 					}
 				}
 			}
@@ -48,7 +71,7 @@ export async function copyToClipboard(content: string): Promise<void> {
 				return;
 			}
 
-			const errorMsg = error.message;
+			const errorMsg = getClipboardErrorMessage(error);
 
 			if (
 				errorMsg.includes('command not found') ||
