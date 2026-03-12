@@ -14,6 +14,7 @@
 		rgba(255, 255, 255, 0.14)
 	);
 	--terminal-button-border: var(--vscode-contrastBorder, transparent);
+	--terminal-tab-height: 26px;
 }
 
 * {
@@ -63,7 +64,7 @@ body {
 	display: inline-flex;
 	align-items: stretch;
 	flex: 0 0 auto;
-	min-height: 20px;
+	min-height: var(--terminal-tab-height);
 	white-space: nowrap;
 	background-color: var(--vscode-tab-inactiveBackground, transparent);
 	color: var(--vscode-tab-inactiveForeground, var(--terminal-button-fg));
@@ -71,7 +72,10 @@ body {
 }
 
 .terminal-tab-item:hover:not(.is-active):not(.is-restarting) {
-	background-color: var(--vscode-tab-hoverBackground, var(--terminal-button-hover-bg));
+	background-color: var(
+		--vscode-tab-hoverBackground,
+		var(--terminal-button-hover-bg)
+	);
 }
 
 .terminal-tab-item.is-active,
@@ -93,7 +97,7 @@ body {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	min-height: 20px;
+	min-height: var(--terminal-tab-height);
 	white-space: nowrap;
 }
 
@@ -117,7 +121,7 @@ body {
 	justify-content: center;
 	width: 18px;
 	min-width: 18px;
-	min-height: 20px;
+	min-height: var(--terminal-tab-height);
 	flex: 0 0 18px;
 	opacity: 0;
 	visibility: hidden;

@@ -110,6 +110,7 @@ type WebviewToExtensionMessage =
 	| {type: 'resize'; cols: number; rows: number}
 	| {type: 'switchTab'; tabId: string}
 	| {type: 'closeTab'; tabId: string}
+	| {type: 'dropPaths'; uris: string[]}
 	| {
 			type: 'rendererHealth';
 			stage: RendererHealthStage;
@@ -367,6 +368,18 @@ function parseWebviewMessage(rawMessage: unknown): WebviewToExtensionMessage | u
 				reason: asOptionalNonEmptyString(rawMessage.reason),
 				stats: parseRendererHealthStats(rawMessage.stats),
 			};
+		}
+		case 'dropPaths': {
+			if (!Array.isArray(rawMessage.uris)) {
+				return undefined;
+			}
+			const uris = (rawMessage.uris as unknown[]).filter(
+				(uri): uri is string => typeof uri === 'string' && uri.length > 0,
+			);
+			if (uris.length === 0) {
+				return undefined;
+			}
+			return {type: 'dropPaths', uris};
 		}
 		case 'frontendLog': {
 			const message = asOptionalNonEmptyString(rawMessage.message);
@@ -1017,13 +1030,16 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 						);
 					}
 					return;
-				case 'rendererHealth':
-					this.handleRendererHealthMessage(
-						message.stage,
-						message.reason,
-						message.stats,
-					);
-					return;
+			case 'dropPaths':
+				this.handleDropPaths(message.uris);
+				return;
+			case 'rendererHealth':
+				this.handleRendererHealthMessage(
+					message.stage,
+					message.reason,
+					message.stats,
+				);
+				return;
 				case 'frontendLog':
 					this.writeOutputLog(
 						message.level,
@@ -1504,6 +1520,28 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
   <script src="${sidebarScriptUri}"></script>
 </body>
 </html>`;
+	}
+
+	private handleDropPaths(uris: string[]): void {
+		const paths = uris
+			.map(uri => {
+				try {
+					return vscode.Uri.parse(uri).fsPath;
+				} catch {
+					return '';
+				}
+			})
+			.filter(path => path.length > 0);
+
+		if (paths.length === 0) {
+			return;
+		}
+
+		this.logSidebarInfo(
+			'Received file paths from drop.',
+			`pathCount=${paths.length}`,
+		);
+		this.sendFilePaths(paths);
 	}
 
 	public sendFilePaths(paths: string[]): void {

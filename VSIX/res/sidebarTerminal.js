@@ -1543,6 +1543,57 @@ logInfo('Initializing sidebar terminal frontend.');
 		addManagedListener(window, 'message', handleWindowMessage);
 		addManagedListener(window, 'beforeunload', runCleanups);
 
+		let dragEnterCount = 0;
+
+		addManagedListener(container, 'dragenter', event => {
+			event.preventDefault();
+			dragEnterCount++;
+			container.classList.add('drag-over');
+		});
+
+		addManagedListener(container, 'dragover', event => {
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		});
+
+		addManagedListener(container, 'dragleave', () => {
+			dragEnterCount--;
+			if (dragEnterCount <= 0) {
+				dragEnterCount = 0;
+				container.classList.remove('drag-over');
+			}
+		});
+
+		addManagedListener(container, 'drop', event => {
+			event.preventDefault();
+			event.stopPropagation();
+			dragEnterCount = 0;
+			container.classList.remove('drag-over');
+
+			const uriList =
+				event.dataTransfer && event.dataTransfer.getData('text/uri-list');
+			if (uriList) {
+				const uris = uriList
+					.split(/\r?\n/)
+					.filter(line => line && !line.startsWith('#'));
+				if (uris.length > 0) {
+					vscode.postMessage({type: 'dropPaths', uris});
+					return;
+				}
+			}
+
+			const plain =
+				event.dataTransfer && event.dataTransfer.getData('text/plain');
+			if (plain) {
+				const lines = plain.split(/\r?\n/).filter(Boolean);
+				if (lines.length > 0) {
+					vscode.postMessage({type: 'dropPaths', uris: lines});
+				}
+			}
+		});
+
 		registerCleanup(() => {
 			clearFocusRecoveryTimers();
 			clearInterval(rendererHealthTimer);
