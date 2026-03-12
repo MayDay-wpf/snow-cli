@@ -3,6 +3,17 @@
 	--terminal-drag-outline: #007acc;
 	--terminal-error: #f14c4c;
 	--terminal-border: var(--vscode-panel-border, rgba(255, 255, 255, 0.12));
+	--terminal-toolbar-bg: var(--vscode-sideBar-background, #181818);
+	--terminal-button-bg: var(
+		--vscode-button-secondaryBackground,
+		rgba(255, 255, 255, 0.08)
+	);
+	--terminal-button-fg: var(--vscode-button-secondaryForeground, #cccccc);
+	--terminal-button-hover-bg: var(
+		--vscode-button-secondaryHoverBackground,
+		rgba(255, 255, 255, 0.14)
+	);
+	--terminal-button-border: var(--vscode-contrastBorder, transparent);
 }
 
 * {
@@ -12,17 +23,188 @@
 }
 
 html,
-body,
-#terminal-container,
-.xterm {
+body {
 	height: 100%;
 	width: 100%;
 }
 
-html,
 body {
 	overflow: hidden;
 	background-color: var(--terminal-bg);
+}
+
+#terminal-root {
+	height: 100%;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+#terminal-tab-strip {
+	display: flex;
+	gap: 0;
+	padding: 0;
+	border-bottom: 1px solid var(--terminal-border);
+	background-color: var(
+		--vscode-editorGroupHeader-tabsBackground,
+		var(--terminal-toolbar-bg)
+	);
+	flex: 0 0 auto;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+#terminal-tab-strip:empty {
+	display: none;
+}
+
+.terminal-tab-item {
+	display: inline-flex;
+	align-items: stretch;
+	flex: 0 0 auto;
+	min-height: 20px;
+	white-space: nowrap;
+	background-color: var(--vscode-tab-inactiveBackground, transparent);
+	color: var(--vscode-tab-inactiveForeground, var(--terminal-button-fg));
+	border-right: 1px solid var(--terminal-border);
+}
+
+.terminal-tab-item:hover:not(.is-active):not(.is-restarting) {
+	background-color: var(--vscode-tab-hoverBackground, var(--terminal-button-hover-bg));
+}
+
+.terminal-tab-item.is-active,
+.terminal-tab-item.is-restarting {
+	background-color: var(--vscode-tab-activeBackground, var(--terminal-bg));
+	color: var(--vscode-tab-activeForeground, var(--terminal-button-fg));
+}
+
+.terminal-tab {
+	appearance: none;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.2;
+	padding: 0 6px 0 8px;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	white-space: nowrap;
+}
+
+.terminal-tab-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.terminal-tab-close {
+	appearance: none;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 13px;
+	line-height: 1;
+	padding: 0;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	min-width: 18px;
+	min-height: 20px;
+	flex: 0 0 18px;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.terminal-tab-item.is-active .terminal-tab-close,
+.terminal-tab-item.is-restarting .terminal-tab-close {
+	opacity: 1;
+	visibility: visible;
+}
+
+.terminal-tab-item.is-active .terminal-tab-close {
+	pointer-events: auto;
+}
+
+.terminal-tab-item.is-restarting .terminal-tab-close {
+	pointer-events: none;
+	cursor: default;
+}
+
+.terminal-tab-close:hover {
+	background-color: var(--terminal-button-hover-bg);
+}
+
+.terminal-tab:focus-visible,
+.terminal-tab-close:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder, #007acc);
+	outline-offset: -1px;
+}
+
+.terminal-tab-spinner {
+	width: 10px;
+	height: 10px;
+	border: 1.5px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: terminal-tab-spinner-spin 0.8s linear infinite;
+}
+
+@keyframes terminal-tab-spinner-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+#terminal-toolbar {
+	display: flex;
+	gap: 6px;
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--terminal-border);
+	background-color: var(--terminal-toolbar-bg);
+	flex: 0 0 auto;
+}
+
+#terminal-toolbar button {
+	appearance: none;
+	border: 1px solid var(--terminal-button-border);
+	border-radius: 4px;
+	background-color: var(--terminal-button-bg);
+	color: var(--terminal-button-fg);
+	font: inherit;
+	font-size: 13px;
+	line-height: 1.4;
+	padding: 2px 8px;
+	cursor: pointer;
+}
+
+#terminal-toolbar button:hover {
+	background-color: var(--terminal-button-hover-bg);
+}
+
+#terminal-toolbar button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder, #007acc);
+	outline-offset: 1px;
+}
+
+#terminal-container {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+#terminal-container,
+.xterm {
+	height: 100%;
+	width: 100%;
 }
 
 #terminal-container.drag-over {
@@ -36,6 +218,26 @@ body {
 	font-family: monospace;
 	font-size: 12px;
 	white-space: pre-wrap;
+}
+
+.terminal-freeze-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	overflow: hidden;
+	pointer-events: none;
+	background-color: var(--terminal-bg);
+}
+
+.terminal-freeze-overlay > .xterm {
+	height: 100%;
+	width: 100%;
+}
+
+.terminal-freeze-overlay .xterm-helpers,
+.terminal-freeze-overlay .xterm-accessibility,
+.terminal-freeze-overlay .xterm-cursor-layer {
+	visibility: hidden !important;
 }
 
 .xterm .xterm-viewport,

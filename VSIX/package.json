@@ -109,6 +109,7 @@
 					"type": "webview",
 					"id": "snowCliTerminal",
 					"name": "Terminal",
+					"icon": "snow.png",
 					"when": "snow-cli.sidebarMode"
 				}
 			]
@@ -126,6 +127,11 @@
 				"command": "snow-cli.restartSidebarTerminal",
 				"title": "Restart Terminal",
 				"icon": "$(debug-rerun)"
+			},
+			{
+				"command": "snow-cli.newSidebarTerminalTab",
+				"title": "New Terminal Tab",
+				"icon": "$(add)"
 			},
 			{
 				"command": "snow-cli.addFolderPath",
@@ -180,14 +186,19 @@
 					"group": "navigation@1"
 				},
 				{
-					"command": "snow-cli.openSnowSettings",
+					"command": "snow-cli.newSidebarTerminalTab",
 					"when": "view == snowCliTerminal && snow-cli.sidebarMode",
 					"group": "navigation@2"
 				},
 				{
-					"submenu": "snow-cli.insertPathActions",
+					"command": "snow-cli.openSnowSettings",
 					"when": "view == snowCliTerminal && snow-cli.sidebarMode",
 					"group": "navigation@3"
+				},
+				{
+					"submenu": "snow-cli.insertPathActions",
+					"when": "view == snowCliTerminal && snow-cli.sidebarMode",
+					"group": "navigation@4"
 				}
 			],
 			"snow-cli.insertPathActions": [
