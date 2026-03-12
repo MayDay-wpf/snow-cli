@@ -16,6 +16,13 @@ function formatTokenCount(tokens: number | undefined): string {
 	return String(tokens);
 }
 
+function extractRejectionReason(content: string): string | undefined {
+	const match = content.match(
+		/^Error: Tool execution rejected by user:([\s\S]+)$/,
+	);
+	return match?.[1]?.trim() || undefined;
+}
+
 /**
  * Manages sub-agent message handling with internal streaming state.
  * Encapsulates the token counting accumulators and context usage tracking
@@ -133,7 +140,11 @@ export class SubAgentUIHandler {
 			...prev,
 			{
 				role: 'subagent' as const,
-				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[32m✵ Context compressed (~${formatTokenCount(msg.beforeTokens)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
+				content: `\x1b[36m⚇ ${
+					subAgentMessage.agentName
+				}\x1b[0m \x1b[32m✵ Context compressed (~${formatTokenCount(
+					msg.beforeTokens,
+				)} → ~${formatTokenCount(msg.afterTokensEstimate)})\x1b[0m`,
 				streaming: false,
 				messageStatus: 'success' as const,
 				subAgent: {
@@ -163,9 +174,7 @@ export class SubAgentUIHandler {
 				role: 'subagent' as const,
 				content: `\x1b[38;2;255;165;0m⚇${statusIcon} [${subAgentMessage.agentName}] → [${targetName}]\x1b[0m: ${truncatedContent}`,
 				streaming: false,
-				messageStatus: msg.success
-					? ('success' as const)
-					: ('error' as const),
+				messageStatus: msg.success ? ('success' as const) : ('error' as const),
 				subAgent: {
 					agentId: subAgentMessage.agentId,
 					agentName: subAgentMessage.agentName,
@@ -182,7 +191,10 @@ export class SubAgentUIHandler {
 	): Message[] {
 		const msg = subAgentMessage.message as any;
 		const promptText = msg.spawnedPrompt
-			? msg.spawnedPrompt.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+			? msg.spawnedPrompt
+					.replace(/[\r\n]+/g, ' ')
+					.replace(/\s+/g, ' ')
+					.trim()
 			: '';
 		const truncatedPrompt =
 			promptText.length > 100
@@ -220,9 +232,7 @@ export class SubAgentUIHandler {
 				role: 'subagent' as const,
 				content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned [${msg.spawnedAgentName}] completed\x1b[0m (parent: ${subAgentMessage.agentName})`,
 				streaming: false,
-				messageStatus: msg.success
-					? ('success' as const)
-					: ('error' as const),
+				messageStatus: msg.success ? ('success' as const) : ('error' as const),
 				subAgent: {
 					agentId: subAgentMessage.agentId,
 					agentName: subAgentMessage.agentName,
@@ -272,10 +282,7 @@ export class SubAgentUIHandler {
 			}
 
 			let paramDisplay = '';
-			if (
-				toolCall.function.name === 'terminal-execute' &&
-				toolArgs.command
-			) {
+			if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
 				paramDisplay = ` "${toolArgs.command}"`;
 			} else if (toolDisplay.args.length > 0) {
 				const params = toolDisplay.args
@@ -311,12 +318,16 @@ export class SubAgentUIHandler {
 				const params = display.args
 					.map((arg: any) => `${arg.key}: ${arg.value}`)
 					.join(', ');
-				return `\n  \x1b[2m${prefix} ${display.toolName}${params ? ` (${params})` : ''}\x1b[0m`;
+				return `\n  \x1b[2m${prefix} ${display.toolName}${
+					params ? ` (${params})` : ''
+				}\x1b[0m`;
 			});
 
 			newMessages.push({
 				role: 'subagent' as const,
-				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m${toolLines.join('')}`,
+				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m${toolLines.join(
+					'',
+				)}`,
 				streaming: false,
 				subAgent: {
 					agentId: subAgentMessage.agentId,
@@ -357,6 +368,9 @@ export class SubAgentUIHandler {
 		const msg = subAgentMessage.message as any;
 		const isError = msg.content.startsWith('Error:');
 		const isTimeConsuming = isToolNeedTwoStepDisplay(msg.tool_name);
+		const rejectionReason = isError
+			? msg.rejection_reason || extractRejectionReason(msg.content)
+			: undefined;
 
 		// Fire-and-forget save
 		const sessionMsg = {
@@ -371,16 +385,24 @@ export class SubAgentUIHandler {
 		);
 
 		if (isTimeConsuming) {
-			return this.handleTimeConsumingToolResult(prev, subAgentMessage, msg, isError);
+			return this.handleTimeConsumingToolResult(
+				prev,
+				subAgentMessage,
+				msg,
+				isError,
+			);
 		}
 
 		// Quick tool: error → new message, success → update pending
 		if (isError) {
+			const statusText = rejectionReason
+				? `\n  └─ Rejection reason: ${rejectionReason}`
+				: '';
 			return [
 				...prev,
 				{
 					role: 'subagent' as const,
-					content: `\x1b[38;2;255;100;100m⚇✗ ${msg.tool_name}\x1b[0m`,
+					content: `\x1b[38;2;255;100;100m⚇✗ ${msg.tool_name}\x1b[0m${statusText}`,
 					streaming: false,
 					messageStatus: 'error' as const,
 					subAgent: {
@@ -426,12 +448,18 @@ export class SubAgentUIHandler {
 		isError: boolean,
 	): Message[] {
 		const statusIcon = isError ? '✗' : '✓';
+		const rejectionReason = isError
+			? extractRejectionReason(msg.content)
+			: undefined;
 
 		let terminalResultData: any;
 		if (msg.tool_name === 'terminal-execute' && !isError) {
 			try {
 				const resultData = JSON.parse(msg.content);
-				if (resultData.stdout !== undefined || resultData.stderr !== undefined) {
+				if (
+					resultData.stdout !== undefined ||
+					resultData.stderr !== undefined
+				) {
 					terminalResultData = {
 						stdout: resultData.stdout,
 						stderr: resultData.stderr,
@@ -468,9 +496,7 @@ export class SubAgentUIHandler {
 							oldContent: resultData.oldContent,
 							newContent: resultData.newContent,
 							filename:
-								resultData.filePath ||
-								resultData.path ||
-								resultData.filename,
+								resultData.filePath || resultData.path || resultData.filename,
 							completeOldContent: resultData.completeOldContent,
 							completeNewContent: resultData.completeNewContent,
 							contextStartLine: resultData.contextStartLine,
@@ -493,11 +519,15 @@ export class SubAgentUIHandler {
 			}
 		}
 
+		const statusText = rejectionReason
+			? `\n  └─ Rejection reason: ${rejectionReason}`
+			: '';
+
 		return [
 			...prev,
 			{
 				role: 'subagent' as const,
-				content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m`,
+				content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
 				streaming: false,
 				messageStatus: isError ? 'error' : 'success',
 				toolResult: !isError ? msg.content : undefined,
@@ -539,7 +569,10 @@ export class SubAgentUIHandler {
 		const contentToApply = this.contentBuffer;
 		this.contentBuffer = '';
 
-		const existingIndex = this.findStreamingMessageIndex(prev, subAgentMessage.agentId);
+		const existingIndex = this.findStreamingMessageIndex(
+			prev,
+			subAgentMessage.agentId,
+		);
 
 		if (existingIndex !== -1 && contentToApply) {
 			const updated = [...prev];
@@ -569,7 +602,10 @@ export class SubAgentUIHandler {
 		this.lastFlushTime = 0;
 		this.setStreamTokenCount(0);
 
-		const existingIndex = this.findStreamingMessageIndex(prev, subAgentMessage.agentId);
+		const existingIndex = this.findStreamingMessageIndex(
+			prev,
+			subAgentMessage.agentId,
+		);
 		if (existingIndex !== -1) {
 			const updated = [...prev];
 			const existing = updated[existingIndex];

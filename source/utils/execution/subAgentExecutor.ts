@@ -40,6 +40,8 @@ export interface SubAgentResult {
 	usage?: TokenUsage;
 	/** User messages injected from the main session during sub-agent execution */
 	injectedUserMessages?: string[];
+	/** Internal stop/summarize instructions injected by the executor */
+	terminationInstructions?: string[];
 }
 
 export interface ToolConfirmationCallback {
@@ -1218,6 +1220,8 @@ You have access to these collaboration tools:
 		let latestTotalTokens = 0;
 		// Track all user messages injected from the main session
 		const collectedInjectedMessages: string[] = [];
+		// Track internal stop/summarize instructions injected by the executor
+		const collectedTerminationInstructions: string[] = [];
 
 		// Track instanceIds of sub-agents spawned by THIS agent via spawn_sub_agent.
 		// Used to prevent this agent from finishing while its children are still running.
@@ -2243,6 +2247,9 @@ You have access to these collaboration tools:
 			const approvedToolCalls: typeof toolCalls = [];
 			const rejectedToolCalls: typeof toolCalls = [];
 			const rejectionReasons = new Map<string, string>(); // Map tool_call_id to rejection reason
+			let shouldStopAfterRejection = false;
+			let stopRejectedToolName: string | undefined;
+			let stopRejectionReason: string | undefined;
 
 			for (const toolCall of toolCalls) {
 				const toolName = toolCall.function.name;
@@ -2284,6 +2291,12 @@ You have access to these collaboration tools:
 						if (typeof confirmation === 'object' && confirmation.reason) {
 							rejectionReasons.set(toolCall.id, confirmation.reason);
 						}
+						if (confirmation === 'reject') {
+							shouldStopAfterRejection = true;
+							stopRejectedToolName = toolName;
+							stopRejectionReason = rejectionReasons.get(toolCall.id);
+							break;
+						}
 						continue;
 					}
 					// If approve_always, add to both global and session lists
@@ -2303,6 +2316,16 @@ You have access to these collaboration tools:
 			// Handle rejected tools - add rejection results to conversation instead of stopping
 			if (rejectedToolCalls.length > 0) {
 				const rejectionResults: ChatMessage[] = [];
+				const handledToolIds = new Set<string>([
+					...approvedToolCalls.map(tc => tc.id),
+					...rejectedToolCalls.map(tc => tc.id),
+				]);
+				const cancelledToolCalls = shouldStopAfterRejection
+					? toolCalls.filter(tc => !handledToolIds.has(tc.id))
+					: [];
+				const abortedApprovedToolCalls = shouldStopAfterRejection
+					? [...approvedToolCalls]
+					: [];
 
 				for (const toolCall of rejectedToolCalls) {
 					// Get rejection reason if provided by user
@@ -2318,7 +2341,6 @@ You have access to these collaboration tools:
 					};
 					rejectionResults.push(toolResultMessage);
 
-					// Send tool result to UI
 					if (onMessage) {
 						onMessage({
 							type: 'sub_agent_message',
@@ -2329,16 +2351,69 @@ You have access to these collaboration tools:
 								tool_call_id: toolCall.id,
 								tool_name: toolCall.function.name,
 								content: `Error: ${rejectMessage}`,
+								rejection_reason: rejectionReason,
 							} as any,
 						});
 					}
 				}
 
-				// Add rejection results to conversation
+				if (shouldStopAfterRejection) {
+					const cancelledMessage = stopRejectedToolName
+						? `Tool execution cancelled because the user rejected tool "${stopRejectedToolName}" and requested the sub-agent to stop`
+						: 'Tool execution cancelled because the user requested the sub-agent to stop';
+
+					for (const toolCall of [
+						...abortedApprovedToolCalls,
+						...cancelledToolCalls,
+					]) {
+						const toolResultMessage = {
+							role: 'tool' as const,
+							tool_call_id: toolCall.id,
+							content: `Error: ${cancelledMessage}`,
+						};
+						rejectionResults.push(toolResultMessage);
+
+						if (onMessage) {
+							onMessage({
+								type: 'sub_agent_message',
+								agentId: agent.id,
+								agentName: agent.name,
+								message: {
+									type: 'tool_result',
+									tool_call_id: toolCall.id,
+									tool_name: toolCall.function.name,
+									content: `Error: ${cancelledMessage}`,
+								} as any,
+							});
+						}
+					}
+				}
+
+				// Add rejection/cancellation results to conversation
 				messages.push(...rejectionResults);
 
+				if (shouldStopAfterRejection) {
+					const stopInstructionLines = [
+						`[System] The user rejected your request to run tool "${
+							stopRejectedToolName || 'unknown tool'
+						}" and asked you to stop.`,
+						stopRejectionReason
+							? `[System] Rejection reason: ${stopRejectionReason}`
+							: undefined,
+						'[System] Do not call any more tools.',
+						'[System] Based only on the information already available in this conversation, provide a final summary of what you know, clearly state any missing information caused by the rejected tool, and then end your work.',
+					].filter(Boolean);
+					const stopInstruction = stopInstructionLines.join('\n');
+					collectedTerminationInstructions.push(stopInstruction);
+					messages.push({
+						role: 'user',
+						content: stopInstruction,
+					});
+					continue;
+				}
+
 				// If all tools were rejected and there are no approved tools, continue to next AI turn
-				// The AI will see the rejection messages and can respond accordingly
+
 				if (approvedToolCalls.length === 0) {
 					continue;
 				}
@@ -2443,6 +2518,10 @@ You have access to these collaboration tools:
 			injectedUserMessages:
 				collectedInjectedMessages.length > 0
 					? collectedInjectedMessages
+					: undefined,
+			terminationInstructions:
+				collectedTerminationInstructions.length > 0
+					? collectedTerminationInstructions
 					: undefined,
 		};
 	} catch (error) {

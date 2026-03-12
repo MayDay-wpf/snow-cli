@@ -86,6 +86,7 @@ export class SubAgentService {
 			result: result.result,
 			usage: result.usage,
 			injectedUserMessages: result.injectedUserMessages,
+			terminationInstructions: result.terminationInstructions,
 		};
 	}
 
