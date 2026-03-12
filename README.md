@@ -23,12 +23,6 @@ _Agentic coding in your terminal_
   <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
 </a>
 
-## Thanks Support
-
-- [UUCode](https://www.uucode.org)
-
----
-
 ![alt text](docs/images/image.png)
 
 ## Documentation
@@ -146,13 +140,6 @@ npm run link   # builds and globally links snow
 └── system-prompt.json      # Custom system prompts
 ```
 
----
-
-## QQ Group
-
-![alt text](docs/images/qq_group_qr.jpg)
-
----
 
 ## Star History
 
