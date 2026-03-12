@@ -5,7 +5,9 @@ import {
 	sendEditorContext,
 } from './webSocketServer';
 import {registerDiffCommands} from './diffHandlers';
+import {ShellType} from './ptyManager';
 import {SidebarTerminalProvider} from './sidebarTerminalProvider';
+import {formatTerminalPathPayload} from './terminalPathFormatter';
 
 /**
  * Snow CLI Extension
@@ -40,12 +42,18 @@ function getWorkspaceFolderForActiveEditor(): string | undefined {
 	);
 }
 
-function quotePathIfNeeded(path: string): string {
-	return path.includes(' ') ? `"${path}"` : path;
-}
+function getSplitTerminalShellType(): ShellType {
+	if (process.platform !== 'win32') {
+		return 'auto';
+	}
 
-function formatPathPayload(paths: readonly string[]): string {
-	return paths.map(quotePathIfNeeded).join(' ');
+	const integratedConfig = vscode.workspace.getConfiguration('terminal.integrated');
+	const defaultProfile = integratedConfig.get<string>('defaultProfile.windows', '');
+	const legacyShellPath = integratedConfig.get<string>('shell.windows', '');
+	const profileHint = `${defaultProfile} ${legacyShellPath}`.trim().toLowerCase();
+	return profileHint.includes('cmd') || profileHint.includes('command prompt')
+		? 'cmd'
+		: 'powershell';
 }
 
 function getExistingSplitSnowTerminal(): vscode.Terminal | undefined {
@@ -102,7 +110,13 @@ async function sendFilePathsToSplitTerminal(paths: string[]): Promise<void> {
 	}
 
 	const terminal = await ensureSplitSnowTerminal();
-	terminal.sendText(formatPathPayload(paths), false);
+	terminal.sendText(
+		formatTerminalPathPayload(paths, {
+			shellType: getSplitTerminalShellType(),
+			platform: process.platform,
+		}),
+		false,
+	);
 }
 
 async function sendFilePathsToConfiguredTerminal(paths: string[]): Promise<void> {
@@ -182,6 +196,15 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 		vscode.commands.registerCommand('snow-cli.restartSidebarTerminal', () => {
 			sidebarProvider?.restartTerminal({reason: 'manualRestart'});
+		}),
+		vscode.commands.registerCommand('snow-cli.newSidebarTerminalTab', async () => {
+			const mode = getConfig<string>('terminalMode', 'split');
+			if (mode === 'sidebar') {
+				await vscode.commands.executeCommand('snowCliTerminal.focus');
+				sidebarProvider?.createTab({focus: true});
+			} else {
+				await openSplitTerminal();
+			}
 		}),
 		vscode.commands.registerCommand('snow-cli.openSnowSettings', async () => {
 			await vscode.commands.executeCommand(
