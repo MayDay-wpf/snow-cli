@@ -531,6 +531,7 @@ export const zh: TranslationKeys = {
 			codebase: '切换当前项目的代码库索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理始终批准的工具权限',
 			backend: '显示后台进程面板',
+			loop: '创建会话级循环任务。用法: /loop 5m <提示词>',
 			profiles: '打开配置文件切换面板',
 			models: '打开模型切换面板',
 			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
@@ -806,6 +807,7 @@ export const zh: TranslationKeys = {
 		// Profile switch
 		profileCurrent: '当前配置',
 		profileSwitchHint: '切换',
+		memoryUsageLabel: '内存占用:',
 		// Tool execution
 		toolCall: '工具调用',
 		toolThinking: '思考',
@@ -814,7 +816,6 @@ export const zh: TranslationKeys = {
 		toolSearching: '搜索',
 		toolExecuting: '执行',
 		toolSuccess: '✓ 成功',
-		toolFailed: '✗ 失败',
 		toolRejected: '✗ 已拒绝',
 		// Parallel execution
 		parallelStart: '┌─ 并行执行',

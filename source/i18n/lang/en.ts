@@ -568,6 +568,7 @@ export const en: TranslationKeys = {
 				'Toggle codebase indexing for current project. Usage: /codebase [on|off|status]',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
+			loop: 'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
 			profiles: 'Switch configuration profiles',
 			models: 'Open model switching panel',
 			vulnerabilityHunting:
@@ -853,6 +854,7 @@ export const en: TranslationKeys = {
 		// Profile switch
 		profileCurrent: 'Profile',
 		profileSwitchHint: 'switch',
+		memoryUsageLabel: 'Memory Usage:',
 		// Tool execution
 		toolCall: 'Tool call',
 		toolThinking: 'Thinking',
@@ -861,7 +863,6 @@ export const en: TranslationKeys = {
 		toolSearching: 'Searching',
 		toolExecuting: 'Executing',
 		toolSuccess: '✓ Success',
-		toolFailed: '✗ Failed',
 		toolRejected: '✗ Rejected',
 		// Parallel execution
 		parallelStart: '┌─ Parallel execution',

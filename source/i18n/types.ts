@@ -521,6 +521,7 @@ export type TranslationKeys = {
 			role: string;
 			usage: string;
 			backend: string;
+			loop: string;
 			profiles: string;
 			models: string;
 			export: string;
@@ -809,6 +810,7 @@ export type TranslationKeys = {
 		// Profile switch
 		profileCurrent: string;
 		profileSwitchHint: string;
+		memoryUsageLabel: string;
 		// Tool execution
 		toolCall: string;
 		toolThinking: string;
@@ -817,7 +819,6 @@ export type TranslationKeys = {
 		toolSearching: string;
 		toolExecuting: string;
 		toolSuccess: string;
-		toolFailed: string;
 		toolRejected: string;
 		// Parallel execution
 		parallelStart: string;

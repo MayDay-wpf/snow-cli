@@ -706,6 +706,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showNewPromptPanel') {
 				options.setShowNewPromptPanel(true);
+			} else if (result.success && result.action === 'showTaskManager') {
+				navigateTo('tasks');
 			} else if (result.success && result.action === 'showTodoListPanel') {
 				options.setShowTodoListPanel(true);
 			} else if (

@@ -3,7 +3,9 @@ import {Command} from '../types/index.js';
 // Import commands to register them
 import './commands/addDir.js';
 import './commands/agent.js';
+import './commands/backend.js';
 import './commands/clear.js';
+import './commands/codebase.js';
 import './commands/compact.js';
 import './commands/connect.js';
 import './commands/copyLast.js';
@@ -14,8 +16,13 @@ import './commands/help.js';
 import './commands/home.js';
 import './commands/ide.js';
 import './commands/init.js';
+import './commands/loop.js';
 import './commands/mcp.js';
+import './commands/models.js';
+import './commands/newPrompt.js';
+import './commands/permissions.js';
 import './commands/plan.js';
+import './commands/profiles.js';
 import './commands/quit.js';
 import './commands/reindex.js';
 import './commands/resume.js';
@@ -25,9 +32,10 @@ import './commands/skills.js';
 import './commands/skillsPicker.js';
 import './commands/todoPicker.js';
 import './commands/todolist.js';
-import './commands/usage.js';
 import './commands/toolsearch.js';
+import './commands/usage.js';
 import './commands/vulnerability-hunting.js';
+import './commands/worktree.js';
 import './commands/yolo.js';
 
 // Export logger

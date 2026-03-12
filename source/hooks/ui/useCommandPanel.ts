@@ -57,6 +57,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.profiles,
 			},
 			{
+				name: 'loop',
+				description:
+					t.commandPanel.commands.loop ||
+					'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
+			},
+			{
 				name: 'models',
 				description: t.commandPanel.commands.models,
 			},

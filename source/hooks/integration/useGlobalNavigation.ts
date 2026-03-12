@@ -15,7 +15,8 @@ export interface NavigationEvent {
 		| 'settings'
 		| 'mcp'
 		| 'systemprompt'
-		| 'customheaders';
+		| 'customheaders'
+		| 'tasks';
 }
 
 // Emit navigation event

@@ -267,7 +267,7 @@ function AppContent({
 				return (
 					<Suspense fallback={loadingFallback}>
 						<TaskManagerScreen
-							onBack={() => setCurrentView('welcome')}
+							onBack={() => setCurrentView('chat')}
 							onResumeTask={() => {
 								// Session is already set by convertTaskToSession
 								// Just navigate to chat view

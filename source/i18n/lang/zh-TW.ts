@@ -532,6 +532,7 @@ export const zhTW: TranslationKeys = {
 			codebase: '切換當前專案的代碼庫索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理永遠允許的工具權限',
 			backend: '顯示背景處理程序面板',
+			loop: '建立會話級循環任務。用法: /loop 5m <提示詞>',
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
@@ -807,6 +808,7 @@ export const zhTW: TranslationKeys = {
 		// Profile switch
 		profileCurrent: '目前設定檔',
 		profileSwitchHint: '切換',
+		memoryUsageLabel: '記憶體佔用:',
 		// Tool execution
 		toolCall: '工具呼叫',
 		toolThinking: '思考',
@@ -815,7 +817,6 @@ export const zhTW: TranslationKeys = {
 		toolSearching: '搜尋',
 		toolExecuting: '執行',
 		toolSuccess: '✓ 成功',
-		toolFailed: '✗ 失敗',
 		toolRejected: '✗ 已拒絕',
 		// Parallel execution
 		parallelStart: '┌─ 並行執行',

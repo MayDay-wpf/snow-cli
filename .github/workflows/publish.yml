@@ -56,11 +56,13 @@ jobs:
 
             ### What's New
 
-            - Added a streaming display switch in API configuration to enhance readability
-            - Added /todolist command to manually maintain TODO list
-            - Added Ctrl+O shortcut key to copy text in the input box
-            - Refactored some code to improve code readability
-            - Added more scrolling windows to avoid window jitter in extreme scenarios
+            - Modify the default permissions of some system tools  
+            - Add a delay tool  
+            - Optimize the display effect of the simple mode  
+            - Add instance memory usage refresh every 5 seconds  
+            - Optimize the smoothness of sub-agent operation  
+            - Optimize the replication strategy  
+            - Optimize the session export strategy
 
             ### Installation
             ```bash

@@ -1,9 +1,45 @@
-import {exec} from 'child_process';
+import {exec, execFile} from 'child_process';
 import {promisify} from 'util';
 import * as path from 'path';
 import * as os from 'os';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+const windowsSaveDialogFilter =
+	'Text files (*.txt)|*.txt|Markdown files (*.md)|*.md|All files (*.*)|*.*';
+
+function escapePowerShellString(value: string): string {
+	return value.replace(/'/g, "''");
+}
+
+async function showWindowsSaveDialog(
+	defaultFilename: string,
+	title: string,
+): Promise<string | null> {
+	const downloadsPath = path.join(os.homedir(), 'Downloads');
+	const psScript = [
+		'Add-Type -AssemblyName System.Windows.Forms;',
+		'$dialog = New-Object System.Windows.Forms.SaveFileDialog;',
+		`$dialog.Title = '${escapePowerShellString(title)}';`,
+		`$dialog.Filter = '${escapePowerShellString(windowsSaveDialogFilter)}';`,
+		`$dialog.FileName = '${escapePowerShellString(defaultFilename)}';`,
+		`$dialog.InitialDirectory = '${escapePowerShellString(downloadsPath)}';`,
+		'$dialog.RestoreDirectory = $true;',
+		'$result = $dialog.ShowDialog();',
+		'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine($dialog.FileName); }',
+	].join(' ');
+	const encodedCommand = Buffer.from(psScript, 'utf16le').toString('base64');
+	const {stdout} = await execFileAsync('powershell.exe', [
+		'-NoProfile',
+		'-STA',
+		'-ExecutionPolicy',
+		'Bypass',
+		'-EncodedCommand',
+		encodedCommand,
+	]);
+	const result = stdout.trim();
+	return result || null;
+}
 
 /**
  * Cross-platform file save dialog
@@ -29,27 +65,8 @@ export async function showSaveDialog(
 			);
 			return stdout.trim();
 		} else if (platform === 'win32') {
-			// Windows - use PowerShell with single-line command for better cmd.exe compatibility
-			const downloadsPath = path
-				.join(os.homedir(), 'Downloads')
-				.replace(/\\/g, '\\\\');
-			// Construct PowerShell script as single line to avoid escaping issues
-			const psScript = [
-				'Add-Type -AssemblyName System.Windows.Forms;',
-				'$dialog = New-Object System.Windows.Forms.SaveFileDialog;',
-				`$dialog.Title = '${title.replace(/'/g, "''")}';`,
-				`$dialog.Filter = 'Text files (*.txt)|*.txt|Markdown files (*.md)|*.md|All files (*.*)|*.*';`,
-				`$dialog.FileName = '${defaultFilename.replace(/'/g, "''")}';`,
-				`$dialog.InitialDirectory = '${downloadsPath}';`,
-				'$result = $dialog.ShowDialog();',
-				`if ($result -eq 'OK') { Write-Output $dialog.FileName; }`,
-			].join(' ');
-			// Use ExecutionPolicy Bypass to avoid permission issues
-			const {stdout} = await execAsync(
-				`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psScript}"`,
-			);
-			const result = stdout.trim();
-			return result || null;
+			// Windows dialogs are more reliable in an STA PowerShell process with encoded script arguments.
+			return showWindowsSaveDialog(defaultFilename, title);
 		} else {
 			// Linux - use zenity (most common) or kdialog as fallback
 			try {
