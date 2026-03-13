@@ -27,11 +27,19 @@ type KeyboardInputOptions = {
 	setShowCommands: (show: boolean) => void;
 	commandSelectedIndex: number;
 	setCommandSelectedIndex: (index: number | ((prev: number) => number)) => void;
-	getFilteredCommands: () => Array<{name: string; description: string}>;
+	getFilteredCommands: () => Array<{
+		name: string;
+		description: string;
+		type: 'builtin' | 'execute' | 'prompt';
+	}>;
 	updateCommandPanelState: (text: string) => void;
 	onCommand?: (commandName: string, result: any) => void;
-	getAllCommands?: () => Array<{name: string; description: string}>; // Get all available commands for validation
-	// File picker
+	getAllCommands?: () => Array<{
+		name: string;
+		description: string;
+		type: 'builtin' | 'execute' | 'prompt';
+	}>; // Get all available commands for validation
+
 	showFilePicker: boolean;
 	setShowFilePicker: (show: boolean) => void;
 	fileSelectedIndex: number;
@@ -1276,12 +1284,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						// Block command execution if AI is processing
 
 						if (isProcessing && getAllCommands) {
-							const allCommands = getAllCommands();
-							const isValidCommand = allCommands.some(
+							const matchedCommand = getAllCommands().find(
 								cmd => cmd.name === selectedCommand.name,
 							);
-							if (isValidCommand) {
-								// Don't execute command, just close the panel
+							if (matchedCommand && matchedCommand.type !== 'prompt') {
+								// Keep non-prompt commands blocked while AI is already processing.
 								buffer.setText('');
 								setShowCommands(false);
 								setCommandSelectedIndex(0);
@@ -1418,12 +1425,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						// Block command execution if AI is processing
 
 						if (isProcessing && getAllCommands) {
-							const allCommands = getAllCommands();
-							const isValidCommand = allCommands.some(
+							const matchedCommand = getAllCommands().find(
 								cmd => cmd.name === commandName,
 							);
-							if (isValidCommand) {
-								// Don't execute command, just clear the input
+							if (matchedCommand && matchedCommand.type !== 'prompt') {
+								// Keep non-prompt commands blocked while AI is already processing.
 								buffer.setText('');
 								triggerUpdate();
 								return;

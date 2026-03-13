@@ -305,7 +305,6 @@ export default function ChatInput({
 		setCommandSelectedIndex,
 		getFilteredCommands,
 		updateCommandPanelState,
-		isProcessing: commandPanelIsProcessing,
 		getAllCommands,
 	} = useCommandPanel(buffer, isProcessing);
 
@@ -1067,7 +1066,6 @@ export default function ChatInput({
 							selectedIndex={commandSelectedIndex}
 							query={buffer.getFullText().slice(1)}
 							visible={showCommands}
-							isProcessing={commandPanelIsProcessing}
 						/>
 					</Suspense>
 					<Box>

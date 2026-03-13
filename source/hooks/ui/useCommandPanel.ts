@@ -4,6 +4,12 @@ import {useI18n} from '../../i18n/index.js';
 import {getCustomCommands} from '../../utils/commands/custom.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 
+export type CommandPanelCommand = {
+	name: string;
+	description: string;
+	type: 'builtin' | 'execute' | 'prompt';
+};
+
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
 
@@ -179,14 +185,24 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		[t],
 	);
 
+	const normalizedBuiltInCommands = useMemo<CommandPanelCommand[]>(
+		() =>
+			builtInCommands.map(command => ({
+				...command,
+				type: 'builtin',
+			})),
+		[builtInCommands],
+	);
+
 	// Get all commands (built-in + custom) - dynamically fetch custom commands
-	const getAllCommands = useCallback(() => {
+	const getAllCommands = useCallback((): CommandPanelCommand[] => {
 		const customCommands = getCustomCommands().map(cmd => ({
 			name: cmd.name,
 			description: cmd.description || cmd.command,
+			type: cmd.type,
 		}));
-		return [...builtInCommands, ...customCommands];
-	}, [builtInCommands]);
+		return [...normalizedBuiltInCommands, ...customCommands];
+	}, [normalizedBuiltInCommands]);
 
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
@@ -212,7 +228,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	// Sorting strategy:
 	// - Empty query: Sort by usage frequency (most used first)
 	// - With query: Sort by match priority, then by usage frequency within same priority
-	const getFilteredCommands = useCallback(() => {
+	const getFilteredCommands = useCallback((): CommandPanelCommand[] => {
 		const text = buffer.getFullText();
 		if (!text.startsWith('/')) return [];
 
@@ -220,6 +236,9 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 
 		// Get all commands (including latest custom commands)
 		const allCommands = getAllCommands();
+		const availableCommands = isProcessing
+			? allCommands.filter(command => command.type === 'prompt')
+			: allCommands;
 
 		// Filter and sort commands by priority and usage frequency
 		// Priority order:
@@ -227,7 +246,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		// 2. Command contains query
 		// 3. Description starts with query
 		// 4. Description contains query (lowest)
-		const filtered = allCommands
+		const filtered = availableCommands
 			.filter(
 				command =>
 					command.name.toLowerCase().includes(query) ||
@@ -274,7 +293,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer, getAllCommands, usageLoaded]);
+	}, [buffer, getAllCommands, isProcessing, usageLoaded]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {
@@ -295,7 +314,6 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		setCommandSelectedIndex,
 		getFilteredCommands,
 		updateCommandPanelState,
-		getAllCommands, // Export function to get all commands dynamically
-		isProcessing, // Export isProcessing for CommandPanel to use
+		getAllCommands,
 	};
 }

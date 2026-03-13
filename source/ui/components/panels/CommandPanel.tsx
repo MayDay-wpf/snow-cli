@@ -1,6 +1,5 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
-import {Alert} from '@inkjs/ui';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
@@ -15,17 +14,9 @@ interface Props {
 	query: string;
 	visible: boolean;
 	maxHeight?: number;
-	isProcessing?: boolean;
 }
-
 const CommandPanel = memo(
-	({
-		commands,
-		selectedIndex,
-		visible,
-		maxHeight,
-		isProcessing = false,
-	}: Props) => {
+	({commands, selectedIndex, visible, maxHeight}: Props) => {
 		const {t} = useI18n();
 		const {theme} = useTheme();
 
@@ -84,26 +75,6 @@ const CommandPanel = memo(
 		// Don't show panel if no commands found
 		if (commands.length === 0) {
 			return null;
-		}
-
-		// Show processing message if conversation is in progress
-		if (isProcessing) {
-			return (
-				<Box flexDirection="column">
-					<Box width="100%">
-						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color={theme.colors.warning} bold>
-									{t.commandPanel.title}
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="info">{t.commandPanel.processingMessage}</Alert>
-							</Box>
-						</Box>
-					</Box>
-				</Box>
-			);
 		}
 
 		return (

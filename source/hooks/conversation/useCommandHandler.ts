@@ -295,6 +295,15 @@ export async function executeContextCompression(
 type CommandHandlerOptions = {
 	messages: Message[];
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+	setPendingMessages?: React.Dispatch<
+		React.SetStateAction<
+			Array<{
+				text: string;
+				images?: Array<{data: string; mimeType: string}>;
+			}>
+		>
+	>;
+	streamStatus?: 'idle' | 'streaming' | 'stopping';
 	setRemountKey: React.Dispatch<React.SetStateAction<number>>;
 	clearSavedMessages: () => void;
 	setIsCompressing: React.Dispatch<React.SetStateAction<boolean>>;
@@ -311,7 +320,6 @@ type CommandHandlerOptions = {
 			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
-
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
@@ -715,15 +723,25 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.action === 'executeCustomCommand' &&
 				result.prompt
 			) {
-				// Execute custom command (prompt type - send to AI)
+				// Execute custom command (prompt type - send to AI or queue as pending)
 				const commandMessage: Message = {
 					role: 'command',
 					content: result.message || '',
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-				// Send command to AI for execution
-				options.processMessage(result.prompt, undefined, false, false);
+				if (
+					options.streamStatus &&
+					options.streamStatus !== 'idle' &&
+					options.setPendingMessages
+				) {
+					options.setPendingMessages(prev => [
+						...prev,
+						{text: result.prompt as string},
+					]);
+				} else {
+					options.processMessage(result.prompt, undefined, false, false);
+				}
 			} else if (
 				result.success &&
 				result.action === 'executeTerminalCommand' &&

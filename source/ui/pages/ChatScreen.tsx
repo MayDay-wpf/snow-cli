@@ -240,6 +240,8 @@ export default function ChatScreen({
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
 		setMessages,
+		setPendingMessages,
+		streamStatus: streamingState.streamStatus,
 		setRemountKey,
 		clearSavedMessages,
 		setIsCompressing,
