@@ -38,7 +38,7 @@
 				"snow-cli.startupCommand": {
 					"type": "string",
 					"default": "snow",
-					"description": "The command to run when the terminal starts."
+					"description": "The command or comma-separated commands to run when terminals start. New terminals are assigned commands in round-robin order, and each terminal keeps its assigned command across restarts."
 				},
 				"snow-cli.terminal.shellType": {
 					"type": "string",
@@ -54,6 +54,11 @@
 						"Command Prompt (cmd.exe, Windows only)"
 					],
 					"description": "Shell type for the sidebar terminal (Windows only). On macOS/Linux the default login shell is always used."
+				},
+				"snow-cli.terminal.proxyUrl": {
+					"type": "string",
+					"default": "",
+					"description": "Optional proxy URL injected into Snow CLI terminals as HTTP_PROXY/HTTPS_PROXY. Leave empty to fall back to VS Code's http.proxy setting."
 				},
 				"snow-cli.terminal.fontFamily": {
 					"type": "string",
@@ -156,6 +161,11 @@
 				"command": "snow-cli.sendFilePaths",
 				"title": "Send to Snow CLI",
 				"icon": "$(file-symlink-file)"
+			},
+			{
+				"command": "snow-cli.sendSelectionLocation",
+				"title": "Send to Snow CLI",
+				"icon": "$(file-symlink-file)"
 			}
 		],
 		"submenus": [
@@ -221,6 +231,13 @@
 				{
 					"command": "snow-cli.sendFilePaths",
 					"when": "resourceScheme == file || resourceScheme == vscode-remote",
+					"group": "snow@1"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "snow-cli.sendSelectionLocation",
+					"when": "editorHasSelection && (resourceScheme == file || resourceScheme == vscode-remote)",
 					"group": "snow@1"
 				}
 			]
