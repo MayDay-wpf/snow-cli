@@ -967,7 +967,8 @@ export const zhTW: TranslationKeys = {
 		historyNavigateHint: '↑↓ 導航 · Enter 選擇 · ESC 關閉',
 		typeToFilterCommands: '輸入以過濾命令',
 		contentSearchHint: '內容搜尋 • Tab/Enter 選擇 • ESC 取消',
-		fileSearchHint: '輸入以過濾檔案 • Tab/Enter 選擇 • ESC 取消',
+		fileSearchHint:
+			'輸入以過濾檔案 • Tab/Enter 選擇 • Ctrl+T 切換檢視 • ESC 取消',
 		expandedViewHint: '展開檢視 • Ctrl+T 切換',
 		yoloModeActive: '❁ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
 		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',

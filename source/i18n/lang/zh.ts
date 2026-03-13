@@ -966,7 +966,8 @@ export const zh: TranslationKeys = {
 		historyNavigateHint: '↑↓ 导航 · Enter 选择 · ESC 关闭',
 		typeToFilterCommands: '输入以过滤命令',
 		contentSearchHint: '内容搜索 • Tab/Enter 选择 • ESC 取消',
-		fileSearchHint: '输入以过滤文件 • Tab/Enter 选择 • ESC 取消',
+		fileSearchHint:
+			'输入以过滤文件 • Tab/Enter 选择 • Ctrl+T 切换视图 • ESC 取消',
 		expandedViewHint: '展开视图 • Ctrl+T 切换',
 		yoloModeActive: '❁ YOLO 模式已激活 - 所有工具将自动批准无需确认',
 		planModeActive: '⚐ Plan 模式已激活 - 专业规划与协调助手',

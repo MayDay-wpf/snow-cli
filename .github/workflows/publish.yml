@@ -56,13 +56,8 @@ jobs:
 
             ### What's New
 
-            - Modify the default permissions of some system tools  
-            - Add a delay tool  
-            - Optimize the display effect of the simple mode  
-            - Add instance memory usage refresh every 5 seconds  
-            - Optimize the smoothness of sub-agent operation  
-            - Optimize the replication strategy  
-            - Optimize the session export strategy
+            - Add dual-form display for file selection list
+            - Add /gitline command to select commit records to AI context
 
             ### Installation
             ```bash

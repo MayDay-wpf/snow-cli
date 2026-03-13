@@ -51,8 +51,11 @@ type KeyboardInputOptions = {
 	filteredFileCount: number;
 	updateFilePickerState: (text: string, cursorPos: number) => void;
 	handleFileSelect: (filePath: string) => Promise<void>;
-	fileListRef: React.RefObject<{getSelectedFile: () => string | null}>;
-	// History navigation
+	fileListRef: React.RefObject<{
+		getSelectedFile: () => string | null;
+		toggleDisplayMode: () => boolean;
+	}>;
+
 	showHistoryMenu: boolean;
 	setShowHistoryMenu: (show: boolean) => void;
 	historySelectedIndex: number;
@@ -957,8 +960,13 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 		};
 
-		// Ctrl+T - Toggle expanded/collapsed view for pasted text
+		// Ctrl+T - Toggle file picker display mode when active, otherwise toggle pasted text view
 		if (key.ctrl && input === 't') {
+			if (showFilePicker && fileListRef.current?.toggleDisplayMode()) {
+				forceUpdate({});
+				return;
+			}
+
 			flushPendingInput();
 			buffer.toggleExpandedView();
 			forceUpdate({});

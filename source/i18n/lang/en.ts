@@ -1020,7 +1020,7 @@ export const en: TranslationKeys = {
 		typeToFilterCommands: 'Type to filter commands',
 		contentSearchHint: 'Content search • Tab/Enter to select • ESC to cancel',
 		fileSearchHint:
-			'Type to filter files • Tab/Enter to select • ESC to cancel',
+			'Type to filter files • Tab/Enter to select • Ctrl+T to toggle view • ESC to cancel',
 		expandedViewHint: 'Expanded view • Ctrl+T to toggle',
 		yoloModeActive:
 			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',

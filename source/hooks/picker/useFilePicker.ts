@@ -193,20 +193,20 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 				// Replace query with selected file path
 				// For content search (@@), the filePath already includes line number
-				// For file search (@), just the file path
+				// For file search (@), directories can keep the picker open for deeper filtering
 				const beforeAt = displayText.slice(0, state.atSymbolPosition);
 				const afterCursor = displayText.slice(cursorPos);
-
-				// Construct the replacement based on search mode
 				const prefix = state.searchMode === 'content' ? '@@' : '@';
-				const newText = beforeAt + prefix + filePath + ' ' + afterCursor;
+				const isDirectoryContinuation =
+					state.searchMode === 'file' && filePath.endsWith('/');
+				const suffix = isDirectoryContinuation ? '' : ' ';
+				const newText = beforeAt + prefix + filePath + suffix + afterCursor;
 
-				// Set the new text and position cursor after the inserted file path + space
+				// Set the new text and position cursor after the inserted file path
 				buffer.setText(newText);
 
 				// Calculate cursor position after the inserted text
-				// prefix length + filePath length + space
-				const insertedLength = prefix.length + filePath.length + 1;
+				const insertedLength = prefix.length + filePath.length + suffix.length;
 				const targetPos = state.atSymbolPosition + insertedLength;
 
 				// Reset cursor to beginning, then move to correct position
@@ -216,7 +216,16 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 					}
 				}
 
-				dispatch({type: 'SELECT_FILE'});
+				if (isDirectoryContinuation) {
+					dispatch({
+						type: 'SHOW',
+						query: filePath,
+						position: state.atSymbolPosition,
+						searchMode: state.searchMode,
+					});
+				} else {
+					dispatch({type: 'SELECT_FILE'});
+				}
 				triggerUpdate();
 			}
 		},

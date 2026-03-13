@@ -36,9 +36,171 @@ type Props = {
 	onFilteredCountChange?: (count: number) => void;
 	searchMode?: 'file' | 'content';
 };
-
 export type FileListRef = {
 	getSelectedFile: () => string | null;
+	toggleDisplayMode: () => boolean;
+};
+
+type DisplayMode = 'list' | 'tree';
+
+type DisplayItem = {
+	file: FileItem;
+	key: string;
+	label: string;
+	depth: number;
+	isContextOnly?: boolean;
+};
+
+const getDisplayItemKey = (file: FileItem) =>
+	`${file.sourceDir || ''}::${file.path}::${file.lineNumber ?? 0}`;
+
+const getNormalizedItemPath = (itemPath: string) =>
+	itemPath.replace(/\\/g, '/').replace(/\/$/, '');
+
+const getLookupKey = (sourceDir: string | undefined, itemPath: string) =>
+	`${sourceDir || ''}::${getNormalizedItemPath(itemPath)}`;
+
+const getRelativeTreePath = (file: FileItem) => {
+	if (file.path.startsWith('ssh://') || path.isAbsolute(file.path)) {
+		return '';
+	}
+
+	return getNormalizedItemPath(file.path)
+		.replace(/^\.\//, '')
+		.replace(/^\/+/, '');
+};
+
+const getTreeDepth = (file: FileItem) => {
+	const relativePath = getRelativeTreePath(file);
+	if (!relativePath) {
+		return 0;
+	}
+
+	return relativePath.split('/').filter(Boolean).length;
+};
+
+const compareTreeItems = (a: FileItem, b: FileItem) => {
+	const sourceCompare = (a.sourceDir || '').localeCompare(b.sourceDir || '');
+	if (sourceCompare !== 0) {
+		return sourceCompare;
+	}
+
+	const aIsRoot = a.path === (a.sourceDir || '');
+	const bIsRoot = b.path === (b.sourceDir || '');
+	if (aIsRoot !== bIsRoot) {
+		return aIsRoot ? -1 : 1;
+	}
+
+	const aParts = getRelativeTreePath(a).split('/').filter(Boolean);
+	const bParts = getRelativeTreePath(b).split('/').filter(Boolean);
+	const maxDepth = Math.min(aParts.length, bParts.length);
+
+	for (let i = 0; i < maxDepth; i++) {
+		const aPart = aParts[i] || '';
+		const bPart = bParts[i] || '';
+		const diff = aPart.localeCompare(bPart);
+		if (diff !== 0) {
+			return diff;
+		}
+	}
+
+	if (aParts.length !== bParts.length) {
+		return aParts.length - bParts.length;
+	}
+
+	if (a.isDirectory !== b.isDirectory) {
+		return a.isDirectory ? -1 : 1;
+	}
+
+	return a.name.localeCompare(b.name);
+};
+
+const buildTreeDisplayItems = (
+	filteredFiles: FileItem[],
+	allFiles: FileItem[],
+	query: string,
+): DisplayItem[] => {
+	const allFilesLookup = new Map(
+		allFiles.map(file => [getLookupKey(file.sourceDir, file.path), file]),
+	);
+	const directMatchKeys = new Set(filteredFiles.map(getDisplayItemKey));
+	const includedFiles = new Map<
+		string,
+		{file: FileItem; isContextOnly: boolean}
+	>();
+
+	const includeFile = (file: FileItem, isContextOnly: boolean) => {
+		const key = getDisplayItemKey(file);
+		const existing = includedFiles.get(key);
+		if (!existing || (!isContextOnly && existing.isContextOnly)) {
+			includedFiles.set(key, {file, isContextOnly});
+		}
+	};
+
+	filteredFiles.forEach(file => includeFile(file, false));
+
+	if (query.trim()) {
+		for (const file of filteredFiles) {
+			if (!file.sourceDir) {
+				continue;
+			}
+
+			const rootFile = allFilesLookup.get(
+				getLookupKey(file.sourceDir, file.sourceDir),
+			);
+			if (rootFile) {
+				includeFile(
+					rootFile,
+					!directMatchKeys.has(getDisplayItemKey(rootFile)),
+				);
+			}
+
+			const relativePath = getRelativeTreePath(file);
+			if (!relativePath) {
+				continue;
+			}
+
+			const segments = relativePath.split('/').filter(Boolean);
+			for (let depth = 1; depth < segments.length; depth++) {
+				const ancestorPath = `./${segments.slice(0, depth).join('/')}`;
+				const ancestor = allFilesLookup.get(
+					getLookupKey(file.sourceDir, ancestorPath),
+				);
+				if (ancestor) {
+					includeFile(
+						ancestor,
+						!directMatchKeys.has(getDisplayItemKey(ancestor)),
+					);
+				}
+			}
+		}
+	}
+
+	return Array.from(includedFiles.values())
+		.map(({file, isContextOnly}) => ({
+			file,
+			key: getDisplayItemKey(file),
+			label: file.name,
+			depth: getTreeDepth(file),
+			isContextOnly,
+		}))
+		.sort((a, b) => compareTreeItems(a.file, b.file));
+};
+
+const getFullFilePath = (file: FileItem, rootPath: string) => {
+	const baseDir = file.sourceDir || rootPath;
+
+	if (file.path.startsWith('ssh://') || path.isAbsolute(file.path)) {
+		return file.path;
+	}
+
+	if (baseDir.startsWith('ssh://')) {
+		const cleanBase = baseDir.replace(/\/$/, '');
+		const cleanRelative = file.path.replace(/^\.\//, '').replace(/^\//, '');
+		return `${cleanBase}/${cleanRelative}`;
+	}
+
+	return path.join(baseDir, file.path);
 };
 
 const FileList = memo(
@@ -62,6 +224,7 @@ const FileList = memo(
 			const [searchDepth, setSearchDepth] = useState(5); // Start with shallow depth for performance
 			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
 			const [hasMoreDepth, setHasMoreDepth] = useState(true); // Track if there's more depth to explore
+			const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -557,16 +720,43 @@ const FileList = memo(
 						setAllFilteredFiles(results);
 					} else {
 						// File name search mode (@)
-						const queryLower = query.toLowerCase();
+						const queryLower = query.toLowerCase().replace(/\\/g, '/');
 						const filtered = files.filter(file => {
 							const fileName = file.name.toLowerCase();
-							const filePath = file.path.toLowerCase();
+							const filePath = file.path.toLowerCase().replace(/\\/g, '/');
 							// Also search in sourceDir for working directory entries
-							const sourceDir = (file.sourceDir || '').toLowerCase();
+							const sourceDir = (file.sourceDir || '')
+								.toLowerCase()
+								.replace(/\\/g, '/');
+							const searchableFullPath = (() => {
+								if (
+									file.path.startsWith('ssh://') ||
+									path.isAbsolute(file.path)
+								) {
+									return filePath;
+								}
+								if ((file.sourceDir || '').startsWith('ssh://')) {
+									const cleanBase = (file.sourceDir || '')
+										.toLowerCase()
+										.replace(/\/$/, '');
+									const cleanRelative = filePath
+										.replace(/^\.\//, '')
+										.replace(/^\//, '');
+									return `${cleanBase}/${cleanRelative}`;
+								}
+								if (file.sourceDir) {
+									return path
+										.join(file.sourceDir, file.path)
+										.toLowerCase()
+										.replace(/\\/g, '/');
+								}
+								return filePath;
+							})();
 							return (
 								fileName.includes(queryLower) ||
 								filePath.includes(queryLower) ||
-								sourceDir.includes(queryLower)
+								sourceDir.includes(queryLower) ||
+								searchableFullPath.includes(queryLower)
 							);
 						});
 
@@ -621,118 +811,128 @@ const FileList = memo(
 				hasMoreDepth,
 			]);
 
+			const displayItems = useMemo<DisplayItem[]>(() => {
+				if (searchMode === 'content') {
+					return allFilteredFiles.map(file => ({
+						file,
+						key: getDisplayItemKey(file),
+						label:
+							file.lineNumber !== undefined
+								? `${file.path}:${file.lineNumber}`
+								: file.path,
+						depth: 0,
+					}));
+				}
+
+				if (displayMode === 'tree') {
+					return buildTreeDisplayItems(allFilteredFiles, files, query);
+				}
+
+				return allFilteredFiles.map(file => ({
+					file,
+					key: getDisplayItemKey(file),
+					label: file.path,
+					depth: 0,
+				}));
+			}, [allFilteredFiles, files, displayMode, searchMode, query]);
+
+			const normalizedSelectedIndex = useMemo(() => {
+				if (displayItems.length === 0) {
+					return 0;
+				}
+
+				return Math.min(selectedIndex, displayItems.length - 1);
+			}, [displayItems.length, selectedIndex]);
+
 			const fileWindow = useMemo(() => {
-				if (allFilteredFiles.length <= effectiveMaxItems) {
+				if (displayItems.length <= effectiveMaxItems) {
 					return {
-						items: allFilteredFiles,
+						items: displayItems,
 						startIndex: 0,
-						endIndex: allFilteredFiles.length,
+						endIndex: displayItems.length,
 					};
 				}
 
-				// Show files around the selected index
 				const halfWindow = Math.floor(effectiveMaxItems / 2);
-				let startIndex = Math.max(0, selectedIndex - halfWindow);
+				let startIndex = Math.max(0, normalizedSelectedIndex - halfWindow);
 				let endIndex = Math.min(
-					allFilteredFiles.length,
+					displayItems.length,
 					startIndex + effectiveMaxItems,
 				);
 
-				// Adjust if we're near the end
 				if (endIndex - startIndex < effectiveMaxItems) {
 					startIndex = Math.max(0, endIndex - effectiveMaxItems);
 				}
 
 				return {
-					items: allFilteredFiles.slice(startIndex, endIndex),
+					items: displayItems.slice(startIndex, endIndex),
 					startIndex,
 					endIndex,
 				};
-			}, [allFilteredFiles, selectedIndex, effectiveMaxItems]);
+			}, [displayItems, normalizedSelectedIndex, effectiveMaxItems]);
 
 			const filteredFiles = fileWindow.items;
 			const hiddenAboveCount = fileWindow.startIndex;
 			const hiddenBelowCount = Math.max(
 				0,
-				allFilteredFiles.length - fileWindow.endIndex,
+				displayItems.length - fileWindow.endIndex,
 			);
 
-			// Notify parent of filtered count changes
 			useEffect(() => {
 				if (onFilteredCountChange) {
-					onFilteredCountChange(allFilteredFiles.length);
+					onFilteredCountChange(displayItems.length);
 				}
-			}, [allFilteredFiles.length, onFilteredCountChange]);
+			}, [displayItems.length, onFilteredCountChange]);
 
-			// Expose methods to parent
 			useImperativeHandle(
 				ref,
 				() => ({
 					getSelectedFile: () => {
-						if (
-							allFilteredFiles.length > 0 &&
-							selectedIndex < allFilteredFiles.length &&
-							allFilteredFiles[selectedIndex]
-						) {
-							const selectedFile = allFilteredFiles[selectedIndex];
-							// Use sourceDir if available, otherwise use rootPath
-							const baseDir = selectedFile.sourceDir || rootPath;
-
-							// Build the full path for the selected item.
-							// Note: working-directory entries store a fully-qualified path/SSH URL in `selectedFile.path`.
-							// If we naively join it with baseDir, we end up with duplicated paths like:
-							//   ssh://host/path/ssh://host/path
-							let fullPath: string;
-							if (selectedFile.path.startsWith('ssh://')) {
-								fullPath = selectedFile.path;
-							} else if (path.isAbsolute(selectedFile.path)) {
-								fullPath = selectedFile.path;
-							} else if (baseDir.startsWith('ssh://')) {
-								// For SSH base dirs, construct path manually.
-								const cleanBase = baseDir.replace(/\/$/, '');
-								const cleanRelative = selectedFile.path
-									.replace(/^\.\//, '')
-									.replace(/^\//, '');
-								fullPath = `${cleanBase}/${cleanRelative}`;
-							} else {
-								fullPath = path.join(baseDir, selectedFile.path);
-							}
-
-							// For content search mode, include line number
-							if (selectedFile.lineNumber !== undefined) {
-								return `${fullPath}:${selectedFile.lineNumber}`;
-							}
-							return fullPath;
+						const selectedEntry = displayItems[normalizedSelectedIndex];
+						if (!selectedEntry) {
+							return null;
 						}
-						return null;
+
+						const fullPath = getFullFilePath(selectedEntry.file, rootPath);
+
+						if (selectedEntry.file.isDirectory && searchMode === 'file') {
+							const normalizedDirectoryPath = fullPath.replace(/\\/g, '/');
+							return normalizedDirectoryPath.endsWith('/')
+								? normalizedDirectoryPath
+								: `${normalizedDirectoryPath}/`;
+						}
+
+						if (selectedEntry.file.lineNumber !== undefined) {
+							return `${fullPath}:${selectedEntry.file.lineNumber}`;
+						}
+
+						return fullPath;
+					},
+					toggleDisplayMode: () => {
+						if (searchMode !== 'file') {
+							return false;
+						}
+
+						setDisplayMode(prev => (prev === 'list' ? 'tree' : 'list'));
+						return true;
 					},
 				}),
-				[allFilteredFiles, selectedIndex, rootPath],
+				[displayItems, normalizedSelectedIndex, rootPath, searchMode],
 			);
 
-			// Calculate display index for the scrolling window
-			// MUST be before early returns to avoid hook order issues
-			const displaySelectedIndex = useMemo(() => {
-				return filteredFiles.findIndex(file => {
-					const originalIndex = allFilteredFiles.indexOf(file);
-					return originalIndex === selectedIndex;
-				});
-			}, [filteredFiles, allFilteredFiles, selectedIndex]);
+			const displaySelectedIndex =
+				filteredFiles.length === 0
+					? -1
+					: normalizedSelectedIndex - fileWindow.startIndex;
 
 			const selectedFileFullPath = useMemo(() => {
-				const file = allFilteredFiles[selectedIndex];
-				if (!file) return null;
-				const baseDir = file.sourceDir || rootPath;
-				if (file.path.startsWith('ssh://') || path.isAbsolute(file.path)) {
-					return file.path;
+				const selectedEntry = displayItems[normalizedSelectedIndex];
+				if (!selectedEntry) {
+					return null;
 				}
-				if (baseDir.startsWith('ssh://')) {
-					const cleanBase = baseDir.replace(/\/$/, '');
-					const cleanRel = file.path.replace(/^\.\//, '').replace(/^\//, '');
-					return `${cleanBase}/${cleanRel}`;
-				}
-				return path.join(baseDir, file.path);
-			}, [allFilteredFiles, selectedIndex, rootPath]);
+
+				return getFullFilePath(selectedEntry.file, rootPath);
+			}, [displayItems, normalizedSelectedIndex, rootPath]);
 
 			if (!visible) {
 				return null;
@@ -750,7 +950,7 @@ const FileList = memo(
 				);
 			}
 
-			if (filteredFiles.length === 0) {
+			if (displayItems.length === 0) {
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
@@ -766,60 +966,67 @@ const FileList = memo(
 				<Box paddingX={1} marginTop={1} flexDirection="column">
 					<Box marginBottom={1}>
 						<Text color="blue" bold>
-							{searchMode === 'content' ? '≡ Content Search' : '≡ Files'}{' '}
-							{allFilteredFiles.length > effectiveMaxItems &&
-								`(${selectedIndex + 1}/${allFilteredFiles.length})`}
+							{searchMode === 'content'
+								? '≡ Content Search'
+								: `≡ Files [${
+										displayMode === 'tree' ? 'Tree' : 'List'
+								  } • Ctrl+T]`}{' '}
+							{displayItems.length > effectiveMaxItems &&
+								`(${normalizedSelectedIndex + 1}/${displayItems.length})`}
 						</Text>
 					</Box>
-					{filteredFiles.map((file, index) => (
-						<Box
-							key={`${file.sourceDir || ''}-${file.path}-${file.lineNumber || 0}`}
-							flexDirection="column"
-						>
-							{/* First line: file path and line number (for content search) or file path (for file search) */}
-							<Text
-								backgroundColor={
-									index === displaySelectedIndex
-										? theme.colors.menuSelected
-										: undefined
-								}
-								color={
-									index === displaySelectedIndex
-										? theme.colors.menuNormal
-										: file.isDirectory
-										? theme.colors.warning
-										: 'white'
-								}
-							>
-								{index === displaySelectedIndex ? '❯ ' : '  '}
-								{searchMode === 'content' && file.lineNumber !== undefined
-									? `${file.path}:${file.lineNumber}`
-									: file.isDirectory
-									? '◇ ' + file.path
-									: '◆ ' + file.path}
-							</Text>
-							{/* Second line: code content (only for content search) */}
-							{searchMode === 'content' && file.lineContent && (
+					{filteredFiles.map((item, index) => {
+						const file = item.file;
+						const isSelected = index === displaySelectedIndex;
+						const isTreeMode = searchMode === 'file' && displayMode === 'tree';
+						const prefix =
+							searchMode === 'content'
+								? ''
+								: isTreeMode
+								? `${'  '.repeat(item.depth)}${
+										item.isContextOnly ? '· ' : file.isDirectory ? '▽ ' : '• '
+								  }`
+								: file.isDirectory
+								? '◇ '
+								: '◆ ';
+						const color = isSelected
+							? theme.colors.menuNormal
+							: item.isContextOnly
+							? theme.colors.menuSecondary
+							: file.isDirectory
+							? theme.colors.warning
+							: 'white';
+
+						return (
+							<Box key={item.key} flexDirection="column">
 								<Text
 									backgroundColor={
-										index === displaySelectedIndex
-											? theme.colors.menuSelected
-											: undefined
+										isSelected ? theme.colors.menuSelected : undefined
 									}
-									color={
-										index === displaySelectedIndex
-											? theme.colors.menuSecondary
-											: theme.colors.menuSecondary
-									}
-									dimColor
+									color={color}
+									dimColor={Boolean(item.isContextOnly && !isSelected)}
 								>
-									{'  '}
-									{file.lineContent}
+									{isSelected ? '❯ ' : '  '}
+									{searchMode === 'content'
+										? item.label
+										: `${prefix}${item.label}`}
 								</Text>
-							)}
-						</Box>
-					))}
-					{allFilteredFiles.length > effectiveMaxItems && (
+								{searchMode === 'content' && file.lineContent && (
+									<Text
+										backgroundColor={
+											isSelected ? theme.colors.menuSelected : undefined
+										}
+										color={theme.colors.menuSecondary}
+										dimColor
+									>
+										{'  '}
+										{file.lineContent}
+									</Text>
+								)}
+							</Box>
+						);
+					})}
+					{displayItems.length > effectiveMaxItems && (
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.commandPanel.scrollHint}
@@ -845,7 +1052,7 @@ const FileList = memo(
 						</Box>
 					)}
 					{selectedFileFullPath && (
-						<Box marginTop={allFilteredFiles.length > effectiveMaxItems ? 0 : 1}>
+						<Box marginTop={displayItems.length > effectiveMaxItems ? 0 : 1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{'⤷ ' + selectedFileFullPath}
 							</Text>
