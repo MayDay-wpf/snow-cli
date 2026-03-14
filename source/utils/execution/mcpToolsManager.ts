@@ -616,9 +616,126 @@ async function probeServiceTools(
 	serviceName: string,
 	server: MCPServer,
 ): Promise<InternalMCPTool[]> {
-	//HTTP服务需要更长超时时间
-	const timeout = server.url ? 15000 : 5000;
+	// HTTP 服务需要更长超时时间
+	const timeout = getMCPServerTransportType(server) === 'http' ? 15000 : 5000;
 	return await connectAndGetTools(serviceName, server, timeout);
+}
+
+const MCP_ENV_VAR_PATTERN = /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
+
+function getMCPServerTransportType(server: MCPServer): 'http' | 'stdio' | null {
+	if (server.type) {
+		return server.type;
+	}
+
+	if (server.url) {
+		return 'http';
+	}
+
+	if (server.command) {
+		return 'stdio';
+	}
+
+	return null;
+}
+
+function getServerProcessEnv(server: MCPServer): Record<string, string> {
+	const processEnv: Record<string, string> = {};
+
+	Object.entries(process.env).forEach(([key, value]) => {
+		if (value !== undefined) {
+			processEnv[key] = value;
+		}
+	});
+
+	if (server.env) {
+		Object.assign(processEnv, server.env);
+	}
+
+	return processEnv;
+}
+
+function interpolateMCPConfigValue(
+	value: string,
+	env: Record<string, string>,
+): string {
+	return value.replace(MCP_ENV_VAR_PATTERN, (match, braced, simple) => {
+		const varName = braced || simple;
+		return env[varName] ?? match;
+	});
+}
+
+function getHttpTransportConfig(server: MCPServer): {
+	url: URL;
+	requestInit: RequestInit;
+} {
+	if (!server.url) {
+		throw new Error('No URL specified');
+	}
+
+	const env = getServerProcessEnv(server);
+	const url = new URL(interpolateMCPConfigValue(server.url, env));
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		Accept: 'application/json, text/event-stream',
+	};
+
+	if (env['MCP_API_KEY']) {
+		headers['Authorization'] = `Bearer ${env['MCP_API_KEY']}`;
+	}
+
+	if (env['MCP_AUTH_HEADER']) {
+		headers['Authorization'] = env['MCP_AUTH_HEADER'];
+	}
+
+	if (server.headers) {
+		Object.entries(server.headers).forEach(([key, value]) => {
+			headers[key] = interpolateMCPConfigValue(value, env);
+		});
+	}
+
+	return {
+		url,
+		requestInit: {headers},
+	};
+}
+
+function createMCPClient(serviceName: string): Client {
+	return new Client(
+		{
+			name: `snow-cli-${serviceName}`,
+			version: '1.0.0',
+		},
+		{
+			capabilities: {},
+		},
+	);
+}
+
+function getMCPErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
+function shouldFallbackToSSE(error: unknown): boolean {
+	const errorCode = (error as {code?: unknown})?.code;
+	if (typeof errorCode === 'number') {
+		return [404, 405, 406, 415, 501].includes(errorCode);
+	}
+
+	const message = getMCPErrorMessage(error).toLowerCase();
+	return (
+		message.includes('error posting to endpoint (http 404)') ||
+		message.includes('error posting to endpoint (http 405)') ||
+		message.includes('error posting to endpoint (http 406)') ||
+		message.includes('error posting to endpoint (http 415)') ||
+		message.includes('error posting to endpoint (http 501)') ||
+		message.includes('method not allowed') ||
+		message.includes('unexpected content type')
+	);
 }
 
 /**
@@ -632,12 +749,11 @@ async function connectAndGetTools(
 	server: MCPServer,
 	timeoutMs: number = 10000,
 ): Promise<InternalMCPTool[]> {
-	let client: Client | null = null;
+	let client = createMCPClient(serviceName);
 	let transport: any;
 	let timeoutId: NodeJS.Timeout | null = null;
 	let connectionAborted = false;
 
-	// Create abort mechanism for cleanup
 	const abortConnection = () => {
 		connectionAborted = true;
 		if (timeoutId) {
@@ -646,93 +762,53 @@ async function connectAndGetTools(
 		}
 	};
 
-	try {
-		client = new Client(
-			{
-				name: `snow-cli-${serviceName}`,
-				version: '1.0.0',
-			},
-			{
-				capabilities: {},
-			},
-		);
+	const runWithTimeout = async <T>(
+		operation: Promise<T>,
+		timeoutMessage: string,
+	): Promise<T> => {
+		try {
+			return await Promise.race([
+				operation,
+				new Promise<never>((_, reject) => {
+					timeoutId = setTimeout(() => {
+						abortConnection();
+						reject(new Error(timeoutMessage));
+					}, timeoutMs);
+				}),
+			]);
+		} finally {
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+				timeoutId = null;
+			}
+		}
+	};
 
+	try {
 		resourceMonitor.trackMCPConnectionOpened(serviceName);
 
-		// Create transport based on server configuration
-		if (server.url) {
-			let urlString = server.url;
-
-			if (server.env) {
-				const allEnv = {...process.env, ...server.env};
-				urlString = urlString.replace(
-					/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-					(match, braced, simple) => {
-						const varName = braced || simple;
-						return allEnv[varName] || match;
-					},
-				);
-			} else {
-				urlString = urlString.replace(
-					/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-					(match, braced, simple) => {
-						const varName = braced || simple;
-						return process.env[varName] || match;
-					},
-				);
-			}
-
-			const url = new URL(urlString);
+		const transportType = getMCPServerTransportType(server);
+		if (transportType === 'http') {
+			const {url, requestInit} = getHttpTransportConfig(server);
 
 			try {
-				// Try StreamableHTTP transport first (recommended)
 				logger.debug(
 					`[MCP] Attempting StreamableHTTP connection to ${serviceName}...`,
 				);
 
-				const headers: Record<string, string> = {
-					'Content-Type': 'application/json',
-					Accept: 'application/json, text/event-stream',
-				};
-
-				if (server.env) {
-					const allEnv = {...process.env, ...server.env};
-					if (allEnv['MCP_API_KEY']) {
-						headers['Authorization'] = `Bearer ${allEnv['MCP_API_KEY']}`;
-					}
-					if (allEnv['MCP_AUTH_HEADER']) {
-						headers['Authorization'] = allEnv['MCP_AUTH_HEADER'];
-					}
-				}
-
 				transport = new StreamableHTTPClientTransport(url, {
-					requestInit: {headers},
+					requestInit,
 				});
-
-				// Use timeout with abort mechanism
-				await Promise.race([
+				await runWithTimeout(
 					client.connect(transport),
-					new Promise<never>((_, reject) => {
-						timeoutId = setTimeout(() => {
-							abortConnection();
-							reject(new Error('StreamableHTTP connection timeout'));
-						}, timeoutMs);
-					}),
-				]);
-
-				if (timeoutId) {
-					clearTimeout(timeoutId);
-					timeoutId = null;
-				}
+					'StreamableHTTP connection timeout',
+				);
 
 				logger.debug(
 					`[MCP] Successfully connected to ${serviceName} using StreamableHTTP`,
 				);
 			} catch (httpError) {
-				// Fallback to SSE transport for backward compatibility
-				logger.debug(
-					`[MCP] StreamableHTTP failed for ${serviceName}, falling back to SSE (deprecated)...`,
-				);
+				const streamableHttpErrorMessage = getMCPErrorMessage(httpError);
 
 				try {
 					await client.close();
@@ -742,78 +818,55 @@ async function connectAndGetTools(
 					throw new Error('Connection aborted due to timeout');
 				}
 
-				// Recreate client for SSE connection
-				client = new Client(
-					{
-						name: `snow-cli-${serviceName}`,
-						version: '1.0.0',
-					},
-					{
-						capabilities: {},
-					},
-				);
-
-				// SSE transport kept for backward compatibility (deprecated)
-				transport = new SSEClientTransport(url);
-				await Promise.race([
-					client.connect(transport),
-					new Promise<never>((_, reject) => {
-						timeoutId = setTimeout(() => {
-							abortConnection();
-							reject(new Error('SSE connection timeout'));
-						}, timeoutMs);
-					}),
-				]);
-
-				if (timeoutId) {
-					clearTimeout(timeoutId);
-					timeoutId = null;
+				if (!shouldFallbackToSSE(httpError)) {
+					throw httpError;
 				}
 
 				logger.debug(
-					`[MCP] Successfully connected to ${serviceName} using SSE (deprecated)`,
+					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to SSE (deprecated)...`,
 				);
-			}
-		} else if (server.command) {
-			const processEnv: Record<string, string> = {};
 
-			Object.entries(process.env).forEach(([key, value]) => {
-				if (value !== undefined) {
-					processEnv[key] = value;
+				client = createMCPClient(serviceName);
+				try {
+					transport = new SSEClientTransport(url, {
+						requestInit,
+					});
+					await runWithTimeout(
+						client.connect(transport),
+						'SSE connection timeout',
+					);
+
+					logger.debug(
+						`[MCP] Successfully connected to ${serviceName} using SSE (deprecated)`,
+					);
+				} catch (sseError) {
+					throw new Error(
+						`StreamableHTTP failed for ${serviceName}: ${streamableHttpErrorMessage}; SSE fallback failed: ${getMCPErrorMessage(
+							sseError,
+						)}`,
+					);
 				}
-			});
-
-			if (server.env) {
-				Object.assign(processEnv, server.env);
+			}
+		} else if (transportType === 'stdio') {
+			if (!server.command) {
+				throw new Error('No command specified');
 			}
 
 			transport = new StdioClientTransport({
 				command: server.command,
 				args: server.args || [],
-				env: processEnv,
+				env: getServerProcessEnv(server),
 				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
 			});
-
 			await client.connect(transport);
 		} else {
 			throw new Error('No URL or command specified');
 		}
 
-		// Get tools from the service
-		const toolsResult = await Promise.race([
+		const toolsResult = await runWithTimeout(
 			client.listTools(),
-			new Promise<never>((_, reject) => {
-				timeoutId = setTimeout(() => {
-					abortConnection();
-					reject(new Error('ListTools timeout'));
-				}, timeoutMs);
-			}),
-		]);
-
-		if (timeoutId) {
-			clearTimeout(timeoutId);
-			timeoutId = null;
-		}
+			'ListTools timeout',
+		);
 
 		return (
 			toolsResult.tools?.map(tool => ({
@@ -823,22 +876,19 @@ async function connectAndGetTools(
 			})) || []
 		);
 	} finally {
-		// Clean up timeout
 		if (timeoutId) {
 			clearTimeout(timeoutId);
 		}
 
 		try {
-			if (client) {
-				await Promise.race([
-					client.close(),
-					new Promise(resolve => setTimeout(resolve, 1000)), // Max 1s for cleanup
-				]);
-				resourceMonitor.trackMCPConnectionClosed(serviceName);
-			}
+			await Promise.race([
+				client.close(),
+				new Promise(resolve => setTimeout(resolve, 1000)),
+			]);
+			resourceMonitor.trackMCPConnectionClosed(serviceName);
 		} catch (error) {
 			logger.warn(`Failed to close client for ${serviceName}:`, error);
-			resourceMonitor.trackMCPConnectionClosed(serviceName); // Track even on error
+			resourceMonitor.trackMCPConnectionClosed(serviceName);
 		}
 	}
 }
@@ -850,71 +900,81 @@ async function getPersistentClient(
 	serviceName: string,
 	server: MCPServer,
 ): Promise<Client> {
-	// Check if we have an existing client
 	const existing = persistentClients.get(serviceName);
 	if (existing) {
 		existing.lastUsed = Date.now();
 		return existing.client;
 	}
 
-	// Create new persistent client
-	const client = new Client(
-		{
-			name: `snow-cli-${serviceName}`,
-			version: '1.0.0',
-		},
-		{
-			capabilities: {},
-		},
-	);
-
+	let client = createMCPClient(serviceName);
 	resourceMonitor.trackMCPConnectionOpened(serviceName);
 
 	let transport: any;
+	const transportType = getMCPServerTransportType(server);
 
-	if (server.url) {
-		let urlString = server.url;
-		const allEnv = {...process.env, ...(server.env || {})};
-		if (server.env) {
-			urlString = urlString.replace(
-				/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-				(match, braced, simple) => {
-					const varName = braced || simple;
-					return allEnv[varName] || match;
-				},
-			);
-		}
-		const url = new URL(urlString);
+	try {
+		if (transportType === 'http') {
+			const {url, requestInit} = getHttpTransportConfig(server);
 
-		//构建请求头
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-			Accept: 'application/json, text/event-stream',
-		};
-		if (allEnv['MCP_API_KEY']) {
-			headers['Authorization'] = `Bearer ${allEnv['MCP_API_KEY']}`;
-		}
-		if (allEnv['MCP_AUTH_HEADER']) {
-			headers['Authorization'] = allEnv['MCP_AUTH_HEADER'];
-		}
+			try {
+				transport = new StreamableHTTPClientTransport(url, {
+					requestInit,
+				});
+				await client.connect(transport);
+			} catch (httpError) {
+				const streamableHttpErrorMessage = getMCPErrorMessage(httpError);
 
-		transport = new StreamableHTTPClientTransport(url, {
-			requestInit: {headers},
-		});
-	} else if (server.command) {
-		transport = new StdioClientTransport({
-			command: server.command,
-			args: server.args || [],
-			env: server.env
-				? ({...process.env, ...server.env} as Record<string, string>)
-				: (process.env as Record<string, string>),
-			stderr: 'pipe', // Persistent services need stderr for process communication
-		});
+				try {
+					await client.close();
+				} catch {}
+
+				if (!shouldFallbackToSSE(httpError)) {
+					throw httpError;
+				}
+
+				logger.debug(
+					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to SSE (deprecated)...`,
+				);
+
+				client = createMCPClient(serviceName);
+				transport = new SSEClientTransport(url, {
+					requestInit,
+				});
+
+				try {
+					await client.connect(transport);
+				} catch (sseError) {
+					throw new Error(
+						`StreamableHTTP failed for ${serviceName}: ${streamableHttpErrorMessage}; SSE fallback failed: ${getMCPErrorMessage(
+							sseError,
+						)}`,
+					);
+				}
+			}
+		} else if (transportType === 'stdio') {
+			if (!server.command) {
+				throw new Error('No command specified');
+			}
+
+			transport = new StdioClientTransport({
+				command: server.command,
+				args: server.args || [],
+				env: getServerProcessEnv(server),
+				stderr: 'pipe', // Persistent services need stderr for process communication
+			});
+			await client.connect(transport);
+		} else {
+			throw new Error('No URL or command specified');
+		}
+	} catch (error) {
+		try {
+			await client.close();
+		} catch {}
+
+		resourceMonitor.trackMCPConnectionClosed(serviceName);
+		throw error;
 	}
 
-	await client.connect(transport);
-
-	// Store the persistent client
 	persistentClients.set(serviceName, {
 		client,
 		transport,

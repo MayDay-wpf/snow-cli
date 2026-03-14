@@ -59,10 +59,12 @@ export interface ApiConfig {
 }
 
 export interface MCPServer {
+	type?: 'http' | 'stdio'; // 传输类型，未指定时根据 url/command 自动推断
 	url?: string;
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>; // 环境变量
+	headers?: Record<string, string>; // HTTP 请求头
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
 	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
 }
@@ -425,6 +427,22 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 				errors.push('Server name cannot be empty');
 			}
 
+			if (
+				server.type !== undefined &&
+				server.type !== 'http' &&
+				server.type !== 'stdio'
+			) {
+				errors.push(`Server "${name}" has unsupported type "${server.type}"`);
+			}
+
+			if (server.type === 'http' && !server.url) {
+				errors.push(`HTTP server "${name}" must have a URL`);
+			}
+
+			if (server.type === 'stdio' && !server.command) {
+				errors.push(`Stdio server "${name}" must have a command`);
+			}
+
 			if (server.url && !isValidUrl(server.url)) {
 				const urlWithEnvReplaced = server.url.replace(
 					/\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*/g,
@@ -454,6 +472,19 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 					if (typeof envValue !== 'string') {
 						errors.push(
 							`Environment variable "${envName}" must be a string for server "${name}"`,
+						);
+					}
+				});
+			}
+
+			if (server.headers) {
+				Object.entries(server.headers).forEach(([headerName, headerValue]) => {
+					if (!headerName.trim()) {
+						errors.push(`Header name cannot be empty for server "${name}"`);
+					}
+					if (typeof headerValue !== 'string') {
+						errors.push(
+							`Header "${headerName}" must be a string for server "${name}"`,
 						);
 					}
 				});
