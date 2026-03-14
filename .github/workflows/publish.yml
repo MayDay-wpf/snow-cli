@@ -56,8 +56,7 @@ jobs:
 
             ### What's New
 
-            - Add dual-form display for file selection list
-            - Add /gitline command to select commit records to AI context
+            - fix some bugs
 
             ### Installation
             ```bash
