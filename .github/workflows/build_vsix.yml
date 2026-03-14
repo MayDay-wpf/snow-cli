@@ -63,6 +63,10 @@ jobs:
           body: |
             ## 🚀 Snow CLI VSCode Extension v${{ env.PACKAGE_VERSION }}
 
+            ### What's New
+
+            - feat(vsix): 支持启动命令轮询、终端代理和选区位置发送
+
             ### Installation
 
             1. Download the `.vsix` file from this release
