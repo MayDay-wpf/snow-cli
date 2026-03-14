@@ -27,6 +27,8 @@ type SidebarTerminalSessionStartHandlers = {
 	}) => void;
 };
 
+type StartupCommandProvider = () => string | undefined;
+
 export class SidebarTerminalSession {
 	public readonly id: string;
 	public readonly title: string;
@@ -41,6 +43,7 @@ export class SidebarTerminalSession {
 	private processNonce = 0;
 	private lastExitCode: number | undefined;
 	private restarting = false;
+	private startupCommand: string | undefined;
 
 	constructor(options: SidebarTerminalSessionOptions) {
 		this.id = options.id;
@@ -55,12 +58,15 @@ export class SidebarTerminalSession {
 
 	public start(
 		cwd: string,
-		startupCommand: string | undefined,
 		size: SidebarTerminalSize | undefined,
 		handlers: SidebarTerminalSessionStartHandlers,
-	): {started: boolean; processNonce: number} {
+		getStartupCommand: StartupCommandProvider,
+	): {started: boolean; processNonce: number; startupCommand: string | undefined} {
 		const processNonce = ++this.processNonce;
 		this.lastExitCode = undefined;
+		if (typeof this.startupCommand === 'undefined') {
+			this.startupCommand = getStartupCommand();
+		}
 		this.ptyManager.start(
 			cwd,
 			{
@@ -77,10 +83,14 @@ export class SidebarTerminalSession {
 					handlers.onExit({code, processNonce, suppressed});
 				},
 			},
-			startupCommand,
+			this.startupCommand,
 			size,
 		);
-		return {started: this.ptyManager.isRunning(), processNonce};
+		return {
+			started: this.ptyManager.isRunning(),
+			processNonce,
+			startupCommand: this.startupCommand,
+		};
 	}
 
 	public write(data: string): void {

@@ -7,7 +7,12 @@ import {
 import {registerDiffCommands} from './diffHandlers';
 import {ShellType} from './ptyManager';
 import {SidebarTerminalProvider} from './sidebarTerminalProvider';
+import {startupCommandManager} from './startupCommandManager';
 import {formatTerminalPathPayload} from './terminalPathFormatter';
+import {
+	getSnowTerminalProxyEnv,
+	hasExplicitSnowTerminalProxyUrl,
+} from './terminalProxy';
 
 /**
  * Snow CLI Extension
@@ -16,13 +21,18 @@ import {formatTerminalPathPayload} from './terminalPathFormatter';
 
 let sidebarProvider: SidebarTerminalProvider | undefined;
 
-/** Read a configuration value with fallback */
 function getConfig<T>(key: string, fallback: T): T {
 	return vscode.workspace.getConfiguration('snow-cli').get<T>(key, fallback);
 }
 
+function refreshStartupCommandManager(): void {
+	const startupCommand = getConfig<string>('startupCommand', 'snow');
+	startupCommandManager.setStartupCommandConfig(startupCommand);
+}
+
 /** Apply the context key so the sidebar view shows/hides accordingly */
 function applySidebarContext(): void {
+
 	const mode = getConfig<string>('terminalMode', 'split');
 	vscode.commands.executeCommand(
 		'setContext',
@@ -69,14 +79,15 @@ function getExistingSplitSnowTerminal(): vscode.Terminal | undefined {
 
 /** Create a new split terminal in the right editor column (allows multiple instances) */
 async function openSplitTerminal(): Promise<vscode.Terminal> {
-	const startupCommand = getConfig<string>('startupCommand', 'snow');
-
+	const startupCommand = startupCommandManager.getNextStartupCommand();
 	const workspaceFolder = getWorkspaceFolderForActiveEditor();
+	const proxyEnv = getSnowTerminalProxyEnv();
 
 	// 1. Create a new terminal in the editor area (initially in current column)
 	const terminal = vscode.window.createTerminal({
 		name: 'Snow CLI',
 		cwd: workspaceFolder,
+		env: proxyEnv,
 		location: vscode.TerminalLocation.Editor,
 	});
 
@@ -144,14 +155,39 @@ async function pickPaths(mode: 'file' | 'folder'): Promise<string[]> {
 	return uris?.map(uri => uri.fsPath) ?? [];
 }
 
+function formatSelectionLocation(editor: vscode.TextEditor): string | undefined {
+	const {document, selection} = editor;
+	if (selection.isEmpty) {
+		return undefined;
+	}
+
+	const absolutePath = document.uri.fsPath;
+	if (!absolutePath) {
+		return undefined;
+	}
+
+	const startLine = selection.start.line;
+	const endLine =
+		selection.end.line > selection.start.line && selection.end.character === 0
+			? selection.end.line - 1
+			: selection.end.line;
+
+	if (endLine <= startLine) {
+		return `${absolutePath}:${startLine + 1}`;
+	}
+
+	return `${absolutePath}:${startLine + 1}-${endLine + 1}`;
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Snow CLI extension activating...');
 
 	// 0. Apply context key for sidebar visibility
 	applySidebarContext();
+	refreshStartupCommandManager();
 
 	try {
-		// 1. 启动 WebSocket 服务器
+
 		startWebSocketServer();
 	} catch (err) {
 		console.error('Failed to start WebSocket server:', err);
@@ -167,11 +203,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	try {
 		// 3. 注册 Sidebar Terminal Provider (always register; view visibility controlled by 'when' clause)
-		const startupCommand = getConfig<string>('startupCommand', 'snow');
-		sidebarProvider = new SidebarTerminalProvider(
-			context.extensionUri,
-			startupCommand,
-		);
+		sidebarProvider = new SidebarTerminalProvider(context.extensionUri);
 		context.subscriptions.push(
 			vscode.window.registerWebviewViewProvider(
 				SidebarTerminalProvider.viewType,
@@ -229,6 +261,24 @@ export function activate(context: vscode.ExtensionContext) {
 				await openSplitTerminal();
 			}
 		}),
+		vscode.commands.registerCommand('snow-cli.sendSelectionLocation', async () => {
+			const editor = vscode.window.activeTextEditor;
+			if (!editor) {
+				return;
+			}
+
+			const scheme = editor.document.uri.scheme;
+			if (scheme !== 'file' && scheme !== 'vscode-remote') {
+				return;
+			}
+
+			const selectionLocation = formatSelectionLocation(editor);
+			if (!selectionLocation) {
+				return;
+			}
+
+			await sendFilePathsToConfiguredTerminal([selectionLocation]);
+		}),
 		vscode.commands.registerCommand('snow-cli.sendFilePaths', async (...args: unknown[]) => {
 			// Context menu: (clickedUri, selectedUris) or command palette: no args
 			const selectedUris = args[1] as vscode.Uri[] | undefined;
@@ -278,15 +328,21 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			if (e.affectsConfiguration('snow-cli.startupCommand')) {
-				const newCommand = getConfig<string>('startupCommand', 'snow');
-				sidebarProvider?.setStartupCommand(newCommand);
+				refreshStartupCommandManager();
 			}
 
-			if (e.affectsConfiguration('snow-cli.terminal')) {
+			const terminalProxyFallbackChanged =
+				e.affectsConfiguration('http.proxy') &&
+				!hasExplicitSnowTerminalProxyUrl();
+			if (
+				e.affectsConfiguration('snow-cli.terminal') ||
+				terminalProxyFallbackChanged
+			) {
 				sidebarProvider?.restartTerminal({reason: 'configChange'});
 			}
 		}),
 	);
+
 
 	console.log('Snow CLI extension activated');
 }

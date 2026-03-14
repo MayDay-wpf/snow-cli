@@ -4,6 +4,7 @@ import {
 	SidebarTerminalSession,
 	SidebarTerminalTabState,
 } from './sidebarTerminalSession';
+import {startupCommandManager} from './startupCommandManager';
 import {formatTerminalPathPayload} from './terminalPathFormatter';
 
 type LaunchPolicy = 'ensure' | 'restart';
@@ -463,7 +464,6 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private sessionOrder: string[] = [];
 	private activeSessionId: string | undefined;
 	private sessionCounter = 0;
-	private startupCommand: string;
 	private webviewReady = false;
 	private hasResolvedViewOnce = false;
 	private ensureRunningTimer: NodeJS.Timeout | undefined;
@@ -481,12 +481,8 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private lastManualRestartRequestedAt = 0;
 	private disposed = false;
 
-	constructor(
-		private readonly extensionUri: vscode.Uri,
-		startupCommand?: string,
-	) {
+	constructor(private readonly extensionUri: vscode.Uri) {
 		this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
-		this.startupCommand = startupCommand ?? 'snow';
 		this.ensureActiveSessionExists();
 		this.applyShellType();
 		this.logSidebarInfo('Sidebar terminal provider initialized.');
@@ -622,10 +618,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		return (
 			folder?.uri.fsPath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 		);
-	}
 
-	public setStartupCommand(command: string): void {
-		this.startupCommand = command;
 	}
 
 	public createTab(options?: EnsureOptions): void {
@@ -1169,9 +1162,8 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		const sizeDetails = this.latestTerminalSize
 			? `${this.latestTerminalSize.cols}x${this.latestTerminalSize.rows}`
 			: 'auto';
-		const {started, processNonce} = session.start(
+		const {started, processNonce, startupCommand} = session.start(
 			cwd,
-			this.startupCommand,
 			this.latestTerminalSize,
 			{
 				onData: data => {
@@ -1186,20 +1178,22 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 					);
 				},
 			},
+			() => startupCommandManager.getNextStartupCommand(),
 		);
+		const commandDetails = startupCommand ?? '(none)';
 
 		this.syncTabsToWebview();
 		if (started) {
 			this.logSidebarInfo(
 				'Terminal started.',
-				`tabId=${session.id}, process=${processNonce}, cwd=${cwd}, command=${this.startupCommand}, size=${sizeDetails}`,
+				`tabId=${session.id}, process=${processNonce}, cwd=${cwd}, command=${commandDetails}, size=${sizeDetails}`,
 			);
 			return;
 		}
 
 		this.logSidebarError(
 			'Terminal start request completed but process is not running.',
-			`tabId=${session.id}, process=${processNonce}, cwd=${cwd}, command=${this.startupCommand}, size=${sizeDetails}`,
+			`tabId=${session.id}, process=${processNonce}, cwd=${cwd}, command=${commandDetails}, size=${sizeDetails}`,
 		);
 	}
 

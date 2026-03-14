@@ -86,6 +86,31 @@ export function broadcast(message: string): void {
 	}
 }
 
+function isTrackableEditor(
+	editor: vscode.TextEditor | undefined,
+): editor is vscode.TextEditor {
+	return editor !== undefined && editor.document.uri.scheme !== 'output';
+}
+
+function getTrackableVisibleEditors(): vscode.TextEditor[] {
+	return vscode.window.visibleTextEditors.filter(isTrackableEditor);
+}
+
+function getFallbackEditor(
+	visibleEditors: vscode.TextEditor[],
+): vscode.TextEditor | undefined {
+	if (lastValidContext.activeFile) {
+		const cachedEditor = visibleEditors.find(
+			editor => normalizePath(editor.document.uri.fsPath) === lastValidContext.activeFile,
+		);
+		if (cachedEditor) {
+			return cachedEditor;
+		}
+	}
+
+	return visibleEditors[0];
+}
+
 /**
  * Send current editor context to all connected clients
  */
@@ -94,25 +119,24 @@ export function sendEditorContext(): void {
 		return;
 	}
 
-	const editor = vscode.window.activeTextEditor;
+	const activeEditor = vscode.window.activeTextEditor;
+	const visibleEditors = getTrackableVisibleEditors();
+	const editor = isTrackableEditor(activeEditor)
+		? activeEditor
+		: getFallbackEditor(visibleEditors);
 
 	if (!editor) {
-		if (vscode.window.visibleTextEditors.length === 0) {
-			// All editors closed — clear cached context and notify clients
-			lastValidContext = {
-				type: 'context',
-				workspaceFolder: normalizePath(
-					vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-				),
-				activeFile: undefined,
-				cursorPosition: undefined,
-				selectedText: undefined,
-			};
-			broadcast(JSON.stringify(lastValidContext));
-		} else if (lastValidContext.activeFile) {
-			// Focus moved to non-editor area but files are still open — use cached context
-			broadcast(JSON.stringify(lastValidContext));
-		}
+		// All editor-area files closed — clear cached context and notify clients
+		lastValidContext = {
+			type: 'context',
+			workspaceFolder: normalizePath(
+				vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+			),
+			activeFile: undefined,
+			cursorPosition: undefined,
+			selectedText: undefined,
+		};
+		broadcast(JSON.stringify(lastValidContext));
 		return;
 	}
 

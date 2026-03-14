@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import {getSnowTerminalProxyEnv} from './terminalProxy';
 
 // Lazy-load node-pty to prevent extension activation failure
 // when the native module is incompatible with the current Electron ABI
@@ -39,6 +40,11 @@ export class PtyManager {
 		this.events = events;
 		const shell = this.getDefaultShell();
 		const shellArgs = this.getShellArgs();
+		const proxyEnv = getSnowTerminalProxyEnv();
+		const spawnEnv = {
+			...process.env,
+			...(proxyEnv ?? {}),
+		} as {[key: string]: string};
 
 		try {
 			// Ensure spawn-helper has execute permission (may be lost during VSIX extraction)
@@ -53,7 +59,7 @@ export class PtyManager {
 				cols,
 				rows,
 				cwd: cwd,
-				env: process.env as {[key: string]: string},
+				env: spawnEnv,
 			});
 			this.ptyProcess = processInstance;
 
