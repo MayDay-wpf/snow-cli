@@ -298,6 +298,7 @@ export async function handleConversationWithTools(
 					addMultipleToAlwaysApproved,
 					addToAlwaysApproved,
 					yoloModeRef,
+					streamingEnabled: config.streamingDisplay !== false,
 					options,
 				});
 
@@ -796,6 +797,7 @@ async function handleToolCallRound(ctx: {
 	addMultipleToAlwaysApproved: (toolNames: string[]) => void;
 	addToAlwaysApproved: (toolName: string) => void;
 	yoloModeRef: React.MutableRefObject<boolean>;
+	streamingEnabled: boolean;
 	options: ConversationHandlerOptions;
 }): Promise<ToolCallRoundResult> {
 	const {
@@ -818,6 +820,7 @@ async function handleToolCallRound(ctx: {
 		addMultipleToAlwaysApproved,
 		addToAlwaysApproved,
 		yoloModeRef,
+		streamingEnabled,
 		options,
 	} = ctx;
 	let {accumulatedUsage} = ctx;
@@ -890,6 +893,10 @@ async function handleToolCallRound(ctx: {
 		encoder,
 		setStreamTokenCount,
 		saveMessage,
+		options.setIsReasoning
+			? (isReasoning: boolean) => options.setIsReasoning!(isReasoning)
+			: undefined,
+		streamingEnabled,
 	);
 
 	const toolResults = await executeToolCalls(

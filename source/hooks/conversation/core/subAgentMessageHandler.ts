@@ -5,6 +5,21 @@ import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.
 
 type CtxUsage = {percentage: number; inputTokens: number; maxTokens: number};
 
+type StreamState = {
+	tokenCount: number;
+	lastTokenFlushTime: number;
+	thinkingLineBuffer: string;
+	contentLineBuffer: string;
+	hasReceivedContentChunk: boolean;
+	isFirstStreamLine: boolean;
+	hasStartedContent: boolean;
+	hasEmittedStreamLine: boolean;
+	inCodeBlock: boolean;
+	codeBlockBuffer: string;
+	tableBuffer: string;
+	listBuffer: string;
+};
+
 /**
  * Format token count for display (e.g., 1234 → "1.2K", 123456 → "123K")
  */
@@ -30,16 +45,16 @@ function extractRejectionReason(content: string): string | undefined {
  */
 export class SubAgentUIHandler {
 	readonly latestCtxUsage: Record<string, CtxUsage> = {};
-	private contentAccumulator = '';
-	private contentBuffer = '';
-	private tokenCount = 0;
-	private lastFlushTime = 0;
+	private readonly streamStates: Record<string, StreamState> = {};
+	private readonly activeReasoningAgents = new Set<string>();
 	private readonly FLUSH_INTERVAL = 100;
 
 	constructor(
 		private encoder: any,
 		private setStreamTokenCount: (count: number) => void,
 		private saveMessage: (msg: any) => Promise<void>,
+		private setIsReasoning?: (isReasoning: boolean) => void,
+		private streamingEnabled: boolean = true,
 	) {}
 
 	/**
@@ -64,6 +79,12 @@ export class SubAgentUIHandler {
 				return this.handleAgentSpawned(prev, subAgentMessage);
 			case 'spawned_agent_completed':
 				return this.handleSpawnedAgentCompleted(prev, subAgentMessage);
+			case 'reasoning_started':
+				return this.handleReasoningStarted(prev, subAgentMessage);
+			case 'reasoning_delta':
+				return this.handleReasoningDelta(prev, subAgentMessage);
+			case 'tool_call_delta':
+				return this.handleToolCallDelta(prev, subAgentMessage);
 			case 'tool_calls':
 				return this.handleToolCalls(prev, subAgentMessage);
 			case 'tool_result':
@@ -75,6 +96,348 @@ export class SubAgentUIHandler {
 			default:
 				return prev;
 		}
+	}
+
+	private createInitialStreamState(): StreamState {
+		return {
+			tokenCount: 0,
+			lastTokenFlushTime: 0,
+			thinkingLineBuffer: '',
+			contentLineBuffer: '',
+			hasReceivedContentChunk: false,
+			isFirstStreamLine: true,
+			hasStartedContent: false,
+			hasEmittedStreamLine: false,
+			inCodeBlock: false,
+			codeBlockBuffer: '',
+			tableBuffer: '',
+			listBuffer: '',
+		};
+	}
+
+	private getStreamState(agentId: string): StreamState {
+		if (!this.streamStates[agentId]) {
+			this.streamStates[agentId] = this.createInitialStreamState();
+		}
+		return this.streamStates[agentId]!;
+	}
+
+	private clearStreamState(agentId: string): void {
+		delete this.streamStates[agentId];
+		this.updateGlobalTokenCount();
+	}
+
+	private updateGlobalTokenCount(): void {
+		const total = Object.values(this.streamStates).reduce(
+			(sum, state) => sum + state.tokenCount,
+			0,
+		);
+		this.setStreamTokenCount(total);
+	}
+
+	private setAgentReasoning(agentId: string, isReasoning: boolean): void {
+		if (isReasoning) {
+			this.activeReasoningAgents.add(agentId);
+		} else {
+			this.activeReasoningAgents.delete(agentId);
+		}
+		this.setIsReasoning?.(this.activeReasoningAgents.size > 0);
+	}
+
+	private addTokens(agentId: string, text: string): void {
+		const state = this.getStreamState(agentId);
+		try {
+			const deltaTokens = this.encoder.encode(text);
+			state.tokenCount += deltaTokens.length;
+		} catch {
+			// Ignore encoding errors
+		}
+	}
+
+	private shouldFlush(state: StreamState, now: number): boolean {
+		return now - state.lastTokenFlushTime >= this.FLUSH_INTERVAL;
+	}
+
+	private flushTokenCount(agentId: string, now: number): void {
+		const state = this.getStreamState(agentId);
+		this.updateGlobalTokenCount();
+		state.lastTokenFlushTime = now;
+	}
+
+	private emitStreamLine(
+		lines: Message[],
+		state: StreamState,
+		subAgentMessage: SubAgentMessage,
+		content: string,
+		isThinking: boolean,
+	): void {
+		if (!this.streamingEnabled) {
+			return;
+		}
+
+		const isFirst = state.isFirstStreamLine;
+		const isFirstContent = !isThinking && !state.hasStartedContent;
+		if (isFirst) state.isFirstStreamLine = false;
+		if (isFirstContent) state.hasStartedContent = true;
+		state.hasEmittedStreamLine = true;
+
+		lines.push({
+			role: 'assistant' as const,
+			content,
+			streamingLine: true,
+			isThinkingLine: isThinking,
+			isFirstStreamLine: isFirst,
+			isFirstContentLine: isFirstContent,
+			subAgent: {
+				agentId: subAgentMessage.agentId,
+				agentName: subAgentMessage.agentName,
+				isComplete: false,
+			},
+			subAgentInternal: true,
+		});
+	}
+
+	private cleanThinkingContent(content: string): string {
+		return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '');
+	}
+
+	private flushThinkingBuffer(
+		state: StreamState,
+		lines: Message[],
+		subAgentMessage: SubAgentMessage,
+	): void {
+		if (state.hasReceivedContentChunk || !state.thinkingLineBuffer) {
+			state.thinkingLineBuffer = '';
+			return;
+		}
+
+		const cleaned = this.cleanThinkingContent(state.thinkingLineBuffer);
+		if (cleaned.trim()) {
+			this.emitStreamLine(lines, state, subAgentMessage, cleaned, true);
+		}
+		state.thinkingLineBuffer = '';
+	}
+
+	private isTableRow(line: string): boolean {
+		const trimmedLine = line.trim();
+		return (
+			trimmedLine.startsWith('|') &&
+			trimmedLine.endsWith('|') &&
+			trimmedLine.length > 2
+		);
+	}
+
+	private isListItemLine(line: string): boolean {
+		return /^\s*\d+[.)]\s/.test(line) || /^\s*[-*+]\s/.test(line);
+	}
+
+	private processContentLine(
+		state: StreamState,
+		lines: Message[],
+		line: string,
+		subAgentMessage: SubAgentMessage,
+	): void {
+		if (state.inCodeBlock) {
+			state.codeBlockBuffer += line + '\n';
+			if (line.trimStart().startsWith('```')) {
+				state.inCodeBlock = false;
+				this.emitStreamLine(
+					lines,
+					state,
+					subAgentMessage,
+					state.codeBlockBuffer.trimEnd(),
+					false,
+				);
+				state.codeBlockBuffer = '';
+			}
+			return;
+		}
+
+		if (line.trimStart().startsWith('```')) {
+			if (state.tableBuffer) {
+				this.emitStreamLine(
+					lines,
+					state,
+					subAgentMessage,
+					state.tableBuffer.trimEnd(),
+					false,
+				);
+				state.tableBuffer = '';
+			}
+			if (state.listBuffer) {
+				this.emitStreamLine(
+					lines,
+					state,
+					subAgentMessage,
+					state.listBuffer.trimEnd(),
+					false,
+				);
+				state.listBuffer = '';
+			}
+			state.inCodeBlock = true;
+			state.codeBlockBuffer = line + '\n';
+			return;
+		}
+
+		if (this.isTableRow(line)) {
+			if (state.listBuffer) {
+				this.emitStreamLine(
+					lines,
+					state,
+					subAgentMessage,
+					state.listBuffer.trimEnd(),
+					false,
+				);
+				state.listBuffer = '';
+			}
+			state.tableBuffer += line + '\n';
+			return;
+		}
+
+		if (state.tableBuffer) {
+			this.emitStreamLine(
+				lines,
+				state,
+				subAgentMessage,
+				state.tableBuffer.trimEnd(),
+				false,
+			);
+			state.tableBuffer = '';
+		}
+
+		if (this.isListItemLine(line)) {
+			state.listBuffer += line + '\n';
+			return;
+		}
+
+		if (state.listBuffer && (line.trim() === '' || /^\s{2,}/.test(line))) {
+			state.listBuffer += line + '\n';
+			return;
+		}
+
+		if (state.listBuffer) {
+			this.emitStreamLine(
+				lines,
+				state,
+				subAgentMessage,
+				state.listBuffer.trimEnd(),
+				false,
+			);
+			state.listBuffer = '';
+		}
+
+		this.emitStreamLine(lines, state, subAgentMessage, line, false);
+	}
+
+	private flushRemainingContentBuffers(
+		state: StreamState,
+		lines: Message[],
+		subAgentMessage: SubAgentMessage,
+	): void {
+		if (state.contentLineBuffer.trim()) {
+			this.processContentLine(
+				state,
+				lines,
+				state.contentLineBuffer,
+				subAgentMessage,
+			);
+			state.contentLineBuffer = '';
+		}
+		if (state.codeBlockBuffer) {
+			this.emitStreamLine(
+				lines,
+				state,
+				subAgentMessage,
+				state.codeBlockBuffer.trimEnd(),
+				false,
+			);
+			state.codeBlockBuffer = '';
+		}
+		if (state.tableBuffer) {
+			this.emitStreamLine(
+				lines,
+				state,
+				subAgentMessage,
+				state.tableBuffer.trimEnd(),
+				false,
+			);
+			state.tableBuffer = '';
+		}
+		if (state.listBuffer) {
+			this.emitStreamLine(
+				lines,
+				state,
+				subAgentMessage,
+				state.listBuffer.trimEnd(),
+				false,
+			);
+			state.listBuffer = '';
+		}
+	}
+
+	private handleReasoningStarted(
+		prev: Message[],
+		subAgentMessage: SubAgentMessage,
+	): Message[] {
+		const state = this.getStreamState(subAgentMessage.agentId);
+		if (!state.hasReceivedContentChunk) {
+			this.setAgentReasoning(subAgentMessage.agentId, true);
+		}
+		return prev;
+	}
+
+	private handleReasoningDelta(
+		prev: Message[],
+		subAgentMessage: SubAgentMessage,
+	): Message[] {
+		const state = this.getStreamState(subAgentMessage.agentId);
+		if (!state.hasReceivedContentChunk) {
+			this.setAgentReasoning(subAgentMessage.agentId, true);
+		}
+		const incomingDelta = subAgentMessage.message.delta;
+		if (!incomingDelta) {
+			return prev;
+		}
+
+		this.addTokens(subAgentMessage.agentId, incomingDelta);
+		const now = Date.now();
+		if (this.shouldFlush(state, now)) {
+			this.flushTokenCount(subAgentMessage.agentId, now);
+		}
+		if (state.hasReceivedContentChunk || !this.streamingEnabled) {
+			return prev;
+		}
+
+		const newLines: Message[] = [];
+		state.thinkingLineBuffer += incomingDelta;
+		const thinkLines = state.thinkingLineBuffer.split('\n');
+		for (let i = 0; i < thinkLines.length - 1; i++) {
+			const cleaned = this.cleanThinkingContent(thinkLines[i] ?? '');
+			if (cleaned || state.hasEmittedStreamLine) {
+				this.emitStreamLine(newLines, state, subAgentMessage, cleaned, true);
+			}
+		}
+		state.thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
+		return newLines.length > 0 ? [...prev, ...newLines] : prev;
+	}
+
+	private handleToolCallDelta(
+		prev: Message[],
+		subAgentMessage: SubAgentMessage,
+	): Message[] {
+		const state = this.getStreamState(subAgentMessage.agentId);
+		this.setAgentReasoning(subAgentMessage.agentId, false);
+		const incomingDelta = subAgentMessage.message.delta;
+		if (!incomingDelta) {
+			return prev;
+		}
+
+		this.addTokens(subAgentMessage.agentId, incomingDelta);
+		const now = Date.now();
+		if (this.shouldFlush(state, now)) {
+			this.flushTokenCount(subAgentMessage.agentId, now);
+		}
+		return prev;
 	}
 
 	private handleContextUsage(
@@ -247,8 +610,26 @@ export class SubAgentUIHandler {
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
 	): Message[] {
+		this.setAgentReasoning(subAgentMessage.agentId, false);
+		const state = this.getStreamState(subAgentMessage.agentId);
+		const pendingStreamLines: Message[] = [];
+		if (!state.hasReceivedContentChunk) {
+			this.flushThinkingBuffer(state, pendingStreamLines, subAgentMessage);
+		} else {
+			state.thinkingLineBuffer = '';
+		}
+		this.flushRemainingContentBuffers(
+			state,
+			pendingStreamLines,
+			subAgentMessage,
+		);
+
 		const toolCalls = subAgentMessage.message.tool_calls;
-		if (!toolCalls || toolCalls.length === 0) return prev;
+		if (!toolCalls || toolCalls.length === 0) {
+			return pendingStreamLines.length > 0
+				? [...prev, ...pendingStreamLines]
+				: prev;
+		}
 
 		const internalAgentTools = new Set([
 			'send_message_to_agent',
@@ -259,7 +640,11 @@ export class SubAgentUIHandler {
 			(tc: any) => !internalAgentTools.has(tc.function.name),
 		);
 
-		if (displayableToolCalls.length === 0) return prev;
+		if (displayableToolCalls.length === 0) {
+			return pendingStreamLines.length > 0
+				? [...prev, ...pendingStreamLines]
+				: prev;
+		}
 
 		const timeConsumingTools = displayableToolCalls.filter((tc: any) =>
 			isToolNeedTwoStepDisplay(tc.function.name),
@@ -268,7 +653,7 @@ export class SubAgentUIHandler {
 			(tc: any) => !isToolNeedTwoStepDisplay(tc.function.name),
 		);
 
-		const newMessages: any[] = [];
+		const newMessages: Message[] = [];
 		const inheritedCtxUsage = this.latestCtxUsage[subAgentMessage.agentId];
 
 		// Time-consuming tools: individual messages with full details
@@ -358,7 +743,8 @@ export class SubAgentUIHandler {
 			console.error('Failed to save sub-agent tool call:', err),
 		);
 
-		return [...prev, ...newMessages];
+		const combinedMessages = [...pendingStreamLines, ...newMessages];
+		return combinedMessages.length > 0 ? [...prev, ...combinedMessages] : prev;
 	}
 
 	private handleToolResult(
@@ -549,90 +935,58 @@ export class SubAgentUIHandler {
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
 	): Message[] {
+		const state = this.getStreamState(subAgentMessage.agentId);
+		this.setAgentReasoning(subAgentMessage.agentId, false);
 		const incomingContent = subAgentMessage.message.content;
-		this.contentAccumulator += incomingContent;
-		this.contentBuffer += incomingContent;
-		try {
-			const deltaTokens = this.encoder.encode(incomingContent);
-			this.tokenCount += deltaTokens.length;
-		} catch {
-			// Ignore encoding errors
-		}
-
-		const now = Date.now();
-		if (now - this.lastFlushTime < this.FLUSH_INTERVAL) {
+		if (!incomingContent) {
 			return prev;
 		}
 
-		this.setStreamTokenCount(this.tokenCount);
-		this.lastFlushTime = now;
-		const contentToApply = this.contentBuffer;
-		this.contentBuffer = '';
-
-		const existingIndex = this.findStreamingMessageIndex(
-			prev,
-			subAgentMessage.agentId,
-		);
-
-		if (existingIndex !== -1 && contentToApply) {
-			const updated = [...prev];
-			const existing = updated[existingIndex];
-			if (existing) {
-				updated[existingIndex] = {
-					...existing,
-					content: (existing.content || '') + contentToApply,
-					streaming: true,
-				};
-			}
-			return updated;
+		this.addTokens(subAgentMessage.agentId, incomingContent);
+		const now = Date.now();
+		if (this.shouldFlush(state, now)) {
+			this.flushTokenCount(subAgentMessage.agentId, now);
 		}
 
-		// Do not create text-only sub-agent messages from content chunks
-		return prev;
+		const isFirstContentChunk = !state.hasReceivedContentChunk;
+		state.hasReceivedContentChunk = true;
+		if (!this.streamingEnabled) {
+			return prev;
+		}
+
+		const newLines: Message[] = [];
+		if (isFirstContentChunk) {
+			this.flushThinkingBuffer(state, newLines, subAgentMessage);
+		}
+
+		state.contentLineBuffer += incomingContent;
+		const contentLines = state.contentLineBuffer.split('\n');
+		for (let i = 0; i < contentLines.length - 1; i++) {
+			this.processContentLine(
+				state,
+				newLines,
+				contentLines[i] ?? '',
+				subAgentMessage,
+			);
+		}
+		state.contentLineBuffer = contentLines[contentLines.length - 1] ?? '';
+		return newLines.length > 0 ? [...prev, ...newLines] : prev;
 	}
 
 	private handleDone(
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
 	): Message[] {
-		const contentToApply = this.contentBuffer;
-		this.contentAccumulator = '';
-		this.contentBuffer = '';
-		this.tokenCount = 0;
-		this.lastFlushTime = 0;
-		this.setStreamTokenCount(0);
-
-		const existingIndex = this.findStreamingMessageIndex(
-			prev,
-			subAgentMessage.agentId,
-		);
-		if (existingIndex !== -1) {
-			const updated = [...prev];
-			const existing = updated[existingIndex];
-			if (existing?.subAgent) {
-				updated[existingIndex] = {
-					...existing,
-					content: (existing.content || '') + contentToApply,
-					streaming: false,
-					subAgent: {...existing.subAgent, isComplete: true},
-				};
-			}
-			return updated;
+		const state = this.getStreamState(subAgentMessage.agentId);
+		this.setAgentReasoning(subAgentMessage.agentId, false);
+		const finalLines: Message[] = [];
+		if (!state.hasReceivedContentChunk) {
+			this.flushThinkingBuffer(state, finalLines, subAgentMessage);
+		} else {
+			state.thinkingLineBuffer = '';
 		}
-		return prev;
-	}
-
-	private findStreamingMessageIndex(
-		messages: Message[],
-		agentId: string,
-	): number {
-		return messages.findIndex(
-			m =>
-				m.role === 'subagent' &&
-				m.subAgent?.agentId === agentId &&
-				!m.subAgent?.isComplete &&
-				m.streaming === true &&
-				!m.pendingToolIds,
-		);
+		this.flushRemainingContentBuffers(state, finalLines, subAgentMessage);
+		this.clearStreamState(subAgentMessage.agentId);
+		return finalLines.length > 0 ? [...prev, ...finalLines] : prev;
 	}
 }
