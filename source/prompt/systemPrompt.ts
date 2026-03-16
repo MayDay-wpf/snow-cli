@@ -179,6 +179,11 @@ PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 
 **BATCH OPERATIONS:** Modify 2+ files? Use batch: \`filesystem-read(filePath=["a.ts","b.ts"])\` or \`filesystem-edit_search(filePath=[{path:"a.ts",...},{path:"b.ts",...}])\`
 
+**File Creation Safety:**
+- \`filesystem-create\` can ONLY create files that do not already exist at the target path
+- BEFORE calling \`filesystem-create\`, you MUST first verify the exact path is currently unused and the file does not exist
+- If a file with the same path/name already exists, creation will be blocked - NEVER use \`filesystem-create\` to overwrite or replace an existing file
+
 **Code Search:**
 PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 
