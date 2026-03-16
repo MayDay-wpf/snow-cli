@@ -10,6 +10,8 @@ type StreamState = {
 	lastTokenFlushTime: number;
 	thinkingLineBuffer: string;
 	contentLineBuffer: string;
+	fullThinkingContent: string;
+	fullContent: string;
 	hasReceivedContentChunk: boolean;
 	isFirstStreamLine: boolean;
 	hasStartedContent: boolean;
@@ -104,6 +106,8 @@ export class SubAgentUIHandler {
 			lastTokenFlushTime: 0,
 			thinkingLineBuffer: '',
 			contentLineBuffer: '',
+			fullThinkingContent: '',
+			fullContent: '',
 			hasReceivedContentChunk: false,
 			isFirstStreamLine: true,
 			hasStartedContent: false,
@@ -375,6 +379,57 @@ export class SubAgentUIHandler {
 		}
 	}
 
+	private persistCompletedResponse(
+		state: StreamState,
+		subAgentMessage: SubAgentMessage,
+	): void {
+		const hasContent = state.fullContent.trim().length > 0;
+		const hasThinking =
+			this.cleanThinkingContent(state.fullThinkingContent).trim().length > 0;
+		if (!hasContent && !hasThinking) {
+			return;
+		}
+
+		const sessionMsg = {
+			role: 'assistant' as const,
+			content: hasContent ? state.fullContent : '',
+			thinking: hasThinking
+				? {
+						type: 'thinking' as const,
+						thinking: state.fullThinkingContent.trim(),
+				  }
+				: undefined,
+			subAgentInternal: true,
+			subAgentContent: true,
+			subAgent: {
+				agentId: subAgentMessage.agentId,
+				agentName: subAgentMessage.agentName,
+				isComplete: true,
+			},
+		};
+		this.saveMessage(sessionMsg).catch(err =>
+			console.error('Failed to save sub-agent content:', err),
+		);
+	}
+
+	private resetRoundState(state: StreamState): void {
+		state.tokenCount = 0;
+		state.lastTokenFlushTime = 0;
+		state.thinkingLineBuffer = '';
+		state.contentLineBuffer = '';
+		state.fullThinkingContent = '';
+		state.fullContent = '';
+		state.hasReceivedContentChunk = false;
+		state.isFirstStreamLine = true;
+		state.hasStartedContent = false;
+		state.hasEmittedStreamLine = false;
+		state.inCodeBlock = false;
+		state.codeBlockBuffer = '';
+		state.tableBuffer = '';
+		state.listBuffer = '';
+		this.updateGlobalTokenCount();
+	}
+
 	private handleReasoningStarted(
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
@@ -399,6 +454,7 @@ export class SubAgentUIHandler {
 			return prev;
 		}
 
+		state.fullThinkingContent += incomingDelta;
 		this.addTokens(subAgentMessage.agentId, incomingDelta);
 		const now = Date.now();
 		if (this.shouldFlush(state, now)) {
@@ -631,6 +687,9 @@ export class SubAgentUIHandler {
 				: prev;
 		}
 
+		this.persistCompletedResponse(state, subAgentMessage);
+		this.resetRoundState(state);
+
 		const internalAgentTools = new Set([
 			'send_message_to_agent',
 			'query_agents_status',
@@ -737,6 +796,11 @@ export class SubAgentUIHandler {
 				})
 				.join(', '),
 			subAgentInternal: true,
+			subAgent: {
+				agentId: subAgentMessage.agentId,
+				agentName: subAgentMessage.agentName,
+				isComplete: false,
+			},
 			tool_calls: toolCalls,
 		};
 		this.saveMessage(sessionMsg).catch(err =>
@@ -942,6 +1006,7 @@ export class SubAgentUIHandler {
 			return prev;
 		}
 
+		state.fullContent += incomingContent;
 		this.addTokens(subAgentMessage.agentId, incomingContent);
 		const now = Date.now();
 		if (this.shouldFlush(state, now)) {
@@ -986,6 +1051,7 @@ export class SubAgentUIHandler {
 			state.thinkingLineBuffer = '';
 		}
 		this.flushRemainingContentBuffers(state, finalLines, subAgentMessage);
+		this.persistCompletedResponse(state, subAgentMessage);
 		this.clearStreamState(subAgentMessage.agentId);
 		return finalLines.length > 0 ? [...prev, ...finalLines] : prev;
 	}

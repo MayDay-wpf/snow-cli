@@ -705,27 +705,33 @@ class SessionManager {
 			if (m.content !== message.content) return false;
 			if (Math.abs(m.timestamp - message.timestamp) >= 5000) return false;
 
-			// If both messages have tool_calls, compare tool call IDs
 			if (m.tool_calls && message.tool_calls) {
-				// Create sets of tool call IDs for comparison
 				const existingIds = new Set(m.tool_calls.map(tc => tc.id));
 				const newIds = new Set(message.tool_calls.map(tc => tc.id));
-
-				// If IDs are different, these are different messages
 				if (existingIds.size !== newIds.size) return false;
 				for (const id of newIds) {
 					if (!existingIds.has(id)) return false;
 				}
 			} else if (m.tool_calls || message.tool_calls) {
-				// One has tool_calls, the other doesn't - different messages
 				return false;
 			}
 
-			// If both have tool_call_id (tool response), compare them
+			if (m.subAgentContent !== message.subAgentContent) {
+				return false;
+			}
+			if (m.subAgent?.agentId !== message.subAgent?.agentId) {
+				return false;
+			}
+			const existingThinking = m.thinking?.thinking || '';
+			const newThinking = message.thinking?.thinking || '';
+			if (existingThinking !== newThinking) {
+				return false;
+			}
+
 			if (m.tool_call_id && message.tool_call_id) {
 				return m.tool_call_id === message.tool_call_id;
-			} else if (m.tool_call_id || message.tool_call_id) {
-				// One has tool_call_id, the other doesn't - different messages
+			}
+			if (m.tool_call_id || message.tool_call_id) {
 				return false;
 			}
 

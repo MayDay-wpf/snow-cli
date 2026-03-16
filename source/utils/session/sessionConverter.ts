@@ -52,9 +52,25 @@ export function convertSessionMessagesToUI(
 		const msg = sessionMessages[i];
 		if (!msg) continue;
 
+		if (
+			msg.subAgentInternal &&
+			msg.subAgentContent &&
+			msg.role === 'assistant'
+		) {
+			uiMessages.push({
+				role: 'subagent',
+				content: msg.content,
+				streaming: false,
+				thinking: extractThinkingFromMessage(msg),
+				subAgentInternal: true,
+				subAgentContent: true,
+				subAgent: msg.subAgent,
+			});
+			continue;
+		}
+
 		// Handle sub-agent internal tool call messages
 		if (msg.subAgentInternal && msg.role === 'assistant' && msg.tool_calls) {
-			// Separate time-consuming tools and quick tools
 			const timeConsumingTools = msg.tool_calls.filter(tc =>
 				isToolNeedTwoStepDisplay(tc.function.name),
 			);

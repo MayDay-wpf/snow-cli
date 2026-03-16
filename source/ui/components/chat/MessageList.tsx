@@ -60,6 +60,7 @@ export interface Message {
 		isComplete?: boolean;
 	};
 	subAgentInternal?: boolean; // Mark internal sub-agent messages to filter from API requests
+	subAgentContent?: boolean; // Persisted sub-agent thinking/content replay message
 	subAgentUsage?: {
 		inputTokens: number;
 		outputTokens: number;
@@ -108,65 +109,63 @@ const MessageList = memo(
 
 		return (
 			<Box flexDirection="column" overflow="hidden">
-			{messages.slice(-maxMessages).map((message, index) => {
-				const iconColor =
-					message.role === 'user'
-						? message.subAgentDirected
+				{messages.slice(-maxMessages).map((message, index) => {
+					const iconColor =
+						message.role === 'user'
+							? message.subAgentDirected
+								? 'magenta'
+								: 'green'
+							: message.role === 'command'
+							? 'gray'
+							: message.role === 'subagent'
 							? 'magenta'
-							: 'green'
-						: message.role === 'command'
-						? 'gray'
-						: message.role === 'subagent'
-						? 'magenta'
-						: message.streaming
-						? (STREAM_COLORS[animationFrame] as any)
-						: 'cyan';
+							: message.streaming
+							? (STREAM_COLORS[animationFrame] as any)
+							: 'cyan';
 
-				return (
-					<Box key={index}>
-						<Text color={iconColor} bold>
-							{message.role === 'user'
-								? message.subAgentDirected
-									? '»'
-									: '❯'
-								: message.role === 'command'
-								? '⌘'
-								: message.role === 'subagent'
-								? '◈'
-								: '❆'}
-						</Text>
-						<Box marginLeft={1} flexDirection="column">
-							{message.role === 'user' &&
-								message.subAgentDirected &&
-								message.subAgentDirected.targets.length > 0 && (
-									<Box flexDirection="column">
-										{message.subAgentDirected.targets.map(
-											(target, ti, arr) => {
-												const isLast = ti === arr.length - 1;
-												const branch = isLast ? '└─' : '├─';
-												return (
-													<Box key={ti}>
-														<Text color="magenta" dimColor>
-															{branch}{' '}
-														</Text>
-														<Text color="magenta">
-															{target.agentName}
-														</Text>
-														{target.promptSnippet ? (
-															<Text color="gray" dimColor>
-																{' '}
-																{target.promptSnippet}
+					return (
+						<Box key={index}>
+							<Text color={iconColor} bold>
+								{message.role === 'user'
+									? message.subAgentDirected
+										? '»'
+										: '❯'
+									: message.role === 'command'
+									? '⌘'
+									: message.role === 'subagent'
+									? '◈'
+									: '❆'}
+							</Text>
+							<Box marginLeft={1} flexDirection="column">
+								{message.role === 'user' &&
+									message.subAgentDirected &&
+									message.subAgentDirected.targets.length > 0 && (
+										<Box flexDirection="column">
+											{message.subAgentDirected.targets.map(
+												(target, ti, arr) => {
+													const isLast = ti === arr.length - 1;
+													const branch = isLast ? '└─' : '├─';
+													return (
+														<Box key={ti}>
+															<Text color="magenta" dimColor>
+																{branch}{' '}
 															</Text>
-														) : null}
-													</Box>
-												);
-											},
-										)}
-									</Box>
-								)}
-							{message.role === 'command' ? (
-								<Text color="gray">└─ {message.commandName}</Text>
-							) : message.role === 'subagent' ? (
+															<Text color="magenta">{target.agentName}</Text>
+															{target.promptSnippet ? (
+																<Text color="gray" dimColor>
+																	{' '}
+																	{target.promptSnippet}
+																</Text>
+															) : null}
+														</Box>
+													);
+												},
+											)}
+										</Box>
+									)}
+								{message.role === 'command' ? (
+									<Text color="gray">└─ {message.commandName}</Text>
+								) : message.role === 'subagent' ? (
 									<>
 										<Text color="magenta" dimColor>
 											└─ Sub-Agent: {message.subAgent?.agentName}

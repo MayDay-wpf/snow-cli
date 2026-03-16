@@ -11,12 +11,10 @@ export function useSessionSave() {
 	// Generate a unique ID for a message (based on role + content + timestamp window + tool identifiers)
 	const generateMessageId = useCallback(
 		(message: APIChatMessage, timestamp: number): string => {
-			// Base ID with role, content length, and time window
 			let id = `${message.role}-${message.content.length}-${Math.floor(
 				timestamp / 5000,
 			)}`;
 
-			// For assistant messages with tool_calls, include tool call IDs to ensure uniqueness
 			if (
 				message.role === 'assistant' &&
 				message.tool_calls &&
@@ -29,7 +27,14 @@ export function useSessionSave() {
 				id += `-tools:${toolCallIds}`;
 			}
 
-			// For tool result messages, include the tool_call_id to ensure uniqueness
+			if (message.role === 'assistant' && message.subAgentContent) {
+				id += `-subagent-content:${message.subAgent?.agentId || 'unknown'}`;
+				const thinking = message.thinking?.thinking;
+				if (thinking) {
+					id += `-thinking:${thinking.length}`;
+				}
+			}
+
 			if (message.role === 'tool' && message.tool_call_id) {
 				id += `-toolcall:${message.tool_call_id}`;
 			}
