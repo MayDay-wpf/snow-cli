@@ -625,7 +625,11 @@ const MCP_ENV_VAR_PATTERN = /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 
 function getMCPServerTransportType(server: MCPServer): 'http' | 'stdio' | null {
 	if (server.type) {
-		return server.type;
+		// 'local' 是 'stdio' 的别名
+		if (server.type === 'local') {
+			return 'stdio';
+		}
+		return server.type as 'http' | 'stdio';
 	}
 
 	if (server.url) {
@@ -650,6 +654,11 @@ function getServerProcessEnv(server: MCPServer): Record<string, string> {
 
 	if (server.env) {
 		Object.assign(processEnv, server.env);
+	}
+
+	// environment 是 env 的别名，与 env 等价
+	if (server.environment) {
+		Object.assign(processEnv, server.environment);
 	}
 
 	return processEnv;

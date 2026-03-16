@@ -56,7 +56,9 @@ jobs:
 
             ### What's New
 
-            - fix some bugs
+            - Add more parameter compatibility for MCP
+            - Add streaming display and thinking summary display for sub-agents
+            - Fix the race timing issue when resuming historical sessions
 
             ### Installation
             ```bash

@@ -1,3 +1,5 @@
+import {useStdout} from 'ink';
+import ansiEscapes from 'ansi-escapes';
 import {useI18n} from '../../../i18n/index.js';
 import type {UseChatLogicProps, Message} from './types.js';
 import type {ReviewCommitSelection} from '../../../ui/components/panels/ReviewCommitPanel.js';
@@ -17,7 +19,11 @@ interface UseChatHandlersDeps {
 	) => Promise<void>;
 }
 
-export function useChatHandlers(props: UseChatLogicProps, deps: UseChatHandlersDeps) {
+export function useChatHandlers(
+	props: UseChatLogicProps,
+	deps: UseChatHandlersDeps,
+) {
+	const {stdout} = useStdout();
 	const {t} = useI18n();
 	const {
 		setMessages,
@@ -78,11 +84,16 @@ export function useChatHandlers(props: UseChatLogicProps, deps: UseChatHandlersD
 			if (session) {
 				const uiMessages = convertSessionMessagesToUI(session.messages);
 
-				initializeFromSession(session.messages);
-				setMessages(uiMessages);
+				stdout.write(ansiEscapes.clearTerminal);
 				setPendingMessages([]);
 				streamingState.setIsStreaming(false);
+				setMessages([]);
 				setRemountKey(prev => prev + 1);
+
+				await new Promise(resolve => setTimeout(resolve, 0));
+
+				initializeFromSession(session.messages);
+				setMessages(uiMessages);
 
 				const snapshots = await hashBasedSnapshotManager.listSnapshots(
 					session.id,

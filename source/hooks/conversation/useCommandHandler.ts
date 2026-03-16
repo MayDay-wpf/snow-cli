@@ -562,13 +562,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			) {
 				if (options.onResumeSessionById) {
 					await options.onResumeSessionById(result.sessionId);
+				} else {
+					const commandMessage: Message = {
+						role: 'command',
+						content: result.message || '',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
 				}
-				const commandMessage: Message = {
-					role: 'command',
-					content: result.message || '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showSessionPanel') {
 				options.setShowSessionPanel(true);
 				const commandMessage: Message = {

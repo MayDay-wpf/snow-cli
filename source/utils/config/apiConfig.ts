@@ -59,11 +59,12 @@ export interface ApiConfig {
 }
 
 export interface MCPServer {
-	type?: 'http' | 'stdio'; // 传输类型，未指定时根据 url/command 自动推断
+	type?: 'http' | 'stdio' | 'local'; // 传输类型，未指定时根据 url/command 自动推断。'local' 是 'stdio' 的别名
 	url?: string;
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>; // 环境变量
+	environment?: Record<string, string>; // 环境变量的别名，与 env 等价
 	headers?: Record<string, string>; // HTTP 请求头
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
 	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
