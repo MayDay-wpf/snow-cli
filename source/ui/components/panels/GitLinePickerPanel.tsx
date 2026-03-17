@@ -160,7 +160,19 @@ const GitLinePickerPanel = memo(
 					{displayedCommits.map((commit, index) => {
 						const isSelected = index === displayedSelectedIndex;
 						const isChecked = selectedCommits.has(commit.sha);
-						const subject = truncateText(commit.subject, 72);
+						const title =
+							commit.kind === 'staged'
+								? `${t.reviewCommitPanel.stagedLabel} (${
+										commit.fileCount ?? 0
+								  } ${t.reviewCommitPanel.filesLabel})`
+								: `${formatShortSha(commit.sha)} ${truncateText(
+										commit.subject,
+										72,
+								  )}`;
+						const subtitle =
+							commit.kind === 'staged'
+								? ''
+								: `${commit.authorName} · ${formatDate(commit.dateIso)}`;
 
 						return (
 							<Box key={commit.sha} flexDirection="column" width="100%">
@@ -173,21 +185,22 @@ const GitLinePickerPanel = memo(
 									bold
 								>
 									{isSelected ? '❯ ' : '  '}
-									{isChecked ? '[✓]' : '[ ]'} {formatShortSha(commit.sha)}{' '}
-									{subject}
+									{isChecked ? '[✓]' : '[ ]'} {title}
 								</Text>
-								<Box marginLeft={5}>
-									<Text
-										color={
-											isSelected
-												? theme.colors.menuSelected
-												: theme.colors.menuNormal
-										}
-										dimColor={!isSelected}
-									>
-										└─ {commit.authorName} · {formatDate(commit.dateIso)}
-									</Text>
-								</Box>
+								{subtitle ? (
+									<Box marginLeft={5}>
+										<Text
+											color={
+												isSelected
+													? theme.colors.menuSelected
+													: theme.colors.menuNormal
+											}
+											dimColor={!isSelected}
+										>
+											└─ {subtitle}
+										</Text>
+									</Box>
+								) : null}
 							</Box>
 						);
 					})}

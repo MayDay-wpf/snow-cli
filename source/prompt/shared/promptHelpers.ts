@@ -28,6 +28,15 @@ export function getSystemPromptWithRole(
 		}
 	};
 
+	const buildRoleOverride = (roleContent: string): string =>
+		[
+			'These are the rules emphasized by the user, which must be adhered to 100%:',
+			roleContent,
+		].join('\n');
+
+	const applyRoleOverride = (roleContent: string): string =>
+		basePrompt.replace(defaultRoleText, () => buildRoleOverride(roleContent));
+
 	const getActiveRolePath = (location: 'project' | 'global'): string | null => {
 		try {
 			const baseDir =
@@ -65,7 +74,7 @@ export function getSystemPromptWithRole(
 		if (projectActivePath) {
 			const roleContent = tryReadRole(projectActivePath);
 			if (roleContent) {
-				return basePrompt.replace(defaultRoleText, roleContent);
+				return applyRoleOverride(roleContent);
 			}
 		}
 
@@ -73,7 +82,7 @@ export function getSystemPromptWithRole(
 		if (globalActivePath) {
 			const roleContent = tryReadRole(globalActivePath);
 			if (roleContent) {
-				return basePrompt.replace(defaultRoleText, roleContent);
+				return applyRoleOverride(roleContent);
 			}
 		}
 	} catch (error) {
