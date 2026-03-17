@@ -8,6 +8,7 @@ import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
+import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -85,12 +86,49 @@ export default function MessageRenderer({
 		return maskSkillInjectedText(removeAnsiCodes(content || '')).displayText;
 	};
 
-	const formatUserBubbleText = (text: string): string => {
+	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
+		const safeWidth = Math.max(maxWidth, 1);
 		const normalized = text.length > 0 ? text : ' ';
-		return normalized
-			.split('\n')
-			.map(line => ` ${line || ' '} `)
-			.join('\n');
+		const wrappedLines: string[] = [];
+
+		for (const rawLine of normalized.split('\n')) {
+			const line = rawLine.length > 0 ? rawLine : ' ';
+			let currentLine = '';
+			let currentWidth = 0;
+
+			for (const char of toCodePoints(line)) {
+				const charWidth = Math.max(visualWidth(char), 1);
+
+				if (currentWidth > 0 && currentWidth + charWidth > safeWidth) {
+					wrappedLines.push(currentLine);
+					currentLine = char;
+					currentWidth = charWidth;
+					continue;
+				}
+
+				currentLine += char;
+				currentWidth += charWidth;
+			}
+
+			wrappedLines.push(currentLine || ' ');
+		}
+
+		return wrappedLines;
+	};
+
+	const formatUserBubbleLines = (
+		text: string,
+		totalWidth: number,
+	): string[] => {
+		const safeTotalWidth = Math.max(totalWidth, 2);
+		const contentWidth = Math.max(safeTotalWidth - 2, 1);
+
+		return wrapTextToVisualWidth(text, contentWidth).map(line => {
+			const trailingSpaces = ' '.repeat(
+				Math.max(contentWidth - visualWidth(line), 0),
+			);
+			return ` ${line}${trailingSpaces} `;
+		});
 	};
 
 	// Determine tool message type and color
@@ -125,6 +163,22 @@ export default function MessageRenderer({
 		nextMessage.parallelGroup !== null &&
 		nextMessage.parallelGroup === message.parallelGroup;
 	const isLastInGroup = shouldShowParallelIndicator && !nextInSameGroup;
+
+	const leadingIndicator =
+		shouldShowParallelIndicator && !isFirstInGroup ? '│' : '';
+	const messageIcon =
+		message.role === 'user'
+			? message.subAgentDirected
+				? '»'
+				: '❯'
+			: message.role === 'command'
+			? '⌘'
+			: '❆';
+	const messagePrefix = `${leadingIndicator}${messageIcon}`;
+	const contentColumnWidth = Math.max(
+		terminalWidth - 2 - visualWidth(messagePrefix) - 1,
+		1,
+	);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
@@ -184,16 +238,13 @@ export default function MessageRenderer({
 							}
 							bold
 						>
-							{shouldShowParallelIndicator && !isFirstInGroup ? '│' : ''}
-							{message.role === 'user'
-								? message.subAgentDirected
-									? '»'
-									: '❯'
-								: message.role === 'command'
-								? '⌘'
-								: '❆'}
+							{messagePrefix}
 						</Text>
-						<Box marginLeft={1} flexDirection="column">
+						<Box
+							marginLeft={1}
+							flexDirection="column"
+							width={contentColumnWidth}
+						>
 							{/* Show target sub-agent tree for directed messages */}
 							{message.role === 'user' &&
 								message.subAgentDirected &&
@@ -358,16 +409,25 @@ export default function MessageRenderer({
 														</Box>
 													)}
 													{message.role === 'user' ? (
-														<Text
-															color="white"
-															backgroundColor={
-																theme.colors.userMessageBackground
-															}
+														<Box
+															flexDirection="column"
+															width={contentColumnWidth}
 														>
-															{formatUserBubbleText(
+															{formatUserBubbleLines(
 																getDisplayContent(message.content),
-															)}
-														</Text>
+																contentColumnWidth,
+															).map((line, lineIndex) => (
+																<Text
+																	key={lineIndex}
+																	color="white"
+																	backgroundColor={
+																		theme.colors.userMessageBackground
+																	}
+																>
+																	{line}
+																</Text>
+															))}
+														</Box>
 													) : message.content ? (
 														<MarkdownRenderer
 															content={getDisplayContent(message.content)}
