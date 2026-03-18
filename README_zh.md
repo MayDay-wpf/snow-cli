@@ -23,12 +23,12 @@ _在终端中进行 Agentic 编程_
   <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
 </a>
 
+![alt text](docs/images/image_zh.png)
+
 ## 感谢社区
 <a href="https://linux.do">
   <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
 </a>
-
-![alt text](docs/images/image_zh.png)
 
 ## 文档目录
 
