@@ -39,6 +39,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/models.js'),
 			import('../../../utils/commands/worktree.js'),
 			import('../../../utils/commands/newPrompt.js'),
+			import('../../../utils/commands/autoformat.js'),
 			import('../../../utils/commands/toolsearch.js'),
 		])
 			.then(async () => {

@@ -537,6 +537,7 @@ export const zhTW: TranslationKeys = {
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
+			autoFormat: '切換 MCP 檔案自動格式化。用法: /auto-format [on|off|status]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',

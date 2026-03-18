@@ -3,6 +3,7 @@ import * as path from 'path';
 
 export interface ProjectSettings {
 	toolSearchEnabled?: boolean;
+	autoFormatEnabled?: boolean;
 }
 
 const SNOW_DIR = path.join(process.cwd(), '.snow');
@@ -43,5 +44,16 @@ export function getToolSearchEnabled(): boolean {
 export function setToolSearchEnabled(enabled: boolean): void {
 	const settings = loadSettings();
 	settings.toolSearchEnabled = enabled;
+	saveSettings(settings);
+}
+
+export function getAutoFormatEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.autoFormatEnabled ?? true;
+}
+
+export function setAutoFormatEnabled(enabled: boolean): void {
+	const settings = loadSettings();
+	settings.autoFormatEnabled = enabled;
 	saveSettings(settings);
 }

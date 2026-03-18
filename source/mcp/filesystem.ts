@@ -64,6 +64,7 @@ import {
 	readFileWithEncoding,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
+import {getAutoFormatEnabled} from '../utils/config/projectSettings.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -1440,6 +1441,7 @@ export class FilesystemMCPService {
 			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
 			const shouldFormat =
+				getAutoFormatEnabled() &&
 				this.prettierSupportedExtensions.includes(fileExtension);
 
 			if (shouldFormat) {
@@ -1846,6 +1848,7 @@ export class FilesystemMCPService {
 			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
 			const shouldFormat =
+				getAutoFormatEnabled() &&
 				this.prettierSupportedExtensions.includes(fileExtension);
 
 			if (shouldFormat) {

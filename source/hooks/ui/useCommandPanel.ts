@@ -136,6 +136,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Toggle vulnerability hunting mode',
 			},
 			{
+				name: 'auto-format',
+				description:
+					t.commandPanel.commands.autoFormat ||
+					'Toggle MCP file auto-formatting. Usage: /auto-format [on|off|status]',
+			},
+			{
 				name: 'tool-search',
 				description:
 					t.commandPanel.commands.toolSearch ||

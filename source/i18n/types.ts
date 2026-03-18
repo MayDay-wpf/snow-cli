@@ -537,6 +537,7 @@ export type TranslationKeys = {
 			codebase: string;
 			permissions: string;
 			vulnerabilityHunting: string;
+			autoFormat: string;
 			toolSearch: string;
 			worktree: string; // Git branch management panel
 			diff: string;
