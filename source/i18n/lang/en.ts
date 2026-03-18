@@ -576,7 +576,7 @@ export const en: TranslationKeys = {
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			autoFormat:
-				'Toggle MCP file auto-formatting. Usage: /auto-format [on|off|status]',
+				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			worktree:

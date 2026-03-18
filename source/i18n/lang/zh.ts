@@ -536,7 +536,7 @@ export const zh: TranslationKeys = {
 			profiles: '打开配置文件切换面板',
 			models: '打开模型切换面板',
 			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
-			autoFormat: '切换 MCP 文件自动格式化。用法: /auto-format [on|off|status]',
+			autoFormat: '文件编辑后自动格式化开关。用法: /auto-format [on|off|status]',
 			toolSearch: '切换工具搜索（渐进式工具加载）。默认启用以节省上下文',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
