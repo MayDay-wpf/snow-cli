@@ -25,6 +25,11 @@ _Agentic coding in your terminal_
 
 ![alt text](docs/images/image.png)
 
+## Thanks to the community
+<a href="https://linux.do">
+  <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
+</a>
+
 ## Documentation
 
 - [Installation Guide](docs/usage/en/01.Installation%20Guide.md) - System requirements, installation (update, uninstall) steps, IDE extension installation
