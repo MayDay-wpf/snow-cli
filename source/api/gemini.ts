@@ -7,6 +7,8 @@ import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
+	isOverloadedResponse,
+	createOverloadedApiError,
 } from '../utils/core/retryUtils.js';
 import {
 	createIdleTimeoutGuard,
@@ -389,14 +391,24 @@ function convertToGeminiMessages(
 			contents.unshift({
 				role: 'user',
 				parts: [
-					{text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled)},
+					{
+						text: getSystemPromptForMode(
+							planMode,
+							vulnerabilityHuntingMode,
+							toolSearchDisabled,
+						),
+					},
 				],
 			});
 		}
 	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemInstruction = [
-			getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
+			getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+				toolSearchDisabled,
+			),
 		];
 	}
 
@@ -550,6 +562,16 @@ export async function* createStreamingGeminiCompletion(
 
 			if (!response.ok) {
 				const errorText = await response.text();
+				if (
+					isOverloadedResponse(response.status, response.statusText, errorText)
+				) {
+					throw createOverloadedApiError(
+						'Gemini API',
+						response.status,
+						response.statusText,
+						errorText,
+					);
+				}
 				throw new Error(
 					`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
 				);

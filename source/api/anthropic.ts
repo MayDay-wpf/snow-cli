@@ -9,6 +9,8 @@ import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
+	isOverloadedResponse,
+	createOverloadedApiError,
 } from '../utils/core/retryUtils.js';
 import {
 	createIdleTimeoutGuard,
@@ -422,7 +424,11 @@ function convertToAnthropicMessages(
 				content: [
 					{
 						type: 'text',
-						text: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
+						text: getSystemPromptForMode(
+							planMode,
+							vulnerabilityHuntingMode,
+							toolSearchDisabled,
+						),
 						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
 				] as any,
@@ -431,7 +437,11 @@ function convertToAnthropicMessages(
 	} else if (!systemContents && includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
 		systemContents = [
-			getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
+			getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+				toolSearchDisabled,
+			),
 		];
 	}
 
@@ -788,6 +798,16 @@ export async function* createStreamingAnthropicCompletion(
 
 			if (!response.ok) {
 				const errorText = await response.text();
+				if (
+					isOverloadedResponse(response.status, response.statusText, errorText)
+				) {
+					throw createOverloadedApiError(
+						'Anthropic API',
+						response.status,
+						response.statusText,
+						errorText,
+					);
+				}
 				throw new Error(
 					`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`,
 				);
@@ -920,15 +940,18 @@ export async function* createStreamingAnthropicCompletion(
 					}
 				} else if (event.type === 'message_start') {
 					if (event.message.usage) {
-						const cacheCreation = (event.message.usage as any).cache_creation_input_tokens || 0;
-						const cacheRead = (event.message.usage as any).cache_read_input_tokens || 0;
+						const cacheCreation =
+							(event.message.usage as any).cache_creation_input_tokens || 0;
+						const cacheRead =
+							(event.message.usage as any).cache_read_input_tokens || 0;
 						usageData = {
 							prompt_tokens: event.message.usage.input_tokens || 0,
 							completion_tokens: event.message.usage.output_tokens || 0,
 							total_tokens:
 								(event.message.usage.input_tokens || 0) +
 								(event.message.usage.output_tokens || 0) +
-								cacheCreation + cacheRead,
+								cacheCreation +
+								cacheRead,
 							cache_creation_input_tokens: cacheCreation || undefined,
 							cache_read_input_tokens: cacheRead || undefined,
 						};

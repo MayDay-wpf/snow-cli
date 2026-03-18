@@ -261,6 +261,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
 					streaming: false,
+					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}
@@ -690,6 +691,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
 					streaming: false,
+					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}

@@ -1,5 +1,6 @@
 import React, {useMemo} from 'react';
 import {Box, Text} from 'ink';
+import {highlight} from 'cli-highlight';
 import * as Diff from 'diff';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
@@ -41,6 +42,66 @@ function stripLineNumbers(content: string): string {
 // Minimum terminal width for side-by-side view (each side needs ~60 chars minimum)
 const MIN_SIDE_BY_SIDE_WIDTH = 120;
 
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+	js: 'javascript',
+	jsx: 'javascript',
+	mjs: 'javascript',
+	cjs: 'javascript',
+	ts: 'typescript',
+	tsx: 'typescript',
+	json: 'json',
+	md: 'markdown',
+	yml: 'yaml',
+	yaml: 'yaml',
+	sh: 'bash',
+	zsh: 'bash',
+	bash: 'bash',
+	py: 'python',
+	rb: 'ruby',
+	rs: 'rust',
+	go: 'go',
+	java: 'java',
+	kt: 'kotlin',
+	swift: 'swift',
+	html: 'html',
+	xml: 'xml',
+	css: 'css',
+	scss: 'scss',
+	less: 'less',
+	sql: 'sql',
+	php: 'php',
+};
+
+function inferLanguageFromFilename(filename?: string): string | undefined {
+	if (!filename) {
+		return undefined;
+	}
+
+	const normalizedFilename = filename.split(/[?#]/)[0] ?? filename;
+	const extension = normalizedFilename.split('.').pop()?.toLowerCase();
+
+	if (!extension || extension === normalizedFilename.toLowerCase()) {
+		return undefined;
+	}
+
+	return LANGUAGE_BY_EXTENSION[extension] ?? extension;
+}
+
+function highlightCodeContent(content: string, language?: string): string {
+	if (!language || content.trim() === '') {
+		return content;
+	}
+
+	try {
+		return highlight(content, {
+			language,
+			ignoreIllegals: true,
+		});
+	} catch {
+		return content;
+	}
+}
+
 export default function DiffViewer({
 	oldContent = '',
 	newContent,
@@ -51,6 +112,7 @@ export default function DiffViewer({
 }: Props) {
 	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
+	const codeLanguage = inferLanguageFromFilename(filename);
 
 	// Use side-by-side view when terminal is wide enough
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
@@ -63,6 +125,36 @@ export default function DiffViewer({
 	const diffNewContent = useCompleteContent
 		? completeNewContent
 		: stripLineNumbers(newContent);
+
+	function renderHighlightedLine({
+		key,
+		prefix,
+		content,
+		backgroundColor,
+		color,
+		dimColor = false,
+	}: {
+		key: React.Key;
+		prefix: string;
+		content: string;
+		backgroundColor?: string;
+		color?: string;
+		dimColor?: boolean;
+	}): React.ReactElement {
+		const highlightedContent = highlightCodeContent(content, codeLanguage);
+
+		return (
+			<Text
+				key={key}
+				color={color}
+				backgroundColor={backgroundColor}
+				dimColor={dimColor}
+			>
+				{prefix}
+				{highlightedContent}
+			</Text>
+		);
+	}
 
 	// If no old content, show as new file creation
 	const isNewFile = !diffOldContent || diffOldContent.trim() === '';
@@ -89,15 +181,15 @@ export default function DiffViewer({
 					)}
 				</Box>
 				<Box flexDirection="column">
-					{allLines.map((line, index) => (
-						<Text
-							key={index}
-							color="white"
-							backgroundColor={theme.colors.diffAdded}
-						>
-							+ {line}
-						</Text>
-					))}
+					{allLines.map((line, index) =>
+						renderHighlightedLine({
+							key: index,
+							prefix: '+ ',
+							content: line,
+							backgroundColor: theme.colors.diffAdded,
+							color: 'white',
+						}),
+					)}
 				</Box>
 			</Box>
 		);
@@ -105,7 +197,7 @@ export default function DiffViewer({
 		isNewFile,
 		diffNewContent,
 		filename,
-		theme.colors.text,
+		codeLanguage,
 		theme.colors.diffAdded,
 	]);
 
@@ -356,14 +448,14 @@ export default function DiffViewer({
 				pair.left.type === 'removed'
 					? '-'
 					: pair.left.type === 'unchanged'
-					? ' '
-					: ' ';
+						? ' '
+						: ' ';
 			const rightSign =
 				pair.right.type === 'added'
 					? '+'
 					: pair.right.type === 'unchanged'
-					? ' '
-					: ' ';
+						? ' '
+						: ' ';
 
 			const leftContent = cleanContent(pair.left.content);
 			const rightContent = cleanContent(pair.right.content);
@@ -418,15 +510,16 @@ export default function DiffViewer({
 					<Box key={line.idx} flexDirection="row">
 						{/* Left panel (OLD) */}
 						<Box width={panelWidth}>
-							{line.leftType === 'removed' ? (
-								<Text color="white" backgroundColor={theme.colors.diffRemoved}>
-									{line.leftLineNum} {line.leftSign} {line.leftContent}
-								</Text>
-							) : (
-								<Text>
-									{line.leftLineNum} {line.leftSign} {line.leftContent}
-								</Text>
-							)}
+							{renderHighlightedLine({
+								key: `left-${line.idx}`,
+								prefix: `${line.leftLineNum} ${line.leftSign} `,
+								content: line.leftContent,
+								backgroundColor:
+									line.leftType === 'removed'
+										? theme.colors.diffRemoved
+										: undefined,
+								color: line.leftType === 'removed' ? 'white' : undefined,
+							})}
 						</Box>
 						{/* Center separator */}
 						<Box width={separatorWidth}>
@@ -434,15 +527,16 @@ export default function DiffViewer({
 						</Box>
 						{/* Right panel (NEW) */}
 						<Box width={panelWidth}>
-							{line.rightType === 'added' ? (
-								<Text color="white" backgroundColor={theme.colors.diffAdded}>
-									{line.rightLineNum} {line.rightSign} {line.rightContent}
-								</Text>
-							) : (
-								<Text>
-									{line.rightLineNum} {line.rightSign} {line.rightContent}
-								</Text>
-							)}
+							{renderHighlightedLine({
+								key: `right-${line.idx}`,
+								prefix: `${line.rightLineNum} ${line.rightSign} `,
+								content: line.rightContent,
+								backgroundColor:
+									line.rightType === 'added'
+										? theme.colors.diffAdded
+										: undefined,
+								color: line.rightType === 'added' ? 'white' : undefined,
+							})}
 						</Box>
 					</Box>
 				))}
@@ -468,35 +562,32 @@ export default function DiffViewer({
 						: '    ';
 
 					if (change.type === 'added') {
-						return (
-							<Text
-								key={changeIndex}
-								color="white"
-								backgroundColor={theme.colors.diffAdded}
-							>
-								{lineNumStr} + {change.content}
-							</Text>
-						);
+						return renderHighlightedLine({
+							key: changeIndex,
+							prefix: `${lineNumStr} + `,
+							content: change.content,
+							backgroundColor: theme.colors.diffAdded,
+							color: 'white',
+						});
 					}
 
 					if (change.type === 'removed') {
-						return (
-							<Text
-								key={changeIndex}
-								color="white"
-								backgroundColor={theme.colors.diffRemoved}
-							>
-								{lineNumStr} - {change.content}
-							</Text>
-						);
+						return renderHighlightedLine({
+							key: changeIndex,
+							prefix: `${lineNumStr} - `,
+							content: change.content,
+							backgroundColor: theme.colors.diffRemoved,
+							color: 'white',
+						});
 					}
 
 					// Unchanged lines (context)
-					return (
-						<Text key={changeIndex} dimColor>
-							{lineNumStr} {change.content}
-						</Text>
-					);
+					return renderHighlightedLine({
+						key: changeIndex,
+						prefix: `${lineNumStr} `,
+						content: change.content,
+						dimColor: true,
+					});
 				})}
 			</Box>
 		);

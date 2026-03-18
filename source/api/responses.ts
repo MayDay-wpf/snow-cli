@@ -7,6 +7,8 @@ import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
+	isOverloadedResponse,
+	createOverloadedApiError,
 } from '../utils/core/retryUtils.js';
 import {
 	createIdleTimeoutGuard,
@@ -346,7 +348,11 @@ function convertToResponseInput(
 						type: 'input_text',
 						text:
 							'<environment_context>' +
-							getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled) +
+							getSystemPromptForMode(
+								planMode,
+								vulnerabilityHuntingMode,
+								toolSearchDisabled,
+							) +
 							'</environment_context>',
 					},
 				],
@@ -628,6 +634,16 @@ export async function* createStreamingResponse(
 
 			if (!response.ok) {
 				const errorText = await response.text();
+				if (
+					isOverloadedResponse(response.status, response.statusText, errorText)
+				) {
+					throw createOverloadedApiError(
+						'OpenAI Responses API',
+						response.status,
+						response.statusText,
+						errorText,
+					);
+				}
 				throw new Error(
 					`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
 				);
@@ -783,9 +799,18 @@ export async function* createStreamingResponse(
 					// 响应失败或取消
 					const error = chunk.error;
 					if (error) {
-						throw new Error(
-							`Response failed: ${error.message || 'Unknown error'}`,
-						);
+						const responseErrorMessage = error.message || 'Unknown error';
+						if (
+							isOverloadedResponse(undefined, undefined, responseErrorMessage)
+						) {
+							throw createOverloadedApiError(
+								'OpenAI Responses API',
+								undefined,
+								undefined,
+								responseErrorMessage,
+							);
+						}
+						throw new Error(`Response failed: ${responseErrorMessage}`);
 					}
 					break;
 				}

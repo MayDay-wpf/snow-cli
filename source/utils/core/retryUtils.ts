@@ -44,10 +44,91 @@ async function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
 	});
 }
 
+function normalizeErrorText(
+	...parts: Array<string | number | undefined | null>
+): string {
+	return parts
+		.map(part =>
+			String(part ?? '')
+				.trim()
+				.toLowerCase(),
+		)
+		.filter(Boolean)
+		.join('\n');
+}
+
+function extractErrorSummary(errorText?: string): string | undefined {
+	const trimmed = errorText?.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+
+	const parseResult = parseJsonWithFix(trimmed, {
+		toolName: 'API error response',
+		logWarning: false,
+		logError: false,
+	});
+
+	if (parseResult.success) {
+		const data = parseResult.data as any;
+		const summary =
+			data?.error?.message ||
+			data?.error?.detail ||
+			data?.message ||
+			data?.detail ||
+			data?.title;
+		if (typeof summary === 'string' && summary.trim()) {
+			return summary.trim();
+		}
+	}
+
+	return trimmed.replace(/\s+/g, ' ').slice(0, 200);
+}
+
+export function isOverloadedResponse(
+	status?: number,
+	statusText?: string,
+	errorText?: string,
+): boolean {
+	if (status === 529) {
+		return true;
+	}
+
+	const normalizedText = normalizeErrorText(statusText, errorText);
+	return normalizedText.includes('overloaded');
+}
+
+export function isOverloadedError(error: Error): boolean {
+	return isOverloadedResponse(undefined, undefined, error.message);
+}
+
+export function createOverloadedApiError(
+	provider: string,
+	status?: number,
+	statusText?: string,
+	errorText?: string,
+): Error {
+	const statusLabel = status
+		? ` (${status}${statusText ? ` ${statusText}` : ''})`
+		: '';
+	const summary = extractErrorSummary(errorText);
+	const detailLabel =
+		summary && !/\boverloaded\b/i.test(summary) ? ` Details: ${summary}` : '';
+
+	return new Error(
+		`${provider} is overloaded. Request was not retried; please try again later.${statusLabel}${detailLabel}`,
+	);
+}
+
 /**
  * 判断错误是否可重试
  */
 function isRetriableError(error: Error): boolean {
+	// Overloaded 需要立即反馈给用户,不能进入自动重试
+	if (isOverloadedError(error)) {
+		return false;
+	}
+
 	// 优先通过错误名称判定,降低对 message 内容的依赖
 	if (error.name === 'StreamIdleTimeoutError') {
 		return true;
@@ -92,10 +173,7 @@ function isRetriableError(error: Error): boolean {
 	}
 
 	// Temporary service unavailable
-	if (
-		errorMessage.includes('overloaded') ||
-		errorMessage.includes('unavailable')
-	) {
+	if (errorMessage.includes('unavailable')) {
 		return true;
 	}
 
