@@ -76,6 +76,18 @@ export const RECENT_FILE_THRESHOLD = 24 * 60 * 60 * 1000;
 export const MAX_FILE_CACHE_SIZE = 50;
 
 /**
+ * Maximum cache size for file stat cache
+ * Prevents recency sorting cache from growing without bound
+ */
+export const MAX_FILE_STAT_CACHE_SIZE = 500;
+
+/**
+ * Idle lifetime for ACE in-memory caches (2 minutes)
+ * Releases symbol indexes and other transient search data when unused
+ */
+export const ACE_IDLE_CLEANUP_MS = 2 * 60 * 1000;
+
+/**
  * Maximum number of files kept in the semantic symbol index
  * Prevents ace-semantic_search from exhausting memory on very large workspaces
  */

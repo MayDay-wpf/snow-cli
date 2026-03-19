@@ -37,12 +37,12 @@ import {
 	expandGlobBraces,
 	isSafeRegexPattern,
 	processWithConcurrency,
-	createTimeoutPromise,
 } from './utils/aceCodeSearch/search.utils.js';
 import {
 	INDEX_CACHE_DURATION,
 	BATCH_SIZE,
 	BINARY_EXTENSIONS,
+	GREP_EXCLUDE_DIRS,
 	MAX_INDEXED_FILES,
 	MAX_SYMBOLS_PER_FILE,
 	MAX_FZF_SYMBOL_NAMES,
@@ -51,6 +51,9 @@ import {
 	TEXT_SEARCH_TIMEOUT_MS,
 	MAX_CONCURRENT_FILE_READS,
 	MAX_REGEX_COMPLEXITY_SCORE,
+	RECENT_FILE_THRESHOLD,
+	MAX_FILE_STAT_CACHE_SIZE,
+	ACE_IDLE_CLEANUP_MS,
 } from './utils/aceCodeSearch/constants.utils.js';
 
 export class ACECodeSearchService {
@@ -66,6 +69,33 @@ export class ACECodeSearchService {
 
 	// Serialize index rebuilds across concurrent/re-entrant tool calls
 	private indexBuildQueue: Promise<void> = Promise.resolve();
+
+	// 文件内容缓存（用于减少重复读取）
+	private fileContentCache: Map<string, {content: string; mtime: number}> =
+		new Map();
+	// 正则表达式缓存（用于 shouldExcludeDirectory）
+	private regexCache: Map<string, RegExp> = new Map();
+
+	// 命令可用性缓存（避免重复 spawn which 进程）
+	private commandAvailabilityCache: Map<string, boolean> = new Map();
+	// Git 仓库状态缓存
+	private isGitRepoCache: boolean | null = null;
+	// 文件修改时间缓存（用于 sortResultsByRecency）
+	private fileStatCache: Map<string, {mtimeMs: number; cachedAt: number}> =
+		new Map();
+	private static readonly STAT_CACHE_TTL = 60 * 1000; // 60秒过期
+	private idleCleanupTimer: NodeJS.Timeout | undefined;
+	private isDisposed = false;
+	private readonly idleCleanupMs: number;
+
+	constructor(
+		basePath: string = process.cwd(),
+		options?: {idleCleanupMs?: number},
+	) {
+		this.basePath = path.resolve(basePath);
+		this.idleCleanupMs = options?.idleCleanupMs ?? ACE_IDLE_CLEANUP_MS;
+		this.scheduleIdleCleanup();
+	}
 
 	private async withIndexBuildLock<T>(fn: () => Promise<T>): Promise<T> {
 		const next = this.indexBuildQueue.then(fn, fn);
@@ -84,23 +114,90 @@ export class ACECodeSearchService {
 		this.isIndexTruncated = true;
 	}
 
-	// 文件内容缓存（用于减少重复读取）
-	private fileContentCache: Map<string, {content: string; mtime: number}> =
-		new Map();
-	// 正则表达式缓存（用于 shouldExcludeDirectory）
-	private regexCache: Map<string, RegExp> = new Map();
+	private ensureNotDisposed(): void {
+		if (this.isDisposed) {
+			throw new Error('ACECodeSearchService has been disposed');
+		}
+	}
 
-	// 命令可用性缓存（避免重复 spawn which 进程）
-	private commandAvailabilityCache: Map<string, boolean> = new Map();
-	// Git 仓库状态缓存
-	private isGitRepoCache: boolean | null = null;
-	// 文件修改时间缓存（用于 sortResultsByRecency）
-	private fileStatCache: Map<string, {mtimeMs: number; cachedAt: number}> =
-		new Map();
-	private static readonly STAT_CACHE_TTL = 60 * 1000; // 60秒过期
+	private scheduleIdleCleanup(): void {
+		if (this.isDisposed || this.idleCleanupMs <= 0) {
+			return;
+		}
 
-	constructor(basePath: string = process.cwd()) {
-		this.basePath = path.resolve(basePath);
+		if (this.idleCleanupTimer) {
+			clearTimeout(this.idleCleanupTimer);
+		}
+
+		this.idleCleanupTimer = setTimeout(() => {
+			if (this.isDisposed) {
+				return;
+			}
+
+			logger.debug(
+				`ACECodeSearchService idle cleanup triggered for ${this.basePath}`,
+			);
+			this.clearCaches({preserveExclusions: true, preserveCommandCache: true});
+		}, this.idleCleanupMs);
+		this.idleCleanupTimer.unref?.();
+	}
+
+	private markActivity(): void {
+		this.ensureNotDisposed();
+		this.scheduleIdleCleanup();
+	}
+
+	private trimFileStatCache(): void {
+		const overflow = this.fileStatCache.size - MAX_FILE_STAT_CACHE_SIZE;
+		if (overflow <= 0) {
+			return;
+		}
+
+		const entries = Array.from(this.fileStatCache.entries()).sort(
+			(a, b) => a[1].cachedAt - b[1].cachedAt,
+		);
+		for (let i = 0; i < overflow; i++) {
+			const filePath = entries[i]?.[0];
+			if (filePath) {
+				this.fileStatCache.delete(filePath);
+			}
+		}
+	}
+
+	private clearCaches(options?: {
+		preserveExclusions?: boolean;
+		preserveCommandCache?: boolean;
+	}): void {
+		this.indexCache.clear();
+		this.fileModTimes.clear();
+		this.allIndexedFiles.clear();
+		this.fileContentCache.clear();
+		this.fileStatCache.clear();
+		this.fzfIndex = undefined;
+		this.lastIndexTime = 0;
+		this.isIndexTruncated = false;
+		this.indexBuildQueue = Promise.resolve();
+
+		if (!options?.preserveExclusions) {
+			this.customExcludes = [];
+			this.excludesLoaded = false;
+			this.regexCache.clear();
+		}
+
+		if (!options?.preserveCommandCache) {
+			this.commandAvailabilityCache.clear();
+			this.isGitRepoCache = null;
+		}
+	}
+
+	dispose(): void {
+		if (this.idleCleanupTimer) {
+			clearTimeout(this.idleCleanupTimer);
+			this.idleCleanupTimer = undefined;
+		}
+
+		this.clearCaches();
+		this.isDisposed = true;
 	}
 
 	/**
@@ -226,6 +323,8 @@ export class ACECodeSearchService {
 	 * Build or refresh the code symbol index with incremental updates
 	 */
 	private async buildIndex(forceRefresh: boolean = false): Promise<void> {
+		this.markActivity();
+
 		return this.withIndexBuildLock(async () => {
 			const now = Date.now();
 
@@ -243,12 +342,10 @@ export class ACECodeSearchService {
 
 			// For force refresh, clear everything
 			if (forceRefresh) {
-				this.indexCache.clear();
-				this.fileModTimes.clear();
-				this.allIndexedFiles.clear();
-				this.fileContentCache.clear();
-				this.fzfIndex = undefined;
-				this.isIndexTruncated = false;
+				this.clearCaches({
+					preserveExclusions: true,
+					preserveCommandCache: true,
+				});
 			}
 
 			const filesToProcess: string[] = [];
@@ -357,6 +454,7 @@ export class ACECodeSearchService {
 						} catch {
 							this.indexCache.delete(fullPath);
 							this.fileModTimes.delete(fullPath);
+							this.fileContentCache.delete(fullPath);
 						}
 					}),
 				);
@@ -418,6 +516,7 @@ export class ACECodeSearchService {
 		language?: string,
 		maxResults: number = 100,
 	): Promise<SemanticSearchResult> {
+		this.markActivity();
 		const startTime = Date.now();
 		await this.buildIndex();
 		await this.indexBuildQueue;
@@ -599,6 +698,7 @@ export class ACECodeSearchService {
 		symbolName: string,
 		maxResults: number = 100,
 	): Promise<CodeReference[]> {
+		this.markActivity();
 		const references: CodeReference[] = [];
 
 		// Load exclusion patterns
@@ -740,6 +840,7 @@ export class ACECodeSearchService {
 		symbolName: string,
 		contextFile?: string,
 	): Promise<CodeSymbol | null> {
+		this.markActivity();
 		await this.buildIndex();
 		await this.indexBuildQueue;
 
@@ -786,28 +887,23 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
-		// Set timeout to prevent hanging
+		this.markActivity();
 		const timeoutMs = 15000;
 
 		return new Promise((resolve, reject) => {
 			const args = ['grep', '--untracked', '-n', '--ignore-case'];
 
-			// Use fixed-strings for literal search, extended regex for pattern search
 			if (isRegex) {
-				args.push('-E'); // Extended regex
+				args.push('-E');
 			} else {
-				args.push('--fixed-strings'); // Literal string matching
+				args.push('--fixed-strings');
 			}
 
 			args.push(pattern);
 
 			if (fileGlob) {
-				// Normalize path separators for Windows compatibility
-				let gitGlob = fileGlob.replace(/\\\\/g, '/');
-				// Convert ** to * as git grep has limited ** support
+				let gitGlob = fileGlob.replace(/\\/g, '/');
 				gitGlob = gitGlob.replace(/\*\*/g, '*');
-
-				// Expand glob patterns with braces (e.g., "source/*.{ts,tsx}" -> ["source/*.ts", "source/*.tsx"])
 				const expandedGlobs = expandGlobBraces(gitGlob);
 				args.push('--', ...expandedGlobs);
 			}
@@ -816,59 +912,71 @@ export class ACECodeSearchService {
 				cwd: this.basePath,
 				windowsHide: true,
 			});
-
-			// Register child process for cleanup
 			processManager.register(child);
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
 			let isCompleted = false;
 
-			// Set up timeout to prevent hanging
-			const timeoutId = setTimeout(() => {
-				if (!isCompleted) {
-					isCompleted = true;
+			const finalize = (
+				handler: () => void,
+				killProcess: boolean = false,
+			): void => {
+				if (isCompleted) {
+					return;
+				}
+
+				isCompleted = true;
+				clearTimeout(timeoutId);
+				child.stdout.removeAllListeners();
+				child.stderr.removeAllListeners();
+				child.removeAllListeners('error');
+				child.removeAllListeners('close');
+
+				if (killProcess && !child.killed) {
 					child.kill('SIGTERM');
+				}
+
+				handler();
+				stdoutChunks.length = 0;
+				stderrChunks.length = 0;
+			};
+
+			const timeoutId = setTimeout(() => {
+				finalize(() => {
 					logger.warn(
 						`git grep timed out after ${timeoutMs}ms, killing process`,
 					);
 					reject(new Error(`git grep timed out after ${timeoutMs}ms`));
-				}
+				}, true);
 			}, timeoutMs);
+			timeoutId.unref?.();
 
 			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
 			child.stderr.on('data', chunk => stderrChunks.push(chunk));
 
-			child.on('error', err => {
-				if (!isCompleted) {
-					isCompleted = true;
-					clearTimeout(timeoutId);
+			child.once('error', err => {
+				finalize(() => {
 					reject(new Error(`Failed to start git grep: ${err.message}`));
-				}
+				});
 			});
 
-			child.on('close', code => {
-				if (!isCompleted) {
-					isCompleted = true;
-					clearTimeout(timeoutId);
+			child.once('close', code => {
+				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
 
-					const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
-					const stderrData = Buffer.concat(stderrChunks)
-						.toString('utf8')
-						.trim();
-
+				finalize(() => {
 					if (code === 0) {
 						const results = parseGrepOutput(stdoutData, this.basePath);
 						resolve(results.slice(0, maxResults));
 					} else if (code === 1) {
-						// No matches found
 						resolve([]);
 					} else {
 						reject(
 							new Error(`git grep exited with code ${code}: ${stderrData}`),
 						);
 					}
-				}
+				});
 			});
 		});
 	}
@@ -885,8 +993,8 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		this.markActivity();
 		const isRipgrep = grepCommand === 'rg';
-		// Set timeout for all commands to prevent hanging
 		const timeoutMs = 15000;
 
 		return new Promise((resolve, reject) => {
@@ -894,36 +1002,17 @@ export class ACECodeSearchService {
 				? ['-n', '-i', '--no-heading']
 				: ['-r', '-n', '-H', '-E', '-i'];
 
-			// Add exclusion patterns
-			const excludeDirs = [
-				'node_modules',
-				'.git',
-				'dist',
-				'build',
-				'__pycache__',
-				'target',
-				'.next',
-				'.nuxt',
-				'coverage',
-			];
-
 			if (isRipgrep) {
-				// Ripgrep uses --glob for filtering
-				excludeDirs.forEach(dir => args.push('--glob', `!${dir}/`));
+				GREP_EXCLUDE_DIRS.forEach(dir => args.push('--glob', `!${dir}/`));
 				if (fileGlob) {
-					// Normalize path separators for Windows compatibility
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
-					// Expand glob patterns with braces
 					const expandedGlobs = expandGlobBraces(normalizedGlob);
 					expandedGlobs.forEach(glob => args.push('--glob', glob));
 				}
 			} else {
-				// System grep uses --exclude-dir
-				excludeDirs.forEach(dir => args.push(`--exclude-dir=${dir}`));
+				GREP_EXCLUDE_DIRS.forEach(dir => args.push(`--exclude-dir=${dir}`));
 				if (fileGlob) {
-					// Normalize path separators for Windows compatibility
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
-					// Expand glob patterns with braces
 					const expandedGlobs = expandGlobBraces(normalizedGlob);
 					expandedGlobs.forEach(glob => args.push(`--include=${glob}`));
 				}
@@ -935,30 +1024,49 @@ export class ACECodeSearchService {
 				windowsHide: true,
 				stdio: ['ignore', 'pipe', 'pipe'],
 			});
-
-			// Register child process for cleanup
 			processManager.register(child);
 
 			const stdoutChunks: Buffer[] = [];
 			const stderrChunks: Buffer[] = [];
 			let isCompleted = false;
 
-			// Set up timeout to prevent hanging
-			const timeoutId = setTimeout(() => {
-				if (!isCompleted) {
-					isCompleted = true;
+			const finalize = (
+				handler: () => void,
+				killProcess: boolean = false,
+			): void => {
+				if (isCompleted) {
+					return;
+				}
+
+				isCompleted = true;
+				clearTimeout(timeoutId);
+				child.stdout.removeAllListeners();
+				child.stderr.removeAllListeners();
+				child.removeAllListeners('error');
+				child.removeAllListeners('close');
+
+				if (killProcess && !child.killed) {
 					child.kill('SIGTERM');
+				}
+
+				handler();
+				stdoutChunks.length = 0;
+				stderrChunks.length = 0;
+			};
+
+			const timeoutId = setTimeout(() => {
+				finalize(() => {
 					logger.warn(
 						`${grepCommand} timed out after ${timeoutMs}ms, killing process`,
 					);
 					reject(new Error(`${grepCommand} timed out after ${timeoutMs}ms`));
-				}
+				}, true);
 			}, timeoutMs);
+			timeoutId.unref?.();
 
 			child.stdout.on('data', chunk => stdoutChunks.push(chunk));
 			child.stderr.on('data', chunk => {
 				const stderrStr = chunk.toString();
-				// Suppress common harmless stderr messages
 				if (
 					!stderrStr.includes('Permission denied') &&
 					!/grep:.*: Is a directory/i.test(stderrStr)
@@ -967,29 +1075,21 @@ export class ACECodeSearchService {
 				}
 			});
 
-			child.on('error', err => {
-				if (!isCompleted) {
-					isCompleted = true;
-					clearTimeout(timeoutId);
+			child.once('error', err => {
+				finalize(() => {
 					reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
-				}
+				});
 			});
 
-			child.on('close', code => {
-				if (!isCompleted) {
-					isCompleted = true;
-					clearTimeout(timeoutId);
+			child.once('close', code => {
+				const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
+				const stderrData = Buffer.concat(stderrChunks).toString('utf8').trim();
 
-					const stdoutData = Buffer.concat(stdoutChunks).toString('utf8');
-					const stderrData = Buffer.concat(stderrChunks)
-						.toString('utf8')
-						.trim();
-
+				finalize(() => {
 					if (code === 0) {
 						const results = parseGrepOutput(stdoutData, this.basePath);
 						resolve(results.slice(0, maxResults));
 					} else if (code === 1) {
-						// No matches found
 						resolve([]);
 					} else if (stderrData) {
 						reject(
@@ -998,10 +1098,9 @@ export class ACECodeSearchService {
 							),
 						);
 					} else {
-						// Exit code > 1 but no stderr, likely just suppressed errors
 						resolve([]);
 					}
-				}
+				});
 			});
 		});
 	}
@@ -1049,6 +1148,7 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		this.markActivity();
 		const results: Array<{
 			filePath: string;
 			line: number;
@@ -1241,6 +1341,8 @@ export class ACECodeSearchService {
 		maxResults: number,
 		isAborted: () => boolean,
 	): Promise<void> {
+		this.markActivity();
+
 		return new Promise(resolve => {
 			const stream = createReadStream(fileInfo.fullPath, {
 				highWaterMark: FILE_READ_CHUNK_SIZE,
@@ -1253,24 +1355,31 @@ export class ACECodeSearchService {
 			});
 
 			let lineNumber = 0;
-			let hasError = false;
+			let isResolved = false;
+
+			const finalize = (): void => {
+				if (isResolved) {
+					return;
+				}
+
+				isResolved = true;
+				rl.removeAllListeners();
+				stream.removeAllListeners();
+				stream.destroy();
+				resolve();
+			};
 
 			rl.on('line', (line: string) => {
-				if (hasError || isAborted() || results.length >= maxResults) {
+				if (isAborted() || results.length >= maxResults) {
 					rl.close();
-					stream.destroy();
 					return;
 				}
 
 				lineNumber++;
-
-				// Skip empty lines for efficiency
 				if (!line) return;
 
-				// Reset regex for each line
 				searchRegex.lastIndex = 0;
 				const match = searchRegex.exec(line);
-
 				if (match) {
 					results.push({
 						filePath: fileInfo.relativePath,
@@ -1281,24 +1390,19 @@ export class ACECodeSearchService {
 				}
 			});
 
-			rl.on('close', () => {
-				resolve();
-			});
-
-			rl.on('error', (err: Error) => {
-				hasError = true;
+			rl.once('close', finalize);
+			rl.once('error', (err: Error) => {
 				logger.info(
 					`Error reading large file ${fileInfo.relativePath}: ${err.message}`,
 				);
-				resolve(); // Resolve gracefully to skip this file
+				finalize();
 			});
 
-			stream.on('error', (err: Error) => {
-				hasError = true;
+			stream.once('error', (err: Error) => {
 				logger.info(
 					`Stream error for ${fileInfo.relativePath}: ${err.message}`,
 				);
-				resolve(); // Resolve gracefully to skip this file
+				finalize();
 			});
 		});
 	}
@@ -1320,22 +1424,29 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
-		// Wrap the entire search with timeout protection
-		const searchPromise = this.executeTextSearch(
-			pattern,
-			fileGlob,
-			isRegex,
-			maxResults,
-		);
+		this.markActivity();
+		const timeoutMs = TEXT_SEARCH_TIMEOUT_MS;
 
-		// Race against timeout
-		return Promise.race([
-			searchPromise,
-			createTimeoutPromise(
-				TEXT_SEARCH_TIMEOUT_MS,
-				`Text search exceeded ${TEXT_SEARCH_TIMEOUT_MS}ms timeout. Try using a more specific pattern or fileGlob filter.`,
-			),
-		]);
+		return new Promise((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				reject(
+					new Error(
+						`Text search exceeded ${timeoutMs}ms timeout. Try using a more specific pattern or fileGlob filter.`,
+					),
+				);
+			}, timeoutMs);
+			timeoutId.unref?.();
+
+			this.executeTextSearch(pattern, fileGlob, isRegex, maxResults)
+				.then(result => {
+					clearTimeout(timeoutId);
+					resolve(result);
+				})
+				.catch(error => {
+					clearTimeout(timeoutId);
+					reject(error);
+				});
+		});
 	}
 
 	/**
@@ -1355,6 +1466,7 @@ export class ACECodeSearchService {
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
+		this.markActivity();
 		// Check command availability once (cached)
 		const [isGitRepo, gitAvailable, rgAvailable, grepAvailable] =
 			await Promise.all([
@@ -1442,7 +1554,7 @@ export class ACECodeSearchService {
 		if (results.length === 0) return results;
 
 		const now = Date.now();
-		const recentThreshold = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+		const recentThreshold = RECENT_FILE_THRESHOLD;
 
 		// Get unique file paths
 		const uniqueFiles = Array.from(new Set(results.map(r => r.filePath)));
@@ -1480,6 +1592,7 @@ export class ACECodeSearchService {
 					const mtimeMs = result.value.mtimeMs;
 					fileModTimes.set(filePath, mtimeMs);
 					this.fileStatCache.set(filePath, {mtimeMs, cachedAt: now});
+					this.trimFileStatCache();
 				} else {
 					// If we can't get stats, treat as old file
 					fileModTimes.set(filePath, 0);
@@ -1519,6 +1632,7 @@ export class ACECodeSearchService {
 			symbolTypes?: SymbolType[];
 		},
 	): Promise<CodeSymbol[]> {
+		this.markActivity();
 		// Check if this is a remote SSH path
 		const isRemote = this.isSSHPath(filePath);
 		let content: string;
@@ -1593,6 +1707,7 @@ export class ACECodeSearchService {
 		symbolType?: CodeSymbol['type'],
 		maxResults: number = 50,
 	): Promise<SemanticSearchResult> {
+		this.markActivity();
 		const startTime = Date.now();
 
 		// Get symbol search results

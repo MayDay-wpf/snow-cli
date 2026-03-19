@@ -270,6 +270,7 @@ export class HybridCodeSearchService {
 	}
 
 	async dispose(): Promise<void> {
+		this.regexSearch.dispose();
 		await this.lspManager.dispose();
 	}
 }
