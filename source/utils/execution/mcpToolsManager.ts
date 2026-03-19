@@ -33,6 +33,7 @@ import {
 import {getDisabledSkills} from '../config/disabledSkills.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
+import {HookFailedError} from './hookFailedError.js';
 import os from 'os';
 import path from 'path';
 
@@ -1784,25 +1785,21 @@ export async function executeMCPTool(
 							}
 						}
 					} else if (exitCode >= 2 || exitCode < 0) {
-						// Exit code 2+: Critical error - throw exception
+						// Exit code 2+: Critical error - throw structured hook error
 						const combinedOutput =
 							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						throw new Error(
-							`afterToolCall hook failed with exit code ${exitCode}
-` +
-								`Command: ${command}\n` +
-								`Output:\n${combinedOutput}`,
+						throw new HookFailedError(
+							'afterToolCall',
+							exitCode,
+							command,
+							combinedOutput,
 						);
 					}
-					// Exit code 0: Success, continue silently
 				}
 			}
 		} catch (error) {
 			// Re-throw if it's a critical hook error (exit code 2+)
-			if (
-				error instanceof Error &&
-				error.message.includes('afterToolCall hook failed')
-			) {
+			if (error instanceof HookFailedError) {
 				throw error;
 			}
 			// Otherwise just warn - don't block tool execution on unexpected errors

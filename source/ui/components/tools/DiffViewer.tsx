@@ -167,12 +167,12 @@ export default function DiffViewer({
 	const {columns} = useTerminalSize();
 	const codeLanguage = inferLanguageFromFilename(filename);
 	const diffAddedBackground = useMemo(
-		() => blendHexColors(theme.colors.diffAdded, theme.colors.background, 0.35),
+		() => blendHexColors(theme.colors.diffAdded, theme.colors.background, 1),
 		[theme.colors.diffAdded, theme.colors.background],
 	);
 	const diffRemovedBackground = useMemo(
 		() =>
-			blendHexColors(theme.colors.diffRemoved, theme.colors.background, 0.35),
+			blendHexColors(theme.colors.diffRemoved, theme.colors.background, 1),
 		[theme.colors.diffRemoved, theme.colors.background],
 	);
 

@@ -2163,18 +2163,112 @@ You have access to these collaboration tools:
 				let question = 'Please select an option:';
 				let options: string[] = ['Yes', 'No'];
 				let multiSelect = false;
+				let parsedArgs: Record<string, any> = {};
 
 				try {
-					const args = JSON.parse(askUserTool.function.arguments);
-					if (args.question) question = args.question;
-					if (args.options && Array.isArray(args.options)) {
-						options = args.options;
+					parsedArgs = JSON.parse(askUserTool.function.arguments);
+					if (parsedArgs['question']) question = parsedArgs['question'];
+					if (parsedArgs['options'] && Array.isArray(parsedArgs['options'])) {
+						options = parsedArgs['options'];
 					}
-					if (args.multiSelect === true) {
+					if (parsedArgs['multiSelect'] === true) {
 						multiSelect = true;
 					}
 				} catch (error) {
 					console.error('Failed to parse askuser tool arguments:', error);
+				}
+
+				try {
+					const hookResult = await unifiedHooksExecutor.executeHooks(
+						'beforeToolCall',
+						{
+							toolName: askUserTool.function.name,
+							args: parsedArgs,
+						},
+					);
+
+					if (hookResult && !hookResult.success) {
+						const commandError = hookResult.results.find(
+							(r: any) => r.type === 'command' && !r.success,
+						);
+
+						if (commandError && commandError.type === 'command') {
+							const {exitCode, command, output, error} = commandError;
+
+							if (exitCode === 1) {
+								const blockedContent =
+									error ||
+									output ||
+									`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`;
+								const blockedResult = {
+									role: 'tool' as const,
+									tool_call_id: askUserTool.id,
+									content: blockedContent,
+								};
+								messages.push(blockedResult);
+
+								if (onMessage) {
+									onMessage({
+										type: 'sub_agent_message',
+										agentId: agent.id,
+										agentName: agent.name,
+										message: {
+											type: 'tool_result',
+											tool_call_id: askUserTool.id,
+											tool_name: askUserTool.function.name,
+											content: blockedContent,
+										} as any,
+									});
+								}
+							} else if (exitCode >= 2 || exitCode < 0) {
+								const hookErrorDetails = {
+									type: 'error' as const,
+									exitCode,
+									command,
+									output,
+									error,
+								};
+								const hookFailedResult = {
+									role: 'tool' as const,
+									tool_call_id: askUserTool.id,
+									content: '',
+									hookFailed: true,
+									hookErrorDetails,
+								};
+								messages.push(hookFailedResult as ChatMessage);
+
+								if (onMessage) {
+									onMessage({
+										type: 'sub_agent_message',
+										agentId: agent.id,
+										agentName: agent.name,
+										message: {
+											type: 'tool_result',
+											tool_call_id: askUserTool.id,
+											tool_name: askUserTool.function.name,
+											content: '',
+											hookFailed: true,
+											hookErrorDetails,
+										} as any,
+									});
+								}
+							}
+
+							const remainingTools = toolCalls.filter(
+								tc => tc.id !== askUserTool.id,
+							);
+							if (remainingTools.length === 0) {
+								continue;
+							}
+
+							toolCalls = remainingTools;
+						}
+					}
+				} catch (hookError) {
+					console.warn(
+						'Failed to execute beforeToolCall hook for askuser in sub-agent:',
+						hookError,
+					);
 				}
 
 				// Notify server that user interaction is needed (only if connected)
@@ -2417,8 +2511,6 @@ You have access to these collaboration tools:
 				if (approvedToolCalls.length === 0) {
 					continue;
 				}
-
-				// Otherwise, continue executing approved tools below
 			}
 
 			// Execute approved tool calls
@@ -2446,6 +2538,95 @@ You have access to these collaboration tools:
 
 				try {
 					const args = JSON.parse(toolCall.function.arguments);
+
+					try {
+						const hookResult = await unifiedHooksExecutor.executeHooks(
+							'beforeToolCall',
+							{
+								toolName: toolCall.function.name,
+								args,
+							},
+						);
+
+						if (hookResult && !hookResult.success) {
+							const commandError = hookResult.results.find(
+								(r: any) => r.type === 'command' && !r.success,
+							);
+
+							if (commandError && commandError.type === 'command') {
+								const {exitCode, command, output, error} = commandError;
+
+								if (exitCode === 1) {
+									const blockedContent =
+										error ||
+										output ||
+										`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`;
+									const blockedResult = {
+										role: 'tool' as const,
+										tool_call_id: toolCall.id,
+										content: blockedContent,
+									};
+									toolResults.push(blockedResult);
+
+									if (onMessage) {
+										onMessage({
+											type: 'sub_agent_message',
+											agentId: agent.id,
+											agentName: agent.name,
+											message: {
+												type: 'tool_result',
+												tool_call_id: toolCall.id,
+												tool_name: toolCall.function.name,
+												content: blockedContent,
+											} as any,
+										});
+									}
+									continue;
+								}
+
+								if (exitCode >= 2 || exitCode < 0) {
+									const hookErrorDetails = {
+										type: 'error' as const,
+										exitCode,
+										command,
+										output,
+										error,
+									};
+									const hookFailedResult = {
+										role: 'tool' as const,
+										tool_call_id: toolCall.id,
+										content: '',
+										hookFailed: true,
+										hookErrorDetails,
+									};
+									toolResults.push(hookFailedResult as ChatMessage);
+
+									if (onMessage) {
+										onMessage({
+											type: 'sub_agent_message',
+											agentId: agent.id,
+											agentName: agent.name,
+											message: {
+												type: 'tool_result',
+												tool_call_id: toolCall.id,
+												tool_name: toolCall.function.name,
+												content: '',
+												hookFailed: true,
+												hookErrorDetails,
+											} as any,
+										});
+									}
+									continue;
+								}
+							}
+						}
+					} catch (hookError) {
+						console.warn(
+							'Failed to execute beforeToolCall hook in sub-agent:',
+							hookError,
+						);
+					}
+
 					const result = await executeMCPTool(
 						toolCall.function.name,
 						args,
