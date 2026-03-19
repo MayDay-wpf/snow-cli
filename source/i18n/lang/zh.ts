@@ -535,8 +535,10 @@ export const zh: TranslationKeys = {
 			loop: '创建会话级循环任务。用法: /loop 5m <提示词>',
 			profiles: '打开配置文件切换面板',
 			models: '打开模型切换面板',
+			subAgentDepth: '设置子代理嵌套创建深度上限',
 			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
-			autoFormat: '文件编辑后自动格式化开关。用法: /auto-format [on|off|status]',
+			autoFormat:
+				'文件编辑后自动格式化开关。用法: /auto-format [on|off|status]',
 			toolSearch: '切换工具搜索（渐进式工具加载）。默认启用以节省上下文',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
@@ -563,6 +565,16 @@ export const zh: TranslationKeys = {
 		confirmClearAll: '清除全部权限？',
 		yes: '是',
 		no: '否',
+	},
+	subAgentDepthPanel: {
+		title: '子代理深度设置',
+		description: '设置子代理继续创建子代理的最大允许深度。',
+		currentValueLabel: '当前值:',
+		inputLabel: '输入深度:',
+		invalidInput: '请输入大于等于 0 的整数',
+		saveSuccess: '保存成功',
+		hint: 'Enter 保存 • Esc 关闭 • 仅支持数字输入',
+		fileHint: '该设置会持久化到项目根目录的 .snow/settings.json',
 	},
 	modelsPanel: {
 		title: '模型切换',

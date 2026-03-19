@@ -88,7 +88,8 @@ function restoreTextWithSkillPlaceholders(
 		const line = lines[i] ?? '';
 		const isSkillBlock = line.startsWith('# Skill:');
 		const isGitLineBlock = line.startsWith('# GitLine:');
-		if (!isSkillBlock && !isGitLineBlock) {
+		const isPasteBlock = line.startsWith('# Paste:');
+		if (!isSkillBlock && !isGitLineBlock && !isPasteBlock) {
 			plain += line;
 			if (i < lines.length - 1) plain += '\n';
 			i++;
@@ -96,6 +97,32 @@ function restoreTextWithSkillPlaceholders(
 		}
 
 		flushPlain();
+
+		if (isPasteBlock) {
+			// Collect paste content until # Paste End
+			const pasteLines: string[] = [];
+			i++;
+			while (i < lines.length) {
+				const next = lines[i] ?? '';
+				if (next.trimStart().startsWith('# Paste End')) {
+					i++;
+					break;
+				}
+				pasteLines.push(next);
+				i++;
+			}
+			const pasteContent = pasteLines.join('\n');
+			if (pasteContent) {
+				const lineCount = pasteLines.length;
+				rollbackPasteCounter++;
+				buffer.insertTextPlaceholder(
+					pasteContent,
+					`[Paste ${lineCount} lines #${rollbackPasteCounter}] `,
+				);
+			}
+			continue;
+		}
+
 		const rawLines: string[] = [line];
 		const placeholderText = isSkillBlock
 			? `[Skill:${parseSkillIdFromHeaderLine(line)}] `

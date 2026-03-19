@@ -43,6 +43,9 @@ import {
 	INDEX_CACHE_DURATION,
 	BATCH_SIZE,
 	BINARY_EXTENSIONS,
+	MAX_INDEXED_FILES,
+	MAX_SYMBOLS_PER_FILE,
+	MAX_FZF_SYMBOL_NAMES,
 	LARGE_FILE_THRESHOLD,
 	FILE_READ_CHUNK_SIZE,
 	TEXT_SEARCH_TIMEOUT_MS,
@@ -59,6 +62,7 @@ export class ACECodeSearchService {
 	private fileModTimes: Map<string, number> = new Map(); // Track file modification times
 	private customExcludes: string[] = []; // Custom exclusion patterns from config files
 	private excludesLoaded: boolean = false; // Track if exclusions have been loaded
+	private isIndexTruncated: boolean = false;
 
 	// Serialize index rebuilds across concurrent/re-entrant tool calls
 	private indexBuildQueue: Promise<void> = Promise.resolve();
@@ -70,6 +74,14 @@ export class ACECodeSearchService {
 			() => undefined,
 		);
 		return next;
+	}
+
+	private markIndexTruncated(message: string): void {
+		if (!this.isIndexTruncated) {
+			logger.warn(message);
+		}
+
+		this.isIndexTruncated = true;
 	}
 
 	// 文件内容缓存（用于减少重复读取）
@@ -235,6 +247,8 @@ export class ACECodeSearchService {
 				this.fileModTimes.clear();
 				this.allIndexedFiles.clear();
 				this.fileContentCache.clear();
+				this.fzfIndex = undefined;
+				this.isIndexTruncated = false;
 			}
 
 			const filesToProcess: string[] = [];
@@ -247,7 +261,6 @@ export class ACECodeSearchService {
 						const fullPath = path.join(dirPath, entry.name);
 
 						if (entry.isDirectory()) {
-							// Use configurable exclusion check
 							if (
 								shouldExcludeDirectory(
 									entry.name,
@@ -259,45 +272,58 @@ export class ACECodeSearchService {
 							) {
 								continue;
 							}
+
 							await searchInDirectory(fullPath);
-						} else if (entry.isFile()) {
-							const language = detectLanguage(fullPath);
-							if (language) {
-								// Check if file needs to be re-indexed
-								try {
-									const stats = await fs.stat(fullPath);
-									const currentMtime = stats.mtimeMs;
-									const cachedMtime = this.fileModTimes.get(fullPath);
+							continue;
+						}
 
-									// Only process if file is new or modified
-									if (cachedMtime === undefined || currentMtime > cachedMtime) {
-										filesToProcess.push(fullPath);
-										this.fileModTimes.set(fullPath, currentMtime);
-									}
+						if (!entry.isFile()) {
+							continue;
+						}
 
-									// Track all indexed files (even if not modified)
-									this.allIndexedFiles.add(fullPath);
-								} catch (error) {
-									// If we can't stat the file, skip it
-								}
+						const language = detectLanguage(fullPath);
+						if (!language) {
+							continue;
+						}
+
+						const isAlreadyIndexed = this.allIndexedFiles.has(fullPath);
+						if (
+							!isAlreadyIndexed &&
+							this.allIndexedFiles.size >= MAX_INDEXED_FILES
+						) {
+							this.markIndexTruncated(
+								`ACE symbol index reached the ${MAX_INDEXED_FILES} file safety limit; skipping remaining files to avoid excessive memory usage`,
+							);
+							continue;
+						}
+
+						try {
+							const stats = await fs.stat(fullPath);
+							const currentMtime = stats.mtimeMs;
+							const cachedMtime = this.fileModTimes.get(fullPath);
+
+							if (cachedMtime === undefined || currentMtime > cachedMtime) {
+								filesToProcess.push(fullPath);
+								this.fileModTimes.set(fullPath, currentMtime);
 							}
+
+							this.allIndexedFiles.add(fullPath);
+						} catch {
+							// If we can't stat the file, skip it
 						}
 					}
-				} catch (error) {
+				} catch {
 					// Skip directories that cannot be accessed
 				}
 			};
 
 			await searchInDirectory(this.basePath);
 
-			// Process files in batches for better performance
 			const batches: string[][] = [];
-
 			for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
 				batches.push(filesToProcess.slice(i, i + BATCH_SIZE));
 			}
 
-			// Process batches concurrently
 			for (const batch of batches) {
 				await Promise.all(
 					batch.map(async fullPath => {
@@ -310,15 +336,25 @@ export class ACECodeSearchService {
 								fullPath,
 								content,
 								this.basePath,
+								{
+									includeContext: false,
+									includeSignature: false,
+									maxSymbols: MAX_SYMBOLS_PER_FILE,
+								},
 							);
+
+							if (symbols.length >= MAX_SYMBOLS_PER_FILE) {
+								this.markIndexTruncated(
+									`ACE symbol index capped files at ${MAX_SYMBOLS_PER_FILE} symbols each to avoid excessive memory usage`,
+								);
+							}
+
 							if (symbols.length > 0) {
 								this.indexCache.set(fullPath, symbols);
 							} else {
-								// Remove entry if no symbols found
 								this.indexCache.delete(fullPath);
 							}
-						} catch (error) {
-							// Remove from index if file cannot be read
+						} catch {
 							this.indexCache.delete(fullPath);
 							this.fileModTimes.delete(fullPath);
 						}
@@ -326,12 +362,10 @@ export class ACECodeSearchService {
 				);
 			}
 
-			// Clean up deleted files from cache
 			for (const cachedPath of Array.from(this.indexCache.keys())) {
 				try {
 					await fs.access(cachedPath);
 				} catch {
-					// File no longer exists, remove from all caches
 					this.indexCache.delete(cachedPath);
 					this.fileModTimes.delete(cachedPath);
 					this.allIndexedFiles.delete(cachedPath);
@@ -341,7 +375,6 @@ export class ACECodeSearchService {
 
 			this.lastIndexTime = now;
 
-			// Rebuild fzf index only if files were processed
 			if (filesToProcess.length > 0 || forceRefresh) {
 				this.buildFzfIndex();
 			}
@@ -352,24 +385,26 @@ export class ACECodeSearchService {
 	 * Build fzf index for fast fuzzy symbol name matching
 	 */
 	private buildFzfIndex(): void {
-		const symbolNames: string[] = [];
+		const uniqueNames = new Set<string>();
 
-		// Collect all unique symbol names
 		for (const fileSymbols of this.indexCache.values()) {
 			for (const symbol of fileSymbols) {
-				symbolNames.push(symbol.name);
+				uniqueNames.add(symbol.name);
+				if (uniqueNames.size > MAX_FZF_SYMBOL_NAMES) {
+					this.fzfIndex = undefined;
+					this.markIndexTruncated(
+						`ACE fuzzy index exceeded ${MAX_FZF_SYMBOL_NAMES} unique symbol names; falling back to manual scoring to keep memory bounded`,
+					);
+					return;
+				}
 			}
 		}
 
-		// Remove duplicates
-		const uniqueNames = Array.from(new Set(symbolNames));
-
-		// Build fzf index with adaptive algorithm selection
-		// Use v1 for >20k symbols, v2 for ≤20k symbols
-		const fuzzyAlgorithm = uniqueNames.length > 20000 ? 'v1' : 'v2';
+		const symbolNames = Array.from(uniqueNames);
+		const fuzzyAlgorithm = symbolNames.length > 20000 ? 'v1' : 'v2';
 
 		// Use sync Fzf to avoid AsyncFzf cancellation/race issues under concurrent tool calls
-		this.fzfIndex = new Fzf(uniqueNames, {
+		this.fzfIndex = new Fzf(symbolNames, {
 			fuzzy: fuzzyAlgorithm,
 		});
 	}

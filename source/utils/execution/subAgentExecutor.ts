@@ -9,6 +9,7 @@ import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
 import {connectionManager} from '../connection/ConnectionManager.js';
+import {getSubAgentMaxSpawnDepth} from '../config/projectSettings.js';
 import {
 	shouldCompressSubAgentContext,
 	getContextPercentage,
@@ -72,10 +73,8 @@ export interface UserQuestionCallback {
 }
 
 /**
- * Maximum spawn depth to prevent infinite recursive spawning.
- * A sub-agent at depth >= MAX_SPAWN_DEPTH cannot spawn further sub-agents.
+ * Maximum spawn depth is project-configurable via `.snow/settings.json`.
  */
-const MAX_SPAWN_DEPTH = 1;
 
 /**
  * 执行子智能体作为工具
@@ -1145,8 +1144,9 @@ Available agent types: agent_explore (code exploration, read-only), agent_plan (
 			},
 		};
 
+		const maxSpawnDepth = getSubAgentMaxSpawnDepth();
 		allowedTools.push(sendMessageTool, queryAgentsStatusTool);
-		if (spawnDepth < MAX_SPAWN_DEPTH) {
+		if (spawnDepth < maxSpawnDepth) {
 			allowedTools.push(spawnSubAgentTool);
 		}
 
@@ -1155,8 +1155,9 @@ Available agent types: agent_explore (code exploration, read-only), agent_plan (
 			.getRunningAgents()
 			.filter(a => a.instanceId !== instanceId);
 
-		const canSpawn = spawnDepth < MAX_SPAWN_DEPTH;
+		const canSpawn = spawnDepth < maxSpawnDepth;
 		let otherAgentsContext = '';
+
 		if (otherAgents.length > 0) {
 			const agentList = otherAgents
 				.map(
@@ -2075,10 +2076,9 @@ You have access to these collaboration tools:
 						addToAlwaysApproved,
 						requestUserQuestion,
 						spawnInstanceId,
-						spawnDepth + 1, // Increase depth to enforce MAX_SPAWN_DEPTH limit
+						spawnDepth + 1, // Increase depth to enforce the configured spawn limit
 					)
 						.then(result => {
-							// Store the result for the main flow to pick up
 							runningSubAgentTracker.storeSpawnedResult({
 								instanceId: spawnInstanceId,
 								agentId: spawnAgentId,

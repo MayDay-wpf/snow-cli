@@ -30,6 +30,7 @@ export function useChatScreenLocalState() {
 	const [isCompressing, setIsCompressing] = useState(false);
 	const [compressionError, setCompressionError] = useState<string | null>(null);
 	const [showPermissionsPanel, setShowPermissionsPanel] = useState(false);
+	const [showSubAgentDepthPanel, setShowSubAgentDepthPanel] = useState(false);
 	const [restoreInputContent, setRestoreInputContent] =
 		useState<RestoreInputContent>(null);
 	const [inputDraftContent, setInputDraftContent] =
@@ -126,6 +127,8 @@ export function useChatScreenLocalState() {
 		setCompressionError,
 		showPermissionsPanel,
 		setShowPermissionsPanel,
+		showSubAgentDepthPanel,
+		setShowSubAgentDepthPanel,
 		restoreInputContent,
 		setRestoreInputContent,
 		inputDraftContent,

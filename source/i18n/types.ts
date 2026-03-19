@@ -525,6 +525,7 @@ export type TranslationKeys = {
 			loop: string;
 			profiles: string;
 			models: string;
+			subAgentDepth: string;
 			export: string;
 			custom: string;
 			skills: string;
@@ -634,6 +635,17 @@ export type TranslationKeys = {
 		confirmClearAll: string;
 		yes: string;
 		no: string;
+	};
+
+	subAgentDepthPanel: {
+		title: string;
+		description: string;
+		currentValueLabel: string;
+		inputLabel: string;
+		invalidInput: string;
+		saveSuccess: string;
+		hint: string;
+		fileHint: string;
 	};
 
 	modelsPanel: {

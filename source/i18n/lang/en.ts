@@ -573,6 +573,7 @@ export const en: TranslationKeys = {
 			loop: 'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
 			profiles: 'Switch configuration profiles',
 			models: 'Open model switching panel',
+			subAgentDepth: 'Set the maximum nested spawn depth for sub-agents',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			autoFormat:
@@ -606,6 +607,18 @@ export const en: TranslationKeys = {
 		confirmClearAll: 'Clear all permissions?',
 		yes: 'Yes',
 		no: 'No',
+	},
+	subAgentDepthPanel: {
+		title: 'Sub-Agent Depth',
+		description:
+			'Set the maximum depth allowed when sub-agents spawn other sub-agents.',
+		currentValueLabel: 'Current value:',
+		inputLabel: 'Input depth:',
+		invalidInput: 'Enter a non-negative integer',
+		saveSuccess: 'Saved successfully',
+		hint: 'Enter save • Esc close • digits only',
+		fileHint:
+			'This setting is persisted to .snow/settings.json in the project root',
 	},
 	modelsPanel: {
 		title: 'Model Switching',

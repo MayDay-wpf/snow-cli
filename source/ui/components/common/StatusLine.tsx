@@ -1,3 +1,5 @@
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import React from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
@@ -7,13 +9,135 @@ import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 import {smartTruncatePath} from '../../../utils/ui/messageFormatter.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
+const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
+const execFileAsync = promisify(execFile);
+const WINDOWS_POWERSHELL_CANDIDATES = [
+	'pwsh.exe',
+	'powershell.exe',
+	'pwsh',
+	'powershell',
+] as const;
 
 // 根据平台返回快捷键显示文本: Windows/Linux使用 Alt+P, macOS使用 Ctrl+P
 const getProfileShortcut = () =>
 	process.platform === 'darwin' ? 'Ctrl+P' : 'Alt+P';
 
-function getCurrentProcessMemoryUsageMb(): number {
+function getFallbackProcessMemoryUsageMb(): number {
 	return Math.max(1, process.memoryUsage().rss / (1024 * 1024));
+}
+
+function parseMacosPhysicalFootprintMb(
+	commandOutput: string,
+): number | undefined {
+	const match = commandOutput.match(
+		/Physical footprint:\s+([0-9.]+)\s*([KMGT])/i,
+	);
+	const valueText = match?.[1];
+	const unit = match?.[2]?.toUpperCase();
+	if (!valueText || !unit) {
+		return undefined;
+	}
+
+	const value = Number.parseFloat(valueText);
+	if (!Number.isFinite(value)) {
+		return undefined;
+	}
+
+	switch (unit) {
+		case 'T': {
+			return value * 1024 * 1024;
+		}
+		case 'G': {
+			return value * 1024;
+		}
+		case 'M': {
+			return value;
+		}
+		case 'K': {
+			return value / 1024;
+		}
+		default: {
+			return undefined;
+		}
+	}
+}
+
+function parseWindowsMemoryUsageMb(commandOutput: string): number | undefined {
+	const valueText = commandOutput.trim();
+	if (valueText.length === 0) {
+		return undefined;
+	}
+
+	const value = Number.parseInt(valueText, 10);
+	if (!Number.isFinite(value)) {
+		return undefined;
+	}
+
+	return Math.max(1, value / (1024 * 1024));
+}
+
+async function getMacosProcessMemoryUsageMb(): Promise<number | undefined> {
+	try {
+		// macOS 活动监视器更接近 physical footprint，而不是 RSS。
+		const {stdout} = await execFileAsync(
+			'vmmap',
+			['-summary', String(process.pid)],
+			{
+				timeout: PROCESS_MEMORY_COMMAND_TIMEOUT_MS,
+				maxBuffer: 1024 * 1024,
+			},
+		);
+		return parseMacosPhysicalFootprintMb(stdout);
+	} catch {
+		return undefined;
+	}
+}
+
+async function getWindowsProcessMemoryUsageMb(): Promise<number | undefined> {
+	const script = [
+		"$ErrorActionPreference = 'Stop'",
+		`$process = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter \"IDProcess = ${process.pid}\" -ErrorAction SilentlyContinue`,
+		'if ($null -ne $process -and $null -ne $process.WorkingSetPrivate) { [Console]::Out.Write([string]$process.WorkingSetPrivate); return }',
+		`$fallback = Get-Process -Id ${process.pid} -ErrorAction Stop`,
+		'[Console]::Out.Write([string]$fallback.PrivateMemorySize64)',
+	].join('; ');
+
+	for (const shell of WINDOWS_POWERSHELL_CANDIDATES) {
+		try {
+			const {stdout} = await execFileAsync(
+				shell,
+				['-NoProfile', '-Command', script],
+				{
+					timeout: PROCESS_MEMORY_COMMAND_TIMEOUT_MS,
+					maxBuffer: 1024 * 1024,
+				},
+			);
+			const memoryUsageMb = parseWindowsMemoryUsageMb(stdout);
+			if (memoryUsageMb !== undefined) {
+				return memoryUsageMb;
+			}
+		} catch {}
+	}
+
+	return undefined;
+}
+
+async function getCurrentProcessMemoryUsageMb(): Promise<number> {
+	if (process.platform === 'darwin') {
+		const memoryUsageMb = await getMacosProcessMemoryUsageMb();
+		if (memoryUsageMb !== undefined) {
+			return Math.max(1, memoryUsageMb);
+		}
+	}
+
+	if (process.platform === 'win32') {
+		const memoryUsageMb = await getWindowsProcessMemoryUsageMb();
+		if (memoryUsageMb !== undefined) {
+			return Math.max(1, memoryUsageMb);
+		}
+	}
+
+	return getFallbackProcessMemoryUsageMb();
 }
 
 function formatMemoryUsage(memoryUsageMb: number): string {
@@ -26,15 +150,38 @@ function formatMemoryUsage(memoryUsageMb: number): string {
 
 function useCurrentProcessMemoryUsage(): number {
 	const [memoryUsageMb, setMemoryUsageMb] = React.useState(() =>
-		getCurrentProcessMemoryUsageMb(),
+		getFallbackProcessMemoryUsageMb(),
 	);
 
 	React.useEffect(() => {
+		let disposed = false;
+		let isRefreshing = false;
+
+		const refreshMemoryUsage = async () => {
+			if (isRefreshing) {
+				return;
+			}
+
+			isRefreshing = true;
+			try {
+				const nextMemoryUsageMb = await getCurrentProcessMemoryUsageMb();
+				if (!disposed) {
+					setMemoryUsageMb(nextMemoryUsageMb);
+				}
+			} finally {
+				isRefreshing = false;
+			}
+		};
+
+		void refreshMemoryUsage();
 		const timer = setInterval(() => {
-			setMemoryUsageMb(getCurrentProcessMemoryUsageMb());
+			void refreshMemoryUsage();
 		}, MEMORY_REFRESH_INTERVAL_MS);
 
-		return () => clearInterval(timer);
+		return () => {
+			disposed = true;
+			clearInterval(timer);
+		};
 	}, []);
 
 	return memoryUsageMb;

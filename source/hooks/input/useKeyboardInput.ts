@@ -1385,6 +1385,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			}
 
 			const message = buffer.getFullText().trim();
+			const markedMessage = buffer.hasTextPlaceholders()
+				? buffer.getFullTextWithPasteMarkers().trim()
+				: message;
 			if (message) {
 				// Check if message is a command with arguments (e.g., /review [note])
 				if (message.startsWith('/')) {
@@ -1461,9 +1464,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 								// Save to persistent history
 								saveToHistory(message);
 
-								// Send as normal message
+								// Send as normal message (use marked version to preserve paste boundaries)
 								onSubmit(
-									message,
+									markedMessage,
 									validImages.length > 0 ? validImages : undefined,
 								);
 								return;
@@ -1503,7 +1506,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				// Save to persistent history
 				saveToHistory(message);
 
-				onSubmit(message, validImages.length > 0 ? validImages : undefined);
+				onSubmit(markedMessage, validImages.length > 0 ? validImages : undefined);
 			}
 			return;
 		}

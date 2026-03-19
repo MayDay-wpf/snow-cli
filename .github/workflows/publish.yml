@@ -56,9 +56,14 @@ jobs:
 
             ### What's New
 
-            - Add more parameter compatibility for MCP
-            - Add streaming display and thinking summary display for sub-agents
-            - Fix the race timing issue when resuming historical sessions
+            - Remove hard-coded request headers for Anthropic requests
+            - The /gitline command supports retrieving staging area content
+            - Add /auto-format command to enable and disable automatic code formatting
+            - Add exception handling for API overload
+            - Fix potential memory overflow caused by ACE tools
+            - Reduce memory usage of Snow CLI
+            - Add sub-agent continuation wake-up depth adjustment command /subagent-depth
+            - DIffViewer adds code highlighting rendering to enhance aesthetics
 
             ### Installation
             ```bash

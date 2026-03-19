@@ -76,6 +76,24 @@ export const RECENT_FILE_THRESHOLD = 24 * 60 * 60 * 1000;
 export const MAX_FILE_CACHE_SIZE = 50;
 
 /**
+ * Maximum number of files kept in the semantic symbol index
+ * Prevents ace-semantic_search from exhausting memory on very large workspaces
+ */
+export const MAX_INDEXED_FILES = 2000;
+
+/**
+ * Maximum number of symbols indexed per file for semantic search
+ * Large generated files can otherwise dominate the in-memory index
+ */
+export const MAX_SYMBOLS_PER_FILE = 100;
+
+/**
+ * Maximum number of unique symbol names used to build the FZF index
+ * Above this threshold we fall back to manual scoring to avoid large heap spikes
+ */
+export const MAX_FZF_SYMBOL_NAMES = 30000;
+
+/**
  * File size threshold for switching to chunked reading (1MB)
  * Files smaller than this are read entirely into memory
  * Files larger than this are processed in chunks to control memory usage

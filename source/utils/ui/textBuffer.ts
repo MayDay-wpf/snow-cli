@@ -119,6 +119,72 @@ export class TextBuffer {
 		return fullText;
 	}
 
+	/**
+	 * 获取完整文本，并在粘贴占位符展开处包裹 # Paste: / # Paste End 标记。
+	 * 用于提交消息时保留粘贴边界信息，以便回滚时精确重建占位符。
+	 * Skill / GitLine / 图片占位符不受影响。
+	 */
+	getFullTextWithPasteMarkers(): string {
+		// Collect text-type paste placeholders with their positions
+		const entries: Array<{ph: Placeholder; idx: number}> = [];
+		for (const ph of this.placeholderStorage.values()) {
+			if (ph.type !== 'text' || !ph.placeholder) continue;
+			// Skip Skill / GitLine placeholders – they already have their own markers
+			if (
+				ph.placeholder.startsWith('[Skill:') ||
+				ph.placeholder.startsWith('[GitLine:')
+			)
+				continue;
+			const idx = this.content.indexOf(ph.placeholder);
+			if (idx !== -1) entries.push({ph, idx});
+		}
+
+		if (entries.length === 0) return this.getFullText();
+
+		// Sort by position (ascending) so we can build the result left-to-right
+		entries.sort((a, b) => a.idx - b.idx);
+
+		let result = '';
+		let pos = 0;
+		for (const entry of entries) {
+			// Append text before this placeholder (expand any non-paste placeholders)
+			const before = this.content.substring(pos, entry.idx);
+			result += this.expandNonPastePlaceholders(before);
+
+			const lineCount =
+				(entry.ph.content.match(/\n/g) || []).length + 1;
+			// Ensure marker starts on its own line
+			if (result.length > 0 && !result.endsWith('\n')) result += '\n';
+			result += `# Paste: ${lineCount} lines\n`;
+			result += entry.ph.content;
+			// Ensure marker ends on its own line
+			if (!entry.ph.content.endsWith('\n')) result += '\n';
+			result += '# Paste End\n';
+
+			pos = entry.idx + entry.ph.placeholder.length;
+		}
+
+		// Append remaining text after the last placeholder
+		if (pos < this.content.length) {
+			result += this.expandNonPastePlaceholders(
+				this.content.substring(pos),
+			);
+		}
+
+		return result;
+	}
+
+	private expandNonPastePlaceholders(text: string): string {
+		let result = text;
+		for (const ph of this.placeholderStorage.values()) {
+			if (ph.type !== 'text' || !ph.placeholder) continue;
+			if (result.includes(ph.placeholder)) {
+				result = result.split(ph.placeholder).join(ph.content);
+			}
+		}
+		return result;
+	}
+
 	get visualCursor(): [number, number] {
 		return this.visualCursorPos;
 	}

@@ -27,6 +27,9 @@ const PermissionsPanel = lazy(
 const NewPromptPanel = lazy(
 	() => import('../../components/panels/NewPromptPanel.js'),
 );
+const SubAgentDepthPanel = lazy(
+	() => import('../../components/panels/SubAgentDepthPanel.js'),
+);
 
 type SnapshotState = {
 	snapshotFileCount: Map<number, number>;
@@ -49,6 +52,8 @@ type Props = {
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 	showPermissionsPanel: boolean;
 	setShowPermissionsPanel: Dispatch<SetStateAction<boolean>>;
+	showSubAgentDepthPanel: boolean;
+	setShowSubAgentDepthPanel: Dispatch<SetStateAction<boolean>>;
 	alwaysApprovedTools: Set<string>;
 	removeFromAlwaysApproved: (toolName: string) => void;
 	clearAllAlwaysApproved: () => void;
@@ -72,6 +77,8 @@ export default function ChatScreenPanels({
 	handleSessionPanelSelect,
 	showPermissionsPanel,
 	setShowPermissionsPanel,
+	showSubAgentDepthPanel,
+	setShowSubAgentDepthPanel,
 	alwaysApprovedTools,
 	removeFromAlwaysApproved,
 	clearAllAlwaysApproved,
@@ -294,6 +301,25 @@ export default function ChatScreenPanels({
 							onCancel={() => {
 								panelState.setShowNewPromptPanel(false);
 							}}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{showSubAgentDepthPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<SubAgentDepthPanel
+							visible={showSubAgentDepthPanel}
+							onClose={() => setShowSubAgentDepthPanel(false)}
 						/>
 					</Suspense>
 				</Box>

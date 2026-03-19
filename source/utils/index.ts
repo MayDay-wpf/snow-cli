@@ -20,6 +20,7 @@ import './commands/init.js';
 import './commands/loop.js';
 import './commands/mcp.js';
 import './commands/models.js';
+import './commands/subagentDepth.js';
 import './commands/newPrompt.js';
 import './commands/permissions.js';
 import './commands/plan.js';

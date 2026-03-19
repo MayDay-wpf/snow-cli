@@ -27,6 +27,12 @@ export function getContext(
 		.trim();
 }
 
+interface ParseFileSymbolsOptions {
+	includeContext?: boolean;
+	includeSignature?: boolean;
+	maxSymbols?: number;
+}
+
 /**
  * Parse file content to extract code symbols using regex patterns
  * @param filePath - Path to file
@@ -38,6 +44,7 @@ export async function parseFileSymbols(
 	filePath: string,
 	content: string,
 	basePath: string,
+	options: ParseFileSymbolsOptions = {},
 ): Promise<CodeSymbol[]> {
 	const symbols: CodeSymbol[] = [];
 	const language = detectLanguage(filePath);
@@ -46,8 +53,14 @@ export async function parseFileSymbols(
 		return symbols;
 	}
 
+	const {includeContext = true, includeSignature = true, maxSymbols} = options;
 	const config = LANGUAGE_CONFIG[language];
 	const lines = content.split('\n');
+	const relativeFilePath = path.relative(basePath, filePath);
+	const pushSymbol = (symbol: CodeSymbol): boolean => {
+		symbols.push(symbol);
+		return maxSymbols !== undefined && symbols.length >= maxSymbols;
+	};
 
 	// Parse each line for symbols
 	for (let i = 0; i < lines.length; i++) {
@@ -61,20 +74,23 @@ export async function parseFileSymbols(
 			if (match) {
 				const name = match[1] || match[2] || match[3];
 				if (name) {
-					// Get function signature (current line + next few lines)
 					const contextLines = lines.slice(i, Math.min(i + 3, lines.length));
-					const signature = contextLines.join('\n').trim();
-
-					symbols.push({
-						name,
-						type: 'function',
-						filePath: path.relative(basePath, filePath),
-						line: lineNumber,
-						column: line.indexOf(name) + 1,
-						signature,
-						language,
-						context: getContext(lines, i, 2),
-					});
+					if (
+						pushSymbol({
+							name,
+							type: 'function',
+							filePath: relativeFilePath,
+							line: lineNumber,
+							column: line.indexOf(name) + 1,
+							signature: includeSignature
+								? contextLines.join('\n').trim()
+								: undefined,
+							language,
+							context: includeContext ? getContext(lines, i, 2) : undefined,
+						})
+					) {
+						return symbols;
+					}
 				}
 			}
 		}
@@ -85,16 +101,20 @@ export async function parseFileSymbols(
 			if (match) {
 				const name = match[1] || match[2] || match[3];
 				if (name) {
-					symbols.push({
-						name,
-						type: 'class',
-						filePath: path.relative(basePath, filePath),
-						line: lineNumber,
-						column: line.indexOf(name) + 1,
-						signature: line.trim(),
-						language,
-						context: getContext(lines, i, 2),
-					});
+					if (
+						pushSymbol({
+							name,
+							type: 'class',
+							filePath: relativeFilePath,
+							line: lineNumber,
+							column: line.indexOf(name) + 1,
+							signature: includeSignature ? line.trim() : undefined,
+							language,
+							context: includeContext ? getContext(lines, i, 2) : undefined,
+						})
+					) {
+						return symbols;
+					}
 				}
 			}
 		}
@@ -105,16 +125,20 @@ export async function parseFileSymbols(
 			if (match) {
 				const name = match[1];
 				if (name) {
-					symbols.push({
-						name,
-						type: 'variable',
-						filePath: path.relative(basePath, filePath),
-						line: lineNumber,
-						column: line.indexOf(name) + 1,
-						signature: line.trim(),
-						language,
-						context: getContext(lines, i, 1),
-					});
+					if (
+						pushSymbol({
+							name,
+							type: 'variable',
+							filePath: relativeFilePath,
+							line: lineNumber,
+							column: line.indexOf(name) + 1,
+							signature: includeSignature ? line.trim() : undefined,
+							language,
+							context: includeContext ? getContext(lines, i, 1) : undefined,
+						})
+					) {
+						return symbols;
+					}
 				}
 			}
 		}
@@ -125,15 +149,19 @@ export async function parseFileSymbols(
 			if (match) {
 				const name = match[1] || match[2];
 				if (name) {
-					symbols.push({
-						name,
-						type: 'import',
-						filePath: path.relative(basePath, filePath),
-						line: lineNumber,
-						column: line.indexOf(name) + 1,
-						signature: line.trim(),
-						language,
-					});
+					if (
+						pushSymbol({
+							name,
+							type: 'import',
+							filePath: relativeFilePath,
+							line: lineNumber,
+							column: line.indexOf(name) + 1,
+							signature: includeSignature ? line.trim() : undefined,
+							language,
+						})
+					) {
+						return symbols;
+					}
 				}
 			}
 		}
@@ -144,15 +172,19 @@ export async function parseFileSymbols(
 			if (match) {
 				const name = match[1];
 				if (name) {
-					symbols.push({
-						name,
-						type: 'export',
-						filePath: path.relative(basePath, filePath),
-						line: lineNumber,
-						column: line.indexOf(name) + 1,
-						signature: line.trim(),
-						language,
-					});
+					if (
+						pushSymbol({
+							name,
+							type: 'export',
+							filePath: relativeFilePath,
+							line: lineNumber,
+							column: line.indexOf(name) + 1,
+							signature: includeSignature ? line.trim() : undefined,
+							language,
+						})
+					) {
+						return symbols;
+					}
 				}
 			}
 		}

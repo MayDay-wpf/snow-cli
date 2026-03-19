@@ -79,6 +79,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.models,
 			},
 			{
+				name: 'subagent-depth',
+				description:
+					t.commandPanel.commands.subAgentDepth ||
+					'Set the maximum nested spawn depth for sub-agents',
+			},
+			{
 				name: 'export',
 				description: t.commandPanel.commands.export,
 			},

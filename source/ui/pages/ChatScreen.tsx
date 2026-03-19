@@ -77,6 +77,8 @@ export default function ChatScreen({
 		setCompressionError,
 		showPermissionsPanel,
 		setShowPermissionsPanel,
+		showSubAgentDepthPanel,
+		setShowSubAgentDepthPanel,
 		restoreInputContent,
 		setRestoreInputContent,
 		inputDraftContent,
@@ -251,6 +253,7 @@ export default function ChatScreen({
 		setShowMcpPanel: panelState.setShowMcpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
+		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
 		setShowRoleCreation: panelState.setShowRoleCreation,
@@ -359,7 +362,8 @@ export default function ChatScreen({
 		panelState.showConnectionPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
-		showPermissionsPanel;
+		showPermissionsPanel ||
+		showSubAgentDepthPanel;
 	const shouldShowFooter =
 		!pendingToolConfirmation &&
 		!pendingUserQuestion &&
@@ -437,6 +441,8 @@ export default function ChatScreen({
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				showPermissionsPanel={showPermissionsPanel}
 				setShowPermissionsPanel={setShowPermissionsPanel}
+				showSubAgentDepthPanel={showSubAgentDepthPanel}
+				setShowSubAgentDepthPanel={setShowSubAgentDepthPanel}
 				alwaysApprovedTools={alwaysApprovedTools}
 				removeFromAlwaysApproved={removeFromAlwaysApproved}
 				clearAllAlwaysApproved={clearAllAlwaysApproved}

@@ -102,6 +102,59 @@ function highlightCodeContent(content: string, language?: string): string {
 	}
 }
 
+function normalizeHexColor(hex: string): string | null {
+	if (!hex.startsWith('#')) {
+		return null;
+	}
+
+	const value = hex.slice(1);
+
+	if (value.length === 3 || value.length === 4) {
+		return value
+			.slice(0, 3)
+			.split('')
+			.map(char => char + char)
+			.join('');
+	}
+
+	if (value.length === 6 || value.length === 8) {
+		return value.slice(0, 6);
+	}
+
+	return null;
+}
+
+function blendHexColors(
+	foreground: string,
+	background: string,
+	alpha: number,
+): string {
+	const normalizedForeground = normalizeHexColor(foreground);
+	const normalizedBackground = normalizeHexColor(background);
+
+	if (!normalizedForeground || !normalizedBackground) {
+		return foreground;
+	}
+
+	const blendChannel = (foregroundOffset: number, backgroundOffset: number) => {
+		const foregroundValue = Number.parseInt(
+			normalizedForeground.slice(foregroundOffset, foregroundOffset + 2),
+			16,
+		);
+		const backgroundValue = Number.parseInt(
+			normalizedBackground.slice(backgroundOffset, backgroundOffset + 2),
+			16,
+		);
+		const blendedValue = Math.round(
+			foregroundValue * alpha + backgroundValue * (1 - alpha),
+		);
+
+		return blendedValue.toString(16).padStart(2, '0');
+	};
+
+	return `#${blendChannel(0, 0)}${blendChannel(2, 2)}${blendChannel(4, 4)}`;
+}
+
 export default function DiffViewer({
 	oldContent = '',
 	newContent,
@@ -113,6 +166,15 @@ export default function DiffViewer({
 	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
 	const codeLanguage = inferLanguageFromFilename(filename);
+	const diffAddedBackground = useMemo(
+		() => blendHexColors(theme.colors.diffAdded, theme.colors.background, 0.35),
+		[theme.colors.diffAdded, theme.colors.background],
+	);
+	const diffRemovedBackground = useMemo(
+		() =>
+			blendHexColors(theme.colors.diffRemoved, theme.colors.background, 0.35),
+		[theme.colors.diffRemoved, theme.colors.background],
+	);
 
 	// Use side-by-side view when terminal is wide enough
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
@@ -186,7 +248,7 @@ export default function DiffViewer({
 							key: index,
 							prefix: '+ ',
 							content: line,
-							backgroundColor: theme.colors.diffAdded,
+							backgroundColor: diffAddedBackground,
 							color: 'white',
 						}),
 					)}
@@ -198,7 +260,7 @@ export default function DiffViewer({
 		diffNewContent,
 		filename,
 		codeLanguage,
-		theme.colors.diffAdded,
+		diffAddedBackground,
 	]);
 
 	if (isNewFile) {
@@ -448,14 +510,14 @@ export default function DiffViewer({
 				pair.left.type === 'removed'
 					? '-'
 					: pair.left.type === 'unchanged'
-						? ' '
-						: ' ';
+					? ' '
+					: ' ';
 			const rightSign =
 				pair.right.type === 'added'
 					? '+'
 					: pair.right.type === 'unchanged'
-						? ' '
-						: ' ';
+					? ' '
+					: ' ';
 
 			const leftContent = cleanContent(pair.left.content);
 			const rightContent = cleanContent(pair.right.content);
@@ -516,7 +578,7 @@ export default function DiffViewer({
 								content: line.leftContent,
 								backgroundColor:
 									line.leftType === 'removed'
-										? theme.colors.diffRemoved
+										? diffRemovedBackground
 										: undefined,
 								color: line.leftType === 'removed' ? 'white' : undefined,
 							})}
@@ -533,7 +595,7 @@ export default function DiffViewer({
 								content: line.rightContent,
 								backgroundColor:
 									line.rightType === 'added'
-										? theme.colors.diffAdded
+										? diffAddedBackground
 										: undefined,
 								color: line.rightType === 'added' ? 'white' : undefined,
 							})}
@@ -566,7 +628,7 @@ export default function DiffViewer({
 							key: changeIndex,
 							prefix: `${lineNumStr} + `,
 							content: change.content,
-							backgroundColor: theme.colors.diffAdded,
+							backgroundColor: diffAddedBackground,
 							color: 'white',
 						});
 					}
@@ -576,7 +638,7 @@ export default function DiffViewer({
 							key: changeIndex,
 							prefix: `${lineNumStr} - `,
 							content: change.content,
-							backgroundColor: theme.colors.diffRemoved,
+							backgroundColor: diffRemovedBackground,
 							color: 'white',
 						});
 					}
