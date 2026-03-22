@@ -2,7 +2,11 @@ import React from 'react';
 import {Box, Text} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert} from '@inkjs/ui';
-import {type ConfigScreenProps, MAX_VISIBLE_FIELDS, isSelectField} from './configScreen/types.js';
+import {
+	type ConfigScreenProps,
+	MAX_VISIBLE_FIELDS,
+	isSelectField,
+} from './configScreen/types.js';
 import {useConfigState} from './configScreen/useConfigState.js';
 import {useConfigInput} from './configScreen/useConfigInput.js';
 import ConfigFieldRenderer from './configScreen/ConfigFieldRenderer.js';
@@ -10,6 +14,7 @@ import ConfigSelectPanel from './configScreen/ConfigSelectPanel.js';
 import {
 	ProfileCreateView,
 	ProfileDeleteView,
+	ProfileRenameView,
 	LoadingView,
 	ManualInputView,
 } from './configScreen/ConfigSubViews.js';
@@ -46,6 +51,10 @@ export default function ConfigScreen({
 
 	if (profileMode === 'deleting') {
 		return <ProfileDeleteView state={state} inlineMode={inlineMode} />;
+	}
+
+	if (profileMode === 'renaming') {
+		return <ProfileRenameView state={state} inlineMode={inlineMode} />;
 	}
 
 	if (loading) {

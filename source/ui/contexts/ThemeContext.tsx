@@ -8,13 +8,17 @@ import React, {
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
 import {
 	getCurrentTheme,
+	getDiffOpacity,
 	setCurrentTheme,
+	setDiffOpacity,
 } from '../../utils/config/themeConfig.js';
 
 interface ThemeContextType {
 	theme: Theme;
 	themeType: ThemeType;
+	diffOpacity: number;
 	setThemeType: (type: ThemeType) => void;
+	setDiffOpacity: (opacity: number) => void;
 	refreshCustomTheme?: () => void;
 }
 
@@ -31,12 +35,20 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 		// Load initial theme from config
 		return getCurrentTheme();
 	});
+	const [diffOpacity, setDiffOpacityState] = useState<number>(() =>
+		getDiffOpacity(),
+	);
 	const [customThemeVersion, setCustomThemeVersion] = useState(0);
 
 	const setThemeType = (type: ThemeType) => {
 		setThemeTypeState(type);
 		// Persist to config file
 		setCurrentTheme(type);
+	};
+
+	const handleSetDiffOpacity = (opacity: number) => {
+		setDiffOpacityState(opacity);
+		setDiffOpacity(opacity);
 	};
 
 	const refreshCustomTheme = useCallback(() => {
@@ -52,10 +64,19 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 		return themes[themeType];
 	}, [themeType, customThemeVersion]);
 
+	const baseTheme = getTheme();
 	const value: ThemeContextType = {
-		theme: getTheme(),
+		theme: {
+			...baseTheme,
+			colors: {
+				...baseTheme.colors,
+				diffOpacity,
+			},
+		},
 		themeType,
+		diffOpacity,
 		setThemeType,
+		setDiffOpacity: handleSetDiffOpacity,
 		refreshCustomTheme,
 	};
 

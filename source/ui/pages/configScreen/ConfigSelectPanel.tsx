@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {Alert} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
 import type {RequestMethod} from '../../../utils/config/apiConfig.js';
 import {switchProfile} from '../../../utils/config/configManager.js';
@@ -105,9 +106,7 @@ export default function ConfigSelectPanel({state}: Props) {
 					currentField === 'basicModel') && (
 					<Box flexDirection="column">
 						{searchTerm && (
-							<Text color={theme.colors.menuInfo}>
-								Filter: {searchTerm}
-							</Text>
+							<Text color={theme.colors.menuInfo}>Filter: {searchTerm}</Text>
 						)}
 						<ScrollableSelectInput
 							items={getCurrentOptions()}
@@ -189,9 +188,7 @@ export default function ConfigSelectPanel({state}: Props) {
 						)}
 						isFocused={true}
 						onSelect={item => {
-							setResponsesVerbosity(
-								item.value as 'low' | 'medium' | 'high',
-							);
+							setResponsesVerbosity(item.value as 'low' | 'medium' | 'high');
 							setIsEditing(false);
 						}}
 					/>
@@ -237,17 +234,11 @@ function ProfileSelect({state}: Props) {
 				renderItem={({label, isSelected, isMarked, isActive}) => {
 					return (
 						<Text>
-							<Text
-								color={
-									isMarked ? 'yellow' : isSelected ? 'cyan' : 'white'
-								}
-							>
+							<Text color={isMarked ? 'yellow' : isSelected ? 'cyan' : 'white'}>
 								{isMarked ? '✓ ' : '  '}
 							</Text>
 							{isActive && <Text color="green">[active] </Text>}
-							<Text color={isSelected ? 'cyan' : 'white'}>
-								{label}
-							</Text>
+							<Text color={isSelected ? 'cyan' : 'white'}>{label}</Text>
 						</Text>
 					);
 				}}
@@ -282,9 +273,13 @@ function ProfileSelect({state}: Props) {
 					<Text color={theme.colors.menuSecondary}> (n)</Text>
 				</Box>
 				<Box marginRight={2}>
-					<Text color={theme.colors.warning}>
-						{t.configScreen.mark}
+					<Text color={theme.colors.menuInfo}>
+						{t.configScreen.renameProfileShort}
 					</Text>
+					<Text color={theme.colors.menuSecondary}> (r)</Text>
+				</Box>
+				<Box marginRight={2}>
+					<Text color={theme.colors.warning}>{t.configScreen.mark}</Text>
 					<Text color={theme.colors.menuSecondary}> (space)</Text>
 				</Box>
 				<Box>
@@ -293,11 +288,12 @@ function ProfileSelect({state}: Props) {
 					</Text>
 					<Text color={theme.colors.menuSecondary}> (d)</Text>
 					{markedProfiles.size > 0 && (
-						<Text color={theme.colors.warning}>
-							[{markedProfiles.size}]
-						</Text>
+						<Text color={theme.colors.warning}>[{markedProfiles.size}]</Text>
 					)}
 				</Box>
+			</Box>
+			<Box marginTop={1}>
+				<Alert variant="info">{t.configScreen.profileSelectHint}</Alert>
 			</Box>
 		</Box>
 	);
@@ -331,16 +327,11 @@ function SystemPromptSelect({state}: Props) {
 				isFocused={true}
 				selectedValues={pendingPromptIds}
 				renderItem={({label, value, isSelected, isMarked}) => {
-					const isMeta =
-						value === '__FOLLOW__' || value === '__DISABLED__';
+					const isMeta = value === '__FOLLOW__' || value === '__DISABLED__';
 					return (
 						<Text
 							color={
-								isSelected
-									? 'cyan'
-									: isMarked
-									? theme.colors.menuInfo
-									: 'white'
+								isSelected ? 'cyan' : isMarked ? theme.colors.menuInfo : 'white'
 							}
 						>
 							{isMeta ? '' : isMarked ? '[✓] ' : '[ ] '}
@@ -349,10 +340,7 @@ function SystemPromptSelect({state}: Props) {
 					);
 				}}
 				onToggleItem={item => {
-					if (
-						item.value === '__FOLLOW__' ||
-						item.value === '__DISABLED__'
-					) {
+					if (item.value === '__FOLLOW__' || item.value === '__DISABLED__') {
 						applySystemPromptSelectValue(item.value);
 						setPendingPromptIds(new Set());
 						setIsEditing(false);
@@ -369,10 +357,7 @@ function SystemPromptSelect({state}: Props) {
 					});
 				}}
 				onSelect={item => {
-					if (
-						item.value === '__FOLLOW__' ||
-						item.value === '__DISABLED__'
-					) {
+					if (item.value === '__FOLLOW__' || item.value === '__DISABLED__') {
 						applySystemPromptSelectValue(item.value);
 						setPendingPromptIds(new Set());
 						setIsEditing(false);
@@ -382,15 +367,10 @@ function SystemPromptSelect({state}: Props) {
 						pendingPromptIds.size > 0
 							? Array.from(pendingPromptIds)
 							: [item.value];
-					if (
-						pendingPromptIds.size > 0 &&
-						!pendingPromptIds.has(item.value)
-					) {
+					if (pendingPromptIds.size > 0 && !pendingPromptIds.has(item.value)) {
 						finalIds.push(item.value);
 					}
-					setSystemPromptId(
-						finalIds.length === 1 ? finalIds[0]! : finalIds,
-					);
+					setSystemPromptId(finalIds.length === 1 ? finalIds[0]! : finalIds);
 					setPendingPromptIds(new Set());
 					setIsEditing(false);
 				}}
@@ -426,9 +406,7 @@ function ReasoningEffortSelect({state}: Props) {
 			items={effortOptions}
 			initialIndex={Math.max(
 				0,
-				effortOptions.findIndex(
-					opt => opt.value === responsesReasoningEffort,
-				),
+				effortOptions.findIndex(opt => opt.value === responsesReasoningEffort),
 			)}
 			isFocused={true}
 			onSelect={item => {
@@ -439,9 +417,7 @@ function ReasoningEffortSelect({state}: Props) {
 					| 'high'
 					| 'xhigh';
 				setResponsesReasoningEffort(
-					nextEffort === 'xhigh' && !supportsXHigh
-						? 'high'
-						: nextEffort,
+					nextEffort === 'xhigh' && !supportsXHigh ? 'high' : nextEffort,
 				);
 				setIsEditing(false);
 			}}

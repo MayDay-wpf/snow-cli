@@ -38,6 +38,7 @@ const colorKeys: ColorKey[] = [
 	'success',
 	'logoGradient',
 	'userMessageBackground',
+	'diffOpacity',
 ];
 
 const sampleOldCode = `function greet(name) {
@@ -49,9 +50,9 @@ const sampleNewCode = `function greet(name: string): string {
   console.log(\`Hello \${name}\`);
   return \`Welcome, \${name}!\`;
 }`;
-
 export default function CustomThemeScreen({onBack}: Props) {
 	const {setThemeType, refreshCustomTheme} = useTheme();
+
 	const {t} = useI18n();
 	const [colors, setColors] = useState<ThemeColors>(() => {
 		const custom = getCustomTheme();
@@ -107,7 +108,9 @@ export default function CustomThemeScreen({onBack}: Props) {
 				// Handle array type for logoGradient
 				const colorValue = colors[key];
 				setEditValue(
-					Array.isArray(colorValue) ? colorValue.join(', ') : colorValue,
+					Array.isArray(colorValue)
+						? colorValue.join(', ')
+						: String(colorValue),
 				);
 			}
 		},
@@ -127,6 +130,8 @@ export default function CustomThemeScreen({onBack}: Props) {
 								.split(',')
 								.map(v => v.trim())
 								.filter(v => v) as [string, string, string])
+						: editingKey === 'diffOpacity'
+						? Math.max(0, Math.min(1, Number.parseFloat(editValue.trim()) || 0))
 						: editValue.trim();
 				return {
 					...prev,
@@ -134,6 +139,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 				};
 			});
 		}
+
 		setEditingKey(null);
 		setEditValue('');
 	}, [editingKey, editValue]);
@@ -160,9 +166,10 @@ export default function CustomThemeScreen({onBack}: Props) {
 					<Text>
 						{Array.isArray(colors[editingKey])
 							? (colors[editingKey] as [string, string, string]).join(', ')
-							: colors[editingKey]}
+							: String(colors[editingKey])}
 					</Text>
 				</Box>
+
 				<Box marginTop={1}>
 					<Text>{t.customTheme?.newValue || 'New value'}: </Text>
 					<TextInput
@@ -209,7 +216,9 @@ export default function CustomThemeScreen({onBack}: Props) {
 					value={{
 						theme: {name: 'Custom', type: 'custom', colors},
 						themeType: 'custom',
+						diffOpacity: colors.diffOpacity,
 						setThemeType,
+						setDiffOpacity: () => {},
 						refreshCustomTheme,
 					}}
 				>

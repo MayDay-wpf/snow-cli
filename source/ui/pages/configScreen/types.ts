@@ -31,7 +31,7 @@ export type ConfigField =
 	| 'editSimilarityThreshold'
 	| 'streamingDisplay';
 
-export type ProfileMode = 'normal' | 'creating' | 'deleting';
+export type ProfileMode = 'normal' | 'creating' | 'renaming' | 'deleting';
 
 export type ConfigScreenProps = {
 	onBack: () => void;

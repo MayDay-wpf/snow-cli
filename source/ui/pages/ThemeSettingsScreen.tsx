@@ -38,8 +38,9 @@ export default function ThemeSettingsScreen({
 	onBack,
 	inlineMode = false,
 }: Props) {
-	const {themeType, setThemeType} = useTheme();
+	const {themeType, setThemeType, diffOpacity, setDiffOpacity} = useTheme();
 	const {t} = useI18n();
+
 	// Use themeType from context which is already loaded from config
 	const [selectedTheme, setSelectedTheme] = useState<ThemeType>(themeType);
 	const [infoText, setInfoText] = useState<string>('');
@@ -59,6 +60,11 @@ export default function ThemeSettingsScreen({
 		setSimpleMode(newSimpleMode);
 	}, [simpleMode]);
 
+	const handleAdjustDiffOpacity = useCallback(() => {
+		const nextOpacity = diffOpacity >= 1 ? 0.3 : diffOpacity + 0.1;
+		setDiffOpacity(Number(nextOpacity.toFixed(2)));
+	}, [diffOpacity, setDiffOpacity]);
+
 	const themeOptions = useMemo(
 		() => [
 			{
@@ -67,6 +73,13 @@ export default function ThemeSettingsScreen({
 				}`,
 				value: 'simple-mode',
 				infoText: t.themeSettings.simpleModeInfo,
+			},
+			{
+				label: `${t.themeSettings.diffOpacity} ${Math.round(
+					diffOpacity * 100,
+				)}%`,
+				value: 'diff-opacity',
+				infoText: t.themeSettings.diffOpacityInfo,
 			},
 			{
 				label:
@@ -136,7 +149,7 @@ export default function ThemeSettingsScreen({
 				infoText: t.themeSettings.backInfo,
 			},
 		],
-		[selectedTheme, simpleMode, t],
+		[selectedTheme, simpleMode, diffOpacity, t],
 	);
 
 	const handleSelect = useCallback(
@@ -148,6 +161,8 @@ export default function ThemeSettingsScreen({
 			} else if (value === 'simple-mode') {
 				// Toggle simple mode
 				handleToggleSimpleMode();
+			} else if (value === 'diff-opacity') {
+				handleAdjustDiffOpacity();
 			} else if (value === 'edit-custom') {
 				// Go to custom theme editor
 				setScreen('custom');
@@ -158,7 +173,13 @@ export default function ThemeSettingsScreen({
 				setThemeType(newTheme);
 			}
 		},
-		[onBack, setThemeType, selectedTheme, handleToggleSimpleMode],
+		[
+			onBack,
+			setThemeType,
+			selectedTheme,
+			handleToggleSimpleMode,
+			handleAdjustDiffOpacity,
+		],
 	);
 
 	const handleSelectionChange = useCallback(
@@ -168,7 +189,8 @@ export default function ThemeSettingsScreen({
 			if (
 				value === 'back' ||
 				value === 'edit-custom' ||
-				value === 'simple-mode'
+				value === 'simple-mode' ||
+				value === 'diff-opacity'
 			) {
 				// Restore to selected theme when hovering on "Back", "Edit Custom", or "Simple Mode"
 				setThemeType(selectedTheme);

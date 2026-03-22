@@ -11,8 +11,28 @@ type SubViewProps = {
 	inlineMode: boolean;
 };
 
-export function ProfileCreateView({state, inlineMode}: SubViewProps) {
-	const {t, theme, newProfileName, setNewProfileName, errors} = state;
+type ProfileNameInputViewProps = SubViewProps & {
+	title: string;
+	subtitle: string;
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+	placeholder: string;
+	hint: string;
+};
+
+function ProfileNameInputView({
+	state,
+	inlineMode,
+	title,
+	subtitle,
+	label,
+	value,
+	onChange,
+	placeholder,
+	hint,
+}: ProfileNameInputViewProps) {
+	const {theme, errors} = state;
 
 	return (
 		<Box flexDirection="column" padding={1}>
@@ -24,23 +44,21 @@ export function ProfileCreateView({state, inlineMode}: SubViewProps) {
 					paddingX={2}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">
-							{t.configScreen.createNewProfile}
-						</Gradient>
+						<Gradient name="rainbow">{title}</Gradient>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.configScreen.enterProfileName}
+							{subtitle}
 						</Text>
 					</Box>
 				</Box>
 			)}
 
 			<Box flexDirection="column">
-				<Text color={theme.colors.menuInfo}>Profile Name:</Text>
+				<Text color={theme.colors.menuInfo}>{label}</Text>
 				<Box marginLeft={2}>
 					<TextInput
-						value={newProfileName}
-						onChange={value => setNewProfileName(stripFocusArtifacts(value))}
-						placeholder={t.configScreen.profileNamePlaceholder}
+						value={value}
+						onChange={nextValue => onChange(stripFocusArtifacts(nextValue))}
+						placeholder={placeholder}
 					/>
 				</Box>
 			</Box>
@@ -52,9 +70,45 @@ export function ProfileCreateView({state, inlineMode}: SubViewProps) {
 			)}
 
 			<Box marginTop={1}>
-				<Alert variant="info">{t.configScreen.createHint}</Alert>
+				<Alert variant="info">{hint}</Alert>
 			</Box>
 		</Box>
+	);
+}
+
+export function ProfileCreateView({state, inlineMode}: SubViewProps) {
+	const {t, newProfileName, setNewProfileName} = state;
+
+	return (
+		<ProfileNameInputView
+			state={state}
+			inlineMode={inlineMode}
+			title={t.configScreen.createNewProfile}
+			subtitle={t.configScreen.enterProfileName}
+			label={t.configScreen.profileNameLabel}
+			value={newProfileName}
+			onChange={setNewProfileName}
+			placeholder={t.configScreen.profileNamePlaceholder}
+			hint={t.configScreen.createHint}
+		/>
+	);
+}
+
+export function ProfileRenameView({state, inlineMode}: SubViewProps) {
+	const {t, renameProfileName, setRenameProfileName} = state;
+
+	return (
+		<ProfileNameInputView
+			state={state}
+			inlineMode={inlineMode}
+			title={t.configScreen.renameProfile}
+			subtitle={t.configScreen.enterRenameProfileName}
+			label={t.configScreen.profileNameLabel}
+			value={renameProfileName}
+			onChange={setRenameProfileName}
+			placeholder={t.configScreen.renameProfilePlaceholder}
+			hint={t.configScreen.renameHint}
+		/>
 	);
 }
 

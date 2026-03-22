@@ -10,10 +10,12 @@ interface ThemeConfig {
 	theme: ThemeType;
 	customColors?: ThemeColors;
 	simpleMode?: boolean;
+	diffOpacity?: number;
 }
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'dark',
 	simpleMode: false,
+	diffOpacity: 1,
 };
 
 function ensureConfigDirectory(): void {
@@ -106,4 +108,20 @@ export function getSimpleMode(): boolean {
 export function setSimpleMode(simpleMode: boolean): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, simpleMode});
+}
+
+/**
+ * Get diff opacity setting
+ */
+export function getDiffOpacity(): number {
+	const config = loadThemeConfig();
+	return config.diffOpacity ?? 1;
+}
+
+/**
+ * Set diff opacity and persist to file system
+ */
+export function setDiffOpacity(diffOpacity: number): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, diffOpacity});
 }

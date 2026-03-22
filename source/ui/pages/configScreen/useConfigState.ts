@@ -19,6 +19,7 @@ import {
 	switchProfile,
 	createProfile,
 	deleteProfile,
+	renameProfile,
 	saveProfile,
 	type ConfigProfile,
 } from '../../../utils/config/configManager.js';
@@ -41,6 +42,7 @@ export function useConfigState() {
 	const [activeProfile, setActiveProfile] = useState('');
 	const [profileMode, setProfileMode] = useState<ProfileMode>('normal');
 	const [newProfileName, setNewProfileName] = useState('');
+	const [renameProfileName, setRenameProfileName] = useState('');
 	const [markedProfiles, setMarkedProfiles] = useState<Set<string>>(new Set());
 
 	// API settings
@@ -608,6 +610,34 @@ export function useConfigState() {
 		}
 	};
 
+	const handleRenameProfile = () => {
+		const cleaned = stripFocusArtifacts(renameProfileName).trim();
+
+		if (!cleaned) {
+			setErrors([t.configScreen.profileNameEmpty]);
+			return;
+		}
+
+		if (activeProfile === 'default') {
+			setErrors([t.configScreen.cannotRenameDefault]);
+			return;
+		}
+
+		try {
+			renameProfile(activeProfile, cleaned);
+			loadProfilesAndConfig();
+			setProfileMode('normal');
+			setRenameProfileName('');
+			setMarkedProfiles(new Set());
+			setIsEditing(false);
+			setErrors([]);
+		} catch (err) {
+			setErrors([
+				err instanceof Error ? err.message : 'Failed to rename profile',
+			]);
+		}
+	};
+
 	const handleModelChange = (value: string) => {
 		if (value === '__MANUAL_INPUT__') {
 			setManualInputMode(true);
@@ -712,13 +742,13 @@ export function useConfigState() {
 						geminiThinking: geminiThinkingEnabled
 							? {enabled: true, budget: geminiThinkingBudget}
 							: undefined,
-					responsesReasoning: {
-						enabled: responsesReasoningEnabled,
-						effort: responsesReasoningEffort,
-					},
-					responsesVerbosity,
-					responsesFastMode,
-					advancedModel,
+						responsesReasoning: {
+							enabled: responsesReasoningEnabled,
+							effort: responsesReasoningEffort,
+						},
+						responsesVerbosity,
+						responsesFastMode,
+						advancedModel,
 						basicModel,
 						maxContextTokens,
 						maxTokens,
@@ -752,6 +782,8 @@ export function useConfigState() {
 		setProfileMode,
 		newProfileName,
 		setNewProfileName,
+		renameProfileName,
+		setRenameProfileName,
 		markedProfiles,
 		setMarkedProfiles,
 		// API settings
@@ -862,6 +894,7 @@ export function useConfigState() {
 		applyCustomHeadersSchemeSelectValue,
 		handleCreateProfile,
 		handleBatchDeleteProfiles,
+		handleRenameProfile,
 		handleModelChange,
 		saveConfiguration,
 		getAllFields,

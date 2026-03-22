@@ -1,5 +1,9 @@
 import {useInput} from 'ink';
-import {stripFocusArtifacts, isFocusEventInput, isSelectField} from './types.js';
+import {
+	stripFocusArtifacts,
+	isFocusEventInput,
+	isSelectField,
+} from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
 export function useConfigInput(
@@ -12,10 +16,13 @@ export function useConfigInput(
 		profileMode,
 		setProfileMode,
 		setNewProfileName,
+		setRenameProfileName,
 		markedProfiles,
+		activeProfile,
 		setErrors,
 		handleCreateProfile,
 		handleBatchDeleteProfiles,
+		handleRenameProfile,
 		loading,
 		setLoading,
 		manualInputMode,
@@ -95,6 +102,18 @@ export function useConfigInput(
 			return;
 		}
 
+		// Handle profile renaming mode
+		if (profileMode === 'renaming') {
+			if (key.return) {
+				handleRenameProfile();
+			} else if (key.escape) {
+				setProfileMode('normal');
+				setRenameProfileName('');
+				setErrors([]);
+			}
+			return;
+		}
+
 		// Handle profile deletion confirmation
 		if (profileMode === 'deleting') {
 			if (input === 'y' || input === 'Y') {
@@ -115,6 +134,23 @@ export function useConfigInput(
 			setProfileMode('creating');
 			setNewProfileName('');
 			setIsEditing(false);
+			return;
+		}
+
+		if (
+			profileMode === 'normal' &&
+			currentField === 'profile' &&
+			(input === 'r' || input === 'R')
+		) {
+			if (activeProfile === 'default') {
+				setErrors([t.configScreen.cannotRenameDefault]);
+				setIsEditing(false);
+				return;
+			}
+			setProfileMode('renaming');
+			setRenameProfileName(activeProfile);
+			setIsEditing(false);
+			setErrors([]);
 			return;
 		}
 

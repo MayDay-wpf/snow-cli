@@ -163,17 +163,26 @@ export default function DiffViewer({
 	completeNewContent,
 	startLineNumber = 1,
 }: Props) {
-	const {theme} = useTheme();
+	const {theme, diffOpacity} = useTheme();
 	const {columns} = useTerminalSize();
 	const codeLanguage = inferLanguageFromFilename(filename);
 	const diffAddedBackground = useMemo(
-		() => blendHexColors(theme.colors.diffAdded, theme.colors.background, 1),
-		[theme.colors.diffAdded, theme.colors.background],
+		() =>
+			blendHexColors(
+				theme.colors.diffAdded,
+				theme.colors.background,
+				diffOpacity,
+			),
+		[diffOpacity, theme.colors.diffAdded, theme.colors.background],
 	);
 	const diffRemovedBackground = useMemo(
 		() =>
-			blendHexColors(theme.colors.diffRemoved, theme.colors.background, 1),
-		[theme.colors.diffRemoved, theme.colors.background],
+			blendHexColors(
+				theme.colors.diffRemoved,
+				theme.colors.background,
+				diffOpacity,
+			),
+		[diffOpacity, theme.colors.diffRemoved, theme.colors.background],
 	);
 
 	// Use side-by-side view when terminal is wide enough
@@ -255,13 +264,7 @@ export default function DiffViewer({
 				</Box>
 			</Box>
 		);
-	}, [
-		isNewFile,
-		diffNewContent,
-		filename,
-		codeLanguage,
-		diffAddedBackground,
-	]);
+	}, [isNewFile, diffNewContent, filename, codeLanguage, diffAddedBackground]);
 
 	if (isNewFile) {
 		return newFileContent;
@@ -594,9 +597,7 @@ export default function DiffViewer({
 								prefix: `${line.rightLineNum} ${line.rightSign} `,
 								content: line.rightContent,
 								backgroundColor:
-									line.rightType === 'added'
-										? diffAddedBackground
-										: undefined,
+									line.rightType === 'added' ? diffAddedBackground : undefined,
 								color: line.rightType === 'added' ? 'white' : undefined,
 							})}
 						</Box>

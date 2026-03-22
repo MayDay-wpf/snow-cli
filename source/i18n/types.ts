@@ -191,9 +191,14 @@ export type TranslationKeys = {
 		toggleHint: string;
 		enterValue: string;
 		createNewProfile: string;
+		renameProfile: string;
 		enterProfileName: string;
+		enterRenameProfileName: string;
+		profileNameLabel: string;
 		profileNamePlaceholder: string;
+		renameProfilePlaceholder: string;
 		createHint: string;
+		renameHint: string;
 		deleteProfile: string;
 		confirmDelete: string;
 		deleteWarning: string;
@@ -221,8 +226,10 @@ export type TranslationKeys = {
 		profileSelectHint: string;
 		requestMethodSelectHint: string;
 		newProfile: string;
+		renameProfileShort: string;
 		deleteProfileShort: string;
 		mark: string;
+		cannotRenameDefault: string;
 		noProfilesMarked: string;
 		confirmDeleteProfiles: string;
 		fetchingModels: string;
@@ -380,6 +387,8 @@ export type TranslationKeys = {
 		backInfo: string;
 		simpleMode: string;
 		simpleModeInfo: string;
+		diffOpacity: string;
+		diffOpacityInfo: string;
 		enabled: string;
 		disabled: string;
 		darkTheme: string;

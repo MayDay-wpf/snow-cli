@@ -34,6 +34,8 @@ export interface ThemeColors {
 	logoGradient: [string, string, string];
 	// User message background
 	userMessageBackground: string;
+	// Diff highlight opacity (0-1)
+	diffOpacity: number;
 }
 
 export const defaultCustomColors: ThemeColors = {
@@ -55,6 +57,7 @@ export const defaultCustomColors: ThemeColors = {
 	cyan: 'cyan',
 	logoGradient: ['#d3d3d3', '#808080', '#505050'],
 	userMessageBackground: '#2a4a2a',
+	diffOpacity: 1,
 };
 
 function loadCustomThemeColors(): ThemeColors {
@@ -105,6 +108,8 @@ export interface Theme {
 		logoGradient: [string, string, string];
 		// User message background
 		userMessageBackground: string;
+		// Diff highlight opacity (0-1)
+		diffOpacity: number;
 	};
 }
 
@@ -135,6 +140,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#d3d3d3', '#808080', '#505050'],
 			// User message background - dark green
 			userMessageBackground: '#2a4a2a',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	light: {
@@ -163,6 +170,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#606060', '#404040', '#202020'],
 			// User message background - light green
 			userMessageBackground: '#d4f1d4',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	'github-dark': {
@@ -191,6 +200,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#58a6ff', '#1f6feb', '#0d419d'],
 			// User message background - GitHub dark green
 			userMessageBackground: '#1a4d2e',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	rainbow: {
@@ -219,6 +230,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#ff006e', '#8338ec', '#00f5ff'],
 			// User message background - rainbow green
 			userMessageBackground: '#16697a',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	'solarized-dark': {
@@ -247,6 +260,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#2aa198', '#268bd2', '#6c71c4'],
 			// User message background - Solarized green
 			userMessageBackground: '#0a3d2c',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	nord: {
@@ -275,6 +290,8 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
 			// User message background - Nord green
 			userMessageBackground: '#1d3a2f',
+			// Diff highlight opacity
+			diffOpacity: 1,
 		},
 	},
 	custom: {
