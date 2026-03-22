@@ -42,6 +42,25 @@ export class LSPClient {
 	private csharpSolutionLoaded = false;
 	private csharpSolutionLoadPromise?: Promise<void>;
 	private resolveCsharpSolutionLoad?: () => void;
+	private isShuttingDown = false;
+
+	private canSendMessages(): boolean {
+		const stdin = this.process?.stdin;
+		return Boolean(
+			this.connection &&
+				this.isInitialized &&
+				this.isProcessAlive &&
+				!this.isShuttingDown &&
+				stdin &&
+				!stdin.destroyed &&
+				!stdin.writableEnded,
+		);
+	}
+
+	private markTransportClosed(): void {
+		this.isInitialized = false;
+		this.isProcessAlive = false;
+	}
 
 	constructor(private config: LSPClientConfig) {}
 
@@ -104,67 +123,68 @@ export class LSPClient {
 				args.push('-s', this.config.rootPath);
 			}
 
-		this.process = spawn(this.config.command, args, {
-			stdio: ['pipe', 'pipe', 'pipe'],
-			cwd: this.config.rootPath,
-		});
+			this.process = spawn(this.config.command, args, {
+				stdio: ['pipe', 'pipe', 'pipe'],
+				cwd: this.config.rootPath,
+			});
 
-		this.isProcessAlive = true;
+			this.isProcessAlive = true;
+			this.isShuttingDown = false;
 
-		// Detect when the LSP server process exits unexpectedly
-		this.process.on('exit', () => {
-			this.isProcessAlive = false;
-		});
-		this.process.on('error', () => {
-			this.isProcessAlive = false;
-		});
+			// Detect when the LSP server transport is no longer writable.
+			this.process.on('exit', () => {
+				this.markTransportClosed();
+			});
+			this.process.on('close', () => {
+				this.markTransportClosed();
+			});
+			this.process.on('error', () => {
+				this.markTransportClosed();
+			});
 
-		// 🔥 KEY FIX: Suppress 'error' events on stdin to prevent ERR_STREAM_DESTROYED
-		// When a child process dies, Node.js destroys stdin. Subsequent writes via
-		// vscode-jsonrpc's StreamMessageWriter trigger BOTH a callback error (handled
-		// by the Promise) AND an 'error' event on the stream. Without this listener,
-		// the 'error' event becomes an uncaught exception.
-		this.process.stdin?.on('error', () => {
-			this.isProcessAlive = false;
-		});
+			// 子进程退出后，stdin 可能先于上层状态同步被销毁；这里要吞掉 error 事件，
+			// 并把连接状态标记为关闭，避免后续继续写入触发未捕获异常导致 CLI 闪退。
+			this.process.stdin?.on('error', () => {
+				this.markTransportClosed();
+			});
 
-		processManager.register(this.process);
+			processManager.register(this.process);
 
-		this.connection = createMessageConnection(
-			new StreamMessageReader(this.process.stdout!),
-			new StreamMessageWriter(this.process.stdin!),
-		);
+			this.connection = createMessageConnection(
+				new StreamMessageReader(this.process.stdout!),
+				new StreamMessageWriter(this.process.stdin!),
+			);
 
-		// Handle connection-level errors and closure
-		this.connection.onError(([error]) => {
-			console.debug('LSP connection error:', error?.message || error);
-		});
-		this.connection.onClose(() => {
-			this.isInitialized = false;
-			this.isProcessAlive = false;
-		});
+			// Handle connection-level errors and closure
+			this.connection.onError(([error]) => {
+				this.markTransportClosed();
+				console.debug('LSP connection error:', error?.message || error);
+			});
+			this.connection.onClose(() => {
+				this.markTransportClosed();
+			});
 
-		// Some servers (notably csharp-ls) will call back into the client.
-		// If we don't implement these, the server may crash with RemoteMethodNotFound.
-		this.connection.onRequest('window/workDoneProgress/create', () => null);
-		this.connection.onRequest('client/registerCapability', () => null);
-		this.connection.onRequest('workspace/configuration', () => []);
-		this.connection.onNotification('window/logMessage', (params: any) => {
-			const message =
-				typeof params?.message === 'string' ? params.message : '';
-			if (
-				!this.csharpSolutionLoaded &&
-				message.includes('Finished loading solution')
-			) {
-				this.csharpSolutionLoaded = true;
-				this.resolveCsharpSolutionLoad?.();
-			}
-		});
-		this.connection.onNotification('window/showMessage', (_params: any) => {
-			// ignored
-		});
+			// Some servers (notably csharp-ls) will call back into the client.
+			// If we don't implement these, the server may crash with RemoteMethodNotFound.
+			this.connection.onRequest('window/workDoneProgress/create', () => null);
+			this.connection.onRequest('client/registerCapability', () => null);
+			this.connection.onRequest('workspace/configuration', () => []);
+			this.connection.onNotification('window/logMessage', (params: any) => {
+				const message =
+					typeof params?.message === 'string' ? params.message : '';
+				if (
+					!this.csharpSolutionLoaded &&
+					message.includes('Finished loading solution')
+				) {
+					this.csharpSolutionLoaded = true;
+					this.resolveCsharpSolutionLoad?.();
+				}
+			});
+			this.connection.onNotification('window/showMessage', (_params: any) => {
+				// ignored
+			});
 
-		this.connection.listen();
+			this.connection.listen();
 			if (this.config.language === 'csharp') {
 				this.csharpSolutionLoaded = false;
 				this.csharpSolutionLoadPromise = new Promise<void>(resolve => {
@@ -239,32 +259,36 @@ export class LSPClient {
 	}
 
 	async shutdown(): Promise<void> {
-		if (!this.connection || !this.isInitialized) {
+		if (!this.connection) {
 			return;
 		}
 
+		this.isShuttingDown = true;
+
 		try {
-			// Only send protocol messages if the process is still alive
-			if (this.isProcessAlive) {
+			if (this.canSendMessages()) {
 				for (const uri of [...this.openDocuments]) {
 					try {
 						await this.closeDocument(uri);
 					} catch {
-						// Process likely dead mid-loop, stop trying
 						break;
 					}
 				}
+			}
 
+			if (this.canSendMessages()) {
 				try {
 					await this.connection.sendRequest('shutdown', null);
 				} catch {
-					// Server may already be dead
+					this.markTransportClosed();
 				}
+			}
 
+			if (this.canSendMessages()) {
 				try {
 					await this.connection.sendNotification('exit', null);
 				} catch {
-					// Server may have exited after shutdown request
+					this.markTransportClosed();
 				}
 			}
 		} catch (error) {
@@ -286,21 +310,23 @@ export class LSPClient {
 
 		if (this.process) {
 			try {
-				this.process.kill();
+				if (!this.process.killed) {
+					this.process.kill();
+				}
 			} catch {
 				// Process may already be dead
 			}
 			this.process = undefined;
 		}
 
-		this.isInitialized = false;
-		this.isProcessAlive = false;
+		this.isShuttingDown = false;
+		this.markTransportClosed();
 		this.openDocuments.clear();
 		this.documentVersions.clear();
 	}
 
 	async openDocument(uri: string, text: string): Promise<void> {
-		if (!this.connection || !this.isInitialized) {
+		if (!this.canSendMessages()) {
 			throw new Error('LSP client not initialized');
 		}
 
@@ -314,18 +340,27 @@ export class LSPClient {
 		this.documentVersions.set(uri, version);
 		this.openDocuments.add(uri);
 
-		await this.connection.sendNotification('textDocument/didOpen', {
-			textDocument: {
-				uri,
-				languageId,
-				version,
-				text,
-			},
-		});
+		try {
+			await this.connection!.sendNotification('textDocument/didOpen', {
+				textDocument: {
+					uri,
+					languageId,
+					version,
+					text,
+				},
+			});
+		} catch (error) {
+			this.openDocuments.delete(uri);
+			this.documentVersions.delete(uri);
+			this.markTransportClosed();
+			throw error;
+		}
 	}
 
 	async closeDocument(uri: string): Promise<void> {
-		if (!this.connection || !this.isInitialized) {
+		if (!this.canSendMessages()) {
+			this.openDocuments.delete(uri);
+			this.documentVersions.delete(uri);
 			return;
 		}
 
@@ -333,12 +368,16 @@ export class LSPClient {
 			return;
 		}
 
-		await this.connection.sendNotification('textDocument/didClose', {
-			textDocument: {uri},
-		});
-
-		this.openDocuments.delete(uri);
-		this.documentVersions.delete(uri);
+		try {
+			await this.connection!.sendNotification('textDocument/didClose', {
+				textDocument: {uri},
+			});
+		} catch {
+			this.markTransportClosed();
+		} finally {
+			this.openDocuments.delete(uri);
+			this.documentVersions.delete(uri);
+		}
 	}
 
 	async gotoDefinition(uri: string, position: Position): Promise<Location[]> {
