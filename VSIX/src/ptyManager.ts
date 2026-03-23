@@ -3,8 +3,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {getSnowTerminalProxyEnv} from './terminalProxy';
 
-// Lazy-load node-pty to prevent extension activation failure
-// when the native module is incompatible with the current Electron ABI
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 function loadPty(): any {
 	return require('node-pty');
@@ -15,16 +13,126 @@ export interface PtyManagerEvents {
 	onExit: (code: number) => void;
 }
 
-export type ShellType = 'auto' | 'powershell' | 'cmd';
+export type ShellFamily = 'powershell' | 'cmd' | 'posix';
+
+export type ResolvedShell = {
+	path: string;
+	args: string[];
+	family: ShellFamily;
+};
+
+export function detectShellFamily(shellPath: string): ShellFamily {
+	const name = path.basename(shellPath).toLowerCase().replace(/\.exe$/, '');
+	if (name === 'cmd') {
+		return 'cmd';
+	}
+	if (name === 'powershell' || name === 'pwsh') {
+		return 'powershell';
+	}
+	return 'posix';
+}
+
+function defaultArgsForFamily(family: ShellFamily): string[] {
+	switch (family) {
+		case 'powershell':
+			return ['-NoLogo', '-NoExit'];
+		case 'cmd':
+			return [];
+		case 'posix':
+			return ['-l'];
+	}
+}
+
+function detectPowerShellPath(): string {
+	const psModulePath = process.env['PSModulePath'] || '';
+	if (
+		psModulePath.includes('PowerShell\\7') ||
+		psModulePath.includes('powershell\\7')
+	) {
+		return 'pwsh.exe';
+	}
+	return 'powershell.exe';
+}
+
+function windowsFallback(): ResolvedShell {
+	const p = detectPowerShellPath();
+	return {path: p, args: ['-NoLogo', '-NoExit'], family: 'powershell'};
+}
+
+function posixFallback(): ResolvedShell {
+	const shellPath = process.env.SHELL || '/bin/bash';
+	return {path: shellPath, args: ['-l'], family: detectShellFamily(shellPath)};
+}
+
+function resolveAutoFromVSCode(): ResolvedShell | undefined {
+	const platform = os.platform();
+	const platformKey = platform === 'win32' ? 'windows' : platform === 'darwin' ? 'osx' : 'linux';
+	const integratedConfig = vscode.workspace.getConfiguration('terminal.integrated');
+	const defaultProfileName = integratedConfig.get<string>(`defaultProfile.${platformKey}`, '');
+	if (!defaultProfileName) {
+		return undefined;
+	}
+	const profiles =
+		integratedConfig.get<Record<string, Record<string, unknown>>>(
+			`profiles.${platformKey}`,
+		) || {};
+	const profile = profiles[defaultProfileName];
+	if (!profile) {
+		return undefined;
+	}
+	let shellPath: string | undefined;
+	if (typeof profile.path === 'string') {
+		shellPath = profile.path;
+	} else if (Array.isArray(profile.path)) {
+		const fs = require('fs');
+		shellPath = (profile.path as string[]).find(p => {
+			try { return fs.existsSync(p); } catch { return false; }
+		}) || (profile.path as string[])[0];
+	}
+	if (!shellPath) {
+		return undefined;
+	}
+	const family = detectShellFamily(shellPath);
+	const args = Array.isArray(profile.args)
+		? (profile.args as string[])
+		: defaultArgsForFamily(family);
+	return {path: shellPath, args, family};
+}
+
+/**
+ * @param input  'auto' → follow VS Code default profile;
+ *               otherwise treated as a shell executable path (absolute or basename).
+ *               If the path doesn't exist, falls back to PowerShell (Windows) or $SHELL (others).
+ */
+export function resolveShellProfile(input?: string): ResolvedShell {
+	const isWindows = os.platform() === 'win32';
+	const fallback = isWindows ? windowsFallback : posixFallback;
+
+	if (!input || input === 'auto') {
+		return resolveAutoFromVSCode() ?? fallback();
+	}
+
+	const fs = require('fs');
+	if (path.isAbsolute(input) && !fs.existsSync(input)) {
+		return fallback();
+	}
+
+	const family = detectShellFamily(input);
+	return {path: input, args: defaultArgsForFamily(family), family};
+}
 
 export class PtyManager {
 	private ptyProcess: any;
 	private events: PtyManagerEvents | undefined;
 	private startupSendTimer: NodeJS.Timeout | undefined;
-	private shellType: ShellType = 'powershell';
+	private resolvedShell: ResolvedShell | undefined;
 
-	public setShellType(type: ShellType): void {
-		this.shellType = type;
+	public setResolvedShell(shell: ResolvedShell): void {
+		this.resolvedShell = shell;
+	}
+
+	public getShellFamily(): ShellFamily {
+		return this.resolvedShell?.family ?? 'posix';
 	}
 
 	public start(
@@ -38,8 +146,8 @@ export class PtyManager {
 		}
 
 		this.events = events;
-		const shell = this.getDefaultShell();
-		const shellArgs = this.getShellArgs();
+		const shell = this.resolvedShell?.path ?? (process.env.SHELL || '/bin/bash');
+		const shellArgs = this.resolvedShell?.args ?? ['-l'];
 		const proxyEnv = getSnowTerminalProxyEnv();
 		const spawnEnv = {
 			...process.env,
@@ -47,7 +155,6 @@ export class PtyManager {
 		} as {[key: string]: string};
 
 		try {
-			// Ensure spawn-helper has execute permission (may be lost during VSIX extraction)
 			this.fixSpawnHelperPermissions();
 
 			const cols = this.normalizeDimension(initialSize?.cols, 80);
@@ -63,8 +170,6 @@ export class PtyManager {
 			});
 			this.ptyProcess = processInstance;
 
-			// Send startup command as soon as terminal starts producing output,
-			// with a short fallback timer in case no early output is emitted.
 			const cmd = startupCommand ?? 'snow';
 			let startupSent = false;
 			const sendStartupCommand = () => {
@@ -122,7 +227,7 @@ export class PtyManager {
 		try {
 			this.ptyProcess?.resize(cols, rows);
 		} catch {
-			// 忽略 resize 错误
+			// ignore resize errors
 		}
 	}
 
@@ -149,9 +254,6 @@ export class PtyManager {
 		return normalized > 0 ? normalized : fallback;
 	}
 
-	/**
-	 * Fix spawn-helper execute permission that may be lost during VSIX extraction
-	 */
 	private fixSpawnHelperPermissions(): void {
 		if (os.platform() === 'win32') return;
 		try {
@@ -182,61 +284,5 @@ export class PtyManager {
 		} catch {
 			// Ignore permission fix errors
 		}
-	}
-
-	/**
-	 * 检测 Windows 环境下的 PowerShell 版本
-	 * 优先使用 pwsh（PowerShell 7+），回退到 powershell.exe（Windows PowerShell 5.x）
-	 */
-	private detectWindowsPowerShell(): 'pwsh' | 'powershell' | null {
-		const psModulePath = process.env['PSModulePath'] || '';
-		if (!psModulePath) return null;
-
-		// PowerShell Core (pwsh) typically has paths containing "PowerShell\7" or similar
-		if (
-			psModulePath.includes('PowerShell\\7') ||
-			psModulePath.includes('powershell\\7')
-		) {
-			return 'pwsh';
-		}
-
-		// Windows PowerShell 5.x has WindowsPowerShell in path
-		if (psModulePath.toLowerCase().includes('windowspowershell')) {
-			return 'powershell';
-		}
-
-		// Has PSModulePath but can't determine version, assume PowerShell
-		return 'powershell';
-	}
-
-	private getDefaultShell(): string {
-		if (os.platform() !== 'win32') {
-			return process.env.SHELL || '/bin/bash';
-		}
-
-		switch (this.shellType) {
-			case 'cmd':
-				return 'cmd.exe';
-			case 'powershell': {
-				const pwshType = this.detectWindowsPowerShell();
-				return pwshType === 'pwsh' ? 'pwsh.exe' : 'powershell.exe';
-			}
-			case 'auto':
-			default: {
-				const pwshType = this.detectWindowsPowerShell();
-				return pwshType === 'pwsh' ? 'pwsh.exe' : 'powershell.exe';
-			}
-		}
-	}
-
-	private getShellArgs(): string[] {
-		if (os.platform() !== 'win32') {
-			return ['-l'];
-		}
-
-		if (this.shellType === 'cmd') {
-			return [];
-		}
-		return ['-NoLogo', '-NoExit'];
 	}
 }

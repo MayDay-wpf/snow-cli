@@ -1,4 +1,4 @@
-import {PtyManager, ShellType} from './ptyManager';
+import {PtyManager, ResolvedShell, ShellFamily} from './ptyManager';
 
 export type SidebarTerminalSize = {cols: number; rows: number};
 
@@ -52,8 +52,12 @@ export class SidebarTerminalSession {
 		this.outputTruncationNotice = options.outputTruncationNotice;
 	}
 
-	public setShellType(shellType: ShellType): void {
-		this.ptyManager.setShellType(shellType);
+	public setResolvedShell(shell: ResolvedShell): void {
+		this.ptyManager.setResolvedShell(shell);
+	}
+
+	public getShellFamily(): ShellFamily {
+		return this.ptyManager.getShellFamily();
 	}
 
 	public start(

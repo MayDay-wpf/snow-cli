@@ -5,7 +5,7 @@ import {
 	sendEditorContext,
 } from './webSocketServer';
 import {registerDiffCommands} from './diffHandlers';
-import {ShellType} from './ptyManager';
+import {ShellFamily, resolveShellProfile} from './ptyManager';
 import {SidebarTerminalProvider} from './sidebarTerminalProvider';
 import {startupCommandManager} from './startupCommandManager';
 import {formatTerminalPathPayload} from './terminalPathFormatter';
@@ -52,18 +52,8 @@ function getWorkspaceFolderForActiveEditor(): string | undefined {
 	);
 }
 
-function getSplitTerminalShellType(): ShellType {
-	if (process.platform !== 'win32') {
-		return 'auto';
-	}
-
-	const integratedConfig = vscode.workspace.getConfiguration('terminal.integrated');
-	const defaultProfile = integratedConfig.get<string>('defaultProfile.windows', '');
-	const legacyShellPath = integratedConfig.get<string>('shell.windows', '');
-	const profileHint = `${defaultProfile} ${legacyShellPath}`.trim().toLowerCase();
-	return profileHint.includes('cmd') || profileHint.includes('command prompt')
-		? 'cmd'
-		: 'powershell';
+function getSplitTerminalShellFamily(): ShellFamily {
+	return resolveShellProfile().family;
 }
 
 function getExistingSplitSnowTerminal(): vscode.Terminal | undefined {
@@ -123,7 +113,7 @@ async function sendFilePathsToSplitTerminal(paths: string[]): Promise<void> {
 	const terminal = await ensureSplitSnowTerminal();
 	terminal.sendText(
 		formatTerminalPathPayload(paths, {
-			shellType: getSplitTerminalShellType(),
+			shellFamily: getSplitTerminalShellFamily(),
 			platform: process.platform,
 		}),
 		false,

@@ -1,7 +1,7 @@
-import {ShellType} from './ptyManager';
+import {ShellFamily} from './ptyManager';
 
 type TerminalPathFormatOptions = {
-	shellType?: ShellType;
+	shellFamily?: ShellFamily;
 	platform?: NodeJS.Platform;
 };
 
@@ -22,11 +22,12 @@ export function formatTerminalPathPayload(
 	options: TerminalPathFormatOptions = {},
 ): string {
 	const platform = options.platform ?? process.platform;
+	const family = options.shellFamily ?? (platform === 'win32' ? 'powershell' : 'posix');
 	const quote =
-		platform === 'win32'
-			? options.shellType === 'cmd'
-				? quoteForCmd
-				: quoteForPowerShell
-			: quoteForBash;
+		family === 'cmd'
+			? quoteForCmd
+			: family === 'powershell'
+				? quoteForPowerShell
+				: quoteForBash;
 	return paths.map(quote).join(' ');
 }

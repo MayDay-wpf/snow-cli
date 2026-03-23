@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import {ShellType} from './ptyManager';
+import {resolveShellProfile} from './ptyManager';
 import {
 	SidebarTerminalSession,
 	SidebarTerminalTabState,
@@ -42,14 +42,14 @@ type FrontendLogMessage = {
 };
 
 type TerminalConfig = {
-	shellType: ShellType;
+	shellProfile: string;
 	fontFamily: string;
 	fontSize: number;
 	fontWeight: string;
 	lineHeight: number;
 };
 
-type NormalizedFontConfig = Omit<TerminalConfig, 'shellType'>;
+type NormalizedFontConfig = Omit<TerminalConfig, 'shellProfile'>;
 
 type RendererHealthStage =
 	| 'degraded'
@@ -484,7 +484,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	constructor(private readonly extensionUri: vscode.Uri) {
 		this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
 		this.ensureActiveSessionExists();
-		this.applyShellType();
+		this.applyShellProfile();
 		this.logSidebarInfo('Sidebar terminal provider initialized.');
 	}
 
@@ -547,7 +547,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private getTerminalConfig(): TerminalConfig {
 		const cfg = vscode.workspace.getConfiguration('snow-cli.terminal');
 		return {
-			shellType: cfg.get<ShellType>('shellType', 'auto'),
+			shellProfile: cfg.get<string>('shellType', 'auto'),
 			fontFamily: cfg.get<string>('fontFamily', ''),
 			fontSize: cfg.get<number>('fontSize', 14),
 			fontWeight: cfg.get<string>('fontWeight', 'normal'),
@@ -568,10 +568,11 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		};
 	}
 
-	private applyShellType(): void {
-		const {shellType} = this.getTerminalConfig();
+	private applyShellProfile(): void {
+		const {shellProfile} = this.getTerminalConfig();
+		const resolved = resolveShellProfile(shellProfile);
 		for (const session of this.getOrderedSessions()) {
-			session.setShellType(shellType);
+			session.setResolvedShell(resolved);
 		}
 	}
 
@@ -665,7 +666,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			outputBufferMaxBytes: OUTPUT_BUFFER_MAX_BYTES,
 			outputTruncationNotice: OUTPUT_TRUNCATION_NOTICE,
 		});
-		session.setShellType(this.getTerminalConfig().shellType);
+		session.setResolvedShell(resolveShellProfile(this.getTerminalConfig().shellProfile));
 		this.sessions.set(session.id, session);
 		this.sessionOrder.push(session.id);
 		this.activeSessionId = session.id;
@@ -1156,7 +1157,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			return;
 		}
 
-		this.applyShellType();
+		this.applyShellProfile();
 		const workspaceFolder = this.getWorkspaceFolderForActiveEditor();
 		const cwd = workspaceFolder || process.cwd();
 		const sizeDetails = this.latestTerminalSize
@@ -1543,8 +1544,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			return;
 		}
 
-		const {shellType} = this.getTerminalConfig();
-		this.writeInputToTerminal(formatTerminalPathPayload(paths, {shellType}));
+		const activeSession = this.getActiveSession();
+		const shellFamily = activeSession?.getShellFamily();
+		this.writeInputToTerminal(formatTerminalPathPayload(paths, {shellFamily}));
 		if (this.isWebviewOperational()) {
 			this.requestWebviewFocus();
 			return;
