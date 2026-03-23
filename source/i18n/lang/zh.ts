@@ -571,6 +571,22 @@ export const zh: TranslationKeys = {
 			copyFailedPrefix: '✗ 复制到剪贴板失败',
 			unknownError: '未知错误',
 		},
+		// 命令输出消息（用于命令执行结果）
+		commandOutput: {
+			// 自动格式化命令消息
+			autoFormat: {
+				enabled: '自动格式化: 已启用',
+				disabled: '自动格式化: 已禁用',
+				statusEnabled: '自动格式化: 已启用',
+				statusDisabled: '自动格式化: 已禁用',
+			},
+			// 导出命令消息
+			export: {
+				exporting: '正在导出对话...',
+				openingDialog: '正在打开文件保存对话框...',
+				cancelledByUser: '导出已被用户取消。',
+			},
+		},
 	},
 	permissionsPanel: {
 		title: '权限',

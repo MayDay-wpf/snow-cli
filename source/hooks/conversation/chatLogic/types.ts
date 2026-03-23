@@ -139,4 +139,5 @@ export interface UseChatLogicProps {
 			| import('../../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	setIsResumingSession?: React.Dispatch<React.SetStateAction<boolean>>;
 }

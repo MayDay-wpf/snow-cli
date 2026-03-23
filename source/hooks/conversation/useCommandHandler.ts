@@ -15,6 +15,16 @@ import {
 import {exportMessagesToFile} from '../../utils/session/chatExporter.js';
 import {copyToClipboard} from '../../utils/core/clipboard.js';
 import {useI18n} from '../../i18n/index.js';
+import {getCurrentLanguage} from '../../utils/config/languageConfig.js';
+import {translations} from '../../i18n/index.js';
+
+/**
+ * Helper function to get export command messages
+ */
+function getExportMessages() {
+	const currentLanguage = getCurrentLanguage();
+	return translations[currentLanguage].commandPanel.commandOutput.export;
+}
 
 /**
  * 执行上下文压缩
@@ -966,7 +976,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Show loading message first
 				const loadingMessage: Message = {
 					role: 'command',
-					content: 'Opening file save dialog...',
+					content: getExportMessages().openingDialog,
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, loadingMessage]);
@@ -1001,7 +1011,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// User cancelled
 						const cancelMessage: Message = {
 							role: 'command',
-							content: 'Export cancelled by user.',
+							content: getExportMessages().cancelledByUser,
 							commandName: commandName,
 						};
 						options.setMessages(prev => [...prev, cancelMessage]);

@@ -45,6 +45,7 @@ export function useChatScreenLocalState() {
 		useState<PendingUserQuestionState>(null);
 	const [compressionStatus, setCompressionStatus] =
 		useState<CompressionStatus | null>(null);
+	const [isResumingSession, setIsResumingSession] = useState(false);
 
 	useEffect(() => {
 		currentContextPercentageRef.current = currentContextPercentage;
@@ -144,5 +145,7 @@ export function useChatScreenLocalState() {
 		requestUserQuestion,
 		compressionStatus,
 		setCompressionStatus,
+		isResumingSession,
+		setIsResumingSession,
 	};
 }

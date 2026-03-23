@@ -566,11 +566,27 @@ export const zhTW: TranslationKeys = {
 			quit: '退出應用程式',
 		},
 		copyLastFeedback: {
-			noAssistantMessage: '未找到可複製的 AI 助手訊息。',
-			emptyAssistantMessage: '最後一條 AI 助手訊息沒有可複製的內容。',
-			copySuccess: '✓ 已複製最後一條 AI 訊息到剪貼簿',
+			noAssistantMessage: '未找到可複製的 AI 助手消息。',
+			emptyAssistantMessage: '最後一條 AI 助手消息沒有可複製的內容。',
+			copySuccess: '✓ 已複製最後一條 AI 消息到剪貼簿',
 			copyFailedPrefix: '✗ 複製到剪貼簿失敗',
 			unknownError: '未知錯誤',
+		},
+		// 命令輸出消息（用於命令執行結果）
+		commandOutput: {
+			// 自動格式化命令消息
+			autoFormat: {
+				enabled: '自動格式化: 已啟用',
+				disabled: '自動格式化: 已停用',
+				statusEnabled: '自動格式化: 已啟用',
+				statusDisabled: '自動格式化: 已停用',
+			},
+			// 導出命令消息
+			export: {
+				exporting: '正在導出對話...',
+				openingDialog: '正在開啟檔案儲存對話方塊...',
+				cancelledByUser: '導出已被使用者取消。',
+			},
 		},
 	},
 	permissionsPanel: {

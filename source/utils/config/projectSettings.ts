@@ -1,30 +1,42 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 export interface ProjectSettings {
 	toolSearchEnabled?: boolean;
 	autoFormatEnabled?: boolean;
 	subAgentMaxSpawnDepth?: number;
+	fileListDisplayMode?: 'list' | 'tree';
 }
 
-const SNOW_DIR = path.join(process.cwd(), '.snow');
-const SETTINGS_FILE = path.join(SNOW_DIR, 'settings.json');
+const PROJECT_SNOW_DIR = path.join(process.cwd(), '.snow');
+const GLOBAL_SNOW_DIR = path.join(os.homedir(), '.snow');
+const PROJECT_SETTINGS_FILE = path.join(PROJECT_SNOW_DIR, 'settings.json');
+const GLOBAL_SETTINGS_FILE = path.join(GLOBAL_SNOW_DIR, 'settings.json');
 
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
 
 function ensureSnowDir(): void {
-	if (!fs.existsSync(SNOW_DIR)) {
-		fs.mkdirSync(SNOW_DIR, {recursive: true});
+	if (!fs.existsSync(PROJECT_SNOW_DIR)) {
+		fs.mkdirSync(PROJECT_SNOW_DIR, {recursive: true});
 	}
 }
 
 function loadSettings(): ProjectSettings {
 	try {
-		if (!fs.existsSync(SETTINGS_FILE)) {
-			return {};
+		// 优先读取项目配置
+		if (fs.existsSync(PROJECT_SETTINGS_FILE)) {
+			const content = fs.readFileSync(PROJECT_SETTINGS_FILE, 'utf-8');
+			return JSON.parse(content) as ProjectSettings;
 		}
-		const content = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-		return JSON.parse(content) as ProjectSettings;
+
+		// 如果项目配置不存在，读取全局配置
+		if (fs.existsSync(GLOBAL_SETTINGS_FILE)) {
+			const content = fs.readFileSync(GLOBAL_SETTINGS_FILE, 'utf-8');
+			return JSON.parse(content) as ProjectSettings;
+		}
+
+		return {};
 	} catch {
 		return {};
 	}
@@ -33,7 +45,11 @@ function loadSettings(): ProjectSettings {
 function saveSettings(settings: ProjectSettings): void {
 	try {
 		ensureSnowDir();
-		fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
+		fs.writeFileSync(
+			PROJECT_SETTINGS_FILE,
+			JSON.stringify(settings, null, 2),
+			'utf-8',
+		);
 	} catch {
 		// Ignore write errors
 	}
@@ -81,4 +97,15 @@ export function setSubAgentMaxSpawnDepth(depth: number): number {
 	settings.subAgentMaxSpawnDepth = normalizedDepth;
 	saveSettings(settings);
 	return normalizedDepth;
+}
+
+export function getFileListDisplayMode(): 'list' | 'tree' {
+	const settings = loadSettings();
+	return settings.fileListDisplayMode ?? 'list';
+}
+
+export function setFileListDisplayMode(mode: 'list' | 'tree'): void {
+	const settings = loadSettings();
+	settings.fileListDisplayMode = mode;
+	saveSettings(settings);
 }

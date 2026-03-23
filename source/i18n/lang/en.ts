@@ -611,6 +611,22 @@ export const en: TranslationKeys = {
 			copyFailedPrefix: '✗ Failed to copy to clipboard',
 			unknownError: 'Unknown error',
 		},
+		// Command output messages (for command execution results)
+		commandOutput: {
+			// Auto-format command messages
+			autoFormat: {
+				enabled: 'Auto-format: Enabled for this project',
+				disabled: 'Auto-format: Disabled for this project',
+				statusEnabled: 'Auto-format: Enabled for this project',
+				statusDisabled: 'Auto-format: Disabled for this project',
+			},
+			// Export command messages
+			export: {
+				exporting: 'Exporting conversation...',
+				openingDialog: 'Opening file save dialog...',
+				cancelledByUser: 'Export cancelled by user.',
+			},
+		},
 	},
 	permissionsPanel: {
 		title: 'Permissions',

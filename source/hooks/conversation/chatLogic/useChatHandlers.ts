@@ -44,6 +44,7 @@ export function useChatHandlers(
 		setFileUpdateNotification,
 		setWatcherEnabled,
 		exitingApplicationText,
+		setIsResumingSession,
 	} = props;
 	const {processMessage} = deps;
 
@@ -79,6 +80,7 @@ export function useChatHandlers(
 
 	const handleSessionPanelSelect = async (sessionId: string) => {
 		setShowSessionPanel(false);
+		setIsResumingSession?.(true);
 		try {
 			const session = await sessionManager.loadSession(sessionId);
 			if (session) {
@@ -125,6 +127,8 @@ export function useChatHandlers(
 			}
 		} catch (error) {
 			console.error('Failed to load session:', error);
+		} finally {
+			setIsResumingSession?.(false);
 		}
 	};
 

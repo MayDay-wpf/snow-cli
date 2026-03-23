@@ -15,6 +15,10 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getWorkingDirectories} from '../../../utils/config/workingDirConfig.js';
 import {SSHClient, parseSSHUrl} from '../../../utils/ssh/sshClient.js';
+import {
+	getFileListDisplayMode,
+	setFileListDisplayMode,
+} from '../../../utils/config/projectSettings.js';
 
 type FileItem = {
 	name: string;
@@ -224,7 +228,9 @@ const FileList = memo(
 			const [searchDepth, setSearchDepth] = useState(5); // Start with shallow depth for performance
 			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
 			const [hasMoreDepth, setHasMoreDepth] = useState(true); // Track if there's more depth to explore
-			const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+			const [displayMode, setDisplayMode] = useState<DisplayMode>(
+				getFileListDisplayMode,
+			);
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -913,7 +919,9 @@ const FileList = memo(
 							return false;
 						}
 
-						setDisplayMode(prev => (prev === 'list' ? 'tree' : 'list'));
+						const newMode = displayMode === 'list' ? 'tree' : 'list';
+						setDisplayMode(newMode);
+						setFileListDisplayMode(newMode);
 						return true;
 					},
 				}),

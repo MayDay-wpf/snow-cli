@@ -568,6 +568,22 @@ export type TranslationKeys = {
 			copyFailedPrefix: string;
 			unknownError: string;
 		};
+		// Command output messages (for command execution results)
+		commandOutput: {
+			// Auto-format command messages
+			autoFormat: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+			};
+			// Export command messages
+			export: {
+				exporting: string;
+				openingDialog: string;
+				cancelledByUser: string;
+			};
+		};
 	};
 	// Profile Panel
 	profilePanel: {

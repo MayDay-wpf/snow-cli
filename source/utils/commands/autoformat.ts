@@ -6,6 +6,14 @@ import {
 	getAutoFormatEnabled,
 	setAutoFormatEnabled,
 } from '../config/projectSettings.js';
+import {getCurrentLanguage} from '../config/languageConfig.js';
+import {translations} from '../../i18n/index.js';
+
+// Get translated messages
+function getMessages() {
+	const currentLanguage = getCurrentLanguage();
+	return translations[currentLanguage].commandPanel.commandOutput.autoFormat;
+}
 
 // Auto-format command handler - toggle MCP filesystem auto-formatting
 // Usage:
@@ -17,11 +25,12 @@ registerCommand('auto-format', {
 	execute: (args?: string): CommandResult => {
 		const trimmedArgs = args?.trim().toLowerCase();
 		const enabled = getAutoFormatEnabled();
+		const messages = getMessages();
 
 		if (trimmedArgs === 'status') {
 			return {
 				success: true,
-				message: `Auto-format: ${enabled ? 'Enabled' : 'Disabled'} for this project`,
+				message: enabled ? messages.statusEnabled : messages.statusDisabled,
 			};
 		}
 
@@ -29,7 +38,7 @@ registerCommand('auto-format', {
 			setAutoFormatEnabled(true);
 			return {
 				success: true,
-				message: 'Auto-format: Enabled for this project',
+				message: messages.enabled,
 			};
 		}
 
@@ -37,14 +46,14 @@ registerCommand('auto-format', {
 			setAutoFormatEnabled(false);
 			return {
 				success: true,
-				message: 'Auto-format: Disabled for this project',
+				message: messages.disabled,
 			};
 		}
 
 		setAutoFormatEnabled(!enabled);
 		return {
 			success: true,
-			message: `Auto-format: ${!enabled ? 'Enabled' : 'Disabled'} for this project`,
+			message: !enabled ? messages.enabled : messages.disabled,
 		};
 	},
 });

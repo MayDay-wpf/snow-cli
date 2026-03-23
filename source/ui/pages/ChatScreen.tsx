@@ -1,5 +1,6 @@
 import React, {useEffect, useRef} from 'react';
 import {Box, Text} from 'ink';
+import Spinner from 'ink-spinner';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import ChatFooter from '../components/chat/ChatFooter.js';
@@ -94,6 +95,8 @@ export default function ChatScreen({
 		requestUserQuestion,
 		compressionStatus,
 		setCompressionStatus,
+		isResumingSession,
+		setIsResumingSession,
 	} = useChatScreenLocalState();
 	const {
 		yoloMode,
@@ -159,6 +162,7 @@ export default function ChatScreen({
 		setRemountKey,
 		setMessages,
 		initializeFromSession,
+		setIsResumingSession,
 	});
 
 	const {
@@ -226,6 +230,7 @@ export default function ChatScreen({
 		},
 		pendingToolConfirmation,
 		onCompressionStatus: setCompressionStatus,
+		setIsResumingSession,
 	});
 
 	function handleSwitchProfile() {
@@ -403,6 +408,24 @@ export default function ChatScreen({
 						{t.chatScreen.terminalMinHeight}
 					</Text>
 				</Box>
+			</Box>
+		);
+	}
+
+	// Show loading state when resuming session
+	if (isResumingSession) {
+		return (
+			<Box
+				flexDirection="column"
+				justifyContent="center"
+				alignItems="center"
+				height="100%"
+				width={terminalWidth}
+			>
+				<Text color="cyan">
+					<Spinner type="dots" />
+				</Text>
+				<Text>{t.chatScreen.sessionLoading}</Text>
 			</Box>
 		);
 	}

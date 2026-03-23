@@ -16,6 +16,7 @@ type Options = {
 	setRemountKey: Dispatch<SetStateAction<number>>;
 	setMessages: Dispatch<SetStateAction<Message[]>>;
 	initializeFromSession: (messages: SessionChatMessage[]) => void;
+	setIsResumingSession?: (value: boolean) => void;
 };
 
 export function useChatScreenSessionLifecycle({
@@ -25,6 +26,7 @@ export function useChatScreenSessionLifecycle({
 	setRemountKey,
 	setMessages,
 	initializeFromSession,
+	setIsResumingSession,
 }: Options) {
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
@@ -36,6 +38,7 @@ export function useChatScreenSessionLifecycle({
 		}
 
 		const resumeSession = async () => {
+			setIsResumingSession?.(true);
 			try {
 				const sessions = await sessionManager.listSessions();
 				if (sessions.length > 0) {
@@ -51,6 +54,8 @@ export function useChatScreenSessionLifecycle({
 				}
 			} catch (error) {
 				console.error('Failed to auto-resume session:', error);
+			} finally {
+				setIsResumingSession?.(false);
 			}
 		};
 
