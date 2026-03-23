@@ -10,6 +10,7 @@ import {smartTruncatePath} from '../../../utils/ui/messageFormatter.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
+const GIT_BRANCH_REFRESH_INTERVAL_MS = 10000;
 const execFileAsync = promisify(execFile);
 const WINDOWS_POWERSHELL_CANDIDATES = [
 	'pwsh.exe',
@@ -187,6 +188,61 @@ function useCurrentProcessMemoryUsage(): number {
 	return memoryUsageMb;
 }
 
+async function getGitBranch(): Promise<string | undefined> {
+	try {
+		const {stdout} = await execFileAsync(
+			'git',
+			['rev-parse', '--abbrev-ref', 'HEAD'],
+			{
+				timeout: 2000,
+				maxBuffer: 1024,
+				cwd: process.cwd(),
+			},
+		);
+		const branch = stdout.trim();
+		return branch || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function useGitBranch(): string | undefined {
+	const [branch, setBranch] = React.useState<string | undefined>(undefined);
+
+	React.useEffect(() => {
+		let disposed = false;
+		let isRefreshing = false;
+
+		const refreshBranch = async () => {
+			if (isRefreshing) {
+				return;
+			}
+
+			isRefreshing = true;
+			try {
+				const nextBranch = await getGitBranch();
+				if (!disposed) {
+					setBranch(nextBranch);
+				}
+			} finally {
+				isRefreshing = false;
+			}
+		};
+
+		void refreshBranch();
+		const timer = setInterval(() => {
+			void refreshBranch();
+		}, GIT_BRANCH_REFRESH_INTERVAL_MS);
+
+		return () => {
+			disposed = true;
+			clearInterval(timer);
+		};
+	}, []);
+
+	return branch;
+}
+
 type VSCodeConnectionStatus =
 	| 'disconnected'
 	| 'connecting'
@@ -299,6 +355,7 @@ export default function StatusLine({
 	const {theme} = useTheme();
 	const simpleMode = getSimpleMode();
 	const memoryUsageMb = useCurrentProcessMemoryUsage();
+	const gitBranch = useGitBranch();
 	const formattedMemoryUsage = formatMemoryUsage(memoryUsageMb);
 	const simpleMemoryStatusText = `⛁ ${formattedMemoryUsage}`;
 	const detailedMemoryStatusText = `⛁ ${t.chatScreen.memoryUsageLabel} ${formattedMemoryUsage}`;
@@ -318,6 +375,7 @@ export default function StatusLine({
 		copyStatusMessage ||
 		currentProfileName ||
 		compressBlockToast ||
+		gitBranch ||
 		detailedMemoryStatusText;
 
 	if (!hasAnyStatus) {
@@ -333,6 +391,14 @@ export default function StatusLine({
 			statusItems.push({
 				text: `ꚰ ${currentProfileName}`,
 				color: theme.colors.menuInfo,
+			});
+		}
+
+		// Git 分支
+		if (gitBranch) {
+			statusItems.push({
+				text: `⑂ ${gitBranch}`,
+				color: '#F472B6',
 			});
 		}
 
@@ -644,6 +710,15 @@ export default function StatusLine({
 					<Text color={theme.colors.menuInfo} dimColor>
 						ꚰ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
 						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
+					</Text>
+				</Box>
+			)}
+
+			{/* Git分支显示 */}
+			{gitBranch && (
+				<Box>
+					<Text color="#F472B6" dimColor>
+						⑂ {t.chatScreen.gitBranch}: {gitBranch}
 					</Text>
 				</Box>
 			)}

@@ -865,6 +865,7 @@ export type TranslationKeys = {
 		// Profile switch
 		profileCurrent: string;
 		profileSwitchHint: string;
+		gitBranch: string;
 		memoryUsageLabel: string;
 		// Tool execution
 		toolCall: string;

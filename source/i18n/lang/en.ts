@@ -915,6 +915,7 @@ export const en: TranslationKeys = {
 		// Profile switch
 		profileCurrent: 'Profile',
 		profileSwitchHint: 'switch',
+		gitBranch: 'Git Branch',
 		memoryUsageLabel: 'Memory Usage:',
 		// Tool execution
 		toolCall: 'Tool call',

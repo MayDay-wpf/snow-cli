@@ -866,6 +866,7 @@ export const zh: TranslationKeys = {
 		// Profile switch
 		profileCurrent: '当前配置',
 		profileSwitchHint: '切换',
+		gitBranch: 'Git分支',
 		memoryUsageLabel: '内存占用:',
 		// Tool execution
 		toolCall: '工具调用',
