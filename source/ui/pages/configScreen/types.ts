@@ -9,6 +9,7 @@ export type ConfigField =
 	| 'customHeadersSchemeId'
 	| 'anthropicBeta'
 	| 'anthropicCacheTTL'
+	| 'anthropicSpeed'
 	| 'enableAutoCompress'
 	| 'autoCompressThreshold'
 	| 'showThinking'
@@ -94,6 +95,7 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'thinkingEffort',
 	'responsesReasoningEffort',
 	'responsesVerbosity',
+	'anthropicSpeed',
 ];
 
 export const isSelectField = (field: ConfigField) =>

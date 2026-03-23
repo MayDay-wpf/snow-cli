@@ -96,6 +96,10 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [isThinkingEffortSelecting, setIsThinkingEffortSelecting] =
 		useState(false);
 	const [isVerbositySelecting, setIsVerbositySelecting] = useState(false);
+	const [anthropicSpeed, setAnthropicSpeed] = useState<
+		'fast' | 'standard' | undefined
+	>(undefined);
+	const [isSpeedSelecting, setIsSpeedSelecting] = useState(false);
 
 	useEffect(() => {
 		if (!visible) {
@@ -119,6 +123,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		setThinkingInputValue('');
 		setIsThinkingEffortSelecting(false);
 		setIsVerbositySelecting(false);
+		setIsSpeedSelecting(false);
 		setErrorMessage('');
 
 		// Load thinking-related config on open
@@ -143,6 +148,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		);
 		setResponsesFastMode((cfg as any).responsesFastMode || false);
 		setResponsesVerbosity((cfg as any).responsesVerbosity || 'medium');
+		setAnthropicSpeed((cfg as any).anthropicSpeed);
 	}, [visible, advancedModel, basicModel]);
 
 	// Auto-hide error message after 3 seconds
@@ -501,6 +507,23 @@ export const ModelsPanel: React.FC<Props> = ({
 		[],
 	);
 
+	const applyAnthropicSpeed = useCallback(
+		async (next: 'fast' | 'standard' | undefined) => {
+			setErrorMessage('');
+			try {
+				setAnthropicSpeed(next);
+				await updateOpenAiConfig({
+					anthropicSpeed: next,
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[],
+	);
+
 	const applyResponsesFastMode = useCallback(async (next: boolean) => {
 		setErrorMessage('');
 		try {
@@ -521,7 +544,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=verbosity, 4=fastMode
 	// chat/other: 0=showThinking, 1=enableThinking
 	const maxThinkingIndex = useMemo(() => {
-		if (requestMethod === 'anthropic') return 3;
+		if (requestMethod === 'anthropic') return 4;
 		if (requestMethod === 'responses') return 4;
 		if (requestMethod === 'gemini') return 2;
 		return 1;
@@ -563,6 +586,10 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (isVerbositySelecting) {
 					setIsVerbositySelecting(false);
+					return;
+				}
+				if (isSpeedSelecting) {
+					setIsSpeedSelecting(false);
 					return;
 				}
 				if (manualInputModeRef.current || manualInputMode) {
@@ -648,7 +675,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 
 			// In list selection modes, avoid switching tabs or triggering other actions.
-			if (isThinkingModeSelecting || isThinkingEffortSelecting || isVerbositySelecting) {
+			if (isThinkingModeSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting) {
 				return;
 			}
 
@@ -703,7 +730,9 @@ export const ModelsPanel: React.FC<Props> = ({
 							setIsVerbositySelecting(true);
 						}
 					} else if (thinkingFocusIndex === 4) {
-						if (requestMethod === 'responses') {
+						if (requestMethod === 'anthropic') {
+							setIsSpeedSelecting(true);
+						} else if (requestMethod === 'responses') {
 							void applyResponsesFastMode(!responsesFastMode);
 						}
 					}
@@ -899,6 +928,28 @@ export const ModelsPanel: React.FC<Props> = ({
 							</Text>
 						</Box>
 					)}
+					{requestMethod === 'anthropic' && (
+						<Box>
+							<Text
+								color={
+									thinkingFocusIndex === 4
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+							>
+								{thinkingFocusIndex === 4 ? '❯ ' : '  '}
+								{t.modelsPanel.anthropicSpeed}
+							</Text>
+							<Text color={theme.colors.menuSelected}>
+								{' '}
+								{anthropicSpeed === 'fast'
+									? t.configScreen.anthropicSpeedFast
+									: anthropicSpeed === 'standard'
+									? t.configScreen.anthropicSpeedStandard
+									: t.configScreen.anthropicSpeedNotUsed}
+							</Text>
+						</Box>
+					)}
 					{requestMethod === 'responses' && (
 						<Box>
 							<Text
@@ -1052,10 +1103,35 @@ export const ModelsPanel: React.FC<Props> = ({
 						</Box>
 					)}
 
+					{isSpeedSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{label: t.configScreen.anthropicSpeedNotUsed, value: '__NONE__'},
+									{label: t.configScreen.anthropicSpeedFast, value: 'fast'},
+									{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
+								]}
+								limit={6}
+								disableNumberShortcuts={true}
+								initialIndex={
+									anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+								}
+								isFocused={true}
+								onSelect={item => {
+									void applyAnthropicSpeed(
+										item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+									);
+									setIsSpeedSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
 					{!thinkingInputMode &&
 						!isThinkingModeSelecting &&
 						!isThinkingEffortSelecting &&
-						!isVerbositySelecting && (
+						!isVerbositySelecting &&
+						!isSpeedSelecting && (
 							<Box marginTop={1}>
 								<Text dimColor color={theme.colors.menuSecondary}>
 									{t.modelsPanel.navigationHint}

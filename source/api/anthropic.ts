@@ -714,6 +714,10 @@ export async function* createStreamingAnthropicCompletion(
 				stream: true,
 			};
 
+			if (config.anthropicSpeed) {
+				requestBody.speed = config.anthropicSpeed;
+			}
+
 			// Add thinking configuration if enabled and not explicitly disabled
 			// When thinking is enabled, temperature must be 1
 			// Note: agents and other internal tools should set disableThinking=true

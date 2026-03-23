@@ -40,6 +40,7 @@ export interface ApiConfig {
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
 	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
 	responsesVerbosity?: 'low' | 'medium' | 'high'; // Responses API text verbosity (default: medium)
+	anthropicSpeed?: 'fast' | 'standard'; // Anthropic speed parameter (optional, not sent when undefined)
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	autoCompressThreshold?: number; // Auto compress threshold percentage (default: 80, range: 50-95)

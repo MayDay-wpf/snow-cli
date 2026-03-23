@@ -26,6 +26,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		setThinkingEffort,
 		responsesVerbosity,
 		setResponsesVerbosity,
+		anthropicSpeed,
+		setAnthropicSpeed,
 		getCurrentOptions,
 		getCurrentValue,
 		getCustomHeadersSchemeSelectItems,
@@ -52,6 +54,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.responsesReasoningEffort.replace(':', '');
 			case 'responsesVerbosity':
 				return t.configScreen.responsesVerbosity.replace(':', '');
+			case 'anthropicSpeed':
+				return t.configScreen.anthropicSpeed.replace(':', '');
 			case 'systemPromptId':
 				return t.configScreen.systemPrompt;
 			case 'customHeadersSchemeId':
@@ -189,6 +193,25 @@ export default function ConfigSelectPanel({state}: Props) {
 						isFocused={true}
 						onSelect={item => {
 							setResponsesVerbosity(item.value as 'low' | 'medium' | 'high');
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'anthropicSpeed' && (
+					<ScrollableSelectInput
+						items={[
+							{label: t.configScreen.anthropicSpeedNotUsed, value: '__NONE__'},
+							{label: t.configScreen.anthropicSpeedFast, value: 'fast'},
+							{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
+						]}
+						initialIndex={
+							anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+						}
+						isFocused={true}
+						onSelect={item => {
+							setAnthropicSpeed(
+								item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+							);
 							setIsEditing(false);
 						}}
 					/>

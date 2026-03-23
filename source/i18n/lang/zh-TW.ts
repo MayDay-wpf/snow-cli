@@ -161,6 +161,10 @@ export const zhTW: TranslationKeys = {
 		anthropicCacheTTL: 'Anthropic 快取時效:',
 		anthropicCacheTTL5m: '5分鐘（預設）',
 		anthropicCacheTTL1h: '1小時',
+		anthropicSpeed: 'Anthropic Speed:',
+		anthropicSpeedNotUsed: '不使用（預設）',
+		anthropicSpeedFast: 'fast',
+		anthropicSpeedStandard: 'standard',
 		enablePromptOptimization: '啟用提示詞優化:',
 		enableAutoCompress: '啟用自動壓縮:',
 		autoCompressThreshold: '自動壓縮閾值 (%):',
@@ -619,6 +623,7 @@ export const zhTW: TranslationKeys = {
 			'目前請求方式({requestMethod})不支援思考',
 		requestMethodNotSupportedForThinkingStrength:
 			'目前請求方式({requestMethod})不支援思考強度設定',
+		anthropicSpeed: 'Speed:',
 		saveFailed: '儲存失敗',
 		modelSaveFailed: '模型儲存失敗',
 		tipLabel: '提示:',

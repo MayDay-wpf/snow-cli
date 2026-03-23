@@ -161,6 +161,10 @@ export type TranslationKeys = {
 		anthropicCacheTTL: string;
 		anthropicCacheTTL5m: string;
 		anthropicCacheTTL1h: string;
+		anthropicSpeed: string;
+		anthropicSpeedNotUsed: string;
+		anthropicSpeedFast: string;
+		anthropicSpeedStandard: string;
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
 		autoCompressThreshold: string;
@@ -685,6 +689,7 @@ export type TranslationKeys = {
 		thinkingLabel: string;
 		requestMethodNotSupportedForThinking: string;
 		requestMethodNotSupportedForThinkingStrength: string;
+		anthropicSpeed: string;
 		saveFailed: string;
 		modelSaveFailed: string;
 		tipLabel: string;

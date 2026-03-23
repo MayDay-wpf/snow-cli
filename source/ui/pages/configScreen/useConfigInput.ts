@@ -433,6 +433,7 @@ export function useConfigInput(
 			setResponsesFastMode(!responsesFastMode);
 		} else if (
 			currentField === 'anthropicCacheTTL' ||
+			currentField === 'anthropicSpeed' ||
 			currentField === 'thinkingMode' ||
 			currentField === 'thinkingEffort' ||
 			currentField === 'responsesReasoningEffort' ||

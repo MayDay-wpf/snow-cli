@@ -94,6 +94,9 @@ export function useConfigState() {
 		'low' | 'medium' | 'high'
 	>('medium');
 	const [responsesFastMode, setResponsesFastMode] = useState(false);
+	const [anthropicSpeed, setAnthropicSpeed] = useState<
+		'fast' | 'standard' | undefined
+	>(undefined);
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
@@ -154,6 +157,7 @@ export function useConfigState() {
 				? [
 						'anthropicBeta' as ConfigField,
 						'anthropicCacheTTL' as ConfigField,
+						'anthropicSpeed' as ConfigField,
 						'thinkingEnabled' as ConfigField,
 						'thinkingMode' as ConfigField,
 						...(thinkingEnabled && thinkingMode === 'tokens'
@@ -231,6 +235,7 @@ export function useConfigState() {
 			requestMethod !== 'anthropic' &&
 			(currentField === 'anthropicBeta' ||
 				currentField === 'anthropicCacheTTL' ||
+				currentField === 'anthropicSpeed' ||
 				currentField === 'thinkingEnabled' ||
 				currentField === 'thinkingBudgetTokens')
 		) {
@@ -306,6 +311,7 @@ export function useConfigState() {
 		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
 		setResponsesFastMode(config.responsesFastMode || false);
+		setAnthropicSpeed(config.anthropicSpeed);
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
@@ -390,6 +396,8 @@ export function useConfigState() {
 			return geminiThinkingBudget.toString();
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
+		if (currentField === 'anthropicSpeed')
+			return anthropicSpeed || '';
 		return '';
 	};
 
@@ -552,6 +560,7 @@ export function useConfigState() {
 							? {type: 'adaptive' as const, effort: thinkingEffort}
 							: {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
+					anthropicSpeed,
 					advancedModel,
 					basicModel,
 					maxContextTokens,
@@ -714,6 +723,7 @@ export function useConfigState() {
 
 			config.responsesFastMode = responsesFastMode;
 			config.responsesVerbosity = responsesVerbosity;
+			config.anthropicSpeed = anthropicSpeed;
 
 			await updateOpenAiConfig(config);
 
@@ -748,6 +758,7 @@ export function useConfigState() {
 						},
 						responsesVerbosity,
 						responsesFastMode,
+						anthropicSpeed,
 						advancedModel,
 						basicModel,
 						maxContextTokens,
@@ -835,6 +846,8 @@ export function useConfigState() {
 		setResponsesVerbosity,
 		responsesFastMode,
 		setResponsesFastMode,
+		anthropicSpeed,
+		setAnthropicSpeed,
 		// Model settings
 		advancedModel,
 		setAdvancedModel,

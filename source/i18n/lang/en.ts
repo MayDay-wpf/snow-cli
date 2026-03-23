@@ -175,6 +175,10 @@ export const en: TranslationKeys = {
 		anthropicCacheTTL: 'Anthropic Cache TTL:',
 		anthropicCacheTTL5m: '5 minutes (default)',
 		anthropicCacheTTL1h: '1 hour',
+		anthropicSpeed: 'Anthropic Speed:',
+		anthropicSpeedNotUsed: 'Not Used (default)',
+		anthropicSpeedFast: 'fast',
+		anthropicSpeedStandard: 'standard',
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
 		autoCompressThreshold: 'Auto Compress Threshold (%):',
@@ -660,6 +664,7 @@ export const en: TranslationKeys = {
 			'Current request method ({requestMethod}) does not support thinking',
 		requestMethodNotSupportedForThinkingStrength:
 			'Current request method ({requestMethod}) does not support thinking strength settings',
+		anthropicSpeed: 'Speed:',
 		saveFailed: 'Save failed',
 		modelSaveFailed: 'Model save failed',
 		tipLabel: 'Tip:',

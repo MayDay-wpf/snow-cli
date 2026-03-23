@@ -34,6 +34,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		anthropicBeta,
 		anthropicCacheTTL,
 		setAnthropicCacheTTL,
+		anthropicSpeed,
+		setAnthropicSpeed,
 		enableAutoCompress,
 		autoCompressThreshold,
 		showThinking,
@@ -274,6 +276,47 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									? t.configScreen.anthropicCacheTTL5m
 									: t.configScreen.anthropicCacheTTL1h}{' '}
 								{t.configScreen.toggleHint}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'anthropicSpeed':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.anthropicSpeed}
+					</Text>
+					{isEditing && isActive ? (
+						<Box marginLeft={3}>
+							<ScrollableSelectInput
+								items={[
+									{label: t.configScreen.anthropicSpeedNotUsed, value: '__NONE__'},
+									{label: t.configScreen.anthropicSpeedFast, value: 'fast'},
+									{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
+								]}
+								initialIndex={
+									anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+								}
+								isFocused={true}
+								onSelect={item => {
+									setAnthropicSpeed(
+										item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+									);
+									state.setIsEditing(false);
+								}}
+							/>
+						</Box>
+					) : (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{anthropicSpeed === 'fast'
+									? t.configScreen.anthropicSpeedFast
+									: anthropicSpeed === 'standard'
+									? t.configScreen.anthropicSpeedStandard
+									: t.configScreen.anthropicSpeedNotUsed}
 							</Text>
 						</Box>
 					)}

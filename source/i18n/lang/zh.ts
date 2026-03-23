@@ -160,6 +160,10 @@ export const zh: TranslationKeys = {
 		anthropicCacheTTL: 'Anthropic 缓存时效:',
 		anthropicCacheTTL5m: '5分钟（默认）',
 		anthropicCacheTTL1h: '1小时',
+		anthropicSpeed: 'Anthropic Speed:',
+		anthropicSpeedNotUsed: '不使用（默认）',
+		anthropicSpeedFast: 'fast',
+		anthropicSpeedStandard: 'standard',
 		enablePromptOptimization: '启用提示词优化:',
 		enableAutoCompress: '启用自动压缩:',
 		autoCompressThreshold: '自动压缩阈值 (%):',
@@ -618,6 +622,7 @@ export const zh: TranslationKeys = {
 			'当前请求方式({requestMethod})不支持思考',
 		requestMethodNotSupportedForThinkingStrength:
 			'当前请求方式({requestMethod})不支持思考强度设置',
+		anthropicSpeed: 'Speed:',
 		saveFailed: '保存失败',
 		modelSaveFailed: '模型保存失败',
 		tipLabel: '提示:',
