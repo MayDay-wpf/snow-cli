@@ -97,8 +97,13 @@ interface Props {
 	animationFrame: number;
 	maxMessages?: number;
 }
-
 const STREAM_COLORS = ['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'] as const;
+
+function formatCommandResultLines(content: string): string[] {
+	return content
+		.split('\n')
+		.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+}
 
 const MessageList = memo(
 	({messages, animationFrame, maxMessages = 6}: Props) => {
@@ -164,7 +169,21 @@ const MessageList = memo(
 										</Box>
 									)}
 								{message.role === 'command' ? (
-									<Text color="gray">└─ {message.commandName}</Text>
+									<Box flexDirection="column">
+										{!message.hideCommandName && (
+											<Text color="cyan" bold>
+												{message.commandName}
+											</Text>
+										)}
+										{message.content &&
+											formatCommandResultLines(message.content).map(
+												(line, lineIndex) => (
+													<Text key={lineIndex} color="gray" dimColor>
+														{line}
+													</Text>
+												),
+											)}
+									</Box>
 								) : message.role === 'subagent' ? (
 									<>
 										<Text color="magenta" dimColor>

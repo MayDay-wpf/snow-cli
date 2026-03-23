@@ -131,6 +131,12 @@ export default function MessageRenderer({
 		});
 	};
 
+	const formatCommandResultLines = (content: string): string[] => {
+		return getDisplayContent(content)
+			.split('\n')
+			.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+	};
+
 	// Determine tool message type and color
 	let toolStatusColor: string = 'cyan';
 
@@ -273,14 +279,24 @@ export default function MessageRenderer({
 							{message.role === 'command' ? (
 								<>
 									{!message.hideCommandName && (
-										<Text color={theme.colors.menuSecondary} dimColor>
-											└─ {message.commandName}
+										<Text color={theme.colors.menuInfo} bold>
+											{message.commandName}
 										</Text>
 									)}
 									{message.content && (
-										<Text color="white">
-											{getDisplayContent(message.content)}
-										</Text>
+										<Box flexDirection="column">
+											{formatCommandResultLines(message.content).map(
+												(line, lineIndex) => (
+													<Text
+														key={lineIndex}
+														color={theme.colors.menuSecondary}
+														dimColor
+													>
+														{line}
+													</Text>
+												),
+											)}
+										</Box>
 									)}
 								</>
 							) : (
