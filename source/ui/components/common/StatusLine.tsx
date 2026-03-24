@@ -7,10 +7,24 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 import {smartTruncatePath} from '../../../utils/ui/messageFormatter.js';
+import {
+	loadProfile,
+	getActiveProfileName,
+} from '../../../utils/config/configManager.js';
+import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
+import type {
+	BackendConnectionStatus,
+	StatusLineCodebaseProgress,
+	StatusLineContextUsage,
+	StatusLineContextWindowMetrics,
+	StatusLineCopyStatusMessage,
+	StatusLineEditorContext,
+	StatusLineFileUpdateNotification,
+	VSCodeConnectionStatus,
+} from './statusline/types.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
-const GIT_BRANCH_REFRESH_INTERVAL_MS = 10000;
 const execFileAsync = promisify(execFile);
 const WINDOWS_POWERSHELL_CANDIDATES = [
 	'pwsh.exe',
@@ -188,82 +202,6 @@ function useCurrentProcessMemoryUsage(): number {
 	return memoryUsageMb;
 }
 
-async function getGitBranch(): Promise<string | undefined> {
-	try {
-		const {stdout} = await execFileAsync(
-			'git',
-			['rev-parse', '--abbrev-ref', 'HEAD'],
-			{
-				timeout: 2000,
-				maxBuffer: 1024,
-				cwd: process.cwd(),
-			},
-		);
-		const branch = stdout.trim();
-		return branch || undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-function useGitBranch(): string | undefined {
-	const [branch, setBranch] = React.useState<string | undefined>(undefined);
-
-	React.useEffect(() => {
-		let disposed = false;
-		let isRefreshing = false;
-
-		const refreshBranch = async () => {
-			if (isRefreshing) {
-				return;
-			}
-
-			isRefreshing = true;
-			try {
-				const nextBranch = await getGitBranch();
-				if (!disposed) {
-					setBranch(nextBranch);
-				}
-			} finally {
-				isRefreshing = false;
-			}
-		};
-
-		void refreshBranch();
-		const timer = setInterval(() => {
-			void refreshBranch();
-		}, GIT_BRANCH_REFRESH_INTERVAL_MS);
-
-		return () => {
-			disposed = true;
-			clearInterval(timer);
-		};
-	}, []);
-
-	return branch;
-}
-
-type VSCodeConnectionStatus =
-	| 'disconnected'
-	| 'connecting'
-	| 'connected'
-	| 'error';
-
-type EditorContext = {
-	activeFile?: string;
-	selectedText?: string;
-	cursorPosition?: {line: number; character: number};
-	workspaceFolder?: string;
-};
-
-type ContextUsage = {
-	inputTokens: number;
-	maxContextTokens: number;
-	cacheCreationTokens?: number;
-	cacheReadTokens?: number;
-	cachedTokens?: number;
-};
-
 type Props = {
 	// 模式信息
 	yoloMode?: boolean;
@@ -273,41 +211,23 @@ type Props = {
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
-	editorContext?: EditorContext;
+	editorContext?: StatusLineEditorContext;
 
 	// 实例连接信息
-	connectionStatus?:
-		| 'disconnected'
-		| 'connecting'
-		| 'connected'
-		| 'reconnecting';
+	connectionStatus?: BackendConnectionStatus;
 	connectionInstanceName?: string;
 
 	// Token消耗信息
-	contextUsage?: ContextUsage;
+	contextUsage?: StatusLineContextUsage;
 
 	// 代码库索引状态
 	codebaseIndexing?: boolean;
-	codebaseProgress?: {
-		totalFiles: number;
-		processedFiles: number;
-		totalChunks: number;
-		currentFile?: string;
-		status?: string;
-		error?: string;
-	} | null;
+	codebaseProgress?: StatusLineCodebaseProgress | null;
 
 	// 文件监视器状态
 	watcherEnabled?: boolean;
-	fileUpdateNotification?: {
-		file: string;
-		timestamp: number;
-	} | null;
-	copyStatusMessage?: {
-		text: string;
-		isError?: boolean;
-		timestamp: number;
-	} | null;
+	fileUpdateNotification?: StatusLineFileUpdateNotification | null;
+	copyStatusMessage?: StatusLineCopyStatusMessage | null;
 
 	// Profile 信息
 	currentProfileName?: string;
@@ -316,12 +236,14 @@ type Props = {
 	compressBlockToast?: string | null;
 };
 
-function calculateContextPercentage(contextUsage: ContextUsage): number {
-	const isAnthropic =
+function calculateContextPercentage(
+	contextUsage: StatusLineContextUsage,
+): number {
+	const hasAnthropicCache =
 		(contextUsage.cacheCreationTokens || 0) > 0 ||
 		(contextUsage.cacheReadTokens || 0) > 0;
 
-	const totalInputTokens = isAnthropic
+	const totalInputTokens = hasAnthropicCache
 		? contextUsage.inputTokens +
 		  (contextUsage.cacheCreationTokens || 0) +
 		  (contextUsage.cacheReadTokens || 0)
@@ -331,6 +253,29 @@ function calculateContextPercentage(contextUsage: ContextUsage): number {
 		100,
 		(totalInputTokens / contextUsage.maxContextTokens) * 100,
 	);
+}
+
+function buildContextWindowState(
+	contextUsage: StatusLineContextUsage,
+): StatusLineContextUsage & StatusLineContextWindowMetrics {
+	const hasAnthropicCache =
+		(contextUsage.cacheCreationTokens || 0) > 0 ||
+		(contextUsage.cacheReadTokens || 0) > 0;
+	const hasOpenAICache = (contextUsage.cachedTokens || 0) > 0;
+	const totalInputTokens = hasAnthropicCache
+		? contextUsage.inputTokens +
+		  (contextUsage.cacheCreationTokens || 0) +
+		  (contextUsage.cacheReadTokens || 0)
+		: contextUsage.inputTokens;
+
+	return {
+		...contextUsage,
+		percentage: calculateContextPercentage(contextUsage),
+		totalInputTokens,
+		hasAnthropicCache,
+		hasOpenAICache,
+		hasAnyCache: hasAnthropicCache || hasOpenAICache,
+	};
 }
 
 export default function StatusLine({
@@ -351,14 +296,193 @@ export default function StatusLine({
 	currentProfileName,
 	compressBlockToast,
 }: Props) {
-	const {t} = useI18n();
+	const {t, language} = useI18n();
 	const {theme} = useTheme();
 	const simpleMode = getSimpleMode();
 	const memoryUsageMb = useCurrentProcessMemoryUsage();
-	const gitBranch = useGitBranch();
 	const formattedMemoryUsage = formatMemoryUsage(memoryUsageMb);
+	const contextWindowState = React.useMemo(
+		() => (contextUsage ? buildContextWindowState(contextUsage) : undefined),
+		[contextUsage],
+	);
+
+	// 获取当前 profile 的完整配置（不含 apiKey）
+	const profileConfig = React.useMemo(() => {
+		const profileName = currentProfileName ?? getActiveProfileName();
+		return loadProfile(profileName);
+	}, [currentProfileName]);
+
+	const statusLineHookContext = React.useMemo(() => {
+		const cfg = profileConfig?.snowcfg;
+		return {
+			cwd: process.cwd(),
+			platform: process.platform,
+			language,
+			simpleMode,
+			labels: {
+				gitBranch: t.chatScreen.gitBranch,
+			},
+			system: {
+				memory: {
+					usageMb: memoryUsageMb,
+					formattedUsage: formattedMemoryUsage,
+				},
+				modes: {
+					yolo: yoloMode,
+					plan: planMode,
+					vulnerabilityHunting: vulnerabilityHuntingMode,
+					toolSearchEnabled: !toolSearchDisabled,
+					simple: simpleMode,
+				},
+				ide: {
+					connectionStatus: vscodeConnectionStatus ?? 'disconnected',
+					editorContext,
+					selectedTextLength: editorContext?.selectedText?.length ?? 0,
+				},
+				backend: {
+					connectionStatus: connectionStatus ?? 'disconnected',
+					instanceName: connectionInstanceName,
+				},
+				contextWindow: contextWindowState,
+				codebase: {
+					indexing: codebaseIndexing,
+					progress: codebaseProgress,
+				},
+				watcher: {
+					enabled: watcherEnabled,
+					fileUpdateNotification,
+				},
+				clipboard: copyStatusMessage,
+				profile: {
+					currentName: currentProfileName,
+					baseUrl: cfg?.baseUrl,
+					requestMethod: cfg?.requestMethod,
+					advancedModel: cfg?.advancedModel,
+					basicModel: cfg?.basicModel,
+					maxContextTokens: cfg?.maxContextTokens,
+					maxTokens: cfg?.maxTokens,
+					anthropicBeta: cfg?.anthropicBeta,
+					anthropicCacheTTL: cfg?.anthropicCacheTTL,
+					thinkingEnabled: cfg?.thinking?.type === 'enabled',
+					thinkingType: cfg?.thinking?.type,
+					thinkingBudgetTokens: cfg?.thinking?.budget_tokens,
+					thinkingEffort: cfg?.thinking?.effort,
+					geminiThinkingEnabled: cfg?.geminiThinking?.enabled,
+					geminiThinkingBudget: cfg?.geminiThinking?.budget,
+					responsesReasoningEnabled: cfg?.responsesReasoning?.enabled,
+					responsesReasoningEffort: cfg?.responsesReasoning?.effort,
+					responsesFastMode: cfg?.responsesFastMode,
+					responsesVerbosity: cfg?.responsesVerbosity,
+					anthropicSpeed: cfg?.anthropicSpeed,
+					enablePromptOptimization: cfg?.enablePromptOptimization,
+					enableAutoCompress: cfg?.enableAutoCompress,
+					autoCompressThreshold: cfg?.autoCompressThreshold,
+					showThinking: cfg?.showThinking,
+					streamIdleTimeoutSec: cfg?.streamIdleTimeoutSec,
+					systemPromptId: cfg?.systemPromptId,
+					customHeadersSchemeId: cfg?.customHeadersSchemeId,
+					editSimilarityThreshold: cfg?.editSimilarityThreshold,
+					toolResultTokenLimit: cfg?.toolResultTokenLimit,
+					streamingDisplay: cfg?.streamingDisplay,
+				},
+				compression: {
+					blockToast: compressBlockToast,
+				},
+			},
+		};
+	}, [
+		codebaseIndexing,
+		codebaseProgress,
+		compressBlockToast,
+		connectionInstanceName,
+		connectionStatus,
+		contextWindowState,
+		copyStatusMessage,
+		currentProfileName,
+		editorContext,
+		fileUpdateNotification,
+		formattedMemoryUsage,
+		language,
+		memoryUsageMb,
+		planMode,
+		profileConfig,
+		simpleMode,
+		t.chatScreen.gitBranch,
+		toolSearchDisabled,
+		vscodeConnectionStatus,
+		vulnerabilityHuntingMode,
+		watcherEnabled,
+		yoloMode,
+	]);
+	const statusLineHookItems = useStatusLineHookItems(statusLineHookContext);
+
 	const simpleMemoryStatusText = `⛁ ${formattedMemoryUsage}`;
 	const detailedMemoryStatusText = `⛁ ${t.chatScreen.memoryUsageLabel} ${formattedMemoryUsage}`;
+
+	const renderContextUsage = () => {
+		if (!contextWindowState) {
+			return null;
+		}
+
+		const {
+			percentage,
+			totalInputTokens,
+			hasAnthropicCache,
+			hasOpenAICache,
+			hasAnyCache,
+			cacheReadTokens = 0,
+			cacheCreationTokens = 0,
+			cachedTokens = 0,
+		} = contextWindowState;
+
+		let color: string;
+		if (percentage < 50) color = theme.colors.success;
+		else if (percentage < 75) color = theme.colors.warning;
+		else if (percentage < 90) color = theme.colors.warning;
+		else color = theme.colors.error;
+
+		const formatNumber = (num: number) => {
+			if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+			return num.toString();
+		};
+
+		return (
+			<Text color={theme.colors.menuSecondary} dimColor>
+				<Text color={color}>{percentage.toFixed(1)}%</Text>
+				<Text> · </Text>
+				<Text color={color}>{formatNumber(totalInputTokens)}</Text>
+				<Text>{t.chatScreen.tokens}</Text>
+				{hasAnyCache && (
+					<>
+						<Text> · </Text>
+						{hasAnthropicCache && (
+							<>
+								{cacheReadTokens > 0 && (
+									<Text color={theme.colors.menuInfo}>
+										↯ {formatNumber(cacheReadTokens)} {t.chatScreen.cached}
+									</Text>
+								)}
+								{cacheCreationTokens > 0 && (
+									<>
+										{cacheReadTokens > 0 && <Text> · </Text>}
+										<Text color={theme.colors.warning}>
+											◆ {formatNumber(cacheCreationTokens)}{' '}
+											{t.chatScreen.newCache}
+										</Text>
+									</>
+								)}
+							</>
+						)}
+						{hasOpenAICache && (
+							<Text color={theme.colors.menuInfo}>
+								↯ {formatNumber(cachedTokens)} {t.chatScreen.cached}
+							</Text>
+						)}
+					</>
+				)}
+			</Text>
+		);
+	};
 
 	// 是否显示任何状态信息
 	const hasAnyStatus =
@@ -375,7 +499,7 @@ export default function StatusLine({
 		copyStatusMessage ||
 		currentProfileName ||
 		compressBlockToast ||
-		gitBranch ||
+		statusLineHookItems.length > 0 ||
 		detailedMemoryStatusText;
 
 	if (!hasAnyStatus) {
@@ -386,7 +510,6 @@ export default function StatusLine({
 	if (simpleMode) {
 		const statusItems: Array<{text: string; color: string}> = [];
 
-		// Profile - 显示在最前面
 		if (currentProfileName) {
 			statusItems.push({
 				text: `ꚰ ${currentProfileName}`,
@@ -394,30 +517,25 @@ export default function StatusLine({
 			});
 		}
 
-		// Git 分支
-		if (gitBranch) {
+		for (const item of statusLineHookItems) {
 			statusItems.push({
-				text: `⑂ ${gitBranch}`,
-				color: '#F472B6',
+				text: item.text,
+				color: item.color || theme.colors.menuSecondary,
 			});
 		}
 
-		// YOLO模式
 		if (yoloMode) {
 			statusItems.push({text: '❁ YOLO', color: theme.colors.warning});
 		}
 
-		// Plan模式
 		if (planMode) {
 			statusItems.push({text: '⚐ Plan', color: '#60A5FA'});
 		}
 
-		// Vulnerability Hunting 模式
 		if (vulnerabilityHuntingMode) {
 			statusItems.push({text: '⍨ Vuln Hunt', color: '#de409aff'});
 		}
 
-		// Tool Search 开启提示
 		if (!toolSearchDisabled) {
 			statusItems.push({
 				text: '♾︎ ToolSearch ON',
@@ -425,7 +543,6 @@ export default function StatusLine({
 			});
 		}
 
-		// IDE连接状态
 		if (vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') {
 			if (vscodeConnectionStatus === 'connecting') {
 				statusItems.push({text: '◐ IDE', color: 'yellow'});
@@ -436,30 +553,19 @@ export default function StatusLine({
 			}
 		}
 
-		// 实例连接状态 - 只显示连接状态，不显示断开
 		if (connectionStatus && connectionStatus !== 'disconnected') {
 			if (connectionStatus === 'connecting') {
-				statusItems.push({
-					text: '◐ Backend',
-					color: 'yellow',
-				});
+				statusItems.push({text: '◐ Backend', color: 'yellow'});
 			} else if (connectionStatus === 'reconnecting') {
-				statusItems.push({
-					text: '↻ Backend',
-					color: 'yellow',
-				});
+				statusItems.push({text: '↻ Backend', color: 'yellow'});
 			} else if (connectionStatus === 'connected') {
 				const instanceLabel = connectionInstanceName
 					? `● ${connectionInstanceName}`
 					: '● Backend';
-				statusItems.push({
-					text: instanceLabel,
-					color: 'green',
-				});
+				statusItems.push({text: instanceLabel, color: 'green'});
 			}
 		}
 
-		// 代码库索引状态 - 显示错误或索引进度
 		if ((codebaseIndexing || codebaseProgress?.error) && codebaseProgress) {
 			if (codebaseProgress.error) {
 				statusItems.push({
@@ -476,7 +582,6 @@ export default function StatusLine({
 			}
 		}
 
-		// 文件监视器状态
 		if (!codebaseIndexing && watcherEnabled) {
 			statusItems.push({
 				text: `☉ ${t.chatScreen.statusWatcherActiveShort || '监视'}`,
@@ -484,7 +589,6 @@ export default function StatusLine({
 			});
 		}
 
-		// 文件更新通知
 		if (fileUpdateNotification) {
 			statusItems.push({
 				text: `⛁ ${t.chatScreen.statusFileUpdatedShort || '已更新'}`,
@@ -515,96 +619,12 @@ export default function StatusLine({
 
 		return (
 			<Box flexDirection="column" paddingX={1} marginTop={1}>
-				{/* Token信息单独一行 - 显示在最上方 */}
-				{contextUsage && (
-					<Box marginBottom={1}>
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{(() => {
-								const isAnthropic =
-									(contextUsage.cacheCreationTokens || 0) > 0 ||
-									(contextUsage.cacheReadTokens || 0) > 0;
-								const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
-
-								const percentage = calculateContextPercentage(contextUsage);
-
-								const totalInputTokens = isAnthropic
-									? contextUsage.inputTokens +
-									  (contextUsage.cacheCreationTokens || 0) +
-									  (contextUsage.cacheReadTokens || 0)
-									: contextUsage.inputTokens;
-
-								let color: string;
-								if (percentage < 50) color = theme.colors.success;
-								else if (percentage < 75) color = theme.colors.warning;
-								else if (percentage < 90) color = theme.colors.warning;
-								else color = theme.colors.error;
-
-								const formatNumber = (num: number) => {
-									if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-									return num.toString();
-								};
-
-								const hasCacheMetrics = isAnthropic || isOpenAI;
-
-								return (
-									<>
-										<Text color={color}>{percentage.toFixed(1)}%</Text>
-										<Text> · </Text>
-										<Text color={color}>{formatNumber(totalInputTokens)}</Text>
-										<Text>{t.chatScreen.tokens}</Text>
-										{hasCacheMetrics && (
-											<>
-												<Text> · </Text>
-												{isAnthropic && (
-													<>
-														{(contextUsage.cacheReadTokens || 0) > 0 && (
-															<>
-																<Text color={theme.colors.menuInfo}>
-																	↯{' '}
-																	{formatNumber(
-																		contextUsage.cacheReadTokens || 0,
-																	)}{' '}
-																	{t.chatScreen.cached}
-																</Text>
-															</>
-														)}
-														{(contextUsage.cacheCreationTokens || 0) > 0 && (
-															<>
-																{(contextUsage.cacheReadTokens || 0) > 0 && (
-																	<Text> · </Text>
-																)}
-																<Text color={theme.colors.warning}>
-																	◆{' '}
-																	{formatNumber(
-																		contextUsage.cacheCreationTokens || 0,
-																	)}{' '}
-																	{t.chatScreen.newCache}
-																</Text>
-															</>
-														)}
-													</>
-												)}
-												{isOpenAI && (
-													<Text color={theme.colors.menuInfo}>
-														↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-														{t.chatScreen.cached}
-													</Text>
-												)}
-											</>
-										)}
-									</>
-								);
-							})()}
-						</Text>
-					</Box>
-				)}
-
-				{/* 状态信息行 */}
+				{contextUsage && <Box marginBottom={1}>{renderContextUsage()}</Box>}
 				{statusItems.length > 0 && (
 					<Box>
 						<Text dimColor>
 							{statusItems.map((item, index) => (
-								<React.Fragment key={index}>
+								<React.Fragment key={`${item.text}-${index}`}>
 									{index > 0 && (
 										<Text color={theme.colors.menuSecondary}> | </Text>
 									)}
@@ -620,91 +640,8 @@ export default function StatusLine({
 
 	return (
 		<Box flexDirection="column" paddingX={1}>
-			{/* Token使用信息 - 始终显示在第一行 */}
-			{contextUsage && (
-				<Box>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{(() => {
-							const isAnthropic =
-								(contextUsage.cacheCreationTokens || 0) > 0 ||
-								(contextUsage.cacheReadTokens || 0) > 0;
-							const isOpenAI = (contextUsage.cachedTokens || 0) > 0;
+			{contextUsage && <Box>{renderContextUsage()}</Box>}
 
-							const percentage = calculateContextPercentage(contextUsage);
-
-							const totalInputTokens = isAnthropic
-								? contextUsage.inputTokens +
-								  (contextUsage.cacheCreationTokens || 0) +
-								  (contextUsage.cacheReadTokens || 0)
-								: contextUsage.inputTokens;
-
-							let color: string;
-							if (percentage < 50) color = theme.colors.success;
-							else if (percentage < 75) color = theme.colors.warning;
-							else if (percentage < 90) color = theme.colors.warning;
-							else color = theme.colors.error;
-
-							const formatNumber = (num: number) => {
-								if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-								return num.toString();
-							};
-
-							const hasCacheMetrics = isAnthropic || isOpenAI;
-
-							return (
-								<>
-									<Text color={color}>{percentage.toFixed(1)}%</Text>
-									<Text> · </Text>
-									<Text color={color}>{formatNumber(totalInputTokens)}</Text>
-									<Text>{t.chatScreen.tokens}</Text>
-									{hasCacheMetrics && (
-										<>
-											<Text> · </Text>
-											{isAnthropic && (
-												<>
-													{(contextUsage.cacheReadTokens || 0) > 0 && (
-														<>
-															<Text color={theme.colors.menuInfo}>
-																↯{' '}
-																{formatNumber(
-																	contextUsage.cacheReadTokens || 0,
-																)}{' '}
-																{t.chatScreen.cached}
-															</Text>
-														</>
-													)}
-													{(contextUsage.cacheCreationTokens || 0) > 0 && (
-														<>
-															{(contextUsage.cacheReadTokens || 0) > 0 && (
-																<Text> · </Text>
-															)}
-															<Text color={theme.colors.warning}>
-																◆{' '}
-																{formatNumber(
-																	contextUsage.cacheCreationTokens || 0,
-																)}{' '}
-																{t.chatScreen.newCache}
-															</Text>
-														</>
-													)}
-												</>
-											)}
-											{isOpenAI && (
-												<Text color={theme.colors.menuInfo}>
-													↯ {formatNumber(contextUsage.cachedTokens || 0)}{' '}
-													{t.chatScreen.cached}
-												</Text>
-											)}
-										</>
-									)}
-								</>
-							);
-						})()}
-					</Text>
-				</Box>
-			)}
-
-			{/* Profile显示 */}
 			{currentProfileName && (
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
@@ -714,14 +651,13 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* Git分支显示 */}
-			{gitBranch && (
-				<Box>
-					<Text color="#F472B6" dimColor>
-						⑂ {t.chatScreen.gitBranch}: {gitBranch}
+			{statusLineHookItems.map(item => (
+				<Box key={item.id}>
+					<Text color={item.color || theme.colors.menuSecondary} dimColor>
+						{item.detailedText || item.text}
 					</Text>
 				</Box>
-			)}
+			))}
 
 			<Box>
 				<Text color={theme.colors.menuSecondary} dimColor>
@@ -729,7 +665,6 @@ export default function StatusLine({
 				</Text>
 			</Box>
 
-			{/* YOLO模式提示 */}
 			{yoloMode && (
 				<Box>
 					<Text color={theme.colors.warning} dimColor>
@@ -738,7 +673,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* Plan模式提示 */}
 			{planMode && (
 				<Box>
 					<Text color="#60A5FA" dimColor>
@@ -747,7 +681,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* Vulnerability Hunting 模式提示 */}
 			{vulnerabilityHuntingMode && (
 				<Box>
 					<Text color="#EF4444" dimColor>
@@ -756,7 +689,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* Tool Search 开启提示 */}
 			{!toolSearchDisabled && (
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
@@ -765,7 +697,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* IDE连接状态 */}
 			{vscodeConnectionStatus &&
 				(vscodeConnectionStatus === 'connecting' ||
 					vscodeConnectionStatus === 'connected' ||
@@ -806,7 +737,6 @@ export default function StatusLine({
 					</Box>
 				)}
 
-			{/* 实例连接状态 - 只显示连接中或已连接，不显示断开 */}
 			{connectionStatus &&
 				(connectionStatus === 'connecting' ||
 					connectionStatus === 'connected' ||
@@ -839,7 +769,6 @@ export default function StatusLine({
 					</Box>
 				)}
 
-			{/* 代码库索引状态 - 显示错误或索引进度 */}
 			{(codebaseIndexing || codebaseProgress?.error) && codebaseProgress && (
 				<Box>
 					{codebaseProgress.error ? (
@@ -865,7 +794,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* 文件监视器状态 */}
 			{!codebaseIndexing && watcherEnabled && (
 				<Box>
 					<Text color="green" dimColor>
@@ -874,7 +802,6 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{/* 文件更新通知 */}
 			{fileUpdateNotification && (
 				<Box>
 					<Text color="yellow" dimColor>

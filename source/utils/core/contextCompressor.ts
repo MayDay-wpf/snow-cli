@@ -180,14 +180,14 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 			// Verify next message is a tool message
 			if (!nextMsg || nextMsg.role !== 'tool') {
 				// Next message is not a tool message - remove assistant message
-				console.warn(
-					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - next message is not tool result',
-					{
-						messageIndex: i,
-						toolCallIds: msg.tool_calls.map(tc => tc.id),
-						nextMessageRole: nextMsg?.role || 'none',
-					},
-				);
+				// console.warn(
+				// 	'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - next message is not tool result',
+				// 	{
+				// 		messageIndex: i,
+				// 		toolCallIds: msg.tool_calls.map(tc => tc.id),
+				// 		nextMessageRole: nextMsg?.role || 'none',
+				// 	},
+				// );
 				indicesToRemove.push(i);
 				continue;
 			}
@@ -218,14 +218,14 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 
 			if (missingIds.length > 0) {
 				// Missing some tool results immediately after - remove assistant message
-				console.warn(
-					'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - missing immediate tool results',
-					{
-						messageIndex: i,
-						toolCallIds: msg.tool_calls.map(tc => tc.id),
-						missingIds,
-					},
-				);
+				// console.warn(
+				// 	'[contextCompressor:cleanOrphanedToolCalls] Removing assistant message - missing immediate tool results',
+				// 	{
+				// 		messageIndex: i,
+				// 		toolCallIds: msg.tool_calls.map(tc => tc.id),
+				// 		missingIds,
+				// 	},
+				// );
 				indicesToRemove.push(i);
 			}
 		}
@@ -263,14 +263,14 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 
 						if (!isImmediatelyAfter) {
 							// Tool result doesn't immediately follow - remove it
-							console.warn(
-								'[contextCompressor:cleanOrphanedToolCalls] Removing tool result - not immediately after assistant',
-								{
-									messageIndex: i,
-									toolCallId: msg.tool_call_id,
-									assistantIndex: j,
-								},
-							);
+							// console.warn(
+							// 	'[contextCompressor:cleanOrphanedToolCalls] Removing tool result - not immediately after assistant',
+							// 	{
+							// 		messageIndex: i,
+							// 		toolCallId: msg.tool_call_id,
+							// 		assistantIndex: j,
+							// 	},
+							// );
 							indicesToRemove.push(i);
 						}
 						break;
@@ -283,13 +283,13 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 
 			if (!foundCorrespondingAssistant) {
 				// No corresponding assistant found - remove orphaned tool result
-				console.warn(
-					'[contextCompressor:cleanOrphanedToolCalls] Removing orphaned tool result - no corresponding assistant',
-					{
-						messageIndex: i,
-						toolCallId: msg.tool_call_id,
-					},
-				);
+				// console.warn(
+				// 	'[contextCompressor:cleanOrphanedToolCalls] Removing orphaned tool result - no corresponding assistant',
+				// 	{
+				// 		messageIndex: i,
+				// 		toolCallId: msg.tool_call_id,
+				// 	},
+				// );
 				indicesToRemove.push(i);
 			}
 		}
@@ -302,9 +302,9 @@ function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 	}
 
 	if (indicesToRemove.length > 0) {
-		console.log(
-			`[contextCompressor:cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from compression input`,
-		);
+		// console.log(
+		// 	`[contextCompressor:cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from compression input`,
+		// );
 	}
 }
 

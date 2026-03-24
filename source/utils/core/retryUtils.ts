@@ -124,9 +124,9 @@ export function createOverloadedApiError(
  * 判断错误是否可重试
  */
 function isRetriableError(error: Error): boolean {
-	// Overloaded 需要立即反馈给用户,不能进入自动重试
+	// Overloaded 现在也会触发重试
 	if (isOverloadedError(error)) {
-		return false;
+		return true;
 	}
 
 	// 优先通过错误名称判定,降低对 message 内容的依赖

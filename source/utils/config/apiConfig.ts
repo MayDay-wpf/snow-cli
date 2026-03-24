@@ -153,6 +153,7 @@ const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
 const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本，保留用于迁移
 const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新版本
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
+export const STATUSLINE_HOOKS_DIR = join(CONFIG_DIR, 'plugin', 'statusline');
 
 /**
  * 迁移旧版本的 proxy 配置到新的独立文件

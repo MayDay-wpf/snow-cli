@@ -26,6 +26,7 @@ _Agentic coding in your terminal_
 ![alt text](docs/images/image.png)
 
 ## Thanks to the community
+
 <a href="https://linux.do">
   <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
 </a>
@@ -58,6 +59,7 @@ _Agentic coding in your terminal_
 - [Skills Command Detailed Guide](docs/usage/en/18.Skills%20Command%20Detailed%20Guide.md) - Skill creation, usage methods, Claude Code Skills compatibility, tool restrictions
 - [LSP Configuration and Usage](docs/usage/en/19.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
 - [SSE Service Mode](docs/usage/en/20.SSE%20Service%20Mode.md) - SSE server startup, API endpoints explanation, tool confirmation flow, permission configuration, YOLO mode, client integration examples
+- [Custom StatusLine Guide](docs/usage/en/21.Custom%20StatusLine%20Guide.md) - User-level StatusLine plugins, hook structure, override behavior, bilingual examples
 
 ### Recommended ROLE.md
 
@@ -144,7 +146,6 @@ npm run link   # builds and globally links snow
 ├── history.json            # History settings
 └── system-prompt.json      # Custom system prompts
 ```
-
 
 ## Star History
 

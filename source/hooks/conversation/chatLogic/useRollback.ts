@@ -268,22 +268,15 @@ export function useRollback(props: UseChatLogicProps) {
 			currentSession.compressedFrom !== undefined &&
 			currentSession.compressedFrom !== null
 		) {
-			let totalFileCount = 0;
-			for (const [index, count] of snapshotState.snapshotFileCount.entries()) {
-				if (index >= selectedIndex) {
-					totalFileCount += count;
-				}
-			}
-
-			if (totalFileCount > 0) {
-				const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
-					currentSession.id,
-					selectedIndex,
-				);
-				const nbCount = getNotebookRollbackCount(
-					currentSession.id,
-					selectedIndex,
-				);
+			const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
+				currentSession.id,
+				selectedIndex,
+			);
+			const nbCount = getNotebookRollbackCount(
+				currentSession.id,
+				selectedIndex,
+			);
+			if (filePaths.length > 0 || nbCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
 					fileCount: filePaths.length,

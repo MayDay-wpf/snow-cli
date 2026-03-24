@@ -26,6 +26,7 @@ _在终端中进行 Agentic 编程_
 ![alt text](docs/images/image_zh.png)
 
 ## 感谢社区
+
 <a href="https://linux.do">
   <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
 </a>
@@ -58,6 +59,7 @@ _在终端中进行 Agentic 编程_
 - [Skills 指令详细说明](docs/usage/zh/18.Skills指令详细说明.md) - 技能创建、使用方法、Claude Code Skills 兼容性、工具限制
 - [LSP 配置与用法](docs/usage/zh/19.LSP配置.md) - LSP 配置文件、语言服务器安装、ACE 工具用法(跳转/大纲)
 - [SSE 服务模式](docs/usage/zh/20.SSE服务模式.md) - SSE 服务器启动、API 端点说明、工具确认流程、权限配置、YOLO 模式、客户端集成示例
+- [自定义 StatusLine 指南](docs/usage/zh/21.自定义StatusLine指南.md) - 用户级状态栏插件、hook 结构、覆盖机制、中英文示例
 
 ### 推荐使用的 ROLE.md
 

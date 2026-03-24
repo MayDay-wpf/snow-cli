@@ -3,6 +3,7 @@ import {sessionManager} from '../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../utils/codebase/hashBasedSnapshot.js';
 
 export function useSnapshotState(messagesLength: number) {
+	const currentSessionId = sessionManager.getCurrentSession()?.id ?? null;
 	const [snapshotFileCount, setSnapshotFileCount] = useState<
 		Map<number, number>
 	>(new Map());
@@ -17,17 +18,29 @@ export function useSnapshotState(messagesLength: number) {
 		originalSessionId?: string; // 原会话ID(压缩前的会话)
 	} | null>(null);
 
-	// Load snapshot file counts when session changes
+	// Reload when message count or current session changes, and ignore stale async results.
 	useEffect(() => {
+		let disposed = false;
+
 		const loadSnapshotFileCounts = async () => {
-			const currentSession = sessionManager.getCurrentSession();
-			if (!currentSession) return;
+			if (!currentSessionId) {
+				if (!disposed) {
+					setSnapshotFileCount(new Map());
+				}
+				return;
+			}
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
-				currentSession.id,
+				currentSessionId,
 			);
-			const counts = new Map<number, number>();
+			if (
+				disposed ||
+				sessionManager.getCurrentSession()?.id !== currentSessionId
+			) {
+				return;
+			}
 
+			const counts = new Map<number, number>();
 			for (const snapshot of snapshots) {
 				counts.set(snapshot.messageIndex, snapshot.fileCount);
 			}
@@ -35,8 +48,11 @@ export function useSnapshotState(messagesLength: number) {
 			setSnapshotFileCount(counts);
 		};
 
-		loadSnapshotFileCounts();
-	}, [messagesLength]); // Reload when messages change
+		void loadSnapshotFileCounts();
+		return () => {
+			disposed = true;
+		};
+	}, [messagesLength, currentSessionId]);
 
 	return {
 		snapshotFileCount,

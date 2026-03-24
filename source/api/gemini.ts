@@ -7,8 +7,6 @@ import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
-	isOverloadedResponse,
-	createOverloadedApiError,
 } from '../utils/core/retryUtils.js';
 import {
 	createIdleTimeoutGuard,
@@ -562,16 +560,6 @@ export async function* createStreamingGeminiCompletion(
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				if (
-					isOverloadedResponse(response.status, response.statusText, errorText)
-				) {
-					throw createOverloadedApiError(
-						'Gemini API',
-						response.status,
-						response.statusText,
-						errorText,
-					);
-				}
 				throw new Error(
 					`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
 				);

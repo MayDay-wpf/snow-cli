@@ -7,8 +7,6 @@ import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
 	parseJsonWithFix,
-	isOverloadedResponse,
-	createOverloadedApiError,
 } from '../utils/core/retryUtils.js';
 import {
 	createIdleTimeoutGuard,
@@ -634,16 +632,6 @@ export async function* createStreamingResponse(
 
 			if (!response.ok) {
 				const errorText = await response.text();
-				if (
-					isOverloadedResponse(response.status, response.statusText, errorText)
-				) {
-					throw createOverloadedApiError(
-						'OpenAI Responses API',
-						response.status,
-						response.statusText,
-						errorText,
-					);
-				}
 				throw new Error(
 					`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
 				);
@@ -800,16 +788,6 @@ export async function* createStreamingResponse(
 					const error = chunk.error;
 					if (error) {
 						const responseErrorMessage = error.message || 'Unknown error';
-						if (
-							isOverloadedResponse(undefined, undefined, responseErrorMessage)
-						) {
-							throw createOverloadedApiError(
-								'OpenAI Responses API',
-								undefined,
-								undefined,
-								responseErrorMessage,
-							);
-						}
 						throw new Error(`Response failed: ${responseErrorMessage}`);
 					}
 					break;
