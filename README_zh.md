@@ -25,6 +25,8 @@ _在终端中进行 Agentic 编程_
 
 ![alt text](docs/images/image_zh.png)
 
+<h3>推荐使用字体: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+
 ## 感谢社区
 
 <a href="https://linux.do">

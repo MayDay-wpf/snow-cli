@@ -25,6 +25,8 @@ _Agentic coding in your terminal_
 
 ![alt text](docs/images/image.png)
 
+<h3>Recommend using fonts: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+
 ## Thanks to the community
 
 <a href="https://linux.do">
