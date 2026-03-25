@@ -78,7 +78,8 @@ export default function MCPConfigScreen({onBack}: Props) {
 	useEffect(() => {
 		const openEditor = async () => {
 			const config = getMCPConfig();
-			writeFileSync(MCP_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+			const originalContent = JSON.stringify(config, null, 2);
+			writeFileSync(MCP_CONFIG_FILE, originalContent, 'utf8');
 
 			const editor = getSystemEditor();
 
@@ -138,13 +139,22 @@ export default function MCPConfigScreen({onBack}: Props) {
 								'MCP configuration saved successfully ! Please use `snow` restart!',
 							);
 						} else {
+							// Validation failed - restore original content
+							writeFileSync(MCP_CONFIG_FILE, originalContent, 'utf8');
 							console.error(
 								'Configuration errors:',
 								validationErrors.join(', '),
 							);
+							console.error(
+								'Changes have been reverted to the previous valid configuration.',
+							);
 						}
 					} catch (parseError) {
-						console.error('Invalid JSON format');
+						// JSON parse failed - restore original content
+						writeFileSync(MCP_CONFIG_FILE, originalContent, 'utf8');
+						console.error(
+							'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
+						);
 					}
 				}
 

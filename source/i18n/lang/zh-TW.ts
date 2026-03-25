@@ -559,8 +559,7 @@ export const zhTW: TranslationKeys = {
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
-			team:
-				'切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
+			team: '切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
 			connect: '連接到 Snow Instance 進行 AI 處理',
@@ -1384,7 +1383,7 @@ export const zhTW: TranslationKeys = {
 		statusExternal: '(外部)',
 		statusDisabled: '(已停用)',
 		statusFailed: '失敗',
-		navigationHint: '↑↓ 導航 • Enter 重新連線 • Tab 啟停服務',
+		navigationHint: '↑↓ 導航 • Enter 重新連線 • Tab 啟停服務 • V 檢視工具',
 		pleaseWait: '請稍候...',
 		skillsTitle: '技能',
 		noSkills: '沒有可用的技能',
@@ -1393,6 +1392,8 @@ export const zhTW: TranslationKeys = {
 		scrollHint: '↑↓ 捲動',
 		moreAbove: '上方還有 {count} 項',
 		moreBelow: '下方還有 {count} 項',
+		toolsListTitle: '{service} - 工具列表',
+		toolsNavigationHint: '↑↓ 導航 • ESC 返回',
 	},
 	runningAgentsPanel: {
 		title: '執行中的子代理',

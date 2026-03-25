@@ -113,6 +113,7 @@ export default function ChatScreenPanels({
 				advancedModel={advancedModel}
 				basicModel={basicModel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
+				setShowMcpPanel={panelState.setShowMcpPanel}
 				setShowModelsPanel={panelState.setShowModelsPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}

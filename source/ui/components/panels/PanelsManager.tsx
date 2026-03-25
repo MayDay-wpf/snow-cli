@@ -54,6 +54,7 @@ type PanelsManagerProps = {
 	advancedModel: string;
 	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
+	setShowMcpPanel: (show: boolean) => void;
 	setShowModelsPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
@@ -107,6 +108,7 @@ export default function PanelsManager({
 	advancedModel,
 	basicModel,
 	setShowSessionPanel,
+	setShowMcpPanel,
 	setShowModelsPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
@@ -153,7 +155,7 @@ export default function PanelsManager({
 			{showMcpPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<Suspense fallback={loadingFallback}>
-						<MCPInfoPanel />
+						<MCPInfoPanel onClose={() => setShowMcpPanel(false)} />
 					</Suspense>
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>

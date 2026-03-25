@@ -558,8 +558,7 @@ export const zh: TranslationKeys = {
 			toolSearch: '切换工具搜索（渐进式工具加载）。默认启用以节省上下文',
 			hybridCompress:
 				'切换混合压缩模式（AI 摘要 + 智能截断，用于 /compact 和自动压缩）',
-			team:
-				'切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
+			team: '切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
 			connect: '连接到 Snow Instance 进行 AI 处理',
@@ -1388,7 +1387,7 @@ export const zh: TranslationKeys = {
 		statusExternal: '(外部)',
 		statusDisabled: '(已禁用)',
 		statusFailed: '失败',
-		navigationHint: '↑↓ 导航 • Enter 重连服务 • Tab 启停服务',
+		navigationHint: '↑↓ 导航 • Enter 重连服务 • Tab 启停服务 • V 查看工具',
 		pleaseWait: '请稍候...',
 		skillsTitle: '技能',
 		noSkills: '没有可用的技能',
@@ -1397,6 +1396,8 @@ export const zh: TranslationKeys = {
 		scrollHint: '↑↓ 滚动',
 		moreAbove: '上方还有 {count} 项',
 		moreBelow: '下方还有 {count} 项',
+		toolsListTitle: '{service} - 工具列表',
+		toolsNavigationHint: '↑↓ 导航 • ESC 返回',
 	},
 	runningAgentsPanel: {
 		title: '运行中的子代理',

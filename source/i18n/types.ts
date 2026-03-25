@@ -1383,6 +1383,8 @@ export type TranslationKeys = {
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
+		toolsListTitle: string;
+		toolsNavigationHint: string;
 	};
 	// Running Agents Panel
 	runningAgentsPanel: {

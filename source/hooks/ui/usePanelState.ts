@@ -153,10 +153,9 @@ export function usePanelState(): PanelState & PanelActions {
 			setShowSessionPanel(false);
 			return true;
 		}
-
 		if (showMcpPanel) {
-			setShowMcpPanel(false);
-			return true;
+			// Let MCPInfoPanel handle ESC internally (tool list page vs main page)
+			return false;
 		}
 
 		if (showUsagePanel) {
