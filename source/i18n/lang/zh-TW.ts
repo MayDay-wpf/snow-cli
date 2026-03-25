@@ -1216,7 +1216,7 @@ export const zhTW: TranslationKeys = {
 		pressEnterToSubmit: '按 Enter 提交',
 		confirmed: '已確認',
 		approveOnce: '批准(一次)',
-		alwaysApprove: '總是批准此工具',
+		alwaysApprove: '批准（此項目將不再詢問此工具）',
 		rejectWithReply: '拒絕並回覆',
 		rejectEndSession: '拒絕（結束工作階段）',
 	},

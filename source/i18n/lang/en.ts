@@ -1290,7 +1290,7 @@ export const en: TranslationKeys = {
 		pressEnterToSubmit: 'Press Enter to submit',
 		confirmed: 'Confirmed',
 		approveOnce: 'Approve (once)',
-		alwaysApprove: 'Always approve this tool',
+		alwaysApprove: 'Approve (this project will no longer ask about this tool)',
 		rejectWithReply: 'Reject with reply',
 		rejectEndSession: 'Reject (end session)',
 	},
