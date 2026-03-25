@@ -1,6 +1,8 @@
 import {executeMCPTool} from './mcpToolsManager.js';
 import {subAgentService} from '../../mcp/subagent.js';
+import {teamService} from '../../mcp/team.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
@@ -305,8 +307,55 @@ export async function executeToolCall(
 			console.warn('Failed to execute beforeToolCall hook:', error);
 		}
 
+		// Check if this is a team tool
+		if (toolCall.function.name.startsWith('team-')) {
+			const teamToolName = toolCall.function.name.substring('team-'.length);
+			const teamArgs = args as Record<string, any>;
+
+			try {
+				const teamResult = await teamService.execute({
+					toolName: teamToolName,
+					args: teamArgs,
+					onMessage: onSubAgentMessage,
+					abortSignal,
+					requestToolConfirmation: requestToolConfirmation
+						? async (toolName: string, toolArgs: any) => {
+								const fakeToolCall = {
+									id: 'team-tool',
+									type: 'function' as const,
+									function: {name: toolName, arguments: JSON.stringify(toolArgs)},
+								};
+								return await requestToolConfirmation(fakeToolCall);
+						  }
+						: undefined,
+					isToolAutoApproved,
+					yoloMode,
+					addToAlwaysApproved: addToAlwaysApproved
+						? (name: string) => addToAlwaysApproved(name)
+						: undefined,
+					requestUserQuestion: onUserInteractionNeeded
+						? async (q: string, opts: string[], multi?: boolean) => {
+								const r = await onUserInteractionNeeded(q, opts, multi);
+								return {selected: r.selected, customInput: r.customInput};
+						  }
+						: undefined,
+				});
+
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: JSON.stringify(teamResult),
+				};
+			} catch (error: any) {
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: JSON.stringify({success: false, error: error.message}),
+				};
+			}
+		}
 		// Check if this is a sub-agent tool
-		if (toolCall.function.name.startsWith('subagent-')) {
+		else if (toolCall.function.name.startsWith('subagent-')) {
 			const agentId = toolCall.function.name.substring('subagent-'.length);
 			const subAgentPrompt = (args['prompt'] as string) || '';
 

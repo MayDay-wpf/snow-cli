@@ -1,10 +1,14 @@
-import React from 'react';
+import React, {useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import ShimmerText from '../common/ShimmerText.js';
 import CodebaseSearchStatus from './CodebaseSearchStatus.js';
 import {formatElapsedTime} from '../../../utils/core/textUtils.js';
+import {
+	subscribeTeammateStream,
+	getTeammateStreamSnapshot,
+} from '../../../hooks/conversation/core/subAgentMessageHandler.js';
 
 /**
  * 截断错误消息，避免过长显示
@@ -17,6 +21,11 @@ function truncateErrorMessage(
 		return message;
 	}
 	return message.substring(0, maxLength) + '...';
+}
+
+function formatTokens(count: number): string {
+	if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+	return String(count);
 }
 
 type LoadingIndicatorProps = {
@@ -48,6 +57,7 @@ type LoadingIndicatorProps = {
 	streamTokenCount: number;
 	elapsedSeconds: number;
 	currentModel?: string | null;
+	teamMode?: boolean;
 };
 
 export default function LoadingIndicator({
@@ -65,11 +75,16 @@ export default function LoadingIndicator({
 	streamTokenCount,
 	elapsedSeconds,
 	currentModel,
+	teamMode,
 }: LoadingIndicatorProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
-	// 不显示加载指示器的条件
+	const teammateStream = useSyncExternalStore(
+		subscribeTeammateStream,
+		getTeammateStreamSnapshot,
+	);
+
 	if (
 		(!isStreaming && !isSaving && !isStopping) ||
 		hasPendingToolConfirmation ||
@@ -78,6 +93,8 @@ export default function LoadingIndicator({
 	) {
 		return null;
 	}
+
+	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
 
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
@@ -122,6 +139,61 @@ export default function LoadingIndicator({
 							</Box>
 						) : codebaseSearchStatus?.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
+						) : showTeamTree ? (
+							<Box flexDirection="column">
+								<Text color={theme.colors.menuSecondary} dimColor bold>
+									<ShimmerText text="⚑ Team Working" />
+									({' '}
+									{currentModel && (
+										<>
+											{currentModel}
+											{' · '}
+										</>
+									)}
+									{formatElapsedTime(elapsedSeconds)}
+									{' · '}
+									<Text color="cyan">
+										↓ {formatTokens(streamTokenCount)} tokens
+									</Text>
+									{')'}
+								</Text>
+								{teammateStream.map((tm, idx) => {
+									const isLast = idx === teammateStream.length - 1;
+									const branch = isLast ? '└─' : '├─';
+									const status = tm.isReasoning
+										? 'Thinking'
+										: tm.tokenCount > 0
+										? 'Writing'
+										: 'Idle';
+									const statusColor = tm.isReasoning
+										? '#FFD700'
+										: tm.tokenCount > 0
+										? '#00FFFF'
+										: theme.colors.menuSecondary;
+									return (
+										<Text key={tm.agentId} dimColor>
+											<Text color={theme.colors.menuSecondary}>
+												{'  '}{branch}{' '}
+											</Text>
+											<Text color="#BA7ACE" bold>
+												{tm.agentName}
+											</Text>
+											<Text color={statusColor}>
+												{' '}({status}
+												{tm.tokenCount > 0 && (
+													<>
+														{' · '}
+														<Text color="cyan">
+															↓ {formatTokens(tm.tokenCount)}
+														</Text>
+													</>
+												)}
+												)
+											</Text>
+										</Text>
+									);
+								})}
+							</Box>
 						) : (
 							<Text color={theme.colors.menuSecondary} dimColor bold>
 								<ShimmerText
@@ -145,9 +217,7 @@ export default function LoadingIndicator({
 									{' · '}
 									<Text color="cyan">
 										↓{' '}
-										{streamTokenCount >= 1000
-											? `${(streamTokenCount / 1000).toFixed(1)}k`
-											: streamTokenCount}{' '}
+										{formatTokens(streamTokenCount)}{' '}
 										tokens
 									</Text>
 								</>

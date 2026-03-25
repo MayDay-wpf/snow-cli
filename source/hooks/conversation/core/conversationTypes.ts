@@ -49,6 +49,7 @@ export type ConversationHandlerOptions = {
 	yoloModeRef: React.MutableRefObject<boolean>;
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
+	teamMode?: boolean;
 	toolSearchDisabled?: boolean;
 	setContextUsage: React.Dispatch<React.SetStateAction<any>>;
 	useBasicModel?: boolean;

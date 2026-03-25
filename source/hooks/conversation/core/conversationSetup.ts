@@ -21,13 +21,14 @@ export type PreparedConversationSetup = {
 export async function prepareConversationSetup(
 	options: Pick<
 		ConversationHandlerOptions,
-		'planMode' | 'vulnerabilityHuntingMode' | 'toolSearchDisabled'
+		'planMode' | 'vulnerabilityHuntingMode' | 'teamMode' | 'toolSearchDisabled'
 	>,
 ): Promise<PreparedConversationSetup> {
 	let {conversationMessages} = await initializeConversationSession(
 		options.planMode || false,
 		options.vulnerabilityHuntingMode || false,
 		options.toolSearchDisabled || false,
+		options.teamMode || false,
 	);
 
 	const allMCPTools = await collectAllMCPTools();

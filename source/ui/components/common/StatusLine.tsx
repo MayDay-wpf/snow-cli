@@ -209,6 +209,7 @@ type Props = {
 	vulnerabilityHuntingMode?: boolean;
 	toolSearchDisabled?: boolean;
 	hybridCompressEnabled?: boolean;
+	teamMode?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -285,6 +286,7 @@ export default function StatusLine({
 	vulnerabilityHuntingMode = false,
 	toolSearchDisabled = true,
 	hybridCompressEnabled = false,
+	teamMode = false,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -335,6 +337,7 @@ export default function StatusLine({
 					vulnerabilityHunting: vulnerabilityHuntingMode,
 					toolSearchEnabled: !toolSearchDisabled,
 					hybridCompress: hybridCompressEnabled,
+					team: teamMode,
 					simple: simpleMode,
 				},
 				ide: {
@@ -413,6 +416,7 @@ export default function StatusLine({
 		t.chatScreen.gitBranch,
 		toolSearchDisabled,
 		hybridCompressEnabled,
+		teamMode,
 		vscodeConnectionStatus,
 		vulnerabilityHuntingMode,
 		watcherEnabled,
@@ -493,6 +497,7 @@ export default function StatusLine({
 		yoloMode ||
 		planMode ||
 		vulnerabilityHuntingMode ||
+		teamMode ||
 		!toolSearchDisabled ||
 		hybridCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
@@ -546,6 +551,10 @@ export default function StatusLine({
 				text: '♾︎ ToolSearch ON',
 				color: theme.colors.menuInfo,
 			});
+		}
+
+		if (teamMode) {
+			statusItems.push({text: '⚑ Team', color: '#10B981'});
 		}
 
 		if (hybridCompressEnabled) {
@@ -705,6 +714,14 @@ export default function StatusLine({
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
 						{t.chatScreen.toolSearchEnabled}
+					</Text>
+				</Box>
+			)}
+
+			{teamMode && (
+				<Box>
+					<Text color="#10B981" dimColor>
+						{t.chatScreen.teamModeActive}
 					</Text>
 				</Box>
 			)}
