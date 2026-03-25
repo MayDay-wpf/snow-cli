@@ -88,9 +88,19 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 	// emitWarning(msg, type, code) — positional form
 	if (typeof args[1] === 'string' && suppressedDepCodes.has(args[1])) return;
 	// emitWarning(msg, { code }) — options object form
-	if (args[0] && typeof args[0] === 'object' && suppressedDepCodes.has(args[0].code)) return;
+	if (
+		args[0] &&
+		typeof args[0] === 'object' &&
+		suppressedDepCodes.has(args[0].code)
+	)
+		return;
 	// Suppress NO_COLOR/FORCE_COLOR conflict warning (Node.js 22+)
-	if (typeof warning === 'string' && warning.includes("'NO_COLOR'") && warning.includes("'FORCE_COLOR'")) return;
+	if (
+		typeof warning === 'string' &&
+		warning.includes("'NO_COLOR'") &&
+		warning.includes("'FORCE_COLOR'")
+	)
+		return;
 	return (originalEmitWarning as any).apply(process, [warning, ...args]);
 };
 
@@ -550,7 +560,7 @@ const Startup = ({
 	headlessSessionId?: string;
 	showTaskList?: boolean;
 	isDevMode: boolean;
-	enableYolo: boolean;
+	enableYolo?: boolean;
 	enablePlan?: boolean;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
@@ -730,8 +740,10 @@ render(
 		headlessSessionId={cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
-		enableYolo={Boolean(cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo)}
-		enablePlan={Boolean(cli.flags.yoloP)}
+		enableYolo={
+			cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo ? true : undefined
+		}
+		enablePlan={cli.flags.yoloP ? true : undefined}
 	/>,
 	{
 		exitOnCtrlC: false,
