@@ -1127,14 +1127,14 @@ export class SubAgentUIHandler {
 						},
 					};
 				} else if (
-					resultData.batchResults &&
-					Array.isArray(resultData.batchResults)
+					resultData.results &&
+					Array.isArray(resultData.results)
 				) {
 					fileToolData = {
 						name: msg.tool_name,
 						arguments: {
 							isBatch: true,
-							batchResults: resultData.batchResults,
+							batchResults: resultData.results,
 						},
 					};
 				}
