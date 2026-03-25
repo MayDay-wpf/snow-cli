@@ -196,6 +196,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Generate a refined prompt from your requirement using AI',
 			},
 			{
+				name: 'team',
+				description:
+					t.commandPanel.commands.team ||
+					'Toggle Agent Team mode - orchestrate multiple agents working together',
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

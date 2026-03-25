@@ -22,6 +22,8 @@ type KeyboardInputOptions = {
 	setPlanMode: (value: boolean) => void;
 	vulnerabilityHuntingMode: boolean;
 	setVulnerabilityHuntingMode: (value: boolean) => void;
+	teamMode: boolean;
+	setTeamMode: (value: boolean) => void;
 	// Command panel
 	showCommands: boolean;
 	setShowCommands: (show: boolean) => void;
@@ -198,6 +200,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		setPlanMode,
 		vulnerabilityHuntingMode: _vulnerabilityHuntingMode,
 		setVulnerabilityHuntingMode,
+		teamMode: _teamMode,
+		setTeamMode,
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,
@@ -316,6 +320,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	void selectedGitLineCommits;
 	void gitLineIsLoading;
 	void gitLineError;
+	void _teamMode;
 	void runningAgentsSelectedIndex;
 	void selectedRunningAgents;
 
@@ -445,8 +450,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
-				// Disable Vulnerability Hunting when enabling Plan
 				setVulnerabilityHuntingMode(false);
+				setTeamMode(false);
 			} else if (yoloMode && planMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
@@ -465,8 +470,8 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			if (yoloMode && !planMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
-				// Disable Vulnerability Hunting when enabling Plan
 				setVulnerabilityHuntingMode(false);
+				setTeamMode(false);
 			} else if (yoloMode && planMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);

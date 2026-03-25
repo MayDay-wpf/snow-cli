@@ -22,6 +22,10 @@ import {
 	subAgentService,
 } from '../../mcp/subagent.js';
 import {
+	getTeamMCPTools as getTeamTools,
+	teamService,
+} from '../../mcp/team.js';
+import {
 	getMCPTools as getSkillTools,
 	executeSkillTool,
 } from '../../mcp/skills.js';
@@ -338,6 +342,35 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	}
 
+	// Add team tools (for Agent Team mode)
+	const {getTeamMode} = await import('../config/projectSettings.js');
+	if (getTeamMode()) {
+		const teamTools = getTeamTools();
+		if (teamTools.length > 0) {
+			const teamEnabled = isBuiltInServiceEnabled('team');
+			servicesInfo.push({
+				serviceName: 'team',
+				tools: teamTools,
+				isBuiltIn: true,
+				connected: true,
+				enabled: teamEnabled !== false,
+			});
+
+			if (teamEnabled !== false) {
+				for (const tool of teamTools) {
+					allTools.push({
+						type: 'function',
+						function: {
+							name: `team-${tool.name}`,
+							description: tool.description,
+							parameters: tool.inputSchema,
+						},
+					});
+				}
+			}
+		}
+	}
+
 	// Add skill tools (dynamically generated from available skills)
 	const projectRoot = process.cwd();
 	const skillTools = await getSkillTools(projectRoot);
@@ -513,7 +546,8 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		serviceName === 'codebase' ||
 		serviceName === 'askuser' ||
 		serviceName === 'scheduler' ||
-		serviceName === 'subagent'
+		serviceName === 'subagent' ||
+		serviceName === 'team'
 	) {
 		return;
 	}
@@ -1145,6 +1179,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('subagent-')) {
 			serviceName = 'subagent';
 			actualToolName = toolName.substring('subagent-'.length);
+		} else if (toolName.startsWith('team-')) {
+			serviceName = 'team';
+			actualToolName = toolName.substring('team-'.length);
 		} else {
 			// Check configured MCP services
 			try {
@@ -1710,6 +1747,13 @@ export async function executeMCPTool(
 			result = await subAgentService.execute({
 				agentId: actualToolName,
 				prompt: args.prompt,
+				abortSignal,
+			});
+		} else if (serviceName === 'team') {
+			// Handle team tools
+			result = await teamService.execute({
+				toolName: actualToolName,
+				args,
 				abortSignal,
 			});
 		} else {

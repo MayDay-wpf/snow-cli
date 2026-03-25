@@ -426,6 +426,7 @@ type CommandHandlerOptions = {
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -984,34 +985,39 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setYoloMode(prev => !prev);
 				// Don't add command message to keep UI clean
 			} else if (result.success && result.action === 'togglePlan') {
-				// Toggle Plan mode without adding command message
 				options.setPlanMode(prev => {
 					const newValue = !prev;
-					// If enabling Plan mode, disable Vulnerability Hunting mode
 					if (newValue) {
 						options.setVulnerabilityHuntingMode(false);
+						options.setTeamMode(false);
 					}
 					return newValue;
 				});
-				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
 				result.action === 'toggleVulnerabilityHunting'
 			) {
-				// Toggle Vulnerability Hunting mode without adding command message
 				options.setVulnerabilityHuntingMode(prev => {
 					const newValue = !prev;
-					// If enabling Vulnerability Hunting mode, disable Plan mode
 					if (newValue) {
 						options.setPlanMode(false);
+						options.setTeamMode(false);
 					}
 					return newValue;
 				});
-				// Don't add command message to keep UI clean
 			} else if (result.success && result.action === 'toggleToolSearch') {
 				options.setToolSearchDisabled(prev => !prev);
 			} else if (result.success && result.action === 'toggleHybridCompress') {
 				options.setHybridCompressEnabled(prev => !prev);
+			} else if (result.success && result.action === 'toggleTeam') {
+				options.setTeamMode(prev => {
+					const newValue = !prev;
+					if (newValue) {
+						options.setPlanMode(false);
+						options.setVulnerabilityHuntingMode(false);
+					}
+					return newValue;
+				});
 			} else if (
 				result.success &&
 				result.action === 'initProject' &&

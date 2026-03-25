@@ -559,6 +559,8 @@ export const zhTW: TranslationKeys = {
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
+			team:
+				'切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
 			connect: '連接到 Snow Instance 進行 AI 處理',
@@ -1025,6 +1027,7 @@ export const zhTW: TranslationKeys = {
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
 		toolSearchEnabled: '♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
 		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
+		teamModeActive: '⚑ Agent Team 模式已啟用 - 多代理獨立 Worktree 協同工作',
 		tokens: ' 個token',
 		cached: '已快取',
 		newCache: '新快取',

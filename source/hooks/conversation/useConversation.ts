@@ -58,6 +58,7 @@ export async function handleConversationWithTools(
 	} = await prepareConversationSetup({
 		planMode: options.planMode,
 		vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+		teamMode: options.teamMode,
 		toolSearchDisabled: options.toolSearchDisabled,
 	});
 
