@@ -114,6 +114,11 @@ export class SubAgentUIHandler {
 	private readonly agentNameMap: Record<string, string> = {};
 	private readonly FLUSH_INTERVAL = 100;
 
+	/** Sequential display queue: only one agent streams visible content at a time */
+	private activeDisplayAgentId: string | null = null;
+	private readonly displayQueue: string[] = [];
+	private readonly bufferedStreamLines = new Map<string, Message[]>();
+
 	constructor(
 		private encoder: any,
 		private setStreamTokenCount: (count: number) => void,
@@ -266,9 +271,7 @@ export class SubAgentUIHandler {
 		content: string,
 		isThinking: boolean,
 	): void {
-		if (!this.streamingEnabled) {
-			return;
-		}
+		if (!this.streamingEnabled) return;
 
 		const isFirst = state.isFirstStreamLine;
 		const isFirstContent = !isThinking && !state.hasStartedContent;
@@ -276,7 +279,7 @@ export class SubAgentUIHandler {
 		if (isFirstContent) state.hasStartedContent = true;
 		state.hasEmittedStreamLine = true;
 
-		lines.push({
+		const msg: Message = {
 			role: 'assistant' as const,
 			content,
 			streamingLine: true,
@@ -289,7 +292,76 @@ export class SubAgentUIHandler {
 				isComplete: false,
 			},
 			subAgentInternal: true,
+		};
+
+		const agentId = subAgentMessage.agentId;
+
+		if (this.activeDisplayAgentId === null) {
+			this.activeDisplayAgentId = agentId;
+			this.emitAgentTitle(lines, subAgentMessage);
+			lines.push(msg);
+		} else if (agentId === this.activeDisplayAgentId) {
+			lines.push(msg);
+		} else {
+			if (!this.displayQueue.includes(agentId)) {
+				this.displayQueue.push(agentId);
+			}
+			const buf = this.bufferedStreamLines.get(agentId) || [];
+			buf.push(msg);
+			this.bufferedStreamLines.set(agentId, buf);
+		}
+	}
+
+	private emitAgentTitle(lines: Message[], subAgentMessage: SubAgentMessage): void {
+		const name = subAgentMessage.agentName;
+		lines.push({
+			role: 'subagent' as const,
+			content: `\x1b[36m⚇ ${name}\x1b[0m`,
+			streaming: false,
+			subAgent: {
+				agentId: subAgentMessage.agentId,
+				agentName: name,
+				isComplete: false,
+			},
+			subAgentInternal: true,
 		});
+	}
+
+	/**
+	 * When the active display agent finishes, flush the next queued agent(s).
+	 * If the next agent already completed, flush its buffer entirely and move on.
+	 */
+	private flushNextQueuedAgent(): Message[] {
+		const flushed: Message[] = [];
+
+		while (this.displayQueue.length > 0) {
+			const nextId = this.displayQueue.shift()!;
+			this.activeDisplayAgentId = nextId;
+			const agentName = this.agentNameMap[nextId] || nextId;
+
+			flushed.push({
+				role: 'subagent' as const,
+				content: `\x1b[36m⚇ ${agentName}\x1b[0m`,
+				streaming: false,
+				subAgent: {agentId: nextId, agentName, isComplete: false},
+				subAgentInternal: true,
+			});
+
+			const buffered = this.bufferedStreamLines.get(nextId) || [];
+			flushed.push(...buffered);
+			this.bufferedStreamLines.delete(nextId);
+
+			// If this agent is still streaming, stop here — future content will flow normally
+			if (this.streamStates[nextId]) break;
+		}
+
+		if (this.displayQueue.length === 0 &&
+			this.activeDisplayAgentId &&
+			!this.streamStates[this.activeDisplayAgentId]) {
+			this.activeDisplayAgentId = null;
+		}
+
+		return flushed;
 	}
 
 	private cleanThinkingContent(content: string): string {
@@ -1155,6 +1227,13 @@ export class SubAgentUIHandler {
 		this.flushRemainingContentBuffers(state, finalLines, subAgentMessage);
 		this.persistCompletedResponse(state, subAgentMessage);
 		this.clearStreamState(subAgentMessage.agentId);
+
+		// Display queue: when the active agent finishes, flush next queued agent(s)
+		if (subAgentMessage.agentId === this.activeDisplayAgentId) {
+			const flushed = this.flushNextQueuedAgent();
+			if (flushed.length > 0) finalLines.push(...flushed);
+		}
+
 		return finalLines.length > 0 ? [...prev, ...finalLines] : prev;
 	}
 }
