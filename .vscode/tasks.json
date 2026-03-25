@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "npm: build",
+			"type": "npm",
+			"script": "build",
+			"group": "build",
+			"problemMatcher": ["$tsc"],
+			"detail": "Build the project"
+		},
+		{
+			"label": "npm: dev",
+			"type": "npm",
+			"script": "dev",
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": ["$tsc-watch"],
+			"detail": "Watch TypeScript files for changes"
+		},
+		{
+			"label": "TypeScript: Watch",
+			"type": "shell",
+			"command": "npx tsc --watch",
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": ["$tsc-watch"]
+		}
+	]
+}

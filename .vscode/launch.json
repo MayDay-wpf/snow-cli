@@ -1,0 +1,45 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug CLI (ts-node)",
+			"type": "node",
+			"request": "launch",
+			"runtimeExecutable": "node",
+			"runtimeArgs": ["--loader", "ts-node/esm"],
+			"args": ["${workspaceFolder}/source/cli.tsx"],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"skipFiles": ["<node_internals>/**"],
+			"env": {
+				"TS_NODE_PROJECT": "${workspaceFolder}/tsconfig.json"
+			}
+		},
+		{
+			"name": "Debug CLI (built)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/bundle/cli.mjs",
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"preLaunchTask": "npm: build",
+			"skipFiles": ["<node_internals>/**"]
+		},
+		{
+			"name": "Debug Current File (ts-node)",
+			"type": "node",
+			"request": "launch",
+			"runtimeArgs": ["--loader", "ts-node/esm"],
+			"args": ["${relativeFile}"],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"skipFiles": ["<node_internals>/**"],
+			"env": {
+				"TS_NODE_PROJECT": "${workspaceFolder}/tsconfig.json"
+			}
+		}
+	]
+}
