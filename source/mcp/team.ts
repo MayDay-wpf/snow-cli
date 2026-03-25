@@ -34,6 +34,8 @@ import {teamTracker} from '../utils/execution/teamTracker.js';
 import {executeTeammate} from '../utils/execution/teamExecutor.js';
 import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
+import {getConversationContext} from '../utils/codebase/conversationContext.js';
+import {recordTeamCreated, recordMemberSpawned} from '../utils/team/teamSnapshot.js';
 
 export interface TeamToolExecutionOptions {
 	toolName: string;
@@ -111,6 +113,7 @@ export class TeamService {
 
 		// Ensure a team exists
 		let team = getActiveTeam();
+		const isNewTeam = !team;
 		if (!team) {
 			const teamName = `team-${Date.now()}`;
 			team = createTeam(teamName, 'lead');
@@ -123,6 +126,18 @@ export class TeamService {
 		// Add member to team config
 		const member = addMember(team.name, name, worktreePath, role);
 
+		// Record snapshots for rollback
+		const ctx = getConversationContext();
+		if (ctx) {
+			if (isNewTeam) {
+				recordTeamCreated(ctx.sessionId, ctx.messageIndex, team.name);
+			}
+			recordMemberSpawned(ctx.sessionId, ctx.messageIndex, team.name, member.id, name, worktreePath);
+		}
+
+		// Create a managed AbortController so rollback can force-stop this teammate
+		const teammateAC = teamTracker.createAbortController(member.id, abortSignal);
+
 		// Spawn teammate execution (fire-and-forget)
 		executeTeammate(
 			member.id,
@@ -133,7 +148,7 @@ export class TeamService {
 			role,
 			{
 				onMessage,
-				abortSignal,
+				abortSignal: teammateAC.signal,
 				requestToolConfirmation,
 				isToolAutoApproved,
 				yoloMode,

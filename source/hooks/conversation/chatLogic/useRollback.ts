@@ -12,6 +12,12 @@ import {
 	deleteNotebookSnapshotsFromIndex,
 	clearAllNotebookSnapshots,
 } from '../../../utils/core/notebookManager.js';
+import {
+	getTeamRollbackCount,
+	rollbackTeamState,
+	deleteTeamSnapshotsFromIndex,
+	clearAllTeamSnapshots,
+} from '../../../utils/team/teamSnapshot.js';
 
 export function useRollback(props: UseChatLogicProps) {
 	const {
@@ -35,6 +41,7 @@ export function useRollback(props: UseChatLogicProps) {
 		void connectionManager.notifyRollbackConfirmationNeeded({
 			filePaths: pendingRollback.filePaths || [],
 			notebookCount: pendingRollback.notebookCount || 0,
+			teamCount: pendingRollback.teamCount || 0,
 		});
 	}, [snapshotState.pendingRollback]);
 
@@ -64,6 +71,15 @@ export function useRollback(props: UseChatLogicProps) {
 				rollbackNotebooks(currentSession.id, selectedIndex);
 			} catch (error) {
 				console.error('Failed to rollback notebooks:', error);
+			}
+		}
+
+		// Always clean up team state when rolling back (regardless of file rollback choice)
+		if (currentSession) {
+			try {
+				await rollbackTeamState(currentSession.id, selectedIndex);
+			} catch (error) {
+				console.error('Failed to rollback team state:', error);
 			}
 		}
 
@@ -142,6 +158,7 @@ export function useRollback(props: UseChatLogicProps) {
 				await hashBasedSnapshotManager.clearAllSnapshots(currentSession.id);
 
 				clearAllNotebookSnapshots(currentSession.id);
+				clearAllTeamSnapshots(currentSession.id);
 
 				await sessionManager.deleteSession(currentSession.id);
 
@@ -169,6 +186,8 @@ export function useRollback(props: UseChatLogicProps) {
 			if (!rollbackFiles) {
 				deleteNotebookSnapshotsFromIndex(currentSession.id, selectedIndex);
 			}
+
+			deleteTeamSnapshotsFromIndex(currentSession.id, selectedIndex);
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,
@@ -276,12 +295,17 @@ export function useRollback(props: UseChatLogicProps) {
 				currentSession.id,
 				selectedIndex,
 			);
-			if (filePaths.length > 0 || nbCount > 0) {
+			const tmCount = getTeamRollbackCount(
+				currentSession.id,
+				selectedIndex,
+			);
+			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
 					fileCount: filePaths.length,
 					filePaths,
 					notebookCount: nbCount,
+					teamCount: tmCount,
 					message: cleanIDEContext(message),
 					images,
 					crossSessionRollback: true,
@@ -307,13 +331,15 @@ export function useRollback(props: UseChatLogicProps) {
 		);
 
 		const nbCount = getNotebookRollbackCount(currentSession.id, selectedIndex);
+		const tmCount = getTeamRollbackCount(currentSession.id, selectedIndex);
 
-		if (filePaths.length > 0 || nbCount > 0) {
+		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length,
 				filePaths,
 				notebookCount: nbCount,
+				teamCount: tmCount,
 				message: cleanIDEContext(message),
 				images,
 			});

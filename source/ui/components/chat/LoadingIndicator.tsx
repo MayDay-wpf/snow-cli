@@ -170,6 +170,12 @@ export default function LoadingIndicator({
 										: tm.tokenCount > 0
 										? '#00FFFF'
 										: theme.colors.menuSecondary;
+									const pct = tm.ctxUsage?.percentage ?? 0;
+									const barWidth = 8;
+									const filled = Math.round((pct / 100) * barWidth);
+									const empty = barWidth - filled;
+									const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+									const barColor = pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
 									return (
 										<Text key={tm.agentId} dimColor>
 											<Text color={theme.colors.menuSecondary}>
@@ -190,6 +196,11 @@ export default function LoadingIndicator({
 												)}
 												)
 											</Text>
+											{pct > 0 && (
+												<Text color={barColor} dimColor>
+													{' '}{pct}% {bar}
+												</Text>
+											)}
 										</Text>
 									);
 								})}

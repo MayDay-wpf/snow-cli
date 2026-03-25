@@ -5,35 +5,46 @@ import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
+export interface TeammateCtxUsage {
+	percentage: number;
+	inputTokens: number;
+	maxTokens: number;
+}
+
 export interface TeammateStreamInfo {
 	agentId: string;
 	agentName: string;
 	tokenCount: number;
 	isReasoning: boolean;
+	ctxUsage?: TeammateCtxUsage;
 }
 
 const _teammateStreamMap = new Map<string, TeammateStreamInfo>();
 const _teammateStreamListeners = new Set<() => void>();
 let _teammateStreamSnapshot: TeammateStreamInfo[] = [];
-let _pendingNotify = false;
+let _notifyTimer: ReturnType<typeof setTimeout> | null = null;
+const _NOTIFY_THROTTLE_MS = 200;
 
-function rebuildTeammateSnapshot(): void {
-	_teammateStreamSnapshot = Array.from(_teammateStreamMap.values());
-	if (!_pendingNotify) {
-		_pendingNotify = true;
-		queueMicrotask(() => {
-			_pendingNotify = false;
-			for (const listener of _teammateStreamListeners) {
-				try { listener(); } catch { /* noop */ }
-			}
-		});
+function notifyTeammateStreamListeners(): void {
+	for (const listener of _teammateStreamListeners) {
+		try { listener(); } catch { /* noop */ }
 	}
 }
 
-function setTeammateStreamEntry(agentId: string, agentName: string, tokenCount: number, isReasoning: boolean): void {
+function rebuildTeammateSnapshot(): void {
+	_teammateStreamSnapshot = Array.from(_teammateStreamMap.values());
+	if (!_notifyTimer) {
+		_notifyTimer = setTimeout(() => {
+			_notifyTimer = null;
+			notifyTeammateStreamListeners();
+		}, _NOTIFY_THROTTLE_MS);
+	}
+}
+
+function setTeammateStreamEntry(agentId: string, agentName: string, tokenCount: number, isReasoning: boolean, ctxUsage?: TeammateCtxUsage): void {
 	const prev = _teammateStreamMap.get(agentId);
-	if (prev && prev.tokenCount === tokenCount && prev.isReasoning === isReasoning) return;
-	_teammateStreamMap.set(agentId, {agentId, agentName, tokenCount, isReasoning});
+	if (prev && prev.tokenCount === tokenCount && prev.isReasoning === isReasoning && prev.ctxUsage?.percentage === ctxUsage?.percentage) return;
+	_teammateStreamMap.set(agentId, {agentId, agentName, tokenCount, isReasoning, ctxUsage});
 	rebuildTeammateSnapshot();
 }
 
@@ -197,6 +208,7 @@ export class SubAgentUIHandler {
 					this.agentNameMap[agentId] || agentId,
 					state.tokenCount,
 					this.activeReasoningAgents.has(agentId),
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
 				);
 			} else {
 				leadTotal += state.tokenCount;
@@ -221,6 +233,7 @@ export class SubAgentUIHandler {
 					this.agentNameMap[agentId] || agentId,
 					state.tokenCount,
 					isReasoning,
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
 				);
 			}
 		}
@@ -578,12 +591,23 @@ export class SubAgentUIHandler {
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
 	): Message[] {
-		const ctxData = {
+		const ctxData: TeammateCtxUsage = {
 			percentage: subAgentMessage.message.percentage,
 			inputTokens: subAgentMessage.message.inputTokens,
 			maxTokens: subAgentMessage.message.maxTokens,
 		};
 		this.latestCtxUsage[subAgentMessage.agentId] = ctxData;
+
+		if (subAgentMessage.agentId.startsWith('teammate-')) {
+			const state = this.streamStates[subAgentMessage.agentId];
+			setTeammateStreamEntry(
+				subAgentMessage.agentId,
+				this.agentNameMap[subAgentMessage.agentId] || subAgentMessage.agentName,
+				state?.tokenCount ?? 0,
+				this.activeReasoningAgents.has(subAgentMessage.agentId),
+				ctxData,
+			);
+		}
 
 		let targetIndex = -1;
 		for (let i = prev.length - 1; i >= 0; i--) {

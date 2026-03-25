@@ -77,6 +77,9 @@ class TeamTracker {
 	/** Active team name (only one team at a time) */
 	private activeTeamName: string | null = null;
 
+	/** Per-teammate AbortControllers for force-stopping during rollback */
+	private teammateAbortControllers: Map<string, AbortController> = new Map();
+
 	// ── Team lifecycle ──
 
 	setActiveTeam(teamName: string): void {
@@ -104,9 +107,35 @@ class TeamTracker {
 	unregister(instanceId: string): void {
 		if (this.teammates.delete(instanceId)) {
 			this.teammateMessageQueues.delete(instanceId);
+			this.teammateAbortControllers.delete(instanceId);
 			this.rebuildSnapshot();
 			this.notifyListeners();
 		}
+	}
+
+	/**
+	 * Create and store an AbortController for a teammate.
+	 * If a parent abort signal is provided, it will be linked so the teammate
+	 * aborts when either the parent fires or abortAllTeammates() is called.
+	 */
+	createAbortController(instanceId: string, parentSignal?: AbortSignal): AbortController {
+		const controller = new AbortController();
+		this.teammateAbortControllers.set(instanceId, controller);
+		if (parentSignal) {
+			const onParentAbort = () => controller.abort();
+			parentSignal.addEventListener('abort', onParentAbort, {once: true});
+		}
+		return controller;
+	}
+
+	/**
+	 * Abort all running teammates (used during rollback).
+	 */
+	abortAllTeammates(): void {
+		for (const controller of this.teammateAbortControllers.values()) {
+			try { controller.abort(); } catch { /* noop */ }
+		}
+		this.teammateAbortControllers.clear();
 	}
 
 	getRunningTeammates(): RunningTeammate[] {
@@ -386,6 +415,7 @@ class TeamTracker {
 			this.completedResults.length > 0 ||
 			this.leadMessageQueue.length > 0
 		) {
+			this.abortAllTeammates();
 			this.teammates.clear();
 			this.teammateMessageQueues.clear();
 			this.leadMessageQueue.length = 0;

@@ -1242,6 +1242,7 @@ export type TranslationKeys = {
 		filesCount: string;
 		filesCountWithSelection: string;
 		notebookCount: string;
+		teamCount: string;
 		question: string;
 		conversationOnly: string;
 		conversationAndFiles: string;

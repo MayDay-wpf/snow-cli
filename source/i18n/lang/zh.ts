@@ -1255,6 +1255,7 @@ export const zh: TranslationKeys = {
 		filesCountWithSelection:
 			'{count} 个文件将被回滚 ({selected}/{total} 已选择)',
 		notebookCount: '{count} 条备忘录也将被回滚',
+		teamCount: '{count} 个团队成员将被终止，工作区将被清理',
 		question: '请选择回滚方式：',
 		conversationOnly: '仅回滚对话',
 		conversationAndFiles: '回滚对话 + 文件',

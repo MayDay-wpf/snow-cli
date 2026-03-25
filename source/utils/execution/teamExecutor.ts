@@ -96,6 +96,8 @@ export async function executeTeammate(
 		const {
 			shouldCompressSubAgentContext,
 			compressSubAgentContext,
+			getContextPercentage,
+			countMessagesTokens,
 		} = await import('../core/subAgentContextCompressor.js');
 		const {listTasks, claimTask, completeTask} = await import(
 			'../team/teamTaskList.js'
@@ -381,6 +383,21 @@ ${role ? `Your role: ${role}` : ''}
 						totalUsage.inputTokens += eu.prompt_tokens || 0;
 						totalUsage.outputTokens += eu.completion_tokens || 0;
 					}
+
+					if (onMessage && config.maxContextTokens && latestTotalTokens > 0) {
+						const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: `teammate-${memberId}`,
+							agentName: memberName,
+							message: {
+								type: 'context_usage',
+								percentage: Math.max(1, Math.round(ctxPct)),
+								inputTokens: latestTotalTokens,
+								maxTokens: config.maxContextTokens,
+							},
+						});
+					}
 				}
 
 				if (event.type === 'content' && event.content) {
@@ -396,6 +413,25 @@ ${role ? `Your role: ${role}` : ''}
 					if ('reasoning_content' in event && event.reasoning_content) {
 						currentReasoningContent = event.reasoning_content as string;
 					}
+				}
+			}
+
+			// Tiktoken fallback when API doesn't return usage
+			if (latestTotalTokens === 0 && config.maxContextTokens) {
+				latestTotalTokens = countMessagesTokens(messages);
+				if (onMessage && latestTotalTokens > 0) {
+					const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: `teammate-${memberId}`,
+						agentName: memberName,
+						message: {
+							type: 'context_usage',
+							percentage: Math.max(1, Math.round(ctxPct)),
+							inputTokens: latestTotalTokens,
+							maxTokens: config.maxContextTokens,
+						},
+					});
 				}
 			}
 
@@ -417,6 +453,20 @@ ${role ? `Your role: ${role}` : ''}
 			let justCompressed = false;
 			if (latestTotalTokens > 0 && config.maxContextTokens) {
 				if (shouldCompressSubAgentContext(latestTotalTokens, config.maxContextTokens)) {
+					const ctxPercentage = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: `teammate-${memberId}`,
+							agentName: memberName,
+							message: {
+								type: 'context_compressing',
+								percentage: Math.round(ctxPercentage),
+							},
+						});
+					}
+
 					try {
 						const compressionResult = await compressSubAgentContext(
 							messages, latestTotalTokens, config.maxContextTokens,
@@ -429,9 +479,30 @@ ${role ? `Your role: ${role}` : ''}
 							if (compressionResult.afterTokensEstimate) {
 								latestTotalTokens = compressionResult.afterTokensEstimate;
 							}
+
+							if (onMessage) {
+								onMessage({
+									type: 'sub_agent_message',
+									agentId: `teammate-${memberId}`,
+									agentName: memberName,
+									message: {
+										type: 'context_compressed',
+										beforeTokens: compressionResult.beforeTokens,
+										afterTokensEstimate: compressionResult.afterTokensEstimate,
+									},
+								});
+							}
+
+							console.log(
+								`[Teammate:${memberName}] Context compressed: ` +
+								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+							);
 						}
-					} catch {
-						// Continue without compression
+					} catch (compressError) {
+						console.error(
+							`[Teammate:${memberName}] Context compression failed:`,
+							compressError,
+						);
 					}
 				}
 			}

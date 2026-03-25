@@ -10,6 +10,7 @@ type Props = {
 	fileCount: number;
 	filePaths: string[];
 	notebookCount?: number;
+	teamCount?: number;
 	previewSessionId?: string;
 	previewTargetMessageIndex?: number;
 	onConfirm: (mode: RollbackMode | null, selectedFiles?: string[]) => void;
@@ -19,6 +20,7 @@ export default function FileRollbackConfirmation({
 	fileCount,
 	filePaths,
 	notebookCount,
+	teamCount,
 	previewSessionId,
 	previewTargetMessageIndex,
 	onConfirm,
@@ -305,6 +307,18 @@ export default function FileRollbackConfirmation({
 						{t.fileRollback.notebookCount.replace(
 							'{count}',
 							String(notebookCount),
+						)}
+					</Text>
+				</Box>
+			)}
+
+			{/* Team cleanup info */}
+			{teamCount !== undefined && teamCount > 0 && (
+				<Box marginBottom={1} marginLeft={2}>
+					<Text color="cyan">
+						⚑ {t.fileRollback.teamCount.replace(
+							'{count}',
+							String(teamCount),
 						)}
 					</Text>
 				</Box>
