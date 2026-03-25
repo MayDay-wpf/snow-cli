@@ -12,6 +12,8 @@ import {
 	setVulnerabilityHuntingMode as persistVulnerabilityHuntingMode,
 	getHybridCompressEnabled,
 	setHybridCompressEnabled as persistHybridCompressEnabled,
+	getTeamMode,
+	setTeamMode as persistTeamMode,
 } from '../../../utils/config/projectSettings.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
@@ -44,6 +46,7 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	const [hybridCompressEnabled, setHybridCompressEnabled] = useState(
 		() => getHybridCompressEnabled(),
 	);
+	const [teamMode, setTeamMode] = useState(() => getTeamMode());
 	const [simpleMode, setSimpleMode] = useState(() => getSimpleMode());
 	const [showThinking, setShowThinking] = useState(() => {
 		const config = getOpenAiConfig();
@@ -69,6 +72,10 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	useEffect(() => {
 		persistHybridCompressEnabled(hybridCompressEnabled);
 	}, [hybridCompressEnabled]);
+
+	useEffect(() => {
+		persistTeamMode(teamMode);
+	}, [teamMode]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -106,6 +113,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		setToolSearchDisabled,
 		hybridCompressEnabled,
 		setHybridCompressEnabled,
+		teamMode,
+		setTeamMode,
 		simpleMode,
 		showThinking,
 	};

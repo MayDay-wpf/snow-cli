@@ -21,6 +21,7 @@ export interface UseChatLogicProps {
 	yoloMode: boolean;
 	planMode: boolean;
 	vulnerabilityHuntingMode: boolean;
+	teamMode: boolean;
 	toolSearchDisabled: boolean;
 	saveMessage: (msg: any) => Promise<void>;
 	clearSavedMessages: () => void;

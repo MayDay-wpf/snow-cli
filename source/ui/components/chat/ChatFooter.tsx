@@ -56,6 +56,8 @@ type ChatFooterProps = {
 	setVulnerabilityHuntingMode: (value: boolean) => void;
 	toolSearchDisabled: boolean;
 	hybridCompressEnabled: boolean;
+	teamMode: boolean;
+	setTeamMode: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -250,6 +252,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						streamTokenCount={props.streamTokenCount}
 						elapsedSeconds={props.elapsedSeconds}
 						currentModel={props.currentModel}
+						teamMode={props.teamMode}
 					/>
 					<ChatInput
 						onSubmit={props.onSubmit}
@@ -266,6 +269,8 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						setPlanMode={props.setPlanMode}
 						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
 						setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
+						teamMode={props.teamMode}
+						setTeamMode={props.setTeamMode}
 						contextUsage={props.contextUsage}
 						initialContent={props.initialContent}
 						draftContent={props.draftContent}
@@ -307,6 +312,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
 						toolSearchDisabled={props.toolSearchDisabled}
 						hybridCompressEnabled={props.hybridCompressEnabled}
+						teamMode={props.teamMode}
 						vscodeConnectionStatus={props.vscodeConnectionStatus}
 						editorContext={props.editorContext}
 						connectionStatus={connectionStatus}

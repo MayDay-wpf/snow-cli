@@ -554,6 +554,7 @@ export type TranslationKeys = {
 			autoFormat: string;
 			toolSearch: string;
 			hybridCompress: string;
+			team: string;
 			worktree: string; // Git branch management panel
 			diff: string;
 			connect: string;
@@ -1019,6 +1020,7 @@ export type TranslationKeys = {
 		vulnerabilityHuntingModeActive: string;
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;
+		teamModeActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

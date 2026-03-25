@@ -213,6 +213,8 @@ type Props = {
 	setPlanMode?: (value: boolean) => void;
 	vulnerabilityHuntingMode?: boolean;
 	setVulnerabilityHuntingMode?: (value: boolean) => void;
+	teamMode?: boolean;
+	setTeamMode?: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -273,6 +275,8 @@ export default function ChatInput({
 	setPlanMode,
 	vulnerabilityHuntingMode = false,
 	setVulnerabilityHuntingMode,
+	teamMode = false,
+	setTeamMode,
 	contextUsage,
 	initialContent = null,
 	draftContent = null,
@@ -474,6 +478,8 @@ export default function ChatInput({
 		setPlanMode: setPlanMode || (() => {}),
 		vulnerabilityHuntingMode,
 		setVulnerabilityHuntingMode: setVulnerabilityHuntingMode || (() => {}),
+		teamMode,
+		setTeamMode: setTeamMode || (() => {}),
 		showCommands,
 		setShowCommands,
 		commandSelectedIndex,

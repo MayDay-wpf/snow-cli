@@ -39,6 +39,7 @@ import './commands/hybridCompress.js';
 import './commands/usage.js';
 import './commands/vulnerability-hunting.js';
 import './commands/autoformat.js';
+import './commands/team.js';
 import './commands/worktree.js';
 import './commands/yolo.js';
 

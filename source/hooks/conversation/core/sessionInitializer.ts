@@ -16,6 +16,7 @@ export async function initializeConversationSession(
 	planMode: boolean,
 	vulnerabilityHuntingMode: boolean,
 	toolSearchDisabled = false,
+	teamMode = false,
 ): Promise<{
 	conversationMessages: ChatMessage[];
 	currentSession: any;
@@ -36,7 +37,7 @@ export async function initializeConversationSession(
 	const conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
+			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
 		},
 	];
 

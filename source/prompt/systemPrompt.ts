@@ -420,7 +420,13 @@ export function getSystemPromptForMode(
 	planMode: boolean,
 	vulnerabilityHuntingMode: boolean,
 	toolSearchDisabled = false,
+	teamMode = false,
 ): string {
+	// Team mode takes highest precedence
+	if (teamMode) {
+		const {getTeamModeSystemPrompt} = require('./teamModeSystemPrompt.js');
+		return getTeamModeSystemPrompt(toolSearchDisabled);
+	}
 	// Vulnerability Hunting mode takes precedence over Plan mode
 	if (vulnerabilityHuntingMode) {
 		// Import dynamically to avoid circular dependency

@@ -3,6 +3,57 @@ import type {SubAgentMessage} from '../../../utils/execution/subAgentExecutor.js
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
 import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
 
+// ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
+
+export interface TeammateStreamInfo {
+	agentId: string;
+	agentName: string;
+	tokenCount: number;
+	isReasoning: boolean;
+}
+
+const _teammateStreamMap = new Map<string, TeammateStreamInfo>();
+const _teammateStreamListeners = new Set<() => void>();
+let _teammateStreamSnapshot: TeammateStreamInfo[] = [];
+let _pendingNotify = false;
+
+function rebuildTeammateSnapshot(): void {
+	_teammateStreamSnapshot = Array.from(_teammateStreamMap.values());
+	if (!_pendingNotify) {
+		_pendingNotify = true;
+		queueMicrotask(() => {
+			_pendingNotify = false;
+			for (const listener of _teammateStreamListeners) {
+				try { listener(); } catch { /* noop */ }
+			}
+		});
+	}
+}
+
+function setTeammateStreamEntry(agentId: string, agentName: string, tokenCount: number, isReasoning: boolean): void {
+	const prev = _teammateStreamMap.get(agentId);
+	if (prev && prev.tokenCount === tokenCount && prev.isReasoning === isReasoning) return;
+	_teammateStreamMap.set(agentId, {agentId, agentName, tokenCount, isReasoning});
+	rebuildTeammateSnapshot();
+}
+
+function removeTeammateStreamEntry(agentId: string): void {
+	if (_teammateStreamMap.delete(agentId)) {
+		rebuildTeammateSnapshot();
+	}
+}
+
+export function subscribeTeammateStream(listener: () => void): () => void {
+	_teammateStreamListeners.add(listener);
+	return () => { _teammateStreamListeners.delete(listener); };
+}
+
+export function getTeammateStreamSnapshot(): TeammateStreamInfo[] {
+	return _teammateStreamSnapshot;
+}
+
+// ── Types ──
+
 type CtxUsage = {percentage: number; inputTokens: number; maxTokens: number};
 
 type StreamState = {
@@ -49,6 +100,7 @@ export class SubAgentUIHandler {
 	readonly latestCtxUsage: Record<string, CtxUsage> = {};
 	private readonly streamStates: Record<string, StreamState> = {};
 	private readonly activeReasoningAgents = new Set<string>();
+	private readonly agentNameMap: Record<string, string> = {};
 	private readonly FLUSH_INTERVAL = 100;
 
 	constructor(
@@ -65,6 +117,10 @@ export class SubAgentUIHandler {
 	 */
 	handleMessage(prev: Message[], subAgentMessage: SubAgentMessage): Message[] {
 		const {message} = subAgentMessage;
+
+		if (subAgentMessage.agentId.startsWith('teammate-')) {
+			this.agentNameMap[subAgentMessage.agentId] = subAgentMessage.agentName;
+		}
 
 		switch (message.type) {
 			case 'context_usage':
@@ -129,14 +185,24 @@ export class SubAgentUIHandler {
 	private clearStreamState(agentId: string): void {
 		delete this.streamStates[agentId];
 		this.updateGlobalTokenCount();
+		removeTeammateStreamEntry(agentId);
 	}
 
 	private updateGlobalTokenCount(): void {
-		const total = Object.values(this.streamStates).reduce(
-			(sum, state) => sum + state.tokenCount,
-			0,
-		);
-		this.setStreamTokenCount(total);
+		let leadTotal = 0;
+		for (const [agentId, state] of Object.entries(this.streamStates)) {
+			if (agentId.startsWith('teammate-')) {
+				setTeammateStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					this.activeReasoningAgents.has(agentId),
+				);
+			} else {
+				leadTotal += state.tokenCount;
+			}
+		}
+		this.setStreamTokenCount(leadTotal);
 	}
 
 	private setAgentReasoning(agentId: string, isReasoning: boolean): void {
@@ -146,6 +212,18 @@ export class SubAgentUIHandler {
 			this.activeReasoningAgents.delete(agentId);
 		}
 		this.setIsReasoning?.(this.activeReasoningAgents.size > 0);
+
+		if (agentId.startsWith('teammate-')) {
+			const state = this.streamStates[agentId];
+			if (state) {
+				setTeammateStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					isReasoning,
+				);
+			}
+		}
 	}
 
 	private addTokens(agentId: string, text: string): void {

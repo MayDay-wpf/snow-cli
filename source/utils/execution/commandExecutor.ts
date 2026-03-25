@@ -43,6 +43,7 @@ export interface CommandResult {
 		| 'copyLastMessage'
 		| 'toggleCodebase'
 		| 'toggleHybridCompress'
+		| 'toggleTeam'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'

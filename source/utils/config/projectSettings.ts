@@ -11,6 +11,7 @@ export interface ProjectSettings {
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
+	teamMode?: boolean;
 }
 
 const PROJECT_SNOW_DIR = path.join(process.cwd(), '.snow');
@@ -155,5 +156,16 @@ export function getHybridCompressEnabled(): boolean {
 export function setHybridCompressEnabled(enabled: boolean): void {
 	const settings = loadSettings();
 	settings.hybridCompressEnabled = enabled;
+	saveSettings(settings);
+}
+
+export function getTeamMode(): boolean {
+	const settings = loadSettings();
+	return settings.teamMode ?? false;
+}
+
+export function setTeamMode(enabled: boolean): void {
+	const settings = loadSettings();
+	settings.teamMode = enabled;
 	saveSettings(settings);
 }
