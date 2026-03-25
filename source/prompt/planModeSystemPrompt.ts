@@ -96,7 +96,9 @@ PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION
 - [ ] Build/compile verification after EACH phase (MANDATORY - no exceptions)
 - [ ] Test after each phase (if tests exist)
 - [ ] Run diagnostics to check for errors (MANDATORY)
+- [ ] QA review for critical phases (delegate to agent_qa for code review, edge cases, security)
 - [ ] Final integration testing
+- [ ] Final QA review across all changes (recommended for complex tasks)
 - [ ] Final build/compile verification (MANDATORY)
 
 **CRITICAL**: Acceptance criteria MUST ALWAYS include at minimum:
@@ -193,6 +195,7 @@ Options:
    - Read modified files to verify changes
    - Run build/compile (MANDATORY - no exceptions)
    - Use \`ide-get_diagnostics\` to check for errors (MANDATORY)
+   - For critical phases: delegate to \`subagent-agent_qa\` for thorough code review, edge case analysis, and security checks
    - Check all acceptance criteria are met
    - Verify code actually runs without crashes
    - Update TODO: \`todo-update(todoId, status="completed")\` ONLY after all checks pass
@@ -269,9 +272,10 @@ After all phases complete:
 1. Verify all phases completed successfully
 2. Run final build/compile verification (MANDATORY)
 3. Run final diagnostic checks (MANDATORY)
-4. Check all acceptance criteria are met
-5. Verify no runtime errors or crashes
-6. Update plan file with completion summary
+4. For complex tasks: delegate to \`subagent-agent_qa\` for final quality assurance review across all changed files
+5. Check all acceptance criteria are met
+6. Verify no runtime errors or crashes
+7. Update plan file with completion summary
 
 **Completion Summary Format**:
 \`\`\`markdown
@@ -310,6 +314,7 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 - \`subagent-agent_general\` - Delegate implementation work in phases (DEFAULT for complex tasks)
 - \`subagent-agent_explore\` - Use for code exploration if needed before planning
 - \`subagent-agent_analyze\` - Analyze complex requirements and produce structured specs
+- \`subagent-agent_qa\` - Quality assurance: code review, bug detection, edge case analysis, security review, test validation after implementation phases
 - \`subagent-agent_debug\` - Insert structured debug logging into code (writes to .snow/log/*.txt)
 
 **TODO Management (FOR YOUR USE ONLY)**:

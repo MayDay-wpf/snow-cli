@@ -55,6 +55,7 @@ type ChatFooterProps = {
 	vulnerabilityHuntingMode: boolean;
 	setVulnerabilityHuntingMode: (value: boolean) => void;
 	toolSearchDisabled: boolean;
+	hybridCompressEnabled: boolean;
 	contextUsage?: {
 		inputTokens: number;
 		maxContextTokens: number;
@@ -305,6 +306,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						planMode={props.planMode}
 						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
 						toolSearchDisabled={props.toolSearchDisabled}
+						hybridCompressEnabled={props.hybridCompressEnabled}
 						vscodeConnectionStatus={props.vscodeConnectionStatus}
 						editorContext={props.editorContext}
 						connectionStatus={connectionStatus}

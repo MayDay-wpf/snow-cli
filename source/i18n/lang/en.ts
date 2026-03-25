@@ -594,6 +594,8 @@ export const en: TranslationKeys = {
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
+			hybridCompress:
+				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
 			diff: 'Review file changes from a conversation in IDE diff view',
@@ -1076,6 +1078,7 @@ export const en: TranslationKeys = {
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
+		hybridCompressEnabled: '⇌ Hybrid Compress ON - AI summary + smart truncation',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

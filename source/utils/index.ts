@@ -35,6 +35,7 @@ import './commands/skillsPicker.js';
 import './commands/todoPicker.js';
 import './commands/todolist.js';
 import './commands/toolsearch.js';
+import './commands/hybridCompress.js';
 import './commands/usage.js';
 import './commands/vulnerability-hunting.js';
 import './commands/autoformat.js';

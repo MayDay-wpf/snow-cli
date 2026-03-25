@@ -10,6 +10,8 @@ import {
 	setPlanMode as persistPlanMode,
 	getVulnerabilityHuntingMode,
 	setVulnerabilityHuntingMode as persistVulnerabilityHuntingMode,
+	getHybridCompressEnabled,
+	setHybridCompressEnabled as persistHybridCompressEnabled,
 } from '../../../utils/config/projectSettings.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
@@ -39,6 +41,9 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	const [toolSearchDisabled, setToolSearchDisabled] = useState(
 		() => !getToolSearchEnabled(),
 	);
+	const [hybridCompressEnabled, setHybridCompressEnabled] = useState(
+		() => getHybridCompressEnabled(),
+	);
 	const [simpleMode, setSimpleMode] = useState(() => getSimpleMode());
 	const [showThinking, setShowThinking] = useState(() => {
 		const config = getOpenAiConfig();
@@ -60,6 +65,10 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	useEffect(() => {
 		persistToolSearchEnabled(!toolSearchDisabled);
 	}, [toolSearchDisabled]);
+
+	useEffect(() => {
+		persistHybridCompressEnabled(hybridCompressEnabled);
+	}, [hybridCompressEnabled]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -95,6 +104,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		setVulnerabilityHuntingMode,
 		toolSearchDisabled,
 		setToolSearchDisabled,
+		hybridCompressEnabled,
+		setHybridCompressEnabled,
 		simpleMode,
 		showThinking,
 	};

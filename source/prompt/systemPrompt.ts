@@ -217,13 +217,14 @@ Never use broad process-name-based kill commands that would match all Node.js pr
 
 **Sub-Agent Usage:**
 
-**CRITICAL Rule**: If user message contains #agent_explore, #agent_plan, #agent_general, #agent_analyze, #agent_debug, or any #agent_* → You MUST use that specific sub-agent (non-negotiable).
+**CRITICAL Rule**: If user message contains #agent_explore, #agent_plan, #agent_general, #agent_analyze, #agent_qa, #agent_debug, or any #agent_* → You MUST use that specific sub-agent (non-negotiable).
 
 **When to delegate (Strategic, not default):**
 - **Explore Agent**: Deep codebase exploration, complex dependency tracing
 - **Plan Agent**: Breaking down complex features, major refactoring planning  
 - **General Purpose Agent**: Focus on modifications, use when there are many files to modify, or when there are many similar modifications in the same file, systematic refactoring
 - **Requirement Analysis Agent**: Analyzing complex or ambiguous requirements, producing structured requirement specifications
+- **QA Agent**: Code review, quality assurance, edge case analysis, security review, test validation, and requirements verification. Produces structured QA reports with severity-categorized findings
 - **Debug Assistant**: Inserting structured debug logging into code. Writes logs to .snow/log/*.txt files with standardized format. Creates the logger helper file if needed
 
 **Keep in main agent (90% of work):**
@@ -337,7 +338,7 @@ All tools are pre-loaded and available for immediate use. You can call any tool 
 - **ide** - IDE diagnostics (error checking)
 - **notebook** - Code memory and notes
 - **askuser** - Ask user interactive questions
-- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, debug)
+- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, qa, debug)
 - **codebase** - Semantic code search across entire codebase
 - **skill** - Load specialized knowledge/instructions`,
 	progressive: `## Tool Discovery (Progressive Loading)
@@ -361,7 +362,7 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 - **ide** - IDE diagnostics (error checking)
 - **notebook** - Code memory and notes
 - **askuser** - Ask user interactive questions
-- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, debug)
+- **subagent** - Delegate tasks to sub-agents (explore, plan, general, analyze, qa, debug)
 - **codebase** - Semantic code search across entire codebase
 - **skill** - Load specialized knowledge/instructions
 

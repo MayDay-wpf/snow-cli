@@ -382,6 +382,56 @@ async function aiSummaryCompress(
 }
 
 /**
+ * Find the tool name for a tool message by searching preceding assistant messages.
+ */
+function findToolName(messages: ChatMessage[], idx: number, toolCallId?: string): string {
+	for (let j = idx - 1; j >= 0; j--) {
+		const prev = messages[j];
+		if (prev?.role === 'assistant' && prev.tool_calls) {
+			const match = prev.tool_calls.find(tc => tc.id === toolCallId);
+			if (match) return match.function.name;
+		}
+		if (prev?.role !== 'tool') break;
+	}
+	return 'unknown';
+}
+
+/** Max chars to keep per tool result in preserved region */
+const MAX_PRESERVED_TOOL_RESULT_CHARS = 2000;
+
+/**
+ * Truncate oversized tool results in a messages array.
+ * Keeps the beginning and end of each tool result for context.
+ *
+ * @param messages - messages array to process
+ * @param maxChars - max chars per tool result (default: MAX_PRESERVED_TOOL_RESULT_CHARS)
+ * @returns new messages array with truncated tool results
+ */
+function truncateOversizedToolResults(
+	messages: ChatMessage[],
+	maxChars: number = MAX_PRESERVED_TOOL_RESULT_CHARS,
+): ChatMessage[] {
+	return messages.map((msg, idx) => {
+		if (msg.role !== 'tool' || !msg.content || msg.content.length <= maxChars) {
+			return msg;
+		}
+
+		const toolName = findToolName(messages, idx, msg.tool_call_id);
+		const keepStart = Math.floor(maxChars * 0.6);
+		const keepEnd = Math.floor(maxChars * 0.3);
+		const truncated = msg.content.length - keepStart - keepEnd;
+
+		return {
+			...msg,
+			content:
+				msg.content.substring(0, keepStart) +
+				`\n\n[... ${truncated} chars truncated from ${toolName} result ...]\n\n` +
+				msg.content.substring(msg.content.length - keepEnd),
+		};
+	});
+}
+
+/**
  * Fallback: smart truncation — replace old large tool results with compact placeholders.
  * Used when AI summary compression fails. This is instant and costs zero additional tokens.
  *
@@ -400,32 +450,18 @@ function truncateToolResults(
 
 	/** Minimum tool result length to consider for truncation */
 	const MIN_TRUNCATION_LENGTH = 500;
-	/** Max chars to keep in preserved region */
-	const MAX_PRESERVED_CHARS = 2000;
 
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i];
 		if (!msg) continue;
 
-		// Helper: find tool name for a tool message
-		const findToolName = (): string => {
-			for (let j = i - 1; j >= 0; j--) {
-				const prev = messages[j];
-				if (prev?.role === 'assistant' && prev.tool_calls) {
-					const match = prev.tool_calls.find(tc => tc.id === msg.tool_call_id);
-					if (match) return match.function.name;
-				}
-				if (prev?.role !== 'tool') break;
-			}
-			return 'unknown';
-		};
-
 		// OLD messages: aggressive truncation (placeholders only)
 		if (i < preserveStartIndex) {
 			if (msg.role === 'tool' && msg.content && msg.content.length > MIN_TRUNCATION_LENGTH) {
+				const toolName = findToolName(messages, i, msg.tool_call_id);
 				result.push({
 					...msg,
-					content: `[Tool result truncated: ${findToolName()}, original ${msg.content.length} chars]`,
+					content: `[Tool result truncated: ${toolName}, original ${msg.content.length} chars]`,
 				});
 			} else {
 				result.push(msg);
@@ -433,25 +469,11 @@ function truncateToolResults(
 			continue;
 		}
 
-		// PRESERVED (recent) messages: truncate oversized tool results but keep more content
-		if (msg.role === 'tool' && msg.content && msg.content.length > MAX_PRESERVED_CHARS) {
-			const toolName = findToolName();
-			const keepStart = Math.floor(MAX_PRESERVED_CHARS * 0.6);
-			const keepEnd = Math.floor(MAX_PRESERVED_CHARS * 0.3);
-			const truncated = msg.content.length - keepStart - keepEnd;
-			result.push({
-				...msg,
-				content:
-					msg.content.substring(0, keepStart) +
-					`\n\n[... ${truncated} chars truncated from ${toolName} result ...]\n\n` +
-					msg.content.substring(msg.content.length - keepEnd),
-			});
-		} else {
-			result.push(msg);
-		}
+		result.push(msg);
 	}
 
-	return result;
+	// Apply standard truncation to preserved region
+	return truncateOversizedToolResults(result);
 }
 
 /**
@@ -483,16 +505,26 @@ export async function compressSubAgentContext(
 	// Determine adaptive keep rounds based on context pressure
 	const keepRounds = getAdaptiveKeepRounds(percentage);
 
+	// Use consistent measurement for beforeTokens:
+	// countMessagesTokens measures only message content, matching afterTokensEstimate.
+	// API's total_tokens includes system prompt + tool definitions + completion overhead,
+	// which inflates beforeTokens and distorts the compression ratio display.
+	const beforeTokens = countMessagesTokens(messages);
+
 	// Primary: AI summary compression (same pattern as main flow)
 	const compressedMessages = await aiSummaryCompress(messages, keepRounds, config);
 
 	// If AI compression succeeded (returned different messages), use it
 	if (compressedMessages !== messages) {
-		const afterTokens = countMessagesTokens(compressedMessages);
+		// Truncate oversized tool results in preserved messages.
+		// AI compression replaces OLD messages with a summary, but preserved messages
+		// (recent N rounds) keep their full tool results which are often the bulk of context.
+		const optimizedMessages = truncateOversizedToolResults(compressedMessages);
+		const afterTokens = countMessagesTokens(optimizedMessages);
 		return {
 			compressed: true,
-			messages: compressedMessages,
-			beforeTokens: totalTokens,
+			messages: optimizedMessages,
+			beforeTokens,
 			afterTokensEstimate: afterTokens,
 		};
 	}
@@ -504,11 +536,11 @@ export async function compressSubAgentContext(
 	const afterTokens = countMessagesTokens(truncatedMessages);
 
 	// Only report as compressed if truncation actually reduced tokens
-	if (afterTokens < totalTokens) {
+	if (afterTokens < beforeTokens) {
 		return {
 			compressed: true,
 			messages: truncatedMessages,
-			beforeTokens: totalTokens,
+			beforeTokens,
 			afterTokensEstimate: afterTokens,
 		};
 	}
@@ -517,4 +549,54 @@ export async function compressSubAgentContext(
 		compressed: false,
 		messages,
 	};
+}
+
+/**
+ * Hybrid compression for the main flow.
+ * Uses the same AI summary + tool result truncation approach as sub-agents,
+ * but without the threshold check (caller decides when to compress).
+ *
+ * @param messages - conversation messages to compress
+ * @param config - API configuration
+ * @param keepRounds - number of recent rounds to preserve (default: 3)
+ * @returns compression result
+ */
+export async function performHybridCompression(
+	messages: ChatMessage[],
+	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
+	keepRounds: number = DEFAULT_KEEP_RECENT_ROUNDS,
+): Promise<SubAgentCompressionResult> {
+	if (messages.length === 0) {
+		return {compressed: false, messages};
+	}
+
+	const beforeTokens = countMessagesTokens(messages);
+
+	const compressedMessages = await aiSummaryCompress(messages, keepRounds, config);
+
+	if (compressedMessages !== messages) {
+		const optimizedMessages = truncateOversizedToolResults(compressedMessages);
+		const afterTokens = countMessagesTokens(optimizedMessages);
+		return {
+			compressed: true,
+			messages: optimizedMessages,
+			beforeTokens,
+			afterTokensEstimate: afterTokens,
+		};
+	}
+
+	// Fallback: truncation only
+	const truncatedMessages = truncateToolResults(messages, keepRounds);
+	const afterTokens = countMessagesTokens(truncatedMessages);
+
+	if (afterTokens < beforeTokens) {
+		return {
+			compressed: true,
+			messages: truncatedMessages,
+			beforeTokens,
+			afterTokensEstimate: afterTokens,
+		};
+	}
+
+	return {compressed: false, messages};
 }

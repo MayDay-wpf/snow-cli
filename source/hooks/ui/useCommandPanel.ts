@@ -160,6 +160,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Open Git branch management panel',
 			},
 			{
+				name: 'hybrid-compress',
+				description:
+					t.commandPanel.commands.hybridCompress ||
+					'Toggle Hybrid Compress mode (AI summary + smart truncation)',
+			},
+			{
 				name: 'diff',
 				description:
 					t.commandPanel.commands.diff ||

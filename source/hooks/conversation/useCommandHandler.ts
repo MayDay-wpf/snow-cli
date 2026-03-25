@@ -4,6 +4,9 @@ import type {Message} from '../../ui/components/chat/MessageList.js';
 import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
+import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
+import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
 import {navigateTo} from '../integration/useGlobalNavigation.js';
 import type {UsageInfo} from '../../api/chat.js';
@@ -95,11 +98,91 @@ export async function executeContextCompression(
 			subAgentInternal: msg.subAgentInternal,
 		}));
 
-		// Compress the context (全量压缩，保留最后一轮完整对话)
+		// Check if Hybrid Compress mode is enabled
+		const useHybridCompress = getHybridCompressEnabled();
+
 		onStatusUpdate?.({step: 'compressing', sessionId});
+
+		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
+		if (useHybridCompress) {
+			const apiConfig = getOpenAiConfig();
+			const hybridResult = await performHybridCompression(
+				chatMessages,
+				{
+					model: apiConfig.advancedModel || 'gpt-5',
+					requestMethod: apiConfig.requestMethod,
+					maxTokens: apiConfig.maxTokens,
+				},
+			);
+
+			if (!hybridResult.compressed) {
+				onStatusUpdate?.({
+					step: 'skipped',
+					message: 'Not enough history to compress',
+					sessionId,
+				});
+				return null;
+			}
+
+			// Build session messages preserving structure (tool_calls, tool_call_id, etc.)
+			const newSessionMessages: Array<any> = hybridResult.messages.map(msg => ({
+				...msg,
+				timestamp: Date.now(),
+			}));
+
+			// Create new session
+			const compressedSession = await sessionManager.createNewSession(false, true);
+			compressedSession.messages = newSessionMessages;
+			compressedSession.messageCount = newSessionMessages.length;
+			compressedSession.updatedAt = Date.now();
+			compressedSession.title = currentSession.title;
+			compressedSession.summary = currentSession.summary;
+			compressedSession.compressedFrom = currentSession.id;
+			compressedSession.compressedAt = Date.now();
+
+			await sessionManager.saveSession(compressedSession);
+
+			// Inherit TODO list
+			try {
+				const todoService = getTodoService();
+				await todoService.copyTodoList(currentSession.id, compressedSession.id);
+			} catch {
+				// Non-critical
+			}
+
+			// Reload session
+			onStatusUpdate?.({step: 'loading', sessionId: compressedSession.id});
+			const reloadedSession = await sessionManager.loadSession(compressedSession.id);
+			if (reloadedSession) {
+				sessionManager.setCurrentSession(reloadedSession);
+			} else {
+				sessionManager.setCurrentSession(compressedSession);
+			}
+
+			onStatusUpdate?.({step: 'completed', sessionId: compressedSession.id});
+
+			// Build UI messages (skip tool messages)
+			const newUIMessages: Message[] = newSessionMessages
+				.filter((msg: any) => msg.role !== 'tool')
+				.map((msg: any) => ({
+					role: msg.role as any,
+					content: msg.content || '',
+					streaming: false,
+				}));
+
+			return {
+				uiMessages: newUIMessages,
+				usage: {
+					prompt_tokens: hybridResult.beforeTokens || 0,
+					completion_tokens: 0,
+					total_tokens: hybridResult.afterTokensEstimate || 0,
+				},
+			};
+		}
+
+		// ── Standard full compression path ──
 		const compressionResult = await compressContext(chatMessages);
 
-		// 如果返回null，说明无法安全压缩（历史不足或只有当前轮次）
 		if (!compressionResult) {
 			onStatusUpdate?.({
 				step: 'skipped',
@@ -116,8 +199,6 @@ export async function executeContextCompression(
 				message: 'Blocked by beforeCompress hook',
 				sessionId,
 			});
-			// Return a special result with hookFailed flag to abort AI flow
-			// Don't return usage to avoid changing token counts
 			return {
 				uiMessages: [],
 				hookFailed: true,
@@ -128,11 +209,8 @@ export async function executeContextCompression(
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
 
-		// 构建单条user消息，将压缩摘要和保留的消息内容合并为文本
-		// 这样避免了复杂的参数对齐问题（tool_calls、tool_call_id等）
 		let finalContent = `[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
 
-		// 如果有保留的消息，将其内容转换为文本附加到user消息中
 		if (
 			compressionResult.preservedMessages &&
 			compressionResult.preservedMessages.length > 0
@@ -146,7 +224,6 @@ export async function executeContextCompression(
 				} else if (msg.role === 'assistant') {
 					finalContent += `**Assistant:**\n${msg.content}`;
 
-					// 如果有tool_calls，以可读的JSON格式附加
 					if (msg.tool_calls && msg.tool_calls.length > 0) {
 						finalContent += '\n\n**[Tool Calls Initiated]:**\n```json\n';
 						finalContent += JSON.stringify(msg.tool_calls, null, 2);
@@ -155,9 +232,7 @@ export async function executeContextCompression(
 						finalContent += '\n\n';
 					}
 				} else if (msg.role === 'tool') {
-					// 工具执行结果
 					finalContent += `**[Tool Result - ${msg.tool_call_id}]:**\n`;
-					// 尝试格式化JSON，如果失败则直接显示原始内容
 					try {
 						const parsed = JSON.parse(msg.content);
 						finalContent +=
@@ -169,7 +244,6 @@ export async function executeContextCompression(
 			}
 		}
 
-		// 添加单条user消息
 		newSessionMessages.push({
 			role: 'user',
 			content: finalContent,
@@ -351,6 +425,7 @@ type CommandHandlerOptions = {
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -935,6 +1010,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Don't add command message to keep UI clean
 			} else if (result.success && result.action === 'toggleToolSearch') {
 				options.setToolSearchDisabled(prev => !prev);
+			} else if (result.success && result.action === 'toggleHybridCompress') {
+				options.setHybridCompressEnabled(prev => !prev);
 			} else if (
 				result.success &&
 				result.action === 'initProject' &&

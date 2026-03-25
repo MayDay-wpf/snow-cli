@@ -208,6 +208,7 @@ type Props = {
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
 	toolSearchDisabled?: boolean;
+	hybridCompressEnabled?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -283,6 +284,7 @@ export default function StatusLine({
 	planMode = false,
 	vulnerabilityHuntingMode = false,
 	toolSearchDisabled = true,
+	hybridCompressEnabled = false,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -332,6 +334,7 @@ export default function StatusLine({
 					plan: planMode,
 					vulnerabilityHunting: vulnerabilityHuntingMode,
 					toolSearchEnabled: !toolSearchDisabled,
+					hybridCompress: hybridCompressEnabled,
 					simple: simpleMode,
 				},
 				ide: {
@@ -409,6 +412,7 @@ export default function StatusLine({
 		simpleMode,
 		t.chatScreen.gitBranch,
 		toolSearchDisabled,
+		hybridCompressEnabled,
 		vscodeConnectionStatus,
 		vulnerabilityHuntingMode,
 		watcherEnabled,
@@ -490,6 +494,7 @@ export default function StatusLine({
 		planMode ||
 		vulnerabilityHuntingMode ||
 		!toolSearchDisabled ||
+		hybridCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
@@ -539,6 +544,13 @@ export default function StatusLine({
 		if (!toolSearchDisabled) {
 			statusItems.push({
 				text: '♾︎ ToolSearch ON',
+				color: theme.colors.menuInfo,
+			});
+		}
+
+		if (hybridCompressEnabled) {
+			statusItems.push({
+				text: '⇌ Hybrid Compress',
 				color: theme.colors.menuInfo,
 			});
 		}
@@ -693,6 +705,14 @@ export default function StatusLine({
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
 						{t.chatScreen.toolSearchEnabled}
+					</Text>
+				</Box>
+			)}
+
+			{hybridCompressEnabled && (
+				<Box>
+					<Text color={theme.colors.menuInfo} dimColor>
+						{t.chatScreen.hybridCompressEnabled}
 					</Text>
 				</Box>
 			)}

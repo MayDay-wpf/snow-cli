@@ -168,6 +168,22 @@ export class SubAgentService {
 				},
 			},
 			{
+				name: 'agent_qa',
+				description:
+					'QA Agent: Quality assurance specialist that reviews code changes, identifies bugs, checks edge cases, validates security, and runs tests. Provides structured QA reports with severity-categorized findings and suggested fixes.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						prompt: {
+							type: 'string',
+							description:
+								'CRITICAL: Provide COMPLETE context from main session. Sub-agent has NO access to main conversation history. Include: (1) What code was changed or implemented, (2) Exact file paths of modified files, (3) Requirements and acceptance criteria, (4) Any specific areas of concern, (5) Known constraints or edge cases. Example: "Review the new authentication middleware in src/middleware/auth.ts. It should validate JWT tokens, handle expired tokens gracefully, and block unauthenticated requests. Also check src/routes/api.ts where it is applied."',
+						},
+					},
+					required: ['prompt'],
+				},
+			},
+			{
 				name: 'agent_debug',
 				description:
 					'Debug Assistant: Specialized for inserting structured file-based logging into project code. Writes all logs to .snow/log/ directory as .txt files with structured format. If the project lacks a logger helper, it will write one first. Reports log file locations upon completion.',
@@ -191,6 +207,7 @@ export class SubAgentService {
 			'agent_plan',
 			'agent_general',
 			'agent_analyze',
+			'agent_qa',
 			'agent_debug',
 		]);
 

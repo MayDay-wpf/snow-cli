@@ -557,6 +557,8 @@ export const zhTW: TranslationKeys = {
 			autoFormat:
 				'文件編輯後自動格式化開關。用法: /auto-format [on|off|status]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
+			hybridCompress:
+				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
 			connect: '連接到 Snow Instance 進行 AI 處理',
@@ -1022,6 +1024,7 @@ export const zhTW: TranslationKeys = {
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
 		toolSearchEnabled: '♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
+		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
 		tokens: ' 個token',
 		cached: '已快取',
 		newCache: '新快取',

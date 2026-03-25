@@ -107,6 +107,8 @@ export default function ChatScreen({
 		setVulnerabilityHuntingMode,
 		toolSearchDisabled,
 		setToolSearchDisabled,
+		hybridCompressEnabled,
+		setHybridCompressEnabled,
 		simpleMode,
 		showThinking,
 	} = useChatScreenModes({enableYolo, enablePlan});
@@ -279,6 +281,7 @@ export default function ChatScreen({
 		setPlanMode,
 		setVulnerabilityHuntingMode,
 		setToolSearchDisabled,
+		setHybridCompressEnabled,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		currentContextPercentageRef,
@@ -510,6 +513,7 @@ export default function ChatScreen({
 					vulnerabilityHuntingMode={vulnerabilityHuntingMode}
 					setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
 					toolSearchDisabled={toolSearchDisabled}
+					hybridCompressEnabled={hybridCompressEnabled}
 					contextUsage={footerContextUsage}
 					initialContent={restoreInputContent}
 					draftContent={inputDraftContent}

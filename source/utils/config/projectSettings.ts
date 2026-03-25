@@ -10,6 +10,7 @@ export interface ProjectSettings {
 	yoloMode?: boolean;
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
+	hybridCompressEnabled?: boolean;
 }
 
 const PROJECT_SNOW_DIR = path.join(process.cwd(), '.snow');
@@ -143,5 +144,16 @@ export function getVulnerabilityHuntingMode(): boolean {
 export function setVulnerabilityHuntingMode(enabled: boolean): void {
 	const settings = loadSettings();
 	settings.vulnerabilityHuntingMode = enabled;
+	saveSettings(settings);
+}
+
+export function getHybridCompressEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.hybridCompressEnabled ?? false;
+}
+
+export function setHybridCompressEnabled(enabled: boolean): void {
+	const settings = loadSettings();
+	settings.hybridCompressEnabled = enabled;
 	saveSettings(settings);
 }
