@@ -464,7 +464,7 @@ export const zhTW: TranslationKeys = {
 		selectItem: 'Tab/Enter - 在選擇器中選擇項目',
 		cancelClose: 'ESC - 取消/關閉選擇器或中斷 AI 回應',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - 切換 YOLO/Plan 模式(循環: YOLO → YOLO+Plan → Plan → 關閉)',
+			'Shift+Tab/Ctrl+Y - 切換模式(循環: 關閉 → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → 關閉)',
 		tipsTitle: '💡 提示:',
 		tipUseHelp: '隨時使用 /help 查看此資訊',
 		tipShowCommands: '輸入 / 查看所有可用命令',
@@ -841,7 +841,7 @@ export const zhTW: TranslationKeys = {
 		headerExplanations: '詢問程式碼說明和偵錯協助',
 		headerInterrupt: '在回應期間按 ESC 中斷',
 		headerYolo:
-			'按 Shift+Tab/Ctrl+Y: 切換 YOLO/Plan 模式(循環: YOLO → YOLO+Plan → Plan → 關閉)',
+			'按 Shift+Tab/Ctrl+Y: 切換模式(循環: 關閉 → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → 關閉)',
 		headerShortcuts:
 			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • Ctrl+O (複製輸入) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切換貼上文字的展開/摺疊顯示',
@@ -976,7 +976,7 @@ export const zhTW: TranslationKeys = {
 		shortcutDeleteToEnd: '刪除至末尾',
 		shortcutCancel: '取消 (ESC)',
 		shortcutRegenerate: '重新產生 (Ctrl+R)',
-		shortcutToggleYolo: '切換 YOLO/Plan (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: '切換模式 (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: '確認回復',
 		rollbackFiles: '回復檔案',
