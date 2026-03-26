@@ -447,24 +447,24 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Shift+Tab - Toggle modes in cycle: Off -> YOLO -> YOLO+Plan -> Plan -> YOLO+Team -> Team -> Off
 		if (key.shift && key.tab) {
-			if (yoloMode && !planMode && !teamMode) {
+			if (yoloMode && !planMode && !_teamMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 				setVulnerabilityHuntingMode(false);
 				setTeamMode(false);
-			} else if (yoloMode && planMode && !teamMode) {
+			} else if (yoloMode && planMode && !_teamMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-			} else if (!yoloMode && planMode && !teamMode) {
+			} else if (!yoloMode && planMode && !_teamMode) {
 				// Plan only -> YOLO + Team
 				setYoloMode(true);
 				setPlanMode(false);
 				setTeamMode(true);
 				setVulnerabilityHuntingMode(false);
-			} else if (yoloMode && !planMode && teamMode) {
+			} else if (yoloMode && !planMode && _teamMode) {
 				// YOLO + Team -> Team only
 				setYoloMode(false);
-			} else if (!yoloMode && !planMode && teamMode) {
+			} else if (!yoloMode && !planMode && _teamMode) {
 				// Team only -> All off
 				setTeamMode(false);
 			} else {
@@ -479,24 +479,24 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 
 		// Ctrl+Y - Toggle modes in cycle: Off -> YOLO -> YOLO+Plan -> Plan -> YOLO+Team -> Team -> Off
 		if (key.ctrl && input === 'y') {
-			if (yoloMode && !planMode && !teamMode) {
+			if (yoloMode && !planMode && !_teamMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 				setVulnerabilityHuntingMode(false);
 				setTeamMode(false);
-			} else if (yoloMode && planMode && !teamMode) {
+			} else if (yoloMode && planMode && !_teamMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-			} else if (!yoloMode && planMode && !teamMode) {
+			} else if (!yoloMode && planMode && !_teamMode) {
 				// Plan only -> YOLO + Team
 				setYoloMode(true);
 				setPlanMode(false);
 				setTeamMode(true);
 				setVulnerabilityHuntingMode(false);
-			} else if (yoloMode && !planMode && teamMode) {
+			} else if (yoloMode && !planMode && _teamMode) {
 				// YOLO + Team -> Team only
 				setYoloMode(false);
-			} else if (!yoloMode && !planMode && teamMode) {
+			} else if (!yoloMode && !planMode && _teamMode) {
 				// Team only -> All off
 				setTeamMode(false);
 			} else {
