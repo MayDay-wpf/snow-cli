@@ -4,7 +4,6 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.snow.plugin.SnowWebSocketManager
-import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import org.jetbrains.plugins.terminal.TerminalToolWindowManager
 
 /**
@@ -20,25 +19,21 @@ class OpenSnowTerminalAction : AnAction() {
                 val terminalManager = TerminalToolWindowManager.getInstance(project)
 
                 // Create new terminal session with activateTool=true to show the terminal window
-                val widget = terminalManager.createLocalShellWidget(project.basePath, "Snow CLI", true, true)
+                val widget = terminalManager.createShellWidget(project.basePath, "Snow CLI", true, true)
 
-                if (widget is ShellTerminalWidget) {
-                    // Wait a bit for terminal to be ready, then send command
-                    ApplicationManager.getApplication().executeOnPooledThread {
-                        try {
-                            Thread.sleep(1000)
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    try {
+                        Thread.sleep(1000)
 
-                            // Send command directly to terminal using executeCommand
-                            ApplicationManager.getApplication().invokeLater {
-                                try {
-                                    widget.executeCommand("snow")
-                                } catch (ex: Exception) {
-                                    // Silently handle command execution failure
-                                }
+                        ApplicationManager.getApplication().invokeLater {
+                            try {
+                                widget.sendCommandToExecute("snow")
+                            } catch (ex: Exception) {
+                                // Silently handle command execution failure
                             }
-                        } catch (ex: Exception) {
-                            // Silently handle background thread failure
                         }
+                    } catch (ex: Exception) {
+                        // Silently handle background thread failure
                     }
                 }
             } catch (ex: Exception) {

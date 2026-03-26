@@ -42,6 +42,7 @@
                     anchor="right" 
                     icon="SnowPluginIcons.SnowAction"
                     factoryClass="com.snow.plugin.toolwindow.SnowToolWindowFactory"/>
+        <postStartupActivity implementation="com.snow.plugin.SnowProjectActivity"/>
     </extensions>
 
     <actions>

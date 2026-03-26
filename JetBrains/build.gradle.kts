@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.snow"
-version = "0.4.4"
+version = "0.4.5"
 
 repositories {
     mavenCentral()
@@ -13,7 +13,7 @@ repositories {
 
 // Configure Gradle IntelliJ Plugin
 intellij {
-    version.set("2023.1.5")
+    version.set("2024.1")
     type.set("IC") // Target IDE Platform (IC = IntelliJ IDEA Community)
 
     plugins.set(listOf("org.jetbrains.plugins.terminal"))
@@ -31,7 +31,7 @@ tasks {
     }
 
     patchPluginXml {
-        sinceBuild.set("231")
+        sinceBuild.set("241")
         untilBuild.set("253.*")
     }
 
