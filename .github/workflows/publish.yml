@@ -56,12 +56,11 @@ jobs:
 
             ### What's New
 
-            - Partial configuration files added for global configuration compatibility
-            - StatusLine supports custom plugins
-            - Anthropic requests to add Speed parameter
-            - Fixed unhandled exceptions in LSP connection
-            - Optimized the performance of file snapshots
-            - API overload added with retry
+            - Added new Team mode, supporting team collaboration
+            - Main process supports mixed compression mode
+            - Optimized the experience of the Plan mode
+            - Optimized MCP panel display, supporting retrieval of service tool list
+            - Streamlined overall internal system prompts
 
             ### Installation
             ```bash

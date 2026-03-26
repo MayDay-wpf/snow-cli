@@ -1400,13 +1400,15 @@ export const zh: TranslationKeys = {
 		toolsNavigationHint: '↑↓ 导航 • ESC 返回',
 	},
 	runningAgentsPanel: {
-		title: '运行中的子代理',
-		noAgentsRunning: '当前没有运行中的子代理',
+		title: '运行中的代理',
+		noAgentsRunning: '当前没有运行中的代理或队友',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
 		selected: '已选择: {count}',
 		scrollHint: '↑↓ 滚动',
 		moreAbove: '上方还有 {count} 个',
 		moreBelow: '下方还有 {count} 个',
+		subAgentLabel: '[代理]',
+		teammateLabel: '[队友]',
 	},
 	sseServer: {
 		started: '✓ SSE 服务器已启动',

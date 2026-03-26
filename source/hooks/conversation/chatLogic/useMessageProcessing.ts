@@ -15,17 +15,25 @@ import {
 	DEFAULT_AUTO_COMPRESS_THRESHOLD,
 } from '../../../utils/config/apiConfig.js';
 import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTracker.js';
+import {teamTracker} from '../../../utils/execution/teamTracker.js';
+
+interface MessageTarget {
+	instanceId: string;
+	agentName: string;
+	type: 'subagent' | 'teammate';
+}
 
 /**
- * Parse "# SubAgentTarget:instanceId:agentName" markers from a message.
+ * Parse "# SubAgentTarget:instanceId:agentName" and "# TeamTarget:instanceId:agentName"
+ * markers from a message.
  * These are injected by the running-agents picker via TextBuffer placeholders.
- * Returns the target sub-agent info and the clean message (markers stripped).
+ * Returns the target info and the clean message (markers stripped).
  */
-function parseSubAgentTargets(message: string): {
-	targets: Array<{instanceId: string; agentName: string}>;
+function parseMessageTargets(message: string): {
+	targets: MessageTarget[];
 	cleanMessage: string;
 } {
-	const targets: Array<{instanceId: string; agentName: string}> = [];
+	const targets: MessageTarget[] = [];
 	const lines = message.split('\n');
 	const cleanLines: string[] = [];
 
@@ -34,9 +42,21 @@ function parseSubAgentTargets(message: string): {
 			const rest = line.slice('# SubAgentTarget:'.length);
 			const colonIdx = rest.indexOf(':');
 			if (colonIdx !== -1) {
-				const instanceId = rest.slice(0, colonIdx);
-				const agentName = rest.slice(colonIdx + 1);
-				targets.push({instanceId, agentName});
+				targets.push({
+					instanceId: rest.slice(0, colonIdx),
+					agentName: rest.slice(colonIdx + 1),
+					type: 'subagent',
+				});
+			}
+		} else if (line.startsWith('# TeamTarget:')) {
+			const rest = line.slice('# TeamTarget:'.length);
+			const colonIdx = rest.indexOf(':');
+			if (colonIdx !== -1) {
+				targets.push({
+					instanceId: rest.slice(0, colonIdx),
+					agentName: rest.slice(colonIdx + 1),
+					type: 'teammate',
+				});
 			}
 		} else {
 			cleanLines.push(line);
@@ -365,26 +385,43 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
 	) => {
-		const {targets: subAgentTargets, cleanMessage: messageWithoutTargets} =
-			parseSubAgentTargets(message);
+		const {targets: messageTargets, cleanMessage: messageWithoutTargets} =
+			parseMessageTargets(message);
 
-		if (subAgentTargets.length > 0 && messageWithoutTargets) {
+		if (messageTargets.length > 0 && messageWithoutTargets) {
 			const injectedTargets: Array<{
 				agentName: string;
 				promptSnippet: string;
 			}> = [];
 
-			for (const target of subAgentTargets) {
-				const success = runningSubAgentTracker.enqueueMessage(
-					target.instanceId,
-					messageWithoutTargets,
-				);
-				if (success) {
-					const runningAgents = runningSubAgentTracker.getRunningAgents();
-					const agentInfo = runningAgents.find(
-						a => a.instanceId === target.instanceId,
+			for (const target of messageTargets) {
+				let success = false;
+				let rawPrompt = '';
+
+				if (target.type === 'teammate') {
+					success = teamTracker.sendMessageToTeammate(
+						'lead',
+						target.instanceId,
+						`[User Message]\n${messageWithoutTargets}`,
 					);
-					const rawPrompt = agentInfo?.prompt || '';
+					if (success) {
+						const teammate = teamTracker.getTeammate(target.instanceId);
+						rawPrompt = teammate?.prompt || '';
+					}
+				} else {
+					success = runningSubAgentTracker.enqueueMessage(
+						target.instanceId,
+						messageWithoutTargets,
+					);
+					if (success) {
+						const agentInfo = runningSubAgentTracker.getRunningAgents().find(
+							a => a.instanceId === target.instanceId,
+						);
+						rawPrompt = agentInfo?.prompt || '';
+					}
+				}
+
+				if (success) {
 					const snippet = rawPrompt
 						.replace(/[\r\n]+/g, ' ')
 						.replace(/\s+/g, ' ')
@@ -414,7 +451,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			}
 
 			message = messageWithoutTargets;
-		} else if (subAgentTargets.length > 0) {
+		} else if (messageTargets.length > 0) {
 			message = messageWithoutTargets;
 		}
 

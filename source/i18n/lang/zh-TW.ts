@@ -1396,13 +1396,15 @@ export const zhTW: TranslationKeys = {
 		toolsNavigationHint: '↑↓ 導航 • ESC 返回',
 	},
 	runningAgentsPanel: {
-		title: '執行中的子代理',
-		noAgentsRunning: '目前沒有執行中的子代理',
+		title: '執行中的代理',
+		noAgentsRunning: '目前沒有執行中的代理或隊友',
 		keyboardHint: '(空白鍵: 切換 · Enter: 確認 · Esc: 取消)',
 		selected: '已選擇: {count}',
 		scrollHint: '↑↓ 捲動',
 		moreAbove: '上方還有 {count} 個',
 		moreBelow: '下方還有 {count} 個',
+		subAgentLabel: '[代理]',
+		teammateLabel: '[隊友]',
 	},
 	sseServer: {
 		started: '✓ SSE 伺服器已啟動',

@@ -1,14 +1,30 @@
-import {useState, useCallback, useEffect, useSyncExternalStore} from 'react';
+import {useState, useCallback, useEffect, useSyncExternalStore, useMemo} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
-import {
-	runningSubAgentTracker,
-	type RunningSubAgent,
-} from '../../utils/execution/runningSubAgentTracker.js';
+import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
+import {teamTracker} from '../../utils/execution/teamTracker.js';
 
 // Stable function references for useSyncExternalStore (must not change between renders)
 const subscribeToTracker = (onStoreChange: () => void) =>
 	runningSubAgentTracker.subscribe(onStoreChange);
 const getTrackerSnapshot = () => runningSubAgentTracker.getRunningAgents();
+
+const subscribeToTeamTracker = (onStoreChange: () => void) =>
+	teamTracker.subscribe(onStoreChange);
+const getTeamTrackerSnapshot = () => teamTracker.getRunningTeammates();
+
+/**
+ * Unified entry in the running-agents picker.
+ * Can represent either a sub-agent or a team teammate.
+ */
+export interface PickerAgent {
+	instanceId: string;
+	agentId: string;
+	agentName: string;
+	prompt: string;
+	startedAt: Date;
+	/** 'subagent' for normal sub-agents, 'teammate' for team mode teammates */
+	sourceType: 'subagent' | 'teammate';
+}
 
 /**
  * Build a short visual tag for a selected running agent.
@@ -17,15 +33,14 @@ const getTrackerSnapshot = () => runningSubAgentTracker.getRunningAgents();
  *
  * Example: [»Explore Agent: 调查项目架构和结构...]
  */
-function buildVisualTag(agent: RunningSubAgent): string {
-	// Always include a short instanceId suffix to guarantee uniqueness.
-	// TextBuffer.getFullText() uses split(tag).join(content) which is a global replace,
-	// so identical tags would cause only one placeholder's content to be applied.
+function buildVisualTag(agent: PickerAgent): string {
 	const shortId = agent.instanceId.slice(-4);
 	const promptSnippet = agent.prompt
 		.replace(/[\r\n]+/g, ' ')
 		.replace(/\s+/g, ' ')
 		.trim();
+
+	const prefix = agent.sourceType === 'teammate' ? '»☆' : '»';
 
 	if (promptSnippet) {
 		const maxPromptLen = 20;
@@ -33,10 +48,10 @@ function buildVisualTag(agent: RunningSubAgent): string {
 			promptSnippet.length > maxPromptLen
 				? promptSnippet.slice(0, maxPromptLen) + '…'
 				: promptSnippet;
-		return `[»${agent.agentName}#${shortId}: ${truncated}] `;
+		return `[${prefix}${agent.agentName}#${shortId}: ${truncated}] `;
 	}
 
-	return `[»${agent.agentName}#${shortId}] `;
+	return `[${prefix}${agent.agentName}#${shortId}] `;
 }
 
 /**
@@ -80,7 +95,7 @@ function findDoubleGreaterTrigger(beforeCursor: string): number {
 
 /**
  * Hook to manage the running agents picker panel.
- * Triggered by ">>" in input, shows currently running sub-agents
+ * Triggered by ">>" in input, shows currently running sub-agents and team teammates
  * with multi-select support for directing messages to specific agents.
  */
 export function useRunningAgentsPicker(
@@ -95,13 +110,33 @@ export function useRunningAgentsPicker(
 	>(new Set());
 	const [doubleGreaterPosition, setDoubleGreaterPosition] = useState(-1);
 
-	// Subscribe to the running sub-agent tracker for real-time updates.
-	// getTrackerSnapshot returns a cached array that only changes on mutation,
-	// satisfying useSyncExternalStore's referential stability requirement.
-	const runningAgents = useSyncExternalStore(
+	const subAgents = useSyncExternalStore(
 		subscribeToTracker,
 		getTrackerSnapshot,
 	);
+
+	const teammates = useSyncExternalStore(
+		subscribeToTeamTracker,
+		getTeamTrackerSnapshot,
+	);
+
+	const runningAgents: PickerAgent[] = useMemo(() => {
+		const agents: PickerAgent[] = subAgents.map(a => ({
+			...a,
+			sourceType: 'subagent' as const,
+		}));
+		for (const t of teammates) {
+			agents.push({
+				instanceId: t.instanceId,
+				agentId: `teammate-${t.memberId}`,
+				agentName: t.memberName,
+				prompt: t.prompt,
+				startedAt: t.startedAt,
+				sourceType: 'teammate' as const,
+			});
+		}
+		return agents;
+	}, [subAgents, teammates]);
 
 	// Reset selected index when agents list changes
 	useEffect(() => {
@@ -183,12 +218,12 @@ export function useRunningAgentsPicker(
 	// Confirm selection - remove >> from buffer, insert visual tags, return selected agents.
 	// Each selected agent is inserted as a TextPlaceholder:
 	//   Visual: [»AgentName: promptSnippet]  (shown in input box, no ">>" to avoid re-trigger)
-	//   Content: # SubAgentTarget:instanceId:agentName\n  (embedded in getFullText())
-	// The pending message system can later parse "# SubAgentTarget:" markers to route messages.
+	//   Content: # SubAgentTarget:instanceId:agentName\n  or  # TeamTarget:instanceId:agentName\n
+	// The pending message system can later parse these markers to route messages.
 	//
 	// If no agents have been explicitly toggled via Space, the currently highlighted
 	// agent is auto-selected so the user can pick with a single Enter press.
-	const confirmRunningAgentsSelection = useCallback((): RunningSubAgent[] => {
+	const confirmRunningAgentsSelection = useCallback((): PickerAgent[] => {
 		let effectiveSelection = selectedRunningAgents;
 
 		// Auto-select the highlighted item when nothing was explicitly toggled
@@ -212,21 +247,18 @@ export function useRunningAgentsPicker(
 			const beforeGt = displayText.slice(0, doubleGreaterPosition);
 			const afterGt = displayText
 				.slice(doubleGreaterPosition + 2)
-				.trimStart(); // Remove ">>" and leading whitespace
+				.trimStart();
 
-			// Replace >> with the remaining text.
-			// setText(nonEmpty) preserves existing placeholders (Skills, etc.).
-			// setText('') clears placeholderStorage, which is fine when buffer was only ">>".
 			buffer.setText(beforeGt + afterGt);
 
 			if (selected.length > 0) {
-				// Position cursor at where >> was, then insert agent tags there.
-				// insertTextPlaceholder inserts at cursor and advances it,
-				// so multiple tags are inserted in order.
 				buffer.setCursorPosition(beforeGt.length);
 
 				for (const agent of selected) {
-					const markerContent = `# SubAgentTarget:${agent.instanceId}:${agent.agentName}\n`;
+					const markerPrefix = agent.sourceType === 'teammate'
+						? 'TeamTarget'
+						: 'SubAgentTarget';
+					const markerContent = `# ${markerPrefix}:${agent.instanceId}:${agent.agentName}\n`;
 					const visualTag = buildVisualTag(agent);
 					buffer.insertTextPlaceholder(markerContent, visualTag);
 				}

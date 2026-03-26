@@ -1395,6 +1395,8 @@ export type TranslationKeys = {
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
+		subAgentLabel: string;
+		teammateLabel: string;
 	};
 	sseServer: {
 		started: string;

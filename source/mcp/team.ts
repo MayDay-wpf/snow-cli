@@ -233,15 +233,15 @@ export class TeamService {
 			};
 		}
 
-		const shutdownMsg = reason
-			? `[Shutdown Request] The lead has requested you to shut down. Reason: ${reason}. Please finish current work and call shutdown_self.`
-			: '[Shutdown Request] The lead has requested you to shut down. Please finish current work and call shutdown_self.';
-
-		teamTracker.sendMessageToTeammate('lead', teammate.instanceId, shutdownMsg);
+		// Abort the teammate's execution directly — teammates cannot self-terminate
+		const controller = teamTracker.getAbortController(teammate.memberId);
+		if (controller) {
+			controller.abort();
+		}
 
 		return {
 			success: true,
-			result: `Shutdown request sent to ${teammate.memberName}. They will finish current work and exit.`,
+			result: `Teammate ${teammate.memberName} has been shut down.${reason ? ` Reason: ${reason}` : ''}`,
 		};
 	}
 
@@ -252,17 +252,39 @@ export class TeamService {
 		const running = teamTracker.getRunningTeammates();
 		if (running.length === 0) {
 			const results = teamTracker.drainResults();
-			const messages = teamTracker.dequeueLeadMessages();
+			const leadMessages = teamTracker.dequeueLeadMessages();
 			return {
 				success: true,
-				result: 'All teammates have already finished.',
+				result: 'No teammates are running.',
 				completedResults: results.map(r => ({
 					name: r.memberName,
 					success: r.success,
 					summary: r.result?.slice(0, 500),
 					error: r.error,
 				})),
-				messages: messages.map(m => ({
+				messages: leadMessages.map(m => ({
+					from: m.fromMemberName,
+					content: m.content?.slice(0, 500),
+				})),
+			};
+		}
+
+		// Check if all are already on standby
+		if (teamTracker.allInStandby()) {
+			const results = teamTracker.drainResults();
+			const leadMessages = teamTracker.dequeueLeadMessages();
+			const standbyTeammates = running.map(t => t.memberName);
+			return {
+				success: true,
+				result: `All ${running.length} teammate(s) are on standby (work complete). Use shutdown_teammate to shut them down, then merge their work.`,
+				standbyTeammates,
+				completedResults: results.map(r => ({
+					name: r.memberName,
+					success: r.success,
+					summary: r.result?.slice(0, 500),
+					error: r.error,
+				})),
+				messages: leadMessages.map(m => ({
 					from: m.fromMemberName,
 					content: m.content?.slice(0, 500),
 				})),
@@ -277,32 +299,39 @@ export class TeamService {
 		const allDone = await teamTracker.waitForAllTeammates(timeoutMs, abortSignal);
 
 		const results = teamTracker.drainResults();
-		const messages = teamTracker.dequeueLeadMessages();
-		const stillRunning = teamTracker.getRunningTeammates();
+		const leadMessages = teamTracker.dequeueLeadMessages();
+		const currentRunning = teamTracker.getRunningTeammates();
+		const standbyTeammates = currentRunning
+			.filter(t => teamTracker.isOnStandby(t.instanceId))
+			.map(t => t.memberName);
+		const stillWorking = currentRunning
+			.filter(t => !teamTracker.isOnStandby(t.instanceId))
+			.map(t => t.memberName);
 
 		return {
 			success: allDone,
 			result: allDone
-				? `All teammates have completed. ${results.length} result(s) collected.`
-				: `Timed out after ${timeoutMs / 1000}s. ${stillRunning.length} teammate(s) still running: ${stillRunning.map(t => t.memberName).join(', ')}`,
+				? `All ${currentRunning.length} teammate(s) are on standby (work complete). Use shutdown_teammate to shut them down, then merge their work.`
+				: `Timed out after ${timeoutMs / 1000}s. ${stillWorking.length} teammate(s) still working: ${stillWorking.join(', ')}`,
+			standbyTeammates,
+			stillWorking,
 			completedResults: results.map(r => ({
 				name: r.memberName,
 				success: r.success,
 				summary: r.result?.slice(0, 500),
 				error: r.error,
 			})),
-			messages: messages.map(m => ({
+			messages: leadMessages.map(m => ({
 				from: m.fromMemberName,
 				content: m.content?.slice(0, 500),
 			})),
-			stillRunning: stillRunning.map(t => t.memberName),
 		};
 	}
 
 	private createTask(args: Record<string, any>): any {
 		const team = getActiveTeam();
 		if (!team) {
-			throw new Error('No active team. Spawn a teammate first to create a team.');
+			throw new Error('No active team. You must call spawn_teammate first — the team is created automatically when the first teammate is spawned. Call spawn_teammate, then create_task.');
 		}
 
 		const title = args['title'] as string;
@@ -704,9 +733,9 @@ export class TeamService {
 					required: ['content'],
 				},
 			},
-			{
-				name: 'shutdown_teammate',
-				description: 'Request a specific teammate to gracefully shut down after finishing current work.',
+		{
+			name: 'shutdown_teammate',
+			description: 'Immediately shut down a specific teammate. Teammates cannot self-terminate — this is the ONLY way to end a teammate. Teammates enter standby after finishing work, remaining available for messages until you shut them down.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -717,8 +746,8 @@ export class TeamService {
 				},
 			},
 			{
-				name: 'wait_for_teammates',
-				description: 'Block and wait until ALL running teammates have completed and shut down. Returns collected results and messages. MUST be called after spawning teammates and before synthesizing final results.',
+			name: 'wait_for_teammates',
+			description: 'Block and wait until ALL running teammates have entered standby (finished their work). Returns collected results and messages. After this returns, you should review results, then shut down teammates with shutdown_teammate, merge their work, and clean up.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -729,7 +758,7 @@ export class TeamService {
 			},
 			{
 				name: 'create_task',
-				description: 'Create a new task in the shared task list. Teammates can claim and work on tasks independently.',
+				description: 'Create a new task in the shared task list. PREREQUISITE: At least one teammate must be spawned first (spawn_teammate creates the team). Calling this without an active team will fail.',
 				inputSchema: {
 					type: 'object',
 					properties: {

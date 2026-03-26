@@ -1,12 +1,12 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import type {RunningSubAgent} from '../../../utils/execution/runningSubAgentTracker.js';
+import type {PickerAgent} from '../../../hooks/picker/useRunningAgentsPicker.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 
 interface Props {
-	agents: RunningSubAgent[];
+	agents: PickerAgent[];
 	selectedIndex: number;
 	selectedAgents: Set<string>;
 	visible: boolean;
@@ -143,62 +143,72 @@ const RunningAgentsPanel = memo(
 								</Text>
 							</Box>
 						)}
-						{displayedAgents.map((agent, index) => {
-							const isSelected = index === displayedSelectedIndex;
-							const isChecked = selectedAgents.has(agent.instanceId);
-							const promptText = agent.prompt
-								? truncatePrompt(agent.prompt, 80)
-								: '';
+					{displayedAgents.map((agent, index) => {
+						const isSelected = index === displayedSelectedIndex;
+						const isChecked = selectedAgents.has(agent.instanceId);
+						const promptText = agent.prompt
+							? truncatePrompt(agent.prompt, 80)
+							: '';
+						const isTeammate = agent.sourceType === 'teammate';
+						const typeLabel = isTeammate
+							? t.runningAgentsPanel.teammateLabel
+							: t.runningAgentsPanel.subAgentLabel;
 
-							return (
-								<Box
-									key={agent.instanceId}
-									flexDirection="column"
-									width="100%"
+						return (
+							<Box
+								key={agent.instanceId}
+								flexDirection="column"
+								width="100%"
+							>
+								<Text
+									color={
+										isSelected
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									bold={isSelected}
 								>
+									{isSelected ? '❯ ' : '  '}
+									{isChecked ? '[✓]' : '[ ]'} {agent.agentName}
+								</Text>
+								<Box marginLeft={5}>
 									<Text
-										color={
-											isSelected
-												? theme.colors.menuSelected
-												: theme.colors.menuNormal
-										}
-										bold={isSelected}
+										color={isTeammate ? theme.colors.warning : theme.colors.cyan}
+										dimColor
 									>
-										{isSelected ? '❯ ' : '  '}
-										{isChecked ? '[✓]' : '[ ]'} {agent.agentName}
+										{typeLabel}
 									</Text>
+									<Text
+										color={theme.colors.cyan}
+										dimColor
+									>
+										{' '}#{agent.agentId}
+									</Text>
+									<Text
+										color={theme.colors.menuSecondary}
+										dimColor
+									>
+										{' '}
+										{formatElapsed(agent.startedAt)}
+									</Text>
+								</Box>
+								{promptText && (
 									<Box marginLeft={5}>
 										<Text
-											color={theme.colors.cyan}
-											dimColor
+											color={
+												isSelected
+													? theme.colors.menuSelected
+													: theme.colors.menuSecondary
+											}
+											dimColor={!isSelected}
 										>
-											#{agent.agentId}
-										</Text>
-										<Text
-											color={theme.colors.menuSecondary}
-											dimColor
-										>
-											{' '}
-											{formatElapsed(agent.startedAt)}
+											{promptText}
 										</Text>
 									</Box>
-									{promptText && (
-										<Box marginLeft={5}>
-											<Text
-												color={
-													isSelected
-														? theme.colors.menuSelected
-														: theme.colors.menuSecondary
-												}
-												dimColor={!isSelected}
-											>
-												{promptText}
-											</Text>
-										</Box>
-									)}
-								</Box>
-							);
-						})}
+								)}
+							</Box>
+						);
+					})}
 						{agents.length > effectiveMaxItems && (
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuSecondary} dimColor>

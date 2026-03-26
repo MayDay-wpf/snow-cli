@@ -80,6 +80,9 @@ class TeamTracker {
 	/** Per-teammate AbortControllers for force-stopping during rollback */
 	private teammateAbortControllers: Map<string, AbortController> = new Map();
 
+	/** Teammates currently in standby (called wait_for_messages) */
+	private standbySet: Set<string> = new Set();
+
 	// ── Team lifecycle ──
 
 	setActiveTeam(teamName: string): void {
@@ -108,6 +111,7 @@ class TeamTracker {
 		if (this.teammates.delete(instanceId)) {
 			this.teammateMessageQueues.delete(instanceId);
 			this.teammateAbortControllers.delete(instanceId);
+			this.standbySet.delete(instanceId);
 			this.rebuildSnapshot();
 			this.notifyListeners();
 		}
@@ -129,6 +133,13 @@ class TeamTracker {
 	}
 
 	/**
+	 * Get the AbortController for a specific teammate by member ID.
+	 */
+	getAbortController(memberId: string): AbortController | undefined {
+		return this.teammateAbortControllers.get(memberId);
+	}
+
+	/**
 	 * Abort all running teammates (used during rollback).
 	 */
 	abortAllTeammates(): void {
@@ -140,6 +151,36 @@ class TeamTracker {
 
 	getRunningTeammates(): RunningTeammate[] {
 		return this.cachedSnapshot;
+	}
+
+	// ── Standby tracking ──
+
+	setStandby(instanceId: string): void {
+		if (this.teammates.has(instanceId)) {
+			this.standbySet.add(instanceId);
+			this.notifyListeners();
+		}
+	}
+
+	clearStandby(instanceId: string): void {
+		if (this.standbySet.delete(instanceId)) {
+			this.notifyListeners();
+		}
+	}
+
+	isOnStandby(instanceId: string): boolean {
+		return this.standbySet.has(instanceId);
+	}
+
+	/**
+	 * Check if all running teammates are in standby (or no teammates are running).
+	 */
+	allInStandby(): boolean {
+		if (this.teammates.size === 0) return true;
+		for (const instanceId of this.teammates.keys()) {
+			if (!this.standbySet.has(instanceId)) return false;
+		}
+		return true;
 	}
 
 	getCount(): number {
@@ -329,12 +370,16 @@ class TeamTracker {
 
 	// ── Wait for all teammates ──
 
+	/**
+	 * Wait until all running teammates are in standby or have been unregistered.
+	 * Resolves true when all teammates are idle/done, false on timeout/abort.
+	 */
 	waitForAllTeammates(
 		timeoutMs = 600_000,
 		abortSignal?: AbortSignal,
 	): Promise<boolean> {
 		return new Promise<boolean>(resolve => {
-			if (this.teammates.size === 0) {
+			if (this.allInStandby()) {
 				resolve(true);
 				return;
 			}
@@ -348,7 +393,7 @@ class TeamTracker {
 					resolve(false);
 					return;
 				}
-				if (this.teammates.size === 0) {
+				if (this.allInStandby()) {
 					cleanup();
 					resolve(true);
 					return;
@@ -418,6 +463,7 @@ class TeamTracker {
 			this.abortAllTeammates();
 			this.teammates.clear();
 			this.teammateMessageQueues.clear();
+			this.standbySet.clear();
 			this.leadMessageQueue.length = 0;
 			this.completedResults.length = 0;
 			this.planApprovals.length = 0;

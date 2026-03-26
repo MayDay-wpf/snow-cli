@@ -1479,13 +1479,15 @@ export const en: TranslationKeys = {
 		toolsNavigationHint: '↑↓ Navigate • ESC Back',
 	},
 	runningAgentsPanel: {
-		title: 'Running Sub-Agents',
-		noAgentsRunning: 'No sub-agents are currently running',
+		title: 'Running Agents',
+		noAgentsRunning: 'No agents or teammates are currently running',
 		keyboardHint: '(Space: toggle · Enter: confirm · Esc: cancel)',
 		selected: 'Selected: {count}',
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
+		subAgentLabel: '[Agent]',
+		teammateLabel: '[Team]',
 	},
 	sseServer: {
 		started: '✓ SSE Server Started',
