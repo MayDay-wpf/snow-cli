@@ -249,7 +249,7 @@ ${role ? `Your role: ${role}` : ''}
 
 		if (otherTeammates.length > 0) {
 			teamContext += '\n' + otherTeammates
-				.map(t => `- ${t.memberName}${t.role ? ` (${t.role})` : ''} [${t.instanceId}]`)
+				.map(t => `- ${t.memberName}${t.role ? ` (${t.role})` : ''} [ID: ${t.memberId}]`)
 				.join('\n');
 		} else {
 			teamContext += '\nNo other teammates are currently active.';
@@ -566,7 +566,8 @@ ${role ? `Your role: ${role}` : ''}
 								: 'Failed to send message to team lead.';
 						} else {
 							let targetTeammate = teamTracker.findByMemberName(target)
-								|| teamTracker.findByMemberId(target);
+								|| teamTracker.findByMemberId(target)
+								|| teamTracker.getTeammate(target);
 
 							if (targetTeammate) {
 								const sent = teamTracker.sendMessageToTeammate(

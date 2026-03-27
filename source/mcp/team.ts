@@ -304,9 +304,10 @@ export class TeamService {
 			throw new Error('message_teammate requires "target_id" and "content"');
 		}
 
-		// Find teammate by member ID or name
+		// Find teammate by member ID, name, or instance ID
 		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId);
+			|| teamTracker.findByMemberName(targetId)
+			|| teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {
@@ -351,7 +352,8 @@ export class TeamService {
 		}
 
 		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId);
+			|| teamTracker.findByMemberName(targetId)
+			|| teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {
@@ -876,7 +878,8 @@ export class TeamService {
 		}
 
 		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId);
+			|| teamTracker.findByMemberName(targetId)
+			|| teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {success: false, error: `Teammate "${targetId}" not found.`};

@@ -85,6 +85,7 @@ export interface ToolResult {
 	role: 'tool';
 	content: string;
 	images?: ImageContent[]; // Support multimodal content with images
+	editDiffData?: Record<string, any>; // Pre-extracted edit diff data for DiffViewer (survives token truncation)
 	messageStatus?: 'pending' | 'success' | 'error'; // Message status for UI rendering
 	hookFailed?: boolean; // Indicates if a hook failed and AI flow should be interrupted
 	hookErrorDetails?: {
@@ -200,7 +201,10 @@ function extractMultimodalContent(result: any): {
 		};
 	}
 
-	// Not multimodal, return as JSON string
+	// Not multimodal — convert to string for tool result content
+	if (typeof result === 'string') {
+		return {textContent: result};
+	}
 	return {
 		textContent: JSON.stringify(result),
 	};
@@ -476,6 +480,31 @@ export async function executeToolCall(
 				onTokenUpdate,
 			);
 
+			// Pre-extract edit diff data from raw result before stringification/truncation
+			// This ensures DiffViewer data survives token limit truncation
+			let editDiffData: Record<string, any> | undefined;
+			if (
+				typeof toolResult === 'object' && toolResult !== null &&
+				(toolCall.function.name === 'filesystem-edit' ||
+					toolCall.function.name === 'filesystem-edit_search')
+			) {
+				if (toolResult.oldContent && toolResult.newContent) {
+					editDiffData = {
+						oldContent: toolResult.oldContent,
+						newContent: toolResult.newContent,
+						filename: args['filePath'],
+						completeOldContent: toolResult.completeOldContent,
+						completeNewContent: toolResult.completeNewContent,
+						contextStartLine: toolResult.contextStartLine,
+					};
+				} else if (toolResult.results && Array.isArray(toolResult.results)) {
+					editDiffData = {
+						batchResults: toolResult.results,
+						isBatch: true,
+					};
+				}
+			}
+
 			// Extract multimodal content (text + images)
 			const {textContent, images} = extractMultimodalContent(toolResult);
 
@@ -484,6 +513,7 @@ export async function executeToolCall(
 				role: 'tool',
 				content: textContent,
 				images,
+				editDiffData,
 			};
 		}
 	} catch (error) {

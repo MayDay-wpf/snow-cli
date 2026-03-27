@@ -74,33 +74,42 @@ function extractEditDiffData(
 	toolCall: ToolCall,
 	result: ToolResult,
 ): Record<string, any> | undefined {
-	const isError = result.content.startsWith('Error:');
 	if (
-		(toolCall.function.name === 'filesystem-edit' ||
-			toolCall.function.name === 'filesystem-edit_search') &&
-		!isError
+		toolCall.function.name !== 'filesystem-edit' &&
+		toolCall.function.name !== 'filesystem-edit_search'
 	) {
-		try {
-			const resultData = JSON.parse(result.content);
-			if (resultData.oldContent && resultData.newContent) {
-				return {
-					oldContent: resultData.oldContent,
-					newContent: resultData.newContent,
-					filename: JSON.parse(toolCall.function.arguments).filePath,
-					completeOldContent: resultData.completeOldContent,
-					completeNewContent: resultData.completeNewContent,
-					contextStartLine: resultData.contextStartLine,
-				};
-			}
-			if (resultData.results && Array.isArray(resultData.results)) {
-				return {
-					batchResults: resultData.results,
-					isBatch: true,
-				};
-			}
-		} catch {
-			// If parsing fails, show regular result
+		return undefined;
+	}
+
+	const isError = result.content.startsWith('Error:');
+	if (isError) return undefined;
+
+	// Prefer pre-extracted diff data (survives token truncation)
+	if (result.editDiffData) {
+		return result.editDiffData;
+	}
+
+	// Fallback: parse from content string
+	try {
+		const resultData = JSON.parse(result.content);
+		if (resultData.oldContent && resultData.newContent) {
+			return {
+				oldContent: resultData.oldContent,
+				newContent: resultData.newContent,
+				filename: JSON.parse(toolCall.function.arguments).filePath,
+				completeOldContent: resultData.completeOldContent,
+				completeNewContent: resultData.completeNewContent,
+				contextStartLine: resultData.contextStartLine,
+			};
 		}
+		if (resultData.results && Array.isArray(resultData.results)) {
+			return {
+				batchResults: resultData.results,
+				isBatch: true,
+			};
+		}
+	} catch {
+		// If parsing fails, show regular result
 	}
 	return undefined;
 }
