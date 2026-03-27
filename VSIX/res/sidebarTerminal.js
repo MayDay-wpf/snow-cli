@@ -57,16 +57,15 @@
 			level === 'error'
 				? 'error'
 				: level === 'warn'
-					? 'warn'
-					: level === 'debug'
-						? 'debug'
-						: 'info';
+				? 'warn'
+				: level === 'debug'
+				? 'debug'
+				: 'info';
 		const logToConsole =
 			typeof console[consoleMethod] === 'function'
 				? console[consoleMethod].bind(console)
 				: console.log.bind(console);
-		const consolePrefix =
-			`[Snow CLI][SidebarTerminal][${level.toUpperCase()}] ${normalizedMessage}`;
+		const consolePrefix = `[Snow CLI][SidebarTerminal][${level.toUpperCase()}] ${normalizedMessage}`;
 
 		if (typeof normalizedDetails === 'string') {
 			logToConsole(consolePrefix, normalizedDetails);
@@ -111,7 +110,9 @@
 	}
 
 	const showError = msg => {
-		for (const overlay of container.querySelectorAll('.terminal-freeze-overlay')) {
+		for (const overlay of container.querySelectorAll(
+			'.terminal-freeze-overlay',
+		)) {
 			overlay.remove();
 		}
 		container.classList.add('terminal-error');
@@ -142,7 +143,9 @@
 			return typeof globalValue === 'function' ? globalValue : undefined;
 		}
 		const constructorValue = globalValue && globalValue[memberName];
-		return typeof constructorValue === 'function' ? constructorValue : undefined;
+		return typeof constructorValue === 'function'
+			? constructorValue
+			: undefined;
 	};
 
 	const TerminalCtor = getGlobalConstructor('Terminal');
@@ -398,9 +401,13 @@
 		};
 
 		const scheduleFit = () => {
-			scheduleTimer(resizeDebounceTimerKey, () => {
-				fitTerminal();
-			}, 50);
+			scheduleTimer(
+				resizeDebounceTimerKey,
+				() => {
+					fitTerminal();
+				},
+				50,
+			);
 		};
 
 		return {
@@ -433,6 +440,21 @@
 	const createClipboardAndContextController = ({term, sendInput}) => {
 		const isMacPlatform = /mac/i.test(navigator.userAgent);
 
+		const shouldUseCtrlSelectionCopy = event => {
+			if (
+				isMacPlatform ||
+				event.type !== 'keydown' ||
+				!event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey ||
+				event.metaKey ||
+				event.key.toLowerCase() !== 'c'
+			) {
+				return false;
+			}
+			return term.hasSelection() && Boolean(term.getSelection());
+		};
+
 		const allowTerminalKeyEvent = event => {
 			if (
 				!isMacPlatform &&
@@ -443,6 +465,15 @@
 				!event.metaKey &&
 				event.key.toLowerCase() === 'v'
 			) {
+				return false;
+			}
+			if (shouldUseCtrlSelectionCopy(event)) {
+				const selection = term.getSelection();
+				if (selection) {
+					navigator.clipboard.writeText(selection).catch(() => {
+						// Ignore clipboard write failures.
+					});
+				}
 				return false;
 			}
 			return true;
@@ -496,10 +527,7 @@
 			scheduleFocusRecovery();
 			const lastFailureReason = getLastWebglFailureReason();
 			if (getActiveRendererMode() !== 'webgl' && lastFailureReason) {
-				scheduleWebglRecoveryAttempt(
-					lastFailureReason,
-					webglRecoveryRecheckMs,
-				);
+				scheduleWebglRecoveryAttempt(lastFailureReason, webglRecoveryRecheckMs);
 			}
 		};
 
@@ -522,7 +550,7 @@
 			addManagedListener,
 			registerDisposable,
 		} = createCleanupRegistry();
-logInfo('Initializing sidebar terminal frontend.');
+		logInfo('Initializing sidebar terminal frontend.');
 
 		let currentTabId;
 		let tabStates = [];
@@ -657,8 +685,6 @@ logInfo('Initializing sidebar terminal frontend.');
 		};
 
 		const sendInput = text => {
-
-
 			if (typeof text !== 'string' || text.length === 0) {
 				return;
 			}
@@ -838,8 +864,9 @@ logInfo('Initializing sidebar terminal frontend.');
 
 		const getWebglRecoveryDelayMs = delayMs => {
 			const nextDelayMs = Math.max(0, Math.floor(delayMs));
-			const suspendedRemainingMs =
-				getRendererHealthSuspendedRemainingMs(Date.now());
+			const suspendedRemainingMs = getRendererHealthSuspendedRemainingMs(
+				Date.now(),
+			);
 			if (suspendedRemainingMs <= 0) {
 				return nextDelayMs;
 			}
@@ -992,17 +1019,21 @@ logInfo('Initializing sidebar terminal frontend.');
 		};
 
 		const scheduleWebglStabilityReset = () => {
-			scheduleTimer(TIMER_KEYS.webglStability, () => {
-				if (activeRendererMode !== 'webgl' || !webglAddon) {
-					return;
-				}
-				if (webglFailureCount > 0 || lastWebglFailureReason) {
-					logInfo('WebGL renderer marked stable after recovery window.');
-				}
-				webglFailureCount = 0;
-				lastWebglFailureReason = undefined;
-				lastWebglEscalationRequestedAt = 0;
-			}, WEBGL_STABILITY_RESET_MS);
+			scheduleTimer(
+				TIMER_KEYS.webglStability,
+				() => {
+					if (activeRendererMode !== 'webgl' || !webglAddon) {
+						return;
+					}
+					if (webglFailureCount > 0 || lastWebglFailureReason) {
+						logInfo('WebGL renderer marked stable after recovery window.');
+					}
+					webglFailureCount = 0;
+					lastWebglFailureReason = undefined;
+					lastWebglEscalationRequestedAt = 0;
+				},
+				WEBGL_STABILITY_RESET_MS,
+			);
 		};
 
 		const disposeWebglAddon = () => {
@@ -1032,7 +1063,9 @@ logInfo('Initializing sidebar terminal frontend.');
 		const runRendererHealthTest = reason => {
 			logWarn(
 				'Manual renderer health test requested.',
-				`reason=${reason}, activeRendererMode=${activeRendererMode}, webglActive=${Boolean(webglAddon)}`,
+				`reason=${reason}, activeRendererMode=${activeRendererMode}, webglActive=${Boolean(
+					webglAddon,
+				)}`,
 			);
 			if (activeRendererMode !== 'webgl' || !webglAddon) {
 				scheduleWebglRecoveryAttempt(reason, WEBGL_RECOVERY_RECHECK_MS);
@@ -1077,7 +1110,9 @@ logInfo('Initializing sidebar terminal frontend.');
 			}
 			logInfo(
 				'Attempting silent WebGL recovery before visible fallback.',
-				`cycle=${currentRecoveryCycleId || 'n/a'}, reason=${reason || 'unknown'}, failureCount=${webglFailureCount}`,
+				`cycle=${currentRecoveryCycleId || 'n/a'}, reason=${
+					reason || 'unknown'
+				}, failureCount=${webglFailureCount}`,
 			);
 			if (
 				tryEnableWebgl(reason || 'silent-recovery', {
@@ -1089,7 +1124,9 @@ logInfo('Initializing sidebar terminal frontend.');
 			) {
 				logInfo(
 					'Silent WebGL recovery succeeded without visible fallback.',
-					`cycle=${currentRecoveryCycleId || 'n/a'}, reason=${reason || 'unknown'}, failureCount=${webglFailureCount}`,
+					`cycle=${currentRecoveryCycleId || 'n/a'}, reason=${
+						reason || 'unknown'
+					}, failureCount=${webglFailureCount}`,
 				);
 				return;
 			}
@@ -1119,12 +1156,20 @@ logInfo('Initializing sidebar terminal frontend.');
 			}
 			const nextDelay = getWebglRecoveryDelayMs(delayMs);
 			const nextAttemptId = currentRecoveryAttemptId + 1;
-			scheduleTimer(TIMER_KEYS.webglRecovery, () => {
-				attemptWebglRecovery(reason, nextAttemptId);
-			}, nextDelay);
+			scheduleTimer(
+				TIMER_KEYS.webglRecovery,
+				() => {
+					attemptWebglRecovery(reason, nextAttemptId);
+				},
+				nextDelay,
+			);
 			logInfo(
 				'Scheduled WebGL recovery attempt.',
-				`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${nextAttemptId}, reason=${reason || 'unknown'}, delayMs=${nextDelay}, failureCount=${webglFailureCount}`,
+				`cycle=${
+					currentRecoveryCycleId || 'n/a'
+				}, attempt=${nextAttemptId}, reason=${
+					reason || 'unknown'
+				}, delayMs=${nextDelay}, failureCount=${webglFailureCount}`,
 			);
 			postRendererHealth('webgl-retry-scheduled', reason, {
 				scheduledRecoveryDelayMs: nextDelay,
@@ -1198,9 +1243,7 @@ logInfo('Initializing sidebar terminal frontend.');
 				lastWebglFailureReason = 'webgl-load-failed';
 				logWarn(
 					'WebGL addon failed to load.',
-					reason
-						? {reason, error: stringifyLogDetails(error)}
-						: error,
+					reason ? {reason, error: stringifyLogDetails(error)} : error,
 				);
 				if (releaseFreezeOnFailure) {
 					releaseRendererFreezeOverlay();
@@ -1216,25 +1259,25 @@ logInfo('Initializing sidebar terminal frontend.');
 			if (!isContainerVisible()) {
 				logInfo(
 					'Deferred WebGL recovery attempt because container is not visible.',
-					`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${attemptId || 'n/a'}, reason=${reason || 'unknown'}`,
+					`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${
+						attemptId || 'n/a'
+					}, reason=${reason || 'unknown'}`,
 				);
 				scheduleWebglRecoveryAttempt(reason, WEBGL_RECOVERY_RECHECK_MS);
 				return;
 			}
 			const now = Date.now();
-			const suspendedRemainingMs =
-				getRendererHealthSuspendedRemainingMs(now);
+			const suspendedRemainingMs = getRendererHealthSuspendedRemainingMs(now);
 			if (suspendedRemainingMs > 0) {
 				logInfo(
 					'Deferred WebGL recovery attempt because renderer health is suspended.',
-					`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${attemptId || 'n/a'}, suspendedMs=${suspendedRemainingMs}`,
+					`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${
+						attemptId || 'n/a'
+					}, suspendedMs=${suspendedRemainingMs}`,
 				);
 				scheduleWebglRecoveryAttempt(
 					reason,
-					Math.max(
-						WEBGL_RECOVERY_SUSPEND_DEFER_MIN_MS,
-						suspendedRemainingMs,
-					),
+					Math.max(WEBGL_RECOVERY_SUSPEND_DEFER_MIN_MS, suspendedRemainingMs),
 				);
 				return;
 			}
@@ -1246,7 +1289,11 @@ logInfo('Initializing sidebar terminal frontend.');
 			createRendererFreezeOverlay();
 			logInfo(
 				'Attempting to restore WebGL renderer.',
-				`cycle=${currentRecoveryCycleId || 'n/a'}, attempt=${currentRecoveryAttemptId}, reason=${reason || 'unknown'}, failureCount=${webglFailureCount}, heuristicAttempt=${attemptNumber}`,
+				`cycle=${
+					currentRecoveryCycleId || 'n/a'
+				}, attempt=${currentRecoveryAttemptId}, reason=${
+					reason || 'unknown'
+				}, failureCount=${webglFailureCount}, heuristicAttempt=${attemptNumber}`,
 			);
 			if (
 				tryEnableWebgl(reason || 'recovery', {
@@ -1625,7 +1672,6 @@ logInfo('Initializing sidebar terminal frontend.');
 		scheduleFocusRecovery();
 		logInfo('Sidebar terminal frontend ready.');
 		vscode.postMessage({type: 'ready'});
-
 	} catch (error) {
 		if (error instanceof Error) {
 			showError(error.stack || error.message);
