@@ -181,6 +181,11 @@ export async function rollbackTeamState(
 
 	teamTracker.clearActiveTeam();
 
+	const {clearAllTeammateStreamEntries} = await import(
+		'../../hooks/conversation/core/subAgentMessageHandler.js'
+	);
+	clearAllTeammateStreamEntries();
+
 	// Delete snapshot records from target index onward
 	deleteTeamSnapshotsFromIndex(sessionId, targetMessageIndex);
 

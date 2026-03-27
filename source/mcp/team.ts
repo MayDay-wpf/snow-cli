@@ -36,6 +36,7 @@ import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
 import {recordTeamCreated, recordMemberSpawned} from '../utils/team/teamSnapshot.js';
+import {clearAllTeammateStreamEntries} from '../hooks/conversation/core/subAgentMessageHandler.js';
 
 export interface TeamToolExecutionOptions {
 	toolName: string;
@@ -653,6 +654,7 @@ export class TeamService {
 		// Disband team and clear tracker
 		disbandTeam(team.name);
 		teamTracker.clearActiveTeam();
+		clearAllTeammateStreamEntries();
 
 		return {
 			success: true,

@@ -135,3 +135,21 @@ export const MAX_CONCURRENT_FILE_READS = 20;
  * Patterns with higher scores are rejected to prevent catastrophic backtracking
  */
 export const MAX_REGEX_COMPLEXITY_SCORE = 100;
+
+/**
+ * Maximum total bytes allowed in the file content cache (50MB)
+ * Prevents memory exhaustion when scanning large codebases
+ */
+export const MAX_CONTENT_CACHE_BYTES = 50 * 1024 * 1024;
+
+/**
+ * RSS threshold (in bytes) for triggering aggressive memory cleanup (512MB)
+ * When process RSS exceeds this, ACE will proactively evict caches
+ */
+export const MEMORY_PRESSURE_THRESHOLD_BYTES = 512 * 1024 * 1024;
+
+/**
+ * Minimum interval between memory pressure checks (10 seconds)
+ * Prevents excessive calls to process.memoryUsage()
+ */
+export const MEMORY_CHECK_INTERVAL_MS = 10_000;

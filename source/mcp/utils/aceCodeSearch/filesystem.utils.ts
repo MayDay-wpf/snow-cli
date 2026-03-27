@@ -210,17 +210,24 @@ export async function loadExclusionPatterns(
 	return patterns;
 }
 
+export interface ContentCacheCallbacks {
+	onAdd?: (filePath: string, content: string, mtime: number) => void;
+	onEvict?: (filePath: string) => void;
+}
+
 /**
  * Read file with LRU cache to reduce repeated file system access
  * @param filePath - Path to file
  * @param fileContentCache - Cache for file contents
- * @param maxCacheSize - Maximum cache size
+ * @param maxCacheSize - Maximum cache size (entry count)
+ * @param callbacks - Optional callbacks for byte tracking
  * @returns File content
  */
 export async function readFileWithCache(
 	filePath: string,
 	fileContentCache: Map<string, {content: string; mtime: number}>,
 	maxCacheSize: number = 50,
+	callbacks?: ContentCacheCallbacks,
 ): Promise<string> {
 	const stats = await fs.stat(filePath);
 	const mtime = stats.mtimeMs;
@@ -234,16 +241,18 @@ export async function readFileWithCache(
 	// Read file
 	const content = await fs.readFile(filePath, 'utf-8');
 
-	// Manage cache size (simple LRU: remove oldest if over limit)
+	// Evict oldest entry if over limit
 	if (fileContentCache.size >= maxCacheSize) {
 		const firstKey = fileContentCache.keys().next().value;
 		if (firstKey) {
+			callbacks?.onEvict?.(firstKey);
 			fileContentCache.delete(firstKey);
 		}
 	}
 
 	// Cache the content
 	fileContentCache.set(filePath, {content, mtime});
+	callbacks?.onAdd?.(filePath, content, mtime);
 
 	return content;
 }

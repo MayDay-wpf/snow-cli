@@ -62,6 +62,7 @@ import {queryNotebook} from '../utils/core/notebookManager.js';
 // Encoding detection and conversion utilities
 import {
 	readFileWithEncoding,
+	readFileLinesStreaming,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
 import {getAutoFormatEnabled} from '../utils/config/projectSettings.js';
@@ -563,13 +564,39 @@ export class FilesystemMCPService {
 							}
 						}
 
-						const content = await readFileWithEncoding(fullPath);
-						const lines = content.split('\n');
-						const totalLines = lines.length;
+						const fileSizeBytes = stats.size;
+						const FILE_SIZE_LIMIT = 256 * 1024 * 1024;
+						let content: string | undefined;
+						let lines: string[];
+						let totalLines: number;
+
+						if (fileSizeBytes > FILE_SIZE_LIMIT) {
+							const actualStart = fileStartLine ?? 1;
+							const actualEnd = fileEndLine ?? 500;
+							if (actualStart < 1) {
+								throw new Error(
+									`Start line must be greater than 0 for ${file}`,
+								);
+							}
+							const streamed = await readFileLinesStreaming(
+								fullPath,
+								actualStart,
+								actualEnd,
+							);
+							lines = streamed.lines;
+							totalLines = streamed.totalLines;
+						} else {
+							content = await readFileWithEncoding(fullPath);
+							lines = content.split('\n');
+							totalLines = lines.length;
+						}
 
 						// Default values and logic (use file-specific values)
 						const actualStartLine = fileStartLine ?? 1;
-						const actualEndLine = fileEndLine ?? totalLines;
+						const actualEndLine =
+							fileSizeBytes > FILE_SIZE_LIMIT
+								? fileEndLine ?? 500
+								: fileEndLine ?? totalLines;
 
 						// Validate and adjust line numbers
 						if (actualStartLine < 1) {
@@ -580,39 +607,49 @@ export class FilesystemMCPService {
 								`End line must be greater than or equal to start line for ${file}`,
 							);
 						}
-						// Auto-adjust if startLine exceeds file length
+
 						const start = Math.min(actualStartLine, totalLines);
 						const end = Math.min(totalLines, actualEndLine);
 
-						// Extract specified lines
-						const selectedLines = lines.slice(start - 1, end);
+						// For large files, lines are already the requested slice;
+						// for normal files, extract from the full content
+						const selectedLines =
+							fileSizeBytes > FILE_SIZE_LIMIT
+								? lines
+								: lines.slice(start - 1, end);
 						const numberedLines = selectedLines.map((line, index) => {
 							const lineNum = start + index;
 							return `${lineNum}→${line}`;
 						});
 
-						let fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})\n${numberedLines.join(
+						const sizeWarning =
+							fileSizeBytes > FILE_SIZE_LIMIT
+								? ` [Large file: ${Math.round(fileSizeBytes / 1024 / 1024)}MB]`
+								: '';
+						let fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join(
 							'\n',
 						)}`;
 
-						// Parse and append symbol information
-						try {
-							const symbols = await parseFileSymbols(
-								fullPath,
-								content,
-								this.basePath,
-							);
-							const symbolInfo = this.extractRelevantSymbols(
-								symbols,
-								start,
-								end,
-								totalLines,
-							);
-							if (symbolInfo) {
-								fileContent += symbolInfo;
+						// Parse and append symbol information (skip for large files)
+						if (content) {
+							try {
+								const symbols = await parseFileSymbols(
+									fullPath,
+									content,
+									this.basePath,
+								);
+								const symbolInfo = this.extractRelevantSymbols(
+									symbols,
+									start,
+									end,
+									totalLines,
+								);
+								if (symbolInfo) {
+									fileContent += symbolInfo;
+								}
+							} catch {
+								// Silently fail symbol parsing
 							}
-						} catch {
-							// Silently fail symbol parsing
 						}
 
 						// Append notebook entries
@@ -761,12 +798,56 @@ export class FilesystemMCPService {
 				}
 			}
 
-			// Text file processing
-			const content = await readFileWithEncoding(fullPath);
+			// Text file processing — use streaming for files that exceed the
+			// in-memory string limit to avoid ERR_STRING_TOO_LONG crashes
+			let content: string | undefined;
+			let lines: string[];
+			let totalLines: number;
 
-			// Parse lines
-			const lines = content.split('\n');
-			const totalLines = lines.length;
+			const fileSizeBytes = stats.size;
+			const FILE_SIZE_LIMIT = 256 * 1024 * 1024; // 256MB
+
+			if (fileSizeBytes > FILE_SIZE_LIMIT) {
+				const actualStartLine = startLine ?? 1;
+				const actualEndLine = endLine ?? 500;
+
+				if (actualStartLine < 1) {
+					throw new Error('Start line must be greater than 0');
+				}
+
+				const streamed = await readFileLinesStreaming(
+					fullPath,
+					actualStartLine,
+					actualEndLine,
+				);
+				lines = streamed.lines;
+				totalLines = streamed.totalLines;
+
+				const start = Math.min(actualStartLine, totalLines);
+				const end = Math.min(
+					totalLines,
+					Math.min(actualEndLine, start + lines.length - 1),
+				);
+				const numberedLines = lines.map((line, index) => {
+					const lineNum = start + index;
+					return `${lineNum}→${line}`;
+				});
+
+				const sizeInfo = `[File: ${Math.round(fileSizeBytes / 1024 / 1024)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
+				const partialContent = `${sizeInfo}\n${numberedLines.join('\n')}`;
+
+				return {
+					content: partialContent,
+					startLine: start,
+					endLine: end,
+					totalLines,
+				};
+			}
+
+			content = await readFileWithEncoding(fullPath);
+
+			lines = content.split('\n');
+			totalLines = lines.length;
 
 			// Default values and logic:
 			// - No params: read entire file (1 to totalLines)

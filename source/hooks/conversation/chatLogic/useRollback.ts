@@ -18,6 +18,7 @@ import {
 	deleteTeamSnapshotsFromIndex,
 	clearAllTeamSnapshots,
 } from '../../../utils/team/teamSnapshot.js';
+import {clearAllTeammateStreamEntries} from '../core/subAgentMessageHandler.js';
 
 export function useRollback(props: UseChatLogicProps) {
 	const {
@@ -82,6 +83,7 @@ export function useRollback(props: UseChatLogicProps) {
 				console.error('Failed to rollback team state:', error);
 			}
 		}
+		clearAllTeammateStreamEntries();
 
 		if (!rollbackConversation) {
 			if (rollbackFiles && currentSession) {

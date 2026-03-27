@@ -63,6 +63,13 @@ export function getTeammateStreamSnapshot(): TeammateStreamInfo[] {
 	return _teammateStreamSnapshot;
 }
 
+export function clearAllTeammateStreamEntries(): void {
+	if (_teammateStreamMap.size === 0) return;
+	_teammateStreamMap.clear();
+	_teammateStreamSnapshot = [];
+	notifyTeammateStreamListeners();
+}
+
 // ── Types ──
 
 type CtxUsage = {percentage: number; inputTokens: number; maxTokens: number};

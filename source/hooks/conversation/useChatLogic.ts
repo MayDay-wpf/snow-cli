@@ -8,6 +8,7 @@ import {useChatHandlers} from './chatLogic/useChatHandlers.js';
 import {useRemoteEvents} from './chatLogic/useRemoteEvents.js';
 import {useI18n} from '../../i18n/index.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
+import {clearAllTeammateStreamEntries} from './core/subAgentMessageHandler.js';
 
 export type {UseChatLogicProps};
 
@@ -166,6 +167,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		streamingState.setCodebaseSearchStatus(null);
 		streamingState.abortController.abort();
 		teamTracker.abortAllTeammates();
+		clearAllTeammateStreamEntries();
 		setMessages(prev => prev.filter(msg => !msg.toolPending));
 		setPendingMessages([]);
 		return true;
@@ -219,6 +221,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					streamingState.abortController.abort();
 				}
 				teamTracker.abortAllTeammates();
+				clearAllTeammateStreamEntries();
 				return true;
 			}
 
@@ -230,6 +233,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			// Abort background teammates even when lead has stopped streaming
 			if (!streamingState.isStreaming && teamTracker.getCount() > 0) {
 				teamTracker.abortAllTeammates();
+				clearAllTeammateStreamEntries();
 				return true;
 			}
 
