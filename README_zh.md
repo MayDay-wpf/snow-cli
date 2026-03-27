@@ -25,7 +25,24 @@ _在终端中进行 Agentic 编程_
 
 ![alt text](docs/images/image_zh.png)
 
-<h3>推荐使用字体: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+<h3>推荐使用字体：<a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+
+<h3>Windows 用户推荐终端组合</h3>
+
+- **PowerShell 7+**: 现代化的跨平台 PowerShell，提供更强的功能和更好的兼容性
+  - GitHub: https://github.com/PowerShell/PowerShell
+- **Windows Terminal**: 现代化的终端应用程序，支持多标签、分屏、GPU 加速渲染
+  - GitHub: https://github.com/microsoft/terminal
+
+**安装方式**:
+
+```bash
+# 使用 winget 安装 (Windows 10/11 自带)
+winget install Microsoft.PowerShell
+winget install Microsoft.WindowsTerminal
+
+# 或使用 Microsoft Store 安装
+```
 
 ## 感谢社区
 

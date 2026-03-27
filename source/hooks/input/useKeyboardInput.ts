@@ -445,42 +445,66 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
-		// Shift+Tab - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
+		// Shift+Tab - Toggle modes in cycle: Off -> YOLO -> YOLO+Plan -> Plan -> YOLO+Team -> Team -> Off
 		if (key.shift && key.tab) {
-			if (yoloMode && !planMode) {
+			if (yoloMode && !planMode && !_teamMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 				setVulnerabilityHuntingMode(false);
 				setTeamMode(false);
-			} else if (yoloMode && planMode) {
+			} else if (yoloMode && planMode && !_teamMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-			} else if (!yoloMode && planMode) {
-				// Plan only -> All off
+			} else if (!yoloMode && planMode && !_teamMode) {
+				// Plan only -> YOLO + Team
+				setYoloMode(true);
 				setPlanMode(false);
-			} else if (!yoloMode && !planMode) {
+				setTeamMode(true);
+				setVulnerabilityHuntingMode(false);
+			} else if (yoloMode && !planMode && _teamMode) {
+				// YOLO + Team -> Team only
+				setYoloMode(false);
+			} else if (!yoloMode && !planMode && _teamMode) {
+				// Team only -> All off
+				setTeamMode(false);
+			} else {
 				// All off -> YOLO only
 				setYoloMode(true);
+				setPlanMode(false);
+				setTeamMode(false);
+				setVulnerabilityHuntingMode(false);
 			}
 			return;
 		}
 
-		// Ctrl+Y - Toggle YOLO modes in cycle: YOLO -> YOLO+Plan -> Plan -> All Off
+		// Ctrl+Y - Toggle modes in cycle: Off -> YOLO -> YOLO+Plan -> Plan -> YOLO+Team -> Team -> Off
 		if (key.ctrl && input === 'y') {
-			if (yoloMode && !planMode) {
+			if (yoloMode && !planMode && !_teamMode) {
 				// YOLO only -> YOLO + Plan
 				setPlanMode(true);
 				setVulnerabilityHuntingMode(false);
 				setTeamMode(false);
-			} else if (yoloMode && planMode) {
+			} else if (yoloMode && planMode && !_teamMode) {
 				// YOLO + Plan -> Plan only
 				setYoloMode(false);
-			} else if (!yoloMode && planMode) {
-				// Plan only -> All off
+			} else if (!yoloMode && planMode && !_teamMode) {
+				// Plan only -> YOLO + Team
+				setYoloMode(true);
 				setPlanMode(false);
-			} else if (!yoloMode && !planMode) {
+				setTeamMode(true);
+				setVulnerabilityHuntingMode(false);
+			} else if (yoloMode && !planMode && _teamMode) {
+				// YOLO + Team -> Team only
+				setYoloMode(false);
+			} else if (!yoloMode && !planMode && _teamMode) {
+				// Team only -> All off
+				setTeamMode(false);
+			} else {
 				// All off -> YOLO only
 				setYoloMode(true);
+				setPlanMode(false);
+				setTeamMode(false);
+				setVulnerabilityHuntingMode(false);
 			}
 			return;
 		}
@@ -1511,7 +1535,10 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				// Save to persistent history
 				saveToHistory(message);
 
-				onSubmit(markedMessage, validImages.length > 0 ? validImages : undefined);
+				onSubmit(
+					markedMessage,
+					validImages.length > 0 ? validImages : undefined,
+				);
 			}
 			return;
 		}

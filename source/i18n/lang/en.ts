@@ -492,7 +492,7 @@ export const en: TranslationKeys = {
 		selectItem: 'Tab/Enter - Select item in pickers',
 		cancelClose: 'ESC - Cancel/close pickers or interrupt AI response',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - Toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
+			'Shift+Tab/Ctrl+Y - Toggle modes (cycle: Off → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → Off)',
 		tipsTitle: '💡 Tips:',
 		tipUseHelp: 'Use /help anytime to see this information',
 		tipShowCommands: 'Type / to see all available commands',
@@ -888,7 +888,7 @@ export const en: TranslationKeys = {
 		headerExplanations: 'Ask for code explanations and debugging help',
 		headerInterrupt: 'Press ESC during response to interrupt',
 		headerYolo:
-			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
+			'Press Shift+Tab/Ctrl+Y: toggle modes (cycle: Off → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → Off)',
 		headerShortcuts:
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+O (copy input) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerExpandedView:
@@ -1027,7 +1027,7 @@ export const en: TranslationKeys = {
 		shortcutDeleteToEnd: 'Delete to end',
 		shortcutCancel: 'Cancel (ESC)',
 		shortcutRegenerate: 'Regenerate (Ctrl+R)',
-		shortcutToggleYolo: 'Toggle YOLO/Plan (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'Toggle modes (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirm rollback',
 		rollbackFiles: 'Rollback files',
