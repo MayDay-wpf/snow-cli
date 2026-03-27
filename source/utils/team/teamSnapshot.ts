@@ -213,6 +213,34 @@ export function deleteTeamSnapshotsFromIndex(
 }
 
 /**
+ * Delete all team snapshot events for a specific team name within a session.
+ * Called when the main flow terminates a team via cleanup_team,
+ * so the rollback prompt no longer shows already-cleaned-up teams.
+ */
+export function deleteTeamSnapshotsByTeamName(
+	sessionId: string,
+	teamName: string,
+): void {
+	const data = readSnapshotData();
+	let changed = false;
+	for (const key of Object.keys(data)) {
+		if (!key.startsWith(`${sessionId}:`)) continue;
+		const events = data[key];
+		if (!events) continue;
+		const filtered = events.filter(e => e.teamName !== teamName);
+		if (filtered.length !== events.length) {
+			changed = true;
+			if (filtered.length === 0) {
+				delete data[key];
+			} else {
+				data[key] = filtered;
+			}
+		}
+	}
+	if (changed) saveSnapshotData(data);
+}
+
+/**
  * Clear all team snapshot records for a session.
  */
 export function clearAllTeamSnapshots(sessionId: string): void {

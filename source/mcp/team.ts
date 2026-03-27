@@ -35,7 +35,7 @@ import {executeTeammate} from '../utils/execution/teamExecutor.js';
 import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
-import {recordTeamCreated, recordMemberSpawned} from '../utils/team/teamSnapshot.js';
+import {recordTeamCreated, recordMemberSpawned, deleteTeamSnapshotsByTeamName} from '../utils/team/teamSnapshot.js';
 import {clearAllTeammateStreamEntries} from '../hooks/conversation/core/subAgentMessageHandler.js';
 
 export interface TeamToolExecutionOptions {
@@ -655,6 +655,12 @@ export class TeamService {
 		disbandTeam(team.name);
 		teamTracker.clearActiveTeam();
 		clearAllTeammateStreamEntries();
+
+		// Clean up team snapshot records so rollback prompt won't show already-terminated teams
+		const ctx = getConversationContext();
+		if (ctx) {
+			deleteTeamSnapshotsByTeamName(ctx.sessionId, team.name);
+		}
 
 		return {
 			success: true,
