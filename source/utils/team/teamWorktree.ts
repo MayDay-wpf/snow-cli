@@ -179,7 +179,7 @@ export function autoCommitWorktreeChanges(
 	}
 }
 
-export type MergeStrategy = 'manual' | 'theirs' | 'ours';
+export type MergeStrategy = 'manual' | 'theirs' | 'ours' | 'auto';
 
 export interface MergeResult {
 	success: boolean;
@@ -188,6 +188,7 @@ export interface MergeResult {
 	filesChanged: number;
 	hasConflicts?: boolean;
 	conflictFiles?: string[];
+	autoResolved?: string[];
 	error?: string;
 }
 
@@ -236,7 +237,6 @@ export function mergeTeammateBranch(
 			return {success: true, merged: false, commitCount: 0, filesChanged: 0};
 		}
 
-		// Build merge command based on strategy
 		const strategyFlag = strategy === 'theirs' ? ' -X theirs'
 			: strategy === 'ours' ? ' -X ours'
 			: '';
@@ -258,8 +258,20 @@ export function mergeTeammateBranch(
 		} catch (mergeError: any) {
 			const conflictFiles = getConflictedFiles();
 
+			// 'auto' strategy: leave in merge state for AI-based resolution by caller
+			if (strategy === 'auto' && conflictFiles.length > 0) {
+				return {
+					success: false,
+					merged: false,
+					hasConflicts: true,
+					commitCount,
+					filesChanged: 0,
+					conflictFiles,
+					error: `Merge conflicts in ${conflictFiles.length} file(s). Awaiting AI resolution.`,
+				};
+			}
+
 			if (strategy !== 'manual' || conflictFiles.length === 0) {
-				// Auto-strategy failed or no actual conflict markers — abort
 				try { execSync('git merge --abort', {stdio: 'pipe'}); } catch { /* noop */ }
 				return {
 					success: false,

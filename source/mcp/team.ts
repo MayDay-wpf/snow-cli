@@ -6,7 +6,7 @@
 
 import {
 	createTeam,
-	getActiveTeam,
+	getTeam,
 	addMember,
 	disbandTeam,
 } from '../utils/team/teamConfig.js';
@@ -29,8 +29,9 @@ import {
 	abortCurrentMerge,
 	type MergeStrategy,
 } from '../utils/team/teamWorktree.js';
-import {existsSync} from 'fs';
+import {existsSync, readFileSync, writeFileSync} from 'fs';
 import {teamTracker} from '../utils/execution/teamTracker.js';
+import type {RequestMethod} from '../utils/config/apiConfig.js';
 import {executeTeammate} from '../utils/execution/teamExecutor.js';
 import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
@@ -58,6 +59,131 @@ export interface TeamToolExecutionOptions {
 }
 
 export class TeamService {
+	private getOwnTeam(): import('../utils/team/teamConfig.js').TeamConfig | null {
+		const teamName = teamTracker.getActiveTeamName();
+		if (!teamName) return null;
+		const team = getTeam(teamName);
+		return team && team.status === 'active' ? team : null;
+	}
+
+	/**
+	 * Use AI to resolve Git merge conflicts in the working directory.
+	 * Reads each conflicted file, sends it to the configured LLM for intelligent
+	 * resolution, writes the resolved content back, and stages the file.
+	 * Falls back to `git checkout --theirs` when AI resolution fails for a file.
+	 */
+	private async aiResolveConflicts(
+		conflictFiles: string[],
+		memberName: string,
+	): Promise<{resolved: string[]; failed: string[]; error?: string}> {
+		const {getOpenAiConfig} = await import('../utils/config/apiConfig.js');
+		const {createStreamingChatCompletion} = await import('../api/chat.js');
+		const {createStreamingAnthropicCompletion} = await import('../api/anthropic.js');
+		const {createStreamingGeminiCompletion} = await import('../api/gemini.js');
+		const {createStreamingResponse} = await import('../api/responses.js');
+		const {execSync} = await import('child_process');
+
+		const config = getOpenAiConfig();
+		const model = config.advancedModel || config.basicModel || 'gpt-4o-mini';
+		const method: RequestMethod = config.requestMethod || 'chat';
+
+		const resolved: string[] = [];
+		const failed: string[] = [];
+
+		for (const file of conflictFiles) {
+			let content: string;
+			try {
+				content = readFileSync(file, 'utf8');
+			} catch {
+				failed.push(file);
+				continue;
+			}
+
+			if (!content.includes('<<<<<<<')) {
+				try {
+					execSync(`git add "${file}"`, {stdio: 'pipe'});
+					resolved.push(file);
+				} catch { failed.push(file); }
+				continue;
+			}
+
+			const prompt = [
+				'You are resolving a Git merge conflict.',
+				'Below is the content of a file with conflict markers.',
+				'',
+				'- `<<<<<<< HEAD` marks the current branch (main/lead).',
+				'- `=======` separates the two versions.',
+				`- \`>>>>>>>\` marks the incoming branch (teammate "${memberName}").`,
+				'',
+				'Rules:',
+				'- Produce the correctly merged file that preserves ALL intended changes from BOTH sides.',
+				'- If changes are complementary (e.g. different functions added), include both.',
+				'- If changes directly conflict (e.g. same line modified differently), combine them intelligently.',
+				'- Output ONLY the resolved file content. No explanations, no markdown fences, no extra text.',
+				'',
+				`File: ${file}`,
+				'---',
+				content,
+			].join('\n');
+
+			const messages = [{role: 'user' as const, content: prompt}];
+			let aiResult = '';
+
+			try {
+				const collectContent = async (stream: AsyncIterable<any>) => {
+					for await (const chunk of stream) {
+						if (chunk.type === 'content' && chunk.content) {
+							aiResult += chunk.content;
+						}
+					}
+				};
+
+				switch (method) {
+					case 'anthropic':
+						await collectContent(createStreamingAnthropicCompletion(
+							{model, messages, max_tokens: config.maxTokens || 8192, temperature: 0, disableThinking: true},
+						));
+						break;
+					case 'gemini':
+						await collectContent(createStreamingGeminiCompletion(
+							{model, messages},
+						));
+						break;
+					case 'responses':
+						await collectContent(createStreamingResponse(
+							{model, messages},
+						));
+						break;
+					case 'chat':
+					default:
+						await collectContent(createStreamingChatCompletion(
+							{model, messages, temperature: 0},
+						));
+						break;
+				}
+
+				if (aiResult && !aiResult.includes('<<<<<<<')) {
+					writeFileSync(file, aiResult, 'utf8');
+					execSync(`git add "${file}"`, {stdio: 'pipe'});
+					resolved.push(file);
+				} else {
+					throw new Error('AI output still contains conflict markers or is empty');
+				}
+			} catch (aiError) {
+				console.error(`[Team] AI conflict resolution failed for ${file}, falling back to --theirs:`, aiError);
+				try {
+					execSync(`git checkout --theirs "${file}"`, {stdio: 'pipe'});
+					execSync(`git add "${file}"`, {stdio: 'pipe'});
+					resolved.push(file);
+				} catch {
+					failed.push(file);
+				}
+			}
+		}
+
+		return {resolved, failed};
+	}
+
 	async execute(options: TeamToolExecutionOptions): Promise<any> {
 		const {toolName, args} = options;
 
@@ -112,8 +238,8 @@ export class TeamService {
 			throw new Error('Agent Teams require a Git repository. Initialize git first.');
 		}
 
-		// Ensure a team exists
-		let team = getActiveTeam();
+		// Ensure a team exists (scoped to this session)
+		let team = this.getOwnTeam();
 		const isNewTeam = !team;
 		if (!team) {
 			const teamName = `team-${Date.now()}`;
@@ -330,7 +456,7 @@ export class TeamService {
 	}
 
 	private createTask(args: Record<string, any>): any {
-		const team = getActiveTeam();
+		const team = this.getOwnTeam();
 		if (!team) {
 			throw new Error('No active team. You must call spawn_teammate first — the team is created automatically when the first teammate is spawned. Call spawn_teammate, then create_task.');
 		}
@@ -358,7 +484,7 @@ export class TeamService {
 	}
 
 	private updateTask(args: Record<string, any>): any {
-		const team = getActiveTeam();
+		const team = this.getOwnTeam();
 		if (!team) {
 			throw new Error('No active team.');
 		}
@@ -383,7 +509,7 @@ export class TeamService {
 	}
 
 	private listTasks(): any {
-		const team = getActiveTeam();
+		const team = this.getOwnTeam();
 		if (!team) {
 			return {success: true, result: 'No active team.', tasks: []};
 		}
@@ -418,8 +544,8 @@ export class TeamService {
 		};
 	}
 
-	private mergeTeammateWork(args: Record<string, any>): any {
-		const team = getActiveTeam();
+	private async mergeTeammateWork(args: Record<string, any>): Promise<any> {
+		const team = this.getOwnTeam();
 		if (!team) {
 			throw new Error('No active team.');
 		}
@@ -461,6 +587,32 @@ export class TeamService {
 				success: true,
 				result: `${member.name} has no changes to merge.`,
 			};
+		} else if (result.hasConflicts && strategy === 'auto') {
+			const aiResult = await this.aiResolveConflicts(
+				result.conflictFiles || [],
+				member.name,
+			);
+
+			if (aiResult.failed.length > 0) {
+				abortCurrentMerge();
+				return {
+					success: false,
+					error: `AI conflict resolution failed for ${aiResult.failed.length} file(s): ${aiResult.failed.join(', ')}`,
+					conflictFiles: aiResult.failed,
+				};
+			}
+
+			const mergeComplete = completeMerge(
+				`[Snow Team] AI-resolved merge of ${member.name}'s work`,
+			);
+			if (mergeComplete.success) {
+				return {
+					success: true,
+					result: `Merged ${result.commitCount} commit(s) from ${member.name}. AI resolved conflicts in ${aiResult.resolved.length} file(s): ${aiResult.resolved.join(', ')}.`,
+					autoResolved: aiResult.resolved,
+				};
+			}
+			return {success: false, error: mergeComplete.error};
 		} else if (result.hasConflicts) {
 			return {
 				success: false,
@@ -478,8 +630,8 @@ export class TeamService {
 		}
 	}
 
-	private mergeAllTeammateWork(args: Record<string, any>): any {
-		const team = getActiveTeam();
+	private async mergeAllTeammateWork(args: Record<string, any>): Promise<any> {
+		const team = this.getOwnTeam();
 		if (!team) {
 			throw new Error('No active team.');
 		}
@@ -501,7 +653,7 @@ export class TeamService {
 		}
 
 		const strategy = (args['strategy'] as MergeStrategy) || 'manual';
-		const results: Array<{name: string; merged: boolean; commits: number; files: number; error?: string; conflictFiles?: string[]}> = [];
+		const results: Array<{name: string; merged: boolean; commits: number; files: number; error?: string; conflictFiles?: string[]; autoResolved?: string[]}> = [];
 
 		for (const member of team.members) {
 			if (member.worktreePath && existsSync(member.worktreePath)) {
@@ -522,6 +674,46 @@ export class TeamService {
 					commits: mergeResult.commitCount,
 					files: mergeResult.filesChanged,
 				});
+			} else if (mergeResult.hasConflicts && strategy === 'auto') {
+				const aiResult = await this.aiResolveConflicts(
+					mergeResult.conflictFiles || [],
+					member.name,
+				);
+
+				if (aiResult.failed.length > 0) {
+					abortCurrentMerge();
+					results.push({
+						name: member.name,
+						merged: false,
+						commits: mergeResult.commitCount,
+						files: 0,
+						error: `AI conflict resolution failed for: ${aiResult.failed.join(', ')}`,
+						conflictFiles: aiResult.failed,
+					});
+					break;
+				}
+
+				const mergeComplete = completeMerge(
+					`[Snow Team] AI-resolved merge of ${member.name}'s work`,
+				);
+				if (mergeComplete.success) {
+					results.push({
+						name: member.name,
+						merged: true,
+						commits: mergeResult.commitCount,
+						files: (mergeResult.conflictFiles || []).length,
+						autoResolved: aiResult.resolved,
+					});
+				} else {
+					results.push({
+						name: member.name,
+						merged: false,
+						commits: mergeResult.commitCount,
+						files: 0,
+						error: mergeComplete.error,
+					});
+					break;
+				}
 			} else if (mergeResult.hasConflicts) {
 				results.push({
 					name: member.name,
@@ -556,6 +748,7 @@ export class TeamService {
 
 		const mergedCount = results.filter(r => r.merged).length;
 		const totalCommits = results.reduce((sum, r) => sum + r.commits, 0);
+		const allAutoResolved = results.flatMap(r => r.autoResolved || []);
 		const failedResult = results.find(r => r.error && !r.conflictFiles?.length);
 
 		if (failedResult) {
@@ -566,10 +759,15 @@ export class TeamService {
 			};
 		}
 
+		const autoInfo = allAutoResolved.length > 0
+			? ` AI resolved conflicts in ${allAutoResolved.length} file(s): ${allAutoResolved.join(', ')}.`
+			: '';
+
 		return {
 			success: true,
-			result: `All teammate work merged. ${mergedCount} teammate(s) with changes, ${totalCommits} total commit(s).`,
+			result: `All teammate work merged. ${mergedCount} teammate(s) with changes, ${totalCommits} total commit(s).${autoInfo}`,
 			results,
+			autoResolved: allAutoResolved.length > 0 ? allAutoResolved : undefined,
 		};
 	}
 
@@ -613,7 +811,7 @@ export class TeamService {
 	}
 
 	private async cleanupTeam(): Promise<any> {
-		const team = getActiveTeam();
+		const team = this.getOwnTeam();
 		if (!team) {
 			return {success: false, error: 'No active team to clean up.'};
 		}
@@ -818,18 +1016,18 @@ export class TeamService {
 					type: 'object',
 					properties: {
 						name: {type: 'string', description: 'The name of the teammate whose work to merge.'},
-						strategy: {type: 'string', enum: ['manual', 'theirs', 'ours'], description: '"manual" (default): pause on conflicts for you to resolve. "theirs": auto-accept all teammate changes on conflict. "ours": auto-keep main branch changes on conflict.'},
-					},
-					required: ['name'],
+					strategy: {type: 'string', enum: ['manual', 'theirs', 'ours', 'auto'], description: '"manual" (default): pause on conflicts for you to resolve. "theirs": auto-accept all teammate changes on conflict. "ours": auto-keep main branch changes on conflict. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.'},
 				},
+				required: ['name'],
 			},
-			{
-				name: 'merge_all_teammate_work',
-				description: 'Merge ALL teammates\' branches sequentially. Stops on first conflict (in "manual" mode) so you can resolve it. MUST call before cleanup_team.',
-				inputSchema: {
-					type: 'object',
-					properties: {
-						strategy: {type: 'string', enum: ['manual', 'theirs', 'ours'], description: '"manual" (default): stop on conflicts for resolution. "theirs": auto-accept teammate changes. "ours": auto-keep main branch.'},
+		},
+		{
+			name: 'merge_all_teammate_work',
+			description: 'Merge ALL teammates\' branches sequentially. Stops on first conflict (in "manual" mode) so you can resolve it. With "auto" strategy, conflicts are auto-resolved and merging continues. MUST call before cleanup_team.',
+			inputSchema: {
+				type: 'object',
+				properties: {
+					strategy: {type: 'string', enum: ['manual', 'theirs', 'ours', 'auto'], description: '"manual" (default): stop on conflicts for resolution. "theirs": auto-accept teammate changes. "ours": auto-keep main branch. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.'},
 					},
 					required: [],
 				},

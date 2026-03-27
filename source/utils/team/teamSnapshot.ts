@@ -146,7 +146,7 @@ export async function rollbackTeamState(
 
 	const {teamTracker} = await import('../execution/teamTracker.js');
 	const {cleanupTeamWorktrees} = await import('./teamWorktree.js');
-	const {disbandTeam, getActiveTeam} = await import('./teamConfig.js');
+	const {disbandTeam} = await import('./teamConfig.js');
 
 	// Abort all running teammates
 	teamTracker.abortAllTeammates();
@@ -157,10 +157,10 @@ export async function rollbackTeamState(
 		teamNames.add(event.teamName);
 	}
 
-	// Also include the currently active team (may not be in snapshots if created in same turn)
-	const activeTeam = getActiveTeam();
-	if (activeTeam) {
-		teamNames.add(activeTeam.name);
+	// Also include this session's own active team (may not be in snapshots if created in same turn)
+	const ownTeamName = teamTracker.getActiveTeamName();
+	if (ownTeamName) {
+		teamNames.add(ownTeamName);
 	}
 
 	let cleanedCount = 0;
