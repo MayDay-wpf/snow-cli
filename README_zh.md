@@ -12,6 +12,7 @@
 [English](README.md) | **中文**
 
 **QQ 群**: 910298558
+**LinuxDO AI社区**: [https://linux.do](https://linux.do)
 
 _在终端中进行 Agentic 编程_
 

@@ -12,6 +12,7 @@
 **English** | [中文](README_zh.md)
 
 **QQ Group**: 910298558
+**LinuxDO AI Community**: [https://linux.do](https://linux.do)
 
 _Agentic coding in your terminal_
 
