@@ -56,9 +56,8 @@ jobs:
 
             ### What's New
 
-            - Fixed some known bugs, including: incomplete state cleanup, incomplete log output, and other issues
-            - Optimized memory usage, added silent automatic release
-            - Optimized the performance of reading large files, added streaming read
+            - Adjust the problem of merge conflict when Team mode is opened multiple times.
+            - Adjust the height of some UIs to fit terminals of different heights.
 
             ### Installation
             ```bash
