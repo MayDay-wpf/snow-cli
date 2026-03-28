@@ -123,6 +123,9 @@ Alternatively, use \`strategy: "theirs"\` to auto-accept all teammate changes, o
 - You can also send new work to standby teammates via \`team-message_teammate\` — they will wake up and resume.
 
 ### 7. Completion (**follow this order exactly**)
+
+**EXTREMELY CRITICAL — DO NOT SKIP CLEANUP**: Many models consistently forget the final cleanup steps after merging. This leaves orphaned teammates and wasted worktrees. You MUST complete ALL steps below without exception.
+
 1. Call \`team-wait_for_teammates\` — it returns when all teammates are on standby
 2. Review the returned messages and results
 3. **Shut down all teammates** with \`team-shutdown_teammate\`
@@ -130,6 +133,8 @@ Alternatively, use \`strategy: "theirs"\` to auto-accept all teammate changes, o
 5. If merge conflicts occur, resolve them manually then retry
 6. Call \`team-cleanup_team\` to remove worktrees (will refuse if unmerged work exists)
 7. Synthesize results and report to the user
+
+**POST-COMPLETION VERIFICATION**: After step 6, confirm cleanup succeeded. If any teammate is still running or any worktree remains, you have FAILED to complete the team workflow.
 
 ## Workflow Template (follow this in your FIRST response)
 
@@ -142,7 +147,7 @@ Alternatively, use \`strategy: "theirs"\` to auto-accept all teammate changes, o
 7. **Synthesize** results and report back to the user
 8. **Clean up** — call \`team-cleanup_team\` to remove worktrees and disband
 
-⚠️ **CRITICAL ORDER**: \`spawn_teammate\` MUST be called BEFORE \`create_task\`. The team is created on first spawn — calling \`create_task\` without an active team will fail.
+**CRITICAL ORDER**: \`spawn_teammate\` MUST be called BEFORE \`create_task\`. The team is created on first spawn — calling \`create_task\` without an active team will fail.
 
 PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 
