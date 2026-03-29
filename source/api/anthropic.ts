@@ -32,6 +32,7 @@ export interface AnthropicOptions {
 	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
@@ -210,12 +211,13 @@ function convertToolsToAnthropic(
 function convertToAnthropicMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string[], // Allow override for sub-agents
-	cacheTTL: '5m' | '1h' = '5m', // Cache TTL configuration
-	disableThinking: boolean = false, // When true, strip thinking blocks from messages
-	planMode: boolean = false, // When true, use Plan mode system prompt
-	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	customSystemPromptOverride?: string[],
+	cacheTTL: '5m' | '1h' = '5m',
+	disableThinking: boolean = false,
+	planMode: boolean = false,
+	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
+	teamMode: boolean = false,
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
@@ -426,6 +428,7 @@ function convertToAnthropicMessages(
 							planMode,
 							vulnerabilityHuntingMode,
 							toolSearchDisabled,
+							teamMode,
 						),
 						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
@@ -439,6 +442,7 @@ function convertToAnthropicMessages(
 				planMode,
 				vulnerabilityHuntingMode,
 				toolSearchDisabled,
+				teamMode,
 			),
 		];
 	}
@@ -686,16 +690,17 @@ export async function* createStreamingAnthropicCompletion(
 			// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
 			customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
 
-			const {system, messages} = convertToAnthropicMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false, // 默认为 true
-				customSystemPromptContent, // 传递自定义系统提示词
-				config.anthropicCacheTTL || '5m', // 使用配置的 TTL，默认 5m
-				options.disableThinking || false, // Strip thinking blocks when thinking is disabled
-				options.planMode || false, // Use Plan mode system prompt if enabled
-				options.vulnerabilityHuntingMode || false, // Use Vulnerability Hunting mode system prompt if enabled
-				options.toolSearchDisabled || false,
-			);
+		const {system, messages} = convertToAnthropicMessages(
+			options.messages,
+			options.includeBuiltinSystemPrompt !== false,
+			customSystemPromptContent,
+			config.anthropicCacheTTL || '5m',
+			options.disableThinking || false,
+			options.planMode || false,
+			options.vulnerabilityHuntingMode || false,
+			options.toolSearchDisabled || false,
+			options.teamMode || false,
+		);
 
 			// Use persistent userId that remains the same until application restart
 			const userId = getPersistentUserId();

@@ -40,6 +40,7 @@ export interface ResponseOptions {
 	disableThinking?: boolean; // 禁用 Extended Thinking 功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
@@ -194,9 +195,10 @@ function convertToResponseInput(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string[],
-	planMode: boolean = false, // When true, use Plan mode system prompt
-	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	planMode: boolean = false,
+	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
+	teamMode: boolean = false,
 ): {
 	input: any[];
 	systemInstructions: string;
@@ -350,6 +352,7 @@ function convertToResponseInput(
 								planMode,
 								vulnerabilityHuntingMode,
 								toolSearchDisabled,
+								teamMode,
 							) +
 							'</environment_context>',
 					},
@@ -362,6 +365,7 @@ function convertToResponseInput(
 			planMode,
 			vulnerabilityHuntingMode,
 			toolSearchDisabled,
+			teamMode,
 		);
 	} else {
 		// 既没有自定义系统提示词，也不需要添加默认系统提示词
@@ -550,11 +554,12 @@ export async function* createStreamingResponse(
 	// 提取系统提示词和转换后的消息
 	const {input: requestInput, systemInstructions} = convertToResponseInput(
 		options.messages,
-		options.includeBuiltinSystemPrompt !== false, // 默认为 true
+		options.includeBuiltinSystemPrompt !== false,
 		customSystemPromptContent,
-		options.planMode || false, // Pass planMode to use correct system prompt
+		options.planMode || false,
 		options.vulnerabilityHuntingMode || false,
 		options.toolSearchDisabled || false,
+		options.teamMode || false,
 	);
 
 	// 获取配置的 reasoning 设置

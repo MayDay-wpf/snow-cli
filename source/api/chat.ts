@@ -47,6 +47,7 @@ export interface ChatCompletionOptions {
 	disableThinking?: boolean; // 禁用思考功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
@@ -105,9 +106,10 @@ function convertToOpenAIMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
 	customSystemPromptOverride?: string[],
-	planMode: boolean = false, // When true, use Plan mode system prompt
-	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	planMode: boolean = false,
+	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
+	teamMode: boolean = false,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompts = customSystemPromptOverride;
 
@@ -234,34 +236,34 @@ function convertToOpenAIMessages(
 						text,
 					})),
 				} as ChatCompletionMessageParam,
-				{
-					role: 'user',
-					content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
-				} as ChatCompletionMessageParam,
-				...result,
-			];
-		} else {
-			// 只添加自定义系统提示词
-			result = [
-				{
-					role: 'system',
-					content: customSystemPrompts.map(text => ({
-						type: 'text' as const,
-						text,
-					})),
-				} as ChatCompletionMessageParam,
-				...result,
-			];
-		}
-	} else if (includeBuiltinSystemPrompt) {
-		// 没有自定义系统提示词，但需要添加默认系统提示词
-		result = [
 			{
-				role: 'system',
-				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled),
+				role: 'user',
+				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
+	} else {
+		// 只添加自定义系统提示词
+		result = [
+			{
+				role: 'system',
+				content: customSystemPrompts.map(text => ({
+					type: 'text' as const,
+					text,
+				})),
+			} as ChatCompletionMessageParam,
+			...result,
+		];
+	}
+} else if (includeBuiltinSystemPrompt) {
+	// 没有自定义系统提示词，但需要添加默认系统提示词
+	result = [
+		{
+			role: 'system',
+			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
+		} as ChatCompletionMessageParam,
+		...result,
+	];
 	}
 
 	return result;
@@ -496,14 +498,15 @@ export async function* createStreamingChatCompletion(
 		async function* () {
 			const requestBody = {
 				model: options.model || config.advancedModel,
-				messages: convertToOpenAIMessages(
-					options.messages,
-					options.includeBuiltinSystemPrompt !== false, // 默认为 true
-					customSystemPromptContent,
-					options.planMode || false, // Pass planMode to use correct system prompt
-					options.vulnerabilityHuntingMode || false, // Pass vulnerabilityHuntingMode to use correct system prompt
-					options.toolSearchDisabled || false,
-				),
+			messages: convertToOpenAIMessages(
+				options.messages,
+				options.includeBuiltinSystemPrompt !== false, // 默认为 true
+				customSystemPromptContent,
+				options.planMode || false,
+				options.vulnerabilityHuntingMode || false,
+				options.toolSearchDisabled || false,
+				options.teamMode || false,
+			),
 				stream: true,
 				stream_options: {include_usage: true},
 				temperature: options.temperature || 0.7,
