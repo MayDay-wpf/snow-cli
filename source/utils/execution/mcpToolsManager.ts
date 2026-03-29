@@ -177,13 +177,15 @@ async function generateConfigHash(): Promise<string> {
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
+		const {getTeamMode} = await import('../config/projectSettings.js');
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
-			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
-			skills: skillTools.map(t => t.name), // Include skill names in hash
-			codebaseEnabled: codebaseConfig.enabled, // 🔥 Must include to invalidate cache on enable/disable
-			disabledBuiltInServices: getDisabledBuiltInServices(), // Include disabled built-in services in hash
-			disabledSkills: getDisabledSkills(), // Include disabled skills in hash
+			subAgents: subAgents.map(t => t.name),
+			skills: skillTools.map(t => t.name),
+			codebaseEnabled: codebaseConfig.enabled,
+			disabledBuiltInServices: getDisabledBuiltInServices(),
+			disabledSkills: getDisabledSkills(),
+			teamMode: getTeamMode(),
 		});
 	} catch {
 		return '';
