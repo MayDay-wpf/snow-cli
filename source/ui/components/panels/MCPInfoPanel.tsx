@@ -6,8 +6,10 @@ import {
 	reconnectMCPService,
 } from '../../../utils/execution/mcpToolsManager.js';
 import {
-	getMCPConfig,
+	getMCPConfigByScope,
 	updateMCPConfig,
+	getMCPServerSource,
+	type MCPConfigScope,
 } from '../../../utils/config/apiConfig.js';
 import {toggleBuiltInService} from '../../../utils/config/disabledBuiltInTools.js';
 import {
@@ -111,6 +113,7 @@ interface MCPConnectionStatus {
 	error?: string;
 	isBuiltIn?: boolean;
 	enabled?: boolean;
+	source?: MCPConfigScope;
 }
 
 interface SelectItem {
@@ -125,6 +128,7 @@ interface SelectItem {
 	isSectionHeader?: boolean;
 	skillLocation?: 'project' | 'global';
 	skillDescription?: string;
+	source?: MCPConfigScope;
 }
 
 interface Props {
@@ -151,21 +155,30 @@ export default function MCPInfoPanel({onClose}: Props) {
 	const loadMCPStatus = async () => {
 		try {
 			const servicesInfo = await getMCPServicesInfo();
-			const mcpConfig = getMCPConfig();
-			const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
-				name: service.serviceName,
-				connected: service.connected,
-				tools: service.tools.map(tool => ({
-					name: tool.name,
-					description: tool.description || '',
-				})),
-				connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
-				isBuiltIn: service.isBuiltIn,
-				error: service.error,
-				enabled: service.isBuiltIn
-					? service.enabled !== false
-					: mcpConfig.mcpServers[service.serviceName]?.enabled !== false,
-			}));
+			const statusList: MCPConnectionStatus[] = servicesInfo.map(service => {
+				let enabled: boolean;
+				if (service.isBuiltIn) {
+					enabled = service.enabled !== false;
+				} else {
+					const scope = service.source || 'global';
+					const scopeConfig = getMCPConfigByScope(scope);
+					enabled =
+						scopeConfig.mcpServers[service.serviceName]?.enabled !== false;
+				}
+				return {
+					name: service.serviceName,
+					connected: service.connected,
+					tools: service.tools.map(tool => ({
+						name: tool.name,
+						description: tool.description || '',
+					})),
+					connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
+					isBuiltIn: service.isBuiltIn,
+					error: service.error,
+					enabled,
+					source: service.source,
+				};
+			});
 
 			setMcpStatus(statusList);
 			setErrorMessage(null);
@@ -248,6 +261,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 			isBuiltIn: s.isBuiltIn,
 			error: s.error,
 			enabled: s.enabled,
+			source: s.source,
 		})),
 	];
 
@@ -419,13 +433,15 @@ export default function MCPInfoPanel({onClose}: Props) {
 					// Toggle built-in service
 					toggleBuiltInService(currentItem.value);
 				} else {
-					// Toggle external MCP service
-					const config = getMCPConfig();
-					const serverConfig = config.mcpServers[currentItem.value];
+					// Toggle external MCP service (write to correct scope)
+					const scope: MCPConfigScope =
+						getMCPServerSource(currentItem.value) || 'global';
+					const scopeConfig = getMCPConfigByScope(scope);
+					const serverConfig = scopeConfig.mcpServers[currentItem.value];
 					if (serverConfig) {
 						const currentEnabled = serverConfig.enabled !== false;
 						serverConfig.enabled = !currentEnabled;
-						updateMCPConfig(config);
+						updateMCPConfig(scopeConfig, scope);
 					}
 				}
 
@@ -574,12 +590,18 @@ export default function MCPInfoPanel({onClose}: Props) {
 									: item.connected
 									? 'green'
 									: 'red';
+								const sourceSuffix =
+									!item.isBuiltIn && item.source === 'project'
+										? t.mcpInfoPanel.mcpSourceProject
+										: !item.isBuiltIn && item.source === 'global'
+										? t.mcpInfoPanel.mcpSourceGlobal
+										: '';
 								const suffix = !isEnabled
 									? t.mcpInfoPanel.statusDisabled
 									: item.isBuiltIn
 									? t.mcpInfoPanel.statusSystem
 									: item.connected
-									? t.mcpInfoPanel.statusExternal
+									? `${t.mcpInfoPanel.statusExternal}${sourceSuffix}`
 									: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
 
 								return (

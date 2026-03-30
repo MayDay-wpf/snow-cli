@@ -1394,6 +1394,18 @@ export const zhTW: TranslationKeys = {
 		moreBelow: '下方還有 {count} 項',
 		toolsListTitle: '{service} - 工具列表',
 		toolsNavigationHint: '↑↓ 導航 • ESC 返回',
+		mcpSourceProject: ' [專案]',
+		mcpSourceGlobal: ' [全域]',
+	},
+	mcpConfigScreen: {
+		title: 'MCP 設定 - 選擇編輯範圍',
+		scopeProject: '專案級設定',
+		scopeGlobal: '全域設定',
+		navigationHint: '↑↓ 導航 • Enter 編輯 • ESC 返回',
+		savedSuccess: '{scope} MCP 設定儲存成功！請用 `snow` 重新啟動！',
+		configErrors: '設定錯誤: {errors}',
+		reverted: '修改已還原至上一個有效設定。',
+		invalidJson: 'JSON 格式無效，修改已還原至上一個有效設定。',
 	},
 	runningAgentsPanel: {
 		title: '執行中的代理',

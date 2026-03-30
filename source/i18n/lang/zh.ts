@@ -1398,6 +1398,18 @@ export const zh: TranslationKeys = {
 		moreBelow: '下方还有 {count} 项',
 		toolsListTitle: '{service} - 工具列表',
 		toolsNavigationHint: '↑↓ 导航 • ESC 返回',
+		mcpSourceProject: ' [项目]',
+		mcpSourceGlobal: ' [全局]',
+	},
+	mcpConfigScreen: {
+		title: 'MCP 配置 - 选择编辑范围',
+		scopeProject: '项目级配置',
+		scopeGlobal: '全局配置',
+		navigationHint: '↑↓ 导航 • Enter 编辑 • ESC 返回',
+		savedSuccess: '{scope} MCP 配置保存成功！请用 `snow` 重启！',
+		configErrors: '配置错误: {errors}',
+		reverted: '修改已回退至上一个有效配置。',
+		invalidJson: 'JSON 格式无效，修改已回退至上一个有效配置。',
 	},
 	runningAgentsPanel: {
 		title: '运行中的代理',

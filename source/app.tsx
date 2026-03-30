@@ -13,9 +13,6 @@ const HeadlessModeScreen = React.lazy(
 const TaskManagerScreen = React.lazy(
 	() => import('./ui/pages/TaskManagerScreen.js'),
 );
-const MCPConfigScreen = React.lazy(
-	() => import('./ui/pages/MCPConfigScreen.js'),
-);
 const SystemPromptConfigScreen = React.lazy(
 	() => import('./ui/pages/SystemPromptConfigScreen.js'),
 );
@@ -123,7 +120,6 @@ function AppContent({
 		| 'chat'
 		| 'help'
 		| 'settings'
-		| 'mcp'
 		| 'systemprompt'
 		| 'customheaders'
 		| 'tasks'
@@ -176,7 +172,6 @@ function AppContent({
 			value === 'chat' ||
 			value === 'resume-last' ||
 			value === 'settings' ||
-			value === 'mcp' ||
 			value === 'systemprompt' ||
 			value === 'customheaders'
 		) {
@@ -233,15 +228,6 @@ function AppContent({
 							Settings interface would be implemented here
 						</Text>
 					</Box>
-				);
-			case 'mcp':
-				return (
-					<Suspense fallback={loadingFallback}>
-						<MCPConfigScreen
-							onBack={() => setCurrentView('welcome')}
-							onSave={() => setCurrentView('welcome')}
-						/>
-					</Suspense>
 				);
 			case 'systemprompt':
 				return (

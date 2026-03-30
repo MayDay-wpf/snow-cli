@@ -1477,6 +1477,18 @@ export const en: TranslationKeys = {
 		moreBelow: '{count} more below',
 		toolsListTitle: '{service} - Tool List',
 		toolsNavigationHint: '↑↓ Navigate • ESC Back',
+		mcpSourceProject: ' [Project]',
+		mcpSourceGlobal: ' [Global]',
+	},
+	mcpConfigScreen: {
+		title: 'MCP Config - Select scope to edit',
+		scopeProject: 'Project Config',
+		scopeGlobal: 'Global Config',
+		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
+		savedSuccess: '{scope} MCP configuration saved successfully! Please use `snow` restart!',
+		configErrors: 'Configuration errors: {errors}',
+		reverted: 'Changes have been reverted to the previous valid configuration.',
+		invalidJson: 'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
 	},
 	runningAgentsPanel: {
 		title: 'Running Agents',

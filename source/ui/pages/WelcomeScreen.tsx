@@ -44,6 +44,7 @@ const ThemeSettingsScreen = React.lazy(
 	() => import('./ThemeSettingsScreen.js'),
 );
 const HooksConfigScreen = React.lazy(() => import('./HooksConfigScreen.js'));
+const MCPConfigScreen = React.lazy(() => import('./MCPConfigScreen.js'));
 
 type Props = {
 	version?: string;
@@ -64,6 +65,7 @@ type InlineView =
 	| 'systemprompt'
 	| 'customheaders'
 	| 'hooks-config'
+	| 'mcp-config'
 	| 'language-settings'
 	| 'theme-settings';
 
@@ -235,9 +237,11 @@ export default function WelcomeScreen({
 				setInlineView('systemprompt');
 			} else if (value === 'customheaders') {
 				setInlineView('customheaders');
-			} else if (value === 'hooks') {
-				setInlineView('hooks-config');
-			} else if (value === 'language') {
+		} else if (value === 'mcp') {
+			setInlineView('mcp-config');
+		} else if (value === 'hooks') {
+			setInlineView('hooks-config');
+		} else if (value === 'language') {
 				setInlineView('language-settings');
 			} else if (value === 'theme') {
 				setInlineView('theme-settings');
@@ -465,6 +469,16 @@ export default function WelcomeScreen({
 				<Suspense fallback={loadingFallback}>
 					<Box paddingX={1}>
 						<CustomHeadersScreen onBack={handleBackToMenu} />
+					</Box>
+				</Suspense>
+			)}
+			{inlineView === 'mcp-config' && (
+				<Suspense fallback={loadingFallback}>
+					<Box paddingX={1}>
+						<MCPConfigScreen
+							onBack={handleBackToMenu}
+							onSave={handleConfigSave}
+						/>
 					</Box>
 				</Suspense>
 			)}

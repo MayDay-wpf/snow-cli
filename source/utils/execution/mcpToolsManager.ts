@@ -3,7 +3,12 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 // Intentionally kept for backward compatibility fallback, despite deprecation
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
-import {getMCPConfig, type MCPServer} from '../config/apiConfig.js';
+import {
+	getMCPConfig,
+	getMCPServerSource,
+	type MCPServer,
+	type MCPConfigScope,
+} from '../config/apiConfig.js';
 import {mcpTools as filesystemTools} from '../../mcp/filesystem.js';
 import {mcpTools as terminalTools} from '../../mcp/bash.js';
 import {mcpTools as aceCodeSearchTools} from '../../mcp/aceCodeSearch.js';
@@ -74,6 +79,7 @@ export interface MCPServiceTools {
 	connected: boolean;
 	error?: string;
 	enabled?: boolean;
+	source?: MCPConfigScope;
 }
 
 // Cache for MCP tools to avoid reconnecting on every message
@@ -465,6 +471,8 @@ async function refreshToolsCache(): Promise<void> {
 	try {
 		const mcpConfig = getMCPConfig();
 		for (const [serviceName, server] of Object.entries(mcpConfig.mcpServers)) {
+			const source = getMCPServerSource(serviceName) || 'global';
+
 			// Skip disabled services
 			if (server.enabled === false) {
 				servicesInfo.push({
@@ -473,6 +481,7 @@ async function refreshToolsCache(): Promise<void> {
 					isBuiltIn: false,
 					connected: false,
 					error: 'Disabled by user',
+					source,
 				});
 				continue;
 			}
@@ -484,6 +493,7 @@ async function refreshToolsCache(): Promise<void> {
 					tools: serviceTools,
 					isBuiltIn: false,
 					connected: true,
+					source,
 				});
 
 				for (const tool of serviceTools) {
@@ -503,6 +513,7 @@ async function refreshToolsCache(): Promise<void> {
 					isBuiltIn: false,
 					connected: false,
 					error: error instanceof Error ? error.message : 'Unknown error',
+					source,
 				});
 			}
 		}
@@ -573,6 +584,8 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		return;
 	}
 
+	const source = getMCPServerSource(serviceName) || 'global';
+
 	try {
 		// Try to reconnect to the service
 		const serviceTools = await probeServiceTools(serviceName, server);
@@ -583,6 +596,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 			tools: serviceTools,
 			isBuiltIn: false,
 			connected: true,
+			source,
 		};
 
 		// Remove old tools for this service from the tools list
@@ -609,6 +623,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 			isBuiltIn: false,
 			connected: false,
 			error: error instanceof Error ? error.message : 'Unknown error',
+			source,
 		};
 
 		// Remove tools for this service from the tools list

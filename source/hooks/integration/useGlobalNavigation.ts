@@ -13,7 +13,6 @@ export interface NavigationEvent {
 		| 'chat'
 		| 'help'
 		| 'settings'
-		| 'mcp'
 		| 'systemprompt'
 		| 'customheaders'
 		| 'tasks';

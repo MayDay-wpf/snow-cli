@@ -155,6 +155,20 @@ const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新�
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 export const STATUSLINE_HOOKS_DIR = join(CONFIG_DIR, 'plugin', 'statusline');
 
+export type MCPConfigScope = 'global' | 'project';
+
+function getProjectMCPConfigDir(): string {
+	return join(process.cwd(), '.snow');
+}
+
+function getProjectMCPConfigFilePath(): string {
+	return join(getProjectMCPConfigDir(), 'mcp-config.json');
+}
+
+export function getGlobalMCPConfigFilePath(): string {
+	return MCP_CONFIG_FILE;
+}
+
 /**
  * 迁移旧版本的 proxy 配置到新的独立文件
  */
@@ -391,34 +405,105 @@ function isValidUrl(url: string): boolean {
 	}
 }
 
-export function updateMCPConfig(mcpConfig: MCPConfig): void {
-	ensureConfigDirectory();
-	try {
-		const configData = JSON.stringify(mcpConfig, null, 2);
-		writeFileSync(MCP_CONFIG_FILE, configData, 'utf8');
-	} catch (error) {
-		throw new Error(`Failed to save MCP configuration: ${error}`);
+export function updateMCPConfig(
+	mcpConfig: MCPConfig,
+	scope: MCPConfigScope = 'global',
+): void {
+	const configData = JSON.stringify(mcpConfig, null, 2);
+	if (scope === 'project') {
+		const projectConfigDir = getProjectMCPConfigDir();
+		if (!existsSync(projectConfigDir)) {
+			mkdirSync(projectConfigDir, {recursive: true});
+		}
+		try {
+			writeFileSync(getProjectMCPConfigFilePath(), configData, 'utf8');
+		} catch (error) {
+			throw new Error(
+				`Failed to save project MCP configuration: ${error}`,
+			);
+		}
+	} else {
+		ensureConfigDirectory();
+		try {
+			writeFileSync(MCP_CONFIG_FILE, configData, 'utf8');
+		} catch (error) {
+			throw new Error(`Failed to save MCP configuration: ${error}`);
+		}
 	}
 }
 
-export function getMCPConfig(): MCPConfig {
+/**
+ * 读取全局 MCP 配置 (~/.snow/mcp-config.json)
+ */
+export function getGlobalMCPConfig(): MCPConfig {
 	ensureConfigDirectory();
 
 	if (!existsSync(MCP_CONFIG_FILE)) {
 		const defaultMCPConfig = cloneDefaultMCPConfig();
-		updateMCPConfig(defaultMCPConfig);
+		updateMCPConfig(defaultMCPConfig, 'global');
 		return defaultMCPConfig;
 	}
 
 	try {
 		const configData = readFileSync(MCP_CONFIG_FILE, 'utf8');
-		const config = JSON.parse(configData) as MCPConfig;
-		return config;
-	} catch (error) {
-		const defaultMCPConfig = cloneDefaultMCPConfig();
-		updateMCPConfig(defaultMCPConfig);
-		return defaultMCPConfig;
+		return JSON.parse(configData) as MCPConfig;
+	} catch {
+		return cloneDefaultMCPConfig();
 	}
+}
+
+/**
+ * 读取项目级 MCP 配置 (<project>/.snow/mcp-config.json)
+ */
+export function getProjectMCPConfig(): MCPConfig {
+	const configPath = getProjectMCPConfigFilePath();
+	if (!existsSync(configPath)) {
+		return cloneDefaultMCPConfig();
+	}
+
+	try {
+		const configData = readFileSync(configPath, 'utf8');
+		return JSON.parse(configData) as MCPConfig;
+	} catch {
+		return cloneDefaultMCPConfig();
+	}
+}
+
+/**
+ * 获取合并后的 MCP 配置（项目 > 全局）
+ * 项目级配置中同名服务会覆盖全局配置
+ */
+export function getMCPConfig(): MCPConfig {
+	const globalConfig = getGlobalMCPConfig();
+	const projectConfig = getProjectMCPConfig();
+
+	return {
+		mcpServers: {
+			...globalConfig.mcpServers,
+			...projectConfig.mcpServers,
+		},
+	};
+}
+
+/**
+ * 判断某个 MCP 服务的配置来源
+ * 项目级配置优先，若项目级存在则返回 'project'
+ */
+export function getMCPServerSource(
+	serviceName: string,
+): MCPConfigScope | null {
+	const projectConfig = getProjectMCPConfig();
+	if (projectConfig.mcpServers[serviceName]) return 'project';
+	const globalConfig = getGlobalMCPConfig();
+	if (globalConfig.mcpServers[serviceName]) return 'global';
+	return null;
+}
+
+/**
+ * 获取指定 scope 的 MCP 配置
+ */
+export function getMCPConfigByScope(scope: MCPConfigScope): MCPConfig {
+	return scope === 'project' ? getProjectMCPConfig() : getGlobalMCPConfig();
 }
 
 export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
