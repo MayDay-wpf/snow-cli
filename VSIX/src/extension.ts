@@ -13,6 +13,7 @@ import {
 	getSnowTerminalProxyEnv,
 	hasExplicitSnowTerminalProxyUrl,
 } from './terminalProxy';
+import {registerGitBlame} from './gitBlameProvider';
 
 /**
  * Snow CLI Extension
@@ -203,6 +204,12 @@ export function activate(context: vscode.ExtensionContext) {
 		);
 	} catch (err) {
 		console.error('Failed to register sidebar terminal:', err);
+	}
+
+	try {
+		registerGitBlame(context);
+	} catch (err) {
+		console.error('Failed to register Git Blame provider:', err);
 	}
 
 	// 4. 注册命令
