@@ -1001,7 +1001,7 @@ export const en: TranslationKeys = {
 		codebaseIndexingShort: 'Indexing',
 		codebaseProgress: '{chunks} chunks',
 		codebaseChunks: 'chunks',
-		codebaseSearching: '✴︎ Codebase Search (Attempt {current}/{max})',
+		codebaseSearching: '◉ Codebase Search (Attempt {current}/{max})',
 		codebaseSearchAttempt: 'Attempt {current}/{max}',
 		codebaseSearchComplete: 'Codebase search complete',
 		codebaseIndexingEnabled: 'Codebase indexing enabled for this project',

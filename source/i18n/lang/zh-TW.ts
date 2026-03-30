@@ -950,7 +950,7 @@ export const zhTW: TranslationKeys = {
 		codebaseIndexingShort: '索引',
 		codebaseProgress: '{chunks} 個區塊',
 		codebaseChunks: '個塊',
-		codebaseSearching: '✴︎ 代碼庫搜尋 (嘗試 {current}/{max})',
+		codebaseSearching: '◉ 代碼庫搜尋 (嘗試 {current}/{max})',
 		codebaseSearchAttempt: '嘗試 {current}/{max}',
 		codebaseSearchComplete: '代碼庫搜尋完成',
 		codebaseIndexingEnabled: '已為此專案啟用代碼庫索引',

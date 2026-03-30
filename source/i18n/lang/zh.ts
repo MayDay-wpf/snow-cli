@@ -949,7 +949,7 @@ export const zh: TranslationKeys = {
 		codebaseIndexingShort: '索引',
 		codebaseProgress: '{chunks} 个块',
 		codebaseChunks: '个块',
-		codebaseSearching: '✴︎ 代码库搜索 (尝试 {current}/{max})',
+		codebaseSearching: '◉ 代码库搜索 (尝试 {current}/{max})',
 		codebaseSearchAttempt: '尝试 {current}/{max}',
 		codebaseSearchComplete: '代码库搜索完成',
 		codebaseIndexingEnabled: '已为此项目启用代码库索引',
