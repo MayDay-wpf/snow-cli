@@ -1306,71 +1306,26 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'edit':
-					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
+							`Missing required parameter 'filePath' for filesystem-edit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
 					if (
-						!Array.isArray(args.filePath) &&
-						(args.startLine === undefined ||
-							args.endLine === undefined ||
-							args.newContent === undefined)
+						typeof args.filePath === 'string' &&
+						(!args.operations || !Array.isArray(args.operations) || args.operations.length === 0)
 					) {
 						throw new Error(
-							`Missing required parameters for filesystem-edit tool.
-` +
-								`For single file mode, 'startLine', 'endLine', and 'newContent' are required.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Provide startLine (number), endLine (number), and newContent (string).`,
+							`Missing required parameter 'operations' for filesystem-edit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Provide an array of {type, startAnchor, endAnchor?, content?} operations.`,
 						);
 					}
 					result = await filesystemService.editFile(
 						args.filePath,
-						args.startLine,
-						args.endLine,
-						args.newContent,
-						args.contextLines,
-					);
-					break;
-				case 'edit_search':
-					// Validate required parameters
-					if (!args.filePath) {
-						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit_search tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
-						);
-					}
-					if (
-						!Array.isArray(args.filePath) &&
-						(args.searchContent === undefined ||
-							args.replaceContent === undefined)
-					) {
-						throw new Error(
-							`Missing required parameters for filesystem-edit_search tool.
-` +
-								`For single file mode, 'searchContent' and 'replaceContent' are required.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Provide searchContent (string) and replaceContent (string).`,
-						);
-					}
-					result = await filesystemService.editFileBySearch(
-						args.filePath,
-						args.searchContent,
-						args.replaceContent,
-						args.occurrence,
+						args.operations,
 						args.contextLines,
 					);
 					break;

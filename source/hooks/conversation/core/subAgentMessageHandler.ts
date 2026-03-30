@@ -1107,8 +1107,7 @@ export class SubAgentUIHandler {
 		if (
 			!isError &&
 			(msg.tool_name === 'filesystem-create' ||
-				msg.tool_name === 'filesystem-edit' ||
-				msg.tool_name === 'filesystem-edit_search')
+				msg.tool_name === 'filesystem-edit')
 		) {
 			try {
 				const resultData = JSON.parse(msg.content);

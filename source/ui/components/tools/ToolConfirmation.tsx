@@ -65,11 +65,7 @@ function formatArgumentsAsTree(
 		excludeFields.add('content');
 	}
 	if (toolName === 'filesystem-edit') {
-		excludeFields.add('newContent');
-	}
-	if (toolName === 'filesystem-edit_search') {
-		excludeFields.add('searchContent');
-		excludeFields.add('replaceContent');
+		excludeFields.add('content');
 	}
 
 	// For ACE tools, exclude large result fields that may contain extensive code
@@ -299,143 +295,16 @@ export default function ToolConfirmation({
 			try {
 				const parsed = JSON.parse(args);
 
-				// Handle filesystem-edit (supports batch editing)
+				// Handle filesystem-edit (hashline-anchored editing)
 				if (name === 'filesystem-edit' && parsed.filePath) {
-					// Parse filePath if it's a JSON string (batch mode)
-					let filePathData = parsed.filePath;
-					if (typeof filePathData === 'string') {
-						try {
-							filePathData = JSON.parse(filePathData);
-						} catch {
-							// Not JSON, treat as single file path
-						}
-					}
-
-					// Check if it's batch editing (array of file configs)
-					if (Array.isArray(filePathData)) {
-						// Batch mode: filePath is array of {path, startLine, endLine, newContent}
-						for (const fileConfig of filePathData) {
-							const filePath =
-								typeof fileConfig === 'string' ? fileConfig : fileConfig.path;
-							const newContent =
-								typeof fileConfig === 'string'
-									? parsed.newContent
-									: fileConfig.newContent;
-
-							if (
-								typeof filePath === 'string' &&
-								newContent &&
-								fs.existsSync(filePath)
-							) {
-								const originalContent = fs.readFileSync(filePath, 'utf-8');
-								promises.push(
-									vscodeConnection
-										.showDiff(filePath, originalContent, newContent, 'Edit')
-										.catch(() => {
-											// Silently fail if diff cannot be shown
-										}),
-								);
-							}
-						}
-					} else if (typeof parsed.filePath === 'string' && parsed.newContent) {
-						// Single file mode
-						const filePath = parsed.filePath;
-						if (fs.existsSync(filePath)) {
-							const originalContent = fs.readFileSync(filePath, 'utf-8');
-							promises.push(
-								vscodeConnection
-									.showDiff(
-										filePath,
-										originalContent,
-										parsed.newContent,
-										'Edit',
-									)
-									.catch(() => {
-										// Silently fail if diff cannot be shown
-									}),
-							);
-						}
-					}
-				}
-
-				// Handle filesystem-edit_search (supports batch editing)
-				if (name === 'filesystem-edit_search' && parsed.filePath) {
-					// Parse filePath if it's a JSON string (batch mode)
-					let filePathData = parsed.filePath;
-					if (typeof filePathData === 'string') {
-						try {
-							filePathData = JSON.parse(filePathData);
-						} catch {
-							// Not JSON, treat as single file path
-						}
-					}
-
-					// Check if it's batch editing (array of file configs)
-					if (Array.isArray(filePathData)) {
-						// Batch mode: filePath is array of {path, searchContent, replaceContent}
-						for (const fileConfig of filePathData) {
-							const filePath =
-								typeof fileConfig === 'string' ? fileConfig : fileConfig.path;
-							const searchContent =
-								typeof fileConfig === 'string'
-									? parsed.searchContent
-									: fileConfig.searchContent;
-							const replaceContent =
-								typeof fileConfig === 'string'
-									? parsed.replaceContent
-									: fileConfig.replaceContent;
-
-							if (
-								typeof filePath === 'string' &&
-								searchContent &&
-								replaceContent &&
-								fs.existsSync(filePath)
-							) {
-								const originalContent = fs.readFileSync(filePath, 'utf-8');
-								const newContent = originalContent.replace(
-									searchContent,
-									replaceContent,
-								);
-								promises.push(
-									vscodeConnection
-										.showDiff(
-											filePath,
-											originalContent,
-											newContent,
-											'Search & Replace',
-										)
-										.catch(() => {
-											// Silently fail if diff cannot be shown
-										}),
-								);
-							}
-						}
-					} else if (
-						typeof parsed.filePath === 'string' &&
-						parsed.searchContent &&
-						parsed.replaceContent
-					) {
-						// Single file mode
-						const filePath = parsed.filePath;
-						if (fs.existsSync(filePath)) {
-							const originalContent = fs.readFileSync(filePath, 'utf-8');
-							const newContent = originalContent.replace(
-								parsed.searchContent,
-								parsed.replaceContent,
-							);
-							promises.push(
-								vscodeConnection
-									.showDiff(
-										filePath,
-										originalContent,
-										newContent,
-										'Search & Replace',
-									)
-									.catch(() => {
-										// Silently fail if diff cannot be shown
-									}),
-							);
-						}
+					const filePath = typeof parsed.filePath === 'string' ? parsed.filePath : null;
+					if (filePath && fs.existsSync(filePath)) {
+						const originalContent = fs.readFileSync(filePath, 'utf-8');
+						promises.push(
+							vscodeConnection
+								.showDiff(filePath, originalContent, originalContent, 'Hashline Edit')
+								.catch(() => {}),
+						);
 					}
 				}
 

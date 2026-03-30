@@ -27,13 +27,13 @@ interface DiffHunk {
 	}>;
 }
 
-// Helper function to strip line numbers from content (format: "123→content")
+// Helper function to strip line numbers from content
+// Supports both legacy "123→content" and hashline "123:a3→content" formats
 function stripLineNumbers(content: string): string {
 	return content
 		.split('\n')
 		.map(line => {
-			// Match pattern: digits + → + content
-			const match = line.match(/^\s*\d+→(.*)$/);
+			const match = line.match(/^\s*\d+(?::[0-9a-f]{2})?→(.*)$/);
 			return match ? match[1] : line;
 		})
 		.join('\n');

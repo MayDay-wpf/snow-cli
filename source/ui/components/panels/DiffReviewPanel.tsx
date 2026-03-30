@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
+import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -50,6 +51,12 @@ export default function DiffReviewPanel({
 	const userMessages: MessageItem[] = useMemo(() => {
 		const items: MessageItem[] = [];
 		let userMsgIndex = 0;
+
+		const currentSession = sessionManager.getCurrentSession();
+		const uiMessages = currentSession
+			? convertSessionMessagesToUI(currentSession.messages)
+			: null;
+
 		for (let i = 0; i < messages.length; i++) {
 			const msg = messages[i];
 			if (
@@ -64,9 +71,29 @@ export default function DiffReviewPanel({
 					.replace(/\s+/g, ' ')
 					.trim();
 
+				let snapshotIdx = i;
+				if (uiMessages) {
+					const ordinal = userMsgIndex + 1;
+					let count = 0;
+					for (let j = 0; j < uiMessages.length; j++) {
+						const um = uiMessages[j];
+						if (
+							um?.role === 'user' &&
+							um.content?.trim() &&
+							!um.subAgentDirected
+						) {
+							count++;
+							if (count === ordinal) {
+								snapshotIdx = j;
+								break;
+							}
+						}
+					}
+				}
+
 				let totalFileCount = 0;
 				for (const [idx, count] of snapshotFileCount.entries()) {
-					if (idx >= i) {
+					if (idx >= snapshotIdx) {
 						totalFileCount += count;
 					}
 				}
@@ -135,25 +162,52 @@ export default function DiffReviewPanel({
 		};
 	}, [fileHighlightIndex, viewMode, filePaths, activeMessageIndex, closeDiffPreview]);
 
+	const resolveSnapshotIdx = useCallback(
+		(liveIndex: number): number => {
+			const session = sessionManager.getCurrentSession();
+			if (!session) return liveIndex;
+			const converted = convertSessionMessagesToUI(session.messages);
+			let userOrdinal = 0;
+			for (let i = 0; i <= liveIndex && i < messages.length; i++) {
+				const m = messages[i];
+				if (m?.role === 'user' && m.content?.trim() && !m.subAgentDirected) {
+					userOrdinal++;
+				}
+			}
+			if (userOrdinal === 0) return 0;
+			let count = 0;
+			for (let i = 0; i < converted.length; i++) {
+				const m = converted[i];
+				if (m?.role === 'user' && m.content?.trim() && !m.subAgentDirected) {
+					count++;
+					if (count === userOrdinal) return i;
+				}
+			}
+			return liveIndex;
+		},
+		[messages],
+	);
+
 	// Load file list when Tab is pressed on a message
 	const loadFileList = useCallback(async (messageIndex: number) => {
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;
 
+		const sIdx = resolveSnapshotIdx(messageIndex);
 		const files = await hashBasedSnapshotManager.getFilesToRollback(
 			currentSession.id,
-			messageIndex,
+			sIdx,
 		);
 		setFilePaths(files);
 		setFileHighlightIndex(0);
 		setFileScrollIndex(0);
-		setActiveMessageIndex(messageIndex);
+		setActiveMessageIndex(sIdx);
 		setViewMode('files');
-	}, []);
+	}, [resolveSnapshotIdx]);
 
-	// Send all diffs to IDE
-	const handleSelect = useCallback(
-		async (messageIndex: number) => {
+	// Send all diffs to IDE (snapshotIdx is already in snapshot coordinate space)
+	const handleSelectSnapshot = useCallback(
+		async (snapshotIdx: number) => {
 			setBusy(true);
 			try {
 				const currentSession = sessionManager.getCurrentSession();
@@ -164,7 +218,7 @@ export default function DiffReviewPanel({
 
 				const allFiles = await hashBasedSnapshotManager.getFilesToRollback(
 					currentSession.id,
-					messageIndex,
+					snapshotIdx,
 				);
 				if (allFiles.length === 0) {
 					onClose();
@@ -182,7 +236,7 @@ export default function DiffReviewPanel({
 						const preview =
 							await hashBasedSnapshotManager.getRollbackPreviewForFile(
 								currentSession.id,
-								messageIndex,
+								snapshotIdx,
 								relativeFile,
 							);
 						const originalContent = preview.rollbackContent;
@@ -269,10 +323,10 @@ export default function DiffReviewPanel({
 				return;
 			}
 
-			// Enter in file mode: send all diffs
+			// Enter in file mode: send all diffs (activeMessageIndex is already snapshot-space)
 			if (key.return && activeMessageIndex !== null) {
 				closeDiffPreview();
-				void handleSelect(activeMessageIndex);
+				void handleSelectSnapshot(activeMessageIndex);
 				return;
 			}
 			return;
@@ -296,7 +350,7 @@ export default function DiffReviewPanel({
 		if (key.return && userMessages.length > 0) {
 			const selected = userMessages[selectedIndex];
 			if (selected) {
-				void handleSelect(selected.originalIndex);
+				void handleSelectSnapshot(resolveSnapshotIdx(selected.originalIndex));
 			}
 			return;
 		}

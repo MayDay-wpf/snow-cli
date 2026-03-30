@@ -485,8 +485,7 @@ export async function executeToolCall(
 			let editDiffData: Record<string, any> | undefined;
 			if (
 				typeof toolResult === 'object' && toolResult !== null &&
-				(toolCall.function.name === 'filesystem-edit' ||
-					toolCall.function.name === 'filesystem-edit_search')
+				toolCall.function.name === 'filesystem-edit'
 			) {
 				if (toolResult.oldContent && toolResult.newContent) {
 					editDiffData = {
@@ -708,7 +707,6 @@ function getToolResourceType(toolName: string): string {
 	// Each file is a separate resource
 	if (
 		toolName === 'filesystem-edit' ||
-		toolName === 'filesystem-edit_search' ||
 		toolName === 'filesystem-create'
 	) {
 		return 'filesystem'; // Will be further refined by file path

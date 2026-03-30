@@ -2,6 +2,7 @@ import React from 'react';
 import {Text, Box} from 'ink';
 import {marked} from 'marked';
 import {markedTerminal} from 'marked-terminal';
+import {supportsLanguage} from 'cli-highlight';
 import logger from '../../../utils/core/logger.js';
 import {
 	latexToUnicode,
@@ -98,6 +99,16 @@ marked.use({
 			},
 		},
 	],
+});
+
+// Sanitize unsupported language tags before they reach the highlighter,
+// preventing highlight.js from emitting console warnings for unknown languages.
+marked.use({
+	walkTokens(token: any) {
+		if (token.type === 'code' && token.lang && !supportsLanguage(token.lang)) {
+			token.lang = '';
+		}
+	},
 });
 
 interface Props {

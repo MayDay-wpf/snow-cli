@@ -614,8 +614,7 @@ Inserted log points:
 ### Filesystem Tools (core work)
 - filesystem-read: Read file contents
 - filesystem-create: Create new files (write the logger helper function file in Phase 2)
-- filesystem-edit: Edit files (insert logging code — Phase 3)
-- filesystem-edit_search: Search-and-replace editing
+- filesystem-edit: Hash-anchored file editing (insert/replace/delete via anchors)
 
 ### Terminal Tools (auxiliary)
 - terminal-execute: Execute commands (check directory structure, etc.)
@@ -638,7 +637,6 @@ Inserted log points:
 			'filesystem-read',
 			'filesystem-create',
 			'filesystem-edit',
-			'filesystem-edit_search',
 			'terminal-execute',
 			'ace-find_definition',
 			'ace-find_references',
@@ -919,8 +917,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 5. Never guess line numbers or code structure
 
 ### File Modification Strategy
-- PREFER filesystem-edit_search: Safer, fuzzy matching, no line tracking
-- USE filesystem-edit for: Adding new code sections or deleting ranges
+- USE filesystem-edit: Hash-anchored editing, no text reproduction needed, stale-read safe
 - ALWAYS verify boundaries: Functions need full body, markup needs complete tags
 - BATCH operations: Modify 2+ files? Use batch mode in single call
 
@@ -942,8 +939,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 
 ### Filesystem Tools (Primary Work)
 - filesystem-read: Read files, use batch for multiple files
-- filesystem-edit_search: Modify existing code (recommended)
-- filesystem-edit: Add/delete code sections with line numbers
+- filesystem-edit: Hash-anchored editing (reference "lineNum:hash" anchors from read output)
 - filesystem-create: Create new files with content
 
 ### Terminal Tools (Build and Test)
@@ -1026,7 +1022,6 @@ You are a versatile task execution agent with full tool access, capable of handl
 			'filesystem-read',
 			'filesystem-create',
 			'filesystem-edit',
-			'filesystem-edit_search',
 			'terminal-execute',
 			'ace-find_definition',
 			'ace-find_references',

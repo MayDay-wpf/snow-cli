@@ -29,7 +29,6 @@ export class ContextManager {
 		'todo-update',
 		'todo-delete',
 		'filesystem-create',
-		'filesystem-edit_search',
 		'filesystem-edit',
 	];
 

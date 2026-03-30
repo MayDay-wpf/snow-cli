@@ -175,7 +175,7 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 
 **Plan Documentation**:
 - \`filesystem-create\` - Create plan markdown file
-- \`filesystem-edit_search\` - Update plan file with progress
+- \`filesystem-edit\` - Update plan file with progress (hash-anchored)
 
 **Sub-Agent Delegation**:
 - \`subagent-agent_general\` - Execute implementation phases (your primary delegation target)
@@ -192,7 +192,7 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 
 **File & Verification**:
 - \`filesystem-read\` - Understand codebase and verify changes
-- \`filesystem-create/edit_search/edit\` - File operations
+- \`filesystem-create/edit\` - File operations
 - \`ide-get_diagnostics\` - Check for errors
 - \`terminal-execute\` - Run build, test, or shell commands
 

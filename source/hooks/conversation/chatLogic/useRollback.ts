@@ -1,4 +1,4 @@
-import {useEffect} from 'react';
+import {useEffect, useCallback} from 'react';
 import type {UseChatLogicProps} from './types.js';
 import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
@@ -19,6 +19,62 @@ import {
 	clearAllTeamSnapshots,
 } from '../../../utils/team/teamSnapshot.js';
 import {clearAllTeammateStreamEntries} from '../core/subAgentMessageHandler.js';
+import type {Message} from '../../../ui/components/chat/MessageList.js';
+import type {ChatMessage} from '../../../api/chat.js';
+
+/**
+ * Convert a live messages array index to a snapshot-compatible index.
+ *
+ * During streaming, assistant responses are emitted as individual
+ * `streamingLine` messages (one per line), while `convertSessionMessagesToUI`
+ * collapses each assistant turn into a single message.  This discrepancy
+ * causes the live array to have more elements than the converted array,
+ * shifting subsequent user-message positions and breaking the comparison
+ * `snapshotMessageIndex >= liveSelectedIndex` used during rollback.
+ *
+ * The fix: count which *user-message ordinal* the live index corresponds to,
+ * then locate the same ordinal in `convertSessionMessagesToUI` output.
+ */
+function resolveSnapshotIndex(
+	liveMessages: Message[],
+	liveIndex: number,
+	sessionMessages: ChatMessage[],
+): number {
+	const uiMessages = convertSessionMessagesToUI(sessionMessages);
+
+	let userMsgOrdinal = 0;
+	for (let i = 0; i <= liveIndex && i < liveMessages.length; i++) {
+		const msg = liveMessages[i];
+		if (
+			msg?.role === 'user' &&
+			msg.content?.trim() &&
+			!msg.subAgentDirected
+		) {
+			userMsgOrdinal++;
+		}
+	}
+
+	if (userMsgOrdinal === 0) {
+		return 0;
+	}
+
+	let count = 0;
+	for (let i = 0; i < uiMessages.length; i++) {
+		const msg = uiMessages[i];
+		if (
+			msg?.role === 'user' &&
+			msg.content?.trim() &&
+			!msg.subAgentDirected
+		) {
+			count++;
+			if (count === userMsgOrdinal) {
+				return i;
+			}
+		}
+	}
+
+	return liveIndex;
+}
 
 export function useRollback(props: UseChatLogicProps) {
 	const {
@@ -46,6 +102,19 @@ export function useRollback(props: UseChatLogicProps) {
 		});
 	}, [snapshotState.pendingRollback]);
 
+	const getSnapshotIndex = useCallback(
+		(liveIndex: number) => {
+			const currentSession = sessionManager.getCurrentSession();
+			if (!currentSession) return liveIndex;
+			return resolveSnapshotIndex(
+				messages,
+				liveIndex,
+				currentSession.messages,
+			);
+		},
+		[messages],
+	);
+
 	const performRollback = async (
 		selectedIndex: number,
 		rollbackFiles: boolean,
@@ -53,23 +122,24 @@ export function useRollback(props: UseChatLogicProps) {
 		selectedFiles?: string[],
 	) => {
 		const currentSession = sessionManager.getCurrentSession();
+		const sIdx = getSnapshotIndex(selectedIndex);
 
 		if (rollbackFiles && currentSession) {
 			if (selectedFiles && selectedFiles.length > 0) {
 				await hashBasedSnapshotManager.rollbackToMessageIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 					selectedFiles,
 				);
 			} else {
 				await hashBasedSnapshotManager.rollbackToMessageIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 				);
 			}
 
 			try {
-				rollbackNotebooks(currentSession.id, selectedIndex);
+				rollbackNotebooks(currentSession.id, sIdx);
 			} catch (error) {
 				console.error('Failed to rollback notebooks:', error);
 			}
@@ -78,7 +148,7 @@ export function useRollback(props: UseChatLogicProps) {
 		// Always clean up team state when rolling back (regardless of file rollback choice)
 		if (currentSession) {
 			try {
-				await rollbackTeamState(currentSession.id, selectedIndex);
+				await rollbackTeamState(currentSession.id, sIdx);
 			} catch (error) {
 				console.error('Failed to rollback team state:', error);
 			}
@@ -89,7 +159,7 @@ export function useRollback(props: UseChatLogicProps) {
 			if (rollbackFiles && currentSession) {
 				await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 				);
 
 				const snapshots = await hashBasedSnapshotManager.listSnapshots(
@@ -182,14 +252,14 @@ export function useRollback(props: UseChatLogicProps) {
 
 			await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
 
 			if (!rollbackFiles) {
-				deleteNotebookSnapshotsFromIndex(currentSession.id, selectedIndex);
+				deleteNotebookSnapshotsFromIndex(currentSession.id, sIdx);
 			}
 
-			deleteTeamSnapshotsFromIndex(currentSession.id, selectedIndex);
+			deleteTeamSnapshotsFromIndex(currentSession.id, sIdx);
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,
@@ -284,6 +354,8 @@ export function useRollback(props: UseChatLogicProps) {
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;
 
+		const sIdx = getSnapshotIndex(selectedIndex);
+
 		if (
 			selectedIndex === 0 &&
 			currentSession.compressedFrom !== undefined &&
@@ -291,15 +363,15 @@ export function useRollback(props: UseChatLogicProps) {
 		) {
 			const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
 			const nbCount = getNotebookRollbackCount(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
 			const tmCount = getTeamRollbackCount(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
 			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 				snapshotState.setPendingRollback({
@@ -329,11 +401,11 @@ export function useRollback(props: UseChatLogicProps) {
 
 		const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 			currentSession.id,
-			selectedIndex,
+			sIdx,
 		);
 
-		const nbCount = getNotebookRollbackCount(currentSession.id, selectedIndex);
-		const tmCount = getTeamRollbackCount(currentSession.id, selectedIndex);
+		const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
+		const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
 
 		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 			snapshotState.setPendingRollback({

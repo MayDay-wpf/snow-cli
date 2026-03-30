@@ -6,11 +6,6 @@ import {
 	vscodeConnection,
 	type Diagnostic,
 } from '../utils/ui/vscodeConnection.js';
-import {
-	tryUnescapeFix,
-	trimPairIfPossible,
-	isOverEscaped,
-} from '../utils/ui/escapeHandler.js';
 // SSH support for remote file operations
 import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
 import {
@@ -19,14 +14,11 @@ import {
 } from '../utils/config/workingDirConfig.js';
 // Type definitions
 import type {
-	EditBySearchConfig,
-	EditByLineConfig,
-	EditBySearchResult,
-	EditByLineResult,
-	EditBySearchSingleResult,
-	EditByLineSingleResult,
-	EditBySearchBatchResultItem,
-	EditByLineBatchResultItem,
+	EditByHashlineConfig,
+	EditByHashlineResult,
+	EditByHashlineSingleResult,
+	EditByHashlineBatchResultItem,
+	HashlineOperation,
 	SingleFileReadResult,
 	MultipleFilesReadResult,
 	MultimodalContent,
@@ -34,24 +26,12 @@ import type {
 } from './types/filesystem.types.js';
 import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
 // Utility functions
-import {
-	calculateSimilarity,
-	calculateSimilarityAsync,
-	normalizeForDisplay,
-} from './utils/filesystem/similarity.utils.js';
+import {normalizeForDisplay} from './utils/filesystem/similarity.utils.js';
 import {
 	analyzeCodeStructure,
 	findSmartContextBoundaries,
 } from './utils/filesystem/code-analysis.utils.js';
-import {
-	findClosestMatches,
-	generateDiffMessage,
-} from './utils/filesystem/match-finder.utils.js';
-import {
-	parseEditBySearchParams,
-	parseEditByLineParams,
-	executeBatchOperation,
-} from './utils/filesystem/batch-operations.utils.js';
+import {executeBatchOperation} from './utils/filesystem/batch-operations.utils.js';
 import {tryFixPath} from './utils/filesystem/path-fixer.utils.js';
 import {readOfficeDocument} from './utils/filesystem/office-parser.utils.js';
 // ACE Code Search utilities for symbol parsing
@@ -66,6 +46,12 @@ import {
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
 import {getAutoFormatEnabled} from '../utils/config/projectSettings.js';
+import {
+	formatLineWithHash,
+	formatLineWithHashDisplay,
+	validateAnchor,
+	parseAnchor,
+} from './utils/filesystem/hashline.utils.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -619,7 +605,7 @@ export class FilesystemMCPService {
 								: lines.slice(start - 1, end);
 						const numberedLines = selectedLines.map((line, index) => {
 							const lineNum = start + index;
-							return `${lineNum}→${line}`;
+							return formatLineWithHash(lineNum, line);
 						});
 
 						const sizeWarning =
@@ -828,12 +814,12 @@ export class FilesystemMCPService {
 					totalLines,
 					Math.min(actualEndLine, start + lines.length - 1),
 				);
-				const numberedLines = lines.map((line, index) => {
-					const lineNum = start + index;
-					return `${lineNum}→${line}`;
-				});
+			const numberedLines = lines.map((line, index) => {
+				const lineNum = start + index;
+				return formatLineWithHash(lineNum, line);
+			});
 
-				const sizeInfo = `[File: ${Math.round(fileSizeBytes / 1024 / 1024)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
+			const sizeInfo = `[File: ${Math.round(fileSizeBytes / 1024 / 1024)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
 				const partialContent = `${sizeInfo}\n${numberedLines.join('\n')}`;
 
 				return {
@@ -870,10 +856,10 @@ export class FilesystemMCPService {
 			// Extract specified lines (convert to 0-indexed) and add line numbers
 			const selectedLines = lines.slice(start - 1, end);
 
-			// Format with line numbers (no padding to save tokens)
+			// Format with line numbers and content hashes for hashline anchoring
 			const numberedLines = selectedLines.map((line, index) => {
 				const lineNum = start + index;
-				return `${lineNum}→${line}`;
+				return formatLineWithHash(lineNum, line);
 			});
 
 			let partialContent = numberedLines.join('\n');
@@ -1093,433 +1079,234 @@ export class FilesystemMCPService {
 	}
 
 	/**
-	 * Edit file(s) by searching for exact content and replacing it
-	 * This method uses SMART MATCHING to handle whitespace differences automatically.
+	 * Edit file(s) using hashline anchors.
 	 *
-	 * @param filePath - Path to the file to edit, or array of file paths, or array of edit config objects
-	 * @param searchContent - Content to search for (for single file or unified mode)
-	 * @param replaceContent - New content to replace (for single file or unified mode)
-	 * @param occurrence - Which occurrence to replace (1-indexed, default: 1, use -1 for all)
-	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
-	 * @returns Object containing success message, before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
-	 * @throws Error if search content is not found or multiple matches exist
+	 * Each operation references lines by `lineNum:hash` anchors obtained from
+	 * a previous `filesystem-read`.  Hashes are validated before any mutation
+	 * so stale reads are caught early.
+	 *
+	 * Supported operation types:
+	 *   • replace  – replace startAnchor..endAnchor with content
+	 *   • insert_after – insert content after startAnchor
+	 *   • delete   – delete startAnchor..endAnchor
 	 */
-	async editFileBySearch(
-		filePath: string | string[] | EditBySearchConfig[],
-		searchContent?: string,
-		replaceContent?: string,
-		occurrence: number = 1,
+	async editFile(
+		filePath: string | EditByHashlineConfig[],
+		operations?: HashlineOperation[],
 		contextLines: number = 8,
-	): Promise<EditBySearchResult> {
-		// Handle array of files
+	): Promise<EditByHashlineResult> {
 		if (Array.isArray(filePath)) {
 			return await executeBatchOperation<
-				EditBySearchConfig,
-				EditBySearchSingleResult,
-				EditBySearchBatchResultItem
+				EditByHashlineConfig,
+				EditByHashlineSingleResult,
+				EditByHashlineBatchResultItem
 			>(
 				filePath,
-				fileItem =>
-					parseEditBySearchParams(
-						fileItem,
-						searchContent,
-						replaceContent,
-						occurrence,
-					),
-				(path, search, replace, occ) =>
-					this.editFileBySearchSingle(path, search, replace, occ, contextLines),
-				(path, result) => {
-					return {path, ...result};
+				(fileItem) => {
+					const cfg = fileItem as EditByHashlineConfig;
+					return {path: cfg.path, operations: cfg.operations};
 				},
+				(path: string, ops: HashlineOperation[]) =>
+					this.editFileSingle(path, ops, contextLines),
+				(path, result) => ({path, ...result}),
 			);
 		}
 
-		// Single file mode
-		if (
-			searchContent === undefined ||
-			searchContent === null ||
-			replaceContent === undefined ||
-			replaceContent === null
-		) {
-			throw new Error(
-				'searchContent and replaceContent are required for single file mode',
-			);
+		if (!operations || operations.length === 0) {
+			throw new Error('operations array is required and must not be empty');
 		}
 
-		return await this.editFileBySearchSingle(
-			filePath,
-			searchContent,
-			replaceContent,
-			occurrence,
-			contextLines,
-		);
+		return await this.editFileSingle(filePath, operations, contextLines);
 	}
 
 	/**
-	 * Internal method: Edit a single file by search-replace
+	 * Internal: edit a single file via hashline anchors.
 	 * @private
 	 */
-	private async editFileBySearchSingle(
+	private async editFileSingle(
 		filePath: string,
-		searchContent: string,
-		replaceContent: string,
-		occurrence: number,
+		operations: HashlineOperation[],
 		contextLines: number,
-	): Promise<EditBySearchSingleResult> {
+	): Promise<EditByHashlineSingleResult> {
 		try {
-			// Check if this is a remote SSH path
 			const isRemote = this.isSSHPath(filePath);
 			let content: string;
 			let fullPath: string;
 
 			if (isRemote) {
-				// Handle remote SSH file
 				content = await this.readRemoteFile(filePath);
 				fullPath = filePath;
 			} else {
 				fullPath = this.resolvePath(filePath);
-
-				// For absolute paths, skip validation to allow access outside base path
 				if (!isAbsolute(filePath)) {
 					await this.validatePath(fullPath);
 				}
-
-				// Read the entire file
 				content = await readFileWithEncoding(fullPath);
 			}
 
 			const lines = content.split('\n');
 
-			// Backup for rollback (file modification)
+			// ── Backup for rollback ──
 			try {
 				const {getConversationContext} = await import(
 					'../utils/codebase/conversationContext.js'
 				);
-				const context = getConversationContext();
-				if (context) {
+				const ctx = getConversationContext();
+				if (ctx) {
 					const {hashBasedSnapshotManager} = await import(
 						'../utils/codebase/hashBasedSnapshot.js'
 					);
 					await hashBasedSnapshotManager.backupFile(
-						context.sessionId,
-						context.messageIndex,
+						ctx.sessionId,
+						ctx.messageIndex,
 						filePath,
 						this.basePath,
-						true, // File existed
-						content, // Original content
+						true,
+						content,
 					);
 				}
-			} catch (backupError) {
-				// Don't fail the operation if backup fails
+			} catch {
+				// non-fatal
 			}
 
-			// Normalize line endings
-			let normalizedSearch = searchContent
-				.replace(/\r\n/g, '\n')
-				.replace(/\r/g, '\n');
-			const normalizedContent = content
-				.replace(/\r\n/g, '\n')
-				.replace(/\r/g, '\n');
-
-			// Split into lines for matching
-			let searchLines = normalizedSearch.split('\n');
-			const contentLines = normalizedContent.split('\n');
-
-			// Find all matches using smart fuzzy matching (auto-handles whitespace)
-			const matches: Array<{
-				startLine: number;
-				endLine: number;
-				similarity: number;
-			}> = [];
-			// Similarity threshold - higher = stricter matching, lower = more fuzzy
-			// Default 0.75, can be configured via editSimilarityThreshold in config
-			const {getOpenAiConfig} = await import('../utils/config/apiConfig.js');
-			const config = getOpenAiConfig();
-			const threshold = config.editSimilarityThreshold ?? 0.75;
-
-			// Fast pre-filter: use first line as anchor to skip unlikely positions
-			// Only apply pre-filter for multi-line searches to avoid missing valid matches
-			const searchFirstLine =
-				searchLines[0]?.replace(/\\s+/g, ' ').trim() || '';
-			const usePreFilter = searchLines.length >= 5; // Only pre-filter for 5+ line searches
-			const preFilterThreshold = 0.2;
-			const maxMatches = 10; // Limit matches to avoid excessive computation
-
-			// Async similarity calculations yield to event loop automatically
-			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-				// Quick pre-filter: check first line similarity (only for multi-line searches)
-				// Keep this synchronous as it's very fast
-				if (usePreFilter) {
-					const firstLineCandidate =
-						contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
-					const firstLineSimilarity = calculateSimilarity(
-						searchFirstLine,
-						firstLineCandidate,
-						preFilterThreshold,
+			// ── Validate ALL anchors before mutating anything ──
+			const anchorErrors: string[] = [];
+			for (const op of operations) {
+				const startV = validateAnchor(op.startAnchor, lines);
+				if (!startV.valid) {
+					anchorErrors.push(
+						`Anchor "${op.startAnchor}" invalid` +
+							(startV.expected && startV.actual
+								? ` (expected hash ${startV.expected}, actual ${startV.actual})`
+								: startV.lineNum > 0
+								? ` (line ${startV.lineNum} out of range or hash mismatch)`
+								: ' (bad format, expected "lineNum:hash")'),
 					);
-
-					// Skip only if first line is very different (< 20% match)
-					// This is safe because if first line differs this much, full match unlikely
-					if (firstLineSimilarity < preFilterThreshold) {
-						continue;
+				}
+				if (op.endAnchor) {
+					const endV = validateAnchor(op.endAnchor, lines);
+					if (!endV.valid) {
+						anchorErrors.push(
+							`Anchor "${op.endAnchor}" invalid` +
+								(endV.expected && endV.actual
+									? ` (expected hash ${endV.expected}, actual ${endV.actual})`
+									: endV.lineNum > 0
+									? ` (line ${endV.lineNum} out of range or hash mismatch)`
+									: ' (bad format, expected "lineNum:hash")'),
+						);
+					}
+					if (startV.valid && endV.valid && endV.lineNum < startV.lineNum) {
+						anchorErrors.push(
+							`endAnchor line ${endV.lineNum} is before startAnchor line ${startV.lineNum}`,
+						);
 					}
 				}
 
-				// Full candidate check - use async to prevent UI freeze
-				// The async similarity calculation yields to event loop, preventing UI freeze
-				const candidateLines = contentLines.slice(i, i + searchLines.length);
-				const candidateContent = candidateLines.join('\n');
-				const similarity = await calculateSimilarityAsync(
-					normalizedSearch,
-					candidateContent,
-					threshold, // Pass threshold for early exit consideration
-				);
-
-				// Accept matches above threshold
-				if (similarity >= threshold) {
-					matches.push({
-						startLine: i + 1,
-						endLine: i + searchLines.length,
-						similarity,
-					});
-
-					// Early exit if we found a nearly perfect match
-					if (similarity >= 0.95) {
-						break;
-					}
-
-					// Limit matches to avoid excessive computation
-					if (matches.length >= maxMatches) {
-						break;
-					}
+				if ((op.type === 'replace' || op.type === 'insert_after') && op.content === undefined) {
+					anchorErrors.push(`Operation "${op.type}" requires content`);
 				}
 			}
 
-			// Sort by similarity descending (best match first)
-			matches.sort((a, b) => b.similarity - a.similarity);
-
-			// Handle no matches: Try escape correction before giving up
-			if (matches.length === 0) {
-				// Step 1: Try unescape correction (lightweight, no LLM)
-				const unescapeFix = tryUnescapeFix(
-					normalizedContent,
-					normalizedSearch,
-					1,
-				);
-				if (unescapeFix) {
-					// Unescape succeeded! Re-run the matching with corrected content using async
-					const correctedSearchLines = unescapeFix.correctedString.split('\n');
-					for (
-						let i = 0;
-						i <= contentLines.length - correctedSearchLines.length;
-						i++
-					) {
-						const candidateLines = contentLines.slice(
-							i,
-							i + correctedSearchLines.length,
-						);
-						const candidateContent = candidateLines.join('\n');
-						// Use async similarity to prevent UI freeze during unescape correction
-						const similarity = await calculateSimilarityAsync(
-							unescapeFix.correctedString,
-							candidateContent,
-						);
-
-						if (similarity >= threshold) {
-							matches.push({
-								startLine: i + 1,
-								endLine: i + correctedSearchLines.length,
-								similarity,
-							});
-						}
-					}
-
-					matches.sort((a, b) => b.similarity - a.similarity);
-
-					// If unescape fix worked, also fix replaceContent if needed
-					if (matches.length > 0) {
-						const trimResult = trimPairIfPossible(
-							unescapeFix.correctedString,
-							replaceContent,
-							normalizedContent,
-							1,
-						);
-						// Update searchContent and replaceContent for the edit
-						normalizedSearch = trimResult.target;
-						replaceContent = trimResult.paired;
-						// Also update searchLines for later use
-						searchLines.splice(
-							0,
-							searchLines.length,
-							...normalizedSearch.split('\n'),
-						);
-					}
-				}
-
-				// If still no matches after unescape, provide detailed error
-				if (matches.length === 0) {
-					// Find closest matches for suggestions
-					const closestMatches = await findClosestMatches(
-						normalizedSearch,
-						normalizedContent.split('\n'),
-						3,
-					);
-
-					let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
-					errorMessage += `🔍 Using smart fuzzy matching (threshold: ${threshold})\n`;
-					if (isOverEscaped(searchContent)) {
-						errorMessage += `⚠️  Detected over-escaped content, automatic fix attempted but failed\n`;
-					}
-
-					errorMessage += `\n`;
-
-					if (closestMatches.length > 0) {
-						errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
-						closestMatches.forEach((candidate, idx) => {
-							errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
-								candidate.endLine
-							} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
-							errorMessage += `${candidate.preview}\n\n`;
-						});
-
-						// Show diff with the closest match
-						const bestMatch = closestMatches[0];
-						if (bestMatch) {
-							const bestMatchLines = lines.slice(
-								bestMatch.startLine - 1,
-								bestMatch.endLine,
-							);
-							const bestMatchContent = bestMatchLines.join('\n');
-							const diffMsg = generateDiffMessage(
-								normalizedSearch,
-								bestMatchContent,
-								5,
-							);
-							if (diffMsg) {
-								errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
-							}
-						}
-						errorMessage += `💡 Suggestions:\n`;
-						errorMessage += `  • Make sure you copied content from filesystem-read (without "123→")\n`;
-						errorMessage += `  • Whitespace differences are automatically handled\n`;
-						errorMessage += `  • Try copying a larger or smaller code block\n`;
-						errorMessage += `  • If multiple filesystem-edit_search attempts fail, use terminal-execute to edit via command line (e.g. sed, printf)\n`;
-
-						errorMessage += `⚠️  No similar content found in the file.\n\n`;
-						errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
-
-						searchLines.slice(0, 5).forEach((line, idx) => {
-							errorMessage += `${idx + 1}. ${JSON.stringify(
-								normalizeForDisplay(line),
-							)}\n`;
-						});
-						errorMessage += `\n💡 Copy exact content from filesystem-read (without line numbers)\n`;
-					}
-
-					throw new Error(errorMessage);
-				}
-			}
-
-			// Handle occurrence selection
-			let selectedMatch: {startLine: number; endLine: number};
-
-			if (occurrence === -1) {
-				// Replace all occurrences
-				if (matches.length === 1) {
-					selectedMatch = matches[0]!;
-				} else {
-					throw new Error(
-						`Found ${matches.length} matches. Please specify which occurrence to replace (1-${matches.length}), or use occurrence=-1 to replace all (not yet implemented for safety).`,
-					);
-				}
-			} else if (occurrence < 1 || occurrence > matches.length) {
+			if (anchorErrors.length > 0) {
 				throw new Error(
-					`Invalid occurrence ${occurrence}. Found ${
-						matches.length
-					} match(es) at lines: ${matches.map(m => m.startLine).join(', ')}`,
+					`❌ Hashline anchor validation failed for ${filePath}:\n` +
+						anchorErrors.map(e => `  • ${e}`).join('\n') +
+						`\n\n💡 The file may have changed since your last read. Re-read the file to get fresh anchors.`,
 				);
-			} else {
-				selectedMatch = matches[occurrence - 1]!;
 			}
 
-			const {startLine, endLine} = selectedMatch;
+			// ── Sort operations bottom-to-top to keep line numbers stable ──
+			const sortedOps = [...operations].sort((a, b) => {
+				const aLine = parseAnchor(a.startAnchor)!.lineNum;
+				const bLine = parseAnchor(b.startAnchor)!.lineNum;
+				return bLine - aLine;
+			});
 
-			// Perform the replacement by replacing the matched lines
-			const normalizedReplace = replaceContent
-				.replace(/\r\n/g, '\n')
-				.replace(/\r/g, '\n');
-			const beforeLines = lines.slice(0, startLine - 1);
-			const afterLines = lines.slice(endLine);
-			let replaceLines = normalizedReplace.split('\n');
+			// Track the overall edit range for context display
+			let editStartLine = Infinity;
+			let editEndLine = 0;
 
-			// Fix indentation for Python/YAML files: preserve first line's original indentation
-			// but keep relative indentation for subsequent lines
-			if (replaceLines.length > 0) {
-				const originalFirstLine = lines[startLine - 1];
-				const originalIndent = originalFirstLine?.match(/^(\s*)/)?.[1] || '';
-				const replaceFirstLine = replaceLines[0];
-				const replaceIndent = replaceFirstLine?.match(/^(\s*)/)?.[1] || '';
+			const mutableLines = [...lines];
+			const opSummaries: string[] = [];
 
-				// Only adjust if the first line indentation is different
-				if (originalIndent !== replaceIndent && replaceFirstLine) {
-					// Adjust only the first line to match original indentation
-					const adjustedFirstLine = originalIndent + replaceFirstLine.trim();
-					replaceLines[0] = adjustedFirstLine;
-					// Subsequent lines keep their relative indentation
+			for (const op of sortedOps) {
+				const startLine = parseAnchor(op.startAnchor)!.lineNum;
+				const endLine = op.endAnchor
+					? parseAnchor(op.endAnchor)!.lineNum
+					: startLine;
+
+				editStartLine = Math.min(editStartLine, startLine);
+				editEndLine = Math.max(editEndLine, endLine);
+
+				switch (op.type) {
+					case 'replace': {
+						const newLines = (op.content ?? '').split('\n');
+						mutableLines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
+						opSummaries.push(
+							`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
+						);
+						break;
+					}
+					case 'insert_after': {
+						const newLines = (op.content ?? '').split('\n');
+						mutableLines.splice(startLine, 0, ...newLines);
+						opSummaries.push(
+							`insert ${newLines.length} line(s) after line ${startLine}`,
+						);
+						break;
+					}
+					case 'delete': {
+						mutableLines.splice(startLine - 1, endLine - startLine + 1);
+						opSummaries.push(`delete lines ${startLine}-${endLine}`);
+						break;
+					}
 				}
 			}
 
-			const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
-			const modifiedContent = modifiedLines.join('\n');
-
-			// Calculate replaced content for display (compress whitespace for readability)
-
-			const replacedLines = lines.slice(startLine - 1, endLine);
-			const replacedContent = replacedLines
+			// ── Build before/after content for DiffViewer ──
+			const replacedContent = lines
+				.slice(editStartLine - 1, editEndLine)
 				.map((line, idx) => {
-					const lineNum = startLine + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
+					const ln = editStartLine + idx;
+					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
 				})
 				.join('\n');
 
-			// Calculate context boundaries
-			const lineDifference = replaceLines.length - (endLine - startLine + 1);
-
 			const smartBoundaries = findSmartContextBoundaries(
 				lines,
-				startLine,
-				endLine,
+				editStartLine,
+				editEndLine,
 				contextLines,
 			);
 			const contextStart = smartBoundaries.start;
 			const contextEnd = smartBoundaries.end;
 
-			// Extract old content for context (compress whitespace for readability)
-			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
-			const oldContent = oldContextLines
+			const oldContent = lines
+				.slice(contextStart - 1, contextEnd)
 				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
+					const ln = contextStart + idx;
+					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
 				})
 				.join('\n');
 
-			// Write the modified content
+			const modifiedContent = mutableLines.join('\n');
+
+			// ── Write ──
 			if (isRemote) {
 				await this.writeRemoteFile(fullPath, modifiedContent);
 			} else {
 				await writeFileWithEncoding(fullPath, modifiedContent);
 			}
 
-			// Format with Prettier asynchronously (non-blocking)
-			let finalContent = modifiedContent;
-			let finalLines = modifiedLines;
-			let finalTotalLines = modifiedLines.length;
+			// ── Optional Prettier format ──
+			let finalLines = mutableLines;
+			let finalTotalLines = mutableLines.length;
+			const lineDifference = mutableLines.length - lines.length;
 			let finalContextEnd = Math.min(
 				finalTotalLines,
 				contextEnd + lineDifference,
 			);
 
-			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
 			const shouldFormat =
 				getAutoFormatEnabled() &&
@@ -1527,80 +1314,66 @@ export class FilesystemMCPService {
 
 			if (shouldFormat) {
 				try {
-					// Use Prettier API for better performance (avoids npx overhead)
 					const prettierConfig = await prettier.resolveConfig(fullPath);
-					finalContent = await prettier.format(modifiedContent, {
+					const formatted = await prettier.format(modifiedContent, {
 						filepath: fullPath,
 						...prettierConfig,
 					});
-
-					// Write formatted content back to file
 					if (isRemote) {
-						await this.writeRemoteFile(fullPath, finalContent);
+						await this.writeRemoteFile(fullPath, formatted);
 					} else {
-						await writeFileWithEncoding(fullPath, finalContent);
+						await writeFileWithEncoding(fullPath, formatted);
 					}
-					finalLines = finalContent.split('\n');
+					finalLines = formatted.split('\n');
 					finalTotalLines = finalLines.length;
-
 					finalContextEnd = Math.min(
 						finalTotalLines,
 						contextStart + (contextEnd - contextStart) + lineDifference,
 					);
-				} catch (formatError) {
-					// Continue with unformatted content
+				} catch {
+					// non-fatal
 				}
 			}
 
-			// Extract new content for context (compress whitespace for readability)
-			const newContextLines = finalLines.slice(
-				contextStart - 1,
-				finalContextEnd,
-			);
-			const newContextContent = newContextLines
+			const newContextContent = finalLines
+				.slice(contextStart - 1, finalContextEnd)
 				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
+					const ln = contextStart + idx;
+					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
 				})
 				.join('\n');
 
-			// Analyze code structure
-			const editedContentLines = replaceLines;
+			// ── Structure analysis ──
 			const structureAnalysis = analyzeCodeStructure(
-				finalContent,
+				finalLines.join('\n'),
 				filePath,
-				editedContentLines,
+				finalLines.slice(editStartLine - 1, editStartLine - 1 + (editEndLine - editStartLine + 1)),
 			);
 
-			// Get diagnostics from IDE (VSCode or JetBrains) - non-blocking, fire-and-forget
+			// ── IDE diagnostics ──
 			let diagnostics: Diagnostic[] = [];
 			try {
-				// Request diagnostics without blocking (with timeout protection)
-				const diagnosticsPromise = Promise.race([
+				diagnostics = await Promise.race([
 					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve =>
-						setTimeout(() => resolve([]), 1000),
-					), // 1s max wait
+					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)),
 				]);
-				diagnostics = await diagnosticsPromise;
-			} catch (error) {
-				// Ignore diagnostics errors - this is optional functionality
+			} catch {
+				// optional
 			}
 
-			// Build result
-			const result = {
+			const result: EditByHashlineSingleResult = {
 				message:
-					`✅ File edited successfully using search-replace (safer boundary detection): ${filePath}\n` +
-					`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})\n` +
-					`   Result: ${replaceLines.length} new lines` +
+					`✅ File edited via hashline anchors: ${filePath}\n` +
+					`   Operations: ${opSummaries.join('; ')}\n` +
+					`   Result: ${finalTotalLines} total lines` +
 					(smartBoundaries.extended
-						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
+						? `\n   📍 Context auto-extended (lines ${contextStart}-${finalContextEnd})`
 						: ''),
-				filePath, // Include file path for DiffViewer display on Resume/re-render
+				filePath,
 				oldContent,
 				newContent: newContextContent,
 				replacedContent,
-				matchLocation: {startLine, endLine},
+				operationsSummary: opSummaries.join('; '),
 				contextStartLine: contextStart,
 				contextEndLine: finalContextEnd,
 				totalLines: finalTotalLines,
@@ -1608,527 +1381,60 @@ export class FilesystemMCPService {
 				diagnostics: undefined as Diagnostic[] | undefined,
 			};
 
-			// Add diagnostics if found
+			// ── Diagnostics report ──
 			if (diagnostics.length > 0) {
-				// Limit diagnostics to top 10 to avoid excessive token usage
 				const limitedDiagnostics = diagnostics.slice(0, 10);
 				result.diagnostics = limitedDiagnostics;
 
-				const errorCount = diagnostics.filter(
-					d => d.severity === 'error',
-				).length;
-				const warningCount = diagnostics.filter(
-					d => d.severity === 'warning',
-				).length;
+				const errorCount = diagnostics.filter(d => d.severity === 'error').length;
+				const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
 
 				if (errorCount > 0 || warningCount > 0) {
-					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
-
-					// Format diagnostics for better readability (limit to first 5 for message display)
-					const formattedDiagnostics = diagnostics
+					result.message += `\n\n⚠️  Diagnostics: ${errorCount} error(s), ${warningCount} warning(s)`;
+					const fmt = diagnostics
 						.filter(d => d.severity === 'error' || d.severity === 'warning')
 						.slice(0, 5)
 						.map(d => {
 							const icon = d.severity === 'error' ? '❌' : '⚠️';
-							const location = `${filePath}:${d.line}:${d.character}`;
-							return `   ${icon} [${
-								d.source || 'unknown'
-							}] ${location}\n      ${d.message}`;
+							return `   ${icon} [${d.source || 'unknown'}] ${filePath}:${d.line}:${d.character}\n      ${d.message}`;
 						})
 						.join('\n\n');
-
-					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
+					result.message += `\n\n📋 Details:\n${fmt}`;
 					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${
-							errorCount + warningCount - 5
-						} more issue(s)`;
+						result.message += `\n   ... and ${errorCount + warningCount - 5} more`;
 					}
-					result.message += `\n\n   ⚡ TIP: Review the errors above and make another edit to fix them`;
 				}
 			}
 
-			// Add structure analysis warnings
-			const structureWarnings: string[] = [];
-
+			// ── Structure warnings ──
+			const sw: string[] = [];
 			if (!structureAnalysis.bracketBalance.curly.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.curly.open -
-					structureAnalysis.bracketBalance.curly.close;
-				structureWarnings.push(
-					`Curly brackets: ${
-						diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`
-					}`,
-				);
+				const d = structureAnalysis.bracketBalance.curly.open - structureAnalysis.bracketBalance.curly.close;
+				sw.push(`Curly brackets: ${d > 0 ? `${d} unclosed {` : `${Math.abs(d)} extra }`}`);
 			}
 			if (!structureAnalysis.bracketBalance.round.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.round.open -
-					structureAnalysis.bracketBalance.round.close;
-				structureWarnings.push(
-					`Round brackets: ${
-						diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`
-					}`,
-				);
+				const d = structureAnalysis.bracketBalance.round.open - structureAnalysis.bracketBalance.round.close;
+				sw.push(`Round brackets: ${d > 0 ? `${d} unclosed (` : `${Math.abs(d)} extra )`}`);
 			}
 			if (!structureAnalysis.bracketBalance.square.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.square.open -
-					structureAnalysis.bracketBalance.square.close;
-				structureWarnings.push(
-					`Square brackets: ${
-						diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`
-					}`,
-				);
+				const d = structureAnalysis.bracketBalance.square.open - structureAnalysis.bracketBalance.square.close;
+				sw.push(`Square brackets: ${d > 0 ? `${d} unclosed [` : `${Math.abs(d)} extra ]`}`);
 			}
-
 			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
 				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
-					structureWarnings.push(
-						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
-							', ',
-						)}`,
-					);
+					sw.push(`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`);
 				}
 				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
-					structureWarnings.push(
-						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
-							', ',
-						)}`,
-					);
+					sw.push(`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`);
 				}
 			}
-
 			if (structureAnalysis.indentationWarnings.length > 0) {
-				structureWarnings.push(
-					...structureAnalysis.indentationWarnings.map(
-						(w: string) => `Indentation: ${w}`,
-					),
-				);
+				sw.push(...structureAnalysis.indentationWarnings.map((w: string) => `Indentation: ${w}`));
 			}
-
-			// Note: Boundary warnings removed - partial edits are common and expected
-
-			if (structureWarnings.length > 0) {
+			if (sw.length > 0) {
 				result.message += `\n\n🔍 Structure Analysis:\n`;
-				structureWarnings.forEach(warning => {
-					result.message += `   ⚠️  ${warning}\n`;
-				});
-				result.message += `\n   💡 TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.`;
-			}
-
-			return result;
-		} catch (error) {
-			throw new Error(
-				`Failed to edit file ${filePath}: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-			);
-		}
-	}
-
-	/**
-	 * Edit file(s) by replacing lines within a specified range
-	 * BEST PRACTICE: Keep edits small and focused (≤15 lines recommended) for better accuracy.
-	 * For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit.
-	 *
-	 * @param filePath - Path to the file to edit, or array of file paths, or array of edit config objects
-	 * @param startLine - Starting line number (for single file or unified mode)
-	 * @param endLine - Ending line number (for single file or unified mode)
-	 * @param newContent - New content to replace (for single file or unified mode)
-	 * @param contextLines - Number of context lines to return before and after the edit (default: 8)
-	 * @returns Object containing success message, precise before/after comparison, and diagnostics from IDE (VSCode or JetBrains)
-	 * @throws Error if file editing fails
-	 */
-	async editFile(
-		filePath: string | string[] | EditByLineConfig[],
-		startLine?: number,
-		endLine?: number,
-		newContent?: string,
-		contextLines: number = 8,
-	): Promise<EditByLineResult> {
-		// Handle array of files
-		if (Array.isArray(filePath)) {
-			return await executeBatchOperation<
-				EditByLineConfig,
-				EditByLineSingleResult,
-				EditByLineBatchResultItem
-			>(
-				filePath,
-				fileItem =>
-					parseEditByLineParams(fileItem, startLine, endLine, newContent),
-				(path, start, end, content) =>
-					this.editFileSingle(path, start, end, content, contextLines),
-				(path, result) => {
-					return {path, ...result};
-				},
-			);
-		}
-
-		// Single file mode
-		if (
-			startLine === undefined ||
-			endLine === undefined ||
-			newContent === undefined
-		) {
-			throw new Error(
-				'startLine, endLine, and newContent are required for single file mode',
-			);
-		}
-
-		return await this.editFileSingle(
-			filePath,
-			startLine,
-			endLine,
-			newContent,
-			contextLines,
-		);
-	}
-
-	/**
-	 * Internal method: Edit a single file by line range
-	 * @private
-	 */
-	private async editFileSingle(
-		filePath: string,
-		startLine: number,
-		endLine: number,
-		newContent: string,
-		contextLines: number,
-	): Promise<EditByLineSingleResult> {
-		try {
-			// Check if this is a remote SSH path
-			const isRemote = this.isSSHPath(filePath);
-			let content: string;
-			let fullPath: string;
-
-			if (isRemote) {
-				// Handle remote SSH file
-				content = await this.readRemoteFile(filePath);
-				fullPath = filePath;
-			} else {
-				fullPath = this.resolvePath(filePath);
-
-				// For absolute paths, skip validation to allow access outside base path
-				if (!isAbsolute(filePath)) {
-					await this.validatePath(fullPath);
-				}
-
-				// Read the entire file
-				content = await readFileWithEncoding(fullPath);
-			}
-
-			const lines = content.split('\n');
-			const totalLines = lines.length;
-
-			// Backup for rollback (file modification)
-			try {
-				const {getConversationContext} = await import(
-					'../utils/codebase/conversationContext.js'
-				);
-				const context = getConversationContext();
-				if (context) {
-					const {hashBasedSnapshotManager} = await import(
-						'../utils/codebase/hashBasedSnapshot.js'
-					);
-					await hashBasedSnapshotManager.backupFile(
-						context.sessionId,
-						context.messageIndex,
-						filePath,
-						this.basePath,
-						true, // File existed
-						content, // Original content
-					);
-				}
-			} catch (backupError) {
-				// Don't fail the operation if backup fails
-			}
-
-			// Validate line numbers
-			if (startLine < 1 || endLine < 1) {
-				throw new Error('Line numbers must be greater than 0');
-			}
-			if (startLine > endLine) {
-				throw new Error('Start line must be less than or equal to end line');
-			}
-
-			// Adjust startLine and endLine if they exceed file length
-			const adjustedStartLine = Math.min(startLine, totalLines);
-			const adjustedEndLine = Math.min(endLine, totalLines);
-			const linesToModify = adjustedEndLine - adjustedStartLine + 1;
-
-			// Extract the lines that will be replaced (for comparison)
-			// Compress whitespace for display readability
-
-			const replacedLines = lines.slice(adjustedStartLine - 1, adjustedEndLine);
-			const replacedContent = replacedLines
-				.map((line, idx) => {
-					const lineNum = adjustedStartLine + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
-				.join('\n');
-
-			// Calculate context range using smart boundary detection
-			const smartBoundaries = findSmartContextBoundaries(
-				lines,
-				adjustedStartLine,
-				adjustedEndLine,
-				contextLines,
-			);
-			const contextStart = smartBoundaries.start;
-			const contextEnd = smartBoundaries.end;
-
-			// Extract old content for context (compress whitespace for readability)
-			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
-			const oldContent = oldContextLines
-				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
-				.join('\n');
-
-			// Replace the specified lines
-			const newContentLines = newContent.split('\n');
-			const beforeLines = lines.slice(0, adjustedStartLine - 1);
-			const afterLines = lines.slice(adjustedEndLine);
-			const modifiedLines = [...beforeLines, ...newContentLines, ...afterLines];
-
-			// Calculate new context range
-			const newTotalLines = modifiedLines.length;
-			const lineDifference =
-				newContentLines.length - (adjustedEndLine - adjustedStartLine + 1);
-			const newContextEnd = Math.min(
-				newTotalLines,
-				contextEnd + lineDifference,
-			);
-
-			// Extract new content for context with line numbers (compress whitespace)
-			const newContextLines = modifiedLines.slice(
-				contextStart - 1,
-				newContextEnd,
-			);
-			const newContextContent = newContextLines
-				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
-				.join('\n');
-
-			// Write the modified content back to file
-			if (isRemote) {
-				await this.writeRemoteFile(fullPath, modifiedLines.join('\n'));
-			} else {
-				await writeFileWithEncoding(fullPath, modifiedLines.join('\n'));
-			}
-
-			// Format the file with Prettier after editing to ensure consistent code style
-			let finalLines = modifiedLines;
-			let finalTotalLines = newTotalLines;
-			let finalContextEnd = newContextEnd;
-			let finalContextContent = newContextContent;
-
-			// Check if Prettier supports this file type
-			const fileExtension = path.extname(fullPath).toLowerCase();
-			const shouldFormat =
-				getAutoFormatEnabled() &&
-				this.prettierSupportedExtensions.includes(fileExtension);
-
-			if (shouldFormat) {
-				try {
-					// Use Prettier API for better performance (avoids npx overhead)
-					const prettierConfig = await prettier.resolveConfig(fullPath);
-					const newContent = modifiedLines.join('\n');
-					const formattedContent = await prettier.format(newContent, {
-						filepath: fullPath,
-						...prettierConfig,
-					});
-
-					// Write formatted content back to file
-					if (isRemote) {
-						await this.writeRemoteFile(fullPath, formattedContent);
-					} else {
-						await writeFileWithEncoding(fullPath, formattedContent);
-					}
-					finalLines = formattedContent.split('\n');
-					finalTotalLines = finalLines.length;
-
-					// Recalculate the context end line based on formatted content
-					finalContextEnd = Math.min(
-						finalTotalLines,
-						contextStart + (newContextEnd - contextStart),
-					);
-
-					// Extract formatted content for context (compress whitespace)
-					const formattedContextLines = finalLines.slice(
-						contextStart - 1,
-						finalContextEnd,
-					);
-					finalContextContent = formattedContextLines
-						.map((line, idx) => {
-							const lineNum = contextStart + idx;
-							return `${lineNum}→${normalizeForDisplay(line)}`;
-						})
-						.join('\n');
-				} catch (formatError) {
-					// If formatting fails, continue with the original content
-					// This ensures editing is not blocked by formatting issues
-				}
-			}
-
-			// Analyze code structure of the edited content (using formatted content if available)
-			const editedContentLines = finalLines.slice(
-				adjustedStartLine - 1,
-				adjustedStartLine - 1 + newContentLines.length,
-			);
-			const structureAnalysis = analyzeCodeStructure(
-				finalLines.join('\n'),
-				filePath,
-				editedContentLines,
-			);
-
-			// Try to get diagnostics from IDE (VSCode or JetBrains) after editing (non-blocking)
-			let diagnostics: Diagnostic[] = [];
-			try {
-				// Request diagnostics without blocking (with timeout protection)
-				const diagnosticsPromise = Promise.race([
-					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve =>
-						setTimeout(() => resolve([]), 1000),
-					), // 1s max wait
-				]);
-				diagnostics = await diagnosticsPromise;
-			} catch (error) {
-				// Ignore diagnostics errors - they are optional
-			}
-
-			const result: EditByLineSingleResult = {
-				message:
-					`✅ File edited successfully,Please check the edit results and pay attention to code boundary issues to avoid syntax errors caused by missing closed parts: ${filePath}\n` +
-					`   Replaced: lines ${adjustedStartLine}-${adjustedEndLine} (${linesToModify} lines)\n` +
-					`   Result: ${newContentLines.length} new lines` +
-					(smartBoundaries.extended
-						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
-						: ''),
-				filePath, // Include file path for DiffViewer display on Resume/re-render
-				oldContent,
-				newContent: finalContextContent,
-				replacedLines: replacedContent,
-				contextStartLine: contextStart,
-				contextEndLine: finalContextEnd,
-				totalLines: finalTotalLines,
-				linesModified: linesToModify,
-				structureAnalysis,
-			};
-
-			// Add diagnostics if any were found
-			if (diagnostics.length > 0) {
-				// Limit diagnostics to top 10 to avoid excessive token usage
-				const limitedDiagnostics = diagnostics.slice(0, 10);
-				result.diagnostics = limitedDiagnostics;
-
-				const errorCount = diagnostics.filter(
-					d => d.severity === 'error',
-				).length;
-				const warningCount = diagnostics.filter(
-					d => d.severity === 'warning',
-				).length;
-
-				if (errorCount > 0 || warningCount > 0) {
-					result.message += `\n\n⚠️  Diagnostics detected: ${errorCount} error(s), ${warningCount} warning(s)`;
-
-					// Format diagnostics for better readability (limit to first 5 for message display)
-					const formattedDiagnostics = diagnostics
-						.filter(d => d.severity === 'error' || d.severity === 'warning')
-						.slice(0, 5)
-						.map(d => {
-							const icon = d.severity === 'error' ? '❌' : '⚠️';
-							const location = `${filePath}:${d.line}:${d.character}`;
-							return `   ${icon} [${
-								d.source || 'unknown'
-							}] ${location}\n      ${d.message}`;
-						})
-						.join('\n\n');
-
-					result.message += `\n\n📋 Diagnostic Details:\n${formattedDiagnostics}`;
-					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${
-							errorCount + warningCount - 5
-						} more issue(s)`;
-					}
-					result.message += `\n\n   ⚡ TIP: Review the errors above and make another small edit to fix them`;
-				}
-			}
-
-			// Add structure analysis warnings to the message
-			const structureWarnings: string[] = [];
-
-			// Check bracket balance
-			if (!structureAnalysis.bracketBalance.curly.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.curly.open -
-					structureAnalysis.bracketBalance.curly.close;
-				structureWarnings.push(
-					`Curly brackets: ${
-						diff > 0 ? `${diff} unclosed {` : `${Math.abs(diff)} extra }`
-					}`,
-				);
-			}
-			if (!structureAnalysis.bracketBalance.round.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.round.open -
-					structureAnalysis.bracketBalance.round.close;
-				structureWarnings.push(
-					`Round brackets: ${
-						diff > 0 ? `${diff} unclosed (` : `${Math.abs(diff)} extra )`
-					}`,
-				);
-			}
-			if (!structureAnalysis.bracketBalance.square.balanced) {
-				const diff =
-					structureAnalysis.bracketBalance.square.open -
-					structureAnalysis.bracketBalance.square.close;
-				structureWarnings.push(
-					`Square brackets: ${
-						diff > 0 ? `${diff} unclosed [` : `${Math.abs(diff)} extra ]`
-					}`,
-				);
-			}
-
-			// Check HTML tags
-			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
-				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
-					structureWarnings.push(
-						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
-							', ',
-						)}`,
-					);
-				}
-				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
-					structureWarnings.push(
-						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
-							', ',
-						)}`,
-					);
-				}
-			}
-
-			// Check indentation
-			if (structureAnalysis.indentationWarnings.length > 0) {
-				structureWarnings.push(
-					...structureAnalysis.indentationWarnings.map(
-						(w: string) => `Indentation: ${w}`,
-					),
-				);
-			}
-
-			// Note: Boundary warnings removed - partial edits are common and expected
-
-			// Format structure warnings
-			if (structureWarnings.length > 0) {
-				result.message += `\n\n🔍 Structure Analysis:\n`;
-				structureWarnings.forEach(warning => {
-					result.message += `   ⚠️  ${warning}\n`;
-				});
-				result.message += `\n   💡 TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.`;
+				sw.forEach(w => { result.message += `   ⚠️  ${w}\n`; });
+				result.message += `\n   💡 TIP: These warnings help identify potential issues.`;
 			}
 
 			return result;
@@ -2192,7 +1498,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-read',
 		description:
-			'Read file content with line numbers. Supports text files, images, Office documents, and directories. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **PATH REQUIREMENT**: Use EXACT paths from search results or user input, never undefined/null/empty/placeholders. **WORKFLOW**: (1) Use search tools FIRST to locate files, (2) Read only when you have the exact path. **SUPPORTS**: Single file (string), multiple files (array of strings), or per-file ranges (array of {path, startLine?, endLine?}). Returns content with line numbers (format: "123->code").',
+			'Read file content with line numbers and content hashes. Supports text files, images, Office documents, and directories. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **PATH REQUIREMENT**: Use EXACT paths from search results or user input, never undefined/null/empty/placeholders. **WORKFLOW**: (1) Use search tools FIRST to locate files, (2) Read only when you have the exact path. **SUPPORTS**: Single file (string), multiple files (array of strings), or per-file ranges (array of {path, startLine?, endLine?}). Returns content with hashline anchors (format: "lineNum:hash→code", e.g. "42:a3→const x = 1;"). Use these anchors with filesystem-edit for safe editing.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -2279,86 +1585,20 @@ export const mcpTools = [
 		},
 	},
 	{
-		name: 'filesystem-edit_search',
-		description:
-			'RECOMMENDED for most edits: Search-and-replace with SMART FUZZY MATCHING. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with search/replace, (2) array of file paths with unified search/replace, or (3) array of {path, searchContent, replaceContent, occurrence?} for per-file edits. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate code, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: entire function from declaration to final closing brace `}`, complete HTML/XML/JSX tags from opening `<tag>` to closing `</tag>`, full code blocks with ALL matching brackets/braces/parentheses, (3) Copy the COMPLETE code block (without line numbers) - verify you have captured ALL opening and closing symbols, (4) MANDATORY verification: Count and match ALL pairs - every `{` must have `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, (5) Use THIS tool only after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit partial functions (missing closing brace), NEVER edit incomplete markup (missing closing tag), NEVER edit partial code blocks (unmatched brackets), NEVER copy line numbers from filesystem-read output. **WHY USE THIS**: No line tracking needed, auto-handles spacing/tabs differences, finds best fuzzy match even with whitespace changes, safer than line-based editing. **SMART MATCHING**: Uses similarity algorithm to find code even if indentation/spacing differs from your search string. Automatically corrects over-escaped content. If multiple matches found, selects best match first (highest similarity score). **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, modifying only part of a function (missing closing brace `}`), incomplete markup tags (HTML/Vue/JSX missing `</tag>`), partial code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), copying line numbers from filesystem-read output. You MUST include complete syntactic units with ALL opening/closing pairs verified and matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", searchContent:"old1", replaceContent:"new1"}, {path:"b.ts", searchContent:"old2", replaceContent:"new2"}]',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				filePath: {
-					oneOf: [
-						{
-							type: 'string',
-							description: 'Path to a single file to edit',
-						},
-						{
-							type: 'array',
-							items: {
-								type: 'string',
-							},
-							description:
-								'Array of file paths (uses unified searchContent/replaceContent from top-level)',
-						},
-						{
-							type: 'array',
-							items: {
-								type: 'object',
-								properties: {
-									path: {
-										type: 'string',
-										description: 'File path',
-									},
-									searchContent: {
-										type: 'string',
-										description: 'Content to search for in this file',
-									},
-									replaceContent: {
-										type: 'string',
-										description: 'New content to replace with',
-									},
-									occurrence: {
-										type: 'number',
-										description:
-											'Which match to replace (1-indexed, default: 1)',
-									},
-								},
-								required: ['path', 'searchContent', 'replaceContent'],
-							},
-							description:
-								'Array of edit config objects for per-file search-replace operations',
-						},
-					],
-					description: 'File path(s) to edit',
-				},
-				searchContent: {
-					type: 'string',
-					description:
-						'Content to find and replace (for single file or unified mode). Copy from filesystem-read WITHOUT line numbers.',
-				},
-				replaceContent: {
-					type: 'string',
-					description:
-						'New content to replace with (for single file or unified mode)',
-				},
-				occurrence: {
-					type: 'number',
-					description:
-						'Which match to replace if multiple found (1-indexed). Default: 1 (best match first). Use -1 for all (not yet supported).',
-					default: 1,
-				},
-				contextLines: {
-					type: 'number',
-					description: 'Context lines to show before/after (default: 8)',
-					default: 8,
-				},
-			},
-			required: ['filePath'],
-		},
-	},
-	{
 		name: 'filesystem-edit',
 		description:
-			'Line-based editing for precise control. **REMOTE SSH SUPPORT**: Fully supports remote files via SSH URL format (ssh://user@host:port/path). **CRITICAL PATH REQUIREMENTS**: (1) filePath parameter is REQUIRED - MUST be a valid non-empty string or array, never use undefined/null/empty string, (2) Use EXACT file paths from search results or user input - never use placeholders like "path/to/file", (3) If uncertain about path, use search tools first to find the correct file. **SUPPORTS BATCH EDITING**: Pass (1) single file with line range, (2) array of file paths with unified line range, or (3) array of {path, startLine, endLine, newContent} for per-file edits. **WHEN TO USE**: (1) Adding new code sections, (2) Deleting specific line ranges, (3) When search-replace not suitable. **CRITICAL WORKFLOW FOR CODE SAFETY - COMPLETE BOUNDARIES REQUIRED**: (1) Use search tools (codebase-search or ACE tools) to locate area, (2) MUST use filesystem-read to identify COMPLETE code boundaries with ALL closing pairs: for functions - include opening declaration to final closing brace `}`; for HTML/XML/JSX markup tags - include opening `<tag>` to closing `</tag>`; for code blocks - include ALL matching braces/brackets/parentheses, (3) MANDATORY verification before editing: count opening and closing symbols in your target range - every `{` must have matching `}`, every `(` must have `)`, every `[` must have `]`, every `<tag>` must have `</tag>`, verify indentation levels are consistent, (4) Use THIS tool with exact startLine/endLine ONLY after verification passes. **ABSOLUTE PROHIBITIONS**: NEVER edit line range that stops mid-function (missing closing brace `}`), NEVER edit partial markup tags (missing `</tag>`), NEVER edit incomplete code blocks (unmatched brackets), NEVER edit without verifying boundaries first. **BEST PRACTICE**: Keep edits small (under 15 lines recommended) for better accuracy. For larger changes, make multiple parallel edits to non-overlapping sections instead of one large edit. **RECOMMENDATION**: For modifying existing code, use filesystem-edit_search - safer and no line tracking needed. **WHY LINE-BASED IS RISKIER**: Line numbers can shift during editing, making it easy to target wrong lines. Search-replace avoids this by matching actual content. **COMMON FATAL ERRORS TO AVOID**: Using invalid/empty file paths, line range stops mid-function (missing closing brace `}`), partial markup tags (missing `</tag>`), incomplete code blocks (unmatched `{`, `}`, `(`, `)`, `[`, `]`), targeting wrong lines after file changes, not verifying boundaries with filesystem-read first. You MUST verify complete syntactic units with ALL opening/closing pairs matched. **BATCH EXAMPLE**: filePath=[{path:"a.ts", startLine:10, endLine:20, newContent:"..."}, {path:"b.ts", startLine:50, endLine:60, newContent:"..."}]',
+			'PREFERRED edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
+			'Each line read has format "lineNum:hash→content" (e.g. "42:a3→code"). ' +
+			'Reference lines by anchors ("42:a3") instead of copying text. ' +
+			'**WHY USE THIS**: No text reproduction needed — avoids "string not found" failures, ' +
+			'whitespace mismatches, and fuzzy matching ambiguity. If the file changed since your ' +
+			'last read, hashes will mismatch and the edit is safely rejected. ' +
+			'**OPERATIONS**: (1) replace — replace lines startAnchor..endAnchor with content, ' +
+			'(2) insert_after — insert content after startAnchor, ' +
+			'(3) delete — delete lines startAnchor..endAnchor. ' +
+			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
+			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". For single-line replace/delete, omit endAnchor. ' +
+			'**SUPPORTS BATCH**: Pass array of {path, operations} for multi-file edits.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -2371,61 +1611,86 @@ export const mcpTools = [
 						{
 							type: 'array',
 							items: {
-								type: 'string',
-							},
-							description:
-								'Array of file paths (uses unified startLine/endLine/newContent from top-level)',
-						},
-						{
-							type: 'array',
-							items: {
 								type: 'object',
 								properties: {
 									path: {
 										type: 'string',
 										description: 'File path',
 									},
-									startLine: {
-										type: 'number',
-										description: 'Starting line number (1-indexed, inclusive)',
-									},
-									endLine: {
-										type: 'number',
-										description: 'Ending line number (1-indexed, inclusive)',
-									},
-									newContent: {
-										type: 'string',
-										description:
-											'New content to replace lines (without line numbers)',
+									operations: {
+										type: 'array',
+										items: {
+											type: 'object',
+											properties: {
+												type: {
+													type: 'string',
+													enum: ['replace', 'insert_after', 'delete'],
+													description: 'Operation type',
+												},
+												startAnchor: {
+													type: 'string',
+													description:
+														'Start anchor from filesystem-read (format: "lineNum:hash", e.g. "42:a3")',
+												},
+												endAnchor: {
+													type: 'string',
+													description:
+														'End anchor for range operations (optional, omit for single-line)',
+												},
+												content: {
+													type: 'string',
+													description:
+														'New content for replace/insert_after (not needed for delete)',
+												},
+											},
+											required: ['type', 'startAnchor'],
+										},
+										description: 'Array of edit operations for this file',
 									},
 								},
-								required: ['path', 'startLine', 'endLine', 'newContent'],
+								required: ['path', 'operations'],
 							},
 							description:
-								'Array of edit config objects for per-file line-based edits',
+								'Array of per-file hashline edit configs for batch editing',
 						},
 					],
-					description: 'File path(s) to edit',
+					description: 'File path (string) or batch configs (array of {path, operations})',
 				},
-				startLine: {
-					type: 'number',
+				operations: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							type: {
+								type: 'string',
+								enum: ['replace', 'insert_after', 'delete'],
+								description:
+									'replace: replace anchor range with content. insert_after: insert after anchor. delete: remove anchor range.',
+							},
+							startAnchor: {
+								type: 'string',
+								description:
+									'Start anchor from filesystem-read output (format: "lineNum:hash", e.g. "10:a3")',
+							},
+							endAnchor: {
+								type: 'string',
+								description:
+									'End anchor for range operations (format: "lineNum:hash"). Omit for single-line replace/delete or insert_after.',
+							},
+							content: {
+								type: 'string',
+								description:
+									'New content (for replace and insert_after). Do NOT include line numbers or hashes.',
+							},
+						},
+						required: ['type', 'startAnchor'],
+					},
 					description:
-						'CRITICAL: Starting line number (1-indexed, inclusive) for single file or unified mode. MUST match filesystem-read output.',
-				},
-				endLine: {
-					type: 'number',
-					description:
-						'CRITICAL: Ending line number (1-indexed, inclusive) for single file or unified mode. Keep edits small (under 15 lines recommended).',
-				},
-				newContent: {
-					type: 'string',
-					description:
-						'New content to replace specified lines (for single file or unified mode). CRITICAL: Do NOT include line numbers. Ensure proper indentation.',
+						'Array of edit operations (for single file mode). Each operation references anchors from filesystem-read.',
 				},
 				contextLines: {
 					type: 'number',
-					description:
-						'Number of context lines to show before/after edit for verification (default: 8)',
+					description: 'Context lines to show before/after edit (default: 8)',
 					default: 8,
 				},
 			},
