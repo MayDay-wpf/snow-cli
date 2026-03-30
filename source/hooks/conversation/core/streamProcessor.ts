@@ -210,7 +210,10 @@ export async function processStreamRound(ctx: {
 	};
 
 	const currentSession = sessionManager.getCurrentSession();
+	let retryInProgress = false;
+
 	const onRetry = (error: Error, attempt: number, nextDelay: number) => {
+		retryInProgress = true;
 		if (setRetryStatus) {
 			setRetryStatus({
 				isRetrying: true,
@@ -242,7 +245,8 @@ export async function processStreamRound(ctx: {
 		}
 
 		chunkCount++;
-		if (setRetryStatus && chunkCount === 1) {
+		if (retryInProgress && setRetryStatus) {
+			retryInProgress = false;
 			setTimeout(() => setRetryStatus(null), 500);
 		}
 
