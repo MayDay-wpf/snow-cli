@@ -56,8 +56,7 @@ jobs:
 
             ### What's New
 
-            - Adjust the problem of merge conflict when Team mode is opened multiple times.
-            - Adjust the height of some UIs to fit terminals of different heights.
+            - Fix the issue where the Team mode startup status does not take effect
 
             ### Installation
             ```bash
