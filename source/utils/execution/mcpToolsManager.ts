@@ -40,6 +40,10 @@ import {
 	getDisabledBuiltInServices,
 } from '../config/disabledBuiltInTools.js';
 import {getDisabledSkills} from '../config/disabledSkills.js';
+import {
+	getDisabledMCPTools,
+	isMCPToolEnabled,
+} from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
 import {HookFailedError} from './hookFailedError.js';
@@ -191,6 +195,7 @@ async function generateConfigHash(): Promise<string> {
 			codebaseEnabled: codebaseConfig.enabled,
 			disabledBuiltInServices: getDisabledBuiltInServices(),
 			disabledSkills: getDisabledSkills(),
+			disabledMCPTools: getDisabledMCPTools(),
 			teamMode: getTeamMode(),
 		});
 	} catch {
@@ -252,9 +257,10 @@ async function refreshToolsCache(): Promise<void> {
 			enabled,
 		});
 
-		// Only add to allTools if enabled
 		if (enabled) {
 			for (const tool of tools) {
+				const unprefixedName = tool.name.replace(`${prefix}-`, '');
+				if (!isMCPToolEnabled(serviceName, unprefixedName)) continue;
 				allTools.push({
 					type: 'function',
 					function: {
@@ -497,6 +503,7 @@ async function refreshToolsCache(): Promise<void> {
 				});
 
 				for (const tool of serviceTools) {
+					if (!isMCPToolEnabled(serviceName, tool.name)) continue;
 					allTools.push({
 						type: 'function',
 						function: {
@@ -1248,6 +1255,14 @@ export async function executeMCPTool(
 			throw new Error(
 				`Built-in service "${serviceName}" is currently disabled. ` +
 					`You can re-enable it in the MCP panel (Tab key to toggle).`,
+			);
+		}
+
+		// Check if individual tool is disabled
+		if (!isMCPToolEnabled(serviceName, actualToolName)) {
+			throw new Error(
+				`Tool "${actualToolName}" in service "${serviceName}" is currently disabled. ` +
+					`You can re-enable it in the MCP panel (V to view tools, Tab to toggle).`,
 			);
 		}
 

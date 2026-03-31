@@ -1387,6 +1387,10 @@ export type TranslationKeys = {
 		moreBelow: string;
 		toolsListTitle: string;
 		toolsNavigationHint: string;
+		toolTogglingHint: string;
+		toolDisabled: string;
+		toolScopeGlobal: string;
+		toolScopeProject: string;
 		mcpSourceProject: string;
 		mcpSourceGlobal: string;
 	};
