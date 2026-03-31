@@ -1,6 +1,6 @@
 import React, {useMemo} from 'react';
 import {Box, Text} from 'ink';
-import {highlight} from 'cli-highlight';
+import {highlight, supportsLanguage} from 'cli-highlight';
 import * as Diff from 'diff';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
@@ -88,7 +88,7 @@ function inferLanguageFromFilename(filename?: string): string | undefined {
 }
 
 function highlightCodeContent(content: string, language?: string): string {
-	if (!language || content.trim() === '') {
+	if (!language || content.trim() === '' || !supportsLanguage(language)) {
 		return content;
 	}
 
