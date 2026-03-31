@@ -1226,42 +1226,64 @@ export class FilesystemMCPService {
 			let editStartLine = Infinity;
 			let editEndLine = 0;
 
-			const mutableLines = [...lines];
-			const opSummaries: string[] = [];
+		const mutableLines = [...lines];
+		const opSummaries: string[] = [];
 
-			for (const op of sortedOps) {
-				const startLine = parseAnchor(op.startAnchor)!.lineNum;
-				const endLine = op.endAnchor
-					? parseAnchor(op.endAnchor)!.lineNum
-					: startLine;
+		// Strip hashline prefixes that less-capable models may accidentally
+		// copy from filesystem-read output into their content.
+		// The exact format is "lineNum:hash→content" (e.g. "42:a3→actual code"),
+		// requiring both the 2-char hex hash AND the → arrow to avoid false positives.
+		const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
+		const sanitizeContent = (raw: string): string => {
+			const contentLines = raw.split('\n');
+			const hasHashlines = contentLines.length > 0 &&
+				contentLines.every(l => l === '' || hashlineContentRe.test(l));
+			if (!hasHashlines) return raw;
+			return contentLines
+				.map(l => {
+					let s = l;
+					let m: RegExpExecArray | null;
+					while ((m = hashlineContentRe.exec(s))) {
+						s = s.slice(m[0].length);
+					}
+					return s;
+				})
+				.join('\n');
+		};
 
-				editStartLine = Math.min(editStartLine, startLine);
-				editEndLine = Math.max(editEndLine, endLine);
+		for (const op of sortedOps) {
+			const startLine = parseAnchor(op.startAnchor)!.lineNum;
+			const endLine = op.endAnchor
+				? parseAnchor(op.endAnchor)!.lineNum
+				: startLine;
 
-				switch (op.type) {
-					case 'replace': {
-						const newLines = (op.content ?? '').split('\n');
-						mutableLines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
-						opSummaries.push(
-							`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
-						);
-						break;
-					}
-					case 'insert_after': {
-						const newLines = (op.content ?? '').split('\n');
-						mutableLines.splice(startLine, 0, ...newLines);
-						opSummaries.push(
-							`insert ${newLines.length} line(s) after line ${startLine}`,
-						);
-						break;
-					}
-					case 'delete': {
-						mutableLines.splice(startLine - 1, endLine - startLine + 1);
-						opSummaries.push(`delete lines ${startLine}-${endLine}`);
-						break;
-					}
+			editStartLine = Math.min(editStartLine, startLine);
+			editEndLine = Math.max(editEndLine, endLine);
+
+			switch (op.type) {
+				case 'replace': {
+					const newLines = sanitizeContent(op.content ?? '').split('\n');
+					mutableLines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
+					opSummaries.push(
+						`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
+					);
+					break;
+				}
+				case 'insert_after': {
+					const newLines = sanitizeContent(op.content ?? '').split('\n');
+					mutableLines.splice(startLine, 0, ...newLines);
+					opSummaries.push(
+						`insert ${newLines.length} line(s) after line ${startLine}`,
+					);
+					break;
+				}
+				case 'delete': {
+					mutableLines.splice(startLine - 1, endLine - startLine + 1);
+					opSummaries.push(`delete lines ${startLine}-${endLine}`);
+					break;
 				}
 			}
+		}
 
 			// ── Build before/after content for DiffViewer ──
 			const replacedContent = lines
