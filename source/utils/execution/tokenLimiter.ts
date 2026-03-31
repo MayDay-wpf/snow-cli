@@ -4,21 +4,39 @@
  * 用于在所有 MCP 工具返回给 AI 之前验证内容长度，防止超大内容导致问题
  */
 
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {
+	getOpenAiConfig,
+	DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
+	MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
+	MIN_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
+} from '../config/apiConfig.js';
 
-/** 默认的工具返回结果 token 限制 */
-const DEFAULT_TOOL_RESULT_TOKEN_LIMIT = 100000;
+/** 默认的工具返回结果 token 限制百分比 */
+const DEFAULT_TOOL_RESULT_TOKEN_LIMIT = DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT;
 
 /**
  * 获取配置的工具返回结果 token 限制
- * @returns 配置的限制值，如果未配置则返回默认值 100000
+ * @returns 配置的限制值（基于 maxContextTokens 的百分比计算），如果未配置则返回默认值
  */
 export function getToolResultTokenLimit(): number {
 	try {
 		const config = getOpenAiConfig();
-		return config.toolResultTokenLimit ?? DEFAULT_TOOL_RESULT_TOKEN_LIMIT;
+		const maxContextTokens = config.maxContextTokens || 120000;
+
+		// 获取百分比设置，默认为 30%
+		let percentage =
+			config.toolResultTokenLimit ?? DEFAULT_TOOL_RESULT_TOKEN_LIMIT;
+
+		// 确保百分比在有效范围内 (20-80)
+		percentage = Math.max(
+			MIN_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
+			Math.min(MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT, percentage),
+		);
+
+		// 基于 maxContextTokens 计算实际 token 限制
+		return Math.floor((maxContextTokens * percentage) / 100);
 	} catch {
-		return DEFAULT_TOOL_RESULT_TOKEN_LIMIT;
+		return Math.floor((120000 * DEFAULT_TOOL_RESULT_TOKEN_LIMIT) / 100);
 	}
 }
 

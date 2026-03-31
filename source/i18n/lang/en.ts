@@ -201,7 +201,11 @@ export const en: TranslationKeys = {
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
 		streamIdleTimeoutSec: 'Stream Idle Timeout(sec):',
-		toolResultTokenLimit: 'Tool Result Token Limit:',
+		toolResultTokenLimit: 'Tool Result Limit (%):',
+		toolResultTokenLimitHint:
+			'Algorithm: maxContextTokens × {percentage}% = {actualLimit} tokens',
+		toolResultTokenLimitDesc:
+			'Limits tool result as % of context window (recommended 20-40%, too low truncates, too high fills context)',
 		editSimilarityThreshold:
 			'Edit Similarity Threshold(0-1, change with caution):',
 		notSet: 'Not set',
@@ -1485,10 +1489,12 @@ export const en: TranslationKeys = {
 		scopeProject: 'Project Config',
 		scopeGlobal: 'Global Config',
 		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
-		savedSuccess: '{scope} MCP configuration saved successfully! Please use `snow` restart!',
+		savedSuccess:
+			'{scope} MCP configuration saved successfully! Please use `snow` restart!',
 		configErrors: 'Configuration errors: {errors}',
 		reverted: 'Changes have been reverted to the previous valid configuration.',
-		invalidJson: 'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
+		invalidJson:
+			'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
 	},
 	runningAgentsPanel: {
 		title: 'Running Agents',

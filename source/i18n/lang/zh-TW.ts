@@ -187,7 +187,11 @@ export const zhTW: TranslationKeys = {
 		maxContextTokens: '最大上下文令牌:',
 		maxTokens: '最大回复令牌數:',
 		streamIdleTimeoutSec: '流式閒置超時(秒):',
-		toolResultTokenLimit: '工具返回Token限制:',
+		toolResultTokenLimit: '工具返回結果限制(%):',
+		toolResultTokenLimitHint:
+			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',
+		toolResultTokenLimitDesc:
+			'限制單個工具返回結果佔上下文窗口的比例 (推薦 20-40%, 過低會截斷, 過高會佔滿上下文)',
 		editSimilarityThreshold: '檔案編輯相似度閾值(0-1, 非必要不改):',
 		notSet: '未設定',
 		enabled: '[✓] 已啟用',

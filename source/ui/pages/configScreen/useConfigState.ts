@@ -103,8 +103,8 @@ export function useConfigState() {
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
+	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
-	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(100000);
 	const [editSimilarityThreshold, setEditSimilarityThreshold] = useState(0.75);
 
 	// UI state
@@ -316,8 +316,8 @@ export function useConfigState() {
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
+		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
-		setToolResultTokenLimit(config.toolResultTokenLimit || 100000);
 		setEditSimilarityThreshold(config.editSimilarityThreshold ?? 0.75);
 
 		const systemPromptConfig = getSystemPromptConfig();
@@ -396,8 +396,7 @@ export function useConfigState() {
 			return geminiThinkingBudget.toString();
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
-		if (currentField === 'anthropicSpeed')
-			return anthropicSpeed || '';
+		if (currentField === 'anthropicSpeed') return anthropicSpeed || '';
 		return '';
 	};
 

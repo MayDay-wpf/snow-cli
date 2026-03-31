@@ -362,8 +362,8 @@ export function useConfigInput(
 			toolResultTokenLimit: {
 				get: () => toolResultTokenLimit,
 				set: setToolResultTokenLimit,
-				min: 1000,
-				max: Infinity,
+				min: 20,
+				max: 80,
 			},
 			thinkingBudgetTokens: {
 				get: () => thinkingBudgetTokens,

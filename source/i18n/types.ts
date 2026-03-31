@@ -188,6 +188,8 @@ export type TranslationKeys = {
 		maxTokens: string;
 		streamIdleTimeoutSec: string;
 		toolResultTokenLimit: string;
+		toolResultTokenLimitHint: string;
+		toolResultTokenLimitDesc: string;
 		editSimilarityThreshold: string;
 		notSet: string;
 		enabled: string;
