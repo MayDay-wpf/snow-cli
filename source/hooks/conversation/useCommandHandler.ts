@@ -412,6 +412,9 @@ type CommandHandlerOptions = {
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleList: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentDeletion: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentList: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -762,6 +765,39 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showRoleList') {
 				options.setShowRoleList(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentCreation'
+			) {
+				options.setShowRoleSubagentCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentDeletion'
+			) {
+				options.setShowRoleSubagentDeletion(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentList'
+			) {
+				options.setShowRoleSubagentList(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

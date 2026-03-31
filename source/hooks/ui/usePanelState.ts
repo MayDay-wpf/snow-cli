@@ -15,6 +15,9 @@ export type PanelState = {
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
+	showRoleSubagentCreation: boolean;
+	showRoleSubagentDeletion: boolean;
+	showRoleSubagentList: boolean;
 	showWorkingDirPanel: boolean;
 	showReviewCommitPanel: boolean;
 	showBranchPanel: boolean;
@@ -42,6 +45,9 @@ export type PanelActions = {
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowRoleList: Dispatch<SetStateAction<boolean>>;
+	setShowRoleSubagentCreation: Dispatch<SetStateAction<boolean>>;
+	setShowRoleSubagentDeletion: Dispatch<SetStateAction<boolean>>;
+	setShowRoleSubagentList: Dispatch<SetStateAction<boolean>>;
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowBranchPanel: Dispatch<SetStateAction<boolean>>;
@@ -71,6 +77,11 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
 	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
 	const [showRoleList, setShowRoleList] = useState(false);
+	const [showRoleSubagentCreation, setShowRoleSubagentCreation] =
+		useState(false);
+	const [showRoleSubagentDeletion, setShowRoleSubagentDeletion] =
+		useState(false);
+	const [showRoleSubagentList, setShowRoleSubagentList] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showBranchPanel, setShowBranchPanel] = useState(false);
@@ -108,6 +119,9 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleCreation ||
 			showRoleDeletion ||
 			showRoleList ||
+			showRoleSubagentCreation ||
+			showRoleSubagentDeletion ||
+			showRoleSubagentList ||
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
@@ -188,6 +202,19 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		if (showRoleSubagentCreation) {
+			return false; // Let the panel handle ESC
+		}
+
+		if (showRoleSubagentDeletion) {
+			return false; // Let the panel handle ESC
+		}
+
+		if (showRoleSubagentList) {
+			setShowRoleSubagentList(false);
+			return true;
+		}
+
 		// WorkingDirectoryPanel handles its own ESC key logic internally
 		// Don't close it here - let the panel decide when to close
 		if (showWorkingDirPanel) {
@@ -249,6 +276,9 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleCreation ||
 			showRoleDeletion ||
 			showRoleList ||
+			showRoleSubagentCreation ||
+			showRoleSubagentDeletion ||
+			showRoleSubagentList ||
 			showWorkingDirPanel ||
 			showReviewCommitPanel ||
 			showBranchPanel ||
@@ -271,6 +301,9 @@ export function usePanelState(): PanelState & PanelActions {
 		showRoleCreation,
 		showRoleDeletion,
 		showRoleList,
+		showRoleSubagentCreation,
+		showRoleSubagentDeletion,
+		showRoleSubagentList,
 		showWorkingDirPanel,
 		showReviewCommitPanel,
 		showBranchPanel,
@@ -293,6 +326,9 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowRoleCreation,
 		setShowRoleDeletion,
 		setShowRoleList,
+		setShowRoleSubagentCreation,
+		setShowRoleSubagentDeletion,
+		setShowRoleSubagentList,
 		setShowWorkingDirPanel,
 		setShowReviewCommitPanel,
 		setShowBranchPanel,

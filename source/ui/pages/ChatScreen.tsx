@@ -269,6 +269,9 @@ export default function ChatScreen({
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowRoleList: panelState.setShowRoleList,
+		setShowRoleSubagentCreation: panelState.setShowRoleSubagentCreation,
+		setShowRoleSubagentDeletion: panelState.setShowRoleSubagentDeletion,
+		setShowRoleSubagentList: panelState.setShowRoleSubagentList,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
@@ -368,6 +371,9 @@ export default function ChatScreen({
 		panelState.showRoleCreation ||
 		panelState.showRoleDeletion ||
 		panelState.showRoleList ||
+		panelState.showRoleSubagentCreation ||
+		panelState.showRoleSubagentDeletion ||
+		panelState.showRoleSubagentList ||
 		panelState.showWorkingDirPanel ||
 		panelState.showBranchPanel ||
 		panelState.showDiffReviewPanel ||

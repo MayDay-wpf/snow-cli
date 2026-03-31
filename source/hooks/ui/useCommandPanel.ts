@@ -51,10 +51,16 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.gitline ||
 					'Select git commits and insert them into the chat input',
 			},
-			{
-				name: 'role',
-				description: t.commandPanel.commands.role,
-			},
+		{
+			name: 'role',
+			description: t.commandPanel.commands.role,
+		},
+		{
+			name: 'role-subagent',
+			description:
+				t.commandPanel.commands.roleSubagent ||
+				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
+		},
 			{
 				name: 'usage',
 				description: t.commandPanel.commands.usage,

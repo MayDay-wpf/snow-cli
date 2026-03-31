@@ -102,6 +102,9 @@ export default function ChatScreenPanels({
 				showRoleCreation={panelState.showRoleCreation}
 				showRoleDeletion={panelState.showRoleDeletion}
 				showRoleList={panelState.showRoleList}
+				showRoleSubagentCreation={panelState.showRoleSubagentCreation}
+				showRoleSubagentDeletion={panelState.showRoleSubagentDeletion}
+				showRoleSubagentList={panelState.showRoleSubagentList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showBranchPanel={panelState.showBranchPanel}
 				showDiffReviewPanel={panelState.showDiffReviewPanel}
@@ -120,6 +123,9 @@ export default function ChatScreenPanels({
 				setShowRoleCreation={panelState.setShowRoleCreation}
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowRoleList={panelState.setShowRoleList}
+				setShowRoleSubagentCreation={panelState.setShowRoleSubagentCreation}
+				setShowRoleSubagentDeletion={panelState.setShowRoleSubagentDeletion}
+				setShowRoleSubagentList={panelState.setShowRoleSubagentList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
 				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
@@ -243,6 +249,98 @@ export default function ChatScreenPanels({
 							role: 'command',
 							content,
 							commandName: 'role',
+						};
+						setMessages(prev => [...prev, errorMessage]);
+					}
+				}}
+				onRoleSubagentSave={async (agentName, location) => {
+					const {createRoleSubagentFile} = await import(
+						'../../../utils/commands/roleSubagent.js'
+					);
+					const result = await createRoleSubagentFile(
+						agentName,
+						location,
+						workingDirectory,
+					);
+					panelState.setShowRoleSubagentCreation(false);
+
+					if (result.success) {
+						const locationDesc =
+							location === 'global'
+								? t.roleSubagentCreation?.locationGlobal || 'Global'
+								: t.roleSubagentCreation?.locationProject || 'Project';
+						const content = (
+							t.roleSubagentCreation?.createSuccessMessage ||
+							'Created sub-agent role successfully! | Agent: {agent} | Location: {location} | Path: {path}'
+						)
+							.replace('{agent}', agentName)
+							.replace('{location}', locationDesc)
+							.replace('{path}', result.path);
+						const successMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role-subagent',
+						};
+						setMessages(prev => [...prev, successMessage]);
+					} else {
+						const errorText =
+							result.error ||
+							t.roleSubagentCreation?.errorUnknown ||
+							'Unknown error';
+						const content = (
+							t.roleSubagentCreation?.createErrorMessage ||
+							'Failed to create sub-agent role: {error}'
+						).replace('{error}', errorText);
+						const errorMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role-subagent',
+						};
+						setMessages(prev => [...prev, errorMessage]);
+					}
+				}}
+				onRoleSubagentDelete={async (agentName, location) => {
+					const {deleteRoleSubagentFile} = await import(
+						'../../../utils/commands/roleSubagent.js'
+					);
+					const result = await deleteRoleSubagentFile(
+						agentName,
+						location,
+						workingDirectory,
+					);
+					panelState.setShowRoleSubagentDeletion(false);
+
+					if (result.success) {
+						const locationDesc =
+							location === 'global'
+								? t.roleSubagentDeletion?.locationGlobal || 'Global'
+								: t.roleSubagentDeletion?.locationProject || 'Project';
+						const content = (
+							t.roleSubagentDeletion?.deleteSuccessMessage ||
+							'Deleted sub-agent role successfully! | Agent: {agent} | Location: {location} | Path: {path}'
+						)
+							.replace('{agent}', agentName)
+							.replace('{location}', locationDesc)
+							.replace('{path}', result.path);
+						const successMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role-subagent',
+						};
+						setMessages(prev => [...prev, successMessage]);
+					} else {
+						const errorText =
+							result.error ||
+							t.roleSubagentDeletion?.errorUnknown ||
+							'Unknown error';
+						const content = (
+							t.roleSubagentDeletion?.deleteErrorMessage ||
+							'Failed to delete sub-agent role: {error}'
+						).replace('{error}', errorText);
+						const errorMessage: Message = {
+							role: 'command',
+							content,
+							commandName: 'role-subagent',
 						};
 						setMessages(prev => [...prev, errorMessage]);
 					}
