@@ -1,6 +1,6 @@
 import {execSync} from 'child_process';
 import {existsSync} from 'fs';
-import {join} from 'path';
+import {join, resolve, relative, isAbsolute} from 'path';
 import {mkdirSync, rmSync} from 'fs';
 
 const WORKTREE_BASE = join(process.cwd(), '.snow', 'worktrees');
@@ -382,4 +382,139 @@ export function isGitRepo(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+// ── Worktree path enforcement ──
+
+/**
+ * Ensure a file path resolves within the teammate's worktree.
+ * - Relative paths → resolved relative to worktree
+ * - Absolute paths within main workspace → remapped to worktree equivalent
+ * - Absolute paths within worktree → allowed as-is
+ * - SSH URLs → passed through unchanged
+ * - Outside both workspaces → returns null (blocked)
+ */
+export function enforceWorktreePath(
+	filePath: string,
+	worktreePath: string,
+): string | null {
+	if (!filePath || filePath.trim() === '') return null;
+	if (filePath.startsWith('ssh://')) return filePath;
+
+	const mainRoot = resolve(process.cwd());
+	const resolvedWorktree = resolve(worktreePath);
+
+	if (isAbsolute(filePath)) {
+		const resolved = resolve(filePath);
+
+		if (resolved === resolvedWorktree || resolved.startsWith(resolvedWorktree + '/')) {
+			return resolved;
+		}
+
+		if (resolved === mainRoot || resolved.startsWith(mainRoot + '/')) {
+			const rel = relative(mainRoot, resolved);
+			return resolve(resolvedWorktree, rel);
+		}
+
+		return null;
+	}
+
+	return resolve(resolvedWorktree, filePath);
+}
+
+/**
+ * Rewrite MCP tool arguments so that all file paths target the teammate's
+ * worktree instead of the main workspace. Returns an error string when
+ * a path cannot be safely remapped (teammate should be told about it).
+ */
+export function rewriteToolArgsForWorktree(
+	toolName: string,
+	args: any,
+	worktreePath: string,
+): {args: any; error?: string} {
+	const rw = (p: string) => enforceWorktreePath(p, worktreePath);
+
+	// filesystem-read / filesystem-create / filesystem-edit
+	if (toolName.startsWith('filesystem-')) {
+		const isWrite = toolName === 'filesystem-create' || toolName === 'filesystem-edit';
+		const verb = isWrite ? 'modify' : 'access';
+
+		if (typeof args.filePath === 'string') {
+			const newPath = rw(args.filePath);
+			if (newPath === null) {
+				return {
+					args,
+					error: `[Worktree Enforcement] Path "${args.filePath}" is outside your worktree. ` +
+						`You can only ${verb} files within: ${worktreePath}. ` +
+						`Use relative paths like "src/foo.ts" — they will be resolved to your worktree automatically.`,
+				};
+			}
+			args = {...args, filePath: newPath};
+		} else if (Array.isArray(args.filePath)) {
+			const mapped: any[] = [];
+			for (const item of args.filePath) {
+				if (typeof item === 'string') {
+					const np = rw(item);
+					if (np === null) {
+						return {
+							args,
+							error: `[Worktree Enforcement] Path "${item}" is outside your worktree (${worktreePath}).`,
+						};
+					}
+					mapped.push(np);
+				} else if (typeof item === 'object' && item.path) {
+					const np = rw(item.path);
+					if (np === null) {
+						return {
+							args,
+							error: `[Worktree Enforcement] Path "${item.path}" is outside your worktree (${worktreePath}).`,
+						};
+					}
+					mapped.push({...item, path: np});
+				} else {
+					mapped.push(item);
+				}
+			}
+			args = {...args, filePath: mapped};
+		}
+	}
+
+	// terminal-execute: force workingDirectory into the worktree
+	if (toolName === 'terminal-execute') {
+		const wd = args.workingDirectory;
+		if (!wd || (!wd.startsWith('ssh://') && !wd.startsWith('SSH://'))) {
+			const newDir = wd ? rw(wd) : null;
+			args = {...args, workingDirectory: newDir || worktreePath};
+		}
+
+		// Block `git push` from teammates
+		const cmd = (args.command || '').trim();
+		if (/\bgit\s+push\b/i.test(cmd)) {
+			return {
+				args,
+				error: '[Worktree Enforcement] Teammates are NOT allowed to run `git push`. ' +
+					'All pushes are handled by the team lead after merging.',
+			};
+		}
+	}
+
+	// ace-file_outline: rewrite filePath
+	if (toolName === 'ace-file_outline' && args.filePath) {
+		const np = rw(args.filePath);
+		if (np) args = {...args, filePath: np};
+	}
+
+	// ace-text_search: rewrite directory
+	if (toolName === 'ace-text_search' && args.directory) {
+		const np = rw(args.directory);
+		if (np) args = {...args, directory: np};
+	}
+
+	// codebase-search: rewrite directory
+	if (toolName === 'codebase-search' && args.directory) {
+		const np = rw(args.directory);
+		if (np) args = {...args, directory: np};
+	}
+
+	return {args};
 }
