@@ -1,17 +1,29 @@
-import {useState, useCallback, useMemo, useEffect} from 'react';
+import {useState, useCallback, useMemo, useEffect, useSyncExternalStore} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCustomCommands} from '../../utils/commands/custom.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
+import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
+import {teamTracker} from '../../utils/execution/teamTracker.js';
+
+const subscribeToSubAgentTracker = (cb: () => void) => runningSubAgentTracker.subscribe(cb);
+const getSubAgentSnapshot = () => runningSubAgentTracker.getRunningAgents();
+const subscribeToTeamTracker = (cb: () => void) => teamTracker.subscribe(cb);
+const getTeamSnapshot = () => teamTracker.getRunningTeammates();
 
 export type CommandPanelCommand = {
 	name: string;
 	description: string;
 	type: 'builtin' | 'execute' | 'prompt';
+	mainFlowOnly?: boolean;
 };
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
+
+	const subAgents = useSyncExternalStore(subscribeToSubAgentTracker, getSubAgentSnapshot);
+	const teammates = useSyncExternalStore(subscribeToTeamTracker, getTeamSnapshot);
+	const hasRunningAgentsOrTeam = subAgents.length > 0 || teammates.length > 0;
 
 	// Built-in commands - only depends on translation
 	const builtInCommands = useMemo(
@@ -217,6 +229,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				t.commandPanel.commands.btw ||
 				'Ask a side-question while AI is working (temporary, no context saved)',
 			allowDuringProcessing: true,
+			mainFlowOnly: true,
 		},
 	],
 	[t],
@@ -228,6 +241,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: command.name,
 				description: command.description,
 				type: (command as any).allowDuringProcessing ? 'prompt' : 'builtin',
+				mainFlowOnly: (command as any).mainFlowOnly || false,
 			})),
 		[builtInCommands],
 	);
@@ -275,7 +289,9 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		// Get all commands (including latest custom commands)
 		const allCommands = getAllCommands();
 		const availableCommands = isProcessing
-			? allCommands.filter(command => command.type === 'prompt')
+			? allCommands.filter(command =>
+				command.type === 'prompt' && !(command.mainFlowOnly && hasRunningAgentsOrTeam),
+			)
 			: allCommands;
 
 		// Filter and sort commands by priority and usage frequency
@@ -331,7 +347,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer, getAllCommands, isProcessing, usageLoaded]);
+	}, [buffer, getAllCommands, isProcessing, hasRunningAgentsOrTeam, usageLoaded]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {
