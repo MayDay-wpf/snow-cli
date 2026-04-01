@@ -7,6 +7,8 @@ import {streamBtwResponse} from '../../../utils/commands/btwStream.js';
 
 type Step = 'streaming' | 'done' | 'error';
 
+const VISIBLE_ROWS = 8;
+
 interface Props {
 	prompt: string;
 	onClose: () => void;
@@ -18,6 +20,7 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 	const [step, setStep] = useState<Step>('streaming');
 	const [response, setResponse] = useState('');
 	const [errorMessage, setErrorMessage] = useState('');
+	const [scrollOffset, setScrollOffset] = useState(0);
 	const abortControllerRef = useRef<AbortController | null>(null);
 	const startedRef = useRef(false);
 
@@ -32,10 +35,7 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 
 		try {
 			let fullResponse = '';
-			for await (const chunk of streamBtwResponse(
-				prompt,
-				controller.signal,
-			)) {
+			for await (const chunk of streamBtwResponse(prompt, controller.signal)) {
 				if (controller.signal.aborted) break;
 				fullResponse += chunk;
 				setResponse(fullResponse);
@@ -47,8 +47,7 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 			}
 		} catch (error) {
 			if (!controller.signal.aborted) {
-				const msg =
-					error instanceof Error ? error.message : 'Unknown error';
+				const msg = error instanceof Error ? error.message : 'Unknown error';
 				setErrorMessage(msg);
 				setStep('error');
 			}
@@ -69,6 +68,10 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 		};
 	}, [startStream]);
 
+	useEffect(() => {
+		setScrollOffset(Math.max(0, response.split('\n').length - VISIBLE_ROWS));
+	}, [response]);
+
 	useInput((_input, key) => {
 		if (key.escape) {
 			try {
@@ -77,6 +80,19 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 				// ignore
 			}
 			onClose();
+			return;
+		}
+
+		if (key.upArrow) {
+			setScrollOffset(prev => Math.max(0, prev - 1));
+			return;
+		}
+
+		if (key.downArrow) {
+			setScrollOffset(prev => {
+				const max = Math.max(0, response.split('\n').length - VISIBLE_ROWS);
+				return Math.min(max, prev + 1);
+			});
 			return;
 		}
 
@@ -90,6 +106,21 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 	const promptPreview =
 		prompt.length > 50 ? prompt.slice(0, 50) + '...' : prompt;
 
+	const lines = response.split('\n');
+	const visibleLines = lines.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
+
+	const responseBox = response.length > 0 && (
+		<Box
+			flexDirection="column"
+			height={Math.min(visibleLines.length, VISIBLE_ROWS)}
+		>
+			{visibleLines.map((line, i) => (
+				<Text key={i} color={theme.colors.menuNormal} wrap="wrap">
+					{line || ' '}
+				</Text>
+			))}
+		</Box>
+	);
 	if (step === 'error') {
 		return (
 			<Box
@@ -103,7 +134,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 						{title}
 					</Text>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{' '}— {promptPreview}
+						{' '}
+						— {promptPreview}
 					</Text>
 				</Box>
 				<Box marginBottom={1}>
@@ -136,22 +168,16 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 						{title}
 					</Text>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{' '}— {promptPreview}
+						{' '}
+						— {promptPreview}
 					</Text>
 				</Box>
 				<Box marginBottom={1}>
 					<Text color={theme.colors.success}>
-						<Spinner type="dots" />{' '}
-						{btwText.thinking || 'Thinking...'}
+						<Spinner type="dots" /> {btwText.thinking || 'Thinking...'}
 					</Text>
 				</Box>
-				{response.length > 0 && (
-					<Box flexDirection="column">
-						<Text color={theme.colors.menuNormal} wrap="wrap">
-							{response}
-						</Text>
-					</Box>
-				)}
+				{responseBox}
 				<Box marginTop={1}>
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{btwText.escHint || 'ESC to cancel'}
@@ -174,20 +200,18 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 					{title}
 				</Text>
 				<Text color={theme.colors.menuSecondary} dimColor>
-					{' '}— {promptPreview}
+					{' '}
+					— {promptPreview}
 				</Text>
 			</Box>
-			<Box flexDirection="column">
-				<Text color={theme.colors.menuNormal} wrap="wrap">
-					{response}
-				</Text>
-			</Box>
+			{responseBox}
 			<Box marginTop={1}>
 				<Text color={theme.colors.success} bold>
 					{'Enter'}
 				</Text>
 				<Text color={theme.colors.menuSecondary}>
-					{' '}- {btwText.actionClose || 'Close'}
+					{' '}
+					- {btwText.actionClose || 'Close'}
 				</Text>
 				<Text>{'  '}</Text>
 				<Text color={theme.colors.menuSecondary} dimColor>
