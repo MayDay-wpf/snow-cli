@@ -42,6 +42,7 @@ import './commands/autoformat.js';
 import './commands/team.js';
 import './commands/worktree.js';
 import './commands/yolo.js';
+import './commands/btw.js';
 
 // Export logger
 export {Logger, LogLevel, logger} from './core/logger.js';

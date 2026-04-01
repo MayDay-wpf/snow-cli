@@ -41,6 +41,7 @@ type Options = {
 	snapshotState: any;
 	panelState: {handleEscapeKey: () => boolean};
 	handleEscKey: (key: InputKey, input: string) => boolean;
+	btwPrompt: string | null;
 };
 
 export function useChatScreenInputHandler({
@@ -58,8 +59,11 @@ export function useChatScreenInputHandler({
 	snapshotState,
 	panelState,
 	handleEscKey,
+	btwPrompt,
 }: Options) {
 	useInput((input, key) => {
+		// BtwPanel is active — it owns all keyboard input, skip everything here
+		if (btwPrompt) return;
 		if (backgroundProcesses.showPanel) {
 			if (key.escape) {
 				backgroundProcesses.hidePanel();

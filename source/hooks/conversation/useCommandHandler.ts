@@ -453,6 +453,7 @@ type CommandHandlerOptions = {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => Promise<void>;
+	setBtwPrompt: React.Dispatch<React.SetStateAction<string | null>>;
 	onQuit?: () => void;
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
 	onToggleCodebase?: (mode?: string) => Promise<void>;
@@ -1241,6 +1242,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				}
+			} else if (
+				result.success &&
+				result.action === 'btw' &&
+				result.prompt
+			) {
+				options.setBtwPrompt(result.prompt);
 			} else if (result.success && result.action === 'toggleCodebase') {
 				// Handle toggle codebase command
 				if (options.onToggleCodebase) {

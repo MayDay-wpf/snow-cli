@@ -610,6 +610,7 @@ export const en: TranslationKeys = {
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
 			newPrompt: 'Generate a refined prompt from your requirement using AI',
+			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -1629,6 +1630,14 @@ export const en: TranslationKeys = {
 		actionRegenerate: 'Regenerate',
 		actionRetry: 'Retry',
 		actionCancel: 'Cancel',
+		errorPrefix: 'Error: ',
+		scrollHint: '↑↓ Scroll',
+	},
+	btw: {
+		title: '✦ BTW',
+		thinking: 'Thinking...',
+		escHint: 'ESC to cancel',
+		actionClose: 'Close',
 		errorPrefix: 'Error: ',
 		scrollHint: '↑↓ Scroll',
 	},

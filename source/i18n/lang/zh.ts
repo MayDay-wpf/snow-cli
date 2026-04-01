@@ -571,6 +571,7 @@ export const zh: TranslationKeys = {
 			disconnect: '断开当前 Snow Instance 连接',
 			connectionStatus: '显示当前 Snow Instance 连接状态',
 			newPrompt: '根据需求使用 AI 生成精炼的提示词',
+			btw: '在 AI 运行时快速提问（临时对话，不保存上下文）',
 			quit: '退出应用程序',
 		},
 		copyLastFeedback: {
@@ -1544,6 +1545,14 @@ export const zh: TranslationKeys = {
 		actionRegenerate: '重新生成',
 		actionRetry: '重试',
 		actionCancel: '取消',
+		errorPrefix: '错误：',
+		scrollHint: '↑↓ 滚动浏览',
+	},
+	btw: {
+		title: '✦ 顺便问一下',
+		thinking: '思考中...',
+		escHint: 'ESC 取消',
+		actionClose: '关闭',
 		errorPrefix: '错误：',
 		scrollHint: '↑↓ 滚动浏览',
 	},

@@ -53,6 +53,7 @@ export interface CommandResult {
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
+		| 'btw'
 		| 'quit';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading

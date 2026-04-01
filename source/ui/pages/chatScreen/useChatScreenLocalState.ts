@@ -46,6 +46,7 @@ export function useChatScreenLocalState() {
 	const [compressionStatus, setCompressionStatus] =
 		useState<CompressionStatus | null>(null);
 	const [isResumingSession, setIsResumingSession] = useState(false);
+	const [btwPrompt, setBtwPrompt] = useState<string | null>(null);
 
 	useEffect(() => {
 		currentContextPercentageRef.current = currentContextPercentage;
@@ -147,5 +148,7 @@ export function useChatScreenLocalState() {
 		setCompressionStatus,
 		isResumingSession,
 		setIsResumingSession,
+		btwPrompt,
+		setBtwPrompt,
 	};
 }

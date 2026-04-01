@@ -207,19 +207,27 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.team ||
 					'Toggle Agent Team mode - orchestrate multiple agents working together',
 			},
-			{
-				name: 'quit',
-				description: t.commandPanel.commands.quit,
-			},
-		],
-		[t],
-	);
+		{
+			name: 'quit',
+			description: t.commandPanel.commands.quit,
+		},
+		{
+			name: 'btw',
+			description:
+				t.commandPanel.commands.btw ||
+				'Ask a side-question while AI is working (temporary, no context saved)',
+			allowDuringProcessing: true,
+		},
+	],
+	[t],
+);
 
 	const normalizedBuiltInCommands = useMemo<CommandPanelCommand[]>(
 		() =>
 			builtInCommands.map(command => ({
-				...command,
-				type: 'builtin',
+				name: command.name,
+				description: command.description,
+				type: (command as any).allowDuringProcessing ? 'prompt' : 'builtin',
 			})),
 		[builtInCommands],
 	);

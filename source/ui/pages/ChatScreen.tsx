@@ -97,6 +97,8 @@ export default function ChatScreen({
 		setCompressionStatus,
 		isResumingSession,
 		setIsResumingSession,
+		btwPrompt,
+		setBtwPrompt,
 	} = useChatScreenLocalState();
 	const {
 		yoloMode,
@@ -296,6 +298,7 @@ export default function ChatScreen({
 		setIsExecutingTerminalCommand,
 		setCustomCommandExecution,
 		processMessage,
+		setBtwPrompt,
 		onQuit: handleQuit,
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
@@ -339,6 +342,7 @@ export default function ChatScreen({
 		snapshotState,
 		panelState,
 		handleEscKey,
+		btwPrompt,
 	});
 
 	const getFilteredProfiles = () => {
@@ -492,15 +496,17 @@ export default function ChatScreen({
 
 			{shouldShowFooter && (
 				<ChatFooter
-					onSubmit={handleMessageSubmit}
-					onCommand={handleCommandExecution}
-					onHistorySelect={handleHistorySelect}
-					onSwitchProfile={handleSwitchProfile}
-					handleProfileSelect={handleProfileSelect}
-					handleHistorySelect={handleHistorySelect}
-					showReviewCommitPanel={panelState.showReviewCommitPanel}
-					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
-					onReviewCommitConfirm={handleReviewCommitConfirm}
+				onSubmit={handleMessageSubmit}
+				onCommand={handleCommandExecution}
+				onHistorySelect={handleHistorySelect}
+				onSwitchProfile={handleSwitchProfile}
+				handleProfileSelect={handleProfileSelect}
+				handleHistorySelect={handleHistorySelect}
+				showReviewCommitPanel={panelState.showReviewCommitPanel}
+				setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+				onReviewCommitConfirm={handleReviewCommitConfirm}
+				btwPrompt={btwPrompt}
+				onBtwClose={() => setBtwPrompt(null)}
 					disabled={
 						!!pendingToolConfirmation ||
 						!!bashSensitiveCommand ||

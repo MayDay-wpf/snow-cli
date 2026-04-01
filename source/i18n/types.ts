@@ -564,6 +564,7 @@ export type TranslationKeys = {
 			disconnect: string;
 			connectionStatus: string;
 			newPrompt: string;
+			btw: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -1526,6 +1527,14 @@ export type TranslationKeys = {
 		actionRegenerate: string;
 		actionRetry: string;
 		actionCancel: string;
+		errorPrefix: string;
+		scrollHint: string;
+	};
+	btw: {
+		title: string;
+		thinking: string;
+		escHint: string;
+		actionClose: string;
 		errorPrefix: string;
 		scrollHint: string;
 	};
