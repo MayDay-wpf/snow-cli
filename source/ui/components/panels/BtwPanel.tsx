@@ -168,12 +168,40 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 	});
 
 	const title = btwText.title || '✦ BTW';
-	const promptPreview =
-		prompt.length > 50 ? prompt.slice(0, 50) + '...' : prompt;
+	const separator = ' — ';
+	const maxPromptWidth = Math.max(
+		10,
+		contentWidth - visualWidth(title) - visualWidth(separator),
+	);
+	const promptPreview = useMemo(() => {
+		if (visualWidth(prompt) <= maxPromptWidth) return prompt;
+		const chars = [...prompt];
+		let s = '';
+		let w = 0;
+		const ellipsis = '...';
+		const ellipsisW = visualWidth(ellipsis);
+		for (const ch of chars) {
+			const cw = visualWidth(ch);
+			if (w + cw + ellipsisW > maxPromptWidth) break;
+			s += ch;
+			w += cw;
+		}
+		return s + ellipsis;
+	}, [prompt, maxPromptWidth]);
 
+	const canScroll = visualLines.length > VISIBLE_ROWS;
 	const visibleSlice = visualLines.slice(
 		scrollOffset,
 		scrollOffset + VISIBLE_ROWS,
+	);
+
+	const scrollIndicator = canScroll && (
+		<Box>
+			<Text color={theme.colors.menuSecondary} dimColor>
+				{btwText.scrollHint || '↑↓ Scroll'}
+				{` (${scrollOffset + 1}-${Math.min(scrollOffset + VISIBLE_ROWS, visualLines.length)}/${visualLines.length})`}
+			</Text>
+		</Box>
 	);
 
 	const responseBox = response.length > 0 && (
@@ -198,12 +226,13 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 				paddingX={1}
 			>
 				<Box marginBottom={1}>
-					<Text color={theme.colors.warning} bold>
-						{title}
-					</Text>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{' '}
-						— {promptPreview}
+					<Text wrap="truncate">
+						<Text color={theme.colors.warning} bold>
+							{title}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{separator}{promptPreview}
+						</Text>
 					</Text>
 				</Box>
 				<Box marginBottom={1}>
@@ -213,10 +242,11 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 					</Text>
 				</Box>
 				<Box>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{'Enter'} - {btwText.actionClose || 'Close'}
-						{'  '}
-						{'ESC'} - {btwText.actionClose || 'Close'}
+					<Text color={theme.colors.success} bold>
+						{'Enter'}
+					</Text>
+					<Text color={theme.colors.menuSecondary}>
+						{' '}- {btwText.actionClose || 'Close'}
 					</Text>
 				</Box>
 			</Box>
@@ -232,12 +262,13 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 				paddingX={1}
 			>
 				<Box marginBottom={1}>
-					<Text color={theme.colors.warning} bold>
-						{title}
-					</Text>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{' '}
-						— {promptPreview}
+					<Text wrap="truncate">
+						<Text color={theme.colors.warning} bold>
+							{title}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{separator}{promptPreview}
+						</Text>
 					</Text>
 				</Box>
 				{!response && (
@@ -248,11 +279,7 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 					</Box>
 				)}
 				{responseBox}
-				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{btwText.escHint || 'ESC to cancel'}
-					</Text>
-				</Box>
+				{scrollIndicator}
 			</Box>
 		);
 	}
@@ -266,26 +293,23 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 			paddingX={1}
 		>
 			<Box marginBottom={1}>
-				<Text color={theme.colors.warning} bold>
-					{title}
-				</Text>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{' '}
-					— {promptPreview}
+				<Text wrap="truncate">
+					<Text color={theme.colors.warning} bold>
+						{title}
+					</Text>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{separator}{promptPreview}
+					</Text>
 				</Text>
 			</Box>
 			{responseBox}
+			{scrollIndicator}
 			<Box marginTop={1}>
 				<Text color={theme.colors.success} bold>
 					{'Enter'}
 				</Text>
 				<Text color={theme.colors.menuSecondary}>
-					{' '}
-					- {btwText.actionClose || 'Close'}
-				</Text>
-				<Text>{'  '}</Text>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{'ESC'} - {btwText.actionClose || 'Close'}
+					{' '}- {btwText.actionClose || 'Close'}
 				</Text>
 			</Box>
 		</Box>
