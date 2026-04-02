@@ -2,14 +2,14 @@
 	"name": "snow-cli",
 	"displayName": "Snow CLI",
 	"description": "Snow AI CLI with ACE Code Search - Intelligent code navigation and search powered by AI",
-	"version": "0.4.19",
+	"version": "0.4.20",
 	"publisher": "mufasa",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/MayDay-wpf/snow-cli"
 	},
 	"engines": {
-		"vscode": "^1.75.0"
+		"vscode": "^1.106.0"
 	},
 	"categories": [
 		"Other"
@@ -95,7 +95,7 @@
 			}
 		},
 		"viewsContainers": {
-			"activitybar": [
+			"secondarySidebar": [
 				{
 					"id": "snow-cli-sidebar",
 					"title": "Snow CLI",
