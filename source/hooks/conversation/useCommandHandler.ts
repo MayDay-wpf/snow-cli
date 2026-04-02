@@ -170,12 +170,15 @@ export async function executeContextCompression(
 					streaming: false,
 				}));
 
+			const apiUsage = hybridResult.compressionApiUsage;
+			const afterEstimate = hybridResult.afterTokensEstimate || 0;
+
 			return {
 				uiMessages: newUIMessages,
 				usage: {
-					prompt_tokens: hybridResult.beforeTokens || 0,
-					completion_tokens: 0,
-					total_tokens: hybridResult.afterTokensEstimate || 0,
+					prompt_tokens: afterEstimate,
+					completion_tokens: apiUsage?.completion_tokens || 0,
+					total_tokens: afterEstimate,
 				},
 			};
 		}

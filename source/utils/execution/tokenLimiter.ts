@@ -124,7 +124,12 @@ export async function validateTokenLimit(
 	try {
 		// 使用 tiktoken 计算 token 数量
 		const {encoding_for_model} = await import('tiktoken');
-		const encoder = encoding_for_model('gpt-4o');
+		let encoder;
+		try {
+			encoder = encoding_for_model('gpt-5');
+		} catch {
+			encoder = encoding_for_model('gpt-3.5-turbo');
+		}
 		try {
 			const tokens = encoder.encode(contentStr);
 			const tokenCount = tokens.length;
@@ -173,13 +178,17 @@ async function truncateToTokenLimit(
 ): Promise<string> {
 	try {
 		const {encoding_for_model} = await import('tiktoken');
-		const encoder = encoding_for_model('gpt-4o');
+		let encoder;
+		try {
+			encoder = encoding_for_model('gpt-5');
+		} catch {
+			encoder = encoding_for_model('gpt-3.5-turbo');
+		}
 		try {
 			const tokens = encoder.encode(content);
 			if (tokens.length <= maxTokens) {
 				return content;
 			}
-			// 截断 tokens 并解码回字符串
 			const truncatedTokens = tokens.slice(0, maxTokens);
 			const decoder = new TextDecoder();
 			return decoder.decode(encoder.decode(truncatedTokens));
