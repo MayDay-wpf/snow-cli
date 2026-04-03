@@ -19,6 +19,7 @@ import {
 } from './subAgentToolInterceptor.js';
 import {checkAndApproveTools, executeMcpTools} from './subAgentToolApproval.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
+import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import type {
 	SubAgentExecutionContext,
 	SubAgentMessage,
@@ -116,6 +117,9 @@ export async function executeSubAgent(
 					error: 'Sub-agent execution aborted',
 				};
 			}
+
+			// Wait if the main flow (or another participant) is compressing.
+			await compressionCoordinator.waitUntilFree(ctx.instanceId);
 
 			// Inject pending user / inter-agent messages
 			injectPendingMessages(ctx);

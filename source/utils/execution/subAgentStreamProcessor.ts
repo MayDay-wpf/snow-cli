@@ -12,6 +12,7 @@ import {emitSubAgentMessage} from './subAgentTypes.js';
 import type {SubAgentExecutionContext} from './subAgentTypes.js';
 import type {ChatMessage} from '../../api/chat.js';
 import type {MCPTool} from './mcpToolsManager.js';
+import {compressionCoordinator} from '../core/compressionCoordinator.js';
 
 export interface StreamProcessResult {
 	currentContent: string;
@@ -249,6 +250,8 @@ export async function handleContextCompression(
 		percentage: Math.round(ctxPercentage),
 	});
 
+	const lockId = ctx.instanceId || `subagent-${ctx.agent.id}`;
+	await compressionCoordinator.acquireLock(lockId);
 	try {
 		const compressionResult = await compressSubAgentContext(
 			ctx.messages,
@@ -288,6 +291,8 @@ export async function handleContextCompression(
 			`[SubAgent:${ctx.agent.name}] Context compression failed:`,
 			compressError,
 		);
+	} finally {
+		compressionCoordinator.releaseLock(lockId);
 	}
 
 	return false;

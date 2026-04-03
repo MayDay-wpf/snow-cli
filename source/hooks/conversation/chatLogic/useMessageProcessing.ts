@@ -16,6 +16,7 @@ import {
 } from '../../../utils/config/apiConfig.js';
 import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTracker.js';
 import {teamTracker} from '../../../utils/execution/teamTracker.js';
+import {compressionCoordinator} from '../../../utils/core/compressionCoordinator.js';
 
 interface MessageTarget {
 	instanceId: string;
@@ -132,6 +133,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			streamingState.setIsAutoCompressing(true);
 			setCompressionError(null);
 
+			await compressionCoordinator.acquireLock('main');
 			try {
 				const compressingMessage: Message = {
 					role: 'assistant',
@@ -167,6 +169,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				streamingState.setIsAutoCompressing(false);
 				return;
 			} finally {
+				compressionCoordinator.releaseLock('main');
 				setIsCompressing(false);
 				streamingState.setIsAutoCompressing(false);
 			}

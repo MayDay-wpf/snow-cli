@@ -15,6 +15,7 @@ import type {SubAgentMessage, TokenUsage} from './subAgentExecutor.js';
 import {rewriteToolArgsForWorktree} from '../team/teamWorktree.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
+import {compressionCoordinator} from '../core/compressionCoordinator.js';
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -320,6 +321,11 @@ ${role ? `Your role: ${role}` : ''}
 				};
 			}
 
+			// Wait if the main flow (or another participant) is compressing.
+			// This prevents this teammate from streaming / mutating state while
+			// the main context is being rebuilt.
+			await compressionCoordinator.waitUntilFree(instanceId);
+
 			// Dequeue messages from lead or other teammates
 			const teammateMessages = teamTracker.dequeueTeammateMessages(instanceId);
 			for (const msg of teammateMessages) {
@@ -466,7 +472,8 @@ ${role ? `Your role: ${role}` : ''}
 				finalResponse = currentContent;
 			}
 
-			// Context compression
+			// Context compression — acquire the coordinator lock so the main flow
+			// and other participants wait while this teammate's context is rebuilt.
 			let justCompressed = false;
 			if (latestTotalTokens > 0 && config.maxContextTokens) {
 				if (shouldCompressSubAgentContext(latestTotalTokens, config.maxContextTokens)) {
@@ -484,6 +491,7 @@ ${role ? `Your role: ${role}` : ''}
 						});
 					}
 
+					await compressionCoordinator.acquireLock(instanceId);
 					try {
 						const compressionResult = await compressSubAgentContext(
 							messages, latestTotalTokens, config.maxContextTokens,
@@ -520,6 +528,8 @@ ${role ? `Your role: ${role}` : ''}
 							`[Teammate:${memberName}] Context compression failed:`,
 							compressError,
 						);
+					} finally {
+						compressionCoordinator.releaseLock(instanceId);
 					}
 				}
 			}
