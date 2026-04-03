@@ -13,6 +13,7 @@ type Props = {
 	teamCount?: number;
 	previewSessionId?: string;
 	previewTargetMessageIndex?: number;
+	terminalWidth: number;
 	onConfirm: (mode: RollbackMode | null, selectedFiles?: string[]) => void;
 };
 
@@ -23,6 +24,7 @@ export default function FileRollbackConfirmation({
 	teamCount,
 	previewSessionId,
 	previewTargetMessageIndex,
+	terminalWidth,
 	onConfirm,
 }: Props) {
 	const {t} = useI18n();
@@ -245,6 +247,12 @@ export default function FileRollbackConfirmation({
 
 	return (
 		<Box flexDirection="column" marginX={1} marginBottom={1} padding={1}>
+			{/* Top border separator */}
+			<Box height={1}>
+				<Text color="gray" dimColor>
+					{'─'.repeat(terminalWidth - 4)}
+				</Text>
+			</Box>
 			<Box marginBottom={1}>
 				<Text color="yellow" bold>
 					⚠ {t.fileRollback.title}

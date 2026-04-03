@@ -454,6 +454,7 @@ export default function ChatScreenPanels({
 					teamCount={snapshotState.pendingRollback.teamCount}
 					previewSessionId={sessionManager.getCurrentSession()?.id}
 					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
+					terminalWidth={terminalWidth}
 					onConfirm={handleRollbackConfirm}
 				/>
 			)}
