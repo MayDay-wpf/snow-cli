@@ -1,5 +1,5 @@
 import {useRef, useEffect} from 'react';
-import {useInput} from 'ink';
+import {useInput, useStdin} from 'ink';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {editTextWithNotepad} from '../../utils/ui/externalEditor.js';
 import {executeCommand} from '../../utils/execution/commandExecutor.js';
@@ -343,30 +343,30 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		};
 	}, []);
 
-	// Track if Delete key was pressed (detected via raw stdin)
+	// Track if Delete key was pressed (detected via Ink's internal event emitter)
 	const deleteKeyPressed = useRef<boolean>(false);
 
-	// Listen to raw stdin to detect Delete key (escape sequence \x1b[3~)
-	// ink's useInput doesn't distinguish between Backspace and Delete
+	// Access Ink's internal event emitter to detect Delete key (escape sequence \x1b[3~)
+	// ink's useInput doesn't distinguish between Backspace and Delete.
+	// We must NOT use process.stdin.on('data', ...) directly, as adding a 'data' listener
+	// switches stdin to flowing mode, conflicting with Ink's readable-event-based handling.
+	const stdinContext = useStdin() as {internal_eventEmitter?: import('events').EventEmitter};
+	const {internal_eventEmitter: inkEventEmitter} = stdinContext;
+
 	useEffect(() => {
-		const handleRawInput = (data: Buffer) => {
-			const str = data.toString();
-			// Delete key sends escape sequence: ESC [ 3 ~
-			if (str === '\x1b[3~') {
+		if (!inkEventEmitter) return;
+
+		const handleRawInput = (data: string) => {
+			if (data === '\x1b[3~') {
 				deleteKeyPressed.current = true;
 			}
 		};
 
-		if (process.stdin.isTTY) {
-			process.stdin.on('data', handleRawInput);
-		}
-
+		inkEventEmitter.on('input', handleRawInput);
 		return () => {
-			if (process.stdin.isTTY) {
-				process.stdin.off('data', handleRawInput);
-			}
+			inkEventEmitter.removeListener('input', handleRawInput);
 		};
-	}, []);
+	}, [inkEventEmitter]);
 
 	// Force immediate state update for critical operations like backspace
 	const forceStateUpdate = () => {
