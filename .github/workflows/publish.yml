@@ -57,10 +57,6 @@ jobs:
             ### What's New
 
             - Fixed some known bugs
-            - Fixed display bug in `/btw` component
-            - Decoupled part of the sub-agent code
-            - Optimized some UI display effects and added prompts
-            - Optimized Hooks system
 
             ### Installation
             ```bash
