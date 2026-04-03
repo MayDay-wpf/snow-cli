@@ -260,54 +260,22 @@ export async function executeToolCall(
 			const {unifiedHooksExecutor} = await import(
 				'../execution/unifiedHooksExecutor.js'
 			);
+			const {interpretHookResult} = await import('./hookResultInterpreter.js');
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'beforeToolCall',
-				{
-					toolName: toolCall.function.name,
-					args,
-				},
+				{toolName: toolCall.function.name, args},
 			);
-			// Handle hook exit codes: 0=continue, 1=block tool and return stderr, 2+=set hookFailed and return
-			if (hookResult && !hookResult.success) {
-				// Find failed command hook
-				const commandError = hookResult.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Exit code 1: Block tool execution, return stderr/stdout as tool result
-						return {
-							tool_call_id: toolCall.id,
-							role: 'tool',
-							content:
-								error ||
-								output ||
-								`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`,
-						};
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Exit code 2+: Set hookFailed flag and return result immediately
-						return {
-							tool_call_id: toolCall.id,
-							role: 'tool',
-							content: '', // Content will be rendered by HookErrorDisplay component
-							hookFailed: true,
-							hookErrorDetails: {
-								type: 'error',
-								exitCode,
-								command,
-								output,
-								error,
-							},
-						};
-					}
-					// Exit code 0: Success, continue
-				}
+			const interpreted = interpretHookResult('beforeToolCall', hookResult);
+			if (interpreted.action === 'block') {
+				return {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: interpreted.replacedContent || '',
+					hookFailed: interpreted.hookFailed,
+					hookErrorDetails: interpreted.errorDetails,
+				};
 			}
 		} catch (error) {
-			// Log unexpected errors and continue - don't block on unexpected errors
 			console.warn('Failed to execute beforeToolCall hook:', error);
 		}
 
@@ -611,6 +579,7 @@ export async function executeToolCall(
 			const {unifiedHooksExecutor} = await import(
 				'../execution/unifiedHooksExecutor.js'
 			);
+			const {interpretHookResult} = await import('./hookResultInterpreter.js');
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'afterToolCall',
 				{
@@ -620,45 +589,16 @@ export async function executeToolCall(
 					error: executionError,
 				},
 			);
-
-			// Handle hook result based on exit code strategy
-			if (hookResult && !hookResult.success) {
-				// Find failed command hook
-				const commandError = hookResult.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Exit code 1: Warning - stderr/stdout replaces tool result content
-						const replacedContent =
-							error ||
-							output ||
-							`[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
-
-						if (result && typeof result.content === 'string') {
-							result.content = replacedContent;
-						}
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Exit code 2+: Set hookFailed flag on result
-						// Set error details for UI rendering (HookErrorDisplay component)
-						if (result && typeof result.content === 'string') {
-							result.hookFailed = true;
-							result.hookErrorDetails = {
-								type: 'error',
-								exitCode,
-								command,
-								output,
-								error,
-							};
-						}
-					}
+			const interpreted = interpretHookResult('afterToolCall', hookResult);
+			if (result) {
+				if (interpreted.action === 'replace') {
+					result.content = interpreted.replacedContent || result.content;
+				} else if (interpreted.action === 'block') {
+					result.hookFailed = interpreted.hookFailed;
+					result.hookErrorDetails = interpreted.errorDetails;
 				}
 			}
 		} catch (error) {
-			// Log unexpected errors but continue - don't block tool execution
 			console.warn('Failed to execute afterToolCall hook:', error);
 		}
 	}

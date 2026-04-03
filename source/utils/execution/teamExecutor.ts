@@ -13,6 +13,8 @@ import type {MCPTool} from './mcpToolsManager.js';
 import {teamTracker} from './teamTracker.js';
 import type {SubAgentMessage, TokenUsage} from './subAgentExecutor.js';
 import {rewriteToolArgsForWorktree} from '../team/teamWorktree.js';
+import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
+import {interpretHookResult} from './hookResultInterpreter.js';
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -756,18 +758,58 @@ ${role ? `Your role: ${role}` : ''}
 									continue;
 								}
 								toolArgs = rwResult.args;
+
+								// beforeToolCall hook
+								try {
+									const bHook = await unifiedHooksExecutor.executeHooks(
+										'beforeToolCall', {toolName: tc.function.name, args: toolArgs},
+									);
+									const bInterp = interpretHookResult('beforeToolCall', bHook);
+									if (bInterp.action === 'block') {
+										messages.push({
+											role: 'tool' as const,
+											tool_call_id: tc.id,
+											content: bInterp.replacedContent || '',
+										});
+										continue;
+									}
+								} catch { /* best effort */ }
+
 								const result = await executeMCPTool(tc.function.name, toolArgs, abortSignal);
+								let resultContent = typeof result === 'string' ? result : JSON.stringify(result);
+
+								// afterToolCall hook
+								try {
+									const aHook = await unifiedHooksExecutor.executeHooks('afterToolCall', {
+										toolName: tc.function.name, args: toolArgs,
+										result: {tool_call_id: tc.id, role: 'tool', content: resultContent},
+										error: null,
+									});
+									const aInterp = interpretHookResult('afterToolCall', aHook);
+									if (aInterp.action === 'replace' && aInterp.replacedContent) {
+										resultContent = aInterp.replacedContent;
+									}
+								} catch { /* best effort */ }
+
 								messages.push({
 									role: 'tool' as const,
 									tool_call_id: tc.id,
-									content: typeof result === 'string' ? result : JSON.stringify(result),
+									content: resultContent,
 								});
 							} catch (e: any) {
+								const errorContent = `Error: ${e.message}`;
 								messages.push({
 									role: 'tool' as const,
 									tool_call_id: tc.id,
-									content: `Error: ${e.message}`,
+									content: errorContent,
 								});
+								try {
+									await unifiedHooksExecutor.executeHooks('afterToolCall', {
+										toolName: tc.function.name, args: {},
+										result: {tool_call_id: tc.id, role: 'tool', content: errorContent},
+										error: e,
+									});
+								} catch { /* best effort */ }
 							}
 						}
 						continue;
@@ -820,19 +862,58 @@ ${role ? `Your role: ${role}` : ''}
 					}
 					toolArgs = rwResult.args;
 
+					// beforeToolCall hook
+					try {
+						const bHook = await unifiedHooksExecutor.executeHooks(
+							'beforeToolCall', {toolName, args: toolArgs},
+						);
+						const bInterp = interpretHookResult('beforeToolCall', bHook);
+						if (bInterp.action === 'block') {
+							messages.push({
+								role: 'tool' as const,
+								tool_call_id: tc.id,
+								content: bInterp.replacedContent || '',
+							});
+							continue;
+						}
+					} catch { /* best effort */ }
+
 					try {
 						const result = await executeMCPTool(toolName, toolArgs, abortSignal);
+						let resultContent = typeof result === 'string' ? result : JSON.stringify(result);
+
+						// afterToolCall hook
+						try {
+							const aHook = await unifiedHooksExecutor.executeHooks('afterToolCall', {
+								toolName, args: toolArgs,
+								result: {tool_call_id: tc.id, role: 'tool', content: resultContent},
+								error: null,
+							});
+							const aInterp = interpretHookResult('afterToolCall', aHook);
+							if (aInterp.action === 'replace' && aInterp.replacedContent) {
+								resultContent = aInterp.replacedContent;
+							}
+						} catch { /* best effort */ }
+
 						messages.push({
 							role: 'tool' as const,
 							tool_call_id: tc.id,
-							content: typeof result === 'string' ? result : JSON.stringify(result),
+							content: resultContent,
 						});
 					} catch (e: any) {
+						const errorContent = `Error: ${e.message}`;
 						messages.push({
 							role: 'tool' as const,
 							tool_call_id: tc.id,
-							content: `Error: ${e.message}`,
+							content: errorContent,
 						});
+						try {
+							await unifiedHooksExecutor.executeHooks('afterToolCall', {
+								toolName, args: toolArgs,
+								result: {tool_call_id: tc.id, role: 'tool', content: errorContent},
+								error: e,
+							});
+						} catch { /* best effort */ }
 					}
 				}
 				}

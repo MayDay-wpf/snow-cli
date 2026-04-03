@@ -56,13 +56,11 @@ jobs:
 
             ### What's New
 
-            - 修复 Team 模式的越权问题
-            - 添加 `/btw` 命令分支对话流与工作中的 AI 对话
-            - 添加 `/role-subagent` 命令为系统子代理注入用户自定义提示词
-            - filesystem 工具重构加入`hash-line`编辑提高编辑精度
-            - 修复部分编程语言无法渲染高亮的警告
-            - 工具响应 token 数量从自定义 token 数修改为上下文百分比
-            - mcp 面板支持通过 `v` 进入工具列表后使用`Tab`键对特定工具启停
+            - Fixed some known bugs
+            - Fixed display bug in `/btw` component
+            - Decoupled part of the sub-agent code
+            - Optimized some UI display effects and added prompts
+            - Optimized Hooks system
 
             ### Installation
             ```bash

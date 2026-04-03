@@ -7,7 +7,8 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import fs from 'fs';
 
 export type ConfirmationResult =
@@ -246,37 +247,16 @@ export default function ToolConfirmation({
 		// Execute hook and handle exit code
 		unifiedHooksExecutor
 			.executeHooks('toolConfirmation', context)
-			.then((result: any) => {
-				// Check for command failures
-				const commandError = result.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Warning: print to console
-						const combinedOutput =
-							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						console.warn(
-							`[Hook Warning] toolConfirmation Hook returned warning:\nCommand: ${command}\nOutput: ${combinedOutput}`,
-						);
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Critical error: send to chat area and close confirmation
-						if (onHookError) {
-							onHookError({
-								type: 'error',
-								exitCode,
-								command,
-								output,
-								error,
-							});
-						}
-						// Close confirmation dialog with reject
-						setHasSelected(true);
-						onConfirm('reject');
+			.then(hookResult => {
+				const interpreted = interpretHookResult('toolConfirmation', hookResult);
+				if (interpreted.action === 'warn' && interpreted.warningMessage) {
+					console.warn(interpreted.warningMessage);
+				} else if (interpreted.action === 'block' && interpreted.errorDetails) {
+					if (onHookError) {
+						onHookError(interpreted.errorDetails);
 					}
+					setHasSelected(true);
+					onConfirm('reject');
 				}
 			})
 			.catch(error => {

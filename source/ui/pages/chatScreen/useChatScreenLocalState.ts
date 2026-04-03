@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {
 	BashSensitiveCommandState,

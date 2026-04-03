@@ -464,33 +464,30 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
 			);
+			const {interpretHookResult} = await import(
+				'../../../utils/execution/hookResultInterpreter.js'
+			);
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
-				{
-					message,
-					imageCount: images?.length || 0,
-					source: 'normal',
-				},
+				{message, imageCount: images?.length || 0, source: 'normal'},
 			);
-			const {handleHookResult} = await import(
-				'../../../utils/execution/hookResultHandler.js'
-			);
-			const handlerResult = handleHookResult(hookResult, message);
+			const interpreted = interpretHookResult('onUserMessage', hookResult, message);
 
-			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
+			if (interpreted.action === 'block' && interpreted.errorDetails) {
 				setMessages(prev => [
 					...prev,
 					{
 						role: 'assistant',
 						content: '',
 						timestamp: new Date(),
-						hookError: handlerResult.errorDetails,
+						hookError: interpreted.errorDetails,
 					},
 				]);
 				return;
 			}
-
-			message = handlerResult.modifiedMessage!;
+			if (interpreted.action === 'replace' && interpreted.replacedContent) {
+				message = interpreted.replacedContent;
+			}
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
@@ -607,34 +604,31 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
 			);
+			const {interpretHookResult} = await import(
+				'../../../utils/execution/hookResultInterpreter.js'
+			);
 			const allImages = messagesToProcess.flatMap(m => m.images || []);
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
-				{
-					message: combinedMessage,
-					imageCount: allImages.length,
-					source: 'pending',
-				},
+				{message: combinedMessage, imageCount: allImages.length, source: 'pending'},
 			);
-			const {handleHookResult} = await import(
-				'../../../utils/execution/hookResultHandler.js'
-			);
-			const handlerResult = handleHookResult(hookResult, combinedMessage);
+			const interpreted = interpretHookResult('onUserMessage', hookResult, combinedMessage);
 
-			if (!handlerResult.shouldContinue && handlerResult.errorDetails) {
+			if (interpreted.action === 'block' && interpreted.errorDetails) {
 				setMessages(prev => [
 					...prev,
 					{
 						role: 'assistant',
 						content: '',
 						timestamp: new Date(),
-						hookError: handlerResult.errorDetails,
+						hookError: interpreted.errorDetails,
 					},
 				]);
 				return;
 			}
-
-			messageToSend = handlerResult.modifiedMessage!;
+			if (interpreted.action === 'replace' && interpreted.replacedContent) {
+				messageToSend = interpreted.replacedContent;
+			}
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}

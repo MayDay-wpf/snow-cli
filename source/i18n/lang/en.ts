@@ -1291,8 +1291,7 @@ export const en: TranslationKeys = {
 		title: 'Sub-Agent Role Management',
 		tabGlobal: 'Global',
 		tabProject: 'Project',
-		noRoles:
-			'No sub-agent role files found. Use /role-subagent to create one.',
+		noRoles: 'No sub-agent role files found. Use /role-subagent to create one.',
 		deleteSuccess: 'Role file deleted successfully',
 		loading: 'Processing...',
 		hints: 'Tab: Switch scope | D: Delete | ESC: Close',
@@ -1412,6 +1411,8 @@ export const en: TranslationKeys = {
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
 		emptyHint: 'No files to rollback',
+		noFilesConfirm: 'No file changes detected. Rollback conversation only?',
+		noFilesConfirmHint: 'Enter confirm · ESC cancel',
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',
@@ -1539,7 +1540,8 @@ export const en: TranslationKeys = {
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
 		toolsListTitle: '{service} - Tool List',
-		toolsNavigationHint: '↑↓ Navigate • Tab Toggle Tool (Global/Project) • ESC Back',
+		toolsNavigationHint:
+			'↑↓ Navigate • Tab Toggle Tool (Global/Project) • ESC Back',
 		toolTogglingHint: 'Toggling tool {tool}...',
 		toolDisabled: '(Disabled)',
 		toolScopeGlobal: '[Global]',

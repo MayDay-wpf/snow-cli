@@ -550,54 +550,28 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const {unifiedHooksExecutor} = await import(
 							'../../utils/execution/unifiedHooksExecutor.js'
 						);
+						const {interpretHookResult} = await import(
+							'../../utils/execution/hookResultInterpreter.js'
+						);
 						const hookResult = await unifiedHooksExecutor.executeHooks(
 							'onSessionStart',
-							{
-								messages: [],
-								messageCount: 0,
-							},
+							{messages: [], messageCount: 0},
 						);
+						const interpreted = interpretHookResult('onSessionStart', hookResult);
 
-						// Check for hook failures
-						let shouldAbort = false;
-						let warningMessage: string | null = null;
-						if (!hookResult.success) {
-							const commandError = hookResult.results.find(
-								r => r.type === 'command' && !r.success,
-							);
-
-							if (commandError && commandError.type === 'command') {
-								const {exitCode, command, output, error} = commandError;
-								const combinedOutput =
-									[output, error].filter(Boolean).join('\n\n') || '(no output)';
-
-								if (exitCode === 1) {
-									// Warning: save to display AFTER clearing screen
-									warningMessage = `[WARN] onSessionStart hook warning:\nCommand: ${command}\nOutput: ${combinedOutput}`;
-								} else if (exitCode >= 2 || exitCode < 0) {
-									// Critical error: display using HookErrorDisplay component
-									const errorMessage: Message = {
-										role: 'assistant',
-										content: '', // Content will be rendered by HookErrorDisplay
-										hookError: {
-											type: 'error',
-											exitCode,
-											command,
-											output,
-											error,
-										},
-									};
-
-									options.setMessages(prev => [...prev, errorMessage]);
-									shouldAbort = true;
-								}
-							}
-						}
-
-						// If hook failed critically, don't clear session
-						if (shouldAbort) {
+						if (interpreted.action === 'block' && interpreted.errorDetails) {
+							const errorMessage: Message = {
+								role: 'assistant',
+								content: '',
+								hookError: interpreted.errorDetails,
+							};
+							options.setMessages(prev => [...prev, errorMessage]);
 							return;
 						}
+
+						const warningMessage = interpreted.action === 'warn'
+							? interpreted.warningMessage
+							: null;
 
 						// Hook passed, now clear session
 						resetTerminal(stdout);

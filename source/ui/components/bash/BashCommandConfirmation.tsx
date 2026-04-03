@@ -6,6 +6,7 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
+import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
 import {sendTerminalInput} from '../../../hooks/execution/useTerminalExecutionState.js';
 
 interface BashCommandConfirmationProps {
@@ -65,30 +66,17 @@ export function BashCommandConfirmation({
 		// Execute hook and handle exit code
 		unifiedHooksExecutor
 			.executeHooks('toolConfirmation', context)
-			.then((result: any) => {
-				// Check for command failures
-				const commandError = result.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Warning: print to console
-						const combinedOutput =
-							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						console.warn(
-							`[Hook Warning] toolConfirmation Hook returned warning:\nCommand: ${command}\nOutput: ${combinedOutput}`,
-						);
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Critical error: print to console (user will see in terminal output)
-						const combinedOutput =
-							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						console.error(
-							`[Hook Error] toolConfirmation Hook failed (exitCode ${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
-						);
-					}
+			.then(hookResult => {
+				const interpreted = interpretHookResult('toolConfirmation', hookResult);
+				if (interpreted.action === 'warn' && interpreted.warningMessage) {
+					console.warn(interpreted.warningMessage);
+				} else if (interpreted.action === 'block' && interpreted.errorDetails) {
+					const {exitCode, command, output, error} = interpreted.errorDetails;
+					const combinedOutput =
+						[output, error].filter(Boolean).join('\n\n') || '(no output)';
+					console.error(
+						`[Hook Error] toolConfirmation Hook failed (exitCode ${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
+					);
 				}
 			})
 			.catch((error: any) => {

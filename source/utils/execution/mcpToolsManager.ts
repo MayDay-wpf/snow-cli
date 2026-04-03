@@ -46,7 +46,7 @@ import {
 } from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
-import {HookFailedError} from './hookFailedError.js';
+
 import os from 'os';
 import path from 'path';
 
@@ -1149,7 +1149,6 @@ export async function executeMCPTool(
 	}
 
 	let result: any;
-	let executionError: Error | null = null;
 
 	try {
 		// Handle tool_search meta-tool (progressive tool discovery)
@@ -1765,87 +1764,7 @@ export async function executeMCPTool(
 			);
 		}
 	} catch (error) {
-		executionError = error instanceof Error ? error : new Error(String(error));
-		throw executionError;
-	} finally {
-		// Execute afterToolCall hook
-		try {
-			const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');
-			const hookResult = await unifiedHooksExecutor.executeHooks(
-				'afterToolCall',
-				{
-					toolName,
-					args,
-					result,
-					error: executionError,
-				},
-			);
-
-			// Handle hook result based on exit code strategy
-			if (hookResult && !hookResult.success) {
-				// Find failed command hook
-				const commandError = hookResult.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Exit code 1: Warning - stderr replaces tool result content
-						console.warn(
-							`[WARN] afterToolCall hook warning (exitCode: ${exitCode}):
-` +
-								`output: ${output || '(empty)'}
-` +
-								`error: ${error || '(empty)'}`,
-						);
-
-						const replacedContent =
-							error ||
-							output ||
-							`[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
-
-						if (typeof result === 'string') {
-							result = replacedContent;
-						} else if (result && typeof result === 'object') {
-							if ('content' in result && typeof result.content === 'string') {
-								result.content = replacedContent;
-							} else {
-								result = replacedContent;
-							}
-						}
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Exit code 2+: Critical error - throw structured hook error
-						const combinedOutput =
-							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						throw new HookFailedError(
-							'afterToolCall',
-							exitCode,
-							command,
-							combinedOutput,
-						);
-					}
-				}
-			}
-		} catch (error) {
-			// Re-throw if it's a critical hook error (exit code 2+)
-			if (error instanceof HookFailedError) {
-				throw error;
-			}
-			// Otherwise just warn - don't block tool execution on unexpected errors
-			logger.warn('Failed to execute afterToolCall hook:', error);
-		}
-	}
-
-	// Re-throw execution error if it exists (from try block)
-	if (executionError) {
-		const err: any = executionError;
-		console.log(
-			'[DEBUG] Re-throwing executionError:',
-			err.message || String(err),
-		);
-		throw executionError;
+		throw error;
 	}
 
 	// Apply token limit validation before returning result (truncates if exceeded)

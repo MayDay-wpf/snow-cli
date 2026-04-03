@@ -1102,59 +1102,28 @@ class SessionManager {
 			const {unifiedHooksExecutor} = await import(
 				'../execution/unifiedHooksExecutor.js'
 			);
-
-			// Execute hook with messages passed via stdin
-			const hookResult = await unifiedHooksExecutor.executeHooks(
-				'onSessionStart',
-				{
-					messages,
-					messageCount: messages.length,
-				},
+			const {interpretHookResult} = await import(
+				'../execution/hookResultInterpreter.js'
 			);
 
-			// onSessionStart only uses command type hooks
-			// exitCode 0: continue normally
-			// exitCode 1: warning (log to console)
-			// exitCode >= 2: critical error (return error details for UI display)
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'onSessionStart',
+				{messages, messageCount: messages.length},
+			);
+			const interpreted = interpretHookResult('onSessionStart', hookResult);
 
-			// Check for command hook failures
-			if (!hookResult.success) {
-				const commandError = hookResult.results.find(
-					r => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-					const combinedOutput =
-						[output, error].filter(Boolean).join('\n\n') || '(no output)';
-
-					if (exitCode === 1) {
-						// Warning - continue
-						const warningMsg = `[WARN] onSessionStart hook warning:\nCommand: ${command}\nOutput: ${combinedOutput}`;
-						logger.warn(warningMsg);
-						return {shouldContinue: true, warningMessage: warningMsg};
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Critical error - return error details for UI display
-						logger.error(
-							`onSessionStart hook failed (exitCode=${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
-						);
-						return {
-							shouldContinue: false,
-							errorDetails: {
-								type: 'error',
-								exitCode,
-								command,
-								output,
-								error,
-							},
-						};
-					}
-				}
+			if (interpreted.action === 'warn') {
+				logger.warn(interpreted.warningMessage || '');
+				return {shouldContinue: true, warningMessage: interpreted.warningMessage};
+			}
+			if (interpreted.action === 'block') {
+				logger.error(`onSessionStart hook failed: ${JSON.stringify(interpreted.errorDetails)}`);
+				return {shouldContinue: false, errorDetails: interpreted.errorDetails};
 			}
 			return {shouldContinue: true};
 		} catch (error) {
 			logger.error('Failed to execute onSessionStart hook:', error);
-			return {shouldContinue: true}; // On exception, continue
+			return {shouldContinue: true};
 		}
 	}
 

@@ -6,7 +6,7 @@ import {
 } from '../../../utils/ui/pickerState.js';
 import type {BackgroundProcess} from '../../../hooks/execution/useBackgroundProcesses.js';
 import type {PendingConfirmation} from '../../../hooks/conversation/useToolConfirmation.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
 	PendingUserQuestionState,

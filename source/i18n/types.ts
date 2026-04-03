@@ -1315,6 +1315,8 @@ export type TranslationKeys = {
 		toggleHint: string;
 		backHint: string;
 		closeHint: string;
+		noFilesConfirm: string;
+		noFilesConfirmHint: string;
 	};
 	usagePanel: {
 		title: string;

@@ -1333,6 +1333,8 @@ export const zhTW: TranslationKeys = {
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 關閉',
 		emptyHint: '無檔案可回滾',
+		noFilesConfirm: '未偵測到檔案變更。僅回滾對話？',
+		noFilesConfirmHint: 'Enter 確認 · ESC 取消',
 	},
 	usagePanel: {
 		title: 'Token 使用統計',

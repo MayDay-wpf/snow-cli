@@ -55,6 +55,69 @@ export interface HookConfig {
 }
 
 /**
+ * 各 HookType 的强类型上下文
+ */
+export interface OnUserMessageContext {
+	message: string;
+	imageCount: number;
+	source: 'normal' | 'pending';
+}
+
+export interface BeforeToolCallContext {
+	toolName: string;
+	args: Record<string, any>;
+}
+
+export interface AfterToolCallContext {
+	toolName: string;
+	args: Record<string, any>;
+	result: any;
+	error: Error | null;
+}
+
+export interface ToolConfirmationContext {
+	toolName: string;
+	args: string | Record<string, any> | undefined;
+	isSensitive?: boolean;
+	allTools?: Array<{name: string; arguments: string}>;
+	matchedPattern?: string;
+	matchedReason?: string;
+}
+
+export interface OnSubAgentCompleteContext {
+	agentId: string;
+	agentName: string;
+	content: string;
+	success: boolean;
+	usage: any;
+}
+
+export interface BeforeCompressContext {
+	messages: any[];
+	conversationJson: string;
+}
+
+export interface OnSessionStartContext {
+	messages: any[];
+	messageCount: number;
+}
+
+export interface OnStopContext {
+	messages: any[];
+}
+
+export type HookContextMap = {
+	onUserMessage: OnUserMessageContext;
+	beforeToolCall: BeforeToolCallContext;
+	afterToolCall: AfterToolCallContext;
+	toolConfirmation: ToolConfirmationContext;
+	onSubAgentComplete: OnSubAgentCompleteContext;
+	beforeCompress: BeforeCompressContext;
+	onSessionStart: OnSessionStartContext;
+	onStop: OnStopContext;
+};
+
+/**
  * Hook 存储位置
  */
 export type HookScope = 'global' | 'project';

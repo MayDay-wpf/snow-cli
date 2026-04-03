@@ -58,6 +58,15 @@ export {
 	type PromptHookResult,
 } from './execution/unifiedHooksExecutor.js';
 
+// Export hook result interpreter
+export {
+	interpretHookResult,
+	findFirstFailedCommand,
+	buildErrorDetails,
+	type InterpretedHookResult,
+	type HookErrorDetails,
+} from './execution/hookResultInterpreter.js';
+
 export function formatCommand(command: Command): string {
 	return `${command.name.padEnd(12)} ${command.description}`;
 }

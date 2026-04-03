@@ -45,11 +45,7 @@ function resolveSnapshotIndex(
 	let userMsgOrdinal = 0;
 	for (let i = 0; i <= liveIndex && i < liveMessages.length; i++) {
 		const msg = liveMessages[i];
-		if (
-			msg?.role === 'user' &&
-			msg.content?.trim() &&
-			!msg.subAgentDirected
-		) {
+		if (msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected) {
 			userMsgOrdinal++;
 		}
 	}
@@ -61,11 +57,7 @@ function resolveSnapshotIndex(
 	let count = 0;
 	for (let i = 0; i < uiMessages.length; i++) {
 		const msg = uiMessages[i];
-		if (
-			msg?.role === 'user' &&
-			msg.content?.trim() &&
-			!msg.subAgentDirected
-		) {
+		if (msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected) {
 			count++;
 			if (count === userMsgOrdinal) {
 				return i;
@@ -106,11 +98,7 @@ export function useRollback(props: UseChatLogicProps) {
 		(liveIndex: number) => {
 			const currentSession = sessionManager.getCurrentSession();
 			if (!currentSession) return liveIndex;
-			return resolveSnapshotIndex(
-				messages,
-				liveIndex,
-				currentSession.messages,
-			);
+			return resolveSnapshotIndex(messages, liveIndex, currentSession.messages);
 		},
 		[messages],
 	);
@@ -365,14 +353,8 @@ export function useRollback(props: UseChatLogicProps) {
 				currentSession.id,
 				sIdx,
 			);
-			const nbCount = getNotebookRollbackCount(
-				currentSession.id,
-				sIdx,
-			);
-			const tmCount = getTeamRollbackCount(
-				currentSession.id,
-				sIdx,
-			);
+			const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
+			const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
 			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
@@ -418,11 +400,16 @@ export function useRollback(props: UseChatLogicProps) {
 				images,
 			});
 		} else {
-			setRestoreInputContent({
-				text: cleanIDEContext(message),
+			// Show confirmation even when no files to rollback
+			snapshotState.setPendingRollback({
+				messageIndex: selectedIndex,
+				fileCount: 0,
+				filePaths: [],
+				notebookCount: 0,
+				teamCount: 0,
+				message: cleanIDEContext(message),
 				images,
 			});
-			await performRollback(selectedIndex, false, true);
 		}
 	};
 
