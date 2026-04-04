@@ -36,7 +36,7 @@ function stripLineNumbers(content: string): string {
 	return content
 		.split('\n')
 		.map(line => {
-			let stripped = line;
+			let stripped = line.replace(/\r$/, '');
 			let match: RegExpMatchArray | null;
 			while ((match = hashlineRe.exec(stripped))) {
 				stripped = match[1]!;
