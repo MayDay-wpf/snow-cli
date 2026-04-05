@@ -814,12 +814,14 @@ export class FilesystemMCPService {
 					totalLines,
 					Math.min(actualEndLine, start + lines.length - 1),
 				);
-			const numberedLines = lines.map((line, index) => {
-				const lineNum = start + index;
-				return formatLineWithHash(lineNum, line);
-			});
+				const numberedLines = lines.map((line, index) => {
+					const lineNum = start + index;
+					return formatLineWithHash(lineNum, line);
+				});
 
-			const sizeInfo = `[File: ${Math.round(fileSizeBytes / 1024 / 1024)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
+				const sizeInfo = `[File: ${Math.round(
+					fileSizeBytes / 1024 / 1024,
+				)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
 				const partialContent = `${sizeInfo}\n${numberedLines.join('\n')}`;
 
 				return {
@@ -1102,7 +1104,7 @@ export class FilesystemMCPService {
 				EditByHashlineBatchResultItem
 			>(
 				filePath,
-				(fileItem) => {
+				fileItem => {
 					const cfg = fileItem as EditByHashlineConfig;
 					return {path: cfg.path, operations: cfg.operations};
 				},
@@ -1202,7 +1204,10 @@ export class FilesystemMCPService {
 					}
 				}
 
-				if ((op.type === 'replace' || op.type === 'insert_after') && op.content === undefined) {
+				if (
+					(op.type === 'replace' || op.type === 'insert_after') &&
+					op.content === undefined
+				) {
 					anchorErrors.push(`Operation "${op.type}" requires content`);
 				}
 			}
@@ -1226,64 +1231,69 @@ export class FilesystemMCPService {
 			let editStartLine = Infinity;
 			let editEndLine = 0;
 
-		const mutableLines = [...lines];
-		const opSummaries: string[] = [];
+			const mutableLines = [...lines];
+			const opSummaries: string[] = [];
 
-		// Strip hashline prefixes that less-capable models may accidentally
-		// copy from filesystem-read output into their content.
-		// The exact format is "lineNum:hash→content" (e.g. "42:a3→actual code"),
-		// requiring both the 2-char hex hash AND the → arrow to avoid false positives.
-		const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
-		const sanitizeContent = (raw: string): string => {
-			const contentLines = raw.split('\n');
-			const hasHashlines = contentLines.length > 0 &&
-				contentLines.every(l => l === '' || hashlineContentRe.test(l));
-			if (!hasHashlines) return raw;
-			return contentLines
-				.map(l => {
-					let s = l;
-					let m: RegExpExecArray | null;
-					while ((m = hashlineContentRe.exec(s))) {
-						s = s.slice(m[0].length);
+			// Strip hashline prefixes that less-capable models may accidentally
+			// copy from filesystem-read output into their content.
+			// The exact format is "lineNum:hash→content" (e.g. "42:a3→actual code"),
+			// requiring both the 2-char hex hash AND the → arrow to avoid false positives.
+			const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
+			const sanitizeContent = (raw: string): string => {
+				const contentLines = raw.split('\n');
+				const hasHashlines =
+					contentLines.length > 0 &&
+					contentLines.every(l => l === '' || hashlineContentRe.test(l));
+				if (!hasHashlines) return raw;
+				return contentLines
+					.map(l => {
+						let s = l;
+						let m: RegExpExecArray | null;
+						while ((m = hashlineContentRe.exec(s))) {
+							s = s.slice(m[0].length);
+						}
+						return s;
+					})
+					.join('\n');
+			};
+
+			for (const op of sortedOps) {
+				const startLine = parseAnchor(op.startAnchor)!.lineNum;
+				const endLine = op.endAnchor
+					? parseAnchor(op.endAnchor)!.lineNum
+					: startLine;
+
+				editStartLine = Math.min(editStartLine, startLine);
+				editEndLine = Math.max(editEndLine, endLine);
+
+				switch (op.type) {
+					case 'replace': {
+						const newLines = sanitizeContent(op.content ?? '').split('\n');
+						mutableLines.splice(
+							startLine - 1,
+							endLine - startLine + 1,
+							...newLines,
+						);
+						opSummaries.push(
+							`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
+						);
+						break;
 					}
-					return s;
-				})
-				.join('\n');
-		};
-
-		for (const op of sortedOps) {
-			const startLine = parseAnchor(op.startAnchor)!.lineNum;
-			const endLine = op.endAnchor
-				? parseAnchor(op.endAnchor)!.lineNum
-				: startLine;
-
-			editStartLine = Math.min(editStartLine, startLine);
-			editEndLine = Math.max(editEndLine, endLine);
-
-			switch (op.type) {
-				case 'replace': {
-					const newLines = sanitizeContent(op.content ?? '').split('\n');
-					mutableLines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
-					opSummaries.push(
-						`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
-					);
-					break;
-				}
-				case 'insert_after': {
-					const newLines = sanitizeContent(op.content ?? '').split('\n');
-					mutableLines.splice(startLine, 0, ...newLines);
-					opSummaries.push(
-						`insert ${newLines.length} line(s) after line ${startLine}`,
-					);
-					break;
-				}
-				case 'delete': {
-					mutableLines.splice(startLine - 1, endLine - startLine + 1);
-					opSummaries.push(`delete lines ${startLine}-${endLine}`);
-					break;
+					case 'insert_after': {
+						const newLines = sanitizeContent(op.content ?? '').split('\n');
+						mutableLines.splice(startLine, 0, ...newLines);
+						opSummaries.push(
+							`insert ${newLines.length} line(s) after line ${startLine}`,
+						);
+						break;
+					}
+					case 'delete': {
+						mutableLines.splice(startLine - 1, endLine - startLine + 1);
+						opSummaries.push(`delete lines ${startLine}-${endLine}`);
+						break;
+					}
 				}
 			}
-		}
 
 			// ── Build before/after content for DiffViewer ──
 			const replacedContent = lines
@@ -1369,7 +1379,10 @@ export class FilesystemMCPService {
 			const structureAnalysis = analyzeCodeStructure(
 				finalLines.join('\n'),
 				filePath,
-				finalLines.slice(editStartLine - 1, editStartLine - 1 + (editEndLine - editStartLine + 1)),
+				finalLines.slice(
+					editStartLine - 1,
+					editStartLine - 1 + (editEndLine - editStartLine + 1),
+				),
 			);
 
 			// ── IDE diagnostics ──
@@ -1377,7 +1390,9 @@ export class FilesystemMCPService {
 			try {
 				diagnostics = await Promise.race([
 					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve => setTimeout(() => resolve([]), 1000)),
+					new Promise<Diagnostic[]>(resolve =>
+						setTimeout(() => resolve([]), 1000),
+					),
 				]);
 			} catch {
 				// optional
@@ -1408,8 +1423,12 @@ export class FilesystemMCPService {
 				const limitedDiagnostics = diagnostics.slice(0, 10);
 				result.diagnostics = limitedDiagnostics;
 
-				const errorCount = diagnostics.filter(d => d.severity === 'error').length;
-				const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
+				const errorCount = diagnostics.filter(
+					d => d.severity === 'error',
+				).length;
+				const warningCount = diagnostics.filter(
+					d => d.severity === 'warning',
+				).length;
 
 				if (errorCount > 0 || warningCount > 0) {
 					result.message += `\n\n⚠️  Diagnostics: ${errorCount} error(s), ${warningCount} warning(s)`;
@@ -1418,12 +1437,16 @@ export class FilesystemMCPService {
 						.slice(0, 5)
 						.map(d => {
 							const icon = d.severity === 'error' ? '❌' : '⚠️';
-							return `   ${icon} [${d.source || 'unknown'}] ${filePath}:${d.line}:${d.character}\n      ${d.message}`;
+							return `   ${icon} [${d.source || 'unknown'}] ${filePath}:${
+								d.line
+							}:${d.character}\n      ${d.message}`;
 						})
 						.join('\n\n');
 					result.message += `\n\n📋 Details:\n${fmt}`;
 					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${errorCount + warningCount - 5} more`;
+						result.message += `\n   ... and ${
+							errorCount + warningCount - 5
+						} more`;
 					}
 				}
 			}
@@ -1431,31 +1454,63 @@ export class FilesystemMCPService {
 			// ── Structure warnings ──
 			const sw: string[] = [];
 			if (!structureAnalysis.bracketBalance.curly.balanced) {
-				const d = structureAnalysis.bracketBalance.curly.open - structureAnalysis.bracketBalance.curly.close;
-				sw.push(`Curly brackets: ${d > 0 ? `${d} unclosed {` : `${Math.abs(d)} extra }`}`);
+				const d =
+					structureAnalysis.bracketBalance.curly.open -
+					structureAnalysis.bracketBalance.curly.close;
+				sw.push(
+					`Curly brackets: ${
+						d > 0 ? `${d} unclosed {` : `${Math.abs(d)} extra }`
+					}`,
+				);
 			}
 			if (!structureAnalysis.bracketBalance.round.balanced) {
-				const d = structureAnalysis.bracketBalance.round.open - structureAnalysis.bracketBalance.round.close;
-				sw.push(`Round brackets: ${d > 0 ? `${d} unclosed (` : `${Math.abs(d)} extra )`}`);
+				const d =
+					structureAnalysis.bracketBalance.round.open -
+					structureAnalysis.bracketBalance.round.close;
+				sw.push(
+					`Round brackets: ${
+						d > 0 ? `${d} unclosed (` : `${Math.abs(d)} extra )`
+					}`,
+				);
 			}
 			if (!structureAnalysis.bracketBalance.square.balanced) {
-				const d = structureAnalysis.bracketBalance.square.open - structureAnalysis.bracketBalance.square.close;
-				sw.push(`Square brackets: ${d > 0 ? `${d} unclosed [` : `${Math.abs(d)} extra ]`}`);
+				const d =
+					structureAnalysis.bracketBalance.square.open -
+					structureAnalysis.bracketBalance.square.close;
+				sw.push(
+					`Square brackets: ${
+						d > 0 ? `${d} unclosed [` : `${Math.abs(d)} extra ]`
+					}`,
+				);
 			}
 			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
 				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
-					sw.push(`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`);
+					sw.push(
+						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
+							', ',
+						)}`,
+					);
 				}
 				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
-					sw.push(`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`);
+					sw.push(
+						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
+							', ',
+						)}`,
+					);
 				}
 			}
 			if (structureAnalysis.indentationWarnings.length > 0) {
-				sw.push(...structureAnalysis.indentationWarnings.map((w: string) => `Indentation: ${w}`));
+				sw.push(
+					...structureAnalysis.indentationWarnings.map(
+						(w: string) => `Indentation: ${w}`,
+					),
+				);
 			}
 			if (sw.length > 0) {
 				result.message += `\n\n🔍 Structure Analysis:\n`;
-				sw.forEach(w => { result.message += `   ⚠️  ${w}\n`; });
+				sw.forEach(w => {
+					result.message += `   ⚠️  ${w}\n`;
+				});
 				result.message += `\n   💡 TIP: These warnings help identify potential issues.`;
 			}
 
@@ -1610,16 +1665,12 @@ export const mcpTools = [
 		name: 'filesystem-edit',
 		description:
 			'PREFERRED edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
-			'Each line read has format "lineNum:hash→content" (e.g. "42:a3→code"). ' +
-			'Reference lines by anchors ("42:a3") instead of copying text. ' +
-			'**WHY USE THIS**: No text reproduction needed — avoids "string not found" failures, ' +
-			'whitespace mismatches, and fuzzy matching ambiguity. If the file changed since your ' +
-			'last read, hashes will mismatch and the edit is safely rejected. ' +
-			'**OPERATIONS**: (1) replace — replace lines startAnchor..endAnchor with content, ' +
-			'(2) insert_after — insert content after startAnchor, ' +
-			'(3) delete — delete lines startAnchor..endAnchor. ' +
+			'Line format: "lineNum:hash→content" (e.g. "42:a3→code"). Use anchors "lineNum:hash" to reference lines — no text reproduction needed. ' +
+			'**OPERATIONS**: (1) replace — replaces startAnchor..endAnchor with content; ' +
+			'(2) insert_after — inserts content after startAnchor; ' +
+			'(3) delete — removes startAnchor..endAnchor, set content to empty string "". ' +
 			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
-			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". For single-line replace/delete, omit endAnchor. ' +
+			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". Omit endAnchor for single-line operations. ' +
 			'**SUPPORTS BATCH**: Pass array of {path, operations} for multi-file edits.',
 		inputSchema: {
 			type: 'object',
@@ -1657,15 +1708,15 @@ export const mcpTools = [
 												endAnchor: {
 													type: 'string',
 													description:
-														'End anchor for range operations (optional, omit for single-line)',
+														'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
 												},
 												content: {
 													type: 'string',
 													description:
-														'New content for replace/insert_after (not needed for delete)',
+														'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 												},
 											},
-											required: ['type', 'startAnchor'],
+											required: ['type', 'startAnchor', 'content'],
 										},
 										description: 'Array of edit operations for this file',
 									},
@@ -1676,7 +1727,8 @@ export const mcpTools = [
 								'Array of per-file hashline edit configs for batch editing',
 						},
 					],
-					description: 'File path (string) or batch configs (array of {path, operations})',
+					description:
+						'File path (string) or batch configs (array of {path, operations})',
 				},
 				operations: {
 					type: 'array',
@@ -1686,8 +1738,7 @@ export const mcpTools = [
 							type: {
 								type: 'string',
 								enum: ['replace', 'insert_after', 'delete'],
-								description:
-									'replace: replace anchor range with content. insert_after: insert after anchor. delete: remove anchor range.',
+								description: 'Operation type',
 							},
 							startAnchor: {
 								type: 'string',
@@ -1697,15 +1748,15 @@ export const mcpTools = [
 							endAnchor: {
 								type: 'string',
 								description:
-									'End anchor for range operations (format: "lineNum:hash"). Omit for single-line replace/delete or insert_after.',
+									'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
 							},
 							content: {
 								type: 'string',
 								description:
-									'New content (for replace and insert_after). Do NOT include line numbers or hashes.',
+									'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 							},
 						},
-						required: ['type', 'startAnchor'],
+						required: ['type', 'startAnchor', 'content'],
 					},
 					description:
 						'Array of edit operations (for single file mode). Each operation references anchors from filesystem-read.',

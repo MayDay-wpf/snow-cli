@@ -21,7 +21,7 @@ const DEFAULT_TOOL_RESULT_TOKEN_LIMIT = DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT;
 export function getToolResultTokenLimit(): number {
 	try {
 		const config = getOpenAiConfig();
-		const maxContextTokens = config.maxContextTokens || 120000;
+		const maxContextTokens = config.maxContextTokens || 200000;
 
 		// 获取百分比设置，默认为 30%
 		let percentage =
@@ -36,7 +36,7 @@ export function getToolResultTokenLimit(): number {
 		// 基于 maxContextTokens 计算实际 token 限制
 		return Math.floor((maxContextTokens * percentage) / 100);
 	} catch {
-		return Math.floor((120000 * DEFAULT_TOOL_RESULT_TOKEN_LIMIT) / 100);
+		return Math.floor((200000 * DEFAULT_TOOL_RESULT_TOKEN_LIMIT) / 100);
 	}
 }
 
