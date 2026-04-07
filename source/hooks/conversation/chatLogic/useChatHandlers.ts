@@ -96,6 +96,7 @@ export function useChatHandlers(
 
 				initializeFromSession(session.messages);
 				setMessages(uiMessages);
+				streamingState.setContextUsage(session.contextUsage ?? null);
 
 				const snapshots = await hashBasedSnapshotManager.listSnapshots(
 					session.id,

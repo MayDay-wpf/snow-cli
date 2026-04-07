@@ -296,6 +296,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 			clearSavedMessages();
 			setMessages(uiMessages);
+			streamingState.setContextUsage(originalSession.contextUsage ?? null);
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				originalSession.id,

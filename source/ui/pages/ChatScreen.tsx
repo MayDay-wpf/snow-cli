@@ -23,6 +23,7 @@ import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
 import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
 import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
 import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
@@ -169,6 +170,7 @@ export default function ChatScreen({
 		setMessages,
 		initializeFromSession,
 		setIsResumingSession,
+		setContextUsage: streamingState.setContextUsage,
 	});
 
 	const {
@@ -322,6 +324,7 @@ export default function ChatScreen({
 				cached_tokens: streamingState.contextUsage.cached_tokens,
 				max_tokens: getOpenAiConfig().maxContextTokens || 128000,
 			});
+			sessionManager.updateContextUsage(streamingState.contextUsage);
 		} else {
 			updateGlobalTokenUsage(null);
 		}

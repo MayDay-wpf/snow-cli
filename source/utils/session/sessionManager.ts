@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import {randomUUID} from 'crypto';
 import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
+import type {UsageInfo} from '../../api/types.js';
 import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
@@ -34,6 +35,7 @@ export interface Session {
 	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
 	compressedAt?: number; // 压缩时间戳
 	originalMessageIndex?: number; // 压缩点在原会话中的消息索引
+	contextUsage?: UsageInfo; // 最近一次 API 响应的上下文 token 使用信息（可选，向下兼容）
 }
 
 export interface SessionListItem {
@@ -848,6 +850,21 @@ class SessionManager {
 			}
 		} catch (error) {
 			logger.error('Summary agent: Failed to generate summary', error);
+		}
+	}
+
+	/**
+	 * 更新当前会话的上下文 token 使用信息（仅更新内存，下次 saveSession 时一并持久化）
+	 */
+	updateContextUsage(usage: UsageInfo | null): void {
+		if (!this.currentSession) {
+			return;
+		}
+
+		if (usage) {
+			this.currentSession.contextUsage = usage;
+		} else {
+			delete this.currentSession.contextUsage;
 		}
 	}
 
