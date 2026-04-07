@@ -1,4 +1,6 @@
 import {useEffect, useCallback} from 'react';
+import {useStdout} from 'ink';
+import ansiEscapes from 'ansi-escapes';
 import type {UseChatLogicProps} from './types.js';
 import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
@@ -79,6 +81,7 @@ export function useRollback(props: UseChatLogicProps) {
 		currentContextPercentageRef,
 		streamingState,
 	} = props;
+	const {stdout} = useStdout();
 
 	// Notify VSCode/Web when a rollback confirmation is needed
 	useEffect(() => {
@@ -187,6 +190,7 @@ export function useRollback(props: UseChatLogicProps) {
 					setMessages(prev => prev.slice(0, selectedIndex));
 					clearSavedMessages();
 
+					stdout.write(ansiEscapes.clearTerminal);
 					setTimeout(() => {
 						setRemountKey(prev => prev + 1);
 						snapshotState.setPendingRollback(null);
@@ -230,6 +234,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 				snapshotState.setSnapshotFileCount(new Map());
 
+				stdout.write(ansiEscapes.clearTerminal);
 				setTimeout(() => {
 					setRemountKey(prev => prev + 1);
 					snapshotState.setPendingRollback(null);
@@ -265,6 +270,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 		clearSavedMessages();
 
+		stdout.write(ansiEscapes.clearTerminal);
 		setTimeout(() => {
 			setRemountKey(prev => prev + 1);
 			snapshotState.setPendingRollback(null);
@@ -376,7 +382,10 @@ export function useRollback(props: UseChatLogicProps) {
 				currentSession.id,
 			);
 			if (switchedToOriginalSession) {
-				setRemountKey(prev => prev + 1);
+				stdout.write(ansiEscapes.clearTerminal);
+				setTimeout(() => {
+					setRemountKey(prev => prev + 1);
+				}, 0);
 				return;
 			}
 		}
@@ -454,6 +463,7 @@ export function useRollback(props: UseChatLogicProps) {
 							shouldRollbackFiles ? undefined : compressedSessionId,
 						);
 					if (switchedToOriginalSession) {
+						stdout.write(ansiEscapes.clearTerminal);
 						setTimeout(() => {
 							setRemountKey(prev => prev + 1);
 							snapshotState.setPendingRollback(null);

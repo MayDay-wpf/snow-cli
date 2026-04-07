@@ -1386,14 +1386,11 @@ export class FilesystemMCPService {
 			);
 
 			// ── IDE diagnostics ──
+			// 延迟等待 IDE 完成文件变化的重新分析，避免拿到旧诊断
 			let diagnostics: Diagnostic[] = [];
 			try {
-				diagnostics = await Promise.race([
-					vscodeConnection.requestDiagnostics(fullPath),
-					new Promise<Diagnostic[]>(resolve =>
-						setTimeout(() => resolve([]), 1000),
-					),
-				]);
+				await new Promise<void>(r => setTimeout(r, 500));
+				diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
 			} catch {
 				// optional
 			}
