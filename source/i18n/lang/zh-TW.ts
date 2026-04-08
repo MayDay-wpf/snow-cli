@@ -1027,7 +1027,7 @@ export const zhTW: TranslationKeys = {
 		fileSearchHint:
 			'輸入以過濾檔案 • Tab/Enter 選擇 • Ctrl+T 切換檢視 • ESC 取消',
 		expandedViewHint: '展開檢視 • Ctrl+T 切換',
-		yoloModeActive: '❁ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
+		yoloModeActive: '⧴ YOLO 模式已啟用 - 所有工具將自動批准無需確認',
 		planModeActive: '⚐ Plan 模式已啟用 - 專業規劃與協調助手',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
@@ -1255,7 +1255,10 @@ export const zhTW: TranslationKeys = {
 		keyboardHints: "提示: 按 'Enter' 選擇 | 按 'e' 編輯當前選項",
 		multiSelectHint: '多選模式',
 		multiSelectKeyboardHints:
-			'↑↓ 移動 | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯',
+			'↑↓ 移動 | Tab 切換(自訂/取消) | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯',
+		optionListScrollHint: '↑↓ 捲動',
+		optionListMoreAbove: '上方還有 {count} 項',
+		optionListMoreBelow: '下方還有 {count} 項',
 	},
 	toolConfirmation: {
 		header: '[工具確認]',

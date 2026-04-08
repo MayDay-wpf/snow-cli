@@ -1239,6 +1239,10 @@ export type TranslationKeys = {
 		keyboardHints: string;
 		multiSelectHint: string;
 		multiSelectKeyboardHints: string;
+		/** 可滚动选项列表底部汇总（与 mcpInfoPanel.scrollHint / more* 一致） */
+		optionListScrollHint: string;
+		optionListMoreAbove: string;
+		optionListMoreBelow: string;
 	};
 	toolConfirmation: {
 		header: string;

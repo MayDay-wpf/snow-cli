@@ -1080,7 +1080,7 @@ export const en: TranslationKeys = {
 			'Type to filter files • Tab/Enter to select • Ctrl+T to toggle view • ESC to cancel',
 		expandedViewHint: 'Expanded view • Ctrl+T to toggle',
 		yoloModeActive:
-			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
+			'⧴ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
 			'⚐ Plan mode active - Specialized planning and coordination agent',
 		vulnerabilityHuntingModeActive:
@@ -1331,7 +1331,10 @@ export const en: TranslationKeys = {
 			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
 		multiSelectHint: 'Multi-select mode',
 		multiSelectKeyboardHints:
-			'↑↓ Move | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
+			'↑↓ Move | Tab Toggle (Custom/Cancel) | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
+		optionListScrollHint: '↑↓ to scroll',
+		optionListMoreAbove: '{count} more above',
+		optionListMoreBelow: '{count} more below',
 	},
 	toolConfirmation: {
 		header: '[Tool Confirmation]',

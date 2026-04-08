@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useMemo} from 'react';
+import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -16,6 +16,11 @@ interface Props {
 	onAnswer: (result: AskUserQuestionResult) => void;
 	onCancel?: () => void;
 }
+
+/** 选项列表可视行数；超出部分随高亮项用方向键滚动 */
+const VISIBLE_OPTION_ROWS = 5;
+/** 非焦点选项的最大显示长度，避免列表高度抖动 */
+const NON_FOCUSED_OPTION_MAX_LEN = 20;
 
 /**
  * Agent提问组件 - 支持选项选择、多选和自定义输入
@@ -38,54 +43,90 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	const [hasAnswered, setHasAnswered] = useState(false);
 	const [showCustomInput, setShowCustomInput] = useState(false);
 	const [customInput, setCustomInput] = useState('');
-	const [highlightedIndex, setHighlightedIndex] = useState(0);
+	const [highlightedOptionIndex, setHighlightedOptionIndex] = useState(0);
+	const [cursorMode, setCursorMode] = useState<'options' | 'custom' | 'cancel'>(
+		'options',
+	);
 	const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
 	// 动态选项列表，支持添加自定义输入
 	const [dynamicOptions, setDynamicOptions] = useState<string[]>([]);
 
-	//Custom input选项的值标识符
-	const CUSTOM_INPUT_VALUE = 'custom';
-	//Cancel选项的值标识符
-	const CANCEL_VALUE = 'cancel';
-
-	//构建选项列表：建议选项 + 动态添加的选项 + Custom input + Cancel
+	//构建选项列表：建议选项 + 动态添加的选项
 	//防御性检查：确保 options 是数组
 	const safeOptions = Array.isArray(options) ? options : [];
 	const allOptions = [...safeOptions, ...dynamicOptions];
-	const items = useMemo(
-		() => [
-			...allOptions.map((option, index) => ({
+	const optionItems = useMemo(
+		() =>
+			allOptions.map((option, index) => ({
 				label: option,
 				value: `option-${index}`,
 				index,
 			})),
-			{
-				label: t.askUser.customInputOption,
-				value: CUSTOM_INPUT_VALUE,
-				index: -1,
-			},
-			{
-				label: t.askUser.cancelOption || 'Cancel',
-				value: CANCEL_VALUE,
-				index: -2,
-			},
-		],
-		[allOptions, t.askUser.customInputOption, t.askUser.cancelOption],
+		[allOptions],
 	);
+
+	useEffect(() => {
+		if (optionItems.length === 0 && cursorMode === 'options') {
+			setCursorMode('custom');
+			return;
+		}
+
+		if (optionItems.length > 0 && highlightedOptionIndex >= optionItems.length) {
+			setHighlightedOptionIndex(optionItems.length - 1);
+		}
+	}, [optionItems.length, highlightedOptionIndex, cursorMode]);
+
+	// 与 MCPInfoPanel 相同的居中视口，避免高亮始终在窗口边缘
+	const optionDisplayWindow = useMemo(() => {
+		const total = optionItems.length;
+		if (total <= VISIBLE_OPTION_ROWS) {
+			return {
+				windowItems: optionItems,
+				startIndex: 0,
+				endIndex: total,
+				hiddenAbove: 0,
+				hiddenBelow: 0,
+			};
+		}
+
+		const halfWindow = Math.floor(VISIBLE_OPTION_ROWS / 2);
+		let startIndex = Math.max(0, highlightedOptionIndex - halfWindow);
+		const endIndex = Math.min(
+			total,
+			startIndex + VISIBLE_OPTION_ROWS,
+		);
+
+		if (endIndex - startIndex < VISIBLE_OPTION_ROWS) {
+			startIndex = Math.max(0, endIndex - VISIBLE_OPTION_ROWS);
+		}
+
+		return {
+			windowItems: optionItems.slice(startIndex, endIndex),
+			startIndex,
+			endIndex,
+			hiddenAbove: startIndex,
+			hiddenBelow: total - endIndex,
+		};
+	}, [optionItems, highlightedOptionIndex]);
+
+	const optionListScrollable = optionItems.length > VISIBLE_OPTION_ROWS;
+	const formatOptionLabel = useCallback((label: string, isHighlighted: boolean) => {
+		if (isHighlighted || label.length <= NON_FOCUSED_OPTION_MAX_LEN) {
+			return label;
+		}
+
+		return `${label.slice(0, NON_FOCUSED_OPTION_MAX_LEN - 3)}...`;
+	}, []);
 
 	const handleSubmit = useCallback(() => {
 		if (hasAnswered) return;
 
-		const currentItem = items[highlightedIndex];
-		if (!currentItem) return;
-
-		if (currentItem.value === CUSTOM_INPUT_VALUE) {
+		if (cursorMode === 'custom') {
 			setShowCustomInput(true);
 			return;
 		}
 
-		// 处理取消选项
-		if (currentItem.value === CANCEL_VALUE) {
+		if (cursorMode === 'cancel') {
 			setHasAnswered(true);
 			onAnswer({
 				selected: '',
@@ -93,6 +134,9 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			});
 			return;
 		}
+
+		const currentItem = optionItems[highlightedOptionIndex];
+		if (!currentItem) return;
 
 		// 始终支持多选：如果有勾选项则返回数组，否则返回当前高亮项（单个）
 		const selectedOptions = Array.from(checkedIndices)
@@ -115,8 +159,9 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		}
 	}, [
 		hasAnswered,
-		items,
-		highlightedIndex,
+		cursorMode,
+		optionItems,
+		highlightedOptionIndex,
 		checkedIndices,
 		allOptions,
 		onAnswer,
@@ -134,7 +179,8 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			setCustomInput('');
 			// 高亮新添加的选项
 			const newIndex = allOptions.length; // 新选项会在下次渲染时出现在这个位置
-			setHighlightedIndex(newIndex);
+			setHighlightedOptionIndex(newIndex);
+			setCursorMode('options');
 		}
 	}, [customInput, allOptions]);
 
@@ -168,22 +214,55 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 			//上下键导航
 			if (key.upArrow || input === 'k') {
-				setHighlightedIndex(prev => (prev > 0 ? prev - 1 : items.length - 1));
+				if (cursorMode === 'cancel') {
+					setCursorMode('custom');
+				} else if (cursorMode === 'custom') {
+					if (optionItems.length > 0) {
+						setCursorMode('options');
+						setHighlightedOptionIndex(optionItems.length - 1);
+					} else {
+						setCursorMode('cancel');
+					}
+				} else if (optionItems.length > 0) {
+					setHighlightedOptionIndex(prev =>
+						prev > 0 ? prev - 1 : optionItems.length - 1,
+					);
+				}
 				return;
 			}
 			if (key.downArrow || input === 'j') {
-				setHighlightedIndex(prev => (prev < items.length - 1 ? prev + 1 : 0));
+				if (cursorMode === 'options') {
+					if (optionItems.length === 0) {
+						setCursorMode('custom');
+					} else if (highlightedOptionIndex < optionItems.length - 1) {
+						setHighlightedOptionIndex(prev => prev + 1);
+					} else {
+						setCursorMode('custom');
+					}
+				} else if (cursorMode === 'custom') {
+					setCursorMode('cancel');
+				} else {
+					if (optionItems.length > 0) {
+						setCursorMode('options');
+						setHighlightedOptionIndex(0);
+					} else {
+						setCursorMode('custom');
+					}
+				}
+				return;
+			}
+
+			if (key.tab) {
+				setCursorMode(prev =>
+					prev === 'custom' ? 'cancel' : 'custom',
+				);
 				return;
 			}
 
 			//空格键切换选中（始终支持多选）
-			if (input === ' ') {
-				const currentItem = items[highlightedIndex];
-				if (
-					currentItem &&
-					currentItem.value !== CUSTOM_INPUT_VALUE &&
-					currentItem.value !== CANCEL_VALUE
-				) {
+			if (input === ' ' && cursorMode === 'options') {
+				const currentItem = optionItems[highlightedOptionIndex];
+				if (currentItem) {
 					toggleCheck(currentItem.index);
 				}
 				return;
@@ -193,6 +272,8 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			const num = parseInt(input, 10);
 			if (!isNaN(num) && num >= 1 && num <= allOptions.length) {
 				const idx = num - 1;
+				setCursorMode('options');
+				setHighlightedOptionIndex(idx);
 				toggleCheck(idx);
 				return;
 			}
@@ -215,14 +296,13 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 			//e键编辑
 			if (input === 'e' || input === 'E') {
-				const currentItem = items[highlightedIndex];
-				if (!currentItem) return;
-
 				setShowCustomInput(true);
 
-				if (currentItem.value === CUSTOM_INPUT_VALUE) {
+				if (cursorMode === 'custom' || cursorMode === 'cancel') {
 					setCustomInput('');
 				} else {
+					const currentItem = optionItems[highlightedOptionIndex];
+					if (!currentItem) return;
 					setCustomInput(currentItem.label);
 				}
 			}
@@ -269,46 +349,122 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			{!showCustomInput ? (
 				<Box flexDirection="column">
 					<Box marginBottom={1}>
-						<Text dimColor>{t.askUser.selectPrompt}</Text>
+						<Text dimColor>
+							{t.askUser.selectPrompt}
+							{optionListScrollable
+								? ` (${highlightedOptionIndex + 1}/${optionItems.length})`
+								: ''}
+						</Text>
 					</Box>
 					<Box flexDirection="column">
-						{items.map((item, index) => {
-							const isHighlighted = index === highlightedIndex;
-							const isChecked =
-								item.index >= 0 && checkedIndices.has(item.index);
-							const isCustomInput = item.value === CUSTOM_INPUT_VALUE;
-							const isCancel = item.value === CANCEL_VALUE;
+						{optionDisplayWindow.hiddenAbove > 0 ? (
+							<Text color="gray" dimColor>
+								↑{' '}
+								{t.askUser.optionListMoreAbove.replace(
+									'{count}',
+									String(optionDisplayWindow.hiddenAbove),
+								)}
+							</Text>
+						) : null}
+						<Box flexDirection="column">
+							{optionDisplayWindow.windowItems.map((item, rowIndex) => {
+								const index =
+									optionDisplayWindow.startIndex + rowIndex;
+								const isHighlighted =
+									cursorMode === 'options' &&
+									index === highlightedOptionIndex;
+								const isChecked =
+									item.index >= 0 &&
+									checkedIndices.has(item.index);
 
-							return (
-								<Box key={item.value}>
-									<Text
-										color={isHighlighted ? theme.colors.menuInfo : undefined}
-									>
-										{isHighlighted ? '▸ ' : '  '}
-									</Text>
-									{!isCustomInput && !isCancel && (
+								return (
+									<Box key={item.value}>
 										<Text
-											color={isChecked ? theme.colors.success : undefined}
+											color={
+												isHighlighted
+													? theme.colors.menuInfo
+													: undefined
+											}
+										>
+											{isHighlighted ? '▸ ' : '  '}
+										</Text>
+										<Text
+											color={
+												isChecked
+													? theme.colors.success
+													: undefined
+											}
 											dimColor={!isChecked}
 										>
 											{isChecked ? '[✓] ' : '[ ] '}
 										</Text>
-									)}
-									<Text
-										color={isHighlighted ? theme.colors.menuInfo : undefined}
-										dimColor={!isHighlighted}
-									>
-										{item.index >= 0 ? `${item.index + 1}. ` : ''}
-										{item.label}
-									</Text>
-								</Box>
-							);
-						})}
+										<Text
+											color={
+												isHighlighted
+													? theme.colors.menuInfo
+													: undefined
+											}
+											dimColor={!isHighlighted}
+										>
+											{item.index >= 0
+												? `${item.index + 1}. `
+												: ''}
+											{formatOptionLabel(item.label, isHighlighted)}
+										</Text>
+									</Box>
+								);
+							})}
+						</Box>
+						{optionDisplayWindow.hiddenBelow > 0 ? (
+							<Text color="gray" dimColor>
+								↓{' '}
+								{t.askUser.optionListMoreBelow.replace(
+									'{count}',
+									String(optionDisplayWindow.hiddenBelow),
+								)}
+							</Text>
+						) : null}
+					</Box>
+					<Box marginTop={1} flexDirection="column">
+						<Box>
+							<Text
+								color={
+									cursorMode === 'custom' ? theme.colors.menuInfo : undefined
+								}
+							>
+								{cursorMode === 'custom' ? '▸ ' : '  '}
+							</Text>
+							<Text
+								color={
+									cursorMode === 'custom' ? theme.colors.menuInfo : undefined
+								}
+								dimColor={cursorMode !== 'custom'}
+							>
+								{t.askUser.customInputOption}
+							</Text>
+						</Box>
+						<Box>
+							<Text
+								color={
+									cursorMode === 'cancel' ? theme.colors.menuInfo : undefined
+								}
+							>
+								{cursorMode === 'cancel' ? '▸ ' : '  '}
+							</Text>
+							<Text
+								color={
+									cursorMode === 'cancel' ? theme.colors.menuInfo : undefined
+								}
+								dimColor={cursorMode !== 'cancel'}
+							>
+								{t.askUser.cancelOption || 'Cancel'}
+							</Text>
+						</Box>
 					</Box>
 					<Box marginTop={1}>
 						<Text dimColor>
 							{t.askUser.multiSelectKeyboardHints ||
-								'↑↓ 移动 | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑'}
+								'↑↓ 移动 | Tab 切换(自定义/取消) | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑'}
 						</Text>
 					</Box>
 				</Box>

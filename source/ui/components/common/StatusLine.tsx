@@ -522,7 +522,7 @@ export default function StatusLine({
 
 		if (currentProfileName) {
 			statusItems.push({
-				text: `ꚰ ${currentProfileName}`,
+				text: `§ ${currentProfileName}`,
 				color: theme.colors.menuInfo,
 			});
 		}
@@ -535,7 +535,7 @@ export default function StatusLine({
 		}
 
 		if (yoloMode) {
-			statusItems.push({text: '❁ YOLO', color: theme.colors.warning});
+			statusItems.push({text: '⧴ YOLO', color: theme.colors.warning});
 		}
 
 		if (planMode) {
@@ -666,7 +666,7 @@ export default function StatusLine({
 			{currentProfileName && (
 				<Box>
 					<Text color={theme.colors.menuInfo} dimColor>
-						ꚰ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
+						§ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
 						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
 					</Text>
 				</Box>
