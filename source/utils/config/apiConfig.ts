@@ -15,9 +15,11 @@ export interface ThinkingConfig {
 	effort?: 'low' | 'medium' | 'high' | 'max'; // For 'adaptive' type
 }
 
+export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+
 export interface GeminiThinkingConfig {
 	enabled: boolean;
-	budget: number;
+	thinkingLevel: GeminiThinkingLevel;
 }
 
 export interface ResponsesReasoningConfig {
@@ -51,8 +53,6 @@ export interface ApiConfig {
 	systemPromptId?: string | string[];
 	// 选填：覆盖 custom-headers.json 的 active（undefined=跟随全局；''=不使用；其它=按ID选择）
 	customHeadersSchemeId?: string;
-	// 文件搜索编辑相似度阈值 (0.0-1.0, 默认: 0.75, 建议非必要不修改)
-	editSimilarityThreshold?: number;
 	// 工具返回结果的最大 token 限制百分比，基于 maxContextTokens (默认: 30%, 范围: 1-100)
 	toolResultTokenLimit?: number;
 	// 流式逐行显示 AI 回复 (默认: false)
@@ -140,7 +140,6 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxTokens: 64000,
 		anthropicBeta: false,
 		streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
-		editSimilarityThreshold: 0.75,
 		streamingDisplay: false,
 	},
 };

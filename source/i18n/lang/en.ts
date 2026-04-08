@@ -182,6 +182,10 @@ export const en: TranslationKeys = {
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
 		autoCompressThreshold: 'Auto Compress Threshold (%):',
+		autoCompressThresholdHint:
+			'Algorithm: maxContextTokens × {percentage}% = {actualThreshold} tokens',
+		autoCompressThresholdDesc:
+			'Triggers compression when context exceeds this threshold (recommended 60-80%, too low impacts performance, too high defeats purpose)',
 		showThinking: 'Show Thinking Process:',
 		streamingDisplay: 'Streaming Line Display:',
 		thinkingEnabled: 'Thinking Enabled:',
@@ -191,7 +195,7 @@ export const en: TranslationKeys = {
 		thinkingBudgetTokens: 'Thinking Budget Tokens:',
 		thinkingEffort: 'Thinking Effort:',
 		geminiThinkingEnabled: 'Gemini Thinking Enabled:',
-		geminiThinkingBudget: 'Gemini Thinking Budget:',
+		geminiThinkingLevel: 'Gemini Thinking Level:',
 		responsesReasoningEnabled: 'Responses Reasoning Enabled:',
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
 		responsesVerbosity: 'Responses Verbosity:',
@@ -206,8 +210,6 @@ export const en: TranslationKeys = {
 			'Algorithm: maxContextTokens × {percentage}% = {actualLimit} tokens',
 		toolResultTokenLimitDesc:
 			'Limits tool result as % of context window (recommended 20-40%, too low truncates, too high fills context)',
-		editSimilarityThreshold:
-			'Edit Similarity Threshold(0-1, change with caution):',
 		notSet: 'Not set',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',

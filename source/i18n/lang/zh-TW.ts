@@ -168,6 +168,10 @@ export const zhTW: TranslationKeys = {
 		enablePromptOptimization: '啟用提示詞優化:',
 		enableAutoCompress: '啟用自動壓縮:',
 		autoCompressThreshold: '自動壓縮閾值 (%):',
+		autoCompressThresholdHint:
+			'算法: maxContextTokens × {percentage}% = {actualThreshold} tokens',
+		autoCompressThresholdDesc:
+			'當上下文超過此閾值時自動觸發壓縮 (推薦 60-80%, 過低頻繁壓縮影響性能, 過高則失去壓縮意義)',
 		showThinking: '顯示思考過程:',
 		streamingDisplay: '流式逐行顯示:',
 		thinkingEnabled: '啟用思考模式:',
@@ -177,7 +181,7 @@ export const zhTW: TranslationKeys = {
 		thinkingBudgetTokens: '思考預算令牌數:',
 		thinkingEffort: '思考強度:',
 		geminiThinkingEnabled: '啟用 Gemini 思考:',
-		geminiThinkingBudget: 'Gemini 思考預算:',
+		geminiThinkingLevel: 'Gemini 思考級別:',
 		responsesReasoningEnabled: '啟用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理強度:',
 		responsesVerbosity: 'Responses 輸出詳細度:',
@@ -192,7 +196,6 @@ export const zhTW: TranslationKeys = {
 			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',
 		toolResultTokenLimitDesc:
 			'限制單個工具返回結果佔上下文窗口的比例 (推薦 20-40%, 過低會截斷, 過高會佔滿上下文)',
-		editSimilarityThreshold: '檔案編輯相似度閾值(0-1, 非必要不改):',
 		notSet: '未設定',
 		enabled: '[✓] 已啟用',
 		disabled: '[ ] 已停用',

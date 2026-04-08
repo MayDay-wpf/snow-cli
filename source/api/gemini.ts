@@ -499,7 +499,7 @@ export async function* createStreamingGeminiCompletion(
 			if (config.geminiThinking?.enabled && !options.disableThinking) {
 				requestBody.generationConfig = {
 					thinkingConfig: {
-						thinkingBudget: config.geminiThinking.budget,
+						thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
 					},
 				};
 			}

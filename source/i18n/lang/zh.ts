@@ -167,6 +167,10 @@ export const zh: TranslationKeys = {
 		enablePromptOptimization: '启用提示词优化:',
 		enableAutoCompress: '启用自动压缩:',
 		autoCompressThreshold: '自动压缩阈值 (%):',
+		autoCompressThresholdHint:
+			'算法: maxContextTokens × {percentage}% = {actualThreshold} tokens',
+		autoCompressThresholdDesc:
+			'当上下文超过此阈值时自动触发压缩 (推荐 60-80%, 过低频繁压缩影响性能, 过高则失去压缩意义)',
 		showThinking: '显示思考过程:',
 		streamingDisplay: '流式逐行显示:',
 		thinkingEnabled: '启用思考模式:',
@@ -176,7 +180,7 @@ export const zh: TranslationKeys = {
 		thinkingBudgetTokens: '思考预算令牌数:',
 		thinkingEffort: '思考强度:',
 		geminiThinkingEnabled: '启用 Gemini 思考:',
-		geminiThinkingBudget: 'Gemini 思考预算:',
+		geminiThinkingLevel: 'Gemini 思考级别:',
 		responsesReasoningEnabled: '启用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理强度:',
 		responsesVerbosity: 'Responses 输出详细度:',
@@ -191,7 +195,6 @@ export const zh: TranslationKeys = {
 			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',
 		toolResultTokenLimitDesc:
 			'限制单个工具返回结果占上下文窗口的比例 (推荐 20-40%, 过低会截断, 过高会占满上下文)',
-		editSimilarityThreshold: '文件编辑相似度阈值(0-1, 非必要不改):',
 		notSet: '未设置',
 		enabled: '[✓] 已启用',
 		disabled: '[ ] 已禁用',

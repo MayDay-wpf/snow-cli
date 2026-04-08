@@ -45,7 +45,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		thinkingBudgetTokens,
 		thinkingEffort,
 		geminiThinkingEnabled,
-		geminiThinkingBudget,
+		geminiThinkingLevel,
+		setGeminiThinkingLevel,
 		responsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
@@ -60,8 +61,6 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		maxTokens,
 		streamIdleTimeoutSec,
 		toolResultTokenLimit,
-		editSimilarityThreshold,
-		editingThresholdValue,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -352,6 +351,48 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 			);
 
 		case 'autoCompressThreshold':
+			{
+				const actualThreshold = Math.floor(
+					(maxContextTokens * autoCompressThreshold) / 100,
+				);
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={activeColor}>
+							{activeIndicator}
+							{t.configScreen.autoCompressThreshold}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {autoCompressThreshold}%
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.configScreen.autoCompressThresholdHint
+										?.replace('{percentage}', autoCompressThreshold.toString())
+										.replace('{maxContext}', maxContextTokens.toString())
+										.replace(
+											'{actualThreshold}',
+											actualThreshold.toLocaleString(),
+										)}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3} flexDirection="column">
+								<Text color={theme.colors.menuSecondary}>
+									{autoCompressThreshold}% → {actualThreshold.toLocaleString()}{' '}
+									tokens
+								</Text>
+								{isActive && (
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{t.configScreen.autoCompressThresholdDesc}
+									</Text>
+								)}
+							</Box>
+						)}
+					</Box>
+				);
+			}
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
@@ -501,24 +542,35 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				</Box>
 			);
 
-		case 'geminiThinkingBudget':
+		case 'geminiThinkingLevel':
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
 						{activeIndicator}
-						{t.configScreen.geminiThinkingBudget}
+						{t.configScreen.geminiThinkingLevel}
 					</Text>
 					{isCurrentlyEditing && (
 						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.configScreen.enterValue} {geminiThinkingBudget}
-							</Text>
+							<Select
+								options={[
+									{label: 'MINIMAL', value: 'minimal'},
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+								]}
+								onChange={value => {
+									setGeminiThinkingLevel(
+										value as 'minimal' | 'low' | 'medium' | 'high',
+									);
+									state.setIsEditing(false);
+								}}
+							/>
 						</Box>
 					)}
 					{!isCurrentlyEditing && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{geminiThinkingBudget}
+								{geminiThinkingLevel.toUpperCase()}
 							</Text>
 						</Box>
 					)}
@@ -718,31 +770,6 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				</Box>
 			);
 		}
-
-		case 'editSimilarityThreshold':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text color={activeColor}>
-						{activeIndicator}
-						{t.configScreen.editSimilarityThreshold}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.configScreen.enterValue}{' '}
-								{editingThresholdValue || editSimilarityThreshold}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{editSimilarityThreshold}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
 
 		default:
 			return null;

@@ -168,6 +168,8 @@ export type TranslationKeys = {
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
 		autoCompressThreshold: string;
+		autoCompressThresholdHint: string;
+		autoCompressThresholdDesc: string;
 		showThinking: string;
 		streamingDisplay: string;
 		thinkingEnabled: string;
@@ -177,7 +179,7 @@ export type TranslationKeys = {
 		thinkingBudgetTokens: string;
 		thinkingEffort: string;
 		geminiThinkingEnabled: string;
-		geminiThinkingBudget: string;
+		geminiThinkingLevel: string;
 		responsesReasoningEnabled: string;
 		responsesReasoningEffort: string;
 		responsesVerbosity: string;
@@ -190,7 +192,6 @@ export type TranslationKeys = {
 		toolResultTokenLimit: string;
 		toolResultTokenLimitHint: string;
 		toolResultTokenLimitDesc: string;
-		editSimilarityThreshold: string;
 		notSet: string;
 		enabled: string;
 		disabled: string;
