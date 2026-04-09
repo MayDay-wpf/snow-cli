@@ -84,7 +84,9 @@ export function useConfigState() {
 		'low' | 'medium' | 'high' | 'max'
 	>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingBudget, setGeminiThinkingBudget] = useState(1024);
+	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
+		'minimal' | 'low' | 'medium' | 'high'
+	>('high');
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<
@@ -103,9 +105,8 @@ export function useConfigState() {
 	const [basicModel, setBasicModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
+	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
-	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(100000);
-	const [editSimilarityThreshold, setEditSimilarityThreshold] = useState(0.75);
 
 	// UI state
 	const [currentField, setCurrentField] = useState<ConfigField>('profile');
@@ -117,7 +118,6 @@ export function useConfigState() {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
-	const [editingThresholdValue, setEditingThresholdValue] = useState('');
 	const [, forceUpdate] = useState(0);
 
 	const supportsXHigh = requestMethod === 'responses';
@@ -170,7 +170,7 @@ export function useConfigState() {
 				: requestMethod === 'gemini'
 				? [
 						'geminiThinkingEnabled' as ConfigField,
-						'geminiThinkingBudget' as ConfigField,
+						'geminiThinkingLevel' as ConfigField,
 				  ]
 				: requestMethod === 'responses'
 				? [
@@ -185,9 +185,8 @@ export function useConfigState() {
 			'maxContextTokens',
 			'maxTokens',
 			'streamIdleTimeoutSec',
-			'toolResultTokenLimit',
-			'editSimilarityThreshold',
-		];
+		'toolResultTokenLimit',
+	];
 	};
 
 	const allFields = getAllFields();
@@ -244,7 +243,7 @@ export function useConfigState() {
 		if (
 			requestMethod !== 'gemini' &&
 			(currentField === 'geminiThinkingEnabled' ||
-				currentField === 'geminiThinkingBudget')
+				currentField === 'geminiThinkingLevel')
 		) {
 			setCurrentField('advancedModel');
 		}
@@ -306,7 +305,7 @@ export function useConfigState() {
 		setThinkingBudgetTokens(config.thinking?.budget_tokens || 10000);
 		setThinkingEffort(config.thinking?.effort || 'high');
 		setGeminiThinkingEnabled(config.geminiThinking?.enabled || false);
-		setGeminiThinkingBudget(config.geminiThinking?.budget || 1024);
+		setGeminiThinkingLevel(config.geminiThinking?.thinkingLevel || 'high');
 		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
 		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
@@ -316,9 +315,8 @@ export function useConfigState() {
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
+		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
-		setToolResultTokenLimit(config.toolResultTokenLimit || 100000);
-		setEditSimilarityThreshold(config.editSimilarityThreshold ?? 0.75);
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -384,20 +382,17 @@ export function useConfigState() {
 		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'streamIdleTimeoutSec')
 			return streamIdleTimeoutSec.toString();
-		if (currentField === 'toolResultTokenLimit')
-			return toolResultTokenLimit.toString();
-		if (currentField === 'editSimilarityThreshold')
-			return editSimilarityThreshold.toString();
-		if (currentField === 'thinkingBudgetTokens')
+	if (currentField === 'toolResultTokenLimit')
+		return toolResultTokenLimit.toString();
+	if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'thinkingMode') return thinkingMode;
 		if (currentField === 'thinkingEffort') return thinkingEffort;
-		if (currentField === 'geminiThinkingBudget')
-			return geminiThinkingBudget.toString();
+		if (currentField === 'geminiThinkingLevel')
+			return geminiThinkingLevel;
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
-		if (currentField === 'anthropicSpeed')
-			return anthropicSpeed || '';
+		if (currentField === 'anthropicSpeed') return anthropicSpeed || '';
 		return '';
 	};
 
@@ -687,12 +682,11 @@ export function useConfigState() {
 				basicModel,
 				maxContextTokens,
 				maxTokens,
-				streamIdleTimeoutSec,
-				toolResultTokenLimit,
-				editSimilarityThreshold,
-			};
+			streamIdleTimeoutSec,
+			toolResultTokenLimit,
+		};
 
-			if (thinkingEnabled) {
+		if (thinkingEnabled) {
 				config.thinking =
 					thinkingMode === 'adaptive'
 						? {
@@ -710,7 +704,7 @@ export function useConfigState() {
 			if (geminiThinkingEnabled) {
 				(config as any).geminiThinking = {
 					enabled: true,
-					budget: geminiThinkingBudget,
+					thinkingLevel: geminiThinkingLevel,
 				};
 			} else {
 				(config as any).geminiThinking = undefined;
@@ -750,7 +744,7 @@ export function useConfigState() {
 								  }
 							: undefined,
 						geminiThinking: geminiThinkingEnabled
-							? {enabled: true, budget: geminiThinkingBudget}
+							? {enabled: true, thinkingLevel: geminiThinkingLevel}
 							: undefined,
 						responsesReasoning: {
 							enabled: responsesReasoningEnabled,
@@ -763,10 +757,9 @@ export function useConfigState() {
 						basicModel,
 						maxContextTokens,
 						maxTokens,
-						streamIdleTimeoutSec,
-						toolResultTokenLimit,
-						editSimilarityThreshold,
-					},
+					streamIdleTimeoutSec,
+					toolResultTokenLimit,
+				},
 				};
 				saveProfile(activeProfile, fullConfig as any);
 			} catch (err) {
@@ -836,8 +829,8 @@ export function useConfigState() {
 		setThinkingEffort,
 		geminiThinkingEnabled,
 		setGeminiThinkingEnabled,
-		geminiThinkingBudget,
-		setGeminiThinkingBudget,
+		geminiThinkingLevel,
+		setGeminiThinkingLevel,
 		responsesReasoningEnabled,
 		setResponsesReasoningEnabled,
 		responsesReasoningEffort,
@@ -859,11 +852,9 @@ export function useConfigState() {
 		setMaxTokens,
 		streamIdleTimeoutSec,
 		setStreamIdleTimeoutSec,
-		toolResultTokenLimit,
-		setToolResultTokenLimit,
-		editSimilarityThreshold,
-		setEditSimilarityThreshold,
-		// UI state
+	toolResultTokenLimit,
+	setToolResultTokenLimit,
+	// UI state
 		currentField,
 		setCurrentField,
 		errors,
@@ -878,11 +869,9 @@ export function useConfigState() {
 		setSearchTerm,
 		manualInputMode,
 		setManualInputMode,
-		manualInputValue,
-		setManualInputValue,
-		editingThresholdValue,
-		setEditingThresholdValue,
-		// Derived
+	manualInputValue,
+	setManualInputValue,
+	// Derived
 		supportsXHigh,
 		requestMethodOptions,
 		allFields,

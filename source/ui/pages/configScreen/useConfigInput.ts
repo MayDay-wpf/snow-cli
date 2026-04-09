@@ -68,12 +68,6 @@ export function useConfigInput(
 		setThinkingBudgetTokens,
 		autoCompressThreshold,
 		setAutoCompressThreshold,
-		geminiThinkingBudget,
-		setGeminiThinkingBudget,
-		editSimilarityThreshold,
-		setEditSimilarityThreshold,
-		editingThresholdValue,
-		setEditingThresholdValue,
 		setAdvancedModel,
 		setBasicModel,
 		systemPromptId,
@@ -235,16 +229,9 @@ export function useConfigInput(
 				currentField === 'streamIdleTimeoutSec' ||
 				currentField === 'toolResultTokenLimit' ||
 				currentField === 'thinkingBudgetTokens' ||
-				currentField === 'geminiThinkingBudget' ||
-				currentField === 'autoCompressThreshold' ||
-				currentField === 'editSimilarityThreshold'
-			) {
-				if (currentField === 'editSimilarityThreshold') {
-					handleThresholdInput(input, key);
-					return;
-				}
-
-				handleNumericInput(input, key);
+			currentField === 'autoCompressThreshold'
+		) {
+			handleNumericInput(input, key);
 				return;
 			}
 
@@ -286,48 +273,6 @@ export function useConfigInput(
 		}
 	});
 
-	function handleThresholdInput(
-		input: string,
-		key: {
-			return: boolean;
-			backspace: boolean;
-			delete: boolean;
-			[k: string]: any;
-		},
-	) {
-		if (input && input.match(/[0-9.]/)) {
-			const currentStr =
-				editingThresholdValue || editSimilarityThreshold.toString();
-			if (input === '.' && currentStr.includes('.')) {
-				return;
-			}
-			const newStr = currentStr + input;
-			if (
-				newStr === '.' ||
-				newStr === '0.' ||
-				/^[0-9]*\.?[0-9]*$/.test(newStr)
-			) {
-				setEditingThresholdValue(newStr);
-			}
-		} else if (key.backspace || key.delete) {
-			const currentStr =
-				editingThresholdValue || editSimilarityThreshold.toString();
-			const newStr = currentStr.slice(0, -1);
-			setEditingThresholdValue(newStr);
-		} else if (key.return) {
-			const valueToSave =
-				editingThresholdValue || editSimilarityThreshold.toString();
-			const finalValue = parseFloat(valueToSave);
-			if (!isNaN(finalValue) && finalValue >= 0.1 && finalValue <= 1) {
-				setEditSimilarityThreshold(finalValue);
-			} else if (finalValue < 0.1) {
-				setEditSimilarityThreshold(0.1);
-			}
-			setEditingThresholdValue('');
-			setIsEditing(false);
-		}
-	}
-
 	function handleNumericInput(
 		input: string,
 		key: {
@@ -362,8 +307,8 @@ export function useConfigInput(
 			toolResultTokenLimit: {
 				get: () => toolResultTokenLimit,
 				set: setToolResultTokenLimit,
-				min: 1000,
-				max: Infinity,
+				min: 20,
+				max: 80,
 			},
 			thinkingBudgetTokens: {
 				get: () => thinkingBudgetTokens,
@@ -376,12 +321,6 @@ export function useConfigInput(
 				set: setAutoCompressThreshold,
 				min: 50,
 				max: 95,
-			},
-			geminiThinkingBudget: {
-				get: () => geminiThinkingBudget,
-				set: setGeminiThinkingBudget,
-				min: 1,
-				max: Infinity,
 			},
 		};
 
@@ -424,11 +363,17 @@ export function useConfigInput(
 		} else if (currentField === 'streamingDisplay') {
 			setStreamingDisplay(!streamingDisplay);
 		} else if (currentField === 'thinkingEnabled') {
-			setThinkingEnabled(!thinkingEnabled);
+			const next = !thinkingEnabled;
+			setThinkingEnabled(next);
+			if (!next) setShowThinking(false);
 		} else if (currentField === 'geminiThinkingEnabled') {
-			setGeminiThinkingEnabled(!geminiThinkingEnabled);
+			const next = !geminiThinkingEnabled;
+			setGeminiThinkingEnabled(next);
+			if (!next) setShowThinking(false);
 		} else if (currentField === 'responsesReasoningEnabled') {
-			setResponsesReasoningEnabled(!responsesReasoningEnabled);
+			const next = !responsesReasoningEnabled;
+			setResponsesReasoningEnabled(next);
+			if (!next) setShowThinking(false);
 		} else if (currentField === 'responsesFastMode') {
 			setResponsesFastMode(!responsesFastMode);
 		} else if (
@@ -436,6 +381,7 @@ export function useConfigInput(
 			currentField === 'anthropicSpeed' ||
 			currentField === 'thinkingMode' ||
 			currentField === 'thinkingEffort' ||
+			currentField === 'geminiThinkingLevel' ||
 			currentField === 'responsesReasoningEffort' ||
 			currentField === 'responsesVerbosity'
 		) {
@@ -446,14 +392,10 @@ export function useConfigInput(
 			currentField === 'streamIdleTimeoutSec' ||
 			currentField === 'toolResultTokenLimit' ||
 			currentField === 'thinkingBudgetTokens' ||
-			currentField === 'geminiThinkingBudget' ||
 			currentField === 'autoCompressThreshold'
 		) {
 			setIsEditing(true);
-		} else if (currentField === 'editSimilarityThreshold') {
-			setEditingThresholdValue('');
-			setIsEditing(true);
-		} else if (
+	} else if (
 			currentField === 'advancedModel' ||
 			currentField === 'basicModel'
 		) {

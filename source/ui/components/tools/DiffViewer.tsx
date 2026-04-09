@@ -1,6 +1,6 @@
 import React, {useMemo} from 'react';
 import {Box, Text} from 'ink';
-import {highlight} from 'cli-highlight';
+import {highlight, supportsLanguage} from 'cli-highlight';
 import * as Diff from 'diff';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
@@ -27,14 +27,21 @@ interface DiffHunk {
 	}>;
 }
 
-// Helper function to strip line numbers from content (format: "123→content")
+// Strip hashline prefixes produced by filesystem-read ("lineNum:hash→content").
+// Requires the full "digits:hexhex→" pattern (with both the 2-char hash AND the
+// → arrow) to avoid false positives on legitimate content.
+// Iteratively strips nested prefixes to handle double-wrapping from model leaks.
 function stripLineNumbers(content: string): string {
+	const hashlineRe = /^\s*\d+:[0-9a-fA-F]{2}→(.*)$/;
 	return content
 		.split('\n')
 		.map(line => {
-			// Match pattern: digits + → + content
-			const match = line.match(/^\s*\d+→(.*)$/);
-			return match ? match[1] : line;
+			let stripped = line.replace(/\r$/, '');
+			let match: RegExpMatchArray | null;
+			while ((match = hashlineRe.exec(stripped))) {
+				stripped = match[1]!;
+			}
+			return stripped;
 		})
 		.join('\n');
 }
@@ -88,7 +95,7 @@ function inferLanguageFromFilename(filename?: string): string | undefined {
 }
 
 function highlightCodeContent(content: string, language?: string): string {
-	if (!language || content.trim() === '') {
+	if (!language || content.trim() === '' || !supportsLanguage(language)) {
 		return content;
 	}
 
@@ -188,14 +195,14 @@ export default function DiffViewer({
 	// Use side-by-side view when terminal is wide enough
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
 
-	// If complete file contents are provided, use them for intelligent diff
-	const useCompleteContent = completeOldContent && completeNewContent;
-	const diffOldContent = useCompleteContent
-		? completeOldContent
-		: stripLineNumbers(oldContent);
-	const diffNewContent = useCompleteContent
-		? completeNewContent
-		: stripLineNumbers(newContent);
+	// Always strip hashline prefixes — even from completeOldContent/completeNewContent
+	// in case upstream accidentally passes hash-formatted strings
+	const diffOldContent = stripLineNumbers(
+		(completeOldContent && completeNewContent ? completeOldContent : oldContent),
+	);
+	const diffNewContent = stripLineNumbers(
+		(completeOldContent && completeNewContent ? completeNewContent : newContent),
+	);
 
 	function renderHighlightedLine({
 		key,

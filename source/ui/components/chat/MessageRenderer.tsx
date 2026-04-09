@@ -210,7 +210,7 @@ export default function MessageRenderer({
 	return (
 		<Box
 			key={`msg-${index}`}
-			marginTop={0}
+			marginTop={message.role === 'user' ? 1 : 0}
 			marginBottom={1}
 			paddingX={1}
 			flexDirection="column"
@@ -508,52 +508,30 @@ export default function MessageRenderer({
 												/>
 											</Box>
 										)}
-									{message.toolCall &&
-										message.toolCall.name === 'filesystem-edit' &&
-										message.toolCall.arguments.oldContent &&
-										message.toolCall.arguments.newContent && (
-											<Box marginTop={1}>
-												<DiffViewer
-													oldContent={message.toolCall.arguments.oldContent}
-													newContent={message.toolCall.arguments.newContent}
-													filename={message.toolCall.arguments.filename}
-													completeOldContent={
-														message.toolCall.arguments.completeOldContent
-													}
-													completeNewContent={
-														message.toolCall.arguments.completeNewContent
-													}
-													startLineNumber={
-														message.toolCall.arguments.contextStartLine
-													}
-												/>
-											</Box>
-										)}
-									{message.toolCall &&
-										message.toolCall.name === 'filesystem-edit_search' &&
-										message.toolCall.arguments.oldContent &&
-										message.toolCall.arguments.newContent && (
-											<Box marginTop={1}>
-												<DiffViewer
-													oldContent={message.toolCall.arguments.oldContent}
-													newContent={message.toolCall.arguments.newContent}
-													filename={message.toolCall.arguments.filename}
-													completeOldContent={
-														message.toolCall.arguments.completeOldContent
-													}
-													completeNewContent={
-														message.toolCall.arguments.completeNewContent
-													}
-													startLineNumber={
-														message.toolCall.arguments.contextStartLine
-													}
-												/>
-											</Box>
-										)}
-									{/* Show batch edit results */}
-									{message.toolCall &&
-										(message.toolCall.name === 'filesystem-edit' ||
-											message.toolCall.name === 'filesystem-edit_search') &&
+								{message.toolCall &&
+									message.toolCall.name === 'filesystem-edit' &&
+									message.toolCall.arguments.oldContent &&
+									message.toolCall.arguments.newContent && (
+										<Box marginTop={1}>
+											<DiffViewer
+												oldContent={message.toolCall.arguments.oldContent}
+												newContent={message.toolCall.arguments.newContent}
+												filename={message.toolCall.arguments.filename}
+												completeOldContent={
+													message.toolCall.arguments.completeOldContent
+												}
+												completeNewContent={
+													message.toolCall.arguments.completeNewContent
+												}
+												startLineNumber={
+													message.toolCall.arguments.contextStartLine
+												}
+											/>
+										</Box>
+									)}
+								{/* Show batch edit results */}
+								{message.toolCall &&
+									message.toolCall.name === 'filesystem-edit' &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) && (

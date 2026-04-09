@@ -10,7 +10,6 @@
 const TWO_STEP_TOOLS = new Set([
 	// 文件编辑工具 - 耗时较长，需要显示进度
 	'filesystem-edit',
-	'filesystem-edit_search',
 	'filesystem-create',
 
 	// 终端执行工具 - 执行时间不确定，需要显示进度

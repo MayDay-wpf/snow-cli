@@ -8,6 +8,9 @@ import {SkillsCreationPanel} from './SkillsCreationPanel.js';
 import {RoleCreationPanel} from './RoleCreationPanel.js';
 import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import {RoleListPanel} from './RoleListPanel.js';
+import {RoleSubagentCreationPanel} from './RoleSubagentCreationPanel.js';
+import {RoleSubagentDeletionPanel} from './RoleSubagentDeletionPanel.js';
+import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
 import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
@@ -19,6 +22,7 @@ import type {
 	SkillLocation,
 } from '../../../utils/commands/skills.js';
 import type {RoleLocation} from '../../../utils/commands/role.js';
+import type {RoleSubagentLocation} from '../../../utils/commands/roleSubagent.js';
 
 // Lazy load panel components
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
@@ -38,6 +42,9 @@ type PanelsManagerProps = {
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
+	showRoleSubagentCreation: boolean;
+	showRoleSubagentDeletion: boolean;
+	showRoleSubagentList: boolean;
 	showWorkingDirPanel: boolean;
 	showBranchPanel: boolean;
 	showDiffReviewPanel: boolean;
@@ -54,12 +61,16 @@ type PanelsManagerProps = {
 	advancedModel: string;
 	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
+	setShowMcpPanel: (show: boolean) => void;
 	setShowModelsPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
 	setShowRoleDeletion: (show: boolean) => void;
 	setShowRoleList: (show: boolean) => void;
+	setShowRoleSubagentCreation: (show: boolean) => void;
+	setShowRoleSubagentDeletion: (show: boolean) => void;
+	setShowRoleSubagentList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
 	setShowDiffReviewPanel: (show: boolean) => void;
@@ -82,6 +93,14 @@ type PanelsManagerProps = {
 	) => Promise<void>;
 	onRoleSave: (location: RoleLocation) => Promise<void>;
 	onRoleDelete: (location: RoleLocation) => Promise<void>;
+	onRoleSubagentSave: (
+		agentName: string,
+		location: RoleSubagentLocation,
+	) => Promise<void>;
+	onRoleSubagentDelete: (
+		agentName: string,
+		location: RoleSubagentLocation,
+	) => Promise<void>;
 };
 
 export default function PanelsManager({
@@ -96,6 +115,9 @@ export default function PanelsManager({
 	showRoleCreation,
 	showRoleDeletion,
 	showRoleList,
+	showRoleSubagentCreation,
+	showRoleSubagentDeletion,
+	showRoleSubagentList,
 	showWorkingDirPanel,
 	showBranchPanel,
 	showDiffReviewPanel,
@@ -107,12 +129,16 @@ export default function PanelsManager({
 	advancedModel,
 	basicModel,
 	setShowSessionPanel,
+	setShowMcpPanel,
 	setShowModelsPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
 	setShowRoleCreation,
 	setShowRoleDeletion,
 	setShowRoleList,
+	setShowRoleSubagentCreation,
+	setShowRoleSubagentDeletion,
+	setShowRoleSubagentList,
 	setShowWorkingDirPanel,
 	setShowBranchPanel,
 	setShowDiffReviewPanel,
@@ -123,6 +149,8 @@ export default function PanelsManager({
 	onSkillsSave,
 	onRoleSave,
 	onRoleDelete,
+	onRoleSubagentSave,
+	onRoleSubagentDelete,
 }: PanelsManagerProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -153,7 +181,7 @@ export default function PanelsManager({
 			{showMcpPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<Suspense fallback={loadingFallback}>
-						<MCPInfoPanel />
+						<MCPInfoPanel onClose={() => setShowMcpPanel(false)} />
 					</Suspense>
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
@@ -239,6 +267,38 @@ export default function PanelsManager({
 					<RoleListPanel
 						projectRoot={workingDirectory}
 						onClose={() => setShowRoleList(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show sub-agent role creation panel if active */}
+			{showRoleSubagentCreation && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleSubagentCreationPanel
+						projectRoot={workingDirectory}
+						onSave={onRoleSubagentSave}
+						onCancel={() => setShowRoleSubagentCreation(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show sub-agent role deletion panel if active */}
+			{showRoleSubagentDeletion && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleSubagentDeletionPanel
+						projectRoot={workingDirectory}
+						onDelete={onRoleSubagentDelete}
+						onCancel={() => setShowRoleSubagentDeletion(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show sub-agent role list panel if active */}
+			{showRoleSubagentList && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<RoleSubagentListPanel
+						projectRoot={workingDirectory}
+						onClose={() => setShowRoleSubagentList(false)}
 					/>
 				</Box>
 			)}

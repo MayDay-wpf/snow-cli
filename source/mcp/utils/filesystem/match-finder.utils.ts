@@ -2,7 +2,12 @@
  * Match finding utilities for fuzzy search
  */
 
-import type {MatchCandidate} from '../../types/filesystem.types.js';
+interface MatchCandidate {
+	startLine: number;
+	endLine: number;
+	similarity: number;
+	preview: string;
+}
 import {calculateSimilarity, normalizeForDisplay} from './similarity.utils.js';
 
 /**

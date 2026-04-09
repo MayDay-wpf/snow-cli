@@ -1,94 +1,48 @@
-import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-import {createStreamingResponse} from '../../api/responses.js';
-import {createStreamingGeminiCompletion} from '../../api/gemini.js';
-import {createStreamingChatCompletion} from '../../api/chat.js';
-import {getSubAgent} from '../config/subAgentConfig.js';
-import {collectAllMCPTools, executeMCPTool} from './mcpToolsManager.js';
+import {collectAllMCPTools} from './mcpToolsManager.js';
 import {getOpenAiConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
-import {checkYoloPermission} from './yoloPermissionChecker.js';
-import {connectionManager} from '../connection/ConnectionManager.js';
-import {getSubAgentMaxSpawnDepth} from '../config/projectSettings.js';
+import {interpretHookResult} from './hookResultInterpreter.js';
+import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+import {resolveAgent, filterAllowedTools} from './subAgentResolver.js';
+import {injectBuiltinTools, buildInitialMessages} from './subAgentBuiltinTools.js';
 import {
-	shouldCompressSubAgentContext,
-	getContextPercentage,
-	compressSubAgentContext,
-	countMessagesTokens,
-} from '../core/subAgentContextCompressor.js';
-import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
-import type {MCPTool} from './mcpToolsManager.js';
-import type {ChatMessage} from '../../api/chat.js';
+	createApiStream,
+	processStreamEvents,
+	handleContextCompression,
+} from './subAgentStreamProcessor.js';
+import {
+	interceptSendMessage,
+	interceptQueryStatus,
+	interceptSpawnSubAgent,
+	interceptAskUser,
+} from './subAgentToolInterceptor.js';
+import {checkAndApproveTools, executeMcpTools} from './subAgentToolApproval.js';
+import {emitSubAgentMessage} from './subAgentTypes.js';
+import {compressionCoordinator} from '../core/compressionCoordinator.js';
+import type {
+	SubAgentExecutionContext,
+	SubAgentMessage,
+	SubAgentResult,
+	ToolConfirmationCallback,
+	ToolApprovalChecker,
+	AddToAlwaysApprovedCallback,
+	UserQuestionCallback,
+} from './subAgentTypes.js';
 
-export interface SubAgentMessage {
-	type: 'sub_agent_message';
-	agentId: string;
-	agentName: string;
-	message: any; // Stream event from anthropic API
-}
-
-export interface TokenUsage {
-	inputTokens: number;
-	outputTokens: number;
-	cacheCreationInputTokens?: number;
-	cacheReadInputTokens?: number;
-}
-
-export interface SubAgentResult {
-	success: boolean;
-	result: string;
-	error?: string;
-	usage?: TokenUsage;
-	/** User messages injected from the main session during sub-agent execution */
-	injectedUserMessages?: string[];
-	/** Internal stop/summarize instructions injected by the executor */
-	terminationInstructions?: string[];
-}
-
-export interface ToolConfirmationCallback {
-	(toolName: string, toolArgs: any): Promise<ConfirmationResult>;
-}
-
-export interface ToolApprovalChecker {
-	(toolName: string): boolean;
-}
-
-export interface AddToAlwaysApprovedCallback {
-	(toolName: string): void;
-}
-
-/**
- * 用户问题回调接口
- * 用于子智能体调用 askuser 工具时，请求主会话显示蓝色边框的 AskUserQuestion 组件
- * @param question - 问题文本
- * @param options - 选项列表
- * @param multiSelect - 是否多选模式
- * @returns 用户选择的结果
- */
-export interface UserQuestionCallback {
-	(question: string, options: string[], multiSelect?: boolean): Promise<{
-		selected: string | string[];
-		customInput?: string;
-	}>;
-}
-
-/**
- * Maximum spawn depth is project-configurable via `.snow/settings.json`.
- */
+// Re-export all public types for backward compatibility
+export type {
+	SubAgentMessage,
+	TokenUsage,
+	SubAgentResult,
+	ToolConfirmationCallback,
+	ToolApprovalChecker,
+	AddToAlwaysApprovedCallback,
+	UserQuestionCallback,
+} from './subAgentTypes.js';
 
 /**
  * 执行子智能体作为工具
- * @param agentId - 子智能体 ID
- * @param prompt - 发送给子智能体的任务提示
- * @param onMessage - 流式消息回调（用于 UI 显示）
- * @param abortSignal - 可选的中止信号
- * @param requestToolConfirmation - 工具确认回调
- * @param isToolAutoApproved - 检查工具是否自动批准
- * @param yoloMode - 是否启用 YOLO 模式（自动批准所有工具）
- * @param addToAlwaysApproved - 添加工具到始终批准列表的回调
- * @param requestUserQuestion - 用户问题回调，用于子智能体调用 askuser 工具时显示主会话的蓝色边框 UI
- * @param spawnDepth - 当前 spawn 嵌套深度（0 = 主流程直接调起的子代理）
- * @returns 子智能体的最终结果
  */
 export async function executeSubAgent(
 	agentId: string,
@@ -104,1130 +58,15 @@ export async function executeSubAgent(
 	spawnDepth: number = 0,
 ): Promise<SubAgentResult> {
 	try {
-		// Handle built-in agents (hardcoded or user copy)
-		let agent: any;
-
-		// First check if user has a custom copy of builtin agent
-		if (
-			agentId === 'agent_explore' ||
-			agentId === 'agent_plan' ||
-			agentId === 'agent_general' ||
-			agentId === 'agent_analyze' ||
-			agentId === 'agent_qa' ||
-			agentId === 'agent_debug'
-		) {
-			// Check user agents directly (not through getSubAgent which might return builtin)
-			const {getUserSubAgents} = await import('../config/subAgentConfig.js');
-			const userAgents = getUserSubAgents();
-			const userAgent = userAgents.find(a => a.id === agentId);
-			if (userAgent) {
-				// User has customized this builtin agent, use their version
-				agent = userAgent;
-			}
+		// 1. Resolve agent
+		const {agent, error: resolveError} = await resolveAgent(agentId);
+		if (!agent) {
+			return {success: false, result: '', error: resolveError};
 		}
 
-		// If no user copy found, use builtin definition
-		if (!agent && agentId === 'agent_explore') {
-			agent = {
-				id: 'agent_explore',
-				name: 'Explore Agent',
-				description:
-					'Specialized for quickly exploring and understanding codebases. Excels at searching code, finding definitions, analyzing code structure and semantic understanding.',
-				role: `# Code Exploration Specialist
-
-## Core Mission
-You are a specialized code exploration agent focused on rapidly understanding codebases, locating implementations, and analyzing code relationships. Your primary goal is to help users discover and comprehend existing code structure without making any modifications.
-
-## Operational Constraints
-- READ-ONLY MODE: Never modify files, create files, or execute commands
-- EXPLORATION FOCUSED: Use search and analysis tools to understand code
-- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
-- COMPLETE CONTEXT: The prompt contains all file locations, requirements, constraints, and discovered information
-
-## Core Capabilities
-
-### 1. Code Discovery
-- Locate function/class/variable definitions across the codebase
-- Find all usages and references of specific symbols
-- Search for patterns, comments, TODOs, and string literals
-- Map file structure and module organization
-
-### 2. Dependency Analysis
-- Trace import/export relationships between modules
-- Identify function call chains and data flow
-- Analyze component dependencies and coupling
-- Map architecture layers and boundaries
-
-### 3. Code Understanding
-- Explain implementation patterns and design decisions
-- Identify code conventions and style patterns
-- Analyze error handling strategies
-- Document authentication, validation, and business logic flows
-
-## Workflow Best Practices
-
-### Search Strategy
-1. Start with semantic search for high-level understanding
-2. Use definition search to locate core implementations
-3. Use reference search to understand usage patterns
-4. Use text search for literals, comments, error messages
-
-### Analysis Approach
-1. Read entry point files first (main, index, app)
-2. Trace from public APIs to internal implementations
-3. Identify shared utilities and common patterns
-4. Map critical paths and data transformations
-
-### Output Format
-- Provide clear file paths with line numbers
-- Explain code purpose and relationships
-- Highlight important patterns or concerns
-- Suggest relevant files for deeper investigation
-
-## Tool Usage Guidelines
-
-### ACE Search Tools (Primary)
-- ace-semantic_search: Find symbols by name with fuzzy matching
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Find all usages of a symbol
-- ace-file_outline: Get complete structure of a file
-- ace-text_search: Search for exact strings or regex patterns
-
-### Filesystem Tools
-- filesystem-read: Read file contents when detailed analysis needed
-- Use batch reads for multiple related files
-
-### Web Search (Reference Only)
-- websearch-search/fetch: Look up documentation for unfamiliar patterns
-- Use sparingly - focus on codebase exploration first
-
-## Critical Reminders
-- ALL context is in the prompt - read carefully before starting
-- Never guess file locations - use search tools to verify
-- Report findings clearly with specific file paths and line numbers
-- If information is insufficient, ask what specifically to explore
-- Focus on answering "where" and "how" questions about code`,
-				tools: [
-					// Filesystem read-only tools
-					'filesystem-read',
-					// ACE code search tools (core tools)
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					// Codebase search tools
-					'codebase-search',
-					// Web search for documentation
-					'websearch-search',
-					'websearch-fetch',
-					// Skill execution
-					'skill-execute',
-				],
-			};
-		} else if (!agent && agentId === 'agent_plan') {
-			agent = {
-				id: 'agent_plan',
-				name: 'Plan Agent',
-				description:
-					'Specialized for planning complex tasks. Excels at analyzing requirements, exploring existing code, and creating detailed implementation plans.',
-				role: `# Task Planning Specialist
-
-## Core Mission
-You are a specialized planning agent focused on analyzing requirements, exploring codebases, and creating detailed implementation plans. Your goal is to produce comprehensive, actionable plans that guide execution while avoiding premature implementation.
-
-## Operational Constraints
-- PLANNING-ONLY MODE: Create plans, do not execute modifications
-- READ AND ANALYZE: Use search, read, and diagnostic tools to understand current state
-- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
-- COMPLETE CONTEXT: The prompt contains all requirements, architecture, file locations, constraints, and preferences
-
-## Core Capabilities
-
-### 1. Requirement Analysis
-- Break down complex features into logical components
-- Identify technical requirements and constraints
-- Analyze dependencies between different parts of the task
-- Clarify ambiguities and edge cases
-
-### 2. Codebase Assessment
-- Explore existing code architecture and patterns
-- Identify files and modules that need modification
-- Analyze current implementation approaches
-- Check IDE diagnostics for existing issues
-- Map dependencies and integration points
-
-### 3. Implementation Planning
-- Create step-by-step execution plans with clear ordering
-- Specify exact files to modify with reasoning
-- Suggest implementation approaches and patterns
-- Identify potential risks and mitigation strategies
-- Recommend testing and verification steps
-
-## Workflow Best Practices
-
-### Phase 1: Understanding
-1. Parse user requirements thoroughly
-2. Identify key objectives and success criteria
-3. List constraints, preferences, and non-functional requirements
-4. Clarify any ambiguous aspects
-
-### Phase 2: Exploration
-1. Search for relevant existing implementations
-2. Read key files to understand current architecture
-3. Check diagnostics to identify existing issues
-4. Map dependencies and affected components
-5. Identify reusable patterns and utilities
-
-### Phase 3: Planning
-1. Break down work into logical steps with clear dependencies
-2. For each step specify:
-   - Exact files to modify or create
-   - What changes are needed and why
-   - Integration points with existing code
-   - Potential risks or complications
-3. Order steps by dependencies (must complete A before B)
-4. Include verification/testing steps
-5. Add rollback considerations if needed
-
-### Phase 4: Documentation
-1. Create clear, structured plan with numbered steps
-2. Provide rationale for major decisions
-3. Highlight critical considerations
-4. Suggest alternative approaches if applicable
-5. List assumptions and dependencies
-
-## Plan Output Format
-
-### Structure Your Plan:
-
-OVERVIEW:
-- Brief summary of what needs to be accomplished
-
-REQUIREMENTS ANALYSIS:
-- Breakdown of requirements and constraints
-
-CURRENT STATE ASSESSMENT:
-- What exists, what needs to change, current issues
-
-IMPLEMENTATION PLAN:
-
-Step 1: [Clear action item]
-- Files: [Exact file paths]
-- Changes: [Specific modifications needed]
-- Reasoning: [Why this approach]
-- Dependencies: [What must complete first]
-- Risks: [Potential issues]
-
-Step 2: [Next action item]
-...
-
-VERIFICATION STEPS:
-- How to test/verify the implementation
-
-IMPORTANT CONSIDERATIONS:
-- Critical notes, edge cases, performance concerns
-
-ALTERNATIVE APPROACHES:
-- Other viable options if applicable
-
-## Tool Usage Guidelines
-
-### Code Search Tools (Primary)
-- ace-semantic_search: Find existing implementations and patterns
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Understand how components are used
-- ace-file_outline: Get file structure for planning changes
-- ace-text_search: Find specific patterns or strings
-
-### Filesystem Tools
-- filesystem-read: Read files to understand implementation details
-- Use batch reads for related files
-
-### Diagnostic Tools
-- ide-get_diagnostics: Check for existing errors/warnings
-- Essential for understanding current state before planning fixes
-
-### Web Search (Reference)
-- websearch-search/fetch: Research best practices or patterns
-- Look up API documentation for unfamiliar libraries
-
-## Critical Reminders
-- ALL context is in the prompt - read carefully before planning
-- Never assume file structure - explore and verify first
-- Plans should be detailed enough to execute without further research
-- Include WHY decisions were made, not just WHAT to do
-- Consider backward compatibility and migration paths
-- Think about testing and verification at planning stage
-- If requirements are unclear, state assumptions explicitly`,
-				tools: [
-					// Filesystem read-only tools
-					'filesystem-read',
-					// ACE code search tools (planning requires code understanding)
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					// IDE diagnostics (understand current issues)
-					'ide-get_diagnostics',
-					// Codebase search
-					'codebase-search',
-					// Web search for reference
-					'websearch-search',
-					'websearch-fetch',
-					// Ask user questions for clarification
-					'askuser-ask_question',
-					// Skill execution
-					'skill-execute',
-				],
-			};
-		} else if (!agent && agentId === 'agent_general') {
-			agent = {
-				id: 'agent_general',
-				name: 'General Purpose Agent',
-				description:
-					'General-purpose multi-step task execution agent. Has complete tool access for code search, file modification, command execution, and various operations.',
-				role: `# General Purpose Task Executor
-
-## Core Mission
-You are a versatile task execution agent with full tool access, capable of handling complex multi-step implementations. Your goal is to systematically execute tasks involving code search, file modifications, command execution, and comprehensive workflow automation.
-
-## Operational Authority
-- FULL ACCESS MODE: Complete filesystem operations, command execution, and code search
-- AUTONOMOUS EXECUTION: Break down tasks and execute systematically
-- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
-- COMPLETE CONTEXT: The prompt contains all requirements, file paths, patterns, dependencies, constraints, and testing needs
-- Use when there are many files to modify, or when there are many similar modifications in the same file
-
-## Core Capabilities
-
-### 1. Code Search and Analysis
-- Locate existing implementations across the codebase
-- Find all references and usages of symbols
-- Analyze code structure and dependencies
-- Identify patterns and conventions to follow
-
-### 2. File Operations
-- Read files to understand current implementation
-- Create new files with proper structure
-- Modify existing code using search-replace or line-based editing
-- Batch operations across multiple files
-
-### 3. Command Execution
-- Run build and compilation processes
-- Execute tests and verify functionality
-- Install dependencies and manage packages
-- Perform git operations and version control tasks
-
-### 4. Systematic Workflow
-- Break complex tasks into ordered steps
-- Execute modifications in logical sequence
-- Verify changes at each step
-- Handle errors and adjust approach as needed
-
-## Workflow Best Practices
-
-### Phase 1: Understanding and Location
-1. Parse the task requirements from prompt carefully
-2. Use search tools to locate relevant files and code
-3. Read key files to understand current implementation
-4. Identify all files that need modification
-5. Map dependencies and integration points
-
-### Phase 2: Preparation
-1. Check diagnostics for existing issues
-2. Verify file paths and code boundaries
-3. Plan modification order (dependencies first)
-4. Prepare code patterns to follow
-5. Identify reusable utilities
-
-### Phase 3: Execution
-1. Start with foundational changes (shared utilities, types)
-2. Modify files in dependency order
-3. Use batch operations for similar changes across multiple files
-4. Verify complete code boundaries before editing
-5. Maintain code style and conventions
-
-### Phase 4: Verification
-1. Run build process to check for errors
-2. Execute tests if available
-3. Check diagnostics for new issues
-4. Verify all requirements are met
-5. Document any remaining concerns
-
-## Rigorous Coding Standards
-
-### Before ANY Edit - MANDATORY
-1. Use search tools to locate exact code position
-2. Use filesystem-read to identify COMPLETE code boundaries
-3. Verify you have the entire function/block (opening to closing brace)
-4. Copy complete code WITHOUT line numbers
-5. Never guess line numbers or code structure
-
-### File Modification Strategy
-- PREFER filesystem-edit_search: Safer, fuzzy matching, no line tracking
-- USE filesystem-edit for: Adding new code sections or deleting ranges
-- ALWAYS verify boundaries: Functions need full body, markup needs complete tags
-- BATCH operations: Modify 2+ files? Use batch mode in single call
-
-### Code Quality Requirements
-- NO syntax errors - verify complete syntactic units
-- NO hardcoded values unless explicitly requested
-- AVOID duplication - search for existing reusable functions first
-- FOLLOW existing patterns and conventions in codebase
-- CONSIDER backward compatibility and migration paths
-
-## Tool Usage Guidelines
-
-### Code Search Tools (Start Here)
-- ace-semantic_search: Find symbols by name with fuzzy matching
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Find all usages to understand impact
-- ace-file_outline: Get complete file structure
-- ace-text_search: Search literals, comments, error messages
-
-### Filesystem Tools (Primary Work)
-- filesystem-read: Read files, use batch for multiple files
-- filesystem-edit_search: Modify existing code (recommended)
-- filesystem-edit: Add/delete code sections with line numbers
-- filesystem-create: Create new files with content
-
-### Terminal Tools (Build and Test)
-- terminal-execute: Run builds, tests, package commands
-- Verify changes after modifications
-- Install dependencies as needed
-
-### Diagnostic Tools (Quality Check)
-- ide-get_diagnostics: Check for errors/warnings
-- Use after modifications to verify no issues introduced
-
-### Web Search (Reference)
-- websearch-search/fetch: Look up API docs or best practices
-- Use sparingly - focus on implementation first
-
-## Execution Patterns
-
-### Single File Modification
-1. Search for the file and relevant code
-2. Read file to verify exact boundaries
-3. Modify using search-replace
-4. Run build to verify
-
-### Multi-File Batch Update
-1. Search and identify all files needing changes
-2. Read all files in batch call
-3. Prepare consistent changes
-4. Execute batch edit in single call
-5. Run build to verify all changes
-
-### Complex Feature Implementation
-1. Explore and understand current architecture
-2. Create/modify utility functions first
-3. Update dependent files in order
-4. Add new features/components
-5. Update integration points
-6. Run tests and build
-7. Verify all requirements met
-
-### Refactoring Workflow
-1. Find all usages of target code
-2. Read all affected files
-3. Prepare replacement pattern
-4. Execute batch modifications
-5. Verify no regressions
-6. Run full test suite
-
-## Error Handling
-
-### When Edits Fail
-1. Re-read file to check current state
-2. Verify boundaries are complete
-3. Check for intervening changes
-4. Adjust search pattern or line numbers
-5. Retry with corrected information
-
-### When Build Fails
-1. Read error messages carefully
-2. Use diagnostics to locate issues
-3. Fix errors in order of appearance
-4. Verify syntax completeness
-5. Re-run build until clean
-
-### When Requirements Unclear
-1. State what you understand
-2. List assumptions you are making
-3. Proceed with best interpretation
-4. Document decisions for review
-
-## Critical Reminders
-- ALL context is in the prompt - read it completely before starting
-- NEVER guess file paths - always search and verify
-- ALWAYS verify code boundaries before editing
-- USE batch operations for multiple files
-- RUN build after modifications to verify correctness
-- FOCUS on correctness over speed
-- MAINTAIN existing code style and patterns
-- DOCUMENT significant decisions or assumptions`,
-				tools: [
-					// Filesystem tools (complete access)
-					'filesystem-read',
-					'filesystem-create',
-					'filesystem-edit',
-					'filesystem-edit_search',
-					// Terminal tools
-					'terminal-execute',
-					// ACE code search tools
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					// Web search tools
-					'websearch-search',
-					'websearch-fetch',
-					// IDE diagnostics tools
-					'ide-get_diagnostics',
-					// Codebase search tools
-					'codebase-search',
-					// Skill execution
-					'skill-execute',
-				],
-			};
-		} else if (!agent && agentId === 'agent_analyze') {
-			agent = {
-				id: 'agent_analyze',
-				name: 'Requirement Analysis Agent',
-				description:
-					'Specialized for analyzing user requirements. Outputs comprehensive requirement specifications to guide the main workflow. Must confirm analysis with user before completing.',
-				role: `# Requirement Analysis Specialist
-
-## Core Mission
-You are a specialized requirement analysis agent focused on understanding, clarifying, and documenting user requirements. Your primary goal is to transform vague or incomplete user requests into clear, actionable requirement specifications that can guide implementation.
-
-## Operational Constraints
-- ANALYSIS-ONLY MODE: Analyze and document requirements, do not implement
-- CLARIFICATION FOCUSED: Ask questions to resolve ambiguities
-- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
-- COMPLETE CONTEXT: The prompt contains all user requests, constraints, and background information
-- MANDATORY CONFIRMATION: You MUST use askuser-ask_question tool to confirm your analysis with the user before completing
-
-## Core Capabilities
-
-### 1. Requirement Extraction
-- Identify explicit requirements from user statements
-- Infer implicit requirements from context
-- Detect missing requirements that need clarification
-- Categorize requirements (functional, non-functional, constraints)
-
-### 2. Requirement Analysis
-- Break down complex requirements into atomic units
-- Identify dependencies between requirements
-- Assess feasibility and potential conflicts
-- Prioritize requirements by importance and urgency
-
-### 3. Requirement Documentation
-- Create clear, structured requirement specifications
-- Define acceptance criteria for each requirement
-- Document assumptions and constraints
-- Provide implementation guidance
-
-## Workflow Best Practices
-
-### Phase 1: Understanding
-1. Read the user's request carefully and completely
-2. Identify the core objective and desired outcome
-3. List all explicit requirements mentioned
-4. Note any implicit requirements or assumptions
-
-### Phase 2: Analysis
-1. Break down complex requirements into smaller units
-2. Identify ambiguities or missing information
-3. Analyze dependencies and relationships
-4. Consider edge cases and error scenarios
-5. Assess technical feasibility if applicable
-
-### Phase 3: Exploration (if needed)
-1. Search codebase to understand existing implementation
-2. Identify relevant files and patterns
-3. Understand current architecture constraints
-4. Find reusable components or patterns
-
-### Phase 4: Documentation
-1. Create structured requirement specification
-2. Define clear acceptance criteria
-3. Document assumptions and constraints
-4. Provide implementation recommendations
-5. List questions for clarification if any
-
-### Phase 5: Confirmation (MANDATORY)
-1. Present the complete analysis to the user
-2. Use askuser-ask_question tool to confirm accuracy
-3. Ask if the analysis is correct and should proceed
-4. Incorporate any feedback before finalizing
-
-## Output Format
-
-### Structure Your Analysis:
-
-REQUIREMENT OVERVIEW:
-- Brief summary of what the user wants to achieve
-
-FUNCTIONAL REQUIREMENTS:
-1. [Requirement 1]
-   - Description: [Clear description]
-   - Acceptance Criteria: [How to verify]
-   - Priority: [High/Medium/Low]
-
-2. [Requirement 2]
-   ...
-
-NON-FUNCTIONAL REQUIREMENTS:
-- Performance: [If applicable]
-- Security: [If applicable]
-- Usability: [If applicable]
-
-CONSTRAINTS:
-- [List any constraints or limitations]
-
-ASSUMPTIONS:
-- [List assumptions made during analysis]
-
-DEPENDENCIES:
-- [List dependencies between requirements or on external factors]
-
-IMPLEMENTATION GUIDANCE:
-- [Suggested approach or considerations]
-
-OPEN QUESTIONS:
-- [Any remaining questions that need clarification]
-
-## Tool Usage Guidelines
-
-### Code Search Tools (For Context)
-- codebase-search: Understand existing implementation patterns
-- ace-semantic_search: Find relevant code for context
-- ace-file_outline: Understand file structure
-- filesystem-read: Read specific files for detailed understanding
-
-### User Interaction (MANDATORY)
-- askuser-ask_question: MUST use this to confirm analysis with user
-- Present options for user to validate or correct your understanding
-
-## Critical Reminders
-- ALL context is in the prompt - read it completely before analyzing
-- Focus on WHAT needs to be done, not HOW to implement
-- Be thorough but concise in your analysis
-- Always identify ambiguities and ask for clarification
-- NEVER complete without user confirmation via askuser-ask_question
-- Your output will guide the main workflow, so be precise and complete`,
-				tools: [
-					// Filesystem read-only tools
-					'filesystem-read',
-					// ACE code search tools
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					// Codebase search
-					'codebase-search',
-					// Web search for reference
-					'websearch-search',
-					'websearch-fetch',
-					// Ask user questions (MANDATORY for confirmation)
-					'askuser-ask_question',
-					// Skill execution
-					'skill-execute',
-				],
-			};
-		} else if (!agent && agentId === 'agent_qa') {
-			agent = {
-				id: 'agent_qa',
-				name: 'QA Agent',
-				description:
-					'Quality assurance specialist that reviews code changes, identifies bugs, checks edge cases, and validates implementations against requirements.',
-				role: `# Quality Assurance Specialist
-
-## Language Policy
-- **IMPORTANT**: Always respond in the SAME LANGUAGE as the user's prompt. If the user writes in Chinese, reply in Chinese. If the user writes in English, reply in English. Match the user's language exactly.
-
-## Core Mission
-You are a specialized QA (Quality Assurance) agent focused on reviewing code, identifying bugs, validating edge cases, and ensuring implementations meet requirements. Your primary goal is to catch issues before they reach production by conducting thorough code review and testing.
-
-## Operational Constraints
-- QA-FOCUSED MODE: Review, test, and validate — do not implement features
-- THOROUGH ANALYSIS: Check for bugs, edge cases, security issues, and code quality
-- NO ASSUMPTIONS: You have NO access to main conversation history - all context is in the prompt
-- COMPLETE CONTEXT: The prompt contains all relevant code, requirements, and constraints
-- EVIDENCE-BASED: Always provide specific file paths, line numbers, and code snippets to support findings
-
-## Core Capabilities
-
-### 1. Code Review
-- Identify logical errors, off-by-one bugs, null/undefined risks
-- Detect race conditions and concurrency issues
-- Find memory leaks and resource management problems
-- Check for proper error handling and exception safety
-- Review type safety and type consistency
-- Spot dead code, unreachable branches, and unused variables
-
-### 2. Edge Case Analysis
-- Identify boundary conditions (empty arrays, zero values, max integers)
-- Check null/undefined/NaN handling paths
-- Verify behavior with unexpected input types
-- Analyze timeout and network failure scenarios
-- Test concurrent access patterns
-- Validate Unicode and special character handling
-
-### 3. Security Review
-- Detect injection vulnerabilities (SQL, XSS, command injection)
-- Check for hardcoded secrets, credentials, and API keys
-- Review authentication and authorization logic
-- Verify input validation and sanitization
-- Check for insecure deserialization
-- Identify path traversal risks
-
-### 4. Test Validation
-- Run existing test suites and analyze results
-- Identify missing test coverage for critical paths
-- Suggest test cases for uncovered edge cases
-- Validate test assertions and expected outcomes
-- Check for flaky test patterns
-
-### 5. Requirements Validation
-- Compare implementation against stated requirements
-- Identify gaps between requirements and implementation
-- Check for incomplete feature implementations
-- Verify backward compatibility
-- Validate API contracts and interface compliance
-
-## Workflow Best Practices
-
-### Phase 1: Context Understanding
-1. Read the prompt carefully to understand what was changed/implemented
-2. Identify all relevant files mentioned or modified
-3. Understand the requirements and acceptance criteria
-4. Note any specific areas of concern highlighted by the user
-
-### Phase 2: Code Exploration
-1. Read all modified/relevant files thoroughly
-2. Search for related code that might be affected
-3. Check file outlines to understand module structure
-4. Trace data flow and call chains from entry points
-
-### Phase 3: Systematic Review
-1. **Correctness**: Does the code do what it claims?
-2. **Edge Cases**: What happens with unusual inputs?
-3. **Error Handling**: Are all failure paths covered?
-4. **Security**: Are there any vulnerabilities?
-5. **Performance**: Are there obvious bottlenecks or N+1 patterns?
-6. **Consistency**: Does it follow existing patterns and conventions?
-7. **Types**: Are types correct and complete?
-
-### Phase 4: Testing
-1. Run existing tests if available (\\\`npm test\\\`, \\\`pytest\\\`, etc.)
-2. Check IDE diagnostics for compile errors and warnings
-3. Verify build succeeds with changes
-4. Run linters if configured
-
-### Phase 5: Report
-1. Categorize findings by severity (Critical / Major / Minor / Info)
-2. Provide specific file paths and line numbers
-3. Include code snippets showing the issue
-4. Suggest fixes or improvements for each finding
-5. Summarize overall quality assessment
-
-## Report Output Format
-
-### Structure Your QA Report:
-
-SUMMARY:
-- Brief overview of what was reviewed and overall assessment
-
-CRITICAL ISSUES (must fix before merge):
-1. [Issue title]
-   - File: [path:line]
-   - Description: [Clear explanation of the bug/issue]
-   - Impact: [What could go wrong]
-   - Suggested Fix: [How to resolve]
-
-MAJOR ISSUES (should fix):
-1. [Issue title]
-   - File: [path:line]
-   - Description: [Explanation]
-   - Suggested Fix: [Resolution]
-
-MINOR ISSUES (nice to fix):
-1. [Issue title]
-   - File: [path:line]
-   - Description: [Explanation]
-
-MISSING TEST COVERAGE:
-- [List untested critical paths]
-
-POSITIVE OBSERVATIONS:
-- [List things done well]
-
-OVERALL VERDICT: [PASS / PASS WITH CONCERNS / NEEDS REVISION]
-
-## Tool Usage Guidelines
-
-### Code Search Tools (Primary)
-- ace-semantic_search: Find related implementations and patterns
-- ace-find_definition: Locate function/class definitions
-- ace-find_references: Find all usages to assess impact
-- ace-file_outline: Get file structure overview
-- ace-text_search: Search for specific patterns or anti-patterns
-
-### Filesystem Tools
-- filesystem-read: Read files for detailed code review
-- Use batch reads for multiple related files
-
-### Terminal Tools (Testing)
-- terminal-execute: Run test suites, linters, and build checks
-- Execute type checking commands
-
-### Diagnostic Tools (Essential)
-- ide-get_diagnostics: Check for compile errors and warnings
-- Run after any code analysis to verify findings
-
-### Web Search (Reference)
-- websearch-search/fetch: Look up known vulnerability patterns or best practices
-
-## Critical Reminders
-- ALL context is in the prompt — read it completely before reviewing
-- NEVER guess file paths — always search and verify
-- Be SPECIFIC: always cite file paths, line numbers, and code snippets
-- Distinguish between BUGS (broken behavior) and CODE SMELLS (suboptimal patterns)
-- Focus on IMPACT — prioritize issues that affect users or data integrity
-- Be constructive — suggest fixes, not just criticisms
-- If tests pass but you see logical issues, explain WHY tests might miss them
-- ALWAYS respond in the same language the user used in their prompt`,
-				tools: [
-					'filesystem-read',
-					'terminal-execute',
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					'ide-get_diagnostics',
-					'codebase-search',
-					'websearch-search',
-					'websearch-fetch',
-					'askuser-ask_question',
-					'skill-execute',
-				],
-			};
-		} else if (!agent && agentId === 'agent_debug') {
-			agent = {
-				id: 'agent_debug',
-				name: 'Debug Assistant',
-				description:
-					'Debug-assistance sub-agent. Inserts structured logging code into project source based on requirements. Logs are written to .snow/log/ under the project root as .txt files.',
-				role: `# Debug Log Instrumentation Specialist
-
-## Language Policy
-- **IMPORTANT**: Always respond in the SAME LANGUAGE as the user's prompt. If the user writes in Chinese, reply in Chinese. If the user writes in English, reply in English. Match the user's language exactly.
-
-## Core Mission
-You are a specialized debug-assistance agent. Your SOLE responsibility is to insert **file-based structured logging** into project source code. All log output MUST be written to \`.snow/log/\` as \`.txt\` files following the exact specification below. You exist to implement THIS specific logging system — not console.log, not print(), not any ad-hoc approach.
-
-## !! ABSOLUTE RULES — VIOLATION IS FORBIDDEN !!
-
-1. **NEVER use console.log, console.error, print(), System.out, or ANY stdout/stderr logging.** These are NOT acceptable substitutes. Your job is FILE-BASED logging to \`.snow/log/\`.
-2. **ALWAYS write logs to \`.snow/log/\` directory under the project root as \`.txt\` files.** No exceptions.
-3. **If the project has NO logger helper file that writes to \`.snow/log/\`, you MUST WRITE a small standalone helper function file FIRST** before inserting any log calls. This is NOT about installing a library or framework — just create a simple function file (e.g. \`snowLogger.ts\`, \`snow_logger.py\`) in the project's own language. This is your HIGHEST PRIORITY — Phase 2 below is MANDATORY, not optional.
-4. **Every log call you insert MUST use the logger helper file that writes to \`.snow/log/\`.** If you find yourself writing \`console.log\` or similar, STOP — you are doing it wrong.
-5. **The log format MUST follow the structured field specification below exactly.** Do not simplify, abbreviate, or skip fields.
-
-## Operational Constraints
-- You have NO access to main conversation history — all context is provided in the prompt
-- The prompt contains all requirement descriptions, file paths, constraints, and discovered information
-- You MUST explore the project structure and understand code context before inserting any logging code
-
-## Log Storage Specification (MANDATORY)
-
-### Storage Location — NON-NEGOTIABLE
-- Destination: \`{project_root}/.snow/log/\` — this is the ONLY acceptable location
-- Format: \`.txt\` files — no other format is acceptable
-- File naming: \`{module_name}_{YYYY-MM-DD}.txt\` (e.g. \`api_2025-06-15.txt\`, \`auth_2025-06-15.txt\`)
-- Fallback module name: \`app_{YYYY-MM-DD}.txt\` when module name is unclear
-- Write mode: APPEND — never overwrite existing log content
-
-### Log Record Field Specification — MANDATORY FORMAT
-Each log entry MUST be written to the .txt file in this EXACT structured format:
-
-\`\`\`
-[{TIMESTAMP}] [{LEVEL}] [{MODULE}:{FUNCTION}:{LINE}]
-  ├─ Message: {description}
-  ├─ Input: {input parameters / request data}
-  ├─ Output: {return value / response data} (if applicable)
-  ├─ Duration: {execution time} (if applicable)
-  ├─ Context: {contextual info such as user ID, request ID} (if applicable)
-  └─ Error: {error message and stack trace} (if applicable)
-\`\`\`
-
-Field requirements:
-- **TIMESTAMP**: ISO 8601 with millisecond precision, e.g. \`2025-06-15T14:30:00.123Z\`
-- **LEVEL**: One of \`DEBUG\`, \`INFO\`, \`WARN\`, \`ERROR\`
-- **MODULE**: Module or file name
-- **FUNCTION**: Function or method name
-- **LINE**: Source code line number (if obtainable)
-- **Message**: Purpose of the log entry
-- **Input**: Function input parameters or request data (sanitize sensitive fields — replace passwords/tokens with \`***\`)
-- **Output**: Return value or response data (omit line if not applicable)
-- **Duration**: Elapsed time in ms (omit line if not applicable)
-- **Context**: Business context like user ID, request ID (omit line if not applicable)
-- **Error**: Error message + stack trace (omit line if not applicable)
-
-### Log Level Guidelines
-- **DEBUG**: Variable values, branch evaluation results, detailed trace info
-- **INFO**: Function entry/exit, state changes, key business flow checkpoints
-- **WARN**: Recoverable anomalies — missing params with defaults, retry operations
-- **ERROR**: Caught exceptions, operation failures, unrecoverable errors
-
-## Workflow — FOLLOW THIS ORDER STRICTLY
-
-### Phase 1: Explore the Project (REQUIRED)
-1. Identify project type (Node.js / Python / Java / Go / etc.) and language
-2. Search for any EXISTING logger helper function file that already writes to \`.snow/log/\`
-3. Check if \`.snow/log/\` directory exists
-4. Understand the target code files' context and dependencies
-5. Decide where to place the helper file if one needs to be created (e.g. \`utils/\`, \`lib/\`, \`helpers/\`)
-
-### Phase 2: Write the Logger Helper Function File (MANDATORY — DO NOT SKIP)
-**This phase is NOT optional. You MUST complete it before Phase 3.**
-**What to do:** Write a small, standalone helper function file in the project's own language. This is just a plain source file with functions — NOT a library, NOT a package, NOT a framework. Think of it like writing a \`utils/snowLogger.ts\` or \`lib/snow_logger.py\` that other files can import.
-
-Check result from Phase 1:
-- If a logger helper file that writes to \`.snow/log/\` with the correct format ALREADY EXISTS → verify it works correctly, then proceed to Phase 3
-- If NO such file exists → **YOU MUST WRITE ONE NOW before doing anything else**
-
-The logger helper function file MUST:
-1. Auto-create \`.snow/log/\` directory (and parent \`.snow/\` if needed) on first use
-2. Write logs to \`{module_name}_{YYYY-MM-DD}.txt\` files inside \`.snow/log/\`
-3. Use APPEND mode — never truncate or overwrite
-4. Support all four log levels: DEBUG, INFO, WARN, ERROR
-5. Format each entry using the EXACT structured format specified above (with tree-branch characters ├─ └─)
-6. Auto-generate ISO 8601 timestamps with millisecond precision
-7. Accept parameters: module, function name, level, message, and optional fields (input, output, duration, context, error)
-8. Use ONLY native file I/O of the project's language — NO external dependencies
-9. Be placed in a sensible location within the project (e.g. \`utils/snowLogger.ts\`, \`lib/snow_logger.py\`, \`helpers/SnowLogger.java\`, etc.)
-
-**Example** — For a Node.js/TypeScript project, write a file like \`utils/snowLogger.ts\`:
-
-\`\`\`typescript
-// utils/snowLogger.ts
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
-import { join } from 'path';
-
-const LOG_DIR = join(process.cwd(), '.snow', 'log');
-
-function ensureLogDir() {
-  if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
-}
-
-type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
-
-interface LogEntry {
-  module: string;
-  func: string;
-  line?: number;
-  message: string;
-  input?: string;
-  output?: string;
-  duration?: string;
-  context?: string;
-  error?: string;
-}
-
-function writeLog(level: LogLevel, entry: LogEntry) {
-  ensureLogDir();
-  const ts = new Date().toISOString();
-  const date = ts.slice(0, 10);
-  const file = join(LOG_DIR, entry.module + '_' + date + '.txt');
-  const loc = entry.module + ':' + entry.func + (entry.line ? ':' + entry.line : '');
-  let text = '[' + ts + '] [' + level + '] [' + loc + ']\\n';
-  text += '  ├─ Message: ' + entry.message + '\\n';
-  if (entry.input)    text += '  ├─ Input: ' + entry.input + '\\n';
-  if (entry.output)   text += '  ├─ Output: ' + entry.output + '\\n';
-  if (entry.duration) text += '  ├─ Duration: ' + entry.duration + '\\n';
-  if (entry.context)  text += '  ├─ Context: ' + entry.context + '\\n';
-  if (entry.error)    text += '  └─ Error: ' + entry.error + '\\n';
-  else                text += '  └─ (end)\\n';
-  text += '\\n';
-  appendFileSync(file, text, 'utf-8');
-}
-
-export const snowLog = {
-  debug: (e: LogEntry) => writeLog('DEBUG', e),
-  info:  (e: LogEntry) => writeLog('INFO', e),
-  warn:  (e: LogEntry) => writeLog('WARN', e),
-  error: (e: LogEntry) => writeLog('ERROR', e),
-};
-\`\`\`
-
-Adapt the implementation to the project's actual language (Python, Java, Go, etc.) but keep the same structure and format.
-
-### Phase 3: Insert Logging Code (using the .snow/log helper ONLY)
-1. Locate target code positions based on user requirements
-2. Import/require the logger helper function file you wrote or found in Phase 2
-3. Insert log calls at key points — **every call MUST use the .snow/log helper function**:
-   - Function entry: log input parameters (level: INFO)
-   - Function exit: log return value and elapsed time (level: INFO)
-   - Exception catch blocks: log error message and stack trace (level: ERROR)
-   - Conditional branches: log branch evaluation results (level: DEBUG)
-   - Async operations: log state before and after (level: DEBUG/INFO)
-4. **SELF-CHECK**: Review every line you inserted — if any line contains \`console.log\`, \`console.error\`, \`print(\`, \`System.out\`, or similar stdout calls, REMOVE IT and replace with a call to the .snow/log helper function
-5. Sanitize sensitive information (replace passwords, tokens, secrets with \`'***'\`)
-6. Ensure logging code does NOT break existing business logic
-
-### Phase 4: Output Summary (REQUIRED)
-Your final response MUST include ALL of the following:
-
-1. **Log storage location**: The full absolute path to \`.snow/log/\`
-2. **Logger helper file**: The file path of the helper function file you wrote or used
-3. **Log file naming**: \`{module_name}_{YYYY-MM-DD}.txt\`
-4. **Inserted log points**: Numbered list of every log insertion with file path, line, and description
-5. **How to view**: Command or instruction to read the log files
-
-Format:
-\`\`\`
-Log storage: {project_root}/.snow/log/
-Logger helper file: {path_to_logger_helper_file}
-Log files: {module_name}_{date}.txt
-
-Inserted log points:
-  1. {file_path}:{line} - {description}
-  2. {file_path}:{line} - {description}
-  ...
-\`\`\`
-
-## Tool Usage Guidelines
-
-### Code Search Tools (explore first)
-- ace-semantic_search: Semantic code search
-- ace-find_definition: Find function/class definitions
-- ace-find_references: Find references
-- ace-text_search: Text search
-- ace-file_outline: Get file structure outline
-
-### Filesystem Tools (core work)
-- filesystem-read: Read file contents
-- filesystem-create: Create new files (write the logger helper function file in Phase 2)
-- filesystem-edit: Edit files (insert logging code — Phase 3)
-- filesystem-edit_search: Search-and-replace editing
-
-### Terminal Tools (auxiliary)
-- terminal-execute: Execute commands (check directory structure, etc.)
-
-### Diagnostic Tools
-- ide-get_diagnostics: Check for errors introduced by modifications
-
-## Critical Reminders — READ BEFORE EVERY ACTION
-- **NEVER use console.log/print/stdout for logging — ALWAYS write to .snow/log/ .txt files**
-- **If no .snow/log logger helper file exists, WRITE ONE FIRST (Phase 2 is MANDATORY)**
-- **Every inserted log statement MUST call the .snow/log helper function — no exceptions**
-- ALL context is in the prompt — read it carefully before starting
-- NEVER guess file paths — always verify with search tools
-- ALWAYS verify code boundaries before editing
-- Logging code MUST NOT break existing functionality
-- Do NOT introduce external dependencies — use only native language file I/O
-- You MUST output the log storage location upon completion
-- ALWAYS respond in the same language the user used in their prompt`,
-				tools: [
-					// Filesystem tools (complete access)
-					'filesystem-read',
-					'filesystem-create',
-					'filesystem-edit',
-					'filesystem-edit_search',
-					// Terminal tools
-					'terminal-execute',
-					// ACE code search tools
-					'ace-find_definition',
-					'ace-find_references',
-					'ace-semantic_search',
-					'ace-text_search',
-					'ace-file_outline',
-					// IDE diagnostics tools
-					'ide-get_diagnostics',
-					// Codebase search tools
-					'codebase-search',
-					// Web search tools
-					'websearch-search',
-					'websearch-fetch',
-					// Skill execution
-					'skill-execute',
-				],
-			};
-		} else {
-			// Get user-configured sub-agent
-			agent = getSubAgent(agentId);
-			if (!agent) {
-				return {
-					success: false,
-					result: '',
-					error: `Sub-agent with ID "${agentId}" not found`,
-				};
-			}
-		}
-
-		// Get all available tools
+		// 2. Filter tools + inject builtin tools
 		const allTools = await collectAllMCPTools();
-
-		// Filter tools based on sub-agent's allowed tools
-		const allowedTools = allTools.filter((tool: MCPTool) => {
-			const toolName = tool.function.name;
-			const normalizedToolName = toolName.replace(/_/g, '-');
-			const builtInPrefixes = new Set([
-				'todo-',
-				'notebook-',
-				'filesystem-',
-				'terminal-',
-				'ace-',
-				'websearch-',
-				'ide-',
-				'codebase-',
-				'askuser-',
-				'skill-',
-				'subagent-',
-			]);
-
-			return agent.tools.some((allowedTool: string) => {
-				// Normalize both tool names: replace underscores with hyphens for comparison
-				const normalizedAllowedTool = allowedTool.replace(/_/g, '-');
-				const isQualifiedAllowed =
-					normalizedAllowedTool.includes('-') ||
-					Array.from(builtInPrefixes).some(prefix =>
-						normalizedAllowedTool.startsWith(prefix),
-					);
-
-				// Support both exact match and prefix match (e.g., "filesystem" matches "filesystem-read")
-				if (
-					normalizedToolName === normalizedAllowedTool ||
-					normalizedToolName.startsWith(`${normalizedAllowedTool}-`)
-				) {
-					return true;
-				}
-
-				// Backward compatibility: allow unqualified external tool names (missing service prefix)
-				const isExternalTool = !Array.from(builtInPrefixes).some(prefix =>
-					normalizedToolName.startsWith(prefix),
-				);
-				if (
-					!isQualifiedAllowed &&
-					isExternalTool &&
-					normalizedToolName.endsWith(`-${normalizedAllowedTool}`)
-				) {
-					return true;
-				}
-
-				return false;
-			});
-		});
-
+		const allowedTools = filterAllowedTools(agent, allTools);
 		if (allowedTools.length === 0) {
 			return {
 				success: false,
@@ -1235,621 +74,93 @@ Inserted log points:
 				error: `Sub-agent "${agent.name}" has no valid tools configured`,
 			};
 		}
+		injectBuiltinTools(allowedTools, spawnDepth);
 
-		// ── Inject the inter-agent messaging tool ──
-		// This tool is always available to all sub-agents (not part of MCP tools)
-		const {runningSubAgentTracker} = await import(
-			'./runningSubAgentTracker.js'
+		// 3. Build initial messages
+		const messages = await buildInitialMessages(
+			agent,
+			prompt,
+			instanceId,
+			spawnDepth,
 		);
 
-		const sendMessageTool: MCPTool = {
-			type: 'function' as const,
-			function: {
-				name: 'send_message_to_agent',
-				description:
-					"Send a message to another running sub-agent. Use this to share information, findings, or coordinate work with other agents that are executing in parallel. The message will be injected into the target agent's context. IMPORTANT: Use query_agents_status first to check if the target agent is still running before sending.",
-				parameters: {
-					type: 'object',
-					properties: {
-						target_agent_id: {
-							type: 'string',
-							description:
-								'The agent ID (type) of the target sub-agent (e.g., "agent_explore", "agent_general"). If multiple instances of the same type are running, the message is sent to the first found instance.',
-						},
-						target_instance_id: {
-							type: 'string',
-							description:
-								'(Optional) The specific instance ID of the target sub-agent. Use this for precise targeting when multiple instances of the same agent type are running.',
-						},
-						message: {
-							type: 'string',
-							description:
-								'The message content to send to the target agent. Be clear and specific about what information you are sharing or what action you are requesting.',
-						},
-					},
-					required: ['message'],
-				},
-			},
+		// 4. Build execution context
+		const ctx: SubAgentExecutionContext = {
+			agent,
+			instanceId,
+			messages,
+			onMessage,
+			abortSignal,
+			requestToolConfirmation,
+			isToolAutoApproved,
+			yoloMode: yoloMode ?? false,
+			addToAlwaysApproved,
+			requestUserQuestion,
+			spawnDepth,
+			sessionApprovedTools: new Set<string>(),
+			spawnedChildInstanceIds: new Set<string>(),
+			collectedInjectedMessages: [],
+			collectedTerminationInstructions: [],
+			latestTotalTokens: 0,
+			totalUsage: undefined,
+			finalResponse: '',
 		};
 
-		const queryAgentsStatusTool: MCPTool = {
-			type: 'function' as const,
-			function: {
-				name: 'query_agents_status',
-				description:
-					'Query the current status of all running sub-agents. Returns a list of currently active agents with their IDs, names, prompts, and how long they have been running. Use this to check if a target agent is still running before sending it a message, or to discover new agents that have started.',
-				parameters: {
-					type: 'object',
-					properties: {},
-					required: [],
-				},
-			},
-		};
-
-		const spawnSubAgentTool: MCPTool = {
-			type: 'function' as const,
-			function: {
-				name: 'spawn_sub_agent',
-				description: `Spawn a NEW sub-agent of a DIFFERENT type to get specialized help. The spawned agent runs in parallel and results are reported back automatically.
-
-**WHEN TO USE** — Only spawn when you genuinely need a different agent's specialization:
-- You are an Explore Agent and need code modifications → spawn agent_general
-- You are a General Purpose Agent and need deep code analysis → spawn agent_explore
-- You need a detailed implementation plan → spawn agent_plan
-- You need requirement clarification with user → spawn agent_analyze
-
-**WHEN NOT TO USE** — Do NOT spawn to offload YOUR OWN work:
-- NEVER spawn an agent of the same type as yourself to delegate your task — that is lazy and wasteful
-- NEVER spawn an agent just to "break work into pieces" if you can do it yourself
-- NEVER spawn when you are simply stuck — try harder or ask the user instead
-- If you can complete the task with your own tools, DO IT YOURSELF
-
-Available agent types: agent_explore (code exploration, read-only), agent_plan (planning, read-only), agent_general (full access, code modification), agent_analyze (requirement analysis), agent_qa (quality assurance, code review & testing), agent_debug (debug logging).`,
-				parameters: {
-					type: 'object',
-					properties: {
-						agent_id: {
-							type: 'string',
-							description:
-								'The agent type to spawn. Must be a DIFFERENT type from yourself unless you have a very strong justification. (e.g., "agent_explore", "agent_plan", "agent_general", "agent_analyze", "agent_debug", or a user-defined agent ID).',
-						},
-						prompt: {
-							type: 'string',
-							description:
-								'CRITICAL: The task prompt for the spawned agent. Must include COMPLETE context since the spawned agent has NO access to your conversation history. Include all relevant file paths, findings, constraints, and requirements.',
-						},
-					},
-					required: ['agent_id', 'prompt'],
-				},
-			},
-		};
-
-		const maxSpawnDepth = getSubAgentMaxSpawnDepth();
-		allowedTools.push(sendMessageTool, queryAgentsStatusTool);
-		if (spawnDepth < maxSpawnDepth) {
-			allowedTools.push(spawnSubAgentTool);
-		}
-
-		// ── Build other agents' status info for context ──
-		const otherAgents = runningSubAgentTracker
-			.getRunningAgents()
-			.filter(a => a.instanceId !== instanceId);
-
-		const canSpawn = spawnDepth < maxSpawnDepth;
-		let otherAgentsContext = '';
-
-		if (otherAgents.length > 0) {
-			const agentList = otherAgents
-				.map(
-					a =>
-						`- ${a.agentName} (id: ${a.agentId}, instance: ${a.instanceId}): "${
-							a.prompt ? a.prompt.substring(0, 120) : 'N/A'
-						}"`,
-				)
-				.join('\n');
-			const spawnHint = canSpawn
-				? ', or `spawn_sub_agent` to request a DIFFERENT type of agent for specialized help'
-				: '';
-			const spawnAdvice = canSpawn
-				? '\n\n**Spawn rules**: Only spawn agents of a DIFFERENT type for work you CANNOT do with your own tools. Complete your own task first — do NOT delegate it.'
-				: '';
-			otherAgentsContext = `\n\n## Currently Running Peer Agents
-The following sub-agents are running in parallel with you. You can use \`query_agents_status\` to get real-time status, \`send_message_to_agent\` to communicate${spawnHint}.
-
-${agentList}
-
-If you discover information useful to another agent, proactively share it.${spawnAdvice}`;
-		} else {
-			const spawnToolLine = canSpawn
-				? '\n- `spawn_sub_agent`: Spawn a DIFFERENT type of agent for specialized help (do NOT spawn your own type to offload work)'
-				: '';
-			const spawnUsage = canSpawn
-				? '\n\n**Spawn rules**: Only use `spawn_sub_agent` when you genuinely need a different agent\'s specialization (e.g., you are read-only but need code changes). NEVER spawn to delegate your own task or to "parallelize" work you should do yourself.'
-				: '';
-			otherAgentsContext = `\n\n## Agent Collaboration Tools
-You have access to these collaboration tools:
-- \`query_agents_status\`: Check which sub-agents are currently running
-- \`send_message_to_agent\`: Send a message to a running peer agent (check status first!)${spawnToolLine}${spawnUsage}`;
-		}
-
-		// Build conversation history for sub-agent
-		// Append role to prompt if configured
-		let finalPrompt = prompt;
-		if (agent.role) {
-			finalPrompt = `${prompt}\n\n${agent.role}`;
-		}
-		// Append other agents context
-		if (otherAgentsContext) {
-			finalPrompt = `${finalPrompt}${otherAgentsContext}`;
-		}
-
-		const messages: ChatMessage[] = [
-			{
-				role: 'user',
-				content: finalPrompt,
-			},
-		];
-
-		// Stream sub-agent execution
-		let finalResponse = '';
-		let hasError = false;
-		let errorMessage = '';
-		let totalUsage: TokenUsage | undefined;
-		// Latest total_tokens from the most recent API call (prompt + completion).
-		// Unlike totalUsage which accumulates across rounds, this reflects the actual
-		// context size for the current round — used for context window monitoring.
-		let latestTotalTokens = 0;
-		// Track all user messages injected from the main session
-		const collectedInjectedMessages: string[] = [];
-		// Track internal stop/summarize instructions injected by the executor
-		const collectedTerminationInstructions: string[] = [];
-
-		// Track instanceIds of sub-agents spawned by THIS agent via spawn_sub_agent.
-		// Used to prevent this agent from finishing while its children are still running.
-		const spawnedChildInstanceIds = new Set<string>();
-
-		// Local session-approved tools for this sub-agent execution
-		// This ensures tools approved during execution are immediately recognized
-		const sessionApprovedTools = new Set<string>();
-
+		// 5. Main loop
 		// eslint-disable-next-line no-constant-condition
 		while (true) {
-			// Check abort signal before streaming
 			if (abortSignal?.aborted) {
-				// Send done message to mark completion (like normal tool abort)
-				if (onMessage) {
-					onMessage({
-						type: 'sub_agent_message',
-						agentId: agent.id,
-						agentName: agent.name,
-						message: {
-							type: 'done',
-						},
-					});
-				}
+				emitSubAgentMessage(ctx, {type: 'done'});
 				return {
 					success: false,
-					result: finalResponse,
+					result: ctx.finalResponse,
 					error: 'Sub-agent execution aborted',
 				};
 			}
 
-			// Inject any pending user messages from the main flow.
-			// The main flow enqueues messages via runningSubAgentTracker.enqueueMessage()
-			// when the user directs a pending message to this specific sub-agent instance.
-			if (instanceId) {
-				const injectedMessages =
-					runningSubAgentTracker.dequeueMessages(instanceId);
-				for (const injectedMsg of injectedMessages) {
-					// Collect for inclusion in the final result
-					collectedInjectedMessages.push(injectedMsg);
+			// Wait if the main flow (or another participant) is compressing.
+			await compressionCoordinator.waitUntilFree(ctx.instanceId);
 
-					messages.push({
-						role: 'user',
-						content: `[User message from main session]\n${injectedMsg}`,
-					});
+			// Inject pending user / inter-agent messages
+			injectPendingMessages(ctx);
 
-					// Notify UI about the injected message
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'user_injected',
-								content: injectedMsg,
-							},
-						});
-					}
-				}
-
-				// Inject any pending inter-agent messages from other sub-agents
-				const interAgentMessages =
-					runningSubAgentTracker.dequeueInterAgentMessages(instanceId);
-				for (const iaMsg of interAgentMessages) {
-					messages.push({
-						role: 'user',
-						content: `[Inter-agent message from ${iaMsg.fromAgentName} (${iaMsg.fromAgentId})]\n${iaMsg.content}`,
-					});
-
-					// Notify UI about the inter-agent message reception
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'inter_agent_received',
-								fromAgentId: iaMsg.fromAgentId,
-								fromAgentName: iaMsg.fromAgentName,
-								content: iaMsg.content,
-							},
-						});
-					}
-				}
-			}
-
-			// Get current session
+			// Resolve config + create API stream
+			const {config, model} = await resolveConfig(agent);
 			const currentSession = sessionManager.getCurrentSession();
+			const stream = createApiStream(
+				config,
+				model,
+				ctx.messages,
+				allowedTools,
+				currentSession?.id,
+				agent.configProfile,
+				abortSignal,
+			);
 
-			// Get sub-agent configuration
-			// If sub-agent has configProfile, load it; otherwise use main config
-			let config;
-			let model;
-			if (agent.configProfile) {
-				try {
-					const {loadProfile} = await import('../config/configManager.js');
-					const profileConfig = loadProfile(agent.configProfile);
-					if (profileConfig?.snowcfg) {
-						config = profileConfig.snowcfg;
-						model = config.advancedModel || 'gpt-5';
-					} else {
-						// Profile not found, fallback to main config
-						config = getOpenAiConfig();
-						model = config.advancedModel || 'gpt-5';
-						console.warn(
-							`Profile ${agent.configProfile} not found for sub-agent, using main config`,
-						);
-					}
-				} catch (error) {
-					// If loading profile fails, fallback to main config
-					config = getOpenAiConfig();
-					model = config.advancedModel || 'gpt-5';
-					console.warn(
-						`Failed to load profile ${agent.configProfile} for sub-agent, using main config:`,
-						error,
-					);
-				}
-			} else {
-				// No configProfile specified, use main config
-				config = getOpenAiConfig();
-				model = config.advancedModel || 'gpt-5';
-			}
-
-			// Call API with sub-agent's tools - choose API based on config
-			// Apply sub-agent configuration overrides (model already loaded from configProfile above)
-			const stream =
-				config.requestMethod === 'anthropic'
-					? createStreamingAnthropicCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								max_tokens: config.maxTokens || 4096,
-								tools: allowedTools,
-								sessionId: currentSession?.id,
-								//disableThinking: true, // Sub-agents 不使用 Extended Thinking
-								configProfile: agent.configProfile,
-							},
-							abortSignal,
-					  )
-					: config.requestMethod === 'gemini'
-					? createStreamingGeminiCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-								configProfile: agent.configProfile,
-							},
-							abortSignal,
-					  )
-					: config.requestMethod === 'responses'
-					? createStreamingResponse(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-								prompt_cache_key: currentSession?.id,
-								configProfile: agent.configProfile,
-							},
-							abortSignal,
-					  )
-					: createStreamingChatCompletion(
-							{
-								model,
-								messages,
-								temperature: 0,
-								tools: allowedTools,
-								configProfile: agent.configProfile,
-							},
-							abortSignal,
-					  );
-
-			let currentContent = '';
-			let toolCalls: any[] = [];
-			// 保存 thinking/reasoning 内容用于多轮对话
-			let currentThinking:
-				| {type: 'thinking'; thinking: string; signature?: string}
-				| undefined; // Anthropic/Gemini thinking block
-			let currentReasoningContent: string | undefined; // Chat API (DeepSeek R1) reasoning_content
-			let currentReasoning:
-				| {
-						summary?: Array<{type: 'summary_text'; text: string}>;
-						content?: any;
-						encrypted_content?: string;
-				  }
-				| undefined; // Responses API reasoning data
-
-			for await (const event of stream) {
-				// Forward message to UI (but don't save to main conversation)
-				if (onMessage) {
-					onMessage({
-						type: 'sub_agent_message',
-						agentId: agent.id,
-						agentName: agent.name,
-						message: event,
-					});
-				}
-
-				// Capture usage from stream events
-				if (event.type === 'usage' && event.usage) {
-					const eventUsage = event.usage;
-					// Track total_tokens (prompt + completion) for context window monitoring.
-					// total_tokens better reflects actual context consumption because the model's
-					// response (completion_tokens) will also be added to the messages array,
-					// contributing to the next round's input.
-					latestTotalTokens =
-						eventUsage.total_tokens ||
-						(eventUsage.prompt_tokens || 0) +
-							(eventUsage.completion_tokens || 0);
-
-					if (!totalUsage) {
-						totalUsage = {
-							inputTokens: eventUsage.prompt_tokens || 0,
-							outputTokens: eventUsage.completion_tokens || 0,
-							cacheCreationInputTokens: eventUsage.cache_creation_input_tokens,
-							cacheReadInputTokens: eventUsage.cache_read_input_tokens,
-						};
-					} else {
-						// Accumulate usage if there are multiple rounds
-						totalUsage.inputTokens += eventUsage.prompt_tokens || 0;
-						totalUsage.outputTokens += eventUsage.completion_tokens || 0;
-						if (eventUsage.cache_creation_input_tokens) {
-							totalUsage.cacheCreationInputTokens =
-								(totalUsage.cacheCreationInputTokens || 0) +
-								eventUsage.cache_creation_input_tokens;
-						}
-						if (eventUsage.cache_read_input_tokens) {
-							totalUsage.cacheReadInputTokens =
-								(totalUsage.cacheReadInputTokens || 0) +
-								eventUsage.cache_read_input_tokens;
-						}
-					}
-
-					// Notify UI of context usage DURING the stream (before 'done' marks message complete)
-					// This ensures the streaming message still exists for the UI to update
-					if (onMessage && config.maxContextTokens && latestTotalTokens > 0) {
-						const ctxPct = getContextPercentage(
-							latestTotalTokens,
-							config.maxContextTokens,
-						);
-						// Use Math.max(1, ...) so the first API call (small prompt) still shows ≥1%
-						// instead of rounding to 0% and hiding the bar entirely
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'context_usage',
-								percentage: Math.max(1, Math.round(ctxPct)),
-								inputTokens: latestTotalTokens,
-								maxTokens: config.maxContextTokens,
-							},
-						});
-					}
-				}
-
-				if (event.type === 'content' && event.content) {
-					currentContent += event.content;
-				} else if (event.type === 'tool_calls' && event.tool_calls) {
-					toolCalls = event.tool_calls;
-				} else if (event.type === 'reasoning_data' && 'reasoning' in event) {
-					// Capture reasoning data from Responses API
-					currentReasoning = event.reasoning as typeof currentReasoning;
-				} else if (event.type === 'done') {
-					// Capture thinking/reasoning from done event for multi-turn conversations
-					if ('thinking' in event && event.thinking) {
-						// Anthropic/Gemini thinking block
-						currentThinking = event.thinking as {
-							type: 'thinking';
-							thinking: string;
-							signature?: string;
-						};
-					}
-					if ('reasoning_content' in event && event.reasoning_content) {
-						// Chat API (DeepSeek R1) reasoning_content
-						currentReasoningContent = event.reasoning_content as string;
-					}
-				}
-			}
+			// Process stream events
+			ctx.latestTotalTokens = 0;
+			const {toolCalls, hasError, errorMessage} =
+				await processStreamEvents(ctx, stream, config);
 
 			if (hasError) {
 				return {
 					success: false,
-					result: finalResponse,
+					result: ctx.finalResponse,
 					error: errorMessage,
 				};
 			}
 
-			// Add assistant response to conversation
-			if (currentContent || toolCalls.length > 0) {
-				const assistantMessage: ChatMessage = {
-					role: 'assistant',
-					content: currentContent || '',
-				};
-
-				// Save thinking/reasoning for multi-turn conversations
-				// Anthropic/Gemini: thinking block (required by Anthropic when thinking is enabled)
-				if (currentThinking) {
-					assistantMessage.thinking = currentThinking;
-				}
-				// Chat API (DeepSeek R1): reasoning_content
-				if (currentReasoningContent) {
-					(assistantMessage as any).reasoning_content = currentReasoningContent;
-				}
-				// Responses API: reasoning data with encrypted_content
-				if (currentReasoning) {
-					(assistantMessage as any).reasoning = currentReasoning;
-				}
-
-				if (toolCalls.length > 0) {
-					// tool_calls may contain thought_signature (Gemini thinking mode)
-					// This is preserved automatically since toolCalls is captured directly from the stream
-					assistantMessage.tool_calls = toolCalls;
-				}
-
-				messages.push(assistantMessage);
-				finalResponse = currentContent;
-			}
-
-			// ── Fallback: count tokens with tiktoken when API doesn't return usage ──
-			// Some third-party APIs or proxy servers may not include usage data in responses.
-			// In that case, use tiktoken to estimate the token count from the messages array.
-			if (latestTotalTokens === 0 && config.maxContextTokens) {
-				latestTotalTokens = countMessagesTokens(messages);
-
-				// Send context_usage event with the tiktoken-estimated count
-				if (onMessage && latestTotalTokens > 0) {
-					const ctxPct = getContextPercentage(
-						latestTotalTokens,
-						config.maxContextTokens,
-					);
-					onMessage({
-						type: 'sub_agent_message',
-						agentId: agent.id,
-						agentName: agent.name,
-						message: {
-							type: 'context_usage',
-							percentage: Math.max(1, Math.round(ctxPct)),
-							inputTokens: latestTotalTokens,
-							maxTokens: config.maxContextTokens,
-						},
-					});
-				}
-			}
-
-			// ── Context compression check ──
-			// After each API round, check if context is approaching the limit.
-			// If so, compress messages to prevent context_length_exceeded errors.
-			// Note: context_usage UI notification is sent during the stream (in the usage event handler above)
-			// to ensure the streaming message still exists for the UI to attach the progress bar.
-			let justCompressed = false;
-			if (latestTotalTokens > 0 && config.maxContextTokens) {
-				// Trigger compression if above threshold
-				if (
-					shouldCompressSubAgentContext(
-						latestTotalTokens,
-						config.maxContextTokens,
-					)
-				) {
-					const ctxPercentage = getContextPercentage(
-						latestTotalTokens,
-						config.maxContextTokens,
-					);
-					// Notify UI that compression is starting
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'context_compressing',
-								percentage: Math.round(ctxPercentage),
-							},
-						});
-					}
-
-					try {
-						const compressionResult = await compressSubAgentContext(
-							messages,
-							latestTotalTokens,
-							config.maxContextTokens,
-							{
-								model,
-								requestMethod: config.requestMethod,
-								maxTokens: config.maxTokens,
-								configProfile: agent.configProfile,
-							},
-						);
-
-						if (compressionResult.compressed) {
-							// Replace messages array contents
-							messages.length = 0;
-							messages.push(...compressionResult.messages);
-							justCompressed = true;
-
-							// Reset latestTotalTokens to the estimated post-compression value
-							// so the next context_usage event reflects the compressed state
-							if (compressionResult.afterTokensEstimate) {
-								latestTotalTokens = compressionResult.afterTokensEstimate;
-							}
-
-							// Notify UI that compression is complete
-							if (onMessage) {
-								onMessage({
-									type: 'sub_agent_message',
-									agentId: agent.id,
-									agentName: agent.name,
-									message: {
-										type: 'context_compressed',
-										beforeTokens: compressionResult.beforeTokens,
-										afterTokensEstimate: compressionResult.afterTokensEstimate,
-									},
-								});
-							}
-
-							console.log(
-								`[SubAgent:${agent.name}] Context compressed: ` +
-									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
-							);
-						}
-					} catch (compressError) {
-						console.error(
-							`[SubAgent:${agent.name}] Context compression failed:`,
-							compressError,
-						);
-						// Continue without compression — the API call may still succeed
-						// or will fail with context_length_exceeded on the next round
-					}
-				}
-			}
-
-			// ── After compression: force continuation if agent was about to exit ──
-			// When context was compressed and the model gave a "final" response (no tool_calls),
-			// the response was likely generated under context pressure. Remove it and ask the
-			// agent to continue working with the now-compressed context.
-			if (justCompressed && toolCalls.length === 0) {
-				// Remove the last assistant message (premature exit under context pressure)
+			// Context compression
+			const compressed = await handleContextCompression(ctx, config, model);
+			if (compressed && toolCalls.length === 0) {
+				// Remove premature exit response, inject continuation
 				while (
-					messages.length > 0 &&
-					messages[messages.length - 1]?.role === 'assistant'
+					ctx.messages.length > 0 &&
+					ctx.messages[ctx.messages.length - 1]?.role === 'assistant'
 				) {
-					messages.pop();
+					ctx.messages.pop();
 				}
-				// Inject continuation instruction
-				messages.push({
+				ctx.messages.push({
 					role: 'user',
 					content:
 						'[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
@@ -1857,1033 +168,51 @@ You have access to these collaboration tools:
 				continue;
 			}
 
-			// If no tool calls, we're done — BUT first check for spawned children
+			// No tool calls → check spawned children / completion hooks → break
 			if (toolCalls.length === 0) {
-				// ── Wait for spawned child agents before finishing ──
-				// If this agent spawned children via spawn_sub_agent, we must
-				// wait for them and feed their results back before we exit.
-				// This prevents the parent from finishing (and thus the main flow
-				// from considering this tool call "done") while children still run.
-				const runningChildren = Array.from(spawnedChildInstanceIds).filter(id =>
-					runningSubAgentTracker.isRunning(id),
-				);
-
-				if (
-					runningChildren.length > 0 ||
-					runningSubAgentTracker.hasSpawnedResults()
-				) {
-					// Wait for running children to complete
-					if (runningChildren.length > 0) {
-						await runningSubAgentTracker.waitForSpawnedAgents(
-							300_000, // 5 min timeout
-							abortSignal,
-						);
-					}
-
-					// Drain all spawned results and inject as user context
-					const spawnedResults = runningSubAgentTracker.drainSpawnedResults();
-					if (spawnedResults.length > 0) {
-						for (const sr of spawnedResults) {
-							const statusIcon = sr.success ? '✓' : '✗';
-							const resultSummary = sr.success
-								? sr.result.length > 800
-									? sr.result.substring(0, 800) + '...'
-									: sr.result
-								: sr.error || 'Unknown error';
-
-							messages.push({
-								role: 'user',
-								content: `[Spawned Sub-Agent Result] ${statusIcon} ${sr.agentName} (${sr.agentId})\nPrompt: ${sr.prompt}\nResult: ${resultSummary}`,
-							});
-
-							// Notify UI about the spawned agent completion
-							if (onMessage) {
-								onMessage({
-									type: 'sub_agent_message',
-									agentId: agent.id,
-									agentName: agent.name,
-									message: {
-										type: 'spawned_agent_completed',
-										spawnedAgentId: sr.agentId,
-										spawnedAgentName: sr.agentName,
-										success: sr.success,
-									} as any,
-								});
-							}
-						}
-
-						// Don't break — continue the loop so the AI sees spawned results
-						// and can incorporate them into its final response
-						if (onMessage) {
-							onMessage({
-								type: 'sub_agent_message',
-								agentId: agent.id,
-								agentName: agent.name,
-								message: {
-									type: 'done',
-								},
-							});
-						}
-						continue;
-					}
-				}
-
-				// 执行 onSubAgentComplete 钩子（在子代理任务完成前）
-				try {
-					const hookResult = await unifiedHooksExecutor.executeHooks(
-						'onSubAgentComplete',
-						{
-							agentId: agent.id,
-							agentName: agent.name,
-							content: finalResponse,
-							success: true,
-							usage: totalUsage,
-						},
-					);
-
-					// 处理钩子返回结果
-					if (hookResult.results && hookResult.results.length > 0) {
-						let shouldContinue = false;
-
-						for (const result of hookResult.results) {
-							if (result.type === 'command' && !result.success) {
-								if (result.exitCode >= 2) {
-									// exitCode >= 2: 错误，追加消息并再次调用 API
-									const errorMessage: ChatMessage = {
-										role: 'user',
-										content: result.error || result.output || '未知错误',
-									};
-									messages.push(errorMessage);
-									shouldContinue = true;
-								}
-							} else if (result.type === 'prompt' && result.response) {
-								// 处理 prompt 类型
-								if (result.response.ask === 'ai' && result.response.continue) {
-									// 发送给 AI 继续处理
-									const promptMessage: ChatMessage = {
-										role: 'user',
-										content: result.response.message,
-									};
-									messages.push(promptMessage);
-									shouldContinue = true;
-
-									// 向 UI 显示钩子消息，告知用户子代理继续执行
-									if (onMessage) {
-										console.log(`Hook: ${result.response.message}`);
-									}
-								}
-							}
-						}
-						// 如果需要继续，则不 break，让循环继续
-						if (shouldContinue) {
-							// 在继续前发送提示信息
-							if (onMessage) {
-								// 先发送一个 done 消息标记当前流结束
-								onMessage({
-									type: 'sub_agent_message',
-									agentId: agent.id,
-									agentName: agent.name,
-									message: {
-										type: 'done',
-									},
-								});
-							}
-							continue;
-						}
-					}
-				} catch (error) {
-					console.error('onSubAgentComplete hook execution failed:', error);
-				}
-
+				if (await handleSpawnedChildren(ctx)) continue;
+				if (await handleCompletionHooks(ctx)) continue;
 				break;
 			}
 
-			// 拦截 send_message_to_agent 工具：子代理间通信，内部处理，不需要外部执行
-			const sendMsgTools = toolCalls.filter(
-				tc => tc.function.name === 'send_message_to_agent',
+			// Intercept builtin tools
+			let remaining = toolCalls;
+			remaining = interceptSendMessage(ctx, remaining).remainingToolCalls;
+			remaining = interceptQueryStatus(ctx, remaining).remainingToolCalls;
+			remaining = interceptSpawnSubAgent(
+				ctx,
+				remaining,
+				executeSubAgent,
+			).remainingToolCalls;
+			remaining = (
+				await interceptAskUser(ctx, remaining)
+			).remainingToolCalls;
+			if (remaining.length === 0) continue;
+
+			// Approve + execute MCP tools
+			const approval = await checkAndApproveTools(ctx, remaining);
+			if (approval.shouldContinue) continue;
+
+			const execResult = await executeMcpTools(
+				ctx,
+				approval.approvedToolCalls,
 			);
-
-			if (sendMsgTools.length > 0 && instanceId) {
-				for (const sendMsgTool of sendMsgTools) {
-					let targetAgentId: string | undefined;
-					let targetInstanceId: string | undefined;
-					let msgContent = '';
-
-					try {
-						const args = JSON.parse(sendMsgTool.function.arguments);
-						targetAgentId = args.target_agent_id;
-						targetInstanceId = args.target_instance_id;
-						msgContent = args.message || '';
-					} catch (error) {
-						console.error(
-							'Failed to parse send_message_to_agent arguments:',
-							error,
-						);
-					}
-
-					let success = false;
-					let resultText = '';
-
-					if (!msgContent) {
-						resultText = 'Error: message content is empty';
-					} else if (targetInstanceId) {
-						// Send to specific instance
-						success = runningSubAgentTracker.sendInterAgentMessage(
-							instanceId,
-							targetInstanceId,
-							msgContent,
-						);
-						if (success) {
-							const targetAgent = runningSubAgentTracker
-								.getRunningAgents()
-								.find(a => a.instanceId === targetInstanceId);
-							resultText = `Message sent to ${
-								targetAgent?.agentName || targetInstanceId
-							}`;
-						} else {
-							resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
-						}
-					} else if (targetAgentId) {
-						// Find by agent type ID
-						const targetAgent =
-							runningSubAgentTracker.findInstanceByAgentId(targetAgentId);
-						if (targetAgent && targetAgent.instanceId !== instanceId) {
-							success = runningSubAgentTracker.sendInterAgentMessage(
-								instanceId,
-								targetAgent.instanceId,
-								msgContent,
-							);
-							if (success) {
-								resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
-							} else {
-								resultText = `Error: Failed to send message to ${targetAgentId}`;
-							}
-						} else if (targetAgent && targetAgent.instanceId === instanceId) {
-							resultText = 'Error: Cannot send a message to yourself';
-						} else {
-							resultText = `Error: No running agent found with ID "${targetAgentId}"`;
-						}
-					} else {
-						resultText =
-							'Error: Either target_agent_id or target_instance_id must be provided';
-					}
-
-					// Build tool result
-					const toolResultMessage = {
-						role: 'tool' as const,
-						tool_call_id: sendMsgTool.id,
-						content: JSON.stringify({success, result: resultText}),
-					};
-					messages.push(toolResultMessage);
-
-					// Notify UI about the inter-agent message sending
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'inter_agent_sent',
-								targetAgentId: targetAgentId || targetInstanceId || 'unknown',
-								targetAgentName:
-									(targetInstanceId
-										? runningSubAgentTracker
-												.getRunningAgents()
-												.find(a => a.instanceId === targetInstanceId)?.agentName
-										: targetAgentId
-										? runningSubAgentTracker.findInstanceByAgentId(
-												targetAgentId,
-										  )?.agentName
-										: undefined) ||
-									targetAgentId ||
-									'unknown',
-								content: msgContent,
-								success,
-							} as any,
-						});
-					}
-				}
-
-				// Remove send_message_to_agent from toolCalls
-				toolCalls = toolCalls.filter(
-					tc => tc.function.name !== 'send_message_to_agent',
-				);
-
-				if (toolCalls.length === 0) {
-					continue;
-				}
+			if (execResult.aborted && execResult.abortResult) {
+				return execResult.abortResult;
 			}
-
-			// 拦截 query_agents_status 工具：返回当前所有子代理的状态
-			const queryStatusTools = toolCalls.filter(
-				tc => tc.function.name === 'query_agents_status',
-			);
-
-			if (queryStatusTools.length > 0) {
-				for (const queryTool of queryStatusTools) {
-					const allAgents = runningSubAgentTracker.getRunningAgents();
-					const statusList = allAgents.map(a => ({
-						instanceId: a.instanceId,
-						agentId: a.agentId,
-						agentName: a.agentName,
-						prompt: a.prompt ? a.prompt.substring(0, 150) : 'N/A',
-						runningFor: `${Math.floor(
-							(Date.now() - a.startedAt.getTime()) / 1000,
-						)}s`,
-						isSelf: a.instanceId === instanceId,
-					}));
-
-					const toolResultMessage = {
-						role: 'tool' as const,
-						tool_call_id: queryTool.id,
-						content: JSON.stringify({
-							totalRunning: allAgents.length,
-							agents: statusList,
-						}),
-					};
-					messages.push(toolResultMessage);
-				}
-
-				toolCalls = toolCalls.filter(
-					tc => tc.function.name !== 'query_agents_status',
-				);
-
-				if (toolCalls.length === 0) {
-					continue;
-				}
-			}
-
-			// 拦截 spawn_sub_agent 工具：异步启动新子代理，结果注入主流程
-			const spawnTools = toolCalls.filter(
-				tc => tc.function.name === 'spawn_sub_agent',
-			);
-
-			if (spawnTools.length > 0 && instanceId) {
-				for (const spawnTool of spawnTools) {
-					let spawnAgentId = '';
-					let spawnPrompt = '';
-
-					try {
-						const args = JSON.parse(spawnTool.function.arguments);
-						spawnAgentId = args.agent_id || '';
-						spawnPrompt = args.prompt || '';
-					} catch (error) {
-						console.error('Failed to parse spawn_sub_agent arguments:', error);
-					}
-
-					if (!spawnAgentId || !spawnPrompt) {
-						const toolResultMessage = {
-							role: 'tool' as const,
-							tool_call_id: spawnTool.id,
-							content: JSON.stringify({
-								success: false,
-								error: 'Both agent_id and prompt are required',
-							}),
-						};
-						messages.push(toolResultMessage);
-						continue;
-					}
-
-					// ── Soft guard: warn when spawning the same agent type as yourself ──
-					// This prevents lazy behavior where an agent spawns a clone of itself
-					// to offload its own work instead of completing it directly.
-					if (spawnAgentId === agent.id) {
-						const toolResultMessage = {
-							role: 'tool' as const,
-							tool_call_id: spawnTool.id,
-							content: JSON.stringify({
-								success: false,
-								error: `REJECTED: You (${agent.name}) attempted to spawn another "${spawnAgentId}" which is the SAME type as yourself. This is not allowed because it wastes resources and delegates work you should complete yourself. If you need help from a DIFFERENT specialization, spawn a different agent type. If the task is within your capabilities, do it yourself.`,
-							}),
-						};
-						messages.push(toolResultMessage);
-						continue;
-					}
-
-					// Look up agent name
-					let spawnAgentName = spawnAgentId;
-					try {
-						const agentConfig = getSubAgent(spawnAgentId);
-						if (agentConfig) {
-							spawnAgentName = agentConfig.name;
-						}
-					} catch {
-						// Built-in agents aren't resolved by getSubAgent, use ID-based name mapping
-						const builtinNames: Record<string, string> = {
-							agent_explore: 'Explore Agent',
-							agent_plan: 'Plan Agent',
-							agent_general: 'General Purpose Agent',
-							agent_analyze: 'Requirement Analysis Agent',
-							agent_qa: 'QA Agent',
-							agent_debug: 'Debug Assistant',
-						};
-						spawnAgentName = builtinNames[spawnAgentId] || spawnAgentId;
-					}
-
-					// Generate unique instance ID
-					const spawnInstanceId = `spawn-${Date.now()}-${Math.random()
-						.toString(36)
-						.slice(2, 8)}`;
-
-					// Get current agent info for the "spawnedBy" record
-					const spawnerInfo = {
-						instanceId,
-						agentId: agent.id,
-						agentName: agent.name,
-					};
-
-					// Track this child so we can wait for it before finishing
-					spawnedChildInstanceIds.add(spawnInstanceId);
-
-					// Register spawned agent in tracker
-					runningSubAgentTracker.register({
-						instanceId: spawnInstanceId,
-						agentId: spawnAgentId,
-						agentName: spawnAgentName,
-						prompt: spawnPrompt,
-						startedAt: new Date(),
-					});
-
-					// Fire-and-forget: start the spawned agent asynchronously
-					// Its result will be stored in the tracker for the main flow to pick up
-					executeSubAgent(
-						spawnAgentId,
-						spawnPrompt,
-						onMessage, // Same UI callback — spawned agent's messages are visible
-						abortSignal, // Same abort signal — ESC stops everything
-						requestToolConfirmation,
-						isToolAutoApproved,
-						yoloMode,
-						addToAlwaysApproved,
-						requestUserQuestion,
-						spawnInstanceId,
-						spawnDepth + 1, // Increase depth to enforce the configured spawn limit
-					)
-						.then(result => {
-							runningSubAgentTracker.storeSpawnedResult({
-								instanceId: spawnInstanceId,
-								agentId: spawnAgentId,
-								agentName: spawnAgentName,
-								prompt:
-									spawnPrompt.length > 200
-										? spawnPrompt.substring(0, 200) + '...'
-										: spawnPrompt,
-								success: result.success,
-								result: result.result,
-								error: result.error,
-								completedAt: new Date(),
-								spawnedBy: spawnerInfo,
-							});
-						})
-						.catch(error => {
-							runningSubAgentTracker.storeSpawnedResult({
-								instanceId: spawnInstanceId,
-								agentId: spawnAgentId,
-								agentName: spawnAgentName,
-								prompt:
-									spawnPrompt.length > 200
-										? spawnPrompt.substring(0, 200) + '...'
-										: spawnPrompt,
-								success: false,
-								result: '',
-								error: error instanceof Error ? error.message : 'Unknown error',
-								completedAt: new Date(),
-								spawnedBy: spawnerInfo,
-							});
-						})
-						.finally(() => {
-							// Unregister the spawned agent (it may have already been unregistered
-							// inside executeSubAgent, but calling again is safe due to the delete check)
-							runningSubAgentTracker.unregister(spawnInstanceId);
-						});
-
-					// Notify UI that a spawn happened
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'agent_spawned',
-								spawnedAgentId: spawnAgentId,
-								spawnedAgentName: spawnAgentName,
-								spawnedInstanceId: spawnInstanceId,
-								spawnedPrompt: spawnPrompt,
-							} as any,
-						});
-					}
-
-					// Return immediate result to spawning sub-agent
-					const toolResultMessage = {
-						role: 'tool' as const,
-						tool_call_id: spawnTool.id,
-						content: JSON.stringify({
-							success: true,
-							result: `Agent "${spawnAgentName}" (${spawnAgentId}) has been spawned and is now running in the background with instance ID "${spawnInstanceId}". Its results will be automatically reported to the main workflow when it completes.`,
-						}),
-					};
-					messages.push(toolResultMessage);
-				}
-
-				toolCalls = toolCalls.filter(
-					tc => tc.function.name !== 'spawn_sub_agent',
-				);
-
-				if (toolCalls.length === 0) {
-					continue;
-				}
-			}
-
-			// 拦截 askuser 工具：子智能体调用时需要显示主会话的蓝色边框 UI，而不是工具确认界面
-			const askUserTool = toolCalls.find(tc =>
-				tc.function.name.startsWith('askuser-'),
-			);
-
-			if (askUserTool && requestUserQuestion) {
-				//解析工具参数，失败时使用默认值
-				let question = 'Please select an option:';
-				let options: string[] = ['Yes', 'No'];
-				let multiSelect = false;
-				let parsedArgs: Record<string, any> = {};
-
-				try {
-					parsedArgs = JSON.parse(askUserTool.function.arguments);
-					if (parsedArgs['question']) question = parsedArgs['question'];
-					if (parsedArgs['options'] && Array.isArray(parsedArgs['options'])) {
-						options = parsedArgs['options'];
-					}
-					if (parsedArgs['multiSelect'] === true) {
-						multiSelect = true;
-					}
-				} catch (error) {
-					console.error('Failed to parse askuser tool arguments:', error);
-				}
-
-				try {
-					const hookResult = await unifiedHooksExecutor.executeHooks(
-						'beforeToolCall',
-						{
-							toolName: askUserTool.function.name,
-							args: parsedArgs,
-						},
-					);
-
-					if (hookResult && !hookResult.success) {
-						const commandError = hookResult.results.find(
-							(r: any) => r.type === 'command' && !r.success,
-						);
-
-						if (commandError && commandError.type === 'command') {
-							const {exitCode, command, output, error} = commandError;
-
-							if (exitCode === 1) {
-								const blockedContent =
-									error ||
-									output ||
-									`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`;
-								const blockedResult = {
-									role: 'tool' as const,
-									tool_call_id: askUserTool.id,
-									content: blockedContent,
-								};
-								messages.push(blockedResult);
-
-								if (onMessage) {
-									onMessage({
-										type: 'sub_agent_message',
-										agentId: agent.id,
-										agentName: agent.name,
-										message: {
-											type: 'tool_result',
-											tool_call_id: askUserTool.id,
-											tool_name: askUserTool.function.name,
-											content: blockedContent,
-										} as any,
-									});
-								}
-							} else if (exitCode >= 2 || exitCode < 0) {
-								const hookErrorDetails = {
-									type: 'error' as const,
-									exitCode,
-									command,
-									output,
-									error,
-								};
-								const hookFailedResult = {
-									role: 'tool' as const,
-									tool_call_id: askUserTool.id,
-									content: '',
-									hookFailed: true,
-									hookErrorDetails,
-								};
-								messages.push(hookFailedResult as ChatMessage);
-
-								if (onMessage) {
-									onMessage({
-										type: 'sub_agent_message',
-										agentId: agent.id,
-										agentName: agent.name,
-										message: {
-											type: 'tool_result',
-											tool_call_id: askUserTool.id,
-											tool_name: askUserTool.function.name,
-											content: '',
-											hookFailed: true,
-											hookErrorDetails,
-										} as any,
-									});
-								}
-							}
-
-							const remainingTools = toolCalls.filter(
-								tc => tc.id !== askUserTool.id,
-							);
-							if (remainingTools.length === 0) {
-								continue;
-							}
-
-							toolCalls = remainingTools;
-						}
-					}
-				} catch (hookError) {
-					console.warn(
-						'Failed to execute beforeToolCall hook for askuser in sub-agent:',
-						hookError,
-					);
-				}
-
-				// Notify server that user interaction is needed (only if connected)
-				if (connectionManager.isConnected()) {
-					await connectionManager.notifyUserInteractionNeeded(
-						question,
-						options,
-						askUserTool.id,
-						multiSelect,
-					);
-				}
-
-				const userAnswer = await requestUserQuestion(
-					question,
-					options,
-					multiSelect,
-				);
-
-				const answerText = userAnswer.customInput
-					? `${
-							Array.isArray(userAnswer.selected)
-								? userAnswer.selected.join(', ')
-								: userAnswer.selected
-					  }: ${userAnswer.customInput}`
-					: Array.isArray(userAnswer.selected)
-					? userAnswer.selected.join(', ')
-					: userAnswer.selected;
-
-				const toolResultMessage = {
-					role: 'tool' as const,
-					tool_call_id: askUserTool.id,
-					content: JSON.stringify({
-						answer: answerText,
-						selected: userAnswer.selected,
-						customInput: userAnswer.customInput,
-					}),
-				};
-
-				messages.push(toolResultMessage);
-
-				if (onMessage) {
-					onMessage({
-						type: 'sub_agent_message',
-						agentId: agent.id,
-						agentName: agent.name,
-						message: {
-							type: 'tool_result',
-							tool_call_id: askUserTool.id,
-							tool_name: askUserTool.function.name,
-							content: JSON.stringify({
-								answer: answerText,
-								selected: userAnswer.selected,
-								customInput: userAnswer.customInput,
-							}),
-						} as any,
-					});
-				}
-
-				// 移除已处理的 askuser 工具，避免重复执行
-				const remainingTools = toolCalls.filter(tc => tc.id !== askUserTool.id);
-
-				if (remainingTools.length === 0) {
-					continue;
-				}
-
-				toolCalls = remainingTools;
-			}
-
-			// Check tool approvals before execution
-			const approvedToolCalls: typeof toolCalls = [];
-			const rejectedToolCalls: typeof toolCalls = [];
-			const rejectionReasons = new Map<string, string>(); // Map tool_call_id to rejection reason
-			let shouldStopAfterRejection = false;
-			let stopRejectedToolName: string | undefined;
-			let stopRejectionReason: string | undefined;
-
-			for (const toolCall of toolCalls) {
-				const toolName = toolCall.function.name;
-				let args: any;
-				try {
-					args = JSON.parse(toolCall.function.arguments);
-				} catch (e) {
-					args = {};
-				}
-
-				// Check if tool needs confirmation using the unified YOLO permission checker
-				const permissionResult = await checkYoloPermission(
-					toolName,
-					args,
-					yoloMode ?? false,
-				);
-				let needsConfirmation = permissionResult.needsConfirmation;
-
-				// Check if tool is in auto-approved list (global or session)
-				// This should override the YOLO permission check result
-				if (
-					sessionApprovedTools.has(toolName) ||
-					(isToolAutoApproved && isToolAutoApproved(toolName))
-				) {
-					needsConfirmation = false;
-				}
-
-				if (needsConfirmation && requestToolConfirmation) {
-					// Request confirmation from user
-					const confirmation = await requestToolConfirmation(toolName, args);
-
-					if (
-						confirmation === 'reject' ||
-						(typeof confirmation === 'object' &&
-							confirmation.type === 'reject_with_reply')
-					) {
-						rejectedToolCalls.push(toolCall);
-						// Save rejection reason if provided
-						if (typeof confirmation === 'object' && confirmation.reason) {
-							rejectionReasons.set(toolCall.id, confirmation.reason);
-						}
-						if (confirmation === 'reject') {
-							shouldStopAfterRejection = true;
-							stopRejectedToolName = toolName;
-							stopRejectionReason = rejectionReasons.get(toolCall.id);
-							break;
-						}
-						continue;
-					}
-					// If approve_always, add to both global and session lists
-					if (confirmation === 'approve_always') {
-						// Add to local session set (immediate effect)
-						sessionApprovedTools.add(toolName);
-						// Add to global list (persistent across sub-agent calls)
-						if (addToAlwaysApproved) {
-							addToAlwaysApproved(toolName);
-						}
-					}
-				}
-
-				approvedToolCalls.push(toolCall);
-			}
-
-			// Handle rejected tools - add rejection results to conversation instead of stopping
-			if (rejectedToolCalls.length > 0) {
-				const rejectionResults: ChatMessage[] = [];
-				const handledToolIds = new Set<string>([
-					...approvedToolCalls.map(tc => tc.id),
-					...rejectedToolCalls.map(tc => tc.id),
-				]);
-				const cancelledToolCalls = shouldStopAfterRejection
-					? toolCalls.filter(tc => !handledToolIds.has(tc.id))
-					: [];
-				const abortedApprovedToolCalls = shouldStopAfterRejection
-					? [...approvedToolCalls]
-					: [];
-
-				for (const toolCall of rejectedToolCalls) {
-					// Get rejection reason if provided by user
-					const rejectionReason = rejectionReasons.get(toolCall.id);
-					const rejectMessage = rejectionReason
-						? `Tool execution rejected by user: ${rejectionReason}`
-						: 'Tool execution rejected by user';
-
-					const toolResultMessage = {
-						role: 'tool' as const,
-						tool_call_id: toolCall.id,
-						content: `Error: ${rejectMessage}`,
-					};
-					rejectionResults.push(toolResultMessage);
-
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'tool_result',
-								tool_call_id: toolCall.id,
-								tool_name: toolCall.function.name,
-								content: `Error: ${rejectMessage}`,
-								rejection_reason: rejectionReason,
-							} as any,
-						});
-					}
-				}
-
-				if (shouldStopAfterRejection) {
-					const cancelledMessage = stopRejectedToolName
-						? `Tool execution cancelled because the user rejected tool "${stopRejectedToolName}" and requested the sub-agent to stop`
-						: 'Tool execution cancelled because the user requested the sub-agent to stop';
-
-					for (const toolCall of [
-						...abortedApprovedToolCalls,
-						...cancelledToolCalls,
-					]) {
-						const toolResultMessage = {
-							role: 'tool' as const,
-							tool_call_id: toolCall.id,
-							content: `Error: ${cancelledMessage}`,
-						};
-						rejectionResults.push(toolResultMessage);
-
-						if (onMessage) {
-							onMessage({
-								type: 'sub_agent_message',
-								agentId: agent.id,
-								agentName: agent.name,
-								message: {
-									type: 'tool_result',
-									tool_call_id: toolCall.id,
-									tool_name: toolCall.function.name,
-									content: `Error: ${cancelledMessage}`,
-								} as any,
-							});
-						}
-					}
-				}
-
-				// Add rejection/cancellation results to conversation
-				messages.push(...rejectionResults);
-
-				if (shouldStopAfterRejection) {
-					const stopInstructionLines = [
-						`[System] The user rejected your request to run tool "${
-							stopRejectedToolName || 'unknown tool'
-						}" and asked you to stop.`,
-						stopRejectionReason
-							? `[System] Rejection reason: ${stopRejectionReason}`
-							: undefined,
-						'[System] Do not call any more tools.',
-						'[System] Based only on the information already available in this conversation, provide a final summary of what you know, clearly state any missing information caused by the rejected tool, and then end your work.',
-					].filter(Boolean);
-					const stopInstruction = stopInstructionLines.join('\n');
-					collectedTerminationInstructions.push(stopInstruction);
-					messages.push({
-						role: 'user',
-						content: stopInstruction,
-					});
-					continue;
-				}
-
-				// If all tools were rejected and there are no approved tools, continue to next AI turn
-
-				if (approvedToolCalls.length === 0) {
-					continue;
-				}
-			}
-
-			// Execute approved tool calls
-			const toolResults: ChatMessage[] = [];
-			for (const toolCall of approvedToolCalls) {
-				// Check abort signal before executing each tool
-				if (abortSignal?.aborted) {
-					// Send done message to mark completion
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'done',
-							},
-						});
-					}
-					return {
-						success: false,
-						result: finalResponse,
-						error: 'Sub-agent execution aborted during tool execution',
-					};
-				}
-
-				try {
-					const args = JSON.parse(toolCall.function.arguments);
-
-					try {
-						const hookResult = await unifiedHooksExecutor.executeHooks(
-							'beforeToolCall',
-							{
-								toolName: toolCall.function.name,
-								args,
-							},
-						);
-
-						if (hookResult && !hookResult.success) {
-							const commandError = hookResult.results.find(
-								(r: any) => r.type === 'command' && !r.success,
-							);
-
-							if (commandError && commandError.type === 'command') {
-								const {exitCode, command, output, error} = commandError;
-
-								if (exitCode === 1) {
-									const blockedContent =
-										error ||
-										output ||
-										`[beforeToolCall Hook Warning] Command: ${command} exited with code 1`;
-									const blockedResult = {
-										role: 'tool' as const,
-										tool_call_id: toolCall.id,
-										content: blockedContent,
-									};
-									toolResults.push(blockedResult);
-
-									if (onMessage) {
-										onMessage({
-											type: 'sub_agent_message',
-											agentId: agent.id,
-											agentName: agent.name,
-											message: {
-												type: 'tool_result',
-												tool_call_id: toolCall.id,
-												tool_name: toolCall.function.name,
-												content: blockedContent,
-											} as any,
-										});
-									}
-									continue;
-								}
-
-								if (exitCode >= 2 || exitCode < 0) {
-									const hookErrorDetails = {
-										type: 'error' as const,
-										exitCode,
-										command,
-										output,
-										error,
-									};
-									const hookFailedResult = {
-										role: 'tool' as const,
-										tool_call_id: toolCall.id,
-										content: '',
-										hookFailed: true,
-										hookErrorDetails,
-									};
-									toolResults.push(hookFailedResult as ChatMessage);
-
-									if (onMessage) {
-										onMessage({
-											type: 'sub_agent_message',
-											agentId: agent.id,
-											agentName: agent.name,
-											message: {
-												type: 'tool_result',
-												tool_call_id: toolCall.id,
-												tool_name: toolCall.function.name,
-												content: '',
-												hookFailed: true,
-												hookErrorDetails,
-											} as any,
-										});
-									}
-									continue;
-								}
-							}
-						}
-					} catch (hookError) {
-						console.warn(
-							'Failed to execute beforeToolCall hook in sub-agent:',
-							hookError,
-						);
-					}
-
-					const result = await executeMCPTool(
-						toolCall.function.name,
-						args,
-						abortSignal,
-					);
-
-					const toolResult = {
-						role: 'tool' as const,
-						tool_call_id: toolCall.id,
-						content: JSON.stringify(result),
-					};
-					toolResults.push(toolResult);
-
-					// Send tool result to UI
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'tool_result',
-								tool_call_id: toolCall.id,
-								tool_name: toolCall.function.name,
-								content: JSON.stringify(result),
-							} as any,
-						});
-					}
-				} catch (error) {
-					const errorResult = {
-						role: 'tool' as const,
-						tool_call_id: toolCall.id,
-						content: `Error: ${
-							error instanceof Error ? error.message : 'Tool execution failed'
-						}`,
-					};
-					toolResults.push(errorResult);
-
-					// Send error result to UI
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: agent.id,
-							agentName: agent.name,
-							message: {
-								type: 'tool_result',
-								tool_call_id: toolCall.id,
-								tool_name: toolCall.function.name,
-								content: `Error: ${
-									error instanceof Error
-										? error.message
-										: 'Tool execution failed'
-								}`,
-							} as any,
-						});
-					}
-				}
-			}
-
-			// Add tool results to conversation
-			messages.push(...toolResults);
-
-			// Continue to next iteration if there were tool calls
-			// The loop will continue until no more tool calls
 		}
 
 		return {
 			success: true,
-			result: finalResponse,
-			usage: totalUsage,
+			result: ctx.finalResponse,
+			usage: ctx.totalUsage,
 			injectedUserMessages:
-				collectedInjectedMessages.length > 0
-					? collectedInjectedMessages
+				ctx.collectedInjectedMessages.length > 0
+					? ctx.collectedInjectedMessages
 					: undefined,
 			terminationInstructions:
-				collectedTerminationInstructions.length > 0
-					? collectedTerminationInstructions
+				ctx.collectedTerminationInstructions.length > 0
+					? ctx.collectedTerminationInstructions
 					: undefined,
 		};
 	} catch (error) {
@@ -2892,5 +221,152 @@ You have access to these collaboration tools:
 			result: '',
 			error: error instanceof Error ? error.message : 'Unknown error',
 		};
+	}
+}
+
+// ── Helper: inject pending user / inter-agent messages ──
+
+function injectPendingMessages(ctx: SubAgentExecutionContext): void {
+	if (!ctx.instanceId) return;
+
+	const injectedMessages = runningSubAgentTracker.dequeueMessages(
+		ctx.instanceId,
+	);
+	for (const injectedMsg of injectedMessages) {
+		ctx.collectedInjectedMessages.push(injectedMsg);
+		ctx.messages.push({
+			role: 'user',
+			content: `[User message from main session]\n${injectedMsg}`,
+		});
+		emitSubAgentMessage(ctx, {
+			type: 'user_injected',
+			content: injectedMsg,
+		});
+	}
+
+	const interAgentMessages =
+		runningSubAgentTracker.dequeueInterAgentMessages(ctx.instanceId);
+	for (const iaMsg of interAgentMessages) {
+		ctx.messages.push({
+			role: 'user',
+			content: `[Inter-agent message from ${iaMsg.fromAgentName} (${iaMsg.fromAgentId})]\n${iaMsg.content}`,
+		});
+		emitSubAgentMessage(ctx, {
+			type: 'inter_agent_received',
+			fromAgentId: iaMsg.fromAgentId,
+			fromAgentName: iaMsg.fromAgentName,
+			content: iaMsg.content,
+		});
+	}
+}
+
+// ── Helper: resolve config/model for the agent ──
+
+async function resolveConfig(
+	agent: any,
+): Promise<{config: any; model: string}> {
+	if (agent.configProfile) {
+		try {
+			const {loadProfile} = await import('../config/configManager.js');
+			const profileConfig = loadProfile(agent.configProfile);
+			if (profileConfig?.snowcfg) {
+				const config = profileConfig.snowcfg;
+				return {config, model: config.advancedModel || 'gpt-5'};
+			}
+		} catch (error) {
+			console.warn(
+				`Failed to load profile ${agent.configProfile} for sub-agent, using main config:`,
+				error,
+			);
+		}
+	}
+
+	const config = getOpenAiConfig();
+	return {config, model: config.advancedModel || 'gpt-5'};
+}
+
+// ── Helper: wait for spawned child agents ──
+
+async function handleSpawnedChildren(
+	ctx: SubAgentExecutionContext,
+): Promise<boolean> {
+	const runningChildren = Array.from(ctx.spawnedChildInstanceIds).filter(id =>
+		runningSubAgentTracker.isRunning(id),
+	);
+
+	if (
+		runningChildren.length === 0 &&
+		!runningSubAgentTracker.hasSpawnedResults()
+	) {
+		return false;
+	}
+
+	if (runningChildren.length > 0) {
+		await runningSubAgentTracker.waitForSpawnedAgents(
+			300_000,
+			ctx.abortSignal,
+		);
+	}
+
+	const spawnedResults = runningSubAgentTracker.drainSpawnedResults();
+	if (spawnedResults.length === 0) return false;
+
+	for (const sr of spawnedResults) {
+		const statusIcon = sr.success ? '\u2713' : '\u2717';
+		const resultSummary = sr.success
+			? sr.result.length > 800
+				? sr.result.substring(0, 800) + '...'
+				: sr.result
+			: sr.error || 'Unknown error';
+
+		ctx.messages.push({
+			role: 'user',
+			content: `[Spawned Sub-Agent Result] ${statusIcon} ${sr.agentName} (${sr.agentId})\nPrompt: ${sr.prompt}\nResult: ${resultSummary}`,
+		});
+
+		emitSubAgentMessage(ctx, {
+			type: 'spawned_agent_completed',
+			spawnedAgentId: sr.agentId,
+			spawnedAgentName: sr.agentName,
+			success: sr.success,
+		});
+	}
+
+	emitSubAgentMessage(ctx, {type: 'done'});
+	return true;
+}
+
+// ── Helper: onSubAgentComplete hooks ──
+
+async function handleCompletionHooks(
+	ctx: SubAgentExecutionContext,
+): Promise<boolean> {
+	try {
+		const hookResult = await unifiedHooksExecutor.executeHooks(
+			'onSubAgentComplete',
+			{
+				agentId: ctx.agent.id,
+				agentName: ctx.agent.name,
+				content: ctx.finalResponse,
+				success: true,
+				usage: ctx.totalUsage,
+			},
+		);
+		const interpreted = interpretHookResult('onSubAgentComplete', hookResult);
+
+		if (interpreted.injectedMessages && interpreted.injectedMessages.length > 0) {
+			for (const injected of interpreted.injectedMessages) {
+				ctx.messages.push({role: injected.role, content: injected.content});
+			}
+		}
+
+		if (interpreted.shouldContinueConversation) {
+			emitSubAgentMessage(ctx, {type: 'done'});
+		}
+
+		return interpreted.shouldContinueConversation || false;
+	} catch (error) {
+		console.error('onSubAgentComplete hook execution failed:', error);
+		return false;
 	}
 }

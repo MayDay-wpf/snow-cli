@@ -46,10 +46,10 @@ export function createTeam(
 	teamName: string,
 	leadInstanceId: string,
 ): TeamConfig {
-	const existing = getActiveTeam();
+	const existing = getTeam(teamName);
 	if (existing) {
 		throw new Error(
-			`An active team "${existing.name}" already exists. Clean it up before creating a new one.`,
+			`Team "${teamName}" already exists.`,
 		);
 	}
 

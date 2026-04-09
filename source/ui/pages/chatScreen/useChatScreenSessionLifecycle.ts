@@ -3,6 +3,7 @@ import type {Dispatch, SetStateAction} from 'react';
 import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import type {Message} from '../../components/chat/MessageList.js';
+import type {UsageInfo} from '../../../api/types.js';
 import {
 	sessionManager,
 	type ChatMessage as SessionChatMessage,
@@ -17,6 +18,7 @@ type Options = {
 	setMessages: Dispatch<SetStateAction<Message[]>>;
 	initializeFromSession: (messages: SessionChatMessage[]) => void;
 	setIsResumingSession?: (value: boolean) => void;
+	setContextUsage?: Dispatch<SetStateAction<UsageInfo | null>>;
 };
 
 export function useChatScreenSessionLifecycle({
@@ -27,6 +29,7 @@ export function useChatScreenSessionLifecycle({
 	setMessages,
 	initializeFromSession,
 	setIsResumingSession,
+	setContextUsage,
 }: Options) {
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
@@ -49,6 +52,7 @@ export function useChatScreenSessionLifecycle({
 							const uiMessages = convertSessionMessagesToUI(session.messages);
 							setMessages(uiMessages);
 							initializeFromSession(session.messages);
+							setContextUsage?.(session.contextUsage ?? null);
 						}
 					}
 				}

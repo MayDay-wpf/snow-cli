@@ -21,6 +21,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/review.js'),
 			import('../../../utils/commands/gitline.js'),
 			import('../../../utils/commands/role.js'),
+			import('../../../utils/commands/roleSubagent.js'),
 			import('../../../utils/commands/usage.js'),
 			import('../../../utils/commands/export.js'),
 			import('../../../utils/commands/agent.js'),
@@ -44,6 +45,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/toolsearch.js'),
 			import('../../../utils/commands/hybridCompress.js'),
 			import('../../../utils/commands/team.js'),
+			import('../../../utils/commands/btw.js'),
 		])
 			.then(async () => {
 				await registerCustomCommands(workingDirectory);

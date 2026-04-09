@@ -625,69 +625,33 @@ export async function compressContext(
 		const {unifiedHooksExecutor} = await import(
 			'../execution/unifiedHooksExecutor.js'
 		);
+		const {interpretHookResult} = await import(
+			'../execution/hookResultInterpreter.js'
+		);
 		const {sessionManager} = await import('../session/sessionManager.js');
 
-		// Get current session for conversation history
 		const currentSession = sessionManager.getCurrentSession();
 		const conversationMessages = currentSession?.messages || messages;
-
-		// Prepare conversation JSON for stdin
 		const conversationJson = JSON.stringify(conversationMessages, null, 2);
 
 		const hookResult = await unifiedHooksExecutor.executeHooks(
 			'beforeCompress',
-			{
-				messages: conversationMessages,
-				conversationJson, // Full conversation JSON for stdin
-			},
+			{messages: conversationMessages, conversationJson},
 		);
+		const interpreted = interpretHookResult('beforeCompress', hookResult);
 
-		// Handle hook exit codes: 0=continue, 1=warning+continue, 2+=block compression
-		if (hookResult && !hookResult.success) {
-			const commandError = hookResult.results.find(
-				(r: any) => r.type === 'command' && !r.success,
-			);
-
-			if (commandError && commandError.type === 'command') {
-				const {exitCode, command, output, error} = commandError;
-
-				if (exitCode >= 2 || exitCode < 0) {
-					// Exit code 2+: Block compression and return hookFailed result
-					console.warn(
-						`[WARN] beforeCompress hook blocked compression (exitCode: ${exitCode}):\n` +
-							`output: ${output || '(empty)'}\n` +
-							`error: ${error || '(empty)'}`,
-					);
-					// Return a special result with hookFailed flag
-					return {
-						summary: '',
-						usage: {
-							prompt_tokens: 0,
-							completion_tokens: 0,
-							total_tokens: 0,
-						},
-						hookFailed: true,
-						hookErrorDetails: {
-							type: 'error',
-							exitCode,
-							command,
-							output,
-							error,
-						},
-					};
-				} else if (exitCode === 1) {
-					// Exit code 1: Warning, log and continue
-					console.warn(
-						`[WARN] beforeCompress hook warning (exitCode: ${exitCode}):\n` +
-							`output: ${output || '(empty)'}\n` +
-							`error: ${error || '(empty)'}`,
-					);
-				}
-				// Exit code 0: Success, continue silently
-			}
+		if (interpreted.action === 'block') {
+			return {
+				summary: '',
+				usage: {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0},
+				hookFailed: interpreted.hookFailed,
+				hookErrorDetails: interpreted.errorDetails,
+			};
+		}
+		if (interpreted.action === 'warn' && interpreted.warningMessage) {
+			console.warn(interpreted.warningMessage);
 		}
 	} catch (error) {
-		// Log unexpected errors but continue - don't block compression on unexpected errors
 		console.warn('Failed to execute beforeCompress hook:', error);
 	}
 

@@ -26,6 +26,7 @@ import {
 	shouldExcludeDirectory,
 	shouldExcludeFile,
 	readFileWithCache,
+	type ContentCacheCallbacks,
 } from './utils/aceCodeSearch/filesystem.utils.js';
 import {
 	parseFileSymbols,
@@ -54,6 +55,9 @@ import {
 	RECENT_FILE_THRESHOLD,
 	MAX_FILE_STAT_CACHE_SIZE,
 	ACE_IDLE_CLEANUP_MS,
+	MAX_CONTENT_CACHE_BYTES,
+	MEMORY_PRESSURE_THRESHOLD_BYTES,
+	MEMORY_CHECK_INTERVAL_MS,
 } from './utils/aceCodeSearch/constants.utils.js';
 
 export class ACECodeSearchService {
@@ -87,6 +91,9 @@ export class ACECodeSearchService {
 	private idleCleanupTimer: NodeJS.Timeout | undefined;
 	private isDisposed = false;
 	private readonly idleCleanupMs: number;
+	private fileContentCacheBytes: number = 0;
+	private lastMemoryCheckTime: number = 0;
+	private readonly contentCacheCallbacks: ContentCacheCallbacks;
 
 	constructor(
 		basePath: string = process.cwd(),
@@ -94,6 +101,18 @@ export class ACECodeSearchService {
 	) {
 		this.basePath = path.resolve(basePath);
 		this.idleCleanupMs = options?.idleCleanupMs ?? ACE_IDLE_CLEANUP_MS;
+		this.contentCacheCallbacks = {
+			onAdd: (_filePath, content) => {
+				this.fileContentCacheBytes += content.length * 2;
+				this.trimContentCacheByBytes();
+			},
+			onEvict: filePath => {
+				const entry = this.fileContentCache.get(filePath);
+				if (entry) {
+					this.fileContentCacheBytes -= entry.content.length * 2;
+				}
+			},
+		};
 		this.scheduleIdleCleanup();
 	}
 
@@ -145,6 +164,97 @@ export class ACECodeSearchService {
 	private markActivity(): void {
 		this.ensureNotDisposed();
 		this.scheduleIdleCleanup();
+		this.checkMemoryPressure();
+	}
+
+	private removeFromContentCache(filePath: string): void {
+		const existing = this.fileContentCache.get(filePath);
+		if (existing) {
+			this.fileContentCacheBytes -= existing.content.length * 2;
+			this.fileContentCache.delete(filePath);
+		}
+	}
+
+	private clearContentCache(): void {
+		this.fileContentCache.clear();
+		this.fileContentCacheBytes = 0;
+	}
+
+	private trimContentCacheByBytes(): void {
+		if (this.fileContentCacheBytes <= MAX_CONTENT_CACHE_BYTES) {
+			return;
+		}
+
+		const entries = Array.from(this.fileContentCache.entries());
+		let i = 0;
+		while (
+			this.fileContentCacheBytes > MAX_CONTENT_CACHE_BYTES &&
+			i < entries.length
+		) {
+			const entry = entries[i];
+			if (entry) {
+				this.fileContentCacheBytes -= entry[1].content.length * 2;
+				this.fileContentCache.delete(entry[0]);
+			}
+			i++;
+		}
+
+		if (this.fileContentCacheBytes < 0) {
+			this.fileContentCacheBytes = 0;
+		}
+	}
+
+	private checkMemoryPressure(): void {
+		const now = Date.now();
+		if (now - this.lastMemoryCheckTime < MEMORY_CHECK_INTERVAL_MS) {
+			return;
+		}
+
+		this.lastMemoryCheckTime = now;
+
+		const rss = process.memoryUsage.rss();
+		if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES) {
+			logger.warn(
+				`ACE memory pressure detected (RSS: ${Math.round(rss / 1024 / 1024)}MB), triggering aggressive cleanup`,
+			);
+			this.clearContentCache();
+			this.fileStatCache.clear();
+
+			if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES * 1.5) {
+				logger.warn(
+					'ACE critical memory pressure, clearing all transient caches',
+				);
+				this.clearCaches({
+					preserveExclusions: true,
+					preserveCommandCache: true,
+				});
+			}
+		}
+	}
+
+	getMemoryStats(): {
+		indexedFiles: number;
+		cachedSymbols: number;
+		contentCacheEntries: number;
+		contentCacheBytes: number;
+		statCacheEntries: number;
+		regexCacheEntries: number;
+		rssBytes: number;
+	} {
+		let cachedSymbols = 0;
+		for (const symbols of this.indexCache.values()) {
+			cachedSymbols += symbols.length;
+		}
+
+		return {
+			indexedFiles: this.allIndexedFiles.size,
+			cachedSymbols,
+			contentCacheEntries: this.fileContentCache.size,
+			contentCacheBytes: this.fileContentCacheBytes,
+			statCacheEntries: this.fileStatCache.size,
+			regexCacheEntries: this.regexCache.size,
+			rssBytes: process.memoryUsage.rss(),
+		};
 	}
 
 	private trimFileStatCache(): void {
@@ -171,7 +281,7 @@ export class ACECodeSearchService {
 		this.indexCache.clear();
 		this.fileModTimes.clear();
 		this.allIndexedFiles.clear();
-		this.fileContentCache.clear();
+		this.clearContentCache();
 		this.fileStatCache.clear();
 		this.fzfIndex = undefined;
 		this.lastIndexTime = 0;
@@ -428,6 +538,8 @@ export class ACECodeSearchService {
 							const content = await readFileWithCache(
 								fullPath,
 								this.fileContentCache,
+								50,
+								this.contentCacheCallbacks,
 							);
 							const symbols = await parseFileSymbols(
 								fullPath,
@@ -454,7 +566,7 @@ export class ACECodeSearchService {
 						} catch {
 							this.indexCache.delete(fullPath);
 							this.fileModTimes.delete(fullPath);
-							this.fileContentCache.delete(fullPath);
+							this.removeFromContentCache(fullPath);
 						}
 					}),
 				);
@@ -467,7 +579,7 @@ export class ACECodeSearchService {
 					this.indexCache.delete(cachedPath);
 					this.fileModTimes.delete(cachedPath);
 					this.allIndexedFiles.delete(cachedPath);
-					this.fileContentCache.delete(cachedPath);
+					this.removeFromContentCache(cachedPath);
 				}
 			}
 
@@ -476,6 +588,9 @@ export class ACECodeSearchService {
 			if (filesToProcess.length > 0 || forceRefresh) {
 				this.buildFzfIndex();
 			}
+
+			// Symbols are extracted — file contents are no longer needed
+			this.clearContentCache();
 		});
 	}
 
@@ -760,10 +875,11 @@ export class ACECodeSearchService {
 						const language = detectLanguage(fullPath);
 						if (language) {
 							try {
-								// 使用缓存读取文件（避免重复读取）
 								const content = await readFileWithCache(
 									fullPath,
 									this.fileContentCache,
+									50,
+									this.contentCacheCallbacks,
 								);
 								const lines = content.split('\n');
 
@@ -830,6 +946,9 @@ export class ACECodeSearchService {
 		};
 
 		await searchInDirectory(this.basePath);
+
+		this.trimContentCacheByBytes();
+
 		return references;
 	}
 

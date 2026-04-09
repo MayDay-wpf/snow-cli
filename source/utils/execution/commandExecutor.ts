@@ -38,6 +38,9 @@ export interface CommandResult {
 		| 'showRoleCreation'
 		| 'showRoleDeletion'
 		| 'showRoleList'
+		| 'showRoleSubagentCreation'
+		| 'showRoleSubagentDeletion'
+		| 'showRoleSubagentList'
 		| 'showPermissionsPanel'
 		| 'reindexCodebase'
 		| 'copyLastMessage'
@@ -50,6 +53,7 @@ export interface CommandResult {
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
+		| 'btw'
 		| 'quit';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading

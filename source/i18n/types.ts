@@ -168,6 +168,8 @@ export type TranslationKeys = {
 		enablePromptOptimization: string;
 		enableAutoCompress: string;
 		autoCompressThreshold: string;
+		autoCompressThresholdHint: string;
+		autoCompressThresholdDesc: string;
 		showThinking: string;
 		streamingDisplay: string;
 		thinkingEnabled: string;
@@ -177,7 +179,7 @@ export type TranslationKeys = {
 		thinkingBudgetTokens: string;
 		thinkingEffort: string;
 		geminiThinkingEnabled: string;
-		geminiThinkingBudget: string;
+		geminiThinkingLevel: string;
 		responsesReasoningEnabled: string;
 		responsesReasoningEffort: string;
 		responsesVerbosity: string;
@@ -188,7 +190,8 @@ export type TranslationKeys = {
 		maxTokens: string;
 		streamIdleTimeoutSec: string;
 		toolResultTokenLimit: string;
-		editSimilarityThreshold: string;
+		toolResultTokenLimitHint: string;
+		toolResultTokenLimitDesc: string;
 		notSet: string;
 		enabled: string;
 		disabled: string;
@@ -362,6 +365,16 @@ export type TranslationKeys = {
 		enabled: string;
 		disabled: string;
 		customLabel: string;
+		// Scope
+		scopeProject: string;
+		scopeGlobal: string;
+		scopeSelectTitle: string;
+		scopeSelectHint: string;
+		duplicatePattern: string;
+		resetScopeSelectTitle: string;
+		resetGlobalDesc: string;
+		resetProjectDesc: string;
+		confirmResetScopeMessage: string;
 		// Add view
 		addTitle: string;
 		patternLabel: string;
@@ -533,6 +546,7 @@ export type TranslationKeys = {
 			review: string;
 			gitline: string;
 			role: string;
+			roleSubagent: string;
 			usage: string;
 			backend: string;
 			loop: string;
@@ -561,6 +575,7 @@ export type TranslationKeys = {
 			disconnect: string;
 			connectionStatus: string;
 			newPrompt: string;
+			btw: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -1155,6 +1170,57 @@ export type TranslationKeys = {
 		confirmDelete: string;
 		confirmDeleteHint: string;
 	};
+	roleSubagentCreation: {
+		title: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		selectAgentLabel: string;
+		selectAgentHint: string;
+		noAvailableAgents: string;
+		agentLabel: string;
+		fileLabel: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		createSuccessMessage: string;
+		createErrorMessage: string;
+		errorUnknown: string;
+	};
+	roleSubagentDeletion: {
+		title: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationGlobalInfo: string;
+		locationProject: string;
+		locationProjectInfo: string;
+		selectRoleLabel: string;
+		selectRoleHint: string;
+		noRoleFiles: string;
+		fileLabel: string;
+		confirmQuestion: string;
+		confirmYes: string;
+		confirmNo: string;
+		escCancel: string;
+		deleteSuccessMessage: string;
+		deleteErrorMessage: string;
+		errorNotFound: string;
+		errorUnknown: string;
+	};
+	roleSubagentList: {
+		title: string;
+		tabGlobal: string;
+		tabProject: string;
+		noRoles: string;
+		deleteSuccess: string;
+		loading: string;
+		hints: string;
+		confirmDelete: string;
+		confirmDeleteHint: string;
+	};
 	// Branch Panel
 	branchPanel: {
 		title: string;
@@ -1184,6 +1250,10 @@ export type TranslationKeys = {
 		keyboardHints: string;
 		multiSelectHint: string;
 		multiSelectKeyboardHints: string;
+		/** 可滚动选项列表底部汇总（与 mcpInfoPanel.scrollHint / more* 一致） */
+		optionListScrollHint: string;
+		optionListMoreAbove: string;
+		optionListMoreBelow: string;
 	};
 	toolConfirmation: {
 		header: string;
@@ -1242,6 +1312,7 @@ export type TranslationKeys = {
 		filesCount: string;
 		filesCountWithSelection: string;
 		notebookCount: string;
+		teamCount: string;
 		question: string;
 		conversationOnly: string;
 		conversationAndFiles: string;
@@ -1259,6 +1330,8 @@ export type TranslationKeys = {
 		toggleHint: string;
 		backHint: string;
 		closeHint: string;
+		noFilesConfirm: string;
+		noFilesConfirmHint: string;
 	};
 	usagePanel: {
 		title: string;
@@ -1382,6 +1455,24 @@ export type TranslationKeys = {
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
+		toolsListTitle: string;
+		toolsNavigationHint: string;
+		toolTogglingHint: string;
+		toolDisabled: string;
+		toolScopeGlobal: string;
+		toolScopeProject: string;
+		mcpSourceProject: string;
+		mcpSourceGlobal: string;
+	};
+	mcpConfigScreen: {
+		title: string;
+		scopeProject: string;
+		scopeGlobal: string;
+		navigationHint: string;
+		savedSuccess: string;
+		configErrors: string;
+		reverted: string;
+		invalidJson: string;
 	};
 	// Running Agents Panel
 	runningAgentsPanel: {
@@ -1392,6 +1483,8 @@ export type TranslationKeys = {
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
+		subAgentLabel: string;
+		teammateLabel: string;
 	};
 	sseServer: {
 		started: string;
@@ -1453,6 +1546,20 @@ export type TranslationKeys = {
 		actionCancel: string;
 		errorPrefix: string;
 		scrollHint: string;
+	};
+	btw: {
+		title: string;
+		thinking: string;
+		escHint: string;
+		actionClose: string;
+		errorPrefix: string;
+		scrollHint: string;
+	};
+	exitScreen: {
+		title: string;
+		goodbye: string;
+		thankYou: string;
+		version: string;
 	};
 };
 

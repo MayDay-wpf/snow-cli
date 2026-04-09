@@ -12,6 +12,10 @@ import type {ChatMessage} from '../../api/chat.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import {teamTracker} from './teamTracker.js';
 import type {SubAgentMessage, TokenUsage} from './subAgentExecutor.js';
+import {rewriteToolArgsForWorktree} from '../team/teamWorktree.js';
+import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
+import {interpretHookResult} from './hookResultInterpreter.js';
+import {compressionCoordinator} from '../core/compressionCoordinator.js';
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -96,6 +100,8 @@ export async function executeTeammate(
 		const {
 			shouldCompressSubAgentContext,
 			compressSubAgentContext,
+			getContextPercentage,
+			countMessagesTokens,
 		} = await import('../core/subAgentContextCompressor.js');
 		const {listTasks, claimTask, completeTask} = await import(
 			'../team/teamTaskList.js'
@@ -202,32 +208,32 @@ export async function executeTeammate(
 			},
 		};
 
-		const shutdownSelfTool: MCPTool = {
-			type: 'function' as const,
-			function: {
-				name: 'shutdown_self',
-				description:
-					'Gracefully shut down this teammate session. Use when all assigned tasks are complete.',
-				parameters: {
-					type: 'object',
-					properties: {
-						summary: {
-							type: 'string',
-							description: 'Brief summary of completed work.',
-						},
+	const waitForMessagesTool: MCPTool = {
+		type: 'function' as const,
+		function: {
+			name: 'wait_for_messages',
+			description:
+				'Block and wait for incoming messages from the lead, user, or other teammates. Call this when you have finished all current work and are waiting for further instructions. This is efficient — no resources are consumed while waiting. Returns immediately if messages are already queued.',
+			parameters: {
+				type: 'object',
+				properties: {
+					summary: {
+						type: 'string',
+						description: 'Brief summary of work completed so far, sent to the lead.',
 					},
-					required: ['summary'],
 				},
+				required: ['summary'],
 			},
-		};
+		},
+	};
 
-		allowedTools.push(
-			messageTeammateTool,
-			claimTaskTool,
-			completeTaskTool,
-			listTasksTool,
-			shutdownSelfTool,
-		);
+	allowedTools.push(
+		messageTeammateTool,
+		claimTaskTool,
+		completeTaskTool,
+		listTasksTool,
+		waitForMessagesTool,
+	);
 		if (requirePlanApproval) {
 			allowedTools.push(requestPlanApprovalTool);
 		}
@@ -243,11 +249,19 @@ You are teammate "${memberName}" in team "${teamName}".
 Your working directory (Git worktree): ${worktreePath}
 ${role ? `Your role: ${role}` : ''}
 
+### ⚠️ Worktree Path Rules (ENFORCED)
+- ALL file operations are restricted to YOUR worktree: \`${worktreePath}\`
+- Use **relative paths** (e.g., \`src/utils/foo.ts\`) — they are automatically resolved to your worktree.
+- You CANNOT read or write files in the main workspace or other teammates' worktrees.
+- When users or task descriptions mention file paths, treat them as relative to your worktree.
+- \`terminal-execute\` commands always run inside your worktree directory.
+- \`git push\` is forbidden — the lead handles all pushes after merging.
+
 ### Other Teammates`;
 
 		if (otherTeammates.length > 0) {
 			teamContext += '\n' + otherTeammates
-				.map(t => `- ${t.memberName}${t.role ? ` (${t.role})` : ''} [${t.instanceId}]`)
+				.map(t => `- ${t.memberName}${t.role ? ` (${t.role})` : ''} [ID: ${t.memberId}]`)
 				.join('\n');
 		} else {
 			teamContext += '\nNo other teammates are currently active.';
@@ -273,7 +287,13 @@ ${role ? `Your role: ${role}` : ''}
 - \`claim_task\`: Claim a pending task from the task list
 - \`complete_task\`: Mark a task as completed
 - \`list_team_tasks\`: View the current task list
-- \`shutdown_self\`: Shut down when all work is done`;
+- \`wait_for_messages\`: **MUST call when all current work is done.** Blocks efficiently until new messages arrive. Provide a summary of completed work.
+
+### Rules
+- You do NOT shut yourself down — the team lead controls your lifecycle.
+- **NEVER run \`git push\`.** All pushes are handled by the lead after merging.
+- **ALL file paths must be relative to your worktree** (\`${worktreePath}\`). Absolute paths pointing to the main workspace will be automatically remapped. Paths outside both your worktree and the main workspace will be rejected.
+- **When you finish all assigned work, you MUST call \`wait_for_messages\` with a summary.** This notifies the lead and efficiently blocks until new instructions arrive. Do NOT end your turn without calling \`wait_for_messages\`.`;
 
 		if (requirePlanApproval) {
 			teamContext += `\n- \`request_plan_approval\`: Submit your plan to the lead for approval (REQUIRED before making changes)`;
@@ -300,6 +320,11 @@ ${role ? `Your role: ${role}` : ''}
 					error: 'Teammate execution aborted',
 				};
 			}
+
+			// Wait if the main flow (or another participant) is compressing.
+			// This prevents this teammate from streaming / mutating state while
+			// the main context is being rebuilt.
+			await compressionCoordinator.waitUntilFree(instanceId);
 
 			// Dequeue messages from lead or other teammates
 			const teammateMessages = teamTracker.dequeueTeammateMessages(instanceId);
@@ -381,6 +406,21 @@ ${role ? `Your role: ${role}` : ''}
 						totalUsage.inputTokens += eu.prompt_tokens || 0;
 						totalUsage.outputTokens += eu.completion_tokens || 0;
 					}
+
+					if (onMessage && config.maxContextTokens && latestTotalTokens > 0) {
+						const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: `teammate-${memberId}`,
+							agentName: memberName,
+							message: {
+								type: 'context_usage',
+								percentage: Math.max(1, Math.round(ctxPct)),
+								inputTokens: latestTotalTokens,
+								maxTokens: config.maxContextTokens,
+							},
+						});
+					}
 				}
 
 				if (event.type === 'content' && event.content) {
@@ -399,6 +439,25 @@ ${role ? `Your role: ${role}` : ''}
 				}
 			}
 
+			// Tiktoken fallback when API doesn't return usage
+			if (latestTotalTokens === 0 && config.maxContextTokens) {
+				latestTotalTokens = countMessagesTokens(messages);
+				if (onMessage && latestTotalTokens > 0) {
+					const ctxPct = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: `teammate-${memberId}`,
+						agentName: memberName,
+						message: {
+							type: 'context_usage',
+							percentage: Math.max(1, Math.round(ctxPct)),
+							inputTokens: latestTotalTokens,
+							maxTokens: config.maxContextTokens,
+						},
+					});
+				}
+			}
+
 			// Build assistant message
 			if (currentContent || toolCalls.length > 0) {
 				const assistantMessage: ChatMessage = {
@@ -413,10 +472,26 @@ ${role ? `Your role: ${role}` : ''}
 				finalResponse = currentContent;
 			}
 
-			// Context compression
+			// Context compression — acquire the coordinator lock so the main flow
+			// and other participants wait while this teammate's context is rebuilt.
 			let justCompressed = false;
 			if (latestTotalTokens > 0 && config.maxContextTokens) {
 				if (shouldCompressSubAgentContext(latestTotalTokens, config.maxContextTokens)) {
+					const ctxPercentage = getContextPercentage(latestTotalTokens, config.maxContextTokens);
+
+					if (onMessage) {
+						onMessage({
+							type: 'sub_agent_message',
+							agentId: `teammate-${memberId}`,
+							agentName: memberName,
+							message: {
+								type: 'context_compressing',
+								percentage: Math.round(ctxPercentage),
+							},
+						});
+					}
+
+					await compressionCoordinator.acquireLock(instanceId);
 					try {
 						const compressionResult = await compressSubAgentContext(
 							messages, latestTotalTokens, config.maxContextTokens,
@@ -429,9 +504,32 @@ ${role ? `Your role: ${role}` : ''}
 							if (compressionResult.afterTokensEstimate) {
 								latestTotalTokens = compressionResult.afterTokensEstimate;
 							}
+
+							if (onMessage) {
+								onMessage({
+									type: 'sub_agent_message',
+									agentId: `teammate-${memberId}`,
+									agentName: memberName,
+									message: {
+										type: 'context_compressed',
+										beforeTokens: compressionResult.beforeTokens,
+										afterTokensEstimate: compressionResult.afterTokensEstimate,
+									},
+								});
+							}
+
+							console.log(
+								`[Teammate:${memberName}] Context compressed: ` +
+								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+							);
 						}
-					} catch {
-						// Continue without compression
+					} catch (compressError) {
+						console.error(
+							`[Teammate:${memberName}] Context compression failed:`,
+							compressError,
+						);
+					} finally {
+						compressionCoordinator.releaseLock(instanceId);
 					}
 				}
 			}
@@ -447,23 +545,30 @@ ${role ? `Your role: ${role}` : ''}
 				continue;
 			}
 
-			// No tool calls = done
-			if (toolCalls.length === 0) {
-				break;
-			}
+		// No tool calls = AI forgot to call wait_for_messages. Prompt it to do so.
+		if (toolCalls.length === 0) {
+			messages.push({
+				role: 'user',
+				content: '[System] Your work appears complete, but you did not call `wait_for_messages`. You MUST call `wait_for_messages` with a summary instead of ending your turn. This keeps you available for follow-up instructions from the lead or other teammates.',
+			});
+			continue;
+		}
 
-			// Handle synthetic team tools internally
-			const syntheticToolNames = new Set([
-				'message_teammate', 'claim_task', 'complete_task',
-				'list_team_tasks', 'request_plan_approval', 'shutdown_self',
-			]);
+		// Handle synthetic team tools internally
+		const syntheticToolNames = new Set([
+			'message_teammate', 'claim_task', 'complete_task',
+			'list_team_tasks', 'request_plan_approval', 'wait_for_messages',
+		]);
 
-			const syntheticCalls = toolCalls.filter(tc => syntheticToolNames.has(tc.function.name));
-			const regularCalls = toolCalls.filter(tc => !syntheticToolNames.has(tc.function.name));
+		const syntheticCalls = toolCalls.filter(tc => syntheticToolNames.has(tc.function.name));
+		const regularCalls = toolCalls.filter(tc => !syntheticToolNames.has(tc.function.name));
 
-			// Process synthetic tools
-			let shouldShutdown = false;
-			for (const tc of syntheticCalls) {
+		// Handle wait_for_messages separately — it's async and blocks
+		const waitCall = syntheticCalls.find(tc => tc.function.name === 'wait_for_messages');
+		const otherSyntheticCalls = syntheticCalls.filter(tc => tc.function.name !== 'wait_for_messages');
+
+		// Process non-blocking synthetic tools first
+		for (const tc of otherSyntheticCalls) {
 				let args: any = {};
 				try {
 					args = JSON.parse(tc.function.arguments);
@@ -482,9 +587,9 @@ ${role ? `Your role: ${role}` : ''}
 								? 'Message sent to team lead.'
 								: 'Failed to send message to team lead.';
 						} else {
-							// Find teammate by name or ID
 							let targetTeammate = teamTracker.findByMemberName(target)
-								|| teamTracker.findByMemberId(target);
+								|| teamTracker.findByMemberId(target)
+								|| teamTracker.getTeammate(target);
 
 							if (targetTeammate) {
 								const sent = teamTracker.sendMessageToTeammate(
@@ -556,16 +661,6 @@ ${role ? `Your role: ${role}` : ''}
 						break;
 					}
 
-					case 'shutdown_self': {
-						const summary = args.summary || 'No summary provided.';
-						teamTracker.sendMessageToLead(
-							instanceId,
-							`[Shutdown] ${memberName} is shutting down. Summary: ${summary}`,
-						);
-						shouldShutdown = true;
-						resultContent = 'Shutdown acknowledged. Finishing current work.';
-						break;
-					}
 				}
 
 				messages.push({
@@ -575,11 +670,67 @@ ${role ? `Your role: ${role}` : ''}
 				});
 			}
 
-			if (shouldShutdown && regularCalls.length === 0) {
+		// Handle wait_for_messages: notify lead, mark standby, then block until messages arrive
+		if (waitCall) {
+			let waitArgs: any = {};
+			try { waitArgs = JSON.parse(waitCall.function.arguments); } catch { /* empty */ }
+
+			const summary = waitArgs.summary || 'Work completed.';
+
+			// Mark as standby so wait_for_teammates knows this teammate is idle
+			teamTracker.setStandby(instanceId);
+
+			teamTracker.sendMessageToLead(
+				instanceId,
+				`[Standby] ${memberName} has completed current work. Summary: ${summary}`,
+			);
+
+			if (onMessage) {
+				onMessage({
+					type: 'sub_agent_message',
+					agentId: `teammate-${memberId}`,
+					agentName: memberName,
+					message: {type: 'status', status: 'standby'} as any,
+				});
+			}
+
+			// Block until messages arrive or aborted
+			let receivedMessages: typeof teammateMessages = [];
+			while (!abortSignal?.aborted) {
+				const incoming = teamTracker.dequeueTeammateMessages(instanceId);
+				if (incoming.length > 0) {
+					receivedMessages = incoming;
+					break;
+				}
+				await new Promise(resolve => setTimeout(resolve, 500));
+			}
+
+			// Clear standby — teammate is resuming or exiting
+			teamTracker.clearStandby(instanceId);
+
+			if (abortSignal?.aborted) {
+				messages.push({
+					role: 'tool' as const,
+					tool_call_id: waitCall.id,
+					content: 'Session terminated by team lead.',
+				});
 				break;
 			}
 
-			// Process regular MCP tool calls
+			const msgSummary = receivedMessages
+				.map(m => `[${m.fromMemberName}]: ${m.content}`)
+				.join('\n');
+			messages.push({
+				role: 'tool' as const,
+				tool_call_id: waitCall.id,
+				content: `Received ${receivedMessages.length} message(s):\n${msgSummary}`,
+			});
+
+			// Skip regular tool calls this iteration — the AI should process the messages first
+			continue;
+		}
+
+		// Process regular MCP tool calls
 			if (regularCalls.length > 0) {
 				// Plan approval gate: block file-modifying tools until approved
 				if (!planApproved) {
@@ -606,19 +757,69 @@ ${role ? `Your role: ${role}` : ''}
 						// Fall through to execute non-blocked calls
 						for (const tc of nonBlockedCalls) {
 							try {
-								const toolArgs = JSON.parse(tc.function.arguments || '{}');
+								let toolArgs = JSON.parse(tc.function.arguments || '{}');
+								const rwResult = rewriteToolArgsForWorktree(tc.function.name, toolArgs, worktreePath);
+								if (rwResult.error) {
+									messages.push({
+										role: 'tool' as const,
+										tool_call_id: tc.id,
+										content: `Error: ${rwResult.error}`,
+									});
+									continue;
+								}
+								toolArgs = rwResult.args;
+
+								// beforeToolCall hook
+								try {
+									const bHook = await unifiedHooksExecutor.executeHooks(
+										'beforeToolCall', {toolName: tc.function.name, args: toolArgs},
+									);
+									const bInterp = interpretHookResult('beforeToolCall', bHook);
+									if (bInterp.action === 'block') {
+										messages.push({
+											role: 'tool' as const,
+											tool_call_id: tc.id,
+											content: bInterp.replacedContent || '',
+										});
+										continue;
+									}
+								} catch { /* best effort */ }
+
 								const result = await executeMCPTool(tc.function.name, toolArgs, abortSignal);
+								let resultContent = typeof result === 'string' ? result : JSON.stringify(result);
+
+								// afterToolCall hook
+								try {
+									const aHook = await unifiedHooksExecutor.executeHooks('afterToolCall', {
+										toolName: tc.function.name, args: toolArgs,
+										result: {tool_call_id: tc.id, role: 'tool', content: resultContent},
+										error: null,
+									});
+									const aInterp = interpretHookResult('afterToolCall', aHook);
+									if (aInterp.action === 'replace' && aInterp.replacedContent) {
+										resultContent = aInterp.replacedContent;
+									}
+								} catch { /* best effort */ }
+
 								messages.push({
 									role: 'tool' as const,
 									tool_call_id: tc.id,
-									content: typeof result === 'string' ? result : JSON.stringify(result),
+									content: resultContent,
 								});
 							} catch (e: any) {
+								const errorContent = `Error: ${e.message}`;
 								messages.push({
 									role: 'tool' as const,
 									tool_call_id: tc.id,
-									content: `Error: ${e.message}`,
+									content: errorContent,
 								});
+								try {
+									await unifiedHooksExecutor.executeHooks('afterToolCall', {
+										toolName: tc.function.name, args: {},
+										result: {tool_call_id: tc.id, role: 'tool', content: errorContent},
+										error: e,
+									});
+								} catch { /* best effort */ }
 							}
 						}
 						continue;
@@ -658,22 +859,73 @@ ${role ? `Your role: ${role}` : ''}
 						approved = true;
 					}
 
-					if (approved) {
-						try {
-							const result = await executeMCPTool(toolName, toolArgs, abortSignal);
-							messages.push({
-								role: 'tool' as const,
-								tool_call_id: tc.id,
-								content: typeof result === 'string' ? result : JSON.stringify(result),
-							});
-						} catch (e: any) {
-							messages.push({
-								role: 'tool' as const,
-								tool_call_id: tc.id,
-								content: `Error: ${e.message}`,
-							});
-						}
+				if (approved) {
+					// Enforce worktree path constraints before execution
+					const rwResult = rewriteToolArgsForWorktree(toolName, toolArgs, worktreePath);
+					if (rwResult.error) {
+						messages.push({
+							role: 'tool' as const,
+							tool_call_id: tc.id,
+							content: `Error: ${rwResult.error}`,
+						});
+						continue;
 					}
+					toolArgs = rwResult.args;
+
+					// beforeToolCall hook
+					try {
+						const bHook = await unifiedHooksExecutor.executeHooks(
+							'beforeToolCall', {toolName, args: toolArgs},
+						);
+						const bInterp = interpretHookResult('beforeToolCall', bHook);
+						if (bInterp.action === 'block') {
+							messages.push({
+								role: 'tool' as const,
+								tool_call_id: tc.id,
+								content: bInterp.replacedContent || '',
+							});
+							continue;
+						}
+					} catch { /* best effort */ }
+
+					try {
+						const result = await executeMCPTool(toolName, toolArgs, abortSignal);
+						let resultContent = typeof result === 'string' ? result : JSON.stringify(result);
+
+						// afterToolCall hook
+						try {
+							const aHook = await unifiedHooksExecutor.executeHooks('afterToolCall', {
+								toolName, args: toolArgs,
+								result: {tool_call_id: tc.id, role: 'tool', content: resultContent},
+								error: null,
+							});
+							const aInterp = interpretHookResult('afterToolCall', aHook);
+							if (aInterp.action === 'replace' && aInterp.replacedContent) {
+								resultContent = aInterp.replacedContent;
+							}
+						} catch { /* best effort */ }
+
+						messages.push({
+							role: 'tool' as const,
+							tool_call_id: tc.id,
+							content: resultContent,
+						});
+					} catch (e: any) {
+						const errorContent = `Error: ${e.message}`;
+						messages.push({
+							role: 'tool' as const,
+							tool_call_id: tc.id,
+							content: errorContent,
+						});
+						try {
+							await unifiedHooksExecutor.executeHooks('afterToolCall', {
+								toolName, args: toolArgs,
+								result: {tool_call_id: tc.id, role: 'tool', content: errorContent},
+								error: e,
+							});
+						} catch { /* best effort */ }
+					}
+				}
 				}
 			}
 

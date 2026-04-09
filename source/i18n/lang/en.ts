@@ -182,6 +182,10 @@ export const en: TranslationKeys = {
 		enablePromptOptimization: 'Enable Prompt Optimization:',
 		enableAutoCompress: 'Enable Auto Compression:',
 		autoCompressThreshold: 'Auto Compress Threshold (%):',
+		autoCompressThresholdHint:
+			'Algorithm: maxContextTokens × {percentage}% = {actualThreshold} tokens',
+		autoCompressThresholdDesc:
+			'Triggers compression when context exceeds this threshold (recommended 60-80%, too low impacts performance, too high defeats purpose)',
 		showThinking: 'Show Thinking Process:',
 		streamingDisplay: 'Streaming Line Display:',
 		thinkingEnabled: 'Thinking Enabled:',
@@ -191,7 +195,7 @@ export const en: TranslationKeys = {
 		thinkingBudgetTokens: 'Thinking Budget Tokens:',
 		thinkingEffort: 'Thinking Effort:',
 		geminiThinkingEnabled: 'Gemini Thinking Enabled:',
-		geminiThinkingBudget: 'Gemini Thinking Budget:',
+		geminiThinkingLevel: 'Gemini Thinking Level:',
 		responsesReasoningEnabled: 'Responses Reasoning Enabled:',
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
 		responsesVerbosity: 'Responses Verbosity:',
@@ -201,9 +205,11 @@ export const en: TranslationKeys = {
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
 		streamIdleTimeoutSec: 'Stream Idle Timeout(sec):',
-		toolResultTokenLimit: 'Tool Result Token Limit:',
-		editSimilarityThreshold:
-			'Edit Similarity Threshold(0-1, change with caution):',
+		toolResultTokenLimit: 'Tool Result Limit (%):',
+		toolResultTokenLimitHint:
+			'Algorithm: maxContextTokens × {percentage}% = {actualLimit} tokens',
+		toolResultTokenLimitDesc:
+			'Limits tool result as % of context window (recommended 20-40%, too low truncates, too high fills context)',
 		notSet: 'Not set',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',
@@ -389,8 +395,20 @@ export const en: TranslationKeys = {
 		enabled: 'Enabled',
 		disabled: 'Disabled',
 		customLabel: 'Custom',
+		// Scope
+		scopeProject: 'Project',
+		scopeGlobal: 'Global',
+		scopeSelectTitle: 'Select scope for new command',
+		scopeSelectHint: '↑↓: Navigate • Enter: Select • Esc: Cancel',
+		duplicatePattern:
+			'Pattern "{pattern}" already exists in {scope} scope',
+		resetScopeSelectTitle: 'Select scope to reset',
+		resetGlobalDesc: 'Restore to default preset commands',
+		resetProjectDesc: 'Clear all project custom commands',
+		confirmResetScopeMessage:
+			'⚠️ Press Enter again to confirm {scope} reset',
 		// Add view
-		addTitle: 'Add Custom Sensitive Command',
+		addTitle: 'Add Custom Sensitive Command ({scope})',
 		patternLabel: 'Pattern (supports wildcards, e.g., "rm*"):',
 		patternPlaceholder: 'e.g., rm -rf, sudo, etc.',
 		descriptionLabel: 'Description:',
@@ -492,7 +510,7 @@ export const en: TranslationKeys = {
 		selectItem: 'Tab/Enter - Select item in pickers',
 		cancelClose: 'ESC - Cancel/close pickers or interrupt AI response',
 		toggleYolo:
-			'Shift+Tab/Ctrl+Y - Toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
+			'Shift+Tab/Ctrl+Y - Toggle modes (cycle: Off → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → Off)',
 		tipsTitle: '💡 Tips:',
 		tipUseHelp: 'Use /help anytime to see this information',
 		tipShowCommands: 'Type / to see all available commands',
@@ -567,6 +585,8 @@ export const en: TranslationKeys = {
 			gitline:
 				'Select git commits and insert their content into the current chat input',
 			role: 'Open or create ROLE.md file to customize AI assistant role. Use -l or --list to list all roles',
+			roleSubagent:
+				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
 			custom: 'Add custom command and save to ~/.snow/commands',
@@ -596,8 +616,7 @@ export const en: TranslationKeys = {
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
-			team:
-				'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
+			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
 			diff: 'Review file changes from a conversation in IDE diff view',
@@ -605,6 +624,7 @@ export const en: TranslationKeys = {
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
 			newPrompt: 'Generate a refined prompt from your requirement using AI',
+			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -889,7 +909,7 @@ export const en: TranslationKeys = {
 		headerExplanations: 'Ask for code explanations and debugging help',
 		headerInterrupt: 'Press ESC during response to interrupt',
 		headerYolo:
-			'Press Shift+Tab/Ctrl+Y: toggle YOLO/Plan modes (cycle: YOLO → YOLO+Plan → Plan → Off)',
+			'Press Shift+Tab/Ctrl+Y: toggle modes (cycle: Off → YOLO → YOLO+Plan → Plan → YOLO+Team → Team → Off)',
 		headerShortcuts:
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+O (copy input) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerExpandedView:
@@ -1002,7 +1022,7 @@ export const en: TranslationKeys = {
 		codebaseIndexingShort: 'Indexing',
 		codebaseProgress: '{chunks} chunks',
 		codebaseChunks: 'chunks',
-		codebaseSearching: '⏏ Codebase Search (Attempt {current}/{max})',
+		codebaseSearching: '◉ Codebase Search (Attempt {current}/{max})',
 		codebaseSearchAttempt: 'Attempt {current}/{max}',
 		codebaseSearchComplete: 'Codebase search complete',
 		codebaseIndexingEnabled: 'Codebase indexing enabled for this project',
@@ -1028,7 +1048,7 @@ export const en: TranslationKeys = {
 		shortcutDeleteToEnd: 'Delete to end',
 		shortcutCancel: 'Cancel (ESC)',
 		shortcutRegenerate: 'Regenerate (Ctrl+R)',
-		shortcutToggleYolo: 'Toggle YOLO/Plan (Shift+Tab/Ctrl+Y)',
+		shortcutToggleYolo: 'Toggle modes (Shift+Tab/Ctrl+Y)',
 		// Rollback
 		rollbackConfirm: 'Confirm rollback',
 		rollbackFiles: 'Rollback files',
@@ -1074,14 +1094,16 @@ export const en: TranslationKeys = {
 			'Type to filter files • Tab/Enter to select • Ctrl+T to toggle view • ESC to cancel',
 		expandedViewHint: 'Expanded view • Ctrl+T to toggle',
 		yoloModeActive:
-			'❁ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
+			'⧴ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
 			'⚐ Plan mode active - Specialized planning and coordination agent',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
-		hybridCompressEnabled: '⇌ Hybrid Compress ON - AI summary + smart truncation',
-		teamModeActive: '⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
+		hybridCompressEnabled:
+			'⇌ Hybrid Compress ON - AI summary + smart truncation',
+		teamModeActive:
+			'⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',
@@ -1236,6 +1258,61 @@ export const en: TranslationKeys = {
 		confirmDeleteHint: 'Press Y to confirm, N to cancel',
 	},
 
+	roleSubagentCreation: {
+		title: 'Create Sub-Agent Role',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/)',
+		locationGlobalInfo: 'Available across all projects',
+		locationProject: 'Project (project root)',
+		locationProjectInfo: 'Only available in this project',
+		selectAgentLabel: 'Select Sub-Agent:',
+		selectAgentHint: '↑↓: Navigate | Enter: Select | ESC: Back',
+		noAvailableAgents:
+			'All sub-agents already have role files at this location.',
+		agentLabel: 'Sub-Agent:',
+		fileLabel: 'File:',
+		confirmQuestion: 'Create this role file?',
+		confirmYes: 'Yes, Create',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		createSuccessMessage:
+			'Created sub-agent role successfully! | Agent: {agent} | Location: {location} | Path: {path}',
+		createErrorMessage: 'Failed to create sub-agent role: {error}',
+		errorUnknown: 'Unknown error',
+	},
+	roleSubagentDeletion: {
+		title: 'Delete Sub-Agent Role',
+		locationLabel: 'Select Location:',
+		locationGlobal: 'Global (~/.snow/)',
+		locationGlobalInfo: 'Sub-agent role files for all projects',
+		locationProject: 'Project (project root)',
+		locationProjectInfo: 'Sub-agent role files for current project only',
+		selectRoleLabel: 'Select role file to delete:',
+		selectRoleHint: '↑↓: Navigate | Enter: Select | ESC: Back',
+		noRoleFiles: 'No sub-agent role files found at this location.',
+		fileLabel: 'File:',
+		confirmQuestion: 'Confirm deletion?',
+		confirmYes: 'Yes, Delete',
+		confirmNo: 'No, Cancel',
+		escCancel: 'Press ESC to cancel',
+		deleteSuccessMessage:
+			'Deleted sub-agent role successfully! | Agent: {agent} | Location: {location} | Path: {path}',
+		deleteErrorMessage: 'Failed to delete sub-agent role: {error}',
+		errorNotFound: 'Sub-agent role file does not exist',
+		errorUnknown: 'Unknown error',
+	},
+	roleSubagentList: {
+		title: 'Sub-Agent Role Management',
+		tabGlobal: 'Global',
+		tabProject: 'Project',
+		noRoles: 'No sub-agent role files found. Use /role-subagent to create one.',
+		deleteSuccess: 'Role file deleted successfully',
+		loading: 'Processing...',
+		hints: 'Tab: Switch scope | D: Delete | ESC: Close',
+		confirmDelete: 'Confirm delete role for "{name}"?',
+		confirmDeleteHint: 'Press Y to confirm, N to cancel',
+	},
+
 	branchPanel: {
 		title: 'Git Branch Management',
 		notGitRepo:
@@ -1268,7 +1345,10 @@ export const en: TranslationKeys = {
 			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
 		multiSelectHint: 'Multi-select mode',
 		multiSelectKeyboardHints:
-			'↑↓ Move | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
+			'↑↓ Move | Tab Toggle (Custom/Cancel) | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
+		optionListScrollHint: '↑↓ to scroll',
+		optionListMoreAbove: '{count} more above',
+		optionListMoreBelow: '{count} more below',
 	},
 	toolConfirmation: {
 		header: '[Tool Confirmation]',
@@ -1290,7 +1370,7 @@ export const en: TranslationKeys = {
 		pressEnterToSubmit: 'Press Enter to submit',
 		confirmed: 'Confirmed',
 		approveOnce: 'Approve (once)',
-		alwaysApprove: 'Always approve this tool',
+		alwaysApprove: 'Approve (this project will no longer ask about this tool)',
 		rejectWithReply: 'Reject with reply',
 		rejectEndSession: 'Reject (end session)',
 	},
@@ -1329,6 +1409,8 @@ export const en: TranslationKeys = {
 		filesCountWithSelection:
 			'{count} file(s) will be rolled back ({selected}/{total} selected)',
 		notebookCount: '{count} notebook(s) will also be rolled back',
+		teamCount:
+			'{count} team member(s) will be terminated and worktrees cleaned up',
 		question: 'Choose rollback mode:',
 		conversationOnly: 'Rollback conversation only',
 		conversationAndFiles: 'Rollback conversation + files',
@@ -1346,6 +1428,8 @@ export const en: TranslationKeys = {
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
 		emptyHint: 'No files to rollback',
+		noFilesConfirm: 'No file changes detected. Rollback conversation only?',
+		noFilesConfirmHint: 'Enter confirm · ESC cancel',
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',
@@ -1462,7 +1546,8 @@ export const en: TranslationKeys = {
 		statusExternal: '(External)',
 		statusDisabled: '(Disabled)',
 		statusFailed: 'Failed',
-		navigationHint: '↑↓ Navigate • Enter Reconnect • Tab Toggle Service',
+		navigationHint:
+			'↑↓ Navigate • Enter Reconnect • Tab Toggle Service • V View Tools',
 		pleaseWait: 'Please wait...',
 		skillsTitle: 'Skills',
 		noSkills: 'No skills available',
@@ -1471,15 +1556,38 @@ export const en: TranslationKeys = {
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
+		toolsListTitle: '{service} - Tool List',
+		toolsNavigationHint:
+			'↑↓ Navigate • Tab Toggle Tool (Global/Project) • ESC Back',
+		toolTogglingHint: 'Toggling tool {tool}...',
+		toolDisabled: '(Disabled)',
+		toolScopeGlobal: '[Global]',
+		toolScopeProject: '[Project]',
+		mcpSourceProject: ' [Project]',
+		mcpSourceGlobal: ' [Global]',
+	},
+	mcpConfigScreen: {
+		title: 'MCP Config - Select scope to edit',
+		scopeProject: 'Project Config',
+		scopeGlobal: 'Global Config',
+		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
+		savedSuccess:
+			'{scope} MCP configuration saved successfully! Please use `snow` restart!',
+		configErrors: 'Configuration errors: {errors}',
+		reverted: 'Changes have been reverted to the previous valid configuration.',
+		invalidJson:
+			'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
 	},
 	runningAgentsPanel: {
-		title: 'Running Sub-Agents',
-		noAgentsRunning: 'No sub-agents are currently running',
+		title: 'Running Agents',
+		noAgentsRunning: 'No agents or teammates are currently running',
 		keyboardHint: '(Space: toggle · Enter: confirm · Esc: cancel)',
 		selected: 'Selected: {count}',
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
+		subAgentLabel: '[Agent]',
+		teammateLabel: '[Team]',
 	},
 	sseServer: {
 		started: '✓ SSE Server Started',
@@ -1543,5 +1651,19 @@ export const en: TranslationKeys = {
 		actionCancel: 'Cancel',
 		errorPrefix: 'Error: ',
 		scrollHint: '↑↓ Scroll',
+	},
+	btw: {
+		title: '✦ BTW',
+		thinking: 'Thinking...',
+		escHint: 'ESC to cancel',
+		actionClose: 'Close',
+		errorPrefix: 'Error: ',
+		scrollHint: '↑↓ Scroll',
+	},
+	exitScreen: {
+		title: 'Goodbye',
+		goodbye: 'Thanks for using Snow CLI',
+		thankYou: 'See you next time',
+		version: 'v{version}',
 	},
 };

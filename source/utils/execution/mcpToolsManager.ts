@@ -3,7 +3,12 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 // Intentionally kept for backward compatibility fallback, despite deprecation
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
-import {getMCPConfig, type MCPServer} from '../config/apiConfig.js';
+import {
+	getMCPConfig,
+	getMCPServerSource,
+	type MCPServer,
+	type MCPConfigScope,
+} from '../config/apiConfig.js';
 import {mcpTools as filesystemTools} from '../../mcp/filesystem.js';
 import {mcpTools as terminalTools} from '../../mcp/bash.js';
 import {mcpTools as aceCodeSearchTools} from '../../mcp/aceCodeSearch.js';
@@ -35,9 +40,13 @@ import {
 	getDisabledBuiltInServices,
 } from '../config/disabledBuiltInTools.js';
 import {getDisabledSkills} from '../config/disabledSkills.js';
+import {
+	getDisabledMCPTools,
+	isMCPToolEnabled,
+} from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
-import {HookFailedError} from './hookFailedError.js';
+
 import os from 'os';
 import path from 'path';
 
@@ -74,6 +83,7 @@ export interface MCPServiceTools {
 	connected: boolean;
 	error?: string;
 	enabled?: boolean;
+	source?: MCPConfigScope;
 }
 
 // Cache for MCP tools to avoid reconnecting on every message
@@ -177,13 +187,16 @@ async function generateConfigHash(): Promise<string> {
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
+		const {getTeamMode} = await import('../config/projectSettings.js');
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
-			subAgents: subAgents.map(t => t.name), // Only track agent names for hash
-			skills: skillTools.map(t => t.name), // Include skill names in hash
-			codebaseEnabled: codebaseConfig.enabled, // 🔥 Must include to invalidate cache on enable/disable
-			disabledBuiltInServices: getDisabledBuiltInServices(), // Include disabled built-in services in hash
-			disabledSkills: getDisabledSkills(), // Include disabled skills in hash
+			subAgents: subAgents.map(t => t.name),
+			skills: skillTools.map(t => t.name),
+			codebaseEnabled: codebaseConfig.enabled,
+			disabledBuiltInServices: getDisabledBuiltInServices(),
+			disabledSkills: getDisabledSkills(),
+			disabledMCPTools: getDisabledMCPTools(),
+			teamMode: getTeamMode(),
 		});
 	} catch {
 		return '';
@@ -244,9 +257,10 @@ async function refreshToolsCache(): Promise<void> {
 			enabled,
 		});
 
-		// Only add to allTools if enabled
 		if (enabled) {
 			for (const tool of tools) {
+				const unprefixedName = tool.name.replace(`${prefix}-`, '');
+				if (!isMCPToolEnabled(serviceName, unprefixedName)) continue;
 				allTools.push({
 					type: 'function',
 					function: {
@@ -463,6 +477,8 @@ async function refreshToolsCache(): Promise<void> {
 	try {
 		const mcpConfig = getMCPConfig();
 		for (const [serviceName, server] of Object.entries(mcpConfig.mcpServers)) {
+			const source = getMCPServerSource(serviceName) || 'global';
+
 			// Skip disabled services
 			if (server.enabled === false) {
 				servicesInfo.push({
@@ -471,6 +487,7 @@ async function refreshToolsCache(): Promise<void> {
 					isBuiltIn: false,
 					connected: false,
 					error: 'Disabled by user',
+					source,
 				});
 				continue;
 			}
@@ -482,9 +499,11 @@ async function refreshToolsCache(): Promise<void> {
 					tools: serviceTools,
 					isBuiltIn: false,
 					connected: true,
+					source,
 				});
 
 				for (const tool of serviceTools) {
+					if (!isMCPToolEnabled(serviceName, tool.name)) continue;
 					allTools.push({
 						type: 'function',
 						function: {
@@ -501,6 +520,7 @@ async function refreshToolsCache(): Promise<void> {
 					isBuiltIn: false,
 					connected: false,
 					error: error instanceof Error ? error.message : 'Unknown error',
+					source,
 				});
 			}
 		}
@@ -571,6 +591,8 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		return;
 	}
 
+	const source = getMCPServerSource(serviceName) || 'global';
+
 	try {
 		// Try to reconnect to the service
 		const serviceTools = await probeServiceTools(serviceName, server);
@@ -581,6 +603,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 			tools: serviceTools,
 			isBuiltIn: false,
 			connected: true,
+			source,
 		};
 
 		// Remove old tools for this service from the tools list
@@ -607,6 +630,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 			isBuiltIn: false,
 			connected: false,
 			error: error instanceof Error ? error.message : 'Unknown error',
+			source,
 		};
 
 		// Remove tools for this service from the tools list
@@ -1125,7 +1149,6 @@ export async function executeMCPTool(
 	}
 
 	let result: any;
-	let executionError: Error | null = null;
 
 	try {
 		// Handle tool_search meta-tool (progressive tool discovery)
@@ -1234,6 +1257,14 @@ export async function executeMCPTool(
 			);
 		}
 
+		// Check if individual tool is disabled
+		if (!isMCPToolEnabled(serviceName, actualToolName)) {
+			throw new Error(
+				`Tool "${actualToolName}" in service "${serviceName}" is currently disabled. ` +
+					`You can re-enable it in the MCP panel (V to view tools, Tab to toggle).`,
+			);
+		}
+
 		if (serviceName === 'todo') {
 			// Handle built-in TODO tools (no connection needed)
 			result = await getTodoService().executeTool(actualToolName, args);
@@ -1289,71 +1320,26 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'edit':
-					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
+							`Missing required parameter 'filePath' for filesystem-edit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
 								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
 					if (
-						!Array.isArray(args.filePath) &&
-						(args.startLine === undefined ||
-							args.endLine === undefined ||
-							args.newContent === undefined)
+						typeof args.filePath === 'string' &&
+						(!args.operations || !Array.isArray(args.operations) || args.operations.length === 0)
 					) {
 						throw new Error(
-							`Missing required parameters for filesystem-edit tool.
-` +
-								`For single file mode, 'startLine', 'endLine', and 'newContent' are required.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Provide startLine (number), endLine (number), and newContent (string).`,
+							`Missing required parameter 'operations' for filesystem-edit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Provide an array of {type, startAnchor, endAnchor?, content?} operations.`,
 						);
 					}
 					result = await filesystemService.editFile(
 						args.filePath,
-						args.startLine,
-						args.endLine,
-						args.newContent,
-						args.contextLines,
-					);
-					break;
-				case 'edit_search':
-					// Validate required parameters
-					if (!args.filePath) {
-						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit_search tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
-						);
-					}
-					if (
-						!Array.isArray(args.filePath) &&
-						(args.searchContent === undefined ||
-							args.replaceContent === undefined)
-					) {
-						throw new Error(
-							`Missing required parameters for filesystem-edit_search tool.
-` +
-								`For single file mode, 'searchContent' and 'replaceContent' are required.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Provide searchContent (string) and replaceContent (string).`,
-						);
-					}
-					result = await filesystemService.editFileBySearch(
-						args.filePath,
-						args.searchContent,
-						args.replaceContent,
-						args.occurrence,
+						args.operations,
 						args.contextLines,
 					);
 					break;
@@ -1778,87 +1764,7 @@ export async function executeMCPTool(
 			);
 		}
 	} catch (error) {
-		executionError = error instanceof Error ? error : new Error(String(error));
-		throw executionError;
-	} finally {
-		// Execute afterToolCall hook
-		try {
-			const {unifiedHooksExecutor} = await import('./unifiedHooksExecutor.js');
-			const hookResult = await unifiedHooksExecutor.executeHooks(
-				'afterToolCall',
-				{
-					toolName,
-					args,
-					result,
-					error: executionError,
-				},
-			);
-
-			// Handle hook result based on exit code strategy
-			if (hookResult && !hookResult.success) {
-				// Find failed command hook
-				const commandError = hookResult.results.find(
-					(r: any) => r.type === 'command' && !r.success,
-				);
-
-				if (commandError && commandError.type === 'command') {
-					const {exitCode, command, output, error} = commandError;
-
-					if (exitCode === 1) {
-						// Exit code 1: Warning - stderr replaces tool result content
-						console.warn(
-							`[WARN] afterToolCall hook warning (exitCode: ${exitCode}):
-` +
-								`output: ${output || '(empty)'}
-` +
-								`error: ${error || '(empty)'}`,
-						);
-
-						const replacedContent =
-							error ||
-							output ||
-							`[afterToolCall Hook Warning] Command: ${command} exited with code 1`;
-
-						if (typeof result === 'string') {
-							result = replacedContent;
-						} else if (result && typeof result === 'object') {
-							if ('content' in result && typeof result.content === 'string') {
-								result.content = replacedContent;
-							} else {
-								result = replacedContent;
-							}
-						}
-					} else if (exitCode >= 2 || exitCode < 0) {
-						// Exit code 2+: Critical error - throw structured hook error
-						const combinedOutput =
-							[output, error].filter(Boolean).join('\n\n') || '(no output)';
-						throw new HookFailedError(
-							'afterToolCall',
-							exitCode,
-							command,
-							combinedOutput,
-						);
-					}
-				}
-			}
-		} catch (error) {
-			// Re-throw if it's a critical hook error (exit code 2+)
-			if (error instanceof HookFailedError) {
-				throw error;
-			}
-			// Otherwise just warn - don't block tool execution on unexpected errors
-			logger.warn('Failed to execute afterToolCall hook:', error);
-		}
-	}
-
-	// Re-throw execution error if it exists (from try block)
-	if (executionError) {
-		const err: any = executionError;
-		console.log(
-			'[DEBUG] Re-throwing executionError:',
-			err.message || String(err),
-		);
-		throw executionError;
+		throw error;
 	}
 
 	// Apply token limit validation before returning result (truncates if exceeded)

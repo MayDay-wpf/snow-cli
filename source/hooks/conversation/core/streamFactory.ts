@@ -16,6 +16,7 @@ export type StreamFactoryOptions = {
 	useBasicModel?: boolean;
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
+	teamMode?: boolean;
 	toolSearchDisabled?: boolean;
 	signal: AbortSignal;
 	onRetry: (error: Error, attempt: number, nextDelay: number) => void;
@@ -45,6 +46,7 @@ export function createStreamGenerator(options: StreamFactoryOptions) {
 				disableThinking: options.useBasicModel,
 				planMode: options.planMode,
 				vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+				teamMode: options.teamMode,
 				toolSearchDisabled: options.toolSearchDisabled,
 			},
 			signal,
@@ -61,6 +63,7 @@ export function createStreamGenerator(options: StreamFactoryOptions) {
 				tools,
 				planMode: options.planMode,
 				vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+				teamMode: options.teamMode,
 				toolSearchDisabled: options.toolSearchDisabled,
 			},
 			signal,
@@ -80,6 +83,7 @@ export function createStreamGenerator(options: StreamFactoryOptions) {
 				reasoning: options.useBasicModel ? null : undefined,
 				planMode: options.planMode,
 				vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+				teamMode: options.teamMode,
 				toolSearchDisabled: options.toolSearchDisabled,
 			},
 			signal,
@@ -95,6 +99,7 @@ export function createStreamGenerator(options: StreamFactoryOptions) {
 			tools,
 			planMode: options.planMode,
 			vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+			teamMode: options.teamMode,
 			toolSearchDisabled: options.toolSearchDisabled,
 		},
 		signal,

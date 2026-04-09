@@ -33,7 +33,7 @@ export default function CodebaseSearchStatus({status}: Props) {
 		return (
 			<Box flexDirection="column" paddingLeft={1}>
 				<Box flexDirection="row" gap={1}>
-					<Text color="cyan">⏏ Codebase Search</Text>
+					<Text color="cyan">◉ Codebase Search</Text>
 					{status.attempt && (
 						<Text color="cyan" dimColor>
 							(Attempt {status.attempt}/{status.maxAttempts})

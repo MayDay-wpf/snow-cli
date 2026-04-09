@@ -99,16 +99,6 @@ export interface StructureAnalysis {
 }
 
 /**
- * Match candidate for fuzzy search
- */
-export interface MatchCandidate {
-	startLine: number;
-	endLine: number;
-	similarity: number;
-	preview: string;
-}
-
-/**
  * File read configuration
  */
 export interface FileReadConfig {
@@ -150,23 +140,38 @@ export interface MultipleFilesReadResult {
 }
 
 /**
- * Edit by search configuration
+ * Hashline edit operation types
  */
-export interface EditBySearchConfig {
-	path: string;
-	searchContent: string;
-	replaceContent: string;
-	occurrence?: number;
+export type HashlineOperationType = 'replace' | 'insert_after' | 'delete';
+
+/**
+ * A single hashline edit operation.
+ * Anchors use the format "lineNum:hash" (e.g. "42:a3").
+ */
+export interface HashlineOperation {
+	type: HashlineOperationType;
+	/** Start anchor – required for all operation types */
+	startAnchor: string;
+	/** End anchor – for range replace/delete. Omit for single-line ops or insert_after. */
+	endAnchor?: string;
+	/** New content – required for replace and insert_after, ignored for delete */
+	content?: string;
 }
 
 /**
- * Edit by line range configuration
+ * Edit by hashline configuration (for batch mode)
  */
-export interface EditByLineConfig {
+export interface EditByHashlineConfig {
 	path: string;
-	startLine: number;
-	endLine: number;
-	newContent: string;
+	operations: HashlineOperation[];
+}
+
+/**
+ * Hashline edit single file result
+ */
+export interface EditByHashlineSingleResult extends SingleFileEditResult {
+	replacedContent: string;
+	operationsSummary: string;
 }
 
 /**
@@ -185,22 +190,6 @@ export interface SingleFileEditResult {
 }
 
 /**
- * Edit by search single file result
- */
-export interface EditBySearchSingleResult extends SingleFileEditResult {
-	replacedContent: string;
-	matchLocation: {startLine: number; endLine: number};
-}
-
-/**
- * Edit by line single file result
- */
-export interface EditByLineSingleResult extends SingleFileEditResult {
-	replacedLines: string;
-	linesModified: number;
-}
-
-/**
  * Batch operation result item (generic)
  */
 export interface BatchResultItem {
@@ -210,16 +199,10 @@ export interface BatchResultItem {
 }
 
 /**
- * Edit by search batch result item
+ * Edit by hashline batch result item
  */
-export type EditBySearchBatchResultItem = BatchResultItem &
-	Partial<EditBySearchSingleResult>;
-
-/**
- * Edit by line batch result item
- */
-export type EditByLineBatchResultItem = BatchResultItem &
-	Partial<EditByLineSingleResult>;
+export type EditByHashlineBatchResultItem = BatchResultItem &
+	Partial<EditByHashlineSingleResult>;
 
 /**
  * Batch operation result (generic)
@@ -233,15 +216,8 @@ export interface BatchOperationResult<T extends BatchResultItem> {
 }
 
 /**
- * Edit by search return type
+ * Edit by hashline return type
  */
-export type EditBySearchResult =
-	| EditBySearchSingleResult
-	| BatchOperationResult<EditBySearchBatchResultItem>;
-
-/**
- * Edit by line return type
- */
-export type EditByLineResult =
-	| EditByLineSingleResult
-	| BatchOperationResult<EditByLineBatchResultItem>;
+export type EditByHashlineResult =
+	| EditByHashlineSingleResult
+	| BatchOperationResult<EditByHashlineBatchResultItem>;

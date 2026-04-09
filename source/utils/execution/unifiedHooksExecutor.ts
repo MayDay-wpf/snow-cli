@@ -4,6 +4,7 @@ import {
 	type HookType,
 	type HookRule,
 	type HookAction,
+	type HookContextMap,
 } from '../config/hooksConfig.js';
 import {processManager} from '../core/processManager.js';
 import {getOpenAiConfig} from '../config/apiConfig.js';
@@ -78,7 +79,7 @@ export interface UnifiedHookExecutionResult {
 }
 
 /**
- * Hook 执行上下文
+ * Hook 执行上下文（运行时兼容任意 key，泛型约束在 executeHooks 签名层保障类型安全）
  */
 export interface HookContext {
 	[key: string]: any;
@@ -151,9 +152,9 @@ export class UnifiedHooksExecutor {
 	 * @param context - 执行上下文（用于 matcher 匹配）
 	 * @returns 执行结果
 	 */
-	async executeHooks(
-		hookType: HookType,
-		context?: HookContext,
+	async executeHooks<T extends HookType>(
+		hookType: T,
+		context?: HookContextMap[T],
 	): Promise<UnifiedHookExecutionResult> {
 		// 1. 先尝试加载项目级 hooks
 		let rules = loadHookConfig(hookType, 'project');
@@ -236,7 +237,7 @@ export class UnifiedHooksExecutor {
 	 * @param context - 上下文对象
 	 * @returns 替换后的文本
 	 */
-	private replacePlaceholders(text: string, context?: HookContext): string {
+	private replacePlaceholders(text: string, context?: Record<string, any>): string {
 		if (!context) {
 			return text;
 		}
@@ -307,7 +308,7 @@ export class UnifiedHooksExecutor {
 	 * @param context - 执行上下文
 	 * @returns 是否匹配
 	 */
-	private matchRule(rule: HookRule, context?: HookContext): boolean {
+	private matchRule(rule: HookRule, context?: Record<string, any>): boolean {
 		// 没有 matcher 表示匹配所有
 		if (!rule.matcher || !context) {
 			return true;
@@ -332,7 +333,7 @@ export class UnifiedHooksExecutor {
 	 * @param context - 执行上下文
 	 * @returns 是否匹配
 	 */
-	private checkMatcher(matcher: string, context: HookContext): boolean {
+	private checkMatcher(matcher: string, context: Record<string, any>): boolean {
 		// Matcher 用于工具 Hooks (beforeToolCall, toolConfirmation, afterToolCall)
 		// 直接匹配 toolName 字段，支持通配符
 		// 例如: "filesystem-read" 精确匹配
@@ -389,7 +390,7 @@ export class UnifiedHooksExecutor {
 	 */
 	private async executeCommand(
 		action: HookAction,
-		context?: HookContext,
+		context?: Record<string, any>,
 	): Promise<CommandHookResult> {
 		// 替换命令中的占位符
 		const command = this.replacePlaceholders(action.command!, context);
@@ -553,7 +554,7 @@ export class UnifiedHooksExecutor {
 	 */
 	private async executePrompt(
 		action: HookAction,
-		context?: HookContext,
+		context?: Record<string, any>,
 	): Promise<PromptHookResult> {
 		// 确保 prompt 执行器已初始化
 		const initialized = await this.initializePromptExecutor();

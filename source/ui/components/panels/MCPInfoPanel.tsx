@@ -6,25 +6,155 @@ import {
 	reconnectMCPService,
 } from '../../../utils/execution/mcpToolsManager.js';
 import {
-	getMCPConfig,
+	getMCPConfigByScope,
 	updateMCPConfig,
+	getMCPServerSource,
+	type MCPConfigScope,
 } from '../../../utils/config/apiConfig.js';
 import {toggleBuiltInService} from '../../../utils/config/disabledBuiltInTools.js';
 import {
 	toggleSkill,
 	isSkillEnabled,
 } from '../../../utils/config/disabledSkills.js';
+import {
+	toggleMCPTool,
+	isMCPToolEnabled,
+	isMCPToolDisabledInScope,
+} from '../../../utils/config/disabledMCPTools.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import type {Skill} from '../../../mcp/skills.js';
+
+// Sub-component for displaying tools list with scrolling support
+interface ToolsListProps {
+	tools: Array<{name: string; description: string}>;
+	selectedIndex: number;
+	maxDisplayItems: number;
+	toolEnabledMap?: Record<string, boolean>;
+	disabledLabel?: string;
+	scopeLabels?: Record<string, string>;
+	toolScopeMap?: Record<string, string>;
+}
+
+function ToolsList({
+	tools,
+	selectedIndex,
+	maxDisplayItems,
+	toolEnabledMap,
+	disabledLabel,
+	scopeLabels,
+	toolScopeMap,
+}: ToolsListProps) {
+	// Calculate display window for scrolling
+	const displayWindow = useMemo(() => {
+		if (tools.length <= maxDisplayItems) {
+			return {
+				tools: tools,
+				startIndex: 0,
+				endIndex: tools.length,
+				hiddenAbove: 0,
+				hiddenBelow: 0,
+			};
+		}
+
+		const halfWindow = Math.floor(maxDisplayItems / 2);
+		let startIndex = Math.max(0, selectedIndex - halfWindow);
+		const endIndex = Math.min(tools.length, startIndex + maxDisplayItems);
+
+		if (endIndex - startIndex < maxDisplayItems) {
+			startIndex = Math.max(0, endIndex - maxDisplayItems);
+		}
+
+		return {
+			tools: tools.slice(startIndex, endIndex),
+			startIndex,
+			endIndex,
+			hiddenAbove: startIndex,
+			hiddenBelow: tools.length - endIndex,
+		};
+	}, [tools, selectedIndex, maxDisplayItems]);
+
+	return (
+		<Box flexDirection="column">
+			{displayWindow.hiddenAbove > 0 && (
+				<Text color="gray" dimColor>
+					↑ {displayWindow.hiddenAbove} more above
+				</Text>
+			)}
+			{displayWindow.tools.map((tool, displayIdx) => {
+				const actualIndex = displayWindow.startIndex + displayIdx;
+				const isToolSelected = actualIndex === selectedIndex;
+				const isLast = actualIndex === tools.length - 1;
+				const treeChar = isLast ? '└─' : '├─';
+				const isEnabled = toolEnabledMap
+					? toolEnabledMap[tool.name] !== false
+					: true;
+				const scopeKey = toolScopeMap?.[tool.name];
+				const scopeLabel =
+					scopeKey && scopeLabels ? scopeLabels[scopeKey] : '';
+				const maxDescLength = 60;
+				const truncatedDesc =
+					tool.description.length > maxDescLength
+						? tool.description.slice(0, maxDescLength - 3) + '...'
+						: tool.description;
+
+				return (
+					<Box key={tool.name} flexDirection="column">
+						<Text>
+							{isToolSelected ? '❯ ' : '  '}
+							<Text color={isEnabled ? 'green' : 'gray'}>● </Text>
+							<Text
+								color={
+									isToolSelected ? 'cyan' : isEnabled ? 'white' : 'gray'
+								}
+							>
+								{treeChar} {tool.name}
+							</Text>
+							{!isEnabled && disabledLabel && (
+								<Text color="gray" dimColor>
+									{' '}
+									{disabledLabel}
+								</Text>
+							)}
+							{!isEnabled && scopeLabel && (
+								<Text color="gray" dimColor>
+									{' '}
+									{scopeLabel}
+								</Text>
+							)}
+						</Text>
+						{tool.description && isEnabled && (
+							<Box marginLeft={4}>
+								<Text color="gray" dimColor>
+									{truncatedDesc}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			})}
+			{displayWindow.hiddenBelow > 0 && (
+				<Text color="gray" dimColor>
+					↓ {displayWindow.hiddenBelow} more below
+				</Text>
+			)}
+		</Box>
+	);
+}
+
+interface ToolInfo {
+	name: string;
+	description: string;
+}
 
 interface MCPConnectionStatus {
 	name: string;
 	connected: boolean;
-	tools: string[];
+	tools: ToolInfo[];
 	connectionMethod?: string;
 	error?: string;
 	isBuiltIn?: boolean;
 	enabled?: boolean;
+	source?: MCPConfigScope;
 }
 
 interface SelectItem {
@@ -39,9 +169,14 @@ interface SelectItem {
 	isSectionHeader?: boolean;
 	skillLocation?: 'project' | 'global';
 	skillDescription?: string;
+	source?: MCPConfigScope;
 }
 
-export default function MCPInfoPanel() {
+interface Props {
+	onClose: () => void;
+}
+
+export default function MCPInfoPanel({onClose}: Props) {
 	const {t} = useI18n();
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
 	const [skills, setSkills] = useState<Skill[]>([]);
@@ -53,22 +188,43 @@ export default function MCPInfoPanel() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [isReconnecting, setIsReconnecting] = useState(false);
 	const [togglingService, setTogglingService] = useState<string | null>(null);
+	const [showToolsPage, setShowToolsPage] = useState(false);
+	const [selectedServiceForTools, setSelectedServiceForTools] =
+		useState<MCPConnectionStatus | null>(null);
+	const [toolsSelectedIndex, setToolsSelectedIndex] = useState(0);
+	const [togglingTool, setTogglingTool] = useState<string | null>(null);
+	const [toolEnabledMap, setToolEnabledMap] = useState<
+		Record<string, boolean>
+	>({});
+	const [toolScopeMap, setToolScopeMap] = useState<Record<string, string>>({});
 
 	const loadMCPStatus = async () => {
 		try {
 			const servicesInfo = await getMCPServicesInfo();
-			const mcpConfig = getMCPConfig();
-			const statusList: MCPConnectionStatus[] = servicesInfo.map(service => ({
-				name: service.serviceName,
-				connected: service.connected,
-				tools: service.tools.map(tool => tool.name),
-				connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
-				isBuiltIn: service.isBuiltIn,
-				error: service.error,
-				enabled: service.isBuiltIn
-					? service.enabled !== false
-					: mcpConfig.mcpServers[service.serviceName]?.enabled !== false,
-			}));
+			const statusList: MCPConnectionStatus[] = servicesInfo.map(service => {
+				let enabled: boolean;
+				if (service.isBuiltIn) {
+					enabled = service.enabled !== false;
+				} else {
+					const scope = service.source || 'global';
+					const scopeConfig = getMCPConfigByScope(scope);
+					enabled =
+						scopeConfig.mcpServers[service.serviceName]?.enabled !== false;
+				}
+				return {
+					name: service.serviceName,
+					connected: service.connected,
+					tools: service.tools.map(tool => ({
+						name: tool.name,
+						description: tool.description || '',
+					})),
+					connectionMethod: service.isBuiltIn ? 'Built-in' : 'External',
+					isBuiltIn: service.isBuiltIn,
+					error: service.error,
+					enabled,
+					source: service.source,
+				};
+			});
 
 			setMcpStatus(statusList);
 			setErrorMessage(null);
@@ -151,6 +307,7 @@ export default function MCPInfoPanel() {
 			isBuiltIn: s.isBuiltIn,
 			error: s.error,
 			enabled: s.enabled,
+			source: s.source,
 		})),
 	];
 
@@ -210,8 +367,83 @@ export default function MCPInfoPanel() {
 	);
 
 	// Listen for keyboard input
-	useInput(async (_, key) => {
-		if (isReconnecting || togglingService) return;
+	useInput(async (input, key) => {
+		if (isReconnecting || togglingService || togglingTool) return;
+
+		// ESC key to return to main page from tools page, or close panel from main page
+		if (key.escape) {
+			if (showToolsPage) {
+				setShowToolsPage(false);
+				setSelectedServiceForTools(null);
+				setToolsSelectedIndex(0);
+			} else {
+				onClose();
+			}
+			return;
+		}
+
+		// When in tools page, handle navigation and tool toggling
+		if (showToolsPage && selectedServiceForTools) {
+			if (key.upArrow) {
+				setToolsSelectedIndex(prev =>
+					prev > 0
+						? prev - 1
+						: (selectedServiceForTools.tools.length || 1) - 1,
+				);
+				return;
+			}
+			if (key.downArrow) {
+				setToolsSelectedIndex(prev =>
+					prev < (selectedServiceForTools.tools.length || 1) - 1
+						? prev + 1
+						: 0,
+				);
+				return;
+			}
+			if (key.tab) {
+				const currentTool = selectedServiceForTools.tools[toolsSelectedIndex];
+				if (!currentTool) return;
+
+				const scope: MCPConfigScope = selectedServiceForTools.isBuiltIn
+					? 'project'
+					: selectedServiceForTools.source || 'global';
+
+				try {
+					setTogglingTool(currentTool.name);
+					const newEnabled = toggleMCPTool(
+						selectedServiceForTools.name,
+						currentTool.name,
+						scope,
+					);
+					setToolEnabledMap(prev => ({
+						...prev,
+						[currentTool.name]: newEnabled,
+					}));
+					if (!newEnabled) {
+						setToolScopeMap(prev => ({
+							...prev,
+							[currentTool.name]: scope,
+						}));
+					} else {
+						setToolScopeMap(prev => {
+							const next = {...prev};
+							delete next[currentTool.name];
+							return next;
+						});
+					}
+					await refreshMCPToolsCache();
+				} catch (error) {
+					setErrorMessage(
+						error instanceof Error
+							? error.message
+							: 'Failed to toggle tool',
+					);
+				} finally {
+					setTogglingTool(null);
+				}
+			}
+			return;
+		}
 
 		// Arrow key navigation — skip section headers
 		if (key.upArrow) {
@@ -246,10 +478,57 @@ export default function MCPInfoPanel() {
 			return;
 		}
 
+		// 'v' key to view tools list for selected service
+		if (input.toLowerCase() === 'v') {
+			const currentItem = selectItems[selectedIndex];
+			if (
+				currentItem &&
+				!currentItem.isRefreshAll &&
+				!currentItem.isSectionHeader &&
+				!currentItem.isSkill
+			) {
+				const service = mcpStatus.find(s => s.name === currentItem.value);
+				if (service && service.tools.length > 0) {
+					const enabledMap: Record<string, boolean> = {};
+					const scopeMap: Record<string, string> = {};
+					for (const tool of service.tools) {
+						enabledMap[tool.name] = isMCPToolEnabled(
+							service.name,
+							tool.name,
+						);
+						if (!enabledMap[tool.name]) {
+							if (
+								isMCPToolDisabledInScope(
+									service.name,
+									tool.name,
+									'project',
+								)
+							) {
+								scopeMap[tool.name] = 'project';
+							} else {
+								scopeMap[tool.name] = 'global';
+							}
+						}
+					}
+					setToolEnabledMap(enabledMap);
+					setToolScopeMap(scopeMap);
+					setSelectedServiceForTools(service);
+					setShowToolsPage(true);
+					setToolsSelectedIndex(0);
+				}
+			}
+			return;
+		}
+
 		// Tab key to toggle enabled/disabled
 		if (key.tab) {
 			const currentItem = selectItems[selectedIndex];
-			if (!currentItem || currentItem.isRefreshAll || currentItem.isSectionHeader) return;
+			if (
+				!currentItem ||
+				currentItem.isRefreshAll ||
+				currentItem.isSectionHeader
+			)
+				return;
 
 			try {
 				setTogglingService(currentItem.label);
@@ -265,13 +544,15 @@ export default function MCPInfoPanel() {
 					// Toggle built-in service
 					toggleBuiltInService(currentItem.value);
 				} else {
-					// Toggle external MCP service
-					const config = getMCPConfig();
-					const serverConfig = config.mcpServers[currentItem.value];
+					// Toggle external MCP service (write to correct scope)
+					const scope: MCPConfigScope =
+						getMCPServerSource(currentItem.value) || 'global';
+					const scopeConfig = getMCPConfigByScope(scope);
+					const serverConfig = scopeConfig.mcpServers[currentItem.value];
 					if (serverConfig) {
 						const currentEnabled = serverConfig.enabled !== false;
 						serverConfig.enabled = !currentEnabled;
-						updateMCPConfig(config);
+						updateMCPConfig(scopeConfig, scope);
 					}
 				}
 
@@ -315,134 +596,192 @@ export default function MCPInfoPanel() {
 	return (
 		<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
 			<Box flexDirection="column">
-			<Text color="cyan" bold>
-				{isReconnecting
-					? t.mcpInfoPanel.refreshing
-					: togglingService
-					? t.mcpInfoPanel.toggling.replace('{service}', togglingService)
-					: t.mcpInfoPanel.title}
-				{!isReconnecting &&
-					!togglingService &&
-					selectItems.length > MAX_DISPLAY_ITEMS &&
-					` (${selectedIndex + 1}/${selectItems.length})`}
-			</Text>
-			{!isReconnecting &&
-				!togglingService &&
-				displayedItems.map((item, displayIndex) => {
-					const originalIndex = displayWindow.startIndex + displayIndex;
-					const isSelected = originalIndex === selectedIndex;
-
-					// Render section header (Skills title)
-					if (item.isSectionHeader) {
-						return (
-							<Box key={item.value} marginTop={1}>
-								<Text color="cyan" bold>
-									{item.label}
-								</Text>
-							</Box>
-						);
-					}
-
-					// Render refresh-all item
-					if (item.isRefreshAll) {
-						return (
-							<Box key={item.value}>
-								<Text color={isSelected ? 'cyan' : 'blue'}>
-									{isSelected ? '❯ ' : '  '}↻ {t.mcpInfoPanel.refreshAll}
-								</Text>
-							</Box>
-						);
-					}
-
-					// Render skill item
-					if (item.isSkill) {
-						const isEnabled = item.enabled !== false;
-						const locationSuffix =
-							item.skillLocation === 'project'
-								? t.mcpInfoPanel.skillLocationProject
-								: t.mcpInfoPanel.skillLocationGlobal;
-
-						return (
-							<Box key={item.value}>
-								<Text>
-									{isSelected ? '❯ ' : '  '}
-									<Text color={isEnabled ? 'magenta' : 'gray'}>◆ </Text>
-									<Text
-										color={
-											isSelected ? 'cyan' : isEnabled ? 'white' : 'gray'
-										}
-									>
-										{item.label}
-									</Text>
-									<Text color="gray" dimColor>
-										{' '}
-										{isEnabled ? locationSuffix : t.mcpInfoPanel.statusDisabled}
-									</Text>
-									{isEnabled && item.skillDescription ? (
-										<Text color="gray" dimColor>
-											{' - '}
-											{item.skillDescription}
-										</Text>
-									) : null}
-								</Text>
-							</Box>
-						);
-					}
-
-					// Render MCP service item
-					const isEnabled = item.enabled !== false;
-					const statusColor = !isEnabled
-						? 'gray'
-						: item.connected
-						? 'green'
-						: 'red';
-					const suffix = !isEnabled
-						? t.mcpInfoPanel.statusDisabled
-						: item.isBuiltIn
-						? t.mcpInfoPanel.statusSystem
-						: item.connected
-						? t.mcpInfoPanel.statusExternal
-						: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
-
-					return (
-						<Box key={item.value}>
-							<Text>
-								{isSelected ? '❯ ' : '  '}
-								<Text color={statusColor}>● </Text>
-								<Text
-									color={isSelected ? 'cyan' : !isEnabled ? 'gray' : 'white'}
-								>
-									{item.label}
-								</Text>
-								<Text color="gray" dimColor>
-									{suffix}
-								</Text>
-							</Text>
-						</Box>
-					);
-				})}
-			{!isReconnecting &&
-				!togglingService &&
-				selectItems.length > MAX_DISPLAY_ITEMS && (
-					<Box>
+			{showToolsPage && selectedServiceForTools ? (
+				<>
+					<Text color="cyan" bold>
+						{togglingTool
+							? t.mcpInfoPanel.toolTogglingHint.replace(
+									'{tool}',
+									togglingTool,
+							  )
+							: `${t.mcpInfoPanel.toolsListTitle.replace(
+									'{service}',
+									selectedServiceForTools.name,
+							  )} (${toolsSelectedIndex + 1}/${selectedServiceForTools.tools.length})`}
+					</Text>
+					{!togglingTool && (
+						<ToolsList
+							tools={selectedServiceForTools.tools}
+							selectedIndex={toolsSelectedIndex}
+							maxDisplayItems={6}
+							toolEnabledMap={toolEnabledMap}
+							disabledLabel={t.mcpInfoPanel.toolDisabled}
+							scopeLabels={{
+								global: t.mcpInfoPanel.toolScopeGlobal,
+								project: t.mcpInfoPanel.toolScopeProject,
+							}}
+							toolScopeMap={toolScopeMap}
+						/>
+					)}
+					{togglingTool && (
+						<Text color="yellow" dimColor>
+							{t.mcpInfoPanel.pleaseWait}
+						</Text>
+					)}
+					<Box marginTop={1}>
 						<Text color="gray" dimColor>
-							{t.mcpInfoPanel.scrollHint}
-							{hiddenAboveCount > 0 &&
-								` · ${t.mcpInfoPanel.moreAbove.replace('{count}', String(hiddenAboveCount))}`}
-							{hiddenBelowCount > 0 &&
-								` · ${t.mcpInfoPanel.moreBelow.replace('{count}', String(hiddenBelowCount))}`}
+							{t.mcpInfoPanel.toolsNavigationHint}
 						</Text>
 					</Box>
-				)}
-				{(isReconnecting || togglingService) && (
-					<Text color="yellow" dimColor>
-						{t.mcpInfoPanel.pleaseWait}
-					</Text>
-				)}
-				{!isReconnecting && !togglingService && (
-					<Text color="gray" dimColor>
-						{t.mcpInfoPanel.navigationHint}
-					</Text>
+				</>
+			) : (
+					<>
+						<Text color="cyan" bold>
+							{isReconnecting
+								? t.mcpInfoPanel.refreshing
+								: togglingService
+								? t.mcpInfoPanel.toggling.replace('{service}', togglingService)
+								: t.mcpInfoPanel.title}
+							{!isReconnecting &&
+								!togglingService &&
+								selectItems.length > MAX_DISPLAY_ITEMS &&
+								` (${selectedIndex + 1}/${selectItems.length})`}
+						</Text>
+						{!isReconnecting &&
+							!togglingService &&
+							displayedItems.map((item, displayIndex) => {
+								const originalIndex = displayWindow.startIndex + displayIndex;
+								const isSelected = originalIndex === selectedIndex;
+
+								// Render section header (Skills title)
+								if (item.isSectionHeader) {
+									return (
+										<Box key={item.value} marginTop={1}>
+											<Text color="cyan" bold>
+												{item.label}
+											</Text>
+										</Box>
+									);
+								}
+
+								// Render refresh-all item
+								if (item.isRefreshAll) {
+									return (
+										<Box key={item.value}>
+											<Text color={isSelected ? 'cyan' : 'blue'}>
+												{isSelected ? '❯ ' : '  '}↻ {t.mcpInfoPanel.refreshAll}
+											</Text>
+										</Box>
+									);
+								}
+
+								// Render skill item
+								if (item.isSkill) {
+									const isEnabled = item.enabled !== false;
+									const locationSuffix =
+										item.skillLocation === 'project'
+											? t.mcpInfoPanel.skillLocationProject
+											: t.mcpInfoPanel.skillLocationGlobal;
+
+									return (
+										<Box key={item.value}>
+											<Text>
+												{isSelected ? '❯ ' : '  '}
+												<Text color={isEnabled ? 'magenta' : 'gray'}>◆ </Text>
+												<Text
+													color={
+														isSelected ? 'cyan' : isEnabled ? 'white' : 'gray'
+													}
+												>
+													{item.label}
+												</Text>
+												<Text color="gray" dimColor>
+													{' '}
+													{isEnabled
+														? locationSuffix
+														: t.mcpInfoPanel.statusDisabled}
+												</Text>
+												{isEnabled && item.skillDescription ? (
+													<Text color="gray" dimColor>
+														{' - '}
+														{item.skillDescription}
+													</Text>
+												) : null}
+											</Text>
+										</Box>
+									);
+								}
+
+								// Render MCP service item
+								const isEnabled = item.enabled !== false;
+								const statusColor = !isEnabled
+									? 'gray'
+									: item.connected
+									? 'green'
+									: 'red';
+								const sourceSuffix =
+									!item.isBuiltIn && item.source === 'project'
+										? t.mcpInfoPanel.mcpSourceProject
+										: !item.isBuiltIn && item.source === 'global'
+										? t.mcpInfoPanel.mcpSourceGlobal
+										: '';
+								const suffix = !isEnabled
+									? t.mcpInfoPanel.statusDisabled
+									: item.isBuiltIn
+									? t.mcpInfoPanel.statusSystem
+									: item.connected
+									? `${t.mcpInfoPanel.statusExternal}${sourceSuffix}`
+									: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
+
+								return (
+									<Box key={item.value}>
+										<Text>
+											{isSelected ? '❯ ' : '  '}
+											<Text color={statusColor}>● </Text>
+											<Text
+												color={
+													isSelected ? 'cyan' : !isEnabled ? 'gray' : 'white'
+												}
+											>
+												{item.label}
+											</Text>
+											<Text color="gray" dimColor>
+												{suffix}
+											</Text>
+										</Text>
+									</Box>
+								);
+							})}
+						{!isReconnecting &&
+							!togglingService &&
+							selectItems.length > MAX_DISPLAY_ITEMS && (
+								<Box>
+									<Text color="gray" dimColor>
+										{t.mcpInfoPanel.scrollHint}
+										{hiddenAboveCount > 0 &&
+											` · ${t.mcpInfoPanel.moreAbove.replace(
+												'{count}',
+												String(hiddenAboveCount),
+											)}`}
+										{hiddenBelowCount > 0 &&
+											` · ${t.mcpInfoPanel.moreBelow.replace(
+												'{count}',
+												String(hiddenBelowCount),
+											)}`}
+									</Text>
+								</Box>
+							)}
+						{(isReconnecting || togglingService) && (
+							<Text color="yellow" dimColor>
+								{t.mcpInfoPanel.pleaseWait}
+							</Text>
+						)}
+						{!isReconnecting && !togglingService && (
+							<Text color="gray" dimColor>
+								{t.mcpInfoPanel.navigationHint}
+							</Text>
+						)}
+					</>
 				)}
 			</Box>
 		</Box>

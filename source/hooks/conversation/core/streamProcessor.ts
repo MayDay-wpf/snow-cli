@@ -210,7 +210,10 @@ export async function processStreamRound(ctx: {
 	};
 
 	const currentSession = sessionManager.getCurrentSession();
+	let retryInProgress = false;
+
 	const onRetry = (error: Error, attempt: number, nextDelay: number) => {
+		retryInProgress = true;
 		if (setRetryStatus) {
 			setRetryStatus({
 				isRetrying: true,
@@ -230,6 +233,7 @@ export async function processStreamRound(ctx: {
 		useBasicModel: options.useBasicModel,
 		planMode: options.planMode,
 		vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+		teamMode: options.teamMode,
 		toolSearchDisabled: options.toolSearchDisabled,
 		signal: controller.signal,
 		onRetry,
@@ -241,7 +245,8 @@ export async function processStreamRound(ctx: {
 		}
 
 		chunkCount++;
-		if (setRetryStatus && chunkCount === 1) {
+		if (retryInProgress && setRetryStatus) {
+			retryInProgress = false;
 			setTimeout(() => setRetryStatus(null), 500);
 		}
 

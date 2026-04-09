@@ -229,8 +229,7 @@ export function convertSessionMessagesToUI(
 				if (
 					!isError &&
 					(toolName === 'filesystem-create' ||
-						toolName === 'filesystem-edit' ||
-						toolName === 'filesystem-edit_search')
+						toolName === 'filesystem-edit')
 				) {
 					try {
 						const resultData = JSON.parse(msg.content);
@@ -448,8 +447,7 @@ export function convertSessionMessagesToUI(
 
 						// Extract edit diff data
 						if (
-							(toolName === 'filesystem-edit' ||
-								toolName === 'filesystem-edit_search') &&
+							(toolName === 'filesystem-edit') &&
 							!isError
 						) {
 							try {

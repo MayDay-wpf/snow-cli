@@ -2,14 +2,14 @@
 	"name": "snow-cli",
 	"displayName": "Snow CLI",
 	"description": "Snow AI CLI with ACE Code Search - Intelligent code navigation and search powered by AI",
-	"version": "0.4.17",
+	"version": "0.4.20",
 	"publisher": "mufasa",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/MayDay-wpf/snow-cli"
 	},
 	"engines": {
-		"vscode": "^1.75.0"
+		"vscode": "^1.106.0"
 	},
 	"categories": [
 		"Other"
@@ -40,11 +40,11 @@
 					"default": "snow",
 					"description": "The command or comma-separated commands to run when terminals start. New terminals are assigned commands in round-robin order, and each terminal keeps its assigned command across restarts."
 				},
-			"snow-cli.terminal.shellType": {
-				"type": "string",
-				"default": "auto",
-				"description": "Shell for the sidebar terminal. Use 'auto' to follow VS Code's default terminal profile, or enter a shell executable path (e.g. 'C:\\Program Files\\Git\\bin\\bash.exe', 'pwsh.exe', 'cmd.exe', '/usr/bin/zsh'). Falls back to PowerShell (Windows) or $SHELL (macOS/Linux) if the path is not found."
-			},
+				"snow-cli.terminal.shellType": {
+					"type": "string",
+					"default": "auto",
+					"description": "Shell for the sidebar terminal. Use 'auto' to follow VS Code's default terminal profile, or enter a shell executable path (e.g. 'C:\\Program Files\\Git\\bin\\bash.exe', 'pwsh.exe', 'cmd.exe', '/usr/bin/zsh'). Falls back to PowerShell (Windows) or $SHELL (macOS/Linux) if the path is not found."
+				},
 				"snow-cli.terminal.proxyUrl": {
 					"type": "string",
 					"default": "",
@@ -80,17 +80,22 @@
 					],
 					"description": "Font weight for the sidebar terminal."
 				},
-				"snow-cli.terminal.lineHeight": {
-					"type": "number",
-					"default": 1,
-					"minimum": 0.8,
-					"maximum": 2,
-					"description": "Line height for the sidebar terminal."
-				}
+			"snow-cli.terminal.lineHeight": {
+				"type": "number",
+				"default": 1,
+				"minimum": 0.8,
+				"maximum": 2,
+				"description": "Line height for the sidebar terminal."
+			},
+			"snow-cli.gitBlame.enabled": {
+				"type": "boolean",
+				"default": false,
+				"description": "Enable Git Blame annotations. Shows commit info (author, time, message) on the current line, similar to GitLens."
+			}
 			}
 		},
 		"viewsContainers": {
-			"activitybar": [
+			"secondarySidebar": [
 				{
 					"id": "snow-cli-sidebar",
 					"title": "Snow CLI",
@@ -152,11 +157,21 @@
 				"title": "Send to Snow CLI",
 				"icon": "$(file-symlink-file)"
 			},
-			{
-				"command": "snow-cli.sendSelectionLocation",
-				"title": "Send to Snow CLI",
-				"icon": "$(file-symlink-file)"
-			}
+		{
+			"command": "snow-cli.sendSelectionLocation",
+			"title": "Send to Snow CLI",
+			"icon": "$(file-symlink-file)"
+		},
+		{
+			"command": "snow-cli.toggleGitBlame",
+			"title": "Snow CLI: Toggle Git Blame",
+			"icon": "$(git-commit)"
+		},
+		{
+			"command": "snow-cli.toggleFileAnnotations",
+			"title": "Snow CLI: Toggle File Annotations",
+			"icon": "$(list-flat)"
+		}
 		],
 		"submenus": [
 			{

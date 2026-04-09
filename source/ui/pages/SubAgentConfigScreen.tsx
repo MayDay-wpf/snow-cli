@@ -115,8 +115,7 @@ export default function SubAgentConfigScreen({
 				'filesystem-read',
 				'filesystem-create',
 				'filesystem-edit',
-				'filesystem-edit_search',
-			],
+							],
 		},
 		{
 			name: t.subAgentConfig.aceTools,

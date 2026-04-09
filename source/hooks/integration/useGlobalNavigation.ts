@@ -13,10 +13,10 @@ export interface NavigationEvent {
 		| 'chat'
 		| 'help'
 		| 'settings'
-		| 'mcp'
 		| 'systemprompt'
 		| 'customheaders'
-		| 'tasks';
+		| 'tasks'
+		| 'exit';
 }
 
 // Emit navigation event

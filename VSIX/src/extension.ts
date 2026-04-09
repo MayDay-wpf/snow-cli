@@ -13,6 +13,7 @@ import {
 	getSnowTerminalProxyEnv,
 	hasExplicitSnowTerminalProxyUrl,
 } from './terminalProxy';
+import {registerGitBlame} from './gitBlameProvider';
 
 /**
  * Snow CLI Extension
@@ -169,8 +170,41 @@ function formatSelectionLocation(editor: vscode.TextEditor): string | undefined 
 	return `${absolutePath}:${startLine + 1}-${endLine + 1}`;
 }
 
+function checkExtensionVersionChange(context: vscode.ExtensionContext): void {
+	const currentVersion: string =
+		context.extension.packageJSON?.version ?? 'unknown';
+	const previousVersion = context.globalState.get<string>(
+		'snow-cli.lastActivatedVersion',
+	);
+
+	if (previousVersion === currentVersion) {
+		return;
+	}
+
+	void context.globalState.update(
+		'snow-cli.lastActivatedVersion',
+		currentVersion,
+	);
+
+	const message = previousVersion
+		? `Snow CLI has been updated to v${currentVersion}. Please reload the window to activate the terminal properly.`
+		: `Snow CLI v${currentVersion} installed. Please reload the window to activate the terminal properly.`;
+
+	void vscode.window
+		.showWarningMessage(message, 'Reload Window')
+		.then(choice => {
+			if (choice === 'Reload Window') {
+				void vscode.commands.executeCommand(
+					'workbench.action.reloadWindow',
+				);
+			}
+		});
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Snow CLI extension activating...');
+
+	checkExtensionVersionChange(context);
 
 	// 0. Apply context key for sidebar visibility
 	applySidebarContext();
@@ -203,6 +237,12 @@ export function activate(context: vscode.ExtensionContext) {
 		);
 	} catch (err) {
 		console.error('Failed to register sidebar terminal:', err);
+	}
+
+	try {
+		registerGitBlame(context);
+	} catch (err) {
+		console.error('Failed to register Git Blame provider:', err);
 	}
 
 	// 4. 注册命令

@@ -24,6 +24,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		setThinkingMode,
 		thinkingEffort,
 		setThinkingEffort,
+		geminiThinkingLevel,
+		setGeminiThinkingLevel,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		anthropicSpeed,
@@ -50,6 +52,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.thinkingMode.replace(':', '');
 			case 'thinkingEffort':
 				return t.configScreen.thinkingEffort.replace(':', '');
+			case 'geminiThinkingLevel':
+				return t.configScreen.geminiThinkingLevel.replace(':', '');
 			case 'responsesReasoningEffort':
 				return t.configScreen.responsesReasoningEffort.replace(':', '');
 			case 'responsesVerbosity':
@@ -167,6 +171,29 @@ export default function ConfigSelectPanel({state}: Props) {
 						onSelect={item => {
 							setThinkingEffort(
 								item.value as 'low' | 'medium' | 'high' | 'max',
+							);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'geminiThinkingLevel' && (
+					<ScrollableSelectInput
+						items={[
+							{label: 'MINIMAL', value: 'minimal'},
+							{label: 'LOW', value: 'low'},
+							{label: 'MEDIUM', value: 'medium'},
+							{label: 'HIGH', value: 'high'},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['minimal', 'low', 'medium', 'high'] as const).indexOf(
+								geminiThinkingLevel,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setGeminiThinkingLevel(
+								item.value as 'minimal' | 'low' | 'medium' | 'high',
 							);
 							setIsEditing(false);
 						}}

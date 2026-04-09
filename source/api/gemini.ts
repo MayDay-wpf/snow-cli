@@ -26,6 +26,7 @@ export interface GeminiOptions {
 	disableThinking?: boolean; // 禁用思考功能（用于 agents 等场景，默认 false）
 	planMode?: boolean; // 启用 Plan 模式（使用 Plan 模式系统提示词）
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
+	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
@@ -162,10 +163,11 @@ function convertToolsToGemini(tools?: ChatCompletionTool[]): any[] | undefined {
 function convertToGeminiMessages(
 	messages: ChatMessage[],
 	includeBuiltinSystemPrompt: boolean = true,
-	customSystemPromptOverride?: string[], // Allow override for sub-agents
-	planMode: boolean = false, // When true, use Plan mode system prompt
-	vulnerabilityHuntingMode: boolean = false, // When true, use Vulnerability Hunting mode system prompt
+	customSystemPromptOverride?: string[],
+	planMode: boolean = false,
+	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
+	teamMode: boolean = false,
 ): {
 	systemInstruction?: string[];
 	contents: any[];
@@ -394,6 +396,7 @@ function convertToGeminiMessages(
 							planMode,
 							vulnerabilityHuntingMode,
 							toolSearchDisabled,
+							teamMode,
 						),
 					},
 				],
@@ -406,6 +409,7 @@ function convertToGeminiMessages(
 				planMode,
 				vulnerabilityHuntingMode,
 				toolSearchDisabled,
+				teamMode,
 			),
 		];
 	}
@@ -472,14 +476,15 @@ export async function* createStreamingGeminiCompletion(
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
-			const {systemInstruction, contents} = convertToGeminiMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false, // 默认为 true
-				customSystemPromptContent, // 传递自定义系统提示词
-				options.planMode || false, // Pass planMode to use correct system prompt
-				options.vulnerabilityHuntingMode || false,
-				options.toolSearchDisabled || false,
-			);
+		const {systemInstruction, contents} = convertToGeminiMessages(
+			options.messages,
+			options.includeBuiltinSystemPrompt !== false,
+			customSystemPromptContent,
+			options.planMode || false,
+			options.vulnerabilityHuntingMode || false,
+			options.toolSearchDisabled || false,
+			options.teamMode || false,
+		);
 
 			// Build request payload
 			const requestBody: any = {
@@ -494,7 +499,7 @@ export async function* createStreamingGeminiCompletion(
 			if (config.geminiThinking?.enabled && !options.disableThinking) {
 				requestBody.generationConfig = {
 					thinkingConfig: {
-						thinkingBudget: config.geminiThinking.budget,
+						thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
 					},
 				};
 			}

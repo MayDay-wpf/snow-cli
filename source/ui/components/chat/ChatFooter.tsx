@@ -16,6 +16,7 @@ import {connectionManager} from '../../../utils/connection/ConnectionManager.js'
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
+const BtwPanel = lazy(() => import('../panels/BtwPanel.js'));
 
 type ChatFooterProps = {
 	onSubmit: (
@@ -121,6 +122,10 @@ type ChatFooterProps = {
 	showBackgroundPanel: boolean;
 	selectedProcessIndex: number;
 	terminalWidth: number;
+
+	// BTW panel props
+	btwPrompt: string | null;
+	onBtwClose: () => void;
 
 	// Loading indicator props
 	isStreaming: boolean;
@@ -235,25 +240,42 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 
 	return (
 		<>
-			{!props.showReviewCommitPanel && (
-				<>
-					<LoadingIndicator
-						isStreaming={props.isStreaming}
-						isStopping={props.isStopping}
-						isSaving={props.isSaving}
-						hasPendingToolConfirmation={props.hasPendingToolConfirmation}
-						hasPendingUserQuestion={props.hasPendingUserQuestion}
-						hasBlockingOverlay={props.hasBlockingOverlay}
-						terminalWidth={props.terminalWidth}
-						animationFrame={props.animationFrame}
-						retryStatus={props.retryStatus}
-						codebaseSearchStatus={props.codebaseSearchStatus}
-						isReasoning={props.isReasoning}
-						streamTokenCount={props.streamTokenCount}
-						elapsedSeconds={props.elapsedSeconds}
-						currentModel={props.currentModel}
-						teamMode={props.teamMode}
-					/>
+		{!props.showReviewCommitPanel && (
+			<>
+				<LoadingIndicator
+					isStreaming={props.isStreaming}
+					isStopping={props.isStopping}
+					isSaving={props.isSaving}
+					hasPendingToolConfirmation={props.hasPendingToolConfirmation}
+					hasPendingUserQuestion={props.hasPendingUserQuestion}
+					hasBlockingOverlay={props.hasBlockingOverlay}
+					terminalWidth={props.terminalWidth}
+					animationFrame={props.animationFrame}
+					retryStatus={props.retryStatus}
+					codebaseSearchStatus={props.codebaseSearchStatus}
+					isReasoning={props.isReasoning}
+					streamTokenCount={props.streamTokenCount}
+					elapsedSeconds={props.elapsedSeconds}
+					currentModel={props.currentModel}
+					teamMode={props.teamMode}
+				/>
+
+				{props.btwPrompt ? (
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<BtwPanel
+							prompt={props.btwPrompt}
+							onClose={props.onBtwClose}
+						/>
+					</Suspense>
+				) : (
 					<ChatInput
 						onSubmit={props.onSubmit}
 						onCommand={props.onCommand}
@@ -299,6 +321,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							});
 						}}
 					/>
+				)}
 
 					{showTodos && todos.length > 0 && (
 						<Box marginTop={1}>

@@ -38,7 +38,7 @@ export default function ToolResultPreview({
 			return renderReadPreview(data, isSubAgentInternal);
 		} else if (toolName === 'filesystem-create') {
 			return renderCreatePreview(data);
-		} else if (toolName === 'filesystem-edit_search') {
+		} else if (toolName === 'filesystem-edit') {
 			return renderEditSearchPreview(data);
 		} else if (toolName === 'websearch-search') {
 			return renderWebSearchPreview(data, maxLines);
@@ -471,7 +471,6 @@ function renderCreatePreview(data: any) {
 }
 
 function renderEditSearchPreview(data: any) {
-	// For edit_search, show only key metadata, exclude searchContent and replaceContent
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{data.message && (

@@ -6,7 +6,7 @@ import {
 } from '../../../utils/ui/pickerState.js';
 import type {BackgroundProcess} from '../../../hooks/execution/useBackgroundProcesses.js';
 import type {PendingConfirmation} from '../../../hooks/conversation/useToolConfirmation.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
 	PendingUserQuestionState,
@@ -41,6 +41,7 @@ type Options = {
 	snapshotState: any;
 	panelState: {handleEscapeKey: () => boolean};
 	handleEscKey: (key: InputKey, input: string) => boolean;
+	btwPrompt: string | null;
 };
 
 export function useChatScreenInputHandler({
@@ -58,8 +59,11 @@ export function useChatScreenInputHandler({
 	snapshotState,
 	panelState,
 	handleEscKey,
+	btwPrompt,
 }: Options) {
 	useInput((input, key) => {
+		// BtwPanel is active — it owns all keyboard input, skip everything here
+		if (btwPrompt) return;
 		if (backgroundProcesses.showPanel) {
 			if (key.escape) {
 				backgroundProcesses.hidePanel();

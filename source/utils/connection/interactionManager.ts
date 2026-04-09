@@ -84,6 +84,7 @@ export class InteractionManager {
 	async notifyRollbackConfirmationNeeded(payload: {
 		filePaths: string[];
 		notebookCount?: number;
+		teamCount?: number;
 	}): Promise<void> {
 		if (!this.isConnected() || !this.connection) {
 			return;

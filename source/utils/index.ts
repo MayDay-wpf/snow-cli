@@ -42,6 +42,7 @@ import './commands/autoformat.js';
 import './commands/team.js';
 import './commands/worktree.js';
 import './commands/yolo.js';
+import './commands/btw.js';
 
 // Export logger
 export {Logger, LogLevel, logger} from './core/logger.js';
@@ -56,6 +57,15 @@ export {
 	type CommandHookResult,
 	type PromptHookResult,
 } from './execution/unifiedHooksExecutor.js';
+
+// Export hook result interpreter
+export {
+	interpretHookResult,
+	findFirstFailedCommand,
+	buildErrorDetails,
+	type InterpretedHookResult,
+	type HookErrorDetails,
+} from './execution/hookResultInterpreter.js';
 
 export function formatCommand(command: Command): string {
 	return `${command.name.padEnd(12)} ${command.description}`;

@@ -13,6 +13,8 @@
 
 **QQ 群**: 910298558
 
+**LinuxDO AI 社区**: [https://linux.do](https://linux.do)
+
 _在终端中进行 Agentic 编程_
 
 </div>
@@ -25,7 +27,24 @@ _在终端中进行 Agentic 编程_
 
 ![alt text](docs/images/image_zh.png)
 
-<h3>推荐使用字体: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+<h3>推荐使用字体：<a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
+
+<h3>Windows 用户推荐终端组合</h3>
+
+- **PowerShell 7+**: 现代化的跨平台 PowerShell，提供更强的功能和更好的兼容性
+  - GitHub: https://github.com/PowerShell/PowerShell
+- **Windows Terminal**: 现代化的终端应用程序，支持多标签、分屏、GPU 加速渲染
+  - GitHub: https://github.com/microsoft/terminal
+
+**安装方式**:
+
+```bash
+# 使用 winget 安装 (Windows 10/11 自带)
+winget install Microsoft.PowerShell
+winget install Microsoft.WindowsTerminal
+
+# 或使用 Microsoft Store 安装
+```
 
 ## 感谢社区
 
@@ -62,6 +81,7 @@ _在终端中进行 Agentic 编程_
 - [LSP 配置与用法](docs/usage/zh/19.LSP配置.md) - LSP 配置文件、语言服务器安装、ACE 工具用法(跳转/大纲)
 - [SSE 服务模式](docs/usage/zh/20.SSE服务模式.md) - SSE 服务器启动、API 端点说明、工具确认流程、权限配置、YOLO 模式、客户端集成示例
 - [自定义 StatusLine 指南](docs/usage/zh/21.自定义StatusLine指南.md) - 用户级状态栏插件、hook 结构、覆盖机制、中英文示例
+- [Team 模式指南](docs/usage/zh/22.Team模式指南.md) - 多智能体协作、并行任务执行、团队管理
 
 ### 推荐使用的 ROLE.md
 
@@ -75,7 +95,7 @@ _在终端中进行 Agentic 编程_
 
 ### 环境要求
 
-- **Node.js >= 16.x** (需要 ES2020 特性支持)
+- **Node.js >= 18.x** (需要 ES2020 特性支持)
 - npm >= 8.3.0
 
 检查你的 Node.js 版本：
@@ -84,12 +104,12 @@ _在终端中进行 Agentic 编程_
 node --version
 ```
 
-如果版本低于 16.x，请先升级：
+如果版本低于 18.x，请先升级：
 
 ```bash
 # 使用 nvm (推荐)
-nvm install 16
-nvm use 16
+nvm install 18
+nvm use 18
 
 # 或从官网下载
 # https://nodejs.org/
@@ -120,33 +140,39 @@ npm run link   # 构建并全局链接 snow
 ### 项目结构
 
 ```
-.snow/                      # 用户配置目录
+source/                     # 源代码
+├── agents/                 # AI 代理实现
+├── api/                    # LLM API 适配器
+├── hooks/                  # 对话 React Hooks
+├── i18n/                   # 国际化
+├── mcp/                    # Model Context Protocol
+├── prompt/                 # 系统提示词模板
+├── types/                  # TypeScript 类型定义
+├── ui/                     # UI 组件 (Ink)
+└── utils/                  # 工具函数
+
+bundle/                     # 构建输出（单文件可执行）
+dist/                       # TypeScript 编译输出
+docs/                       # 文档
+JetBrains/                  # JetBrains 插件源码
+scripts/                    # 构建和工具脚本
+VSIX/                       # VSCode 扩展源码
+```
+
+### 用户配置目录
+
+运行 snow 后，会在主目录创建 `.snow/` 文件夹：
+
+```
+~/.snow/                    # 用户配置目录
 ├── log/                    # 运行日志(本地，可删除)
 ├── profiles/               # 配置文件
 ├── sessions/               # 对话记录
-├── snapshots/              # 文件快照
-├── todos/                  # TODO 列表
 ├── tasks/                  # 异步任务
-├── task-logs/              # 异步任务日志
-├── history/                # 命令历史
-├── commands/               # 自定义命令
 ├── hooks/                  # 工作流钩子
-├── sse-daemons/            # SSE 守护进程
-├── sse-logs/               # SSE 服务日志
-├── usage/                  # 使用统计
-├── active-profile.json     # 当前活动配置
 ├── config.json             # API 配置
-├── custom-headers.json     # 自定义请求头
 ├── mcp-config.json         # MCP 配置
-├── lsp-config.json         # LSP 配置
-├── proxy-config.json       # 代理设置
-├── codebase.json           # 代码库索引设置
-├── sub-agents.json         # 子代理配置
-├── sensitive-commands.json # 敏感命令规则
-├── theme.json              # 主题设置
-├── language.json           # 语言设置
-├── history.json            # 历史设置
-└── system-prompt.json      # 自定义系统提示词
+└── ...                     # 其他配置文件
 ```
 
 ## Star History

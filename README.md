@@ -13,6 +13,8 @@
 
 **QQ Group**: 910298558
 
+**LinuxDO AI Community**: [https://linux.do](https://linux.do)
+
 _Agentic coding in your terminal_
 
 </div>
@@ -62,6 +64,7 @@ _Agentic coding in your terminal_
 - [LSP Configuration and Usage](docs/usage/en/19.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
 - [SSE Service Mode](docs/usage/en/20.SSE%20Service%20Mode.md) - SSE server startup, API endpoints explanation, tool confirmation flow, permission configuration, YOLO mode, client integration examples
 - [Custom StatusLine Guide](docs/usage/en/21.Custom%20StatusLine%20Guide.md) - User-level StatusLine plugins, hook structure, override behavior, bilingual examples
+- [Team Mode Guide](docs/usage/en/22.Team%20Mode%20Guide.md) - Multi-agent collaboration, parallel task execution, team management
 
 ### Recommended ROLE.md
 
@@ -75,7 +78,7 @@ _Agentic coding in your terminal_
 
 ### Prerequisites
 
-- **Node.js >= 16.x** (Requires ES2020 features support)
+- **Node.js >= 18.x** (Requires ES2020 features support)
 - npm >= 8.3.0
 
 Check your Node.js version:
@@ -84,12 +87,12 @@ Check your Node.js version:
 node --version
 ```
 
-If your version is below 16.x, please upgrade first:
+If your version is below 18.x, please upgrade first:
 
 ```bash
 # Using nvm (recommended)
-nvm install 16
-nvm use 16
+nvm install 18
+nvm use 18
 
 # Or download from official website
 # https://nodejs.org/
@@ -120,33 +123,39 @@ npm run link   # builds and globally links snow
 ### Project Structure
 
 ```
-.snow/                      # User configuration directory
+source/                     # Source code
+├── agents/                 # AI agents implementation
+├── api/                    # LLM API adapters
+├── hooks/                  # React hooks for conversation
+├── i18n/                   # Internationalization
+├── mcp/                    # Model Context Protocol
+├── prompt/                 # System prompt templates
+├── types/                  # TypeScript type definitions
+├── ui/                     # UI components (Ink)
+└── utils/                  # Utility functions
+
+bundle/                     # Build output (single-file executable)
+dist/                       # TypeScript compilation output
+docs/                       # Documentation
+JetBrains/                  # JetBrains plugin source
+scripts/                    # Build and utility scripts
+VSIX/                       # VSCode extension source
+```
+
+### User Configuration Directory
+
+After running snow, `.snow/` directory is created in your home folder:
+
+```
+~/.snow/                    # User configuration directory
 ├── log/                    # Runtime logs (local, can be deleted)
 ├── profiles/               # Configuration profiles
 ├── sessions/               # Conversation history
-├── snapshots/              # File snapshots
-├── todos/                  # TODO lists
 ├── tasks/                  # Async tasks
-├── task-logs/              # Async task logs
-├── history/                # Command history
-├── commands/               # Custom commands
 ├── hooks/                  # Workflow hooks
-├── sse-daemons/            # SSE daemon processes
-├── sse-logs/               # SSE service logs
-├── usage/                  # Usage statistics
-├── active-profile.json     # Current active profile
 ├── config.json             # API configuration
-├── custom-headers.json     # Custom request headers
 ├── mcp-config.json         # MCP configuration
-├── lsp-config.json         # LSP configuration
-├── proxy-config.json       # Proxy settings
-├── codebase.json           # Codebase index settings
-├── sub-agents.json         # Sub-agent configuration
-├── sensitive-commands.json # Sensitive command rules
-├── theme.json              # Theme settings
-├── language.json           # Language settings
-├── history.json            # History settings
-└── system-prompt.json      # Custom system prompts
+└── ...                     # Other config files
 ```
 
 ## Star History

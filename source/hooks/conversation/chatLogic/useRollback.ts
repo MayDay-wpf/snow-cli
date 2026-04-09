@@ -1,4 +1,6 @@
-import {useEffect} from 'react';
+import {useEffect, useCallback} from 'react';
+import {useStdout} from 'ink';
+import ansiEscapes from 'ansi-escapes';
 import type {UseChatLogicProps} from './types.js';
 import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
@@ -12,6 +14,61 @@ import {
 	deleteNotebookSnapshotsFromIndex,
 	clearAllNotebookSnapshots,
 } from '../../../utils/core/notebookManager.js';
+import {
+	getTeamRollbackCount,
+	rollbackTeamState,
+	deleteTeamSnapshotsFromIndex,
+	clearAllTeamSnapshots,
+} from '../../../utils/team/teamSnapshot.js';
+import {clearAllTeammateStreamEntries} from '../core/subAgentMessageHandler.js';
+import type {Message} from '../../../ui/components/chat/MessageList.js';
+import type {ChatMessage} from '../../../api/chat.js';
+
+/**
+ * Convert a live messages array index to a snapshot-compatible index.
+ *
+ * During streaming, assistant responses are emitted as individual
+ * `streamingLine` messages (one per line), while `convertSessionMessagesToUI`
+ * collapses each assistant turn into a single message.  This discrepancy
+ * causes the live array to have more elements than the converted array,
+ * shifting subsequent user-message positions and breaking the comparison
+ * `snapshotMessageIndex >= liveSelectedIndex` used during rollback.
+ *
+ * The fix: count which *user-message ordinal* the live index corresponds to,
+ * then locate the same ordinal in `convertSessionMessagesToUI` output.
+ */
+function resolveSnapshotIndex(
+	liveMessages: Message[],
+	liveIndex: number,
+	sessionMessages: ChatMessage[],
+): number {
+	const uiMessages = convertSessionMessagesToUI(sessionMessages);
+
+	let userMsgOrdinal = 0;
+	for (let i = 0; i <= liveIndex && i < liveMessages.length; i++) {
+		const msg = liveMessages[i];
+		if (msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected) {
+			userMsgOrdinal++;
+		}
+	}
+
+	if (userMsgOrdinal === 0) {
+		return 0;
+	}
+
+	let count = 0;
+	for (let i = 0; i < uiMessages.length; i++) {
+		const msg = uiMessages[i];
+		if (msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected) {
+			count++;
+			if (count === userMsgOrdinal) {
+				return i;
+			}
+		}
+	}
+
+	return liveIndex;
+}
 
 export function useRollback(props: UseChatLogicProps) {
 	const {
@@ -24,6 +81,7 @@ export function useRollback(props: UseChatLogicProps) {
 		currentContextPercentageRef,
 		streamingState,
 	} = props;
+	const {stdout} = useStdout();
 
 	// Notify VSCode/Web when a rollback confirmation is needed
 	useEffect(() => {
@@ -35,8 +93,18 @@ export function useRollback(props: UseChatLogicProps) {
 		void connectionManager.notifyRollbackConfirmationNeeded({
 			filePaths: pendingRollback.filePaths || [],
 			notebookCount: pendingRollback.notebookCount || 0,
+			teamCount: pendingRollback.teamCount || 0,
 		});
 	}, [snapshotState.pendingRollback]);
+
+	const getSnapshotIndex = useCallback(
+		(liveIndex: number) => {
+			const currentSession = sessionManager.getCurrentSession();
+			if (!currentSession) return liveIndex;
+			return resolveSnapshotIndex(messages, liveIndex, currentSession.messages);
+		},
+		[messages],
+	);
 
 	const performRollback = async (
 		selectedIndex: number,
@@ -45,33 +113,44 @@ export function useRollback(props: UseChatLogicProps) {
 		selectedFiles?: string[],
 	) => {
 		const currentSession = sessionManager.getCurrentSession();
+		const sIdx = getSnapshotIndex(selectedIndex);
 
 		if (rollbackFiles && currentSession) {
 			if (selectedFiles && selectedFiles.length > 0) {
 				await hashBasedSnapshotManager.rollbackToMessageIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 					selectedFiles,
 				);
 			} else {
 				await hashBasedSnapshotManager.rollbackToMessageIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 				);
 			}
 
 			try {
-				rollbackNotebooks(currentSession.id, selectedIndex);
+				rollbackNotebooks(currentSession.id, sIdx);
 			} catch (error) {
 				console.error('Failed to rollback notebooks:', error);
 			}
 		}
 
+		// Always clean up team state when rolling back (regardless of file rollback choice)
+		if (currentSession) {
+			try {
+				await rollbackTeamState(currentSession.id, sIdx);
+			} catch (error) {
+				console.error('Failed to rollback team state:', error);
+			}
+		}
+		clearAllTeammateStreamEntries();
+
 		if (!rollbackConversation) {
 			if (rollbackFiles && currentSession) {
 				await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
 					currentSession.id,
-					selectedIndex,
+					sIdx,
 				);
 
 				const snapshots = await hashBasedSnapshotManager.listSnapshots(
@@ -111,6 +190,7 @@ export function useRollback(props: UseChatLogicProps) {
 					setMessages(prev => prev.slice(0, selectedIndex));
 					clearSavedMessages();
 
+					stdout.write(ansiEscapes.clearTerminal);
 					setTimeout(() => {
 						setRemountKey(prev => prev + 1);
 						snapshotState.setPendingRollback(null);
@@ -142,6 +222,7 @@ export function useRollback(props: UseChatLogicProps) {
 				await hashBasedSnapshotManager.clearAllSnapshots(currentSession.id);
 
 				clearAllNotebookSnapshots(currentSession.id);
+				clearAllTeamSnapshots(currentSession.id);
 
 				await sessionManager.deleteSession(currentSession.id);
 
@@ -153,6 +234,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 				snapshotState.setSnapshotFileCount(new Map());
 
+				stdout.write(ansiEscapes.clearTerminal);
 				setTimeout(() => {
 					setRemountKey(prev => prev + 1);
 					snapshotState.setPendingRollback(null);
@@ -163,12 +245,14 @@ export function useRollback(props: UseChatLogicProps) {
 
 			await hashBasedSnapshotManager.deleteSnapshotsFromIndex(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
 
 			if (!rollbackFiles) {
-				deleteNotebookSnapshotsFromIndex(currentSession.id, selectedIndex);
+				deleteNotebookSnapshotsFromIndex(currentSession.id, sIdx);
 			}
+
+			deleteTeamSnapshotsFromIndex(currentSession.id, sIdx);
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				currentSession.id,
@@ -186,6 +270,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 		clearSavedMessages();
 
+		stdout.write(ansiEscapes.clearTerminal);
 		setTimeout(() => {
 			setRemountKey(prev => prev + 1);
 			snapshotState.setPendingRollback(null);
@@ -211,6 +296,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 			clearSavedMessages();
 			setMessages(uiMessages);
+			streamingState.setContextUsage(originalSession.contextUsage ?? null);
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				originalSession.id,
@@ -263,6 +349,8 @@ export function useRollback(props: UseChatLogicProps) {
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;
 
+		const sIdx = getSnapshotIndex(selectedIndex);
+
 		if (
 			selectedIndex === 0 &&
 			currentSession.compressedFrom !== undefined &&
@@ -270,18 +358,17 @@ export function useRollback(props: UseChatLogicProps) {
 		) {
 			const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 				currentSession.id,
-				selectedIndex,
+				sIdx,
 			);
-			const nbCount = getNotebookRollbackCount(
-				currentSession.id,
-				selectedIndex,
-			);
-			if (filePaths.length > 0 || nbCount > 0) {
+			const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
+			const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
+			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
 					fileCount: filePaths.length,
 					filePaths,
 					notebookCount: nbCount,
+					teamCount: tmCount,
 					message: cleanIDEContext(message),
 					images,
 					crossSessionRollback: true,
@@ -296,33 +383,43 @@ export function useRollback(props: UseChatLogicProps) {
 				currentSession.id,
 			);
 			if (switchedToOriginalSession) {
-				setRemountKey(prev => prev + 1);
+				stdout.write(ansiEscapes.clearTerminal);
+				setTimeout(() => {
+					setRemountKey(prev => prev + 1);
+				}, 0);
 				return;
 			}
 		}
 
 		const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
 			currentSession.id,
-			selectedIndex,
+			sIdx,
 		);
 
-		const nbCount = getNotebookRollbackCount(currentSession.id, selectedIndex);
+		const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
+		const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
 
-		if (filePaths.length > 0 || nbCount > 0) {
+		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				fileCount: filePaths.length,
 				filePaths,
 				notebookCount: nbCount,
+				teamCount: tmCount,
 				message: cleanIDEContext(message),
 				images,
 			});
 		} else {
-			setRestoreInputContent({
-				text: cleanIDEContext(message),
+			// Show confirmation even when no files to rollback
+			snapshotState.setPendingRollback({
+				messageIndex: selectedIndex,
+				fileCount: 0,
+				filePaths: [],
+				notebookCount: 0,
+				teamCount: 0,
+				message: cleanIDEContext(message),
 				images,
 			});
-			await performRollback(selectedIndex, false, true);
 		}
 	};
 
@@ -367,6 +464,7 @@ export function useRollback(props: UseChatLogicProps) {
 							shouldRollbackFiles ? undefined : compressedSessionId,
 						);
 					if (switchedToOriginalSession) {
+						stdout.write(ansiEscapes.clearTerminal);
 						setTimeout(() => {
 							setRemountKey(prev => prev + 1);
 							snapshotState.setPendingRollback(null);

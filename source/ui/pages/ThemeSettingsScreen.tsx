@@ -5,7 +5,7 @@ import React, {
 	useEffect,
 	Suspense,
 } from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text, useInput, useStdout} from 'ink';
 import {Alert, Spinner} from '@inkjs/ui';
 import Menu from '../components/common/Menu.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
@@ -40,6 +40,7 @@ export default function ThemeSettingsScreen({
 }: Props) {
 	const {themeType, setThemeType, diffOpacity, setDiffOpacity} = useTheme();
 	const {t} = useI18n();
+	const {stdout} = useStdout();
 
 	// Use themeType from context which is already loaded from config
 	const [selectedTheme, setSelectedTheme] = useState<ThemeType>(themeType);
@@ -48,6 +49,8 @@ export default function ThemeSettingsScreen({
 	const [simpleMode, setSimpleModeState] = useState<boolean>(() =>
 		getSimpleMode(),
 	);
+	const terminalHeight = stdout?.rows || 24;
+	const themeMenuHeight = Math.max(4, Math.min(8, terminalHeight - 18));
 
 	// Load simple mode on mount
 	useEffect(() => {
@@ -251,6 +254,7 @@ export default function ThemeSettingsScreen({
 				options={themeOptions}
 				onSelect={handleSelect}
 				onSelectionChange={handleSelectionChange}
+				maxHeight={themeMenuHeight}
 			/>
 
 			<Box flexDirection="column" paddingX={1}>
@@ -262,7 +266,7 @@ export default function ThemeSettingsScreen({
 					newContent={sampleNewCode}
 					filename="example.ts"
 				/>
-				<Box marginTop={1} flexDirection="column">
+				<Box flexDirection="column">
 					<Text color="gray" dimColor>
 						{t.themeSettings.userMessagePreview}
 					</Text>

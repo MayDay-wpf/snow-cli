@@ -170,12 +170,15 @@ export async function executeContextCompression(
 					streaming: false,
 				}));
 
+			const apiUsage = hybridResult.compressionApiUsage;
+			const afterEstimate = hybridResult.afterTokensEstimate || 0;
+
 			return {
 				uiMessages: newUIMessages,
 				usage: {
-					prompt_tokens: hybridResult.beforeTokens || 0,
-					completion_tokens: 0,
-					total_tokens: hybridResult.afterTokensEstimate || 0,
+					prompt_tokens: afterEstimate,
+					completion_tokens: apiUsage?.completion_tokens || 0,
+					total_tokens: afterEstimate,
 				},
 			};
 		}
@@ -412,6 +415,9 @@ type CommandHandlerOptions = {
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleList: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentDeletion: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowRoleSubagentList: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -450,6 +456,7 @@ type CommandHandlerOptions = {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => Promise<void>;
+	setBtwPrompt: React.Dispatch<React.SetStateAction<string | null>>;
 	onQuit?: () => void;
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
 	onToggleCodebase?: (mode?: string) => Promise<void>;
@@ -543,54 +550,28 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const {unifiedHooksExecutor} = await import(
 							'../../utils/execution/unifiedHooksExecutor.js'
 						);
+						const {interpretHookResult} = await import(
+							'../../utils/execution/hookResultInterpreter.js'
+						);
 						const hookResult = await unifiedHooksExecutor.executeHooks(
 							'onSessionStart',
-							{
-								messages: [],
-								messageCount: 0,
-							},
+							{messages: [], messageCount: 0},
 						);
+						const interpreted = interpretHookResult('onSessionStart', hookResult);
 
-						// Check for hook failures
-						let shouldAbort = false;
-						let warningMessage: string | null = null;
-						if (!hookResult.success) {
-							const commandError = hookResult.results.find(
-								r => r.type === 'command' && !r.success,
-							);
-
-							if (commandError && commandError.type === 'command') {
-								const {exitCode, command, output, error} = commandError;
-								const combinedOutput =
-									[output, error].filter(Boolean).join('\n\n') || '(no output)';
-
-								if (exitCode === 1) {
-									// Warning: save to display AFTER clearing screen
-									warningMessage = `[WARN] onSessionStart hook warning:\nCommand: ${command}\nOutput: ${combinedOutput}`;
-								} else if (exitCode >= 2 || exitCode < 0) {
-									// Critical error: display using HookErrorDisplay component
-									const errorMessage: Message = {
-										role: 'assistant',
-										content: '', // Content will be rendered by HookErrorDisplay
-										hookError: {
-											type: 'error',
-											exitCode,
-											command,
-											output,
-											error,
-										},
-									};
-
-									options.setMessages(prev => [...prev, errorMessage]);
-									shouldAbort = true;
-								}
-							}
-						}
-
-						// If hook failed critically, don't clear session
-						if (shouldAbort) {
+						if (interpreted.action === 'block' && interpreted.errorDetails) {
+							const errorMessage: Message = {
+								role: 'assistant',
+								content: '',
+								hookError: interpreted.errorDetails,
+							};
+							options.setMessages(prev => [...prev, errorMessage]);
 							return;
 						}
+
+						const warningMessage = interpreted.action === 'warn'
+							? interpreted.warningMessage
+							: null;
 
 						// Hook passed, now clear session
 						resetTerminal(stdout);
@@ -762,6 +743,39 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showRoleList') {
 				options.setShowRoleList(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentCreation'
+			) {
+				options.setShowRoleSubagentCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentDeletion'
+			) {
+				options.setShowRoleSubagentDeletion(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (
+				result.success &&
+				result.action === 'showRoleSubagentList'
+			) {
+				options.setShowRoleSubagentList(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',
@@ -1205,6 +1219,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				}
+			} else if (
+				result.success &&
+				result.action === 'btw' &&
+				result.prompt
+			) {
+				options.setBtwPrompt(result.prompt);
 			} else if (result.success && result.action === 'toggleCodebase') {
 				// Handle toggle codebase command
 				if (options.onToggleCodebase) {

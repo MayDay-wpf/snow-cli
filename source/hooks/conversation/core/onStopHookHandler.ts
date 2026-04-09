@@ -1,6 +1,7 @@
 import type {ChatMessage} from '../../../api/chat.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
+import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
 
 export type OnStopHookOptions = {
 	conversationMessages: ChatMessage[];
@@ -24,71 +25,34 @@ export async function handleOnStopHooks(
 		const hookResult = await unifiedHooksExecutor.executeHooks('onStop', {
 			messages: conversationMessages,
 		});
+		const interpreted = interpretHookResult('onStop', hookResult);
 
-		if (!hookResult.results || hookResult.results.length === 0) {
-			return {shouldContinue: false};
+		if (!interpreted.injectedMessages || interpreted.injectedMessages.length === 0) {
+			return {shouldContinue: interpreted.shouldContinueConversation || false};
 		}
 
-		let shouldContinue = false;
+		for (const injected of interpreted.injectedMessages) {
+			const chatMsg: ChatMessage = {
+				role: injected.role as 'user' | 'assistant',
+				content: injected.content,
+			};
 
-		for (const result of hookResult.results) {
-			if (result.type === 'command' && !result.success) {
-				if (result.exitCode === 1) {
-					console.log(
-						'[WARN] onStop hook warning:',
-						result.error || result.output || '',
-					);
-				} else if (result.exitCode >= 2) {
-					const errorMessage: ChatMessage = {
-						role: 'user',
-						content: result.error || result.output || '未知错误',
-					};
-					conversationMessages.push(errorMessage);
-					await saveMessage(errorMessage);
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'user',
-							content: errorMessage.content,
-							streaming: false,
-						},
-					]);
-					shouldContinue = true;
-				}
-			} else if (result.type === 'prompt' && result.response) {
-				if (result.response.ask === 'ai' && result.response.continue) {
-					const promptMessage: ChatMessage = {
-						role: 'user',
-						content: result.response.message,
-					};
-					conversationMessages.push(promptMessage);
-					await saveMessage(promptMessage);
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'user',
-							content: promptMessage.content,
-							streaming: false,
-						},
-					]);
-					shouldContinue = true;
-				} else if (
-					result.response.ask === 'user' &&
-					!result.response.continue
-				) {
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: result.response!.message,
-							streaming: false,
-						},
-					]);
-				}
+			if (injected.role === 'user') {
+				conversationMessages.push(chatMsg);
+				await saveMessage(chatMsg);
 			}
+
+			setMessages(prev => [
+				...prev,
+				{
+					role: injected.role,
+					content: injected.content,
+					streaming: false,
+				},
+			]);
 		}
 
-		return {shouldContinue};
+		return {shouldContinue: interpreted.shouldContinueConversation || false};
 	} catch (error) {
 		console.error('onStop hook execution failed:', error);
 		return {shouldContinue: false};

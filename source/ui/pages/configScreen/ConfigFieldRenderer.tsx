@@ -45,7 +45,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		thinkingBudgetTokens,
 		thinkingEffort,
 		geminiThinkingEnabled,
-		geminiThinkingBudget,
+		geminiThinkingLevel,
+		setGeminiThinkingLevel,
 		responsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
@@ -60,8 +61,6 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		maxTokens,
 		streamIdleTimeoutSec,
 		toolResultTokenLimit,
-		editSimilarityThreshold,
-		editingThresholdValue,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -238,9 +237,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 					</Text>
 					<Box marginLeft={3}>
 						<Text color={theme.colors.menuSecondary}>
-							{anthropicBeta
-								? t.configScreen.enabled
-								: t.configScreen.disabled}{' '}
+							{anthropicBeta ? t.configScreen.enabled : t.configScreen.disabled}{' '}
 							{t.configScreen.toggleHint}
 						</Text>
 					</Box>
@@ -293,17 +290,29 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<ScrollableSelectInput
 								items={[
-									{label: t.configScreen.anthropicSpeedNotUsed, value: '__NONE__'},
+									{
+										label: t.configScreen.anthropicSpeedNotUsed,
+										value: '__NONE__',
+									},
 									{label: t.configScreen.anthropicSpeedFast, value: 'fast'},
-									{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
+									{
+										label: t.configScreen.anthropicSpeedStandard,
+										value: 'standard',
+									},
 								]}
 								initialIndex={
-									anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+									anthropicSpeed === 'fast'
+										? 1
+										: anthropicSpeed === 'standard'
+										? 2
+										: 0
 								}
 								isFocused={true}
 								onSelect={item => {
 									setAnthropicSpeed(
-										item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+										item.value === '__NONE__'
+											? undefined
+											: (item.value as 'fast' | 'standard'),
 									);
 									state.setIsEditing(false);
 								}}
@@ -342,6 +351,48 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 			);
 
 		case 'autoCompressThreshold':
+			{
+				const actualThreshold = Math.floor(
+					(maxContextTokens * autoCompressThreshold) / 100,
+				);
+				return (
+					<Box key={field} flexDirection="column">
+						<Text color={activeColor}>
+							{activeIndicator}
+							{t.configScreen.autoCompressThreshold}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.configScreen.enterValue} {autoCompressThreshold}%
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.configScreen.autoCompressThresholdHint
+										?.replace('{percentage}', autoCompressThreshold.toString())
+										.replace('{maxContext}', maxContextTokens.toString())
+										.replace(
+											'{actualThreshold}',
+											actualThreshold.toLocaleString(),
+										)}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3} flexDirection="column">
+								<Text color={theme.colors.menuSecondary}>
+									{autoCompressThreshold}% → {actualThreshold.toLocaleString()}{' '}
+									tokens
+								</Text>
+								{isActive && (
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{t.configScreen.autoCompressThresholdDesc}
+									</Text>
+								)}
+							</Box>
+						)}
+					</Box>
+				);
+			}
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
@@ -374,9 +425,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 					</Text>
 					<Box marginLeft={3}>
 						<Text color={theme.colors.menuSecondary}>
-							{showThinking
-								? t.configScreen.enabled
-								: t.configScreen.disabled}{' '}
+							{showThinking ? t.configScreen.enabled : t.configScreen.disabled}{' '}
 							{t.configScreen.toggleHint}
 						</Text>
 					</Box>
@@ -493,24 +542,35 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				</Box>
 			);
 
-		case 'geminiThinkingBudget':
+		case 'geminiThinkingLevel':
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
 						{activeIndicator}
-						{t.configScreen.geminiThinkingBudget}
+						{t.configScreen.geminiThinkingLevel}
 					</Text>
 					{isCurrentlyEditing && (
 						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.configScreen.enterValue} {geminiThinkingBudget}
-							</Text>
+							<Select
+								options={[
+									{label: 'MINIMAL', value: 'minimal'},
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+								]}
+								onChange={value => {
+									setGeminiThinkingLevel(
+										value as 'minimal' | 'low' | 'medium' | 'high',
+									);
+									state.setIsEditing(false);
+								}}
+							/>
 						</Box>
 					)}
 					{!isCurrentlyEditing && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{geminiThinkingBudget}
+								{geminiThinkingLevel.toUpperCase()}
 							</Text>
 						</Box>
 					)}
@@ -557,9 +617,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									{label: 'LOW', value: 'low'},
 									{label: 'MEDIUM', value: 'medium'},
 									{label: 'HIGH', value: 'high'},
-									...(supportsXHigh
-										? [{label: 'XHIGH', value: 'xhigh'}]
-										: []),
+									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
 								]}
 								onChange={value => {
 									setResponsesReasoningEffort(
@@ -596,9 +654,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									{label: 'HIGH', value: 'high'},
 								]}
 								onChange={value => {
-									setResponsesVerbosity(
-										value as 'low' | 'medium' | 'high',
-									);
+									setResponsesVerbosity(value as 'low' | 'medium' | 'high');
 									state.setIsEditing(false);
 								}}
 							/>
@@ -667,11 +723,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 			);
 
 		case 'maxTokens':
-			return renderNumericField(
-				field,
-				t.configScreen.maxTokens,
-				maxTokens,
-			);
+			return renderNumericField(field, t.configScreen.maxTokens, maxTokens);
 
 		case 'streamIdleTimeoutSec':
 			return renderNumericField(
@@ -680,37 +732,44 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				streamIdleTimeoutSec,
 			);
 
-		case 'toolResultTokenLimit':
-			return renderNumericField(
-				field,
-				t.configScreen.toolResultTokenLimit,
-				toolResultTokenLimit,
+		case 'toolResultTokenLimit': {
+			const actualLimit = Math.floor(
+				(maxContextTokens * toolResultTokenLimit) / 100,
 			);
-
-		case 'editSimilarityThreshold':
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
 						{activeIndicator}
-						{t.configScreen.editSimilarityThreshold}
+						{t.configScreen.toolResultTokenLimit}
 					</Text>
 					{isCurrentlyEditing && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuInfo}>
-								{t.configScreen.enterValue}{' '}
-								{editingThresholdValue || editSimilarityThreshold}
+								{t.configScreen.enterValue} {toolResultTokenLimit}%
+							</Text>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.configScreen.toolResultTokenLimitHint
+									?.replace('{percentage}', toolResultTokenLimit.toString())
+									.replace('{maxContext}', maxContextTokens.toString())
+									.replace('{actualLimit}', actualLimit.toLocaleString())}
 							</Text>
 						</Box>
 					)}
 					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
+						<Box marginLeft={3} flexDirection="column">
 							<Text color={theme.colors.menuSecondary}>
-								{editSimilarityThreshold}
+								{toolResultTokenLimit}% → {actualLimit.toLocaleString()} tokens
 							</Text>
+							{isActive && (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.configScreen.toolResultTokenLimitDesc}
+								</Text>
+							)}
 						</Box>
 					)}
 				</Box>
 			);
+		}
 
 		default:
 			return null;

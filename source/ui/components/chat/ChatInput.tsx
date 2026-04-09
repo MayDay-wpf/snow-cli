@@ -23,6 +23,7 @@ const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
 const RunningAgentsPanel = lazy(
 	() => import('../panels/RunningAgentsPanel.js'),
 );
+const RollbackMenuPanel = lazy(() => import('../panels/RollbackMenuPanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
@@ -907,112 +908,16 @@ export default function ChatInput({
 
 	return (
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
-			{showHistoryMenu && (
-				<Box flexDirection="column" marginBottom={1} width={terminalWidth - 2}>
-					<Box flexDirection="column">
-						{(() => {
-							const userMessages = getUserMessages();
-							const maxVisibleItems = 5; // Number of message items to show (reduced for small terminals)
-
-							// Calculate scroll window to keep selected index visible
-							let startIndex = 0;
-							if (userMessages.length > maxVisibleItems) {
-								// Keep selected item in the middle of the view when possible
-								startIndex = Math.max(
-									0,
-									historySelectedIndex - Math.floor(maxVisibleItems / 2),
-								);
-								// Adjust if we're near the end
-								startIndex = Math.min(
-									startIndex,
-									userMessages.length - maxVisibleItems,
-								);
-							}
-
-							const endIndex = Math.min(
-								userMessages.length,
-								startIndex + maxVisibleItems,
-							);
-							const visibleMessages = userMessages.slice(startIndex, endIndex);
-
-							const hasMoreAbove = startIndex > 0;
-							const hasMoreBelow = endIndex < userMessages.length;
-
-							return (
-								<>
-									{/* Top scroll indicator - always reserve space */}
-									<Box height={1}>
-										{hasMoreAbove ? (
-											<Text color={theme.colors.menuSecondary} dimColor>
-												{t.chatScreen.moreAbove.replace(
-													'{count}',
-													startIndex.toString(),
-												)}
-											</Text>
-										) : (
-											<Text> </Text>
-										)}
-									</Box>
-
-									{/* Message list - each item fixed to 1 line */}
-									{visibleMessages.map((message, displayIndex) => {
-										const actualIndex = startIndex + displayIndex;
-
-										// Ensure single line by removing all newlines and control characters
-										const singleLineLabel = message.label
-											.replace(/[\r\n\t\v\f\u0000-\u001F\u007F-\u009F]+/g, ' ')
-											.replace(/\s+/g, ' ')
-											.trim();
-										// Calculate available width for the message
-										const prefixWidth = 3; // "❯  " or "  "
-										const maxLabelWidth = terminalWidth - 4 - prefixWidth;
-										const truncatedLabel =
-											singleLineLabel.length > maxLabelWidth
-												? singleLineLabel.slice(0, maxLabelWidth - 3) + '...'
-												: singleLineLabel;
-
-										return (
-											<Box key={message.value} height={1}>
-												<Text
-													color={
-														actualIndex === historySelectedIndex
-															? theme.colors.menuSelected
-															: theme.colors.menuNormal
-													}
-													bold
-													wrap="truncate"
-												>
-													{actualIndex === historySelectedIndex ? '❯  ' : '  '}
-													{truncatedLabel}
-												</Text>
-											</Box>
-										);
-									})}
-
-									{/* Bottom scroll indicator - always reserve space */}
-									<Box height={1}>
-										{hasMoreBelow ? (
-											<Text color={theme.colors.menuSecondary} dimColor>
-												{t.chatScreen.moreBelow.replace(
-													'{count}',
-													(userMessages.length - endIndex).toString(),
-												)}
-											</Text>
-										) : (
-											<Text> </Text>
-										)}
-									</Box>
-								</>
-							);
-						})()}
-					</Box>
-					<Box marginBottom={1}>
-						<Text color={theme.colors.menuInfo} dimColor>
-							{t.chatScreen.historyNavigateHint}
-						</Text>
-					</Box>
-				</Box>
-			)}
+			<Suspense fallback={null}>
+				<RollbackMenuPanel
+					isVisible={showHistoryMenu}
+					messages={getUserMessages()}
+					selectedIndex={historySelectedIndex}
+					terminalWidth={terminalWidth}
+					t={t}
+					colors={theme.colors}
+				/>
+			</Suspense>
 			{!showHistoryMenu && (
 				<>
 					<Box flexDirection="column" width={terminalWidth - 2}>

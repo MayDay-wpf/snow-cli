@@ -23,6 +23,7 @@ import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
 import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
 import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
 import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
@@ -97,6 +98,8 @@ export default function ChatScreen({
 		setCompressionStatus,
 		isResumingSession,
 		setIsResumingSession,
+		btwPrompt,
+		setBtwPrompt,
 	} = useChatScreenLocalState();
 	const {
 		yoloMode,
@@ -167,6 +170,7 @@ export default function ChatScreen({
 		setMessages,
 		initializeFromSession,
 		setIsResumingSession,
+		setContextUsage: streamingState.setContextUsage,
 	});
 
 	const {
@@ -269,6 +273,9 @@ export default function ChatScreen({
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowRoleList: panelState.setShowRoleList,
+		setShowRoleSubagentCreation: panelState.setShowRoleSubagentCreation,
+		setShowRoleSubagentDeletion: panelState.setShowRoleSubagentDeletion,
+		setShowRoleSubagentList: panelState.setShowRoleSubagentList,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
@@ -293,6 +300,7 @@ export default function ChatScreen({
 		setIsExecutingTerminalCommand,
 		setCustomCommandExecution,
 		processMessage,
+		setBtwPrompt,
 		onQuit: handleQuit,
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
@@ -316,6 +324,7 @@ export default function ChatScreen({
 				cached_tokens: streamingState.contextUsage.cached_tokens,
 				max_tokens: getOpenAiConfig().maxContextTokens || 128000,
 			});
+			sessionManager.updateContextUsage(streamingState.contextUsage);
 		} else {
 			updateGlobalTokenUsage(null);
 		}
@@ -336,6 +345,7 @@ export default function ChatScreen({
 		snapshotState,
 		panelState,
 		handleEscKey,
+		btwPrompt,
 	});
 
 	const getFilteredProfiles = () => {
@@ -368,6 +378,9 @@ export default function ChatScreen({
 		panelState.showRoleCreation ||
 		panelState.showRoleDeletion ||
 		panelState.showRoleList ||
+		panelState.showRoleSubagentCreation ||
+		panelState.showRoleSubagentDeletion ||
+		panelState.showRoleSubagentList ||
 		panelState.showWorkingDirPanel ||
 		panelState.showBranchPanel ||
 		panelState.showDiffReviewPanel ||
@@ -486,15 +499,17 @@ export default function ChatScreen({
 
 			{shouldShowFooter && (
 				<ChatFooter
-					onSubmit={handleMessageSubmit}
-					onCommand={handleCommandExecution}
-					onHistorySelect={handleHistorySelect}
-					onSwitchProfile={handleSwitchProfile}
-					handleProfileSelect={handleProfileSelect}
-					handleHistorySelect={handleHistorySelect}
-					showReviewCommitPanel={panelState.showReviewCommitPanel}
-					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
-					onReviewCommitConfirm={handleReviewCommitConfirm}
+				onSubmit={handleMessageSubmit}
+				onCommand={handleCommandExecution}
+				onHistorySelect={handleHistorySelect}
+				onSwitchProfile={handleSwitchProfile}
+				handleProfileSelect={handleProfileSelect}
+				handleHistorySelect={handleHistorySelect}
+				showReviewCommitPanel={panelState.showReviewCommitPanel}
+				setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+				onReviewCommitConfirm={handleReviewCommitConfirm}
+				btwPrompt={btwPrompt}
+				onBtwClose={() => setBtwPrompt(null)}
 					disabled={
 						!!pendingToolConfirmation ||
 						!!bashSensitiveCommand ||

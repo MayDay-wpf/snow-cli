@@ -175,9 +175,9 @@ PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 2. **COUNT & MATCH** - Before editing, MANDATORY verification: count ALL opening and closing symbols - every \`{\` must have \`}\`, every \`(\` must have \`)\`, every \`[\` must have \`]\`, every \`<tag>\` must have \`</tag>\`. Verify indentation levels are consistent.
 3. **COPY COMPLETE CODE** - Remove line numbers, preserve ALL content including ALL closing symbols
 4. **ABSOLUTE PROHIBITIONS** - NEVER edit partial functions (missing closing brace \`}\`), NEVER edit incomplete markup (missing \`</tag>\`), NEVER edit partial code blocks (unmatched \`{\`, \`}\`, \`(\`, \`)\`, \`[\`, \`]\`), NEVER copy line numbers from filesystem-read output
-5. **EDIT** - \`filesystem-edit_search\` (fuzzy match, safer) or \`filesystem-edit\` (line-based, for add/delete) - use ONLY after verification passes
+5. **EDIT** - \`filesystem-edit\` (hash-anchored — reference "lineNum:hash" anchors from read output, no text reproduction needed) - use ONLY after verification passes
 
-**BATCH OPERATIONS:** Modify 2+ files? Use batch: \`filesystem-read(filePath=["a.ts","b.ts"])\` or \`filesystem-edit_search(filePath=[{path:"a.ts",...},{path:"b.ts",...}])\`
+**BATCH OPERATIONS:** When modifying multiple independent files, consider using batch operations: \`filesystem-read(filePath=["a.ts","b.ts"])\` or \`filesystem-edit(filePath=[{path:"a.ts",operations:[...]},{path:"b.ts",operations:[...]}])\`
 
 **File Creation Safety:**
 - \`filesystem-create\` can ONLY create files that do not already exist at the target path
@@ -284,11 +284,11 @@ function getWorkflowSection(hasCodebase: boolean): string {
 
 **Golden Rule: Read what you need to write correct code, nothing more.**
 
-**BATCH OPERATIONS RULE:**
-When dealing with 2+ files, ALWAYS prefer batch operations:
-- Multiple reads? Use \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\` in ONE call
-- Multiple edits? Use \\\`filesystem-edit_search(filePath=[{...}, {...}])\\\` in ONE call
-- This is NOT optional for efficiency - batch operations are the EXPECTED workflow`;
+**BATCH OPERATIONS:**
+When dealing with multiple independent files, batch operations can improve efficiency:
+- Multiple reads: \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\`
+- Multiple edits: \\\`filesystem-edit(filePath=[{path:"a.ts",operations:[...]}, {path:"b.ts",operations:[...]}])\\\`
+- Use your judgment — batch when files are independent, sequence when there are dependencies`;
 	}
 }
 /**

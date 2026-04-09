@@ -28,8 +28,7 @@ type Tab = 'advanced' | 'basic' | 'thinking';
 
 type ThinkingInputMode =
 	| null
-	| 'anthropicBudgetTokens'
-	| 'geminiThinkingBudget';
+	| 'anthropicBudgetTokens';
 
 type ResponsesReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 type ResponsesVerbosity = 'low' | 'medium' | 'high';
@@ -78,7 +77,10 @@ export const ModelsPanel: React.FC<Props> = ({
 		'low' | 'medium' | 'high' | 'max'
 	>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingBudget, setGeminiThinkingBudget] = useState(1024);
+	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
+		'minimal' | 'low' | 'medium' | 'high'
+	>('high');
+	const [isGeminiLevelSelecting, setIsGeminiLevelSelecting] = useState(false);
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] =
@@ -139,7 +141,8 @@ export const ModelsPanel: React.FC<Props> = ({
 		setThinkingBudgetTokens(cfg.thinking?.budget_tokens || 10000);
 		setThinkingEffort(cfg.thinking?.effort || 'high');
 		setGeminiThinkingEnabled((cfg as any).geminiThinking?.enabled || false);
-		setGeminiThinkingBudget((cfg as any).geminiThinking?.budget || 1024);
+		setGeminiThinkingLevel((cfg as any).geminiThinking?.thinkingLevel || 'high');
+		setIsGeminiLevelSelecting(false);
 		setResponsesReasoningEnabled(
 			(cfg as any).responsesReasoning?.enabled || false,
 		);
@@ -297,7 +300,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				: String(thinkingBudgetTokens);
 		}
 		if (requestMethod === 'gemini') {
-			return String(geminiThinkingBudget);
+			return geminiThinkingLevel.toUpperCase();
 		}
 		if (requestMethod === 'responses') {
 			return responsesReasoningEffort;
@@ -308,7 +311,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		thinkingMode,
 		thinkingBudgetTokens,
 		thinkingEffort,
-		geminiThinkingBudget,
+		geminiThinkingLevel,
 		responsesReasoningEffort,
 		t,
 	]);
@@ -334,6 +337,13 @@ export const ModelsPanel: React.FC<Props> = ({
 		async (next: boolean) => {
 			setErrorMessage('');
 			try {
+				// Turning off thinking → auto turn off show thinking
+				if (!next && showThinking) {
+					setShowThinking(false);
+					await updateOpenAiConfig({showThinking: false});
+					configEvents.emitConfigChange({type: 'showThinking', value: false});
+				}
+
 				if (requestMethod === 'anthropic') {
 					setThinkingEnabled(next);
 					await updateOpenAiConfig({
@@ -352,7 +362,7 @@ export const ModelsPanel: React.FC<Props> = ({
 					setGeminiThinkingEnabled(next);
 					await updateOpenAiConfig({
 						geminiThinking: next
-							? {enabled: true, budget: geminiThinkingBudget}
+							? {enabled: true, thinkingLevel: geminiThinkingLevel}
 							: undefined,
 					} as any);
 					return;
@@ -382,10 +392,11 @@ export const ModelsPanel: React.FC<Props> = ({
 		},
 		[
 			requestMethod,
+			showThinking,
 			thinkingMode,
 			thinkingBudgetTokens,
 			thinkingEffort,
-			geminiThinkingBudget,
+			geminiThinkingLevel,
 			responsesReasoningEffort,
 		],
 	);
@@ -451,14 +462,14 @@ export const ModelsPanel: React.FC<Props> = ({
 		[thinkingEnabled],
 	);
 
-	const applyGeminiBudget = useCallback(
-		async (next: number) => {
+	const applyGeminiLevel = useCallback(
+		async (next: 'minimal' | 'low' | 'medium' | 'high') => {
 			setErrorMessage('');
 			try {
-				setGeminiThinkingBudget(next);
+				setGeminiThinkingLevel(next);
 				await updateOpenAiConfig({
 					geminiThinking: geminiThinkingEnabled
-						? {enabled: true, budget: next}
+						? {enabled: true, thinkingLevel: next}
 						: undefined,
 				} as any);
 			} catch (err) {
@@ -580,6 +591,10 @@ export const ModelsPanel: React.FC<Props> = ({
 					setIsThinkingModeSelecting(false);
 					return;
 				}
+				if (isGeminiLevelSelecting) {
+					setIsGeminiLevelSelecting(false);
+					return;
+				}
 				if (isThinkingEffortSelecting) {
 					setIsThinkingEffortSelecting(false);
 					return;
@@ -625,8 +640,6 @@ export const ModelsPanel: React.FC<Props> = ({
 					if (!Number.isNaN(parsed) && parsed >= 0) {
 						if (thinkingInputMode === 'anthropicBudgetTokens') {
 							void applyAnthropicBudgetTokens(parsed);
-						} else {
-							void applyGeminiBudget(parsed);
 						}
 					}
 					setThinkingInputMode(null);
@@ -675,7 +688,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 
 			// In list selection modes, avoid switching tabs or triggering other actions.
-			if (isThinkingModeSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting) {
+			if (isThinkingModeSelecting || isGeminiLevelSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting) {
 				return;
 			}
 
@@ -709,12 +722,11 @@ export const ModelsPanel: React.FC<Props> = ({
 						void applyShowThinking(!showThinking);
 					} else if (thinkingFocusIndex === 1) {
 						void applyThinkingEnabled(!thinkingEnabledValue);
-					} else if (thinkingFocusIndex === 2) {
+					} else 					if (thinkingFocusIndex === 2) {
 						if (requestMethod === 'anthropic') {
 							setIsThinkingModeSelecting(true);
 						} else if (requestMethod === 'gemini') {
-							setThinkingInputMode('geminiThinkingBudget');
-							setThinkingInputValue(geminiThinkingBudget.toString());
+							setIsGeminiLevelSelecting(true);
 						} else if (requestMethod === 'responses') {
 							setIsThinkingEffortSelecting(true);
 						}
@@ -1103,6 +1115,34 @@ export const ModelsPanel: React.FC<Props> = ({
 						</Box>
 					)}
 
+					{isGeminiLevelSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{label: 'MINIMAL', value: 'minimal'},
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+								]}
+								limit={6}
+								disableNumberShortcuts={true}
+								initialIndex={Math.max(
+									0,
+									(['minimal', 'low', 'medium', 'high'] as const).indexOf(
+										geminiThinkingLevel,
+									),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									void applyGeminiLevel(
+										item.value as 'minimal' | 'low' | 'medium' | 'high',
+									);
+									setIsGeminiLevelSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
 					{isSpeedSelecting && (
 						<Box marginTop={1}>
 							<ScrollableSelectInput
@@ -1129,6 +1169,7 @@ export const ModelsPanel: React.FC<Props> = ({
 
 					{!thinkingInputMode &&
 						!isThinkingModeSelecting &&
+						!isGeminiLevelSelecting &&
 						!isThinkingEffortSelecting &&
 						!isVerbositySelecting &&
 						!isSpeedSelecting && (

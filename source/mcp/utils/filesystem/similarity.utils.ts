@@ -202,5 +202,5 @@ export async function calculateSimilarityAsync(
  * Makes preview more readable by collapsing whitespace
  */
 export function normalizeForDisplay(line: string): string {
-	return line.replace(/\t/g, ' ').replace(/  +/g, ' ');
+	return line.replace(/\t/g, ' ').replace(/  +/g, ' ').replace(/\r/g, '');
 }

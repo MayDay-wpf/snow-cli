@@ -173,6 +173,39 @@ export class TodoService {
 	}
 
 	/**
+	 * 批量更新多个 TODO 项
+	 */
+	async updateTodoItems(
+		sessionId: string,
+		todoIds: string[],
+		updates: Partial<Omit<TodoItem, 'id' | 'createdAt'>>,
+	): Promise<TodoList | null> {
+		const todoList = await this.getTodoList(sessionId);
+		if (!todoList) {
+			return null;
+		}
+
+		const idSet = new Set(todoIds);
+		const updatedAt = new Date().toISOString();
+		let anyFound = false;
+
+		todoList.todos = todoList.todos.map(t => {
+			if (idSet.has(t.id)) {
+				anyFound = true;
+				return {...t, ...updates, updatedAt};
+			}
+
+			return t;
+		});
+
+		if (!anyFound) {
+			return null;
+		}
+
+		return this.saveTodoList(sessionId, todoList.todos, todoList);
+	}
+
+	/**
 	 * 添加 TODO 项
 	 */
 	async addTodoItem(
@@ -223,6 +256,25 @@ export class TodoService {
 
 		const filteredTodos = todoList.todos.filter(
 			t => t.id !== todoId && t.parentId !== todoId,
+		);
+		return this.saveTodoList(sessionId, filteredTodos, todoList);
+	}
+
+	/**
+	 * 批量删除多个 TODO 项（含级联删除子项）
+	 */
+	async deleteTodoItems(
+		sessionId: string,
+		todoIds: string[],
+	): Promise<TodoList | null> {
+		const todoList = await this.getTodoList(sessionId);
+		if (!todoList) {
+			return null;
+		}
+
+		const idSet = new Set(todoIds);
+		const filteredTodos = todoList.todos.filter(
+			t => !idSet.has(t.id) && !idSet.has(t.parentId ?? ''),
 		);
 		return this.saveTodoList(sessionId, filteredTodos, todoList);
 	}
@@ -335,6 +387,10 @@ EXAMPLE: todo-get + filesystem-read (check progress while reading files)`,
 PARALLEL CALLS ONLY: MUST pair with other tools (todo-update + filesystem-edit/terminal-execute/etc).
 NEVER call todo-update alone - always combine with an action tool.
 
+SUPPORTS BATCH UPDATING:
+- Single: todoId="task-id"
+- Multiple: todoId=["id1", "id2", "id3"] (all get the same status/content)
+
 BEST PRACTICE: 
 - Mark "completed" ONLY after task is verified
 - Update while working, not after
@@ -346,9 +402,20 @@ This ensures efficient workflow and prevents unnecessary wait times.`,
 					type: 'object',
 					properties: {
 						todoId: {
-							type: 'string',
+							oneOf: [
+								{
+									type: 'string',
+									description: 'Single TODO item ID to update',
+								},
+								{
+									type: 'array',
+									items: {type: 'string'},
+									description:
+										'Multiple TODO item IDs to update with the same status/content',
+								},
+							],
 							description:
-								'TODO item ID to update (get exact ID from todo-get)',
+								'TODO item ID(s) to update (get exact ID from todo-get)',
 						},
 						status: {
 							type: 'string',
@@ -416,6 +483,10 @@ SUPPORTS BATCH ADDING:
 PARALLEL CALLS ONLY: MUST pair with other tools (todo-delete + filesystem-edit/todo-get/etc).
 NEVER call todo-delete alone - always combine with an action tool.
 
+SUPPORTS BATCH DELETION:
+- Single: todoId="task-id"
+- Multiple: todoId=["id1", "id2", "id3"]
+
 CASCADE DELETE: Deleting a parent task automatically deletes all its children.
 
 BEST PRACTICE - KEEP TODO CLEAN:
@@ -424,9 +495,19 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 					type: 'object',
 					properties: {
 						todoId: {
-							type: 'string',
+							oneOf: [
+								{
+									type: 'string',
+									description: 'Single TODO item ID to delete',
+								},
+								{
+									type: 'array',
+									items: {type: 'string'},
+									description: 'Multiple TODO item IDs for batch deletion',
+								},
+							],
 							description:
-								'TODO item ID to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
+								'TODO item ID(s) to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
 						},
 					},
 					required: ['todoId'],
@@ -483,7 +564,7 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 
 				case 'update': {
 					const {todoId, status, content} = args as {
-						todoId: string;
+						todoId: string | string[];
 						status?: 'pending' | 'inProgress' | 'completed';
 						content?: string;
 					};
@@ -492,7 +573,8 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 					if (status) updates.status = status;
 					if (content) updates.content = content;
 
-					const result = await this.updateTodoItem(sessionId, todoId, updates);
+					const ids = Array.isArray(todoId) ? todoId : [todoId];
+					const result = await this.updateTodoItems(sessionId, ids, updates);
 					return {
 						content: [
 							{
@@ -561,10 +643,11 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 
 				case 'delete': {
 					const {todoId} = args as {
-						todoId: string;
+						todoId: string | string[];
 					};
 
-					const result = await this.deleteTodoItem(sessionId, todoId);
+					const ids = Array.isArray(todoId) ? todoId : [todoId];
+					const result = await this.deleteTodoItems(sessionId, ids);
 					return {
 						content: [
 							{

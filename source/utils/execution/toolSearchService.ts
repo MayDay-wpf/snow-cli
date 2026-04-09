@@ -42,11 +42,18 @@ class ToolSearchService {
 		if (servicesInfo) {
 			for (const svc of servicesInfo) {
 				if (!svc.isBuiltIn && svc.connected && svc.tools.length > 0) {
-					this.externalServices.push({
-						serviceName: svc.serviceName,
-						toolNames: svc.tools.map(t => t.name),
-						toolDescriptions: svc.tools.map(t => t.description || t.name),
-					});
+					const enabledTools = svc.tools.filter(t =>
+						this.toolMap.has(`${svc.serviceName}-${t.name}`),
+					);
+					if (enabledTools.length > 0) {
+						this.externalServices.push({
+							serviceName: svc.serviceName,
+							toolNames: enabledTools.map(t => t.name),
+							toolDescriptions: enabledTools.map(
+								t => t.description || t.name,
+							),
+						});
+					}
 				}
 			}
 		}

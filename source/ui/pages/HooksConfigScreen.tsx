@@ -16,6 +16,7 @@ import {
 	type HookRule,
 	type HookAction,
 	type HookActionType,
+	isActionTypeAllowed,
 } from '../../utils/config/hooksConfig.js';
 
 type Props = {
@@ -75,24 +76,16 @@ export default function HooksConfigScreen({
 	// 验证是否可以添加指定类型的 Action
 	const canAddActionType = useCallback(
 		(newType: HookActionType, currentHooks: HookAction[]): boolean => {
-			// prompt 类型只能在 onSubAgentComplete 和 onStop 中使用
+			if (!selectedHookType || !isActionTypeAllowed(selectedHookType, newType)) {
+				return false;
+			}
+			// prompt 和 command 互斥：prompt 独占，command 不能与 prompt 共存
 			if (newType === 'prompt') {
-				if (
-					selectedHookType !== 'onSubAgentComplete' &&
-					selectedHookType !== 'onStop'
-				) {
-					return false; // 其他 Hook 类型不允许使用 prompt
-				}
-				// 如果要添加 Prompt，不能有任何现有 Action
 				return currentHooks.length === 0;
 			}
-
 			if (newType === 'command') {
-				const hasPrompt = currentHooks.some(h => h.type === 'prompt');
-				// 如果要添加 Command，不能有 Prompt
-				return !hasPrompt;
+				return !currentHooks.some(h => h.type === 'prompt');
 			}
-
 			return false;
 		},
 		[selectedHookType],

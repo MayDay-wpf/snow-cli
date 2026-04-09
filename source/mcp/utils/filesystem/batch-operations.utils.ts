@@ -5,8 +5,6 @@
 import type {
 	BatchOperationResult,
 	BatchResultItem,
-	EditBySearchConfig,
-	EditByLineConfig,
 } from '../../types/filesystem.types.js';
 
 /**
@@ -29,82 +27,6 @@ export function extractFilePath<T extends {path: string}>(
 	fileItem: string | T,
 ): string {
 	return typeof fileItem === 'string' ? fileItem : fileItem.path;
-}
-
-/**
- * Parse edit by search parameters
- */
-export function parseEditBySearchParams(
-	fileItem: string | EditBySearchConfig,
-	globalSearchContent?: string,
-	globalReplaceContent?: string,
-	globalOccurrence?: number,
-): {
-	path: string;
-	searchContent: string;
-	replaceContent: string;
-	occurrence: number;
-} {
-	if (typeof fileItem === 'string') {
-		if (!globalSearchContent || !globalReplaceContent) {
-			throw new Error(
-				'searchContent and replaceContent are required for string array format',
-			);
-		}
-		return {
-			path: fileItem,
-			searchContent: globalSearchContent,
-			replaceContent: globalReplaceContent,
-			occurrence: globalOccurrence ?? 1,
-		};
-	}
-
-	return {
-		path: fileItem.path,
-		searchContent: fileItem.searchContent,
-		replaceContent: fileItem.replaceContent,
-		occurrence: fileItem.occurrence ?? globalOccurrence ?? 1,
-	};
-}
-
-/**
- * Parse edit by line parameters
- */
-export function parseEditByLineParams(
-	fileItem: string | EditByLineConfig,
-	globalStartLine?: number,
-	globalEndLine?: number,
-	globalNewContent?: string,
-): {
-	path: string;
-	startLine: number;
-	endLine: number;
-	newContent: string;
-} {
-	if (typeof fileItem === 'string') {
-		if (
-			globalStartLine === undefined ||
-			globalEndLine === undefined ||
-			globalNewContent === undefined
-		) {
-			throw new Error(
-				'startLine, endLine, and newContent are required for string array format',
-			);
-		}
-		return {
-			path: fileItem,
-			startLine: globalStartLine,
-			endLine: globalEndLine,
-			newContent: globalNewContent,
-		};
-	}
-
-	return {
-		path: fileItem.path,
-		startLine: fileItem.startLine,
-		endLine: fileItem.endLine,
-		newContent: fileItem.newContent,
-	};
 }
 
 /**

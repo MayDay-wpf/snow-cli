@@ -1,4 +1,5 @@
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback, useRef} from 'react';
+import {useInput} from 'ink';
 
 /**
  * Hook to detect terminal window focus state.
@@ -22,6 +23,10 @@ import {useState, useEffect} from 'react';
  * Auto-focus recovery: If user input is detected while in unfocused state,
  * automatically restore focus state to ensure cursor visibility during
  * operations like Shift+drag file drop where focus events may be delayed.
+ *
+ * IMPORTANT: Uses Ink's useInput instead of direct process.stdin listeners
+ * to avoid switching stdin between flowing/paused modes, which causes
+ * stream conflicts with Ink's internal readable-event-based input handling.
  */
 export function useTerminalFocus(): {
 	hasFocus: boolean;
@@ -29,45 +34,45 @@ export function useTerminalFocus(): {
 	ensureFocus: () => void;
 } {
 	const [hasFocus, setHasFocus] = useState(true); // Default to focused
+	const hasFocusRef = useRef(true);
 
+	const handleInput = useCallback((input: string) => {
+		// Ink strips the ESC prefix, so ESC[I arrives as '[I' and ESC[O as '[O'
+		if (input === '[I' || input === '\x1b[I') {
+			hasFocusRef.current = true;
+			setHasFocus(true);
+			return;
+		}
+
+		if (input === '[O' || input === '\x1b[O') {
+			hasFocusRef.current = false;
+			setHasFocus(false);
+			return;
+		}
+
+		// Auto-recovery: If we receive printable input while in unfocused state,
+		// treat it as an implicit focus gain.
+		// This handles cases where focus events are delayed (e.g., Shift+drag operations)
+		if (!hasFocusRef.current) {
+			const isPrintableInput =
+				input.length > 0 &&
+				!input.startsWith('\x1b') &&
+				!input.startsWith('[') &&
+				!/^[\x00-\x1f\x7f]+$/.test(input);
+
+			if (isPrintableInput) {
+				hasFocusRef.current = true;
+				setHasFocus(true);
+			}
+		}
+	}, []);
+
+	useInput(handleInput);
+
+	// Enable/disable focus reporting
 	useEffect(() => {
 		let syncTimer: NodeJS.Timeout | null = null;
 
-		// Set up listener first
-		const handleData = (data: Buffer) => {
-			const str = data.toString();
-
-			// Focus gained: ESC[I
-			if (str === '\x1b[I') {
-				setHasFocus(true);
-				return;
-			}
-
-			// Focus lost: ESC[O
-			if (str === '\x1b[O') {
-				setHasFocus(false);
-				return;
-			}
-
-			// Auto-recovery: If we receive any input that's NOT a focus event
-			// while in unfocused state, treat it as an implicit focus gain.
-			// This handles cases where focus events are delayed (e.g., Shift+drag operations)
-			// Filter out escape sequences and other non-printable characters
-			const isPrintableInput =
-				str.length > 0 &&
-				!str.startsWith('\x1b') && // Not an escape sequence
-				!/^[\x00-\x1f\x7f]+$/.test(str); // Not only control characters
-
-			if (!hasFocus && isPrintableInput) {
-				setHasFocus(true);
-			}
-		};
-
-		// Listen to stdin data
-		process.stdin.on('data', handleData);
-
-		// Enable focus reporting AFTER listener is set up
-		// Add a small delay to ensure listener is fully registered
 		const enableTimer = setTimeout(() => {
 			// ESC[?1004h - Enable focus events
 			process.stdout.write('\x1b[?1004h');
@@ -76,6 +81,7 @@ export function useTerminalFocus(): {
 			// This ensures cursor is visible after component remount (e.g., after /clear)
 			// The terminal will send ESC[O if it doesn't have focus
 			syncTimer = setTimeout(() => {
+				hasFocusRef.current = true;
 				setHasFocus(true);
 			}, 100);
 		}, 50);
@@ -88,9 +94,8 @@ export function useTerminalFocus(): {
 			// Disable focus reporting on cleanup
 			// ESC[?1004l - Disable focus events
 			process.stdout.write('\x1b[?1004l');
-			process.stdin.off('data', handleData);
 		};
-	}, []); // Remove hasFocus from dependencies to avoid re-running effect
+	}, []);
 
 	// Helper function to check if input is a focus event
 	const isFocusEvent = (input: string): boolean => {
@@ -99,6 +104,7 @@ export function useTerminalFocus(): {
 
 	// Manual focus restoration function (can be called externally if needed)
 	const ensureFocus = () => {
+		hasFocusRef.current = true;
 		setHasFocus(true);
 	};
 

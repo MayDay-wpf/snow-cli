@@ -9,6 +9,7 @@ import {
 	performAutoCompression,
 } from '../../../utils/core/autoCompress.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {compressionCoordinator} from '../../../utils/core/compressionCoordinator.js';
 
 export type AutoCompressOptions = {
 	getCurrentContextPercentage?: () => number;
@@ -55,6 +56,10 @@ export async function handleAutoCompression(
 	}
 
 	options.setIsAutoCompressing?.(true);
+
+	// Acquire the compression lock so teammates / sub-agents pause at
+	// their next loop boundary and don't mutate shared state concurrently.
+	await compressionCoordinator.acquireLock('main');
 
 	try {
 		const compressingMessage: Message = {
@@ -126,6 +131,8 @@ export async function handleAutoCompression(
 			step: 'failed',
 			message: error instanceof Error ? error.message : 'Unknown error',
 		});
+	} finally {
+		compressionCoordinator.releaseLock('main');
 	}
 
 	options.setIsAutoCompressing?.(false);

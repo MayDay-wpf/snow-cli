@@ -644,6 +644,7 @@ class ConnectionManager {
 	async notifyRollbackConfirmationNeeded(payload: {
 		filePaths: string[];
 		notebookCount?: number;
+		teamCount?: number;
 	}): Promise<void> {
 		return this.interactionManager.notifyRollbackConfirmationNeeded(payload);
 	}

@@ -15,7 +15,7 @@ import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {CompressionStatus as CompressionStatusType} from '../../components/compression/CompressionStatus.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
 	CustomCommandExecutionState,

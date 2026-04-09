@@ -72,7 +72,7 @@ let _encoder: any = null;
 function getEncoder() {
 	if (!_encoder) {
 		try {
-			_encoder = encoding_for_model('gpt-4o');
+			_encoder = encoding_for_model('gpt-5');
 		} catch {
 			_encoder = encoding_for_model('gpt-3.5-turbo');
 		}
@@ -85,6 +85,7 @@ export interface SubAgentCompressionResult {
 	messages: ChatMessage[];
 	beforeTokens?: number;
 	afterTokensEstimate?: number;
+	compressionApiUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
 /**
@@ -276,6 +277,11 @@ function prepareMessagesForAICompression(
 	return messages;
 }
 
+interface AISummaryResult {
+	messages: ChatMessage[];
+	apiUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
 /**
  * Perform AI summary compression — call the AI to generate a handover document.
  * Preserves recent tool call rounds and replaces older history with a summary.
@@ -283,18 +289,18 @@ function prepareMessagesForAICompression(
  * @param messages - all sub-agent messages
  * @param keepRounds - number of recent rounds to preserve
  * @param config - API configuration
- * @returns new messages array with summary + preserved recent messages
+ * @returns new messages array with summary + preserved recent messages, plus API usage if available
  */
 async function aiSummaryCompress(
 	messages: ChatMessage[],
 	keepRounds: number,
 	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
-): Promise<ChatMessage[]> {
+): Promise<AISummaryResult> {
 	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRounds);
 
 	// If there's nothing to compress (all messages are "recent"), return as-is
 	if (preserveStartIndex === 0) {
-		return messages;
+		return {messages};
 	}
 
 	const messagesToCompress = messages.slice(0, preserveStartIndex);
@@ -303,6 +309,7 @@ async function aiSummaryCompress(
 	// Generate summary using the appropriate API
 	const compressionMessages = prepareMessagesForAICompression(messagesToCompress);
 	let summary = '';
+	let apiUsage: AISummaryResult['apiUsage'];
 
 	try {
 		switch (config.requestMethod) {
@@ -314,6 +321,13 @@ async function aiSummaryCompress(
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
 						summary += chunk.content;
+					}
+					if (chunk.type === 'usage' && chunk.usage) {
+						apiUsage = {
+							prompt_tokens: chunk.usage.prompt_tokens || 0,
+							completion_tokens: chunk.usage.completion_tokens || 0,
+							total_tokens: chunk.usage.total_tokens || 0,
+						};
 					}
 				}
 				break;
@@ -329,6 +343,13 @@ async function aiSummaryCompress(
 					if (chunk.type === 'content' && chunk.content) {
 						summary += chunk.content;
 					}
+					if (chunk.type === 'usage' && chunk.usage) {
+						apiUsage = {
+							prompt_tokens: chunk.usage.prompt_tokens || 0,
+							completion_tokens: chunk.usage.completion_tokens || 0,
+							total_tokens: chunk.usage.total_tokens || 0,
+						};
+					}
 				}
 				break;
 			}
@@ -340,6 +361,13 @@ async function aiSummaryCompress(
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
 						summary += chunk.content;
+					}
+					if (chunk.type === 'usage' && chunk.usage) {
+						apiUsage = {
+							prompt_tokens: chunk.usage.prompt_tokens || 0,
+							completion_tokens: chunk.usage.completion_tokens || 0,
+							total_tokens: chunk.usage.total_tokens || 0,
+						};
 					}
 				}
 				break;
@@ -355,18 +383,25 @@ async function aiSummaryCompress(
 					if (chunk.type === 'content' && chunk.content) {
 						summary += chunk.content;
 					}
+					if (chunk.type === 'usage' && chunk.usage) {
+						apiUsage = {
+							prompt_tokens: chunk.usage.prompt_tokens || 0,
+							completion_tokens: chunk.usage.completion_tokens || 0,
+							total_tokens: chunk.usage.total_tokens || 0,
+						};
+					}
 				}
 				break;
 			}
 		}
 	} catch (error) {
 		console.error('[SubAgentCompressor] AI compression failed:', error);
-		return messages;
+		return {messages};
 	}
 
 	if (!summary) {
 		console.warn('[SubAgentCompressor] AI compression returned empty summary');
-		return messages;
+		return {messages};
 	}
 
 	// Build new messages: summary as first user message + preserved recent messages
@@ -378,7 +413,7 @@ async function aiSummaryCompress(
 		...preservedMessages,
 	];
 
-	return newMessages;
+	return {messages: newMessages, apiUsage};
 }
 
 /**
@@ -512,7 +547,7 @@ export async function compressSubAgentContext(
 	const beforeTokens = countMessagesTokens(messages);
 
 	// Primary: AI summary compression (same pattern as main flow)
-	const compressedMessages = await aiSummaryCompress(messages, keepRounds, config);
+	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(messages, keepRounds, config);
 
 	// If AI compression succeeded (returned different messages), use it
 	if (compressedMessages !== messages) {
@@ -526,6 +561,7 @@ export async function compressSubAgentContext(
 			messages: optimizedMessages,
 			beforeTokens,
 			afterTokensEstimate: afterTokens,
+			compressionApiUsage: apiUsage,
 		};
 	}
 
@@ -572,7 +608,7 @@ export async function performHybridCompression(
 
 	const beforeTokens = countMessagesTokens(messages);
 
-	const compressedMessages = await aiSummaryCompress(messages, keepRounds, config);
+	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(messages, keepRounds, config);
 
 	if (compressedMessages !== messages) {
 		const optimizedMessages = truncateOversizedToolResults(compressedMessages);
@@ -582,6 +618,7 @@ export async function performHybridCompression(
 			messages: optimizedMessages,
 			beforeTokens,
 			afterTokensEstimate: afterTokens,
+			compressionApiUsage: apiUsage,
 		};
 	}
 

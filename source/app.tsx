@@ -13,9 +13,6 @@ const HeadlessModeScreen = React.lazy(
 const TaskManagerScreen = React.lazy(
 	() => import('./ui/pages/TaskManagerScreen.js'),
 );
-const MCPConfigScreen = React.lazy(
-	() => import('./ui/pages/MCPConfigScreen.js'),
-);
 const SystemPromptConfigScreen = React.lazy(
 	() => import('./ui/pages/SystemPromptConfigScreen.js'),
 );
@@ -23,6 +20,7 @@ const CustomHeadersScreen = React.lazy(
 	() => import('./ui/pages/CustomHeadersScreen.js'),
 );
 const HelpScreen = React.lazy(() => import('./ui/pages/HelpScreen.js'));
+const ExitScreen = React.lazy(() => import('./ui/pages/ExitScreen.js'));
 
 import {
 	useGlobalExit,
@@ -48,7 +46,9 @@ type Props = {
 
 // ShowTaskListWrapper: Handles task list mode with session conversion support
 function ShowTaskListWrapper() {
-	const [currentView, setCurrentView] = useState<'tasks' | 'chat'>('tasks');
+	const [currentView, setCurrentView] = useState<'tasks' | 'chat' | 'exit'>(
+		'tasks',
+	);
 	const [chatScreenKey, setChatScreenKey] = useState(0);
 	const [exitNotification, setExitNotification] =
 		useState<ExitNotificationType>({
@@ -64,7 +64,29 @@ function ShowTaskListWrapper() {
 	// Global exit handler
 	useGlobalExit(setExitNotification);
 
+	// Listen for navigation events (including exit)
+	useEffect(() => {
+		const unsubscribe = onNavigate(event => {
+			if (
+				event.destination === 'exit' ||
+				event.destination === 'tasks' ||
+				event.destination === 'chat'
+			) {
+				setCurrentView(event.destination);
+			}
+		});
+		return unsubscribe;
+	}, []);
+
 	const renderView = () => {
+		if (currentView === 'exit') {
+			return (
+				<Suspense fallback={loadingFallback}>
+					<ExitScreen />
+				</Suspense>
+			);
+		}
+
 		if (currentView === 'chat') {
 			return (
 				<Suspense fallback={loadingFallback}>
@@ -95,7 +117,7 @@ function ShowTaskListWrapper() {
 	return (
 		<Box flexDirection="column" width={terminalWidth}>
 			{renderView()}
-			{exitNotification.show && (
+			{exitNotification.show && currentView !== 'exit' && (
 				<Box paddingX={1} flexShrink={0}>
 					<Alert variant="warning">{exitNotification.message}</Alert>
 				</Box>
@@ -123,10 +145,10 @@ function AppContent({
 		| 'chat'
 		| 'help'
 		| 'settings'
-		| 'mcp'
 		| 'systemprompt'
 		| 'customheaders'
 		| 'tasks'
+		| 'exit'
 	>(skipWelcome ? 'chat' : 'welcome');
 
 	// Add a key to force remount ChatScreen when returning from welcome screen
@@ -176,7 +198,6 @@ function AppContent({
 			value === 'chat' ||
 			value === 'resume-last' ||
 			value === 'settings' ||
-			value === 'mcp' ||
 			value === 'systemprompt' ||
 			value === 'customheaders'
 		) {
@@ -195,7 +216,7 @@ function AppContent({
 			// Both 'chat' and 'resume-last' go to chat view
 			setCurrentView(value === 'resume-last' ? 'chat' : value);
 		} else if (value === 'exit') {
-			gracefulExit();
+			setCurrentView('exit');
 		}
 	};
 
@@ -234,15 +255,6 @@ function AppContent({
 						</Text>
 					</Box>
 				);
-			case 'mcp':
-				return (
-					<Suspense fallback={loadingFallback}>
-						<MCPConfigScreen
-							onBack={() => setCurrentView('welcome')}
-							onSave={() => setCurrentView('welcome')}
-						/>
-					</Suspense>
-				);
 			case 'systemprompt':
 				return (
 					<Suspense fallback={loadingFallback}>
@@ -277,6 +289,12 @@ function AppContent({
 						/>
 					</Suspense>
 				);
+			case 'exit':
+				return (
+					<Suspense fallback={loadingFallback}>
+						<ExitScreen version={version} />
+					</Suspense>
+				);
 			default:
 				return (
 					<Suspense fallback={loadingFallback}>
@@ -294,7 +312,7 @@ function AppContent({
 	return (
 		<Box flexDirection="column" width={terminalWidth}>
 			{renderView()}
-			{exitNotification.show && (
+			{exitNotification.show && currentView !== 'exit' && (
 				<Box paddingX={1} flexShrink={0}>
 					<Alert variant="warning">{exitNotification.message}</Alert>
 				</Box>

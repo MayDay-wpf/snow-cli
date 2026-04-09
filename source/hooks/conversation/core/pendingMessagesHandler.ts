@@ -111,10 +111,13 @@ export async function handlePendingMessages(
 		);
 		const updatedSession = sessionManager.getCurrentSession();
 		if (updatedSession) {
-			setConversationContext(
-				updatedSession.id,
-				updatedSession.messages.length,
+			const {convertSessionMessagesToUI} = await import(
+				'../../../utils/session/sessionConverter.js'
 			);
+			const uiMessages = convertSessionMessagesToUI(
+				updatedSession.messages,
+			);
+			setConversationContext(updatedSession.id, uiMessages.length);
 		}
 	} catch (error) {
 		console.error('Failed to save pending user message:', error);

@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
-import type {HookErrorDetails} from '../../../utils/execution/hookResultHandler.js';
+import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {
 	BashSensitiveCommandState,
@@ -46,6 +46,7 @@ export function useChatScreenLocalState() {
 	const [compressionStatus, setCompressionStatus] =
 		useState<CompressionStatus | null>(null);
 	const [isResumingSession, setIsResumingSession] = useState(false);
+	const [btwPrompt, setBtwPrompt] = useState<string | null>(null);
 
 	useEffect(() => {
 		currentContextPercentageRef.current = currentContextPercentage;
@@ -147,5 +148,7 @@ export function useChatScreenLocalState() {
 		setCompressionStatus,
 		isResumingSession,
 		setIsResumingSession,
+		btwPrompt,
+		setBtwPrompt,
 	};
 }
