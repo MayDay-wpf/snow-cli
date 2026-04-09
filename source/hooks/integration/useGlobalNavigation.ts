@@ -15,7 +15,8 @@ export interface NavigationEvent {
 		| 'settings'
 		| 'systemprompt'
 		| 'customheaders'
-		| 'tasks';
+		| 'tasks'
+		| 'exit';
 }
 
 // Emit navigation event

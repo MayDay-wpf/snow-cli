@@ -395,8 +395,20 @@ export const en: TranslationKeys = {
 		enabled: 'Enabled',
 		disabled: 'Disabled',
 		customLabel: 'Custom',
+		// Scope
+		scopeProject: 'Project',
+		scopeGlobal: 'Global',
+		scopeSelectTitle: 'Select scope for new command',
+		scopeSelectHint: '↑↓: Navigate • Enter: Select • Esc: Cancel',
+		duplicatePattern:
+			'Pattern "{pattern}" already exists in {scope} scope',
+		resetScopeSelectTitle: 'Select scope to reset',
+		resetGlobalDesc: 'Restore to default preset commands',
+		resetProjectDesc: 'Clear all project custom commands',
+		confirmResetScopeMessage:
+			'⚠️ Press Enter again to confirm {scope} reset',
 		// Add view
-		addTitle: 'Add Custom Sensitive Command',
+		addTitle: 'Add Custom Sensitive Command ({scope})',
 		patternLabel: 'Pattern (supports wildcards, e.g., "rm*"):',
 		patternPlaceholder: 'e.g., rm -rf, sudo, etc.',
 		descriptionLabel: 'Description:',
@@ -1647,5 +1659,11 @@ export const en: TranslationKeys = {
 		actionClose: 'Close',
 		errorPrefix: 'Error: ',
 		scrollHint: '↑↓ Scroll',
+	},
+	exitScreen: {
+		title: 'Goodbye',
+		goodbye: 'Thanks for using Snow CLI',
+		thankYou: 'See you next time',
+		version: 'v{version}',
 	},
 };

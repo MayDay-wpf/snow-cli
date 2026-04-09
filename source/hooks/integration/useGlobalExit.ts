@@ -1,6 +1,7 @@
 import {useInput} from 'ink';
 import {useState} from 'react';
 import {useI18n} from '../../i18n/index.js';
+import {navigateTo} from './useGlobalNavigation.js';
 
 export interface ExitNotification {
 	show: boolean;
@@ -18,9 +19,7 @@ export function useGlobalExit(
 		if (key.ctrl && input === 'c') {
 			const now = Date.now();
 			if (now - lastCtrlCTime < ctrlCTimeout) {
-				// Second Ctrl+C within timeout - emit SIGINT to trigger cleanup
-				// This ensures proper async cleanup before exit
-				process.emit('SIGINT');
+				navigateTo('exit');
 			} else {
 				// First Ctrl+C - show notification
 				setLastCtrlCTime(now);

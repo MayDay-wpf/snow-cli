@@ -7,8 +7,8 @@ import {reviewAgent} from '../../../agents/reviewAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
-import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {reindexCodebase} from '../../../utils/codebase/reindexCodebase.js';
+import {navigateTo} from '../../integration/useGlobalNavigation.js';
 
 interface UseChatHandlersDeps {
 	processMessage: (
@@ -43,7 +43,6 @@ export function useChatHandlers(
 		setCodebaseProgress,
 		setFileUpdateNotification,
 		setWatcherEnabled,
-		exitingApplicationText,
 		setIsResumingSession,
 	} = props;
 	const {processMessage} = deps;
@@ -134,44 +133,7 @@ export function useChatHandlers(
 	};
 
 	const handleQuit = async () => {
-		setMessages(prev => [
-			...prev,
-			{
-				role: 'command',
-				content: exitingApplicationText,
-			},
-		]);
-
-		const quitTimeout = setTimeout(() => {
-			process.exit(0);
-		}, 3000);
-
-		try {
-			if (codebaseAgentRef.current) {
-				const agent = codebaseAgentRef.current;
-				await Promise.race([
-					(async () => {
-						await agent.stop();
-						agent.stopWatching();
-					})(),
-					new Promise(resolve => setTimeout(resolve, 2000)),
-				]);
-			}
-
-			if (
-				vscodeConnection.isConnected() ||
-				vscodeConnection.isClientRunning()
-			) {
-				vscodeConnection.stop();
-			}
-
-			clearTimeout(quitTimeout);
-
-			process.exit(0);
-		} catch (error) {
-			clearTimeout(quitTimeout);
-			process.exit(0);
-		}
+		navigateTo('exit');
 	};
 
 	const handleReindexCodebase = async (force?: boolean) => {

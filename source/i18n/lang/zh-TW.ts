@@ -370,8 +370,18 @@ export const zhTW: TranslationKeys = {
 		enabled: '已啟用',
 		disabled: '已停用',
 		customLabel: '自訂',
+		// Scope
+		scopeProject: '專案',
+		scopeGlobal: '全域',
+		scopeSelectTitle: '選擇新命令的作用域',
+		scopeSelectHint: '↑↓: 導航 • Enter: 選擇 • Esc: 取消',
+		duplicatePattern: '模式 "{pattern}" 已存在於{scope}作用域',
+		resetScopeSelectTitle: '選擇要重設的作用域',
+		resetGlobalDesc: '還原為預設命令',
+		resetProjectDesc: '清空所有專案自訂命令',
+		confirmResetScopeMessage: '⚠️ 再次按 Enter 確認重設{scope}',
 		// Add view
-		addTitle: '新增自訂敏感命令',
+		addTitle: '新增自訂敏感命令 ({scope})',
 		patternLabel: '命令模式(支援萬用字元,例如 "rm*"):',
 		patternPlaceholder: '例如: rm -rf, sudo 等',
 		descriptionLabel: '描述:',
@@ -1559,5 +1569,11 @@ export const zhTW: TranslationKeys = {
 		actionClose: '關閉',
 		errorPrefix: '錯誤：',
 		scrollHint: '↑↓ 捲動瀏覽',
+	},
+	exitScreen: {
+		title: '再見',
+		goodbye: '感謝使用 Snow CLI',
+		thankYou: '期待下次相見',
+		version: 'v{version}',
 	},
 };

@@ -365,6 +365,16 @@ export type TranslationKeys = {
 		enabled: string;
 		disabled: string;
 		customLabel: string;
+		// Scope
+		scopeProject: string;
+		scopeGlobal: string;
+		scopeSelectTitle: string;
+		scopeSelectHint: string;
+		duplicatePattern: string;
+		resetScopeSelectTitle: string;
+		resetGlobalDesc: string;
+		resetProjectDesc: string;
+		confirmResetScopeMessage: string;
 		// Add view
 		addTitle: string;
 		patternLabel: string;
@@ -1544,6 +1554,12 @@ export type TranslationKeys = {
 		actionClose: string;
 		errorPrefix: string;
 		scrollHint: string;
+	};
+	exitScreen: {
+		title: string;
+		goodbye: string;
+		thankYou: string;
+		version: string;
 	};
 };
 
