@@ -163,6 +163,17 @@ function trimLines(lines: string[]): string[] {
 	return result;
 }
 
+export function renderMarkdownToLines(content: string): string[] {
+	try {
+		const sanitized = sanitizeMarkdownContent(content);
+		const rendered = marked.parse(sanitized) as string;
+		if (!rendered || typeof rendered !== 'string') return content.split('\n');
+		return trimLines(rendered.split('\n'));
+	} catch {
+		return content.split('\n');
+	}
+}
+
 export default function MarkdownRenderer({content}: Props) {
 	try {
 		const sanitizedContent = sanitizeMarkdownContent(content);

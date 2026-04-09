@@ -5,44 +5,12 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {streamBtwResponse} from '../../../utils/commands/btwStream.js';
 import {visualWidth} from '../../../utils/core/textUtils.js';
+import {renderMarkdownToLines} from '../common/MarkdownRenderer.js';
 
 type Step = 'streaming' | 'done' | 'error';
 
 const VISIBLE_ROWS = 8;
 const DEBOUNCE_MS = 80;
-
-/**
- * Split text into visual lines that each fit within `maxWidth` columns.
- * Accounts for wide characters (CJK, emoji) via visualWidth.
- */
-function toVisualLines(text: string, maxWidth: number): string[] {
-	if (maxWidth <= 0) return text.split('\n');
-
-	const result: string[] = [];
-	for (const logical of text.split('\n')) {
-		if (!logical || visualWidth(logical) <= maxWidth) {
-			result.push(logical);
-			continue;
-		}
-
-		const chars = [...logical];
-		let cur = '';
-		let curW = 0;
-		for (const ch of chars) {
-			const w = visualWidth(ch);
-			if (curW + w > maxWidth) {
-				result.push(cur);
-				cur = ch;
-				curW = w;
-			} else {
-				cur += ch;
-				curW += w;
-			}
-		}
-		if (cur) result.push(cur);
-	}
-	return result;
-}
 
 interface Props {
 	prompt: string;
@@ -68,8 +36,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 	const contentWidth = Math.max(1, columns - 4);
 
 	const visualLines = useMemo(
-		() => toVisualLines(response, contentWidth),
-		[response, contentWidth],
+		() => (response ? renderMarkdownToLines(response) : []),
+		[response],
 	);
 
 	const flushPending = useCallback(() => {
