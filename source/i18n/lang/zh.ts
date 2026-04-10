@@ -665,6 +665,8 @@ export const zh: TranslationKeys = {
 		saveFailed: '保存失败',
 		modelSaveFailed: '模型保存失败',
 		tipLabel: '提示:',
+		modelCount: '共 {count} 个模型',
+		scrollHint: '↑↓ 滚动浏览更多模型',
 	},
 	profilePanel: {
 		title: '选择配置',

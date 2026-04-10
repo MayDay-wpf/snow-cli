@@ -491,13 +491,47 @@ ${role ? `Your role: ${role}` : ''}
 						});
 					}
 
-					await compressionCoordinator.acquireLock(instanceId);
-					try {
-						const compressionResult = await compressSubAgentContext(
-							messages, latestTotalTokens, config.maxContextTokens,
-							{model, requestMethod: config.requestMethod, maxTokens: config.maxTokens},
-						);
-						if (compressionResult.compressed) {
+				await compressionCoordinator.acquireLock(instanceId);
+				try {
+						const COMPRESS_MAX_RETRIES = 3;
+						const COMPRESS_RETRY_BASE_DELAY = 1000;
+						let compressionResult;
+
+						for (let retryAttempt = 0; retryAttempt <= COMPRESS_MAX_RETRIES; retryAttempt++) {
+							try {
+								compressionResult = await compressSubAgentContext(
+									messages, latestTotalTokens, config.maxContextTokens,
+									{model, requestMethod: config.requestMethod, maxTokens: config.maxTokens},
+								);
+								break;
+							} catch (retryError) {
+								if (retryAttempt < COMPRESS_MAX_RETRIES) {
+									const retryDelay = COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
+									if (onMessage) {
+										onMessage({
+											type: 'sub_agent_message',
+											agentId: `teammate-${memberId}`,
+											agentName: memberName,
+											message: {
+												type: 'context_compress_retrying',
+												attempt: retryAttempt + 1,
+												maxRetries: COMPRESS_MAX_RETRIES,
+												error: retryError instanceof Error ? retryError.message : String(retryError),
+											},
+										});
+									}
+									console.warn(
+										`[Teammate:${memberName}] Compression failed, retrying (${retryAttempt + 1}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
+										retryError,
+									);
+									await new Promise(resolve => setTimeout(resolve, retryDelay));
+									continue;
+								}
+								throw retryError;
+							}
+						}
+
+						if (compressionResult?.compressed) {
 							messages.length = 0;
 							messages.push(...compressionResult.messages);
 							justCompressed = true;
@@ -525,7 +559,7 @@ ${role ? `Your role: ${role}` : ''}
 						}
 					} catch (compressError) {
 						console.error(
-							`[Teammate:${memberName}] Context compression failed:`,
+							`[Teammate:${memberName}] Context compression failed after retries:`,
 							compressError,
 						);
 					} finally {

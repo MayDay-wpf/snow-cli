@@ -253,19 +253,45 @@ export async function handleContextCompression(
 	const lockId = ctx.instanceId || `subagent-${ctx.agent.id}`;
 	await compressionCoordinator.acquireLock(lockId);
 	try {
-		const compressionResult = await compressSubAgentContext(
-			ctx.messages,
-			ctx.latestTotalTokens,
-			config.maxContextTokens,
-			{
-				model,
-				requestMethod: config.requestMethod,
-				maxTokens: config.maxTokens,
-				configProfile: ctx.agent.configProfile,
-			},
-		);
+		const COMPRESS_MAX_RETRIES = 3;
+		const COMPRESS_RETRY_BASE_DELAY = 1000;
+		let compressionResult;
 
-		if (compressionResult.compressed) {
+		for (let retryAttempt = 0; retryAttempt <= COMPRESS_MAX_RETRIES; retryAttempt++) {
+			try {
+				compressionResult = await compressSubAgentContext(
+					ctx.messages,
+					ctx.latestTotalTokens,
+					config.maxContextTokens,
+					{
+						model,
+						requestMethod: config.requestMethod,
+						maxTokens: config.maxTokens,
+						configProfile: ctx.agent.configProfile,
+					},
+				);
+				break;
+			} catch (retryError) {
+				if (retryAttempt < COMPRESS_MAX_RETRIES) {
+					const retryDelay = COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
+					emitSubAgentMessage(ctx, {
+						type: 'context_compress_retrying',
+						attempt: retryAttempt + 1,
+						maxRetries: COMPRESS_MAX_RETRIES,
+						error: retryError instanceof Error ? retryError.message : String(retryError),
+					});
+					console.warn(
+						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${retryAttempt + 1}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
+						retryError,
+					);
+					await new Promise(resolve => setTimeout(resolve, retryDelay));
+					continue;
+				}
+				throw retryError;
+			}
+		}
+
+		if (compressionResult?.compressed) {
 			ctx.messages.length = 0;
 			ctx.messages.push(...compressionResult.messages);
 
@@ -288,7 +314,7 @@ export async function handleContextCompression(
 		}
 	} catch (compressError) {
 		console.error(
-			`[SubAgent:${ctx.agent.name}] Context compression failed:`,
+			`[SubAgent:${ctx.agent.name}] Context compression failed after retries:`,
 			compressError,
 		);
 	} finally {

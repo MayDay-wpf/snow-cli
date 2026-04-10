@@ -150,6 +150,8 @@ export class SubAgentUIHandler {
 				return this.handleContextUsage(prev, subAgentMessage);
 			case 'context_compressing':
 				return this.handleContextCompressing(prev, subAgentMessage);
+			case 'context_compress_retrying':
+				return this.handleContextCompressRetrying(prev, subAgentMessage);
 			case 'context_compressed':
 				return this.handleContextCompressed(prev, subAgentMessage);
 			case 'inter_agent_sent':
@@ -720,6 +722,27 @@ export class SubAgentUIHandler {
 			{
 				role: 'subagent' as const,
 				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[33m✵ Auto-compressing context (${subAgentMessage.message.percentage}%)...\x1b[0m`,
+				streaming: false,
+				subAgent: {
+					agentId: subAgentMessage.agentId,
+					agentName: subAgentMessage.agentName,
+					isComplete: false,
+				},
+				subAgentInternal: true,
+			},
+		];
+	}
+
+	private handleContextCompressRetrying(
+		prev: Message[],
+		subAgentMessage: SubAgentMessage,
+	): Message[] {
+		const msg = subAgentMessage.message as any;
+		return [
+			...prev,
+			{
+				role: 'subagent' as const,
+				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[33m⟳ Compression retry (${msg.attempt}/${msg.maxRetries})...\x1b[0m${msg.error ? ` \x1b[90m${msg.error}\x1b[0m` : ''}`,
 				streaming: false,
 				subAgent: {
 					agentId: subAgentMessage.agentId,

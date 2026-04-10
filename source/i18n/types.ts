@@ -726,6 +726,8 @@ export type TranslationKeys = {
 		saveFailed: string;
 		modelSaveFailed: string;
 		tipLabel: string;
+		modelCount: string;
+		scrollHint: string;
 	};
 
 	// Hooks

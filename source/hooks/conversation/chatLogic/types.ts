@@ -36,6 +36,7 @@ export interface UseChatLogicProps {
 			images?: Array<{type: 'image'; data: string; mimeType: string}>;
 		} | null>
 	>;
+	isCompressing: boolean;
 	setIsCompressing: React.Dispatch<React.SetStateAction<boolean>>;
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;

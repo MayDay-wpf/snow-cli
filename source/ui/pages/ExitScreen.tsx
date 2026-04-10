@@ -1,10 +1,10 @@
-import React, {useEffect, useMemo} from 'react';
-import {Box, Text} from 'ink';
+import React, { useEffect, useMemo } from 'react';
+import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
-import {useI18n} from '../../i18n/index.js';
-import {useTheme} from '../contexts/ThemeContext.js';
-import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
-import {gracefulExit} from '../../utils/core/processManager.js';
+import { useI18n } from '../../i18n/index.js';
+import { useTheme } from '../contexts/ThemeContext.js';
+import { useTerminalSize } from '../../hooks/ui/useTerminalSize.js';
+import { gracefulExit } from '../../utils/core/processManager.js';
 
 type Props = {
 	version?: string;
@@ -12,13 +12,13 @@ type Props = {
 
 function dotLine(width: number): string {
 	const count = Math.max(0, Math.floor(width / 3));
-	return Array.from({length: count}, () => '·').join('  ');
+	return Array.from({ length: count }, () => '·').join('  ');
 }
 
-export default function ExitScreen({version = '1.0.0'}: Props) {
-	const {t} = useI18n();
-	const {theme} = useTheme();
-	const {columns: terminalWidth} = useTerminalSize();
+export default function ExitScreen({ version = '1.0.0' }: Props) {
+	const { t } = useI18n();
+	const { theme } = useTheme();
+	const { columns: terminalWidth } = useTerminalSize();
 
 	useEffect(() => {
 		gracefulExit();

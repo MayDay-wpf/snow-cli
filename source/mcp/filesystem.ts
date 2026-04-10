@@ -937,6 +937,7 @@ export class FilesystemMCPService {
 	 * @param filePath - Path where the file should be created
 	 * @param content - Content to write to the file
 	 * @param createDirectories - Whether to create parent directories if they don't exist
+	 * @param overwrite - Whether to overwrite the file if it already exists
 	 * @returns Success message
 	 * @throws Error if file creation fails
 	 */
@@ -944,22 +945,29 @@ export class FilesystemMCPService {
 		filePath: string,
 		content: string,
 		createDirectories: boolean = true,
+		overwrite: boolean = false,
 	): Promise<string> {
 		try {
 			const fullPath = this.resolvePath(filePath);
 
+			let fileExisted = false;
+			let originalContent: string | undefined;
+
 			// Check if file already exists
 			try {
 				await fs.access(fullPath);
-				throw new Error(`File already exists: ${filePath}`);
+				if (!overwrite) {
+					throw new Error(`File already exists: ${filePath}`);
+				}
+				fileExisted = true;
+				originalContent = await readFileWithEncoding(fullPath);
 			} catch (error) {
-				// File doesn't exist, which is what we want
 				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 					throw error;
 				}
 			}
 
-			// Backup for rollback (new file, didn't exist before)
+			// Backup for rollback
 			try {
 				const {getConversationContext} = await import(
 					'../utils/codebase/conversationContext.js'
@@ -974,8 +982,8 @@ export class FilesystemMCPService {
 						context.messageIndex,
 						filePath,
 						this.basePath,
-						false, // File didn't exist
-						undefined,
+						fileExisted,
+						originalContent,
 					);
 				}
 			} catch (backupError) {
@@ -989,7 +997,9 @@ export class FilesystemMCPService {
 			}
 
 			await writeFileWithEncoding(fullPath, content);
-			return `File created successfully: ${filePath}`;
+			return fileExisted
+				? `File overwritten successfully: ${filePath}`
+				: `File created successfully: ${filePath}`;
 		} catch (error) {
 			throw new Error(
 				`Failed to create file ${filePath}: ${
@@ -1636,7 +1646,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Verify file does not exist first. Automatically creates parent directories.',
+			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1648,6 +1658,11 @@ export const mcpTools = [
 					type: 'string',
 					description: 'Content to write to the file',
 				},
+				overwrite: {
+					type: 'boolean',
+					description:
+						'Whether to overwrite the file if it already exists. When true, the existing file content is backed up for rollback before being replaced. When false, an error is thrown if the file already exists.',
+				},
 				createDirectories: {
 					type: 'boolean',
 					description:
@@ -1655,7 +1670,7 @@ export const mcpTools = [
 					default: true,
 				},
 			},
-			required: ['filePath', 'content'],
+			required: ['filePath', 'content', 'overwrite'],
 		},
 	},
 	{

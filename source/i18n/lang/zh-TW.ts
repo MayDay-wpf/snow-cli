@@ -666,6 +666,8 @@ export const zhTW: TranslationKeys = {
 		saveFailed: '儲存失敗',
 		modelSaveFailed: '模型儲存失敗',
 		tipLabel: '提示:',
+		modelCount: '共 {count} 個模型',
+		scrollHint: '↑↓ 捲動瀏覽更多模型',
 	},
 	profilePanel: {
 		title: '選擇設定檔',

@@ -478,36 +478,36 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setCompressionError(null);
 
 				try {
-					// 获取当前会话ID
-					const currentSession = sessionManager.getCurrentSession();
-					if (!currentSession) {
-						throw new Error('No active session to compress');
-					}
+					const {performAutoCompression} = await import(
+						'../../utils/core/autoCompress.js'
+					);
 
-					// 使用提取的压缩函数，传入当前会话ID和状态回调
-					const compressionResult = await executeContextCompression(
-						currentSession.id,
-						status => {
+					const currentSession = sessionManager.getCurrentSession();
+					const compressionResult = await performAutoCompression(
+						currentSession?.id,
+						(status: CompressionStatus | null) => {
 							options.onCompressionStatus?.(status);
 						},
 					);
 
-					if (!compressionResult) {
-						throw new Error('Compression failed');
+					if (compressionResult && (compressionResult as any).hookFailed) {
+						const errorMsg = 'Blocked by beforeCompress hook';
+						options.setCompressionError(errorMsg);
+						return;
 					}
 
-					// Clear compression status after completion
+					if (!compressionResult) {
+						return;
+					}
+
 					options.onCompressionStatus?.(null);
 
-					// 更新UI
 					options.clearSavedMessages();
 					options.setMessages(compressionResult.uiMessages);
 					options.setRemountKey(prev => prev + 1);
 
-					// Update token usage with compression result
 					options.setContextUsage(compressionResult.usage);
 				} catch (error) {
-					// Show error message
 					const errorMsg =
 						error instanceof Error
 							? error.message
@@ -517,13 +517,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						message: errorMsg,
 					});
 					options.setCompressionError(errorMsg);
-
-					const errorMessage: Message = {
-						role: 'assistant',
-						content: `**Compression Failed**\\n\\n${errorMsg}`,
-						streaming: false,
-					};
-					options.setMessages(prev => [...prev, errorMessage]);
+					setTimeout(() => {
+						options.onCompressionStatus?.(null);
+					}, 5000);
 				} finally {
 					options.setIsCompressing(false);
 				}

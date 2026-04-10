@@ -361,10 +361,17 @@ export function useConfigState() {
 
 	const getCurrentOptions = () => {
 		const filteredModels = filterModels(models, searchTerm);
-		const modelOptions = filteredModels.map(model => ({
-			label: model.id,
-			value: model.id,
-		}));
+		const seen = new Set<string>();
+		const modelOptions = filteredModels
+			.filter(model => {
+				if (seen.has(model.id)) return false;
+				seen.add(model.id);
+				return true;
+			})
+			.map(model => ({
+				label: model.id,
+				value: model.id,
+			}));
 
 		return [
 			{label: t.configScreen.manualInputOption, value: '__MANUAL_INPUT__'},

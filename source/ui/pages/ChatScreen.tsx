@@ -207,6 +207,7 @@ export default function ChatScreen({
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
 		setRestoreInputContent,
+		isCompressing,
 		setIsCompressing,
 		setCompressionError,
 		currentContextPercentageRef,

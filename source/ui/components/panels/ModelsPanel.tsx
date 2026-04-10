@@ -60,6 +60,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [hasStartedLoading, setHasStartedLoading] = useState(false);
+	const [highlightedModelIndex, setHighlightedModelIndex] = useState(0);
 
 	// 使用 ref 同步追踪选择状态，解决 ESC 键需要按两次的问题
 	const isSelectingRef = useRef(false);
@@ -120,6 +121,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		manualInputModeRef.current = false;
 		setManualInputValue('');
 		setHasStartedLoading(false);
+		setHighlightedModelIndex(0);
 		setThinkingFocusIndex(0);
 		setThinkingInputMode(null);
 		setThinkingInputValue('');
@@ -227,16 +229,21 @@ export const ModelsPanel: React.FC<Props> = ({
 		[models, searchTerm],
 	);
 
-	const currentOptions = useMemo(
-		() => [
+	const currentOptions = useMemo(() => {
+		const seen = new Set<string>();
+		const uniqueModels = filteredModels.filter(model => {
+			if (seen.has(model.id)) return false;
+			seen.add(model.id);
+			return true;
+		});
+		return [
 			{label: t.modelsPanel.manualInputOption, value: '__MANUAL_INPUT__'},
-			...filteredModels.map(model => ({
+			...uniqueModels.map(model => ({
 				label: model.id,
 				value: model.id,
 			})),
-		],
-		[filteredModels, t],
-	);
+		];
+	}, [filteredModels, t]);
 
 	const handleModelSelect = useCallback(
 		(value: string) => {
@@ -1198,22 +1205,46 @@ export const ModelsPanel: React.FC<Props> = ({
 						</Text>
 					</Box>
 				</Box>
-			) : isSelecting ? (
-				<Box flexDirection="column" paddingX={1} paddingY={0}>
+		) : isSelecting ? (
+			<Box flexDirection="column" paddingX={1} paddingY={0}>
+				<Box>
 					{searchTerm && (
 						<Text color={theme.colors.menuInfo}>
 							{t.modelsPanel.filterLabel} {searchTerm}
+							{'  '}
 						</Text>
 					)}
-					<ScrollableSelectInput
-						items={currentOptions}
-						limit={10}
-						disableNumberShortcuts={true}
-						initialIndex={selectedIndex}
-						isFocused={isSelecting}
-						onSelect={item => handleModelSelect(item.value)}
-					/>
+					<Text color={theme.colors.warning} bold>
+						{t.modelsPanel.modelCount.replace(
+							'{count}',
+							(currentOptions.length - 1).toString(),
+						)}
+						{currentOptions.length > 10 &&
+							` (${highlightedModelIndex + 1}/${currentOptions.length})`}
+					</Text>
 				</Box>
+				<ScrollableSelectInput
+					items={currentOptions}
+					limit={10}
+					disableNumberShortcuts={true}
+					initialIndex={selectedIndex}
+					isFocused={isSelecting}
+					onSelect={item => handleModelSelect(item.value)}
+					onHighlight={item => {
+						const idx = currentOptions.findIndex(
+							o => o.value === item.value,
+						);
+						if (idx >= 0) setHighlightedModelIndex(idx);
+					}}
+				/>
+				{currentOptions.length > 10 && (
+					<Box>
+						<Text dimColor color={theme.colors.menuSecondary}>
+							{t.modelsPanel.scrollHint}
+						</Text>
+					</Box>
+				)}
+			</Box>
 			) : (
 				<Box flexDirection="column" paddingX={1} paddingY={0}>
 					<Box>

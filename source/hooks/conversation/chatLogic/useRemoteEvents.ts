@@ -3,7 +3,7 @@ import type {UseChatLogicProps} from './types.js';
 import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
-import {executeContextCompression} from '../useCommandHandler.js';
+import {performAutoCompression} from '../../../utils/core/autoCompress.js';
 
 interface UseRemoteEventsHandlers {
 	handleMessageSubmit: (
@@ -318,19 +318,29 @@ export function useRemoteEvents(
 					await connectionManager.notifyCompactStarted();
 
 					const currentSession = sessionManager.getCurrentSession();
-					if (!currentSession) {
-						throw new Error('No active session to compress');
-					}
 
-					const compressionResult = await executeContextCompression(
-						currentSession.id,
-						status => {
+					const compressionResult = await performAutoCompression(
+						currentSession?.id,
+						(status) => {
 							props.onCompressionStatus?.(status);
 						},
 					);
 
+					if (compressionResult && (compressionResult as any).hookFailed) {
+						setCompressionError('Blocked by beforeCompress hook');
+						await connectionManager.notifyCompactCompleted({
+							success: false,
+							error: 'Blocked by beforeCompress hook',
+						});
+						return;
+					}
+
 					if (!compressionResult) {
-						throw new Error('Compression failed');
+						await connectionManager.notifyCompactCompleted({
+							success: false,
+							error: 'Compression failed after retries',
+						});
+						return;
 					}
 
 					props.onCompressionStatus?.(null);
@@ -353,6 +363,9 @@ export function useRemoteEvents(
 						message: errorMsg,
 					});
 					setCompressionError(errorMsg);
+					setTimeout(() => {
+						props.onCompressionStatus?.(null);
+					}, 5000);
 
 					await connectionManager.notifyCompactCompleted({
 						success: false,

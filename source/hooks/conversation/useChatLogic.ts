@@ -20,6 +20,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		setPendingMessages,
 		setRestoreInputContent,
 		userInterruptedRef,
+		isCompressing,
 		vscodeState,
 		commandsLoaded,
 		terminalExecutionState,
@@ -211,6 +212,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 				return true;
 			}
 
+			// Block ESC during /compact command compression
+			if (isCompressing) {
+				streamingState.setCompressBlockToast(
+					t.chatScreen.compressionBlockToast,
+				);
+				return true;
+			}
+
 			// Handle scheduler task interruption
 			if (schedulerExecutionState?.state.isRunning) {
 				schedulerExecutionState.resetTask();
@@ -273,6 +282,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			backgroundProcesses,
 			terminalExecutionState,
 			streamingState,
+			isCompressing,
 			hasFocus,
 			pendingMessages,
 			handleInterrupt,

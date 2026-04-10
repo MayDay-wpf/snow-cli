@@ -7,6 +7,7 @@ export type CompressionStep =
 	| 'saving'
 	| 'loading'
 	| 'compressing'
+	| 'retrying'
 	| 'completed'
 	| 'failed'
 	| 'skipped';
@@ -15,6 +16,8 @@ export type CompressionStatus = {
 	step: CompressionStep;
 	message?: string;
 	sessionId?: string;
+	retryAttempt?: number;
+	maxRetries?: number;
 };
 
 interface CompressionStatusProps {
@@ -26,6 +29,7 @@ const stepIcons: Record<CompressionStep, {icon: string; color: string}> = {
 	saving: {icon: '◉', color: 'yellow'},
 	loading: {icon: '◉', color: 'cyan'},
 	compressing: {icon: '◉', color: 'blue'},
+	retrying: {icon: '⟳', color: 'yellow'},
 	completed: {icon: '✓', color: 'green'},
 	failed: {icon: '✗', color: 'red'},
 	skipped: {icon: '○', color: 'gray'},
@@ -35,6 +39,7 @@ const stepLabels: Record<CompressionStep, string> = {
 	saving: 'Saving session',
 	loading: 'Loading session',
 	compressing: 'Compressing context',
+	retrying: 'Retrying compression',
 	completed: 'Compression complete',
 	failed: 'Compression failed',
 	skipped: 'Compression skipped',
@@ -50,19 +55,22 @@ export function CompressionStatus({
 		return null;
 	}
 
-	const {step, message, sessionId} = status;
+	const {step, message, sessionId, retryAttempt, maxRetries} = status;
 	const isActive =
 		step === 'saving' || step === 'loading' || step === 'compressing';
+	const isRetrying = step === 'retrying';
 	const isCompleted = step === 'completed';
 	const isFailed = step === 'failed' || step === 'skipped';
 
 	const stepInfo = stepIcons[step];
-	const label = stepLabels[step];
+	const label = isRetrying && retryAttempt && maxRetries
+		? `Retrying compression (${retryAttempt}/${maxRetries})`
+		: stepLabels[step];
 
-	// Get theme color
 	const getColor = () => {
 		if (isFailed) return theme.colors.error;
 		if (isCompleted) return theme.colors.success;
+		if (isRetrying) return theme.colors.warning;
 		return theme.colors.menuInfo;
 	};
 
@@ -72,7 +80,7 @@ export function CompressionStatus({
 		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
 			<Box>
 				<Text bold color={color}>
-					{isActive ? (
+					{isActive || isRetrying ? (
 						<>
 							<Spinner type="dots" /> {label}
 						</>
@@ -85,7 +93,7 @@ export function CompressionStatus({
 			</Box>
 
 			{sessionId && (
-				<Box paddingLeft={2} marginTop={isActive ? 0 : 1}>
+				<Box paddingLeft={2} marginTop={isActive || isRetrying ? 0 : 1}>
 					<Text dimColor>Session: </Text>
 					<Text color={theme.colors.menuSecondary}>{sessionId}</Text>
 				</Box>
@@ -93,13 +101,16 @@ export function CompressionStatus({
 
 			{message && (
 				<Box paddingLeft={2} marginTop={1}>
-					<Text dimColor wrap="truncate">
+					<Text
+						dimColor={!isRetrying}
+						color={isRetrying ? theme.colors.warning : undefined}
+						wrap="truncate"
+					>
 						{message}
 					</Text>
 				</Box>
 			)}
 
-			{/* Progress indicator for active steps */}
 			{isActive && (
 				<Box paddingLeft={2} marginTop={1}>
 					<Text color={theme.colors.menuSecondary}>

@@ -161,7 +161,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 				const errorMessage: Message = {
 					role: 'assistant',
-					content: `**Auto-compression Failed**\n\n${errorMsg}`,
+					content: `**Auto-compression Failed**`,
 					streaming: false,
 				};
 				setMessages(prev => [...prev, errorMessage]);

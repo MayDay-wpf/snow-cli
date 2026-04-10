@@ -708,6 +708,8 @@ export const en: TranslationKeys = {
 		saveFailed: 'Save failed',
 		modelSaveFailed: 'Model save failed',
 		tipLabel: 'Tip:',
+		modelCount: '{count} models',
+		scrollHint: '↑↓ scroll for more',
 	},
 	profilePanel: {
 		title: 'Select Profile',
