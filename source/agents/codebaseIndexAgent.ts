@@ -316,6 +316,14 @@ export class CodebaseIndexAgent {
 	}
 
 	/**
+	 * Count the number of files that would be embedded
+	 */
+	async countFiles(): Promise<number> {
+		const files = await this.scanFiles();
+		return files.length;
+	}
+
+	/**
 	 * Clear all indexed data
 	 */
 	clear(): void {
