@@ -1132,6 +1132,16 @@ export class SubAgentUIHandler {
 			(msg.tool_name === 'filesystem-create' ||
 				msg.tool_name === 'filesystem-edit')
 		) {
+			if (
+				msg.editDiffData &&
+				(typeof msg.editDiffData.oldContent === 'string' ||
+					Array.isArray(msg.editDiffData.batchResults))
+			) {
+				fileToolData = {
+					name: msg.tool_name,
+					arguments: msg.editDiffData,
+				};
+			}
 			try {
 				const resultData = JSON.parse(msg.content);
 				if (resultData.content) {
@@ -1155,15 +1165,23 @@ export class SubAgentUIHandler {
 							contextStartLine: resultData.contextStartLine,
 						},
 					};
-				} else if (
-					resultData.results &&
-					Array.isArray(resultData.results)
-				) {
+				} else if (resultData.results && Array.isArray(resultData.results)) {
 					fileToolData = {
 						name: msg.tool_name,
 						arguments: {
 							isBatch: true,
 							batchResults: resultData.results,
+						},
+					};
+				} else if (
+					resultData.batchResults &&
+					Array.isArray(resultData.batchResults)
+				) {
+					fileToolData = {
+						name: msg.tool_name,
+						arguments: {
+							isBatch: true,
+							batchResults: resultData.batchResults,
 						},
 					};
 				}

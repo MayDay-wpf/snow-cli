@@ -310,6 +310,24 @@ ${role ? `Your role: ${role}` : ''}
 		let totalUsage: TokenUsage | undefined;
 		let latestTotalTokens = 0;
 		let planApproved = !requirePlanApproval; // Skip approval if not required
+		const emitToolResultEvent = (
+			toolCallId: string,
+			toolName: string,
+			content: string,
+		) => {
+			if (!onMessage) return;
+			onMessage({
+				type: 'sub_agent_message',
+				agentId: `teammate-${memberId}`,
+				agentName: memberName,
+				message: {
+					type: 'tool_result',
+					tool_call_id: toolCallId,
+					tool_name: toolName,
+					content,
+				},
+			});
+		};
 
 		// eslint-disable-next-line no-constant-condition
 		while (true) {
@@ -777,6 +795,11 @@ ${role ? `Your role: ${role}` : ''}
 
 					if (blockedTools.length > 0) {
 						for (const tc of blockedTools) {
+							emitToolResultEvent(
+								tc.id,
+								tc.function.name,
+								'Error: Plan approval required before making changes. Use request_plan_approval first.',
+							);
 							messages.push({
 								role: 'tool' as const,
 								tool_call_id: tc.id,
@@ -794,6 +817,11 @@ ${role ? `Your role: ${role}` : ''}
 								let toolArgs = JSON.parse(tc.function.arguments || '{}');
 								const rwResult = rewriteToolArgsForWorktree(tc.function.name, toolArgs, worktreePath);
 								if (rwResult.error) {
+									emitToolResultEvent(
+										tc.id,
+										tc.function.name,
+										`Error: ${rwResult.error}`,
+									);
 									messages.push({
 										role: 'tool' as const,
 										tool_call_id: tc.id,
@@ -810,6 +838,11 @@ ${role ? `Your role: ${role}` : ''}
 									);
 									const bInterp = interpretHookResult('beforeToolCall', bHook);
 									if (bInterp.action === 'block') {
+										emitToolResultEvent(
+											tc.id,
+											tc.function.name,
+											bInterp.replacedContent || '',
+										);
 										messages.push({
 											role: 'tool' as const,
 											tool_call_id: tc.id,
@@ -840,6 +873,7 @@ ${role ? `Your role: ${role}` : ''}
 									tool_call_id: tc.id,
 									content: resultContent,
 								});
+								emitToolResultEvent(tc.id, tc.function.name, resultContent);
 							} catch (e: any) {
 								const errorContent = `Error: ${e.message}`;
 								messages.push({
@@ -847,6 +881,7 @@ ${role ? `Your role: ${role}` : ''}
 									tool_call_id: tc.id,
 									content: errorContent,
 								});
+								emitToolResultEvent(tc.id, tc.function.name, errorContent);
 								try {
 									await unifiedHooksExecutor.executeHooks('afterToolCall', {
 										toolName: tc.function.name, args: {},
@@ -882,6 +917,7 @@ ${role ? `Your role: ${role}` : ''}
 							const feedback = typeof confirmResult === 'object' && confirmResult.type === 'reject_with_reply'
 								? confirmResult.reason
 								: 'Tool execution denied by user.';
+							emitToolResultEvent(tc.id, toolName, feedback);
 							messages.push({
 								role: 'tool' as const,
 								tool_call_id: tc.id,
@@ -897,6 +933,7 @@ ${role ? `Your role: ${role}` : ''}
 					// Enforce worktree path constraints before execution
 					const rwResult = rewriteToolArgsForWorktree(toolName, toolArgs, worktreePath);
 					if (rwResult.error) {
+						emitToolResultEvent(tc.id, toolName, `Error: ${rwResult.error}`);
 						messages.push({
 							role: 'tool' as const,
 							tool_call_id: tc.id,
@@ -913,6 +950,11 @@ ${role ? `Your role: ${role}` : ''}
 						);
 						const bInterp = interpretHookResult('beforeToolCall', bHook);
 						if (bInterp.action === 'block') {
+							emitToolResultEvent(
+								tc.id,
+								toolName,
+								bInterp.replacedContent || '',
+							);
 							messages.push({
 								role: 'tool' as const,
 								tool_call_id: tc.id,
@@ -944,6 +986,7 @@ ${role ? `Your role: ${role}` : ''}
 							tool_call_id: tc.id,
 							content: resultContent,
 						});
+						emitToolResultEvent(tc.id, toolName, resultContent);
 					} catch (e: any) {
 						const errorContent = `Error: ${e.message}`;
 						messages.push({
@@ -951,6 +994,7 @@ ${role ? `Your role: ${role}` : ''}
 							tool_call_id: tc.id,
 							content: errorContent,
 						});
+						emitToolResultEvent(tc.id, toolName, errorContent);
 						try {
 							await unifiedHooksExecutor.executeHooks('afterToolCall', {
 								toolName, args: toolArgs,
