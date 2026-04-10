@@ -6,6 +6,7 @@ import {
 	loadCodebaseConfig,
 	isCodebaseEnabled,
 } from '../config/codebaseConfig.js';
+import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 
 // Codebase command handler - Toggle codebase indexing for current project
 // Usage:
@@ -14,7 +15,7 @@ import {
 //   /codebase off    - Disable codebase
 //   /codebase status - Show current status
 registerCommand('codebase', {
-	execute: (args?: string): CommandResult => {
+	execute: async (args?: string): Promise<CommandResult> => {
 		const trimmedArgs = args?.trim().toLowerCase();
 
 		// Check if embedding is configured
@@ -31,12 +32,25 @@ registerCommand('codebase', {
 						'Codebase: Not configured. Please configure embedding settings in /home first.',
 				};
 			}
-			return {
-				success: true,
-				message: `Codebase: ${
-					enabled ? 'Enabled' : 'Disabled'
-				} for this project`,
-			};
+			try {
+				const agent = new CodebaseIndexAgent(process.cwd());
+				const fileCount = await agent.countFiles();
+				return {
+					success: true,
+					message: `Codebase: ${
+						enabled ? 'Enabled' : 'Disabled'
+					} for this project (${fileCount} file${
+						fileCount === 1 ? '' : 's'
+					} will be embedded)`,
+				};
+			} catch {
+				return {
+					success: true,
+					message: `Codebase: ${
+						enabled ? 'Enabled' : 'Disabled'
+					} for this project`,
+				};
+			}
 		}
 
 		if (trimmedArgs === 'on') {
