@@ -553,7 +553,7 @@ export class CodebaseIndexAgent {
 	/**
 	 * Scan project directory for code files
 	 */
-	private async scanFiles(): Promise<string[]> {
+	public async scanFiles(): Promise<string[]> {
 		const files: string[] = [];
 
 		const scanDir = (dir: string) => {
@@ -603,6 +603,14 @@ export class CodebaseIndexAgent {
 
 		scanDir(this.projectRoot);
 		return files;
+	}
+
+	/**
+	 * Count scannable files
+	 */
+	public async countFiles(): Promise<number> {
+		const files = await this.scanFiles();
+		return files.length;
 	}
 
 	/**
