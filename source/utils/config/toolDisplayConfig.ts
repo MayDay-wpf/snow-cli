@@ -30,6 +30,13 @@ const TWO_STEP_TOOLS = new Set([
 ]);
 
 /**
+ * 固定列表内的两步显示工具名（不含 `subagent-` 前缀规则）
+ * 供持久化 / teammate 等路径对照检查，避免漏发 `tool_result` 导致会话缺结果
+ */
+export const TWO_STEP_DISPLAY_TOOL_NAMES: readonly string[] =
+	Array.from(TWO_STEP_TOOLS);
+
+/**
  * 判断工具是否需要显示两步状态
  * @param toolName - 工具名称
  * @returns 是否需要显示进行中和完成两个状态
@@ -55,4 +62,51 @@ export function isToolNeedTwoStepDisplay(toolName: string): boolean {
  */
 export function isToolOnlyShowCompleted(toolName: string): boolean {
 	return !isToolNeedTwoStepDisplay(toolName);
+}
+
+/**
+ * 从已写入会话的 tool 消息 content（JSON 字符串）中提取 filesystem-edit 的 diff 元数据，
+ * 便于截断或仅文本 content 时仍能恢复 DiffViewer（与主流程 ToolResult.editDiffData 对齐）
+ */
+export function extractFilesystemEditDiffDataForPersistence(
+	toolName: string,
+	content: string,
+): Record<string, any> | undefined {
+	if (toolName !== 'filesystem-edit' || content.startsWith('Error:')) {
+		return undefined;
+	}
+	try {
+		const resultData = JSON.parse(content);
+		if (resultData.oldContent && resultData.newContent) {
+			return {
+				oldContent: resultData.oldContent,
+				newContent: resultData.newContent,
+				filename:
+					resultData.filePath ||
+					resultData.path ||
+					resultData.filename,
+				completeOldContent: resultData.completeOldContent,
+				completeNewContent: resultData.completeNewContent,
+				contextStartLine: resultData.contextStartLine,
+			};
+		}
+		if (resultData.results && Array.isArray(resultData.results)) {
+			return {
+				batchResults: resultData.results,
+				isBatch: true,
+			};
+		}
+		if (
+			resultData.batchResults &&
+			Array.isArray(resultData.batchResults)
+		) {
+			return {
+				batchResults: resultData.batchResults,
+				isBatch: true,
+			};
+		}
+	} catch {
+		// ignore
+	}
+	return undefined;
 }

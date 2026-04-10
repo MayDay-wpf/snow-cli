@@ -1,7 +1,10 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {SubAgentMessage} from '../../../utils/execution/subAgentExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
+import {
+	extractFilesystemEditDiffDataForPersistence,
+	isToolNeedTwoStepDisplay,
+} from '../../../utils/config/toolDisplayConfig.js';
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -1026,6 +1029,11 @@ export class SubAgentUIHandler {
 			? msg.rejection_reason || extractRejectionReason(msg.content)
 			: undefined;
 
+		const editDiffData = extractFilesystemEditDiffDataForPersistence(
+			msg.tool_name,
+			msg.content,
+		);
+
 		// Fire-and-forget save
 		const sessionMsg = {
 			role: 'tool' as const,
@@ -1033,6 +1041,7 @@ export class SubAgentUIHandler {
 			content: msg.content,
 			messageStatus: isError ? 'error' : 'success',
 			subAgentInternal: true,
+			...(editDiffData ? {editDiffData} : {}),
 		};
 		this.saveMessage(sessionMsg).catch(err =>
 			console.error('Failed to save sub-agent tool result:', err),

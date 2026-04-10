@@ -720,6 +720,7 @@ ${role ? `Your role: ${role}` : ''}
 					tool_call_id: tc.id,
 					content: resultContent,
 				});
+				emitToolResultEvent(tc.id, tc.function.name, resultContent);
 			}
 
 		// Handle wait_for_messages: notify lead, mark standby, then block until messages arrive
@@ -761,10 +762,16 @@ ${role ? `Your role: ${role}` : ''}
 			teamTracker.clearStandby(instanceId);
 
 			if (abortSignal?.aborted) {
+				const waitAbortContent = 'Session terminated by team lead.';
+				emitToolResultEvent(
+					waitCall.id,
+					'wait_for_messages',
+					waitAbortContent,
+				);
 				messages.push({
 					role: 'tool' as const,
 					tool_call_id: waitCall.id,
-					content: 'Session terminated by team lead.',
+					content: waitAbortContent,
 				});
 				break;
 			}
@@ -772,10 +779,16 @@ ${role ? `Your role: ${role}` : ''}
 			const msgSummary = receivedMessages
 				.map(m => `[${m.fromMemberName}]: ${m.content}`)
 				.join('\n');
+			const waitDoneContent = `Received ${receivedMessages.length} message(s):\n${msgSummary}`;
+			emitToolResultEvent(
+				waitCall.id,
+				'wait_for_messages',
+				waitDoneContent,
+			);
 			messages.push({
 				role: 'tool' as const,
 				tool_call_id: waitCall.id,
-				content: `Received ${receivedMessages.length} message(s):\n${msgSummary}`,
+				content: waitDoneContent,
 			});
 
 			// Skip regular tool calls this iteration — the AI should process the messages first
