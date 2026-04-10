@@ -1,5 +1,6 @@
 import {CodebaseDatabase} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbedding} from '../api/embedding.js';
+import {rerankDocuments} from '../api/rerank.js';
 import {logger} from '../utils/core/logger.js';
 import {codebaseReviewAgent} from '../agents/codebaseReviewAgent.js';
 import {codebaseSearchEvents} from '../utils/codebase/codebaseSearchEvents.js';
@@ -103,6 +104,7 @@ class CodebaseSearchService {
 		// Load codebase config
 		const config = loadCodebaseConfig();
 		const enableAgentReview = config.enableAgentReview;
+		const enableReranking = config.enableReranking;
 
 		// Check if codebase index is available
 		const {available, reason} = await this.isCodebaseIndexAvailable();
@@ -136,8 +138,8 @@ class CodebaseSearchService {
 			while (searchAttempt < MAX_SEARCH_RETRIES) {
 				searchAttempt++;
 
-				// Emit search event (only if agent review is enabled)
-				if (enableAgentReview) {
+				// Emit search event (when agent review or reranking is enabled)
+				if (enableAgentReview || enableReranking) {
 					codebaseSearchEvents.emitSearchEvent({
 						type: searchAttempt === 1 ? 'search-start' : 'search-retry',
 						attempt: searchAttempt,
@@ -183,7 +185,63 @@ class CodebaseSearchService {
 				let suggestion: string | undefined;
 				let highConfidenceFiles: string[] = [];
 
-				if (enableAgentReview) {
+				if (enableReranking) {
+					// ── Reranking branch ──
+					codebaseSearchEvents.emitSearchEvent({
+						type: 'search-retry',
+						attempt: searchAttempt,
+						maxAttempts: MAX_SEARCH_RETRIES,
+						currentTopN,
+						message: `Reranking ${formattedResults.length} results...`,
+						query,
+						originalResultsCount: formattedResults.length,
+					});
+
+					logger.info(
+						`Reranking ${formattedResults.length} search results (attempt ${searchAttempt})`,
+					);
+
+					try {
+						const rerankTopN = config.reranking.topN;
+						const documents = formattedResults.map(r => {
+							return `File: ${r.filePath} (Lines ${r.startLine}-${r.endLine})\n${r.content}`;
+						});
+
+						const rerankResponse = await rerankDocuments({
+							query: currentQuery,
+							documents,
+							topN: rerankTopN,
+						});
+
+						// Map rerank results back to formatted results, sorted by relevance
+						const rerankedResults = rerankResponse.results
+							.sort((a, b) => b.relevanceScore - a.relevanceScore)
+							.filter(r => r.index >= 0 && r.index < formattedResults.length)
+							.map((r, newRank) => {
+								const original = formattedResults[r.index]!;
+								return {
+									...original,
+									rank: newRank + 1,
+									similarityScore: `${(r.relevanceScore * 100).toFixed(2)}`,
+									relevanceScore: r.relevanceScore,
+								};
+							});
+
+						finalResults = rerankedResults;
+						removedCount = formattedResults.length - finalResults.length;
+						reviewFailed = false;
+
+						logger.info(
+							`Reranking complete: ${formattedResults.length} → ${finalResults.length} results`,
+						);
+					} catch (rerankError) {
+						logger.error('Reranking failed, falling back to raw results:', rerankError);
+						finalResults = formattedResults;
+						reviewFailed = true;
+						removedCount = 0;
+					}
+				} else if (enableAgentReview) {
+					// ── Agent review branch ──
 					// Emit reviewing event
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-retry',
@@ -228,16 +286,14 @@ class CodebaseSearchService {
 					suggestion = reviewResult.suggestion;
 					highConfidenceFiles = reviewResult.highConfidenceFiles || [];
 				} else {
-					// Skip agent review, use all formatted results
+					// ── Raw results branch (no review, no reranking) ──
 					finalResults = formattedResults;
 					reviewFailed = false;
 					removedCount = 0;
 					suggestion = undefined;
 
-					// When agent review is disabled, we don't need to retry
-					// Just return results immediately
 					logger.info(
-						`Agent review disabled, returning all ${finalResults.length} search results`,
+						`Agent review & reranking disabled, returning all ${finalResults.length} search results`,
 					);
 				}
 
@@ -254,9 +310,8 @@ class CodebaseSearchService {
 					searchAttempts: searchAttempt,
 				};
 
-				// If agent review is disabled, return immediately (no need to retry)
-				if (!enableAgentReview) {
-					// Emit search complete event before closing
+				// If neither agent review nor reranking is enabled, return immediately
+				if (!enableAgentReview && !enableReranking) {
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
 						attempt: searchAttempt,
@@ -271,11 +326,25 @@ class CodebaseSearchService {
 					return lastResults;
 				}
 
-				// If review failed, return immediately (no point retrying)
-				if (reviewFailed) {
-					logger.info('Review failed, returning all results without retry');
+				// If reranking succeeded, return immediately (no retry loop needed)
+				if (enableReranking && !reviewFailed) {
+					codebaseSearchEvents.emitSearchEvent({
+						type: 'search-complete',
+						attempt: searchAttempt,
+						maxAttempts: MAX_SEARCH_RETRIES,
+						currentTopN,
+						message: `Search complete`,
+						query: currentQuery,
+					});
 
-					// Emit search complete event before closing
+					db.close();
+					return lastResults;
+				}
+
+				// If review/reranking failed, return immediately (no point retrying)
+				if (reviewFailed) {
+					logger.info('Review/reranking failed, returning all results without retry');
+
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
 						attempt: searchAttempt,
@@ -385,7 +454,7 @@ class CodebaseSearchService {
 			logger.error('Codebase search failed:', error);
 
 			// Emit search complete event with error to reset UI state
-			if (enableAgentReview) {
+			if (enableAgentReview || enableReranking) {
 				codebaseSearchEvents.emitSearchEvent({
 					type: 'search-complete',
 					attempt: 0,

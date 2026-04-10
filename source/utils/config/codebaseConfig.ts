@@ -5,6 +5,7 @@ import os from 'os';
 export interface CodebaseConfig {
 	enabled: boolean;
 	enableAgentReview: boolean;
+	enableReranking: boolean;
 	embedding: {
 		type?: 'jina' | 'ollama' | 'gemini'; // 请求类型，默认为jina
 		modelName: string;
@@ -22,11 +23,19 @@ export interface CodebaseConfig {
 		minCharsPerChunk: number;
 		overlapLines: number;
 	};
+	reranking: {
+		modelName: string;
+		baseUrl: string;
+		apiKey: string;
+		contextLength: number;
+		topN: number;
+	};
 }
 
 const DEFAULT_CONFIG: CodebaseConfig = {
 	enabled: false,
 	enableAgentReview: true,
+	enableReranking: false,
 	embedding: {
 		type: 'jina', // 默认使用jina
 		modelName: '',
@@ -43,6 +52,13 @@ const DEFAULT_CONFIG: CodebaseConfig = {
 		minLinesPerChunk: 10,
 		minCharsPerChunk: 20,
 		overlapLines: 20,
+	},
+	reranking: {
+		modelName: '',
+		baseUrl: '',
+		apiKey: '',
+		contextLength: 4096,
+		topN: 5,
 	},
 };
 
@@ -119,6 +135,8 @@ export const loadCodebaseConfig = (
 			enabled: projectConfig.enabled ?? DEFAULT_CONFIG.enabled,
 			enableAgentReview:
 				projectConfig.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
+			enableReranking:
+				projectConfig.enableReranking ?? DEFAULT_CONFIG.enableReranking,
 			embedding: globalEmbedding,
 			batch: {
 				maxLines:
@@ -139,6 +157,19 @@ export const loadCodebaseConfig = (
 				overlapLines:
 					projectConfig.chunking?.overlapLines ??
 					DEFAULT_CONFIG.chunking.overlapLines,
+			},
+			reranking: {
+				modelName:
+					projectConfig.reranking?.modelName ??
+					DEFAULT_CONFIG.reranking.modelName,
+				baseUrl:
+					projectConfig.reranking?.baseUrl ?? DEFAULT_CONFIG.reranking.baseUrl,
+				apiKey:
+					projectConfig.reranking?.apiKey ?? DEFAULT_CONFIG.reranking.apiKey,
+				contextLength:
+					projectConfig.reranking?.contextLength ??
+					DEFAULT_CONFIG.reranking.contextLength,
+				topN: projectConfig.reranking?.topN ?? DEFAULT_CONFIG.reranking.topN,
 			},
 		};
 	} catch (error) {
@@ -169,8 +200,10 @@ export const saveCodebaseConfig = (
 		const projectConfig = {
 			enabled: config.enabled,
 			enableAgentReview: config.enableAgentReview,
+			enableReranking: config.enableReranking,
 			batch: config.batch,
 			chunking: config.chunking,
+			reranking: config.reranking,
 		};
 		fs.writeFileSync(
 			projectConfigPath,

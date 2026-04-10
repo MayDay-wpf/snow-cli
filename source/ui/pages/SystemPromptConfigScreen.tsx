@@ -503,7 +503,7 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 											: theme.colors.menuNormal
 									}
 								>
-									{index === selectedIndex ? '> ' : '  '}
+									{index === selectedIndex ? '❯ ' : '  '}
 									{config.active.includes(prompt.id) ? '[✓] ' : '[ ] '}
 									{prompt.name}
 									{typeof prompt.content === 'string' &&

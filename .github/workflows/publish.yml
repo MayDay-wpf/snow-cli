@@ -56,12 +56,11 @@ jobs:
 
             ### What's New
 
-            - Add batch processing function to tools like TODO
-            - Optimize part of UI display to avoid icon display anomalies and terminal jitter
-            - Update Gemini thinking strength parameters
-            - Persistent context information
-            - Enhance robustness of `/btw` command
-            - Remove outdated API setting parameters
+            - Optimized the UI display effects of some components
+            - Added model list deduplication
+            - Added Markdown rendering to the Btw panel
+            - Codebase added Rerank selection
+            - Added retry mechanism for compression failure
 
             ### Installation
             ```bash
