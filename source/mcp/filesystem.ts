@@ -50,7 +50,6 @@ import {
 	formatLineWithHash,
 	formatLineWithHashDisplay,
 	validateAnchor,
-	parseAnchor,
 } from './utils/filesystem/hashline.utils.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
@@ -1182,8 +1181,16 @@ export class FilesystemMCPService {
 			}
 
 			// ── Validate ALL anchors before mutating anything ──
+			type PreparedHashlineOperation = {
+				op: HashlineOperation;
+				originalIndex: number;
+				startLine: number;
+				endLine: number;
+			};
+
+			const preparedOps: PreparedHashlineOperation[] = [];
 			const anchorErrors: string[] = [];
-			for (const op of operations) {
+			for (const [originalIndex, op] of operations.entries()) {
 				const startV = validateAnchor(op.startAnchor, lines);
 				if (!startV.valid) {
 					anchorErrors.push(
@@ -1195,6 +1202,9 @@ export class FilesystemMCPService {
 								: ' (bad format, expected "lineNum:hash")'),
 					);
 				}
+
+				let endLine = startV.lineNum;
+				let hasValidRange = startV.valid;
 				if (op.endAnchor) {
 					const endV = validateAnchor(op.endAnchor, lines);
 					if (!endV.valid) {
@@ -1206,11 +1216,15 @@ export class FilesystemMCPService {
 									? ` (line ${endV.lineNum} out of range or hash mismatch)`
 									: ' (bad format, expected "lineNum:hash")'),
 						);
-					}
-					if (startV.valid && endV.valid && endV.lineNum < startV.lineNum) {
-						anchorErrors.push(
-							`endAnchor line ${endV.lineNum} is before startAnchor line ${startV.lineNum}`,
-						);
+						hasValidRange = false;
+					} else {
+						endLine = endV.lineNum;
+						if (startV.valid && endLine < startV.lineNum) {
+							anchorErrors.push(
+								`endAnchor line ${endLine} is before startAnchor line ${startV.lineNum}`,
+							);
+							hasValidRange = false;
+						}
 					}
 				}
 
@@ -1219,6 +1233,15 @@ export class FilesystemMCPService {
 					op.content === undefined
 				) {
 					anchorErrors.push(`Operation "${op.type}" requires content`);
+				}
+
+				if (hasValidRange) {
+					preparedOps.push({
+						op,
+						originalIndex,
+						startLine: startV.lineNum,
+						endLine,
+					});
 				}
 			}
 
@@ -1230,11 +1253,78 @@ export class FilesystemMCPService {
 				);
 			}
 
+			const conflictErrors: string[] = [];
+			for (let i = 0; i < preparedOps.length; i++) {
+				const current = preparedOps[i]!;
+				for (let j = i + 1; j < preparedOps.length; j++) {
+					const next = preparedOps[j]!;
+					const sameStartLine = current.startLine === next.startLine;
+					const bothInsertAfter =
+						current.op.type === 'insert_after' &&
+						next.op.type === 'insert_after' &&
+						sameStartLine;
+					if (bothInsertAfter) {
+						continue;
+					}
+
+					const sameSingleLineAnchor =
+						sameStartLine &&
+						current.startLine === current.endLine &&
+						next.startLine === next.endLine;
+					const hasInsertAfter =
+						current.op.type === 'insert_after' ||
+						next.op.type === 'insert_after';
+					if (sameSingleLineAnchor && hasInsertAfter) {
+						continue;
+					}
+
+					const overlaps =
+						current.startLine <= next.endLine &&
+						next.startLine <= current.endLine;
+					if (!overlaps) {
+						continue;
+					}
+
+					conflictErrors.push(
+						`Operation ${current.originalIndex + 1} (${current.op.type} ${
+							current.startLine
+						}-${current.endLine}) conflicts with ` +
+							`operation ${next.originalIndex + 1} (${next.op.type} ${
+								next.startLine
+							}-${next.endLine})`,
+					);
+				}
+			}
+
+			if (conflictErrors.length > 0) {
+				throw new Error(
+					`Hashline operations conflict for ${filePath}:\n` +
+						conflictErrors.map(e => `  • ${e}`).join('\n') +
+						`\n\nUse non-overlapping anchors for the same file, or split dependent edits into separate calls.`,
+				);
+			}
+
 			// ── Sort operations bottom-to-top to keep line numbers stable ──
-			const sortedOps = [...operations].sort((a, b) => {
-				const aLine = parseAnchor(a.startAnchor)!.lineNum;
-				const bLine = parseAnchor(b.startAnchor)!.lineNum;
-				return bLine - aLine;
+			const sortedOps = [...preparedOps].sort((a, b) => {
+				if (a.startLine !== b.startLine) {
+					return b.startLine - a.startLine;
+				}
+
+				const aInsertAfter = a.op.type === 'insert_after';
+				const bInsertAfter = b.op.type === 'insert_after';
+				if (aInsertAfter && bInsertAfter) {
+					return b.originalIndex - a.originalIndex;
+				}
+
+				if (aInsertAfter !== bInsertAfter) {
+					return aInsertAfter ? -1 : 1;
+				}
+
+				if (a.endLine !== b.endLine) {
+					return b.endLine - a.endLine;
+				}
+
+				return b.originalIndex - a.originalIndex;
 			});
 
 			// Track the overall edit range for context display
@@ -1267,11 +1357,8 @@ export class FilesystemMCPService {
 					.join('\n');
 			};
 
-			for (const op of sortedOps) {
-				const startLine = parseAnchor(op.startAnchor)!.lineNum;
-				const endLine = op.endAnchor
-					? parseAnchor(op.endAnchor)!.lineNum
-					: startLine;
+			for (const preparedOp of sortedOps) {
+				const {op, startLine, endLine} = preparedOp;
 
 				editStartLine = Math.min(editStartLine, startLine);
 				editEndLine = Math.max(editEndLine, endLine);
