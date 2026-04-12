@@ -115,6 +115,30 @@ const loadGlobalEmbeddingConfig = (): CodebaseConfig['embedding'] => {
 	}
 };
 
+// Load global reranking config (shared across projects)
+const loadGlobalRerankingConfig = (): CodebaseConfig['reranking'] => {
+	try {
+		const configPath = getGlobalConfigPath();
+		if (!fs.existsSync(configPath)) {
+			return {...DEFAULT_CONFIG.reranking};
+		}
+		const configContent = fs.readFileSync(configPath, 'utf-8');
+		const config = JSON.parse(configContent);
+		return {
+			modelName:
+				config.reranking?.modelName ?? DEFAULT_CONFIG.reranking.modelName,
+			baseUrl: config.reranking?.baseUrl ?? DEFAULT_CONFIG.reranking.baseUrl,
+			apiKey: config.reranking?.apiKey ?? DEFAULT_CONFIG.reranking.apiKey,
+			contextLength:
+				config.reranking?.contextLength ??
+				DEFAULT_CONFIG.reranking.contextLength,
+			topN: config.reranking?.topN ?? DEFAULT_CONFIG.reranking.topN,
+		};
+	} catch {
+		return {...DEFAULT_CONFIG.reranking};
+	}
+};
+
 // Load codebase config - project-level enabled/disabled, global embedding settings
 export const loadCodebaseConfig = (
 	workingDirectory?: string,
@@ -122,6 +146,7 @@ export const loadCodebaseConfig = (
 	try {
 		const projectConfigPath = getProjectConfigPath(workingDirectory);
 		const globalEmbedding = loadGlobalEmbeddingConfig();
+		const globalReranking = loadGlobalRerankingConfig();
 
 		// Check project-level config for enabled status
 		let projectConfig: Partial<CodebaseConfig> = {};
@@ -130,7 +155,7 @@ export const loadCodebaseConfig = (
 			projectConfig = JSON.parse(configContent);
 		}
 
-		// Merge: project-level enabled/settings + global embedding
+		// Merge: project-level enabled/settings + global embedding/reranking
 		return {
 			enabled: projectConfig.enabled ?? DEFAULT_CONFIG.enabled,
 			enableAgentReview:
@@ -158,19 +183,7 @@ export const loadCodebaseConfig = (
 					projectConfig.chunking?.overlapLines ??
 					DEFAULT_CONFIG.chunking.overlapLines,
 			},
-			reranking: {
-				modelName:
-					projectConfig.reranking?.modelName ??
-					DEFAULT_CONFIG.reranking.modelName,
-				baseUrl:
-					projectConfig.reranking?.baseUrl ?? DEFAULT_CONFIG.reranking.baseUrl,
-				apiKey:
-					projectConfig.reranking?.apiKey ?? DEFAULT_CONFIG.reranking.apiKey,
-				contextLength:
-					projectConfig.reranking?.contextLength ??
-					DEFAULT_CONFIG.reranking.contextLength,
-				topN: projectConfig.reranking?.topN ?? DEFAULT_CONFIG.reranking.topN,
-			},
+			reranking: globalReranking,
 		};
 	} catch (error) {
 		console.error('Failed to load codebase config:', error);
@@ -179,16 +192,19 @@ export const loadCodebaseConfig = (
 };
 
 // Save codebase config
-// - Embedding settings are saved globally (~/.snow/codebase.json)
+// - Embedding and reranking settings are saved globally (~/.snow/codebase.json)
 // - Other settings (enabled, batch, chunking) are saved per-project (.snow/codebase.json)
 export const saveCodebaseConfig = (
 	config: CodebaseConfig,
 	workingDirectory?: string,
 ): void => {
 	try {
-		// Save embedding settings globally
+		// Save embedding and reranking settings globally
 		const globalConfigPath = getGlobalConfigPath();
-		const globalConfig = {embedding: config.embedding};
+		const globalConfig = {
+			embedding: config.embedding,
+			reranking: config.reranking,
+		};
 		fs.writeFileSync(
 			globalConfigPath,
 			JSON.stringify(globalConfig, null, 2),
@@ -203,7 +219,6 @@ export const saveCodebaseConfig = (
 			enableReranking: config.enableReranking,
 			batch: config.batch,
 			chunking: config.chunking,
-			reranking: config.reranking,
 		};
 		fs.writeFileSync(
 			projectConfigPath,
