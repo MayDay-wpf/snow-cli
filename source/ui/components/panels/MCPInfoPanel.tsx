@@ -176,6 +176,8 @@ interface Props {
 	onClose: () => void;
 }
 
+const NON_FOCUSED_SKILL_DESC_MAX_LEN = 20;
+
 export default function MCPInfoPanel({onClose}: Props) {
 	const {t} = useI18n();
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
@@ -365,6 +367,19 @@ export default function MCPInfoPanel({onClose}: Props) {
 		0,
 		selectItems.length - displayWindow.endIndex,
 	);
+	const formatSkillDescription = (
+		description: string,
+		isSelected: boolean,
+	): string => {
+		if (
+			isSelected ||
+			description.length <= NON_FOCUSED_SKILL_DESC_MAX_LEN
+		) {
+			return description;
+		}
+
+		return `${description.slice(0, NON_FOCUSED_SKILL_DESC_MAX_LEN - 3)}...`;
+	};
 
 	// Listen for keyboard input
 	useInput(async (input, key) => {
@@ -688,9 +703,17 @@ export default function MCPInfoPanel({onClose}: Props) {
 										item.skillLocation === 'project'
 											? t.mcpInfoPanel.skillLocationProject
 											: t.mcpInfoPanel.skillLocationGlobal;
+									const skillDescription = item.skillDescription?.trim();
+									const hasDescription = Boolean(skillDescription);
+									const renderedDescription = hasDescription
+										? formatSkillDescription(
+												skillDescription as string,
+												isSelected,
+										  )
+										: '';
 
 									return (
-										<Box key={item.value}>
+										<Box key={item.value} flexDirection="column">
 											<Text>
 												{isSelected ? '❯ ' : '  '}
 												<Text color={isEnabled ? 'magenta' : 'gray'}>◆ </Text>
@@ -707,13 +730,14 @@ export default function MCPInfoPanel({onClose}: Props) {
 														? locationSuffix
 														: t.mcpInfoPanel.statusDisabled}
 												</Text>
-												{isEnabled && item.skillDescription ? (
-													<Text color="gray" dimColor>
-														{' - '}
-														{item.skillDescription}
-													</Text>
-												) : null}
 											</Text>
+											{isEnabled && hasDescription ? (
+												<Box marginLeft={4}>
+													<Text color="gray" dimColor>
+														{renderedDescription}
+													</Text>
+												</Box>
+											) : null}
 										</Box>
 									);
 								}
