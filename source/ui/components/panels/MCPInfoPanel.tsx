@@ -628,10 +628,16 @@ export default function MCPInfoPanel({onClose}: Props) {
 							{t.mcpInfoPanel.pleaseWait}
 						</Text>
 					)}
-					<Box marginTop={1}>
+					<Box marginTop={1} flexDirection="column">
 						<Text color="gray" dimColor>
 							{t.mcpInfoPanel.toolsNavigationHint}
 						</Text>
+						{selectedServiceForTools.name === 'filesystem' && (
+							<Text color="gray" dimColor>
+								replaceedit: default off — Tab enables (writes
+								.snow/opt-in-mcp-tools.json).
+							</Text>
+						)}
 					</Box>
 				</>
 			) : (

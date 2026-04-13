@@ -129,6 +129,7 @@ export function formatToolCallMessage(toolCall: ToolCall): {
 		// Edit 工具名称列表
 		const editTools = [
 			'filesystem-edit',
+			'filesystem-replaceedit',
 			'filesystem-create',
 		];
 

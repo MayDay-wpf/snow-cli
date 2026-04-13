@@ -509,7 +509,8 @@ export default function MessageRenderer({
 											</Box>
 										)}
 								{message.toolCall &&
-									message.toolCall.name === 'filesystem-edit' &&
+									(message.toolCall.name === 'filesystem-edit' ||
+										message.toolCall.name === 'filesystem-replaceedit') &&
 									message.toolCall.arguments.oldContent &&
 									message.toolCall.arguments.newContent && (
 										<Box marginTop={1}>
@@ -531,7 +532,8 @@ export default function MessageRenderer({
 									)}
 								{/* Show batch edit results */}
 								{message.toolCall &&
-									message.toolCall.name === 'filesystem-edit' &&
+									(message.toolCall.name === 'filesystem-edit' ||
+										message.toolCall.name === 'filesystem-replaceedit') &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) && (

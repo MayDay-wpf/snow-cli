@@ -38,7 +38,10 @@ export default function ToolResultPreview({
 			return renderReadPreview(data, isSubAgentInternal);
 		} else if (toolName === 'filesystem-create') {
 			return renderCreatePreview(data);
-		} else if (toolName === 'filesystem-edit') {
+		} else if (
+			toolName === 'filesystem-edit' ||
+			toolName === 'filesystem-replaceedit'
+		) {
 			return renderEditSearchPreview(data);
 		} else if (toolName === 'websearch-search') {
 			return renderWebSearchPreview(data, maxLines);

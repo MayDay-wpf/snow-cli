@@ -42,6 +42,7 @@ import {
 import {getDisabledSkills} from '../config/disabledSkills.js';
 import {
 	getDisabledMCPTools,
+	getOptInEnabledMCPKeysMerged,
 	isMCPToolEnabled,
 } from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
@@ -196,6 +197,7 @@ async function generateConfigHash(): Promise<string> {
 			disabledBuiltInServices: getDisabledBuiltInServices(),
 			disabledSkills: getDisabledSkills(),
 			disabledMCPTools: getDisabledMCPTools(),
+			optInEnabledMCPTools: getOptInEnabledMCPKeysMerged(),
 			teamMode: getTeamMode(),
 		});
 	} catch {
@@ -273,7 +275,7 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	};
 
-	// Add built-in filesystem tools
+	// Built-in filesystem (includes filesystem-replaceedit — off by default; enable in MCP panel: V on filesystem, Tab on replaceedit)
 	addBuiltInService('filesystem', filesystemTools, 'filesystem');
 
 	// Add built-in terminal tools
@@ -1341,6 +1343,22 @@ export async function executeMCPTool(
 					result = await filesystemService.editFile(
 						args.filePath,
 						args.operations,
+						args.contextLines,
+					);
+					break;
+				case 'replaceedit':
+					// Opt-in tool (default off): enable under MCP panel → filesystem → V → Tab on replaceedit
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-replaceedit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}`,
+						);
+					}
+					result = await filesystemService.editFileBySearch(
+						args.filePath,
+						args.searchContent,
+						args.replaceContent,
+						args.occurrence ?? 1,
 						args.contextLines,
 					);
 					break;

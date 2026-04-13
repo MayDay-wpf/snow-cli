@@ -436,7 +436,10 @@ export function rewriteToolArgsForWorktree(
 
 	// filesystem-read / filesystem-create / filesystem-edit
 	if (toolName.startsWith('filesystem-')) {
-		const isWrite = toolName === 'filesystem-create' || toolName === 'filesystem-edit';
+		const isWrite =
+			toolName === 'filesystem-create' ||
+			toolName === 'filesystem-edit' ||
+			toolName === 'filesystem-replaceedit';
 		const verb = isWrite ? 'modify' : 'access';
 
 		if (typeof args.filePath === 'string') {

@@ -30,6 +30,7 @@ export class ContextManager {
 		'todo-delete',
 		'filesystem-create',
 		'filesystem-edit',
+		'filesystem-replaceedit',
 	];
 
 	constructor(stateManager: StateManager) {

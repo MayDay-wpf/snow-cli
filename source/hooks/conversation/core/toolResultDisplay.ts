@@ -75,7 +75,8 @@ function extractEditDiffData(
 	result: ToolResult,
 ): Record<string, any> | undefined {
 	if (
-		toolCall.function.name !== 'filesystem-edit'
+		toolCall.function.name !== 'filesystem-edit' &&
+		toolCall.function.name !== 'filesystem-replaceedit'
 	) {
 		return undefined;
 	}

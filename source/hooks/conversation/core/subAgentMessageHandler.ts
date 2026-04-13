@@ -1139,7 +1139,8 @@ export class SubAgentUIHandler {
 		if (
 			!isError &&
 			(msg.tool_name === 'filesystem-create' ||
-				msg.tool_name === 'filesystem-edit')
+				msg.tool_name === 'filesystem-edit' ||
+				msg.tool_name === 'filesystem-replaceedit')
 		) {
 			if (
 				msg.editDiffData &&

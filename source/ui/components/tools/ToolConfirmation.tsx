@@ -68,6 +68,10 @@ function formatArgumentsAsTree(
 	if (toolName === 'filesystem-edit') {
 		excludeFields.add('content');
 	}
+	if (toolName === 'filesystem-replaceedit') {
+		excludeFields.add('searchContent');
+		excludeFields.add('replaceContent');
+	}
 
 	// For ACE tools, exclude large result fields that may contain extensive code
 	if (toolName?.startsWith('ace-')) {
@@ -283,6 +287,18 @@ export default function ToolConfirmation({
 						promises.push(
 							vscodeConnection
 								.showDiff(filePath, originalContent, originalContent, 'Hashline Edit')
+								.catch(() => {}),
+						);
+					}
+				}
+
+				if (name === 'filesystem-replaceedit' && parsed.filePath) {
+					const filePath = typeof parsed.filePath === 'string' ? parsed.filePath : null;
+					if (filePath && fs.existsSync(filePath)) {
+						const originalContent = fs.readFileSync(filePath, 'utf-8');
+						promises.push(
+							vscodeConnection
+								.showDiff(filePath, originalContent, originalContent, 'Replace Edit')
 								.catch(() => {}),
 						);
 					}
