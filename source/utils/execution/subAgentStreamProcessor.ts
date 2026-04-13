@@ -208,15 +208,23 @@ function handleUsageEvent(
 		}
 	}
 
-	if (config.maxContextTokens && ctx.latestTotalTokens > 0) {
+	const promptTokens = eventUsage.prompt_tokens || 0;
+	const cacheCreationTokens = eventUsage.cache_creation_input_tokens || 0;
+	const cacheReadTokens = eventUsage.cache_read_input_tokens || 0;
+	const isAnthropic = cacheCreationTokens > 0 || cacheReadTokens > 0;
+	const totalInputTokens = isAnthropic
+		? promptTokens + cacheCreationTokens + cacheReadTokens
+		: promptTokens;
+
+	if (config.maxContextTokens && totalInputTokens > 0) {
 		const ctxPct = getContextPercentage(
-			ctx.latestTotalTokens,
+			totalInputTokens,
 			config.maxContextTokens,
 		);
 		emitSubAgentMessage(ctx, {
 			type: 'context_usage',
 			percentage: Math.max(1, Math.round(ctxPct)),
-			inputTokens: ctx.latestTotalTokens,
+			inputTokens: totalInputTokens,
 			maxTokens: config.maxContextTokens,
 		});
 	}
@@ -257,7 +265,11 @@ export async function handleContextCompression(
 		const COMPRESS_RETRY_BASE_DELAY = 1000;
 		let compressionResult;
 
-		for (let retryAttempt = 0; retryAttempt <= COMPRESS_MAX_RETRIES; retryAttempt++) {
+		for (
+			let retryAttempt = 0;
+			retryAttempt <= COMPRESS_MAX_RETRIES;
+			retryAttempt++
+		) {
 			try {
 				compressionResult = await compressSubAgentContext(
 					ctx.messages,
@@ -273,15 +285,21 @@ export async function handleContextCompression(
 				break;
 			} catch (retryError) {
 				if (retryAttempt < COMPRESS_MAX_RETRIES) {
-					const retryDelay = COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
+					const retryDelay =
+						COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
 					emitSubAgentMessage(ctx, {
 						type: 'context_compress_retrying',
 						attempt: retryAttempt + 1,
 						maxRetries: COMPRESS_MAX_RETRIES,
-						error: retryError instanceof Error ? retryError.message : String(retryError),
+						error:
+							retryError instanceof Error
+								? retryError.message
+								: String(retryError),
 					});
 					console.warn(
-						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${retryAttempt + 1}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
+						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${
+							retryAttempt + 1
+						}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
 						retryError,
 					);
 					await new Promise(resolve => setTimeout(resolve, retryDelay));
