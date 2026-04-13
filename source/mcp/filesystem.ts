@@ -1741,9 +1741,9 @@ export class FilesystemMCPService {
 	 * so stale reads are caught early.
 	 *
 	 * Supported operation types:
-	 *   • replace  – replace startAnchor..endAnchor with content
-	 *   • insert_after – insert content after startAnchor
-	 *   • delete   – delete startAnchor..endAnchor
+	 *   • replace  – replace startAnchor..endAnchor (inclusive) with content
+	 *   • insert_after – insert content after startAnchor (endAnchor required; same as startAnchor)
+	 *   • delete   – delete startAnchor..endAnchor (inclusive)
 	 */
 	async editFile(
 		filePath: string | EditByHashlineConfig[],
@@ -1849,7 +1849,18 @@ export class FilesystemMCPService {
 
 				let endLine = startV.lineNum;
 				let hasValidRange = startV.valid;
-				if (op.endAnchor) {
+				const endAnchorMissing =
+					op.endAnchor === undefined ||
+					op.endAnchor === null ||
+					(typeof op.endAnchor === 'string' && op.endAnchor.trim() === '');
+				if (endAnchorMissing) {
+					anchorErrors.push(
+						`Operation ${originalIndex + 1} (${op.type}): endAnchor is required. ` +
+							`For a single-line replace or delete, set endAnchor to the same "lineNum:hash" as startAnchor. ` +
+							`For insert_after, repeat startAnchor as endAnchor.`,
+					);
+					hasValidRange = false;
+				} else {
 					const endV = validateAnchor(op.endAnchor, lines);
 					if (!endV.valid) {
 						anchorErrors.push(
@@ -2495,7 +2506,7 @@ export const mcpTools = [
 			'(2) insert_after — inserts content after startAnchor; ' +
 			'(3) delete — removes startAnchor..endAnchor, set content to empty string "". ' +
 			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
-			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". Omit endAnchor for single-line operations. ' +
+			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". endAnchor is always required (inclusive range). Single-line edits: set endAnchor to the same anchor as startAnchor. ' +
 			'**SUPPORTS BATCH**: Pass array of {path, operations} for multi-file edits.',
 		inputSchema: {
 			type: 'object',
@@ -2533,7 +2544,7 @@ export const mcpTools = [
 												endAnchor: {
 													type: 'string',
 													description:
-														'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
+														'Inclusive end anchor (format: "lineNum:hash"). For a single line, use the same value as startAnchor.',
 												},
 												content: {
 													type: 'string',
@@ -2541,7 +2552,12 @@ export const mcpTools = [
 														'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 												},
 											},
-											required: ['type', 'startAnchor', 'content'],
+											required: [
+												'type',
+												'startAnchor',
+												'endAnchor',
+												'content',
+											],
 										},
 										description: 'Array of edit operations for this file',
 									},
@@ -2573,7 +2589,7 @@ export const mcpTools = [
 							endAnchor: {
 								type: 'string',
 								description:
-									'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
+									'Inclusive end anchor (format: "lineNum:hash"). For a single line, use the same value as startAnchor.',
 							},
 							content: {
 								type: 'string',
@@ -2581,7 +2597,7 @@ export const mcpTools = [
 									'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 							},
 						},
-						required: ['type', 'startAnchor', 'content'],
+						required: ['type', 'startAnchor', 'endAnchor', 'content'],
 					},
 					description:
 						'Array of edit operations (for single file mode). Each operation references anchors from filesystem-read.',

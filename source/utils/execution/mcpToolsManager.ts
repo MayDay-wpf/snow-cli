@@ -1337,7 +1337,7 @@ export async function executeMCPTool(
 						throw new Error(
 							`Missing required parameter 'operations' for filesystem-edit tool.\n` +
 								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: Provide an array of {type, startAnchor, endAnchor?, content?} operations.`,
+								`AI Tip: Provide an array of {type, startAnchor, endAnchor, content} operations (endAnchor required; same as startAnchor for single-line edits).`,
 						);
 					}
 					result = await filesystemService.editFile(

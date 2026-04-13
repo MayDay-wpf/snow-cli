@@ -162,8 +162,8 @@ export interface HashlineOperation {
 	type: HashlineOperationType;
 	/** Start anchor – required for all operation types */
 	startAnchor: string;
-	/** End anchor – for range replace/delete. Omit for single-line ops or insert_after. */
-	endAnchor?: string;
+	/** End anchor – inclusive end of range for replace/delete. For a single line, use the same value as startAnchor. For insert_after, repeat startAnchor (only the start line is used). */
+	endAnchor: string;
 	/** New content – required for replace and insert_after, ignored for delete */
 	content?: string;
 }
