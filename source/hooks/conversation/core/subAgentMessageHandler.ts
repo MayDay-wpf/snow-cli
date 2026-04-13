@@ -22,14 +22,33 @@ export interface TeammateStreamInfo {
 	ctxUsage?: TeammateCtxUsage;
 }
 
+export interface SubAgentStreamInfo {
+	agentId: string;
+	agentName: string;
+	tokenCount: number;
+	isReasoning: boolean;
+	ctxUsage?: TeammateCtxUsage;
+}
+
 const _teammateStreamMap = new Map<string, TeammateStreamInfo>();
 const _teammateStreamListeners = new Set<() => void>();
 let _teammateStreamSnapshot: TeammateStreamInfo[] = [];
 let _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 const _NOTIFY_THROTTLE_MS = 200;
 
+const _subAgentStreamMap = new Map<string, SubAgentStreamInfo>();
+const _subAgentStreamListeners = new Set<() => void>();
+let _subAgentStreamSnapshot: SubAgentStreamInfo[] = [];
+let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+
 function notifyTeammateStreamListeners(): void {
 	for (const listener of _teammateStreamListeners) {
+		try { listener(); } catch { /* noop */ }
+	}
+}
+
+function notifySubAgentStreamListeners(): void {
+	for (const listener of _subAgentStreamListeners) {
 		try { listener(); } catch { /* noop */ }
 	}
 }
@@ -40,6 +59,16 @@ function rebuildTeammateSnapshot(): void {
 		_notifyTimer = setTimeout(() => {
 			_notifyTimer = null;
 			notifyTeammateStreamListeners();
+		}, _NOTIFY_THROTTLE_MS);
+	}
+}
+
+function rebuildSubAgentSnapshot(): void {
+	_subAgentStreamSnapshot = Array.from(_subAgentStreamMap.values());
+	if (!_subAgentNotifyTimer) {
+		_subAgentNotifyTimer = setTimeout(() => {
+			_subAgentNotifyTimer = null;
+			notifySubAgentStreamListeners();
 		}, _NOTIFY_THROTTLE_MS);
 	}
 }
@@ -57,6 +86,38 @@ function removeTeammateStreamEntry(agentId: string): void {
 	}
 }
 
+function setSubAgentStreamEntry(
+	agentId: string,
+	agentName: string,
+	tokenCount: number,
+	isReasoning: boolean,
+	ctxUsage?: TeammateCtxUsage,
+): void {
+	const prev = _subAgentStreamMap.get(agentId);
+	if (
+		prev &&
+		prev.tokenCount === tokenCount &&
+		prev.isReasoning === isReasoning &&
+		prev.ctxUsage?.percentage === ctxUsage?.percentage
+	) {
+		return;
+	}
+	_subAgentStreamMap.set(agentId, {
+		agentId,
+		agentName,
+		tokenCount,
+		isReasoning,
+		ctxUsage,
+	});
+	rebuildSubAgentSnapshot();
+}
+
+function removeSubAgentStreamEntry(agentId: string): void {
+	if (_subAgentStreamMap.delete(agentId)) {
+		rebuildSubAgentSnapshot();
+	}
+}
+
 export function subscribeTeammateStream(listener: () => void): () => void {
 	_teammateStreamListeners.add(listener);
 	return () => { _teammateStreamListeners.delete(listener); };
@@ -66,11 +127,29 @@ export function getTeammateStreamSnapshot(): TeammateStreamInfo[] {
 	return _teammateStreamSnapshot;
 }
 
+export function subscribeSubAgentStream(listener: () => void): () => void {
+	_subAgentStreamListeners.add(listener);
+	return () => {
+		_subAgentStreamListeners.delete(listener);
+	};
+}
+
+export function getSubAgentStreamSnapshot(): SubAgentStreamInfo[] {
+	return _subAgentStreamSnapshot;
+}
+
 export function clearAllTeammateStreamEntries(): void {
 	if (_teammateStreamMap.size === 0) return;
 	_teammateStreamMap.clear();
 	_teammateStreamSnapshot = [];
 	notifyTeammateStreamListeners();
+}
+
+export function clearAllSubAgentStreamEntries(): void {
+	if (_subAgentStreamMap.size === 0) return;
+	_subAgentStreamMap.clear();
+	_subAgentStreamSnapshot = [];
+	notifySubAgentStreamListeners();
 }
 
 // ── Types ──
@@ -131,7 +210,6 @@ export class SubAgentUIHandler {
 
 	constructor(
 		private encoder: any,
-		private setStreamTokenCount: (count: number) => void,
 		private saveMessage: (msg: any) => Promise<void>,
 		private setIsReasoning?: (isReasoning: boolean) => void,
 		private streamingEnabled: boolean = true,
@@ -214,10 +292,10 @@ export class SubAgentUIHandler {
 		delete this.streamStates[agentId];
 		this.updateGlobalTokenCount();
 		removeTeammateStreamEntry(agentId);
+		removeSubAgentStreamEntry(agentId);
 	}
 
 	private updateGlobalTokenCount(): void {
-		let leadTotal = 0;
 		for (const [agentId, state] of Object.entries(this.streamStates)) {
 			if (agentId.startsWith('teammate-')) {
 				setTeammateStreamEntry(
@@ -228,10 +306,15 @@ export class SubAgentUIHandler {
 					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
 				);
 			} else {
-				leadTotal += state.tokenCount;
+				setSubAgentStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					this.activeReasoningAgents.has(agentId),
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
+				);
 			}
 		}
-		this.setStreamTokenCount(leadTotal);
 	}
 
 	private setAgentReasoning(agentId: string, isReasoning: boolean): void {
@@ -246,6 +329,17 @@ export class SubAgentUIHandler {
 			const state = this.streamStates[agentId];
 			if (state) {
 				setTeammateStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					isReasoning,
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
+				);
+			}
+		} else {
+			const state = this.streamStates[agentId];
+			if (state) {
+				setSubAgentStreamEntry(
 					agentId,
 					this.agentNameMap[agentId] || agentId,
 					state.tokenCount,
@@ -685,6 +779,15 @@ export class SubAgentUIHandler {
 		if (subAgentMessage.agentId.startsWith('teammate-')) {
 			const state = this.streamStates[subAgentMessage.agentId];
 			setTeammateStreamEntry(
+				subAgentMessage.agentId,
+				this.agentNameMap[subAgentMessage.agentId] || subAgentMessage.agentName,
+				state?.tokenCount ?? 0,
+				this.activeReasoningAgents.has(subAgentMessage.agentId),
+				ctxData,
+			);
+		} else {
+			const state = this.streamStates[subAgentMessage.agentId];
+			setSubAgentStreamEntry(
 				subAgentMessage.agentId,
 				this.agentNameMap[subAgentMessage.agentId] || subAgentMessage.agentName,
 				state?.tokenCount ?? 0,

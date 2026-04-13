@@ -140,7 +140,6 @@ export async function handleToolCallRound(ctx: {
 
 	const subAgentHandler = new SubAgentUIHandler(
 		encoder,
-		setStreamTokenCount,
 		saveMessage,
 		options.setIsReasoning
 			? (isReasoning: boolean) => options.setIsReasoning!(isReasoning)

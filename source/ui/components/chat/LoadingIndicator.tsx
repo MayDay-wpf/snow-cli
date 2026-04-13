@@ -8,6 +8,8 @@ import {formatElapsedTime} from '../../../utils/core/textUtils.js';
 import {
 	subscribeTeammateStream,
 	getTeammateStreamSnapshot,
+	subscribeSubAgentStream,
+	getSubAgentStreamSnapshot,
 } from '../../../hooks/conversation/core/subAgentMessageHandler.js';
 
 /**
@@ -84,6 +86,10 @@ export default function LoadingIndicator({
 		subscribeTeammateStream,
 		getTeammateStreamSnapshot,
 	);
+	const subAgentStream = useSyncExternalStore(
+		subscribeSubAgentStream,
+		getSubAgentStreamSnapshot,
+	);
 
 	if (
 		(!isStreaming && !isSaving && !isStopping) ||
@@ -95,6 +101,70 @@ export default function LoadingIndicator({
 	}
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
+	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+	const renderAgentTree = (
+		entries: Array<{
+			agentId: string;
+			agentName: string;
+			tokenCount: number;
+			isReasoning: boolean;
+			ctxUsage?: {percentage: number};
+		}>,
+		title: string,
+	) => (
+		<Box flexDirection="column">
+			<Text color={theme.colors.menuSecondary} dimColor bold>
+				<ShimmerText text={title} />
+			</Text>
+			{entries.map((tm, idx) => {
+				const isLast = idx === entries.length - 1;
+				const branch = isLast ? '└─' : '├─';
+				const status = tm.isReasoning
+					? 'Thinking'
+					: tm.tokenCount > 0
+					? 'Writing'
+					: 'Idle';
+				const statusColor = tm.isReasoning
+					? '#FFD700'
+					: tm.tokenCount > 0
+					? '#00FFFF'
+					: theme.colors.menuSecondary;
+				const pct = tm.ctxUsage?.percentage ?? 0;
+				const barWidth = 8;
+				const filled = Math.round((pct / 100) * barWidth);
+				const empty = barWidth - filled;
+				const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+				const barColor = pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
+				return (
+					<Text key={tm.agentId} dimColor>
+						<Text color={theme.colors.menuSecondary}>
+							{'  '}{branch}{' '}
+						</Text>
+						<Text color="#BA7ACE" bold>
+							{tm.agentName}
+						</Text>
+						<Text color={statusColor}>
+							{' '}({status}
+							{tm.tokenCount > 0 && (
+								<>
+									{' · '}
+									<Text color="cyan">
+										↓ {formatTokens(tm.tokenCount)}
+									</Text>
+								</>
+							)}
+							)
+						</Text>
+						{pct > 0 && (
+							<Text color={barColor} dimColor>
+								{' '}{pct}% {bar}
+							</Text>
+						)}
+					</Text>
+				);
+			})}
+		</Box>
+	);
 
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
@@ -205,6 +275,11 @@ export default function LoadingIndicator({
 									);
 								})}
 							</Box>
+						) : showSubAgentTree ? (
+							renderAgentTree(
+								subAgentStream,
+								`⚑ Sub-Agent Working (${formatElapsedTime(elapsedSeconds)})`,
+							)
 						) : (
 							<Text color={theme.colors.menuSecondary} dimColor bold>
 								<ShimmerText

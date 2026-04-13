@@ -20,7 +20,10 @@ import {
 	deleteTeamSnapshotsFromIndex,
 	clearAllTeamSnapshots,
 } from '../../../utils/team/teamSnapshot.js';
-import {clearAllTeammateStreamEntries} from '../core/subAgentMessageHandler.js';
+import {
+	clearAllTeammateStreamEntries,
+	clearAllSubAgentStreamEntries,
+} from '../core/subAgentMessageHandler.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ChatMessage} from '../../../api/chat.js';
 
@@ -145,6 +148,7 @@ export function useRollback(props: UseChatLogicProps) {
 			}
 		}
 		clearAllTeammateStreamEntries();
+		clearAllSubAgentStreamEntries();
 
 		if (!rollbackConversation) {
 			if (rollbackFiles && currentSession) {
