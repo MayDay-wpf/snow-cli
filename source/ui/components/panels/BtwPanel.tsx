@@ -4,6 +4,7 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {streamBtwResponse} from '../../../utils/commands/btwStream.js';
+import {waitForPendingSendSignal} from '../../../hooks/conversation/core/pendingMessagesHandler.js';
 import {visualWidth} from '../../../utils/core/textUtils.js';
 import {renderMarkdownToLines} from '../common/MarkdownRenderer.js';
 
@@ -11,6 +12,37 @@ type Step = 'streaming' | 'done' | 'error';
 
 const VISIBLE_ROWS = 8;
 const DEBOUNCE_MS = 80;
+const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
+
+function stripAnsiCodes(input: string): string {
+	return input.replace(ANSI_REGEX, '');
+}
+
+function wrapLineToWidth(line: string, width: number): string[] {
+	if (!line) return [''];
+	const chars = [...line];
+	const result: string[] = [];
+	let current = '';
+	let currentWidth = 0;
+
+	for (const ch of chars) {
+		const chWidth = Math.max(1, visualWidth(ch));
+		if (currentWidth + chWidth > width) {
+			result.push(current || ' ');
+			current = ch;
+			currentWidth = chWidth;
+		} else {
+			current += ch;
+			currentWidth += chWidth;
+		}
+	}
+
+	if (current.length > 0) {
+		result.push(current);
+	}
+
+	return result.length > 0 ? result : [''];
+}
 
 interface Props {
 	prompt: string;
@@ -35,10 +67,13 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 	// border (2) + paddingX (2) = 4 columns of chrome
 	const contentWidth = Math.max(1, columns - 4);
 
-	const visualLines = useMemo(
-		() => (response ? renderMarkdownToLines(response) : []),
-		[response],
-	);
+	const visualLines = useMemo(() => {
+		if (!response) return [];
+		const markdownLines = renderMarkdownToLines(response).map(stripAnsiCodes);
+		return markdownLines.flatMap(line =>
+			wrapLineToWidth(line, Math.max(1, contentWidth)),
+		);
+	}, [response, contentWidth]);
 
 	const flushPending = useCallback(() => {
 		debounceTimerRef.current = null;
@@ -54,6 +89,11 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 		abortControllerRef.current = controller;
 
 		try {
+			// 与 PendingMessage 发送信号一致：先等待可发送，再进入思考阶段。
+			await waitForPendingSendSignal({abortSignal: controller.signal});
+			if (controller.signal.aborted) return;
+			setStep('streaming');
+
 			for await (const chunk of streamBtwResponse(prompt, controller.signal)) {
 				if (controller.signal.aborted) break;
 				pendingTextRef.current += chunk;

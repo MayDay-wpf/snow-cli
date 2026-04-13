@@ -22,6 +22,93 @@ export type PendingMessagesResult = {
 	accumulatedUsage?: any;
 };
 
+type BasicConversationMessage = {
+	role?: string;
+	tool_call_id?: string;
+	tool_calls?: Array<{id: string}>;
+};
+
+/**
+ * PendingMessage 安全发送信号：
+ * 仅当当前会话尾部不存在未闭合的 tool_call 轮次时返回 true。
+ */
+export function isPendingSendTimingReady(
+	messages: BasicConversationMessage[],
+): boolean {
+	const resolvedToolCallIds = new Set<string>();
+
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i];
+		if (!m) continue;
+
+		if (m.role === 'tool' && m.tool_call_id) {
+			resolvedToolCallIds.add(m.tool_call_id);
+			continue;
+		}
+
+		if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+			const hasUnresolvedCall = m.tool_calls.some(
+				tc => !resolvedToolCallIds.has(tc.id),
+			);
+			if (hasUnresolvedCall) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+/**
+ * 等待 PendingMessage 发送时机（与 handlePendingMessages 一致的信号语义）。
+ * - 已就绪：立即返回
+ * - 未就绪：订阅消息变更，直到就绪 / 超时 / 中断
+ */
+export async function waitForPendingSendSignal(options?: {
+	abortSignal?: AbortSignal;
+	timeoutMs?: number;
+}): Promise<void> {
+	const {abortSignal, timeoutMs = 3000} = options || {};
+	const initialSession = sessionManager.getCurrentSession();
+	if (!initialSession) return;
+	if (isPendingSendTimingReady(initialSession.messages as BasicConversationMessage[])) {
+		return;
+	}
+
+	await new Promise<void>(resolve => {
+		let finished = false;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		let unsubscribe: (() => void) | undefined;
+
+		const cleanup = () => {
+			if (finished) return;
+			finished = true;
+			if (timeout) clearTimeout(timeout);
+			if (unsubscribe) unsubscribe();
+			resolve();
+		};
+
+		const tryResolve = () => {
+			if (abortSignal?.aborted) {
+				cleanup();
+				return;
+			}
+			const session = sessionManager.getCurrentSession();
+			if (!session) {
+				cleanup();
+				return;
+			}
+			if (isPendingSendTimingReady(session.messages as BasicConversationMessage[])) {
+				cleanup();
+			}
+		};
+
+		unsubscribe = sessionManager.onMessagesChanged(tryResolve);
+		timeout = setTimeout(cleanup, timeoutMs);
+		tryResolve();
+	});
+}
+
 /**
  * Handle pending user messages that arrived during tool execution.
  * Also performs auto-compression before injecting if needed.
