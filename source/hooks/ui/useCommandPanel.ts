@@ -1,4 +1,10 @@
-import {useState, useCallback, useMemo, useEffect, useSyncExternalStore} from 'react';
+import {
+	useState,
+	useCallback,
+	useMemo,
+	useEffect,
+	useSyncExternalStore,
+} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCustomCommands} from '../../utils/commands/custom.js';
@@ -6,7 +12,8 @@ import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
 
-const subscribeToSubAgentTracker = (cb: () => void) => runningSubAgentTracker.subscribe(cb);
+const subscribeToSubAgentTracker = (cb: () => void) =>
+	runningSubAgentTracker.subscribe(cb);
 const getSubAgentSnapshot = () => runningSubAgentTracker.getRunningAgents();
 const subscribeToTeamTracker = (cb: () => void) => teamTracker.subscribe(cb);
 const getTeamSnapshot = () => teamTracker.getRunningTeammates();
@@ -21,8 +28,14 @@ export type CommandPanelCommand = {
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
 
-	const subAgents = useSyncExternalStore(subscribeToSubAgentTracker, getSubAgentSnapshot);
-	const teammates = useSyncExternalStore(subscribeToTeamTracker, getTeamSnapshot);
+	const subAgents = useSyncExternalStore(
+		subscribeToSubAgentTracker,
+		getSubAgentSnapshot,
+	);
+	const teammates = useSyncExternalStore(
+		subscribeToTeamTracker,
+		getTeamSnapshot,
+	);
 	const hasRunningAgentsOrTeam = subAgents.length > 0 || teammates.length > 0;
 
 	// Built-in commands - only depends on translation
@@ -63,16 +76,16 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.gitline ||
 					'Select git commits and insert them into the chat input',
 			},
-		{
-			name: 'role',
-			description: t.commandPanel.commands.role,
-		},
-		{
-			name: 'role-subagent',
-			description:
-				t.commandPanel.commands.roleSubagent ||
-				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
-		},
+			{
+				name: 'role',
+				description: t.commandPanel.commands.role,
+			},
+			{
+				name: 'role-subagent',
+				description:
+					t.commandPanel.commands.roleSubagent ||
+					'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
+			},
 			{
 				name: 'usage',
 				description: t.commandPanel.commands.usage,
@@ -219,21 +232,27 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.team ||
 					'Toggle Agent Team mode - orchestrate multiple agents working together',
 			},
-		{
-			name: 'quit',
-			description: t.commandPanel.commands.quit,
-		},
-		{
-			name: 'btw',
-			description:
-				t.commandPanel.commands.btw ||
-				'Ask a side-question while AI is working (temporary, no context saved)',
-			allowDuringProcessing: true,
-			mainFlowOnly: true,
-		},
-	],
-	[t],
-);
+			{
+				name: 'pixel',
+				description:
+					t.commandPanel.commands.pixel || 'Open the terminal pixel editor',
+				mainFlowOnly: true,
+			},
+			{
+				name: 'quit',
+				description: t.commandPanel.commands.quit,
+			},
+			{
+				name: 'btw',
+				description:
+					t.commandPanel.commands.btw ||
+					'Ask a side-question while AI is working (temporary, no context saved)',
+				allowDuringProcessing: true,
+				mainFlowOnly: true,
+			},
+		],
+		[t],
+	);
 
 	const normalizedBuiltInCommands = useMemo<CommandPanelCommand[]>(
 		() =>
@@ -289,9 +308,11 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		// Get all commands (including latest custom commands)
 		const allCommands = getAllCommands();
 		const availableCommands = isProcessing
-			? allCommands.filter(command =>
-				command.type === 'prompt' && !(command.mainFlowOnly && hasRunningAgentsOrTeam),
-			)
+			? allCommands.filter(
+					command =>
+						command.type === 'prompt' &&
+						!(command.mainFlowOnly && hasRunningAgentsOrTeam),
+			  )
 			: allCommands;
 
 		// Filter and sort commands by priority and usage frequency
@@ -347,7 +368,13 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			.map(item => item.command);
 
 		return filtered;
-	}, [buffer, getAllCommands, isProcessing, hasRunningAgentsOrTeam, usageLoaded]);
+	}, [
+		buffer,
+		getAllCommands,
+		isProcessing,
+		hasRunningAgentsOrTeam,
+		usageLoaded,
+	]);
 
 	// Update command panel state
 	const updateCommandPanelState = useCallback((text: string) => {

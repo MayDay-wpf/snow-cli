@@ -127,10 +127,14 @@ export const en: TranslationKeys = {
 		rerankingApiKey: 'API Key:',
 		rerankingContextLength: 'Model Context Length:',
 		rerankingTopN: 'Top N:',
-		rerankingNotConfigured: 'Please configure Model Name and Base URL in "Reranking Model Config" first',
-		validationRerankingModelNameRequired: 'Reranking model name is required when enabled',
-		validationRerankingBaseUrlRequired: 'Reranking base URL is required when enabled',
-		validationRerankingContextLengthPositive: 'Model context length must be greater than 0',
+		rerankingNotConfigured:
+			'Please configure Model Name and Base URL in "Reranking Model Config" first',
+		validationRerankingModelNameRequired:
+			'Reranking model name is required when enabled',
+		validationRerankingBaseUrlRequired:
+			'Reranking base URL is required when enabled',
+		validationRerankingContextLengthPositive:
+			'Model context length must be greater than 0',
 		validationRerankingTopNPositive: 'Top N must be greater than 0',
 		saveError: 'Failed to save configuration',
 		gitignoreNotFound:
@@ -417,13 +421,11 @@ export const en: TranslationKeys = {
 		scopeGlobal: 'Global',
 		scopeSelectTitle: 'Select scope for new command',
 		scopeSelectHint: '↑↓: Navigate • Enter: Select • Esc: Cancel',
-		duplicatePattern:
-			'Pattern "{pattern}" already exists in {scope} scope',
+		duplicatePattern: 'Pattern "{pattern}" already exists in {scope} scope',
 		resetScopeSelectTitle: 'Select scope to reset',
 		resetGlobalDesc: 'Restore to default preset commands',
 		resetProjectDesc: 'Clear all project custom commands',
-		confirmResetScopeMessage:
-			'⚠️ Press Enter again to confirm {scope} reset',
+		confirmResetScopeMessage: '⚠️ Press Enter again to confirm {scope} reset',
 		// Add view
 		addTitle: 'Add Custom Sensitive Command ({scope})',
 		patternLabel: 'Pattern (supports wildcards, e.g., "rm*"):',
@@ -641,6 +643,7 @@ export const en: TranslationKeys = {
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
 			newPrompt: 'Generate a refined prompt from your requirement using AI',
+			pixel: 'Open the terminal pixel editor',
 			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
 			quit: 'Exit the application',
 		},

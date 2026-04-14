@@ -188,7 +188,10 @@ function AppContent({
 			if (event.destination !== 'chat' && currentView === 'chat') {
 				setShouldAutoResume(false);
 			}
-			setCurrentView(event.destination);
+			// 'pixel' handled as a panel inside chat, ignore direct navigation
+			if (event.destination !== 'pixel') {
+				setCurrentView(event.destination);
+			}
 		});
 		return unsubscribe;
 	}, [currentView]);

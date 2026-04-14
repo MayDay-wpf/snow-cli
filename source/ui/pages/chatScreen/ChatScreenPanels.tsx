@@ -20,7 +20,7 @@ import type {
 	PanelActions,
 	PanelState,
 } from '../../../hooks/ui/usePanelState.js';
-
+import PixelEditorScreen from '../PixelEditorScreen.js';
 const PermissionsPanel = lazy(
 	() => import('../../components/panels/PermissionsPanel.js'),
 );
@@ -457,6 +457,14 @@ export default function ChatScreenPanels({
 					terminalWidth={terminalWidth}
 					onConfirm={handleRollbackConfirm}
 				/>
+			)}
+
+			{panelState.showPixelEditor && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<PixelEditorScreen
+						onBack={() => panelState.setShowPixelEditor(false)}
+					/>
+				</Box>
 			)}
 		</>
 	);

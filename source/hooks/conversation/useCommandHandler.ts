@@ -106,14 +106,11 @@ export async function executeContextCompression(
 		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
 		if (useHybridCompress) {
 			const apiConfig = getOpenAiConfig();
-			const hybridResult = await performHybridCompression(
-				chatMessages,
-				{
-					model: apiConfig.advancedModel || 'gpt-5',
-					requestMethod: apiConfig.requestMethod,
-					maxTokens: apiConfig.maxTokens,
-				},
-			);
+			const hybridResult = await performHybridCompression(chatMessages, {
+				model: apiConfig.advancedModel || 'gpt-5',
+				requestMethod: apiConfig.requestMethod,
+				maxTokens: apiConfig.maxTokens,
+			});
 
 			if (!hybridResult.compressed) {
 				onStatusUpdate?.({
@@ -131,7 +128,10 @@ export async function executeContextCompression(
 			}));
 
 			// Create new session
-			const compressedSession = await sessionManager.createNewSession(false, true);
+			const compressedSession = await sessionManager.createNewSession(
+				false,
+				true,
+			);
 			compressedSession.messages = newSessionMessages;
 			compressedSession.messageCount = newSessionMessages.length;
 			compressedSession.updatedAt = Date.now();
@@ -152,7 +152,9 @@ export async function executeContextCompression(
 
 			// Reload session
 			onStatusUpdate?.({step: 'loading', sessionId: compressedSession.id});
-			const reloadedSession = await sessionManager.loadSession(compressedSession.id);
+			const reloadedSession = await sessionManager.loadSession(
+				compressedSession.id,
+			);
 			if (reloadedSession) {
 				sessionManager.setCurrentSession(reloadedSession);
 			} else {
@@ -407,6 +409,8 @@ type CommandHandlerOptions = {
 			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -424,7 +428,6 @@ type CommandHandlerOptions = {
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowNewPromptPanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -553,7 +556,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 							'onSessionStart',
 							{messages: [], messageCount: 0},
 						);
-						const interpreted = interpretHookResult('onSessionStart', hookResult);
+						const interpreted = interpretHookResult(
+							'onSessionStart',
+							hookResult,
+						);
 
 						if (interpreted.action === 'block' && interpreted.errorDetails) {
 							const errorMessage: Message = {
@@ -565,9 +571,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 							return;
 						}
 
-						const warningMessage = interpreted.action === 'warn'
-							? interpreted.warningMessage
-							: null;
+						const warningMessage =
+							interpreted.action === 'warn' ? interpreted.warningMessage : null;
 
 						// Hook passed, now clear session
 						resetTerminal(stdout);
@@ -702,6 +707,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// Help uses a dedicated screen to avoid chat layout overflow.
 				navigateTo('help');
 				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'pixel') {
+				// Pixel editor shown as an overlay panel
+				options.setShowPixelEditor(true);
+				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
 				result.action === 'showCustomCommandConfig'
@@ -767,10 +776,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (
-				result.success &&
-				result.action === 'showRoleSubagentList'
-			) {
+			} else if (result.success && result.action === 'showRoleSubagentList') {
 				options.setShowRoleSubagentList(true);
 				const commandMessage: Message = {
 					role: 'command',
@@ -1215,11 +1221,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
 				}
-			} else if (
-				result.success &&
-				result.action === 'btw' &&
-				result.prompt
-			) {
+			} else if (result.success && result.action === 'btw' && result.prompt) {
 				options.setBtwPrompt(result.prompt);
 			} else if (result.success && result.action === 'toggleCodebase') {
 				// Handle toggle codebase command

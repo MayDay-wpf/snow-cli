@@ -286,6 +286,7 @@ export default function ChatScreen({
 		setShowBranchPanel: panelState.setShowBranchPanel,
 		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		setShowTodoListPanel: panelState.setShowTodoListPanel,
+		setShowPixelEditor: panelState.setShowPixelEditor,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
@@ -388,6 +389,7 @@ export default function ChatScreen({
 		panelState.showConnectionPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
+		panelState.showPixelEditor ||
 		showPermissionsPanel ||
 		showSubAgentDepthPanel;
 	const shouldShowFooter =
@@ -500,17 +502,17 @@ export default function ChatScreen({
 
 			{shouldShowFooter && (
 				<ChatFooter
-				onSubmit={handleMessageSubmit}
-				onCommand={handleCommandExecution}
-				onHistorySelect={handleHistorySelect}
-				onSwitchProfile={handleSwitchProfile}
-				handleProfileSelect={handleProfileSelect}
-				handleHistorySelect={handleHistorySelect}
-				showReviewCommitPanel={panelState.showReviewCommitPanel}
-				setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
-				onReviewCommitConfirm={handleReviewCommitConfirm}
-				btwPrompt={btwPrompt}
-				onBtwClose={() => setBtwPrompt(null)}
+					onSubmit={handleMessageSubmit}
+					onCommand={handleCommandExecution}
+					onHistorySelect={handleHistorySelect}
+					onSwitchProfile={handleSwitchProfile}
+					handleProfileSelect={handleProfileSelect}
+					handleHistorySelect={handleHistorySelect}
+					showReviewCommitPanel={panelState.showReviewCommitPanel}
+					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+					onReviewCommitConfirm={handleReviewCommitConfirm}
+					btwPrompt={btwPrompt}
+					onBtwClose={() => setBtwPrompt(null)}
 					disabled={
 						!!pendingToolConfirmation ||
 						!!bashSensitiveCommand ||

@@ -30,6 +30,7 @@ export interface CommandResult {
 		| 'showSkillsPicker'
 		| 'showGitLinePicker'
 		| 'help'
+		| 'pixel'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'
 		| 'executeTerminalCommand'

@@ -602,6 +602,7 @@ export const zhTW: TranslationKeys = {
 			disconnect: '斷開目前 Snow Instance 連接',
 			connectionStatus: '顯示目前 Snow Instance 連接狀態',
 			newPrompt: '根據需求使用 AI 生成精煉的提示詞',
+			pixel: '開啟終端像素編輯器',
 			btw: '在 AI 運行時快速提問（臨時對話，不儲存上下文）',
 			quit: '退出應用程式',
 		},

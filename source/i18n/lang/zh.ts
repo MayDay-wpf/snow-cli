@@ -601,6 +601,7 @@ export const zh: TranslationKeys = {
 			disconnect: '断开当前 Snow Instance 连接',
 			connectionStatus: '显示当前 Snow Instance 连接状态',
 			newPrompt: '根据需求使用 AI 生成精炼的提示词',
+			pixel: '打开终端像素编辑器',
 			btw: '在 AI 运行时快速提问（临时对话，不保存上下文）',
 			quit: '退出应用程序',
 		},

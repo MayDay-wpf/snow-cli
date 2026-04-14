@@ -592,6 +592,7 @@ export type TranslationKeys = {
 			disconnect: string;
 			connectionStatus: string;
 			newPrompt: string;
+			pixel: string;
 			btw: string;
 			quit: string;
 		};
