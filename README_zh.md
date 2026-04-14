@@ -13,7 +13,7 @@
 
 **QQ 群**: 910298558
 
-**LinuxDO AI 社区**: [https://linux.do](https://linux.do)
+**AI 社区**: [https://linux.do](https://linux.do)
 
 _在终端中进行 Agentic 编程_
 
@@ -45,13 +45,6 @@ winget install Microsoft.WindowsTerminal
 
 # 或使用 Microsoft Store 安装
 ```
-
-## 感谢社区
-
-<a href="https://linux.do">
-  <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
-</a>
-
 ## 文档目录
 
 - [安装指南](docs/usage/zh/01.安装指南.md) - 系统要求、安装(更新、卸载)步骤、IDE 扩展安装

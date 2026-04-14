@@ -13,7 +13,7 @@
 
 **QQ Group**: 910298558
 
-**LinuxDO AI Community**: [https://linux.do](https://linux.do)
+**AI Community**: [https://linux.do](https://linux.do)
 
 _Agentic coding in your terminal_
 
@@ -29,11 +29,6 @@ _Agentic coding in your terminal_
 
 <h3>Recommend using fonts: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
 
-## Thanks to the community
-
-<a href="https://linux.do">
-  <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
-</a>
 
 ## Documentation
 
