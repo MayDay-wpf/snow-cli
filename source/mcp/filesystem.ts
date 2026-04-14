@@ -1478,15 +1478,9 @@ export class FilesystemMCPService {
 			const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
 			const modifiedContent = modifiedLines.join('\n');
 
-			// Calculate replaced content for display (compress whitespace for readability)
-
+			// Calculate replaced content for display (raw text, no line-number prefix)
 			const replacedLines = lines.slice(startLine - 1, endLine);
-			const replacedContent = replacedLines
-				.map((line, idx) => {
-					const lineNum = startLine + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
-				.join('\n');
+			const replacedContent = replacedLines.join('\n');
 
 			// Calculate context boundaries
 			const lineDifference = replaceLines.length - (endLine - startLine + 1);
@@ -1500,14 +1494,9 @@ export class FilesystemMCPService {
 			const contextStart = smartBoundaries.start;
 			const contextEnd = smartBoundaries.end;
 
-			// Extract old content for context (compress whitespace for readability)
+			// Extract old content for context (raw text for reliable diff rendering)
 			const oldContextLines = lines.slice(contextStart - 1, contextEnd);
-			const oldContent = oldContextLines
-				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
-				.join('\n');
+			const oldContent = oldContextLines.join('\n');
 
 			// Write the modified content
 			if (isRemote) {
@@ -1558,16 +1547,30 @@ export class FilesystemMCPService {
 				}
 			}
 
-			// Extract new content for context (compress whitespace for readability)
+			// Extract new content for context (raw text for reliable diff rendering)
 			const newContextLines = finalLines.slice(
 				contextStart - 1,
 				finalContextEnd,
 			);
-			const newContextContent = newContextLines
-				.map((line, idx) => {
-					const lineNum = contextStart + idx;
-					return `${lineNum}→${normalizeForDisplay(line)}`;
-				})
+			const newContextContent = newContextLines.join('\n');
+
+			// Provide a larger overflow window so UI can render a broader diff hunk
+			// and help models verify bracket/block closure with surrounding context.
+			const overflowPadding = Math.max(3, contextLines);
+			const completeOldStart = Math.max(1, contextStart - overflowPadding);
+			const completeOldEnd = Math.min(lines.length, contextEnd + overflowPadding);
+			const completeOldContent = lines
+				.slice(completeOldStart - 1, completeOldEnd)
+				.join('\n');
+
+			const finalLineDifference = finalLines.length - lines.length;
+			const completeNewStart = Math.max(1, completeOldStart);
+			const completeNewEnd = Math.min(
+				finalLines.length,
+				completeOldEnd + finalLineDifference,
+			);
+			const completeNewContent = finalLines
+				.slice(completeNewStart - 1, completeNewEnd)
 				.join('\n');
 
 			// Analyze code structure
@@ -1605,6 +1608,8 @@ export class FilesystemMCPService {
 				filePath, // Include file path for DiffViewer display on Resume/re-render
 				oldContent,
 				newContent: newContextContent,
+				completeOldContent,
+				completeNewContent,
 				replacedContent,
 				matchLocation: {startLine, endLine},
 				contextStartLine: contextStart,
@@ -2418,8 +2423,8 @@ export const mcpTools = [
 	{
 		name: 'filesystem-replaceedit',
 		description:
-			'OPTIONAL (off by default — enable in MCP panel): Fuzzy search-and-replace editing. ' +
-			'**WHEN**: Prefer `filesystem-edit` (hashline anchors) for normal workflow; use this only when you need to match raw text. ' +
+			'DEFAULT edit tool: Fuzzy search-and-replace editing. ' +
+			'**WHEN**: Prefer this for normal workflow and diff-friendly context display. Use `filesystem-edit` when you need strict hash-anchored safety checks. ' +
 			'**REMOTE SSH**: Supports ssh:// paths like other filesystem tools. ' +
 			'**INPUT**: `searchContent` must be raw source text — strip `lineNum:hash→` prefixes if you pasted from `filesystem-read`. ' +
 			'**BATCH**: `filePath` may be a string, string[] with top-level search/replace, or {path, searchContent, replaceContent, occurrence?}[]. ' +
@@ -2500,7 +2505,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-edit',
 		description:
-			'PREFERRED edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
+			'OPTIONAL strict edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
 			'Line format: "lineNum:hash→content" (e.g. "42:a3→code"). Use anchors "lineNum:hash" to reference lines — no text reproduction needed. ' +
 			'**OPERATIONS**: (1) replace — replaces startAnchor..endAnchor with content; ' +
 			'(2) insert_after — inserts content after startAnchor; ' +

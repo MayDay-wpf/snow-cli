@@ -27,13 +27,16 @@ const SUB_AGENTS_CONFIG_FILE = join(CONFIG_DIR, 'sub-agents.json');
 
 /**
  * Built-in sub-agents (hardcoded, always available)
+ * Build dynamically so tool enable/disable changes are reflected immediately.
  */
-const BUILTIN_AGENTS: SubAgent[] = getAllBuiltinAgentDefinitions().map(def => ({
-	...def,
-	createdAt: '2024-01-01T00:00:00.000Z',
-	updatedAt: '2024-01-01T00:00:00.000Z',
-	builtin: true,
-}));
+function getBuiltinAgents(): SubAgent[] {
+	return getAllBuiltinAgentDefinitions().map(def => ({
+		...def,
+		createdAt: '2024-01-01T00:00:00.000Z',
+		updatedAt: '2024-01-01T00:00:00.000Z',
+		builtin: true,
+	}));
+}
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
@@ -72,9 +75,10 @@ export function getUserSubAgents(): SubAgent[] {
 export function getSubAgents(): SubAgent[] {
 	const userAgents = getUserSubAgents();
 	const userAgentIds = new Set(userAgents.map(a => a.id));
+	const builtinAgents = getBuiltinAgents();
 
 	// 过滤掉已被用户覆盖的内置代理
-	const effectiveBuiltinAgents = BUILTIN_AGENTS.filter(
+	const effectiveBuiltinAgents = builtinAgents.filter(
 		agent => !userAgentIds.has(agent.id),
 	);
 

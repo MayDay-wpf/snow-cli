@@ -275,7 +275,7 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	};
 
-	// Built-in filesystem (includes filesystem-replaceedit — off by default; enable in MCP panel: V on filesystem, Tab on replaceedit)
+	// Built-in filesystem (filesystem-edit is opt-in; filesystem-replaceedit is enabled by default)
 	addBuiltInService('filesystem', filesystemTools, 'filesystem');
 
 	// Add built-in terminal tools
@@ -1347,7 +1347,7 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'replaceedit':
-					// Opt-in tool (default off): enable under MCP panel → filesystem → V → Tab on replaceedit
+					// Default-on tool (can be disabled in MCP panel)
 					if (!args.filePath) {
 						throw new Error(
 							`Missing required parameter 'filePath' for filesystem-replaceedit tool.\n` +

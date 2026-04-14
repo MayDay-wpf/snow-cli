@@ -21,7 +21,7 @@ interface OptInMCPConfig {
 }
 
 /** Tools that are off until explicitly enabled (Tab in MCP tools list writes opt-in file). */
-const DEFAULT_OPT_IN_DISABLED_KEYS = new Set<string>(['filesystem:replaceedit']);
+const DEFAULT_OPT_IN_DISABLED_KEYS = new Set<string>(['filesystem:edit']);
 
 function getProjectConfigPath(): string {
 	return path.join(process.cwd(), '.snow', CONFIG_FILE);

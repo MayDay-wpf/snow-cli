@@ -56,11 +56,11 @@ jobs:
 
             ### What's New
 
-            - Optimized the UI display effects of some components
-            - Added model list deduplication
-            - Added Markdown rendering to the Btw panel
-            - Codebase added Rerank selection
-            - Added retry mechanism for compression failure
+            - Optimized the display of Skills information
+            - Added the replaceedit default editor
+            - Optimized the loading display of sub-agents
+            - Fixed the ambiguity bug of reranker model configuration between global and project
+            - Fixed the issue where sub-agent Diffviewer did not display
 
             ### Installation
             ```bash
