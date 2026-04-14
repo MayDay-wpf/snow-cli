@@ -61,7 +61,7 @@ _Agentic coding in your terminal_
 - [MCP Configuration](docs/usage/en/14.MCP%20Configuration.md) - MCP service management, configure external services, enable/disable services, troubleshooting
 - [Async Task Management](docs/usage/en/15.Async%20Task%20Management.md) - Background task creation, task management interface, sensitive command approval, task to session conversion
 - [Skills Command Detailed Guide](docs/usage/en/18.Skills%20Command%20Detailed%20Guide.md) - Skill creation, usage methods, Claude Code Skills compatibility, tool restrictions
-- [LSP Configuration and Usage](docs/usage/en/19.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
+- [LSP Configuration and Usage](docs/usage/en/17.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
 - [SSE Service Mode](docs/usage/en/20.SSE%20Service%20Mode.md) - SSE server startup, API endpoints explanation, tool confirmation flow, permission configuration, YOLO mode, client integration examples
 - [Custom StatusLine Guide](docs/usage/en/21.Custom%20StatusLine%20Guide.md) - User-level StatusLine plugins, hook structure, override behavior, bilingual examples
 - [Team Mode Guide](docs/usage/en/22.Team%20Mode%20Guide.md) - Multi-agent collaboration, parallel task execution, team management

@@ -78,7 +78,7 @@ winget install Microsoft.WindowsTerminal
 - [MCP 配置](docs/usage/zh/14.MCP配置.md) - MCP 服务管理、配置外部服务、启用/禁用服务、故障排除
 - [异步任务管理](docs/usage/zh/15.异步任务管理.md) - 后台任务创建、任务管理界面、敏感命令审批、任务转会话
 - [Skills 指令详细说明](docs/usage/zh/18.Skills指令详细说明.md) - 技能创建、使用方法、Claude Code Skills 兼容性、工具限制
-- [LSP 配置与用法](docs/usage/zh/19.LSP配置.md) - LSP 配置文件、语言服务器安装、ACE 工具用法(跳转/大纲)
+- [LSP 配置与用法](docs/usage/zh/17.LSP配置.md) - LSP 配置文件、语言服务器安装、ACE 工具用法(跳转/大纲)
 - [SSE 服务模式](docs/usage/zh/20.SSE服务模式.md) - SSE 服务器启动、API 端点说明、工具确认流程、权限配置、YOLO 模式、客户端集成示例
 - [自定义 StatusLine 指南](docs/usage/zh/21.自定义StatusLine指南.md) - 用户级状态栏插件、hook 结构、覆盖机制、中英文示例
 - [Team 模式指南](docs/usage/zh/22.Team模式指南.md) - 多智能体协作、并行任务执行、团队管理
