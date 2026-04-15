@@ -619,14 +619,8 @@ export async function executeToolCall(
  * Categorize tools by their resource type for proper execution sequencing
  */
 function getToolResourceType(toolName: string): string {
-	// Notebook tools all modify the same notebook file - must be sequential
-	if (
-		toolName === 'notebook-add' ||
-		toolName === 'notebook-update' ||
-		toolName === 'notebook-delete' ||
-		toolName === 'notebook-list' ||
-		toolName === 'notebook-query'
-	) {
+	// Notebook state is shared and should be coordinated
+	if (toolName === 'notebook-manage') {
 		return 'notebook-state';
 	}
 
@@ -667,6 +661,19 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 			// fall through to serialized todo-state
 		}
 		return 'todo-state';
+	}
+
+	// notebook-manage: read actions can be parallelized, mutating actions share notebook-state
+	if (toolName === 'notebook-manage') {
+		try {
+			const args = safeParseToolArguments(toolCall.function.arguments);
+			if (args?.['action'] === 'query' || args?.['action'] === 'list') {
+				return `independent:${toolCall.id}`;
+			}
+		} catch {
+			// fall through to serialized notebook-state
+		}
+		return 'notebook-state';
 	}
 
 	const resourceType = getToolResourceType(toolName);

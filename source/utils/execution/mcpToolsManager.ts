@@ -1272,7 +1272,7 @@ export async function executeMCPTool(
 			result = await getTodoService().executeTool(actualToolName, args);
 		} else if (serviceName === 'notebook') {
 			// Handle built-in Notebook tools (no connection needed)
-			result = await executeNotebookTool(toolName, args);
+			result = await executeNotebookTool(actualToolName, args);
 		} else if (serviceName === 'filesystem') {
 			// Handle built-in filesystem tools (no connection needed)
 			const {filesystemService} = await import('../../mcp/filesystem.js');

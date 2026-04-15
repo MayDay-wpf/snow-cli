@@ -18,12 +18,19 @@ import {getConversationContext} from '../utils/codebase/conversationContext.js';
  */
 export const mcpTools: Tool[] = [
 	{
-		name: 'notebook-add',
-		description: `📝 Record code parts that are fragile and easily broken during iteration.
+		name: 'notebook-manage',
+		description: `📝 Unified notebook management tool. Use required "action" field to operate code memory.
 
 **Core Purpose:** Prevent new features from breaking existing functionality.
 
-**When to record:**
+**Actions:**
+- query: Search entries by fuzzy file path pattern (default action to discover notes)
+- list: List all entries for one exact file path
+- add: Record a new note for a file
+- update: Update existing note by notebookId
+- delete: Delete outdated note by notebookId
+
+**When to add notes:**
 - After fixing bugs that could easily reoccur
 - Fragile code that new features might break
 - Non-obvious dependencies between components
@@ -37,129 +44,43 @@ export const mcpTools: Tool[] = [
 		inputSchema: {
 			type: 'object',
 			properties: {
+				action: {
+					type: 'string',
+					enum: ['query', 'list', 'add', 'update', 'delete'],
+					description:
+						'Operation to run: query | list | add | update | delete.',
+				},
 				filePath: {
 					type: 'string',
 					description:
-						'File path (relative or absolute). Example: "src/utils/parser.ts"',
+						'For action=add/list: file path (relative or absolute).',
 				},
-				note: {
-					type: 'string',
-					description:
-						'Brief, specific note. Focus on risks/constraints, NOT what code does.',
-				},
-			},
-			required: ['filePath', 'note'],
-		},
-	},
-	{
-		name: 'notebook-query',
-		description: `🔍 Search notebook entries by file path pattern.
-
-**Auto-triggered:** When reading files, last 10 notebooks are automatically shown.
-**Manual use:** Query specific patterns or see more entries.`,
-		inputSchema: {
-			type: 'object',
-			properties: {
 				filePathPattern: {
 					type: 'string',
 					description:
-						'Fuzzy search pattern (e.g., "parser"). Empty = all entries.',
+						'For action=query: fuzzy file path search pattern; empty means all.',
 					default: '',
 				},
 				topN: {
 					type: 'number',
-					description: 'Max results to return (default: 10, max: 50)',
+					description:
+						'For action=query: max results (default: 10, max: 50).',
 					default: 10,
 					minimum: 1,
 					maximum: 50,
 				},
-			},
-		},
-	},
-	{
-		name: 'notebook-update',
-		description: `✏️ Update an existing notebook entry to fix mistakes or refine notes.
-
-**Core Purpose:** Correct errors in previously recorded notes or update outdated information.
-
-**When to use:**
-- Found a mistake in a previously recorded note
-- Need to clarify or improve the wording
-- Update note after code changes
-- Refine warning messages for better clarity
-
-**Usage:**
-1. Use notebook-query or notebook-list to find the entry ID
-2. Call notebook-update with the ID and new note content
-
-**Example:**
-- Old: "⚠️ Don't change this"
-- New: "⚠️ validateInput() MUST be called first - parser depends on sanitized input"`,
-		inputSchema: {
-			type: 'object',
-			properties: {
 				notebookId: {
 					type: 'string',
 					description:
-						'Notebook entry ID to update (get from notebook-query or notebook-list)',
+						'For action=update/delete: notebook entry ID (from query/list).',
 				},
 				note: {
 					type: 'string',
-					description: 'New note content to replace the existing one',
+					description:
+						'For action=add/update: brief and specific risk/constraint note.',
 				},
 			},
-			required: ['notebookId', 'note'],
-		},
-	},
-	{
-		name: 'notebook-delete',
-		description: `🗑️ Delete an outdated or incorrect notebook entry.
-
-**Core Purpose:** Remove notes that are no longer relevant or were recorded by mistake.
-
-**When to use:**
-- Code has been refactored and note is obsolete
-- Note was recorded by mistake
-- Workaround has been properly fixed
-- Entry is duplicate or redundant
-
-**Usage:**
-1. Use notebook-query or notebook-list to find the entry ID
-2. Call notebook-delete with the ID to remove it
-
-**⚠️ Warning:** Deletion is permanent. Make sure the note is truly obsolete.`,
-		inputSchema: {
-			type: 'object',
-			properties: {
-				notebookId: {
-					type: 'string',
-					description: 'Notebook entry ID to delete (get from notebook-query)',
-				},
-			},
-			required: ['notebookId'],
-		},
-	},
-	{
-		name: 'notebook-list',
-		description: `📋 List all notebook entries for a specific file.
-
-**Core Purpose:** View all notes associated with a particular file for management.
-
-**When to use:**
-- Need to see all notes for a file before editing
-- Want to clean up old notes for a specific file
-- Review constraints before making changes to a file
-
-**Returns:** All notebook entries for the specified file, ordered by creation time.`,
-		inputSchema: {
-			type: 'object',
-			properties: {
-				filePath: {
-					type: 'string',
-					description: 'File path (relative or absolute) to list notebooks for',
-				},
-			},
-			required: ['filePath'],
+			required: ['action'],
 		},
 	},
 ];
@@ -172,8 +93,35 @@ export async function executeNotebookTool(
 	args: any,
 ): Promise<CallToolResult> {
 	try {
-		switch (toolName) {
-			case 'notebook-add': {
+		// Backward compatibility: old names map to action
+		const legacyActionMap: Record<string, string> = {
+			'notebook-add': 'add',
+			'notebook-query': 'query',
+			'notebook-update': 'update',
+			'notebook-delete': 'delete',
+			'notebook-list': 'list',
+		};
+		const action =
+			(typeof args?.action === 'string' && args.action) ||
+			legacyActionMap[toolName] ||
+			(toolName === 'manage' || toolName === 'notebook-manage'
+				? ''
+				: undefined);
+
+		if (!action || !['query', 'list', 'add', 'update', 'delete'].includes(action)) {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: 'Error: "action" must be one of: query, list, add, update, delete',
+					},
+				],
+				isError: true,
+			};
+		}
+
+		switch (action) {
+			case 'add': {
 				const {filePath, note} = args;
 				if (!filePath || !note) {
 					return {
@@ -226,7 +174,7 @@ export async function executeNotebookTool(
 				};
 			}
 
-			case 'notebook-query': {
+			case 'query': {
 				const {filePathPattern = '', topN = 10} = args;
 				const results = queryNotebook(filePathPattern, topN);
 
@@ -273,7 +221,7 @@ export async function executeNotebookTool(
 				};
 			}
 
-			case 'notebook-update': {
+			case 'update': {
 				const {notebookId, note} = args;
 				if (!notebookId || !note) {
 					return {
@@ -349,7 +297,7 @@ export async function executeNotebookTool(
 				};
 			}
 
-			case 'notebook-delete': {
+			case 'delete': {
 				const {notebookId} = args;
 				if (!notebookId) {
 					return {
@@ -417,7 +365,7 @@ export async function executeNotebookTool(
 				};
 			}
 
-			case 'notebook-list': {
+			case 'list': {
 				const {filePath} = args;
 				if (!filePath) {
 					return {
@@ -464,7 +412,7 @@ export async function executeNotebookTool(
 					content: [
 						{
 							type: 'text',
-							text: `Unknown notebook tool: ${toolName}`,
+							text: `Unknown notebook action: ${String(action)}`,
 						},
 					],
 					isError: true,
@@ -475,7 +423,7 @@ export async function executeNotebookTool(
 			content: [
 				{
 					type: 'text',
-					text: `Error executing notebook tool: ${
+					text: `Error executing notebook-manage: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
 				},
