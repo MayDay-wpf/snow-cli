@@ -22,6 +22,7 @@ import {
 	type SSHConfig,
 } from '../utils/config/workingDirConfig.js';
 import {detectWindowsPowerShell} from '../prompt/shared/promptHelpers.js';
+import {bashOutputSummaryAgent} from '../agents/bashOutputSummaryAgent.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -55,6 +56,41 @@ export class TerminalCommandService {
 	) {
 		this.workingDirectory = workingDirectory;
 		this.maxOutputLength = maxOutputLength;
+	}
+
+	private async maybeSummarizeCommandResult(
+		commandResult: CommandExecutionResult,
+		enableAiSummary: boolean,
+		abortSignal?: AbortSignal,
+	): Promise<CommandExecutionResult> {
+		try {
+			if (!enableAiSummary) {
+				return commandResult;
+			}
+
+			const summarizedResult = await bashOutputSummaryAgent.summarizeCommandResult(
+				commandResult,
+				abortSignal,
+			);
+
+			if (summarizedResult.stdout !== commandResult.stdout) {
+				appendTerminalOutput('[AI Summary] Output was compressed by AI.');
+				const summaryLines = summarizedResult.stdout
+					.split('\n')
+					.filter(line => line.trim());
+				for (const line of summaryLines) {
+					appendTerminalOutput(`[AI Summary] ${line}`);
+				}
+			}
+
+			return summarizedResult;
+		} catch (error) {
+			logger.warn(
+				'terminal-execute: summarize in bash service failed, fallback to original',
+				error,
+			);
+			return commandResult;
+		}
 	}
 
 	/**
@@ -217,6 +253,7 @@ export class TerminalCommandService {
 		timeout: number = 30000,
 		abortSignal?: AbortSignal,
 		isInteractive: boolean = false,
+		enableAiSummary: boolean = false,
 	): Promise<CommandExecutionResult> {
 		const executedAt = new Date().toISOString();
 
@@ -260,13 +297,18 @@ export class TerminalCommandService {
 					abortSignal,
 				);
 
-				return {
+				const commandResult: CommandExecutionResult = {
 					stdout: truncateOutput(result.stdout, this.maxOutputLength),
 					stderr: truncateOutput(result.stderr, this.maxOutputLength),
 					exitCode: result.exitCode,
 					command,
 					executedAt,
 				};
+				return this.maybeSummarizeCommandResult(
+					commandResult,
+					enableAiSummary,
+					abortSignal,
+				);
 			}
 
 			// Local execution: Execute command using system default shell and register the process.
@@ -647,13 +689,18 @@ export class TerminalCommandService {
 			});
 
 			// Truncate output if too long
-			return {
+			const commandResult: CommandExecutionResult = {
 				stdout: truncateOutput(stdout, this.maxOutputLength),
 				stderr: truncateOutput(stderr, this.maxOutputLength),
 				exitCode: 0,
 				command,
 				executedAt,
 			};
+			return this.maybeSummarizeCommandResult(
+				commandResult,
+				enableAiSummary,
+				abortSignal,
+			);
 		} catch (error: any) {
 			// Handle execution errors (non-zero exit codes)
 			if (error.code === 'ETIMEDOUT') {
@@ -662,7 +709,7 @@ export class TerminalCommandService {
 
 			// Check if aborted by user (ESC key)
 			if (abortSignal?.aborted) {
-				return {
+				const commandResult: CommandExecutionResult = {
 					stdout: truncateOutput(error.stdout || '', this.maxOutputLength),
 					stderr: truncateOutput(
 						error.stderr ||
@@ -673,10 +720,15 @@ export class TerminalCommandService {
 					command,
 					executedAt,
 				};
+				return this.maybeSummarizeCommandResult(
+					commandResult,
+					enableAiSummary,
+					abortSignal,
+				);
 			}
 
 			// For non-zero exit codes, still return the output
-			return {
+			const commandResult: CommandExecutionResult = {
 				stdout: truncateOutput(error.stdout || '', this.maxOutputLength),
 				stderr: truncateOutput(
 					error.stderr || error.message || '',
@@ -686,6 +738,11 @@ export class TerminalCommandService {
 				command,
 				executedAt,
 			};
+			return this.maybeSummarizeCommandResult(
+				commandResult,
+				enableAiSummary,
+				abortSignal,
+			);
 		}
 	}
 
@@ -733,7 +790,6 @@ export const mcpTools = [
 					type: 'number',
 					description: 'Timeout in milliseconds (default: 30000)',
 					default: 30000,
-					maximum: 300000,
 				},
 				isInteractive: {
 					type: 'boolean',
@@ -741,8 +797,14 @@ export const mcpTools = [
 						'Set to true if the command requires user input (e.g., Read-Host, password prompts, y/n confirmations, interactive installers). When true, an input prompt will be shown to allow user to provide input. Default: false.',
 					default: false,
 				},
+				enableAiSummary: {
+					type: 'boolean',
+					description:
+						'REQUIRED: Whether to summarize and clean command output with AI before returning tool result. Set true when output may contain noisy or low-value information. Default: false.',
+					default: false,
+				},
 			},
-			required: ['command', 'workingDirectory'],
+			required: ['command', 'workingDirectory', 'enableAiSummary'],
 		},
 	},
 ];

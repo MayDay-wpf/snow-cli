@@ -122,7 +122,9 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 
 **Formatting rule:**
 - TODO item content should be clear and actionable
-- **REQUIRED: Get existing TODOs first** - BEFORE calling todo-add, ALWAYS run todo-get (paired with an action tool in the same call) to inspect current items
+- **REQUIRED: Get existing TODOs first** - BEFORE action=add, ALWAYS run todo-manage with action=get (paired with an action tool in the same call) to inspect current items
+- **HARD RULE: Update immediately after each completed step** - As soon as one step is done, call \`todo-manage({action:"update", ...})\` in the same turn as the next action. Do NOT defer updates until the end.
+- **STRICTLY FORBIDDEN**: Completing multiple steps and doing one final bulk TODO status update at the end.
 
 **WHEN TO USE (Default for most work):**
 - ANY task touching 2+ files
@@ -136,29 +138,30 @@ PLACEHOLDER_FOR_WORKFLOW_SECTION
 - Simple queries that don't change code
 
 **STANDARD WORKFLOW - Always Plan First:**
-1. **Receive task** → Run todo-get (paired with an action tool) to see current list
-2. **Plan** → Create TODO with todo-add (batch add all steps at once)
-3. **Execute** → Update progress with todo-update as each step is completed
-4. **Complete** → Clean up obsolete, incorrect, or superseded items with todo-delete
+1. **Receive task** → todo-manage({action:"get"}) (paired with an action tool) to see current list
+2. **Plan** → todo-manage({action:"add", content:[...]}) — batch add all steps at once
+3. **Execute** → todo-manage({action:"update", todoId, status}) as each step is completed
+4. **Complete** → todo-manage({action:"delete", todoId}) for obsolete, incorrect, or superseded items
 
 **PARALLEL CALLS RULE:**
-ALWAYS pair TODO tools with action tools in same call:
-- CORRECT: todo-get + filesystem-read | todo-get + filesystem-edit | todo-update + filesystem-edit
-- WRONG: Call todo-get alone, wait for result, then act
+ALWAYS pair todo-manage with action tools in same call:
+- CORRECT: todo-manage({action:"get"}) + filesystem-read | todo-manage({action:"get"}) + filesystem-edit | todo-manage({action:"update",...}) + filesystem-edit
+- WRONG: Call todo-manage alone, wait for result, then act
+- WRONG: Finish 3-5 tasks first, then update all of them together at the end
 
-**Available tools:**
-- **todo-add**: Create task list (supports batch: pass string array to add multiple at once)
-- **todo-get**: Get the current TODO list (always pair with other tools)
-- **todo-update**: Update TODO status/content
-- **todo-delete**: Remove obsolete/redundant items
+**Single tool — \`todo-manage\` (required \`action\`):**
+- **get**: Current TODO list (ids, status, hierarchy)
+- **add**: \`content\` string or string[]; optional \`parentId\` for subtasks
+- **update**: \`todoId\` string or string[]; optional \`status\` and/or \`content\`
+- **delete**: \`todoId\` string or string[] (cascade removes children of a parent)
 
 **Examples:**
 \`\`\`
 User: "Fix authentication bug and add logging"
-AI: todo-add(content=["Fix auth bug in auth.ts", "Add logging to login flow", "Test login with new logs"]) + filesystem-read("auth.ts")
+AI: todo-manage({action:"add", content:["Fix auth bug in auth.ts", "Add logging to login flow", "Test login with new logs"]}) + filesystem-read("auth.ts")
 
 User: "Refactor utils module"  
-AI: todo-add(content=["Read utils module structure", "Identify refactor targets", "Extract common functions", "Update imports", "Run tests"]) + filesystem-read("utils/")
+AI: todo-manage({action:"add", content:["Read utils module structure", "Identify refactor targets", "Extract common functions", "Update imports", "Run tests"]}) + filesystem-read("utils/")
 \`\`\`
 
 
@@ -351,7 +354,7 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 1. Call \`tool_search(query="your search terms")\` to find relevant tools
 2. Found tools become immediately available for the next call
 3. You can search multiple times for different tool categories
-4. Pair \`tool_search\` with action tools when possible (e.g., search + todo-get)
+4. Pair \`tool_search\` with action tools when possible (e.g., search + todo-manage with action get)
 
 **Available tool categories (search by these keywords):**
 - **filesystem** - Read, create, edit files (supports batch operations)

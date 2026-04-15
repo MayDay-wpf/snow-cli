@@ -188,7 +188,8 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 - \`askuser-ask_question\` - **Your most important coordination tool**. Pauses workflow to get user decisions. MUST be used before starting execution. Also use when: requirements are ambiguous, a phase fails and cannot be resolved, or the plan scope needs fundamental changes
 
 **Task Tracking**:
-- \`todo-add/update/get/delete\` - Track phase execution progress (for your own coordination, not sub-agents)
+- \`todo-manage\` (action: get / add / update / delete) - Track phase execution progress (for your own coordination, not sub-agents)
+- **Execution discipline**: Update TODO status immediately after each completed step; never wait until the end of a phase (or all phases) to do one bulk status update.
 
 **File & Verification**:
 - \`filesystem-read\` - Understand codebase and verify changes

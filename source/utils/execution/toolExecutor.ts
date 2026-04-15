@@ -619,15 +619,6 @@ export async function executeToolCall(
  * Categorize tools by their resource type for proper execution sequencing
  */
 function getToolResourceType(toolName: string): string {
-	// TODO tools all modify the same TODO file - must be sequential
-	if (
-		toolName === 'todo-update' ||
-		toolName === 'todo-add' ||
-		toolName === 'todo-delete'
-	) {
-		return 'todo-state';
-	}
-
 	// Notebook tools all modify the same notebook file - must be sequential
 	if (
 		toolName === 'notebook-add' ||
@@ -664,11 +655,21 @@ function getToolResourceType(toolName: string): string {
  */
 function getResourceIdentifier(toolCall: ToolCall): string {
 	const toolName = toolCall.function.name;
-	const resourceType = getToolResourceType(toolName);
 
-	if (resourceType === 'todo-state') {
-		return 'todo-state'; // All TODO operations share same resource
+	// todo-manage: only get can run in parallel with other work; mutating actions share todo-state
+	if (toolName === 'todo-manage') {
+		try {
+			const args = safeParseToolArguments(toolCall.function.arguments);
+			if (args?.['action'] === 'get') {
+				return `independent:${toolCall.id}`;
+			}
+		} catch {
+			// fall through to serialized todo-state
+		}
+		return 'todo-state';
 	}
+
+	const resourceType = getToolResourceType(toolName);
 
 	if (resourceType === 'notebook-state') {
 		return 'notebook-state'; // All Notebook operations share same resource

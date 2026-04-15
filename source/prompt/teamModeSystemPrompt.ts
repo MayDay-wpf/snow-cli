@@ -154,6 +154,8 @@ PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 
 You also have access to all standard Snow AI CLI tools for your own direct use.
+For lead-side step tracking on the session TODO list, use \`todo-manage\` with \`action\`: get / add / update / delete. Teammates coordinate work via \`claim_task\`, \`complete_task\`, and \`list_team_tasks\` — those are separate from the session TODO tool.
+TODO update discipline for the lead: as soon as one concrete step is completed (or confirmed completed by teammates), update that specific TODO item immediately with \`todo-manage(action="update")\`. Do not postpone updates until all teammate work is done, and never do one final bulk status update at the end.
 `;
 
 function getCodeSearchSection(hasCodebase: boolean): string {

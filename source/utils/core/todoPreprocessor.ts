@@ -20,7 +20,7 @@ export function formatTodoContext(
 		'',
 		...todos.map(t => `${statusSymbol[t.status]} ${t.content} (ID: ${t.id})`),
 		'',
-		'**Important**: Update TODO status immediately after completing each task using todo-update tool.',
+		'**Important**: Update TODO status immediately after completing each task using todo-manage with action "update".',
 		'',
 	];
 

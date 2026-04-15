@@ -358,159 +358,85 @@ export class TodoService {
 	}
 
 	/**
-	 * 获取所有工具定义
+	 * 获取所有工具定义（单一 todo-manage，通过 action 区分 get / add / update / delete）
 	 */
 	getTools(): Tool[] {
 		return [
 			{
-				name: 'todo-get',
-				description: `Get current TODO list with task IDs, status, and hierarchy.
+				name: 'todo-manage',
+				description: `Unified session TODO list: use required field "action" — one of get | add | update | delete.
 
-PARALLEL CALLS ONLY: MUST pair with other tools (todo-get + filesystem-read/terminal-execute/etc).
-NEVER call todo-get alone - always combine with an action tool.
+PARALLEL CALLS ONLY: MUST pair with other tools (todo-manage + filesystem-read/terminal-execute/etc).
+NEVER call todo-manage alone for any action — always combine with an action tool in the same turn.
 
-USE WHEN:
-- User provides additional info → Check what's already done before continuing
-- User requests modifications → Check current progress before adding tasks
-- Continuing work → Verify status to avoid redoing completed tasks
+ACTIONS:
+- get: Current list with IDs, status, hierarchy. Use before add/update when you need existing IDs.
+- add: Create item(s). Use "content" (string or string[]). Optional "parentId" for subtasks (valid parent id from get).
+- update: Required "todoId" (string or string[]). Optional "status" (pending|inProgress|completed) and/or "content" (refined wording). Batch ids share the same updates.
+- delete: Required "todoId" (string or string[]). Deleting a parent cascades to children.
 
-EXAMPLE: todo-get + filesystem-read (check progress while reading files)`,
-				inputSchema: {
-					type: 'object',
-					properties: {},
-				},
-			},
-			{
-				name: 'todo-update',
-				description: `Update TODO status/content - USE FREQUENTLY to track progress!
+BEST PRACTICES:
+- Mark "completed" only after the step is verified; update as you work.
+- Update each item immediately after it is done; do NOT finish all work first and batch-update at the end.
+- Delete obsolete or redundant items to keep the list focused.
 
-PARALLEL CALLS ONLY: MUST pair with other tools (todo-update + filesystem-edit/terminal-execute/etc).
-NEVER call todo-update alone - always combine with an action tool.
-
-SUPPORTS BATCH UPDATING:
-- Single: todoId="task-id"
-- Multiple: todoId=["id1", "id2", "id3"] (all get the same status/content)
-
-BEST PRACTICE: 
-- Mark "completed" ONLY after task is verified
-- Update while working, not after
-- Example: todo-update(task1, completed) + filesystem-edit(task2) 
-
-This ensures efficient workflow and prevents unnecessary wait times.`,
-
+EXAMPLES:
+- todo-manage({action:"get"}) + filesystem-read(...)
+- todo-manage({action:"add", content:["Step 1","Step 2"]}) + filesystem-read(...)
+- todo-manage({action:"update", todoId:"...", status:"completed"}) + filesystem-edit(...)`,
 				inputSchema: {
 					type: 'object',
 					properties: {
-						todoId: {
+						action: {
+							type: 'string',
+							enum: ['get', 'add', 'update', 'delete'],
+							description:
+								'Which operation to run on the current session TODO list.',
+						},
+						content: {
 							oneOf: [
 								{
 									type: 'string',
-									description: 'Single TODO item ID to update',
+									description:
+										'For action=add: one TODO description. For action=update: optional new wording.',
 								},
 								{
 									type: 'array',
 									items: {type: 'string'},
 									description:
-										'Multiple TODO item IDs to update with the same status/content',
+										'For action=add only: batch add multiple TODO descriptions.',
 								},
 							],
 							description:
-								'TODO item ID(s) to update (get exact ID from todo-get)',
-						},
-						status: {
-							type: 'string',
-							enum: ['pending', 'inProgress', 'completed'],
-							description:
-								'New status - "pending" (not started), "inProgress" (currently working on), or "completed" (100% finished and verified)',
-						},
-
-						content: {
-							type: 'string',
-							description:
-								'Updated TODO content (optional, only if task description needs refinement)',
-						},
-					},
-					required: ['todoId'],
-				},
-			},
-			{
-				name: 'todo-add',
-				description: `Add tasks to TODO list - FIRST STEP for most programming tasks.
-
-PARALLEL CALLS ONLY: MUST pair with other tools (todo-add + filesystem-read/etc).
-NEVER call todo-add alone - always combine with an action tool.
-
-WHEN TO USE (Very common):
-- Start ANY multi-step task → Create TODO list immediately
-- User adds new requirements → Add tasks for new work
-- Break down complex work → Add subtasks
-
-SUPPORTS BATCH ADDING:
-- Single: content="Task description"
-- Multiple: content=["Task 1", "Task 2", "Task 3"] (recommended for multi-step work)`,
-				inputSchema: {
-					type: 'object',
-					properties: {
-						content: {
-							oneOf: [
-								{
-									type: 'string',
-									description: 'Single TODO item description',
-								},
-								{
-									type: 'array',
-									items: {type: 'string'},
-									description:
-										'Multiple TODO item descriptions for batch adding',
-								},
-							],
-							description:
-								'TODO item description(s) - must be specific, actionable, and technically precise. Can be a single string or an array of strings.',
+								'For add: required (string or string[]). For update: optional text refinement.',
 						},
 						parentId: {
 							type: 'string',
 							description:
-								'Parent TODO ID to create a subtask (optional). Get valid IDs from todo-get. When adding multiple tasks, all will be added under the same parent.',
+								'For action=add only: parent TODO id for subtasks (from action=get).',
 						},
-					},
-					required: ['content'],
-				},
-			},
-			{
-				name: 'todo-delete',
-				description: `Delete TODO item from the list.
-
-PARALLEL CALLS ONLY: MUST pair with other tools (todo-delete + filesystem-edit/todo-get/etc).
-NEVER call todo-delete alone - always combine with an action tool.
-
-SUPPORTS BATCH DELETION:
-- Single: todoId="task-id"
-- Multiple: todoId=["id1", "id2", "id3"]
-
-CASCADE DELETE: Deleting a parent task automatically deletes all its children.
-
-BEST PRACTICE - KEEP TODO CLEAN:
-Proactively delete obsolete, redundant, or overly detailed completed subtasks to maintain focus on current work.`,
-				inputSchema: {
-					type: 'object',
-					properties: {
 						todoId: {
 							oneOf: [
 								{
 									type: 'string',
-									description: 'Single TODO item ID to delete',
+									description: 'Single TODO item id',
 								},
 								{
 									type: 'array',
 									items: {type: 'string'},
-									description: 'Multiple TODO item IDs for batch deletion',
+									description: 'Multiple ids (same update or delete applies to all)',
 								},
 							],
 							description:
-								'TODO item ID(s) to delete. Deleting a parent will cascade delete all its children. Get exact ID from todo-get.',
+								'For action=update or delete: item id(s) from action=get.',
+						},
+						status: {
+							type: 'string',
+							enum: ['pending', 'inProgress', 'completed'],
+							description: 'For action=update only.',
 						},
 					},
-					required: ['todoId'],
+					required: ['action'],
 				},
 			},
 		];
@@ -537,8 +463,38 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 			};
 		}
 
+		if (toolName !== 'manage') {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Unknown TODO tool: ${toolName}`,
+					},
+				],
+				isError: true,
+			};
+		}
+
+		const rawAction = args['action'];
+		if (
+			typeof rawAction !== 'string' ||
+			!['get', 'add', 'update', 'delete'].includes(rawAction)
+		) {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: 'Error: "action" must be one of: get, add, update, delete',
+					},
+				],
+				isError: true,
+			};
+		}
+
+		const action = rawAction as 'get' | 'add' | 'update' | 'delete';
+
 		try {
-			switch (toolName) {
+			switch (action) {
 				case 'get': {
 					let result = await this.getTodoList(sessionId);
 
@@ -569,9 +525,23 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 						content?: string;
 					};
 
+					if (todoId === undefined || todoId === null) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: 'Error: action=update requires "todoId"',
+								},
+							],
+							isError: true,
+						};
+					}
+
 					const updates: Partial<Omit<TodoItem, 'id' | 'createdAt'>> = {};
 					if (status) updates.status = status;
-					if (content) updates.content = content;
+					if (content !== undefined && typeof content === 'string') {
+						updates.content = content;
+					}
 
 					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const result = await this.updateTodoItems(sessionId, ids, updates);
@@ -589,9 +559,21 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 
 				case 'add': {
 					const {content, parentId} = args as {
-						content: string | string[];
+						content?: string | string[];
 						parentId?: string;
 					};
+
+					if (content === undefined || content === null) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: 'Error: action=add requires "content"',
+								},
+							],
+							isError: true,
+						};
+					}
 
 					// 智能解析 content：处理 JSON 字符串形式的数组
 					let parsedContent: string | string[] = content;
@@ -643,8 +625,20 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 
 				case 'delete': {
 					const {todoId} = args as {
-						todoId: string | string[];
+						todoId?: string | string[];
 					};
+
+					if (todoId === undefined || todoId === null) {
+						return {
+							content: [
+								{
+									type: 'text',
+									text: 'Error: action=delete requires "todoId"',
+								},
+							],
+							isError: true,
+						};
+					}
 
 					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const result = await this.deleteTodoItems(sessionId, ids);
@@ -665,7 +659,7 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 						content: [
 							{
 								type: 'text',
-								text: `Unknown tool: ${toolName}`,
+								text: `Unknown action: ${String(action)}`,
 							},
 						],
 						isError: true,
@@ -676,7 +670,7 @@ Proactively delete obsolete, redundant, or overly detailed completed subtasks to
 				content: [
 					{
 						type: 'text',
-						text: `Error executing ${toolName}: ${
+						text: `Error executing todo-manage (${action}): ${
 							error instanceof Error ? error.message : String(error)
 						}`,
 					},

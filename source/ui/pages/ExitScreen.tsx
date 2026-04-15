@@ -6,7 +6,7 @@ import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {gracefulExit} from '../../utils/core/processManager.js';
-import {existsSync, readFileSync} from 'fs';
+import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import {join} from 'path';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
@@ -28,10 +28,6 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 	const {theme} = useTheme();
 	const {columns: terminalWidth} = useTerminalSize();
 
-	useEffect(() => {
-		gracefulExit();
-	}, []);
-
 	const versionText = t.exitScreen.version.replace('{version}', version);
 	const dotWidth = Math.max(12, Math.min(terminalWidth - 8, 42));
 	const dots = useMemo(() => dotLine(dotWidth), [dotWidth]);
@@ -40,24 +36,45 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 	const [exitImageGrid, setExitImageGrid] = useState<PixelGrid | undefined>(
 		undefined,
 	);
+	const [isExitScreenReady, setIsExitScreenReady] = useState(false);
 
 	useEffect(() => {
-		if (!existsSync(EXIT_IMAGE_PATH)) {
-			setExitImageGrid(undefined);
-			return;
-		}
-		try {
-			const content = readFileSync(EXIT_IMAGE_PATH, 'utf8');
-			const data = JSON.parse(content) as {grid?: PixelGrid; enabled?: boolean};
-			if (data.grid && (data.enabled ?? true)) {
-				setExitImageGrid(data.grid.map(row => [...row]));
-			} else {
-				setExitImageGrid(undefined);
+		let active = true;
+		const loadExitImage = async () => {
+			try {
+				const content = await readFile(EXIT_IMAGE_PATH, 'utf8');
+				const data = JSON.parse(content) as {
+					grid?: PixelGrid;
+					enabled?: boolean;
+				};
+				if (!active) return;
+				if (data.grid && (data.enabled ?? true)) {
+					setExitImageGrid(data.grid.map(row => [...row]));
+				} else {
+					setExitImageGrid(undefined);
+				}
+			} catch {
+				if (active) {
+					setExitImageGrid(undefined);
+				}
+			} finally {
+				if (active) {
+					// Mark screen ready only after async content decision finishes.
+					setIsExitScreenReady(true);
+				}
 			}
-		} catch {
-			setExitImageGrid(undefined);
-		}
+		};
+
+		loadExitImage();
+		return () => {
+			active = false;
+		};
 	}, []);
+
+	useEffect(() => {
+		if (!isExitScreenReady) return;
+		gracefulExit();
+	}, [isExitScreenReady]);
 
 	const exitImageRows = useMemo(() => {
 		if (!exitImageGrid) return [];

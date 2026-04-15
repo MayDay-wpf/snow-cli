@@ -559,7 +559,7 @@ function renderGenericPreview(data: any, maxLines: number) {
 }
 
 function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
-	// Handle todo-get, todo-update, todo-add, todo-delete
+	// Handle todo-manage (all actions return the same list JSON shape when applicable)
 
 	// Debug: Check if data is actually the stringified result that needs parsing again
 	// Some tools might return the result wrapped in content[0].text
