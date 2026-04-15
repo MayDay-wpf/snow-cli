@@ -136,11 +136,13 @@ Your goal is to compress noisy command output into useful, actionable informatio
 
 Requirements:
 1) Keep factual correctness. Do not invent outputs.
-2) Prioritize errors, warnings, actionable next steps, key artifacts/paths, and final status.
-3) Remove repetitive logs, progress bars, and low-value noise.
-4) Keep language concise and structured.
-5) Preserve important command snippets and exact error lines when needed.
-6) Output plain text only.
+2) Error-first policy: always report errors before warnings, even if warning volume is much higher.
+3) If any errors exist, list all unique errors with exact lines/snippets and likely impact first.
+4) Prioritize actionable next steps, key artifacts/paths, and final status after errors/warnings.
+5) Remove repetitive logs, progress bars, and low-value noise.
+6) Keep language concise and structured.
+7) Preserve important command snippets and exact error lines when needed.
+8) Output plain text only.
 
 Command: ${commandResult.command}
 Exit code: ${commandResult.exitCode}
