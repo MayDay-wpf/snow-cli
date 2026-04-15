@@ -32,6 +32,26 @@ interface DiffHunk {
 // 2) Line+arrow from filesystem-replaceedit (and legacy read): "lineNum→content"
 //    Applied after (1) so "42:a3→..." is not broken by matching "42→" first.
 // Iteratively strips nested prefixes to handle double-wrapping from model leaks.
+/** Tabs jump to tab stops in terminals and widen Ink layouts; expand for stable diff display. */
+function expandTabsForDisplay(line: string, tabWidth = 2): string {
+	if (!line.includes('\t')) {
+		return line;
+	}
+	let col = 0;
+	let out = '';
+	for (const ch of line) {
+		if (ch === '\t') {
+			const spaces = tabWidth - (col % tabWidth);
+			out += ' '.repeat(spaces);
+			col += spaces;
+		} else {
+			out += ch;
+			col = ch === '\n' || ch === '\r' ? 0 : col + 1;
+		}
+	}
+	return out;
+}
+
 function stripLineNumbers(content: string): string {
 	const hashlineRe = /^\s*\d+:[0-9a-fA-F]{2}→(.*)$/;
 	const lineNumArrowRe = /^\s*\d+→(.*)$/;
@@ -228,7 +248,10 @@ export default function DiffViewer({
 		color?: string;
 		dimColor?: boolean;
 	}): React.ReactElement {
-		const highlightedContent = highlightCodeContent(content, codeLanguage);
+		const highlightedContent = highlightCodeContent(
+			expandTabsForDisplay(content),
+			codeLanguage,
+		);
 
 		return (
 			<Text

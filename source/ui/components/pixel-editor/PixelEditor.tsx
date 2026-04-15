@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import chalk from 'chalk';
+import {useI18n} from '../../../i18n/index.js';
 import type {PixelGrid} from './types.js';
 
 const PALETTE = [
@@ -38,6 +39,25 @@ function blendWithWhite(hex: string, ratio: number): string {
 		.padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
 }
 
+function applyCursorEffect(hex: string): string {
+	const clean = hex.replace('#', '');
+	const r = Number.parseInt(clean.slice(0, 2), 16);
+	const g = Number.parseInt(clean.slice(2, 4), 16);
+	const b = Number.parseInt(clean.slice(4, 6), 16);
+	const brightness = (r + g + b) / 3;
+	// If the color is already bright, darken it so the cursor remains visible
+	if (brightness > 200) {
+		const factor = 0.5;
+		const nr = Math.round(r * factor);
+		const ng = Math.round(g * factor);
+		const nb = Math.round(b * factor);
+		return `#${nr.toString(16).padStart(2, '0')}${ng
+			.toString(16)
+			.padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+	}
+	return blendWithWhite(hex, 0.6);
+}
+
 type PixelEditorProps = {
 	width?: number;
 	height?: number;
@@ -55,6 +75,8 @@ export default function PixelEditor({
 	onExit,
 	onSave,
 }: PixelEditorProps) {
+	const {t} = useI18n();
+	const te = t.pixelEditor;
 	// Ensure even height for dual-pixel rendering
 	const canvasHeight = height % 2 === 0 ? height : height + 1;
 	const canvasWidth = width;
@@ -114,9 +136,9 @@ export default function PixelEditor({
 
 	const clearCanvas = useCallback(() => {
 		setGrid(createEmptyGrid(canvasWidth, canvasHeight));
-		setMessage('Canvas cleared');
+		setMessage(te.canvasCleared);
 		setConfirmClear(false);
-	}, [canvasWidth, canvasHeight]);
+	}, [canvasWidth, canvasHeight, te.canvasCleared]);
 
 	useInput((input, key) => {
 		if (confirmClear) {
@@ -124,7 +146,7 @@ export default function PixelEditor({
 				clearCanvas();
 			} else {
 				setConfirmClear(false);
-				setMessage('Clear cancelled');
+				setMessage(te.clearCancelled);
 			}
 			return;
 		}
@@ -133,14 +155,14 @@ export default function PixelEditor({
 			if (key.escape) {
 				setIsNamingSave(false);
 				setSaveName('');
-				setMessage('Save cancelled');
+				setMessage(te.saveCancelled);
 				return;
 			}
 
 			if (key.return) {
 				const name = saveName.trim();
 				if (!name) {
-					setMessage('Name cannot be empty');
+					setMessage(te.nameCannotBeEmpty);
 					return;
 				}
 
@@ -148,7 +170,7 @@ export default function PixelEditor({
 				setCurrentName(name);
 				setIsNamingSave(false);
 				setSaveName('');
-				setMessage(`Saved as ${name}`);
+				setMessage(te.savedAs.replace('{name}', name));
 				return;
 			}
 
@@ -164,7 +186,7 @@ export default function PixelEditor({
 		if (key.ctrl && input === 's') {
 			if (currentName) {
 				onSave?.(grid, currentName);
-				setMessage(`Saved as ${currentName}`);
+				setMessage(te.savedAs.replace('{name}', currentName));
 			} else {
 				setIsNamingSave(true);
 				setSaveName('');
@@ -192,12 +214,22 @@ export default function PixelEditor({
 			return;
 		}
 
-		if (key.return || input === ' ') {
+		if (input === ' ') {
+			const currentPixelColor = grid[cursorY]![cursorX];
+			if (currentPixelColor !== PALETTE[0]) {
+				erasePixel();
+			} else {
+				drawPixel();
+			}
+			return;
+		}
+
+		if (key.return) {
 			drawPixel();
 			return;
 		}
 
-		if (input === 'e' || input === 'E' || input === '0') {
+		if (input === '0') {
 			erasePixel();
 			return;
 		}
@@ -228,11 +260,11 @@ export default function PixelEditor({
 				// Cursor highlight
 				if (cursorVisible) {
 					if (cursorX === x && cursorY === topY) {
-						topColor = blendWithWhite(topColor, 0.6);
+						topColor = applyCursorEffect(topColor);
 					}
 
 					if (cursorX === x && cursorY === bottomY) {
-						bottomColor = blendWithWhite(bottomColor, 0.6);
+						bottomColor = applyCursorEffect(bottomColor);
 					}
 				}
 
@@ -258,19 +290,21 @@ export default function PixelEditor({
 
 				<Box flexDirection="column">
 					<Text bold underline color="cyan">
-						Pixel Editor
+						{te.title}
 					</Text>
 					<Text color="gray">
 						{canvasWidth}x{canvasHeight}
 					</Text>
 					<Box marginTop={1} flexDirection="column">
-						<Text bold>Palette</Text>
+						<Text bold>{te.palette}</Text>
 						{PALETTE.map((color, idx) => (
 							<Box key={idx} flexDirection="row">
 								<Text>
 									{idx === colorIndex ? '▶ ' : '  '}
 									{chalk.bgHex(color).hex(color)('  ')}{' '}
-									{idx === 0 ? 'Eraser' : `Color ${idx}`}
+									{idx === 0
+										? te.eraser
+										: te.colorNumber.replace('{n}', String(idx))}
 								</Text>
 							</Box>
 						))}
@@ -282,11 +316,12 @@ export default function PixelEditor({
 				{!isNamingSave && (
 					<>
 						<Text color="gray" dimColor>
-							Arrows: move • Space/Enter: draw • 1-9: color • E/0: erase • C:
-							clear
+							{te.controlsHint}
 						</Text>
 						<Text color="gray" dimColor>
-							ESC/Q: back • Ctrl+S: save • Pos: ({cursorX}, {cursorY}) • Brush:{' '}
+							{te.controlsHintPosBrush
+								.replace('{x}', String(cursorX))
+								.replace('{y}', String(cursorY))}
 							{chalk.bgHex(currentColor).hex(currentColor)('  ')}
 						</Text>
 					</>
@@ -294,7 +329,7 @@ export default function PixelEditor({
 				{isNamingSave && (
 					<Box flexDirection="row">
 						<Text color="cyan" bold>
-							Save drawing:{' '}
+							{te.saveDrawingLabel}
 						</Text>
 						<TextInput
 							value={saveName}
@@ -302,7 +337,7 @@ export default function PixelEditor({
 							onSubmit={() => {
 								const name = saveName.trim();
 								if (!name) {
-									setMessage('Name cannot be empty');
+									setMessage(te.nameCannotBeEmpty);
 									return;
 								}
 
@@ -310,16 +345,16 @@ export default function PixelEditor({
 								setCurrentName(name);
 								setIsNamingSave(false);
 								setSaveName('');
-								setMessage(`Saved as ${name}`);
+								setMessage(te.savedAs.replace('{name}', name));
 							}}
-							placeholder="Enter name..."
+							placeholder={te.namePlaceholder}
 						/>
-						<Text color="gray">{'  '}ESC cancel</Text>
+						<Text color="gray">{te.escCancelHint}</Text>
 					</Box>
 				)}
 				{confirmClear ? (
 					<Text color="yellow" bold>
-						Clear canvas? Press Y to confirm, any other key to cancel.
+						{te.confirmClearCanvas}
 					</Text>
 				) : (
 					!isNamingSave && message && <Text color="yellow">{message}</Text>

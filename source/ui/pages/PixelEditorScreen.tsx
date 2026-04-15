@@ -1,6 +1,7 @@
 import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {PixelEditor} from '../components/pixel-editor/index.js';
+import {useI18n} from '../../i18n/index.js';
 import {navigateTo} from '../../hooks/integration/useGlobalNavigation.js';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
 import {homedir} from 'os';
@@ -16,6 +17,7 @@ import {
 } from 'fs';
 
 const DRAW_DIR = join(homedir(), '.snow', 'draw');
+const EXIT_IMAGE_PATH = join(homedir(), '.snow', 'exit-image.json');
 
 function ensureDrawDir(): void {
 	if (!existsSync(DRAW_DIR)) {
@@ -25,6 +27,28 @@ function ensureDrawDir(): void {
 
 function sanitizeFileName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+}
+
+function cropGrid(grid: PixelGrid): PixelGrid {
+	if (!grid || grid.length === 0) return [];
+	const height = grid.length;
+	const width = grid[0]?.length ?? 0;
+	let minY = height;
+	let maxY = -1;
+	let minX = width;
+	let maxX = -1;
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			if (grid[y]![x] !== '#000000') {
+				minY = Math.min(minY, y);
+				maxY = Math.max(maxY, y);
+				minX = Math.min(minX, x);
+				maxX = Math.max(maxX, x);
+			}
+		}
+	}
+	if (maxY < 0) return [];
+	return grid.slice(minY, maxY + 1).map(row => row.slice(minX, maxX + 1));
 }
 
 interface DrawingFile {
@@ -40,6 +64,8 @@ type Props = {
 };
 
 export default function PixelEditorScreen({onBack}: Props) {
+	const {t} = useI18n();
+	const ts = t.pixelEditorScreen;
 	const [view, setView] = useState<View>('menu');
 	const [editorReturnView, setEditorReturnView] = useState<View>('menu');
 	const [editorKey, setEditorKey] = useState(0);
@@ -53,6 +79,11 @@ export default function PixelEditorScreen({onBack}: Props) {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
 	const [pendingDelete, setPendingDelete] = useState(false);
+	const [message, setMessage] = useState<string | null>(null);
+	const [exitImageName, setExitImageName] = useState<string | undefined>(
+		undefined,
+	);
+	const [exitImageEnabled, setExitImageEnabled] = useState(false);
 
 	const loadDrawings = useCallback(() => {
 		ensureDrawDir();
@@ -91,6 +122,23 @@ export default function PixelEditorScreen({onBack}: Props) {
 	useEffect(() => {
 		if (view === 'manager') {
 			loadDrawings();
+			if (existsSync(EXIT_IMAGE_PATH)) {
+				try {
+					const content = readFileSync(EXIT_IMAGE_PATH, 'utf8');
+					const data = JSON.parse(content) as {
+						name?: string;
+						enabled?: boolean;
+					};
+					setExitImageName(data.name);
+					setExitImageEnabled(data.enabled ?? true);
+				} catch {
+					setExitImageName(undefined);
+					setExitImageEnabled(false);
+				}
+			} else {
+				setExitImageName(undefined);
+				setExitImageEnabled(false);
+			}
 		}
 	}, [view, loadDrawings]);
 
@@ -101,19 +149,49 @@ export default function PixelEditorScreen({onBack}: Props) {
 		});
 	}, [drawings.length]);
 
-	const handleSave = useCallback((grid: PixelGrid, name: string) => {
-		ensureDrawDir();
-		const safeName = sanitizeFileName(name);
-		const filePath = join(DRAW_DIR, `${safeName}.json`);
-		const data = {
-			name,
-			width: grid[0]?.length ?? 32,
-			height: grid.length,
-			grid,
-			updatedAt: new Date().toISOString(),
-		};
-		writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-	}, []);
+	useEffect(() => {
+		if (!message) return;
+		const id = setTimeout(() => setMessage(null), 1500);
+		return () => clearTimeout(id);
+	}, [message]);
+
+	const handleSave = useCallback(
+		(grid: PixelGrid, name: string) => {
+			ensureDrawDir();
+			const safeName = sanitizeFileName(name);
+			const filePath = join(DRAW_DIR, `${safeName}.json`);
+			const data = {
+				name,
+				width: grid[0]?.length ?? 32,
+				height: grid.length,
+				grid,
+				updatedAt: new Date().toISOString(),
+			};
+			writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+
+			if (exitImageEnabled && exitImageName === name) {
+				try {
+					const cropped = cropGrid(grid);
+					const exitData = {
+						name,
+						width: cropped[0]?.length ?? 0,
+						height: cropped.length,
+						grid: cropped,
+						enabled: true,
+						updatedAt: new Date().toISOString(),
+					};
+					writeFileSync(
+						EXIT_IMAGE_PATH,
+						JSON.stringify(exitData, null, 2),
+						'utf8',
+					);
+				} catch {
+					// ignore sync errors
+				}
+			}
+		},
+		[exitImageEnabled, exitImageName],
+	);
 
 	const handleLoad = useCallback((fileName: string): PixelGrid | undefined => {
 		const filePath = join(DRAW_DIR, fileName);
@@ -264,6 +342,49 @@ export default function PixelEditorScreen({onBack}: Props) {
 				}
 				return;
 			}
+			if (input === 's' || input === 'S') {
+				const current = drawings[selectedIndex];
+				if (current) {
+					if (exitImageEnabled && exitImageName === current.name) {
+						try {
+							writeFileSync(
+								EXIT_IMAGE_PATH,
+								JSON.stringify({enabled: false}, null, 2),
+								'utf8',
+							);
+							setExitImageEnabled(false);
+							setExitImageName(undefined);
+							setMessage(ts.exitImageDisabled);
+						} catch {
+							setMessage(ts.failedDisableExitImage);
+						}
+					} else {
+						const grid = handleLoad(current.fileName);
+						if (grid) {
+							const cropped = cropGrid(grid);
+							const data = {
+								name: current.name,
+								width: cropped[0]?.length ?? 0,
+								height: cropped.length,
+								grid: cropped,
+								enabled: true,
+								updatedAt: new Date().toISOString(),
+							};
+							writeFileSync(
+								EXIT_IMAGE_PATH,
+								JSON.stringify(data, null, 2),
+								'utf8',
+							);
+							setExitImageName(current.name);
+							setExitImageEnabled(true);
+							setMessage(
+								ts.setAsExitImage.replace('{name}', current.name),
+							);
+						}
+					}
+				}
+				return;
+			}
 			if (key.return) {
 				const current = drawings[selectedIndex];
 				if (current) {
@@ -310,16 +431,18 @@ export default function PixelEditorScreen({onBack}: Props) {
 		return (
 			<Box paddingX={1} flexDirection="column">
 				<Text bold color="cyan">
-					Manage Drawings
+					{ts.manageTitle}
 				</Text>
 				<Box marginTop={1} flexDirection="column">
 					{drawings.length === 0 ? (
-						<Text color="gray">No drawings found.</Text>
+						<Text color="gray">{ts.noDrawings}</Text>
 					) : (
 						displayWindow.items.map((drawing, index) => {
 							const originalIndex = displayWindow.startIndex + index;
 							const isSelected = originalIndex === selectedIndex;
 							const isChecked = selectedNames.has(drawing.fileName);
+							const isExitImage =
+								exitImageEnabled && exitImageName === drawing.name;
 							return (
 								<Text
 									key={drawing.fileName}
@@ -328,6 +451,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 								>
 									{isSelected ? '❯ ' : '  '}
 									{isChecked ? '[✓]' : '[ ]'} {drawing.name}
+									{isExitImage ? ' ★' : ''}
 								</Text>
 							);
 						})
@@ -336,36 +460,42 @@ export default function PixelEditorScreen({onBack}: Props) {
 				<Box marginTop={1} flexDirection="column">
 					<Text color="yellow" dimColor>
 						{pendingDelete
-							? `Confirm delete ${selectedNames.size} item(s)? Enter/Y/D confirm, N/Esc cancel`
-							: '↑↓ navigate • Space select • D delete • Enter edit • Esc back'}
+							? ts.confirmDeleteMany.replace(
+									'{count}',
+									String(selectedNames.size),
+							  )
+							: ts.managerHint}
 					</Text>
 					{showOverflowHint && hiddenAboveCount > 0 && (
 						<Text color="gray" dimColor>
-							↑ {hiddenAboveCount} more above
+							{ts.moreAbove.replace('{count}', String(hiddenAboveCount))}
 						</Text>
 					)}
 					{showOverflowHint && hiddenBelowCount > 0 && (
 						<Text color="gray" dimColor>
-							↓ {hiddenBelowCount} more below
+							{ts.moreBelow.replace('{count}', String(hiddenBelowCount))}
 						</Text>
 					)}
 					{selectedNames.size > 0 && !pendingDelete && (
 						<Text color="yellow">
-							Selected {selectedNames.size} item
-							{selectedNames.size > 1 ? 's' : ''}
+							{ts.selectedCount.replace(
+								'{count}',
+								String(selectedNames.size),
+							)}
 						</Text>
 					)}
+					{message && <Text color="green">{message}</Text>}
 				</Box>
 			</Box>
 		);
 	}
 
 	// menu
-	const menuItems = ['New Canvas', 'Manage Drawings'];
+	const menuItems = [ts.newCanvas, ts.manageDrawings];
 	return (
 		<Box paddingX={1} flexDirection="column">
 			<Text bold color="cyan">
-				Pixel Editor
+				{ts.screenTitle}
 			</Text>
 			<Box marginTop={1} flexDirection="column">
 				{menuItems.map((item, index) => (
@@ -381,7 +511,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 			</Box>
 			<Box marginTop={1}>
 				<Text color="gray" dimColor>
-					↑↓ navigate • Enter select • Esc back
+					{ts.menuNavigateHint}
 				</Text>
 			</Box>
 		</Box>

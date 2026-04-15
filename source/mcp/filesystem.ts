@@ -1505,14 +1505,18 @@ export class FilesystemMCPService {
 				await writeFileWithEncoding(fullPath, modifiedContent);
 			}
 
+			// DiffViewer must compare the same "version" of the file: original `lines`
+			// vs pre-Prettier `modifiedLines`. Using `finalLines` after format made the
+			// old side unformatted and the new side formatted, which shredded the diff.
+			const diffContextEnd = Math.min(
+				modifiedLines.length,
+				contextEnd + lineDifference,
+			);
+
 			// Format with Prettier asynchronously (non-blocking)
 			let finalContent = modifiedContent;
 			let finalLines = modifiedLines;
 			let finalTotalLines = modifiedLines.length;
-			let finalContextEnd = Math.min(
-				finalTotalLines,
-				contextEnd + lineDifference,
-			);
 
 			// Check if Prettier supports this file type
 			const fileExtension = path.extname(fullPath).toLowerCase();
@@ -1537,20 +1541,15 @@ export class FilesystemMCPService {
 					}
 					finalLines = finalContent.split('\n');
 					finalTotalLines = finalLines.length;
-
-					finalContextEnd = Math.min(
-						finalTotalLines,
-						contextStart + (contextEnd - contextStart) + lineDifference,
-					);
 				} catch (formatError) {
 					// Continue with unformatted content
 				}
 			}
 
-			// Extract new content for context (raw text for reliable diff rendering)
-			const newContextLines = finalLines.slice(
+			// Extract new content for context (pre-Prettier, aligned with oldContent)
+			const newContextLines = modifiedLines.slice(
 				contextStart - 1,
-				finalContextEnd,
+				diffContextEnd,
 			);
 			const newContextContent = newContextLines.join('\n');
 
@@ -1563,13 +1562,13 @@ export class FilesystemMCPService {
 				.slice(completeOldStart - 1, completeOldEnd)
 				.join('\n');
 
-			const finalLineDifference = finalLines.length - lines.length;
+			const editLineDelta = modifiedLines.length - lines.length;
 			const completeNewStart = Math.max(1, completeOldStart);
 			const completeNewEnd = Math.min(
-				finalLines.length,
-				completeOldEnd + finalLineDifference,
+				modifiedLines.length,
+				completeOldEnd + editLineDelta,
 			);
-			const completeNewContent = finalLines
+			const completeNewContent = modifiedLines
 				.slice(completeNewStart - 1, completeNewEnd)
 				.join('\n');
 
@@ -1603,7 +1602,7 @@ export class FilesystemMCPService {
 					`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})\n` +
 					`   Result: ${replaceLines.length} new lines` +
 					(smartBoundaries.extended
-						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${finalContextEnd})`
+						? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${diffContextEnd})`
 						: ''),
 				filePath, // Include file path for DiffViewer display on Resume/re-render
 				oldContent,
@@ -1613,7 +1612,7 @@ export class FilesystemMCPService {
 				replacedContent,
 				matchLocation: {startLine, endLine},
 				contextStartLine: contextStart,
-				contextEndLine: finalContextEnd,
+				contextEndLine: diffContextEnd,
 				totalLines: finalTotalLines,
 				structureAnalysis,
 				diagnostics: undefined as Diagnostic[] | undefined,

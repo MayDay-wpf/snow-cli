@@ -1590,6 +1590,43 @@ export const zhTW: TranslationKeys = {
 		errorPrefix: '錯誤：',
 		scrollHint: '↑↓ 捲動瀏覽',
 	},
+	pixelEditor: {
+		title: '像素編輯器',
+		palette: '調色盤',
+		eraser: '橡皮擦',
+		colorNumber: '顏色 {n}',
+		canvasCleared: '畫布已清空',
+		clearCancelled: '已取消清空',
+		saveCancelled: '已取消儲存',
+		nameCannotBeEmpty: '名稱不能為空',
+		savedAs: '已儲存為 {name}',
+		controlsHint:
+			'方向鍵：移動 • 空白鍵：繪製/擦除 • Enter：繪製 • 1-9：選色 • 0：擦除 • C：清空畫布',
+		controlsHintPosBrush:
+			'ESC/Q：返回 • Ctrl+S：儲存 • 座標：({x}, {y}) • 筆刷： ',
+		saveDrawingLabel: '儲存作品：',
+		namePlaceholder: '輸入名稱...',
+		escCancelHint: '  ESC 取消',
+		confirmClearCanvas: '清空畫布？按 Y 確認，按其他鍵取消。',
+	},
+	pixelEditorScreen: {
+		screenTitle: '像素編輯器',
+		newCanvas: '新建畫布',
+		manageDrawings: '管理作品',
+		menuNavigateHint: '↑↓ 選擇 • Enter 確認 • Esc 返回',
+		manageTitle: '管理作品',
+		noDrawings: '尚無作品。',
+		managerHint:
+			'↑↓ 移動 • 空白鍵 多選 • D 刪除 • S 切換結束畫面 • Enter 編輯 • Esc 返回',
+		confirmDeleteMany:
+			'確認刪除 {count} 項？Enter/Y/D 確認，N/Esc 取消',
+		moreAbove: '↑ 上方還有 {count} 項',
+		moreBelow: '↓ 下方還有 {count} 項',
+		selectedCount: '已選擇 {count} 項',
+		exitImageDisabled: '已關閉結束畫面',
+		failedDisableExitImage: '關閉結束畫面失敗',
+		setAsExitImage: '已將「{name}」設為結束畫面',
+	},
 	exitScreen: {
 		title: '再見',
 		goodbye: '感謝使用 Snow CLI',

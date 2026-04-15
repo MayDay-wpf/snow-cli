@@ -1575,6 +1575,39 @@ export type TranslationKeys = {
 		errorPrefix: string;
 		scrollHint: string;
 	};
+	pixelEditor: {
+		title: string;
+		palette: string;
+		eraser: string;
+		colorNumber: string;
+		canvasCleared: string;
+		clearCancelled: string;
+		saveCancelled: string;
+		nameCannotBeEmpty: string;
+		savedAs: string;
+		controlsHint: string;
+		controlsHintPosBrush: string;
+		saveDrawingLabel: string;
+		namePlaceholder: string;
+		escCancelHint: string;
+		confirmClearCanvas: string;
+	};
+	pixelEditorScreen: {
+		screenTitle: string;
+		newCanvas: string;
+		manageDrawings: string;
+		menuNavigateHint: string;
+		manageTitle: string;
+		noDrawings: string;
+		managerHint: string;
+		confirmDeleteMany: string;
+		moreAbove: string;
+		moreBelow: string;
+		selectedCount: string;
+		exitImageDisabled: string;
+		failedDisableExitImage: string;
+		setAsExitImage: string;
+	};
 	exitScreen: {
 		title: string;
 		goodbye: string;

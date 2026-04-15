@@ -1682,6 +1682,44 @@ export const en: TranslationKeys = {
 		errorPrefix: 'Error: ',
 		scrollHint: '↑↓ Scroll',
 	},
+	pixelEditor: {
+		title: 'Pixel Editor',
+		palette: 'Palette',
+		eraser: 'Eraser',
+		colorNumber: 'Color {n}',
+		canvasCleared: 'Canvas cleared',
+		clearCancelled: 'Clear cancelled',
+		saveCancelled: 'Save cancelled',
+		nameCannotBeEmpty: 'Name cannot be empty',
+		savedAs: 'Saved as {name}',
+		controlsHint:
+			'Arrows: move • Space: draw/erase • Enter: draw • 1-9: color • 0: erase • C: clear',
+		controlsHintPosBrush:
+			'ESC/Q: back • Ctrl+S: save • Pos: ({x}, {y}) • Brush: ',
+		saveDrawingLabel: 'Save drawing: ',
+		namePlaceholder: 'Enter name...',
+		escCancelHint: '  ESC cancel',
+		confirmClearCanvas:
+			'Clear canvas? Press Y to confirm, any other key to cancel.',
+	},
+	pixelEditorScreen: {
+		screenTitle: 'Pixel Editor',
+		newCanvas: 'New Canvas',
+		manageDrawings: 'Manage Drawings',
+		menuNavigateHint: '↑↓ navigate • Enter select • Esc back',
+		manageTitle: 'Manage Drawings',
+		noDrawings: 'No drawings found.',
+		managerHint:
+			'↑↓ navigate • Space select • D delete • S toggle exit image • Enter edit • Esc back',
+		confirmDeleteMany:
+			'Confirm delete {count} item(s)? Enter/Y/D confirm, N/Esc cancel',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		selectedCount: 'Selected {count} item(s)',
+		exitImageDisabled: 'Exit image disabled',
+		failedDisableExitImage: 'Failed to disable exit image',
+		setAsExitImage: 'Set "{name}" as exit image',
+	},
 	exitScreen: {
 		title: 'Goodbye',
 		goodbye: 'Thanks for using Snow CLI',
