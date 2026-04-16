@@ -56,11 +56,10 @@ jobs:
 
             ### What's New
 
-            - Optimized the display of Skills information
-            - Added the replaceedit default editor
-            - Optimized the loading display of sub-agents
-            - Fixed the ambiguity bug of reranker model configuration between global and project
-            - Fixed the issue where sub-agent Diffviewer did not display
+            - Added `/pixel` command to support drawing pixel art as the exit interface
+            - Optimized the context usage of TODO, NoteBook tools
+            - Optimized the display of DiffViewer
+            - Added a named execution result cleaning Agent
 
             ### Installation
             ```bash
