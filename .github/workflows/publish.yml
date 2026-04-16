@@ -56,11 +56,8 @@ jobs:
 
             ### What's New
 
-            - Added `/pixel` command to support drawing pixel art as the exit interface
-            - Optimized the context usage of TODO, NoteBook tools
-            - Optimized the display of DiffViewer
-            - Added a named execution result cleaning Agent
-
+            - Urgently add tool parameter self-fixing policy because Opus 4.7 is stupid
+            
             ### Installation
             ```bash
             npm install -g snow-ai

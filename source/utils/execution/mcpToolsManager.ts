@@ -26,10 +26,7 @@ import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
 } from '../../mcp/subagent.js';
-import {
-	getTeamMCPTools as getTeamTools,
-	teamService,
-} from '../../mcp/team.js';
+import {getTeamMCPTools as getTeamTools, teamService} from '../../mcp/team.js';
 import {
 	getMCPTools as getSkillTools,
 	executeSkillTool,
@@ -1332,7 +1329,9 @@ export async function executeMCPTool(
 					}
 					if (
 						typeof args.filePath === 'string' &&
-						(!args.operations || !Array.isArray(args.operations) || args.operations.length === 0)
+						(!args.operations ||
+							!Array.isArray(args.operations) ||
+							args.operations.length === 0)
 					) {
 						throw new Error(
 							`Missing required parameter 'operations' for filesystem-edit tool.\n` +
@@ -1384,12 +1383,9 @@ export async function executeMCPTool(
 								`Use the project root path or a specific directory path.`,
 						);
 					}
+					// enableAiSummary 有默认值 false，AI 若未提供或类型错误则兜底为 false，避免因傻瓜式调用直接报错中断
 					if (typeof args.enableAiSummary !== 'boolean') {
-						throw new Error(
-							`Missing required parameter 'enableAiSummary' for terminal-execute tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: You MUST provide a boolean 'enableAiSummary'. Use false by default, or true when output may need AI cleanup.`,
-						);
+						args.enableAiSummary = false;
 					}
 
 					// Set working directory from AI-provided parameter
