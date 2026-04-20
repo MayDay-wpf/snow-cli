@@ -235,13 +235,13 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		setHeaderEditingField('key');
 	};
 
-	const saveHeaderEdit = () => {
+	const saveHeaderEdit = (): Record<string, string> => {
 		const trimmedKey = headerEditKey.trim();
 		const trimmedValue = headerEditValue.trim();
 
 		if (!trimmedKey) {
 			setHeaderEditingIndex(-1);
-			return;
+			return editHeaders;
 		}
 
 		const newHeaders = {...editHeaders};
@@ -258,6 +258,46 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		setEditHeaders(newHeaders);
 		setHeaderKeys(Object.keys(newHeaders));
 		setHeaderEditingIndex(-1);
+		return newHeaders;
+	};
+
+	const persistScheme = (headers: Record<string, string>) => {
+		if (previousView === 'add') {
+			const newScheme: CustomHeadersItem = {
+				id: Date.now().toString(),
+				name: editName.trim() || 'Unnamed Scheme',
+				headers,
+				createdAt: new Date().toISOString(),
+			};
+			const newConfig: CustomHeadersConfig = {
+				...config,
+				schemes: [...config.schemes, newScheme],
+				active: config.schemes.length === 0 ? newScheme.id : config.active,
+			};
+			if (saveAndRefresh(newConfig)) {
+				setSelectedIndex(config.schemes.length);
+				setPreviousView('edit');
+			}
+		} else {
+			if (
+				config.schemes.length === 0 ||
+				selectedIndex >= config.schemes.length
+			)
+				return;
+			const newConfig: CustomHeadersConfig = {
+				...config,
+				schemes: config.schemes.map((s, i) =>
+					i === selectedIndex
+						? {
+								...s,
+								name: editName.trim() || 'Unnamed Scheme',
+								headers,
+						  }
+						: s,
+				),
+			};
+			saveAndRefresh(newConfig);
+		}
 	};
 
 	const deleteHeaderAtIndex = (index: number) => {
@@ -354,47 +394,50 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		(input, key) => {
 			if (view !== 'editHeaders') return;
 
-			if (headerEditingIndex === -1) {
-				// 列表浏览模式
-				if (key.escape) {
-					exitHeadersEditMode();
-				} else if (key.upArrow) {
-					setHeaderSelectedIndex(prev =>
-						prev > 0 ? prev - 1 : headerKeys.length,
-					);
-				} else if (key.downArrow) {
-					setHeaderSelectedIndex(prev =>
-						prev < headerKeys.length ? prev + 1 : 0,
-					);
-				} else if (key.return) {
-					if (headerSelectedIndex < headerKeys.length) {
-						editHeaderAtIndex(headerSelectedIndex);
-					} else {
-						addNewHeader();
-					}
-				} else if (key.delete || input === 'd') {
-					if (headerSelectedIndex < headerKeys.length) {
-						deleteHeaderAtIndex(headerSelectedIndex);
-					}
+		if (headerEditingIndex === -1) {
+			// 列表浏览模式
+			if (key.escape) {
+				exitHeadersEditMode();
+			} else if (key.upArrow) {
+				setHeaderSelectedIndex(prev =>
+					prev > 0 ? prev - 1 : headerKeys.length,
+				);
+			} else if (key.downArrow) {
+				setHeaderSelectedIndex(prev =>
+					prev < headerKeys.length ? prev + 1 : 0,
+				);
+			} else if (key.return) {
+				if (headerSelectedIndex < headerKeys.length) {
+					editHeaderAtIndex(headerSelectedIndex);
+				} else {
+					addNewHeader();
 				}
-			} else {
-				// 编辑模式
-				if (key.escape) {
-					setHeaderEditingIndex(-1);
-				} else if (key.upArrow && !isEditing) {
-					setHeaderEditingField('key');
-				} else if (key.downArrow && !isEditing) {
-					setHeaderEditingField('value');
-				} else if (key.return) {
-					if (isEditing) {
-						setIsEditing(false);
-					} else {
-						setIsEditing(true);
-					}
-				} else if (input === 's' && (key.ctrl || key.meta)) {
-					saveHeaderEdit();
+			} else if (key.delete || input === 'd') {
+				if (headerSelectedIndex < headerKeys.length) {
+					deleteHeaderAtIndex(headerSelectedIndex);
 				}
+			} else if (input === 's' && (key.ctrl || key.meta)) {
+				persistScheme(editHeaders);
 			}
+		} else {
+			// 编辑模式
+			if (key.escape) {
+				setHeaderEditingIndex(-1);
+			} else if (key.upArrow && !isEditing) {
+				setHeaderEditingField('key');
+			} else if (key.downArrow && !isEditing) {
+				setHeaderEditingField('value');
+			} else if (key.return) {
+				if (isEditing) {
+					setIsEditing(false);
+				} else {
+					setIsEditing(true);
+				}
+			} else if (input === 's' && (key.ctrl || key.meta)) {
+				const newHeaders = saveHeaderEdit();
+				persistScheme(newHeaders);
+			}
+		}
 		},
 		{isActive: view === 'editHeaders'},
 	);
