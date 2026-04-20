@@ -55,7 +55,7 @@ export interface ApiConfig {
 	customHeadersSchemeId?: string;
 	// 工具返回结果的最大 token 限制百分比，基于 maxContextTokens (默认: 30%, 范围: 1-100)
 	toolResultTokenLimit?: number;
-	// 流式逐行显示 AI 回复 (默认: false)
+	// 流式逐行显示 AI 回复 (默认: true)
 	streamingDisplay?: boolean;
 }
 
@@ -140,7 +140,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxTokens: 64000,
 		anthropicBeta: false,
 		streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
-		streamingDisplay: false,
+		streamingDisplay: true,
 	},
 };
 
