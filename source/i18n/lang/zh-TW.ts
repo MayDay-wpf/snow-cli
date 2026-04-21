@@ -1631,6 +1631,7 @@ export const zhTW: TranslationKeys = {
 		title: '再見',
 		goodbye: '感謝使用 Snow CLI',
 		thankYou: '期待下次相見',
+		resumeSession: '恢復會話',
 		version: 'v{version}',
 	},
 };

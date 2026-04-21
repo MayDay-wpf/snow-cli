@@ -1724,6 +1724,7 @@ export const en: TranslationKeys = {
 		title: 'Goodbye',
 		goodbye: 'Thanks for using Snow CLI',
 		thankYou: 'See you next time',
+		resumeSession: 'Resume Session',
 		version: 'v{version}',
 	},
 };

@@ -1612,6 +1612,7 @@ export type TranslationKeys = {
 		title: string;
 		goodbye: string;
 		thankYou: string;
+		resumeSession: string;
 		version: string;
 	};
 };

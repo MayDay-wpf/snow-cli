@@ -224,7 +224,7 @@ Options
 		--help        Show help
 		--version     Show version
 		--update      Update to latest version
-		-c            Skip welcome screen and resume last conversation
+		-c            Skip welcome screen and resume last conversation (optionally specify sessionId)
 		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
 		--task        Create a background AI task (headless mode, saves session)
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
@@ -546,6 +546,7 @@ const Startup = ({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	headlessPrompt,
 	headlessSessionId,
 	showTaskList,
@@ -556,6 +557,7 @@ const Startup = ({
 	version: string | undefined;
 	skipWelcome: boolean;
 	autoResume: boolean;
+	resumeSessionId?: string;
 	headlessPrompt?: string;
 	headlessSessionId?: string;
 	showTaskList?: boolean;
@@ -649,6 +651,7 @@ const Startup = ({
 			version={version}
 			skipWelcome={skipWelcome}
 			autoResume={autoResume}
+			resumeSessionId={resumeSessionId}
 			headlessPrompt={headlessPrompt}
 			headlessSessionId={headlessSessionId}
 			showTaskList={showTaskList}
@@ -725,19 +728,23 @@ process.on('SIGTERM', async () => {
 	await cleanupAsync();
 	process.exit(0);
 });
+const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
+const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
+
 render(
 	<Startup
 		version={VERSION}
 		skipWelcome={Boolean(
 			cli.flags.c || cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo,
 		)}
-		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
+		autoResume={isResumeMode}
+		resumeSessionId={resumeSessionId}
 		headlessPrompt={
 			typeof cli.flags['ask'] === 'string'
 				? (cli.flags['ask'] as string)
 				: undefined
 		}
-		headlessSessionId={cli.input[0]}
+		headlessSessionId={isResumeMode ? undefined : cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
 		enableYolo={

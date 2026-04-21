@@ -37,6 +37,7 @@ type Props = {
 	version?: string;
 	skipWelcome?: boolean;
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	headlessPrompt?: string;
 	headlessSessionId?: string;
 	showTaskList?: boolean;
@@ -131,12 +132,14 @@ function AppContent({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	enableYolo,
 	enablePlan,
 }: {
 	version?: string;
 	skipWelcome?: boolean;
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
 }) {
@@ -244,6 +247,7 @@ function AppContent({
 						<ChatScreen
 							key={chatScreenKey}
 							autoResume={autoResume || shouldAutoResume}
+							resumeSessionId={resumeSessionId}
 							enableYolo={enableYolo}
 							enablePlan={enablePlan}
 						/>
@@ -328,6 +332,7 @@ export default function App({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	headlessPrompt,
 	headlessSessionId,
 	showTaskList,
@@ -372,6 +377,7 @@ export default function App({
 					version={version}
 					skipWelcome={skipWelcome}
 					autoResume={autoResume}
+					resumeSessionId={resumeSessionId}
 					enableYolo={enableYolo}
 					enablePlan={enablePlan}
 				/>

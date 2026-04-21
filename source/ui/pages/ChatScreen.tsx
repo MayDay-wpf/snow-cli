@@ -38,12 +38,14 @@ const MIN_TERMINAL_HEIGHT = 10;
 
 type Props = {
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
 };
 
 export default function ChatScreen({
 	autoResume,
+	resumeSessionId,
 	enableYolo,
 	enablePlan,
 }: Props) {
@@ -164,6 +166,7 @@ export default function ChatScreen({
 
 	useChatScreenSessionLifecycle({
 		autoResume,
+		resumeSessionId,
 		terminalWidth,
 		remountKey,
 		setRemountKey,

@@ -6,6 +6,7 @@ import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {gracefulExit} from '../../utils/core/processManager.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
 import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import {join} from 'path';
@@ -27,6 +28,8 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
 	const {columns: terminalWidth} = useTerminalSize();
+
+	const [sessionId] = useState(() => sessionManager.getCurrentSession()?.id);
 
 	const versionText = t.exitScreen.version.replace('{version}', version);
 	const dotWidth = Math.max(12, Math.min(terminalWidth - 8, 42));
@@ -140,6 +143,18 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 				</Box>
 
 				<Text color={colors.menuSecondary}>{t.exitScreen.thankYou}</Text>
+
+				{sessionId && (
+					<Box marginTop={1} flexDirection="column" alignItems="center">
+						<Text color={colors.menuSecondary} dimColor>
+							{`─── ${t.exitScreen.resumeSession} ───`}
+						</Text>
+						<Box marginTop={0}>
+							<Text color={colors.cyan}>{'snow -c '}</Text>
+							<Text color={colors.menuInfo}>{sessionId}</Text>
+						</Box>
+					</Box>
+				)}
 
 				<Box marginTop={1}>
 					<Text color={colors.border} dimColor>
