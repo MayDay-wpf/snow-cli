@@ -7,7 +7,7 @@ export interface CodebaseConfig {
 	enableAgentReview: boolean;
 	enableReranking: boolean;
 	embedding: {
-		type?: 'jina' | 'ollama' | 'gemini'; // 请求类型，默认为jina
+		type?: 'jina' | 'ollama' | 'gemini' | 'mistral'; // 请求类型，默认为jina
 		modelName: string;
 		baseUrl: string;
 		apiKey: string;

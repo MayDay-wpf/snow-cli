@@ -24,8 +24,13 @@ const RunningAgentsPanel = lazy(
 	() => import('../panels/RunningAgentsPanel.js'),
 );
 const RollbackMenuPanel = lazy(() => import('../panels/RollbackMenuPanel.js'));
+const CommandArgsPanel = lazy(() => import('../panels/CommandArgsPanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
-import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
+import {
+	useCommandPanel,
+	COMMAND_ARGS_HINTS,
+	COMMAND_ARGS_OPTIONS,
+} from '../../../hooks/ui/useCommandPanel.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
 import {useHistoryNavigation} from '../../../hooks/input/useHistoryNavigation.js';
 import {useClipboard} from '../../../hooks/input/useClipboard.js';
@@ -340,6 +345,20 @@ export default function ChatInput({
 		getAllCommands,
 	} = useCommandPanel(buffer, isProcessing);
 
+	// Command args picker state
+	const [showArgsPicker, setShowArgsPicker] = React.useState(false);
+	const [argsSelectedIndex, setArgsSelectedIndex] = React.useState(0);
+
+	// Compute current command name and its available args options
+	const argsPickerContext = useMemo(() => {
+		const text = buffer.text;
+		const match = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
+		if (!match) return {commandName: '', options: [] as string[]};
+		const cmd = match[1] ?? '';
+		const options = COMMAND_ARGS_OPTIONS[cmd];
+		return {commandName: cmd, options: options || []};
+	}, [buffer.text]);
+
 	// Use file picker hook
 	const {
 		showFilePicker,
@@ -592,6 +611,11 @@ export default function ChatInput({
 		confirmRunningAgentsSelection,
 		closeRunningAgentsPicker,
 		updateRunningAgentsPickerState,
+		showArgsPicker,
+		setShowArgsPicker,
+		argsSelectedIndex,
+		setArgsSelectedIndex,
+		argsPickerContext,
 	});
 
 	// Set initial content when provided (e.g., when rolling back to first message)
@@ -827,6 +851,19 @@ export default function ChatInput({
 	const INPUT_MAX_LINES = 6;
 	const EXPANDED_MAX_LINES = 12;
 
+	// 当输入为单行的 `/cmd` 或 `/cmd ` 形式时，计算参数提示；否则为空字符串
+	const commandArgsHint = useMemo(() => {
+		const text = buffer.text;
+		if (!text.startsWith('/')) return '';
+		const match = text.match(/^\/([a-zA-Z0-9_-]+)(\s*)$/);
+		if (!match) return '';
+		const cmd = match[1] ?? '';
+		const hint = COMMAND_ARGS_HINTS[cmd];
+		if (!hint) return '';
+		// 若已经有尾随空格则直接拼接，否则前置空格将 cmd 与提示分隔
+		return match[2] && match[2].length > 0 ? hint : ` ${hint}`;
+	}, [buffer.text]);
+
 	const renderContent = () => {
 		if (buffer.text.length > 0) {
 			// Use visual lines for proper wrapping and multi-line support
@@ -873,6 +910,11 @@ export default function ChatInput({
 							<Text>{beforeCursor}</Text>
 							{renderCursor(atCursor)}
 							<Text>{afterCursor}</Text>
+							{commandArgsHint && i === visualLines.length - 1 ? (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{commandArgsHint}
+								</Text>
+							) : null}
 						</Box>,
 					);
 				} else {
@@ -1004,6 +1046,14 @@ export default function ChatInput({
 							selectedIndex={commandSelectedIndex}
 							query={buffer.getFullText().slice(1)}
 							visible={showCommands}
+						/>
+					</Suspense>
+					<Suspense fallback={null}>
+						<CommandArgsPanel
+							commandName={argsPickerContext.commandName}
+							options={argsPickerContext.options}
+							selectedIndex={argsSelectedIndex}
+							visible={showArgsPicker}
 						/>
 					</Suspense>
 					<Box>

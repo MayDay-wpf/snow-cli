@@ -43,6 +43,7 @@ export class CodebaseIndexAgent {
 	private consecutiveFailures: number = 0;
 	private readonly MAX_CONSECUTIVE_FAILURES = 3;
 	private fileWatcher: any | null = null;
+	private watcherClosePromise: Promise<void> | null = null;
 	private watchDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
 	// Supported code file extensions
@@ -247,8 +248,7 @@ export class CodebaseIndexAgent {
 				logger.info('Indexing paused by user, progress saved');
 			}
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
+			const errorMessage = this.extractDetailedError(error);
 
 			this.db.updateProgress({
 				status: 'error',
@@ -448,7 +448,7 @@ export class CodebaseIndexAgent {
 	 */
 	stopWatching(): void {
 		if (this.fileWatcher) {
-			this.fileWatcher.close();
+			this.watcherClosePromise = this.fileWatcher.close();
 			this.fileWatcher = null;
 
 			// Persist watcher state to database
@@ -462,6 +462,18 @@ export class CodebaseIndexAgent {
 			clearTimeout(timer);
 		}
 		this.watchDebounceTimers.clear();
+	}
+
+	/**
+	 * Wait for the chokidar file watcher to fully close its libuv handles.
+	 * Must be awaited before process.exit() on Windows to avoid
+	 * UV_HANDLE_CLOSING assertion failure.
+	 */
+	async waitForWatcherClose(): Promise<void> {
+		if (this.watcherClosePromise) {
+			await this.watcherClosePromise;
+			this.watcherClosePromise = null;
+		}
 	}
 
 	/**
@@ -772,28 +784,27 @@ export class CodebaseIndexAgent {
 
 					// Reset failure counter on success
 					this.consecutiveFailures = 0;
-				} catch (error) {
-					this.consecutiveFailures++;
-					logger.error(
-						`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
-						error,
-					);
+			} catch (error) {
+				this.consecutiveFailures++;
+				const detailedError = this.extractDetailedError(error);
+				logger.error(
+					`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
+					detailedError,
+				);
 
-					// Stop indexing if too many consecutive failures
-					if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-						logger.error(
-							`Stopping indexing after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
-						);
-						this.db.updateProgress({
-							status: 'error',
-							lastError: `Too many failures: ${
-								error instanceof Error ? error.message : 'Unknown error'
-							}`,
-						});
-						throw new Error(
-							`Indexing stopped after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
-						);
-					}
+				// Stop indexing if too many consecutive failures
+				if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+					logger.error(
+						`Stopping indexing after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+					);
+					this.db.updateProgress({
+						status: 'error',
+						lastError: `Too many failures: ${detailedError}`,
+					});
+					throw new Error(
+						`Indexing stopped after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+					);
+				}
 
 					// Skip this batch and continue
 					continue;
@@ -952,6 +963,29 @@ export class CodebaseIndexAgent {
 			`Document split into ${chunks.length} semantic chunks for: ${filePath}`,
 		);
 		return chunks;
+	}
+
+	/**
+	 * Extract detailed error message including cause chain
+	 */
+	private extractDetailedError(error: unknown): string {
+		if (!(error instanceof Error)) {
+			return String(error);
+		}
+
+		const parts: string[] = [error.message];
+		let current: unknown = (error as any).cause;
+		while (current) {
+			if (current instanceof Error) {
+				parts.push(current.message);
+				current = (current as any).cause;
+			} else {
+				parts.push(String(current));
+				break;
+			}
+		}
+
+		return parts.join(' -> ');
 	}
 
 	/**

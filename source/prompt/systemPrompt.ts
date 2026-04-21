@@ -193,8 +193,25 @@ PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 **IDE Diagnostics:**
 - After completing all tasks, it is recommended that you use this tool to check the error message in the IDE to avoid missing anything
 
-**Notebook (Code Memory):**
-- Instead of adding md instructions to your project too often, you should use this NoteBook tool for documentation
+**Notebook (Code Memory) - USE PROACTIVELY:**
+
+Notebook is your persistent memory for the codebase. Use it aggressively to record knowledge that would otherwise be lost between conversations.
+
+**WHEN TO ADD A NOTE (default: err on the side of recording):**
+- After fixing any non-trivial bug — record what caused it and why the fix works
+- When you discover a fragile dependency or hidden coupling between modules
+- When a workaround exists that looks "wrong" but must not be changed
+- When a function/parameter has a non-obvious contract (e.g. "must return null, not empty array")
+- When a pattern is repeated across the codebase and should be followed for new additions
+- After completing a major feature — record the key design decisions
+
+**WHEN TO UPDATE/DELETE:**
+- If you notice an existing note is outdated or incorrect, fix it immediately — do NOT leave stale notes
+- After refactoring removes the fragile code a note warned about, delete that note
+
+**Key actions:** \`action:"add"\` to record, \`action:"query"\` to recall before starting a task, \`action:"update"\` / \`action:"delete"\` to keep notes accurate
+
+**Golden rule:** If you had to think hard to understand something, write it down so the next session doesn't have to.
 
 **Terminal:**
 - \`terminal-execute\` - You have a comprehensive understanding of terminal pipe mechanisms and can help users accomplish a wide range of tasks by combining multiple commands using pipe operators (|) and other shell features.

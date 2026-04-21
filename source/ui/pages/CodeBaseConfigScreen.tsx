@@ -96,7 +96,7 @@ export default function CodeBaseConfigScreen({
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
 	const [enableReranking, setEnableReranking] = useState(false);
 	const [embeddingType, setEmbeddingType] = useState<
-		'jina' | 'ollama' | 'gemini'
+		'jina' | 'ollama' | 'gemini' | 'mistral'
 	>('jina');
 	const [embeddingModelName, setEmbeddingModelName] = useState('');
 	const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState('');
@@ -168,6 +168,7 @@ export default function CodeBaseConfigScreen({
 		{label: 'Jina & OpenAI', value: 'jina' as const},
 		{label: 'Ollama', value: 'ollama' as const},
 		{label: 'Gemini', value: 'gemini' as const},
+		{label: 'Mistral', value: 'mistral' as const},
 	];
 
 	const currentFieldIndex = allFields.indexOf(currentField);
@@ -463,7 +464,7 @@ export default function CodeBaseConfigScreen({
 									isFocused={true}
 									onSelect={item => {
 										setEmbeddingType(
-											item.value as 'jina' | 'ollama' | 'gemini',
+											item.value as 'jina' | 'ollama' | 'gemini' | 'mistral',
 										);
 										setIsEditing(false);
 									}}

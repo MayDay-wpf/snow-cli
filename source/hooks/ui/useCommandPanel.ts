@@ -25,6 +25,34 @@ export type CommandPanelCommand = {
 	mainFlowOnly?: boolean;
 };
 
+// 指令参数提示：当用户输入 /cmd 后（尚未补充参数），在输入框末尾以暗色显示可用参数组合
+// key 为指令名（不含斜杠），value 为提示文本（不含前导空格）
+export const COMMAND_ARGS_HINTS: Record<string, string> = {
+	resume: '[sessionId]',
+	reindex: '[-force]',
+	codebase: '[on|off|status]',
+	'auto-format': '[on|off|status]',
+	'add-dir': '[path]',
+	loop: '<interval> <prompt> | list | tasks | cancel <id>',
+	role: '[-l|--list | -d|--delete]',
+	'role-subagent': '[-l|--list | -d|--delete]',
+	'subagent-depth': '[<number>|status]',
+	btw: '<question>',
+	connect: '[apiUrl]',
+};
+
+// 指令参数可选值列表：用于 Tab 弹出参数选择面板
+// key 为指令名（不含斜杠），value 为可选参数值数组
+export const COMMAND_ARGS_OPTIONS: Record<string, string[]> = {
+	codebase: ['on', 'off', 'status'],
+	'auto-format': ['on', 'off', 'status'],
+	reindex: ['-force'],
+	role: ['-l', '-d'],
+	'role-subagent': ['-l', '-d'],
+	'subagent-depth': ['status'],
+	loop: ['list', 'tasks'],
+};
+
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const {t} = useI18n();
 
