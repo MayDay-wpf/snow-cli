@@ -1600,6 +1600,9 @@ export const en: TranslationKeys = {
 		invalidJson:
 			'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
 	},
+	commandArgsPanel: {
+		navigationHint: '\u2191\u2193 navigate  Enter select  Tab/ESC close',
+	},
 	runningAgentsPanel: {
 		title: 'Running Agents',
 		noAgentsRunning: 'No agents or teammates are currently running',

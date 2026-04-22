@@ -1510,8 +1510,12 @@ export const zhTW: TranslationKeys = {
 		reverted: '修改已還原至上一個有效設定。',
 		invalidJson: 'JSON 格式無效，修改已還原至上一個有效設定。',
 	},
+	commandArgsPanel: {
+		navigationHint:
+			'\u2191\u2193 \u5c0e\u822a  Enter \u9078\u64c7  Tab/ESC \u95dc\u9589',
+	},
 	runningAgentsPanel: {
-		title: '執行中的代理',
+		title: '\u57f7\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '目前沒有執行中的代理或隊友',
 		keyboardHint: '(空白鍵: 切換 · Enter: 確認 · Esc: 取消)',
 		selected: '已選擇: {count}',
@@ -1618,8 +1622,7 @@ export const zhTW: TranslationKeys = {
 		noDrawings: '尚無作品。',
 		managerHint:
 			'↑↓ 移動 • 空白鍵 多選 • D 刪除 • S 切換結束畫面 • Enter 編輯 • Esc 返回',
-		confirmDeleteMany:
-			'確認刪除 {count} 項？Enter/Y/D 確認，N/Esc 取消',
+		confirmDeleteMany: '確認刪除 {count} 項？Enter/Y/D 確認，N/Esc 取消',
 		moreAbove: '↑ 上方還有 {count} 項',
 		moreBelow: '↓ 下方還有 {count} 項',
 		selectedCount: '已選擇 {count} 項',

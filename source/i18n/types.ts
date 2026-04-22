@@ -1494,6 +1494,10 @@ export type TranslationKeys = {
 		reverted: string;
 		invalidJson: string;
 	};
+	// Command Args Panel
+	commandArgsPanel: {
+		navigationHint: string;
+	};
 	// Running Agents Panel
 	runningAgentsPanel: {
 		title: string;

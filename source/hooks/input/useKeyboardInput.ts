@@ -362,7 +362,9 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 	// ink's useInput doesn't distinguish between Backspace and Delete.
 	// We must NOT use process.stdin.on('data', ...) directly, as adding a 'data' listener
 	// switches stdin to flowing mode, conflicting with Ink's readable-event-based handling.
-	const stdinContext = useStdin() as {internal_eventEmitter?: import('events').EventEmitter};
+	const stdinContext = useStdin() as {
+		internal_eventEmitter?: import('events').EventEmitter;
+	};
 	const {internal_eventEmitter: inkEventEmitter} = stdinContext;
 
 	useEffect(() => {
@@ -654,11 +656,11 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
+			// Tab closes the panel
 			if (key.tab) {
-				setArgsSelectedIndex(prev => {
-					const maxIndex = Math.max(0, argOptions.length - 1);
-					return prev < maxIndex ? prev + 1 : 0;
-				});
+				setShowArgsPicker(false);
+				setArgsSelectedIndex(0);
+				setPickerActive(true);
 				return;
 			}
 
@@ -679,6 +681,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 				return;
 			}
 
+			// Backspace silently closes (not shown in hint text)
 			if (key.backspace || key.delete) {
 				setShowArgsPicker(false);
 				setArgsSelectedIndex(0);
@@ -1335,8 +1338,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 						buffer.setCursorPosition(buffer.text.length);
 						setShowCommands(false);
 						setCommandSelectedIndex(0);
-						const cmdArgsOptions =
-							COMMAND_ARGS_OPTIONS[selectedCommand.name];
+						const cmdArgsOptions = COMMAND_ARGS_OPTIONS[selectedCommand.name];
 						if (cmdArgsOptions && cmdArgsOptions.length > 0) {
 							setShowArgsPicker(true);
 							setArgsSelectedIndex(0);

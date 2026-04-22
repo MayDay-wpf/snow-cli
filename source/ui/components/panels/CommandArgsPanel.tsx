@@ -1,6 +1,7 @@
 import React, {memo, useMemo} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {useI18n} from '../../../i18n/I18nContext.js';
 
 interface Props {
 	commandName: string;
@@ -12,6 +13,7 @@ interface Props {
 const CommandArgsPanel = memo(
 	({commandName, options, selectedIndex, visible}: Props) => {
 		const {theme} = useTheme();
+		const {t} = useI18n();
 
 		const MAX_DISPLAY_ITEMS = 6;
 
@@ -53,7 +55,7 @@ const CommandArgsPanel = memo(
 						/{commandName}{' '}
 					</Text>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						Tab ↑↓ Enter
+						{t.commandArgsPanel.navigationHint}
 					</Text>
 				</Box>
 				{displayedItems.map((option, index) => (

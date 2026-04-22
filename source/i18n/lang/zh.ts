@@ -1514,8 +1514,12 @@ export const zh: TranslationKeys = {
 		reverted: '修改已回退至上一个有效配置。',
 		invalidJson: 'JSON 格式无效，修改已回退至上一个有效配置。',
 	},
+	commandArgsPanel: {
+		navigationHint:
+			'\u2191\u2193 \u5bfc\u822a  Enter \u9009\u62e9  Tab/ESC \u5173\u95ed',
+	},
 	runningAgentsPanel: {
-		title: '运行中的代理',
+		title: '\u8fd0\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '当前没有运行中的代理或队友',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
 		selected: '已选择: {count}',
@@ -1622,8 +1626,7 @@ export const zh: TranslationKeys = {
 		noDrawings: '暂无作品。',
 		managerHint:
 			'↑↓ 移动 • 空格 多选 • D 删除 • S 切换退出画面 • Enter 编辑 • Esc 返回',
-		confirmDeleteMany:
-			'确认删除 {count} 项？Enter/Y/D 确认，N/Esc 取消',
+		confirmDeleteMany: '确认删除 {count} 项？Enter/Y/D 确认，N/Esc 取消',
 		moreAbove: '↑ 上方还有 {count} 项',
 		moreBelow: '↓ 下方还有 {count} 项',
 		selectedCount: '已选择 {count} 项',
