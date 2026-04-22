@@ -682,6 +682,18 @@ export const en: TranslationKeys = {
 			},
 		},
 	},
+	ideSelectPanel: {
+		title: 'Select IDE',
+		subtitle: 'Connect to an IDE for integrated development features.',
+		noneOption: 'None',
+		connectedMark: ' ✔',
+		hint: '↑↓ navigate • Enter select • ESC close',
+		connecting: 'Connecting...',
+		connectSuccess: 'Connected to {label}',
+		connectError: 'Failed to connect: {error}',
+		unmatchedIDEs:
+			'Found {count} other running IDE(s). However, their workspace/project directories do not match the current cwd.',
+	},
 	permissionsPanel: {
 		title: 'Permissions',
 		clearAll: 'Clear All',

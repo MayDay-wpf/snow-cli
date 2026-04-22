@@ -51,6 +51,7 @@ export interface CommandResult {
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'
+		| 'showIdeSelectPanel'
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'

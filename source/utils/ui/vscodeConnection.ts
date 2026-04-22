@@ -542,6 +542,61 @@ class VSCodeConnectionManager {
 		return {matched, unmatched};
 	}
 
+	/**
+	 * Connect to a specific IDE port.
+	 * Stops any existing connection first, then connects to the given port.
+	 */
+	async connectToPort(targetPort: number): Promise<void> {
+		this.stop();
+		this._userDisconnected = false;
+
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				this.cleanupConnection();
+				reject(new Error('Connection timeout after 10 seconds'));
+			}, this.CONNECTION_TIMEOUT);
+
+			try {
+				this.client = new WebSocket(`ws://localhost:${targetPort}`);
+
+				this.client.on('open', () => {
+					this.trustContextFromConnectedServer = false;
+					this.reconnectAttempts = 0;
+					this.port = targetPort;
+					this.refreshConnectedWorkspaceFolders();
+					clearTimeout(timeout);
+					resolve();
+				});
+
+				this.client.on('message', message => {
+					try {
+						const data = JSON.parse(message.toString());
+						if (this.shouldHandleMessage(data)) {
+							this.handleMessage(data);
+						}
+					} catch {
+						// Ignore invalid JSON
+					}
+				});
+
+				this.client.on('close', () => {
+					this.client = null;
+					this.scheduleReconnect();
+				});
+
+				this.client.on('error', _error => {
+					clearTimeout(timeout);
+					this.cleanupConnection();
+					reject(new Error(`Failed to connect to port ${targetPort}`));
+				});
+			} catch (error) {
+				clearTimeout(timeout);
+				this.cleanupConnection();
+				reject(error instanceof Error ? error : new Error('Connection failed'));
+			}
+		});
+	}
+
 	hasMatchingWorkspace(): boolean {
 		const {matched} = this.getAvailableIDEs();
 		return matched.length > 0;

@@ -16,6 +16,7 @@ import {connectionManager} from '../../../utils/connection/ConnectionManager.js'
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
+import {IdeSelectPanel} from '../panels/IdeSelectPanel.js';
 const BtwPanel = lazy(() => import('../panels/BtwPanel.js'));
 
 type ChatFooterProps = {
@@ -122,6 +123,14 @@ type ChatFooterProps = {
 	showBackgroundPanel: boolean;
 	selectedProcessIndex: number;
 	terminalWidth: number;
+
+	// IDE select panel props
+	showIdeSelectPanel: boolean;
+	setShowIdeSelectPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	onIdeConnectionChange: (
+		status: 'connected' | 'disconnected',
+		message?: string,
+	) => void;
 
 	// BTW panel props
 	btwPrompt: string | null;
@@ -238,9 +247,17 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		};
 	}, [copyStatusMessage]);
 
+	// When a panel hides the input area, clear the draft so the old command text
+	// doesn't get restored when the panel closes and ChatInput remounts.
+	useEffect(() => {
+		if (props.showReviewCommitPanel || props.showIdeSelectPanel) {
+			props.onDraftChange(null);
+		}
+	}, [props.showReviewCommitPanel, props.showIdeSelectPanel]);
+
 	return (
 		<>
-		{!props.showReviewCommitPanel && (
+		{!props.showReviewCommitPanel && !props.showIdeSelectPanel && (
 			<>
 				<LoadingIndicator
 					isStreaming={props.isStreaming}
@@ -379,6 +396,14 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						/>
 					</Suspense>
 				</Box>
+			)}
+
+			{props.showIdeSelectPanel && (
+				<IdeSelectPanel
+					visible={props.showIdeSelectPanel}
+					onClose={() => props.setShowIdeSelectPanel(false)}
+					onConnectionChange={props.onIdeConnectionChange}
+				/>
 			)}
 		</>
 	);

@@ -287,6 +287,7 @@ export default function ChatScreen({
 		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
+		setShowIdeSelectPanel: panelState.setShowIdeSelectPanel,
 		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		setShowTodoListPanel: panelState.setShowTodoListPanel,
 		setShowPixelEditor: panelState.setShowPixelEditor,
@@ -517,6 +518,19 @@ export default function ChatScreen({
 					showReviewCommitPanel={panelState.showReviewCommitPanel}
 					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
 					onReviewCommitConfirm={handleReviewCommitConfirm}
+					showIdeSelectPanel={panelState.showIdeSelectPanel}
+					setShowIdeSelectPanel={panelState.setShowIdeSelectPanel}
+					onIdeConnectionChange={(status, message) => {
+						vscodeState.setVscodeConnectionStatus(status);
+						if (message) {
+							const commandMessage = {
+								role: 'command' as const,
+								content: message,
+								commandName: 'ide',
+							};
+							setMessages(prev => [...prev, commandMessage]);
+						}
+					}}
 					btwPrompt={btwPrompt}
 					onBtwClose={() => setBtwPrompt(null)}
 					disabled={

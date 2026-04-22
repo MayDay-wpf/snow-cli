@@ -535,6 +535,20 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 			return;
 		}
 
+		// Ctrl+Enter (Win/Linux) or Option+Enter (macOS) - Insert newline
+		// Must be checked before any picker/panel key.return handlers to avoid interception
+		if ((key.ctrl || key.meta) && key.return) {
+			flushPendingInput();
+			buffer.insert('\n');
+			const text = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateCommandPanelState(text);
+			updateFilePickerState(text, cursorPos);
+			updateAgentPickerState(text, cursorPos);
+			updateRunningAgentsPickerState(text, cursorPos);
+			return;
+		}
+
 		// Handle escape key for double-ESC history navigation
 		if (key.escape) {
 			if (showArgsPicker) {
@@ -1451,19 +1465,6 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 					return;
 				}
 			}
-		}
-
-		// Ctrl+Enter - Insert newline
-		if (key.ctrl && key.return) {
-			flushPendingInput();
-			buffer.insert('\n');
-			const text = buffer.getFullText();
-			const cursorPos = buffer.getCursorPosition();
-			updateCommandPanelState(text);
-			updateFilePickerState(text, cursorPos);
-			updateAgentPickerState(text, cursorPos);
-			updateRunningAgentsPickerState(text, cursorPos);
-			return;
 		}
 
 		// Enter - submit message or insert newline after '/'

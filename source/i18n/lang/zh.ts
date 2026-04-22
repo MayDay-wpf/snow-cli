@@ -639,6 +639,18 @@ export const zh: TranslationKeys = {
 			},
 		},
 	},
+	ideSelectPanel: {
+		title: '选择 IDE',
+		subtitle: '连接到 IDE 以使用集成开发功能。',
+		noneOption: '无',
+		connectedMark: ' ✔',
+		hint: '↑↓ 导航 • Enter 选择 • ESC 关闭',
+		connecting: '正在连接...',
+		connectSuccess: '已连接到 {label}',
+		connectError: '连接失败：{error}',
+		unmatchedIDEs:
+			'发现 {count} 个其他运行中的 IDE，但其工作区/项目目录与当前工作目录不匹配。',
+	},
 	permissionsPanel: {
 		title: '权限',
 		clearAll: '全部清除',

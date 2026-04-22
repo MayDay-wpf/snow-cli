@@ -28,6 +28,7 @@ export type PanelState = {
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
 	showPixelEditor: boolean;
+	showIdeSelectPanel: boolean;
 	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
@@ -57,6 +58,7 @@ export type PanelActions = {
 	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
+	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
 	handleSwitchProfile: (options: {
@@ -94,6 +96,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
+	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
 		string | undefined
 	>(undefined);
@@ -134,6 +137,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showNewPromptPanel ||
 			showTodoListPanel ||
 			showPixelEditor ||
+			showIdeSelectPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
 			options.hasPendingUserQuestion ||
@@ -270,6 +274,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let PixelEditorScreen handle ESC
 		}
 
+		if (showIdeSelectPanel) {
+			setShowIdeSelectPanel(false);
+			return true;
+		}
+
 		return false; // ESC not handled
 	};
 
@@ -295,7 +304,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showConnectionPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
-			showPixelEditor
+			showPixelEditor ||
+			showIdeSelectPanel
 		);
 	};
 
@@ -322,6 +332,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showNewPromptPanel,
 		showTodoListPanel,
 		showPixelEditor,
+		showIdeSelectPanel,
 		connectionPanelApiUrl,
 		profileSelectedIndex,
 		profileSearchQuery,
@@ -348,6 +359,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
 		setShowPixelEditor,
+		setShowIdeSelectPanel,
 		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,

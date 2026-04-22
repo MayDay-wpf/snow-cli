@@ -56,13 +56,9 @@ jobs:
 
             ### What's New
 
-            - The ink framework has been upgraded from 5.2.1 to 7.0.1
-            - Added command parameter hints and Tab completion
-            - Refactored IDE connection logic to support active disconnection
-            - Optimized system prompt adjustment workflow to enhance user experience
-            - snow -c supports adding sessionId to restore a specific session
-            - Default streaming display scheme enabled
-            - Fixed known bugs to improve stability
+            - Fixed the line break issue in key.meta
+            - Fixed the problem of static content loss caused by clearing the screen
+            - Optimized the IDE connection experience
             
             ### Installation
             ```bash

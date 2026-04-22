@@ -427,6 +427,7 @@ type CommandHandlerOptions = {
 	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowIdeSelectPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowNewPromptPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
@@ -529,23 +530,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				return;
 			}
 
-			// Handle /ide command
+			// Handle /ide command — open selection panel
 			if (commandName === 'ide') {
-				if (result.success) {
-					if (result.action === 'disconnect') {
-						options.setVscodeConnectionStatus('disconnected');
-					} else {
-						options.setVscodeConnectionStatus('connected');
-					}
-				} else {
-					options.setVscodeConnectionStatus('disconnected');
+				if (result.success && result.action === 'showIdeSelectPanel') {
+					options.setShowIdeSelectPanel(true);
 				}
-				const commandMessage: Message = {
-					role: 'command',
-					content: result.message || '',
-					commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
 				return;
 			}
 

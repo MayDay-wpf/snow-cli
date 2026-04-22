@@ -628,6 +628,18 @@ export type TranslationKeys = {
 			};
 		};
 	};
+	// IDE Select Panel
+	ideSelectPanel: {
+		title: string;
+		subtitle: string;
+		noneOption: string;
+		connectedMark: string;
+		hint: string;
+		connecting: string;
+		connectSuccess: string;
+		connectError: string;
+		unmatchedIDEs: string;
+	};
 	// Profile Panel
 	profilePanel: {
 		title: string;

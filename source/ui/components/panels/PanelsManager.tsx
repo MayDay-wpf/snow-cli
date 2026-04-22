@@ -347,6 +347,7 @@ export default function PanelsManager({
 					<TodoListPanel onClose={() => setShowTodoListPanel(false)} />
 				</Box>
 			)}
+
 		</>
 	);
 }

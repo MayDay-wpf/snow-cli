@@ -640,6 +640,18 @@ export const zhTW: TranslationKeys = {
 			},
 		},
 	},
+	ideSelectPanel: {
+		title: '選擇 IDE',
+		subtitle: '連線至 IDE 以使用整合開發功能。',
+		noneOption: '無',
+		connectedMark: ' ✔',
+		hint: '↑↓ 導覽 • Enter 選擇 • ESC 關閉',
+		connecting: '正在連線...',
+		connectSuccess: '已連線至 {label}',
+		connectError: '連線失敗：{error}',
+		unmatchedIDEs:
+			'發現 {count} 個其他執行中的 IDE，但其工作區/專案目錄與目前工作目錄不相符。',
+	},
 	permissionsPanel: {
 		title: '權限',
 		clearAll: '全部清除',
