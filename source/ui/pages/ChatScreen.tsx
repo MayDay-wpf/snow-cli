@@ -404,6 +404,15 @@ export default function ChatScreen({
 		!schedulerExecutionState.state.isRunning &&
 		!hasBlockingPanel &&
 		!snapshotState.pendingRollback;
+
+	// 统一处理：任何会隐藏输入框的场景（面板打开、footer 隐藏等），
+	// 都需要清空 draftContent，避免面板关闭后 ChatInput 重新挂载时
+	// 通过 draftContent 把旧文本恢复回输入框。
+	useEffect(() => {
+		if (!shouldShowFooter) {
+			setInputDraftContent(null);
+		}
+	}, [shouldShowFooter, setInputDraftContent]);
 	const footerContextUsage = streamingState.contextUsage
 		? {
 				inputTokens: streamingState.contextUsage.prompt_tokens,
