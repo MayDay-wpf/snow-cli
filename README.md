@@ -9,6 +9,8 @@
 [![license](https://img.shields.io/npm/l/snow-ai.svg)](https://github.com/MayDay-wpf/snow-cli/blob/main/LICENSE)
 [![node](https://img.shields.io/node/v/snow-ai.svg)](https://nodejs.org/)
 
+<a href="https://www.producthunt.com/products/snow-cli/launches/snow-cli?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-snow-cli" target="_blank" rel="noopener noreferrer"><img alt="Snow CLI - Agentic coding in your terminal | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1084735&amp;theme=light&amp;t=1776848197707"></a>
+
 **English** | [中文](README_zh.md)
 
 **QQ Group**: 910298558
