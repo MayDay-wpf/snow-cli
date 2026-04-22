@@ -628,6 +628,16 @@ export const zhTW: TranslationKeys = {
 				openingDialog: '正在開啟檔案儲存對話方塊...',
 				cancelledByUser: '導出已被使用者取消。',
 			},
+			// IDE 命令訊息
+			ide: {
+				disconnected: '已中斷 IDE 連線。',
+				noAvailableIDEs:
+					'未偵測到可用的 IDE。請確認 IDE 已安裝 Snow CLI 擴充套件/外掛程式且正在執行。',
+				unmatchedIDEs:
+					'發現 {count} 個其他執行中的 IDE，但其工作區/專案目錄與目前工作目錄不相符。',
+				connectedTo: '已連線至 {label}',
+				connectFailed: '連線 IDE 失敗：{error}',
+			},
 		},
 	},
 	permissionsPanel: {
@@ -1023,6 +1033,7 @@ export const zhTW: TranslationKeys = {
 		rollbackConversation: '僅回復對話',
 		rollbackWarning: '將影響 {count} 個檔案',
 		// Session
+		chatInitializing: '初始化中...',
 		sessionCreating: '建立第一個對話記錄檔案...',
 		sessionLoading: '載入會話...',
 		sessionSaving: '儲存會話...',

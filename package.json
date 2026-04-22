@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.7.11",
+	"version": "0.7.12",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -24,7 +24,7 @@
 	},
 	"homepage": "https://github.com/MayDay-wpf/snow-cli#readme",
 	"engines": {
-		"node": ">=16",
+		"node": ">=22",
 		"npm": ">=8.3.0"
 	},
 	"scripts": {
@@ -66,7 +66,7 @@
 		"@types/marked-terminal": "^6.1.1",
 		"@types/pdf-parse": "^1.1.5",
 		"@types/prettier": "^2.7.3",
-		"@types/react": "^18.0.32",
+		"@types/react": "^19.0.0",
 		"@types/sharp": "^0.32.0",
 		"@types/sql.js": "^1.4.9",
 		"@types/ssh2": "^1.15.5",
@@ -90,11 +90,11 @@
 		"https-proxy-agent": "^7.0.6",
 		"iconv-lite": "^0.7.2",
 		"ignore": "^7.0.5",
-		"ink": "^5.2.1",
-		"ink-gradient": "^3.0.0",
+		"ink": "^7.0.1",
+		"ink-gradient": "^4.0.0",
 		"ink-select-input": "^6.2.0",
 		"ink-spinner": "^5.0.0",
-		"ink-testing-library": "^3.0.0",
+		"ink-testing-library": "^4.0.0",
 		"ink-text-input": "^6.0.0",
 		"katex": "^0.16.27",
 		"mammoth": "^1.11.0",
@@ -105,7 +105,7 @@
 		"pptx-parser": "^1.1.7-beta.9",
 		"prettier": "^2.8.7",
 		"puppeteer-core": "^24.25.0",
-		"react": "^18.2.0",
+		"react": "^19.2.0",
 		"sql.js": "^1.13.0",
 		"string-width": "^7.2.0",
 		"tiktoken": "^1.0.22",

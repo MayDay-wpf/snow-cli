@@ -19,6 +19,13 @@ interface Diagnostic {
 	code?: string | number;
 }
 
+export interface IDEInfo {
+	name: string;
+	workspace: string;
+	port: number;
+	matched: boolean;
+}
+
 class VSCodeConnectionManager {
 	private client: WebSocket | null = null;
 	private reconnectTimer: NodeJS.Timeout | null = null;
@@ -26,15 +33,11 @@ class VSCodeConnectionManager {
 	private readonly MAX_RECONNECT_ATTEMPTS = 10;
 	private readonly BASE_RECONNECT_DELAY = 2000; // 2 seconds
 	private readonly MAX_RECONNECT_DELAY = 30000; // 30 seconds
-	// Port ranges: VSCode uses 9527-9537, JetBrains uses 9538-9548
-	private readonly VSCODE_BASE_PORT = 9527;
-	private readonly VSCODE_MAX_PORT = 9537;
-	private readonly JETBRAINS_BASE_PORT = 9538;
-	private readonly JETBRAINS_MAX_PORT = 9548;
-	private port = 9527;
+	private port = 0;
 	private editorContext: EditorContext = {};
 	private listeners: Array<(context: EditorContext) => void> = [];
 	private currentWorkingDirectory = process.cwd();
+	private _userDisconnected = false;
 	// In multi-root workspaces a single VSCode window serves multiple workspace folders on the same port.
 	// Cache the workspace folders mapped to the connected port so we can accept context from any of them.
 	private connectedWorkspaceFolders: Set<string> = new Set();
@@ -49,24 +52,30 @@ class VSCodeConnectionManager {
 	private readonly CONNECTION_TIMEOUT = 10000; // 10 seconds timeout for initial connection
 
 	async start(): Promise<void> {
-		// If already connected, just return success
 		if (this.client?.readyState === WebSocket.OPEN) {
 			return Promise.resolve();
 		}
 
-		// If already connecting, return the existing promise to avoid duplicate connections
 		if (this.connectingPromise) {
 			return this.connectingPromise;
 		}
 
-		// Try to find the correct port for this workspace
-		const targetPort = this.findPortForWorkspace();
+		// Only try ports whose workspace matches the current cwd
+		const {matched} = this.getAvailableIDEs();
+		const portsToTry = [...new Set(matched.map(ide => ide.port))];
 
-		// Create a new connection promise and store it
+		if (portsToTry.length === 0) {
+			return Promise.reject(
+				new Error(
+					'No IDE with matching workspace found for current directory',
+				),
+			);
+		}
+
 		this.connectingPromise = new Promise((resolve, reject) => {
-			let isSettled = false; // Prevent double resolve/reject
+			let isSettled = false;
+			let portIndex = 0;
 
-			// Set connection timeout
 			this.connectionTimeout = setTimeout(() => {
 				if (!isSettled) {
 					isSettled = true;
@@ -75,30 +84,24 @@ class VSCodeConnectionManager {
 				}
 			}, this.CONNECTION_TIMEOUT);
 
-			const tryConnect = (port: number) => {
-				// If already settled (resolved or rejected), stop trying
-				if (isSettled) {
-					return;
-				}
+			const tryNextPort = () => {
+				if (isSettled) return;
 
-				// Check both VSCode and JetBrains port ranges
-				if (port > this.VSCODE_MAX_PORT && port < this.JETBRAINS_BASE_PORT) {
-					// Jump from VSCode range to JetBrains range
-					tryConnect(this.JETBRAINS_BASE_PORT);
-					return;
-				}
-				if (port > this.JETBRAINS_MAX_PORT) {
+				if (portIndex >= portsToTry.length) {
 					if (!isSettled) {
 						isSettled = true;
 						this.cleanupConnection();
 						reject(
 							new Error(
-								`Failed to connect: no IDE server found on ports ${this.VSCODE_BASE_PORT}-${this.VSCODE_MAX_PORT} or ${this.JETBRAINS_BASE_PORT}-${this.JETBRAINS_MAX_PORT}`,
+								'Failed to connect to any IDE with matching workspace',
 							),
 						);
 					}
 					return;
 				}
+
+				const port = portsToTry[portIndex]!;
+				portIndex++;
 
 				try {
 					this.client = new WebSocket(`ws://localhost:${port}`);
@@ -107,11 +110,9 @@ class VSCodeConnectionManager {
 						if (!isSettled) {
 							isSettled = true;
 							this.trustContextFromConnectedServer = false;
-							// Reset reconnect attempts on successful connection
 							this.reconnectAttempts = 0;
 							this.port = port;
 							this.refreshConnectedWorkspaceFolders();
-							// Clear connection state
 							if (this.connectionTimeout) {
 								clearTimeout(this.connectionTimeout);
 								this.connectionTimeout = null;
@@ -124,44 +125,37 @@ class VSCodeConnectionManager {
 					this.client.on('message', message => {
 						try {
 							const data = JSON.parse(message.toString());
-
-							// Filter messages by workspace folder
 							if (this.shouldHandleMessage(data)) {
 								this.handleMessage(data);
 							}
-						} catch (error) {
+						} catch {
 							// Ignore invalid JSON
 						}
 					});
 
 					this.client.on('close', () => {
 						this.client = null;
-						// Only schedule reconnect if this was an established connection (not initial scan)
 						if (this.reconnectAttempts > 0 || isSettled) {
 							this.scheduleReconnect();
 						}
 					});
 
 					this.client.on('error', _error => {
-						// On initial connection, try next port
-						if (this.reconnectAttempts === 0 && !isSettled) {
+						if (!isSettled) {
 							this.client = null;
-							// Small delay before trying next port to avoid rapid fire
-							setTimeout(() => tryConnect(port + 1), 50);
+							setTimeout(() => tryNextPort(), 50);
 						}
-						// For reconnections, silently handle and let close event trigger reconnect
 					});
-				} catch (error) {
+				} catch {
 					if (!isSettled) {
-						setTimeout(() => tryConnect(port + 1), 50);
+						setTimeout(() => tryNextPort(), 50);
 					}
 				}
 			};
 
-			tryConnect(targetPort);
+			tryNextPort();
 		});
 
-		// Return the promise and clean up state when it completes or fails
 		return this.connectingPromise.finally(() => {
 			this.connectingPromise = null;
 			if (this.connectionTimeout) {
@@ -218,128 +212,7 @@ class VSCodeConnectionManager {
 	}
 
 	/**
-	 * Find the correct port for the current workspace
-	 * Detects which IDE terminal this is running in and connects accordingly
-	 */
-	private findPortForWorkspace(): number {
-		try {
-			const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
-			if (fs.existsSync(portInfoPath)) {
-				const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
-				const cwd = this.normalizePath(this.currentWorkingDirectory);
-
-				// Priority 1: Check terminal environment variables to detect IDE type
-				const termProgram = process.env['TERM_PROGRAM'];
-				const terminalEmulator = process.env['TERMINAL_EMULATOR'];
-
-				// Build a list of candidate ports based on IDE type and workspace match
-				let candidatePorts: Array<{
-					port: number;
-					workspace: string;
-					matchScore: number;
-				}> = [];
-
-				// If running in VSCode terminal, collect VSCode ports with workspace match scores
-				if (termProgram === 'vscode') {
-					for (const [workspace, port] of Object.entries(portInfo)) {
-						if (typeof port === 'number' && port >= 9527 && port <= 9537) {
-							const normalizedWorkspace = this.normalizePath(workspace);
-							let matchScore = 1; // Default: at least it's the right IDE type
-							if (normalizedWorkspace === cwd) {
-								matchScore = 100; // Exact match
-							} else if (
-								normalizedWorkspace &&
-								cwd.startsWith(normalizedWorkspace + '/')
-							) {
-								matchScore = 50 + normalizedWorkspace.length; // Parent workspace
-							} else if (
-								normalizedWorkspace &&
-								normalizedWorkspace.startsWith(cwd + '/')
-							) {
-								matchScore = 30; // Child workspace
-							}
-							candidatePorts.push({port, workspace, matchScore});
-						}
-					}
-				}
-
-				// If running in JetBrains terminal, collect JetBrains ports with workspace match scores
-				if (terminalEmulator?.includes('JetBrains')) {
-					for (const [workspace, port] of Object.entries(portInfo)) {
-						if (typeof port === 'number' && port >= 9538 && port <= 9548) {
-							const normalizedWorkspace = this.normalizePath(workspace);
-							let matchScore = 1; // Default: at least it's the right IDE type
-							if (normalizedWorkspace === cwd) {
-								matchScore = 100; // Exact match
-							} else if (
-								normalizedWorkspace &&
-								cwd.startsWith(normalizedWorkspace + '/')
-							) {
-								matchScore = 50 + normalizedWorkspace.length; // Parent workspace
-							} else if (
-								normalizedWorkspace &&
-								normalizedWorkspace.startsWith(cwd + '/')
-							) {
-								matchScore = 30; // Child workspace
-							}
-							candidatePorts.push({port, workspace, matchScore});
-						}
-					}
-				}
-
-				// If we found candidates based on terminal type, use the best match
-				if (candidatePorts.length > 0) {
-					candidatePorts.sort((a, b) => b.matchScore - a.matchScore);
-					return candidatePorts[0]!.port;
-				}
-
-				// Priority 2: Exact workspace match
-				if (portInfo[cwd]) {
-					return portInfo[cwd];
-				}
-
-				// Priority 3: Find workspace containing current directory
-				const matches: Array<{
-					workspace: string;
-					port: number;
-					length: number;
-				}> = [];
-
-				for (const [workspace, port] of Object.entries(portInfo)) {
-					const normalizedWorkspace = this.normalizePath(workspace);
-
-					// Check if cwd is within this workspace or workspace is within cwd
-					const cwdInWorkspace =
-						cwd.startsWith(normalizedWorkspace + '/') ||
-						cwd === normalizedWorkspace;
-					const workspaceInCwd = normalizedWorkspace.startsWith(cwd + '/');
-
-					if (cwdInWorkspace || workspaceInCwd) {
-						matches.push({
-							workspace: normalizedWorkspace,
-							port: port as number,
-							length: normalizedWorkspace.length,
-						});
-					}
-				}
-
-				// Sort by path length (longest first) to get the most specific workspace
-				if (matches.length > 0) {
-					matches.sort((a, b) => b.length - a.length);
-					return matches[0]!.port;
-				}
-			}
-		} catch (error) {
-			// Ignore errors, will fall back to VSCODE_BASE_PORT
-		}
-
-		// Start with VSCode port range by default
-		return this.VSCODE_BASE_PORT;
-	}
-
-	/**
 	 * Check if we should handle this message based on workspace folder
-	 * Uses the same matching logic as findPortForWorkspace to ensure consistency
 	 */
 	private shouldHandleMessage(data: any): boolean {
 		// If no workspace folder in message, accept it (backwards compatibility)
@@ -357,18 +230,16 @@ class VSCodeConnectionManager {
 		const cwd = this.normalizePath(this.currentWorkingDirectory);
 		const workspaceFolder = this.normalizePath(data.workspaceFolder);
 
-		// Exact match - highest priority
+		// Exact match
 		if (cwd === workspaceFolder) {
 			return true;
 		}
 
-		// Check if cwd is within the IDE workspace (cwd is more specific)
-		const cwdInWorkspace = cwd.startsWith(workspaceFolder + '/');
-
-		// Check if workspace is within cwd (workspace is more specific)
-		const workspaceInCwd = workspaceFolder.startsWith(cwd + '/');
-
-		if (cwdInWorkspace || workspaceInCwd) {
+		// cwd is inside the IDE workspace
+		if (
+			workspaceFolder.length > 1 &&
+			cwd.startsWith(workspaceFolder + '/')
+		) {
 			return true;
 		}
 
@@ -396,8 +267,16 @@ class VSCodeConnectionManager {
 			}
 
 			const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
-			for (const [workspace, port] of Object.entries(portInfo)) {
-				if (typeof port !== 'number' || port !== this.port) {
+			for (const [workspace, value] of Object.entries(portInfo)) {
+				const entryPort =
+					typeof value === 'number'
+						? value
+						: typeof value === 'object' &&
+							  value !== null &&
+							  typeof (value as any).port === 'number'
+							? (value as any).port
+							: null;
+				if (entryPort !== this.port) {
 					continue;
 				}
 				const normalizedWorkspace = this.normalizePath(workspace);
@@ -409,9 +288,8 @@ class VSCodeConnectionManager {
 			const cwd = this.normalizePath(this.currentWorkingDirectory);
 			for (const ws of this.connectedWorkspaceFolders) {
 				if (
-					cwd === ws ||
-					cwd.startsWith(ws + '/') ||
-					ws.startsWith(cwd + '/')
+					ws.length > 1 &&
+					(cwd === ws || cwd.startsWith(ws + '/'))
 				) {
 					this.connectedPortHasCwdMatch = true;
 					break;
@@ -425,6 +303,10 @@ class VSCodeConnectionManager {
 	}
 
 	private scheduleReconnect(): void {
+		if (this._userDisconnected) {
+			return;
+		}
+
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer);
 		}
@@ -587,6 +469,82 @@ class VSCodeConnectionManager {
 	 */
 	resetReconnectAttempts(): void {
 		this.reconnectAttempts = 0;
+	}
+
+	getUserDisconnected(): boolean {
+		return this._userDisconnected;
+	}
+
+	setUserDisconnected(value: boolean): void {
+		this._userDisconnected = value;
+	}
+
+	/**
+	 * Get all available IDEs from the port info file, categorized by workspace match.
+	 */
+	getAvailableIDEs(): {matched: IDEInfo[]; unmatched: IDEInfo[]} {
+		const matched: IDEInfo[] = [];
+		const unmatched: IDEInfo[] = [];
+
+		try {
+			const portInfoPath = path.join(os.tmpdir(), 'snow-cli-ports.json');
+			if (!fs.existsSync(portInfoPath)) {
+				return {matched, unmatched};
+			}
+
+			const portInfo = JSON.parse(fs.readFileSync(portInfoPath, 'utf8'));
+			const cwd = this.normalizePath(this.currentWorkingDirectory);
+
+			for (const [workspace, value] of Object.entries(portInfo)) {
+				let port: number;
+				let ideName: string;
+
+				if (typeof value === 'number') {
+					// Legacy format: workspace -> port
+					port = value;
+					ideName = 'VSCode';
+				} else if (
+					typeof value === 'object' &&
+					value !== null &&
+					typeof (value as any).port === 'number'
+				) {
+					// New format: workspace -> { port, ide }
+					port = (value as any).port;
+					ideName = (value as any).ide || 'IDE';
+				} else {
+					continue;
+				}
+
+				const normalizedWorkspace = this.normalizePath(workspace);
+
+				const isMatch =
+					normalizedWorkspace.length > 1 &&
+					(cwd === normalizedWorkspace ||
+						cwd.startsWith(normalizedWorkspace + '/'));
+
+				const info: IDEInfo = {
+					name: ideName,
+					workspace,
+					port,
+					matched: isMatch,
+				};
+
+				if (isMatch) {
+					matched.push(info);
+				} else {
+					unmatched.push(info);
+				}
+			}
+		} catch {
+			// Ignore errors reading port file
+		}
+
+		return {matched, unmatched};
+	}
+
+	hasMatchingWorkspace(): boolean {
+		const {matched} = this.getAvailableIDEs();
+		return matched.length > 0;
 	}
 
 	/**

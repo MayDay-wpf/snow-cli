@@ -83,6 +83,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 		hasAttemptedAutoVscodeConnect.current = true;
 
+		// Skip auto-connect if no matching workspace (like Claude Code)
+		if (!vscodeConnection.hasMatchingWorkspace()) {
+			return;
+		}
+
 		const timer = setTimeout(() => {
 			(async () => {
 				try {
@@ -98,7 +103,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 					vscodeState.setVscodeConnectionStatus('connecting');
 					await vscodeConnection.start();
 				} catch (error) {
-					vscodeState.setVscodeConnectionStatus('error');
+					// Workspace mismatch or connection failure — stay disconnected quietly
+					vscodeState.setVscodeConnectionStatus('disconnected');
 				}
 			})();
 		}, 0);

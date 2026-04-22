@@ -36,6 +36,8 @@ class SnowPluginLifecycle : AppLifecycleListener {
         private val handlers = mutableMapOf<Project, SnowMessageHandler>()
 
         fun setupProject(project: Project) {
+            SnowWebSocketManager.instance.updatePortInfoForProject(project)
+
             if (!trackers.containsKey(project)) {
                 val tracker = SnowEditorContextTracker(project)
                 val handler = SnowMessageHandler(project)
@@ -54,6 +56,7 @@ class SnowPluginLifecycle : AppLifecycleListener {
         }
 
         fun cleanupProject(project: Project) {
+            SnowWebSocketManager.instance.cleanupPortInfoForProject(project)
             trackers.remove(project)
             handlers.remove(project)
         }

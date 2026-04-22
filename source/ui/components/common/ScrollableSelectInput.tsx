@@ -1,5 +1,5 @@
 import React, {useState, useMemo, useEffect, useCallback} from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text, useInput, type Key} from 'ink';
 
 type SelectItem = {
 	label: string;
@@ -219,22 +219,22 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 	);
 
 	const handleInput = useCallback(
-		(input: string, key: Record<string, boolean>) => {
+		(input: string, key: Key) => {
 			if (!isFocused || totalItems === 0) {
 				return;
 			}
 
-			if (key['upArrow']) {
+			if (key.upArrow) {
 				moveCursor(-1);
 				return;
 			}
 
-			if (key['downArrow']) {
+			if (key.downArrow) {
 				moveCursor(1);
 				return;
 			}
 
-			if (key['return'] && selectedItem) {
+			if (key.return && selectedItem) {
 				onSelect?.(selectedItem);
 				return;
 			}

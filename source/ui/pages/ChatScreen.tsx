@@ -438,8 +438,7 @@ export default function ChatScreen({
 		);
 	}
 
-	// Show loading state when resuming session
-	if (isResumingSession) {
+	if (!commandsLoaded || isResumingSession) {
 		return (
 			<Box
 				flexDirection="column"
@@ -451,7 +450,11 @@ export default function ChatScreen({
 				<Text color="cyan">
 					<Spinner type="dots" />
 				</Text>
-				<Text>{t.chatScreen.sessionLoading}</Text>
+				<Text>
+					{isResumingSession
+						? t.chatScreen.sessionLoading
+						: t.chatScreen.chatInitializing}
+				</Text>
 			</Box>
 		);
 	}

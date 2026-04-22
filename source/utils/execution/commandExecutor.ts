@@ -55,7 +55,8 @@ export interface CommandResult {
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
 		| 'btw'
-		| 'quit';
+		| 'quit'
+		| 'disconnect';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading
 	location?: 'global' | 'project'; // For custom commands to specify location

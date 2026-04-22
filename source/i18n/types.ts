@@ -618,6 +618,14 @@ export type TranslationKeys = {
 				openingDialog: string;
 				cancelledByUser: string;
 			};
+			// IDE command messages
+			ide: {
+				disconnected: string;
+				noAvailableIDEs: string;
+				unmatchedIDEs: string;
+				connectedTo: string;
+				connectFailed: string;
+			};
 		};
 	};
 	// Profile Panel
@@ -1014,6 +1022,7 @@ export type TranslationKeys = {
 		rollbackConversation: string;
 		rollbackWarning: string;
 		// Session
+		chatInitializing: string;
 		sessionCreating: string;
 		sessionLoading: string;
 		sessionSaving: string;

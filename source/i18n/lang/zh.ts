@@ -627,6 +627,16 @@ export const zh: TranslationKeys = {
 				openingDialog: '正在打开文件保存对话框...',
 				cancelledByUser: '导出已被用户取消。',
 			},
+			// IDE 命令消息
+			ide: {
+				disconnected: '已断开 IDE 连接。',
+				noAvailableIDEs:
+					'未检测到可用的 IDE。请确保 IDE 已安装 Snow CLI 扩展/插件并正在运行。',
+				unmatchedIDEs:
+					'发现 {count} 个其他运行中的 IDE，但其工作区/项目目录与当前工作目录不匹配。',
+				connectedTo: '已连接到 {label}',
+				connectFailed: '连接 IDE 失败：{error}',
+			},
 		},
 	},
 	permissionsPanel: {
@@ -1022,6 +1032,7 @@ export const zh: TranslationKeys = {
 		rollbackConversation: '仅回滚对话',
 		rollbackWarning: '将影响 {count} 个文件',
 		// Session
+		chatInitializing: '初始化中...',
 		sessionCreating: '创建第一个对话记录文件...',
 		sessionLoading: '加载会话...',
 		sessionSaving: '保存会话...',

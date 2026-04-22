@@ -670,6 +670,16 @@ export const en: TranslationKeys = {
 				openingDialog: 'Opening file save dialog...',
 				cancelledByUser: 'Export cancelled by user.',
 			},
+			// IDE command messages
+			ide: {
+				disconnected: 'Disconnected from IDE.',
+				noAvailableIDEs:
+					'No available IDEs detected. Make sure your IDE has the Snow CLI extension or plugin installed and is running.',
+				unmatchedIDEs:
+					'Found {count} other running IDE(s). However, their workspace/project directories do not match the current cwd.',
+				connectedTo: 'Connected to {label}',
+				connectFailed: 'Failed to connect to IDE: {error}',
+			},
 		},
 	},
 	permissionsPanel: {
@@ -1077,6 +1087,7 @@ export const en: TranslationKeys = {
 		rollbackConversation: 'Rollback conversation only',
 		rollbackWarning: '{count} files will be affected',
 		// Session
+		chatInitializing: 'Initializing...',
 		sessionCreating: 'Create the first dialogue record file...',
 		sessionLoading: 'Loading session...',
 		sessionSaving: 'Saving session...',

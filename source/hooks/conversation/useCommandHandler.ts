@@ -532,13 +532,20 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			// Handle /ide command
 			if (commandName === 'ide') {
 				if (result.success) {
-					// Connection successful, set status to connected immediately
-					// The轮询 mechanism will also update the status, but we do it here for immediate feedback
-					options.setVscodeConnectionStatus('connected');
-					// Don't add command message to keep UI clean
+					if (result.action === 'disconnect') {
+						options.setVscodeConnectionStatus('disconnected');
+					} else {
+						options.setVscodeConnectionStatus('connected');
+					}
 				} else {
-					options.setVscodeConnectionStatus('error');
+					options.setVscodeConnectionStatus('disconnected');
 				}
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 				return;
 			}
 

@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
 
       - name: Use CI npm config
@@ -56,7 +56,13 @@ jobs:
 
             ### What's New
 
-            - Urgently add tool parameter self-fixing policy because Opus 4.7 is stupid
+            - The ink framework has been upgraded from 5.2.1 to 7.0.1
+            - Added command parameter hints and Tab completion
+            - Refactored IDE connection logic to support active disconnection
+            - Optimized system prompt adjustment workflow to enhance user experience
+            - snow -c supports adding sessionId to restore a specific session
+            - Default streaming display scheme enabled
+            - Fixed known bugs to improve stability
             
             ### Installation
             ```bash
