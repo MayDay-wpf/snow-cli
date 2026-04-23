@@ -467,8 +467,12 @@ export function useBashMode() {
 				results.push(result);
 
 				// 构建替换文本
+				// 成功时合并 stdout 和 stderr：许多工具（如 cargo、npm）把输出写到 stderr
+				const successOutput = [result.stdout, result.stderr]
+					.filter(Boolean)
+					.join('\n');
 				const output = result.success
-					? result.stdout || '(no output)'
+					? successOutput || '(no output)'
 					: (() => {
 							const lines: string[] = [];
 
