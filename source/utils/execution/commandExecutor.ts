@@ -55,6 +55,7 @@ export interface CommandResult {
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
+		| 'forkSession'
 		| 'btw'
 		| 'quit'
 		| 'disconnect';

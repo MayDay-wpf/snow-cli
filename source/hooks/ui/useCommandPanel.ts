@@ -28,6 +28,8 @@ export type CommandPanelCommand = {
 // 指令参数提示：当用户输入 /cmd 后（尚未补充参数），在输入框末尾以暗色显示可用参数组合
 // key 为指令名（不含斜杠），value 为提示文本（不含前导空格）
 export const COMMAND_ARGS_HINTS: Record<string, string> = {
+	branch: '[name]',
+	fork: '[name]',
 	resume: '[sessionId]',
 	reindex: '[-force]',
 	codebase: '[on|off|status]',
@@ -69,7 +71,13 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	// Built-in commands - only depends on translation
 	const builtInCommands = useMemo(
 		() => [
-			{name: 'help', description: t.commandPanel.commands.help},
+			{
+			name: 'branch',
+			description:
+				t.commandPanel.commands.branch ||
+				'Fork current conversation into a new branch',
+		},
+		{name: 'help', description: t.commandPanel.commands.help},
 			{name: 'clear', description: t.commandPanel.commands.clear},
 			{
 				name: 'copy-last',

@@ -595,6 +595,7 @@ export const zh: TranslationKeys = {
 			hybridCompress:
 				'切换混合压缩模式（AI 摘要 + 智能截断，用于 /compact 和自动压缩）',
 			team: '切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
+			branch: '将当前对话分叉为新分支，可用 /resume 返回原会话',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
 			connect: '连接到 Snow Instance 进行 AI 处理',
@@ -636,6 +637,12 @@ export const zh: TranslationKeys = {
 					'发现 {count} 个其他运行中的 IDE，但其工作区/项目目录与当前工作目录不匹配。',
 				connectedTo: '已连接到 {label}',
 				connectFailed: '连接 IDE 失败：{error}',
+			},
+			branchFork: {
+				noActiveSession: '没有可分叉的活跃会话。',
+				success:
+					'对话已分叉为分支 {name}。返回原会话请执行:\n/resume {originalId}',
+				failed: '会话分叉失败',
 			},
 		},
 	},

@@ -35,6 +35,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/codebase.js'),
 			import('../../../utils/commands/addDir.js'),
 			import('../../../utils/commands/permissions.js'),
+			import('../../../utils/commands/branch.js'),
 			import('../../../utils/commands/backend.js'),
 			import('../../../utils/commands/loop.js'),
 			import('../../../utils/commands/models.js'),

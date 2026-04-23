@@ -413,6 +413,17 @@ export default function ChatScreen({
 			setInputDraftContent(null);
 		}
 	}, [shouldShowFooter, setInputDraftContent]);
+
+	// remountKey 变化时清空 draftContent：
+	// /resume、/clear、/compact、/branch 等指令通过 setRemountKey 触发 ChatInput 重挂载，
+	// 但旧组件在销毁前来不及通过 onDraftChange 上报空文本，导致新组件从旧草稿恢复。
+	const remountKeyRef = useRef(remountKey);
+	useEffect(() => {
+		if (remountKey !== remountKeyRef.current) {
+			remountKeyRef.current = remountKey;
+			setInputDraftContent(null);
+		}
+	}, [remountKey, setInputDraftContent]);
 	const footerContextUsage = streamingState.contextUsage
 		? {
 				inputTokens: streamingState.contextUsage.prompt_tokens,

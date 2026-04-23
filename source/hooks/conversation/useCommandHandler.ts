@@ -812,6 +812,90 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'forkSession') {
+				const currentSession = sessionManager.getCurrentSession();
+				if (!currentSession) {
+					const errorMessage: Message = {
+						role: 'command',
+						content:
+							t.commandPanel.commandOutput.branchFork?.noActiveSession ||
+							'No active session to fork.',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				try {
+					await sessionManager.saveSession(currentSession);
+
+					const forkedSession = await sessionManager.createNewSession(
+						false,
+						true,
+					);
+
+					const branchName = result.prompt || undefined;
+
+					forkedSession.messages = currentSession.messages.map(msg => ({
+						...msg,
+					}));
+					forkedSession.messageCount = currentSession.messageCount;
+					forkedSession.title = branchName
+						? `${currentSession.title} [${branchName}]`
+						: currentSession.title;
+					forkedSession.summary = currentSession.summary;
+					forkedSession.branchedFrom = currentSession.id;
+					forkedSession.branchName = branchName;
+					forkedSession.updatedAt = Date.now();
+
+					await sessionManager.saveSession(forkedSession);
+
+					try {
+						const {getTodoService} = await import(
+							'../../utils/execution/mcpToolsManager.js'
+						);
+						const todoService = getTodoService();
+						await todoService.copyTodoList(
+							currentSession.id,
+							forkedSession.id,
+						);
+					} catch {
+						// Non-critical
+					}
+
+					if (options.onResumeSessionById) {
+						await options.onResumeSessionById(forkedSession.id);
+					} else {
+						sessionManager.setCurrentSession(forkedSession);
+					}
+
+					const displayName = branchName
+						? `"${branchName}"`
+						: forkedSession.id.slice(0, 8);
+					const originalId = currentSession.id;
+					const successContent = (
+						t.commandPanel.commandOutput.branchFork?.success ||
+						'Conversation forked into branch {name}. To return to the original session:\n/resume {originalId}'
+					)
+						.replace('{name}', displayName)
+						.replace('{originalId}', originalId);
+
+					const commandMessage: Message = {
+						role: 'command',
+						content: successContent,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : 'Unknown error';
+					const errorMessage: Message = {
+						role: 'command',
+						content: `${t.commandPanel.commandOutput.branchFork?.failed || 'Failed to fork session'}: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (result.success && result.action === 'showNewPromptPanel') {
 				options.setShowNewPromptPanel(true);
 			} else if (result.success && result.action === 'showSubAgentDepthPanel') {

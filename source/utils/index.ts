@@ -4,6 +4,7 @@ import {Command} from '../types/index.js';
 import './commands/addDir.js';
 import './commands/agent.js';
 import './commands/backend.js';
+import './commands/branch.js';
 import './commands/clear.js';
 import './commands/codebase.js';
 import './commands/compact.js';
