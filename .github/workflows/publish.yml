@@ -56,9 +56,7 @@ jobs:
 
             ### What's New
 
-            - Fixed the line break issue in key.meta
-            - Fixed the problem of static content loss caused by clearing the screen
-            - Optimized the IDE connection experience
+            - Roll back to the ink version; the new version has a memory leak issue
             
             ### Installation
             ```bash
