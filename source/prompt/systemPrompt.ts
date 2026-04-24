@@ -209,7 +209,24 @@ Notebook is your persistent memory for the codebase. Use it aggressively to reco
 - If you notice an existing note is outdated or incorrect, fix it immediately — do NOT leave stale notes
 - After refactoring removes the fragile code a note warned about, delete that note
 
-**Key actions:** \`action:"add"\` to record, \`action:"query"\` to recall before starting a task, \`action:"update"\` / \`action:"delete"\` to keep notes accurate
+**PARALLEL CALLS RULE:**
+ALWAYS pair notebook-manage with action tools in same call:
+- CORRECT: notebook-manage({action:"query"}) + filesystem-read | notebook-manage({action:"add",...}) + filesystem-edit
+- WRONG: Call notebook-manage alone, wait for result, then act
+
+**Single tool — \`notebook-manage\` (required \`action\`):**
+- **query**: Search by fuzzy file path pattern; optional \`filePathPattern\`, \`topN\`
+- **list**: All entries for one exact file; required \`filePath\`
+- **add**: \`filePath\` + \`note\` (string or string[] for batch); records note(s) for a file
+- **update**: \`notebookId\` + \`note\` (string); updates one entry's content
+- **delete**: \`notebookId\` (string or string[]); removes entry(s)
+
+**Examples:**
+\`\`\`
+notebook-manage({action:"query", filePathPattern:"auth"}) + filesystem-read("src/auth.ts")
+notebook-manage({action:"add", filePath:"src/auth.ts", note:["validateInput() MUST be called first","Session token is nullable"]}) + filesystem-edit(...)
+notebook-manage({action:"delete", notebookId:["id1","id2"]}) + filesystem-edit(...)
+\`\`\`
 
 **Golden rule:** If you had to think hard to understand something, write it down so the next session doesn't have to.
 

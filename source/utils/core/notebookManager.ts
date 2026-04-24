@@ -272,6 +272,89 @@ export function deleteNotebook(notebookId: string): boolean {
 }
 
 /**
+ * 批量添加备忘录（单次文件读写）
+ * @param filePath 文件路径
+ * @param notes 多条备忘说明
+ * @returns 添加的备忘录条目列表
+ */
+export function addNotebooks(
+	filePath: string,
+	notes: string[],
+): NotebookEntry[] {
+	const normalizedPath = normalizePath(filePath);
+	const data = readNotebookData();
+
+	if (!data[normalizedPath]) {
+		data[normalizedPath] = [];
+	}
+
+	const entries: NotebookEntry[] = [];
+	for (const note of notes) {
+		const now = new Date();
+		const localTimeStr = `${now.getFullYear()}-${String(
+			now.getMonth() + 1,
+		).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(
+			now.getHours(),
+		).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(
+			now.getSeconds(),
+		).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+
+		const entry: NotebookEntry = {
+			id: `notebook-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+			filePath: normalizedPath,
+			note,
+			createdAt: localTimeStr,
+			updatedAt: localTimeStr,
+		};
+		data[normalizedPath]!.unshift(entry);
+		entries.push(entry);
+	}
+
+	if (data[normalizedPath]!.length > MAX_ENTRIES_PER_FILE) {
+		data[normalizedPath] = data[normalizedPath]!.slice(
+			0,
+			MAX_ENTRIES_PER_FILE,
+		);
+	}
+
+	saveNotebookData(data);
+	return entries;
+}
+
+/**
+ * 批量删除备忘录（单次文件读写）
+ * @param notebookIds 备忘录ID列表
+ * @returns 每个ID是否删除成功的映射
+ */
+export function deleteNotebooks(
+	notebookIds: string[],
+): {deleted: string[]; notFound: string[]} {
+	const data = readNotebookData();
+	const idSet = new Set(notebookIds);
+	const deleted: string[] = [];
+
+	for (const [, entries] of Object.entries(data)) {
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (idSet.has(entries[i]!.id)) {
+				deleted.push(entries[i]!.id);
+				entries.splice(i, 1);
+				idSet.delete(entries[i]?.id ?? '');
+			}
+		}
+		if (idSet.size === 0) break;
+	}
+
+	if (deleted.length > 0) {
+		saveNotebookData(data);
+	}
+
+	return {
+		deleted,
+		notFound: notebookIds.filter(id => !deleted.includes(id)),
+	};
+}
+
+/**
  * 清空指定文件的所有备忘录
  * @param filePath 文件路径
  */

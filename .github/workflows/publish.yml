@@ -56,10 +56,9 @@ jobs:
 
             ### What's New
 
-            - Fixed DIffViewer display issue under non-YOLO mode
-            - Added `/branch` command to deep copy the current session and create a branch
-            - Chat request compatible with Deepseek's pause and parameter settings
-            - Fixed the issue of failed result reading in command injection mode
+            - Fix flashback caused by LSP communication anomaly
+            - Tweak the optimization context of the notebook tool
+            - Loop command add more time combination parameter compatibility
             
             ### Installation
             ```bash
