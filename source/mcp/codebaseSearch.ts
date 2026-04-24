@@ -119,9 +119,9 @@ class CodebaseSearchService {
 		const MAX_SEARCH_RETRIES = 3;
 		const MIN_RESULTS_THRESHOLD = Math.ceil(topN * 0.5); // 50% of topN
 
+		const projectRoot = process.cwd();
+		const db = new CodebaseDatabase(projectRoot);
 		try {
-			const projectRoot = process.cwd();
-			const db = new CodebaseDatabase(projectRoot);
 			await db.initialize();
 
 			const totalChunks = db.getTotalChunks();
@@ -448,7 +448,6 @@ class CodebaseSearchService {
 				suggestion: lastResults?.suggestion,
 			});
 
-			db.close();
 			return lastResults;
 		} catch (error) {
 			logger.error('Codebase search failed:', error);
@@ -468,6 +467,8 @@ class CodebaseSearchService {
 			}
 
 			throw error;
+		} finally {
+			try { db.close(); } catch { /* ignore close errors */ }
 		}
 	}
 }

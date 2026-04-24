@@ -775,6 +775,19 @@ const cleanupAsync = async () => {
 		new Promise(resolve => setTimeout(resolve, 500)), // 500ms timeout for saving usage data
 	]);
 
+	// Cleanup global singleton resources (close browser, free encoders, etc.)
+	try {
+		const {cleanupGlobalResources} = await import(
+			'./utils/core/globalCleanup.js'
+		);
+		await Promise.race([
+			cleanupGlobalResources(),
+			new Promise(resolve => setTimeout(resolve, 2000)),
+		]);
+	} catch {
+		// Ignore cleanup errors during exit
+	}
+
 	const deps = (global as any).__deps;
 	if (deps) {
 		// Close MCP connections first (graceful shutdown with timeout)

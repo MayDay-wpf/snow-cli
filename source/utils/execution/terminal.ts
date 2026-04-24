@@ -16,7 +16,15 @@ export function resetTerminal(stream?: WritableStreamLike): void {
 	target.write('\x1B[3J\x1B[2J\x1B[H');
 
 	// Re-enable focus reporting immediately after terminal reset
-	// The RIS command (\x1bc) disables focus reporting, so we must re-enable it
-	// This ensures focus state tracking continues to work after /clear command
 	target.write('\x1b[?1004h');
+
+	// Clear Ink's internal fullStaticOutput buffer to reclaim memory.
+	// Uses dynamic import so tsc doesn't need to resolve the vendor path.
+	(import('ink') as Promise<any>)
+		.then((mod: any) => {
+			if (typeof mod.clearInkStaticOutput === 'function') {
+				mod.clearInkStaticOutput(target);
+			}
+		})
+		.catch(() => {});
 }

@@ -465,10 +465,11 @@ export class TerminalCommandService {
 				if (typeof timeout === 'number' && timeout > 0) {
 					timeoutTimer = setTimeout(triggerTimeout, timeout);
 				}
-				if (abortSignal) {
-					abortSignal.addEventListener('abort', () => {
-						safeClearTimeout();
-					});
+				const abortTimeoutHandler = abortSignal ? () => {
+					safeClearTimeout();
+				} : null;
+				if (abortSignal && abortTimeoutHandler) {
+					abortSignal.addEventListener('abort', abortTimeoutHandler);
 				}
 				let stdoutData = '';
 				let stderrData = '';
@@ -658,9 +659,12 @@ export class TerminalCommandService {
 							.catch(() => {});
 					}
 
-					// Clean up abort handler
+					// Clean up abort handlers
 					if (abortHandler && abortSignal) {
 						abortSignal.removeEventListener('abort', abortHandler);
+					}
+					if (abortTimeoutHandler && abortSignal) {
+						abortSignal.removeEventListener('abort', abortTimeoutHandler);
 					}
 
 					if (signal) {

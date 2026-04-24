@@ -582,6 +582,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
 
+						// Clean up global singleton resources to reclaim memory
+						import('../../utils/core/globalCleanup.js')
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.catch(() => {});
+
 						// Add command message
 						const commandMessage: Message = {
 							role: 'command',
@@ -607,6 +612,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// CRITICAL: Also reset the ref immediately to prevent auto-compress trigger
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
+
+						// Clean up global singleton resources to reclaim memory
+						import('../../utils/core/globalCleanup.js')
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.catch(() => {});
 
 						const commandMessage: Message = {
 							role: 'command',

@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild';
 import {copyFileSync, existsSync, mkdirSync} from 'fs';
 import {builtinModules} from 'module';
+import {resolve} from 'path';
 
 // Plugin to stub out optional dependencies
 const stubPlugin = {
@@ -162,6 +163,9 @@ if (typeof globalThis.Path2D === 'undefined') {
 		// Note: @microsoft/signalr dependencies (abort-controller, eventsource, fetch-cookie, node-fetch, tough-cookie) are NOT bundled
 		// They are dynamically required at runtime and must be in package.json dependencies
 	],
+	alias: {
+		'ink': resolve('source/vendor/ink/src/index.ts'),
+	},
 	plugins: [stubPlugin],
 	minify: false,
 	sourcemap: false,

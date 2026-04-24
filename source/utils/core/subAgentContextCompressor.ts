@@ -66,7 +66,7 @@ You are creating a technical handover document for a tool-using AI agent. Extrac
 
 **EXECUTE NOW — Output the handover document immediately.**`;
 
-// ── Singleton tiktoken encoder (lazy-initialized) ──
+// ── Singleton tiktoken encoder (lazy-initialized, with cleanup support) ──
 let _encoder: any = null;
 
 function getEncoder() {
@@ -78,6 +78,21 @@ function getEncoder() {
 		}
 	}
 	return _encoder;
+}
+
+/**
+ * Free the module-level tiktoken encoder to reclaim WASM memory.
+ * Called during /clear or session teardown.
+ */
+export function freeSubAgentEncoder(): void {
+	if (_encoder) {
+		try {
+			_encoder.free();
+		} catch {
+			// already freed or unavailable
+		}
+		_encoder = null;
+	}
 }
 
 export interface SubAgentCompressionResult {
