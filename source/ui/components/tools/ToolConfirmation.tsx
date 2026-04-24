@@ -273,20 +273,85 @@ export default function ToolConfirmation({
 			return;
 		}
 
+		const computeHashlinePreview = (
+			originalContent: string,
+			operations: any[],
+		): string => {
+			if (!Array.isArray(operations) || operations.length === 0) {
+				return originalContent;
+			}
+			const mutableLines = originalContent.split('\n');
+			const parsed = operations
+				.map((op: any) => {
+					const startMatch = String(op.startAnchor ?? '').match(/^(\d+):/);
+					const endMatch = String(op.endAnchor ?? '').match(/^(\d+):/);
+					return {
+						type: op.type as string,
+						content: (op.content ?? '') as string,
+						startLine: startMatch ? parseInt(startMatch[1]!, 10) : 0,
+						endLine: endMatch ? parseInt(endMatch[1]!, 10) : 0,
+					};
+				})
+				.filter(op => op.startLine > 0 && op.endLine > 0)
+				.sort((a, b) => b.startLine - a.startLine);
+
+			for (const op of parsed) {
+				const newLines = op.content.split('\n');
+				switch (op.type) {
+					case 'replace':
+						mutableLines.splice(
+							op.startLine - 1,
+							op.endLine - op.startLine + 1,
+							...newLines,
+						);
+						break;
+					case 'insert_after':
+						mutableLines.splice(op.startLine, 0, ...newLines);
+						break;
+					case 'delete':
+						mutableLines.splice(
+							op.startLine - 1,
+							op.endLine - op.startLine + 1,
+						);
+						break;
+				}
+			}
+			return mutableLines.join('\n');
+		};
+
+		const computeReplaceEditPreview = (
+			originalContent: string,
+			searchContent: string,
+			replaceContent: string,
+		): string => {
+			const idx = originalContent.indexOf(searchContent);
+			if (idx !== -1) {
+				return (
+					originalContent.substring(0, idx) +
+					replaceContent +
+					originalContent.substring(idx + searchContent.length)
+				);
+			}
+			return originalContent;
+		};
+
 		// Helper function to show diff for a single tool
 		const showDiffForTool = (name: string, args: string): Promise<void>[] => {
 			const promises: Promise<void>[] = [];
 			try {
 				const parsed = JSON.parse(args);
 
-				// Handle filesystem-edit (hashline-anchored editing)
 				if (name === 'filesystem-edit' && parsed.filePath) {
 					const filePath = typeof parsed.filePath === 'string' ? parsed.filePath : null;
 					if (filePath && fs.existsSync(filePath)) {
 						const originalContent = fs.readFileSync(filePath, 'utf-8');
+						const newContent = computeHashlinePreview(
+							originalContent,
+							parsed.operations,
+						);
 						promises.push(
 							vscodeConnection
-								.showDiff(filePath, originalContent, originalContent, 'Hashline Edit')
+								.showDiff(filePath, originalContent, newContent, 'Hashline Edit')
 								.catch(() => {}),
 						);
 					}
@@ -296,9 +361,17 @@ export default function ToolConfirmation({
 					const filePath = typeof parsed.filePath === 'string' ? parsed.filePath : null;
 					if (filePath && fs.existsSync(filePath)) {
 						const originalContent = fs.readFileSync(filePath, 'utf-8');
+						const newContent =
+							parsed.searchContent && parsed.replaceContent !== undefined
+								? computeReplaceEditPreview(
+										originalContent,
+										parsed.searchContent,
+										parsed.replaceContent,
+									)
+								: originalContent;
 						promises.push(
 							vscodeConnection
-								.showDiff(filePath, originalContent, originalContent, 'Replace Edit')
+								.showDiff(filePath, originalContent, newContent, 'Replace Edit')
 								.catch(() => {}),
 						);
 					}

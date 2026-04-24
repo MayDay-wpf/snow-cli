@@ -61,8 +61,7 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	}, [pageCount]);
 
 	useInput((_input, key) => {
-		// 仅 Tab：下一页；到最后自动从头开始循环。
-		if (!key.tab || pageCount <= 1) return;
+		if (!key.tab || key.shift || pageCount <= 1) return;
 
 		setPageIndex(p => (p + 1) % pageCount);
 	});
