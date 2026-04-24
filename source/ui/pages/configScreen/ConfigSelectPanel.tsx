@@ -29,6 +29,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		setResponsesVerbosity,
 		anthropicSpeed,
 		setAnthropicSpeed,
+		chatReasoningEffort,
+		setChatReasoningEffort,
 		getCustomHeadersSchemeSelectItems,
 		getCustomHeadersSchemeSelectedValue,
 		applyCustomHeadersSchemeSelectValue,
@@ -56,6 +58,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.responsesVerbosity.replace(':', '');
 			case 'anthropicSpeed':
 				return t.configScreen.anthropicSpeed.replace(':', '');
+			case 'chatReasoningEffort':
+				return t.configScreen.chatReasoningEffort.replace(':', '');
 			case 'systemPromptId':
 				return t.configScreen.systemPrompt;
 			case 'customHeadersSchemeId':
@@ -197,6 +201,29 @@ export default function ConfigSelectPanel({state}: Props) {
 						isFocused={true}
 						onSelect={item => {
 							setResponsesVerbosity(item.value as 'low' | 'medium' | 'high');
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'chatReasoningEffort' && (
+					<ScrollableSelectInput
+						items={[
+							{label: 'LOW', value: 'low'},
+							{label: 'MEDIUM', value: 'medium'},
+							{label: 'HIGH', value: 'high'},
+							{label: 'MAX', value: 'max'},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['low', 'medium', 'high', 'max'] as const).indexOf(
+								chatReasoningEffort,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setChatReasoningEffort(
+								item.value as 'low' | 'medium' | 'high' | 'max',
+							);
 							setIsEditing(false);
 						}}
 					/>

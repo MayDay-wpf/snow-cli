@@ -99,6 +99,10 @@ export function useConfigState() {
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
 		'fast' | 'standard' | undefined
 	>(undefined);
+	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
+	const [chatReasoningEffort, setChatReasoningEffort] = useState<
+		'low' | 'medium' | 'high' | 'max'
+	>('high');
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
@@ -172,14 +176,21 @@ export function useConfigState() {
 						'geminiThinkingEnabled' as ConfigField,
 						'geminiThinkingLevel' as ConfigField,
 				  ]
-				: requestMethod === 'responses'
-				? [
-						'responsesReasoningEnabled' as ConfigField,
-						'responsesReasoningEffort' as ConfigField,
-						'responsesVerbosity' as ConfigField,
-						'responsesFastMode' as ConfigField,
-				  ]
-				: []),
+			: requestMethod === 'responses'
+			? [
+					'responsesReasoningEnabled' as ConfigField,
+					'responsesReasoningEffort' as ConfigField,
+					'responsesVerbosity' as ConfigField,
+					'responsesFastMode' as ConfigField,
+			  ]
+			: requestMethod === 'chat'
+			? [
+					'chatThinkingEnabled' as ConfigField,
+					...(chatThinkingEnabled
+						? ['chatReasoningEffort' as ConfigField]
+						: []),
+			  ]
+			: []),
 			'advancedModel',
 			'basicModel',
 			'maxContextTokens',
@@ -256,6 +267,13 @@ export function useConfigState() {
 		) {
 			setCurrentField('advancedModel');
 		}
+		if (
+			requestMethod !== 'chat' &&
+			(currentField === 'chatThinkingEnabled' ||
+				currentField === 'chatReasoningEffort')
+		) {
+			setCurrentField('advancedModel');
+		}
 	}, [requestMethod, currentField]);
 
 	useEffect(() => {
@@ -311,6 +329,8 @@ export function useConfigState() {
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
 		setResponsesFastMode(config.responsesFastMode || false);
 		setAnthropicSpeed(config.anthropicSpeed);
+		setChatThinkingEnabled(config.chatThinking?.enabled || false);
+		setChatReasoningEffort(config.chatThinking?.reasoning_effort || 'high');
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
@@ -400,6 +420,7 @@ export function useConfigState() {
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
 		if (currentField === 'anthropicSpeed') return anthropicSpeed || '';
+	if (currentField === 'chatReasoningEffort') return chatReasoningEffort;
 		return '';
 	};
 
@@ -563,6 +584,9 @@ export function useConfigState() {
 							: {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
 					anthropicSpeed,
+					chatThinking: chatThinkingEnabled
+						? {enabled: true, reasoning_effort: chatReasoningEffort}
+						: undefined,
 					advancedModel,
 					basicModel,
 					maxContextTokens,
@@ -726,6 +750,10 @@ export function useConfigState() {
 			config.responsesVerbosity = responsesVerbosity;
 			config.anthropicSpeed = anthropicSpeed;
 
+			(config as any).chatThinking = chatThinkingEnabled
+				? {enabled: true, reasoning_effort: chatReasoningEffort}
+				: undefined;
+
 			await updateOpenAiConfig(config);
 
 			try {
@@ -757,16 +785,19 @@ export function useConfigState() {
 							enabled: responsesReasoningEnabled,
 							effort: responsesReasoningEffort,
 						},
-						responsesVerbosity,
-						responsesFastMode,
-						anthropicSpeed,
-						advancedModel,
-						basicModel,
-						maxContextTokens,
-						maxTokens,
-					streamIdleTimeoutSec,
-					toolResultTokenLimit,
-				},
+					responsesVerbosity,
+					responsesFastMode,
+					anthropicSpeed,
+					chatThinking: chatThinkingEnabled
+						? {enabled: true, reasoning_effort: chatReasoningEffort}
+						: undefined,
+					advancedModel,
+					basicModel,
+					maxContextTokens,
+					maxTokens,
+				streamIdleTimeoutSec,
+				toolResultTokenLimit,
+			},
 				};
 				saveProfile(activeProfile, fullConfig as any);
 			} catch (err) {
@@ -848,6 +879,10 @@ export function useConfigState() {
 		setResponsesFastMode,
 		anthropicSpeed,
 		setAnthropicSpeed,
+		chatThinkingEnabled,
+		setChatThinkingEnabled,
+		chatReasoningEffort,
+		setChatReasoningEffort,
 		// Model settings
 		advancedModel,
 		setAdvancedModel,

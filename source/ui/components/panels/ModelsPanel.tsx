@@ -103,6 +103,11 @@ export const ModelsPanel: React.FC<Props> = ({
 		'fast' | 'standard' | undefined
 	>(undefined);
 	const [isSpeedSelecting, setIsSpeedSelecting] = useState(false);
+	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
+	const [chatReasoningEffort, setChatReasoningEffort] = useState<
+		'low' | 'medium' | 'high' | 'max'
+	>('high');
+	const [isChatEffortSelecting, setIsChatEffortSelecting] = useState(false);
 
 	useEffect(() => {
 		if (!visible) {
@@ -154,6 +159,11 @@ export const ModelsPanel: React.FC<Props> = ({
 		setResponsesFastMode((cfg as any).responsesFastMode || false);
 		setResponsesVerbosity((cfg as any).responsesVerbosity || 'medium');
 		setAnthropicSpeed((cfg as any).anthropicSpeed);
+		setChatThinkingEnabled((cfg as any).chatThinking?.enabled || false);
+		setChatReasoningEffort(
+			(cfg as any).chatThinking?.reasoning_effort || 'high',
+		);
+		setIsChatEffortSelecting(false);
 	}, [visible, advancedModel, basicModel]);
 
 	// Auto-hide error message after 3 seconds
@@ -292,12 +302,16 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (requestMethod === 'responses') {
 			return responsesReasoningEnabled;
 		}
+		if (requestMethod === 'chat') {
+			return chatThinkingEnabled;
+		}
 		return false;
 	}, [
 		requestMethod,
 		thinkingEnabled,
 		geminiThinkingEnabled,
 		responsesReasoningEnabled,
+		chatThinkingEnabled,
 	]);
 
 	const thinkingStrengthValue = useMemo(() => {
@@ -312,6 +326,9 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (requestMethod === 'responses') {
 			return responsesReasoningEffort;
 		}
+		if (requestMethod === 'chat') {
+			return chatReasoningEffort.toUpperCase();
+		}
 		return t.modelsPanel.notSupported;
 	}, [
 		requestMethod,
@@ -320,6 +337,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		thinkingEffort,
 		geminiThinkingLevel,
 		responsesReasoningEffort,
+		chatReasoningEffort,
 		t,
 	]);
 
@@ -382,6 +400,10 @@ export const ModelsPanel: React.FC<Props> = ({
 							effort: responsesReasoningEffort,
 						},
 					} as any);
+					return;
+				}
+				if (requestMethod === 'chat') {
+					void applyChatThinkingEnabled(next);
 					return;
 				}
 
@@ -525,6 +547,50 @@ export const ModelsPanel: React.FC<Props> = ({
 		[],
 	);
 
+	const applyChatThinkingEnabled = useCallback(
+		async (next: boolean) => {
+			setErrorMessage('');
+			try {
+				if (!next && showThinking) {
+					setShowThinking(false);
+					await updateOpenAiConfig({showThinking: false});
+					configEvents.emitConfigChange({type: 'showThinking', value: false});
+				}
+				setChatThinkingEnabled(next);
+				await updateOpenAiConfig({
+					chatThinking: next
+						? {enabled: true, reasoning_effort: chatReasoningEffort}
+						: undefined,
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[showThinking, chatReasoningEffort],
+	);
+
+	const applyChatReasoningEffort = useCallback(
+		async (effort: 'low' | 'medium' | 'high' | 'max') => {
+			setErrorMessage('');
+			try {
+				setChatReasoningEffort(effort);
+				await updateOpenAiConfig({
+					chatThinking: {
+						enabled: chatThinkingEnabled,
+						reasoning_effort: effort,
+					},
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[chatThinkingEnabled],
+	);
+
 	const applyAnthropicSpeed = useCallback(
 		async (next: 'fast' | 'standard' | undefined) => {
 			setErrorMessage('');
@@ -565,6 +631,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (requestMethod === 'anthropic') return 4;
 		if (requestMethod === 'responses') return 4;
 		if (requestMethod === 'gemini') return 2;
+		if (requestMethod === 'chat') return 2;
 		return 1;
 	}, [requestMethod]);
 
@@ -612,6 +679,10 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (isSpeedSelecting) {
 					setIsSpeedSelecting(false);
+					return;
+				}
+				if (isChatEffortSelecting) {
+					setIsChatEffortSelecting(false);
 					return;
 				}
 				if (manualInputModeRef.current || manualInputMode) {
@@ -695,7 +766,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 
 			// In list selection modes, avoid switching tabs or triggering other actions.
-			if (isThinkingModeSelecting || isGeminiLevelSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting) {
+			if (isThinkingModeSelecting || isGeminiLevelSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting || isChatEffortSelecting) {
 				return;
 			}
 
@@ -736,6 +807,8 @@ export const ModelsPanel: React.FC<Props> = ({
 							setIsGeminiLevelSelecting(true);
 						} else if (requestMethod === 'responses') {
 							setIsThinkingEffortSelecting(true);
+						} else if (requestMethod === 'chat') {
+							setIsChatEffortSelecting(true);
 						}
 					} else if (thinkingFocusIndex === 3) {
 						if (requestMethod === 'anthropic') {
@@ -885,7 +958,8 @@ export const ModelsPanel: React.FC<Props> = ({
 					</Box>
 					{(requestMethod === 'anthropic' ||
 						requestMethod === 'gemini' ||
-						requestMethod === 'responses') && (
+						requestMethod === 'responses' ||
+						requestMethod === 'chat') && (
 						<Box>
 							<Text
 								color={
@@ -925,7 +999,8 @@ export const ModelsPanel: React.FC<Props> = ({
 					)}
 					{(requestMethod === 'anthropic' ||
 						requestMethod === 'gemini' ||
-						requestMethod === 'responses') && (
+						requestMethod === 'responses' ||
+						requestMethod === 'chat') && (
 						<Box>
 							<Text
 								color={
@@ -1174,12 +1249,41 @@ export const ModelsPanel: React.FC<Props> = ({
 						</Box>
 					)}
 
+					{isChatEffortSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+									{label: 'MAX', value: 'max'},
+								]}
+								limit={6}
+								disableNumberShortcuts={true}
+								initialIndex={Math.max(
+									0,
+									(['low', 'medium', 'high', 'max'] as const).indexOf(
+										chatReasoningEffort,
+									),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									void applyChatReasoningEffort(
+										item.value as 'low' | 'medium' | 'high' | 'max',
+									);
+									setIsChatEffortSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
 					{!thinkingInputMode &&
 						!isThinkingModeSelecting &&
 						!isGeminiLevelSelecting &&
 						!isThinkingEffortSelecting &&
 						!isVerbositySelecting &&
-						!isSpeedSelecting && (
+						!isSpeedSelecting &&
+						!isChatEffortSelecting && (
 							<Box marginTop={1}>
 								<Text dimColor color={theme.colors.menuSecondary}>
 									{t.modelsPanel.navigationHint}

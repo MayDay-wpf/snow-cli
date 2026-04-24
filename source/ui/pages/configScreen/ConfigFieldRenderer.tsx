@@ -53,6 +53,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		responsesVerbosity,
 		setResponsesVerbosity,
 		responsesFastMode,
+		chatThinkingEnabled,
+		chatReasoningEffort,
 		supportsXHigh,
 		// Model settings
 		advancedModel,
@@ -678,6 +680,41 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 							{t.configScreen.toggleHint}
 						</Text>
 					</Box>
+				</Box>
+			);
+
+		case 'chatThinkingEnabled':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.chatThinkingEnabled}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{chatThinkingEnabled
+								? t.configScreen.enabled
+								: t.configScreen.disabled}{' '}
+							{t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'chatReasoningEffort':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.chatReasoningEffort}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{chatReasoningEffort.toUpperCase()}
+							</Text>
+						</Box>
+					)}
 				</Box>
 			);
 

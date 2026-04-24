@@ -221,6 +221,8 @@ export const en: TranslationKeys = {
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
 		responsesVerbosity: 'Responses Verbosity:',
 		responsesFastMode: 'Responses Fast Mode (priority):',
+		chatThinkingEnabled: 'Chat Thinking (DeepSeek):',
+		chatReasoningEffort: 'Chat Reasoning Effort:',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',

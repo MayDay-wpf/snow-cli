@@ -376,6 +376,10 @@ export function useConfigInput(
 			if (!next) setShowThinking(false);
 		} else if (currentField === 'responsesFastMode') {
 			setResponsesFastMode(!responsesFastMode);
+		} else if (currentField === 'chatThinkingEnabled') {
+			const next = !state.chatThinkingEnabled;
+			state.setChatThinkingEnabled(next);
+			if (!next) setShowThinking(false);
 		} else if (
 			currentField === 'anthropicCacheTTL' ||
 			currentField === 'anthropicSpeed' ||
@@ -383,7 +387,8 @@ export function useConfigInput(
 			currentField === 'thinkingEffort' ||
 			currentField === 'geminiThinkingLevel' ||
 			currentField === 'responsesReasoningEffort' ||
-			currentField === 'responsesVerbosity'
+			currentField === 'responsesVerbosity' ||
+			currentField === 'chatReasoningEffort'
 		) {
 			setIsEditing(true);
 		} else if (

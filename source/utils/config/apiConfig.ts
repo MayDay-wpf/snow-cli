@@ -27,6 +27,13 @@ export interface ResponsesReasoningConfig {
 	effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 }
 
+export type ChatReasoningEffort = 'low' | 'medium' | 'high' | 'max';
+
+export interface ChatThinkingConfig {
+	enabled: boolean;
+	reasoning_effort?: ChatReasoningEffort;
+}
+
 export interface ApiConfig {
 	baseUrl: string;
 	apiKey: string;
@@ -43,6 +50,7 @@ export interface ApiConfig {
 	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
 	responsesVerbosity?: 'low' | 'medium' | 'high'; // Responses API text verbosity (default: medium)
 	anthropicSpeed?: 'fast' | 'standard'; // Anthropic speed parameter (optional, not sent when undefined)
+	chatThinking?: ChatThinkingConfig; // Chat API (DeepSeek) thinking configuration
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	autoCompressThreshold?: number; // Auto compress threshold percentage (default: 80, range: 50-95)

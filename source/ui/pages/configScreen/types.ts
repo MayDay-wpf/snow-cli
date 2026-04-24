@@ -23,6 +23,8 @@ export type ConfigField =
 	| 'responsesReasoningEffort'
 	| 'responsesVerbosity'
 	| 'responsesFastMode'
+	| 'chatThinkingEnabled'
+	| 'chatReasoningEffort'
 	| 'advancedModel'
 	| 'basicModel'
 	| 'maxContextTokens'
@@ -96,6 +98,7 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'responsesReasoningEffort',
 	'responsesVerbosity',
 	'anthropicSpeed',
+	'chatReasoningEffort',
 ];
 
 export const isSelectField = (field: ConfigField) =>
@@ -119,6 +122,7 @@ export const TOGGLE_FIELDS: ConfigField[] = [
 	'geminiThinkingEnabled',
 	'responsesReasoningEnabled',
 	'responsesFastMode',
+	'chatThinkingEnabled',
 ];
 
 export type RequestMethodOption = {

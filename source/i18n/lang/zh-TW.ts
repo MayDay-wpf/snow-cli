@@ -203,6 +203,8 @@ export const zhTW: TranslationKeys = {
 		responsesReasoningEffort: 'Responses 推理強度:',
 		responsesVerbosity: 'Responses 輸出詳細度:',
 		responsesFastMode: 'Responses Fast (priority):',
+		chatThinkingEnabled: '啟用 Chat 思考 (DeepSeek):',
+		chatReasoningEffort: 'Chat 思考強度:',
 		advancedModel: '進階模型(輸入後可以搜尋):',
 		basicModel: '基礎模型(輸入後可以搜尋):',
 		maxContextTokens: '最大上下文令牌:',

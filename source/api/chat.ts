@@ -496,7 +496,7 @@ export async function* createStreamingChatCompletion(
 	// 使用重试包装生成器
 	yield* withRetryGenerator(
 		async function* () {
-			const requestBody = {
+			const requestBody: Record<string, any> = {
 				model: options.model || config.advancedModel,
 			messages: convertToOpenAIMessages(
 				options.messages,
@@ -514,6 +514,13 @@ export async function* createStreamingChatCompletion(
 				tools: options.tools,
 				tool_choice: options.tool_choice,
 			};
+
+			if (config.chatThinking?.enabled && !options.disableThinking) {
+				requestBody['thinking'] = {type: 'enabled'};
+				if (config.chatThinking.reasoning_effort) {
+					requestBody['reasoning_effort'] = config.chatThinking.reasoning_effort;
+				}
+			}
 
 			const url = `${config.baseUrl}/chat/completions`;
 
@@ -543,7 +550,7 @@ export async function* createStreamingChatCompletion(
 				throw new Error(
 					`OpenAI API fetch failed: ${errorMessage}\n` +
 						`URL: ${url}\n` +
-						`Model: ${requestBody.model}\n` +
+						`Model: ${requestBody['model']}\n` +
 						`Error type: ${
 							error instanceof TypeError
 								? 'Network/Connection Error'

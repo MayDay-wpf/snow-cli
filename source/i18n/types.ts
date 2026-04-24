@@ -201,6 +201,8 @@ export type TranslationKeys = {
 		responsesReasoningEffort: string;
 		responsesVerbosity: string;
 		responsesFastMode: string;
+		chatThinkingEnabled: string;
+		chatReasoningEffort: string;
 		advancedModel: string;
 		basicModel: string;
 		maxContextTokens: string;

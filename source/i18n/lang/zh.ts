@@ -202,6 +202,8 @@ export const zh: TranslationKeys = {
 		responsesReasoningEffort: 'Responses 推理强度:',
 		responsesVerbosity: 'Responses 输出详细度:',
 		responsesFastMode: 'Responses Fast (priority):',
+		chatThinkingEnabled: '启用 Chat 思考 (DeepSeek):',
+		chatReasoningEffort: 'Chat 思考强度:',
 		advancedModel: '高级模型(键入可搜索):',
 		basicModel: '基础模型(键入可搜索):',
 		maxContextTokens: '最大上下文令牌:',
