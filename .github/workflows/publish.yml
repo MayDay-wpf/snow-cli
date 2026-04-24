@@ -56,7 +56,10 @@ jobs:
 
             ### What's New
 
-            - Roll back to the ink version; the new version has a memory leak issue
+            - Fixed DIffViewer display issue under non-YOLO mode
+            - Added `/branch` command to deep copy the current session and create a branch
+            - Chat request compatible with Deepseek's pause and parameter settings
+            - Fixed the issue of failed result reading in command injection mode
             
             ### Installation
             ```bash
