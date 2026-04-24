@@ -104,6 +104,41 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 	return (originalEmitWarning as any).apply(process, [warning, ...args]);
 };
 
+// Global safety net: suppress known non-fatal stream errors (e.g. from LSP
+// processes exiting while vscode-jsonrpc still has queued writes) so they
+// don't crash the main CLI process.
+function isStreamDestroyedError(err: unknown): boolean {
+	if (!(err instanceof Error)) return false;
+	const code = (err as NodeJS.ErrnoException).code;
+	if (code === 'ERR_STREAM_DESTROYED' || code === 'EPIPE') return true;
+	const msg = err.message || '';
+	return (
+		msg.includes('stream was destroyed') ||
+		msg.includes('ERR_STREAM_DESTROYED') ||
+		msg.includes('write after end') ||
+		msg.includes('Cannot call write after a stream was destroyed')
+	);
+}
+
+process.on('uncaughtException', (err: Error) => {
+	if (isStreamDestroyedError(err)) {
+		// Silently ignore — these are expected when an LSP child process
+		// exits while vscode-jsonrpc still has pending writes.
+		return;
+	}
+	// For all other errors, preserve the default crash behaviour.
+	console.error('Uncaught Exception:', err);
+	process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+	if (isStreamDestroyedError(reason)) {
+		return;
+	}
+	// Log but don't exit — unhandled rejections are not necessarily fatal.
+	console.error('Unhandled Rejection:', reason);
+});
+
 // Check if this is a quick command that doesn't need loading indicator
 const args = process.argv.slice(2);
 const isQuickCommand = args.some(

@@ -120,6 +120,9 @@ export class HybridCodeSearchService {
 			position.column,
 		);
 
+		// Prevent unhandled rejection if the LSP operation fails after timeout
+		lspPromise.catch(() => {});
+
 		const location = await Promise.race([lspPromise, timeoutPromise]);
 
 		if (!location) {
@@ -160,6 +163,13 @@ export class HybridCodeSearchService {
 			);
 
 			const lspPromise = this.lspManager.getDocumentSymbols(filePath);
+
+			// Attach a no-op rejection handler so that if the timeout wins the
+			// race and the LSP operation later fails (e.g. ERR_STREAM_DESTROYED
+			// because the server process exited), the rejection does not become
+			// an unhandled promise rejection.
+			lspPromise.catch(() => {});
+
 			const symbols = await Promise.race([lspPromise, timeoutPromise]);
 
 			if (symbols && symbols.length > 0) {

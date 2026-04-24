@@ -58,8 +58,23 @@ export class LSPClient {
 	}
 
 	private markTransportClosed(): void {
+		if (!this.isProcessAlive && !this.isInitialized) {
+			return;
+		}
+
 		this.isInitialized = false;
 		this.isProcessAlive = false;
+
+		// Immediately dispose the connection to prevent vscode-jsonrpc from
+		// attempting further writes (e.g. responses to server-initiated requests)
+		// on the now-destroyed stdin stream.
+		if (this.connection) {
+			try {
+				this.connection.dispose();
+			} catch {
+				// Connection may already be disposed
+			}
+		}
 	}
 
 	constructor(private config: LSPClientConfig) {}
