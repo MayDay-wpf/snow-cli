@@ -99,6 +99,25 @@ function millisecondsToLabel(intervalMs: number): string {
 	return `${intervalMs / 1000}s`;
 }
 
+/**
+ * Parse a combined duration string (e.g. "8h30m", "1h15m30s", "1d12h") into total milliseconds.
+ * Each unit segment is forwarded to unitToMilliseconds for validation and conversion.
+ */
+function parseDurationString(durationStr: string): number {
+	const pattern = /(\d+)\s*([a-zA-Z]+)/g;
+	let match: RegExpExecArray | null;
+	let totalMs = 0;
+	while ((match = pattern.exec(durationStr)) !== null) {
+		const value = Number.parseInt(match[1]!, 10);
+		const unit = match[2]!;
+		totalMs += unitToMilliseconds(value, unit);
+	}
+	if (totalMs <= 0) {
+		throw new Error('Invalid duration string.');
+	}
+	return totalMs;
+}
+
 function formatTimestamp(timestamp: number): string {
 	return new Date(timestamp).toLocaleString();
 }
@@ -107,22 +126,19 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 	const args = rawArgs?.trim() || '';
 	if (!args) {
 		throw new Error(
-			'Usage: /loop 5m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+			'Usage: /loop 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
 		);
 	}
 
-	if (/^\d+\s*[a-zA-Z]+$/.test(args)) {
+	if (/^(?:\d+\s*[a-zA-Z]+\s*)+\s*$/.test(args)) {
 		throw new Error('Loop prompt is required after the interval.');
 	}
 
-	const prefixMatch = args.match(/^(\d+)\s*([a-zA-Z]+)\s+([\s\S]+)$/);
-	if (prefixMatch?.[1] && prefixMatch[2] && prefixMatch[3]) {
-		const intervalMs = unitToMilliseconds(
-			Number.parseInt(prefixMatch[1], 10),
-			prefixMatch[2],
-		);
+	const prefixMatch = args.match(/^((?:\d+\s*[a-zA-Z]+\s*)+?)\s+([\s\S]+)$/);
+	if (prefixMatch?.[1] && prefixMatch[2]) {
+		const intervalMs = parseDurationString(prefixMatch[1]);
 		return {
-			prompt: prefixMatch[3].trim(),
+			prompt: prefixMatch[2].trim(),
 			intervalMs,
 			intervalLabel: millisecondsToLabel(intervalMs),
 		};

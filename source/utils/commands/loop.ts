@@ -9,7 +9,7 @@ import {
 } from '../task/loopManager.js';
 
 const LOOP_USAGE =
-	'Usage: /loop 5m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks';
+	'Usage: /loop 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks';
 
 registerCommand('loop', {
 	execute: async (args?: string): Promise<CommandResult> => {
