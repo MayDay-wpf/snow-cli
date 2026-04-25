@@ -14,6 +14,8 @@ import * as dom from './dom.js';
 import logUpdate, {type LogUpdate} from './log-update.js';
 import instances from './instances.js';
 import App from './components/App.js';
+import {type CursorRegistration} from './components/CursorContext.js';
+import {type DOMElement} from './dom.js';
 
 const noop = () => {};
 
@@ -53,6 +55,7 @@ export default class Ink {
 	private exitPromise?: Promise<void>;
 	private restoreConsole?: () => void;
 	private readonly unsubscribeResize?: () => void;
+	private cursorRegistration?: CursorRegistration;
 
 	constructor(options: Options) {
 		autoBind(this);
@@ -136,6 +139,22 @@ export default class Ink {
 	rejectExitPromise: (reason?: Error) => void = () => {};
 	unsubscribeExit: () => void = () => {};
 
+	registerCursor = (registration: CursorRegistration | undefined): void => {
+		this.cursorRegistration = registration;
+	};
+
+	private getAbsolutePosition(node: DOMElement): {x: number; y: number} {
+		let x = 0;
+		let y = 0;
+		let current: DOMElement | undefined = node;
+		while (current?.yogaNode) {
+			x += current.yogaNode.getComputedLeft();
+			y += current.yogaNode.getComputedTop();
+			current = current.parentNode as DOMElement | undefined;
+		}
+		return {x, y};
+	}
+
 	calculateLayout = () => {
 		// The 'columns' property can be undefined or 0 when not using a TTY.
 		// In that case we fall back to 80.
@@ -156,6 +175,22 @@ export default class Ink {
 		}
 
 		const {output, outputHeight, staticOutput} = this.renderFrame();
+
+		// Resolve cursor position from registration after layout computation
+		if (this.cursorRegistration) {
+			const {nodeRef, offsetX, offsetY} = this.cursorRegistration;
+			if (nodeRef.current?.yogaNode) {
+				const abs = this.getAbsolutePosition(nodeRef.current);
+				this.log.setCursorPosition({
+					x: abs.x + offsetX,
+					y: abs.y + offsetY,
+				});
+			} else {
+				this.log.setCursorPosition(undefined);
+			}
+		} else {
+			this.log.setCursorPosition(undefined);
+		}
 
 		// If <Static> output isn't empty, it means new children have been added to it
 		const hasStaticOutput = staticOutput && staticOutput !== '\n';
@@ -200,8 +235,12 @@ export default class Ink {
 			this.log(output);
 		}
 
-		if (!hasStaticOutput && output !== this.lastOutput) {
-			this.throttledLog(output);
+		if (!hasStaticOutput) {
+			if (output !== this.lastOutput) {
+				this.throttledLog(output);
+			} else if (this.log.isCursorDirty()) {
+				this.log(output);
+			}
 		}
 
 		this.lastOutput = output;
@@ -217,6 +256,7 @@ export default class Ink {
 				writeToStderr={this.writeToStderr}
 				exitOnCtrlC={this.options.exitOnCtrlC}
 				onExit={this.unmount}
+				registerCursor={this.registerCursor}
 			>
 				{node}
 			</App>

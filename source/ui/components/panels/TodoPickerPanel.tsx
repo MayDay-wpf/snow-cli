@@ -41,13 +41,11 @@ const TodoPickerPanel = memo(
 					<Box width="100%" flexDirection="column">
 						<Box>
 							<Text color={theme.colors.warning} bold>
-								TODO Selection
+								{t.todoPickerPanel.title}
 							</Text>
 						</Box>
 						<Box marginTop={1}>
-							<Alert variant="info">
-								Scanning project for TODO comments...
-							</Alert>
+							<Alert variant="info">{t.todoPickerPanel.scanning}</Alert>
 						</Box>
 					</Box>
 				</Box>
@@ -60,13 +58,11 @@ const TodoPickerPanel = memo(
 					<Box width="100%" flexDirection="column">
 						<Box>
 							<Text color={theme.colors.warning} bold>
-								TODO Selection
+								{t.todoPickerPanel.title}
 							</Text>
 						</Box>
 						<Box marginTop={1}>
-							<Alert variant="info">
-								No TODO comments found in the project
-							</Alert>
+							<Alert variant="info">{t.todoPickerPanel.noTodosFound}</Alert>
 						</Box>
 					</Box>
 				</Box>
@@ -79,17 +75,19 @@ const TodoPickerPanel = memo(
 					<Box width="100%" flexDirection="column">
 						<Box>
 							<Text color={theme.colors.warning} bold>
-								TODO Selection
+								{t.todoPickerPanel.title}
 							</Text>
 						</Box>
 						<Box marginTop={1}>
 							<Alert variant="warning">
-								No TODOs match "{searchQuery}" (Total: {totalCount})
+								{t.todoPickerPanel.noMatchSearch
+									.replace('{searchQuery}', searchQuery)
+									.replace('{totalCount}', totalCount.toString())}
 							</Alert>
 						</Box>
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								Type to filter · Backspace to clear search
+								{t.todoPickerPanel.typeToClearSearch}
 							</Text>
 						</Box>
 					</Box>
@@ -106,10 +104,13 @@ const TodoPickerPanel = memo(
 				getItemKey={(todo: TodoItem) => todo.id}
 				title={
 					<Text color={theme.colors.warning} bold>
-						Select TODOs{' '}
-						{todos.length > 5 &&
-							`(${selectedIndex + 1}/${todos.length})`}
-						{searchQuery && ` - Filtering: "${searchQuery}"`}
+						{t.todoPickerPanel.selectTodos}{' '}
+						{todos.length > 5 && `(${selectedIndex + 1}/${todos.length})`}
+						{searchQuery &&
+							` ${t.todoPickerPanel.filteringLabel.replace(
+								'{searchQuery}',
+								searchQuery,
+							)}`}
 						{searchQuery &&
 							totalCount > todos.length &&
 							` (${todos.length}/${totalCount})`}
@@ -119,8 +120,8 @@ const TodoPickerPanel = memo(
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
 							{searchQuery
-								? 'Type to filter · Backspace to clear · Space: toggle · Enter: confirm'
-								: 'Type to search · Space: toggle · Enter: confirm · Esc: cancel'}
+								? t.todoPickerPanel.typeToFilterHint
+								: t.todoPickerPanel.typeToSearchHint}
 						</Text>
 					</Box>
 				}
@@ -128,7 +129,10 @@ const TodoPickerPanel = memo(
 					selectedTodos.size > 0 ? (
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuInfo}>
-								{selectedTodos.size} TODO(s) selected
+								{t.todoPickerPanel.selectedCount.replace(
+									'{count}',
+									selectedTodos.size.toString(),
+								)}
 							</Text>
 						</Box>
 					) : undefined
@@ -139,19 +143,13 @@ const TodoPickerPanel = memo(
 						{above > 0 && (
 							<>
 								·{' '}
-								{t.commandPanel.moreAbove.replace(
-									'{count}',
-									above.toString(),
-								)}
+								{t.commandPanel.moreAbove.replace('{count}', above.toString())}
 							</>
 						)}
 						{below > 0 && (
 							<>
 								·{' '}
-								{t.commandPanel.moreBelow.replace(
-									'{count}',
-									below.toString(),
-								)}
+								{t.commandPanel.moreBelow.replace('{count}', below.toString())}
 							</>
 						)}
 					</Text>

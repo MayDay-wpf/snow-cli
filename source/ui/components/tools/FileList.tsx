@@ -55,6 +55,12 @@ type DisplayItem = {
 	isContextOnly?: boolean;
 };
 
+// How long the in-memory file index is kept after the panel is hidden.
+// When the panel stays closed beyond this window, the cached `files` array
+// is released so a long-running CLI session does not hold onto thousands of
+// FileItem entries indefinitely. Reopening the panel triggers a fresh scan.
+const SEARCH_RESULT_TTL_MS = 30_000;
+
 const getDisplayItemKey = (file: FileItem) =>
 	`${file.sourceDir || ''}::${file.path}::${file.lineNumber ?? 0}`;
 
@@ -225,9 +231,10 @@ const FileList = memo(
 			const {theme} = useTheme();
 			const [files, setFiles] = useState<FileItem[]>([]);
 			const [isLoading, setIsLoading] = useState(false);
-			const [searchDepth, setSearchDepth] = useState(5); // Start with shallow depth for performance
+			// Progressive depth search: start shallow, expand on demand.
+			const [searchDepth, setSearchDepth] = useState(2);
+			const [hasMoreDepth, setHasMoreDepth] = useState(true);
 			const [isIncreasingDepth, setIsIncreasingDepth] = useState(false);
-			const [hasMoreDepth, setHasMoreDepth] = useState(true); // Track if there's more depth to explore
 			const [displayMode, setDisplayMode] = useState<DisplayMode>(
 				getFileListDisplayMode,
 			);
@@ -243,16 +250,50 @@ const FileList = memo(
 					: MAX_DISPLAY_ITEMS;
 			}, [maxItems]);
 
-			// Get files from directory with progressive depth search
+			// Streamed file loader: walks the tree (BFS) up to `searchDepth` and
+			// pushes incremental updates to `files` so the input box can filter
+			// against partial results in real time. No file count cap.
 			const loadFiles = useCallback(async () => {
-				const MAX_FILES = 3000; // Increased limit for multiple directories
-
-				// Get all working directories
 				const workingDirs = await getWorkingDirectories();
-				const allFiles: FileItem[] = [];
-				let globalMaxDepth = 0;
+				const collected: FileItem[] = [];
+				// Tracks whether we encountered subdirectories that were skipped
+				// because they exceeded `searchDepth`, signalling more depth is available.
+				let depthLimitHit = false;
 
-				// Load files from each working directory
+				// Throttle UI updates: flush at most every FLUSH_INTERVAL_MS or every
+				// FLUSH_BATCH_SIZE new files, whichever comes first.
+				const FLUSH_INTERVAL_MS = 80;
+				const FLUSH_BATCH_SIZE = 200;
+				let lastFlushAt = 0;
+				let pendingSinceFlush = 0;
+
+				const flush = (force: boolean) => {
+					const now = Date.now();
+					if (
+						!force &&
+						pendingSinceFlush < FLUSH_BATCH_SIZE &&
+						now - lastFlushAt < FLUSH_INTERVAL_MS
+					) {
+						return;
+					}
+					lastFlushAt = now;
+					pendingSinceFlush = 0;
+					setFiles(collected.slice());
+				};
+
+				const pushFile = (item: FileItem) => {
+					collected.push(item);
+					pendingSinceFlush++;
+					flush(false);
+				};
+
+				// Yield to the event loop so UI/keystrokes stay responsive during long scans.
+				const yieldToEventLoop = () =>
+					new Promise<void>(resolve => setImmediate(resolve));
+
+				setIsLoading(true);
+				setFiles([]);
+
 				for (const workingDir of workingDirs) {
 					const dirPath = workingDir.path;
 
@@ -264,12 +305,11 @@ const FileList = memo(
 								continue;
 							}
 
-							// Add the remote working directory itself to the list
 							const remoteDirName =
 								sshInfo.path.split('/').pop() || sshInfo.host;
-							allFiles.push({
+							pushFile({
 								name: remoteDirName,
-								path: dirPath, // Show full SSH URL as path
+								path: dirPath,
 								isDirectory: true,
 								sourceDir: dirPath,
 							});
@@ -284,124 +324,73 @@ const FileList = memo(
 								continue;
 							}
 
-							// Get remote files recursively
-							const getRemoteFilesRecursively = async (
-								remotePath: string,
-								depth: number = 0,
-								maxDepth: number = searchDepth,
-								maxFiles: number = MAX_FILES,
-							): Promise<{files: FileItem[]; maxDepthReached: number}> => {
-								if (depth > maxDepth) {
-									return {files: [], maxDepthReached: depth - 1};
+							// BFS over remote directories so siblings are sampled fairly.
+							const queue: Array<{path: string; depth: number}> = [
+								{path: sshInfo.path, depth: 0},
+							];
+							while (queue.length > 0) {
+								const node = queue.shift() as {path: string; depth: number};
+								const current = node.path;
+								let entries: Awaited<
+									ReturnType<typeof sshClient.listDirectory>
+								> = [];
+								try {
+									entries = await sshClient.listDirectory(current);
+								} catch {
+									continue;
 								}
 
-								try {
-									const entries = await sshClient.listDirectory(remotePath);
-									let result: FileItem[] = [];
-									let currentMaxDepth = depth;
-
-									const baseIgnorePatterns = [
-										'node_modules',
-										'dist',
-										'build',
-										'coverage',
-										'.git',
-										'.vscode',
-										'.idea',
-										'out',
-										'target',
-										'bin',
-										'obj',
-										'.next',
-										'.nuxt',
-										'vendor',
-										'__pycache__',
-										'.pytest_cache',
-										'.mypy_cache',
-										'venv',
-										'.venv',
-										'env',
-										'.env',
-									];
-
-									for (const entry of entries) {
-										if (result.length >= maxFiles) break;
-
-										if (
-											(entry.name.startsWith('.') && entry.name !== '.snow') ||
-											baseIgnorePatterns.includes(entry.name)
-										) {
-											continue;
-										}
-
-										const fullRemotePath = remotePath + '/' + entry.name;
-										let relativePath = fullRemotePath.substring(
-											sshInfo.path.length,
-										);
-										if (!relativePath.startsWith('/')) {
-											relativePath = '/' + relativePath;
-										}
-										relativePath = '.' + relativePath;
-
-										result.push({
-											name: entry.name,
-											path: relativePath,
-											isDirectory: entry.isDirectory,
-											sourceDir: dirPath, // SSH URL as source
-										});
-
-										if (entry.isDirectory && depth < maxDepth) {
-											const subResult = await getRemoteFilesRecursively(
-												fullRemotePath,
-												depth + 1,
-												maxDepth,
-												maxFiles,
-											);
-											result = result.concat(subResult.files);
-											currentMaxDepth = Math.max(
-												currentMaxDepth,
-												subResult.maxDepthReached,
-											);
-										}
+								for (const entry of entries) {
+									if (entry.name.startsWith('.') && entry.name !== '.snow') {
+										continue;
 									}
 
-									return {files: result, maxDepthReached: currentMaxDepth};
-								} catch {
-									return {files: [], maxDepthReached: depth};
-								}
-							};
+									const fullRemotePath = current + '/' + entry.name;
+									let relativePath = fullRemotePath.substring(
+										sshInfo.path.length,
+									);
+									if (!relativePath.startsWith('/')) {
+										relativePath = '/' + relativePath;
+									}
+									relativePath = '.' + relativePath;
 
-							const remoteResult = await getRemoteFilesRecursively(
-								sshInfo.path,
-							);
-							allFiles.push(...remoteResult.files);
-							globalMaxDepth = Math.max(
-								globalMaxDepth,
-								remoteResult.maxDepthReached,
-							);
+									pushFile({
+										name: entry.name,
+										path: relativePath,
+										isDirectory: entry.isDirectory,
+										sourceDir: dirPath,
+									});
+
+									if (entry.isDirectory) {
+										if (node.depth < searchDepth) {
+											queue.push({path: fullRemotePath, depth: node.depth + 1});
+										} else {
+											depthLimitHit = true;
+										}
+									}
+								}
+
+								await yieldToEventLoop();
+							}
 
 							sshClient.disconnect();
 						} catch {
 							// SSH connection failed, skip this directory
 						}
 
-						if (allFiles.length >= MAX_FILES) {
-							break;
-						}
 						continue;
 					}
 
 					// Handle local directories
-					// Add the local working directory itself to the list
 					const localDirName = path.basename(dirPath) || dirPath;
-					allFiles.push({
+					pushFile({
 						name: localDirName,
-						path: dirPath, // Show full path
+						path: dirPath,
 						isDirectory: true,
 						sourceDir: dirPath,
 					});
 
-					// Read .gitignore patterns for this directory
+					// Read .gitignore patterns for this directory (only ignore source)
 					const gitignorePath = path.join(dirPath, '.gitignore');
 					let gitignorePatterns: string[] = [];
 					try {
@@ -415,143 +404,75 @@ const FileList = memo(
 						// No .gitignore or read error
 					}
 
-					const getFilesRecursively = async (
-						dir: string,
-						depth: number = 0,
-						maxDepth: number = searchDepth,
-						maxFiles: number = MAX_FILES,
-					): Promise<{files: FileItem[]; maxDepthReached: number}> => {
-						// Stop recursion if depth limit reached
-						if (depth > maxDepth) {
-							return {files: [], maxDepthReached: depth - 1};
-						}
-
+					// BFS so the first results come from shallow, broadly useful directories.
+					const queue: Array<{path: string; depth: number}> = [
+						{path: dirPath, depth: 0},
+					];
+					while (queue.length > 0) {
+						const node = queue.shift() as {path: string; depth: number};
+						const current = node.path;
+						let entries: import('fs').Dirent[] = [];
 						try {
-							const entries = await fs.promises.readdir(dir, {
+							entries = await fs.promises.readdir(current, {
 								withFileTypes: true,
 							});
-							let result: FileItem[] = [];
-							let currentMaxDepth = depth; // Track deepest level we actually explored
+						} catch {
+							continue;
+						}
 
-							// Common ignore patterns for better performance
-							const baseIgnorePatterns = [
-								'node_modules',
-								'dist',
-								'build',
-								'coverage',
-								'.git',
-								'.vscode',
-								'.idea',
-								'out',
-								'target',
-								'bin',
-								'obj',
-								'.next',
-								'.nuxt',
-								'vendor',
-								'__pycache__',
-								'.pytest_cache',
-								'.mypy_cache',
-								'venv',
-								'.venv',
-								'env',
-								'.env',
-							];
-
-							// Merge base patterns with .gitignore patterns
-							const ignorePatterns = [
-								...baseIgnorePatterns,
-								...gitignorePatterns,
-							];
-
-							for (const entry of entries) {
-								// Early exit if we've collected enough files
-								if (result.length >= maxFiles) {
-									break;
-								}
-
-								// Skip hidden files and ignore patterns
-								// Note: .snow directory is explicitly allowed
-								if (
-									(entry.name.startsWith('.') && entry.name !== '.snow') ||
-									ignorePatterns.includes(entry.name)
-								) {
-									continue;
-								}
-
-								const fullPath = path.join(dir, entry.name);
-
-								// Skip if file is too large (> 10MB) for performance
-								try {
-									const stats = await fs.promises.stat(fullPath);
-									if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
-										continue;
-									}
-								} catch {
-									continue;
-								}
-
-								let relativePath = path.relative(dirPath, fullPath);
-
-								// Ensure relative paths start with ./ for consistency
-								if (
-									!relativePath.startsWith('.') &&
-									!path.isAbsolute(relativePath)
-								) {
-									relativePath = './' + relativePath;
-								}
-
-								// Normalize to forward slashes for cross-platform consistency
-								relativePath = relativePath.replace(/\\/g, '/');
-
-								result.push({
-									name: entry.name,
-									path: relativePath,
-									isDirectory: entry.isDirectory(),
-									sourceDir: dirPath, // Track source directory
-								});
-
-								// Recursively get files from subdirectories with depth limit
-								if (entry.isDirectory() && depth < maxDepth) {
-									const subResult = await getFilesRecursively(
-										fullPath,
-										depth + 1,
-										maxDepth,
-										maxFiles,
-									);
-									result = result.concat(subResult.files);
-									// Track the deepest level reached
-									currentMaxDepth = Math.max(
-										currentMaxDepth,
-										subResult.maxDepthReached,
-									);
-								}
+						for (const entry of entries) {
+							if (
+								(entry.name.startsWith('.') && entry.name !== '.snow') ||
+								gitignorePatterns.includes(entry.name)
+							) {
+								continue;
 							}
 
-							return {files: result, maxDepthReached: currentMaxDepth};
-						} catch (error) {
-							return {files: [], maxDepthReached: depth};
+							const fullPath = path.join(current, entry.name);
+
+							// Skip files larger than 10MB to keep memory usage bounded
+							try {
+								const stats = await fs.promises.stat(fullPath);
+								if (!entry.isDirectory() && stats.size > 10 * 1024 * 1024) {
+									continue;
+								}
+							} catch {
+								continue;
+							}
+
+							let relativePath = path
+								.relative(dirPath, fullPath)
+								.replace(/\\/g, '/');
+							if (
+								!relativePath.startsWith('.') &&
+								!path.isAbsolute(relativePath)
+							) {
+								relativePath = './' + relativePath;
+							}
+
+							pushFile({
+								name: entry.name,
+								path: relativePath,
+								isDirectory: entry.isDirectory(),
+								sourceDir: dirPath,
+							});
+
+							if (entry.isDirectory()) {
+								if (node.depth < searchDepth) {
+									queue.push({path: fullPath, depth: node.depth + 1});
+								} else {
+									depthLimitHit = true;
+								}
+							}
 						}
-					};
 
-					// Load files from this directory
-					const dirResult = await getFilesRecursively(dirPath);
-					allFiles.push(...dirResult.files);
-					globalMaxDepth = Math.max(globalMaxDepth, dirResult.maxDepthReached);
-
-					// Stop if we've collected enough files
-					if (allFiles.length >= MAX_FILES) {
-						break;
+						// Cooperative yield: let React render and the user keep typing.
+						await yieldToEventLoop();
 					}
 				}
 
-				// Check if we've hit the depth limit (might have deeper directories)
-				const hitDepthLimit = globalMaxDepth >= searchDepth - 1;
-
-				// Batch all state updates together
-				setIsLoading(true);
-				setFiles(allFiles);
-				setHasMoreDepth(hitDepthLimit);
+				flush(true);
+				setHasMoreDepth(depthLimitHit);
 				setIsLoading(false);
 			}, [searchDepth]);
 
@@ -566,62 +487,10 @@ const FileList = memo(
 					const queryLower = query.toLowerCase();
 					const maxResults = 100; // Limit results for performance
 
-					// Text file extensions to search
-					const textExtensions = new Set([
-						'.js',
-						'.jsx',
-						'.ts',
-						'.tsx',
-						'.py',
-						'.java',
-						'.c',
-						'.cpp',
-						'.h',
-						'.hpp',
-						'.cs',
-						'.go',
-						'.rs',
-						'.rb',
-						'.php',
-						'.swift',
-						'.kt',
-						'.scala',
-						'.sh',
-						'.bash',
-						'.zsh',
-						'.fish',
-						'.ps1',
-						'.html',
-						'.css',
-						'.scss',
-						'.sass',
-						'.less',
-						'.xml',
-						'.json',
-						'.yaml',
-						'.yml',
-						'.toml',
-						'.ini',
-						'.conf',
-						'.config',
-						'.txt',
-						'.md',
-						'.markdown',
-						'.rst',
-						'.tex',
-						'.sql',
-						'.graphql',
-						'.proto',
-						'.vue',
-						'.svelte',
-					]);
-
-					// Filter to only text files
-					const filesToSearch = files.filter(f => {
-						if (f.isDirectory) return false;
-						const ext = path.extname(f.path).toLowerCase();
-						return textExtensions.has(ext);
-					});
+					// Search all non-directory files; binary/encoding errors are caught
+					// in the readFile try/catch below, and >10MB files are already skipped
+					// during directory scan.
+					const filesToSearch = files.filter(f => !f.isDirectory);
 
 					// Process files in batches to avoid blocking
 					const batchSize = 10;
@@ -712,6 +581,25 @@ const FileList = memo(
 			// State for filtered files (needed for async content search)
 			const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
 
+			// Release cached results after the panel has been hidden for
+			// SEARCH_RESULT_TTL_MS. Toggling visible cancels the pending timer so
+			// quick close/reopen reuses the cache; only a sustained close evicts it.
+			useEffect(() => {
+				if (visible) {
+					return;
+				}
+
+				const timer = setTimeout(() => {
+					setFiles([]);
+					setAllFilteredFiles([]);
+					// Reset depth state so the next open starts shallow again.
+					setSearchDepth(2);
+					setHasMoreDepth(true);
+				}, SEARCH_RESULT_TTL_MS);
+
+				return () => clearTimeout(timer);
+			}, [visible]);
+
 			// Filter files based on query and search mode with debounce
 			useEffect(() => {
 				const performSearch = async () => {
@@ -779,22 +667,20 @@ const FileList = memo(
 
 						setAllFilteredFiles(filtered);
 
-						// Progressive depth increase: automatically increase depth until found
-						// Stop conditions: found files OR no more depth (reached project's max depth)
+						// Progressive depth: when the user has typed something but no
+						// match is found in the currently loaded set, expand the scan
+						// depth so a follow-up scan can pick up files deeper in the tree.
+						// Only trigger when not already scanning, otherwise we would
+						// thrash setSearchDepth while the previous scan is in flight.
 						if (
+							!isLoading &&
 							filtered.length === 0 &&
 							query.trim().length > 0 &&
 							hasMoreDepth
 						) {
-							// Increase search depth progressively (step by 5)
-							const newDepth = searchDepth + 5;
-							setSearchDepth(newDepth);
+							setSearchDepth(d => d + 3);
 							setIsIncreasingDepth(true);
-
-							// Reset indicator after a short delay
-							setTimeout(() => {
-								setIsIncreasingDepth(false);
-							}, 300);
+							setTimeout(() => setIsIncreasingDepth(false), 400);
 						}
 					}
 				};
@@ -812,8 +698,7 @@ const FileList = memo(
 				query,
 				searchMode,
 				searchFileContent,
-				searchDepth,
-				loadFiles,
+				isLoading,
 				hasMoreDepth,
 			]);
 
@@ -946,13 +831,26 @@ const FileList = memo(
 				return null;
 			}
 
-			if (isLoading) {
+			// Treat "still searching" broadly: either a scan is in flight, or a
+			// deeper rescan was just queued (isIncreasingDepth), or there are still
+			// untouched deeper directories that the next query miss can expand into.
+			// This prevents a brief "No files found" flash between depth bumps when
+			// the new loadFiles call is still awaiting its first async tick.
+			const stillSearching =
+				isLoading ||
+				isIncreasingDepth ||
+				(query.trim().length > 0 && hasMoreDepth);
+
+			if (stillSearching && displayItems.length === 0) {
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color="blue" dimColor>
-							{isIncreasingDepth
-								? `Searching deeper directories (depth: ${searchDepth})...`
-								: 'Loading files...'}
+							{isIncreasingDepth || (query.trim().length > 0 && hasMoreDepth)
+								? t.fileList.searchingDeeper.replace(
+										'{depth}',
+										searchDepth.toString(),
+								  )
+								: t.fileList.loadingFiles}
 						</Text>
 					</Box>
 				);
@@ -962,9 +860,7 @@ const FileList = memo(
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{isIncreasingDepth
-								? 'Searching deeper directories...'
-								: 'No files found'}
+							{t.fileList.noFilesFound}
 						</Text>
 					</Box>
 				);
@@ -975,10 +871,13 @@ const FileList = memo(
 					<Box marginBottom={1}>
 						<Text color="blue" bold>
 							{searchMode === 'content'
-								? '≡ Content Search'
-								: `≡ Files [${
-										displayMode === 'tree' ? 'Tree' : 'List'
-								  } • Ctrl+T]`}{' '}
+								? t.fileList.contentSearchHeader
+								: t.fileList.filesHeader.replace(
+										'{mode}',
+										displayMode === 'tree'
+											? t.fileList.treeMode
+											: t.fileList.listMode,
+								  )}{' '}
 							{displayItems.length > effectiveMaxItems &&
 								`(${normalizedSelectedIndex + 1}/${displayItems.length})`}
 						</Text>
@@ -1063,6 +962,20 @@ const FileList = memo(
 						<Box marginTop={displayItems.length > effectiveMaxItems ? 0 : 1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{'⤷ ' + selectedFileFullPath}
+							</Text>
+						</Box>
+					)}
+					{isLoading && (
+						<Box>
+							<Text color="blue" dimColor>
+								{isIncreasingDepth
+									? t.fileList.scanningDeeper
+											.replace('{depth}', searchDepth.toString())
+											.replace('{count}', files.length.toString())
+									: t.fileList.scanning.replace(
+											'{count}',
+											files.length.toString(),
+									  )}
 							</Text>
 						</Box>
 					)}

@@ -7,7 +7,9 @@ import StdinContext from './StdinContext.js';
 import StdoutContext from './StdoutContext.js';
 import StderrContext from './StderrContext.js';
 import FocusContext from './FocusContext.js';
+import CursorContext from './CursorContext.js';
 import ErrorOverview from './ErrorOverview.js';
+import {type CursorRegistration} from './CursorContext.js';
 
 const tab = '\t';
 const shiftTab = '\u001B[Z';
@@ -22,6 +24,9 @@ type Props = {
 	readonly writeToStderr: (data: string) => void;
 	readonly exitOnCtrlC: boolean;
 	readonly onExit: (error?: Error) => void;
+	readonly registerCursor: (
+		registration: CursorRegistration | undefined,
+	) => void;
 };
 
 type State = {
@@ -113,11 +118,18 @@ export default class App extends PureComponent<Props, State> {
 									focus: this.focus,
 								}}
 							>
-								{this.state.error ? (
-									<ErrorOverview error={this.state.error as Error} />
-								) : (
-									this.props.children
-								)}
+								<CursorContext.Provider
+									// eslint-disable-next-line react/jsx-no-constructed-context-values
+									value={{
+										registerCursor: this.props.registerCursor,
+									}}
+								>
+									{this.state.error ? (
+										<ErrorOverview error={this.state.error as Error} />
+									) : (
+										this.props.children
+									)}
+								</CursorContext.Provider>
 							</FocusContext.Provider>
 						</StderrContext.Provider>
 					</StdoutContext.Provider>

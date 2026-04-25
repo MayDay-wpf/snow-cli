@@ -2,6 +2,7 @@ import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {SubAgent} from '../../../utils/config/subAgentConfig.js';
+import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import PickerList from '../common/PickerList.js';
 
@@ -14,6 +15,7 @@ interface Props {
 
 const AgentPickerPanel = memo(
 	({agents, selectedIndex, visible, maxHeight}: Props) => {
+		const {t} = useI18n();
 		const {theme} = useTheme();
 
 		if (!visible) {
@@ -26,12 +28,12 @@ const AgentPickerPanel = memo(
 					<Box width="100%" flexDirection="column">
 						<Box>
 							<Text color={theme.colors.warning} bold>
-								Sub-Agent Selection
+								{t.agentPickerPanel.title}
 							</Text>
 						</Box>
 						<Box marginTop={1}>
 							<Alert variant="warning">
-								No sub-agents configured. Please configure sub-agents first.
+								{t.agentPickerPanel.noAgentsWarning}
 							</Alert>
 						</Box>
 					</Box>
@@ -49,22 +51,42 @@ const AgentPickerPanel = memo(
 				title={
 					<>
 						<Text color={theme.colors.warning} bold>
-							Select Sub-Agent{' '}
-							{agents.length > 5 &&
-								`(${selectedIndex + 1}/${agents.length})`}
+							{t.agentPickerPanel.selectAgent}{' '}
+							{agents.length > 5 && `(${selectedIndex + 1}/${agents.length})`}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							(Press ESC to close)
+							{t.agentPickerPanel.escHint}
 						</Text>
 					</>
 				}
+				scrollHintFormat={(above, below) => (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.agentPickerPanel.scrollHint}
+						{above > 0 && (
+							<>
+								·{' '}
+								{t.agentPickerPanel.moreAbove.replace(
+									'{count}',
+									above.toString(),
+								)}
+							</>
+						)}
+						{below > 0 && (
+							<>
+								·{' '}
+								{t.agentPickerPanel.moreBelow.replace(
+									'{count}',
+									below.toString(),
+								)}
+							</>
+						)}
+					</Text>
+				)}
 				renderItem={(agent: SubAgent, isSelected: boolean) => (
 					<>
 						<Text
 							color={
-								isSelected
-									? theme.colors.menuSelected
-									: theme.colors.menuNormal
+								isSelected ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
 							bold
 						>
@@ -80,7 +102,7 @@ const AgentPickerPanel = memo(
 								dimColor
 								wrap="truncate-end"
 							>
-								└─ {agent.description || 'No description'}
+								└─ {agent.description || t.agentPickerPanel.noDescription}
 							</Text>
 						</Box>
 					</>

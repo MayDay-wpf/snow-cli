@@ -638,8 +638,7 @@ export const en: TranslationKeys = {
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
-			branch:
-				'Fork current conversation into a new branch',
+			branch: 'Fork current conversation into a new branch',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
 			diff: 'Review file changes from a conversation in IDE diff view',
@@ -691,6 +690,17 @@ export const en: TranslationKeys = {
 				failed: 'Failed to fork session',
 			},
 		},
+	},
+	fileList: {
+		loadingFiles: 'Loading files...',
+		noFilesFound: 'No files found',
+		searchingDeeper: 'Searching deeper (depth {depth})...',
+		scanning: 'Scanning... ({count} indexed)',
+		scanningDeeper: 'Searching deeper (depth {depth}, {count} indexed)...',
+		contentSearchHeader: '≡ Content Search',
+		filesHeader: '≡ Files [{mode} • Ctrl+T]',
+		treeMode: 'Tree',
+		listMode: 'List',
 	},
 	ideSelectPanel: {
 		title: 'Select IDE',
@@ -1755,6 +1765,32 @@ export const en: TranslationKeys = {
 		exitImageDisabled: 'Exit image disabled',
 		failedDisableExitImage: 'Failed to disable exit image',
 		setAsExitImage: 'Set "{name}" as exit image',
+	},
+	agentPickerPanel: {
+		title: 'Sub-Agent Selection',
+		noAgentsWarning:
+			'No sub-agents configured. Please configure sub-agents first.',
+		selectAgent: 'Select Sub-Agent',
+		escHint: '(Press ESC to close)',
+		noDescription: 'No description',
+		scrollHint: '· ↑↓ to scroll',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
+	},
+	todoPickerPanel: {
+		title: 'TODO Selection',
+		scanning: 'Scanning project for TODO comments...',
+		noTodosFound: 'No TODO comments found in the project',
+		noMatchSearch: 'No TODOs match "{searchQuery}" (Total: {totalCount})',
+		typeToClearSearch: 'Type to filter · Backspace to clear search',
+		selectTodos: 'Select TODOs',
+		filteringLabel: 'Filtering: "{searchQuery}"',
+		typeToFilterHint:
+			'Type to filter · Backspace to clear · Space: toggle · Enter: confirm',
+		typeToSearchHint:
+			'Type to search · Space: toggle · Enter: confirm · Esc: cancel',
+		selectedCount: '{count} TODO(s) selected',
+		noDescription: 'No description',
 	},
 	exitScreen: {
 		title: 'Goodbye',

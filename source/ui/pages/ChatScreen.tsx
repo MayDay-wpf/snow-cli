@@ -20,7 +20,6 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {useSchedulerExecutionState} from '../../hooks/execution/useSchedulerExecutionState.js';
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
-import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
@@ -56,8 +55,6 @@ export default function ChatScreen({
 	const apiConfig = getOpenAiConfig();
 	const advancedModel = apiConfig.advancedModel || '';
 	const basicModel = apiConfig.basicModel || '';
-
-	useCursorHide();
 
 	const {
 		messages,

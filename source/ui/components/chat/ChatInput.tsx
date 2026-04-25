@@ -1,14 +1,12 @@
 import React, {
-	useCallback,
 	useEffect,
 	useRef,
 	useMemo,
 	lazy,
 	Suspense,
 } from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useCursor} from 'ink';
 import {Viewport} from '../../../utils/ui/textBuffer.js';
-import {cpSlice, visualPosToCodePoint} from '../../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
@@ -826,26 +824,8 @@ export default function ChatInput({
 		isPureBashMode,
 	]);
 
-	// Render cursor based on focus state
-	const renderCursor = useCallback(
-		(char: string) => {
-			if (hasFocus) {
-				// Focused: solid block cursor (use inverted colors)
-				return (
-					<Text
-						backgroundColor={theme.colors.menuNormal}
-						color={theme.colors.background}
-					>
-						{char}
-					</Text>
-				);
-			} else {
-				// Unfocused: no cursor, just render the character normally
-				return <Text>{char}</Text>;
-			}
-		},
-		[hasFocus, theme],
-	);
+	// Real terminal cursor via useCursor hook
+	const {setCursorPosition, cursorRef} = useCursor();
 
 	// Render content with cursor (treat all text including placeholders as plain text)
 	const INPUT_MAX_LINES = 6;
@@ -884,6 +864,16 @@ export default function ChatInput({
 				endLine = startLine + maxLines;
 			}
 
+			// Set real terminal cursor position
+			const hasScrollUp = startLine > 0;
+			const cursorYInContent =
+				cursorRow - startLine + (hasScrollUp ? 1 : 0);
+			if (hasFocus) {
+				setCursorPosition({x: cursorCol, y: cursorYInContent});
+			} else {
+				setCursorPosition(undefined);
+			}
+
 			const renderedLines: React.ReactNode[] = [];
 
 			// Scroll-up indicator
@@ -899,17 +889,9 @@ export default function ChatInput({
 				const line = visualLines[i] || '';
 
 				if (i === cursorRow) {
-					// This line contains the cursor
-					const cursorIndex = visualPosToCodePoint(line, cursorCol);
-					const beforeCursor = cpSlice(line, 0, cursorIndex);
-					const atCursor = cpSlice(line, cursorIndex, cursorIndex + 1) || ' ';
-					const afterCursor = cpSlice(line, cursorIndex + 1);
-
 					renderedLines.push(
 						<Box key={i} flexDirection="row">
-							<Text>{beforeCursor}</Text>
-							{renderCursor(atCursor)}
-							<Text>{afterCursor}</Text>
+							<Text>{line || ' '}</Text>
 							{commandArgsHint && i === visualLines.length - 1 ? (
 								<Text color={theme.colors.menuSecondary} dimColor>
 									{commandArgsHint}
@@ -918,7 +900,6 @@ export default function ChatInput({
 						</Box>,
 					);
 				} else {
-					// No cursor in this line
 					renderedLines.push(<Text key={i}>{line || ' '}</Text>);
 				}
 			}
@@ -937,13 +918,17 @@ export default function ChatInput({
 
 			return <Box flexDirection="column">{renderedLines}</Box>;
 		} else {
+			// Empty input: cursor at start
+			if (hasFocus) {
+				setCursorPosition({x: 0, y: 0});
+			} else {
+				setCursorPosition(undefined);
+			}
+
 			return (
-				<>
-					{renderCursor(' ')}
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{disabled ? t.chatScreen.waitingForResponse : placeholder}
-					</Text>
-				</>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{disabled ? t.chatScreen.waitingForResponse : placeholder}
+				</Text>
 			);
 		}
 	};
@@ -997,7 +982,9 @@ export default function ChatInput({
 									? '⤢'
 									: '❯'}{' '}
 							</Text>
-							<Box flexGrow={1}>{renderContent()}</Box>
+							<Box ref={cursorRef} flexGrow={1}>
+								{renderContent()}
+							</Box>
 						</Box>
 						<Box flexDirection="row">
 							<Text

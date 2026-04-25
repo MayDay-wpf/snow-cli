@@ -589,7 +589,7 @@ export type TranslationKeys = {
 			hybridCompress: string;
 			team: string;
 			branch: string; // Fork conversation into a new branch
-		worktree: string; // Git branch management panel
+			worktree: string; // Git branch management panel
 			diff: string;
 			connect: string;
 			disconnect: string;
@@ -635,6 +635,21 @@ export type TranslationKeys = {
 				failed: string;
 			};
 		};
+	};
+	// File search list (`@` panel)
+	fileList: {
+		loadingFiles: string;
+		noFilesFound: string;
+		// Used while a deeper rescan is queued or running
+		searchingDeeper: string; // {depth}
+		// Inline status while streaming results in
+		scanning: string; // {count}
+		scanningDeeper: string; // {depth} {count}
+		// Header labels
+		contentSearchHeader: string;
+		filesHeader: string; // {mode}
+		treeMode: string;
+		listMode: string;
 	};
 	// IDE Select Panel
 	ideSelectPanel: {
@@ -1640,6 +1655,29 @@ export type TranslationKeys = {
 		exitImageDisabled: string;
 		failedDisableExitImage: string;
 		setAsExitImage: string;
+	};
+	agentPickerPanel: {
+		title: string;
+		noAgentsWarning: string;
+		selectAgent: string;
+		escHint: string;
+		noDescription: string;
+		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
+	};
+	todoPickerPanel: {
+		title: string;
+		scanning: string;
+		noTodosFound: string;
+		noMatchSearch: string;
+		typeToClearSearch: string;
+		selectTodos: string;
+		filteringLabel: string;
+		typeToFilterHint: string;
+		typeToSearchHint: string;
+		selectedCount: string;
+		noDescription: string;
 	};
 	exitScreen: {
 		title: string;

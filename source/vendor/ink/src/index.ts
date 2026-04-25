@@ -23,6 +23,7 @@ export {default as useStdout} from './hooks/use-stdout.js';
 export {default as useStderr} from './hooks/use-stderr.js';
 export {default as useFocus} from './hooks/use-focus.js';
 export {default as useFocusManager} from './hooks/use-focus-manager.js';
+export {default as useCursor} from './hooks/use-cursor.js';
 export {default as measureElement} from './measure-element.js';
 export {clearInkStaticOutput} from './ink.js';
 export type {DOMElement} from './dom.js';
