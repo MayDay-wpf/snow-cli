@@ -138,14 +138,15 @@ export class ReviewAgent {
 			execSync('git diff --cached --quiet', {
 				cwd: gitRoot,
 				encoding: 'utf-8',
+				stdio: 'pipe',
 			});
 		} catch {
 			hasStaged = true;
-			// Count staged files
 			try {
 				const stagedFiles = execSync('git diff --cached --name-only', {
 					cwd: gitRoot,
 					encoding: 'utf-8',
+					stdio: 'pipe',
 				});
 				stagedFileCount = stagedFiles.trim().split('\n').filter(Boolean).length;
 			} catch {
@@ -157,14 +158,15 @@ export class ReviewAgent {
 			execSync('git diff --quiet', {
 				cwd: gitRoot,
 				encoding: 'utf-8',
+				stdio: 'pipe',
 			});
 		} catch {
 			hasUnstaged = true;
-			// Count unstaged files
 			try {
 				const unstagedFiles = execSync('git diff --name-only', {
 					cwd: gitRoot,
 					encoding: 'utf-8',
+					stdio: 'pipe',
 				});
 				unstagedFileCount = unstagedFiles
 					.trim()
@@ -189,6 +191,7 @@ export class ReviewAgent {
 				cwd: gitRoot,
 				encoding: 'utf-8',
 				maxBuffer: 10 * 1024 * 1024,
+				stdio: 'pipe',
 			});
 
 			if (!stagedDiff) {
@@ -216,6 +219,7 @@ export class ReviewAgent {
 				cwd: gitRoot,
 				encoding: 'utf-8',
 				maxBuffer: 10 * 1024 * 1024,
+				stdio: 'pipe',
 			});
 
 			if (!unstagedDiff) {
@@ -239,18 +243,18 @@ export class ReviewAgent {
 	 */
 	getGitDiff(gitRoot: string): string {
 		try {
-			// Get staged changes
 			const stagedDiff = execSync('git diff --cached', {
 				cwd: gitRoot,
 				encoding: 'utf-8',
-				maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+				maxBuffer: 10 * 1024 * 1024,
+				stdio: 'pipe',
 			});
 
-			// Get unstaged changes
 			const unstagedDiff = execSync('git diff', {
 				cwd: gitRoot,
 				encoding: 'utf-8',
 				maxBuffer: 10 * 1024 * 1024,
+				stdio: 'pipe',
 			});
 
 			// Combine both diffs

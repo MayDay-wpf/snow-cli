@@ -1,9 +1,10 @@
-import React, {memo, useMemo} from 'react';
+import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import type {GitLineCommit} from '../../../hooks/picker/useGitLinePicker.js';
+import PickerList from '../common/PickerList.js';
 
 interface Props {
 	commits: GitLineCommit[];
@@ -17,8 +18,6 @@ interface Props {
 	searchQuery?: string;
 	error?: string | null;
 }
-
-const MAX_DISPLAY_ITEMS = 5;
 
 function formatShortSha(sha: string): string {
 	return sha.slice(0, 8);
@@ -51,46 +50,6 @@ const GitLinePickerPanel = memo(
 	}: Props) => {
 		const {t} = useI18n();
 		const {theme} = useTheme();
-		const effectiveMaxItems = maxHeight
-			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
-			: MAX_DISPLAY_ITEMS;
-
-		const displayWindow = useMemo(() => {
-			if (commits.length <= effectiveMaxItems) {
-				return {
-					items: commits,
-					startIndex: 0,
-					endIndex: commits.length,
-				};
-			}
-
-			const halfWindow = Math.floor(effectiveMaxItems / 2);
-			let startIndex = Math.max(0, selectedIndex - halfWindow);
-			let endIndex = Math.min(commits.length, startIndex + effectiveMaxItems);
-			if (endIndex - startIndex < effectiveMaxItems) {
-				startIndex = Math.max(0, endIndex - effectiveMaxItems);
-			}
-
-			return {
-				items: commits.slice(startIndex, endIndex),
-				startIndex,
-				endIndex,
-			};
-		}, [commits, selectedIndex, effectiveMaxItems]);
-
-		const displayedCommits = displayWindow.items;
-		const hiddenAboveCount = displayWindow.startIndex;
-		const hiddenBelowCount = Math.max(
-			0,
-			commits.length - displayWindow.endIndex,
-		);
-
-		const displayedSelectedIndex = useMemo(() => {
-			return displayedCommits.findIndex(commit => {
-				const originalIndex = commits.indexOf(commit);
-				return originalIndex === selectedIndex;
-			});
-		}, [displayedCommits, commits, selectedIndex]);
 
 		if (!visible) {
 			return null;
@@ -136,46 +95,88 @@ const GitLinePickerPanel = memo(
 		}
 
 		return (
-			<Box flexDirection="column">
-				<Box>
+			<PickerList
+				items={commits}
+				selectedIndex={selectedIndex}
+				visible={visible}
+				maxDisplayItems={maxHeight}
+				getItemKey={(commit: GitLineCommit) => commit.sha}
+				title={
 					<Text color={theme.colors.warning} bold>
 						{t.gitLinePickerPanel.title}{' '}
-						{commits.length > effectiveMaxItems &&
+						{commits.length > 5 &&
 							`(${selectedIndex + 1}/${commits.length})`}
-						{isLoadingMore ? ` ${t.gitLinePickerPanel.loadingMoreSuffix}` : ''}
+						{isLoadingMore
+							? ` ${t.gitLinePickerPanel.loadingMoreSuffix}`
+							: ''}
 					</Text>
-				</Box>
-				<Box marginTop={1} flexDirection="column">
-					<Text color={theme.colors.menuInfo}>
-						{t.gitLinePickerPanel.searchLabel}{' '}
-						<Text color={theme.colors.menuSelected}>
-							{searchQuery || t.gitLinePickerPanel.emptySearch}
+				}
+				header={
+					<Box marginTop={1} flexDirection="column">
+						<Text color={theme.colors.menuInfo}>
+							{t.gitLinePickerPanel.searchLabel}{' '}
+							<Text color={theme.colors.menuSelected}>
+								{searchQuery || t.gitLinePickerPanel.emptySearch}
+							</Text>
 						</Text>
-					</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.gitLinePickerPanel.hintNavigation}
+						</Text>
+					</Box>
+				}
+				footer={
+					selectedCommits.size > 0 ? (
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuInfo}>
+								{t.gitLinePickerPanel.selectedLabel}:{' '}
+								{selectedCommits.size}
+							</Text>
+						</Box>
+					) : undefined
+				}
+				scrollHintFormat={(above, below) => (
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.gitLinePickerPanel.hintNavigation}
+						{t.commandPanel.scrollHint}
+						{above > 0 && (
+							<>
+								·{' '}
+								{t.commandPanel.moreAbove.replace(
+									'{count}',
+									above.toString(),
+								)}
+							</>
+						)}
+						{below > 0 && (
+							<>
+								·{' '}
+								{t.commandPanel.moreBelow.replace(
+									'{count}',
+									below.toString(),
+								)}
+							</>
+						)}
+						{hasMore && <>· {t.gitLinePickerPanel.scrollToLoadMore}</>}
 					</Text>
-				</Box>
-				<Box marginTop={1} flexDirection="column">
-					{displayedCommits.map((commit, index) => {
-						const isSelected = index === displayedSelectedIndex;
-						const isChecked = selectedCommits.has(commit.sha);
-						const title =
-							commit.kind === 'staged'
-								? `${t.reviewCommitPanel.stagedLabel} (${
-										commit.fileCount ?? 0
-								  } ${t.reviewCommitPanel.filesLabel})`
-								: `${formatShortSha(commit.sha)} ${truncateText(
-										commit.subject,
-										72,
-								  )}`;
-						const subtitle =
-							commit.kind === 'staged'
-								? ''
-								: `${commit.authorName} · ${formatDate(commit.dateIso)}`;
+				)}
+				renderItem={(commit: GitLineCommit, isSelected: boolean) => {
+					const isChecked = selectedCommits.has(commit.sha);
+					const title =
+						commit.kind === 'staged'
+							? `${t.reviewCommitPanel.stagedLabel} (${
+									commit.fileCount ?? 0
+							  } ${t.reviewCommitPanel.filesLabel})`
+							: `${formatShortSha(commit.sha)} ${truncateText(
+									commit.subject,
+									72,
+							  )}`;
+					const subtitle =
+						commit.kind === 'staged'
+							? ''
+							: `${commit.authorName} · ${formatDate(commit.dateIso)}`;
 
-						return (
-							<Box key={commit.sha} flexDirection="column" width="100%">
+					return (
+						<>
+							<Box overflow="hidden">
 								<Text
 									color={
 										isSelected
@@ -183,62 +184,31 @@ const GitLinePickerPanel = memo(
 											: theme.colors.menuNormal
 									}
 									bold
+									wrap="truncate-end"
 								>
 									{isSelected ? '❯ ' : '  '}
 									{isChecked ? '[✓]' : '[ ]'} {title}
 								</Text>
-								{subtitle ? (
-									<Box marginLeft={5}>
-										<Text
-											color={
-												isSelected
-													? theme.colors.menuSelected
-													: theme.colors.menuNormal
-											}
-											dimColor={!isSelected}
-										>
-											└─ {subtitle}
-										</Text>
-									</Box>
-								) : null}
 							</Box>
-						);
-					})}
-				</Box>
-				{(commits.length > effectiveMaxItems || hasMore) && (
-					<Box marginTop={1}>
-						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.commandPanel.scrollHint}
-							{hiddenAboveCount > 0 && (
-								<>
-									·{' '}
-									{t.commandPanel.moreAbove.replace(
-										'{count}',
-										hiddenAboveCount.toString(),
-									)}
-								</>
-							)}
-							{hiddenBelowCount > 0 && (
-								<>
-									·{' '}
-									{t.commandPanel.moreBelow.replace(
-										'{count}',
-										hiddenBelowCount.toString(),
-									)}
-								</>
-							)}
-							{hasMore && <>· {t.gitLinePickerPanel.scrollToLoadMore}</>}
-						</Text>
-					</Box>
-				)}
-				{selectedCommits.size > 0 && (
-					<Box marginTop={1}>
-						<Text color={theme.colors.menuInfo}>
-							{t.gitLinePickerPanel.selectedLabel}: {selectedCommits.size}
-						</Text>
-					</Box>
-				)}
-			</Box>
+							{subtitle ? (
+								<Box marginLeft={5} overflow="hidden">
+									<Text
+										color={
+											isSelected
+												? theme.colors.menuSelected
+												: theme.colors.menuNormal
+										}
+										dimColor={!isSelected}
+										wrap="truncate-end"
+									>
+										└─ {subtitle}
+									</Text>
+								</Box>
+							) : null}
+						</>
+					);
+				}}
+			/>
 		);
 	},
 );

@@ -55,6 +55,14 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <keyboard-shortcut first-keystroke="control alt S" keymap="$default"/>
         </action>
+
+        <action id="snow.SendToSnowCLI"
+                class="com.snow.plugin.actions.SendToSnowCLIAction"
+                text="Send to Snow CLI"
+                description="Send file path to Snow CLI terminal input">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+        </action>
     </actions>
 
     <applicationListeners>

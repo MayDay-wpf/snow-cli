@@ -1,9 +1,10 @@
-import React, {memo, useMemo} from 'react';
+import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {TodoItem} from '../../../utils/core/todoScanner.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import PickerList from '../common/PickerList.js';
 
 interface Props {
 	todos: TodoItem[];
@@ -29,120 +30,67 @@ const TodoPickerPanel = memo(
 	}: Props) => {
 		const {t} = useI18n();
 		const {theme} = useTheme();
-		// Fixed maximum display items to prevent rendering issues
-		const MAX_DISPLAY_ITEMS = 5;
-		const effectiveMaxItems = maxHeight
-			? Math.min(maxHeight, MAX_DISPLAY_ITEMS)
-			: MAX_DISPLAY_ITEMS;
 
-		const todoWindow = useMemo(() => {
-			if (todos.length <= effectiveMaxItems) {
-				return {
-					items: todos,
-					startIndex: 0,
-					endIndex: todos.length,
-				};
-			}
-
-			// Show todos around the selected index
-			const halfWindow = Math.floor(effectiveMaxItems / 2);
-			let startIndex = Math.max(0, selectedIndex - halfWindow);
-			let endIndex = Math.min(todos.length, startIndex + effectiveMaxItems);
-
-			// Adjust if we're near the end
-			if (endIndex - startIndex < effectiveMaxItems) {
-				startIndex = Math.max(0, endIndex - effectiveMaxItems);
-			}
-
-			return {
-				items: todos.slice(startIndex, endIndex),
-				startIndex,
-				endIndex,
-			};
-		}, [todos, selectedIndex, effectiveMaxItems]);
-
-		const displayedTodos = todoWindow.items;
-		const hiddenAboveCount = todoWindow.startIndex;
-		const hiddenBelowCount = Math.max(0, todos.length - todoWindow.endIndex);
-
-		// Calculate actual selected index in the displayed subset
-		const displayedSelectedIndex = useMemo(() => {
-			return displayedTodos.findIndex(todo => {
-				const originalIndex = todos.indexOf(todo);
-				return originalIndex === selectedIndex;
-			});
-		}, [displayedTodos, todos, selectedIndex]);
-
-		// Don't show panel if not visible
 		if (!visible) {
 			return null;
 		}
 
-		// Show loading state
 		if (isLoading) {
 			return (
 				<Box flexDirection="column">
-					<Box width="100%">
-						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color={theme.colors.warning} bold>
-									TODO Selection
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="info">
-									Scanning project for TODO comments...
-								</Alert>
-							</Box>
+					<Box width="100%" flexDirection="column">
+						<Box>
+							<Text color={theme.colors.warning} bold>
+								TODO Selection
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Alert variant="info">
+								Scanning project for TODO comments...
+							</Alert>
 						</Box>
 					</Box>
 				</Box>
 			);
 		}
 
-		// Show message if no todos found
 		if (todos.length === 0 && !searchQuery) {
 			return (
 				<Box flexDirection="column">
-					<Box width="100%">
-						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color={theme.colors.warning} bold>
-									TODO Selection
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="info">
-									No TODO comments found in the project
-								</Alert>
-							</Box>
+					<Box width="100%" flexDirection="column">
+						<Box>
+							<Text color={theme.colors.warning} bold>
+								TODO Selection
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Alert variant="info">
+								No TODO comments found in the project
+							</Alert>
 						</Box>
 					</Box>
 				</Box>
 			);
 		}
 
-		// Show message if search has no results
 		if (todos.length === 0 && searchQuery) {
 			return (
 				<Box flexDirection="column">
-					<Box width="100%">
-						<Box flexDirection="column" width="100%">
-							<Box>
-								<Text color={theme.colors.warning} bold>
-									TODO Selection
-								</Text>
-							</Box>
-							<Box marginTop={1}>
-								<Alert variant="warning">
-									No TODOs match "{searchQuery}" (Total: {totalCount})
-								</Alert>
-							</Box>
-							<Box marginTop={1}>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									Type to filter · Backspace to clear search
-								</Text>
-							</Box>
+					<Box width="100%" flexDirection="column">
+						<Box>
+							<Text color={theme.colors.warning} bold>
+								TODO Selection
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Alert variant="warning">
+								No TODOs match "{searchQuery}" (Total: {totalCount})
+							</Alert>
+						</Box>
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								Type to filter · Backspace to clear search
+							</Text>
 						</Box>
 					</Box>
 				</Box>
@@ -150,94 +98,96 @@ const TodoPickerPanel = memo(
 		}
 
 		return (
-			<Box flexDirection="column">
-				<Box width="100%">
-					<Box flexDirection="column" width="100%">
-						<Box>
-							<Text color={theme.colors.warning} bold>
-								Select TODOs{' '}
-								{todos.length > effectiveMaxItems &&
-									`(${selectedIndex + 1}/${todos.length})`}
-								{searchQuery && ` - Filtering: "${searchQuery}"`}
-								{searchQuery &&
-									totalCount > todos.length &&
-									` (${todos.length}/${totalCount})`}
-							</Text>
-						</Box>
-						<Box marginTop={1}>
-							<Text color={theme.colors.menuSecondary} dimColor>
-								{searchQuery
-									? 'Type to filter · Backspace to clear · Space: toggle · Enter: confirm'
-									: 'Type to search · Space: toggle · Enter: confirm · Esc: cancel'}
-							</Text>
-						</Box>
-						{displayedTodos.map((todo, index) => {
-							const isSelected = index === displayedSelectedIndex;
-							const isChecked = selectedTodos.has(todo.id);
-
-							return (
-								<Box key={todo.id} flexDirection="column" width="100%">
-									<Text
-										color={
-											isSelected
-												? theme.colors.menuSelected
-												: theme.colors.menuNormal
-										}
-										bold
-									>
-										{isSelected ? '❯ ' : '  '}
-										{isChecked ? '[✓]' : '[ ]'} {todo.file}:{todo.line}
-									</Text>
-									<Box marginLeft={5}>
-										<Text
-											color={
-												isSelected
-													? theme.colors.menuSelected
-													: theme.colors.menuNormal
-											}
-											dimColor={!isSelected}
-										>
-											└─ {todo.content}
-										</Text>
-									</Box>
-								</Box>
-							);
-						})}
-						{todos.length > effectiveMaxItems && (
-							<Box marginTop={1}>
-								<Text color={theme.colors.menuSecondary} dimColor>
-									{t.commandPanel.scrollHint}
-									{hiddenAboveCount > 0 && (
-										<>
-											·{' '}
-											{t.commandPanel.moreAbove.replace(
-												'{count}',
-												hiddenAboveCount.toString(),
-											)}
-										</>
-									)}
-									{hiddenBelowCount > 0 && (
-										<>
-											·{' '}
-											{t.commandPanel.moreBelow.replace(
-												'{count}',
-												hiddenBelowCount.toString(),
-											)}
-										</>
-									)}
-								</Text>
-							</Box>
-						)}
-						{selectedTodos.size > 0 && (
-							<Box marginTop={1}>
-								<Text color={theme.colors.menuInfo}>
-									{selectedTodos.size} TODO(s) selected
-								</Text>
-							</Box>
-						)}
+			<PickerList
+				items={todos}
+				selectedIndex={selectedIndex}
+				visible={visible}
+				maxDisplayItems={maxHeight}
+				getItemKey={(todo: TodoItem) => todo.id}
+				title={
+					<Text color={theme.colors.warning} bold>
+						Select TODOs{' '}
+						{todos.length > 5 &&
+							`(${selectedIndex + 1}/${todos.length})`}
+						{searchQuery && ` - Filtering: "${searchQuery}"`}
+						{searchQuery &&
+							totalCount > todos.length &&
+							` (${todos.length}/${totalCount})`}
+					</Text>
+				}
+				header={
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{searchQuery
+								? 'Type to filter · Backspace to clear · Space: toggle · Enter: confirm'
+								: 'Type to search · Space: toggle · Enter: confirm · Esc: cancel'}
+						</Text>
 					</Box>
-				</Box>
-			</Box>
+				}
+				footer={
+					selectedTodos.size > 0 ? (
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuInfo}>
+								{selectedTodos.size} TODO(s) selected
+							</Text>
+						</Box>
+					) : undefined
+				}
+				scrollHintFormat={(above, below) => (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.commandPanel.scrollHint}
+						{above > 0 && (
+							<>
+								·{' '}
+								{t.commandPanel.moreAbove.replace(
+									'{count}',
+									above.toString(),
+								)}
+							</>
+						)}
+						{below > 0 && (
+							<>
+								·{' '}
+								{t.commandPanel.moreBelow.replace(
+									'{count}',
+									below.toString(),
+								)}
+							</>
+						)}
+					</Text>
+				)}
+				renderItem={(todo: TodoItem, isSelected: boolean) => {
+					const isChecked = selectedTodos.has(todo.id);
+					return (
+						<>
+							<Text
+								color={
+									isSelected
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+								bold
+							>
+								{isSelected ? '❯ ' : '  '}
+								{isChecked ? '[✓]' : '[ ]'} {todo.file}:{todo.line}
+							</Text>
+							<Box marginLeft={5} overflow="hidden">
+								<Text
+									color={
+										isSelected
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									dimColor={!isSelected}
+									wrap="truncate-end"
+								>
+									└─ {todo.content}
+								</Text>
+							</Box>
+						</>
+					);
+				}}
+			/>
 		);
 	},
 );

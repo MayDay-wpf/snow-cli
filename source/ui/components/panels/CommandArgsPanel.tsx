@@ -1,7 +1,8 @@
-import React, {memo, useMemo} from 'react';
+import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import PickerList from '../common/PickerList.js';
 
 interface Props {
 	commandName: string;
@@ -15,65 +16,45 @@ const CommandArgsPanel = memo(
 		const {theme} = useTheme();
 		const {t} = useI18n();
 
-		const MAX_DISPLAY_ITEMS = 6;
-
-		const displayWindow = useMemo(() => {
-			if (options.length <= MAX_DISPLAY_ITEMS) {
-				return {
-					items: options,
-					startIndex: 0,
-					endIndex: options.length,
-				};
-			}
-
-			const halfWindow = Math.floor(MAX_DISPLAY_ITEMS / 2);
-			let startIndex = Math.max(0, selectedIndex - halfWindow);
-			let endIndex = Math.min(options.length, startIndex + MAX_DISPLAY_ITEMS);
-
-			if (endIndex - startIndex < MAX_DISPLAY_ITEMS) {
-				startIndex = Math.max(0, endIndex - MAX_DISPLAY_ITEMS);
-			}
-
-			return {
-				items: options.slice(startIndex, endIndex),
-				startIndex,
-				endIndex,
-			};
-		}, [options, selectedIndex]);
-
-		const displayedItems = displayWindow.items;
-		const displayedSelectedIndex = selectedIndex - displayWindow.startIndex;
-
 		if (!visible || options.length === 0) {
 			return null;
 		}
 
 		return (
-			<Box flexDirection="column">
-				<Box>
-					<Text color={theme.colors.warning} bold>
-						/{commandName}{' '}
-					</Text>
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.commandArgsPanel.navigationHint}
-					</Text>
-				</Box>
-				{displayedItems.map((option, index) => (
-					<Box key={option} flexDirection="row">
+			<PickerList
+				items={options}
+				selectedIndex={selectedIndex}
+				visible={visible}
+				maxDisplayItems={6}
+				itemHeight={1}
+				getItemKey={(option: string) => option}
+				title={
+					<>
+						<Text color={theme.colors.warning} bold>
+							/{commandName}{' '}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.commandArgsPanel.navigationHint}
+						</Text>
+					</>
+				}
+				renderItem={(option: string, isSelected: boolean) => (
+					<Box overflow="hidden">
 						<Text
 							color={
-								index === displayedSelectedIndex
+								isSelected
 									? theme.colors.menuSelected
 									: theme.colors.menuNormal
 							}
-							bold={index === displayedSelectedIndex}
+							bold={isSelected}
+							wrap="truncate-end"
 						>
-							{index === displayedSelectedIndex ? '❯ ' : '  '}
+							{isSelected ? '❯ ' : '  '}
 							{option}
 						</Text>
 					</Box>
-				))}
-			</Box>
+				)}
+			/>
 		);
 	},
 );
