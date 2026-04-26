@@ -110,6 +110,7 @@ function convertToOpenAIMessages(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	thinkingEnabled: boolean = false,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompts = customSystemPromptOverride;
 
@@ -156,9 +157,11 @@ function convertToOpenAIMessages(
 				...baseMessage,
 				tool_calls: msg.tool_calls,
 			};
-			// Include reasoning_content for DeepSeek R1 models
-			if ((msg as any).reasoning_content) {
-				result.reasoning_content = (msg as any).reasoning_content;
+			const rc = (msg as any).reasoning_content;
+			if (rc !== undefined && rc !== null) {
+				result.reasoning_content = rc;
+			} else if (thinkingEnabled) {
+				result.reasoning_content = '';
 			}
 			return result as ChatCompletionMessageParam;
 		}
@@ -208,12 +211,20 @@ function convertToOpenAIMessages(
 			} as ChatCompletionMessageParam;
 		}
 
-		// Include reasoning_content for assistant messages (DeepSeek R1)
-		if (msg.role === 'assistant' && (msg as any).reasoning_content) {
-			return {
-				...baseMessage,
-				reasoning_content: (msg as any).reasoning_content,
-			} as any;
+		if (msg.role === 'assistant') {
+			const rc = (msg as any).reasoning_content;
+			if (rc !== undefined && rc !== null) {
+				return {
+					...baseMessage,
+					reasoning_content: rc,
+				} as any;
+			}
+			if (thinkingEnabled) {
+				return {
+					...baseMessage,
+					reasoning_content: '',
+				} as any;
+			}
 		}
 
 		return baseMessage as ChatCompletionMessageParam;
@@ -236,34 +247,44 @@ function convertToOpenAIMessages(
 						text,
 					})),
 				} as ChatCompletionMessageParam,
-			{
-				role: 'user',
-				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
-			} as ChatCompletionMessageParam,
-			...result,
-		];
-	} else {
-		// 只添加自定义系统提示词
+				{
+					role: 'user',
+					content: getSystemPromptForMode(
+						planMode,
+						vulnerabilityHuntingMode,
+						toolSearchDisabled,
+						teamMode,
+					),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		} else {
+			// 只添加自定义系统提示词
+			result = [
+				{
+					role: 'system',
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		}
+	} else if (includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
 		result = [
 			{
 				role: 'system',
-				content: customSystemPrompts.map(text => ({
-					type: 'text' as const,
-					text,
-				})),
+				content: getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+				),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
-	}
-} else if (includeBuiltinSystemPrompt) {
-	// 没有自定义系统提示词，但需要添加默认系统提示词
-	result = [
-		{
-			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
-		} as ChatCompletionMessageParam,
-		...result,
-	];
 	}
 
 	return result;
@@ -494,19 +515,24 @@ export async function* createStreamingChatCompletion(
 	customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
 
 	// 使用重试包装生成器
+	const thinkingEnabled = !!(
+		config.chatThinking?.enabled && !options.disableThinking
+	);
+
 	yield* withRetryGenerator(
 		async function* () {
 			const requestBody: Record<string, any> = {
 				model: options.model || config.advancedModel,
-			messages: convertToOpenAIMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false, // 默认为 true
-				customSystemPromptContent,
-				options.planMode || false,
-				options.vulnerabilityHuntingMode || false,
-				options.toolSearchDisabled || false,
-				options.teamMode || false,
-			),
+				messages: convertToOpenAIMessages(
+					options.messages,
+					options.includeBuiltinSystemPrompt !== false, // 默认为 true
+					customSystemPromptContent,
+					options.planMode || false,
+					options.vulnerabilityHuntingMode || false,
+					options.toolSearchDisabled || false,
+					options.teamMode || false,
+					thinkingEnabled,
+				),
 				stream: true,
 				stream_options: {include_usage: true},
 				temperature: options.temperature || 0.7,
@@ -515,10 +541,11 @@ export async function* createStreamingChatCompletion(
 				tool_choice: options.tool_choice,
 			};
 
-			if (config.chatThinking?.enabled && !options.disableThinking) {
+			if (thinkingEnabled) {
 				requestBody['thinking'] = {type: 'enabled'};
-				if (config.chatThinking.reasoning_effort) {
-					requestBody['reasoning_effort'] = config.chatThinking.reasoning_effort;
+				if (config.chatThinking?.reasoning_effort) {
+					requestBody['reasoning_effort'] =
+						config.chatThinking.reasoning_effort;
 				}
 			}
 

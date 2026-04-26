@@ -56,12 +56,9 @@ jobs:
 
             ### What's New
 
-            - Pure TS implementation of the Yoga engine to avoid infinite linear memory growth.
-            - Optimized Diffviewer rendering algorithm to reduce large number of Yoga nodes allocated.
-            - widestLine cache to reduce stringWidth recalculation.
-            - Add clearYogaNodeReferences to prevent dangling WASM pointers.
-            - Output instance reuse to reduce GC pressure
-            - Set limited cache to prevent infinite growth
+            - Optimize rendering performance of all panels
+            - Add input box real terminal cursor
+            - Optimize think field return for chat requests
 
             ### Installation
             ```bash
