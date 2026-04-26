@@ -98,11 +98,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 ## Tool Usage Guidelines
 
 ### Code Search Tools (Start Here)
-- ace-semantic_search: Find symbols by name with fuzzy matching
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Find all usages to understand impact
-- ace-file_outline: Get complete file structure
-- ace-text_search: Search literals, comments, error messages
+- ace-search: Unified ACE code search; pick action: semantic_search (fuzzy symbols), find_definition, find_references (impact), file_outline (complete file structure), text_search (literals/comments/errors)
 
 ### Filesystem Tools (Primary Work)
 - filesystem-read: Read files, use batch for multiple files
@@ -192,11 +188,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 		'filesystem-replaceedit',
 		'filesystem-edit',
 		'terminal-execute',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'websearch-search',
 		'websearch-fetch',
 		'ide-get_diagnostics',

@@ -1428,11 +1428,24 @@ export async function executeMCPTool(
 			}
 		} else if (serviceName === 'ace') {
 			// Handle built-in ACE Code Search tools with LSP hybrid support
+			// 聚合后的统一入口：actualToolName 始终是 'search'，通过 args.action 分发
 			const {hybridCodeSearchService} = await import(
 				'../../mcp/lsp/HybridCodeSearchService.js'
 			);
 
-			switch (actualToolName) {
+			// 兼容老的子工具名（find_definition/find_references/...），同时支持新的统一 ace-search
+			const aceAction =
+				actualToolName === 'search'
+					? (args.action as string | undefined)
+					: actualToolName;
+
+			if (!aceAction) {
+				throw new Error(
+					'ace-search requires "action" field: one of find_definition, find_references, semantic_search, file_outline, text_search.',
+				);
+			}
+
+			switch (aceAction) {
 				case 'search_symbols':
 					result = await hybridCodeSearchService.semanticSearch(
 						args.query,
@@ -1481,7 +1494,7 @@ export async function executeMCPTool(
 					);
 					break;
 				default:
-					throw new Error(`Unknown ACE tool: ${actualToolName}`);
+					throw new Error(`Unknown ACE action: ${aceAction}`);
 			}
 		} else if (serviceName === 'websearch') {
 			// Handle built-in Web Search tools (no connection needed)

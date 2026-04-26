@@ -187,11 +187,7 @@ Inserted log points:
 ## Tool Usage Guidelines
 
 ### Code Search Tools (explore first)
-- ace-semantic_search: Semantic code search
-- ace-find_definition: Find function/class definitions
-- ace-find_references: Find references
-- ace-text_search: Text search
-- ace-file_outline: Get file structure outline
+- ace-search: Unified ACE code search; pick action: semantic_search, find_definition, find_references, text_search, file_outline
 
 ### Filesystem Tools (core work)
 - filesystem-read: Read file contents
@@ -222,11 +218,7 @@ Inserted log points:
 		'filesystem-replaceedit',
 		'filesystem-edit',
 		'terminal-execute',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'ide-get_diagnostics',
 		'codebase-search',
 		'websearch-search',

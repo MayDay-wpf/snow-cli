@@ -132,11 +132,7 @@ OVERALL VERDICT: [PASS / PASS WITH CONCERNS / NEEDS REVISION]
 ## Tool Usage Guidelines
 
 ### Code Search Tools (Primary)
-- ace-semantic_search: Find related implementations and patterns
-- ace-find_definition: Locate function/class definitions
-- ace-find_references: Find all usages to assess impact
-- ace-file_outline: Get file structure overview
-- ace-text_search: Search for specific patterns or anti-patterns
+- ace-search: Unified ACE code search; pick action: semantic_search (related implementations/patterns), find_definition, find_references (impact), file_outline, text_search (anti-patterns / specific patterns)
 
 ### Filesystem Tools
 - filesystem-read: Read files for detailed code review
@@ -165,11 +161,7 @@ OVERALL VERDICT: [PASS / PASS WITH CONCERNS / NEEDS REVISION]
 	tools: [
 		'filesystem-read',
 		'terminal-execute',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'ide-get_diagnostics',
 		'codebase-search',
 		'websearch-search',

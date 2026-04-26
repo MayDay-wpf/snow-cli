@@ -308,106 +308,55 @@ function renderReadPreview(data: any, isSubAgentInternal: boolean) {
 	);
 }
 
-function renderACEPreview(toolName: string, data: any, maxLines: number) {
-	// Handle ace-text-search results
-	if (toolName === 'ace-text-search' || toolName === 'ace-text_search') {
-		if (!data || data.length === 0) {
-			return (
-				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
-						└─ No matches found
-					</Text>
-				</Box>
-			);
-		}
+function renderACEPreview(_toolName: string, data: any, maxLines: number) {
+	// 聚合后的统一工具 ace-search 通过 result shape 推断子动作
+	const isObject = data && typeof data === 'object' && !Array.isArray(data);
 
-		const results = Array.isArray(data) ? data : [];
-		return (
-			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
-					└─ Found {results.length} {results.length === 1 ? 'match' : 'matches'}
-				</Text>
-			</Box>
-		);
-	}
-
-	// Handle ace-search-symbols results
-	if (toolName === 'ace-search-symbols' || toolName === 'ace-search_symbols') {
-		const symbols = data.symbols || [];
-		if (symbols.length === 0) {
-			return (
-				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
-						└─ No symbols found
-					</Text>
-				</Box>
-			);
-		}
-
-		return (
-			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
-					└─ Found {symbols.length}{' '}
-					{symbols.length === 1 ? 'symbol' : 'symbols'}
-				</Text>
-			</Box>
-		);
-	}
-
-	// Handle ace-find-references results
+	// text_search: 数组，元素含 content + line
 	if (
-		toolName === 'ace-find-references' ||
-		toolName === 'ace-find_references'
+		Array.isArray(data) &&
+		data.length > 0 &&
+		data[0] &&
+		'content' in data[0] &&
+		'line' in data[0]
 	) {
-		const references = Array.isArray(data) ? data : [];
-		if (references.length === 0) {
-			return (
-				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
-						└─ No references found
-					</Text>
-				</Box>
-			);
-		}
-
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {references.length}{' '}
-					{references.length === 1 ? 'reference' : 'references'}
+					└─ Found {data.length} {data.length === 1 ? 'match' : 'matches'}
 				</Text>
 			</Box>
 		);
 	}
 
-	// Handle ace-find-definition result
+	// find_references: 数组，元素含 referenceType
 	if (
-		toolName === 'ace-find-definition' ||
-		toolName === 'ace-find_definition'
+		Array.isArray(data) &&
+		data.length > 0 &&
+		data[0] &&
+		'referenceType' in data[0]
 	) {
-		if (!data) {
-			return (
-				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
-						└─ Definition not found
-					</Text>
-				</Box>
-			);
-		}
-
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {data.type} {data.name} at {data.filePath}:{data.line}
+					└─ Found {data.length}{' '}
+					{data.length === 1 ? 'reference' : 'references'}
 				</Text>
 			</Box>
 		);
 	}
 
-	// Handle ace-file-outline result
-	if (toolName === 'ace-file-outline' || toolName === 'ace-file_outline') {
-		const symbols = Array.isArray(data) ? data : [];
-		if (symbols.length === 0) {
+	// file_outline: 数组（可空），元素含 name + type，但不含 referenceType / content
+	if (
+		Array.isArray(data) &&
+		(data.length === 0 ||
+			(data[0] &&
+				'name' in data[0] &&
+				'type' in data[0] &&
+				!('referenceType' in data[0]) &&
+				!('content' in data[0])))
+	) {
+		if (data.length === 0) {
 			return (
 				<Box marginLeft={2}>
 					<Text color="gray" dimColor>
@@ -416,21 +365,21 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 				</Box>
 			);
 		}
-
 		return (
 			<Box marginLeft={2}>
 				<Text color="gray" dimColor>
-					└─ Found {symbols.length}{' '}
-					{symbols.length === 1 ? 'symbol' : 'symbols'} in file
+					└─ Found {data.length} {data.length === 1 ? 'symbol' : 'symbols'} in
+					file
 				</Text>
 			</Box>
 		);
 	}
 
-	// Handle ace-semantic-search result
+	// semantic_search: 对象，含 symbols / references + totalResults
 	if (
-		toolName === 'ace-semantic-search' ||
-		toolName === 'ace-semantic_search'
+		isObject &&
+		('symbols' in data || 'references' in data) &&
+		'totalResults' in data
 	) {
 		const totalResults =
 			(data.symbols?.length || 0) + (data.references?.length || 0);
@@ -443,7 +392,6 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 				</Box>
 			);
 		}
-
 		return (
 			<Box flexDirection="column" marginLeft={2}>
 				<Text color="gray" dimColor>
@@ -453,6 +401,34 @@ function renderACEPreview(toolName: string, data: any, maxLines: number) {
 				<Text color="gray" dimColor>
 					└─ {data.references?.length || 0}{' '}
 					{(data.references?.length || 0) === 1 ? 'reference' : 'references'}
+				</Text>
+			</Box>
+		);
+	}
+
+	// find_definition: 对象，含 name + filePath + line（且不是 semantic_search）
+	if (
+		isObject &&
+		'name' in data &&
+		'filePath' in data &&
+		'line' in data &&
+		!('totalResults' in data)
+	) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ Found {data.type} {data.name} at {data.filePath}:{data.line}
+				</Text>
+			</Box>
+		);
+	}
+
+	// 空数组（text_search / find_references 无结果）
+	if (Array.isArray(data) && data.length === 0) {
+		return (
+			<Box marginLeft={2}>
+				<Text color="gray" dimColor>
+					└─ No matches found
 				</Text>
 			</Box>
 		);

@@ -111,8 +111,7 @@ OPEN QUESTIONS:
 
 ### Code Search Tools (For Context)
 - codebase-search: Understand existing implementation patterns
-- ace-semantic_search: Find relevant code for context
-- ace-file_outline: Understand file structure
+- ace-search: Unified ACE code search; pick action: semantic_search (find relevant code for context), file_outline (understand file structure), find_definition, find_references, text_search
 - filesystem-read: Read specific files for detailed understanding
 
 ### User Interaction (MANDATORY)
@@ -128,11 +127,7 @@ OPEN QUESTIONS:
 - Your output will guide the main workflow, so be precise and complete`,
 	tools: [
 		'filesystem-read',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'codebase-search',
 		'websearch-search',
 		'websearch-fetch',

@@ -219,17 +219,12 @@ function getAnalysisToolsSection(hasCodebase: boolean): string {
 
 - \`codebase-search\` - PRIMARY tool for code exploration (semantic search across entire codebase)
 - \`filesystem-read\` - Read current code to understand implementation
-- \`ace-find_definition\` - Locate exact symbol definitions (when you know the symbol name)
-- \`ace-find_references\` - See where code is used throughout the project
-- \`ace-file_outline\` - Get structure overview of specific files
+- \`ace-search\` - Unified ACE code search; choose \`action\`: find_definition (exact symbol), find_references (impact), file_outline (file structure), semantic_search (fuzzy), text_search (literal/regex)
 - \`ide-get_diagnostics\` - Check for existing errors/warnings that might affect the plan`;
 	} else {
 		return `**CRITICAL: Use code search tools to find code. Only use terminal-execute to run build/test commands, NEVER for searching code.**
 
-- \`ace-semantic_search\` - Find relevant code by semantic meaning
-- \`ace-find_definition\` - Locate where symbols are defined
-- \`ace-find_references\` - See where code is used throughout the project
-- \`ace-file_outline\` - Get structure overview of specific files
+- \`ace-search\` - Unified ACE code search; choose \`action\`: semantic_search (find by meaning), find_definition (locate symbol), find_references (impact), file_outline (file structure), text_search (literal/regex)
 - \`filesystem-read\` - Read current code to understand implementation
 - \`ide-get_diagnostics\` - Check for existing errors/warnings that might affect the plan`;
 	}
@@ -242,10 +237,7 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 	if (hasCodebase) {
 		return `**Code Analysis (Read-Only)**:
 - \`codebase-search\` - PRIMARY tool for semantic search (query by meaning/intent)
-- \`ace-find_definition\` - Find where symbols are defined (exact symbol lookup)
-- \`ace-find_references\` - Find all usages of a symbol (impact analysis)
-- \`ace-file_outline\` - Get file structure overview
-- \`ace-text_search\` - Search for literal strings/patterns (TODOs, comments, error messages)
+- \`ace-search\` - Unified ACE code search; pick \`action\`: find_definition / find_references / file_outline / text_search / semantic_search
 
 **File Operations (Read-Only)**:
 - \`filesystem-read\` - Read file contents to understand current state
@@ -254,11 +246,7 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 - \`ide-get_diagnostics\` - Check for existing errors/warnings`;
 	} else {
 		return `**Code Analysis (Read-Only)**:
-- \`ace-semantic_search\` - Search code by meaning/intent
-- \`ace-find_definition\` - Find where symbols are defined
-- \`ace-find_references\` - Find all usages of a symbol
-- \`ace-file_outline\` - Get file structure overview
-- \`ace-text_search\` - Search for literal strings/patterns
+- \`ace-search\` - Unified ACE code search; pick \`action\`: semantic_search (by meaning), find_definition, find_references, file_outline, text_search (literal/regex)
 
 **File Operations (Read-Only)**:
 - \`filesystem-read\` - Read file contents to understand current state

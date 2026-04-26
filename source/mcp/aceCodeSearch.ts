@@ -215,7 +215,9 @@ export class ACECodeSearchService {
 		const rss = process.memoryUsage.rss();
 		if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES) {
 			logger.warn(
-				`ACE memory pressure detected (RSS: ${Math.round(rss / 1024 / 1024)}MB), triggering aggressive cleanup`,
+				`ACE memory pressure detected (RSS: ${Math.round(
+					rss / 1024 / 1024,
+				)}MB), triggering aggressive cleanup`,
 			);
 			this.clearContentCache();
 			this.fileStatCache.clear();
@@ -1875,78 +1877,75 @@ export class ACECodeSearchService {
 	}
 }
 
-// Export a default instance
-export const aceCodeSearchService = new ACECodeSearchService();
-
 // MCP Tool definitions for integration
+// 聚合后的统一 ACE 工具：使用 action 字段分发到对应能力
 export const mcpTools = [
 	{
-		name: 'ace-find_definition',
-		description:
-			'ACE Code Search: Find the definition of a symbol (Go to Definition). Locates where a function, class, or variable is defined in the codebase. Returns precise location with full signature and context.',
+		name: 'ace-search',
+		description: `ACE Code Search: Unified code search tool. Use required field "action" — one of find_definition | find_references | semantic_search | file_outline | text_search.
+
+PARALLEL CALLS ONLY: MUST pair with other tools (ace-search + filesystem-read/terminal-execute/etc).
+
+ACTIONS:
+- find_definition: Find the definition of a symbol (Go to Definition). Required: "symbolName". Optional: "contextFile", "line", "column" (0-indexed; useful for OmniSharp/LSP precision).
+- find_references: Find all references to a symbol (definition / usage / import / type). Required: "symbolName". Optional: "maxResults" (default 100).
+- semantic_search: Intelligent symbol search with fuzzy matching. Required: "query". Optional: "searchType" (definition|usage|implementation|all, default all), "symbolType", "language", "maxResults" (default 50). Tip: prefer action=file_outline if you only need a single file's outline.
+- file_outline: Get complete symbol outline for a file (function/class/variable/...). Required: "filePath". Optional: "maxResults", "includeContext" (default true), "symbolTypes". Set includeContext=false to reduce output size significantly.
+- text_search: Literal text or regex pattern matching (grep-style). Best for TODOs, comments, exact error strings. Required: "pattern". Optional: "fileGlob" (e.g. "*.ts", "**/*.{js,ts}"), "isRegex" (default true; set false for literal), "maxResults" (default 100).
+
+EXAMPLES:
+- ace-search({action:"find_definition", symbolName:"getFileContent"})
+- ace-search({action:"find_references", symbolName:"TodoService", maxResults:50})
+- ace-search({action:"semantic_search", query:"gfc", searchType:"definition"})
+- ace-search({action:"file_outline", filePath:"source/mcp/todo.ts", includeContext:false})
+- ace-search({action:"text_search", pattern:"TODO:", fileGlob:"**/*.ts", isRegex:false})`,
 		inputSchema: {
 			type: 'object',
 			properties: {
+				action: {
+					type: 'string',
+					enum: [
+						'find_definition',
+						'find_references',
+						'semantic_search',
+						'file_outline',
+						'text_search',
+					],
+					description:
+						'Which ACE search operation to run. Determines which other parameters are required.',
+				},
+				// find_definition / find_references
 				symbolName: {
 					type: 'string',
-					description: 'Name of the symbol to find definition for',
+					description:
+						'For action=find_definition or find_references: name of the symbol to look up.',
 				},
 				contextFile: {
 					type: 'string',
 					description:
-						'Current file path for context-aware search (optional, searches current file first)',
+						'For action=find_definition only: current file path for context-aware search (optional, searches current file first).',
 				},
 				line: {
 					type: 'number',
 					description:
-						'Line number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+						'For action=find_definition only: 0-indexed line number where the symbol appears in contextFile (optional; required by some LSP servers like OmniSharp).',
 				},
 				column: {
 					type: 'number',
 					description:
-						'Column number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+						'For action=find_definition only: 0-indexed column number where the symbol appears in contextFile (optional; required by some LSP servers like OmniSharp).',
 				},
-			},
-			required: ['symbolName'],
-		},
-	},
-	{
-		name: 'ace-find_references',
-		description:
-			'ACE Code Search: Find all references to a symbol (Find All References). Shows where a function, class, or variable is used throughout the codebase. Categorizes references as definition, usage, import, or type reference.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				symbolName: {
-					type: 'string',
-					description: 'Name of the symbol to find references for',
-				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of references to return (default: 100)',
-					default: 100,
-				},
-			},
-			required: ['symbolName'],
-		},
-	},
-	{
-		name: 'ace-semantic_search',
-		description:
-			'ACE Code Search: Intelligent symbol search and semantic analysis. Supports multiple search modes: (1) definition - find symbol definitions (functions/classes/interfaces); (2) usage - find symbol reference locations; (3) implementation - find specific implementations; (4) all - comprehensive search. Supports fuzzy matching and filtering by language and symbol type. 💡 Tip: If you only need to view the symbol outline of a single file, use ace-file_outline for faster access.',
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// semantic_search
 				query: {
 					type: 'string',
 					description:
-						'Search Query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent")',
+						'For action=semantic_search: search query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent").',
 				},
 				searchType: {
 					type: 'string',
 					enum: ['definition', 'usage', 'implementation', 'all'],
 					description:
-						'Search Types: definition (search for declarations), usage (search for usages), implementation (search for implementations), all (full search)',
+						'For action=semantic_search only: definition (declarations), usage (reference locations), implementation (specific implementations), all (full search). Default: all.',
 					default: 'all',
 				},
 				symbolType: {
@@ -1964,7 +1963,7 @@ export const mcpTools = [
 						'export',
 					],
 					description:
-						'Optionally, filter by symbol type (function, class, variable, etc.).',
+						'For action=semantic_search only: optional filter by symbol type.',
 				},
 				language: {
 					type: 'string',
@@ -1977,38 +1976,19 @@ export const mcpTools = [
 						'java',
 						'csharp',
 					],
-					description: 'Optional: Filter by programming language',
+					description:
+						'For action=semantic_search only: optional filter by programming language.',
 				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of returned results (default: 50)',
-					default: 50,
-				},
-			},
-			required: ['query'],
-		},
-	},
-	{
-		name: 'ace-file_outline',
-		description:
-			"ACE Code Search: Get complete code outline for a file. Shows all functions, classes, variables, and other symbols defined in the file with their locations. Similar to VS Code's outline view.",
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// file_outline
 				filePath: {
 					type: 'string',
 					description:
-						'Path to the file to get outline for (relative to workspace root)',
-				},
-				maxResults: {
-					type: 'number',
-					description:
-						'Maximum number of symbols to return (default: unlimited). Important symbols (function, class, interface, method) are prioritized.',
+						'For action=file_outline: path to the file to get outline for (relative to workspace root, or ssh:// URL).',
 				},
 				includeContext: {
 					type: 'boolean',
 					description:
-						'Whether to include surrounding code context (default: true). Set to false to reduce output size significantly.',
+						'For action=file_outline only: include surrounding code context (default true). Set false to reduce output size significantly.',
 					default: true,
 				},
 				symbolTypes: {
@@ -2029,42 +2009,36 @@ export const mcpTools = [
 						],
 					},
 					description:
-						'Filter by specific symbol types (optional). If not specified, all symbol types are returned.',
+						'For action=file_outline only: filter by specific symbol types (optional).',
 				},
-			},
-			required: ['filePath', 'maxResults', 'includeContext'],
-		},
-	},
-	{
-		name: 'ace-text_search',
-		description:
-			'ACE Code Search: Literal text/regex pattern matching (grep-style search). Best for finding exact strings: TODOs, comments, log messages, error strings, string constants. NOT recommended for code understanding or exploring functionality - use semantic search tools for that. Use when you know the exact text pattern you are looking for.',
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// text_search
 				pattern: {
 					type: 'string',
 					description:
-						'Text pattern or regex to search for. Examples: "TODO:" (literal), "import.*from" (regex), "tool_call|toolCall" (regex with OR). By default, pattern is treated as regex. Set isRegex to false for literal string search.',
+						'For action=text_search: text pattern or regex to search for. Examples: "TODO:" (literal), "import.*from" (regex), "tool_call|toolCall" (regex with OR).',
 				},
 				fileGlob: {
 					type: 'string',
 					description:
-						'Glob pattern to filter files (e.g., "*.ts" for TypeScript only, "**/*.{js,ts}" for JS and TS, "src/**/*.py" for Python in src)',
+						'For action=text_search only: glob pattern to filter files (e.g. "*.ts", "**/*.{js,ts}", "src/**/*.py").',
 				},
 				isRegex: {
 					type: 'boolean',
 					description:
-						'Whether to force regex mode. If not specified, the tool defaults to regex mode. Set to false to use literal string search.',
+						'For action=text_search only: whether to use regex mode. Default true. Set false for literal string search.',
 					default: true,
 				},
+				// shared
 				maxResults: {
 					type: 'number',
-					description: 'Maximum number of results to return (default: 100)',
-					default: 100,
+					description:
+						'Optional max results. Defaults: find_references=100, semantic_search=50, text_search=100, file_outline=unlimited.',
 				},
 			},
-			required: ['pattern'],
+			required: ['action'],
 		},
 	},
 ];
+
+// Export a default instance
+export const aceCodeSearchService = new ACECodeSearchService();

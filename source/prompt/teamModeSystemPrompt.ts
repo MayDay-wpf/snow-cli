@@ -167,17 +167,12 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 - Query by meaning: "authentication logic", "error handling patterns"
 - Returns relevant code with full context across the entire codebase
 
-**Fallback tools:**
-- \`ace-find_definition\` - Jump to exact symbol definition
-- \`ace-find_references\` - Find all usages of a known symbol
-- \`ace-text_search\` - Literal string search`;
+**Fallback tool:**
+- \`ace-search\` - Unified ACE code search; pick \`action\`: find_definition / find_references / semantic_search / file_outline / text_search`;
 	}
 	return `## Code Search (for Lead's own use)
 
-- \`ace-semantic_search\` - Symbol search with fuzzy matching
-- \`ace-find_definition\` - Go to definition of a symbol
-- \`ace-find_references\` - Find all usages of a symbol
-- \`ace-text_search\` - Literal text/regex search`;
+- \`ace-search\` - Unified ACE code search. Required \`action\`: find_definition (go to definition) / find_references (all usages) / semantic_search (fuzzy symbol search) / file_outline / text_search (literal/regex)`;
 }
 
 const TOOL_DISCOVERY_SECTIONS = {

@@ -108,11 +108,7 @@ ALTERNATIVE APPROACHES:
 ## Tool Usage Guidelines
 
 ### Code Search Tools (Primary)
-- ace-semantic_search: Find existing implementations and patterns
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Understand how components are used
-- ace-file_outline: Get file structure for planning changes
-- ace-text_search: Find specific patterns or strings
+- ace-search: Unified ACE code search; pick action: semantic_search (existing implementations/patterns), find_definition, find_references (how components are used), file_outline (planning changes), text_search (specific patterns/strings)
 
 ### Filesystem Tools
 - filesystem-read: Read files to understand implementation details
@@ -136,11 +132,7 @@ ALTERNATIVE APPROACHES:
 - If requirements are unclear, state assumptions explicitly`,
 	tools: [
 		'filesystem-read',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'ide-get_diagnostics',
 		'codebase-search',
 		'websearch-search',

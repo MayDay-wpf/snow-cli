@@ -120,13 +120,7 @@ export default function SubAgentConfigScreen({
 		},
 		{
 			name: t.subAgentConfig.aceTools,
-			tools: [
-				'ace-find_definition',
-				'ace-find_references',
-				'ace-semantic_search',
-				'ace-text_search',
-				'ace-file_outline',
-			],
+			tools: ['ace-search'],
 		},
 		{
 			name: t.subAgentConfig.codebaseTools,
@@ -194,9 +188,13 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		const isBuiltin = ['agent_explore', 'agent_plan', 'agent_general', 'agent_analyze', 'agent_debug'].includes(
-			agentId,
-		);
+		const isBuiltin = [
+			'agent_explore',
+			'agent_plan',
+			'agent_general',
+			'agent_analyze',
+			'agent_debug',
+		].includes(agentId);
 		setIsBuiltinAgent(isBuiltin);
 
 		setAgentName(agent.name);
@@ -419,10 +417,7 @@ export default function SubAgentConfigScreen({
 		if (key.upArrow) {
 			// 配置列表字段：在列表内导航，到达顶部时跳到上一个主字段
 			if (currentField === 'configProfile') {
-				if (
-					profileOptions.length === 0 ||
-					selectedConfigProfileIndex === 0
-				) {
+				if (profileOptions.length === 0 || selectedConfigProfileIndex === 0) {
 					// 跳到上一个主字段
 					setCurrentField('role');
 				} else {

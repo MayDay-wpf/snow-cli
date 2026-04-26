@@ -89,7 +89,7 @@ export const ACE_IDLE_CLEANUP_MS = 2 * 60 * 1000;
 
 /**
  * Maximum number of files kept in the semantic symbol index
- * Prevents ace-semantic_search from exhausting memory on very large workspaces
+ * Prevents ace-search (action=semantic_search) from exhausting memory on very large workspaces
  */
 export const MAX_INDEXED_FILES = 2000;
 
