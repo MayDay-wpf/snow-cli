@@ -186,6 +186,40 @@ export class SummaryAgent {
 		assistantMessage: string,
 		abortSignal?: AbortSignal,
 	): Promise<{title: string; summary: string} | null> {
+		const result = await this.generateSummaryInternal(
+			userMessage,
+			assistantMessage,
+			abortSignal,
+		);
+		// 无论生成成功或回退，都用 title 更新终端标题
+		this.applyTerminalTitle(result?.title);
+		return result;
+	}
+
+	/**
+	 * 把 summary 标题设置为终端窗口/标签标题，失败时静默忽略
+	 */
+	private applyTerminalTitle(title: string | undefined): void {
+		if (!title) return;
+		try {
+			if (!process.stdout?.isTTY) return;
+			const finalTitle = `Snow CLI - ${title}`;
+			try {
+				process.title = finalTitle;
+			} catch {
+				// 某些受限环境写入 process.title 会失败，忽略
+			}
+			process.stdout.write(`\x1b]0;${finalTitle}\x07`);
+		} catch (error) {
+			logger.warn('Summary agent: Failed to set terminal title', error);
+		}
+	}
+
+	private async generateSummaryInternal(
+		userMessage: string,
+		assistantMessage: string,
+		abortSignal?: AbortSignal,
+	): Promise<{title: string; summary: string} | null> {
 		const available = await this.isAvailable();
 		if (!available) {
 			logger.warn('Summary agent: Not available, using fallback summary');

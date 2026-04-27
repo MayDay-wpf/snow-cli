@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {PixelEditor} from '../components/pixel-editor/index.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {navigateTo} from '../../hooks/integration/useGlobalNavigation.js';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
 import {homedir} from 'os';
@@ -66,6 +67,7 @@ type Props = {
 export default function PixelEditorScreen({onBack}: Props) {
 	const {t} = useI18n();
 	const ts = t.pixelEditorScreen;
+	useTerminalTitle(`Snow CLI - ${ts.screenTitle}`);
 	const [view, setView] = useState<View>('menu');
 	const [editorReturnView, setEditorReturnView] = useState<View>('menu');
 	const [editorKey, setEditorKey] = useState(0);
@@ -377,9 +379,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 							);
 							setExitImageName(current.name);
 							setExitImageEnabled(true);
-							setMessage(
-								ts.setAsExitImage.replace('{name}', current.name),
-							);
+							setMessage(ts.setAsExitImage.replace('{name}', current.name));
 						}
 					}
 				}
@@ -478,10 +478,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 					)}
 					{selectedNames.size > 0 && !pendingDelete && (
 						<Text color="yellow">
-							{ts.selectedCount.replace(
-								'{count}',
-								String(selectedNames.size),
-							)}
+							{ts.selectedCount.replace('{count}', String(selectedNames.size))}
 						</Text>
 					)}
 					{message && <Text color="green">{message}</Text>}

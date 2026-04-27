@@ -13,6 +13,7 @@ import {
 } from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -165,9 +166,7 @@ function openEditorForScope(
 						scope === 'project'
 							? i18nMessages.scopeProjectLabel
 							: i18nMessages.scopeGlobalLabel;
-					console.log(
-						i18nMessages.savedSuccess.replace('{scope}', scopeLabel),
-					);
+					console.log(i18nMessages.savedSuccess.replace('{scope}', scopeLabel));
 				} else {
 					writeFileSync(configFilePath, originalContent, 'utf8');
 					console.error(
@@ -200,6 +199,7 @@ function openEditorForScope(
 
 export default function MCPConfigScreen({onBack}: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.mcpConfigScreen.title}`);
 	const {theme} = useTheme();
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [editing, setEditing] = useState(false);

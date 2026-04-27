@@ -9,6 +9,7 @@ import {
 import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -30,6 +31,7 @@ export default function SubAgentListScreen({
 	const {theme} = useTheme();
 	const {columns} = useTerminalSize();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.subAgentList.title}`);
 	const [agents, setAgents] = useState<SubAgent[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(defaultSelectedIndex);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -104,11 +106,13 @@ export default function SubAgentListScreen({
 		}
 
 		if (key.upArrow) {
-			const newIndex = selectedIndex > 0 ? selectedIndex - 1 : agents.length - 1;
+			const newIndex =
+				selectedIndex > 0 ? selectedIndex - 1 : agents.length - 1;
 			setSelectedIndex(newIndex);
 			onSelectionPersist?.(newIndex);
 		} else if (key.downArrow) {
-			const newIndex = selectedIndex < agents.length - 1 ? selectedIndex + 1 : 0;
+			const newIndex =
+				selectedIndex < agents.length - 1 ? selectedIndex + 1 : 0;
 			setSelectedIndex(newIndex);
 			onSelectionPersist?.(newIndex);
 		} else if (key.return) {

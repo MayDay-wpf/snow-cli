@@ -18,6 +18,7 @@ import {
 	type HookActionType,
 	isActionTypeAllowed,
 } from '../../utils/config/hooksConfig.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -42,6 +43,7 @@ export default function HooksConfigScreen({
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.hooksConfig.title}`);
 
 	const [screen, setScreen] = useState<Screen>('scope-select');
 	const [selectedScope, setSelectedScope] = useState<HookScope>('project');
@@ -76,7 +78,10 @@ export default function HooksConfigScreen({
 	// 验证是否可以添加指定类型的 Action
 	const canAddActionType = useCallback(
 		(newType: HookActionType, currentHooks: HookAction[]): boolean => {
-			if (!selectedHookType || !isActionTypeAllowed(selectedHookType, newType)) {
+			if (
+				!selectedHookType ||
+				!isActionTypeAllowed(selectedHookType, newType)
+			) {
 				return false;
 			}
 			// prompt 和 command 互斥：prompt 独占，command 不能与 prompt 共存

@@ -10,6 +10,7 @@ import {
 } from '../../utils/config/proxyConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -23,6 +24,7 @@ export default function ProxyConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.proxyConfig.title}`);
 	const {theme} = useTheme();
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');

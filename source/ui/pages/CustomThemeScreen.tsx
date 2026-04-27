@@ -13,6 +13,7 @@ import {
 } from '../themes/index.js';
 import {saveCustomColors} from '../../utils/config/themeConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: (nextSelectedTheme?: ThemeType) => void;
@@ -54,6 +55,9 @@ export default function CustomThemeScreen({onBack}: Props) {
 	const {setThemeType, refreshCustomTheme} = useTheme();
 
 	const {t} = useI18n();
+	useTerminalTitle(
+		`Snow CLI - ${t.customTheme?.title || 'Custom Theme Editor'}`,
+	);
 	const [colors, setColors] = useState<ThemeColors>(() => {
 		const custom = getCustomTheme();
 		return custom.colors;

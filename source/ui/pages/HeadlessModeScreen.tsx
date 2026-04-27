@@ -18,6 +18,7 @@ import {
 import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
 import {getCurrentTheme} from '../../utils/config/themeConfig.js';
 import {themes} from '../themes/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	prompt: string;
@@ -359,6 +360,7 @@ export default function HeadlessModeScreen({
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
 	const {t} = useI18n();
+	useTerminalTitle('Snow CLI - Headless Mode');
 
 	// Use custom hooks
 	const streamingState = useStreamingState();

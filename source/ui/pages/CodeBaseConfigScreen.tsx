@@ -11,6 +11,7 @@ import {
 } from '../../utils/config/codebaseConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -90,6 +91,7 @@ export default function CodeBaseConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.codebaseConfig.title}`);
 	const {theme} = useTheme();
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
@@ -401,59 +403,59 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-		case 'enableReranking':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.rerankingToggle}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{enableReranking
-								? t.codebaseConfig.enabled
-								: t.codebaseConfig.disabled}{' '}
-							{t.codebaseConfig.toggleHint}
+			case 'enableReranking':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingToggle}
 						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{enableReranking
+									? t.codebaseConfig.enabled
+									: t.codebaseConfig.disabled}{' '}
+								{t.codebaseConfig.toggleHint}
+							</Text>
+						</Box>
 					</Box>
-				</Box>
-			);
+				);
 
-		case 'embeddingSettings':
-			return (
-				<Box key={field} flexDirection="column">
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{embeddingExpanded ? '▼ ' : '▶ '}
-						{t.codebaseConfig.embeddingSettingsGroup}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{t.codebaseConfig.embeddingSettingsExpandHint}
+			case 'embeddingSettings':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{embeddingExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.embeddingSettingsGroup}
 						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{t.codebaseConfig.embeddingSettingsExpandHint}
+							</Text>
+						</Box>
 					</Box>
-				</Box>
-			);
+				);
 
-		case 'embeddingType':
-			return (
-				<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.embeddingType}
-					</Text>
+			case 'embeddingType':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.embeddingType}
+						</Text>
 						{isEditing && isActive ? (
 							<Box marginLeft={3}>
 								<ScrollableSelectInput
@@ -482,10 +484,10 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-		case 'embeddingModelName':
-			return (
-				<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
+			case 'embeddingModelName':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
@@ -516,10 +518,10 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-		case 'embeddingBaseUrl':
-			return (
-				<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
+			case 'embeddingBaseUrl':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
@@ -550,10 +552,10 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-		case 'embeddingApiKey':
-			return (
-				<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
+			case 'embeddingApiKey':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
@@ -587,10 +589,10 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-		case 'embeddingDimensions':
-			return (
-				<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
+			case 'embeddingDimensions':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
@@ -615,372 +617,370 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-	case 'batchSettings':
-		return (
-			<Box key={field} flexDirection="column">
-				<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{batchExpanded ? '▼ ' : '▶ '}
-						{t.codebaseConfig.batchSettingsGroup}
-					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{t.codebaseConfig.batchSettingsExpandHint}
+			case 'batchSettings':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{batchExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.batchSettingsGroup}
 						</Text>
-					</Box>
-				</Box>
-			);
-
-	case 'batchMaxLines':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.batchMaxLines}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {batchMaxLines}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>{batchMaxLines}</Text>
-						</Box>
-					)}
-				</Box>
-			);
-
-	case 'batchConcurrency':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.batchConcurrency}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {batchConcurrency}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{batchConcurrency}
+								{t.codebaseConfig.batchSettingsExpandHint}
 							</Text>
 						</Box>
-					)}
-				</Box>
-			);
-	case 'chunkingMaxLinesPerChunk':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.chunkingMaxLinesPerChunk}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {chunkingMaxLinesPerChunk}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
+					</Box>
+				);
+
+			case 'batchMaxLines':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.batchMaxLines}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {batchMaxLines}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>{batchMaxLines}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'batchConcurrency':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.batchConcurrency}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {batchConcurrency}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{batchConcurrency}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			case 'chunkingMaxLinesPerChunk':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMaxLinesPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {chunkingMaxLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMaxLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'chunkingMinLinesPerChunk':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMinLinesPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {chunkingMinLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMinLinesPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'chunkingMinCharsPerChunk':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingMinCharsPerChunk}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {chunkingMinCharsPerChunk}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingMinCharsPerChunk}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'chunkingOverlapLines':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.chunkingOverlapLines}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {chunkingOverlapLines}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{chunkingOverlapLines}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			case 'rerankingSettings':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{rerankingExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.rerankingSettingsGroup}
+						</Text>
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
-								{chunkingMaxLinesPerChunk}
+								{t.codebaseConfig.rerankingSettingsExpandHint}
 							</Text>
 						</Box>
-					)}
-				</Box>
-			);
+					</Box>
+				);
 
-	case 'chunkingMinLinesPerChunk':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.chunkingMinLinesPerChunk}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {chunkingMinLinesPerChunk}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{chunkingMinLinesPerChunk}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
+			case 'rerankingModelName':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingModelName}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingModelName}
+										onChange={value =>
+											setRerankingModelName(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingModelName || t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
-	case 'chunkingMinCharsPerChunk':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.chunkingMinCharsPerChunk}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {chunkingMinCharsPerChunk}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{chunkingMinCharsPerChunk}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
+			case 'rerankingBaseUrl':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingBaseUrl}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingBaseUrl}
+										onChange={value =>
+											setRerankingBaseUrl(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingBaseUrl || t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
-	case 'chunkingOverlapLines':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-					<Text
-						color={
-							isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-						}
-					>
-						{isActive ? '❯ ' : '  '}
-						{t.codebaseConfig.chunkingOverlapLines}
-					</Text>
-					{isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuInfo}>
-								{t.codebaseConfig.enterValue} {chunkingOverlapLines}
-							</Text>
-						</Box>
-					)}
-					{!isCurrentlyEditing && (
-						<Box marginLeft={3}>
-							<Text color={theme.colors.menuSecondary}>
-								{chunkingOverlapLines}
-							</Text>
-						</Box>
-					)}
-				</Box>
-			);
-		case 'rerankingSettings':
-		return (
-			<Box key={field} flexDirection="column">
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{rerankingExpanded ? '▼ ' : '▶ '}
-					{t.codebaseConfig.rerankingSettingsGroup}
-				</Text>
-				<Box marginLeft={3}>
-					<Text color={theme.colors.menuSecondary}>
-						{t.codebaseConfig.rerankingSettingsExpandHint}
-					</Text>
-				</Box>
-			</Box>
-		);
+			case 'rerankingApiKey':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingApiKey}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingApiKey}
+										onChange={value =>
+											setRerankingApiKey(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+										mask="*"
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingApiKey
+										? t.codebaseConfig.masked
+										: t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 
-	case 'rerankingModelName':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{t.codebaseConfig.rerankingModelName}
-				</Text>
-				{isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuInfo}>
-							<TextInput
-								value={rerankingModelName}
-								onChange={value =>
-									setRerankingModelName(stripFocusArtifacts(value))
-								}
-								onSubmit={() => setIsEditing(false)}
-							/>
+			case 'rerankingContextLength':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingContextLength}
 						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {rerankingContextLength}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingContextLength}
+								</Text>
+							</Box>
+						)}
 					</Box>
-				)}
-				{!isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{rerankingModelName || t.codebaseConfig.notSet}
-						</Text>
-					</Box>
-				)}
-			</Box>
-		);
+				);
 
-	case 'rerankingBaseUrl':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{t.codebaseConfig.rerankingBaseUrl}
-				</Text>
-				{isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuInfo}>
-							<TextInput
-								value={rerankingBaseUrl}
-								onChange={value =>
-									setRerankingBaseUrl(stripFocusArtifacts(value))
-								}
-								onSubmit={() => setIsEditing(false)}
-							/>
+			case 'rerankingTopN':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingTopN}
 						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {rerankingTopN}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>{rerankingTopN}</Text>
+							</Box>
+						)}
 					</Box>
-				)}
-				{!isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{rerankingBaseUrl || t.codebaseConfig.notSet}
-						</Text>
-					</Box>
-				)}
-			</Box>
-		);
+				);
 
-	case 'rerankingApiKey':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{t.codebaseConfig.rerankingApiKey}
-				</Text>
-				{isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuInfo}>
-							<TextInput
-								value={rerankingApiKey}
-								onChange={value =>
-									setRerankingApiKey(stripFocusArtifacts(value))
-								}
-								onSubmit={() => setIsEditing(false)}
-								mask="*"
-							/>
-						</Text>
-					</Box>
-				)}
-				{!isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{rerankingApiKey
-								? t.codebaseConfig.masked
-								: t.codebaseConfig.notSet}
-						</Text>
-					</Box>
-				)}
-			</Box>
-		);
-
-	case 'rerankingContextLength':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{t.codebaseConfig.rerankingContextLength}
-				</Text>
-				{isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuInfo}>
-							{t.codebaseConfig.enterValue} {rerankingContextLength}
-						</Text>
-					</Box>
-				)}
-				{!isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{rerankingContextLength}
-						</Text>
-					</Box>
-				)}
-			</Box>
-		);
-
-	case 'rerankingTopN':
-		return (
-			<Box key={field} flexDirection="column" marginLeft={2}>
-				<Text
-					color={
-						isActive ? theme.colors.menuSelected : theme.colors.menuNormal
-					}
-				>
-					{isActive ? '❯ ' : '  '}
-					{t.codebaseConfig.rerankingTopN}
-				</Text>
-				{isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuInfo}>
-							{t.codebaseConfig.enterValue} {rerankingTopN}
-						</Text>
-					</Box>
-				)}
-				{!isCurrentlyEditing && (
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{rerankingTopN}
-						</Text>
-					</Box>
-				)}
-			</Box>
-		);
-
-		default:
+			default:
 				return null;
 		}
 	};

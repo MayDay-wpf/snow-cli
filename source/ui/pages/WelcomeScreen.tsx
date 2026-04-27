@@ -17,6 +17,7 @@ import {useI18n} from '../../i18n/index.js';
 import {getUpdateNotice, onUpdateNotice} from '../../utils/ui/updateNotice.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import UpdateNotice from '../components/common/UpdateNotice.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 // Lazy load all configuration screens for better startup performance
 const ConfigScreen = React.lazy(() => import('./ConfigScreen.js'));
@@ -76,6 +77,7 @@ export default function WelcomeScreen({
 	onMenuSelectionPersist,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.welcome.title}`);
 	const {theme} = useTheme();
 	const [infoText, setInfoText] = useState(t.welcome.startChatInfo);
 	const [inlineView, setInlineView] = useState<InlineView>('menu');
@@ -237,11 +239,11 @@ export default function WelcomeScreen({
 				setInlineView('systemprompt');
 			} else if (value === 'customheaders') {
 				setInlineView('customheaders');
-		} else if (value === 'mcp') {
-			setInlineView('mcp-config');
-		} else if (value === 'hooks') {
-			setInlineView('hooks-config');
-		} else if (value === 'language') {
+			} else if (value === 'mcp') {
+				setInlineView('mcp-config');
+			} else if (value === 'hooks') {
+				setInlineView('hooks-config');
+			} else if (value === 'language') {
 				setInlineView('language-settings');
 			} else if (value === 'theme') {
 				setInlineView('theme-settings');

@@ -32,6 +32,7 @@ import {useChatScreenLocalState} from './chatScreen/useChatScreenLocalState.js';
 import {useChatScreenModes} from './chatScreen/useChatScreenModes.js';
 import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLifecycle.js';
 import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 const MIN_TERMINAL_HEIGHT = 10;
 
@@ -49,6 +50,7 @@ export default function ChatScreen({
 	enablePlan,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.chatScreen.headerTitle}`);
 	const {theme} = useTheme();
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	const workingDirectory = process.cwd();

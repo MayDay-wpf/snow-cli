@@ -14,6 +14,7 @@ import {
 } from '../../utils/execution/sensitiveCommandManager.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 // Focus event handling
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -61,6 +62,8 @@ export default function SensitiveCommandConfigScreen({
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
+
+	useTerminalTitle(`Snow CLI - ${t.sensitiveCommandConfig.title}`);
 	const [commands, setCommands] = useState<SensitiveCommand[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -221,13 +224,7 @@ export default function SensitiveCommandConfigScreen({
 				}
 			}
 		},
-		[
-			scopeSelectIndex,
-			scopeSelectPurpose,
-			confirmResetScope,
-			loadCommands,
-			t,
-		],
+		[scopeSelectIndex, scopeSelectPurpose, confirmResetScope, loadCommands, t],
 	);
 
 	// Handle add view input — ESC returns to scope-select
@@ -512,9 +509,7 @@ export default function SensitiveCommandConfigScreen({
 						return null;
 					}
 
-					const scopeTag = cmd.isPreset
-						? ''
-						: ` · ${getScopeLabel(cmd.scope)}`;
+					const scopeTag = cmd.isPreset ? '' : ` · ${getScopeLabel(cmd.scope)}`;
 
 					return (
 						<Text
@@ -523,8 +518,8 @@ export default function SensitiveCommandConfigScreen({
 								selectedIndex === index
 									? theme.colors.menuInfo
 									: cmd.enabled
-										? theme.colors.menuNormal
-										: theme.colors.menuSecondary
+									? theme.colors.menuNormal
+									: theme.colors.menuSecondary
 							}
 							bold={selectedIndex === index}
 							dimColor={!cmd.enabled}

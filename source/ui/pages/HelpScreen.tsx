@@ -4,6 +4,7 @@ import {useTheme} from '../contexts/ThemeContext.js';
 import {useI18n} from '../../i18n/I18nContext.js';
 import HelpPanel from '../components/panels/HelpPanel.js';
 import {navigateTo} from '../../hooks/integration/useGlobalNavigation.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	// Future-proof: allow calling screen to decide where to go back.
@@ -13,6 +14,7 @@ type Props = {
 export default function HelpScreen({onBackDestination = 'chat'}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.helpPanel.title}`);
 
 	useInput((input, key) => {
 		if (key.escape) {

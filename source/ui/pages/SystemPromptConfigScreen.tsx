@@ -15,6 +15,7 @@ import {
 } from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -92,6 +93,7 @@ function getSystemEditor(): string | null {
 
 export default function SystemPromptConfigScreen({onBack}: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.systemPromptConfig.title}`);
 	const {theme} = useTheme();
 	const [config, setConfig] = useState<SystemPromptConfig>(() => {
 		return (
@@ -472,10 +474,12 @@ export default function SystemPromptConfigScreen({onBack}: Props) {
 						{config.active.length > 0 && (
 							<Text dimColor>
 								{' '}
-								({t.systemPromptConfig.activeCount.replace(
+								(
+								{t.systemPromptConfig.activeCount.replace(
 									'{count}',
 									String(config.active.length),
-								)})
+								)}
+								)
 							</Text>
 						)}
 					</Text>

@@ -18,6 +18,7 @@ import {
 	LoadingView,
 	ManualInputView,
 } from './configScreen/ConfigSubViews.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 export default function ConfigScreen({
 	onBack,
@@ -45,6 +46,8 @@ export default function ConfigScreen({
 		hiddenBelowFieldsCount,
 		getRequestUrl,
 	} = state;
+
+	useTerminalTitle(`Snow CLI - ${t.configScreen.title}`);
 
 	if (profileMode === 'creating') {
 		return <ProfileCreateView state={state} inlineMode={inlineMode} />;

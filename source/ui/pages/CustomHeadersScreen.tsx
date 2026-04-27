@@ -11,6 +11,7 @@ import {
 } from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -27,6 +28,7 @@ type ListAction =
 
 export default function CustomHeadersScreen({onBack}: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.customHeaders.title}`);
 	const {theme} = useTheme();
 	const [config, setConfig] = useState<CustomHeadersConfig>(() => {
 		return (
@@ -279,10 +281,7 @@ export default function CustomHeadersScreen({onBack}: Props) {
 				setPreviousView('edit');
 			}
 		} else {
-			if (
-				config.schemes.length === 0 ||
-				selectedIndex >= config.schemes.length
-			)
+			if (config.schemes.length === 0 || selectedIndex >= config.schemes.length)
 				return;
 			const newConfig: CustomHeadersConfig = {
 				...config,
@@ -394,50 +393,50 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		(input, key) => {
 			if (view !== 'editHeaders') return;
 
-		if (headerEditingIndex === -1) {
-			// 列表浏览模式
-			if (key.escape) {
-				exitHeadersEditMode();
-			} else if (key.upArrow) {
-				setHeaderSelectedIndex(prev =>
-					prev > 0 ? prev - 1 : headerKeys.length,
-				);
-			} else if (key.downArrow) {
-				setHeaderSelectedIndex(prev =>
-					prev < headerKeys.length ? prev + 1 : 0,
-				);
-			} else if (key.return) {
-				if (headerSelectedIndex < headerKeys.length) {
-					editHeaderAtIndex(headerSelectedIndex);
-				} else {
-					addNewHeader();
+			if (headerEditingIndex === -1) {
+				// 列表浏览模式
+				if (key.escape) {
+					exitHeadersEditMode();
+				} else if (key.upArrow) {
+					setHeaderSelectedIndex(prev =>
+						prev > 0 ? prev - 1 : headerKeys.length,
+					);
+				} else if (key.downArrow) {
+					setHeaderSelectedIndex(prev =>
+						prev < headerKeys.length ? prev + 1 : 0,
+					);
+				} else if (key.return) {
+					if (headerSelectedIndex < headerKeys.length) {
+						editHeaderAtIndex(headerSelectedIndex);
+					} else {
+						addNewHeader();
+					}
+				} else if (key.delete || input === 'd') {
+					if (headerSelectedIndex < headerKeys.length) {
+						deleteHeaderAtIndex(headerSelectedIndex);
+					}
+				} else if (input === 's' && (key.ctrl || key.meta)) {
+					persistScheme(editHeaders);
 				}
-			} else if (key.delete || input === 'd') {
-				if (headerSelectedIndex < headerKeys.length) {
-					deleteHeaderAtIndex(headerSelectedIndex);
+			} else {
+				// 编辑模式
+				if (key.escape) {
+					setHeaderEditingIndex(-1);
+				} else if (key.upArrow && !isEditing) {
+					setHeaderEditingField('key');
+				} else if (key.downArrow && !isEditing) {
+					setHeaderEditingField('value');
+				} else if (key.return) {
+					if (isEditing) {
+						setIsEditing(false);
+					} else {
+						setIsEditing(true);
+					}
+				} else if (input === 's' && (key.ctrl || key.meta)) {
+					const newHeaders = saveHeaderEdit();
+					persistScheme(newHeaders);
 				}
-			} else if (input === 's' && (key.ctrl || key.meta)) {
-				persistScheme(editHeaders);
 			}
-		} else {
-			// 编辑模式
-			if (key.escape) {
-				setHeaderEditingIndex(-1);
-			} else if (key.upArrow && !isEditing) {
-				setHeaderEditingField('key');
-			} else if (key.downArrow && !isEditing) {
-				setHeaderEditingField('value');
-			} else if (key.return) {
-				if (isEditing) {
-					setIsEditing(false);
-				} else {
-					setIsEditing(true);
-				}
-			} else if (input === 's' && (key.ctrl || key.meta)) {
-				const newHeaders = saveHeaderEdit();
-				persistScheme(newHeaders);
-			}
-		}
 		},
 		{isActive: view === 'editHeaders'},
 	);

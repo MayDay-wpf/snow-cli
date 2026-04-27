@@ -17,6 +17,7 @@ import {
 
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 // Focus event handling - prevent terminal focus events from appearing as input
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -83,6 +84,7 @@ export default function SubAgentConfigScreen({
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.subAgentConfig.title}`);
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
 	const [role, setRole] = useState('');

@@ -11,6 +11,7 @@ import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import {join} from 'path';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	version?: string;
@@ -26,6 +27,7 @@ const BLOCK_CHAR = '\u2580';
 
 export default function ExitScreen({version = '1.0.0'}: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.exitScreen.title}`);
 	const {theme} = useTheme();
 	const {columns: terminalWidth} = useTerminalSize();
 
