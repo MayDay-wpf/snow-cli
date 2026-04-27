@@ -63,10 +63,19 @@ async function readSkillFile(skillPath: string): Promise<{
 			}
 		}
 
+		// Defensive coercion: gray-matter may parse unquoted placeholders like
+		// `{{NAME}}` as YAML flow mappings (objects), which would crash React
+		// when later rendered as text. Force string types here.
+		const rawName = parsed.data['name'];
+		const rawDescription = parsed.data['description'];
+		const safeName = typeof rawName === 'string' ? rawName : '';
+		const safeDescription =
+			typeof rawDescription === 'string' ? rawDescription : '';
+
 		return {
 			metadata: {
-				name: parsed.data['name'] || '',
-				description: parsed.data['description'] || '',
+				name: safeName,
+				description: safeDescription,
 				allowedTools,
 			},
 			content,
@@ -107,6 +116,18 @@ async function loadSkillsFromDirectory(
 
 			for (const entry of entries) {
 				if (entry.isDirectory()) {
+					// Skip template/example directories that ship inside skills
+					// (e.g. skill-based-architecture-main/templates/**) — their
+					// SKILL.md files contain placeholders like `{{NAME}}` and
+					// must not be treated as real skills.
+					if (
+						entry.name === 'templates' ||
+						entry.name === 'examples' ||
+						entry.name === 'node_modules' ||
+						entry.name.startsWith('.')
+					) {
+						continue;
+					}
 					pendingDirs.push(join(currentDir, entry.name));
 					continue;
 				}
