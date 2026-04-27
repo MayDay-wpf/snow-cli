@@ -82,7 +82,7 @@ export async function executeTeammate(
 	try {
 		const {collectAllMCPTools} = await import('./mcpToolsManager.js');
 		const {executeMCPTool} = await import('./mcpToolsManager.js');
-		const {getOpenAiConfig} = await import('../config/apiConfig.js');
+		const {getSnowConfig} = await import('../config/apiConfig.js');
 		const {sessionManager} = await import('../session/sessionManager.js');
 		const {createStreamingChatCompletion} = await import(
 			'../../api/chat.js'
@@ -368,7 +368,7 @@ ${role ? `Your role: ${role}` : ''}
 			}
 
 			// API call
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 			const model = config.advancedModel || 'gpt-5';
 			const currentSession = sessionManager.getCurrentSession();
 

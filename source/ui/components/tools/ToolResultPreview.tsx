@@ -1,5 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import type {Theme} from '../../themes/index.js';
 
 interface ToolResultPreviewProps {
 	toolName: string;
@@ -25,41 +27,48 @@ export default function ToolResultPreview({
 	maxLines = 5,
 	isSubAgentInternal = false,
 }: ToolResultPreviewProps) {
+	const {theme} = useTheme();
+
 	try {
 		// Try to parse JSON result
 		const data = JSON.parse(result);
 
 		// Handle different tool types
 		if (toolName.startsWith('subagent-')) {
-			return renderSubAgentPreview(data, maxLines);
+			return renderSubAgentPreview(data, maxLines, theme);
 		} else if (toolName === 'terminal-execute') {
-			return renderTerminalExecutePreview(data, maxLines, isSubAgentInternal);
+			return renderTerminalExecutePreview(
+				data,
+				maxLines,
+				isSubAgentInternal,
+				theme,
+			);
 		} else if (toolName === 'filesystem-read') {
-			return renderReadPreview(data, isSubAgentInternal);
+			return renderReadPreview(data, isSubAgentInternal, theme);
 		} else if (toolName === 'filesystem-create') {
-			return renderCreatePreview(data);
+			return renderCreatePreview(data, theme);
 		} else if (
 			toolName === 'filesystem-edit' ||
 			toolName === 'filesystem-replaceedit'
 		) {
-			return renderEditSearchPreview(data);
+			return renderEditSearchPreview(data, theme);
 		} else if (toolName === 'websearch-search') {
-			return renderWebSearchPreview(data, maxLines);
+			return renderWebSearchPreview(data, maxLines, theme);
 		} else if (toolName === 'websearch-fetch') {
-			return renderWebFetchPreview(data);
+			return renderWebFetchPreview(data, theme);
 		} else if (toolName.startsWith('ace-')) {
-			return renderACEPreview(toolName, data, maxLines);
+			return renderACEPreview(toolName, data, maxLines, theme);
 		} else if (toolName.startsWith('todo-')) {
-			return renderTodoPreview(toolName, data, maxLines);
+			return renderTodoPreview(toolName, data, maxLines, theme);
 		} else if (toolName === 'ide-get_diagnostics') {
-			return renderIdeDiagnosticsPreview(data);
+			return renderIdeDiagnosticsPreview(data, theme);
 		} else if (toolName === 'skill-execute') {
 			// skill-execute returns a string message, no preview needed
 			// (the skill content is displayed elsewhere)
 			return null;
 		} else {
 			// Generic preview for unknown tools
-			return renderGenericPreview(data, maxLines);
+			return renderGenericPreview(data, maxLines, theme);
 		}
 	} catch {
 		// If not JSON or parsing fails, return null (no preview)
@@ -67,7 +76,7 @@ export default function ToolResultPreview({
 	}
 }
 
-function renderSubAgentPreview(data: any, _maxLines: number) {
+function renderSubAgentPreview(data: any, _maxLines: number, theme: Theme) {
 	// Sub-agent results have format: { success: boolean, result: string }
 	if (!data.result) return null;
 
@@ -76,7 +85,7 @@ function renderSubAgentPreview(data: any, _maxLines: number) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Sub-agent completed ({lines.length}{' '}
 				{lines.length === 1 ? 'line' : 'lines'} output)
 			</Text>
@@ -88,6 +97,7 @@ function renderTerminalExecutePreview(
 	data: any,
 	maxLines: number,
 	isSubAgentInternal: boolean,
+	theme: Theme,
 ) {
 	const hasError = data.exitCode !== 0;
 	const hasStdout = data.stdout && data.stdout.trim();
@@ -110,31 +120,36 @@ function renderTerminalExecutePreview(
 			<Box flexDirection="column" marginLeft={2}>
 				{data.command && (
 					<Box flexDirection="column">
-						<Text color="gray" dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor>
 							├─ command:
 						</Text>
 						<Box marginLeft={2}>
-							<Text color="gray">{data.command}</Text>
+							<Text color={theme.colors.menuSecondary}>{data.command}</Text>
 						</Box>
 					</Box>
 				)}
-				<Text color={hasError ? 'red' : 'gray'} dimColor>
+				<Text
+					color={
+						hasError ? theme.colors.error : theme.colors.menuSecondary
+					}
+					dimColor
+				>
 					├─ exitCode: {data.exitCode}
 				</Text>
 
 				{hasStdout && (
 					<Box flexDirection="column">
-						<Text color="gray" dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor>
 							├─ stdout:
 						</Text>
 						<Box marginLeft={2} flexDirection="column">
 							{stdoutPreview.lines.map((line: string, idx: number) => (
-								<Text key={idx} color="white">
+								<Text key={idx} color={theme.colors.text}>
 									{removeAnsiCodes(line)}
 								</Text>
 							))}
 							{stdoutPreview.truncated && (
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									…
 								</Text>
 							)}
@@ -144,17 +159,27 @@ function renderTerminalExecutePreview(
 
 				{hasStderr && (
 					<Box flexDirection="column">
-						<Text color={hasError ? 'red' : 'gray'} dimColor>
+						<Text
+							color={
+								hasError ? theme.colors.error : theme.colors.menuSecondary
+							}
+							dimColor
+						>
 							└─ stderr:
 						</Text>
 						<Box marginLeft={2} flexDirection="column">
 							{stderrPreview.lines.map((line: string, idx: number) => (
-								<Text key={idx} color={hasError ? 'red' : 'gray'}>
+								<Text
+									key={idx}
+									color={
+										hasError ? theme.colors.error : theme.colors.menuSecondary
+									}
+								>
 									{removeAnsiCodes(line)}
 								</Text>
 							))}
 							{stderrPreview.truncated && (
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									…
 								</Text>
 							)}
@@ -173,7 +198,7 @@ function renderTerminalExecutePreview(
 		if (!hasStdout) {
 			return (
 				<Box marginLeft={2}>
-					<Text color="green" dimColor>
+					<Text color={theme.colors.success} dimColor>
 						└─ ✓ Exit code: {data.exitCode}
 					</Text>
 				</Box>
@@ -183,29 +208,29 @@ function renderTerminalExecutePreview(
 		return (
 			<Box flexDirection="column" marginLeft={2}>
 				<Box flexDirection="column">
-					<Text color="green" dimColor>
+					<Text color={theme.colors.success} dimColor>
 						├─ command:
 					</Text>
 					<Box marginLeft={2}>
-						<Text color="green">{data.command}</Text>
+						<Text color={theme.colors.success}>{data.command}</Text>
 					</Box>
 				</Box>
-				<Text color="green" dimColor>
+				<Text color={theme.colors.success} dimColor>
 					├─ exitCode: {data.exitCode} ✓
 				</Text>
 				<Box flexDirection="column">
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						├─ stdout:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
 						{data.stdout.split('\n').map((line: string, idx: number) => (
-							<Text key={idx} color="white">
+							<Text key={idx} color={theme.colors.text}>
 								{removeAnsiCodes(line)}
 							</Text>
 						))}
 					</Box>
 				</Box>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ executedAt: {data.executedAt}
 				</Text>
 			</Box>
@@ -217,28 +242,28 @@ function renderTerminalExecutePreview(
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
 			<Box flexDirection="column">
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					├─ command:
 				</Text>
 				<Box marginLeft={2}>
-					<Text color="gray">{data.command}</Text>
+					<Text color={theme.colors.menuSecondary}>{data.command}</Text>
 				</Box>
 			</Box>
 
 			{/* Exit code with color indication */}
-			<Text color="red" bold>
+			<Text color={theme.colors.error} bold>
 				├─ exitCode: {data.exitCode} FAILED
 			</Text>
 
 			{/* Stdout - show completely if present */}
 			{hasStdout && (
 				<Box flexDirection="column">
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						├─ stdout:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
 						{data.stdout.split('\n').map((line: string, idx: number) => (
-							<Text key={idx} color="yellow">
+							<Text key={idx} color={theme.colors.warning}>
 								{removeAnsiCodes(line)}
 							</Text>
 						))}
@@ -249,12 +274,12 @@ function renderTerminalExecutePreview(
 			{/* Stderr - show completely with red color if present */}
 			{hasStderr && (
 				<Box flexDirection="column">
-					<Text color="red" dimColor>
+					<Text color={theme.colors.error} dimColor>
 						├─ stderr:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
 						{data.stderr.split('\n').map((line: string, idx: number) => (
-							<Text key={idx} color="red">
+							<Text key={idx} color={theme.colors.error}>
 								{removeAnsiCodes(line)}
 							</Text>
 						))}
@@ -264,7 +289,7 @@ function renderTerminalExecutePreview(
 
 			{/* Execution time if available */}
 			{data.executedAt && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ executedAt: {data.executedAt}
 				</Text>
 			)}
@@ -272,7 +297,11 @@ function renderTerminalExecutePreview(
 	);
 }
 
-function renderReadPreview(data: any, isSubAgentInternal: boolean) {
+function renderReadPreview(
+	data: any,
+	isSubAgentInternal: boolean,
+	theme: Theme,
+) {
 	if (!data.content) return null;
 
 	// 简洁显示：只显示读取的行数信息
@@ -284,7 +313,7 @@ function renderReadPreview(data: any, isSubAgentInternal: boolean) {
 	if (isSubAgentInternal) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Read {readLineCount} lines
 					{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
 				</Text>
@@ -300,7 +329,7 @@ function renderReadPreview(data: any, isSubAgentInternal: boolean) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Read {readLineCount} lines{rangeInfo}
 				{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
 			</Text>
@@ -308,7 +337,12 @@ function renderReadPreview(data: any, isSubAgentInternal: boolean) {
 	);
 }
 
-function renderACEPreview(_toolName: string, data: any, maxLines: number) {
+function renderACEPreview(
+	_toolName: string,
+	data: any,
+	maxLines: number,
+	theme: Theme,
+) {
 	// 聚合后的统一工具 ace-search 通过 result shape 推断子动作
 	const isObject = data && typeof data === 'object' && !Array.isArray(data);
 
@@ -322,7 +356,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Found {data.length} {data.length === 1 ? 'match' : 'matches'}
 				</Text>
 			</Box>
@@ -338,7 +372,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Found {data.length}{' '}
 					{data.length === 1 ? 'reference' : 'references'}
 				</Text>
@@ -359,7 +393,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 		if (data.length === 0) {
 			return (
 				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						└─ No symbols in file
 					</Text>
 				</Box>
@@ -367,7 +401,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 		}
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Found {data.length} {data.length === 1 ? 'symbol' : 'symbols'} in
 					file
 				</Text>
@@ -386,7 +420,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 		if (totalResults === 0) {
 			return (
 				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						└─ No results found
 					</Text>
 				</Box>
@@ -394,11 +428,11 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 		}
 		return (
 			<Box flexDirection="column" marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					├─ {data.symbols?.length || 0}{' '}
 					{(data.symbols?.length || 0) === 1 ? 'symbol' : 'symbols'}
 				</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ {data.references?.length || 0}{' '}
 					{(data.references?.length || 0) === 1 ? 'reference' : 'references'}
 				</Text>
@@ -416,7 +450,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Found {data.type} {data.name} at {data.filePath}:{data.line}
 				</Text>
 			</Box>
@@ -427,7 +461,7 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 	if (Array.isArray(data) && data.length === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ No matches found
 				</Text>
 			</Box>
@@ -435,36 +469,36 @@ function renderACEPreview(_toolName: string, data: any, maxLines: number) {
 	}
 
 	// Generic ACE tool preview
-	return renderGenericPreview(data, maxLines);
+	return renderGenericPreview(data, maxLines, theme);
 }
 
-function renderCreatePreview(data: any) {
+function renderCreatePreview(data: any, theme: Theme) {
 	// Simple success message for create/write operations
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ {data.message || data}
 			</Text>
 		</Box>
 	);
 }
 
-function renderEditSearchPreview(data: any) {
+function renderEditSearchPreview(data: any, theme: Theme) {
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{data.message && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					├─ {data.message}
 				</Text>
 			)}
 			{data.matchLocation && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					├─ Match: lines {data.matchLocation.startLine}-
 					{data.matchLocation.endLine}
 				</Text>
 			)}
 			{data.totalLines && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ Total lines: {data.totalLines}
 				</Text>
 			)}
@@ -472,11 +506,11 @@ function renderEditSearchPreview(data: any) {
 	);
 }
 
-function renderWebSearchPreview(data: any, _maxLines: number) {
+function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 	if (!data.results || data.results.length === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ No results for "{data.query}"
 				</Text>
 			</Box>
@@ -485,7 +519,7 @@ function renderWebSearchPreview(data: any, _maxLines: number) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Found {data.totalResults || data.results.length} results for "
 				{data.query}"
 			</Text>
@@ -493,18 +527,18 @@ function renderWebSearchPreview(data: any, _maxLines: number) {
 	);
 }
 
-function renderWebFetchPreview(data: any) {
+function renderWebFetchPreview(data: any, theme: Theme) {
 	const contentLength = data.textLength || data.content?.length || 0;
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Fetched {contentLength} characters from {data.title || 'page'}
 			</Text>
 		</Box>
 	);
 }
 
-function renderGenericPreview(data: any, maxLines: number) {
+function renderGenericPreview(data: any, maxLines: number, theme: Theme) {
 	// Guard: if data is not an object (e.g., it's a string), skip preview
 	// This prevents Object.entries from treating strings as character arrays
 	if (typeof data !== 'object' || data === null) {
@@ -524,7 +558,7 @@ function renderGenericPreview(data: any, maxLines: number) {
 						: JSON.stringify(value).slice(0, 60);
 
 				return (
-					<Text key={idx} color="gray" dimColor>
+					<Text key={idx} color={theme.colors.menuSecondary} dimColor>
 						{idx === entries.length - 1 ? '└─ ' : '├─ '}
 						{key}: {valueStr}
 					</Text>
@@ -534,7 +568,12 @@ function renderGenericPreview(data: any, maxLines: number) {
 	);
 }
 
-function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
+function renderTodoPreview(
+	_toolName: string,
+	data: any,
+	_maxLines: number,
+	theme: Theme,
+) {
 	// Handle todo-manage (all actions return the same list JSON shape when applicable)
 
 	// Debug: Check if data is actually the stringified result that needs parsing again
@@ -552,7 +591,7 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 		) {
 			return (
 				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						└─ {textContent}
 					</Text>
 				</Box>
@@ -566,7 +605,7 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 			// If parsing fails, show the raw text
 			return (
 				<Box marginLeft={2}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						└─ {textContent}
 					</Text>
 				</Box>
@@ -578,7 +617,7 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 	if (!todoData.todos || !Array.isArray(todoData.todos)) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ {todoData.message || 'No TODO list'}
 				</Text>
 			</Box>
@@ -594,7 +633,7 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ TODO: {pendingTodos} pending, {completedTodos} completed (total:{' '}
 				{totalTodos})
 			</Text>
@@ -602,13 +641,13 @@ function renderTodoPreview(_toolName: string, data: any, _maxLines: number) {
 	);
 }
 
-function renderIdeDiagnosticsPreview(data: any) {
+function renderIdeDiagnosticsPreview(data: any, theme: Theme) {
 	// Handle ide-get_diagnostics result
 	// Data format: { diagnostics: Diagnostic[], formatted: string, summary: string }
 	if (!data.diagnostics || !Array.isArray(data.diagnostics)) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ No diagnostics data
 				</Text>
 			</Box>
@@ -619,7 +658,7 @@ function renderIdeDiagnosticsPreview(data: any) {
 	if (diagnosticsCount === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					└─ No diagnostics found
 				</Text>
 			</Box>
@@ -642,7 +681,7 @@ function renderIdeDiagnosticsPreview(data: any) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Found {diagnosticsCount} diagnostic(s)
 				{errorCount > 0 && ` (${errorCount} error${errorCount > 1 ? 's' : ''})`}
 				{warningCount > 0 &&

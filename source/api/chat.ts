@@ -1,5 +1,5 @@
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomHeadersForConfig,
 	getCustomSystemPromptForConfig,
 } from '../utils/config/apiConfig.js';
@@ -290,7 +290,7 @@ function convertToOpenAIMessages(
 	return result;
 }
 
-export function resetOpenAIClient(): void {
+export function resetApiClient(): void {
 	// No-op: kept for backward compatibility
 }
 
@@ -467,7 +467,7 @@ export async function* createStreamingChatCompletion(
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<StreamChunk, void, unknown> {
 	// Load configuration: if configProfile is specified, load it; otherwise use main config
-	let config: ReturnType<typeof getOpenAiConfig>;
+	let config: ReturnType<typeof getSnowConfig>;
 	if (options.configProfile) {
 		try {
 			const {loadProfile} = await import('../utils/config/configManager.js');
@@ -476,7 +476,7 @@ export async function* createStreamingChatCompletion(
 				config = profileConfig.snowcfg;
 			} else {
 				// Profile not found, fallback to main config
-				config = getOpenAiConfig();
+				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
 				logger.warn(
 					`Profile ${options.configProfile} not found, using main config`,
@@ -484,7 +484,7 @@ export async function* createStreamingChatCompletion(
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
-			config = getOpenAiConfig();
+			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
 			logger.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
@@ -493,7 +493,7 @@ export async function* createStreamingChatCompletion(
 		}
 	} else {
 		// No configProfile specified, use main config
-		config = getOpenAiConfig();
+		config = getSnowConfig();
 	}
 
 	// Get system prompt (with custom override support)

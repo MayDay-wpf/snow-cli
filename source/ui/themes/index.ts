@@ -9,6 +9,7 @@ export type ThemeType =
 	| 'rainbow'
 	| 'solarized-dark'
 	| 'nord'
+	| 'tiffany'
 	| 'custom';
 
 export interface ThemeColors {
@@ -290,6 +291,36 @@ export const themes: Record<ThemeType, Theme> = {
 			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
 			// User message background - Nord green
 			userMessageBackground: '#1d3a2f',
+			// Diff highlight opacity
+			diffOpacity: 1,
+		},
+	},
+	tiffany: {
+		name: 'Tiffany',
+		type: 'tiffany',
+		colors: {
+			background: '#e8f7f5',
+			text: '#0a3a38',
+			border: '#0abab5',
+			diffAdded: '#a7e8d8',
+			diffRemoved: '#f5c2c7',
+			diffModified: '#bfe7e3',
+			lineNumber: '#5a8a87',
+			lineNumberBorder: '#9bd9d3',
+			// Menu colors
+			menuSelected: '#0abab5',
+			menuNormal: '#0a3a38',
+			menuInfo: '#0a8a85',
+			menuSecondary: '#5a8a87',
+			// Status colors
+			error: '#c0392b',
+			warning: '#d18a3d',
+			success: '#0abab5',
+			cyan: '#0abab5',
+			// Logo gradient - Tiffany blue tones
+			logoGradient: ['#0abab5', '#5fd6d1', '#9bd9d3'],
+			// User message background - Tiffany pale
+			userMessageBackground: '#bfe7e3',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},

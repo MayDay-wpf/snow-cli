@@ -1,5 +1,5 @@
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomSystemPromptForConfig,
 	getCustomHeadersForConfig,
 } from '../utils/config/apiConfig.js';
@@ -156,7 +156,7 @@ function getResponsesReasoningConfig(): {
 	effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 	summary?: 'auto' | 'none';
 } | null {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const reasoningConfig = config.responsesReasoning;
 
 	if (!reasoningConfig || !reasoningConfig.enabled) {
@@ -170,11 +170,11 @@ function getResponsesReasoningConfig(): {
 }
 
 function getResponsesVerbosityConfig(): 'low' | 'medium' | 'high' {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	return config.responsesVerbosity || 'medium';
 }
 
-export function resetOpenAIClient(): void {
+export function resetApiClient(): void {
 	// No-op: kept for backward compatibility
 }
 
@@ -504,7 +504,7 @@ export async function* createStreamingResponse(
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
 	// Load configuration: if configProfile is specified, load it; otherwise use main config
-	let config: ReturnType<typeof getOpenAiConfig>;
+	let config: ReturnType<typeof getSnowConfig>;
 	if (options.configProfile) {
 		try {
 			const {loadProfile} = await import('../utils/config/configManager.js');
@@ -513,7 +513,7 @@ export async function* createStreamingResponse(
 				config = profileConfig.snowcfg;
 			} else {
 				// Profile not found, fallback to main config
-				config = getOpenAiConfig();
+				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
 				logger.warn(
 					`Profile ${options.configProfile} not found, using main config`,
@@ -521,7 +521,7 @@ export async function* createStreamingResponse(
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
-			config = getOpenAiConfig();
+			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
 			logger.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
@@ -530,7 +530,7 @@ export async function* createStreamingResponse(
 		}
 	} else {
 		// No configProfile specified, use main config
-		config = getOpenAiConfig();
+		config = getSnowConfig();
 	}
 
 	// Get system prompt (with custom override support)

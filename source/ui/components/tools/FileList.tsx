@@ -43,6 +43,10 @@ type Props = {
 export type FileListRef = {
 	getSelectedFile: () => string | null;
 	toggleDisplayMode: () => boolean;
+	// Manually expand the BFS scan depth (used when the user navigates past
+	// the last filtered result and may want results from deeper directories).
+	// Returns true if a deeper scan was actually scheduled.
+	triggerDeeperSearch: () => boolean;
 };
 
 type DisplayMode = 'list' | 'tree';
@@ -809,8 +813,33 @@ const FileList = memo(
 						setFileListDisplayMode(newMode);
 						return true;
 					},
+					triggerDeeperSearch: () => {
+						// Only meaningful for the file-name picker; content search reads
+						// from the already-loaded file index.
+						if (searchMode !== 'file') {
+							return false;
+						}
+						// No deeper directories left to scan, or a scan is already
+						// in flight — nothing to do.
+						if (!hasMoreDepth || isLoading || isIncreasingDepth) {
+							return false;
+						}
+
+						setSearchDepth(d => d + 3);
+						setIsIncreasingDepth(true);
+						setTimeout(() => setIsIncreasingDepth(false), 400);
+						return true;
+					},
 				}),
-				[displayItems, normalizedSelectedIndex, rootPath, searchMode],
+				[
+					displayItems,
+					normalizedSelectedIndex,
+					rootPath,
+					searchMode,
+					hasMoreDepth,
+					isLoading,
+					isIncreasingDepth,
+				],
 			);
 
 			const displaySelectedIndex =
@@ -979,6 +1008,21 @@ const FileList = memo(
 							</Text>
 						</Box>
 					)}
+					{/* Surface a hint at the bottom whenever there are still
+					    deeper directories that have not been scanned, so the
+					    user knows they can press ↓ on the last item to dig
+					    deeper instead of assuming the list is exhaustive. */}
+					{searchMode === 'file' &&
+						hasMoreDepth &&
+						!isLoading &&
+						!isIncreasingDepth &&
+						displayItems.length > 0 && (
+							<Box>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.fileList.deeperSearchHint}
+								</Text>
+							</Box>
+						)}
 				</Box>
 			);
 		},

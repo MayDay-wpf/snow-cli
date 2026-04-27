@@ -39,6 +39,11 @@ export type ConfigScreenProps = {
 	onBack: () => void;
 	onSave: () => void;
 	inlineMode?: boolean;
+	/**
+	 * 指定要编辑的 profile 名称。
+	 * 提供时配置仅写回该 profile，不会切换或修改全局 active profile。
+	 */
+	targetProfileName?: string;
 };
 
 export const MAX_VISIBLE_FIELDS = 8;

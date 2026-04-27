@@ -11,7 +11,6 @@ import {RoleListPanel} from './RoleListPanel.js';
 import {RoleSubagentCreationPanel} from './RoleSubagentCreationPanel.js';
 import {RoleSubagentDeletionPanel} from './RoleSubagentDeletionPanel.js';
 import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
-import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
@@ -36,7 +35,6 @@ type PanelsManagerProps = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
-	showModelsPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
@@ -58,11 +56,8 @@ type PanelsManagerProps = {
 		subAgentDirected?: unknown;
 	}>;
 	diffReviewSnapshotFileCount: Map<number, number>;
-	advancedModel: string;
-	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
 	setShowMcpPanel: (show: boolean) => void;
-	setShowModelsPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
@@ -109,7 +104,6 @@ export default function PanelsManager({
 	showSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
-	showModelsPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
 	showRoleCreation,
@@ -126,11 +120,8 @@ export default function PanelsManager({
 	connectionPanelApiUrl,
 	diffReviewMessages,
 	diffReviewSnapshotFileCount,
-	advancedModel,
-	basicModel,
 	setShowSessionPanel,
 	setShowMcpPanel,
-	setShowModelsPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
 	setShowRoleCreation,
@@ -202,18 +193,6 @@ export default function PanelsManager({
 							{t.chatScreen.pressEscToClose}
 						</Text>
 					</Box>
-				</Box>
-			)}
-
-			{/* Show models panel if active - replaces input */}
-			{showModelsPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<ModelsPanel
-						advancedModel={advancedModel}
-						basicModel={basicModel}
-						visible={showModelsPanel}
-						onClose={() => setShowModelsPanel(false)}
-					/>
 				</Box>
 			)}
 

@@ -1,4 +1,4 @@
-import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -37,7 +37,7 @@ export class CompactAgent {
 	 */
 	private async initialize(): Promise<boolean> {
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			// Check if basic model is configured
 			if (!config.basicModel) {
@@ -87,7 +87,7 @@ export class CompactAgent {
 		abortSignal?: AbortSignal,
 		onTokenUpdate?: (tokenCount: number) => void,
 	): Promise<string> {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 
 		if (!config.basicModel) {
 			throw new Error('Basic model not configured');

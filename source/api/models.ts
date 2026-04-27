@@ -1,4 +1,9 @@
-import {getOpenAiConfig, getCustomHeaders} from '../utils/config/apiConfig.js';
+import {
+	getSnowConfig,
+	getCustomHeaders,
+	getCustomHeadersForConfig,
+	type ApiConfig,
+} from '../utils/config/apiConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 
 export interface Model {
@@ -167,8 +172,15 @@ async function fetchAnthropicModels(
 /**
  * Fetch available models based on configured request method
  */
-export async function fetchAvailableModels(): Promise<Model[]> {
-	const config = getOpenAiConfig();
+export async function fetchAvailableModels(
+	overrideConfig?: Partial<ApiConfig>,
+): Promise<Model[]> {
+	// 当传入 overrideConfig 时，使用临时合并的配置（不依赖磁盘上的 active profile / 全局 config.json）
+	// 这样即使在编辑非激活 profile 时调用，也不会污染全局 config 与 active profile 文件。
+	const baseConfig = overrideConfig
+		? ({...getSnowConfig(), ...overrideConfig} as ApiConfig)
+		: getSnowConfig();
+	const config = baseConfig;
 
 	if (!config.baseUrl) {
 		throw new Error(
@@ -176,7 +188,9 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 		);
 	}
 
-	const customHeaders = getCustomHeaders();
+	const customHeaders = overrideConfig
+		? getCustomHeadersForConfig(config)
+		: getCustomHeaders();
 
 	try {
 		let models: Model[];

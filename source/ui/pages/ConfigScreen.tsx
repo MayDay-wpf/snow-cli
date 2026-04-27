@@ -23,8 +23,9 @@ export default function ConfigScreen({
 	onBack,
 	onSave,
 	inlineMode = false,
+	targetProfileName,
 }: ConfigScreenProps) {
-	const state = useConfigState();
+	const state = useConfigState({targetProfileName});
 	useConfigInput(state, {onBack, onSave});
 
 	const {

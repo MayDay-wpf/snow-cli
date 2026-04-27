@@ -206,9 +206,7 @@ export function saveProfile(profileName: string, config: AppConfig): void {
 	const profilePath = getProfilePath(profileName);
 
 	try {
-		// Remove openai field for backward compatibility
-		const {openai, ...configWithoutOpenai} = config;
-		const configData = JSON.stringify(configWithoutOpenai, null, 2);
+		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(profilePath, configData, 'utf8');
 	} catch (error) {
 		throw new Error(`Failed to save profile: ${error}`);

@@ -1,5 +1,5 @@
 import {collectAllMCPTools} from './mcpToolsManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
@@ -281,7 +281,7 @@ async function resolveConfig(
 		}
 	}
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	return {config, model: config.advancedModel || 'gpt-5'};
 }
 

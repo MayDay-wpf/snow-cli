@@ -1,5 +1,5 @@
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomSystemPrompt,
 } from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
@@ -23,7 +23,7 @@ export class ReviewAgent {
 	 */
 	private async initialize(): Promise<boolean> {
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			if (!config.advancedModel) {
 				return false;
@@ -430,7 +430,7 @@ Please provide your review in a clear, structured format.`;
 		messages: ChatMessage[],
 		abortSignal?: AbortSignal,
 	): AsyncGenerator<any, void, unknown> {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 
 		if (!config.advancedModel) {
 			throw new Error('Advanced model not configured');

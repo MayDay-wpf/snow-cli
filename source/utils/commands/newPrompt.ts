@@ -2,7 +2,7 @@ import {
 	registerCommand,
 	type CommandResult,
 } from '../execution/commandExecutor.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {getSubAgents} from '../config/subAgentConfig.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
@@ -518,7 +518,7 @@ export async function* streamGeneratePrompt(
 	userRequirement: string,
 	abortSignal?: AbortSignal,
 ): AsyncGenerator<string, void, unknown> {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = config.advancedModel || config.basicModel;
 	if (!model) {
 		throw new Error('No model configured');

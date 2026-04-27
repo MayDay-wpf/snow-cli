@@ -1,7 +1,7 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {CompressionStatus} from '../../../ui/components/compression/CompressionStatus.js';
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	DEFAULT_AUTO_COMPRESS_THRESHOLD,
 } from '../../../utils/config/apiConfig.js';
 import {
@@ -42,7 +42,7 @@ export type AutoCompressResult = {
 export async function handleAutoCompression(
 	options: AutoCompressOptions,
 ): Promise<AutoCompressResult> {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 
 	if (
 		config.enableAutoCompress === false ||

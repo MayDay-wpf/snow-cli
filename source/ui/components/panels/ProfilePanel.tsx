@@ -38,8 +38,7 @@ const ProfilePanel = memo(
 				title={
 					<Text color={theme.colors.warning} bold>
 						{t.profilePanel.title}{' '}
-						{profiles.length > 5 &&
-							`(${selectedIndex + 1}/${profiles.length})`}
+						{profiles.length > 5 && `(${selectedIndex + 1}/${profiles.length})`}
 					</Text>
 				}
 				header={
@@ -47,9 +46,7 @@ const ProfilePanel = memo(
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuInfo}>
 								{t.profilePanel.searchLabel}{' '}
-								<Text color={theme.colors.menuSelected}>
-									{searchQuery}
-								</Text>
+								<Text color={theme.colors.menuSelected}>{searchQuery}</Text>
 							</Text>
 						</Box>
 					) : undefined
@@ -57,7 +54,7 @@ const ProfilePanel = memo(
 				footer={
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.profilePanel.escHint}
+							{t.profilePanel.escHint} · {t.profilePanel.editHint}
 						</Text>
 					</Box>
 				}
@@ -72,9 +69,7 @@ const ProfilePanel = memo(
 							<Box marginTop={1}>
 								<Text color={theme.colors.menuInfo}>
 									{t.profilePanel.searchLabel}{' '}
-									<Text color={theme.colors.menuSelected}>
-										{searchQuery}
-									</Text>
+									<Text color={theme.colors.menuSelected}>{searchQuery}</Text>
 								</Text>
 							</Box>
 						)}
@@ -85,7 +80,7 @@ const ProfilePanel = memo(
 						</Box>
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								{t.profilePanel.escHint}
+								{t.profilePanel.escHint} · {t.profilePanel.editHint}
 							</Text>
 						</Box>
 					</Box>
@@ -96,19 +91,13 @@ const ProfilePanel = memo(
 						{above > 0 && (
 							<>
 								·{' '}
-								{t.profilePanel.moreAbove.replace(
-									'{count}',
-									above.toString(),
-								)}
+								{t.profilePanel.moreAbove.replace('{count}', above.toString())}
 							</>
 						)}
 						{below > 0 && (
 							<>
 								·{' '}
-								{t.profilePanel.moreBelow.replace(
-									'{count}',
-									below.toString(),
-								)}
+								{t.profilePanel.moreBelow.replace('{count}', below.toString())}
 							</>
 						)}
 						{above === 0 && below === 0 && (
@@ -126,9 +115,7 @@ const ProfilePanel = memo(
 					<Box overflow="hidden">
 						<Text
 							color={
-								isSelected
-									? theme.colors.menuSelected
-									: theme.colors.menuNormal
+								isSelected ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
 							bold
 							wrap="truncate-end"

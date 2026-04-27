@@ -25,7 +25,6 @@ export interface CommandResult {
 		| 'showTodoPicker'
 		| 'showTodoListPanel'
 		| 'showProfilePanel'
-		| 'showModelsPanel'
 		| 'showSubAgentDepthPanel'
 		| 'showSkillsPicker'
 		| 'showGitLinePicker'

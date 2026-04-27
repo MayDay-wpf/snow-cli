@@ -56,9 +56,10 @@ jobs:
 
             ### What's New
 
-            - Optimize rendering performance of all panels
-            - Add input box real terminal cursor
-            - Optimize think field return for chat requests
+            - Optimize the ACE tool to reduce context usage
+            - Remove the /models command to strengthen the /profiles command and panel functionality
+            - Enhance the coverage of the default sensitive command panel (database operation commands)
+            - Add more effective points to the theme system and introduce a new built-in theme
 
             ### Installation
             ```bash

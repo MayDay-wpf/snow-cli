@@ -30,6 +30,9 @@ const NewPromptPanel = lazy(
 const SubAgentDepthPanel = lazy(
 	() => import('../../components/panels/SubAgentDepthPanel.js'),
 );
+const ProfileEditPanel = lazy(
+	() => import('../../components/panels/ProfileEditPanel.js'),
+);
 
 type SnapshotState = {
 	snapshotFileCount: Map<number, number>;
@@ -48,8 +51,6 @@ type Props = {
 	panelState: PanelState & PanelActions;
 	messages: Message[];
 	snapshotState: SnapshotState;
-	advancedModel: string;
-	basicModel: string;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 	showPermissionsPanel: boolean;
 	setShowPermissionsPanel: Dispatch<SetStateAction<boolean>>;
@@ -73,8 +74,6 @@ export default function ChatScreenPanels({
 	panelState,
 	messages,
 	snapshotState,
-	advancedModel,
-	basicModel,
 	handleSessionPanelSelect,
 	showPermissionsPanel,
 	setShowPermissionsPanel,
@@ -96,7 +95,6 @@ export default function ChatScreenPanels({
 				showSessionPanel={panelState.showSessionPanel}
 				showMcpPanel={panelState.showMcpPanel}
 				showUsagePanel={panelState.showUsagePanel}
-				showModelsPanel={panelState.showModelsPanel}
 				showCustomCommandConfig={panelState.showCustomCommandConfig}
 				showSkillsCreation={panelState.showSkillsCreation}
 				showRoleCreation={panelState.showRoleCreation}
@@ -113,11 +111,8 @@ export default function ChatScreenPanels({
 				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
 				diffReviewMessages={messages}
 				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
-				advancedModel={advancedModel}
-				basicModel={basicModel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
 				setShowMcpPanel={panelState.setShowMcpPanel}
-				setShowModelsPanel={panelState.setShowModelsPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}
 				setShowRoleCreation={panelState.setShowRoleCreation}
@@ -464,6 +459,29 @@ export default function ChatScreenPanels({
 					<PixelEditorScreen
 						onBack={() => panelState.setShowPixelEditor(false)}
 					/>
+				</Box>
+			)}
+
+			{/* ProfileEditPanel：从 ProfilePanel 按右方向键进入，
+			    编辑指定 profile（不切换 active）。ESC 由 ConfigScreen 内部处理：
+			    保存配置并通过 onBack 触发 closeProfileEditAndReturnToPicker，
+			    返回到 ProfilePanel（picker）。 */}
+			{panelState.showProfileEditPanel && panelState.editingProfileName && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<ProfileEditPanel
+							profileName={panelState.editingProfileName}
+							onClose={panelState.closeProfileEditAndReturnToPicker}
+						/>
+					</Suspense>
 				</Box>
 			)}
 		</>

@@ -134,6 +134,14 @@ export default function ThemeSettingsScreen({
 			},
 			{
 				label:
+					selectedTheme === 'tiffany'
+						? `✓ ${t.themeSettings.tiffany}`
+						: t.themeSettings.tiffany,
+				value: 'tiffany',
+				infoText: t.themeSettings.tiffanyInfo,
+			},
+			{
+				label:
 					selectedTheme === 'custom'
 						? `✓ ${t.themeSettings?.custom || 'Custom'}`
 						: t.themeSettings?.custom || 'Custom',

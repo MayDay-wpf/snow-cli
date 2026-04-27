@@ -1,4 +1,4 @@
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
@@ -37,7 +37,7 @@ export async function* streamBtwResponse(
 	question: string,
 	abortSignal?: AbortSignal,
 ): AsyncGenerator<string, void, unknown> {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = config.basicModel || config.advancedModel;
 	if (!model) {
 		throw new Error('No model configured');

@@ -458,12 +458,12 @@ function ModelSelect({state}: Props) {
 			<Box>
 				{searchTerm && (
 					<Text color={theme.colors.menuInfo}>
-						{t.modelsPanel.filterLabel} {searchTerm}
+						{t.configScreen.modelSelectFilterLabel} {searchTerm}
 						{'  '}
 					</Text>
 				)}
 				<Text color={theme.colors.warning} bold>
-					{t.modelsPanel.modelCount.replace(
+					{t.configScreen.modelSelectModelCount.replace(
 						'{count}',
 						modelCount.toString(),
 					)}
@@ -491,7 +491,7 @@ function ModelSelect({state}: Props) {
 			{options.length > 10 && (
 				<Box>
 					<Text dimColor color={theme.colors.menuSecondary}>
-						{t.modelsPanel.scrollHint}
+						{t.configScreen.modelSelectScrollHint}
 					</Text>
 				</Box>
 			)}

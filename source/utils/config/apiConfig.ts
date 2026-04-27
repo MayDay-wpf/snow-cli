@@ -85,7 +85,6 @@ export interface MCPConfig {
 
 export interface AppConfig {
 	snowcfg: ApiConfig;
-	openai?: ApiConfig; // 向下兼容旧版本
 }
 
 /**
@@ -259,7 +258,7 @@ export function loadConfig(): AppConfig {
 		const {mcp: legacyMcp, proxy: legacyProxy, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
-		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
+		// 仅使用 snowcfg；旧版的 openai 字段已不再兼容（用户长期不使用旧版）。
 		let apiConfig: ApiConfig;
 		if (configWithoutMcp.snowcfg) {
 			apiConfig = {
@@ -270,18 +269,6 @@ export function loadConfig(): AppConfig {
 				),
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
 					configWithoutMcp.snowcfg.streamIdleTimeoutSec,
-				),
-			};
-		} else if (configWithoutMcp.openai) {
-			// 向下兼容旧版本
-			apiConfig = {
-				...DEFAULT_CONFIG.snowcfg,
-				...configWithoutMcp.openai,
-				requestMethod: normalizeRequestMethod(
-					configWithoutMcp.openai.requestMethod,
-				),
-				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
-					configWithoutMcp.openai.streamIdleTimeoutSec,
 				),
 			};
 		} else {
@@ -319,11 +306,7 @@ export function loadConfig(): AppConfig {
 			saveConfig(mergedConfig);
 		}
 
-		if (
-			legacyMcp !== undefined ||
-			legacyProxy !== undefined ||
-			(configWithoutMcp.openai && !configWithoutMcp.snowcfg)
-		) {
+		if (legacyMcp !== undefined || legacyProxy !== undefined) {
 			saveConfig(mergedConfig);
 		}
 
@@ -340,9 +323,7 @@ export function saveConfig(config: AppConfig): void {
 	ensureConfigDirectory();
 
 	try {
-		// 只保留 snowcfg，去除 openai 字段
-		const {openai, ...configWithoutOpenai} = config;
-		const configData = JSON.stringify(configWithoutOpenai, null, 2);
+		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
 		// 清除缓存，下次加载时会重新读取
 		configCache = null;
@@ -366,7 +347,7 @@ export function reloadConfig(): AppConfig {
 	return loadConfig();
 }
 
-export async function updateOpenAiConfig(
+export async function updateSnowConfig(
 	apiConfig: Partial<ApiConfig>,
 ): Promise<void> {
 	const currentConfig = loadConfig();
@@ -400,7 +381,7 @@ export async function updateOpenAiConfig(
 	}
 }
 
-export function getOpenAiConfig(): ApiConfig {
+export function getSnowConfig(): ApiConfig {
 	const config = loadConfig();
 	return config.snowcfg;
 }
@@ -708,7 +689,7 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 返回激活提示词内容数组，每个元素对应一个提示词
  */
 export function getCustomSystemPrompt(): string[] | undefined {
-	return getCustomSystemPromptForConfig(getOpenAiConfig());
+	return getCustomSystemPromptForConfig(getSnowConfig());
 }
 
 export function getCustomSystemPromptForConfig(
@@ -754,7 +735,7 @@ export function getCustomSystemPromptForConfig(
  * 否则返回空对象
  */
 export function getCustomHeaders(): Record<string, string> {
-	return getCustomHeadersForConfig(getOpenAiConfig());
+	return getCustomHeadersForConfig(getSnowConfig());
 }
 
 export function getCustomHeadersForConfig(

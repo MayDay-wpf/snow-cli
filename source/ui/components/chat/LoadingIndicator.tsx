@@ -102,6 +102,72 @@ export default function LoadingIndicator({
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
 	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+
+	const renderAgentEntry = (
+		tm: {
+			agentId: string;
+			agentName: string;
+			tokenCount: number;
+			isReasoning: boolean;
+			ctxUsage?: {percentage: number};
+		},
+		isLast: boolean,
+	) => {
+		const branch = isLast ? '└─' : '├─';
+		const status = tm.isReasoning
+			? 'Thinking'
+			: tm.tokenCount > 0
+			? 'Writing'
+			: 'Idle';
+		const statusColor = tm.isReasoning
+			? theme.colors.warning
+			: tm.tokenCount > 0
+			? theme.colors.cyan
+			: theme.colors.menuSecondary;
+		const pct = tm.ctxUsage?.percentage ?? 0;
+		const barWidth = 8;
+		const filled = Math.round((pct / 100) * barWidth);
+		const empty = barWidth - filled;
+		const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+		const barColor =
+			pct >= 80
+				? theme.colors.error
+				: pct >= 65
+				? theme.colors.warning
+				: pct >= 50
+				? theme.colors.cyan
+				: theme.colors.menuSecondary;
+		return (
+			<Text key={tm.agentId} dimColor>
+				<Text color={theme.colors.menuSecondary}>
+					{'  '}
+					{branch}{' '}
+				</Text>
+				<Text color={theme.colors.menuSelected} bold>
+					{tm.agentName}
+				</Text>
+				<Text color={statusColor}>
+					{' '}({status}
+					{tm.tokenCount > 0 && (
+						<>
+							{' · '}
+							<Text color={theme.colors.cyan}>
+								↓ {formatTokens(tm.tokenCount)}
+							</Text>
+						</>
+					)}
+					)
+				</Text>
+				{pct > 0 && (
+					<Text color={barColor} dimColor>
+						{' '}
+						{pct}% {bar}
+					</Text>
+				)}
+			</Text>
+		);
+	};
+
 	const renderAgentTree = (
 		entries: Array<{
 			agentId: string;
@@ -116,59 +182,20 @@ export default function LoadingIndicator({
 			<Text color={theme.colors.menuSecondary} dimColor bold>
 				<ShimmerText text={title} />
 			</Text>
-			{entries.map((tm, idx) => {
-				const isLast = idx === entries.length - 1;
-				const branch = isLast ? '└─' : '├─';
-				const status = tm.isReasoning
-					? 'Thinking'
-					: tm.tokenCount > 0
-					? 'Writing'
-					: 'Idle';
-				const statusColor = tm.isReasoning
-					? '#FFD700'
-					: tm.tokenCount > 0
-					? '#00FFFF'
-					: theme.colors.menuSecondary;
-				const pct = tm.ctxUsage?.percentage ?? 0;
-				const barWidth = 8;
-				const filled = Math.round((pct / 100) * barWidth);
-				const empty = barWidth - filled;
-				const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
-				const barColor = pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
-				return (
-					<Text key={tm.agentId} dimColor>
-						<Text color={theme.colors.menuSecondary}>
-							{'  '}{branch}{' '}
-						</Text>
-						<Text color="#BA7ACE" bold>
-							{tm.agentName}
-						</Text>
-						<Text color={statusColor}>
-							{' '}({status}
-							{tm.tokenCount > 0 && (
-								<>
-									{' · '}
-									<Text color="cyan">
-										↓ {formatTokens(tm.tokenCount)}
-									</Text>
-								</>
-							)}
-							)
-						</Text>
-						{pct > 0 && (
-							<Text color={barColor} dimColor>
-								{' '}{pct}% {bar}
-							</Text>
-						)}
-					</Text>
-				);
-			})}
+			{entries.map((tm, idx) =>
+				renderAgentEntry(tm, idx === entries.length - 1),
+			)}
 		</Box>
 	);
 
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
-			<Text color={['#00FFFF', '#1ACEB0'][animationFrame % 2] as any} bold>
+			<Text
+				color={
+					[theme.colors.cyan, theme.colors.menuInfo][animationFrame % 2] as any
+				}
+				bold
+			>
 				❆
 			</Text>
 			<Box marginLeft={1} flexDirection="column">
@@ -181,7 +208,7 @@ export default function LoadingIndicator({
 						{retryStatus && retryStatus.isRetrying ? (
 							<Box flexDirection="column">
 								{retryStatus.errorMessage && (
-									<Text color="red" dimColor>
+									<Text color={theme.colors.error} dimColor>
 										{t.chatScreen.retryError.replace(
 											'{message}',
 											truncateErrorMessage(retryStatus.errorMessage),
@@ -190,7 +217,7 @@ export default function LoadingIndicator({
 								)}
 								{retryStatus.remainingSeconds !== undefined &&
 								retryStatus.remainingSeconds > 0 ? (
-									<Text color="yellow" dimColor>
+									<Text color={theme.colors.warning} dimColor>
 										{t.chatScreen.retryAttempt
 											.replace('{current}', String(retryStatus.attempt))
 											.replace('{max}', '5')}{' '}
@@ -200,7 +227,7 @@ export default function LoadingIndicator({
 										)}
 									</Text>
 								) : (
-									<Text color="yellow" dimColor>
+									<Text color={theme.colors.warning} dimColor>
 										{t.chatScreen.retryResending
 											.replace('{current}', String(retryStatus.attempt))
 											.replace('{max}', '5')}
@@ -222,58 +249,14 @@ export default function LoadingIndicator({
 									)}
 									{formatElapsedTime(elapsedSeconds)}
 									{' · '}
-									<Text color="cyan">
+									<Text color={theme.colors.cyan}>
 										↓ {formatTokens(streamTokenCount)} tokens
 									</Text>
 									{')'}
 								</Text>
-								{teammateStream.map((tm, idx) => {
-									const isLast = idx === teammateStream.length - 1;
-									const branch = isLast ? '└─' : '├─';
-									const status = tm.isReasoning
-										? 'Thinking'
-										: tm.tokenCount > 0
-										? 'Writing'
-										: 'Idle';
-									const statusColor = tm.isReasoning
-										? '#FFD700'
-										: tm.tokenCount > 0
-										? '#00FFFF'
-										: theme.colors.menuSecondary;
-									const pct = tm.ctxUsage?.percentage ?? 0;
-									const barWidth = 8;
-									const filled = Math.round((pct / 100) * barWidth);
-									const empty = barWidth - filled;
-									const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
-									const barColor = pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
-									return (
-										<Text key={tm.agentId} dimColor>
-											<Text color={theme.colors.menuSecondary}>
-												{'  '}{branch}{' '}
-											</Text>
-											<Text color="#BA7ACE" bold>
-												{tm.agentName}
-											</Text>
-											<Text color={statusColor}>
-												{' '}({status}
-												{tm.tokenCount > 0 && (
-													<>
-														{' · '}
-														<Text color="cyan">
-															↓ {formatTokens(tm.tokenCount)}
-														</Text>
-													</>
-												)}
-												)
-											</Text>
-											{pct > 0 && (
-												<Text color={barColor} dimColor>
-													{' '}{pct}% {bar}
-												</Text>
-											)}
-										</Text>
-									);
-								})}
+								{teammateStream.map((tm, idx) =>
+									renderAgentEntry(tm, idx === teammateStream.length - 1),
+								)}
 							</Box>
 						) : showSubAgentTree ? (
 							renderAgentTree(
@@ -299,14 +282,10 @@ export default function LoadingIndicator({
 									</>
 								)}
 								{formatElapsedTime(elapsedSeconds)}
-								<>
-									{' · '}
-									<Text color="cyan">
-										↓{' '}
-										{formatTokens(streamTokenCount)}{' '}
-										tokens
-									</Text>
-								</>
+								{' · '}
+								<Text color={theme.colors.cyan}>
+									↓ {formatTokens(streamTokenCount)} tokens
+								</Text>
 								{')'}
 							</Text>
 						)}

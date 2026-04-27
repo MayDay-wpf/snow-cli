@@ -22,7 +22,9 @@ export type PanelState = {
 	showReviewCommitPanel: boolean;
 	showBranchPanel: boolean;
 	showProfilePanel: boolean;
-	showModelsPanel: boolean;
+	// 配置编辑面板：从 ProfilePanel 按右方向键进入，编辑指定 profile（不切换 active）
+	showProfileEditPanel: boolean;
+	editingProfileName: string | null;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
 	showNewPromptPanel: boolean;
@@ -37,11 +39,11 @@ export type PanelState = {
 
 export type PanelActions = {
 	setShowSessionPanel: Dispatch<SetStateAction<boolean>>;
+	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
+	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
 	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
-	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
-	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
@@ -54,7 +56,17 @@ export type PanelActions = {
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowBranchPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
-	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
+	setShowProfileEditPanel: Dispatch<SetStateAction<boolean>>;
+	setEditingProfileName: Dispatch<SetStateAction<string | null>>;
+	/**
+	 * 打开 ProfileEditPanel 编辑指定 profile：
+	 * 同时关闭 ProfilePanel（picker），切换为编辑视图。
+	 */
+	openProfileEdit: (profileName: string) => void;
+	/**
+	 * 关闭 ProfileEditPanel 并回到 ProfilePanel（picker）。
+	 */
+	closeProfileEditAndReturnToPicker: () => void;
 	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
@@ -90,7 +102,10 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showBranchPanel, setShowBranchPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
-	const [showModelsPanel, setShowModelsPanel] = useState(false);
+	const [showProfileEditPanel, setShowProfileEditPanel] = useState(false);
+	const [editingProfileName, setEditingProfileName] = useState<string | null>(
+		null,
+	);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
@@ -131,7 +146,6 @@ export function usePanelState(): PanelState & PanelActions {
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
-			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
 			showNewPromptPanel ||
@@ -148,7 +162,30 @@ export function usePanelState(): PanelState & PanelActions {
 
 		// Show profile selection panel instead of cycling
 		setShowProfilePanel(true);
-		setProfileSelectedIndex(0);
+		setProfileSearchQuery('');
+		const profiles = getAllProfiles();
+		const activeName = getActiveProfileName();
+		const activeIndex = profiles.findIndex(p => p.name === activeName);
+		setProfileSelectedIndex(activeIndex >= 0 ? activeIndex : 0);
+	};
+
+	// 从 ProfilePanel 进入 ProfileEditPanel：编辑光标焦点的 profile
+	// 注意：保留 profileSelectedIndex 与 profileSearchQuery，
+	// 这样 ESC 返回 picker 时光标停留在原来的 profile 上。
+	const openProfileEdit = (profileName: string) => {
+		setEditingProfileName(profileName);
+		setShowProfileEditPanel(true);
+		// 关闭 picker 让 footer 不再渲染 ProfilePanel；
+		// ProfileEditPanel 会在 PanelsManager 里独立渲染。
+		setShowProfilePanel(false);
+	};
+
+	// 关闭 ProfileEditPanel 后回到 ProfilePanel（picker）
+	// 同样保留 profileSelectedIndex，让光标回到进入编辑面板时的位置。
+	const closeProfileEditAndReturnToPicker = () => {
+		setShowProfileEditPanel(false);
+		setEditingProfileName(null);
+		setShowProfilePanel(true);
 	};
 
 	const handleProfileSelect = (profileName: string) => {
@@ -250,15 +287,17 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let ConnectionPanel handle ESC
 		}
 
+		// ProfileEditPanel 完全交由 ConfigScreen 内部处理 ESC：
+		// 内部 useConfigInput 会按层级处理（先关闭 select 子项 / 退出编辑模式，
+		// 再按 ESC 才会保存并通过 onBack 触发 closeProfileEditAndReturnToPicker）。
+		// 外层若也处理，会一次 ESC 直接弹出整个面板，破坏多级返回体验。
+		if (showProfileEditPanel) {
+			return false;
+		}
+
 		if (showProfilePanel) {
 			setShowProfilePanel(false);
 			return true;
-		}
-
-		// ModelsPanel handles its own ESC key logic internally
-		// Don't close it here - let the panel decide when to close
-		if (showModelsPanel) {
-			return false; // Let ModelsPanel handle ESC
 		}
 
 		// NewPromptPanel handles its own ESC key logic internally
@@ -299,7 +338,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
-			showModelsPanel ||
+			showProfileEditPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
 			showNewPromptPanel ||
@@ -326,7 +365,8 @@ export function usePanelState(): PanelState & PanelActions {
 		showReviewCommitPanel,
 		showBranchPanel,
 		showProfilePanel,
-		showModelsPanel,
+		showProfileEditPanel,
+		editingProfileName,
 		showDiffReviewPanel,
 		showConnectionPanel,
 		showNewPromptPanel,
@@ -353,7 +393,10 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowReviewCommitPanel,
 		setShowBranchPanel,
 		setShowProfilePanel,
-		setShowModelsPanel,
+		setShowProfileEditPanel,
+		setEditingProfileName,
+		openProfileEdit,
+		closeProfileEditAndReturnToPicker,
 		setShowDiffReviewPanel,
 		setShowConnectionPanel,
 		setShowNewPromptPanel,

@@ -76,14 +76,14 @@ export class TeamService {
 		conflictFiles: string[],
 		memberName: string,
 	): Promise<{resolved: string[]; failed: string[]; error?: string}> {
-		const {getOpenAiConfig} = await import('../utils/config/apiConfig.js');
+		const {getSnowConfig} = await import('../utils/config/apiConfig.js');
 		const {createStreamingChatCompletion} = await import('../api/chat.js');
 		const {createStreamingAnthropicCompletion} = await import('../api/anthropic.js');
 		const {createStreamingGeminiCompletion} = await import('../api/gemini.js');
 		const {createStreamingResponse} = await import('../api/responses.js');
 		const {execSync} = await import('child_process');
 
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		const model = config.advancedModel || config.basicModel || 'gpt-4o-mini';
 		const method: RequestMethod = config.requestMethod || 'chat';
 

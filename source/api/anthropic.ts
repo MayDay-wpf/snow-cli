@@ -1,6 +1,6 @@
 import {createHash, randomUUID} from 'crypto';
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomSystemPromptForConfig,
 	getCustomHeadersForConfig,
 	type ThinkingConfig,
@@ -643,7 +643,7 @@ export async function* createStreamingAnthropicCompletion(
 	yield* withRetryGenerator(
 		async function* () {
 			// Load configuration: if configProfile is specified, load it; otherwise use main config
-			let config: ReturnType<typeof getOpenAiConfig>;
+			let config: ReturnType<typeof getSnowConfig>;
 			if (options.configProfile) {
 				try {
 					const {loadProfile} = await import(
@@ -654,14 +654,14 @@ export async function* createStreamingAnthropicCompletion(
 						config = profileConfig.snowcfg;
 					} else {
 						// Profile not found, fallback to main config
-						config = getOpenAiConfig();
+						config = getSnowConfig();
 						logger.warn(
 							`Profile ${options.configProfile} not found, using main config`,
 						);
 					}
 				} catch (error) {
 					// If loading profile fails, fallback to main config
-					config = getOpenAiConfig();
+					config = getSnowConfig();
 					logger.warn(
 						`Failed to load profile ${options.configProfile}, using main config:`,
 						error,
@@ -669,7 +669,7 @@ export async function* createStreamingAnthropicCompletion(
 				}
 			} else {
 				// No configProfile specified, use main config
-				config = getOpenAiConfig();
+				config = getSnowConfig();
 			}
 
 			// Get system prompt (with custom override support)

@@ -11,7 +11,7 @@ import {
 	performAutoCompression,
 } from '../../../utils/core/autoCompress.js';
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	DEFAULT_AUTO_COMPRESS_THRESHOLD,
 } from '../../../utils/config/apiConfig.js';
 import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTracker.js';
@@ -121,7 +121,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
-		const autoCompressConfig = getOpenAiConfig();
+		const autoCompressConfig = getSnowConfig();
 		if (
 			autoCompressConfig.enableAutoCompress !== false &&
 			shouldAutoCompress(

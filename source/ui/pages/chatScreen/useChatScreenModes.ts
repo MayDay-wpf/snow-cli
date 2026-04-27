@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
 import {configEvents} from '../../../utils/config/configEvents.js';
-import {getOpenAiConfig} from '../../../utils/config/apiConfig.js';
+import {getSnowConfig} from '../../../utils/config/apiConfig.js';
 import {
 	getToolSearchEnabled,
 	setToolSearchEnabled as persistToolSearchEnabled,
@@ -49,7 +49,7 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	const [teamMode, setTeamMode] = useState(() => getTeamMode());
 	const [simpleMode, setSimpleMode] = useState(() => getSimpleMode());
 	const [showThinking, setShowThinking] = useState(() => {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		return config.showThinking !== false;
 	});
 

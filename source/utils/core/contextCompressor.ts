@@ -1,4 +1,4 @@
-import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
+import {getSnowConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
 import {getSystemPromptForMode} from '../../prompt/systemPrompt.js';
 import type {ChatMessage} from '../../api/types.js';
 import {createStreamingChatCompletion} from '../../api/chat.js';
@@ -655,7 +655,7 @@ export async function compressContext(
 		console.warn('Failed to execute beforeCompress hook:', error);
 	}
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 
 	if (messages.length === 0) {
 		console.warn('No messages to compress');

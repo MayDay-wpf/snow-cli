@@ -5,7 +5,7 @@ import type {CompressionStatus} from '../../ui/components/compression/Compressio
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
 import {navigateTo} from '../integration/useGlobalNavigation.js';
@@ -105,7 +105,7 @@ export async function executeContextCompression(
 
 		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
 		if (useHybridCompress) {
-			const apiConfig = getOpenAiConfig();
+			const apiConfig = getSnowConfig();
 			const hybridResult = await performHybridCompression(chatMessages, {
 				model: apiConfig.advancedModel || 'gpt-5',
 				requestMethod: apiConfig.requestMethod,
@@ -412,7 +412,6 @@ type CommandHandlerOptions = {
 	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
@@ -668,14 +667,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showUsagePanel') {
 				options.setShowUsagePanel(true);
-				const commandMessage: Message = {
-					role: 'command',
-					content: '',
-					commandName: commandName,
-				};
-				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (result.success && result.action === 'showModelsPanel') {
-				options.setShowModelsPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

@@ -4,8 +4,8 @@ import {
 } from '../execution/commandExecutor.js';
 import {resetAnthropicClient} from '../../api/anthropic.js';
 import {resetGeminiClient} from '../../api/gemini.js';
-import {resetOpenAIClient as resetChatClient} from '../../api/chat.js';
-import {resetOpenAIClient as resetResponseClient} from '../../api/responses.js';
+import {resetApiClient as resetChatClient} from '../../api/chat.js';
+import {resetApiClient as resetResponseClient} from '../../api/responses.js';
 import {clearConfigCache} from '../config/apiConfig.js';
 
 // Home command handler - returns to welcome screen

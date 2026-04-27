@@ -1,10 +1,4 @@
-import React, {
-	useEffect,
-	useRef,
-	useMemo,
-	lazy,
-	Suspense,
-} from 'react';
+import React, {useEffect, useRef, useMemo, lazy, Suspense} from 'react';
 import {Box, Text, useCursor} from 'ink';
 import {Viewport} from '../../../utils/ui/textBuffer.js';
 
@@ -257,6 +251,10 @@ type Props = {
 		isActive: boolean;
 	}>;
 	handleProfileSelect?: (profileName: string) => void;
+	/**
+	 * 在 ProfilePanel 中按右方向键时调用：进入 ProfileEditPanel 编辑该 profile。
+	 */
+	handleProfileEdit?: (profileName: string) => void;
 	profileSearchQuery?: string;
 	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
@@ -292,6 +290,7 @@ export default function ChatInput({
 	setProfileSelectedIndex,
 	getFilteredProfiles,
 	handleProfileSelect,
+	handleProfileEdit,
 	profileSearchQuery = '',
 	setProfileSearchQuery,
 	onSwitchProfile,
@@ -596,6 +595,7 @@ export default function ChatInput({
 		setProfileSelectedIndex: setProfileSelectedIndex || (() => {}),
 		getFilteredProfiles: getFilteredProfiles || (() => []),
 		handleProfileSelect: handleProfileSelect || (() => {}),
+		handleProfileEdit,
 		profileSearchQuery,
 		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
@@ -866,8 +866,7 @@ export default function ChatInput({
 
 			// Set real terminal cursor position
 			const hasScrollUp = startLine > 0;
-			const cursorYInContent =
-				cursorRow - startLine + (hasScrollUp ? 1 : 0);
+			const cursorYInContent = cursorRow - startLine + (hasScrollUp ? 1 : 0);
 			if (hasFocus) {
 				setCursorPosition({x: cursorCol, y: cursorYInContent});
 			} else {

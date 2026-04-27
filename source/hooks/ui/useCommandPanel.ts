@@ -72,12 +72,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const builtInCommands = useMemo(
 		() => [
 			{
-			name: 'branch',
-			description:
-				t.commandPanel.commands.branch ||
-				'Fork current conversation into a new branch',
-		},
-		{name: 'help', description: t.commandPanel.commands.help},
+				name: 'branch',
+				description:
+					t.commandPanel.commands.branch ||
+					'Fork current conversation into a new branch',
+			},
+			{name: 'help', description: t.commandPanel.commands.help},
 			{name: 'clear', description: t.commandPanel.commands.clear},
 			{
 				name: 'copy-last',
@@ -140,10 +140,6 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.loop ||
 					'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
-			},
-			{
-				name: 'models',
-				description: t.commandPanel.commands.models,
 			},
 			{
 				name: 'subagent-depth',

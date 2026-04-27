@@ -6,7 +6,7 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {mkdir, writeFile} from 'fs/promises';
 import {existsSync} from 'fs';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {
 	createStreamingChatCompletion,
 	type ChatMessage,
@@ -212,7 +212,7 @@ async function callModelForText(
 	messages: ChatMessage[],
 	abortSignal?: AbortSignal,
 ): Promise<string> {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = config.advancedModel || config.basicModel;
 	if (!model) {
 		throw new Error('未配置模型，请先在设置中选择模型');

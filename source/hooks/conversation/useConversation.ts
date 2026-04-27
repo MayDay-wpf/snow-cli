@@ -1,5 +1,5 @@
 import type {ChatMessage} from '../../api/chat.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {extractThinkingContent} from './utils/thinkingExtractor.js';
@@ -77,7 +77,7 @@ export async function handleConversationWithTools(
 
 	setStreamTokenCount(0);
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = options.useBasicModel
 		? config.basicModel || config.advancedModel || 'gpt-5'
 		: config.advancedModel || 'gpt-5';

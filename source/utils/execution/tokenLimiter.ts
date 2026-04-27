@@ -5,7 +5,7 @@
  */
 
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
 	MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
 	MIN_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
@@ -20,7 +20,7 @@ const DEFAULT_TOOL_RESULT_TOKEN_LIMIT = DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT;
  */
 export function getToolResultTokenLimit(): number {
 	try {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		const maxContextTokens = config.maxContextTokens || 200000;
 
 		// 获取百分比设置，默认为 30%
