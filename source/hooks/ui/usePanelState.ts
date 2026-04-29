@@ -164,8 +164,11 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowProfilePanel(true);
 		setProfileSearchQuery('');
 		const profiles = getAllProfiles();
-		const activeName = getActiveProfileName();
-		const activeIndex = profiles.findIndex(p => p.name === activeName);
+		// 使用内存中的 currentProfileName（displayName）定位光标，
+		// 避免其他终端切换 profile 写文件后，本终端读到的 active 与内存不一致
+		const activeIndex = profiles.findIndex(
+			p => p.displayName === currentProfileName,
+		);
 		setProfileSelectedIndex(activeIndex >= 0 ? activeIndex : 0);
 	};
 

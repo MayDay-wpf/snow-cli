@@ -110,10 +110,8 @@ export default function ConfigSelectPanel({state}: Props) {
 							/>
 						);
 					})()}
-			{(currentField === 'advancedModel' ||
-				currentField === 'basicModel') && (
-				<ModelSelect state={state} />
-			)}
+				{(currentField === 'advancedModel' ||
+					currentField === 'basicModel') && <ModelSelect state={state} />}
 				{currentField === 'thinkingMode' && (
 					<ScrollableSelectInput
 						items={[
@@ -236,12 +234,18 @@ export default function ConfigSelectPanel({state}: Props) {
 							{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
 						]}
 						initialIndex={
-							anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+							anthropicSpeed === 'fast'
+								? 1
+								: anthropicSpeed === 'standard'
+								? 2
+								: 0
 						}
 						isFocused={true}
 						onSelect={item => {
 							setAnthropicSpeed(
-								item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+								item.value === '__NONE__'
+									? undefined
+									: (item.value as 'fast' | 'standard'),
 							);
 							setIsEditing(false);
 						}}
@@ -411,20 +415,19 @@ function SystemPromptSelect({state}: Props) {
 					});
 				}}
 				onSelect={item => {
+					// 元选项（跟随全局/禁用）保持单选语义：Enter 时直接应用光标所在项
 					if (item.value === '__FOLLOW__' || item.value === '__DISABLED__') {
 						applySystemPromptSelectValue(item.value);
 						setPendingPromptIds(new Set());
 						setIsEditing(false);
 						return;
 					}
-					const finalIds =
-						pendingPromptIds.size > 0
-							? Array.from(pendingPromptIds)
-							: [item.value];
-					if (pendingPromptIds.size > 0 && !pendingPromptIds.has(item.value)) {
-						finalIds.push(item.value);
+					// 多选模式：Enter 仅用于"保存并退出"，绝不触发光标项的选中
+					// 仅保存通过 Space 已 toggle 的集合；若未 toggle 任何项，则保持原配置不变
+					if (pendingPromptIds.size > 0) {
+						const finalIds = Array.from(pendingPromptIds);
+						setSystemPromptId(finalIds.length === 1 ? finalIds[0]! : finalIds);
 					}
-					setSystemPromptId(finalIds.length === 1 ? finalIds[0]! : finalIds);
 					setPendingPromptIds(new Set());
 					setIsEditing(false);
 				}}
