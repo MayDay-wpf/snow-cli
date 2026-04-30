@@ -112,11 +112,11 @@ export default function SubAgentDepthPanel({visible, onClose}: Props) {
 		<Box
 			flexDirection="column"
 			borderStyle="round"
-			borderColor="cyan"
+			borderColor={theme.colors.menuInfo}
 			paddingX={2}
 			paddingY={1}
 		>
-			<Text color="cyan" bold>
+			<Text color={theme.colors.menuInfo} bold>
 				{t.subAgentDepthPanel.title}
 			</Text>
 			<Box marginTop={1} flexDirection="column">
@@ -145,10 +145,10 @@ export default function SubAgentDepthPanel({visible, onClose}: Props) {
 				</Box>
 			)}
 			<Box marginTop={1} flexDirection="column">
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.subAgentDepthPanel.hint}
 				</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.subAgentDepthPanel.fileHint}
 				</Text>
 			</Box>

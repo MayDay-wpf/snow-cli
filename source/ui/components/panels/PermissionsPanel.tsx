@@ -171,11 +171,11 @@ export default function PermissionsPanel({
 			<Box
 				flexDirection="column"
 				borderStyle="round"
-				borderColor="red"
+				borderColor={theme.colors.error}
 				paddingX={2}
 				paddingY={1}
 			>
-				<Text color="red" bold>
+				<Text color={theme.colors.error} bold>
 					{isConfirmingClearAll
 						? messages.confirmClearAll ?? 'Clear all permissions?'
 						: messages.confirmDelete ?? 'Delete allowed tool?'}
@@ -183,7 +183,7 @@ export default function PermissionsPanel({
 
 				{!isConfirmingClearAll && toolName && (
 					<Box marginTop={1} flexDirection="column">
-						<Text color="white" bold>
+						<Text color={theme.colors.text} bold>
 							{'  '}
 							{toolName}
 						</Text>
@@ -222,11 +222,11 @@ export default function PermissionsPanel({
 		<Box
 			flexDirection="column"
 			borderStyle="round"
-			borderColor="cyan"
+			borderColor={theme.colors.menuInfo}
 			paddingX={2}
 			paddingY={1}
 		>
-			<Text color="cyan" bold>
+			<Text color={theme.colors.menuInfo} bold>
 				{messages.title ?? 'Permissions'}
 			</Text>
 
@@ -266,14 +266,14 @@ export default function PermissionsPanel({
 				</Box>
 			) : (
 				<Box marginTop={1}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{messages.noTools ?? 'No tools are always approved'}
 					</Text>
 				</Box>
 			)}
 
 			<Box marginTop={1}>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{messages.hint ?? '↑↓ navigate • Enter remove • ESC close'}
 				</Text>
 			</Box>

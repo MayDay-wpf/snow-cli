@@ -5,6 +5,8 @@ import path from 'path';
 import os from 'os';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import type {Theme} from '../../themes/index.js';
 
 interface UsageLogEntry {
 	model: string;
@@ -270,10 +272,11 @@ function renderStackedBarChart(
 	terminalWidth: number,
 	scrollOffset: number,
 	t: any,
+	theme: Theme,
 ) {
 	if (stats.models.size === 0) {
 		return (
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				{t.usagePanel.chart.noData}
 			</Text>
 		);
@@ -308,18 +311,18 @@ function renderStackedBarChart(
 		<Box flexDirection="column">
 			{/* Legend */}
 			<Box marginBottom={1}>
-				<Text color="cyan">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuInfo}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.usage}{' '}
 				</Text>
-				<Text color="green">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.success}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.cacheHit}{' '}
 				</Text>
-				<Text color="yellow">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.warning}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.cacheCreate}
 				</Text>
@@ -328,7 +331,7 @@ function renderStackedBarChart(
 			{/* Scroll indicator - more above */}
 			{hasMoreAbove && (
 				<Box marginBottom={1}>
-					<Text color="yellow" dimColor>
+					<Text color={theme.colors.warning} dimColor>
 						{t.usagePanel.chart.moreAbove.replace('{count}', String(startIdx))}
 					</Text>
 				</Box>
@@ -365,34 +368,40 @@ function renderStackedBarChart(
 					<Box key={modelName} flexDirection="column" marginBottom={1}>
 						{/* Line 1: Model name */}
 						<Box>
-							<Text bold color="white">
+							<Text bold color={theme.colors.text}>
 								{shortName}
 							</Text>
 						</Box>
 
 						{/* Line 2: Stacked bar chart */}
 						<Box>
-							{/* Usage segment (cyan) */}
+							{/* Usage segment */}
 							{usageLength > 0 && (
-								<Text color="cyan">{'█'.repeat(usageLength)}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{'█'.repeat(usageLength)}
+								</Text>
 							)}
-							{/* Cache hit segment (green) */}
+							{/* Cache hit segment */}
 							{cacheHitLength > 0 && (
-								<Text color="green">{'█'.repeat(cacheHitLength)}</Text>
+								<Text color={theme.colors.success}>
+									{'█'.repeat(cacheHitLength)}
+								</Text>
 							)}
-							{/* Cache create segment (yellow) */}
+							{/* Cache create segment */}
 							{cacheCreateLength > 0 && (
-								<Text color="yellow">{'█'.repeat(cacheCreateLength)}</Text>
+								<Text color={theme.colors.warning}>
+									{'█'.repeat(cacheCreateLength)}
+								</Text>
 							)}
 						</Box>
 
 						{/* Line 3: Detailed stats */}
 						<Box>
-							<Text color="cyan">
+							<Text color={theme.colors.menuInfo}>
 								{t.usagePanel.chart.usage}{' '}
 								{formatTokens(modelStats.total, isNarrow)}
 							</Text>
-							<Text color="gray" dimColor>
+							<Text color={theme.colors.menuSecondary} dimColor>
 								{' '}
 								({t.usagePanel.chart.in}{' '}
 								{formatTokens(modelStats.input, isNarrow)},{' '}
@@ -401,25 +410,25 @@ function renderStackedBarChart(
 							</Text>
 							{(modelStats.cacheRead > 0 || modelStats.cacheCreation > 0) && (
 								<>
-									<Text color="gray" dimColor>
+									<Text color={theme.colors.menuSecondary} dimColor>
 										{' '}
 										|{' '}
 									</Text>
 									{modelStats.cacheRead > 0 && (
 										<>
-											<Text color="green">
+											<Text color={theme.colors.success}>
 												{t.usagePanel.chart.hit}{' '}
 												{formatTokens(modelStats.cacheRead, isNarrow)}
 											</Text>
 											{modelStats.cacheCreation > 0 && (
-												<Text color="gray" dimColor>
+												<Text color={theme.colors.menuSecondary} dimColor>
 													,{' '}
 												</Text>
 											)}
 										</>
 									)}
 									{modelStats.cacheCreation > 0 && (
-										<Text color="yellow">
+										<Text color={theme.colors.warning}>
 											{t.usagePanel.chart.create}{' '}
 											{formatTokens(modelStats.cacheCreation, isNarrow)}
 										</Text>
@@ -434,14 +443,14 @@ function renderStackedBarChart(
 			{/* Total summary */}
 			{sortedModels.length > 1 && (
 				<Box marginTop={1} flexDirection="column">
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{'─'.repeat(Math.min(terminalWidth - 8, 70))}
 					</Text>
 					<Box>
-						<Text bold color="white">
+						<Text bold color={theme.colors.text}>
 							{t.usagePanel.chart.total}{' '}
 						</Text>
-						<Text color="cyan" bold>
+						<Text color={theme.colors.menuInfo} bold>
 							{formatTokens(stats.grandTotal)}
 						</Text>
 						{Array.from(stats.models.values()).reduce(
@@ -449,11 +458,11 @@ function renderStackedBarChart(
 							0,
 						) > 0 && (
 							<>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									|{' '}
 								</Text>
-								<Text color="green" bold>
+								<Text color={theme.colors.success} bold>
 									{t.usagePanel.chart.hit}{' '}
 									{formatTokens(
 										Array.from(stats.models.values()).reduce(
@@ -469,10 +478,10 @@ function renderStackedBarChart(
 							0,
 						) > 0 && (
 							<>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									,{' '}
 								</Text>
-								<Text color="yellow" bold>
+								<Text color={theme.colors.warning} bold>
 									{t.usagePanel.chart.create}{' '}
 									{formatTokens(
 										Array.from(stats.models.values()).reduce(
@@ -490,7 +499,7 @@ function renderStackedBarChart(
 			{/* Scroll indicator - more below */}
 			{hasMoreBelow && (
 				<Box marginTop={1}>
-					<Text color="yellow" dimColor>
+					<Text color={theme.colors.warning} dimColor>
 						{t.usagePanel.chart.moreBelow.replace(
 							'{count}',
 							String(sortedModels.length - endIdx),
@@ -504,6 +513,7 @@ function renderStackedBarChart(
 
 export default function UsagePanel() {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [granularity, setGranularity] = useState<Granularity>('week');
 	const [stats, setStats] = useState<AggregatedStats>({
 		models: new Map(),
@@ -575,23 +585,35 @@ export default function UsagePanel() {
 
 	if (isLoading) {
 		return (
-			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="gray">{t.usagePanel.loading}</Text>
+			<Box
+				borderColor={theme.colors.menuInfo}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.menuSecondary}>{t.usagePanel.loading}</Text>
 			</Box>
 		);
 	}
 
 	if (error) {
 		return (
-			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="red">{t.usagePanel.error.replace('{error}', error)}</Text>
+			<Box
+				borderColor={theme.colors.error}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.error}>
+					{t.usagePanel.error.replace('{error}', error)}
+				</Text>
 			</Box>
 		);
 	}
 
 	return (
 		<Box
-			borderColor="cyan"
+			borderColor={theme.colors.menuInfo}
 			borderStyle="round"
 			paddingX={2}
 			paddingY={1}
@@ -599,22 +621,25 @@ export default function UsagePanel() {
 		>
 			{/* Header */}
 			<Box marginBottom={1}>
-				<Text color="cyan" bold>
+				<Text color={theme.colors.menuInfo} bold>
 					{t.usagePanel.title}
 				</Text>
-				<Text color="gray"> ({granularityLabels[granularity]})</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary}>
+					{' '}
+					({granularityLabels[granularity]})
+				</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.tabToSwitch}
 				</Text>
 			</Box>
 
 			{stats.models.size === 0 ? (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.usagePanel.noDataForPeriod}
 				</Text>
 			) : (
-				renderStackedBarChart(stats, terminalWidth, scrollOffset, t)
+				renderStackedBarChart(stats, terminalWidth, scrollOffset, t, theme)
 			)}
 		</Box>
 	);
