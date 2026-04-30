@@ -5,6 +5,7 @@ import {
 	type SessionListItem,
 } from '../../../utils/session/sessionManager.js';
 import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 type Props = {
 	onSelectSession: (sessionId: string) => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadingMore, setLoadingMore] = useState(false);
@@ -30,9 +32,9 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const [renameInput, setRenameInput] = useState('');
 	const [isRenaming, setIsRenaming] = useState(false);
 
-	const VISIBLE_ITEMS = 5;
+	const VISIBLE_ITEMS = 10;
 	const PAGE_SIZE = 20;
-	const SEARCH_DEBOUNCE_MS = 300;
+	const SEARCH_DEBOUNCE_MS = 600;
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -301,14 +303,9 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 	const currentSession = sessions[selectedIndex];
 
 	return (
-		<Box
-			borderStyle="round"
-			borderColor="cyan"
-			paddingX={1}
-			flexDirection="column"
-		>
+		<Box paddingX={1} flexDirection="column">
 			<Box flexDirection="column">
-				<Text color="cyan" dimColor>
+				<Text color={theme.colors.menuInfo} bold>
 					{t.sessionListPanel.title} ({selectedIndex + 1}/{sessions.length}
 					{totalCount > sessions.length && ` of ${totalCount}`})
 					{currentSession &&
@@ -316,7 +313,7 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 							currentSession.messageCount
 						} ${t.sessionListPanel.messages.replace('{count}', '')}`}
 					{markedSessions.size > 0 && (
-						<Text color="yellow">
+						<Text color={theme.colors.warning}>
 							{' '}
 							•{' '}
 							{t.sessionListPanel.marked.replace(
@@ -326,36 +323,67 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 						</Text>
 					)}
 					{loadingMore && (
-						<Text color="gray"> • {t.sessionListPanel.loadingMore}</Text>
+						<Text color={theme.colors.menuSecondary}>
+							{' '}
+							• {t.sessionListPanel.loadingMore}
+						</Text>
 					)}
 				</Text>
-				{searchInput ? (
-					<Text color="green">
-						{t.sessionListPanel.searchLabel} {searchInput}
-						{searchInput !== debouncedSearch && (
-							<Text color="gray"> ({t.sessionListPanel.searching})</Text>
-						)}
-					</Text>
-				) : renamingSessionId ? (
-					<Text color="yellow">
+				{renamingSessionId ? (
+					<Text color={theme.colors.warning}>
 						{t.sessionListPanel.renamePrompt}:{' '}
-						<Text color="white">{renameInput}</Text>
+						<Text color={theme.colors.text}>{renameInput}</Text>
+						<Text color={theme.colors.warning}>▌</Text>
 						{isRenaming && (
-							<Text color="gray"> ({t.sessionListPanel.renaming})</Text>
+							<Text color={theme.colors.menuSecondary}>
+								{' '}
+								({t.sessionListPanel.renaming})
+							</Text>
 						)}
 					</Text>
 				) : (
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.sessionListPanel.navigationHint}
 					</Text>
 				)}
 			</Box>
+			{!renamingSessionId && (
+				<Box
+					borderStyle="round"
+					borderColor={
+						searchInput ? theme.colors.success : theme.colors.menuSecondary
+					}
+					paddingX={1}
+				>
+					<Text
+						color={
+							searchInput ? theme.colors.success : theme.colors.menuSecondary
+						}
+					>
+						⌕{' '}
+					</Text>
+					{searchInput ? (
+						<Text color={theme.colors.text}>
+							{searchInput}
+							<Text color={theme.colors.success}>▌</Text>
+						</Text>
+					) : (
+						<Text color={theme.colors.menuSecondary}>▌</Text>
+					)}
+					{searchInput && searchInput !== debouncedSearch && (
+						<Text color={theme.colors.menuSecondary}>
+							{' '}
+							({t.sessionListPanel.searching})
+						</Text>
+					)}
+				</Box>
+			)}
 			{loading ? (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.sessionListPanel.loading}
 				</Text>
 			) : sessions.length === 0 ? (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{debouncedSearch
 						? t.sessionListPanel.noResults.replace('{query}', debouncedSearch)
 						: t.sessionListPanel.noConversations}
@@ -363,7 +391,7 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 			) : (
 				<>
 					{hasPrevious && (
-						<Text color="gray" dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor>
 							{' '}
 							{t.sessionListPanel.moreAbove.replace(
 								'{count}',
@@ -386,18 +414,34 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 
 						return (
 							<Box key={session.id}>
-								<Text color={isMarked ? 'green' : 'gray'}>
+								<Text
+									color={
+										isMarked ? theme.colors.success : theme.colors.menuSecondary
+									}
+								>
 									{isMarked ? '✔ ' : '  '}
 								</Text>
-								<Text color={isSelected ? 'green' : 'gray'}>
+								<Text
+									color={
+										isSelected
+											? theme.colors.success
+											: theme.colors.menuSecondary
+									}
+								>
 									{isSelected ? '❯ ' : '  '}
 								</Text>
 								<Text
-									color={isSelected ? 'cyan' : isMarked ? 'green' : 'white'}
+									color={
+										isSelected
+											? theme.colors.menuInfo
+											: isMarked
+											? theme.colors.success
+											: theme.colors.text
+									}
 								>
 									{truncatedLabel}
 								</Text>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									• {timeStr}
 								</Text>
@@ -407,7 +451,7 @@ export default function SessionListPanel({onSelectSession, onClose}: Props) {
 				</>
 			)}
 			{!loading && sessions.length > 0 && hasMoreInView && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.sessionListPanel.moreBelow.replace(
 						'{count}',

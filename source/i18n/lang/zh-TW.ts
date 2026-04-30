@@ -451,6 +451,8 @@ export const zhTW: TranslationKeys = {
 		nordInfo: '北極、北方藍調色板',
 		tiffany: '蒂芙尼藍',
 		tiffanyInfo: '清新優雅的蒂芙尼藍色調',
+		macaronPink: '馬卡龍粉',
+		macaronPinkInfo: '甜美柔和的馬卡龍粉色調',
 		custom: '自訂',
 		customInfo: '使用你自己的自訂顏色',
 		editCustom: '編輯自訂主題...',

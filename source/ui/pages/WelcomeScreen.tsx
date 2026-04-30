@@ -358,7 +358,11 @@ export default function WelcomeScreen({
 			{/* Menu must be outside Static to receive input */}
 			{onMenuSelect && inlineView === 'menu' && (
 				<Box paddingX={1}>
-					<Box borderStyle="round" borderColor="cyan" paddingX={1}>
+					<Box
+						borderStyle="round"
+						borderColor={theme.colors.menuInfo}
+						paddingX={1}
+					>
 						<Menu
 							options={menuOptions}
 							onSelect={handleInlineMenuSelect}

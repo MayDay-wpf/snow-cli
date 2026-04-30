@@ -444,6 +444,8 @@ export type TranslationKeys = {
 		nordInfo: string;
 		tiffany: string;
 		tiffanyInfo: string;
+		macaronPink: string;
+		macaronPinkInfo: string;
 		custom: string;
 		customInfo: string;
 		editCustom: string;

@@ -265,6 +265,7 @@ export default function ChatScreen({
 		setShowSessionPanel: panelState.setShowSessionPanel,
 		onResumeSessionById: handleSessionPanelSelect,
 		setShowMcpPanel: panelState.setShowMcpPanel,
+		setShowHelpPanel: panelState.setShowHelpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
@@ -373,6 +374,7 @@ export default function ChatScreen({
 		panelState.showSessionPanel ||
 		panelState.showMcpPanel ||
 		panelState.showUsagePanel ||
+		panelState.showHelpPanel ||
 		panelState.showProfileEditPanel ||
 		panelState.showCustomCommandConfig ||
 		panelState.showSkillsCreation ||

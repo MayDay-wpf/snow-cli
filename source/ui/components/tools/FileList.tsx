@@ -898,7 +898,7 @@ const FileList = memo(
 			return (
 				<Box paddingX={1} marginTop={1} flexDirection="column">
 					<Box marginBottom={1}>
-						<Text color="blue" bold>
+						<Text color={theme.colors.menuInfo} bold>
 							{searchMode === 'content'
 								? t.fileList.contentSearchHeader
 								: t.fileList.filesHeader.replace(

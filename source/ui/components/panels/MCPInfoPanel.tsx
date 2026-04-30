@@ -22,6 +22,7 @@ import {
 	isMCPToolDisabledInScope,
 } from '../../../utils/config/disabledMCPTools.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
 import type {Skill} from '../../../mcp/skills.js';
 
 // Sub-component for displaying tools list with scrolling support
@@ -44,6 +45,7 @@ function ToolsList({
 	scopeLabels,
 	toolScopeMap,
 }: ToolsListProps) {
+	const {theme} = useTheme();
 	// Calculate display window for scrolling
 	const displayWindow = useMemo(() => {
 		if (tools.length <= maxDisplayItems) {
@@ -76,7 +78,7 @@ function ToolsList({
 	return (
 		<Box flexDirection="column">
 			{displayWindow.hiddenAbove > 0 && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					↑ {displayWindow.hiddenAbove} more above
 				</Text>
 			)}
@@ -89,8 +91,7 @@ function ToolsList({
 					? toolEnabledMap[tool.name] !== false
 					: true;
 				const scopeKey = toolScopeMap?.[tool.name];
-				const scopeLabel =
-					scopeKey && scopeLabels ? scopeLabels[scopeKey] : '';
+				const scopeLabel = scopeKey && scopeLabels ? scopeLabels[scopeKey] : '';
 				const maxDescLength = 60;
 				const truncatedDesc =
 					tool.description.length > maxDescLength
@@ -101,22 +102,32 @@ function ToolsList({
 					<Box key={tool.name} flexDirection="column">
 						<Text>
 							{isToolSelected ? '❯ ' : '  '}
-							<Text color={isEnabled ? 'green' : 'gray'}>● </Text>
 							<Text
 								color={
-									isToolSelected ? 'cyan' : isEnabled ? 'white' : 'gray'
+									isEnabled ? theme.colors.success : theme.colors.menuSecondary
+								}
+							>
+								●{' '}
+							</Text>
+							<Text
+								color={
+									isToolSelected
+										? theme.colors.menuInfo
+										: isEnabled
+										? theme.colors.text
+										: theme.colors.menuSecondary
 								}
 							>
 								{treeChar} {tool.name}
 							</Text>
 							{!isEnabled && disabledLabel && (
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									{disabledLabel}
 								</Text>
 							)}
 							{!isEnabled && scopeLabel && (
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									{scopeLabel}
 								</Text>
@@ -124,7 +135,7 @@ function ToolsList({
 						</Text>
 						{tool.description && isEnabled && (
 							<Box marginLeft={4}>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{truncatedDesc}
 								</Text>
 							</Box>
@@ -133,7 +144,7 @@ function ToolsList({
 				);
 			})}
 			{displayWindow.hiddenBelow > 0 && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					↓ {displayWindow.hiddenBelow} more below
 				</Text>
 			)}
@@ -180,6 +191,7 @@ const NON_FOCUSED_SKILL_DESC_MAX_LEN = 20;
 
 export default function MCPInfoPanel({onClose}: Props) {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [mcpStatus, setMcpStatus] = useState<MCPConnectionStatus[]>([]);
 	const [skills, setSkills] = useState<Skill[]>([]);
 	const [skillEnabledMap, setSkillEnabledMap] = useState<
@@ -195,9 +207,9 @@ export default function MCPInfoPanel({onClose}: Props) {
 		useState<MCPConnectionStatus | null>(null);
 	const [toolsSelectedIndex, setToolsSelectedIndex] = useState(0);
 	const [togglingTool, setTogglingTool] = useState<string | null>(null);
-	const [toolEnabledMap, setToolEnabledMap] = useState<
-		Record<string, boolean>
-	>({});
+	const [toolEnabledMap, setToolEnabledMap] = useState<Record<string, boolean>>(
+		{},
+	);
 	const [toolScopeMap, setToolScopeMap] = useState<Record<string, string>>({});
 
 	const loadMCPStatus = async () => {
@@ -371,10 +383,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 		description: string,
 		isSelected: boolean,
 	): string => {
-		if (
-			isSelected ||
-			description.length <= NON_FOCUSED_SKILL_DESC_MAX_LEN
-		) {
+		if (isSelected || description.length <= NON_FOCUSED_SKILL_DESC_MAX_LEN) {
 			return description;
 		}
 
@@ -401,17 +410,13 @@ export default function MCPInfoPanel({onClose}: Props) {
 		if (showToolsPage && selectedServiceForTools) {
 			if (key.upArrow) {
 				setToolsSelectedIndex(prev =>
-					prev > 0
-						? prev - 1
-						: (selectedServiceForTools.tools.length || 1) - 1,
+					prev > 0 ? prev - 1 : (selectedServiceForTools.tools.length || 1) - 1,
 				);
 				return;
 			}
 			if (key.downArrow) {
 				setToolsSelectedIndex(prev =>
-					prev < (selectedServiceForTools.tools.length || 1) - 1
-						? prev + 1
-						: 0,
+					prev < (selectedServiceForTools.tools.length || 1) - 1 ? prev + 1 : 0,
 				);
 				return;
 			}
@@ -449,9 +454,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 					await refreshMCPToolsCache();
 				} catch (error) {
 					setErrorMessage(
-						error instanceof Error
-							? error.message
-							: 'Failed to toggle tool',
+						error instanceof Error ? error.message : 'Failed to toggle tool',
 					);
 				} finally {
 					setTogglingTool(null);
@@ -507,17 +510,10 @@ export default function MCPInfoPanel({onClose}: Props) {
 					const enabledMap: Record<string, boolean> = {};
 					const scopeMap: Record<string, string> = {};
 					for (const tool of service.tools) {
-						enabledMap[tool.name] = isMCPToolEnabled(
-							service.name,
-							tool.name,
-						);
+						enabledMap[tool.name] = isMCPToolEnabled(service.name, tool.name);
 						if (!enabledMap[tool.name]) {
 							if (
-								isMCPToolDisabledInScope(
-									service.name,
-									tool.name,
-									'project',
-								)
+								isMCPToolDisabledInScope(service.name, tool.name, 'project')
 							) {
 								scopeMap[tool.name] = 'project';
 							} else {
@@ -545,17 +541,28 @@ export default function MCPInfoPanel({onClose}: Props) {
 			)
 				return;
 
-			try {
-				setTogglingService(currentItem.label);
-
-				if (currentItem.isSkill) {
-					// Toggle individual skill
+			// Skill toggle is a pure local state change — handle it without
+			// switching to the "toggling" overlay (which would unmount the list
+			// and cause the cursor/selection to visually jump in the terminal).
+			if (currentItem.isSkill) {
+				try {
 					toggleSkill(currentItem.value);
 					setSkillEnabledMap(prev => ({
 						...prev,
 						[currentItem.value]: !prev[currentItem.value],
 					}));
-				} else if (currentItem.isBuiltIn) {
+				} catch (error) {
+					setErrorMessage(
+						error instanceof Error ? error.message : 'Failed to toggle skill',
+					);
+				}
+				return;
+			}
+
+			try {
+				setTogglingService(currentItem.label);
+
+				if (currentItem.isBuiltIn) {
 					// Toggle built-in service
 					toggleBuiltInService(currentItem.value);
 				} else {
@@ -585,13 +592,20 @@ export default function MCPInfoPanel({onClose}: Props) {
 	});
 
 	if (isLoading) {
-		return <Text color="gray">{t.mcpInfoPanel.loading}</Text>;
+		return (
+			<Text color={theme.colors.menuSecondary}>{t.mcpInfoPanel.loading}</Text>
+		);
 	}
 
 	if (errorMessage) {
 		return (
-			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="red" dimColor>
+			<Box
+				borderColor={theme.colors.error}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.error} dimColor>
 					{t.mcpInfoPanel.error.replace('{message}', errorMessage)}
 				</Text>
 			</Box>
@@ -600,8 +614,13 @@ export default function MCPInfoPanel({onClose}: Props) {
 
 	if (mcpStatus.length === 0 && skills.length === 0) {
 		return (
-			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="gray" dimColor>
+			<Box
+				borderColor={theme.colors.menuInfo}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.mcpInfoPanel.noServices}
 				</Text>
 			</Box>
@@ -609,55 +628,62 @@ export default function MCPInfoPanel({onClose}: Props) {
 	}
 
 	return (
-		<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
+		<Box
+			borderColor={theme.colors.menuInfo}
+			borderStyle="round"
+			paddingX={2}
+			paddingY={0}
+		>
 			<Box flexDirection="column">
-			{showToolsPage && selectedServiceForTools ? (
-				<>
-					<Text color="cyan" bold>
-						{togglingTool
-							? t.mcpInfoPanel.toolTogglingHint.replace(
-									'{tool}',
-									togglingTool,
-							  )
-							: `${t.mcpInfoPanel.toolsListTitle.replace(
-									'{service}',
-									selectedServiceForTools.name,
-							  )} (${toolsSelectedIndex + 1}/${selectedServiceForTools.tools.length})`}
-					</Text>
-					{!togglingTool && (
-						<ToolsList
-							tools={selectedServiceForTools.tools}
-							selectedIndex={toolsSelectedIndex}
-							maxDisplayItems={6}
-							toolEnabledMap={toolEnabledMap}
-							disabledLabel={t.mcpInfoPanel.toolDisabled}
-							scopeLabels={{
-								global: t.mcpInfoPanel.toolScopeGlobal,
-								project: t.mcpInfoPanel.toolScopeProject,
-							}}
-							toolScopeMap={toolScopeMap}
-						/>
-					)}
-					{togglingTool && (
-						<Text color="yellow" dimColor>
-							{t.mcpInfoPanel.pleaseWait}
+				{showToolsPage && selectedServiceForTools ? (
+					<>
+						<Text color={theme.colors.menuInfo} bold>
+							{togglingTool
+								? t.mcpInfoPanel.toolTogglingHint.replace(
+										'{tool}',
+										togglingTool,
+								  )
+								: `${t.mcpInfoPanel.toolsListTitle.replace(
+										'{service}',
+										selectedServiceForTools.name,
+								  )} (${toolsSelectedIndex + 1}/${
+										selectedServiceForTools.tools.length
+								  })`}
 						</Text>
-					)}
-					<Box marginTop={1} flexDirection="column">
-						<Text color="gray" dimColor>
-							{t.mcpInfoPanel.toolsNavigationHint}
-						</Text>
-						{selectedServiceForTools.name === 'filesystem' && (
-							<Text color="gray" dimColor>
-								replaceedit: default off — Tab enables (writes
-								.snow/opt-in-mcp-tools.json).
+						{!togglingTool && (
+							<ToolsList
+								tools={selectedServiceForTools.tools}
+								selectedIndex={toolsSelectedIndex}
+								maxDisplayItems={6}
+								toolEnabledMap={toolEnabledMap}
+								disabledLabel={t.mcpInfoPanel.toolDisabled}
+								scopeLabels={{
+									global: t.mcpInfoPanel.toolScopeGlobal,
+									project: t.mcpInfoPanel.toolScopeProject,
+								}}
+								toolScopeMap={toolScopeMap}
+							/>
+						)}
+						{togglingTool && (
+							<Text color={theme.colors.warning} dimColor>
+								{t.mcpInfoPanel.pleaseWait}
 							</Text>
 						)}
-					</Box>
-				</>
-			) : (
+						<Box marginTop={1} flexDirection="column">
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.mcpInfoPanel.toolsNavigationHint}
+							</Text>
+							{selectedServiceForTools.name === 'filesystem' && (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									replaceedit: default off — Tab enables (writes
+									.snow/opt-in-mcp-tools.json).
+								</Text>
+							)}
+						</Box>
+					</>
+				) : (
 					<>
-						<Text color="cyan" bold>
+						<Text color={theme.colors.menuInfo} bold>
 							{isReconnecting
 								? t.mcpInfoPanel.refreshing
 								: togglingService
@@ -678,7 +704,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 								if (item.isSectionHeader) {
 									return (
 										<Box key={item.value} marginTop={1}>
-											<Text color="cyan" bold>
+											<Text color={theme.colors.menuInfo} bold>
 												{item.label}
 											</Text>
 										</Box>
@@ -689,7 +715,11 @@ export default function MCPInfoPanel({onClose}: Props) {
 								if (item.isRefreshAll) {
 									return (
 										<Box key={item.value}>
-											<Text color={isSelected ? 'cyan' : 'blue'}>
+											<Text
+												color={
+													isSelected ? theme.colors.menuInfo : theme.colors.text
+												}
+											>
 												{isSelected ? '❯ ' : '  '}↻ {t.mcpInfoPanel.refreshAll}
 											</Text>
 										</Box>
@@ -716,15 +746,27 @@ export default function MCPInfoPanel({onClose}: Props) {
 										<Box key={item.value} flexDirection="column">
 											<Text>
 												{isSelected ? '❯ ' : '  '}
-												<Text color={isEnabled ? 'magenta' : 'gray'}>◆ </Text>
 												<Text
 													color={
-														isSelected ? 'cyan' : isEnabled ? 'white' : 'gray'
+														isEnabled
+															? theme.colors.success
+															: theme.colors.menuSecondary
+													}
+												>
+													◆{' '}
+												</Text>
+												<Text
+													color={
+														isSelected
+															? theme.colors.menuInfo
+															: isEnabled
+															? theme.colors.text
+															: theme.colors.menuSecondary
 													}
 												>
 													{item.label}
 												</Text>
-												<Text color="gray" dimColor>
+												<Text color={theme.colors.menuSecondary} dimColor>
 													{' '}
 													{isEnabled
 														? locationSuffix
@@ -733,7 +775,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 											</Text>
 											{isEnabled && hasDescription ? (
 												<Box marginLeft={4}>
-													<Text color="gray" dimColor>
+													<Text color={theme.colors.menuSecondary} dimColor>
 														{renderedDescription}
 													</Text>
 												</Box>
@@ -745,10 +787,10 @@ export default function MCPInfoPanel({onClose}: Props) {
 								// Render MCP service item
 								const isEnabled = item.enabled !== false;
 								const statusColor = !isEnabled
-									? 'gray'
+									? theme.colors.menuSecondary
 									: item.connected
-									? 'green'
-									: 'red';
+									? theme.colors.success
+									: theme.colors.error;
 								const sourceSuffix =
 									!item.isBuiltIn && item.source === 'project'
 										? t.mcpInfoPanel.mcpSourceProject
@@ -770,12 +812,16 @@ export default function MCPInfoPanel({onClose}: Props) {
 											<Text color={statusColor}>● </Text>
 											<Text
 												color={
-													isSelected ? 'cyan' : !isEnabled ? 'gray' : 'white'
+													isSelected
+														? theme.colors.menuInfo
+														: !isEnabled
+														? theme.colors.menuSecondary
+														: theme.colors.text
 												}
 											>
 												{item.label}
 											</Text>
-											<Text color="gray" dimColor>
+											<Text color={theme.colors.menuSecondary} dimColor>
 												{suffix}
 											</Text>
 										</Text>
@@ -786,7 +832,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 							!togglingService &&
 							selectItems.length > MAX_DISPLAY_ITEMS && (
 								<Box>
-									<Text color="gray" dimColor>
+									<Text color={theme.colors.menuSecondary} dimColor>
 										{t.mcpInfoPanel.scrollHint}
 										{hiddenAboveCount > 0 &&
 											` · ${t.mcpInfoPanel.moreAbove.replace(
@@ -802,12 +848,12 @@ export default function MCPInfoPanel({onClose}: Props) {
 								</Box>
 							)}
 						{(isReconnecting || togglingService) && (
-							<Text color="yellow" dimColor>
+							<Text color={theme.colors.warning} dimColor>
 								{t.mcpInfoPanel.pleaseWait}
 							</Text>
 						)}
 						{!isReconnecting && !togglingService && (
-							<Text color="gray" dimColor>
+							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.mcpInfoPanel.navigationHint}
 							</Text>
 						)}

@@ -450,6 +450,8 @@ export const zh: TranslationKeys = {
 		nordInfo: '北极、北方蓝调色板',
 		tiffany: '蒂芙尼蓝',
 		tiffanyInfo: '清新优雅的蒂芙尼蓝色调',
+		macaronPink: '马卡龙粉',
+		macaronPinkInfo: '甜美柔和的马卡龙粉色调',
 		custom: '自定义',
 		customInfo: '使用您自定义的颜色',
 		editCustom: '编辑自定义主题...',

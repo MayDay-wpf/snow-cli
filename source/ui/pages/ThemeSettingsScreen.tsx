@@ -144,6 +144,14 @@ export default function ThemeSettingsScreen({
 			},
 			{
 				label:
+					selectedTheme === 'macaron-pink'
+						? `✓ ${t.themeSettings.macaronPink}`
+						: t.themeSettings.macaronPink,
+				value: 'macaron-pink',
+				infoText: t.themeSettings.macaronPinkInfo,
+			},
+			{
+				label:
 					selectedTheme === 'custom'
 						? `✓ ${t.themeSettings?.custom || 'Custom'}`
 						: t.themeSettings?.custom || 'Custom',

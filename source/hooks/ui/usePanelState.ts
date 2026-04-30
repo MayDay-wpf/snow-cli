@@ -10,6 +10,7 @@ export type PanelState = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
+	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
@@ -41,6 +42,7 @@ export type PanelActions = {
 	setShowSessionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
+	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
@@ -88,6 +90,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
+	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
@@ -224,6 +227,11 @@ export function usePanelState(): PanelState & PanelActions {
 			setShowUsagePanel(false);
 			return true;
 		}
+
+		if (showHelpPanel) {
+			setShowHelpPanel(false);
+			return true;
+		}
 		// CustomCommandConfigPanel handles its own ESC key logic internally
 		// Don't close it here - let the panel decide when to close
 		if (showCustomCommandConfig) {
@@ -356,6 +364,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showSessionPanel,
 		showMcpPanel,
 		showUsagePanel,
+		showHelpPanel,
 		showCustomCommandConfig,
 		showSkillsCreation,
 		showRoleCreation,
@@ -384,6 +393,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowSessionPanel,
 		setShowMcpPanel,
 		setShowUsagePanel,
+		setShowHelpPanel,
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
 		setShowRoleCreation,

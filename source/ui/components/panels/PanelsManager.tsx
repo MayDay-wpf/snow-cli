@@ -15,6 +15,7 @@ import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
 import TodoListPanel from './TodoListPanel.js';
+import HelpPanel from './HelpPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
@@ -35,6 +36,7 @@ type PanelsManagerProps = {
 	showSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
+	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
 	showRoleCreation: boolean;
@@ -104,6 +106,7 @@ export default function PanelsManager({
 	showSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
+	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
 	showRoleCreation,
@@ -188,6 +191,18 @@ export default function PanelsManager({
 					<Suspense fallback={loadingFallback}>
 						<UsagePanel />
 					</Suspense>
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.pressEscToClose}
+						</Text>
+					</Box>
+				</Box>
+			)}
+
+			{/* Show help panel if active - replaces input */}
+			{showHelpPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<HelpPanel />
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
 							{t.chatScreen.pressEscToClose}
@@ -326,7 +341,6 @@ export default function PanelsManager({
 					<TodoListPanel onClose={() => setShowTodoListPanel(false)} />
 				</Box>
 			)}
-
 		</>
 	);
 }

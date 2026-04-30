@@ -481,6 +481,8 @@ export const en: TranslationKeys = {
 		nordInfo: 'Arctic, north-bluish color palette',
 		tiffany: 'Tiffany Blue',
 		tiffanyInfo: 'Fresh and elegant Tiffany blue palette',
+		macaronPink: 'Macaron Pink',
+		macaronPinkInfo: 'Sweet pastel macaron pink palette',
 		custom: 'Custom',
 		customInfo: 'Use your own custom colors',
 		editCustom: 'Edit Custom Theme...',

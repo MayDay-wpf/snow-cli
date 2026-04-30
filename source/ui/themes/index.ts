@@ -10,6 +10,7 @@ export type ThemeType =
 	| 'solarized-dark'
 	| 'nord'
 	| 'tiffany'
+	| 'macaron-pink'
 	| 'custom';
 
 export interface ThemeColors {
@@ -340,6 +341,38 @@ export const themes: Record<ThemeType, Theme> = {
 			userMessageBackground: '#bfe7e3',
 			// User message text color
 			userMessageText: '#000000',
+			// Diff highlight opacity
+			diffOpacity: 1,
+		},
+	},
+	'macaron-pink': {
+		name: 'Macaron Pink',
+		type: 'macaron-pink',
+		colors: {
+			background: '#fff0f5',
+			text: '#5a2a4a',
+			border: '#f7b6d2',
+			diffAdded: '#c8e8d4',
+			diffRemoved: '#fbc4d0',
+			diffModified: '#fde2a7',
+			lineNumber: '#b07a96',
+			lineNumberBorder: '#f3c6dc',
+			// Menu colors - macaron pastel palette
+			menuSelected: '#ff7eb6',
+			menuNormal: '#5a2a4a',
+			menuInfo: '#b388eb',
+			menuSecondary: '#a87a96',
+			// Status colors
+			error: '#e5547d',
+			warning: '#e8a87c',
+			success: '#7ec4a3',
+			cyan: '#8fd3d8',
+			// Logo gradient - pink to lavender macaron
+			logoGradient: ['#ffb3d1', '#ff7eb6', '#b388eb'],
+			// User message background - soft pink macaron
+			userMessageBackground: '#ffd1e3',
+			// User message text color
+			userMessageText: '#5a2a4a',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
