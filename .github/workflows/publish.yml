@@ -56,10 +56,12 @@ jobs:
 
             ### What's New
 
-            - Optimize the ACE tool to reduce context usage
-            - Remove the /models command to strengthen the /profiles command and panel functionality
-            - Enhance the coverage of the default sensitive command panel (database operation commands)
-            - Add more effective points to the theme system and introduce a new built-in theme
+            - Added more theme validation points and added macaron powder theme
+            - Optimize the user experience of the /profiles panel
+            - Add orphan tool cleanup logic when sub-proxy compression
+            - Improve terminal title display
+            - Fix the bug that IDE Diff doesn't trigger when editing multiple files.
+            - Fix the bug that IDE Diff is not triggered when editing multiple files.
 
             ### Installation
             ```bash
