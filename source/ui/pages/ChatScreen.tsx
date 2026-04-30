@@ -577,6 +577,7 @@ export default function ChatScreen({
 					draftContent={inputDraftContent}
 					onDraftChange={setInputDraftContent}
 					onContextPercentageChange={setCurrentContextPercentage}
+					onInitialContentConsumed={() => setRestoreInputContent(null)}
 					showProfilePicker={panelState.showProfilePanel}
 					setShowProfilePicker={panelState.setShowProfilePanel}
 					profileSelectedIndex={panelState.profileSelectedIndex}

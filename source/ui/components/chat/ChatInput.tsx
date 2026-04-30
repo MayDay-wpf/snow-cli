@@ -238,6 +238,7 @@ type Props = {
 		} | null,
 	) => void;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
+	onInitialContentConsumed?: () => void;
 	// Profile picker
 	showProfilePicker?: boolean;
 	setShowProfilePicker?: (show: boolean) => void;
@@ -284,6 +285,7 @@ export default function ChatInput({
 	draftContent = null,
 	onDraftChange,
 	onContextPercentageChange,
+	onInitialContentConsumed,
 	showProfilePicker = false,
 	setShowProfilePicker,
 	profileSelectedIndex = 0,
@@ -616,57 +618,58 @@ export default function ChatInput({
 		argsPickerContext,
 	});
 
-	// Set initial content when provided (e.g., when rolling back to first message)
+	// Set initial content when provided (e.g., rollback/history restore)
 	useEffect(() => {
-		if (initialContent) {
-			// Always do full restore to avoid duplicate placeholders
-			buffer.setText('');
+		if (!initialContent) return;
 
-			const text = initialContent.text;
-			const images = initialContent.images || [];
+		// Always do full restore to avoid duplicate placeholders
+		buffer.setText('');
 
-			if (images.length === 0) {
-				// No images, just set the text.
-				// Use restoreTextWithSkillPlaceholders() so rollback restore:
-				// - doesn't get treated as a "paste" placeholder
-				// - rebuilds Skill injection blocks back into [Skill:id] placeholders
-				if (text) {
-					restoreTextWithSkillPlaceholders(buffer, text);
+		const text = initialContent.text;
+		const images = initialContent.images || [];
+
+		if (images.length === 0) {
+			// No images, just set the text.
+			// Use restoreTextWithSkillPlaceholders() so rollback restore:
+			// - doesn't get treated as a "paste" placeholder
+			// - rebuilds Skill injection blocks back into [Skill:id] placeholders
+			if (text) {
+				restoreTextWithSkillPlaceholders(buffer, text);
+			}
+		} else {
+			// Split text by image placeholders and reconstruct with actual images
+			// Placeholder format: [image #N]
+			const imagePlaceholderPattern = /\[image #\d+\]/g;
+			const parts = text.split(imagePlaceholderPattern);
+
+			// Interleave text parts with images
+			for (let i = 0; i < parts.length; i++) {
+				// Insert text part
+				const part = parts[i];
+				if (part) {
+					restoreTextWithSkillPlaceholders(buffer, part);
 				}
-			} else {
-				// Split text by image placeholders and reconstruct with actual images
-				// Placeholder format: [image #N]
-				const imagePlaceholderPattern = /\[image #\d+\]/g;
-				const parts = text.split(imagePlaceholderPattern);
 
-				// Interleave text parts with images
-				for (let i = 0; i < parts.length; i++) {
-					// Insert text part
-					const part = parts[i];
-					if (part) {
-						restoreTextWithSkillPlaceholders(buffer, part);
-					}
-
-					// Insert image after this text part (if exists)
-					if (i < images.length) {
-						const img = images[i];
-						if (img) {
-							// Extract base64 data from data URL if present
-							let base64Data = img.data;
-							if (base64Data.startsWith('data:')) {
-								const base64Index = base64Data.indexOf('base64,');
-								if (base64Index !== -1) {
-									base64Data = base64Data.substring(base64Index + 7);
-								}
+				// Insert image after this text part (if exists)
+				if (i < images.length) {
+					const img = images[i];
+					if (img) {
+						// Extract base64 data from data URL if present
+						let base64Data = img.data;
+						if (base64Data.startsWith('data:')) {
+							const base64Index = base64Data.indexOf('base64,');
+							if (base64Index !== -1) {
+								base64Data = base64Data.substring(base64Index + 7);
 							}
-							buffer.insertImage(base64Data, img.mimeType);
 						}
+						buffer.insertImage(base64Data, img.mimeType);
 					}
 				}
 			}
-
-			triggerUpdate();
 		}
+
+		triggerUpdate();
+		onInitialContentConsumed?.();
 		// Only run when initialContent changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [initialContent]);

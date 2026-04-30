@@ -39,6 +39,7 @@ const colorKeys: ColorKey[] = [
 	'success',
 	'logoGradient',
 	'userMessageBackground',
+	'userMessageText',
 	'diffOpacity',
 ];
 

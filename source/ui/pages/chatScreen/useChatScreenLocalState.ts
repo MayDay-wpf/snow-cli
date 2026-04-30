@@ -77,16 +77,9 @@ export function useChatScreenLocalState() {
 		return undefined;
 	}, [bashSensitiveCommand]);
 
-	useEffect(() => {
-		if (restoreInputContent !== null) {
-			const timer = setTimeout(() => {
-				setRestoreInputContent(null);
-			}, 100);
-			return () => clearTimeout(timer);
-		}
-
-		return undefined;
-	}, [restoreInputContent]);
+	// restoreInputContent must be cleared only after ChatInput actually consumes it.
+	// During rollback confirmation the footer is hidden, so clearing by timeout here
+	// can drop the restored user message before the input is remounted.
 
 	const requestUserQuestion = useCallback(
 		async (

@@ -85,6 +85,7 @@ type ChatFooterProps = {
 		} | null,
 	) => void;
 	onContextPercentageChange: (percentage: number) => void;
+	onInitialContentConsumed: () => void;
 	showProfilePicker: boolean;
 	setShowProfilePicker: (value: boolean | ((prev: boolean) => boolean)) => void;
 	profileSelectedIndex: number;
@@ -316,6 +317,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							draftContent={props.draftContent}
 							onDraftChange={props.onDraftChange}
 							onContextPercentageChange={props.onContextPercentageChange}
+							onInitialContentConsumed={props.onInitialContentConsumed}
 							showProfilePicker={props.showProfilePicker}
 							setShowProfilePicker={props.setShowProfilePicker}
 							profileSelectedIndex={props.profileSelectedIndex}
