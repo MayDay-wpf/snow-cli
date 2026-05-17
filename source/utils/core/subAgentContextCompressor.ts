@@ -383,6 +383,14 @@ interface AISummaryResult {
 	};
 }
 
+interface HybridCompressionConfig {
+	model: string;
+	requestMethod: RequestMethod;
+	maxTokens?: number;
+	configProfile?: string;
+	onStreamStart?: (content: string) => void;
+}
+
 /**
  * Perform AI summary compression — call the AI to generate a handover document.
  * Preserves recent tool call rounds and replaces older history with a summary.
@@ -395,12 +403,7 @@ interface AISummaryResult {
 async function aiSummaryCompress(
 	messages: ChatMessage[],
 	keepRounds: number,
-	config: {
-		model: string;
-		requestMethod: RequestMethod;
-		maxTokens?: number;
-		configProfile?: string;
-	},
+	config: HybridCompressionConfig,
 ): Promise<AISummaryResult> {
 	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRounds);
 
@@ -435,6 +438,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -456,6 +460,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -475,6 +480,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -496,6 +502,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -649,12 +656,7 @@ export async function compressSubAgentContext(
 	messages: ChatMessage[],
 	totalTokens: number,
 	maxContextTokens: number,
-	config: {
-		model: string;
-		requestMethod: RequestMethod;
-		maxTokens?: number;
-		configProfile?: string;
-	},
+	config: HybridCompressionConfig,
 ): Promise<SubAgentCompressionResult> {
 	const percentage = getContextPercentage(totalTokens, maxContextTokens);
 
@@ -733,12 +735,7 @@ export async function compressSubAgentContext(
  */
 export async function performHybridCompression(
 	messages: ChatMessage[],
-	config: {
-		model: string;
-		requestMethod: RequestMethod;
-		maxTokens?: number;
-		configProfile?: string;
-	},
+	config: HybridCompressionConfig,
 	keepRounds: number = DEFAULT_KEEP_RECENT_ROUNDS,
 ): Promise<SubAgentCompressionResult> {
 	if (messages.length === 0) {

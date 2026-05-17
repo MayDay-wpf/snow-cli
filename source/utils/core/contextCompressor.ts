@@ -33,6 +33,10 @@ export interface CompressionResult {
 	}; // Hook error details for UI rendering
 }
 
+export interface CompressionOptions {
+	onStreamStart?: (content: string) => void;
+}
+
 /**
  * Compression request prompt - asks AI to create a detailed handover document
  * that preserves critical information with rigorous technical accuracy
@@ -427,6 +431,7 @@ async function compressWithChatCompletions(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -448,6 +453,7 @@ async function compressWithChatCompletions(
 	})) {
 		// Collect content
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -460,6 +466,7 @@ async function compressWithChatCompletions(
 			};
 		}
 	}
+
 	if (!summary) {
 		throw new Error('Failed to generate summary');
 	}
@@ -474,6 +481,7 @@ async function compressWithResponses(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -495,6 +503,7 @@ async function compressWithResponses(
 	})) {
 		// Collect content
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -522,6 +531,7 @@ async function compressWithGemini(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -542,6 +552,7 @@ async function compressWithGemini(
 	})) {
 		// Collect content
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -569,6 +580,7 @@ async function compressWithAnthropic(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -591,6 +603,7 @@ async function compressWithAnthropic(
 	})) {
 		// Collect content
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -614,10 +627,12 @@ async function compressWithAnthropic(
 /**
  * Compress conversation history using the advanced model
  * @param messages - Array of messages to compress
+ * @param options - Optional compression lifecycle callbacks
  * @returns Compressed summary and token usage information, or null if compression should be skipped
  */
 export async function compressContext(
 	messages: ChatMessage[],
+	options?: CompressionOptions,
 ): Promise<CompressionResult | null> {
 	// Execute beforeCompress hook
 	try {
@@ -706,6 +721,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -714,6 +730,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -723,6 +740,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -733,6 +751,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 		}

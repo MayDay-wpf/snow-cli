@@ -18,6 +18,8 @@ export type CompressionStatus = {
 	sessionId?: string;
 	retryAttempt?: number;
 	maxRetries?: number;
+	progress?: number;
+	streamStarted?: boolean;
 };
 
 interface CompressionStatusProps {
@@ -45,27 +47,108 @@ const stepLabels: Record<CompressionStep, string> = {
 	skipped: 'Compression skipped',
 };
 
+function clampProgress(progress: number): number {
+	return Math.max(0, Math.min(100, Math.round(progress)));
+}
+
+function buildProgressBar(progress: number, terminalWidth: number) {
+	const barWidth = Math.max(20, Math.min(46, terminalWidth - 12));
+	const filled = Math.max(
+		0,
+		Math.min(barWidth, Math.round((progress / 100) * barWidth)),
+	);
+	const empty = barWidth - filled;
+
+	return {
+		filledBar: '▰'.repeat(filled),
+		emptyBar: '▱'.repeat(empty),
+	};
+}
+
 export function CompressionStatus({
 	status,
 	terminalWidth,
 }: CompressionStatusProps) {
 	const {theme} = useTheme();
+	const [animatedProgress, setAnimatedProgress] = React.useState(0);
+
+	React.useEffect(() => {
+		if (!status) {
+			setAnimatedProgress(0);
+			return;
+		}
+
+		if (status.step === 'completed') {
+			setAnimatedProgress(100);
+			return;
+		}
+
+		if (status.step !== 'compressing') {
+			setAnimatedProgress(0);
+			return;
+		}
+
+		setAnimatedProgress(previous =>
+			Math.max(previous, clampProgress(status.progress ?? 0)),
+		);
+	}, [status?.step, status?.progress]);
+
+	React.useEffect(() => {
+		if (!status || status.step !== 'compressing' || !status.streamStarted) {
+			return;
+		}
+
+		setAnimatedProgress(previous => Math.max(previous, 10));
+	}, [status?.step, status?.streamStarted]);
 
 	if (!status) {
 		return null;
 	}
 
 	const {step, message, sessionId, retryAttempt, maxRetries} = status;
-	const isActive =
-		step === 'saving' || step === 'loading' || step === 'compressing';
+	const isActive = step === 'saving' || step === 'loading';
 	const isRetrying = step === 'retrying';
 	const isCompleted = step === 'completed';
 	const isFailed = step === 'failed' || step === 'skipped';
 
+	if (step === 'compressing') {
+		const progress = clampProgress(animatedProgress);
+		const {filledBar, emptyBar} = buildProgressBar(progress, terminalWidth);
+
+		return (
+			<Box flexDirection="column" width={terminalWidth}>
+				<Box>
+					<Text color={theme.colors.menuInfo}>
+						✵ Compacting conversation...
+					</Text>
+				</Box>
+				{sessionId && (
+					<Box paddingLeft={2} marginTop={1}>
+						<Text dimColor>Session: </Text>
+						<Text color={theme.colors.menuSecondary}>{sessionId}</Text>
+					</Box>
+				)}
+				<Box paddingLeft={2} marginTop={1}>
+					<Text color={theme.colors.text}>{filledBar}</Text>
+					<Text dimColor>{emptyBar}</Text>
+					<Text dimColor> {progress}%</Text>
+				</Box>
+				{message && (
+					<Box paddingLeft={2} marginTop={1}>
+						<Text dimColor wrap="truncate">
+							{message}
+						</Text>
+					</Box>
+				)}
+			</Box>
+		);
+	}
+
 	const stepInfo = stepIcons[step];
-	const label = isRetrying && retryAttempt && maxRetries
-		? `Retrying compression (${retryAttempt}/${maxRetries})`
-		: stepLabels[step];
+	const label =
+		isRetrying && retryAttempt && maxRetries
+			? `Retrying compression (${retryAttempt}/${maxRetries})`
+			: stepLabels[step];
 
 	const getColor = () => {
 		if (isFailed) return theme.colors.error;
@@ -116,7 +199,6 @@ export function CompressionStatus({
 					<Text color={theme.colors.menuSecondary}>
 						{step === 'saving' && 'Persisting conversation data...'}
 						{step === 'loading' && 'Reading session from disk...'}
-						{step === 'compressing' && 'Optimizing context for token limit...'}
 					</Text>
 				</Box>
 			)}

@@ -122,7 +122,40 @@ export async function executeContextCompression(
 		// Check if Hybrid Compress mode is enabled
 		const useHybridCompress = getHybridCompressEnabled();
 
-		onStatusUpdate?.({step: 'compressing', sessionId});
+		let compressionStreamStarted = false;
+		let compressionStreamScore = 0;
+		let compressionProgress = 0;
+		const notifyCompressionStreamStarted = (content?: string) => {
+			compressionStreamStarted = true;
+			compressionStreamScore += Math.max(
+				1,
+				Math.ceil((content?.length ?? 0) / 1500),
+			);
+
+			const nextProgress = Math.min(
+				90,
+				10 + Math.floor((1 - Math.exp(-compressionStreamScore / 800)) * 80),
+			);
+
+			if (nextProgress <= compressionProgress) {
+				return;
+			}
+
+			compressionProgress = nextProgress;
+			onStatusUpdate?.({
+				step: 'compressing',
+				sessionId,
+				progress: compressionProgress,
+				streamStarted: compressionStreamStarted,
+			});
+		};
+
+		onStatusUpdate?.({
+			step: 'compressing',
+			sessionId,
+			progress: 0,
+			streamStarted: false,
+		});
 
 		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
 		if (useHybridCompress) {
@@ -131,6 +164,7 @@ export async function executeContextCompression(
 				model: apiConfig.advancedModel || 'gpt-5',
 				requestMethod: apiConfig.requestMethod,
 				maxTokens: apiConfig.maxTokens,
+				onStreamStart: notifyCompressionStreamStarted,
 			});
 
 			if (!hybridResult.compressed) {
@@ -259,9 +293,10 @@ export async function executeContextCompression(
 				},
 			};
 		}
-
 		// ── Standard full compression path ──
-		const compressionResult = await compressContext(chatMessages);
+		const compressionResult = await compressContext(chatMessages, {
+			onStreamStart: notifyCompressionStreamStarted,
+		});
 
 		if (!compressionResult) {
 			onStatusUpdate?.({
