@@ -652,25 +652,6 @@ export default function MCPInfoPanel({onClose}: Props) {
 									</Box>
 								);
 							})}
-						{!isReconnecting &&
-							!togglingService &&
-							selectItems.length > MAX_DISPLAY_ITEMS && (
-								<Box>
-									<Text color={theme.colors.menuSecondary} dimColor>
-										{t.mcpInfoPanel.scrollHint}
-										{hiddenAboveCount > 0 &&
-											` · ${t.mcpInfoPanel.moreAbove.replace(
-												'{count}',
-												String(hiddenAboveCount),
-											)}`}
-										{hiddenBelowCount > 0 &&
-											` · ${t.mcpInfoPanel.moreBelow.replace(
-												'{count}',
-												String(hiddenBelowCount),
-											)}`}
-									</Text>
-								</Box>
-							)}
 						{(isReconnecting || togglingService) && (
 							<Text color={theme.colors.warning} dimColor>
 								{t.mcpInfoPanel.pleaseWait}
@@ -679,6 +660,18 @@ export default function MCPInfoPanel({onClose}: Props) {
 						{!isReconnecting && !togglingService && (
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.mcpInfoPanel.navigationHint}
+								{selectItems.length > MAX_DISPLAY_ITEMS &&
+									hiddenAboveCount > 0 &&
+									` · ${t.mcpInfoPanel.moreAbove.replace(
+										'{count}',
+										String(hiddenAboveCount),
+									)}`}
+								{selectItems.length > MAX_DISPLAY_ITEMS &&
+									hiddenBelowCount > 0 &&
+									` · ${t.mcpInfoPanel.moreBelow.replace(
+										'{count}',
+										String(hiddenBelowCount),
+									)}`}
 							</Text>
 						)}
 					</>

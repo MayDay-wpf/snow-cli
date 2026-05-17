@@ -22,6 +22,7 @@ export default function SubAgentDepthPanel({visible, onClose}: Props) {
 	);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const [showCursor, setShowCursor] = useState(true);
 
 	useEffect(() => {
 		if (!visible) {
@@ -58,6 +59,18 @@ export default function SubAgentDepthPanel({visible, onClose}: Props) {
 
 		return () => clearTimeout(timer);
 	}, [successMessage]);
+
+	useEffect(() => {
+		if (!visible) {
+			return undefined;
+		}
+
+		const timer = setInterval(() => {
+			setShowCursor(v => !v);
+		}, 530);
+
+		return () => clearInterval(timer);
+	}, [visible]);
 
 	const handleSave = useCallback(() => {
 		const trimmedValue = inputValue.trim();
@@ -132,7 +145,11 @@ export default function SubAgentDepthPanel({visible, onClose}: Props) {
 				<Text color={theme.colors.menuInfo}>
 					{t.subAgentDepthPanel.inputLabel}
 				</Text>
-				<Text color={theme.colors.menuSelected}> {inputValue || '0'}</Text>
+				<Text color={theme.colors.menuSelected}>
+					{' '}
+					{inputValue || '0'}
+					{showCursor ? '█' : ' '}
+				</Text>
 			</Box>
 			{successMessage && (
 				<Box marginTop={1}>
