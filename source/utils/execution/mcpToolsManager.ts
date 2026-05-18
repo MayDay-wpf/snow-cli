@@ -1690,14 +1690,13 @@ export async function executeMCPTool(
 					// Validate parameters
 					if (
 						typeof args.duration !== 'number' ||
-						args.duration < 1 ||
-						args.duration > 3600
+						args.duration < 1
 					) {
 						return {
 							content: [
 								{
 									type: 'text',
-									text: `Error: "duration" must be a number between 1 and 3600 seconds.\n\nReceived: ${JSON.stringify(
+									text: `Error: "duration" must be a number greater than or equal to 1 second.\n\nReceived: ${JSON.stringify(
 										args.duration,
 									)}`,
 								},

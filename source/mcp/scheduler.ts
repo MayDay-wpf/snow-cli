@@ -2,7 +2,7 @@ import type {MCPTool} from '../utils/execution/mcpToolsManager.js';
 
 export interface SchedulerTaskArgs {
 	/**
-	 * 等待时长（秒），范围 1-3600
+	 * 等待时长（秒），最小 1 秒，无上限
 	 */
 	duration: number;
 	/**
@@ -43,9 +43,8 @@ export const mcpTools: MCPTool[] = [
 					duration: {
 						type: 'number',
 						description:
-							'Wait duration in seconds. Minimum 1 second, maximum 3600 seconds (1 hour). If user specifies a specific time (e.g., "3 PM", "15:30"), use terminal-execute to get current timestamp first, then calculate seconds from now to the target time.',
-						minimum: 1,
-						maximum: 3600,
+							'Wait duration in seconds. Minimum 1 second, no upper limit. If user specifies a specific time (e.g., "3 PM", "15:30"), use terminal-execute to get current timestamp first, then calculate seconds from now to the target time.',
+						minimum: 1
 					},
 					description: {
 						type: 'string',
