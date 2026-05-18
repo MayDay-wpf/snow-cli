@@ -51,6 +51,32 @@ function buildGoalObjectiveBlock(goal: GoalRecord): string {
 }
 
 /**
+ * 构造压缩 AI 的 goal-awareness 指令。
+ *
+ * 追加到待压缩消息末尾，让压缩模型在生成 handover 文档时优先保留
+ * goal 相关的验证证据（文件路径、测试命令、审计结果、进度状态）。
+ * 这是对 buildGoalObjectiveBlock（事后注入 verbatim 原文）的补充——
+ * 前者保证目标原文不丢，本函数保证支撑验证的上下文不丢。
+ */
+function buildGoalCompressionHint(goal: GoalRecord): string {
+	return [
+		'[COMPRESSION PRIORITY — ACTIVE GOAL]',
+		`This conversation is actively pursuing a goal (id=${goal.id}):`,
+		`"${goal.objective}"`,
+		'',
+		'When compressing the above conversation, you MUST give highest priority to preserving:',
+		'1. The EXACT goal objective text (verbatim, no paraphrasing).',
+		'2. All verification criteria and audit evidence: file paths inspected, test commands run, expected vs actual outputs.',
+		'3. Progress tracking: which deliverables are verified-complete vs still pending.',
+		'4. Blockers, unresolved decisions, or contradictions related to goal completion.',
+		'5. Any todolist state or structured task breakdown referenced in the conversation.',
+		'',
+		'These details are critical for the goal continuation loop to function correctly after compression.',
+		'Generic summaries that lose this specificity will break the automated verification process.',
+	].join('\n');
+}
+
+/**
  * 执行上下文压缩
  * @param sessionId - 可选的会话ID，如果提供则使用该ID加载会话进行压缩
  * @param onStatusUpdate - 可选的状态更新回调，用于在UI中显示压缩进度
@@ -108,16 +134,31 @@ export async function executeContextCompression(
 		const sessionMessages = currentSession.messages;
 
 		// 转换为 ChatMessage 格式（保留所有关键字段）
-		const chatMessages = sessionMessages.map(msg => ({
+		const chatMessages: Array<any> = sessionMessages.map(msg => ({
 			role: msg.role,
 			content: msg.content,
 			tool_call_id: msg.tool_call_id,
 			tool_calls: msg.tool_calls,
 			images: msg.images,
 			reasoning: msg.reasoning,
-			thinking: msg.thinking, // 保留 thinking 字段（Anthropic Extended Thinking）
+			thinking: msg.thinking,
 			subAgentInternal: msg.subAgentInternal,
 		}));
+
+		// ── /goal: 提前加载当前会话的 goal，供压缩指令注入和后续 objective 注入复用 ──
+		const activeGoalForCompression = await goalManager.loadGoalForSession(
+			currentSession.id,
+		);
+
+		// 若存在活跃目标，追加一条 goal-awareness 指令到对话末尾。
+		// 这条消息会被压缩 AI 看到，使其生成的 handover 文档优先保留 goal 相关的
+		// 验证证据（文件路径、测试命令、进度状态），而非只靠后面的 verbatim 注入。
+		if (activeGoalForCompression && activeGoalForCompression.status === 'pursuing') {
+			chatMessages.push({
+				role: 'user',
+				content: buildGoalCompressionHint(activeGoalForCompression),
+			});
+		}
 
 		// Check if Hybrid Compress mode is enabled
 		const useHybridCompress = getHybridCompressEnabled();
@@ -193,11 +234,8 @@ export async function executeContextCompression(
 			// 保证用户的需求原文 (goal.objective) 在新会话上下文里逐字可见，否则后续 Ralph Loop
 			// continuation prompt 中 `"${goal.objective}"` 与摘要里的目标信息可能漂移 / 丢失。
 			// 因此：找到第一条 user 消息，把目标原文以独立区块前置；若没有 user 则 prepend 一条。
-			const hybridGoalForInjection = await goalManager.loadGoalForSession(
-				currentSession.id,
-			);
-			if (hybridGoalForInjection) {
-				const goalBlock = buildGoalObjectiveBlock(hybridGoalForInjection);
+			if (activeGoalForCompression) {
+				const goalBlock = buildGoalObjectiveBlock(activeGoalForCompression);
 				const firstUserIdx = newSessionMessages.findIndex(
 					(m: any) => m && m.role === 'user',
 				);
@@ -331,11 +369,8 @@ export async function executeContextCompression(
 		// - 驱动 Ralph Loop 续接的 continuation prompt 里 `"${goal.objective}"` 是原文，
 		//   如果摘要里只有 paraphrase，模型会看到两段意思不同的“目标”，决策面会漂移。
 		// - 以后万一 migrateGoalToSession 失败也能双保险：模型至少能从上下文中读到目标原话。
-		const standardGoalForInjection = await goalManager.loadGoalForSession(
-			currentSession.id,
-		);
-		const goalHeader = standardGoalForInjection
-			? buildGoalObjectiveBlock(standardGoalForInjection) + '\n\n'
+		const goalHeader = activeGoalForCompression
+			? buildGoalObjectiveBlock(activeGoalForCompression) + '\n\n'
 			: '';
 
 		let finalContent = `${goalHeader}[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
@@ -414,9 +449,9 @@ export async function executeContextCompression(
 		await sessionManager.saveSession(compressedSession);
 
 		// ── /goal: 迁移 goal 文件到新 sessionId ──
-		// 详见 hybrid 分支同名逻辑的注释。这里 standardGoalForInjection 已在上面读过，
-		// 复用它验证 hasGoal 表明确实存在 goal 文件 -> 避免在错误状态下重复调用。
-		if (currentSession.hasGoal && standardGoalForInjection) {
+		// 详见 hybrid 分支同名逻辑的注释。复用 activeGoalForCompression 验证确实
+		// 存在 goal 文件 -> 避免在错误状态下重复调用。
+		if (currentSession.hasGoal && activeGoalForCompression) {
 			try {
 				await goalManager.migrateGoalToSession(
 					currentSession.id,

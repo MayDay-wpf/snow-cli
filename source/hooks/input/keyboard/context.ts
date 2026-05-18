@@ -29,7 +29,7 @@ export function createHelpers(
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
 		updateRunningAgentsPickerState(text, cursorPos);
-		updateCommandPanelState(text);
+		updateCommandPanelState(text, cursorPos);
 
 		forceUpdate({});
 	};

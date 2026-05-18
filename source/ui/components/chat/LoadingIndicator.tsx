@@ -1,4 +1,4 @@
-import React, {useSyncExternalStore} from 'react';
+import React, {useRef, useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -30,10 +30,62 @@ function formatTokens(count: number): string {
 	return String(count);
 }
 
+const STREAM_DELAY_STAGE_SECONDS = {
+	warning: 30,
+	critical: 60,
+} as const;
+const STREAM_DELAY_SHIMMER_COLORS = {
+	normal: {
+		base: '#1ACEB0',
+		shimmer: '#00FFFF',
+	},
+	warning: {
+		base: '#ffc857',
+		shimmer: '#ffe7a3',
+	},
+	critical: {
+		base: '#d97706',
+		shimmer: '#ffb347',
+	},
+} as const;
+
+type StreamDelayStage = keyof typeof STREAM_DELAY_SHIMMER_COLORS;
+
+function getStreamDelayStage(waitingSeconds: number): StreamDelayStage {
+	if (waitingSeconds >= STREAM_DELAY_STAGE_SECONDS.critical) {
+		return 'critical';
+	}
+
+	if (waitingSeconds >= STREAM_DELAY_STAGE_SECONDS.warning) {
+		return 'warning';
+	}
+
+	return 'normal';
+}
+
+function getDelayAwareColor(
+	waitingSeconds: number,
+	baseColor: string,
+	criticalColor: string,
+): string {
+	const stage = getStreamDelayStage(waitingSeconds);
+
+	if (stage === 'critical') {
+		return criticalColor;
+	}
+
+	if (stage === 'warning') {
+		return STREAM_DELAY_SHIMMER_COLORS.warning.base;
+	}
+
+	return baseColor;
+}
+
 type LoadingIndicatorProps = {
 	isStreaming: boolean;
 	isStopping: boolean;
 	isSaving: boolean;
+	isCompressing: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
 	hasBlockingOverlay: boolean;
@@ -66,6 +118,7 @@ export default function LoadingIndicator({
 	isStreaming,
 	isStopping,
 	isSaving,
+	isCompressing,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
 	hasBlockingOverlay,
@@ -90,6 +143,40 @@ export default function LoadingIndicator({
 		subscribeSubAgentStream,
 		getSubAgentStreamSnapshot,
 	);
+
+	const streamActivityMarker = [
+		streamTokenCount,
+		...teammateStream.map(
+			tm => `${tm.agentId}:${tm.tokenCount}:${tm.isReasoning}`,
+		),
+		...subAgentStream.map(
+			tm => `${tm.agentId}:${tm.tokenCount}:${tm.isReasoning}`,
+		),
+	].join('|');
+	const previousStreamActivityMarkerRef = useRef<string | null>(null);
+	const lastStreamActivityElapsedSecondsRef = useRef(elapsedSeconds);
+
+	if (
+		!isStreaming ||
+		isCompressing ||
+		previousStreamActivityMarkerRef.current !== streamActivityMarker
+	) {
+		previousStreamActivityMarkerRef.current = streamActivityMarker;
+		lastStreamActivityElapsedSecondsRef.current = elapsedSeconds;
+	}
+
+	const waitingForStreamSeconds = isStreaming && !isCompressing
+		? Math.max(0, elapsedSeconds - lastStreamActivityElapsedSecondsRef.current)
+		: 0;
+	const streamDelayStage = getStreamDelayStage(waitingForStreamSeconds);
+	const loadingShimmerColors = STREAM_DELAY_SHIMMER_COLORS[streamDelayStage];
+	const loadingIconColor = getDelayAwareColor(
+		waitingForStreamSeconds,
+		[theme.colors.cyan, theme.colors.menuInfo][animationFrame % 2] as string,
+		STREAM_DELAY_SHIMMER_COLORS.critical.base,
+	);
+	const loadingTextColor = loadingShimmerColors.base;
+	const loadingTokenColor = loadingShimmerColors.shimmer;
 
 	if (
 		(!isStreaming && !isSaving && !isStopping) ||
@@ -179,8 +266,12 @@ export default function LoadingIndicator({
 		title: string,
 	) => (
 		<Box flexDirection="column">
-			<Text color={theme.colors.menuSecondary} dimColor bold>
-				<ShimmerText text={title} />
+			<Text color={loadingTextColor} dimColor bold>
+				<ShimmerText
+					text={title}
+					baseColor={loadingTextColor}
+					shimmerColor={loadingTokenColor}
+				/>
 			</Text>
 			{entries.map((tm, idx) =>
 				renderAgentEntry(tm, idx === entries.length - 1),
@@ -190,12 +281,7 @@ export default function LoadingIndicator({
 
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
-			<Text
-				color={
-					[theme.colors.cyan, theme.colors.menuInfo][animationFrame % 2] as any
-				}
-				bold
-			>
+			<Text color={loadingIconColor} bold>
 				❆
 			</Text>
 			<Box marginLeft={1} flexDirection="column">
@@ -238,8 +324,12 @@ export default function LoadingIndicator({
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
 						) : showTeamTree ? (
 							<Box flexDirection="column">
-								<Text color={theme.colors.menuSecondary} dimColor bold>
-									<ShimmerText text="⚑ Team Working" />
+								<Text color={loadingTextColor} dimColor bold>
+									<ShimmerText
+										text="⚑ Team Working"
+										baseColor={loadingTextColor}
+										shimmerColor={loadingTokenColor}
+									/>
 									({' '}
 									{currentModel && (
 										<>
@@ -249,7 +339,7 @@ export default function LoadingIndicator({
 									)}
 									{formatElapsedTime(elapsedSeconds)}
 									{' · '}
-									<Text color={theme.colors.cyan}>
+									<Text color={loadingTokenColor}>
 										↓ {formatTokens(streamTokenCount)} tokens
 									</Text>
 									{')'}
@@ -264,7 +354,7 @@ export default function LoadingIndicator({
 								`⚑ Sub-Agent Working (${formatElapsedTime(elapsedSeconds)})`,
 							)
 						) : (
-							<Text color={theme.colors.menuSecondary} dimColor bold>
+							<Text color={loadingTextColor} dimColor bold>
 								<ShimmerText
 									text={
 										isReasoning
@@ -273,6 +363,8 @@ export default function LoadingIndicator({
 											? t.chatScreen.statusWriting
 											: t.chatScreen.statusThinking
 									}
+									baseColor={loadingTextColor}
+									shimmerColor={loadingTokenColor}
 								/>
 								({' '}
 								{currentModel && (
@@ -283,7 +375,7 @@ export default function LoadingIndicator({
 								)}
 								{formatElapsedTime(elapsedSeconds)}
 								{' · '}
-								<Text color={theme.colors.cyan}>
+								<Text color={loadingTokenColor}>
 									↓ {formatTokens(streamTokenCount)} tokens
 								</Text>
 								{')'}

@@ -11,6 +11,10 @@ import {getCustomCommands} from '../../utils/commands/custom.js';
 import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
+import {
+	findInlineCommandTrigger,
+	isInlineInsertionCommand,
+} from '../input/keyboard/utils/inlineCommandTrigger.js';
 
 const subscribeToSubAgentTracker = (cb: () => void) =>
 	runningSubAgentTracker.subscribe(cb);
@@ -23,6 +27,8 @@ export type CommandPanelCommand = {
 	description: string;
 	type: 'builtin' | 'execute' | 'prompt';
 	mainFlowOnly?: boolean;
+	isCustom?: boolean;
+	insertionText?: string;
 };
 
 // 指令参数提示：当用户输入 /cmd 后（尚未补充参数），在输入框末尾以暗色显示可用参数组合
@@ -334,6 +340,8 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			name: cmd.name,
 			description: cmd.description || cmd.command,
 			type: cmd.type,
+			isCustom: true,
+			insertionText: cmd.type === 'prompt' ? cmd.command : undefined,
 		}));
 		return [...normalizedBuiltInCommands, ...customCommands];
 	}, [normalizedBuiltInCommands]);
@@ -363,10 +371,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	// - Empty query: Sort by usage frequency (most used first)
 	// - With query: Sort by match priority, then by usage frequency within same priority
 	const getFilteredCommands = useCallback((): CommandPanelCommand[] => {
-		const text = buffer.getFullText();
-		if (!text.startsWith('/')) return [];
+		const text = buffer.text;
+		const cursorPosition = buffer.getCursorPosition();
+		const trigger = findInlineCommandTrigger(text, cursorPosition);
+		if (!trigger) return [];
 
-		const query = text.slice(1).toLowerCase();
+		const query = trigger.query.toLowerCase();
 
 		// Get all commands (including latest custom commands)
 		const allCommands = getAllCommands();
@@ -376,7 +386,9 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 						command.type === 'prompt' &&
 						!(command.mainFlowOnly && hasRunningAgentsOrTeam),
 			  )
-			: allCommands;
+			: trigger.isAtStart
+			? allCommands
+			: allCommands.filter(isInlineInsertionCommand);
 
 		// Filter and sort commands by priority and usage frequency
 		// Priority order:
@@ -440,16 +452,34 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	]);
 
 	// Update command panel state
-	const updateCommandPanelState = useCallback((text: string) => {
-		// Check if / is at the start (not preceded by @ or #)
-		if (text.startsWith('/') && text.length > 0) {
-			setShowCommands(true);
+	const updateCommandPanelState = useCallback(
+		(_text: string, cursorPosition?: number) => {
+			const trigger = findInlineCommandTrigger(
+				buffer.text,
+				cursorPosition ?? buffer.getCursorPosition(),
+			);
+			if (!trigger) {
+				setShowCommands(false);
+				setCommandSelectedIndex(0);
+				return;
+			}
+
+			const allCommands = getAllCommands();
+			const availableCommands = trigger.isAtStart
+				? allCommands
+				: allCommands.filter(isInlineInsertionCommand);
+			const query = trigger.query.toLowerCase();
+			const hasMatch = availableCommands.some(
+				command =>
+					command.name.toLowerCase().includes(query) ||
+					command.description.toLowerCase().includes(query),
+			);
+
+			setShowCommands(hasMatch);
 			setCommandSelectedIndex(0);
-		} else {
-			setShowCommands(false);
-			setCommandSelectedIndex(0);
-		}
-	}, []);
+		},
+		[buffer, getAllCommands],
+	);
 
 	return {
 		showCommands,

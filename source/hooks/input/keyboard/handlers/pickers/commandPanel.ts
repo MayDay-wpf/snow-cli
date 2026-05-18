@@ -1,6 +1,10 @@
 import {executeCommand} from '../../../../../utils/execution/commandExecutor.js';
 import {commandUsageManager} from '../../../../../utils/session/commandUsageManager.js';
 import {COMMAND_ARGS_OPTIONS} from '../../../../ui/useCommandPanel.js';
+import {
+	findInlineCommandTrigger,
+	isInlineInsertionCommand,
+} from '../../utils/inlineCommandTrigger.js';
 import type {HandlerContext} from '../../types.js';
 
 export function commandPanelHandler(ctx: HandlerContext): boolean {
@@ -16,15 +20,21 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 		setShowTodoPicker,
 		setShowAgentPicker,
 		setShowSkillsPicker,
-		setShowGitLinePicker,
+		openGitLinePicker,
 		isProcessing,
 		getAllCommands,
 		onCommand,
+
 		triggerUpdate,
 	} = options;
 
 	if (!showCommands) return false;
 	const filteredCommands = getFilteredCommands();
+	const inlineTrigger = findInlineCommandTrigger(
+		buffer.text,
+		buffer.getCursorPosition(),
+	);
+	const isInlineTrigger = inlineTrigger !== null && !inlineTrigger.isAtStart;
 
 	// Up arrow in command panel - 循环导航:第一项 → 最后一项
 	if (key.upArrow) {
@@ -49,8 +59,16 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 		) {
 			const selectedCommand = filteredCommands[commandSelectedIndex];
 			if (selectedCommand) {
-				buffer.setText('/' + selectedCommand.name);
-				buffer.setCursorPosition(buffer.text.length);
+				if (inlineTrigger) {
+					buffer.replaceRange(
+						inlineTrigger.slashIndex,
+						inlineTrigger.endIndex,
+						'/' + selectedCommand.name,
+					);
+				} else {
+					buffer.setText('/' + selectedCommand.name);
+					buffer.setCursorPosition(buffer.text.length);
+				}
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
 				const cmdArgsOptions = COMMAND_ARGS_OPTIONS[selectedCommand.name];
@@ -73,9 +91,38 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 		) {
 			const selectedCommand = filteredCommands[commandSelectedIndex];
 			if (selectedCommand) {
+				if (isInlineTrigger) {
+					if (selectedCommand.name === 'gitline' && inlineTrigger) {
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						openGitLinePicker({
+							start: inlineTrigger.slashIndex,
+							end: inlineTrigger.endIndex,
+						});
+						triggerUpdate();
+						return true;
+					}
+
+					if (isInlineInsertionCommand(selectedCommand) && inlineTrigger) {
+						buffer.replaceRange(
+							inlineTrigger.slashIndex,
+							inlineTrigger.endIndex,
+							selectedCommand.insertionText ?? '',
+						);
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						commandUsageManager.recordUsage(selectedCommand.name);
+						triggerUpdate();
+						return true;
+					}
+
+					return false;
+				}
+
 				// Special handling for todo- command
 				if (selectedCommand.name === 'todo-') {
 					buffer.setText('');
+
 					setShowCommands(false);
 					setCommandSelectedIndex(0);
 					setShowTodoPicker(true);
@@ -104,7 +151,7 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 					buffer.setText('');
 					setShowCommands(false);
 					setCommandSelectedIndex(0);
-					setShowGitLinePicker(true);
+					openGitLinePicker();
 					triggerUpdate();
 					return true;
 				}

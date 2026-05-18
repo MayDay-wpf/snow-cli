@@ -196,6 +196,22 @@ export class TextBuffer {
 		this.recomputeVisualCursorOnly();
 	}
 
+	replaceRange(start: number, end: number, replacement: string): void {
+		const sanitizedReplacement = sanitizeInput(replacement);
+		const length = cpLen(this.content);
+		const safeStart = Math.max(0, Math.min(start, length));
+		const safeEnd = Math.max(safeStart, Math.min(end, length));
+		const before = cpSlice(this.content, 0, safeStart);
+		const after = cpSlice(this.content, safeEnd);
+
+		this.lastTextPlaceholderId = null;
+		this.lastTextPlaceholderAt = 0;
+		this.content = before + sanitizedReplacement + after;
+		this.cursorIndex = safeStart + cpLen(sanitizedReplacement);
+		this.recalculateVisualState();
+		this.scheduleUpdate();
+	}
+
 	get viewportVisualLines(): string[] {
 		return this.visualLines;
 	}

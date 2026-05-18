@@ -18,7 +18,7 @@ export function submitHandler(ctx: HandlerContext): boolean {
 		setShowTodoPicker,
 		setShowAgentPicker,
 		setShowSkillsPicker,
-		setShowGitLinePicker,
+		openGitLinePicker,
 		onCommand,
 		saveToHistory,
 		onSubmit,
@@ -49,7 +49,7 @@ export function submitHandler(ctx: HandlerContext): boolean {
 			buffer.insert('\n');
 			const text = buffer.getFullText();
 			const newCursorPos = buffer.getCursorPosition();
-			updateCommandPanelState(text);
+			updateCommandPanelState(text, newCursorPos);
 			updateFilePickerState(text, newCursorPos);
 			updateAgentPickerState(text, newCursorPos);
 			updateRunningAgentsPickerState(text, newCursorPos);
@@ -108,7 +108,7 @@ export function submitHandler(ctx: HandlerContext): boolean {
 					buffer.setText('');
 					setShowCommands(false);
 					setCommandSelectedIndex(0);
-					setShowGitLinePicker(true);
+					openGitLinePicker();
 					triggerUpdate();
 					return true;
 				}

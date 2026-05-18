@@ -28,13 +28,17 @@ export type KeyboardInputOptions = {
 		name: string;
 		description: string;
 		type: 'builtin' | 'execute' | 'prompt';
+		isCustom?: boolean;
+		insertionText?: string;
 	}>;
-	updateCommandPanelState: (text: string) => void;
+	updateCommandPanelState: (text: string, cursorPosition?: number) => void;
 	onCommand?: (commandName: string, result: any) => void;
 	getAllCommands?: () => Array<{
 		name: string;
 		description: string;
 		type: 'builtin' | 'execute' | 'prompt';
+		isCustom?: boolean;
+		insertionText?: string;
 	}>; // Get all available commands for validation
 
 	showFilePicker: boolean;
@@ -134,6 +138,7 @@ export type KeyboardInputOptions = {
 	// GitLine picker
 	showGitLinePicker: boolean;
 	setShowGitLinePicker: (show: boolean) => void;
+	openGitLinePicker: (range?: {start: number; end: number}) => void;
 	gitLineSelectedIndex: number;
 	setGitLineSelectedIndex: (index: number | ((prev: number) => number)) => void;
 	gitLineCommits: Array<{

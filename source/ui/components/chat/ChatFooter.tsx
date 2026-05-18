@@ -294,6 +294,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							isStreaming={props.isStreaming}
 							isStopping={props.isStopping}
 							isSaving={props.isSaving}
+							isCompressing={props.isCompressing}
 							hasPendingToolConfirmation={props.hasPendingToolConfirmation}
 							hasPendingUserQuestion={props.hasPendingUserQuestion}
 							hasBlockingOverlay={props.hasBlockingOverlay}

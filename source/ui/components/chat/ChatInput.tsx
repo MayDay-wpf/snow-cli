@@ -443,6 +443,7 @@ export default function ChatInput({
 	const {
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits,
@@ -582,6 +583,7 @@ export default function ChatInput({
 		closeSkillsPicker,
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits,

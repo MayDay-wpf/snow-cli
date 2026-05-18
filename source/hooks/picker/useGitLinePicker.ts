@@ -83,6 +83,10 @@ export function useGitLinePicker(
 	const [searchQuery, setSearchQuery] = useState('');
 	const [error, setError] = useState<string | null>(null);
 	const [gitRoot, setGitRoot] = useState<string | null>(null);
+	const [insertionRange, setInsertionRange] = useState<{
+		start: number;
+		end: number;
+	} | null>(null);
 
 	const allCommits = useMemo(() => {
 		return stagedEntry ? [stagedEntry, ...commits] : commits;
@@ -229,6 +233,15 @@ export function useGitLinePicker(
 		showGitLinePicker,
 	]);
 
+	const openGitLinePicker = useCallback(
+		(range?: {start: number; end: number}) => {
+			setInsertionRange(range ?? null);
+			setShowGitLinePicker(true);
+			triggerUpdate();
+		},
+		[triggerUpdate],
+	);
+
 	const closeGitLinePicker = useCallback(() => {
 		setShowGitLinePicker(false);
 		setGitLineSelectedIndex(0);
@@ -239,6 +252,7 @@ export function useGitLinePicker(
 		setSkip(0);
 		setIsLoadingMore(false);
 		setStagedEntry(null);
+		setInsertionRange(null);
 		triggerUpdate();
 	}, [triggerUpdate]);
 
@@ -282,7 +296,11 @@ export function useGitLinePicker(
 			return;
 		}
 
-		buffer.setText('');
+		if (insertionRange) {
+			buffer.replaceRange(insertionRange.start, insertionRange.end, '');
+		} else {
+			buffer.setText('');
+		}
 		for (const commit of commitsToInsert) {
 			buffer.insertTextPlaceholder(
 				buildInjectedGitLineText(commit, gitRoot),
@@ -299,6 +317,7 @@ export function useGitLinePicker(
 		setSkip(0);
 		setIsLoadingMore(false);
 		setStagedEntry(null);
+		setInsertionRange(null);
 		triggerUpdate();
 	}, [
 		allCommits,
@@ -308,12 +327,14 @@ export function useGitLinePicker(
 		gitLineSelectedIndex,
 		gitRoot,
 		selectedCommits,
+		insertionRange,
 		triggerUpdate,
 	]);
 
 	return {
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits: filteredCommits,
