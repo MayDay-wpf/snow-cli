@@ -440,6 +440,57 @@
 	const createClipboardAndContextController = ({term, sendInput}) => {
 		const isMacPlatform = /mac/i.test(navigator.userAgent);
 
+		const writeClipboardText = (text, source) => {
+			if (typeof text !== 'string' || text.length === 0) {
+				return;
+			}
+			if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+				logWarn('Clipboard write API is unavailable.', `source=${source}`);
+				return;
+			}
+
+			navigator.clipboard.writeText(text).catch(error => {
+				logWarn('Failed to write text to clipboard.', {
+					source,
+					error: stringifyLogDetails(error),
+				});
+			});
+		};
+
+		const registerOsc52ClipboardHandler = () => {
+			const parser = term.parser;
+			if (!parser || typeof parser.registerOscHandler !== 'function') {
+				logWarn('OSC 52 clipboard passthrough is unavailable.');
+				return undefined;
+			}
+
+			return parser.registerOscHandler(52, data => {
+				const parts = String(data).split(';');
+				if (parts.length < 2) {
+					return true;
+				}
+
+				const base64 = parts.slice(1).join(';').trim();
+				if (!base64 || base64 === '?') {
+					return true;
+				}
+
+				try {
+					const binary = atob(base64);
+					const bytes = new Uint8Array(binary.length);
+					for (let index = 0; index < binary.length; index += 1) {
+						bytes[index] = binary.charCodeAt(index);
+					}
+					const text = new TextDecoder('utf-8', {fatal: false}).decode(bytes);
+					writeClipboardText(text, 'osc52');
+				} catch (error) {
+					logWarn('Failed to decode OSC 52 clipboard payload.', error);
+				}
+
+				return true;
+			});
+		};
+
 		const shouldUseCtrlSelectionCopy = event => {
 			if (
 				isMacPlatform ||
@@ -470,9 +521,7 @@
 			if (shouldUseCtrlSelectionCopy(event)) {
 				const selection = term.getSelection();
 				if (selection) {
-					navigator.clipboard.writeText(selection).catch(() => {
-						// Ignore clipboard write failures.
-					});
+					writeClipboardText(selection, 'selection-keyboard');
 				}
 				return false;
 			}
@@ -483,9 +532,7 @@
 			event.preventDefault();
 			const selection = term.getSelection();
 			if (selection) {
-				navigator.clipboard.writeText(selection).catch(() => {
-					// Ignore clipboard write failures.
-				});
+				writeClipboardText(selection, 'selection-context-menu');
 				term.clearSelection();
 				return;
 			}
@@ -503,6 +550,7 @@
 		return {
 			allowTerminalKeyEvent,
 			handleContextMenu,
+			registerOsc52ClipboardHandler,
 		};
 	};
 
@@ -1714,8 +1762,12 @@
 		addManagedListener(container, 'pointerdown', unlockTerminalAudio);
 		addManagedListener(container, 'keydown', unlockTerminalAudio);
 
-		const {allowTerminalKeyEvent, handleContextMenu} =
-			createClipboardAndContextController({term, sendInput});
+		const {
+			allowTerminalKeyEvent,
+			handleContextMenu,
+			registerOsc52ClipboardHandler,
+		} = createClipboardAndContextController({term, sendInput});
+		registerDisposable(registerOsc52ClipboardHandler());
 
 		// On macOS, Ctrl+V passes through to CLI which handles paste (including images).
 		// On Windows/Linux, Ctrl+V must be intercepted to suppress the raw \x16 that

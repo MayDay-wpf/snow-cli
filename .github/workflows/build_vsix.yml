@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Supports code completion and Tab&Tab AI cross-file suggestions
+            - support OSC 52 clipboard passthrough in sidebar terminal
 
             ### Installation
 
