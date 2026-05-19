@@ -74,7 +74,10 @@ export async function appendUserMessageAndSyncContext(options: {
 		saveMessage,
 	} = options;
 
-	const finalUserContent = buildEditorContextContent(editorContext, userContent);
+	const finalUserContent = buildEditorContextContent(
+		editorContext,
+		userContent,
+	);
 
 	conversationMessages.push({
 		role: 'user',
@@ -102,7 +105,15 @@ export async function appendUserMessageAndSyncContext(options: {
 				'../../../utils/session/sessionConverter.js'
 			);
 			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
-			setConversationContext(updatedSession.id, uiMessages.length);
+			const compressedSummaryIndex = uiMessages.findIndex(
+				msg =>
+					msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected,
+			);
+			const snapshotMessageIndex =
+				updatedSession.compressedFrom != null
+					? Math.max(0, compressedSummaryIndex)
+					: uiMessages.length;
+			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
 		console.error('Failed to set conversation context:', error);

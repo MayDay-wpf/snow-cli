@@ -1,6 +1,9 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
-import {handleAutoCompression, type AutoCompressOptions} from './autoCompressHandler.js';
+import {
+	handleAutoCompression,
+	type AutoCompressOptions,
+} from './autoCompressHandler.js';
 
 export type PendingMessagesOptions = {
 	getPendingMessages?: () => Array<{
@@ -71,7 +74,11 @@ export async function waitForPendingSendSignal(options?: {
 	const {abortSignal, timeoutMs = 3000} = options || {};
 	const initialSession = sessionManager.getCurrentSession();
 	if (!initialSession) return;
-	if (isPendingSendTimingReady(initialSession.messages as BasicConversationMessage[])) {
+	if (
+		isPendingSendTimingReady(
+			initialSession.messages as BasicConversationMessage[],
+		)
+	) {
 		return;
 	}
 
@@ -98,7 +105,9 @@ export async function waitForPendingSendSignal(options?: {
 				cleanup();
 				return;
 			}
-			if (isPendingSendTimingReady(session.messages as BasicConversationMessage[])) {
+			if (
+				isPendingSendTimingReady(session.messages as BasicConversationMessage[])
+			) {
 				cleanup();
 			}
 		};
@@ -201,10 +210,16 @@ export async function handlePendingMessages(
 			const {convertSessionMessagesToUI} = await import(
 				'../../../utils/session/sessionConverter.js'
 			);
-			const uiMessages = convertSessionMessagesToUI(
-				updatedSession.messages,
+			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
+			const compressedSummaryIndex = uiMessages.findIndex(
+				msg =>
+					msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected,
 			);
-			setConversationContext(updatedSession.id, uiMessages.length);
+			const snapshotMessageIndex =
+				updatedSession.compressedFrom != null
+					? Math.max(0, compressedSummaryIndex)
+					: uiMessages.length;
+			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
 		console.error('Failed to save pending user message:', error);

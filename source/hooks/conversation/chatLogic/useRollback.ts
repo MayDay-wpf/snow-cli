@@ -54,7 +54,6 @@ function resolveSnapshotIndex(
 			userMsgOrdinal++;
 		}
 	}
-
 	if (userMsgOrdinal === 0) {
 		return 0;
 	}
@@ -69,8 +68,17 @@ function resolveSnapshotIndex(
 			}
 		}
 	}
-
 	return liveIndex;
+}
+
+function getCompressedSummarySnapshotIndex(
+	sessionMessages: ChatMessage[],
+): number {
+	const uiMessages = convertSessionMessagesToUI(sessionMessages);
+	const firstUserIndex = uiMessages.findIndex(
+		msg => msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected,
+	);
+	return firstUserIndex >= 0 ? firstUserIndex : 0;
 }
 
 export function useRollback(props: UseChatLogicProps) {
@@ -116,7 +124,10 @@ export function useRollback(props: UseChatLogicProps) {
 		selectedFiles?: string[],
 	) => {
 		const currentSession = sessionManager.getCurrentSession();
-		const sIdx = getSnapshotIndex(selectedIndex);
+		const sIdx =
+			currentSession?.compressedFrom != null && selectedIndex === 0
+				? getCompressedSummarySnapshotIndex(currentSession.messages)
+				: getSnapshotIndex(selectedIndex);
 
 		if (rollbackFiles && currentSession) {
 			if (selectedFiles && selectedFiles.length > 0) {
@@ -353,7 +364,11 @@ export function useRollback(props: UseChatLogicProps) {
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;
 
-		const sIdx = getSnapshotIndex(selectedIndex);
+		const isCompressedSummaryRollback =
+			selectedIndex === 0 && currentSession.compressedFrom != null;
+		const sIdx = isCompressedSummaryRollback
+			? getCompressedSummarySnapshotIndex(currentSession.messages)
+			: getSnapshotIndex(selectedIndex);
 
 		if (
 			selectedIndex === 0 &&

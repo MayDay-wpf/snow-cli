@@ -153,7 +153,10 @@ export async function executeContextCompression(
 		// 若存在活跃目标，追加一条 goal-awareness 指令到对话末尾。
 		// 这条消息会被压缩 AI 看到，使其生成的 handover 文档优先保留 goal 相关的
 		// 验证证据（文件路径、测试命令、进度状态），而非只靠后面的 verbatim 注入。
-		if (activeGoalForCompression && activeGoalForCompression.status === 'pursuing') {
+		if (
+			activeGoalForCompression &&
+			activeGoalForCompression.status === 'pursuing'
+		) {
 			chatMessages.push({
 				role: 'user',
 				content: buildGoalCompressionHint(activeGoalForCompression),
@@ -226,8 +229,7 @@ export async function executeContextCompression(
 			}
 
 			while (
-				compressionStreamLineBuffer.length >=
-				MAX_COMPRESSION_STREAM_LINE_LENGTH
+				compressionStreamLineBuffer.length >= MAX_COMPRESSION_STREAM_LINE_LENGTH
 			) {
 				appendCompressionStreamLine(
 					compressionStreamLineBuffer.slice(
@@ -241,10 +243,7 @@ export async function executeContextCompression(
 				shouldEmit = true;
 			}
 
-			compressionStreamScore += Math.max(
-				1,
-				Math.ceil(content.length / 1500),
-			);
+			compressionStreamScore += Math.max(1, Math.ceil(content.length / 1500));
 
 			const nextProgress = Math.min(
 				90,
@@ -328,6 +327,7 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
+			compressedSession.originalMessageIndex = currentSession.messages.length;
 			// ── /goal: 把 hasGoal 标记带过来，新会话 saveSession 后即可让
 			// mcpToolsManager 在切换后重新暴露 goal-update_goal 工具。
 			if (currentSession.hasGoal) {
