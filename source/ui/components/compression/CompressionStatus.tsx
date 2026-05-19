@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
+import stringWidth from 'string-width';
 import {useTheme} from '../../contexts/ThemeContext.js';
 
 export type CompressionStep =
@@ -53,7 +54,7 @@ function clampProgress(progress: number): number {
 }
 
 function buildProgressBar(progress: number, terminalWidth: number) {
-	const barWidth = Math.max(20, Math.min(46, terminalWidth - 12));
+	const barWidth = Math.max(4, Math.min(46, terminalWidth - 12));
 	const filled = Math.max(
 		0,
 		Math.min(barWidth, Math.round((progress / 100) * barWidth)),
@@ -67,33 +68,84 @@ function buildProgressBar(progress: number, terminalWidth: number) {
 }
 
 const STREAM_VIEWPORT_HEIGHT = 5;
+const STREAM_VIEWPORT_RESERVED_COLUMNS = 8;
+const STREAM_VIEWPORT_INDENT_WIDTH = 2;
+const INDENT_WIDTH = 2;
+
+type StreamViewportLine = {
+	text: string;
+};
+
+function getSafeLineWidth(terminalWidth: number, reservedColumns = 0): number {
+	return Math.max(1, terminalWidth - reservedColumns);
+}
+
+function getSafeIndentedLineWidth(terminalWidth: number): number {
+	return getSafeLineWidth(
+		terminalWidth,
+		INDENT_WIDTH + STREAM_VIEWPORT_RESERVED_COLUMNS,
+	);
+}
+
+function normalizeStreamContent(content: string | undefined): string {
+	return (
+		content
+			?.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n')
+			.replace(/[\t\v\f]+/g, ' ') ?? ''
+	);
+}
+
+function sliceByVisualWidth(text: string, maxWidth: number): string {
+	if (!text || maxWidth <= 0) {
+		return '';
+	}
+
+	let result = '';
+	let width = 0;
+
+	for (const char of text) {
+		const charWidth = stringWidth(char);
+		if (width + charWidth > maxWidth) {
+			break;
+		}
+
+		result += char;
+		width += charWidth;
+	}
+
+	return result;
+}
 
 function buildStreamViewportLines(
 	content: string | undefined,
 	terminalWidth: number,
-): string[] {
-	const visualWidth = Math.max(24, terminalWidth - 4);
-	const normalizedContent = content?.replace(/\r\n/g, '\n') ?? '';
-	const logicalLines = normalizedContent ? normalizedContent.split('\n') : [];
-	const visualLines = logicalLines.flatMap(line => {
-		if (!line) {
-			return [''];
-		}
-
-		const segments: string[] = [];
-		for (let index = 0; index < line.length; index += visualWidth) {
-			segments.push(line.slice(index, index + visualWidth));
-		}
-		return segments;
-	});
-	const visibleLines = visualLines.slice(-STREAM_VIEWPORT_HEIGHT);
+): StreamViewportLine[] {
+	const width = getSafeLineWidth(
+		terminalWidth,
+		STREAM_VIEWPORT_INDENT_WIDTH + STREAM_VIEWPORT_RESERVED_COLUMNS,
+	);
+	const logicalLines = normalizeStreamContent(content).split('\n');
+	const visibleLines = logicalLines.slice(-STREAM_VIEWPORT_HEIGHT);
 
 	return [
-		...Array(Math.max(0, STREAM_VIEWPORT_HEIGHT - visibleLines.length)).fill(
-			'',
-		),
-		...visibleLines,
+		...Array(Math.max(0, STREAM_VIEWPORT_HEIGHT - visibleLines.length)).fill({
+			text: ' ',
+		}),
+		...visibleLines.map(line => ({
+			text: sliceByVisualWidth(line || ' ', width) || ' ',
+		})),
 	];
+}
+
+function buildSafeInlineText(text: string, terminalWidth: number): string {
+	return sliceByVisualWidth(text, getSafeLineWidth(terminalWidth, 1)) || ' ';
+}
+
+function buildSafeIndentedText(text: string, terminalWidth: number): string {
+	return (
+		sliceByVisualWidth(text, getSafeIndentedLineWidth(terminalWidth)) || ' '
+	);
 }
 
 export function CompressionStatus({
@@ -149,58 +201,72 @@ export function CompressionStatus({
 			status.streamContent,
 			terminalWidth,
 		);
+		const safeTitle = buildSafeInlineText(
+			'✵ Compacting conversation...',
+			terminalWidth,
+		);
+		const sessionLine = sessionId
+			? buildSafeIndentedText(`Session: ${sessionId}`, terminalWidth)
+			: undefined;
+		const progressLine = buildSafeIndentedText(
+			`${filledBar}${emptyBar} ${progress}%`,
+			terminalWidth,
+		);
+		const messageLine = message
+			? buildSafeIndentedText(message, terminalWidth)
+			: undefined;
 
 		return (
 			<Box flexDirection="column" width={terminalWidth}>
-				<Box>
-					<Text color={theme.colors.menuInfo}>
-						✵ Compacting conversation...
+				<Box height={1}>
+					<Text color={theme.colors.menuInfo} wrap="truncate">
+						{safeTitle}
 					</Text>
 				</Box>
 
 				<Box
-					paddingLeft={2}
+					paddingLeft={STREAM_VIEWPORT_INDENT_WIDTH}
 					marginTop={1}
-					height={STREAM_VIEWPORT_HEIGHT}
 					flexDirection="column"
 				>
 					{streamViewportLines.map((line, index) => (
-						<Text
-							key={`compression-stream-line-${index}`}
-							italic
-							dimColor
-							color={theme.colors.menuSecondary}
-							wrap="truncate"
-						>
-							{line || ' '}
-						</Text>
+						<Box key={`compression-stream-line-${index}`} height={1}>
+							<Text
+								italic
+								dimColor
+								color={theme.colors.menuSecondary}
+								wrap="truncate"
+							>
+								{line.text}
+							</Text>
+						</Box>
 					))}
 				</Box>
 
-				{sessionId && (
-					<Box paddingLeft={2} marginTop={1}>
-						<Text dimColor>Session: </Text>
-						<Text color={theme.colors.menuSecondary}>{sessionId}</Text>
+				{sessionLine && (
+					<Box paddingLeft={2} marginTop={1} height={1}>
+						<Text color={theme.colors.menuSecondary} wrap="truncate">
+							{sessionLine}
+						</Text>
 					</Box>
 				)}
 
-				<Box paddingLeft={2} marginTop={1}>
-					<Text color={theme.colors.text}>{filledBar}</Text>
-					<Text dimColor>{emptyBar}</Text>
-					<Text dimColor> {progress}%</Text>
+				<Box paddingLeft={2} marginTop={1} height={1}>
+					<Text color={theme.colors.text} wrap="truncate">
+						{progressLine}
+					</Text>
 				</Box>
 
-				{message && (
-					<Box paddingLeft={2} marginTop={1}>
+				{messageLine && (
+					<Box paddingLeft={2} marginTop={1} height={1}>
 						<Text dimColor wrap="truncate">
-							{message}
+							{messageLine}
 						</Text>
 					</Box>
 				)}
 			</Box>
 		);
 	}
-
 
 	const stepInfo = stepIcons[step];
 	const label =
