@@ -20,6 +20,7 @@ export type CompressionStatus = {
 	maxRetries?: number;
 	progress?: number;
 	streamStarted?: boolean;
+	streamContent?: string;
 };
 
 interface CompressionStatusProps {
@@ -63,6 +64,36 @@ function buildProgressBar(progress: number, terminalWidth: number) {
 		filledBar: '▰'.repeat(filled),
 		emptyBar: '▱'.repeat(empty),
 	};
+}
+
+const STREAM_VIEWPORT_HEIGHT = 5;
+
+function buildStreamViewportLines(
+	content: string | undefined,
+	terminalWidth: number,
+): string[] {
+	const visualWidth = Math.max(24, terminalWidth - 4);
+	const normalizedContent = content?.replace(/\r\n/g, '\n') ?? '';
+	const logicalLines = normalizedContent ? normalizedContent.split('\n') : [];
+	const visualLines = logicalLines.flatMap(line => {
+		if (!line) {
+			return [''];
+		}
+
+		const segments: string[] = [];
+		for (let index = 0; index < line.length; index += visualWidth) {
+			segments.push(line.slice(index, index + visualWidth));
+		}
+		return segments;
+	});
+	const visibleLines = visualLines.slice(-STREAM_VIEWPORT_HEIGHT);
+
+	return [
+		...Array(Math.max(0, STREAM_VIEWPORT_HEIGHT - visibleLines.length)).fill(
+			'',
+		),
+		...visibleLines,
+	];
 }
 
 export function CompressionStatus({
@@ -114,6 +145,10 @@ export function CompressionStatus({
 	if (step === 'compressing') {
 		const progress = clampProgress(animatedProgress);
 		const {filledBar, emptyBar} = buildProgressBar(progress, terminalWidth);
+		const streamViewportLines = buildStreamViewportLines(
+			status.streamContent,
+			terminalWidth,
+		);
 
 		return (
 			<Box flexDirection="column" width={terminalWidth}>
@@ -122,17 +157,39 @@ export function CompressionStatus({
 						✵ Compacting conversation...
 					</Text>
 				</Box>
+
+				<Box
+					paddingLeft={2}
+					marginTop={1}
+					height={STREAM_VIEWPORT_HEIGHT}
+					flexDirection="column"
+				>
+					{streamViewportLines.map((line, index) => (
+						<Text
+							key={`compression-stream-line-${index}`}
+							italic
+							dimColor
+							color={theme.colors.menuSecondary}
+							wrap="truncate"
+						>
+							{line || ' '}
+						</Text>
+					))}
+				</Box>
+
 				{sessionId && (
 					<Box paddingLeft={2} marginTop={1}>
 						<Text dimColor>Session: </Text>
 						<Text color={theme.colors.menuSecondary}>{sessionId}</Text>
 					</Box>
 				)}
+
 				<Box paddingLeft={2} marginTop={1}>
 					<Text color={theme.colors.text}>{filledBar}</Text>
 					<Text dimColor>{emptyBar}</Text>
 					<Text dimColor> {progress}%</Text>
 				</Box>
+
 				{message && (
 					<Box paddingLeft={2} marginTop={1}>
 						<Text dimColor wrap="truncate">
@@ -143,6 +200,7 @@ export function CompressionStatus({
 			</Box>
 		);
 	}
+
 
 	const stepInfo = stepIcons[step];
 	const label =

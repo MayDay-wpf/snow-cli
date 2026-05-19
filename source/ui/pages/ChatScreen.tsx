@@ -651,6 +651,7 @@ export default function ChatScreen({
 					fileUpdateNotification={fileUpdateNotification}
 					currentProfileName={panelState.currentProfileName}
 					isCompressing={isCompressing}
+					isAutoCompressing={streamingState.isAutoCompressing}
 					compressionError={compressionError}
 					backgroundProcesses={backgroundProcesses.processes}
 					showBackgroundPanel={backgroundProcesses.showPanel}

@@ -452,6 +452,10 @@ async function compressWithChatCompletions(
 		stream: true,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
 			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
@@ -502,6 +506,10 @@ async function compressWithResponses(
 		stream: true,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
 			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
@@ -551,6 +559,10 @@ async function compressWithGemini(
 		messages,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
 			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
@@ -602,6 +614,10 @@ async function compressWithAnthropic(
 		disableThinking: true, // Context compression 不使用 Extended Thinking
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
 			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;

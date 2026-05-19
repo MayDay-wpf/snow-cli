@@ -5,6 +5,7 @@
  *   - settings.json
  *   - codebase.json
  *   - connection.json
+ *   - working-dirs.json
  *   - disabled-builtin-tools.json
  *   - disabled-mcp-tools.json
  *   - disabled-skills.json
@@ -15,7 +16,7 @@
  *
  * 现在统一收敛到 `.snow/settings.json` 一个文件（项目级、全局级各自一份）。
  * 各模块通过本文件读写所需字段，老的独立 JSON 文件由 `legacyConfigMigration.ts`
- * 在启动期一次性迁移并删除。
+ * 在启动期一次性扫描、迁移并删除；运行期不再兼容读取旧独立 JSON。
  */
 
 import fs from 'node:fs';
@@ -80,6 +81,24 @@ export interface UnifiedSettings {
 		instanceId: string;
 		instanceName: string;
 	};
+
+	// === 来自旧 working-dirs.json ===
+	workingDirectories?: Array<{
+		path: string;
+		isDefault: boolean;
+		addedAt: number;
+		isRemote?: boolean;
+		sshConfig?: {
+			host: string;
+			port: number;
+			username: string;
+			authMethod: 'password' | 'privateKey' | 'agent';
+			password?: string;
+			privateKeyPath?: string;
+			passphrase?: string;
+		};
+		displayName?: string;
+	}>;
 
 	// === 来自旧 disabled-builtin-tools.json ===
 	disabledBuiltInServices?: string[];

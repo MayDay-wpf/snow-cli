@@ -7,6 +7,7 @@
  *   - settings.json                 -> kept; merged into unified shape (no-op if already shaped)
  *   - codebase.json                 -> settings.codebase
  *   - connection.json               -> settings.connection (project only)
+ *   - working-dirs.json             -> settings.workingDirectories
  *   - disabled-builtin-tools.json   -> settings.disabledBuiltInServices
  *   - disabled-mcp-tools.json       -> settings.disabledMCPTools
  *   - opt-in-mcp-tools.json         -> settings.optInMCPTools
@@ -29,6 +30,7 @@ import {
 const LEGACY_FILES = {
 	codebase: 'codebase.json',
 	connection: 'connection.json',
+	workingDirs: 'working-dirs.json',
 	disabledBuiltin: 'disabled-builtin-tools.json',
 	disabledMcp: 'disabled-mcp-tools.json',
 	optInMcp: 'opt-in-mcp-tools.json',
@@ -142,6 +144,27 @@ function migrateScope(
 			return false;
 		});
 	}
+
+
+	// working-dirs.json
+	tryMigrate<{directories?: unknown}>(LEGACY_FILES.workingDirs, data => {
+		if (
+			Array.isArray(data.directories) &&
+			settings.workingDirectories === undefined
+		) {
+			type WD = NonNullable<UnifiedSettings['workingDirectories']>[number];
+			const isWorkingDirectory = (d: unknown): d is WD =>
+				!!d &&
+				typeof d === 'object' &&
+				typeof (d as Record<string, unknown>)['path'] === 'string' &&
+				typeof (d as Record<string, unknown>)['isDefault'] === 'boolean' &&
+				typeof (d as Record<string, unknown>)['addedAt'] === 'number';
+			settings.workingDirectories = data.directories.filter(isWorkingDirectory);
+			return true;
+		}
+
+		return false;
+	});
 
 	// disabled-builtin-tools.json
 	tryMigrate<{disabledServices?: unknown}>(

@@ -86,6 +86,7 @@ type LoadingIndicatorProps = {
 	isStopping: boolean;
 	isSaving: boolean;
 	isCompressing: boolean;
+	isAutoCompressing?: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
 	hasBlockingOverlay: boolean;
@@ -119,6 +120,7 @@ export default function LoadingIndicator({
 	isStopping,
 	isSaving,
 	isCompressing,
+	isAutoCompressing = false,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
 	hasBlockingOverlay,
@@ -156,16 +158,18 @@ export default function LoadingIndicator({
 	const previousStreamActivityMarkerRef = useRef<string | null>(null);
 	const lastStreamActivityElapsedSecondsRef = useRef(elapsedSeconds);
 
+	const shouldIgnoreStreamDelay = isCompressing || isAutoCompressing;
+
 	if (
 		!isStreaming ||
-		isCompressing ||
+		shouldIgnoreStreamDelay ||
 		previousStreamActivityMarkerRef.current !== streamActivityMarker
 	) {
 		previousStreamActivityMarkerRef.current = streamActivityMarker;
 		lastStreamActivityElapsedSecondsRef.current = elapsedSeconds;
 	}
 
-	const waitingForStreamSeconds = isStreaming && !isCompressing
+	const waitingForStreamSeconds = isStreaming && !shouldIgnoreStreamDelay
 		? Math.max(0, elapsedSeconds - lastStreamActivityElapsedSecondsRef.current)
 		: 0;
 	const streamDelayStage = getStreamDelayStage(waitingForStreamSeconds);

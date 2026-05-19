@@ -166,11 +166,84 @@ export async function executeContextCompression(
 		let compressionStreamStarted = false;
 		let compressionStreamScore = 0;
 		let compressionProgress = 0;
+		let compressionStreamLineBuffer = '';
+		const compressionStreamLines: string[] = [];
+		const MAX_COMPRESSION_STREAM_LINES = 80;
+		const MAX_COMPRESSION_STREAM_LINE_LENGTH = 120;
+
+		const appendCompressionStreamLine = (line: string) => {
+			compressionStreamLines.push(line);
+			if (compressionStreamLines.length > MAX_COMPRESSION_STREAM_LINES) {
+				compressionStreamLines.splice(
+					0,
+					compressionStreamLines.length - MAX_COMPRESSION_STREAM_LINES,
+				);
+			}
+		};
+
+		const emitCompressionStreamUpdate = () => {
+			onStatusUpdate?.({
+				step: 'compressing',
+				sessionId,
+				progress: compressionProgress,
+				streamStarted: compressionStreamStarted,
+				streamContent: compressionStreamLines.join('\n'),
+			});
+		};
+
+		const flushCompressionStreamBuffer = (force: boolean = false) => {
+			if (!compressionStreamStarted) {
+				return;
+			}
+
+			if (force && compressionStreamLineBuffer) {
+				appendCompressionStreamLine(compressionStreamLineBuffer);
+				compressionStreamLineBuffer = '';
+			}
+
+			if (compressionStreamLines.length === 0) {
+				return;
+			}
+
+			emitCompressionStreamUpdate();
+		};
+
 		const notifyCompressionStreamStarted = (content?: string) => {
+			if (!content) {
+				return;
+			}
+
 			compressionStreamStarted = true;
+			compressionStreamLineBuffer += content.replace(/\r\n?/g, '\n');
+
+			let shouldEmit = false;
+			const lineParts = compressionStreamLineBuffer.split('\n');
+			compressionStreamLineBuffer = lineParts.pop() ?? '';
+
+			for (const line of lineParts) {
+				appendCompressionStreamLine(line);
+				shouldEmit = true;
+			}
+
+			while (
+				compressionStreamLineBuffer.length >=
+				MAX_COMPRESSION_STREAM_LINE_LENGTH
+			) {
+				appendCompressionStreamLine(
+					compressionStreamLineBuffer.slice(
+						0,
+						MAX_COMPRESSION_STREAM_LINE_LENGTH,
+					),
+				);
+				compressionStreamLineBuffer = compressionStreamLineBuffer.slice(
+					MAX_COMPRESSION_STREAM_LINE_LENGTH,
+				);
+				shouldEmit = true;
+			}
+
 			compressionStreamScore += Math.max(
 				1,
-				Math.ceil((content?.length ?? 0) / 1500),
+				Math.ceil(content.length / 1500),
 			);
 
 			const nextProgress = Math.min(
@@ -178,17 +251,13 @@ export async function executeContextCompression(
 				10 + Math.floor((1 - Math.exp(-compressionStreamScore / 800)) * 80),
 			);
 
-			if (nextProgress <= compressionProgress) {
-				return;
+			if (nextProgress > compressionProgress) {
+				compressionProgress = nextProgress;
 			}
 
-			compressionProgress = nextProgress;
-			onStatusUpdate?.({
-				step: 'compressing',
-				sessionId,
-				progress: compressionProgress,
-				streamStarted: compressionStreamStarted,
-			});
+			if (shouldEmit) {
+				emitCompressionStreamUpdate();
+			}
 		};
 
 		onStatusUpdate?.({
@@ -196,6 +265,7 @@ export async function executeContextCompression(
 			sessionId,
 			progress: 0,
 			streamStarted: false,
+			streamContent: '',
 		});
 
 		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
@@ -207,6 +277,7 @@ export async function executeContextCompression(
 				maxTokens: apiConfig.maxTokens,
 				onStreamStart: notifyCompressionStreamStarted,
 			});
+			flushCompressionStreamBuffer(true);
 
 			if (!hybridResult.compressed) {
 				onStatusUpdate?.({
@@ -335,6 +406,7 @@ export async function executeContextCompression(
 		const compressionResult = await compressContext(chatMessages, {
 			onStreamStart: notifyCompressionStreamStarted,
 		});
+		flushCompressionStreamBuffer(true);
 
 		if (!compressionResult) {
 			onStatusUpdate?.({

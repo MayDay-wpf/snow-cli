@@ -127,6 +127,7 @@ type ChatFooterProps = {
 	fileUpdateNotification: {file: string; timestamp: number} | null;
 	currentProfileName: string;
 	isCompressing: boolean;
+	isAutoCompressing?: boolean;
 	compressionError: string | null;
 	copyStatusMessage?: {
 		text: string;
@@ -295,6 +296,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							isStopping={props.isStopping}
 							isSaving={props.isSaving}
 							isCompressing={props.isCompressing}
+							isAutoCompressing={props.isAutoCompressing}
 							hasPendingToolConfirmation={props.hasPendingToolConfirmation}
 							hasPendingUserQuestion={props.hasPendingUserQuestion}
 							hasBlockingOverlay={props.hasBlockingOverlay}
