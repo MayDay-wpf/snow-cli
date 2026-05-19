@@ -60,10 +60,14 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 			const selectedCommand = filteredCommands[commandSelectedIndex];
 			if (selectedCommand) {
 				if (inlineTrigger) {
+					const inlineInsertionText =
+						!inlineTrigger.isAtStart && isInlineInsertionCommand(selectedCommand)
+							? selectedCommand.insertionText
+							: undefined;
 					buffer.replaceRange(
 						inlineTrigger.slashIndex,
 						inlineTrigger.endIndex,
-						'/' + selectedCommand.name,
+						inlineInsertionText ?? '/' + selectedCommand.name,
 					);
 				} else {
 					buffer.setText('/' + selectedCommand.name);
