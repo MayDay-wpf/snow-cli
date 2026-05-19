@@ -56,9 +56,13 @@ jobs:
 
             ### What's New
 
-            - Added /goal command and related features
-            - File list supports multiple selection with spaces
-            - Optimized some display effects and memory leak issues
+            - Optimize system prompts to obtain more accurate system information
+            - Fix the issue of "copy-last" not working remotely (requires client compatibility)
+            - Optimize the flexibility of the websearch tool
+            - Support using all tools after adding a remote directory with add-dir
+            - Optimize the display effect of context compression
+            - Some commands are allowed to be used in content
+            - Optimize init to include a more comprehensive workflow
             
             ### Installation
             ```bash

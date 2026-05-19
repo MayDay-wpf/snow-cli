@@ -1361,15 +1361,16 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				result.action === 'initProject' &&
 				result.prompt
 			) {
-				// Add command execution feedback
+				// Add command execution feedback; show truncated user prompt under
+				// the command tree node when args were provided.
 				const commandMessage: Message = {
 					role: 'command',
-					content: '',
+					content: result.message || '',
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-				// Auto-send the prompt using basicModel, hide the prompt from UI
-				options.processMessage(result.prompt, undefined, true, true);
+				// Use advanced model for init workflow (requires tool calls), hide the prompt from UI
+				options.processMessage(result.prompt, undefined, false, true);
 			} else if (
 				result.success &&
 				result.action === 'startGoalLoop' &&

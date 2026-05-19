@@ -14,15 +14,4 @@ registerCommand('branch', {
 	},
 });
 
-registerCommand('fork', {
-	execute: (args?: string): CommandResult => {
-		const branchName = args?.trim() || undefined;
-		return {
-			success: true,
-			action: 'forkSession',
-			prompt: branchName,
-		};
-	},
-});
-
 export default {};

@@ -23,6 +23,7 @@ import {
 	COMMAND_ARGS_HINTS,
 	COMMAND_ARGS_OPTIONS,
 } from '../../../hooks/ui/useCommandPanel.js';
+import {isInlineInsertionCommand} from '../../../hooks/input/keyboard/utils/inlineCommandTrigger.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
 import {useHistoryNavigation} from '../../../hooks/input/useHistoryNavigation.js';
 import {useClipboard} from '../../../hooks/input/useClipboard.js';
@@ -851,29 +852,38 @@ export default function ChatInput({
 		return match[2] && match[2].length > 0 ? hint : ` ${hint}`;
 	}, [buffer.text]);
 
-	// 当输入为以 `/cmd` 开头且 cmd 命中已注册指令时，计算高亮长度（含开头的 `/`）。
-	// 用于在输入框中以主题色高亮“完整指令”片段，方便用户确认命令已被识别。
-	const completedCommandLength = useMemo(() => {
-		const text = buffer.text;
-		if (!text.startsWith('/')) return 0;
-		const match = text.match(/^\/([a-zA-Z0-9_-]+)(?:\s|$)/);
-		if (!match) return 0;
-		const cmd = match[1] ?? '';
-		if (!cmd) return 0;
+	// 计算可高亮的指令长度（含开头的 `/`）。
+	// - 行首位置允许所有已注册指令；
+	// - 内容中的内联位置只高亮真正支持内联插入的指令，避免把普通 `/help` 误标成可用内联指令。
+	const getCommandHighlightLength = useMemo(() => {
 		const allCommands = getAllCommands();
-		// 精确匹配（如 /help、/clear、/branch ...）
-		const exact = allCommands.some(c => c.name === cmd);
-		if (exact) return 1 + cmd.length;
-		// 前缀型指令（如 agent-、todo-、skills-）：cmd 以 `name` 开头且长度更长
-		const prefixHit = allCommands.some(
-			c =>
-				c.name.endsWith('-') &&
-				cmd.length > c.name.length &&
-				cmd.startsWith(c.name),
-		);
-		if (prefixHit) return 1 + cmd.length;
-		return 0;
-	}, [buffer.text, getAllCommands]);
+
+		return (text: string, inlineOnly: boolean): number => {
+			if (!text.startsWith('/')) return 0;
+
+			const commandToken = text.slice(1).match(/^\S*/)?.[0] ?? '';
+			if (!commandToken) return 0;
+
+			const availableCommands = inlineOnly
+				? allCommands.filter(isInlineInsertionCommand)
+				: allCommands;
+			const exact = availableCommands.some(c => c.name === commandToken);
+			if (exact) return 1 + commandToken.length;
+
+			if (inlineOnly) return 0;
+
+			// 前缀型指令（如 agent-、todo-、skills-）：cmd 以 `name` 开头且长度更长
+			const prefixHit = availableCommands.some(
+				c =>
+					c.name.endsWith('-') &&
+					commandToken.length > c.name.length &&
+					commandToken.startsWith(c.name),
+			);
+			if (prefixHit) return 1 + commandToken.length;
+
+			return 0;
+		};
+	}, [getAllCommands]);
 
 	const renderContent = () => {
 		if (buffer.text.length > 0) {
@@ -916,9 +926,10 @@ export default function ChatInput({
 			}
 
 			// 渲染单行内容的辅助函数：同时高亮
-			//   1. 首行已识别的完整指令 `/cmd`
-			//   2. 各类 `[...]` 占位符标签（Paste / image / Skill / GitLine / » running-agent）
-			//   3. `#agent_xxx` 裸文本子代理标签（词边界上）
+			//   1. 已识别的行首完整指令 `/cmd`
+			//   2. 内容中支持内联插入的指令（如 `/gitline`、Prompt 类型自定义指令）
+			//   3. 各类 `[...]` 占位符标签（Paste / image / Skill / GitLine / » running-agent）
+			//   4. `#agent_xxx` 裸文本子代理标签（词边界上）
 			const renderLineSegments = (line: string, isFirstLine: boolean) => {
 				type Token = {text: string; highlight: boolean};
 				const tokens: Token[] = [];
@@ -930,21 +941,6 @@ export default function ChatInput({
 					}
 				};
 
-				let i = 0;
-
-				// 1) 首行完整指令高亮
-				if (
-					isFirstLine &&
-					completedCommandLength > 0 &&
-					line.length >= completedCommandLength
-				) {
-					tokens.push({
-						text: line.slice(0, completedCommandLength),
-						highlight: true,
-					});
-					i = completedCommandLength;
-				}
-
 				const isPlaceholderTag = (tag: string) =>
 					/^\[Paste \d+ lines #\d+\]$/.test(tag) ||
 					/^\[image #\d+\]$/.test(tag) ||
@@ -952,10 +948,33 @@ export default function ChatInput({
 					/^\[GitLine:[^\]]+\]$/.test(tag) ||
 					/^\[»[^\]]*\]$/.test(tag);
 
+				let i = 0;
 				while (i < line.length) {
 					const ch = line[i];
 
-					// 2) [...] 占位符标签
+					// 1/2) slash 指令高亮：行首允许所有指令，内容中只允许可内联插入指令。
+					if (ch === '/') {
+						const prevCh = i === 0 ? '' : line[i - 1] ?? '';
+						const leftBoundary = i === 0 || /\s/.test(prevCh);
+						if (leftBoundary) {
+							const isRootCommandPosition = isFirstLine && i === 0;
+							const commandLength = getCommandHighlightLength(
+								line.slice(i),
+								!isRootCommandPosition,
+							);
+							if (commandLength > 0) {
+								flushPlain();
+								tokens.push({
+									text: line.slice(i, i + commandLength),
+									highlight: true,
+								});
+								i += commandLength;
+								continue;
+							}
+						}
+					}
+
+					// 3) [...] 占位符标签
 					if (ch === '[') {
 						const closeIdx = line.indexOf(']', i + 1);
 						if (closeIdx !== -1) {
@@ -970,7 +989,7 @@ export default function ChatInput({
 						}
 					}
 
-					// 3) #agent 裸文本标签：需要词边界（前面是行首或空白，后面是行末或空白）
+					// 4) #agent 裸文本标签：需要词边界（前面是行首或空白，后面是行末或空白）
 					if (ch === '#') {
 						const prevCh = i === 0 ? '' : line[i - 1] ?? '';
 						const leftBoundary = i === 0 || /\s/.test(prevCh);

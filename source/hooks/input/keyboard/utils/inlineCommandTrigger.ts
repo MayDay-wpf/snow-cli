@@ -44,7 +44,10 @@ export function findInlineCommandTrigger(
 			}
 		}
 
-		slashIndex = text.lastIndexOf('/', slashIndex - 1);
+		// Avoid getting stuck on the first slash. String.lastIndexOf('/', -1)
+		// can still return index 0, which previously caused an infinite loop for
+		// inputs like "/help " or "/goal objective" once the command contained whitespace.
+		slashIndex = slashIndex > 0 ? text.lastIndexOf('/', slashIndex - 1) : -1;
 	}
 
 	return null;

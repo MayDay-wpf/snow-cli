@@ -35,7 +35,6 @@ export type CommandPanelCommand = {
 // key 为指令名（不含斜杠），value 为提示文本（不含前导空格）
 export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	branch: '[name]',
-	fork: '[name]',
 	resume: '[sessionId]',
 	reindex: '[-force]',
 	codebase: '[on|off|status]',
@@ -44,6 +43,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	'add-dir': '[path]',
 	loop: '<interval> <prompt> | list | tasks | cancel <id>',
 	goal: '<objective> [--budget=N] | pause | resume | clear | status',
+	init: '[prompt]',
 	role: '[-l|--list | -d|--delete]',
 	skills: '[-l|--list]',
 	'role-subagent': '[-l|--list | -d|--delete]',
