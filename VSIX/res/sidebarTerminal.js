@@ -439,6 +439,15 @@
 
 	const createClipboardAndContextController = ({term, sendInput}) => {
 		const isMacPlatform = /mac/i.test(navigator.userAgent);
+		const SUPPORTED_IMAGE_MIME_PATTERN = /^image\/(?:png|jpe?g|gif|webp)$/i;
+		const IMAGE_PASTE_DEDUPE_MS = 1000;
+		let lastImagePasteDataUrl = '';
+		let lastImagePasteAt = 0;
+
+		const normalizeImageMimeType = mimeType => {
+			const normalized = String(mimeType || 'image/png').toLowerCase();
+			return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+		};
 
 		const writeClipboardText = (text, source) => {
 			if (typeof text !== 'string' || text.length === 0) {
@@ -455,6 +464,150 @@
 					error: stringifyLogDetails(error),
 				});
 			});
+		};
+
+		const blobToDataUrl = blob =>
+			new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => {
+					if (typeof reader.result === 'string') {
+						resolve(reader.result);
+						return;
+					}
+					reject(new Error('Clipboard image did not produce a data URL.'));
+				};
+				reader.onerror = () => {
+					reject(reader.error || new Error('Failed to read clipboard image.'));
+				};
+				reader.readAsDataURL(blob);
+			});
+
+		const getImageFileFromDataTransfer = dataTransfer => {
+			const items = Array.from(dataTransfer?.items || []);
+			for (const item of items) {
+				if (
+					item.kind === 'file' &&
+					SUPPORTED_IMAGE_MIME_PATTERN.test(normalizeImageMimeType(item.type))
+				) {
+					const file = item.getAsFile();
+					if (file) {
+						return file;
+					}
+				}
+			}
+			return undefined;
+		};
+
+		const readImageDataUrlFromClipboardItems = async clipboardItems => {
+			for (const item of clipboardItems || []) {
+				const imageType = (item.types || []).find(type =>
+					SUPPORTED_IMAGE_MIME_PATTERN.test(normalizeImageMimeType(type)),
+				);
+				if (!imageType) {
+					continue;
+				}
+				const blob = await item.getType(imageType);
+				return blobToDataUrl(blob);
+			}
+			return undefined;
+		};
+
+		const readImageDataUrlFromNavigatorClipboard = async () => {
+			if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+				return undefined;
+			}
+			return readImageDataUrlFromClipboardItems(await navigator.clipboard.read());
+		};
+
+		const sendClipboardImageDataUrl = (dataUrl, source) => {
+			if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+				return false;
+			}
+
+			const now = Date.now();
+			if (
+				dataUrl === lastImagePasteDataUrl &&
+				now - lastImagePasteAt <= IMAGE_PASTE_DEDUPE_MS
+			) {
+				logInfo('Skipped duplicate clipboard image paste.', {
+					source,
+					length: dataUrl.length,
+				});
+				return true;
+			}
+
+			lastImagePasteDataUrl = dataUrl;
+			lastImagePasteAt = now;
+			sendInput(dataUrl);
+			logInfo('Clipboard image converted to data URL for terminal input.', {
+				source,
+				length: dataUrl.length,
+			});
+			return true;
+		};
+
+		const readAndSendClipboardText = async source => {
+			if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+				logWarn('Clipboard readText API is unavailable.', `source=${source}`);
+				return false;
+			}
+			const text = await navigator.clipboard.readText();
+			if (text) {
+				sendInput(text);
+				return true;
+			}
+			return false;
+		};
+
+		const handleClipboardImagePaste = async source => {
+			try {
+				const dataUrl = await readImageDataUrlFromNavigatorClipboard();
+				return sendClipboardImageDataUrl(dataUrl, source);
+			} catch (error) {
+				logWarn('Failed to read clipboard image for terminal paste shortcut.', {
+					source,
+					error: stringifyLogDetails(error),
+				});
+			}
+			return false;
+		};
+
+		const handleClipboardPaste = async ({event, source}) => {
+			try {
+				const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
+				if (pastedFile) {
+					event.preventDefault();
+					const dataUrl = await blobToDataUrl(pastedFile);
+					sendClipboardImageDataUrl(dataUrl, source);
+					return true;
+				}
+
+				const dataUrl = await readImageDataUrlFromNavigatorClipboard();
+				if (sendClipboardImageDataUrl(dataUrl, source)) {
+					event?.preventDefault?.();
+					return true;
+				}
+
+				if (!event) {
+					return readAndSendClipboardText(source);
+				}
+			} catch (error) {
+				logWarn('Failed to read clipboard image for terminal paste.', {
+					source,
+					error: stringifyLogDetails(error),
+				});
+				if (!event) {
+					try {
+						return await readAndSendClipboardText(source);
+					} catch (textError) {
+						logWarn('Failed to read text from clipboard after image paste fallback.', {
+							source,
+							error: stringifyLogDetails(textError),
+						});
+					}
+				}
+			}
+			return false;
 		};
 
 		const registerOsc52ClipboardHandler = () => {
@@ -506,18 +659,41 @@
 			return term.hasSelection() && Boolean(term.getSelection());
 		};
 
-		const allowTerminalKeyEvent = event => {
-			if (
-				!isMacPlatform &&
-				event.type === 'keydown' &&
-				event.ctrlKey &&
-				!event.shiftKey &&
-				!event.altKey &&
-				!event.metaKey &&
-				event.key.toLowerCase() === 'v'
-			) {
+		const isSystemPasteShortcut = event => {
+			if (event.type !== 'keydown') {
 				return false;
 			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			if (key !== 'v' || event.altKey) {
+				return false;
+			}
+			if (isMacPlatform) {
+				return event.metaKey && !event.ctrlKey;
+			}
+			return event.ctrlKey && !event.metaKey;
+		};
+
+		const handleSystemPasteShortcut = event => {
+			if (!isSystemPasteShortcut(event)) {
+				return undefined;
+			}
+
+			if (isMacPlatform) {
+				void handleClipboardImagePaste('system-paste-shortcut');
+				return true;
+			}
+
+			event.preventDefault();
+			void handleClipboardPaste({source: 'system-paste-shortcut'});
+			return false;
+		};
+
+		const allowTerminalKeyEvent = event => {
+			const systemPasteDecision = handleSystemPasteShortcut(event);
+			if (typeof systemPasteDecision === 'boolean') {
+				return systemPasteDecision;
+			}
+
 			if (shouldUseCtrlSelectionCopy(event)) {
 				const selection = term.getSelection();
 				if (selection) {
@@ -526,6 +702,10 @@
 				return false;
 			}
 			return true;
+		};
+
+		const handlePasteEvent = event => {
+			void handleClipboardPaste({event, source: 'paste-event'});
 		};
 
 		const handleContextMenu = event => {
@@ -537,19 +717,13 @@
 				return;
 			}
 
-			navigator.clipboard
-				.readText()
-				.then(text => {
-					sendInput(text);
-				})
-				.catch(() => {
-					// Ignore clipboard read failures.
-				});
+			void handleClipboardPaste({source: 'context-menu'});
 		};
 
 		return {
 			allowTerminalKeyEvent,
 			handleContextMenu,
+			handlePasteEvent,
 			registerOsc52ClipboardHandler,
 		};
 	};
@@ -1765,15 +1939,16 @@
 		const {
 			allowTerminalKeyEvent,
 			handleContextMenu,
+			handlePasteEvent,
 			registerOsc52ClipboardHandler,
 		} = createClipboardAndContextController({term, sendInput});
 		registerDisposable(registerOsc52ClipboardHandler());
+		addManagedListener(container, 'paste', handlePasteEvent);
 
-		// On macOS, Ctrl+V passes through to CLI which handles paste (including images).
-		// On Windows/Linux, Ctrl+V must be intercepted to suppress the raw \x16 that
-		// xterm would otherwise emit.  We return false so xterm ignores the keydown,
-		// but do NOT call preventDefault — the browser / VS Code webview will still
-		// fire a paste event which xterm's built-in paste handler processes via onData.
+		// System paste shortcuts keep native text paste behavior where possible, while
+		// also probing navigator.clipboard for image data because terminal emulators
+		// only inject pasted text into stdin and never serialize clipboard images.
+		// Existing in-app image paste shortcuts still work inside Snow CLI itself.
 		term.attachCustomKeyEventHandler(allowTerminalKeyEvent);
 
 		const {

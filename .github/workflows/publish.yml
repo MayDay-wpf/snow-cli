@@ -56,13 +56,9 @@ jobs:
 
             ### What's New
 
-            - Optimize system prompts to obtain more accurate system information
-            - Fix the issue of "copy-last" not working remotely (requires client compatibility)
-            - Optimize the flexibility of the websearch tool
-            - Support using all tools after adding a remote directory with add-dir
-            - Optimize the display effect of context compression
-            - Some commands are allowed to be used in content
-            - Optimize init to include a more comprehensive workflow
+            - Optimized the display effect of context compression
+            - Fixed the issue of automatic filling failure for Prompt commands
+            - Automatically recognize Base64 image text input in the input box as an image
             
             ### Installation
             ```bash

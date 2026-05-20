@@ -37,7 +37,14 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 		// 表现为光标插入错位、内容渲染像“总是显示末尾”。
 		// 因此：短的多字符输入直接落盘；只对明显的粘贴/大输入走缓冲。
 		const isSingleCharInput = input.length === 1;
-		const isSmallMultiCharInput = input.length > 1 && !input.includes('\n');
+		const looksLikeImageDataPaste = /data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(
+			input,
+		);
+		const isSmallMultiCharInput =
+			input.length > 1 &&
+			input.length <= pasteIndicatorThreshold &&
+			!input.includes('\n') &&
+			!looksLikeImageDataPaste;
 
 		// 单字符：正常键入，直接插入
 		if (isSingleCharInput && !refs.isProcessingInput.current) {

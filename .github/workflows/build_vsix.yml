@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - support OSC 52 clipboard passthrough in sidebar terminal
+            - Compatibility: Automatically recognize Base64 image text as image information
 
             ### Installation
 

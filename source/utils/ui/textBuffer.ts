@@ -31,6 +31,110 @@ function sanitizeInput(str: string): string {
 	);
 }
 
+function decodeStrictBase64(base64Data: string): Uint8Array | null {
+	if (base64Data.length <= 100) return null;
+	if (base64Data.length % 4 !== 0) return null;
+	if (
+		!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+			base64Data,
+		)
+	)
+		return null;
+
+	const decoded = Buffer.from(base64Data, 'base64');
+	if (decoded.length === 0) return null;
+	return decoded;
+}
+
+function hasAscii(bytes: Uint8Array, offset: number, text: string): boolean {
+	if (bytes.length < offset + text.length) return false;
+	for (let index = 0; index < text.length; index += 1) {
+		if (bytes[offset + index] !== text.charCodeAt(index)) return false;
+	}
+	return true;
+}
+
+function hasPngSignature(bytes: Uint8Array): boolean {
+	const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+	return signature.every((value, index) => bytes[index] === value);
+}
+
+function isCompleteImageData(bytes: Uint8Array, mimeType: string): boolean {
+	if (mimeType === 'image/png') {
+		return (
+			bytes.length >= 45 &&
+			hasPngSignature(bytes) &&
+			bytes[bytes.length - 12] === 0x00 &&
+			bytes[bytes.length - 11] === 0x00 &&
+			bytes[bytes.length - 10] === 0x00 &&
+			bytes[bytes.length - 9] === 0x00 &&
+			hasAscii(bytes, bytes.length - 8, 'IEND')
+		);
+	}
+
+	if (mimeType === 'image/jpeg') {
+		return (
+			bytes.length >= 4 &&
+			bytes[0] === 0xff &&
+			bytes[1] === 0xd8 &&
+			bytes[bytes.length - 2] === 0xff &&
+			bytes[bytes.length - 1] === 0xd9
+		);
+	}
+
+	if (mimeType === 'image/gif') {
+		return (
+			bytes.length >= 14 &&
+			(hasAscii(bytes, 0, 'GIF87a') || hasAscii(bytes, 0, 'GIF89a')) &&
+			bytes[bytes.length - 1] === 0x3b
+		);
+	}
+
+	if (mimeType === 'image/webp') {
+		if (
+			bytes.length < 20 ||
+			!hasAscii(bytes, 0, 'RIFF') ||
+			!hasAscii(bytes, 8, 'WEBP')
+		) {
+			return false;
+		}
+		const riffSize =
+			(bytes.at(4) ?? 0) +
+			(bytes.at(5) ?? 0) * 0x100 +
+			(bytes.at(6) ?? 0) * 0x10000 +
+			(bytes.at(7) ?? 0) * 0x1000000;
+		return riffSize === bytes.length - 8;
+	}
+
+	return false;
+}
+
+function parsePastedImageDataUrl(input: string):
+	| {base64Data: string; mimeType: string}
+	| null {
+	const trimmed = input.trim();
+	if (!trimmed) return null;
+
+	const markdownImageMatch = trimmed.match(
+		/^!\[[^\]]*\]\((data:image\/(?:png|jpe?g|gif|webp);base64,[\s\S]+)\)$/i,
+	);
+	const dataUrl = markdownImageMatch?.[1] ?? trimmed;
+	const dataUrlMatch = dataUrl.match(
+		/^data:(image\/(?:png|jpe?g|gif|webp));base64,([\s\S]+)$/i,
+	);
+	if (!dataUrlMatch) return null;
+
+	const mimeType = (dataUrlMatch[1] || 'image/png')
+		.toLowerCase()
+		.replace('image/jpg', 'image/jpeg');
+	const base64Data = (dataUrlMatch[2] || '').replace(/\s/g, '');
+	const decoded = decodeStrictBase64(base64Data);
+	if (!decoded || !isCompleteImageData(decoded, mimeType)) return null;
+
+	return {base64Data, mimeType};
+}
+
+
 /**
  * 统一的占位符类型，用于大文本粘贴和图片
  */
@@ -251,6 +355,14 @@ export class TextBuffer {
 	insert(input: string): void {
 		const sanitized = sanitizeInput(input);
 		if (!sanitized) {
+			return;
+		}
+
+		const pastedImage = parsePastedImageDataUrl(sanitized);
+		if (pastedImage) {
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.insertImage(pastedImage.base64Data, pastedImage.mimeType);
 			return;
 		}
 
