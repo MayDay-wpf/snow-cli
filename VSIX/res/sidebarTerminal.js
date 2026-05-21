@@ -453,7 +453,10 @@
 			if (typeof text !== 'string' || text.length === 0) {
 				return;
 			}
-			if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.writeText !== 'function'
+			) {
 				logWarn('Clipboard write API is unavailable.', `source=${source}`);
 				return;
 			}
@@ -513,10 +516,15 @@
 		};
 
 		const readImageDataUrlFromNavigatorClipboard = async () => {
-			if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.read !== 'function'
+			) {
 				return undefined;
 			}
-			return readImageDataUrlFromClipboardItems(await navigator.clipboard.read());
+			return readImageDataUrlFromClipboardItems(
+				await navigator.clipboard.read(),
+			);
 		};
 
 		const sendClipboardImageDataUrl = (dataUrl, source) => {
@@ -547,7 +555,10 @@
 		};
 
 		const readAndSendClipboardText = async source => {
-			if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.readText !== 'function'
+			) {
 				logWarn('Clipboard readText API is unavailable.', `source=${source}`);
 				return false;
 			}
@@ -559,20 +570,12 @@
 			return false;
 		};
 
-		const handleClipboardImagePaste = async source => {
-			try {
-				const dataUrl = await readImageDataUrlFromNavigatorClipboard();
-				return sendClipboardImageDataUrl(dataUrl, source);
-			} catch (error) {
-				logWarn('Failed to read clipboard image for terminal paste shortcut.', {
-					source,
-					error: stringifyLogDetails(error),
-				});
-			}
-			return false;
-		};
-
-		const handleClipboardPaste = async ({event, source}) => {
+		const handleClipboardPaste = async ({
+			event,
+			source,
+			allowNavigatorImage = !event,
+			fallbackToText = !event,
+		}) => {
 			try {
 				const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
 				if (pastedFile) {
@@ -582,13 +585,15 @@
 					return true;
 				}
 
-				const dataUrl = await readImageDataUrlFromNavigatorClipboard();
-				if (sendClipboardImageDataUrl(dataUrl, source)) {
-					event?.preventDefault?.();
-					return true;
+				if (allowNavigatorImage) {
+					const dataUrl = await readImageDataUrlFromNavigatorClipboard();
+					if (sendClipboardImageDataUrl(dataUrl, source)) {
+						event?.preventDefault?.();
+						return true;
+					}
 				}
 
-				if (!event) {
+				if (!event && fallbackToText) {
 					return readAndSendClipboardText(source);
 				}
 			} catch (error) {
@@ -596,14 +601,17 @@
 					source,
 					error: stringifyLogDetails(error),
 				});
-				if (!event) {
+				if (!event && fallbackToText) {
 					try {
 						return await readAndSendClipboardText(source);
 					} catch (textError) {
-						logWarn('Failed to read text from clipboard after image paste fallback.', {
-							source,
-							error: stringifyLogDetails(textError),
-						});
+						logWarn(
+							'Failed to read text from clipboard after image paste fallback.',
+							{
+								source,
+								error: stringifyLogDetails(textError),
+							},
+						);
 					}
 				}
 			}
@@ -678,14 +686,7 @@
 				return undefined;
 			}
 
-			if (isMacPlatform) {
-				void handleClipboardImagePaste('system-paste-shortcut');
-				return true;
-			}
-
-			event.preventDefault();
-			void handleClipboardPaste({source: 'system-paste-shortcut'});
-			return false;
+			return true;
 		};
 
 		const allowTerminalKeyEvent = event => {

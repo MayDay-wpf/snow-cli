@@ -109,9 +109,9 @@ function isCompleteImageData(bytes: Uint8Array, mimeType: string): boolean {
 	return false;
 }
 
-function parsePastedImageDataUrl(input: string):
-	| {base64Data: string; mimeType: string}
-	| null {
+function parsePastedImageDataUrl(
+	input: string,
+): {base64Data: string; mimeType: string} | null {
 	const trimmed = input.trim();
 	if (!trimmed) return null;
 
@@ -133,7 +133,6 @@ function parsePastedImageDataUrl(input: string):
 
 	return {base64Data, mimeType};
 }
-
 
 /**
  * 统一的占位符类型，用于大文本粘贴和图片
@@ -504,8 +503,8 @@ export class TextBuffer {
 	 * 与 insertPastingIndicator 共用 tempPastingPlaceholder 字段，
 	 * 任意时刻只允许一个临时占位符存在。
 	 */
-	insertImageLoadingIndicator(): void {
-		if (this.tempPastingPlaceholder) {
+	insertImageLoadingIndicator(isImagePaste: boolean): void {
+		if (!isImagePaste || this.tempPastingPlaceholder) {
 			return;
 		}
 		this.tempPastingPlaceholder = `[image upload...]`;

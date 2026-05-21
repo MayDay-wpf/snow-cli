@@ -56,9 +56,7 @@ jobs:
 
             ### What's New
 
-            - Optimized the display effect of context compression
-            - Fixed the issue of automatic filling failure for Prompt commands
-            - Automatically recognize Base64 image text input in the input box as an image
+            - Fix the bug of repeated text pasting
             
             ### Installation
             ```bash

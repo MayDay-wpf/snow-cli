@@ -6,7 +6,7 @@ import {logger} from '../../utils/core/logger.js';
 import {isWSL} from '../../mcp/utils/websearch/browser.utils.js';
 
 // 使用异步 exec 替代 execSync，避免阻塞 React 渲染线程，
-// 这样 [image upload...] loading 占位符可以及时显示。
+// 这样确认剪贴板包含图片后，[image upload...] loading 占位符可以及时显示。
 const execAsync = promisify(exec);
 
 export function useClipboard(
@@ -16,22 +16,42 @@ export function useClipboard(
 	triggerUpdate: () => void,
 ) {
 	const pasteFromClipboard = useCallback(async () => {
-		// 立即插入 "[image upload...]" 临时占位符并触发渲染，
-		// 让用户在等待剪贴板读取（可能耗时数秒）期间有视觉反馈。
-		buffer.insertImageLoadingIndicator();
-		{
+		let imageInserted = false;
+		let imageLoadingIndicatorShown = false;
+
+		const showImageLoadingIndicator = async () => {
+			if (imageLoadingIndicatorShown) {
+				return;
+			}
+
+			// 只在确认剪贴板包含图片后插入 "[image upload...]" 临时占位符，
+			// 避免普通文本粘贴误显示图片上传提示。
+			imageLoadingIndicatorShown = true;
+			buffer.insertImageLoadingIndicator(true);
 			const text = buffer.getFullText();
 			const cursorPos = buffer.getCursorPosition();
 			updateCommandPanelState(text);
 			updateFilePickerState(text, cursorPos);
-		}
-		triggerUpdate();
+			triggerUpdate();
 
-		// 让出事件循环，确保 React 完成至少一次渲染 commit，
-		// 否则后续的 await 仍可能在第一次 paint 之前阻塞 UI。
-		await new Promise(resolve => setTimeout(resolve, 0));
+			// 让出事件循环，确保 React 完成至少一次渲染 commit，
+			// 否则后续的 await 仍可能在第一次 paint 之前阻塞 UI。
+			await new Promise(resolve => setTimeout(resolve, 0));
+		};
 
-		let imageInserted = false;
+		const insertClipboardText = (clipboardText: string): boolean => {
+			if (!clipboardText) {
+				return false;
+			}
+
+			buffer.insert(clipboardText);
+			const fullText = buffer.getFullText();
+			const cursorPos = buffer.getCursorPosition();
+			updateCommandPanelState(fullText);
+			updateFilePickerState(fullText, cursorPos);
+			triggerUpdate();
+			return true;
+		};
 
 		try {
 			const isWslEnv = process.platform === 'linux' && isWSL();
@@ -41,6 +61,41 @@ export function useClipboard(
 			if (process.platform === 'win32' || isWslEnv) {
 				// Windows / WSL: Use PowerShell to read image from clipboard
 				try {
+					const probeScript =
+						'Add-Type -AssemblyName System.Windows.Forms; ' +
+						'$hasImage = [System.Windows.Forms.Clipboard]::ContainsImage(); ' +
+						"$textBase64 = ''; " +
+						'if (-not $hasImage) { ' +
+						'$text = [System.Windows.Forms.Clipboard]::GetText(); ' +
+						"if ($null -eq $text) { $text = '' }; " +
+						'$textBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($text)); ' +
+						'}; ' +
+						'Write-Output $hasImage; ' +
+						'Write-Output $textBase64';
+					const encodedProbe = Buffer.from(probeScript, 'utf16le').toString(
+						'base64',
+					);
+					const {stdout: probeStdout} = await execAsync(
+						`${psCmd} -NoProfile -EncodedCommand ${encodedProbe}`,
+						{
+							encoding: 'utf-8',
+							timeout: 2000,
+							maxBuffer: 10 * 1024 * 1024,
+						},
+					);
+					const [hasImageLine = '', ...textBase64Lines] =
+						probeStdout.split(/\r?\n/);
+					if (!/^true$/i.test(hasImageLine.trim())) {
+						const textBase64 = textBase64Lines.join('').replace(/\s/g, '');
+						const clipboardText = textBase64
+							? Buffer.from(textBase64, 'base64').toString('utf8')
+							: '';
+						insertClipboardText(clipboardText);
+						return;
+					}
+
+					await showImageLoadingIndicator();
+
 					// Optimized PowerShell script with compression for large images
 					const psScript =
 						'Add-Type -AssemblyName System.Windows.Forms; ' +
@@ -137,6 +192,7 @@ end try'`;
 					const hasImage = hasImageStdout.trim();
 
 					if (hasImage === 'hasImage') {
+						await showImageLoadingIndicator();
 						// Save clipboard image to temporary file and read it
 						const tmpFile = `/tmp/snow_clipboard_${Date.now()}.png`;
 						const saveScript = `osascript -e 'set imgData to the clipboard as «class PNGf»' -e 'set fileRef to open for access POSIX file "${tmpFile}" with write permission' -e 'write imgData to fileRef' -e 'close access fileRef'`;
@@ -214,18 +270,34 @@ end try'`;
 			// 避免 [image upload...] 留在输入框里。
 			buffer.removeTempPlaceholder();
 
-			// If no image, try to read text from clipboard
+			// If no image, try to read text from clipboard. Windows/WSL usually
+			// returned above from the combined probe, so this branch is mainly a
+			// fallback for image-probe errors and non-Windows platforms.
 			try {
 				let clipboardText = '';
 				if (process.platform === 'win32' || isWslEnv) {
+					// PowerShell 5.x may emit Get-Clipboard text using the active console
+					// code page, which makes Node's utf-8 decoding corrupt Chinese text.
+					// Encode the Unicode clipboard text to UTF-8 base64 inside PowerShell,
+					// then decode it in Node so non-ASCII paste content is stable.
+					const textScript =
+						'Add-Type -AssemblyName System.Windows.Forms; ' +
+						'$text = [System.Windows.Forms.Clipboard]::GetText(); ' +
+						"if ($null -eq $text) { $text = '' }; " +
+						'[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($text))';
+					const encoded = Buffer.from(textScript, 'utf16le').toString('base64');
 					const {stdout} = await execAsync(
-						`${psCmd} -NoProfile -Command "Get-Clipboard"`,
+						`${psCmd} -NoProfile -EncodedCommand ${encoded}`,
 						{
 							encoding: 'utf-8',
 							timeout: 2000,
+							maxBuffer: 10 * 1024 * 1024,
 						},
 					);
-					clipboardText = stdout.trim();
+					clipboardText = Buffer.from(
+						stdout.replace(/\s/g, ''),
+						'base64',
+					).toString('utf8');
 				} else if (process.platform === 'darwin') {
 					const {stdout} = await execAsync('pbpaste', {
 						encoding: 'utf-8',
@@ -240,14 +312,7 @@ end try'`;
 					clipboardText = stdout.trim();
 				}
 
-				if (clipboardText) {
-					buffer.insert(clipboardText);
-					const fullText = buffer.getFullText();
-					const cursorPos = buffer.getCursorPosition();
-					updateCommandPanelState(fullText);
-					updateFilePickerState(fullText, cursorPos);
-					triggerUpdate();
-				}
+				insertClipboardText(clipboardText);
 			} catch (textError) {
 				logger.error('Failed to read text from clipboard:', textError);
 			}

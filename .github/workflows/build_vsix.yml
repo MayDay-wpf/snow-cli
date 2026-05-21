@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Compatibility: Automatically recognize Base64 image text as image information
+            - Fix the bug of repeated text pasting
 
             ### Installation
 
