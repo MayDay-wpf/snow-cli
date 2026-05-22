@@ -8,8 +8,7 @@ import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
 import {
-	getProjectId,
-	getProjectPath,
+	resolveProjectIdentity,
 	formatDateCompact,
 	isDateFolder,
 	isProjectFolder,
@@ -75,6 +74,7 @@ class SessionManager {
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
 	private readonly currentProjectPath: string;
+	private readonly projectAliasIds: string[];
 	// 会话列表缓存
 	private sessionListCache: SessionListItem[] | null = null;
 	private cacheTimestamp: number = 0;
@@ -86,8 +86,10 @@ class SessionManager {
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
-		this.currentProjectId = getProjectId();
-		this.currentProjectPath = getProjectPath();
+		const identity = resolveProjectIdentity();
+		this.currentProjectId = identity.projectId;
+		this.currentProjectPath = identity.projectPath;
+		this.projectAliasIds = identity.projectAliasIds;
 	}
 
 	/**
@@ -215,11 +217,9 @@ class SessionManager {
 			return;
 		}
 
-		// 确保会话有项目信息（向后兼容：补充旧会话的项目信息）
-		if (!session.projectId) {
-			session.projectId = this.currentProjectId;
-			session.projectPath = this.currentProjectPath;
-		}
+		// 新版本统一写入稳定项目 ID；旧路径项目 ID 作为只读别名自动兼容。
+		session.projectId = this.currentProjectId;
+		session.projectPath = this.currentProjectPath;
 
 		const sessionDate = new Date(session.createdAt);
 		await this.ensureSessionsDir(sessionDate);
@@ -387,38 +387,91 @@ class SessionManager {
 		return session;
 	}
 	/**
+	 * 获取可用于当前项目读取的项目目录。
+	 * 第一个始终是稳定项目目录，后续是旧路径项目目录别名。
+	 */
+	private getProjectSessionDirsToRead(): Array<{projectId: string; dir: string}> {
+		const projectIds = new Set<string>([
+			this.currentProjectId,
+			...this.projectAliasIds,
+		]);
+
+		return [...projectIds].map(projectId => ({
+			projectId,
+			dir: path.join(this.sessionsDir, projectId),
+		}));
+	}
+
+	private isCurrentProjectSession(session: Session): boolean {
+		if (!session.projectId && !session.projectPath) {
+			return true;
+		}
+
+		if (session.projectId) {
+			return (
+				session.projectId === this.currentProjectId ||
+				this.projectAliasIds.includes(session.projectId)
+			);
+		}
+
+		return session.projectPath === this.currentProjectPath;
+	}
+
+	private toSessionListItem(session: Session): SessionListItem {
+		return {
+			id: session.id,
+			title: this.cleanTitle(session.title),
+			summary: session.summary,
+			createdAt: session.createdAt,
+			updatedAt: session.updatedAt,
+			messageCount: session.messageCount,
+			projectPath: session.projectPath,
+			projectId: session.projectId,
+			compressedFrom: session.compressedFrom,
+			compressedAt: session.compressedAt,
+			hasGoal: session.hasGoal, // 透传给 /goal resume 列表过滤
+		};
+	}
+
+	private addSessionListItem(
+		sessions: SessionListItem[],
+		seenIds: Set<string>,
+		session: Session,
+	): void {
+		if (seenIds.has(session.id) || !this.isCurrentProjectSession(session)) {
+			return;
+		}
+
+		sessions.push(this.toSessionListItem(session));
+		seenIds.add(session.id);
+	}
+
+	/**
 	 * 在项目文件夹和日期文件夹中查找会话
 	 * 搜索顺序:
-
-	 * 1. 当前项目的日期文件夹（新格式）
-	 * 2. 其他项目的日期文件夹（跨项目兼容）
-	 * 3. 旧格式的日期文件夹（向后兼容）
+	 * 1. 稳定项目目录
+	 * 2. 当前项目的旧路径别名目录
+	 * 3. 其他项目目录和旧格式日期目录（向后兼容）
 	 */
 	private async findSessionInDateFolders(
 		sessionId: string,
 	): Promise<Session | null> {
 		try {
-			const files = await fs.readdir(this.sessionsDir);
+			const preferredProjectIds = new Set<string>();
 
-			// 1. 首先在当前项目中查找
-			const currentProjectDir = this.getProjectSessionsDir();
-			const sessionFromCurrentProject = await this.findSessionInProjectDir(
-				currentProjectDir,
-				sessionId,
-			);
-			if (sessionFromCurrentProject) {
-				return sessionFromCurrentProject;
+			for (const {projectId, dir} of this.getProjectSessionDirsToRead()) {
+				preferredProjectIds.add(projectId);
+				const session = await this.findSessionInProjectDir(dir, sessionId);
+				if (session) return session;
 			}
 
-			// 2. 在所有项目文件夹中查找（跨项目和向后兼容）
+			const files = await fs.readdir(this.sessionsDir);
 			for (const file of files) {
 				const filePath = path.join(this.sessionsDir, file);
 				const stat = await fs.stat(filePath);
 
 				if (!stat.isDirectory()) continue;
-
-				// 跳过当前项目（已经搜索过了）
-				if (file === this.currentProjectId) continue;
+				if (preferredProjectIds.has(file)) continue;
 
 				// 新格式：项目文件夹（项目名-哈希）
 				if (isProjectFolder(file)) {
@@ -485,8 +538,7 @@ class SessionManager {
 
 	/**
 	 * 列出当前项目的所有会话
-	 * 只返回与当前项目关联的会话，实现项目级别的会话隔离
-	 * 旧格式数据作为只读备用显示，不迁移到新格式
+	 * 自动合并稳定项目目录、旧路径项目目录和旧格式数据，用户移动工作目录后无需手动迁移。
 	 */
 	async listSessions(): Promise<SessionListItem[]> {
 		await this.ensureSessionsDir();
@@ -494,49 +546,44 @@ class SessionManager {
 		const seenIds = new Set<string>(); // 用于去重
 
 		try {
-			// 1. 从当前项目目录读取会话（新格式，优先）
-			const projectDir = this.getProjectSessionsDir();
-			try {
-				const dateFolders = await fs.readdir(projectDir);
-				for (const dateFolder of dateFolders) {
-					if (!isDateFolder(dateFolder)) continue;
-					const datePath = path.join(projectDir, dateFolder);
-					await this.readSessionsFromDir(datePath, sessions);
-				}
-				// 记录新格式中的会话ID
-				for (const s of sessions) {
-					seenIds.add(s.id);
-				}
-			} catch (error) {
-				// 项目目录不存在，继续处理旧格式
-			}
-
-			// 2. 只有当新格式目录为空时，才读取旧格式作为只读备用
-			if (sessions.length === 0) {
+			// 1. 读取稳定项目目录和旧路径别名目录
+			for (const {dir} of this.getProjectSessionDirsToRead()) {
 				try {
-					const files = await fs.readdir(this.sessionsDir);
-
-					for (const file of files) {
-						const filePath = path.join(this.sessionsDir, file);
-						const stat = await fs.stat(filePath);
-
-						// 旧格式：直接在 sessions 目录下的日期文件夹（不是项目文件夹）
-						if (
-							stat.isDirectory() &&
-							isDateFolder(file) &&
-							!isProjectFolder(file)
-						) {
-							await this.readLegacySessionsFromDir(filePath, sessions, seenIds);
-						}
-
-						// 旧格式：直接在 sessions 目录下的 JSON 文件
-						if (file.endsWith('.json')) {
-							await this.readLegacySessionFile(filePath, sessions, seenIds);
-						}
+					const dateFolders = await fs.readdir(dir);
+					for (const dateFolder of dateFolders) {
+						if (!isDateFolder(dateFolder)) continue;
+						const datePath = path.join(dir, dateFolder);
+						await this.readSessionsFromDir(datePath, sessions, seenIds);
 					}
 				} catch (error) {
-					// 读取旧格式失败不影响主流程
+					// 项目目录不存在，继续读取其他兼容来源
 				}
+			}
+
+			// 2. 读取旧格式作为备用（全程合并，而不是只在新目录为空时读取）
+			try {
+				const files = await fs.readdir(this.sessionsDir);
+
+				for (const file of files) {
+					const filePath = path.join(this.sessionsDir, file);
+					const stat = await fs.stat(filePath);
+
+					// 旧格式：直接在 sessions 目录下的日期文件夹（不是项目文件夹）
+					if (
+						stat.isDirectory() &&
+						isDateFolder(file) &&
+						!isProjectFolder(file)
+					) {
+						await this.readLegacySessionsFromDir(filePath, sessions, seenIds);
+					}
+
+					// 旧格式：直接在 sessions 目录下的 JSON 文件
+					if (file.endsWith('.json')) {
+						await this.readLegacySessionFile(filePath, sessions, seenIds);
+					}
+				}
+			} catch (error) {
+				// 读取旧格式失败不影响主流程
 			}
 
 			// Sort by updatedAt (newest first)
@@ -583,37 +630,7 @@ class SessionManager {
 		try {
 			const data = await fs.readFile(filePath, 'utf-8');
 			const session: Session = JSON.parse(data);
-
-			// 跳过已在新格式中存在的会话
-			if (seenIds.has(session.id)) {
-				return;
-			}
-
-			// 项目过滤：只显示匹配当前项目或没有项目标识的会话
-			if (
-				session.projectPath &&
-				session.projectPath !== this.currentProjectPath
-			) {
-				return;
-			}
-			if (session.projectId && session.projectId !== this.currentProjectId) {
-				return;
-			}
-
-			sessions.push({
-				id: session.id,
-				title: this.cleanTitle(session.title),
-				summary: session.summary,
-				createdAt: session.createdAt,
-				updatedAt: session.updatedAt,
-				messageCount: session.messageCount,
-				projectPath: session.projectPath,
-				projectId: session.projectId,
-				compressedFrom: session.compressedFrom,
-				compressedAt: session.compressedAt,
-				hasGoal: session.hasGoal, // 透传给 /goal resume 列表过滤
-			});
-			seenIds.add(session.id);
+			this.addSessionListItem(sessions, seenIds, session);
 		} catch (error) {
 			// Skip invalid session files
 		}
@@ -675,34 +692,22 @@ class SessionManager {
 	private async readSessionsFromDir(
 		dirPath: string,
 		sessions: SessionListItem[],
+		seenIds: Set<string>,
 	): Promise<void> {
 		try {
 			const files = await fs.readdir(dirPath);
 
 			for (const file of files) {
-				if (file.endsWith('.json')) {
-					try {
-						const sessionPath = path.join(dirPath, file);
-						const data = await fs.readFile(sessionPath, 'utf-8');
-						const session: Session = JSON.parse(data);
+				if (!file.endsWith('.json')) continue;
 
-						sessions.push({
-							id: session.id,
-							title: this.cleanTitle(session.title),
-							summary: session.summary,
-							createdAt: session.createdAt,
-							updatedAt: session.updatedAt,
-							messageCount: session.messageCount,
-							projectPath: session.projectPath,
-							projectId: session.projectId,
-							compressedFrom: session.compressedFrom,
-							compressedAt: session.compressedAt,
-							hasGoal: session.hasGoal, // 透传给 /goal resume 列表过滤
-						});
-					} catch (error) {
-						// Skip invalid session files
-						continue;
-					}
+				try {
+					const sessionPath = path.join(dirPath, file);
+					const data = await fs.readFile(sessionPath, 'utf-8');
+					const session: Session = JSON.parse(data);
+					this.addSessionListItem(sessions, seenIds, session);
+				} catch (error) {
+					// Skip invalid session files
+					continue;
 				}
 			}
 		} catch (error) {
@@ -1108,18 +1113,22 @@ class SessionManager {
 			// 旧格式不存在，继续搜索
 		}
 
-		// 2. 在当前项目的日期文件夹中查找
+		// 2. 优先删除稳定项目目录和旧路径别名目录
 		if (!sessionDeleted) {
-			sessionDeleted = await this.deleteSessionFromProjectDir(
-				this.getProjectSessionsDir(),
-				sessionId,
-			);
+			for (const {dir} of this.getProjectSessionDirsToRead()) {
+				sessionDeleted = await this.deleteSessionFromProjectDir(dir, sessionId);
+				if (sessionDeleted) break;
+			}
 		}
 
 		// 3. 在所有项目文件夹和旧格式日期文件夹中查找
 		if (!sessionDeleted) {
 			try {
 				const files = await fs.readdir(this.sessionsDir);
+				const preferredProjectIds = new Set([
+					this.currentProjectId,
+					...this.projectAliasIds,
+				]);
 
 				for (const file of files) {
 					if (sessionDeleted) break;
@@ -1128,9 +1137,7 @@ class SessionManager {
 					const stat = await fs.stat(filePath);
 
 					if (!stat.isDirectory()) continue;
-
-					// 跳过当前项目（已经搜索过了）
-					if (file === this.currentProjectId) continue;
+					if (preferredProjectIds.has(file)) continue;
 
 					// 新格式：项目文件夹
 					if (isProjectFolder(file)) {
