@@ -78,8 +78,8 @@ export default function FileRollbackConfirmation({
 					.then(preview =>
 						vscodeConnection.showDiff(
 							preview.absolutePath,
-							preview.currentContent,
 							preview.rollbackContent,
+							preview.currentContent,
 							'Rollback Preview',
 						),
 					)

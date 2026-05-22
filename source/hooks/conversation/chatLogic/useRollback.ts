@@ -384,6 +384,7 @@ export function useRollback(props: UseChatLogicProps) {
 			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
+					previewTargetMessageIndex: sIdx,
 					fileCount: filePaths.length,
 					filePaths,
 					notebookCount: nbCount,
@@ -421,6 +422,7 @@ export function useRollback(props: UseChatLogicProps) {
 		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
+				previewTargetMessageIndex: sIdx,
 				fileCount: filePaths.length,
 				filePaths,
 				notebookCount: nbCount,
@@ -432,6 +434,7 @@ export function useRollback(props: UseChatLogicProps) {
 			// Show confirmation even when no files to rollback
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
+				previewTargetMessageIndex: sIdx,
 				fileCount: 0,
 				filePaths: [],
 				notebookCount: 0,

@@ -9,6 +9,7 @@ export function useSnapshotState(messagesLength: number) {
 	>(new Map());
 	const [pendingRollback, setPendingRollback] = useState<{
 		messageIndex: number;
+		previewTargetMessageIndex?: number;
 		fileCount: number;
 		filePaths?: string[];
 		notebookCount?: number;

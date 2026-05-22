@@ -43,6 +43,7 @@ type SnapshotState = {
 	snapshotFileCount: Map<number, number>;
 	pendingRollback: {
 		messageIndex: number;
+		previewTargetMessageIndex?: number;
 		fileCount: number;
 		filePaths?: string[];
 		notebookCount?: number;
@@ -457,7 +458,10 @@ export default function ChatScreenPanels({
 					notebookCount={snapshotState.pendingRollback.notebookCount}
 					teamCount={snapshotState.pendingRollback.teamCount}
 					previewSessionId={sessionManager.getCurrentSession()?.id}
-					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
+					previewTargetMessageIndex={
+						snapshotState.pendingRollback.previewTargetMessageIndex ??
+						snapshotState.pendingRollback.messageIndex
+					}
 					terminalWidth={terminalWidth}
 					onConfirm={handleRollbackConfirm}
 				/>
