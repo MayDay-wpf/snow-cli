@@ -47,6 +47,7 @@ type TerminalConfig = {
 	fontSize: number;
 	fontWeight: string;
 	lineHeight: number;
+	backgroundColor: string;
 };
 
 type NormalizedFontConfig = Omit<TerminalConfig, 'shellProfile'>;
@@ -135,6 +136,7 @@ type ExtensionToWebviewMessage =
 			fontSize: number;
 			fontWeight: string;
 			lineHeight: number;
+			backgroundColor: string;
 	  }
 	| ({type: 'updateBell'} & BellConfig)
 	| {type: 'exit'; tabId: string; code: number};
@@ -592,6 +594,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			fontSize: cfg.get<number>('fontSize', 14),
 			fontWeight: cfg.get<string>('fontWeight', 'normal'),
 			lineHeight: cfg.get<number>('lineHeight', 1.0),
+			backgroundColor: cfg.get<string>('backgroundColor', '#181818'),
 		};
 	}
 
@@ -605,6 +608,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				LINE_HEIGHT_MIN,
 				LINE_HEIGHT_MAX,
 			),
+			backgroundColor: config.backgroundColor || '#181818',
 		};
 	}
 

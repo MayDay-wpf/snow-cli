@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Fix the bug of repeated text pasting
+            - Add terminal background color setting and tab title tooltips
 
             ### Installation
 

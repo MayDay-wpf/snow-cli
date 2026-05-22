@@ -21,6 +21,7 @@
 	"config.terminal.fontSize.description": "侧边栏终端的字号（像素）。",
 	"config.terminal.fontWeight.description": "侧边栏终端的字重。",
 	"config.terminal.lineHeight.description": "侧边栏终端的行高。",
+	"config.terminal.backgroundColor.description": "侧边栏终端的背景色。支持任意 CSS 颜色值，例如 #181818、rgb(24, 24, 24) 或 var(--vscode-terminal-background)。",
 
 	"config.bell.enabled.description": "启用终端响铃（BEL / \\x07）。关闭后将同时禁用声音与视觉提示。",
 	"config.bell.volume.description": "终端响铃音量（0.0 - 1.0）。设为 0 则静音，但仍可使用视觉闪烁提示。",

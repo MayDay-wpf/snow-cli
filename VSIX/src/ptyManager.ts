@@ -43,15 +43,137 @@ function defaultArgsForFamily(family: ShellFamily): string[] {
 	}
 }
 
-function detectPowerShellPath(): string {
-	const psModulePath = process.env['PSModulePath'] || '';
-	if (
-		psModulePath.includes('PowerShell\\7') ||
-		psModulePath.includes('powershell\\7')
-	) {
-		return 'pwsh.exe';
+function getFs(): typeof import('fs') {
+	// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+	return require('fs');
+}
+
+function getEnvValue(name: string): string | undefined {
+	const direct = process.env[name];
+	if (typeof direct === 'string') {
+		return direct;
 	}
-	return 'powershell.exe';
+
+	const key = Object.keys(process.env).find(
+		entry => entry.toLowerCase() === name.toLowerCase(),
+	);
+	const value = key ? process.env[key] : undefined;
+	return typeof value === 'string' ? value : undefined;
+}
+
+function stripWrappingQuotes(value: string): string {
+	const trimmed = value.trim();
+	if (
+		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+		(trimmed.startsWith("'") && trimmed.endsWith("'"))
+	) {
+		return trimmed.slice(1, -1);
+	}
+	return trimmed;
+}
+
+function expandShellPath(rawPath: string): string {
+	return stripWrappingQuotes(rawPath)
+		.replace(/\$\{env:([^}]+)\}/gi, (_match, name: string) => getEnvValue(name) ?? '')
+		.replace(/%([^%]+)%/g, (_match, name: string) => getEnvValue(name) ?? '');
+}
+
+function shellPathExists(shellPath: string): boolean {
+	try {
+		return getFs().existsSync(shellPath);
+	} catch {
+		return false;
+	}
+}
+
+function isAbsoluteShellPath(shellPath: string): boolean {
+	return os.platform() === 'win32'
+		? path.win32.isAbsolute(shellPath)
+		: path.isAbsolute(shellPath);
+}
+
+function hasPathSeparator(value: string): boolean {
+	return value.includes('/') || value.includes('\\');
+}
+
+function resolveExecutableFromPath(executable: string): string | undefined {
+	if (!executable || isAbsoluteShellPath(executable) || hasPathSeparator(executable)) {
+		return undefined;
+	}
+
+	const pathValue = getEnvValue('PATH');
+	if (!pathValue) {
+		return undefined;
+	}
+
+	const isWindows = os.platform() === 'win32';
+	const hasExtension = path.extname(executable) !== '';
+	const extensions = isWindows && !hasExtension
+		? (getEnvValue('PATHEXT') || '.COM;.EXE;.BAT;.CMD')
+			.split(';')
+			.filter(Boolean)
+		: [''];
+	for (const directory of pathValue.split(path.delimiter)) {
+		if (!directory) {
+			continue;
+		}
+		for (const extension of extensions) {
+			const candidate = path.join(directory, `${executable}${extension}`);
+			if (shellPathExists(candidate)) {
+				return candidate;
+			}
+		}
+	}
+
+	return undefined;
+}
+
+function resolveExistingShellPath(rawPath: string): string | undefined {
+	const expanded = expandShellPath(rawPath);
+	if (!expanded) {
+		return undefined;
+	}
+
+	if (shellPathExists(expanded)) {
+		return expanded;
+	}
+
+	return resolveExecutableFromPath(expanded);
+}
+
+export function resolveProfileShellPath(
+	profile: Record<string, unknown>,
+): string | undefined {
+	const rawPath = profile.path;
+	const rawPaths = Array.isArray(rawPath)
+		? rawPath.filter((entry): entry is string => typeof entry === 'string')
+		: typeof rawPath === 'string'
+		? [rawPath]
+		: [];
+
+	for (const candidate of rawPaths) {
+		const resolved = resolveExistingShellPath(candidate);
+		if (resolved) {
+			return resolved;
+		}
+	}
+
+	const firstCandidate = rawPaths.map(expandShellPath).filter(Boolean)[0];
+	if (
+		firstCandidate &&
+		os.platform() !== 'win32' &&
+		!isAbsoluteShellPath(firstCandidate)
+	) {
+		return firstCandidate;
+	}
+
+	return undefined;
+}
+
+function detectPowerShellPath(): string {
+	return resolveExecutableFromPath('pwsh.exe') ??
+		resolveExecutableFromPath('powershell.exe') ??
+		'powershell.exe';
 }
 
 function windowsFallback(): ResolvedShell {
@@ -80,15 +202,7 @@ function resolveAutoFromVSCode(): ResolvedShell | undefined {
 	if (!profile) {
 		return undefined;
 	}
-	let shellPath: string | undefined;
-	if (typeof profile.path === 'string') {
-		shellPath = profile.path;
-	} else if (Array.isArray(profile.path)) {
-		const fs = require('fs');
-		shellPath = (profile.path as string[]).find(p => {
-			try { return fs.existsSync(p); } catch { return false; }
-		}) || (profile.path as string[])[0];
-	}
+	const shellPath = resolveProfileShellPath(profile);
 	if (!shellPath) {
 		return undefined;
 	}
@@ -112,13 +226,15 @@ export function resolveShellProfile(input?: string): ResolvedShell {
 		return resolveAutoFromVSCode() ?? fallback();
 	}
 
-	const fs = require('fs');
-	if (path.isAbsolute(input) && !fs.existsSync(input)) {
+	const expandedInput = expandShellPath(input);
+	if (isAbsoluteShellPath(expandedInput) && !shellPathExists(expandedInput)) {
 		return fallback();
 	}
 
-	const family = detectShellFamily(input);
-	return {path: input, args: defaultArgsForFamily(family), family};
+	const resolvedFromPath = resolveExecutableFromPath(expandedInput);
+	const shellPath = resolvedFromPath ?? expandedInput;
+	const family = detectShellFamily(shellPath);
+	return {path: shellPath, args: defaultArgsForFamily(family), family};
 }
 
 export class PtyManager {

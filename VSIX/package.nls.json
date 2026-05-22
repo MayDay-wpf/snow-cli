@@ -21,6 +21,7 @@
 	"config.terminal.fontSize.description": "Font size (px) for the sidebar terminal.",
 	"config.terminal.fontWeight.description": "Font weight for the sidebar terminal.",
 	"config.terminal.lineHeight.description": "Line height for the sidebar terminal.",
+	"config.terminal.backgroundColor.description": "Background color for the sidebar terminal. Supports any CSS color value, such as #181818, rgb(24, 24, 24), or var(--vscode-terminal-background).",
 
 	"config.bell.enabled.description": "Enable terminal bell (BEL / \\x07) notifications. When disabled, both audio and visual feedback are suppressed.",
 	"config.bell.volume.description": "Terminal bell volume (0.0 - 1.0). Set to 0 to mute audio while still allowing visual flash.",

@@ -153,6 +153,36 @@ body {
 	outline-offset: -1px;
 }
 
+.terminal-tab-tooltip {
+	position: fixed;
+	z-index: 1000;
+	max-width: calc(100vw - 12px);
+	padding: 5px 8px;
+	border: 1px solid var(--vscode-editorHoverWidget-border, var(--terminal-border));
+	border-radius: 4px;
+	background-color: var(--vscode-editorHoverWidget-background, #252526);
+	color: var(--vscode-editorHoverWidget-foreground, var(--terminal-button-fg));
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(-2px);
+	transition: opacity 80ms ease-out, transform 80ms ease-out;
+}
+
+.terminal-tab-tooltip[hidden] {
+	display: none;
+}
+
+.terminal-tab-tooltip.is-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
 .terminal-tab-spinner {
 	width: 10px;
 	height: 10px;

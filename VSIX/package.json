@@ -2,7 +2,7 @@
 	"name": "snow-cli",
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
-	"version": "0.4.28",
+	"version": "0.4.29",
 	"publisher": "mufasa",
 	"icon": "snow.png",
 	"repository": {
@@ -105,6 +105,12 @@
 						"minimum": 0.8,
 						"maximum": 2,
 						"description": "%config.terminal.lineHeight.description%"
+					},
+					"snow-cli.terminal.backgroundColor": {
+						"order": 7,
+						"type": "string",
+						"default": "#181818",
+						"description": "%config.terminal.backgroundColor.description%"
 					}
 				}
 			},
@@ -579,6 +585,7 @@
 		}
 	},
 	"scripts": {
+		"build": "npm run compile",
 		"compile": "webpack",
 		"watch": "webpack --watch",
 		"package": "webpack --mode production --devtool hidden-source-map",

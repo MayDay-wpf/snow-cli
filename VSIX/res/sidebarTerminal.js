@@ -234,6 +234,18 @@
 		}
 	};
 
+	const applyTerminalBackground = (term, color) => {
+		if (typeof color !== 'string' || !color.trim()) {
+			return;
+		}
+		const normalized = color.trim();
+		document.documentElement.style.setProperty('--terminal-bg', normalized);
+		term.options.theme = {
+			...(term.options.theme || {}),
+			background: normalized,
+		};
+	};
+
 	const createTimerRegistry = () => {
 		const timers = new Map();
 
@@ -777,6 +789,7 @@
 
 		let currentTabId;
 		let tabStates = [];
+		const terminalTitleByTabId = new Map();
 
 		const normalizeTabState = value => {
 			if (!value || typeof value !== 'object') {
@@ -784,12 +797,17 @@
 			}
 			const id = typeof value.id === 'string' ? value.id : '';
 			const title = typeof value.title === 'string' ? value.title : '';
+			const terminalTitle =
+				typeof value.terminalTitle === 'string'
+					? value.terminalTitle.trim()
+					: '';
 			if (!id || !title) {
 				return undefined;
 			}
 			return {
 				id,
 				title,
+				terminalTitle: terminalTitle || undefined,
 				isActive: Boolean(value.isActive),
 				isRunning: Boolean(value.isRunning),
 				isRestarting: Boolean(value.isRestarting),
@@ -799,6 +817,113 @@
 						: undefined,
 			};
 		};
+
+		const getTabHoverTitle = tab => {
+			const storedTitle = terminalTitleByTabId.get(tab.id);
+			if (typeof storedTitle === 'string' && storedTitle.trim()) {
+				return storedTitle.trim();
+			}
+			if (typeof tab.terminalTitle === 'string' && tab.terminalTitle.trim()) {
+				return tab.terminalTitle.trim();
+			}
+			return tab.title;
+		};
+
+		const updateActiveTabTerminalTitle = title => {
+			const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+			if (!currentTabId || !normalizedTitle) {
+				return;
+			}
+			if (terminalTitleByTabId.get(currentTabId) === normalizedTitle) {
+				return;
+			}
+			terminalTitleByTabId.set(currentTabId, normalizedTitle);
+			renderTabs();
+		};
+
+		const createTabTooltipController = () => {
+			const tooltip = document.createElement('div');
+			tooltip.className = 'terminal-tab-tooltip';
+			tooltip.setAttribute('role', 'tooltip');
+			tooltip.hidden = true;
+			document.body.appendChild(tooltip);
+
+			let activeTarget;
+
+			const positionTooltip = target => {
+				if (!(target instanceof HTMLElement) || tooltip.hidden) {
+					return;
+				}
+				const targetRect = target.getBoundingClientRect();
+				const tooltipRect = tooltip.getBoundingClientRect();
+				const viewportWidth =
+					document.documentElement.clientWidth || window.innerWidth;
+				const viewportHeight =
+					document.documentElement.clientHeight || window.innerHeight;
+				const margin = 6;
+				let left = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+				left = Math.max(
+					margin,
+					Math.min(left, viewportWidth - tooltipRect.width - margin),
+				);
+
+				let top = targetRect.bottom + margin;
+				if (top + tooltipRect.height + margin > viewportHeight) {
+					top = Math.max(margin, targetRect.top - tooltipRect.height - margin);
+				}
+
+				tooltip.style.left = `${Math.round(left)}px`;
+				tooltip.style.top = `${Math.round(top)}px`;
+			};
+
+			const show = (target, text) => {
+				const normalizedText = typeof text === 'string' ? text.trim() : '';
+				if (!(target instanceof HTMLElement) || !normalizedText) {
+					hide();
+					return;
+				}
+				activeTarget = target;
+				tooltip.textContent = normalizedText;
+				tooltip.hidden = false;
+				tooltip.classList.add('is-visible');
+				positionTooltip(target);
+				window.requestAnimationFrame(() => {
+					if (activeTarget === target) {
+						positionTooltip(target);
+					}
+				});
+			};
+
+			const hide = () => {
+				activeTarget = undefined;
+				tooltip.classList.remove('is-visible');
+				tooltip.hidden = true;
+			};
+
+			const bindTarget = (target, getText) => {
+				const resolveText =
+					typeof getText === 'function' ? getText : () => String(getText || '');
+				target.addEventListener('pointerenter', () => {
+					show(target, resolveText());
+				});
+				target.addEventListener('pointerleave', hide);
+				target.addEventListener('focus', () => {
+					show(target, resolveText());
+				});
+				target.addEventListener('blur', hide);
+				target.addEventListener('click', hide);
+			};
+
+			const dispose = () => {
+				hide();
+				tooltip.remove();
+			};
+
+			return {bindTarget, dispose, hide};
+		};
+
+		const tabTooltip = createTabTooltipController();
+		registerCleanup(tabTooltip.dispose);
 
 		const revealTabItem = item => {
 			if (!(item instanceof HTMLElement)) {
@@ -820,15 +945,18 @@
 		};
 
 		const renderTabs = () => {
+			tabTooltip.hide();
 			tabStrip.replaceChildren();
 			if (tabStates.length === 0) {
 				return;
 			}
 			let activeItem;
 			for (const tab of tabStates) {
+				const hoverTitle = getTabHoverTitle(tab);
 				const item = document.createElement('div');
 				item.className = 'terminal-tab-item';
 				item.dataset.tabId = tab.id;
+				item.dataset.tooltip = hoverTitle;
 				if (tab.isActive) {
 					item.classList.add('is-active');
 					activeItem = item;
@@ -843,7 +971,10 @@
 				button.setAttribute('role', 'tab');
 				button.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
 				button.setAttribute('aria-controls', 'terminal-container');
-				button.title = tab.title;
+				button.setAttribute(
+					'aria-label',
+					hoverTitle === tab.title ? tab.title : `${tab.title}: ${hoverTitle}`,
+				);
 
 				const label = document.createElement('span');
 				label.className = 'terminal-tab-label';
@@ -880,6 +1011,7 @@
 
 				item.appendChild(button);
 				item.appendChild(closeButton);
+				tabTooltip.bindTarget(item, () => getTabHoverTitle(tab));
 				tabStrip.appendChild(item);
 			}
 			if (activeItem) {
@@ -894,8 +1026,15 @@
 			if (normalizedTabs.length === 0) {
 				tabStates = [];
 				currentTabId = undefined;
+				terminalTitleByTabId.clear();
 				renderTabs();
 				return;
+			}
+			const nextTabIds = new Set(normalizedTabs.map(tab => tab.id));
+			for (const tabId of terminalTitleByTabId.keys()) {
+				if (!nextTabIds.has(tabId)) {
+					terminalTitleByTabId.delete(tabId);
+				}
 			}
 			const activeTab =
 				normalizedTabs.find(tab => tab.isActive) || normalizedTabs[0];
@@ -1932,6 +2071,14 @@
 			}),
 		);
 
+		if (typeof term.onTitleChange === 'function') {
+			registerDisposable(
+				term.onTitleChange(title => {
+					updateActiveTabTerminalTitle(title);
+				}),
+			);
+		}
+
 		// AudioContext starts suspended in webviews until a user gesture occurs;
 		// arm it on first interaction so subsequent bells can produce sound.
 		addManagedListener(container, 'pointerdown', unlockTerminalAudio);
@@ -2052,6 +2199,7 @@
 				applyTermOption(term.options, 'fontSize', payload.fontSize);
 				applyTermOption(term.options, 'fontWeight', payload.fontWeight);
 				applyTermOption(term.options, 'lineHeight', payload.lineHeight);
+				applyTerminalBackground(term, payload.backgroundColor);
 				fitTerminal();
 				scheduleFocusRecovery();
 			},
