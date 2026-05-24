@@ -37,13 +37,45 @@ await esbuild.build({
 		js: `import { createRequire as _createRequire } from 'module';
 import { fileURLToPath as _fileURLToPath } from 'url';
 const __snow_raw_require = _createRequire(import.meta.url);
-const require = Object.assign((moduleName) => {
-  const moduleValue = __snow_raw_require(moduleName);
-  if (moduleName === 'fetch-cookie' && typeof moduleValue !== 'function' && typeof moduleValue?.default === 'function') {
+const __snow_create_canvas_stub = () => ({
+  DOMMatrix: globalThis.DOMMatrix,
+  ImageData: globalThis.ImageData,
+  Path2D: globalThis.Path2D,
+  createCanvas() {
+    throw new Error('@napi-rs/canvas is not installed; PDF canvas rendering is unavailable.');
+  }
+});
+const __snow_copy_require_properties = (targetRequire, sourceRequire) => {
+  Object.assign(targetRequire, sourceRequire);
+  targetRequire.resolve = sourceRequire.resolve;
+  targetRequire.cache = sourceRequire.cache;
+  targetRequire.extensions = sourceRequire.extensions;
+  targetRequire.main = sourceRequire.main;
+  return targetRequire;
+};
+const __snow_wrap_require = (rawRequire, options = {}) => __snow_copy_require_properties((moduleName) => {
+  if (moduleName === '@napi-rs/canvas') {
+    try {
+      return rawRequire(moduleName);
+    } catch {
+      return __snow_create_canvas_stub();
+    }
+  }
+  const moduleValue = rawRequire(moduleName);
+  if (options.normalizeFetchCookie && moduleName === 'fetch-cookie' && typeof moduleValue !== 'function' && typeof moduleValue?.default === 'function') {
     return moduleValue.default;
   }
   return moduleValue;
-}, __snow_raw_require);
+}, rawRequire);
+const require = __snow_wrap_require(__snow_raw_require, { normalizeFetchCookie: true });
+const __snow_module_builtin = __snow_raw_require('node:module');
+const __snow_original_create_require = __snow_module_builtin.createRequire;
+if (!__snow_module_builtin.__snow_canvas_require_patched) {
+  __snow_module_builtin.createRequire = function createRequireWithSnowCanvasStub(filename) {
+    return __snow_wrap_require(__snow_original_create_require.call(this, filename));
+  };
+  __snow_module_builtin.__snow_canvas_require_patched = true;
+}
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));
 

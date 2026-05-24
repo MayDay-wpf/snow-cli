@@ -161,6 +161,7 @@
 	},
 	"prettier": "@vdemedes/prettier-config",
 	"optionalDependencies": {
+		"@napi-rs/canvas": "^0.1.80",
 		"sharp": "^0.34.5"
 	}
 }
