@@ -14,6 +14,7 @@ import './commands/custom.js';
 import './commands/deepresearch.js';
 import './commands/diff.js';
 import './commands/export.js';
+import './commands/config.js';
 import './commands/gitline.js';
 import './commands/goal.js';
 import './commands/help.js';

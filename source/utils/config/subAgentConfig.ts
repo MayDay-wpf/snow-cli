@@ -112,6 +112,13 @@ function saveSubAgents(agents: SubAgent[]): void {
 }
 
 /**
+ * Overwrite user-configured sub-agents from imported configuration.
+ */
+export function saveUserSubAgents(agents: SubAgent[]): void {
+	saveSubAgents(agents);
+}
+
+/**
  * Create a new sub-agent (user-configured only)
  */
 export function createSubAgent(

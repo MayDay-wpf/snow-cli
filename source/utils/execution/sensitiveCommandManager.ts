@@ -380,6 +380,16 @@ export function saveSensitiveCommands(config: SensitiveCommandsConfig): void {
 }
 
 /**
+ * Save sensitive commands configuration for a specific scope.
+ */
+export function saveSensitiveCommandsForScope(
+	scope: SensitiveCommandScope,
+	config: SensitiveCommandsConfig,
+): void {
+	saveScopedConfig(scope, config);
+}
+
+/**
  * Check if a pattern already exists in any scope
  */
 export function isDuplicatePattern(pattern: string): {

@@ -584,6 +584,7 @@ export type TranslationKeys = {
 			models: string;
 			subAgentDepth: string;
 			export: string;
+			config: string;
 			custom: string;
 			skills: string;
 			skillsPicker: string;
@@ -642,6 +643,27 @@ export type TranslationKeys = {
 				cancelledByUser: string;
 				invalidFormat: string;
 				noSession: string;
+			};
+			// Config command messages
+			config: {
+				exporting: string;
+				importing: string;
+				openingDialog: string;
+				saveDialogTitle: string;
+				openDialogTitle: string;
+				cancelledByUser: string;
+				importCancelledByUser: string;
+				fileDialogUnsupported: string;
+				exportSuccess: string;
+				exportFailed: string;
+				importWarning: string;
+				importConfirmTitle: string;
+				importConfirmMessage: string;
+				importSuccess: string;
+				importFailed: string;
+				none: string;
+				usage: string;
+				unknownError: string;
 			};
 			// IDE command messages
 			ide: {

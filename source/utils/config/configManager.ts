@@ -114,6 +114,13 @@ function setActiveProfileName(profileName: string): void {
 }
 
 /**
+ * Set the active profile from imported configuration.
+ */
+export function setActiveProfileFromImport(profileName: string): void {
+	setActiveProfileName(profileName);
+}
+
+/**
  * Get the path to a profile file
  */
 function getProfilePath(profileName: string): string {

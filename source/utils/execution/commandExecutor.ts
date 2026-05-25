@@ -22,6 +22,8 @@ export interface CommandResult {
 		| 'review'
 		| 'showReviewCommitPanel'
 		| 'exportChat'
+		| 'exportConfig'
+		| 'importConfig'
 		| 'showAgentPicker'
 		| 'showTodoPicker'
 		| 'showTodoListPanel'

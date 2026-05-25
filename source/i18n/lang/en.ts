@@ -622,6 +622,7 @@ export const en: TranslationKeys = {
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
+			config: 'Export or import Snow CLI YAML configuration. Usage: /config [export|import]',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
 			skillsPicker:
@@ -698,6 +699,31 @@ export const en: TranslationKeys = {
 					'Invalid export format: {format}. Supported: txt, md, html.',
 				noSession:
 					'No active session to export. Start a conversation first, then try /export again.',
+			},
+			// Config command messages
+			config: {
+				exporting: 'Exporting configuration...',
+				importing: 'Importing configuration...',
+				openingDialog: 'Opening configuration save dialog...',
+				saveDialogTitle: 'Export Snow CLI Configuration',
+				openDialogTitle: 'Import Snow CLI Configuration',
+				cancelledByUser: 'Configuration export cancelled by user.',
+				importCancelledByUser: 'Configuration import cancelled by user.',
+				fileDialogUnsupported:
+					'File dialog not supported on this platform. Configuration operation cancelled.',
+				exportSuccess: 'Configuration exported successfully to:\n{path}',
+				exportFailed: 'Configuration export failed: {error}',
+				importWarning:
+					'Configuration import will overwrite configuration items included in the YAML file. Items missing from the YAML file will be skipped and kept unchanged.',
+				importConfirmTitle: 'Confirm Configuration Import',
+				importConfirmMessage:
+					'This is an overwrite import. Configuration items included in the YAML file will replace current values; missing items will be skipped. Continue?',
+				importSuccess:
+					'Configuration imported successfully from:\n{path}\nImported: {imported}\nSkipped: {skipped}',
+				importFailed: 'Configuration import failed: {error}',
+				none: 'none',
+				usage: 'Usage: /config [export|import]',
+				unknownError: 'Unknown error',
 			},
 			// IDE command messages
 			ide: {

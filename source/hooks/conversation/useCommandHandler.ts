@@ -15,9 +15,15 @@ import type {UsageInfo} from '../../api/chat.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
 import {
 	showSaveDialog,
+	showOpenDialog,
+	showConfirmDialog,
 	isFileDialogSupported,
 } from '../../utils/ui/fileDialog.js';
 import {exportSessionToFile} from '../../utils/session/chatExporter.js';
+import {
+	exportConfigManagerToYamlFile,
+	importConfigManagerFromYamlFile,
+} from '../../utils/config/configExporter.js';
 import {copyToClipboard} from '../../utils/core/clipboard.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCurrentLanguage} from '../../utils/config/languageConfig.js';
@@ -29,6 +35,14 @@ import {translations} from '../../i18n/index.js';
 function getExportMessages() {
 	const currentLanguage = getCurrentLanguage();
 	return translations[currentLanguage].commandPanel.commandOutput.export;
+}
+
+/**
+ * Helper function to get config command messages
+ */
+function getConfigMessages() {
+	const currentLanguage = getCurrentLanguage();
+	return translations[currentLanguage].commandPanel.commandOutput.config;
 }
 
 /**
@@ -1611,6 +1625,131 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					const errorMessage: Message = {
 						role: 'command',
 						content: `✗ Export failed: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (result.success && result.action === 'exportConfig') {
+				const configMessages = getConfigMessages();
+				const loadingMessage: Message = {
+					role: 'command',
+					content: configMessages.openingDialog,
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, loadingMessage]);
+
+				try {
+					if (!isFileDialogSupported()) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: configMessages.fileDialogUnsupported,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					const timestamp = new Date()
+						.toISOString()
+						.replace(/[:.]/g, '-')
+						.split('.')[0];
+					const defaultFilename = `snow-config-${timestamp}.yaml`;
+					const filePath = await showSaveDialog(
+						defaultFilename,
+						configMessages.saveDialogTitle,
+					);
+
+					if (!filePath) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.cancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					await exportConfigManagerToYamlFile(filePath);
+
+					const successMessage: Message = {
+						role: 'command',
+						content: configMessages.exportSuccess.replace('{path}', filePath),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : configMessages.unknownError;
+					const errorMessage: Message = {
+						role: 'command',
+						content: configMessages.exportFailed.replace('{error}', errorMsg),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (result.success && result.action === 'importConfig') {
+				const configMessages = getConfigMessages();
+				const warningMessage: Message = {
+					role: 'command',
+					content: configMessages.importWarning,
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, warningMessage]);
+
+				try {
+					if (!isFileDialogSupported()) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: configMessages.fileDialogUnsupported,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					const confirmed = await showConfirmDialog(
+						configMessages.importConfirmMessage,
+						configMessages.importConfirmTitle,
+					);
+					if (!confirmed) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.importCancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					const filePath = await showOpenDialog(configMessages.openDialogTitle);
+					if (!filePath) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.importCancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					const importResult = await importConfigManagerFromYamlFile(filePath);
+					const imported = importResult.importedKeys.join(', ') || configMessages.none;
+					const skipped = importResult.skippedKeys.join(', ') || configMessages.none;
+					const successMessage: Message = {
+						role: 'command',
+						content: configMessages.importSuccess
+							.replace('{path}', filePath)
+							.replace('{imported}', imported)
+							.replace('{skipped}', skipped),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : configMessages.unknownError;
+					const errorMessage: Message = {
+						role: 'command',
+						content: configMessages.importFailed.replace('{error}', errorMsg),
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
