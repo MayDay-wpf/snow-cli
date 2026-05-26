@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Add terminal background color setting and tab title tooltips
+            - Fix Responses request body error
 
             ### Installation
 

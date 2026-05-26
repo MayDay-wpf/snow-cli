@@ -56,7 +56,9 @@ jobs:
 
             ### What's New
 
-            - Fix the bug of repeated text pasting
+            - Fixed issue where Diff could not be viewed during rollback
+            - Added import and export of complete configuration files
+            - Suppressed invalid warnings
             
             ### Installation
             ```bash

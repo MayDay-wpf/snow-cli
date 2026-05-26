@@ -420,7 +420,7 @@ async function requestResponsesCommitMessage(
 		body: JSON.stringify({
 			model,
 			instructions: messages.system,
-			input: messages.user,
+			input: [{role: 'user', content: messages.user}],
 			store: false,
 		}),
 		signal,
