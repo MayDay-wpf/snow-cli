@@ -652,6 +652,14 @@ export const zhTW: TranslationKeys = {
 				statusEnabled: '簡易模式: 已啟用',
 				statusDisabled: '簡易模式: 已停用',
 			},
+			// Ultra TODO 命令訊息
+			ultraTodo: {
+				toggling: '正在切換 Ultra TODO 模式',
+				enabled: 'Ultra TODO 已啟用。todo-manage 已停用，todo-ultra 可用。',
+				disabled: 'Ultra TODO 已停用。todo-manage 已重新可用。',
+				failed: '切換 Ultra TODO 失敗：{error}',
+				unknownError: '未知錯誤',
+			},
 			// 導出命令消息
 			export: {
 				exporting: '正在導出對話...',

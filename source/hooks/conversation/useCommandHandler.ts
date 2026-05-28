@@ -1444,6 +1444,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					return newValue;
 				});
 			} else if (result.success && result.action === 'toggleUltraTodo') {
+				const messages =
+					translations[getCurrentLanguage()].commandPanel.commandOutput.ultraTodo;
 				try {
 					const {getUltraTodoEnabled, setUltraTodoEnabled} = await import(
 						'../../utils/config/projectSettings.js'
@@ -1458,17 +1460,16 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 
 					const commandMessage: Message = {
 						role: 'command',
-						content: newValue
-							? 'Ultra TODO enabled. todo-manage is disabled and todo-ultra is available.'
-							: 'Ultra TODO disabled. todo-manage is available again.',
+						content: newValue ? messages.enabled : messages.disabled,
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, commandMessage]);
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					const errorMsg =
+						error instanceof Error ? error.message : messages.unknownError;
 					const errorMessage: Message = {
 						role: 'command',
-						content: `Failed to toggle Ultra TODO: ${errorMsg}`,
+						content: messages.failed.replace('{error}', errorMsg),
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);

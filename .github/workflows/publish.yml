@@ -56,9 +56,10 @@ jobs:
 
             ### What's New
 
-            - Fixed issue where Diff could not be viewed during rollback
-            - Added import and export of complete configuration files
-            - Suppressed invalid warnings
+            - Optimized some display effects
+            - Added @vscode/ripgrep package
+            - Added /ultra-todo
+            - Added BaseUrl type replacement
             
             ### Installation
             ```bash

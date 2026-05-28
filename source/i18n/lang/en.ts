@@ -695,6 +695,15 @@ export const en: TranslationKeys = {
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
 			},
+			// Ultra TODO command messages
+			ultraTodo: {
+				toggling: 'Toggling Ultra TODO mode',
+				enabled:
+					'Ultra TODO enabled. todo-manage is disabled and todo-ultra is available.',
+				disabled: 'Ultra TODO disabled. todo-manage is available again.',
+				failed: 'Failed to toggle Ultra TODO: {error}',
+				unknownError: 'Unknown error',
+			},
 			// Export command messages
 			export: {
 				exporting: 'Exporting conversation...',

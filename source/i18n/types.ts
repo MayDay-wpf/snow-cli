@@ -641,6 +641,14 @@ export type TranslationKeys = {
 				statusEnabled: string;
 				statusDisabled: string;
 			};
+			// Ultra TODO command messages
+			ultraTodo: {
+				toggling: string;
+				enabled: string;
+				disabled: string;
+				failed: string;
+				unknownError: string;
+			};
 			// Export command messages
 			export: {
 				exporting: string;
