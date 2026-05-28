@@ -15,6 +15,7 @@ export interface ProjectSettings {
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
+	ultraTodoEnabled?: boolean;
 }
 
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
@@ -46,6 +47,7 @@ function loadSettings(): ProjectSettings {
 		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		teamMode: pick('teamMode'),
+		ultraTodoEnabled: pick('ultraTodoEnabled'),
 	};
 }
 
@@ -149,4 +151,14 @@ export function getTeamMode(): boolean {
 
 export function setTeamMode(enabled: boolean): void {
 	setField('teamMode', enabled);
+}
+
+
+export function getUltraTodoEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.ultraTodoEnabled ?? false;
+}
+
+export function setUltraTodoEnabled(enabled: boolean): void {
+	setField('ultraTodoEnabled', enabled);
 }

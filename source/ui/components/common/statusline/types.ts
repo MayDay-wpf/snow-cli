@@ -79,6 +79,7 @@ export interface StatusLineSystemState {
 		toolSearchEnabled: boolean;
 		hybridCompress: boolean;
 		team: boolean;
+		ultraTodo: boolean;
 		simple: boolean;
 	};
 	ide: {

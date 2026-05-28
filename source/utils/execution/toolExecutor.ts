@@ -451,34 +451,40 @@ export async function executeToolCall(
 				onTokenUpdate,
 			);
 
-			// Pre-extract edit diff data from raw result before stringification/truncation
-			// This ensures DiffViewer data survives token limit truncation
+			// Diff metadata is captured before token truncation inside executeMCPTool
+			const {extractFilesystemEditDiffFromRawResult} = await import(
+				'../config/toolDisplayConfig.js'
+			);
 			let editDiffData: Record<string, any> | undefined;
+			let contentSource: unknown = toolResult;
 			if (
+				toolResult &&
 				typeof toolResult === 'object' &&
-				toolResult !== null &&
-				(toolCall.function.name === 'filesystem-edit' ||
-					toolCall.function.name === 'filesystem-replaceedit')
+				'editDiffData' in toolResult &&
+				(toolResult as {editDiffData?: Record<string, any>}).editDiffData
 			) {
-				if (toolResult.oldContent && toolResult.newContent) {
-					editDiffData = {
-						oldContent: toolResult.oldContent,
-						newContent: toolResult.newContent,
-						filename: args['filePath'],
-						completeOldContent: toolResult.completeOldContent,
-						completeNewContent: toolResult.completeNewContent,
-						contextStartLine: toolResult.contextStartLine,
-					};
-				} else if (toolResult.results && Array.isArray(toolResult.results)) {
-					editDiffData = {
-						batchResults: toolResult.results,
-						isBatch: true,
-					};
+				editDiffData = (toolResult as {editDiffData: Record<string, any>})
+					.editDiffData;
+				if ('__toolResultContent' in toolResult) {
+					contentSource = (toolResult as {__toolResultContent: unknown})
+						.__toolResultContent;
+				}
+			} else {
+				editDiffData = extractFilesystemEditDiffFromRawResult(
+					toolCall.function.name,
+					toolResult,
+				);
+				if (
+					editDiffData &&
+					!editDiffData['filename'] &&
+					typeof args['filePath'] === 'string'
+				) {
+					editDiffData['filename'] = args['filePath'];
 				}
 			}
 
 			// Extract multimodal content (text + images)
-			const {textContent, images} = extractMultimodalContent(toolResult);
+			const {textContent, images} = extractMultimodalContent(contentSource);
 
 			result = {
 				tool_call_id: toolCall.id,

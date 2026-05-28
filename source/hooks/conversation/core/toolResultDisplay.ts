@@ -1,7 +1,10 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ToolCall, ToolResult} from '../../../utils/execution/toolExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
+import {
+	extractFilesystemEditDiffFromRawResult,
+	isToolNeedTwoStepDisplay,
+} from '../../../utils/config/toolDisplayConfig.js';
 
 /**
  * Build UI messages for tool execution results.
@@ -92,21 +95,22 @@ function extractEditDiffData(
 	// Fallback: parse from content string
 	try {
 		const resultData = JSON.parse(result.content);
-		if (resultData.oldContent && resultData.newContent) {
-			return {
-				oldContent: resultData.oldContent,
-				newContent: resultData.newContent,
-				filename: JSON.parse(toolCall.function.arguments).filePath,
-				completeOldContent: resultData.completeOldContent,
-				completeNewContent: resultData.completeNewContent,
-				contextStartLine: resultData.contextStartLine,
-			};
-		}
-		if (resultData.results && Array.isArray(resultData.results)) {
-			return {
-				batchResults: resultData.results,
-				isBatch: true,
-			};
+		const fromParsed = extractFilesystemEditDiffFromRawResult(
+			toolCall.function.name,
+			resultData,
+		);
+		if (fromParsed) {
+			if (!fromParsed['filename']) {
+				try {
+					const callArgs = JSON.parse(toolCall.function.arguments);
+					if (typeof callArgs.filePath === 'string') {
+						fromParsed['filename'] = callArgs.filePath;
+					}
+				} catch {
+					// ignore
+				}
+			}
+			return fromParsed;
 		}
 	} catch {
 		// If parsing fails, show regular result

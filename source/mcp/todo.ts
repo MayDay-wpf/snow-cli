@@ -6,6 +6,7 @@ import type {
 	TodoItem,
 	TodoList,
 	GetCurrentSessionId,
+	TodoPhase,
 } from './types/todo.types.js';
 // Utility functions
 import {formatDateForFolder} from './utils/todo/date.utils.js';
@@ -81,6 +82,9 @@ export class TodoService {
 			todos,
 			createdAt: existingList?.createdAt ?? now,
 			updatedAt: now,
+			ultraMode: existingList?.ultraMode,
+			phases: existingList?.phases,
+			currentPhaseId: existingList?.currentPhaseId,
 		};
 
 		await fs.writeFile(todoPath, JSON.stringify(todoList, null, 2));
@@ -286,6 +290,394 @@ export class TodoService {
 		return this.saveTodoList(sessionId, [], null);
 	}
 
+	private createId(prefix: string): string {
+		return `${prefix}-${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+	}
+
+	private createTextResult(value: unknown): CallToolResult {
+		return {
+			content: [
+				{
+					type: 'text',
+					text:
+						typeof value === 'string'
+							? value
+							: JSON.stringify(value, null, 2),
+				},
+			],
+		};
+	}
+
+	private createErrorResult(text: string): CallToolResult {
+		return {
+			content: [
+				{
+					type: 'text',
+					text,
+				},
+			],
+			isError: true,
+		};
+	}
+
+	private async getOrCreateTodoList(
+		sessionId: string,
+		ultraMode = false,
+	): Promise<TodoList> {
+		const existingList = await this.getTodoList(sessionId);
+		if (!existingList) {
+			const now = new Date().toISOString();
+			return this.saveTodoList(sessionId, [], {
+				sessionId,
+				todos: [],
+				createdAt: now,
+				updatedAt: now,
+				ultraMode,
+				phases: ultraMode ? [] : undefined,
+			});
+		}
+
+		if (ultraMode && !existingList.ultraMode) {
+			return this.saveTodoList(sessionId, existingList.todos, {
+				...existingList,
+				ultraMode: true,
+				phases: existingList.phases ?? [],
+			});
+		}
+
+		return existingList;
+	}
+
+	private saveUltraTodoList(
+		sessionId: string,
+		todoList: TodoList,
+	): Promise<TodoList> {
+		return this.saveTodoList(sessionId, todoList.todos, {
+			...todoList,
+			ultraMode: true,
+			phases: todoList.phases ?? [],
+		});
+	}
+
+	private getPhaseTodos(todoList: TodoList, phaseId: string): TodoItem[] {
+		return todoList.todos.filter(todo => todo.phaseId === phaseId);
+	}
+
+	private getIncompletePhaseTodos(todoList: TodoList, phaseId: string): TodoItem[] {
+		return this.getPhaseTodos(todoList, phaseId).filter(
+			todo => todo.status !== 'completed',
+		);
+	}
+
+	private findPhase(todoList: TodoList, phaseId: string): TodoPhase | undefined {
+		return todoList.phases?.find(phase => phase.id === phaseId);
+	}
+
+	private normalizeStringArray(value: unknown): string[] | null {
+		if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+			return value.map(item => item.trim()).filter(Boolean);
+		}
+
+		if (typeof value === 'string') {
+			try {
+				const parsed = JSON.parse(value);
+				if (
+					Array.isArray(parsed) &&
+					parsed.every(item => typeof item === 'string')
+				) {
+					return parsed.map(item => item.trim()).filter(Boolean);
+				}
+			} catch {
+				return [value.trim()].filter(Boolean);
+			}
+		}
+
+		return null;
+	}
+
+	private buildIncompletePhaseMessage(
+		phase: TodoPhase,
+		incompleteTodos: TodoItem[],
+	): string {
+		const items = incompleteTodos
+			.map(todo => `- ${todo.id} [${todo.status}]: ${todo.content}`)
+			.join('\n');
+		return `Blocked: phase "${phase.title}" cannot advance because ${incompleteTodos.length} item(s) are not completed. Complete or update them first.\n${items}`;
+	}
+
+	private async executeUltraTodoTool(
+		sessionId: string,
+		args: Record<string, unknown>,
+	): Promise<CallToolResult> {
+		const rawAction = args['action'];
+		const allowedActions = [
+			'get',
+			'add_phase',
+			'add_item',
+			'update_item',
+			'complete_phase',
+			'advance_phase',
+			'delete_item',
+		];
+
+		if (typeof rawAction !== 'string' || !allowedActions.includes(rawAction)) {
+			return this.createErrorResult(
+				'Error: "action" must be one of: get, add_phase, add_item, update_item, complete_phase, advance_phase, delete_item',
+			);
+		}
+
+		try {
+			const action = rawAction as (typeof allowedActions)[number];
+			const todoList = await this.getOrCreateTodoList(sessionId, true);
+			todoList.phases = todoList.phases ?? [];
+
+			switch (action) {
+				case 'get': {
+					if (todoList.todos.length > 0) {
+						todoEvents.emitTodoUpdate(sessionId, todoList.todos);
+					}
+					return this.createTextResult(todoList);
+				}
+
+				case 'add_phase': {
+					const title = typeof args['title'] === 'string' ? args['title'].trim() : '';
+					const items = this.normalizeStringArray(args['items']);
+
+					if (!title) {
+						return this.createErrorResult('Error: action=add_phase requires "title"');
+					}
+
+					if (!items || items.length === 0) {
+						return this.createErrorResult(
+							'Error: action=add_phase requires non-empty "items" so every phase is decomposed into concrete TODO items',
+						);
+					}
+
+					const now = new Date().toISOString();
+					const phaseId = this.createId('phase');
+					const shouldBecomeCurrent = !todoList.currentPhaseId;
+					const phase: TodoPhase = {
+						id: phaseId,
+						title,
+						status: shouldBecomeCurrent ? 'inProgress' : 'pending',
+						createdAt: now,
+						updatedAt: now,
+					};
+					const phaseTodos: TodoItem[] = items.map(content => ({
+						id: this.createId('todo'),
+						content,
+						status: 'pending',
+						createdAt: now,
+						updatedAt: now,
+						phaseId,
+					}));
+
+					todoList.phases.push(phase);
+					todoList.todos = [...todoList.todos, ...phaseTodos];
+					if (shouldBecomeCurrent) {
+						todoList.currentPhaseId = phaseId;
+					}
+
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				case 'add_item': {
+					const content =
+						typeof args['content'] === 'string' ? args['content'].trim() : '';
+					const phaseId =
+						typeof args['phaseId'] === 'string' && args['phaseId'].trim()
+							? args['phaseId'].trim()
+							: todoList.currentPhaseId;
+					const parentId =
+						typeof args['parentId'] === 'string' && args['parentId'].trim()
+							? args['parentId'].trim()
+							: undefined;
+
+					if (!content) {
+						return this.createErrorResult('Error: action=add_item requires "content"');
+					}
+
+					if (!phaseId || !this.findPhase(todoList, phaseId)) {
+						return this.createErrorResult(
+							'Error: action=add_item requires a valid "phaseId" or an active current phase',
+						);
+					}
+
+					const validatedParentId =
+						parentId && todoList.todos.some(todo => todo.id === parentId)
+							? parentId
+							: undefined;
+					const now = new Date().toISOString();
+					todoList.todos.push({
+						id: this.createId('todo'),
+						content,
+						status: 'pending',
+						createdAt: now,
+						updatedAt: now,
+						parentId: validatedParentId,
+						phaseId,
+					});
+
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				case 'update_item': {
+					const todoId = args['todoId'] as string | string[] | undefined;
+					const status = args['status'] as
+						| 'pending'
+						| 'inProgress'
+						| 'completed'
+						| undefined;
+					const content = args['content'];
+
+					if (todoId === undefined || todoId === null) {
+						return this.createErrorResult('Error: action=update_item requires "todoId"');
+					}
+
+					if (
+						status !== undefined &&
+						!['pending', 'inProgress', 'completed'].includes(status)
+					) {
+						return this.createErrorResult(
+							'Error: "status" must be one of: pending, inProgress, completed',
+						);
+					}
+
+					const ids = Array.isArray(todoId) ? todoId : [todoId];
+					const idSet = new Set(ids);
+					const updatedAt = new Date().toISOString();
+					let anyFound = false;
+					todoList.todos = todoList.todos.map(todo => {
+						if (!idSet.has(todo.id)) {
+							return todo;
+						}
+						anyFound = true;
+						return {
+							...todo,
+							...(status ? {status} : {}),
+							...(typeof content === 'string' ? {content} : {}),
+							updatedAt,
+						};
+					});
+
+					if (!anyFound) {
+						return this.createTextResult('TODO item not found');
+					}
+
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				case 'complete_phase': {
+					const phaseId =
+						typeof args['phaseId'] === 'string' && args['phaseId'].trim()
+							? args['phaseId'].trim()
+							: todoList.currentPhaseId;
+
+					if (!phaseId) {
+						return this.createErrorResult(
+							'Error: action=complete_phase requires "phaseId" or an active current phase',
+						);
+					}
+
+					const phase = this.findPhase(todoList, phaseId);
+					if (!phase) {
+						return this.createErrorResult(`Error: phase not found: ${phaseId}`);
+					}
+
+					const incompleteTodos = this.getIncompletePhaseTodos(todoList, phaseId);
+					if (incompleteTodos.length > 0) {
+						return this.createErrorResult(
+							this.buildIncompletePhaseMessage(phase, incompleteTodos),
+						);
+					}
+
+					phase.status = 'completed';
+					phase.updatedAt = new Date().toISOString();
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				case 'advance_phase': {
+					const currentPhaseId = todoList.currentPhaseId;
+					if (currentPhaseId) {
+						const currentPhase = this.findPhase(todoList, currentPhaseId);
+						if (!currentPhase) {
+							return this.createErrorResult(
+								`Error: current phase not found: ${currentPhaseId}`,
+							);
+						}
+
+						const incompleteTodos = this.getIncompletePhaseTodos(
+							todoList,
+							currentPhaseId,
+						);
+						if (incompleteTodos.length > 0) {
+							return this.createErrorResult(
+								this.buildIncompletePhaseMessage(currentPhase, incompleteTodos),
+							);
+						}
+
+						currentPhase.status = 'completed';
+						currentPhase.updatedAt = new Date().toISOString();
+					}
+
+					const requestedNextPhaseId =
+						typeof args['nextPhaseId'] === 'string' && args['nextPhaseId'].trim()
+							? args['nextPhaseId'].trim()
+							: undefined;
+					const nextPhase = requestedNextPhaseId
+						? this.findPhase(todoList, requestedNextPhaseId)
+						: todoList.phases.find(phase => phase.status !== 'completed');
+
+					if (requestedNextPhaseId && !nextPhase) {
+						return this.createErrorResult(
+							`Error: next phase not found: ${requestedNextPhaseId}`,
+						);
+					}
+
+					if (nextPhase) {
+						nextPhase.status = 'inProgress';
+						nextPhase.updatedAt = new Date().toISOString();
+						todoList.currentPhaseId = nextPhase.id;
+					} else {
+						todoList.currentPhaseId = undefined;
+					}
+
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				case 'delete_item': {
+					const todoId = args['todoId'] as string | string[] | undefined;
+					if (todoId === undefined || todoId === null) {
+						return this.createErrorResult('Error: action=delete_item requires "todoId"');
+					}
+
+					const ids = Array.isArray(todoId) ? todoId : [todoId];
+					const idSet = new Set(ids);
+					todoList.todos = todoList.todos.filter(
+						todo => !idSet.has(todo.id) && !idSet.has(todo.parentId ?? ''),
+					);
+					const result = await this.saveUltraTodoList(sessionId, todoList);
+					return this.createTextResult(result);
+				}
+
+				default:
+					return this.createErrorResult(`Unknown action: ${String(action)}`);
+			}
+		} catch (error) {
+			return this.createErrorResult(
+				`Error executing ultra-todo (${rawAction}): ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		}
+	}
+
+
 	/**
 	 * 复制 TODO 列表到新会话（用于会话压缩时继承 TODO）
 	 * @param fromSessionId - 源会话ID
@@ -313,8 +705,13 @@ export class TodoService {
 			updatedAt: now,
 		}));
 
-		// 保存到新会话
-		return this.saveTodoList(toSessionId, copiedTodos, null);
+		// 保存到新会话，并保留 ultra TODO 的阶段元数据。
+		return this.saveTodoList(toSessionId, copiedTodos, {
+			...sourceTodoList,
+			sessionId: toSessionId,
+			createdAt: now,
+			updatedAt: now,
+		});
 	}
 
 	/**
@@ -360,7 +757,95 @@ export class TodoService {
 	/**
 	 * 获取所有工具定义（单一 todo-manage，通过 action 区分 get / add / update / delete）
 	 */
-	getTools(): Tool[] {
+	getTools(ultraMode = false): Tool[] {
+		if (ultraMode) {
+			return [
+				{
+					name: 'todo-ultra',
+					description: `Ultra TODO session planner: use required field "action" — one of get | add_phase | add_item | update_item | complete_phase | advance_phase | delete_item.
+
+Ultra TODO is stricter than todo-manage. Every requirement phase MUST be decomposed into concrete TODO items. Before advancing to the next phase, the current phase is automatically checked; if any item is not completed, the tool blocks advancement and returns the incomplete items.
+
+ACTIONS:
+- get: Current ultra TODO state with phases, currentPhaseId, and items.
+- add_phase: Create a phase and its decomposed TODO items. Required: "title" and non-empty "items" (string[] or JSON string array).
+- add_item: Add one item to a phase. Required: "content" and a valid "phaseId" unless there is an active current phase. Optional "parentId".
+- update_item: Update item status/content. Required "todoId" (string or string[]). Optional "status" (pending|inProgress|completed) and/or "content".
+- complete_phase: Mark a phase completed only if all its items are completed. Optional "phaseId"; defaults to current phase.
+- advance_phase: Move from current phase to the next phase. Blocks if current phase has incomplete items. Optional "nextPhaseId".
+- delete_item: Delete item(s), cascading direct children. Required "todoId" (string or string[]).
+
+IMPORTANT:
+- Do not start a new phase until advance_phase succeeds.
+- If advance_phase or complete_phase is blocked, update every listed incomplete item before trying again.
+- In Ultra TODO mode, the legacy todo-manage tool is not available.`,
+					inputSchema: {
+						type: 'object',
+						properties: {
+							action: {
+								type: 'string',
+								enum: [
+									'get',
+									'add_phase',
+									'add_item',
+									'update_item',
+									'complete_phase',
+									'advance_phase',
+									'delete_item',
+								],
+								description: 'Which Ultra TODO operation to run.',
+							},
+							title: {
+								type: 'string',
+								description: 'For action=add_phase: phase title.',
+							},
+							items: {
+								oneOf: [
+									{type: 'array', items: {type: 'string'}},
+									{type: 'string'},
+								],
+								description:
+									'For action=add_phase: required decomposed items as string[] or JSON string array.',
+							},
+							phaseId: {
+								type: 'string',
+								description:
+									'For add_item/complete_phase: target phase id. Defaults to current phase where applicable.',
+							},
+							nextPhaseId: {
+								type: 'string',
+								description:
+									'For action=advance_phase: optional explicit next phase id.',
+							},
+							content: {
+								type: 'string',
+								description:
+									'For add_item: item content. For update_item: optional updated content.',
+							},
+							parentId: {
+								type: 'string',
+								description: 'For action=add_item: optional parent TODO id.',
+							},
+							todoId: {
+								oneOf: [
+									{type: 'string'},
+									{type: 'array', items: {type: 'string'}},
+								],
+								description:
+									'For update_item/delete_item: item id(s) from action=get.',
+							},
+							status: {
+								type: 'string',
+								enum: ['pending', 'inProgress', 'completed'],
+								description: 'For action=update_item only.',
+							},
+						},
+						required: ['action'],
+					},
+				},
+			];
+		}
+
 		return [
 			{
 				name: 'todo-manage',
@@ -461,6 +946,10 @@ EXAMPLES:
 				],
 				isError: true,
 			};
+		}
+
+		if (toolName === 'ultra' || toolName === 'ultra-todo') {
+			return this.executeUltraTodoTool(sessionId, args);
 		}
 
 		if (toolName !== 'manage') {

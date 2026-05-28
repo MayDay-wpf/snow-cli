@@ -14,6 +14,7 @@ export const BUILTIN_STATUSLINE_IDS = {
 	modePlan: 'builtin.mode-plan',
 	modeHunt: 'builtin.mode-hunt',
 	modeTeam: 'builtin.mode-team',
+	modeUltraTodo: 'builtin.mode-ultra-todo',
 	toolSearch: 'builtin.tool-search',
 	hybridCompress: 'builtin.hybrid-compress',
 	ideConnection: 'builtin.ide-connection',

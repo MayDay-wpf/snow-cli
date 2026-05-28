@@ -304,6 +304,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Toggle Agent Team mode - orchestrate multiple agents working together',
 			},
 			{
+				name: 'ultra-todo',
+				description:
+					t.commandPanel.commands.ultraTodo ||
+					'Toggle Ultra TODO mode with phase-gated task management',
+			},
+			{
 				name: 'pixel',
 				description:
 					t.commandPanel.commands.pixel || 'Open the terminal pixel editor',

@@ -66,6 +66,43 @@ export function isToolOnlyShowCompleted(toolName: string): boolean {
 }
 
 /**
+ * 从 MCP 工具原始返回对象中提取 filesystem-edit / replaceedit 的 DiffViewer 元数据。
+ * 须在 token 截断之前调用，避免批量结果被整段 stringify 后丢失 diff 字段。
+ */
+export function extractFilesystemEditDiffFromRawResult(
+	toolName: string,
+	toolResult: unknown,
+): Record<string, any> | undefined {
+	if (
+		toolName !== 'filesystem-edit' &&
+		toolName !== 'filesystem-replaceedit'
+	) {
+		return undefined;
+	}
+	if (!toolResult || typeof toolResult !== 'object') {
+		return undefined;
+	}
+	const result = toolResult as Record<string, any>;
+	if (result['oldContent'] && result['newContent']) {
+		return {
+			oldContent: result['oldContent'],
+			newContent: result['newContent'],
+			filename: result['filePath'] || result['path'] || result['filename'],
+			completeOldContent: result['completeOldContent'],
+			completeNewContent: result['completeNewContent'],
+			contextStartLine: result['contextStartLine'],
+		};
+	}
+	if (Array.isArray(result['results']) && result['results'].length > 0) {
+		return {
+			batchResults: result['results'],
+			isBatch: true,
+		};
+	}
+	return undefined;
+}
+
+/**
  * 从已写入会话的 tool 消息 content（JSON 字符串）中提取 filesystem-edit 的 diff 元数据，
  * 便于截断或仅文本 content 时仍能恢复 DiffViewer（与主流程 ToolResult.editDiffData 对齐）
  */

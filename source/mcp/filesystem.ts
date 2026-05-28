@@ -740,11 +740,26 @@ export class FilesystemMCPService {
 	 *   • delete   – delete startAnchor..endAnchor (inclusive)
 	 */
 	async editFile(
-		filePath: string | EditByHashlineConfig[],
+		filePath: string | string[] | EditByHashlineConfig[],
 		operations?: HashlineOperation[],
 		contextLines: number = 8,
 	): Promise<EditByHashlineResult> {
 		if (Array.isArray(filePath)) {
+			// string[] + shared operations (same batch shape as filesystem-replaceedit)
+			if (filePath.length > 0 && typeof filePath[0] === 'string') {
+				if (!operations || operations.length === 0) {
+					throw new Error(
+						'operations array is required when filePath is an array of path strings',
+					);
+				}
+				const pathList = filePath as string[];
+				const configs: EditByHashlineConfig[] = pathList.map(file => ({
+					path: file,
+					operations,
+				}));
+				return await this.editFile(configs, undefined, contextLines);
+			}
+
 			return await executeBatchOperation<
 				EditByHashlineConfig,
 				EditByHashlineSingleResult,
@@ -1027,7 +1042,7 @@ export const mcpTools = [
 			'(3) delete — removes startAnchor..endAnchor, set content to empty string "". ' +
 			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
 			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". endAnchor is always required (inclusive range). Single-line edits: set endAnchor to the same anchor as startAnchor. ' +
-			'**SUPPORTS BATCH**: Pass array of {path, operations} for multi-file edits.',
+			'**SUPPORTS BATCH**: Pass array of {path, operations}, or path string[] with shared top-level operations (same as filesystem-replaceedit batch).',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1036,6 +1051,16 @@ export const mcpTools = [
 						{
 							type: 'string',
 							description: 'Path to a single file to edit',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+								description:
+									'File path (use with top-level operations for unified batch edit)',
+							},
+							description:
+								'Array of file paths sharing the same top-level operations',
 						},
 						{
 							type: 'array',

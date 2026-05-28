@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/index.js';
@@ -93,6 +93,7 @@ export default function TodoListPanel({onClose}: Props) {
 	const [loading, setLoading] = useState(true);
 	const [deleting, setDeleting] = useState(false);
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+	const currentSessionIdRef = useRef<string | null>(null);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [markedTodoIds, setMarkedTodoIds] = useState<Set<string>>(new Set());
 	const [pendingDelete, setPendingDelete] = useState(false);
@@ -145,7 +146,9 @@ export default function TodoListPanel({onClose}: Props) {
 
 	const loadTodos = useCallback(async () => {
 		const currentSession = sessionManager.getCurrentSession();
-		setCurrentSessionId(currentSession?.id ?? null);
+		const nextSessionId = currentSession?.id ?? null;
+		currentSessionIdRef.current = nextSessionId;
+		setCurrentSessionId(nextSessionId);
 
 		if (!currentSession) {
 			setTodos([]);
@@ -167,6 +170,17 @@ export default function TodoListPanel({onClose}: Props) {
 
 	useEffect(() => {
 		void loadTodos();
+	}, [loadTodos]);
+
+	useEffect(() => {
+		const handleSessionChange = () => {
+			const nextSessionId = sessionManager.getCurrentSession()?.id ?? null;
+			if (nextSessionId !== currentSessionIdRef.current) {
+				void loadTodos();
+			}
+		};
+
+		return sessionManager.onMessagesChanged(handleSessionChange);
 	}, [loadTodos]);
 
 	useEffect(() => {

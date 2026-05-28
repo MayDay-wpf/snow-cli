@@ -39,6 +39,7 @@ export interface UnifiedSettings {
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
+	ultraTodoEnabled?: boolean;
 
 	// === 来自旧 codebase.json ===
 	codebase?: {

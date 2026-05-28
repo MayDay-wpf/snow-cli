@@ -720,6 +720,7 @@ type CommandHandlerOptions = {
 	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setUltraTodoEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -1442,6 +1443,36 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 					return newValue;
 				});
+			} else if (result.success && result.action === 'toggleUltraTodo') {
+				try {
+					const {getUltraTodoEnabled, setUltraTodoEnabled} = await import(
+						'../../utils/config/projectSettings.js'
+					);
+					const {refreshMCPToolsCache} = await import(
+						'../../utils/execution/mcpToolsManager.js'
+					);
+					const newValue = !getUltraTodoEnabled();
+					setUltraTodoEnabled(newValue);
+					options.setUltraTodoEnabled(newValue);
+					await refreshMCPToolsCache();
+
+					const commandMessage: Message = {
+						role: 'command',
+						content: newValue
+							? 'Ultra TODO enabled. todo-manage is disabled and todo-ultra is available.'
+							: 'Ultra TODO disabled. todo-manage is available again.',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+					const errorMessage: Message = {
+						role: 'command',
+						content: `Failed to toggle Ultra TODO: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (
 				result.success &&
 				result.action === 'initProject' &&

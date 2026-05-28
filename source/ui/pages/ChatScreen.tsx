@@ -113,6 +113,8 @@ export default function ChatScreen({
 		setHybridCompressEnabled,
 		teamMode,
 		setTeamMode,
+		ultraTodoEnabled,
+		setUltraTodoEnabled,
 		simpleMode,
 		showThinking,
 	} = useChatScreenModes({enableYolo, enablePlan});
@@ -333,6 +335,7 @@ export default function ChatScreen({
 		setToolSearchDisabled,
 		setHybridCompressEnabled,
 		setTeamMode,
+		setUltraTodoEnabled,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		currentContextPercentageRef,
@@ -629,6 +632,7 @@ export default function ChatScreen({
 					toolSearchDisabled={toolSearchDisabled}
 					hybridCompressEnabled={hybridCompressEnabled}
 					teamMode={teamMode}
+					ultraTodoEnabled={ultraTodoEnabled}
 					setTeamMode={setTeamMode}
 					contextUsage={footerContextUsage}
 					initialContent={restoreInputContent}

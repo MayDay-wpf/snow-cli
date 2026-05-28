@@ -211,6 +211,7 @@ type Props = {
 	toolSearchDisabled?: boolean;
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
+	ultraTodoEnabled?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -288,6 +289,7 @@ export default function StatusLine({
 	toolSearchDisabled = true,
 	hybridCompressEnabled = false,
 	teamMode = false,
+	ultraTodoEnabled = false,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -339,6 +341,7 @@ export default function StatusLine({
 					toolSearchEnabled: !toolSearchDisabled,
 					hybridCompress: hybridCompressEnabled,
 					team: teamMode,
+					ultraTodo: ultraTodoEnabled,
 					simple: simpleMode,
 				},
 				ide: {
@@ -424,6 +427,7 @@ export default function StatusLine({
 		vscodeConnectionStatus,
 		vulnerabilityHuntingMode,
 		watcherEnabled,
+		ultraTodoEnabled,
 		yoloMode,
 	]);
 	const {items: statusLineHookItems, externalHookIds} = useStatusLineHookItems(
@@ -508,6 +512,7 @@ export default function StatusLine({
 		planMode ||
 		vulnerabilityHuntingMode ||
 		teamMode ||
+		ultraTodoEnabled ||
 		!toolSearchDisabled ||
 		hybridCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
@@ -574,6 +579,13 @@ export default function StatusLine({
 
 		if (teamMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeTeam)) {
 			statusItems.push({text: '⚑ Team', color: '#10B981'});
+		}
+
+		if (
+			ultraTodoEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeUltraTodo)
+		) {
+			statusItems.push({text: '◈ Ultra TODO', color: '#A78BFA'});
 		}
 
 		if (
@@ -779,6 +791,15 @@ export default function StatusLine({
 					</Text>
 				</Box>
 			)}
+
+			{ultraTodoEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeUltraTodo) && (
+					<Box>
+						<Text color="#A78BFA" dimColor>
+							{t.chatScreen.ultraTodoActive}
+						</Text>
+					</Box>
+				)}
 
 			{hybridCompressEnabled &&
 				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.hybridCompress) && (

@@ -52,6 +52,7 @@ export interface CommandResult {
 		| 'toggleCodebase'
 		| 'toggleHybridCompress'
 		| 'toggleTeam'
+		| 'toggleUltraTodo'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'

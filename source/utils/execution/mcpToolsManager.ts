@@ -187,7 +187,9 @@ async function generateConfigHash(): Promise<string> {
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
-		const {getTeamMode} = await import('../config/projectSettings.js');
+		const {getTeamMode, getUltraTodoEnabled} = await import(
+			'../config/projectSettings.js'
+		);
 		// 把当前会话的 goal 绑定状态纳入 hash：会话切换或 hasGoal 翻转时，
 		// 缓存失效 -> 重建工具列表 -> goal- 工具按需出现/消失。
 		const sessionHasGoal = !!sessionManager.getCurrentSession()?.hasGoal;
@@ -202,6 +204,7 @@ async function generateConfigHash(): Promise<string> {
 			disabledMCPTools: getDisabledMCPTools(),
 			optInEnabledMCPTools: getOptInEnabledMCPKeysMerged(),
 			teamMode: getTeamMode(),
+			ultraTodoEnabled: getUltraTodoEnabled(),
 			sessionHasGoal,
 			sessionId,
 		});
@@ -289,7 +292,9 @@ async function refreshToolsCache(): Promise<void> {
 	// Add built-in TODO tools
 	const todoSvc = getTodoService();
 	await todoSvc.initialize();
-	const todoTools = todoSvc.getTools();
+	const {getUltraTodoEnabled} = await import('../config/projectSettings.js');
+	const ultraTodoEnabled = getUltraTodoEnabled();
+	const todoTools = todoSvc.getTools(ultraTodoEnabled);
 	addBuiltInService(
 		'todo',
 		todoTools.map(t => ({
@@ -1298,6 +1303,21 @@ export async function executeMCPTool(
 		}
 
 		if (serviceName === 'todo') {
+			const {getUltraTodoEnabled} = await import('../config/projectSettings.js');
+			const ultraTodoEnabled = getUltraTodoEnabled();
+			if (ultraTodoEnabled && actualToolName === 'manage') {
+				throw new Error(
+					'Legacy todo-manage is disabled while Ultra TODO mode is enabled. Use todo-ultra instead.',
+				);
+			}
+			if (!ultraTodoEnabled && actualToolName === 'ultra') {
+				throw new Error(
+					'Ultra TODO tool is disabled. Enable it with /ultra-todo first.',
+				);
+			}
+		}
+
+		if (serviceName === 'todo') {
 			// Handle built-in TODO tools (no connection needed)
 			result = await getTodoService().executeTool(actualToolName, args);
 		} else if (serviceName === 'goal') {
@@ -1839,9 +1859,25 @@ export async function executeMCPTool(
 		throw error;
 	}
 
+	// Preserve diff metadata before token truncation (batch edit payloads are large)
+	const {extractFilesystemEditDiffFromRawResult} = await import(
+		'../config/toolDisplayConfig.js'
+	);
+	const preservedEditDiffData = extractFilesystemEditDiffFromRawResult(
+		toolName,
+		result,
+	);
+
 	// Apply token limit validation before returning result (truncates if exceeded)
 	const {wrapToolResultWithTokenLimit} = await import('./tokenLimiter.js');
 	result = await wrapToolResultWithTokenLimit(result, toolName);
+
+	if (preservedEditDiffData) {
+		return {
+			__toolResultContent: result,
+			editDiffData: preservedEditDiffData,
+		};
+	}
 
 	return result;
 }

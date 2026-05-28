@@ -14,6 +14,8 @@ import {
 	setHybridCompressEnabled as persistHybridCompressEnabled,
 	getTeamMode,
 	setTeamMode as persistTeamMode,
+	getUltraTodoEnabled,
+	setUltraTodoEnabled as persistUltraTodoEnabled,
 } from '../../../utils/config/projectSettings.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 
@@ -47,6 +49,9 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		getHybridCompressEnabled(),
 	);
 	const [teamMode, setTeamMode] = useState(() => getTeamMode());
+	const [ultraTodoEnabled, setUltraTodoEnabled] = useState(() =>
+		getUltraTodoEnabled(),
+	);
 	const [simpleMode, setSimpleMode] = useState(() => getSimpleMode());
 	const [showThinking, setShowThinking] = useState(() => {
 		const config = getSnowConfig();
@@ -76,6 +81,10 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	useEffect(() => {
 		persistTeamMode(teamMode);
 	}, [teamMode]);
+
+	useEffect(() => {
+		persistUltraTodoEnabled(ultraTodoEnabled);
+	}, [ultraTodoEnabled]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -119,6 +128,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		setHybridCompressEnabled,
 		teamMode,
 		setTeamMode,
+		ultraTodoEnabled,
+		setUltraTodoEnabled,
 		simpleMode,
 		showThinking,
 	};

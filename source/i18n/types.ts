@@ -605,6 +605,7 @@ export type TranslationKeys = {
 			toolSearch: string;
 			hybridCompress: string;
 			team: string;
+			ultraTodo: string;
 			branch: string; // Fork conversation into a new branch
 			worktree: string; // Git branch management panel
 			diff: string;
@@ -1230,6 +1231,7 @@ export type TranslationKeys = {
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;
 		teamModeActive: string;
+		ultraTodoActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

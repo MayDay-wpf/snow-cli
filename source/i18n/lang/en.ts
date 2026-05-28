@@ -656,6 +656,7 @@ export const en: TranslationKeys = {
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
+			ultraTodo: 'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
 			branch: 'Fork current conversation into a new branch',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
@@ -1320,6 +1321,8 @@ export const en: TranslationKeys = {
 			'⇌ Hybrid Compress ON - AI summary + smart truncation',
 		teamModeActive:
 			'⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
+		ultraTodoActive:
+			'◈ Ultra TODO Mode Active - phase advancement requires completion checks',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

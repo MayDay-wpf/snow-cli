@@ -615,6 +615,7 @@ export const zhTW: TranslationKeys = {
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
 			team: '切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
+			ultraTodo: '切換 Ultra TODO 模式 - 按階段細分任務並在階段推進前強制校驗',
 			branch: '將目前對話分叉為新分支，可用 /resume 返回原會話',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
@@ -1246,6 +1247,7 @@ export const zhTW: TranslationKeys = {
 		toolSearchEnabled: '♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
 		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
 		teamModeActive: '⚑ Agent Team 模式已啟用 - 多代理獨立 Worktree 協同工作',
+		ultraTodoActive: '◈ Ultra TODO 模式已啟用 - 階段任務推進將強制校驗',
 		tokens: ' 個詞元',
 		cached: '已快取',
 		newCache: '新快取',

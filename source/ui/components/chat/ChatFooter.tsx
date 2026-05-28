@@ -12,6 +12,7 @@ import TodoTree from '../special/TodoTree.js';
 import type {TodoItem} from '../../../mcp/types/todo.types.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
+import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
@@ -74,6 +75,7 @@ type ChatFooterProps = {
 	toolSearchDisabled: boolean;
 	hybridCompressEnabled: boolean;
 	teamMode: boolean;
+	ultraTodoEnabled: boolean;
 	setTeamMode: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
@@ -216,18 +218,52 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		return unsubscribe;
 	}, []);
 
-	// 使用事件监听 TODO 更新，替代轮询
+	// 使用事件监听 TODO 更新，替代轮询；同时监听当前会话切换，避免压缩后仍绑定旧会话 ID。
 	useEffect(() => {
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) {
-			setShowTodos(false);
-			setTodos([]);
-			return;
-		}
+		let disposed = false;
+		let observedSessionId = sessionManager.getCurrentSession()?.id ?? null;
+
+		const loadTodosForCurrentSession = async (force = false) => {
+			const currentSession = sessionManager.getCurrentSession();
+			const nextSessionId = currentSession?.id ?? null;
+
+			if (!force && nextSessionId === observedSessionId) {
+				return;
+			}
+
+			observedSessionId = nextSessionId;
+
+			if (!currentSession) {
+				if (!disposed) {
+					setShowTodos(false);
+					setTodos([]);
+				}
+				return;
+			}
+
+			try {
+				const todoList = await getTodoService().getTodoList(currentSession.id);
+				if (
+					disposed ||
+					sessionManager.getCurrentSession()?.id !== currentSession.id
+				) {
+					return;
+				}
+
+				setTodos(todoList?.todos ?? []);
+			} catch (error) {
+				console.error('Failed to load current session TODO list:', error);
+				if (!disposed) {
+					setTodos([]);
+				}
+			}
+		};
 
 		const handleTodoUpdate = (data: {sessionId: string; todos: TodoItem[]}) => {
-			// 只处理当前会话的 TODO 更新
-			if (data.sessionId === currentSession.id) {
+			// 始终按事件发生时的当前会话判断，避免压缩切换会话后闭包仍引用旧会话。
+			const currentSession = sessionManager.getCurrentSession();
+			if (currentSession && data.sessionId === currentSession.id) {
+				observedSessionId = currentSession.id;
 				setTodos(data.todos);
 				if (data.todos.length > 0 && props.isProcessing) {
 					setShowTodos(true);
@@ -235,11 +271,16 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 			}
 		};
 
-		// 监听 TODO 更新事件
+		const unsubscribeSessionChanges = sessionManager.onMessagesChanged(() => {
+			void loadTodosForCurrentSession(false);
+		});
+
+		void loadTodosForCurrentSession(true);
 		todoEvents.onTodoUpdate(handleTodoUpdate);
 
-		// 清理监听器
 		return () => {
+			disposed = true;
+			unsubscribeSessionChanges();
 			todoEvents.offTodoUpdate(handleTodoUpdate);
 		};
 	}, [props.isProcessing]);
@@ -386,6 +427,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							toolSearchDisabled={props.toolSearchDisabled}
 							hybridCompressEnabled={props.hybridCompressEnabled}
 							teamMode={props.teamMode}
+							ultraTodoEnabled={props.ultraTodoEnabled}
 							vscodeConnectionStatus={props.vscodeConnectionStatus}
 							editorContext={props.editorContext}
 							connectionStatus={connectionStatus}
