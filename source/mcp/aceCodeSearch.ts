@@ -2,6 +2,7 @@
 import {promises as fs, createReadStream} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
+import {createRequire} from 'module';
 import {createInterface} from 'readline';
 import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
@@ -78,6 +79,12 @@ import {
 	MEMORY_CHECK_INTERVAL_MS,
 } from './utils/aceCodeSearch/constants.utils.js';
 
+const nodeRequire = createRequire(import.meta.url);
+
+type RipgrepModule = {
+	rgPath?: string;
+};
+
 export class ACECodeSearchService {
 	private basePath: string;
 	private indexCache: Map<string, CodeSymbol[]> = new Map();
@@ -100,6 +107,7 @@ export class ACECodeSearchService {
 
 	// 命令可用性缓存（避免重复 spawn which 进程）
 	private commandAvailabilityCache: Map<string, boolean> = new Map();
+	private bundledRipgrepPath: string | null | undefined;
 	// Git 仓库状态缓存
 	private isGitRepoCache: boolean | null = null;
 	// 文件修改时间缓存（用于 sortResultsByRecency）
@@ -316,6 +324,7 @@ export class ACECodeSearchService {
 
 		if (!options?.preserveCommandCache) {
 			this.commandAvailabilityCache.clear();
+			this.bundledRipgrepPath = undefined;
 			this.isGitRepoCache = null;
 		}
 	}
@@ -443,6 +452,32 @@ export class ACECodeSearchService {
 		const available = await isCommandAvailable(command);
 		this.commandAvailabilityCache.set(command, available);
 		return available;
+	}
+
+	/**
+	 * Get the ripgrep binary bundled by @vscode/ripgrep.
+	 * Keep this dependency loaded at runtime so local search does not depend on a
+	 * system-level rg installation.
+	 */
+	private getBundledRipgrepPath(): string | null {
+		const cached = this.bundledRipgrepPath;
+		if (cached !== undefined) {
+			return cached;
+		}
+
+		try {
+			const ripgrep = nodeRequire('@vscode/ripgrep') as RipgrepModule;
+			const rgPath = typeof ripgrep.rgPath === 'string' ? ripgrep.rgPath : '';
+			this.bundledRipgrepPath = rgPath.length > 0 ? rgPath : null;
+		} catch (error) {
+			logger.debug(
+				'Bundled ripgrep unavailable, falling back to system search tools',
+				error,
+			);
+			this.bundledRipgrepPath = null;
+		}
+
+		return this.bundledRipgrepPath;
 	}
 
 	/**
@@ -1156,27 +1191,34 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Strategy 2: Use system grep (or ripgrep if available) for fast searching
-	 * Enhanced with timeout protection to prevent hanging on Windows
+	 * Strategy 2: Use ripgrep/grep for fast searching.
+	 * Enhanced with timeout protection to prevent hanging on Windows.
 	 */
 	private async systemGrepSearch(
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
-		grepCommand: 'rg' | 'grep' = 'grep',
+		grepCommand: string = 'grep',
+		isRegex: boolean = true,
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		this.markActivity();
-		const isRipgrep = grepCommand === 'rg';
+		const commandName = path.basename(grepCommand).toLowerCase();
+		const isRipgrep = commandName === 'rg' || commandName === 'rg.exe';
+		const displayCommand = isRipgrep ? 'rg' : commandName || grepCommand;
 		const timeoutMs = 15000;
 
 		return new Promise((resolve, reject) => {
 			const args = isRipgrep
-				? ['-n', '-i', '--no-heading']
-				: ['-r', '-n', '-H', '-E', '-i'];
+				? ['-n', '-i', '--no-heading', '--color=never', '--hidden']
+				: ['-r', '-n', '-H', '-i'];
 
 			if (isRipgrep) {
+				if (!isRegex) {
+					args.push('-F');
+				}
+
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push('--glob', `!${dir}/`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
@@ -1184,6 +1226,7 @@ export class ACECodeSearchService {
 					expandedGlobs.forEach(glob => args.push('--glob', glob));
 				}
 			} else {
+				args.push(isRegex ? '-E' : '-F');
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push(`--exclude-dir=${dir}`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
@@ -1231,9 +1274,9 @@ export class ACECodeSearchService {
 			const timeoutId = setTimeout(() => {
 				finalize(() => {
 					logger.warn(
-						`${grepCommand} timed out after ${timeoutMs}ms, killing process`,
+						`${displayCommand} timed out after ${timeoutMs}ms, killing process`,
 					);
-					reject(new Error(`${grepCommand} timed out after ${timeoutMs}ms`));
+					reject(new Error(`${displayCommand} timed out after ${timeoutMs}ms`));
 				}, true);
 			}, timeoutMs);
 			timeoutId.unref?.();
@@ -1251,7 +1294,7 @@ export class ACECodeSearchService {
 
 			child.once('error', err => {
 				finalize(() => {
-					reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
+					reject(new Error(`Failed to start ${displayCommand}: ${err.message}`));
 				});
 			});
 
@@ -1268,7 +1311,7 @@ export class ACECodeSearchService {
 					} else if (stderrData) {
 						reject(
 							new Error(
-								`${grepCommand} exited with code ${code}: ${stderrData}`,
+								`${displayCommand} exited with code ${code}: ${stderrData}`,
 							),
 						);
 					} else {
@@ -1634,10 +1677,11 @@ export class ACECodeSearchService {
 	 * Internal text search implementation (separated for timeout wrapping)
 	 *
 	 * Strategy priority:
-	 * 1. git grep (fastest, works in git repos)
-	 * 2. system grep (reliable on all platforms, especially Windows)
-	 * 3. ripgrep (fast but can hang on Windows)
-	 * 4. JavaScript fallback (always works)
+	 * 1. bundled ripgrep from @vscode/ripgrep (consistent local rg search)
+	 * 2. system ripgrep (if bundled rg is unavailable)
+	 * 3. git grep (fast fallback in Git repositories)
+	 * 4. system grep
+	 * 5. JavaScript fallback (always works)
 	 */
 	private async executeTextSearch(
 		pattern: string,
@@ -1648,6 +1692,26 @@ export class ACECodeSearchService {
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		this.markActivity();
+
+		// Prefer the package-provided ripgrep binary for local workspaces so users
+		// do not need to install rg manually.
+		const bundledRipgrepPath = this.getBundledRipgrepPath();
+		if (bundledRipgrepPath) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					bundledRipgrepPath,
+					isRegex,
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('Bundled ripgrep failed, trying next strategy');
+				// Fall through to system tools or JavaScript fallback
+			}
+		}
+
 		// Check command availability once (cached)
 		const [isGitRepo, gitAvailable, rgAvailable, grepAvailable] =
 			await Promise.all([
@@ -1657,7 +1721,24 @@ export class ACECodeSearchService {
 				this.isCommandAvailableCached('grep'),
 			]);
 
-		// Strategy 1: Try git grep first (fastest in git repos)
+		// Strategy 2: Try system ripgrep if the bundled binary is unavailable/failing
+		if (rgAvailable) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					'rg',
+					isRegex,
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('System ripgrep failed, trying next strategy');
+				// Fall through to git grep, system grep or JavaScript fallback
+			}
+		}
+
+		// Strategy 3: Try git grep in Git repositories
 		if (isGitRepo && gitAvailable) {
 			try {
 				const results = await this.gitGrepSearch(
@@ -1674,23 +1755,7 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 2: Try ripgrep (fast and reliable, with timeout protection)
-		if (rgAvailable) {
-			try {
-				const results = await this.systemGrepSearch(
-					pattern,
-					fileGlob,
-					maxResults,
-					'rg',
-				);
-				return await this.sortResultsByRecency(results);
-			} catch (error) {
-				logger.info('Ripgrep failed, trying next strategy');
-				// Fall through to system grep or JavaScript fallback
-			}
-		}
-
-		// Strategy 3: Try system grep as fallback
+		// Strategy 4: Try system grep as fallback
 		if (grepAvailable) {
 			try {
 				const results = await this.systemGrepSearch(
@@ -1698,6 +1763,7 @@ export class ACECodeSearchService {
 					fileGlob,
 					maxResults,
 					'grep',
+					isRegex,
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
@@ -1706,7 +1772,7 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 4: JavaScript fallback (always works)
+		// Strategy 5: JavaScript fallback (always works)
 		logger.info('Using JavaScript fallback for text search');
 		const results = await this.jsTextSearch(
 			pattern,

@@ -52,6 +52,7 @@
 	],
 	"dependencies": {
 		"@microsoft/signalr": "^10.0.0",
+		"@vscode/ripgrep": "^1.18.0",
 		"abort-controller": "^3.0.0",
 		"eventsource": "^2.0.2",
 		"fetch-cookie": "^3.0.1",

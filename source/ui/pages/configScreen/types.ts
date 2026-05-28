@@ -3,6 +3,7 @@ import type {RequestMethod} from '../../../utils/config/apiConfig.js';
 export type ConfigField =
 	| 'profile'
 	| 'baseUrl'
+	| 'baseUrlMode'
 	| 'apiKey'
 	| 'requestMethod'
 	| 'systemPromptId'
@@ -92,6 +93,7 @@ export const stripFocusArtifacts = (value: string) => {
 
 export const SELECT_FIELDS: ConfigField[] = [
 	'profile',
+	'baseUrlMode',
 	'requestMethod',
 	'systemPromptId',
 	'customHeadersSchemeId',

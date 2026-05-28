@@ -191,6 +191,8 @@ if (typeof globalThis.Path2D === 'undefined') {
 		// SSH2 includes native .node addons that cannot be bundled by esbuild
 		'ssh2',
 		'cpu-features',
+		// @vscode/ripgrep resolves a platform-specific rg binary using package paths
+		'@vscode/ripgrep',
 		// Note: katex and markdown-it-math are bundled (not external)
 		// Note: @microsoft/signalr dependencies (abort-controller, eventsource, fetch-cookie, node-fetch, tough-cookie) are NOT bundled
 		// They are dynamically required at runtime and must be in package.json dependencies

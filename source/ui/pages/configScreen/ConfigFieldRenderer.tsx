@@ -23,6 +23,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		// API settings
 		baseUrl,
 		setBaseUrl,
+		baseUrlMode,
 		apiKey,
 		setApiKey,
 		requestMethod,
@@ -115,6 +116,27 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{baseUrl || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'baseUrlMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.baseUrlMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{baseUrlMode === 'base'
+									? t.configScreen.baseUrlModeBase
+									: baseUrlMode === 'endpoint'
+									? t.configScreen.baseUrlModeEndpoint
+									: t.configScreen.baseUrlModeAuto}
 							</Text>
 						</Box>
 					)}

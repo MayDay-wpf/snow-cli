@@ -2,7 +2,7 @@ import React, {useState} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
-import type {RequestMethod} from '../../../utils/config/apiConfig.js';
+import type {BaseUrlMode, RequestMethod} from '../../../utils/config/apiConfig.js';
 import {switchProfile} from '../../../utils/config/configManager.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -16,6 +16,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		theme,
 		currentField,
 		setIsEditing,
+		baseUrlMode,
+		setBaseUrlMode,
 		requestMethod,
 		setRequestMethod,
 		requestMethodOptions,
@@ -42,6 +44,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.profile.replace(':', '');
 			case 'requestMethod':
 				return t.configScreen.requestMethod.replace(':', '');
+			case 'baseUrlMode':
+				return t.configScreen.baseUrlMode.replace(':', '');
 			case 'advancedModel':
 				return t.configScreen.advancedModel.replace(':', '');
 			case 'basicModel':
@@ -83,6 +87,27 @@ export default function ConfigSelectPanel({state}: Props) {
 						isFocused={true}
 						onSelect={item => {
 							setRequestMethod(item.value as RequestMethod);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'baseUrlMode' && (
+					<ScrollableSelectInput
+						items={[
+							{label: t.configScreen.baseUrlModeAuto, value: 'auto'},
+							{label: t.configScreen.baseUrlModeBase, value: 'base'},
+							{
+								label: t.configScreen.baseUrlModeEndpoint,
+								value: 'endpoint',
+							},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['auto', 'base', 'endpoint'] as const).indexOf(baseUrlMode),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setBaseUrlMode(item.value as BaseUrlMode);
 							setIsEditing(false);
 						}}
 					/>

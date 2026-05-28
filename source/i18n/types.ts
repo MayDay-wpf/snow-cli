@@ -174,6 +174,10 @@ export type TranslationKeys = {
 		moreBelow: string;
 		profile: string;
 		baseUrl: string;
+		baseUrlMode: string;
+		baseUrlModeAuto: string;
+		baseUrlModeBase: string;
+		baseUrlModeEndpoint: string;
 		apiKey: string;
 		requestMethod: string;
 		requestUrlLabel: string;

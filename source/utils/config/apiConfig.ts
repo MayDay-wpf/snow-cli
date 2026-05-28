@@ -10,6 +10,7 @@ import {
 import {readSettings, updateSettings} from './unifiedSettings.js';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
+export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
 export interface ThinkingConfig {
 	type: 'enabled' | 'adaptive';
 	budget_tokens?: number; // For 'enabled' type
@@ -37,6 +38,7 @@ export interface ChatThinkingConfig {
 
 export interface ApiConfig {
 	baseUrl: string;
+	baseUrlMode?: BaseUrlMode;
 	apiKey: string;
 	requestMethod: RequestMethod;
 	advancedModel?: string;
@@ -137,9 +139,18 @@ function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	return value;
 }
 
+export function normalizeBaseUrlMode(value: unknown): BaseUrlMode {
+	if (value === 'base' || value === 'endpoint') {
+		return value;
+	}
+
+	return 'auto';
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
 	snowcfg: {
 		baseUrl: 'https://api.openai.com/v1',
+		baseUrlMode: 'auto',
 		apiKey: '',
 		requestMethod: 'chat',
 		advancedModel: '',
@@ -261,6 +272,9 @@ export function loadConfig(): AppConfig {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				...configWithoutMcp.snowcfg,
+				baseUrlMode: normalizeBaseUrlMode(
+					configWithoutMcp.snowcfg.baseUrlMode,
+				),
 				requestMethod: normalizeRequestMethod(
 					configWithoutMcp.snowcfg.requestMethod,
 				),
@@ -271,6 +285,7 @@ export function loadConfig(): AppConfig {
 		} else {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
+				baseUrlMode: DEFAULT_CONFIG.snowcfg.baseUrlMode,
 				requestMethod: DEFAULT_CONFIG.snowcfg.requestMethod,
 				streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
 			};
@@ -352,11 +367,15 @@ export async function updateSnowConfig(
 		apiConfig.streamIdleTimeoutSec ??
 			currentConfig.snowcfg.streamIdleTimeoutSec,
 	);
+	const normalizedBaseUrlMode = normalizeBaseUrlMode(
+		apiConfig.baseUrlMode ?? currentConfig.snowcfg.baseUrlMode,
+	);
 	const updatedConfig: AppConfig = {
 		...currentConfig,
 		snowcfg: {
 			...currentConfig.snowcfg,
 			...apiConfig,
+			baseUrlMode: normalizedBaseUrlMode,
 			streamIdleTimeoutSec: normalizedIdleTimeoutSec,
 		},
 	};
@@ -377,6 +396,7 @@ export async function updateSnowConfig(
 		// Profiles system not available yet (during initialization), skip sync
 	}
 }
+
 
 export function getSnowConfig(): ApiConfig {
 	const config = loadConfig();

@@ -5,6 +5,7 @@ import {
 	type ApiConfig,
 } from '../utils/config/apiConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 
 export interface Model {
 	id: string;
@@ -42,11 +43,11 @@ interface AnthropicModel {
  * Fetch models from OpenAI-compatible API
  */
 async function fetchOpenAIModels(
-	baseUrl: string,
+	modelsUrl: string,
 	apiKey: string,
 	customHeaders: Record<string, string>,
 ): Promise<Model[]> {
-	const url = `${baseUrl}/models`;
+	const url = modelsUrl;
 
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
@@ -232,7 +233,7 @@ export async function fetchAvailableModels(
 			default:
 				// OpenAI-compatible API
 				models = await fetchOpenAIModels(
-					config.baseUrl.replace(/\/$/, ''),
+					resolveApiEndpoint(config.baseUrl, 'models', config.baseUrlMode),
 					config.apiKey,
 					customHeaders,
 				);

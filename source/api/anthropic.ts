@@ -20,6 +20,7 @@ import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -772,9 +773,12 @@ export async function* createStreamingAnthropicCompletion(
 					: 'https://api.anthropic.com/v1'
 			).replace(/\/+$/, '');
 
-			const url = config.anthropicBeta
-				? `${baseUrl}/messages?beta=true`
-				: `${baseUrl}/messages`;
+			const url = resolveApiEndpoint(
+				baseUrl,
+				'anthropicMessages',
+				config.baseUrlMode,
+				{anthropicBeta: config.anthropicBeta},
+			);
 
 			const fetchOptions = addProxyToFetchOptions(url, {
 				method: 'POST',

@@ -6,6 +6,7 @@ import {
 	getSystemPromptConfig,
 	getCustomHeadersConfig,
 	type RequestMethod,
+	type BaseUrlMode,
 	type ApiConfig,
 } from '../../../utils/config/apiConfig.js';
 import {
@@ -13,6 +14,7 @@ import {
 	filterModels,
 	type Model,
 } from '../../../api/models.js';
+import {resolveApiEndpoint} from '../../../api/endpointResolver.js';
 import {
 	getActiveProfileName,
 	getAllProfiles,
@@ -59,6 +61,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 
 	// API settings
 	const [baseUrl, setBaseUrl] = useState('');
+	const [baseUrlMode, setBaseUrlMode] = useState<BaseUrlMode>('auto');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [systemPromptId, setSystemPromptId] = useState<
@@ -168,6 +171,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			// 防止用户切换 active profile 或对 profile 进行增删改。
 			...(targetProfileName ? [] : ['profile' as ConfigField]),
 			'baseUrl',
+			'baseUrlMode',
 			'apiKey',
 			'requestMethod',
 			'systemPromptId',
@@ -326,6 +330,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			: undefined;
 		const config = targetConfig?.snowcfg ?? getSnowConfig();
 		setBaseUrl(config.baseUrl);
+		setBaseUrlMode(config.baseUrlMode || 'auto');
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
 		setSystemPromptId(config.systemPromptId);
@@ -385,6 +390,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 
 		const tempConfig: Partial<ApiConfig> = {
 			baseUrl,
+			baseUrlMode,
 			apiKey,
 			requestMethod,
 			customHeadersSchemeId,
@@ -432,6 +438,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const getCurrentValue = () => {
 		if (currentField === 'profile') return activeProfile;
 		if (currentField === 'baseUrl') return baseUrl;
+		if (currentField === 'baseUrlMode') return baseUrlMode;
 		if (currentField === 'apiKey') return apiKey;
 		if (currentField === 'advancedModel') return advancedModel;
 		if (currentField === 'basicModel') return basicModel;
@@ -490,23 +497,28 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		const resolvedBaseUrl = getResolvedBaseUrl(requestMethod);
 
 		if (requestMethod === 'responses') {
-			return `${resolvedBaseUrl}/responses`;
+			return resolveApiEndpoint(resolvedBaseUrl, 'responses', baseUrlMode);
 		}
 
 		if (requestMethod === 'anthropic') {
-			const endpoint = anthropicBeta ? '/messages?beta=true' : '/messages';
-			return `${resolvedBaseUrl}${endpoint}`;
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'anthropicMessages',
+				baseUrlMode,
+				{anthropicBeta},
+			);
 		}
 
 		if (requestMethod === 'gemini') {
-			const effectiveModel = advancedModel || 'model-id';
-			const modelName = effectiveModel.startsWith('models/')
-				? effectiveModel
-				: `models/${effectiveModel}`;
-			return `${resolvedBaseUrl}/${modelName}:streamGenerateContent?alt=sse`;
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'geminiStreamGenerateContent',
+				baseUrlMode,
+				{modelName: advancedModel || 'model-id'},
+			);
 		}
 
-		return `${resolvedBaseUrl}/chat/completions`;
+		return resolveApiEndpoint(resolvedBaseUrl, 'chat', baseUrlMode);
 	};
 
 	const getSystemPromptSelectItems = () => {
@@ -596,8 +608,9 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		try {
 			const currentConfig = {
 				snowcfg: {
-					baseUrl,
-					apiKey,
+						baseUrl,
+						baseUrlMode,
+						apiKey,
 					requestMethod,
 					systemPromptId,
 					customHeadersSchemeId,
@@ -728,6 +741,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		if (validationErrors.length === 0) {
 			const config: Partial<ApiConfig> = {
 				baseUrl,
+				baseUrlMode,
 				apiKey,
 				requestMethod,
 				systemPromptId,
@@ -799,6 +813,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				const fullConfig = {
 					snowcfg: {
 						baseUrl,
+						baseUrlMode,
 						apiKey,
 						requestMethod,
 						systemPromptId,
@@ -873,6 +888,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		// API settings
 		baseUrl,
 		setBaseUrl,
+		baseUrlMode,
+		setBaseUrlMode,
 		apiKey,
 		setApiKey,
 		requestMethod,

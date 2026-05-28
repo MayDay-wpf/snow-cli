@@ -21,6 +21,7 @@ import type {
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -593,7 +594,11 @@ export async function* createStreamingResponse(
 				prompt_cache_key: options.prompt_cache_key,
 			};
 
-			const url = `${config.baseUrl}/responses`;
+			const url = resolveApiEndpoint(
+				config.baseUrl,
+				'responses',
+				config.baseUrlMode,
+			);
 
 			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 			const customHeaders =

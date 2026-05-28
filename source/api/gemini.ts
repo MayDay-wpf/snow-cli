@@ -16,6 +16,7 @@ import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -522,9 +523,12 @@ export async function* createStreamingGeminiCompletion(
 					? config.baseUrl
 					: 'https://generativelanguage.googleapis.com/v1beta';
 
-			const urlObj = new URL(`${baseUrl}/${modelName}:streamGenerateContent`);
-			urlObj.searchParams.set('alt', 'sse');
-			const url = urlObj.toString();
+			const url = resolveApiEndpoint(
+				baseUrl,
+				'geminiStreamGenerateContent',
+				config.baseUrlMode,
+				{modelName},
+			);
 
 			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 			const customHeaders =

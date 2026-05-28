@@ -22,6 +22,7 @@ import type {
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 
 export type {
 	ChatMessage,
@@ -549,7 +550,7 @@ export async function* createStreamingChatCompletion(
 				}
 			}
 
-			const url = `${config.baseUrl}/chat/completions`;
+			const url = resolveApiEndpoint(config.baseUrl, 'chat', config.baseUrlMode);
 
 			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 			const customHeaders =
