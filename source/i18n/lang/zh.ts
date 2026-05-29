@@ -574,6 +574,7 @@ export const zh: TranslationKeys = {
 			help: '显示快捷键和帮助信息',
 			clear: '清空聊天上下文和对话历史',
 			copyLast: '复制最后一条AI回复到剪贴板',
+			delSession: '删除当前会话并清屏',
 			resume: '恢复对话',
 			mcp: '显示模型上下文协议服务和工具',
 			yolo: '切换无人值守模式(自动批准所有工具)',
@@ -634,6 +635,10 @@ export const zh: TranslationKeys = {
 			copySuccess: '✓ 已复制最后一条 AI 消息到剪贴板',
 			copyFailedPrefix: '✗ 复制到剪贴板失败',
 			unknownError: '未知错误',
+		},
+		delSessionFeedback: {
+			noCurrentSession: '当前没有可删除的会话。',
+			deleteFailed: '删除当前会话失败。',
 		},
 		// 命令输出消息（用于命令执行结果）
 		commandOutput: {

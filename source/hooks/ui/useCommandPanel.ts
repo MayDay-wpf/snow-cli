@@ -95,6 +95,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			},
 			{name: 'help', description: t.commandPanel.commands.help},
 			{name: 'clear', description: t.commandPanel.commands.clear},
+			{name: 'del-session', description: t.commandPanel.commands.delSession},
 			{
 				name: 'copy-last',
 				description:

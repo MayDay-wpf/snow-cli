@@ -822,6 +822,52 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				return;
 			}
 
+
+			if (result.success && result.action === 'deleteCurrentSession') {
+				const currentSession = sessionManager.getCurrentSession();
+
+				if (!currentSession) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: t.commandPanel.delSessionFeedback.noCurrentSession,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				const deleted = await sessionManager.deleteSession(currentSession.id);
+
+				if (!deleted) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: t.commandPanel.delSessionFeedback.deleteFailed,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				resetTerminal(stdout);
+				options.clearSavedMessages();
+				options.setMessages([]);
+				options.setRemountKey(prev => prev + 1);
+				options.setContextUsage(null);
+				options.setCurrentContextPercentage(0);
+				options.currentContextPercentageRef.current = 0;
+
+				import('../../utils/core/globalCleanup.js')
+					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+					.catch(() => {});
+
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages([commandMessage]);
+				return;
+			}
 			if (result.success && result.action === 'clear') {
 				// Execute onSessionStart hook BEFORE clearing session
 				(async () => {

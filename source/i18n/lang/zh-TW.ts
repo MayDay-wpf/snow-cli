@@ -575,6 +575,7 @@ export const zhTW: TranslationKeys = {
 			help: '顯示快捷鍵和說明資訊',
 			clear: '清空聊天上下文和對話歷史',
 			copyLast: '複製最後一條AI回覆到剪貼簿',
+			delSession: '刪除目前會話並清屏',
 			resume: '恢復對話',
 			mcp: '顯示模型上下文協定服務和工具',
 			yolo: '切換無人值守模式(自動批准所有工具)',
@@ -635,6 +636,10 @@ export const zhTW: TranslationKeys = {
 			copySuccess: '✓ 已複製最後一條 AI 消息到剪貼簿',
 			copyFailedPrefix: '✗ 複製到剪貼簿失敗',
 			unknownError: '未知錯誤',
+		},
+		delSessionFeedback: {
+			noCurrentSession: '目前沒有可刪除的會話。',
+			deleteFailed: '刪除目前會話失敗。',
 		},
 		// 命令輸出消息（用於命令執行結果）
 		commandOutput: {

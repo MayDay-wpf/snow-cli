@@ -568,6 +568,7 @@ export type TranslationKeys = {
 			help: string;
 			clear: string;
 			copyLast: string;
+			delSession: string;
 			resume: string;
 			mcp: string;
 			yolo: string;
@@ -624,6 +625,10 @@ export type TranslationKeys = {
 			copySuccess: string;
 			copyFailedPrefix: string;
 			unknownError: string;
+		};
+		delSessionFeedback: {
+			noCurrentSession: string;
+			deleteFailed: string;
 		};
 		// Command output messages (for command execution results)
 		commandOutput: {

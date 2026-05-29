@@ -9,6 +9,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 
 		Promise.all([
 			import('../../../utils/commands/clear.js'),
+			import('../../../utils/commands/delSession.js'),
 			import('../../../utils/commands/profiles.js'),
 			import('../../../utils/commands/simple.js'),
 			import('../../../utils/commands/resume.js'),

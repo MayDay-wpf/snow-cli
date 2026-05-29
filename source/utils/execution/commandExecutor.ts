@@ -3,6 +3,7 @@ export interface CommandResult {
 	message?: string;
 	action?:
 		| 'clear'
+		| 'deleteCurrentSession'
 		| 'resume'
 		| 'info'
 		| 'showMcpInfo'

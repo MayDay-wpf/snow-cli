@@ -608,6 +608,7 @@ export const en: TranslationKeys = {
 			help: 'Show keyboard shortcuts and help information',
 			clear: 'Clear chat context and conversation history',
 			copyLast: 'Copy last AI message to clipboard',
+			delSession: 'Delete the current session and clear the screen',
 			resume: 'Resume a conversation',
 			mcp: 'Show Model Context Protocol services and tools',
 			yolo: 'Toggle unattended mode (auto-approve all tools)',
@@ -678,6 +679,10 @@ export const en: TranslationKeys = {
 			copySuccess: '✓ Last AI message copied to clipboard',
 			copyFailedPrefix: '✗ Failed to copy to clipboard',
 			unknownError: 'Unknown error',
+		},
+		delSessionFeedback: {
+			noCurrentSession: 'No current session to delete.',
+			deleteFailed: 'Failed to delete the current session.',
 		},
 		// Command output messages (for command execution results)
 		commandOutput: {
