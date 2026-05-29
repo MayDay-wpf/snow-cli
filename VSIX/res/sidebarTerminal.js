@@ -679,6 +679,20 @@
 			return term.hasSelection() && Boolean(term.getSelection());
 		};
 
+		const isImagePasteShortcut = event => {
+			if (event.type !== 'keydown') {
+				return false;
+			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			if (key !== 'v' || event.shiftKey || event.metaKey) {
+				return false;
+			}
+			if (isMacPlatform) {
+				return event.ctrlKey && !event.altKey;
+			}
+			return event.altKey && !event.ctrlKey;
+		};
+
 		const isSystemPasteShortcut = event => {
 			if (event.type !== 'keydown') {
 				return false;
@@ -693,15 +707,45 @@
 			return event.ctrlKey && !event.metaKey;
 		};
 
+		const handleImagePasteShortcut = event => {
+			if (!isImagePasteShortcut(event)) {
+				return undefined;
+			}
+
+			event.preventDefault?.();
+			void handleClipboardPaste({
+				allowNavigatorImage: true,
+				fallbackToText: false,
+				source: isMacPlatform
+					? 'macos-ctrl-v-image-shortcut'
+					: 'windows-alt-v-image-shortcut',
+			});
+			return false;
+		};
+
 		const handleSystemPasteShortcut = event => {
 			if (!isSystemPasteShortcut(event)) {
 				return undefined;
+			}
+
+			if (!isMacPlatform) {
+				void handleClipboardPaste({
+					allowNavigatorImage: true,
+					fallbackToText: false,
+					source: 'windows-ctrl-v-image-probe',
+				});
+				return false;
 			}
 
 			return true;
 		};
 
 		const allowTerminalKeyEvent = event => {
+			const imagePasteDecision = handleImagePasteShortcut(event);
+			if (typeof imagePasteDecision === 'boolean') {
+				return imagePasteDecision;
+			}
+
 			const systemPasteDecision = handleSystemPasteShortcut(event);
 			if (typeof systemPasteDecision === 'boolean') {
 				return systemPasteDecision;
@@ -718,7 +762,37 @@
 		};
 
 		const handlePasteEvent = event => {
-			void handleClipboardPaste({event, source: 'paste-event'});
+			const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
+			const text =
+				event?.clipboardData?.getData('text/plain') ||
+				event?.clipboardData?.getData('text') ||
+				'';
+
+			if (pastedFile) {
+				event.preventDefault?.();
+				event.stopImmediatePropagation?.();
+				event.stopPropagation?.();
+				void handleClipboardPaste({
+					allowNavigatorImage: false,
+					event,
+					fallbackToText: false,
+					source: 'paste-event-image',
+				});
+				return;
+			}
+
+			if (text) {
+				return;
+			}
+
+			event.preventDefault?.();
+			event.stopImmediatePropagation?.();
+			event.stopPropagation?.();
+			void handleClipboardPaste({
+				allowNavigatorImage: true,
+				fallbackToText: false,
+				source: 'paste-event-image-probe',
+			});
 		};
 
 		const handleContextMenu = event => {
@@ -2091,7 +2165,7 @@
 			registerOsc52ClipboardHandler,
 		} = createClipboardAndContextController({term, sendInput});
 		registerDisposable(registerOsc52ClipboardHandler());
-		addManagedListener(container, 'paste', handlePasteEvent);
+		addManagedListener(container, 'paste', handlePasteEvent, true);
 
 		// System paste shortcuts keep native text paste behavior where possible, while
 		// also probing navigator.clipboard for image data because terminal emulators

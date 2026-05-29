@@ -12,12 +12,7 @@ export function clipboardHandler(ctx: HandlerContext): boolean {
 			? key.ctrl && input === 'v'
 			: key.meta && input === 'v';
 
-	// System paste shortcut compatibility for terminals that forward Ctrl+V to the app.
-	// macOS Cmd+V is normally handled by the terminal/webview before it reaches Ink.
-	const isForwardedSystemPasteShortcut =
-		process.platform !== 'darwin' && key.ctrl && input === 'v';
-
-	if (isLegacyImagePasteShortcut || isForwardedSystemPasteShortcut) {
+	if (isLegacyImagePasteShortcut) {
 		refs.lastPasteShortcutAt.current = Date.now();
 		pasteFromClipboard();
 		return true;

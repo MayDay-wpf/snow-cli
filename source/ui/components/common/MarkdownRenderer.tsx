@@ -1,9 +1,14 @@
 import React from 'react';
 import {Text, Box} from 'ink';
-import {marked} from 'marked';
+import {marked, type Tokens} from 'marked';
 import {markedTerminal} from 'marked-terminal';
 import {supportsLanguage} from 'cli-highlight';
 import logger from '../../../utils/core/logger.js';
+import {visualWidth} from '../../../utils/core/textUtils.js';
+import {
+	getAvailableTerminalColumns,
+	getTerminalColumns,
+} from '../../../utils/execution/terminal.js';
 import {
 	latexToUnicode,
 	simpleLatexToUnicode,
@@ -15,7 +20,7 @@ import {
 marked.use(
 	markedTerminal(
 		{
-			width: process.stdout.columns || 80,
+			width: getTerminalColumns(),
 			reflowText: true,
 			unescape: true,
 			showSectionPrefix: false,
@@ -39,6 +44,66 @@ marked.use({
 			}
 
 			return token;
+		},
+	},
+});
+
+const VERTICAL_TABLE_SEPARATOR_CHAR = '─';
+const VERTICAL_TABLE_RESERVED_COLUMNS = 2;
+
+function renderInlineTokens(parser: any, cell: Tokens.TableCell): string {
+	return cell.tokens ? parser.parseInline(cell.tokens) : cell.text;
+}
+
+function calculateHorizontalTableWidth(
+	headers: string[],
+	rows: string[][],
+): number {
+	const widths = headers.map(header => visualWidth(header));
+
+	for (const row of rows) {
+		row.forEach((cell, index) => {
+			widths[index] = Math.max(widths[index] ?? 0, visualWidth(cell));
+		});
+	}
+
+	// cli-table3 renders tables with left/right padding around every cell,
+	// plus one border per column boundary.
+	return widths.reduce((total, width) => total + width + 2, 0) + widths.length + 1;
+}
+
+function formatVerticalTableSeparator(width: number): string {
+	return VERTICAL_TABLE_SEPARATOR_CHAR.repeat(Math.max(1, width));
+}
+
+function renderVerticalTable(token: Tokens.Table, parser: any): string {
+	const headers = token.header.map(cell => renderInlineTokens(parser, cell));
+	const rows = token.rows.map(row =>
+		row.map(cell => renderInlineTokens(parser, cell)),
+	);
+	const terminalWidth = getAvailableTerminalColumns(
+		VERTICAL_TABLE_RESERVED_COLUMNS,
+	);
+	const horizontalTableWidth = calculateHorizontalTableWidth(headers, rows);
+
+	if (horizontalTableWidth <= terminalWidth) {
+		return false as any;
+	}
+
+	const separator = formatVerticalTableSeparator(terminalWidth);
+	const blocks = rows.map(row => {
+		return headers
+			.map((header, index) => `${header}: ${row[index] ?? ''}`)
+			.join('\n');
+	});
+
+	return `\n${blocks.join(`\n${separator}\n`)}\n`;
+}
+
+marked.use({
+	renderer: {
+		table(token: Tokens.Table) {
+			return renderVerticalTable(token, (this as any).parser);
 		},
 	},
 });

@@ -4,6 +4,32 @@ type WritableStreamLike =
 			write: (data: string) => unknown;
 	  };
 
+const DEFAULT_TERMINAL_COLUMNS = 80;
+
+type TerminalColumnsStreamLike = Partial<Pick<NodeJS.WriteStream, 'columns'>>;
+
+export function getTerminalColumns(
+	stream: TerminalColumnsStreamLike = process.stdout,
+): number {
+	const columns = stream.columns;
+
+	return typeof columns === 'number' && Number.isFinite(columns) && columns > 0
+		? Math.floor(columns)
+		: DEFAULT_TERMINAL_COLUMNS;
+}
+
+export function getAvailableTerminalColumns(
+	reservedColumns = 0,
+	stream: TerminalColumnsStreamLike = process.stdout,
+): number {
+	const safeReservedColumns =
+		Number.isFinite(reservedColumns) && reservedColumns > 0
+			? Math.floor(reservedColumns)
+			: 0;
+
+	return Math.max(1, getTerminalColumns(stream) - safeReservedColumns);
+}
+
 export function resetTerminal(stream?: WritableStreamLike): void {
 	const target = stream ?? process.stdout;
 
