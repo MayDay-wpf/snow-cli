@@ -455,6 +455,8 @@
 		const IMAGE_PASTE_DEDUPE_MS = 1000;
 		let lastImagePasteDataUrl = '';
 		let lastImagePasteAt = 0;
+		let pendingSystemPasteShortcut = false;
+		let suppressPasteUntilSystemPasteKeyup = false;
 
 		const normalizeImageMimeType = mimeType => {
 			const normalized = String(mimeType || 'image/png').toLowerCase();
@@ -729,6 +731,8 @@
 			}
 
 			if (!isMacPlatform) {
+				pendingSystemPasteShortcut = true;
+				suppressPasteUntilSystemPasteKeyup = false;
 				void handleClipboardPaste({
 					allowNavigatorImage: true,
 					fallbackToText: false,
@@ -740,7 +744,21 @@
 			return true;
 		};
 
+		const isSystemPasteKeyRelease = event => {
+			if (isMacPlatform || event.type !== 'keyup') {
+				return false;
+			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			return key === 'v';
+		};
+
 		const allowTerminalKeyEvent = event => {
+			if (isSystemPasteKeyRelease(event)) {
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = false;
+				return true;
+			}
+
 			const imagePasteDecision = handleImagePasteShortcut(event);
 			if (typeof imagePasteDecision === 'boolean') {
 				return imagePasteDecision;
@@ -767,11 +785,21 @@
 				event?.clipboardData?.getData('text/plain') ||
 				event?.clipboardData?.getData('text') ||
 				'';
+			const isSystemShortcutPaste = !isMacPlatform && pendingSystemPasteShortcut;
+			const isDuplicateSystemShortcutPaste =
+				!isMacPlatform && suppressPasteUntilSystemPasteKeyup;
+
+			event.preventDefault?.();
+			event.stopImmediatePropagation?.();
+			event.stopPropagation?.();
+
+			if (isDuplicateSystemShortcutPaste) {
+				return;
+			}
 
 			if (pastedFile) {
-				event.preventDefault?.();
-				event.stopImmediatePropagation?.();
-				event.stopPropagation?.();
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
 				void handleClipboardPaste({
 					allowNavigatorImage: false,
 					event,
@@ -782,12 +810,14 @@
 			}
 
 			if (text) {
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
+				sendInput(text);
 				return;
 			}
 
-			event.preventDefault?.();
-			event.stopImmediatePropagation?.();
-			event.stopPropagation?.();
+			pendingSystemPasteShortcut = false;
+			suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
 			void handleClipboardPaste({
 				allowNavigatorImage: true,
 				fallbackToText: false,
@@ -2165,7 +2195,7 @@
 			registerOsc52ClipboardHandler,
 		} = createClipboardAndContextController({term, sendInput});
 		registerDisposable(registerOsc52ClipboardHandler());
-		addManagedListener(container, 'paste', handlePasteEvent, true);
+		addManagedListener(document, 'paste', handlePasteEvent, true);
 
 		// System paste shortcuts keep native text paste behavior where possible, while
 		// also probing navigator.clipboard for image data because terminal emulators

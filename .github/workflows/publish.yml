@@ -56,10 +56,8 @@ jobs:
 
             ### What's New
 
-            - Optimized some display effects
-            - Added @vscode/ripgrep package
-            - Added /ultra-todo
-            - Added BaseUrl type replacement
+            - Table rendering adaptive width
+            - Fixed the reentrancy issue when pasting text on Windows
             
             ### Installation
             ```bash

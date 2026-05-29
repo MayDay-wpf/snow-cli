@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Fix Responses request body error
+            - Fixed the reentrancy issue when pasting text on Windows
 
             ### Installation
 
