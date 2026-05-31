@@ -62,8 +62,9 @@ export async function launchWindowsBrowserFromWSL(
 	browserPath: string,
 	debugPort: number = 9222,
 ): Promise<string | null> {
-	// Convert WSL path to Windows path for the user data directory
-	const userDataDir = 'C:\\\\temp\\\\snow-browser-debug';
+	// Keep one stable Windows-side profile per debug port to avoid profile locks
+	// when different Snow processes use different browserDebugPort values.
+	const userDataDir = `C:\\temp\\snow-browser-debug-${debugPort}`;
 
 	// Build the command to run via PowerShell
 	// Convert /mnt/c/... path to C:\... for PowerShell

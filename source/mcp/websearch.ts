@@ -37,6 +37,8 @@ export class WebSearchService {
 	private executablePath: string | null = null;
 	private isWSLMode: boolean = false;
 	private userDataDir: string | undefined;
+	private browserLaunchPromise: Promise<Browser> | null = null;
+	private browserClosePromise: Promise<void> | null = null;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
@@ -57,10 +59,26 @@ export class WebSearchService {
 	 * In WSL mode, connects to Windows browser via WebSocket
 	 */
 	private async launchBrowser(): Promise<Browser> {
+		if (this.browserClosePromise) {
+			await this.browserClosePromise;
+		}
+
 		if (this.browser && this.browser.connected) {
 			return this.browser;
 		}
 
+		if (this.browserLaunchPromise) {
+			return this.browserLaunchPromise;
+		}
+
+		this.browserLaunchPromise = this.createBrowser().finally(() => {
+			this.browserLaunchPromise = null;
+		});
+
+		return this.browserLaunchPromise;
+	}
+
+	private async createBrowser(): Promise<Browser> {
 		const proxyConfig = getProxyConfig();
 		const debugPort = proxyConfig.browserDebugPort || 9222;
 
@@ -188,22 +206,60 @@ export class WebSearchService {
 	 * Close browser instance
 	 */
 	async closeBrowser(): Promise<void> {
-		if (this.browser) {
-			if (this.isWSLMode) {
-				// In WSL mode, just disconnect (don't close the Windows browser)
-				try {
-					this.browser.disconnect();
-				} catch {
-					// Ignore disconnect errors
-				}
-			} else {
-				try {
-					await this.browser.close();
-				} catch {
-					// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
-				}
-			}
+		if (this.browserClosePromise) {
+			return this.browserClosePromise;
+		}
+
+		this.browserClosePromise = this.closeBrowserInternal().finally(() => {
+			this.browserClosePromise = null;
+		});
+
+		return this.browserClosePromise;
+	}
+
+	private async closeBrowserInternal(): Promise<void> {
+		const browser = this.browserLaunchPromise
+			? await this.browserLaunchPromise.catch(() => null)
+			: this.browser;
+
+		if (!browser) {
 			this.browser = null;
+			return;
+		}
+
+		if (this.isWSLMode) {
+			// In WSL mode, just disconnect (don't close the Windows browser)
+			try {
+				if (browser.connected) {
+					browser.disconnect();
+				}
+			} catch {
+				// Ignore disconnect errors
+			}
+		} else {
+			try {
+				if (browser.connected) {
+					await browser.close();
+				}
+			} catch {
+				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
+			}
+		}
+
+		if (this.browser === browser) {
+			this.browser = null;
+		}
+	}
+
+	private async closePage(page: Page | null): Promise<void> {
+		if (!page || page.isClosed()) {
+			return;
+		}
+
+		try {
+			await page.close();
+		} catch {
+			// Ignore close errors. Page cleanup must not mask the real tool result.
 		}
 	}
 
@@ -238,25 +294,15 @@ export class WebSearchService {
 			// Delegate the actual search/extraction to the engine.
 			const cleanedResults = await engine.search(page, query, limit);
 
-			// Close the page
-			await page.close();
-
 			return {
 				query,
 				results: cleanedResults,
 				totalResults: cleanedResults.length,
 			};
 		} catch (error: any) {
-			// Clean up page on error
-			if (page) {
-				try {
-					await page.close();
-				} catch {
-					// Ignore close errors
-				}
-			}
-
 			throw new Error(`Web search failed: ${error.message}`);
+		} finally {
+			await this.closePage(page);
 		}
 	}
 
@@ -377,8 +423,10 @@ export class WebSearchService {
 				cleanedContent.slice(0, 500) +
 				(cleanedContent.length > 500 ? '...' : '');
 
-			// Close the page
-			await page.close();
+			// Release the Puppeteer page before optional AI compression. Compression can
+			// take much longer than DOM extraction and must not keep browser resources busy.
+			await this.closePage(page);
+			page = null;
 
 			// Use compact agent to extract key information if userQuery is provided
 			// Skip compression for user-provided URLs OR when AI summary is not requested
@@ -413,16 +461,9 @@ export class WebSearchService {
 				contentPreview,
 			};
 		} catch (error: any) {
-			// Clean up page on error
-			if (page) {
-				try {
-					await page.close();
-				} catch {
-					// Ignore close errors
-				}
-			}
-
 			throw new Error(`Failed to fetch page: ${error.message}`);
+		} finally {
+			await this.closePage(page);
 		}
 	}
 }
