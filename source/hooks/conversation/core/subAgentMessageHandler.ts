@@ -43,13 +43,21 @@ let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
 
 function notifyTeammateStreamListeners(): void {
 	for (const listener of _teammateStreamListeners) {
-		try { listener(); } catch { /* noop */ }
+		try {
+			listener();
+		} catch {
+			/* noop */
+		}
 	}
 }
 
 function notifySubAgentStreamListeners(): void {
 	for (const listener of _subAgentStreamListeners) {
-		try { listener(); } catch { /* noop */ }
+		try {
+			listener();
+		} catch {
+			/* noop */
+		}
 	}
 }
 
@@ -73,10 +81,28 @@ function rebuildSubAgentSnapshot(): void {
 	}
 }
 
-function setTeammateStreamEntry(agentId: string, agentName: string, tokenCount: number, isReasoning: boolean, ctxUsage?: TeammateCtxUsage): void {
+function setTeammateStreamEntry(
+	agentId: string,
+	agentName: string,
+	tokenCount: number,
+	isReasoning: boolean,
+	ctxUsage?: TeammateCtxUsage,
+): void {
 	const prev = _teammateStreamMap.get(agentId);
-	if (prev && prev.tokenCount === tokenCount && prev.isReasoning === isReasoning && prev.ctxUsage?.percentage === ctxUsage?.percentage) return;
-	_teammateStreamMap.set(agentId, {agentId, agentName, tokenCount, isReasoning, ctxUsage});
+	if (
+		prev &&
+		prev.tokenCount === tokenCount &&
+		prev.isReasoning === isReasoning &&
+		prev.ctxUsage?.percentage === ctxUsage?.percentage
+	)
+		return;
+	_teammateStreamMap.set(agentId, {
+		agentId,
+		agentName,
+		tokenCount,
+		isReasoning,
+		ctxUsage,
+	});
 	rebuildTeammateSnapshot();
 }
 
@@ -120,7 +146,9 @@ function removeSubAgentStreamEntry(agentId: string): void {
 
 export function subscribeTeammateStream(listener: () => void): () => void {
 	_teammateStreamListeners.add(listener);
-	return () => { _teammateStreamListeners.delete(listener); };
+	return () => {
+		_teammateStreamListeners.delete(listener);
+	};
 }
 
 export function getTeammateStreamSnapshot(): TeammateStreamInfo[] {
@@ -418,7 +446,10 @@ export class SubAgentUIHandler {
 		}
 	}
 
-	private emitAgentTitle(lines: Message[], subAgentMessage: SubAgentMessage): void {
+	private emitAgentTitle(
+		lines: Message[],
+		subAgentMessage: SubAgentMessage,
+	): void {
 		const name = subAgentMessage.agentName;
 		lines.push({
 			role: 'subagent' as const,
@@ -461,9 +492,11 @@ export class SubAgentUIHandler {
 			if (this.streamStates[nextId]) break;
 		}
 
-		if (this.displayQueue.length === 0 &&
+		if (
+			this.displayQueue.length === 0 &&
 			this.activeDisplayAgentId &&
-			!this.streamStates[this.activeDisplayAgentId]) {
+			!this.streamStates[this.activeDisplayAgentId]
+		) {
 			this.activeDisplayAgentId = null;
 		}
 
@@ -848,7 +881,11 @@ export class SubAgentUIHandler {
 			...prev,
 			{
 				role: 'subagent' as const,
-				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[33m⟳ Compression retry (${msg.attempt}/${msg.maxRetries})...\x1b[0m${msg.error ? ` \x1b[90m${msg.error}\x1b[0m` : ''}`,
+				content: `\x1b[36m⚇ ${
+					subAgentMessage.agentName
+				}\x1b[0m \x1b[33m⟳ Compression retry (${msg.attempt}/${
+					msg.maxRetries
+				})...\x1b[0m${msg.error ? ` \x1b[90m${msg.error}\x1b[0m` : ''}`,
 				streaming: false,
 				subAgent: {
 					agentId: subAgentMessage.agentId,
@@ -1132,10 +1169,15 @@ export class SubAgentUIHandler {
 			? msg.rejection_reason || extractRejectionReason(msg.content)
 			: undefined;
 
-		const editDiffData = extractFilesystemEditDiffDataForPersistence(
-			msg.tool_name,
-			msg.content,
-		);
+		const editDiffData =
+			!isError && msg.editDiffData
+				? msg.editDiffData
+				: extractFilesystemEditDiffDataForPersistence(
+						msg.tool_name,
+						msg.content,
+				  );
+		const displayMsg =
+			editDiffData && !msg.editDiffData ? {...msg, editDiffData} : msg;
 
 		// Fire-and-forget save
 		const sessionMsg = {
@@ -1154,7 +1196,7 @@ export class SubAgentUIHandler {
 			return this.handleTimeConsumingToolResult(
 				prev,
 				subAgentMessage,
-				msg,
+				displayMsg,
 				isError,
 			);
 		}

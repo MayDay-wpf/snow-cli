@@ -16,6 +16,7 @@ import {rewriteToolArgsForWorktree} from '../team/teamWorktree.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
+import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -321,6 +322,7 @@ ${role ? `Your role: ${role}` : ''}
 			toolCallId: string,
 			toolName: string,
 			content: string,
+			editDiffData?: Record<string, any>,
 		) => {
 			if (!onMessage) return;
 			onMessage({
@@ -332,8 +334,50 @@ ${role ? `Your role: ${role}` : ''}
 					tool_call_id: toolCallId,
 					tool_name: toolName,
 					content,
+					...(editDiffData ? {editDiffData} : {}),
 				},
 			});
+		};
+
+		const normalizeToolResultPayload = (
+			toolName: string,
+			result: unknown,
+			args: any,
+		): {resultContent: string; editDiffData?: Record<string, any>} => {
+			let contentSource: unknown = result;
+			let editDiffData: Record<string, any> | undefined;
+
+			if (
+				result &&
+				typeof result === 'object' &&
+				'editDiffData' in result &&
+				(result as {editDiffData?: Record<string, any>}).editDiffData
+			) {
+				editDiffData = (result as {editDiffData: Record<string, any>})
+					.editDiffData;
+				if ('__toolResultContent' in result) {
+					contentSource = (result as {__toolResultContent: unknown})
+						.__toolResultContent;
+				}
+			} else {
+				editDiffData = extractFilesystemEditDiffFromRawResult(toolName, result);
+			}
+
+			if (
+				editDiffData &&
+				!editDiffData['filename'] &&
+				args &&
+				typeof args['filePath'] === 'string'
+			) {
+				editDiffData['filename'] = args['filePath'];
+			}
+
+			const serializedContent =
+				typeof contentSource === 'string'
+					? contentSource
+					: JSON.stringify(contentSource) ?? String(contentSource);
+
+			return {resultContent: serializedContent, editDiffData};
 		};
 
 		// eslint-disable-next-line no-constant-condition
@@ -972,8 +1016,13 @@ ${role ? `Your role: ${role}` : ''}
 									toolArgs,
 									abortSignal,
 								);
-								let resultContent =
-									typeof result === 'string' ? result : JSON.stringify(result);
+								const {resultContent: rawResultContent, editDiffData} =
+									normalizeToolResultPayload(
+										tc.function.name,
+										result,
+										toolArgs,
+									);
+								let resultContent = rawResultContent;
 
 								// afterToolCall hook
 								try {
@@ -1002,8 +1051,14 @@ ${role ? `Your role: ${role}` : ''}
 									role: 'tool' as const,
 									tool_call_id: tc.id,
 									content: resultContent,
-								});
-								emitToolResultEvent(tc.id, tc.function.name, resultContent);
+									...(editDiffData ? {editDiffData} : {}),
+								} as ChatMessage);
+								emitToolResultEvent(
+									tc.id,
+									tc.function.name,
+									resultContent,
+									editDiffData,
+								);
 							} catch (e: any) {
 								const errorContent = `Error: ${e.message}`;
 								messages.push({
@@ -1124,8 +1179,9 @@ ${role ? `Your role: ${role}` : ''}
 								toolArgs,
 								abortSignal,
 							);
-							let resultContent =
-								typeof result === 'string' ? result : JSON.stringify(result);
+							const {resultContent: rawResultContent, editDiffData} =
+								normalizeToolResultPayload(toolName, result, toolArgs);
+							let resultContent = rawResultContent;
 
 							// afterToolCall hook
 							try {
@@ -1154,8 +1210,9 @@ ${role ? `Your role: ${role}` : ''}
 								role: 'tool' as const,
 								tool_call_id: tc.id,
 								content: resultContent,
-							});
-							emitToolResultEvent(tc.id, toolName, resultContent);
+								...(editDiffData ? {editDiffData} : {}),
+							} as ChatMessage);
+							emitToolResultEvent(tc.id, toolName, resultContent, editDiffData);
 						} catch (e: any) {
 							const errorContent = `Error: ${e.message}`;
 							messages.push({

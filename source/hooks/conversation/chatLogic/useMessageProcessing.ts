@@ -146,31 +146,61 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			streamingState.setIsAutoCompressing(true);
 			setCompressionError(null);
 
+			let sessionId = sessionManager.getCurrentSession()?.id;
+			let lastCompressionStep: string | null = 'saving';
+			props.onCompressionStatus?.({
+				step: 'saving',
+				message: 'Auto-compressing context due to token limit...',
+				sessionId,
+			});
+
 			await compressionCoordinator.acquireLock('main');
 			try {
-				const compressingMessage: Message = {
-					role: 'assistant',
-					content: '✵ Auto-compressing context due to token limit...',
-					streaming: false,
-				};
-				setMessages(prev => [...prev, compressingMessage]);
+				sessionId = sessionManager.getCurrentSession()?.id;
+				const compressionResult = await performAutoCompression(
+					sessionId,
+					status => {
+						lastCompressionStep = status?.step ?? null;
+						props.onCompressionStatus?.(status);
+					},
+				);
 
-				const session = sessionManager.getCurrentSession();
-				const compressionResult = await performAutoCompression(session?.id);
+				if (compressionResult && (compressionResult as any).hookFailed) {
+					const errorMsg = 'Blocked by beforeCompress hook';
+					setCompressionError(errorMsg);
+					props.onCompressionStatus?.({
+						step: 'failed',
+						message: errorMsg,
+						sessionId,
+					});
+					setTimeout(() => {
+						props.onCompressionStatus?.(null);
+					}, 5000);
+					return;
+				}
 
 				if (compressionResult) {
+					props.onCompressionStatus?.(null);
 					clearSavedMessages();
 					setMessages(compressionResult.uiMessages);
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
 					snapshotState.setSnapshotFileCount(new Map());
-				} else {
-					setMessages(prev => prev.filter(m => m !== compressingMessage));
+				} else if (lastCompressionStep !== 'failed') {
+					props.onCompressionStatus?.(null);
 				}
 			} catch (error) {
 				const errorMsg =
 					error instanceof Error ? error.message : 'Unknown error';
 				setCompressionError(errorMsg);
+				props.onCompressionStatus?.({
+					step: 'failed',
+					message: errorMsg,
+					sessionId,
+				});
+				setTimeout(() => {
+					props.onCompressionStatus?.(null);
+				}, 5000);
 
 				const errorMessage: Message = {
 					role: 'assistant',

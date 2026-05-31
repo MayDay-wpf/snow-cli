@@ -65,6 +65,20 @@ export function isToolOnlyShowCompleted(toolName: string): boolean {
 	return !isToolNeedTwoStepDisplay(toolName);
 }
 
+function isFilesystemEditDiffData(
+	value: unknown,
+): value is Record<string, any> {
+	if (!value || typeof value !== 'object') {
+		return false;
+	}
+	const data = value as Record<string, any>;
+	return (
+		(typeof data['oldContent'] === 'string' &&
+			typeof data['newContent'] === 'string') ||
+		Array.isArray(data['batchResults'])
+	);
+}
+
 /**
  * 从 MCP 工具原始返回对象中提取 filesystem-edit / replaceedit 的 DiffViewer 元数据。
  * 须在 token 截断之前调用，避免批量结果被整段 stringify 后丢失 diff 字段。
@@ -73,17 +87,30 @@ export function extractFilesystemEditDiffFromRawResult(
 	toolName: string,
 	toolResult: unknown,
 ): Record<string, any> | undefined {
-	if (
-		toolName !== 'filesystem-edit' &&
-		toolName !== 'filesystem-replaceedit'
-	) {
+	if (toolName !== 'filesystem-edit' && toolName !== 'filesystem-replaceedit') {
 		return undefined;
 	}
 	if (!toolResult || typeof toolResult !== 'object') {
 		return undefined;
 	}
 	const result = toolResult as Record<string, any>;
-	if (result['oldContent'] && result['newContent']) {
+	const embeddedEditDiffData = result['editDiffData'];
+	if (isFilesystemEditDiffData(embeddedEditDiffData)) {
+		return embeddedEditDiffData;
+	}
+	if ('__toolResultContent' in result) {
+		const fromWrappedContent = extractFilesystemEditDiffFromRawResult(
+			toolName,
+			result['__toolResultContent'],
+		);
+		if (fromWrappedContent) {
+			return fromWrappedContent;
+		}
+	}
+	if (
+		typeof result['oldContent'] === 'string' &&
+		typeof result['newContent'] === 'string'
+	) {
 		return {
 			oldContent: result['oldContent'],
 			newContent: result['newContent'],
@@ -96,6 +123,15 @@ export function extractFilesystemEditDiffFromRawResult(
 	if (Array.isArray(result['results']) && result['results'].length > 0) {
 		return {
 			batchResults: result['results'],
+			isBatch: true,
+		};
+	}
+	if (
+		Array.isArray(result['batchResults']) &&
+		result['batchResults'].length > 0
+	) {
+		return {
+			batchResults: result['batchResults'],
 			isBatch: true,
 		};
 	}
@@ -118,34 +154,7 @@ export function extractFilesystemEditDiffDataForPersistence(
 	}
 	try {
 		const resultData = JSON.parse(content);
-		if (resultData.oldContent && resultData.newContent) {
-			return {
-				oldContent: resultData.oldContent,
-				newContent: resultData.newContent,
-				filename:
-					resultData.filePath ||
-					resultData.path ||
-					resultData.filename,
-				completeOldContent: resultData.completeOldContent,
-				completeNewContent: resultData.completeNewContent,
-				contextStartLine: resultData.contextStartLine,
-			};
-		}
-		if (resultData.results && Array.isArray(resultData.results)) {
-			return {
-				batchResults: resultData.results,
-				isBatch: true,
-			};
-		}
-		if (
-			resultData.batchResults &&
-			Array.isArray(resultData.batchResults)
-		) {
-			return {
-				batchResults: resultData.batchResults,
-				isBatch: true,
-			};
-		}
+		return extractFilesystemEditDiffFromRawResult(toolName, resultData);
 	} catch {
 		// ignore
 	}
