@@ -18,6 +18,11 @@ import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTr
 import {teamTracker} from '../../../utils/execution/teamTracker.js';
 import {compressionCoordinator} from '../../../utils/core/compressionCoordinator.js';
 import {goalManager} from '../../../utils/task/goalManager.js';
+import {getProjectName} from '../../../utils/session/projectUtils.js';
+import {
+	notifyAgentTurnComplete,
+	shouldNotifyAgentTurnCompletion,
+} from '../../../utils/platform/windows-notification.js';
 
 interface MessageTarget {
 	instanceId: string;
@@ -97,6 +102,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		userInterruptedRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
+		hasFocus,
 	} = props;
 
 	const processMessageRef = useRef<
@@ -110,10 +116,15 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 	>(null);
 
 	const yoloModeRef = useRef(yoloMode);
+	const hasFocusRef = useRef(hasFocus ?? true);
 
 	useEffect(() => {
 		yoloModeRef.current = yoloMode;
 	}, [yoloMode]);
+
+	useEffect(() => {
+		hasFocusRef.current = hasFocus ?? true;
+	}, [hasFocus]);
 
 	const appendAiCompletionTimeMessage = () => {
 		setMessages(prev => [
@@ -125,6 +136,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				aiCompletionTime: new Date(),
 			},
 		]);
+	};
+
+	const notifyAgentTurnWaitingForInput = () => {
+		notifyAgentTurnComplete({
+			projectName: getProjectName(),
+		});
 	};
 
 	const processMessage = async (
@@ -471,12 +488,14 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			// 用本轮初始快照的 wasUserInterrupted 判定，避免 ref 已被 reset 的陷阱。
 			// 同时再次校验 goal 当前状态：用户 ESC 时 handleInterrupt 会把 goal 置为
 			// paused，所以即使 wasUserInterrupted 漏判，status !== 'pursuing' 也能兜底。
-			if (!wasUserInterrupted) {
-				void (async () => {
-					try {
+			void (async () => {
+				let willAutoContinue = false;
+
+				try {
+					if (!wasUserInterrupted) {
 						const current = await goalManager.loadCurrentGoal();
-						if (!current) return;
-						if (current.status === 'pursuing') {
+						if (current?.status === 'pursuing') {
+							willAutoContinue = true;
 							await goalManager.markPendingContinuation();
 							// 调度下一轮：用空消息 + hideUserMessage 触发，使续接 prompt 作为唯一输入
 							setTimeout(() => {
@@ -488,9 +507,10 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								}
 							}, 0);
 						} else if (
-							current.status === 'budget-limited' &&
+							current?.status === 'budget-limited' &&
 							current.pendingContinuation
 						) {
+							willAutoContinue = true;
 							// 预算已耗尽，但还有一次 budget_limit 收尾轮次
 							setTimeout(() => {
 								const ref = processMessageRef.current;
@@ -501,11 +521,22 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								}
 							}, 0);
 						}
-					} catch (err) {
-						console.error('[goal] continuation scheduling failed:', err);
 					}
-				})();
-			}
+				} catch (err) {
+					console.error('[goal] continuation scheduling failed:', err);
+				} finally {
+					if (
+						shouldNotifyAgentTurnCompletion({
+							terminalFocused: hasFocusRef.current,
+							wasUserInterrupted,
+							willAutoContinue,
+							pendingMessageCount: pendingMessagesRef.current.length,
+						})
+					) {
+						notifyAgentTurnWaitingForInput();
+					}
+				}
+			})();
 		}
 	};
 
