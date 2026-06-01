@@ -40,7 +40,7 @@ export type NotificationChannels = {
 export function getAgentTurnCompletionChannels(
 	platform: NodeJS.Platform = process.platform,
 ): NotificationChannels {
-	return {toast: platform !== 'win32'};
+	return {toast: ['win32', 'darwin', 'linux'].includes(platform)};
 }
 
 const agentTurnCompletionChannels = getAgentTurnCompletionChannels();
@@ -75,6 +75,16 @@ export function escapeXml(value: string): string {
 		.replaceAll('>', '&gt;')
 		.replaceAll('"', '&quot;')
 		.replaceAll("'", '&apos;');
+}
+export function escapePowerShellSingleQuotedString(value: string): string {
+	return cleanNotificationText(value).replaceAll("'", "''");
+}
+
+export function escapePowerShellDoubleQuotedString(value: string): string {
+	return cleanNotificationText(value)
+		.replaceAll('`', '``')
+		.replaceAll('$', '`$')
+		.replaceAll('"', '`"');
 }
 
 export function escapeAppleScriptString(value: string): string {
@@ -143,29 +153,41 @@ export function buildTerminalNotificationSequences(
 }
 
 export function buildToastScript(title: string, body: string): string {
-	const safeTitle = escapeXml(title);
-	const safeBody = escapeXml(body);
-	const safeAppId = appId.replaceAll("'", "''");
+	const safeTitle = escapePowerShellSingleQuotedString(title || appId);
+	const safeBody = escapePowerShellSingleQuotedString(body || title || appId);
 
 	return `
 try {
-  [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-  [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+  Add-Type -AssemblyName System.Windows.Forms
+  Add-Type -AssemblyName System.Drawing
 
-  $xml = @"
-<toast>
-  <visual>
-    <binding template="ToastGeneric">
-      <text>${safeTitle}</text>
-      <text>${safeBody}</text>
-    </binding>
-  </visual>
-</toast>
-"@
-  $document = New-Object Windows.Data.Xml.Dom.XmlDocument
-  $document.LoadXml($xml)
-  $toast = [Windows.UI.Notifications.ToastNotification]::new($document)
-  [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${safeAppId}').Show($toast)
+  $notification = New-Object System.Windows.Forms.NotifyIcon
+  $notification.Icon = [System.Drawing.SystemIcons]::Information
+  $notification.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+  $notification.BalloonTipTitle = '${safeTitle}'
+  $notification.BalloonTipText = '${safeBody}'
+  $notification.Visible = $true
+  $notification.ShowBalloonTip(5000)
+  Start-Sleep -Seconds 6
+  $notification.Dispose()
+} catch {
+  exit 0
+}
+`;
+}
+
+export function buildWindowsNotificationLauncherScript(
+	title: string,
+	body: string,
+): string {
+	const toastScript = buildToastScript(title, body).trim();
+
+	return `
+try {
+  $script = @'
+${toastScript}
+'@
+  Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-Command',$script -WindowStyle Hidden | Out-Null
 } catch {
   exit 0
 }
@@ -222,13 +244,26 @@ function spawnDetachedBestEffort(command: string, args: string[]): void {
 	}
 }
 
-function showWindowsToastNotification({title, body}: NotificationPayload): void {
-	const script = buildToastScript(title, body);
-	const encodedCommand = Buffer.from(script, 'utf16le').toString('base64');
+function showWindowsToastNotification({
+	title,
+	body,
+}: NotificationPayload): void {
+	const encodedCommand = Buffer.from(
+		buildToastScript(title, body),
+		'utf16le',
+	).toString('base64');
 
-	spawnDetachedBestEffort('powershell.exe', [
+	spawnDetachedBestEffort('cmd.exe', [
+		'/d',
+		'/s',
+		'/c',
+		'start',
+		'""',
+		'/min',
+		'powershell',
 		'-NoProfile',
-		'-NonInteractive',
+		'-WindowStyle',
+		'Hidden',
 		'-ExecutionPolicy',
 		'Bypass',
 		'-EncodedCommand',
