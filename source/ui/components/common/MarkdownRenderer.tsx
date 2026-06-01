@@ -255,19 +255,6 @@ export default function MarkdownRenderer({content}: Props) {
 		let lines = rendered.split('\n');
 		lines = trimLines(lines);
 
-		if (lines.length > 500) {
-			logger.warn('[MarkdownRenderer] Rendered output has too many lines', {
-				totalLines: lines.length,
-				truncatedTo: 500,
-			});
-			return (
-				<Box flexDirection="column">
-					{lines.slice(0, 500).map((line: string, index: number) => (
-						<Text key={index}>{line || ' '}</Text>
-					))}
-				</Box>
-			);
-		}
 
 		return (
 			<Box flexDirection="column">
