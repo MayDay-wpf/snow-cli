@@ -1,6 +1,6 @@
 import anyTest, {type TestFn} from 'ava';
 
-import {formatTerminalTitle} from './terminal-title-formatter.js';
+import {formatTerminalTitle} from '../utils/ui/terminal-title-formatter.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -43,15 +43,16 @@ test('formatTerminalTitle limits long project names', t => {
 	t.true(title.endsWith(`${'P'.repeat(21)}...`));
 });
 
-test('formatTerminalTitle shows activity spinner before title', t => {
+test('formatTerminalTitle prefers summary during activity state', t => {
 	t.is(
 		formatTerminalTitle({
 			appTitle: 'Programming efficiency x10!',
 			projectName: 'my-project',
+			summary: '调整终端标题摘要',
 			activity: true,
 			animationFrame: 1,
 		}),
-		'⠙ Snow CLI - Programming efficiency x10! - my-project',
+		'Snow CLI - 调整终端标题摘要 - my-project',
 	);
 });
 

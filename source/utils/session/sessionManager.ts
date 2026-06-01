@@ -390,7 +390,10 @@ class SessionManager {
 	 * 获取可用于当前项目读取的项目目录。
 	 * 第一个始终是稳定项目目录，后续是旧路径项目目录别名。
 	 */
-	private getProjectSessionDirsToRead(): Array<{projectId: string; dir: string}> {
+	private getProjectSessionDirsToRead(): Array<{
+		projectId: string;
+		dir: string;
+	}> {
 		const projectIds = new Set<string>([
 			this.currentProjectId,
 			...this.projectAliasIds,
@@ -770,8 +773,6 @@ class SessionManager {
 
 		// 通知监听器有新消息
 		this.notifyMessageListeners(message);
-		// 通知消息列表已变化
-		this.notifyMessagesChanged();
 
 		// Generate simple title and summary from first user message
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
@@ -786,6 +787,9 @@ class SessionManager {
 			this.currentSession.title = this.cleanTitle(title);
 			this.currentSession.summary = this.cleanTitle(summary);
 		}
+
+		// 通知消息列表已变化，也同步标题/摘要等会话元数据
+		this.notifyMessagesChanged();
 
 		// After the first complete conversation exchange (user + assistant), generate AI summary
 		// Only run once when messageCount becomes 2 and the second message is from assistant
@@ -861,6 +865,7 @@ class SessionManager {
 				targetSession.title = result.title;
 				targetSession.summary = result.summary;
 				await this.saveSession(targetSession);
+				this.notifyMessagesChanged();
 
 				logger.info('Summary agent: Successfully updated session summary', {
 					sessionId: targetSessionId,

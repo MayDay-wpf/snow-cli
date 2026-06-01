@@ -258,6 +258,17 @@ export default function ChatScreen({
 
 	const handleProfileSelect = panelState.handleProfileSelect;
 	const [terminalTitleFrame, setTerminalTitleFrame] = useState(0);
+	const [terminalTitleSummary, setTerminalTitleSummary] = useState('');
+
+	useEffect(() => {
+		const syncTerminalTitleSummary = () => {
+			const currentSession = sessionManager.getCurrentSession();
+			setTerminalTitleSummary(currentSession?.summary || '');
+		};
+
+		syncTerminalTitleSummary();
+		return sessionManager.onMessagesChanged(syncTerminalTitleSummary);
+	}, []);
 
 	const foregroundTerminalCommand =
 		terminalExecutionState.state.isExecuting &&
@@ -285,7 +296,7 @@ export default function ChatScreen({
 		(customCommandExecution?.isRunning ?? false) ||
 		schedulerExecutionState.state.isRunning ||
 		hasRunningBackgroundProcess;
-	const terminalTitleActive = hasActiveProgress || hasPendingAction;
+	const terminalTitleActive = hasPendingAction;
 
 	useEffect(() => {
 		if (!terminalTitleActive) {
@@ -293,21 +304,19 @@ export default function ChatScreen({
 			return;
 		}
 
-		const intervalId = setInterval(
-			() => {
-				setTerminalTitleFrame(frame => frame + 1);
-			},
-			hasPendingAction ? 500 : 120,
-		);
+		const intervalId = setInterval(() => {
+			setTerminalTitleFrame(frame => frame + 1);
+		}, 500);
 
 		return () => {
 			clearInterval(intervalId);
 		};
-	}, [terminalTitleActive, hasPendingAction]);
+	}, [terminalTitleActive]);
 
 	const terminalTitle = formatTerminalTitle({
 		appTitle: t.chatScreen.headerTitle,
 		projectName,
+		summary: terminalTitleSummary,
 		activity: hasActiveProgress,
 		actionRequired: hasPendingAction,
 		animationFrame: terminalTitleFrame,

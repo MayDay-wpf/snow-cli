@@ -191,19 +191,19 @@ export class SummaryAgent {
 			assistantMessage,
 			abortSignal,
 		);
-		// 无论生成成功或回退，都用 title 更新终端标题
-		this.applyTerminalTitle(result?.title);
+		// 无论生成成功或回退，都优先用摘要更新终端标题
+		this.applyTerminalTitle(result?.summary);
 		return result;
 	}
 
 	/**
-	 * 把 summary 标题设置为终端窗口/标签标题，失败时静默忽略
+	 * 把 conversation summary 设置为终端窗口/标签标题，失败时静默忽略
 	 */
-	private applyTerminalTitle(title: string | undefined): void {
-		if (!title) return;
+	private applyTerminalTitle(summary: string | undefined): void {
+		if (!summary) return;
 		try {
 			if (!process.stdout?.isTTY) return;
-			const finalTitle = `Snow CLI - ${title}`;
+			const finalTitle = `Snow CLI - ${summary}`;
 			try {
 				process.title = finalTitle;
 			} catch {

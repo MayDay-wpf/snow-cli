@@ -1,6 +1,7 @@
 const appName = 'Snow CLI';
 const defaultProjectName = 'Unknown Project';
 const maxProjectNameLength = 24;
+const maxSummaryLength = 80;
 const controlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
 
 export const terminalTitleSpinnerFrames = [
@@ -20,6 +21,7 @@ export const terminalTitleFrameCount = terminalTitleSpinnerFrames.length;
 type TerminalTitleState = {
 	appTitle?: string;
 	projectName?: string;
+	summary?: string;
 	activity?: boolean;
 	actionRequired?: boolean;
 	animationFrame?: number;
@@ -59,7 +61,7 @@ function formatBaseTitle(appTitle: string | undefined): string {
 export function formatTerminalTitle({
 	appTitle,
 	projectName,
-	activity = false,
+	summary,
 	actionRequired = false,
 	animationFrame = 0,
 }: TerminalTitleState): string {
@@ -68,17 +70,13 @@ export function formatTerminalTitle({
 		defaultProjectName,
 		maxProjectNameLength,
 	);
-	const title = `${formatBaseTitle(appTitle)} - ${safeProjectName}`;
+	const safeSummary = cleanTitlePart(summary, '', maxSummaryLength);
+	const title = `${formatBaseTitle(
+		safeSummary || appTitle,
+	)} - ${safeProjectName}`;
 
 	if (actionRequired) {
 		return `${formatActionRequiredPrefix(animationFrame)} - ${title}`;
-	}
-
-	if (activity) {
-		const spinnerFrame =
-			terminalTitleSpinnerFrames[getFrameIndex(animationFrame)]!;
-
-		return `${spinnerFrame} ${title}`;
 	}
 
 	return title;
