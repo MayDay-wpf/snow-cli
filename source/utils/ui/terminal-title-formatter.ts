@@ -1,3 +1,4 @@
+const appName = 'Snow CLI';
 const defaultProjectName = 'Unknown Project';
 const maxProjectNameLength = 24;
 const controlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
@@ -17,6 +18,7 @@ export const terminalTitleSpinnerFrames = [
 export const terminalTitleFrameCount = terminalTitleSpinnerFrames.length;
 
 type TerminalTitleState = {
+	appTitle?: string;
 	projectName?: string;
 	activity?: boolean;
 	actionRequired?: boolean;
@@ -26,7 +28,7 @@ type TerminalTitleState = {
 function cleanTitlePart(
 	value: string | undefined,
 	fallback: string,
-	maxLength: number,
+	maxLength?: number,
 ): string {
 	const cleaned = (value ?? '')
 		.replaceAll(controlCharacters, ' ')
@@ -34,7 +36,7 @@ function cleanTitlePart(
 		.trim();
 	const safeValue = cleaned || fallback;
 
-	return safeValue.length > maxLength
+	return maxLength && safeValue.length > maxLength
 		? `${safeValue.slice(0, maxLength - 3)}...`
 		: safeValue;
 }
@@ -49,7 +51,13 @@ function formatActionRequiredPrefix(animationFrame: number): string {
 		: '[ . ] Action Required';
 }
 
+function formatBaseTitle(appTitle: string | undefined): string {
+	const safeAppTitle = cleanTitlePart(appTitle, '');
+	return safeAppTitle ? `${appName} - ${safeAppTitle}` : appName;
+}
+
 export function formatTerminalTitle({
+	appTitle,
 	projectName,
 	activity = false,
 	actionRequired = false,
@@ -60,17 +68,18 @@ export function formatTerminalTitle({
 		defaultProjectName,
 		maxProjectNameLength,
 	);
+	const title = `${formatBaseTitle(appTitle)} - ${safeProjectName}`;
 
 	if (actionRequired) {
-		return `${formatActionRequiredPrefix(animationFrame)} - ${safeProjectName}`;
+		return `${formatActionRequiredPrefix(animationFrame)} - ${title}`;
 	}
 
 	if (activity) {
 		const spinnerFrame =
 			terminalTitleSpinnerFrames[getFrameIndex(animationFrame)]!;
 
-		return `${spinnerFrame} ${safeProjectName}`;
+		return `${spinnerFrame} ${title}`;
 	}
 
-	return safeProjectName;
+	return title;
 }
