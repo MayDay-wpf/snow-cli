@@ -2,7 +2,7 @@ import {spawn} from 'child_process';
 import {writeFileSync, appendFileSync, existsSync, mkdirSync} from 'fs';
 import {join} from 'path';
 import {homedir} from 'os';
-import {notifyTaskFinished} from '../platform/windows-notification.js';
+import {notifyTaskFinished} from '../platform/notification.js';
 import {taskManager} from './taskManager.js';
 
 const TASK_LOG_DIR = join(homedir(), '.snow', 'task-logs');

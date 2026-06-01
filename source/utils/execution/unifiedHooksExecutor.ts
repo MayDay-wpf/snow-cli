@@ -1,6 +1,6 @@
 import {exec} from 'child_process';
 import {
-	loadHookConfig,
+	loadHookConfigWithFallback,
 	type HookType,
 	type HookRule,
 	type HookAction,
@@ -156,13 +156,8 @@ export class UnifiedHooksExecutor {
 		hookType: T,
 		context?: HookContextMap[T],
 	): Promise<UnifiedHookExecutionResult> {
-		// 1. 先尝试加载项目级 hooks
-		let rules = loadHookConfig(hookType, 'project');
-
-		// 2. 如果项目级没有，回退到全局级
-		if (rules.length === 0) {
-			rules = loadHookConfig(hookType, 'global');
-		}
+		// 1. 加载 hooks：优先项目级，项目级没有时回退到全局级。
+		const rules = loadHookConfigWithFallback(hookType);
 
 		// 3. 没有配置任何 hooks
 		if (rules.length === 0) {
@@ -189,8 +184,8 @@ export class UnifiedHooksExecutor {
 
 			// 按顺序执行规则中的所有 actions
 			for (const action of rule.hooks) {
-				// 跳过禁用的 action
-				if (action.enabled === false) {
+				// 跳过未显式启用的 action
+				if (action.enabled !== true) {
 					totalSkipped++;
 					continue;
 				}

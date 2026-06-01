@@ -24,6 +24,7 @@ export type AgentTurnCompletionNotificationState = {
 	wasUserInterrupted?: boolean;
 	willAutoContinue?: boolean;
 	pendingMessageCount?: number;
+	hasOnStopHook?: boolean;
 };
 
 type NotificationPayload = {
@@ -31,12 +32,18 @@ type NotificationPayload = {
 	body: string;
 };
 
-type NotificationChannels = {
+export type NotificationChannels = {
 	terminal?: boolean;
 	toast?: boolean;
 };
 
-const agentTurnCompletionChannels: NotificationChannels = {toast: false};
+export function getAgentTurnCompletionChannels(
+	platform: NodeJS.Platform = process.platform,
+): NotificationChannels {
+	return {toast: platform !== 'win32'};
+}
+
+const agentTurnCompletionChannels = getAgentTurnCompletionChannels();
 
 export function truncate(value: string, maxLength: number): string {
 	if (maxLength <= 0) {
@@ -70,6 +77,12 @@ export function escapeXml(value: string): string {
 		.replaceAll("'", '&apos;');
 }
 
+export function escapeAppleScriptString(value: string): string {
+	return cleanNotificationText(value)
+		.replaceAll('\\', '\\\\')
+		.replaceAll('"', '\\"');
+}
+
 export function formatTaskNotification({
 	taskTitle,
 	status,
@@ -96,13 +109,15 @@ export function shouldNotifyAgentTurnCompletion({
 	wasUserInterrupted = false,
 	willAutoContinue = false,
 	pendingMessageCount = 0,
+	hasOnStopHook = false,
 }: AgentTurnCompletionNotificationState): boolean {
-	// Codex only asks the terminal for attention when it is actually unfocused.
+	// Snow only asks the terminal for attention when it is actually unfocused.
 	return (
 		!terminalFocused &&
 		!wasUserInterrupted &&
 		!willAutoContinue &&
-		pendingMessageCount === 0
+		pendingMessageCount === 0 &&
+		!hasOnStopHook
 	);
 }
 
@@ -134,27 +149,48 @@ export function buildToastScript(title: string, body: string): string {
 
 	return `
 try {
-	[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-	[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+  [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+  [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
 
-	$xml = @"
+  $xml = @"
 <toast>
-	<visual>
-		<binding template="ToastGeneric">
-			<text>${safeTitle}</text>
-			<text>${safeBody}</text>
-		</binding>
-	</visual>
+  <visual>
+    <binding template="ToastGeneric">
+      <text>${safeTitle}</text>
+      <text>${safeBody}</text>
+    </binding>
+  </visual>
 </toast>
 "@
-	$document = New-Object Windows.Data.Xml.Dom.XmlDocument
-	$document.LoadXml($xml)
-	$toast = [Windows.UI.Notifications.ToastNotification]::new($document)
-	[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${safeAppId}').Show($toast)
+  $document = New-Object Windows.Data.Xml.Dom.XmlDocument
+  $document.LoadXml($xml)
+  $toast = [Windows.UI.Notifications.ToastNotification]::new($document)
+  [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${safeAppId}').Show($toast)
 } catch {
-	exit 0
+  exit 0
 }
 `;
+}
+
+export function buildMacOsNotificationArguments(
+	title: string,
+	body: string,
+): string[] {
+	const safeTitle = escapeAppleScriptString(title);
+	const safeBody = escapeAppleScriptString(body);
+
+	return ['-e', `display notification "${safeBody}" with title "${safeTitle}"`];
+}
+
+export function buildLinuxNotificationArguments(
+	title: string,
+	body: string,
+): string[] {
+	const safeTitle = cleanNotificationText(title) || appId;
+	const safeBody = cleanNotificationText(body);
+	const baseArguments = [`--app-name=${appId}`, safeTitle];
+
+	return safeBody ? [...baseArguments, safeBody] : baseArguments;
 }
 
 function writeTerminalNotification(title: string, body: string): void {
@@ -171,48 +207,84 @@ function writeTerminalNotification(title: string, body: string): void {
 	}
 }
 
-function showWindowsNotification(
-	{title, body}: NotificationPayload,
-	channels: NotificationChannels = {},
-): void {
-	if (process.platform !== 'win32') {
-		return;
-	}
-
-	const {terminal = true, toast = true} = channels;
-	if (terminal) {
-		writeTerminalNotification(title, body);
-	}
-
-	if (!toast) {
-		return;
-	}
-
-	const script = buildToastScript(title, body);
-	const encodedCommand = Buffer.from(script, 'utf16le').toString('base64');
-
+function spawnDetachedBestEffort(command: string, args: string[]): void {
 	try {
-		const child = spawn(
-			'powershell.exe',
-			[
-				'-NoProfile',
-				'-NonInteractive',
-				'-ExecutionPolicy',
-				'Bypass',
-				'-EncodedCommand',
-				encodedCommand,
-			],
-			{
-				detached: true,
-				stdio: 'ignore',
-				windowsHide: true,
-			},
-		);
+		const child = spawn(command, args, {
+			detached: true,
+			stdio: 'ignore',
+			windowsHide: true,
+		});
 
 		child.on('error', () => undefined);
 		child.unref();
 	} catch {
-		// Notifications are best-effort and must never affect task execution.
+		// Desktop notifications are best-effort.
+	}
+}
+
+function showWindowsToastNotification({title, body}: NotificationPayload): void {
+	const script = buildToastScript(title, body);
+	const encodedCommand = Buffer.from(script, 'utf16le').toString('base64');
+
+	spawnDetachedBestEffort('powershell.exe', [
+		'-NoProfile',
+		'-NonInteractive',
+		'-ExecutionPolicy',
+		'Bypass',
+		'-EncodedCommand',
+		encodedCommand,
+	]);
+}
+
+function showMacOsNotification({title, body}: NotificationPayload): void {
+	spawnDetachedBestEffort(
+		'osascript',
+		buildMacOsNotificationArguments(title, body),
+	);
+}
+
+function showLinuxNotification({title, body}: NotificationPayload): void {
+	spawnDetachedBestEffort(
+		'notify-send',
+		buildLinuxNotificationArguments(title, body),
+	);
+}
+
+function showDesktopNotification(payload: NotificationPayload): void {
+	switch (process.platform) {
+		case 'win32': {
+			showWindowsToastNotification(payload);
+			break;
+		}
+
+		case 'darwin': {
+			showMacOsNotification(payload);
+			break;
+		}
+
+		case 'linux': {
+			showLinuxNotification(payload);
+			break;
+		}
+
+		default: {
+			break;
+		}
+	}
+}
+
+function showPlatformNotification(
+	{title, body}: NotificationPayload,
+	channels: NotificationChannels = {},
+): void {
+	const {terminal = true, toast = true} = channels;
+
+	if (terminal) {
+		writeTerminalNotification(title, body);
+	}
+
+	if (toast) {
+		showDesktopNotification({title, body});
 	}
 }
 
@@ -220,14 +292,14 @@ export function notifyTaskFinished(
 	notification: TaskNotification,
 	channels: NotificationChannels = {},
 ): void {
-	showWindowsNotification(formatTaskNotification(notification), channels);
+	showPlatformNotification(formatTaskNotification(notification), channels);
 }
 
 export function notifyAgentTurnComplete(
 	notification: SessionNotification,
 	channels: NotificationChannels = agentTurnCompletionChannels,
 ): void {
-	showWindowsNotification(
+	showPlatformNotification(
 		formatAgentTurnCompletionNotification(notification),
 		channels,
 	);

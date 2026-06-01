@@ -22,7 +22,8 @@ import {getProjectName} from '../../../utils/session/projectUtils.js';
 import {
 	notifyAgentTurnComplete,
 	shouldNotifyAgentTurnCompletion,
-} from '../../../utils/platform/windows-notification.js';
+} from '../../../utils/platform/notification.js';
+import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
 
 interface MessageTarget {
 	instanceId: string;
@@ -531,6 +532,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 							wasUserInterrupted,
 							willAutoContinue,
 							pendingMessageCount: pendingMessagesRef.current.length,
+							hasOnStopHook: hasEnabledHookActions('onStop'),
 						})
 					) {
 						notifyAgentTurnWaitingForInput();

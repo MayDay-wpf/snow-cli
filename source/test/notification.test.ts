@@ -1,15 +1,20 @@
 import anyTest, {type TestFn} from 'ava';
 
 import {
+	buildLinuxNotificationArguments,
+	buildMacOsNotificationArguments,
 	buildTerminalNotificationSequences,
 	buildToastScript,
 	cleanNotificationText,
+	escapeAppleScriptString,
 	escapeXml,
 	formatAgentTurnCompletionNotification,
 	formatTaskNotification,
+	getAgentTurnCompletionChannels,
 	shouldNotifyAgentTurnCompletion,
 	truncate,
-} from './windows-notification.js';
+} from '../utils/platform/notification.js';
+import {hasEnabledHookActionsInRules} from '../utils/config/hooksConfig.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -22,6 +27,10 @@ test('cleanNotificationText strips terminal control characters', t => {
 
 test('escapeXml escapes toast text characters', t => {
 	t.is(escapeXml('&<>"\''), '&amp;&lt;&gt;&quot;&apos;');
+});
+
+test('escapeAppleScriptString escapes notification script text', t => {
+	t.is(escapeAppleScriptString('A"B\\C\nD'), 'A\\"B\\\\C D');
 });
 
 test('truncate returns short text unchanged', t => {
@@ -70,6 +79,19 @@ test('formatAgentTurnCompletionNotification formats waiting payload', t => {
 	);
 });
 
+
+test('getAgentTurnCompletionChannels keeps Windows toast disabled', t => {
+	t.deepEqual(getAgentTurnCompletionChannels('win32'), {toast: false});
+});
+
+test('getAgentTurnCompletionChannels enables desktop notifications on macOS', t => {
+	t.deepEqual(getAgentTurnCompletionChannels('darwin'), {toast: true});
+});
+
+test('getAgentTurnCompletionChannels enables desktop notifications on Linux', t => {
+	t.deepEqual(getAgentTurnCompletionChannels('linux'), {toast: true});
+});
+
 test('shouldNotifyAgentTurnCompletion allows completed unfocused turns waiting for input', t => {
 	t.true(
 		shouldNotifyAgentTurnCompletion({
@@ -116,6 +138,44 @@ test('shouldNotifyAgentTurnCompletion skips turns with queued messages', t => {
 	);
 });
 
+test('shouldNotifyAgentTurnCompletion skips turns when onStop hook is configured', t => {
+	t.false(
+		shouldNotifyAgentTurnCompletion({
+			terminalFocused: false,
+			hasOnStopHook: true,
+		}),
+	);
+});
+
+test('hasEnabledHookActionsInRules detects explicitly enabled executable hook actions', t => {
+	t.true(
+		hasEnabledHookActionsInRules([
+			{
+				description: 'notify on stop',
+				hooks: [
+					{type: 'command', command: 'notify-send done', enabled: true},
+				],
+			},
+		]),
+	);
+});
+
+test('hasEnabledHookActionsInRules ignores disabled, missing enabled, or incomplete hook actions', t => {
+	t.false(
+		hasEnabledHookActionsInRules([
+			{
+				description: 'disabled command',
+				hooks: [
+					{type: 'command', command: 'notify-send done', enabled: false},
+					{type: 'command', command: 'notify-send done'},
+					{type: 'command', enabled: true},
+					{type: 'prompt', prompt: '   ', enabled: true},
+				],
+			},
+		]),
+	);
+});
+
 test('buildTerminalNotificationSequences emits OSC 9 and BEL fallback', t => {
 	t.deepEqual(buildTerminalNotificationSequences('Done', 'Task'), [
 		'\u001B]9;Done: Task\u0007',
@@ -149,4 +209,26 @@ test('buildToastScript uses hidden non-interactive powershell policy path', t =>
 	const script = buildToastScript('title', 'body');
 
 	t.true(script.includes('ToastNotificationManager'));
+});
+
+test('buildMacOsNotificationArguments creates escaped osascript command', t => {
+	t.deepEqual(buildMacOsNotificationArguments('A"B\\C', 'Line\nBody'), [
+		'-e',
+		'display notification "Line Body" with title "A\\"B\\\\C"',
+	]);
+});
+
+test('buildLinuxNotificationArguments creates notify-send arguments', t => {
+	t.deepEqual(buildLinuxNotificationArguments('Title', 'Body'), [
+		'--app-name=Snow CLI',
+		'Title',
+		'Body',
+	]);
+});
+
+test('buildLinuxNotificationArguments omits blank body', t => {
+	t.deepEqual(buildLinuxNotificationArguments('Title', '\n'), [
+		'--app-name=Snow CLI',
+		'Title',
+	]);
 });

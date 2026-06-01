@@ -35,7 +35,7 @@ export interface HookAction {
 	command?: string; // type=command 时使用
 	prompt?: string; // type=prompt 时使用
 	timeout?: number; // 超时时间（毫秒）
-	enabled?: boolean; // 是否启用（默认为 true）
+	enabled?: boolean; // 是否启用
 }
 
 /**
@@ -193,6 +193,47 @@ export function loadHookConfig(
 		console.error(`Failed to load hook config for ${hookType}:`, error);
 		return [];
 	}
+}
+
+function isExecutableHookAction(action: HookAction): boolean {
+	if (action.enabled !== true) {
+		return false;
+	}
+
+	if (action.type === 'command') {
+		return Boolean(action.command?.trim());
+	}
+
+	if (action.type === 'prompt') {
+		return Boolean(action.prompt?.trim());
+	}
+
+	return false;
+}
+
+export function hasEnabledHookActionsInRules(rules: HookRule[]): boolean {
+	return rules.some(rule => rule.hooks.some(isExecutableHookAction));
+}
+
+export function loadHookConfigWithFallback(hookType: HookType): HookRule[] {
+	const projectRules = loadHookConfig(hookType, 'project');
+
+	if (projectRules.length > 0) {
+		return projectRules;
+	}
+
+	return loadHookConfig(hookType, 'global');
+}
+
+export function hasEnabledHookActions(
+	hookType: HookType,
+	scope?: HookScope,
+): boolean {
+	const rules = scope
+		? loadHookConfig(hookType, scope)
+		: loadHookConfigWithFallback(hookType);
+
+	return hasEnabledHookActionsInRules(rules);
 }
 
 /**
