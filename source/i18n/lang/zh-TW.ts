@@ -592,7 +592,7 @@ export const zhTW: TranslationKeys = {
 				'為子代理自訂前置提示詞 (ROLE-名字.md)。使用 -l 列出，-d 刪除',
 			usage: '查看帶有互動式圖表的令牌使用統計',
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
-			config: '匯出或匯入 Snow CLI YAML 設定。用法: /config [export|import]',
+			config: '匯出或匯入 Snow CLI YAML 設定。用法: /config <export|import>',
 			custom: '新增自訂命令並儲存到 ~/.snow/commands',
 			skills: '建立包含文件和範例的技能模板',
 			skillsPicker: '選擇 Skill 並將其 SKILL.md 內容注入到輸入框',
@@ -691,7 +691,7 @@ export const zhTW: TranslationKeys = {
 				importSuccess: '設定已成功從以下檔案匯入:\n{path}\n已匯入: {imported}\n已跳過: {skipped}',
 				importFailed: '設定匯入失敗: {error}',
 				none: '無',
-				usage: '用法: /config [export|import]',
+				usage: '用法: /config <export|import>',
 				unknownError: '未知錯誤',
 			},
 			// IDE 命令訊息

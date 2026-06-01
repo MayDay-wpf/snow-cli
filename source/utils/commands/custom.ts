@@ -24,6 +24,11 @@ type CommandFileEntry = {
 	inferredCommandName: string;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+
 function isValidSlashCommandName(name: string): boolean {
 	const trimmed = name.trim();
 	if (trimmed.length === 0) return false;
@@ -254,6 +259,15 @@ export async function loadCustomCommands(
 	return commands;
 }
 
+export async function loadCustomCommandsForLocation(
+	location: CommandLocation,
+	projectRoot?: string,
+): Promise<CustomCommand[]> {
+	const dir = getCustomCommandsDir(location, projectRoot);
+	return loadCommandsFromDir(dir, location);
+}
+
+
 // Check if command name conflicts with built-in or existing custom commands
 export function isCommandNameConflict(name: string): boolean {
 	const allCommands = getAvailableCommands();
@@ -320,6 +334,74 @@ export function getCustomCommands(): CustomCommand[] {
 
 // Cache for custom commands
 let customCommandsCache: CustomCommand[] = [];
+
+function isBuiltInCommandNameConflict(name: string): boolean {
+	const existingCustomNames = new Set(customCommandsCache.map(cmd => cmd.name));
+	const allCommands = getAvailableCommands();
+	return allCommands.includes(name) && !existingCustomNames.has(name);
+}
+
+function normalizeImportedCustomCommand(
+	value: unknown,
+	location: CommandLocation,
+): CustomCommand | null {
+	if (!isRecord(value)) {
+		return null;
+	}
+
+	const {name, command, type, description} = value;
+	if (
+		typeof name !== 'string' ||
+		typeof command !== 'string' ||
+		(type !== 'execute' && type !== 'prompt')
+	) {
+		return null;
+	}
+
+	const trimmedName = name.trim();
+	if (trimmedName.length === 0) {
+		return null;
+	}
+
+	return {
+		name: trimmedName,
+		command,
+		type,
+		...(typeof description === 'string' ? {description} : {}),
+		location,
+	};
+}
+
+export async function importCustomCommandsForLocation(
+	commands: unknown,
+	location: CommandLocation,
+	projectRoot?: string,
+): Promise<void> {
+	if (!Array.isArray(commands)) {
+		throw new TypeError(`customCommands.${location} must be an array`);
+	}
+
+	await ensureCommandsDir(location, projectRoot);
+	const dir = getCustomCommandsDir(location, projectRoot);
+
+	for (const item of commands) {
+		const command = normalizeImportedCustomCommand(item, location);
+		if (!command) {
+			continue;
+		}
+
+		if (isBuiltInCommandNameConflict(command.name)) {
+			throw new Error(
+				`Command name "${command.name}" conflicts with an existing built-in command`,
+			);
+		}
+
+		const filePath = getCommandJsonFilePath(dir, command.name);
+		await mkdir(dirname(filePath), {recursive: true});
+		await writeFile(filePath, JSON.stringify(command, null, 2), 'utf-8');
+	}
+}
+
 
 // Delete a custom command
 export async function deleteCustomCommand(

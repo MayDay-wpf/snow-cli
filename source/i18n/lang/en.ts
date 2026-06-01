@@ -627,7 +627,7 @@ export const en: TranslationKeys = {
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
-			config: 'Export or import Snow CLI YAML configuration. Usage: /config [export|import]',
+			config: 'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
 			skillsPicker:
@@ -741,7 +741,7 @@ export const en: TranslationKeys = {
 					'Configuration imported successfully from:\n{path}\nImported: {imported}\nSkipped: {skipped}',
 				importFailed: 'Configuration import failed: {error}',
 				none: 'none',
-				usage: 'Usage: /config [export|import]',
+				usage: 'Usage: /config <export|import>',
 				unknownError: 'Unknown error',
 			},
 			// IDE command messages

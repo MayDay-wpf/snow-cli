@@ -52,7 +52,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	deepresearch: '<prompt>',
 	connect: '[apiUrl]',
 	export: '[txt|md|html|json]',
-	config: '[export|import]',
+	config: '<export|import>',
 };
 
 // 指令参数可选值列表：用于 Tab 弹出参数选择面板

@@ -41,6 +41,14 @@ import {
 	type SensitiveCommand,
 	type SensitiveCommandsConfig,
 } from '../execution/sensitiveCommandManager.js';
+import {
+	importCustomCommandsForLocation,
+	loadCustomCommandsForLocation,
+	registerCustomCommands,
+	type CommandLocation,
+	type CustomCommand,
+} from '../commands/custom.js';
+
 
 type YamlScalar = string | number | boolean | null;
 type YamlValue = YamlScalar | YamlValue[] | {[key: string]: YamlValue};
@@ -166,7 +174,34 @@ function getHooksExportData(): YamlValue {
 	return result;
 }
 
-export function getConfigManagerExportData(): YamlValue {
+function toCustomCommandsExportValue(commands: CustomCommand[]): YamlValue {
+	return toYamlValue(
+		commands.map(command => ({
+			name: command.name,
+			command: command.command,
+			type: command.type,
+			...(command.description ? {description: command.description} : {}),
+			location: command.location,
+		})),
+	);
+}
+
+async function getCustomCommandsExportData(
+	workingDirectory: string,
+): Promise<YamlValue> {
+	const [globalCommands, projectCommands] = await Promise.all([
+		loadCustomCommandsForLocation('global'),
+		loadCustomCommandsForLocation('project', workingDirectory),
+	]);
+
+	return {
+		global: toCustomCommandsExportValue(globalCommands),
+		project: toCustomCommandsExportValue(projectCommands),
+	};
+}
+
+
+export async function getConfigManagerExportData(): Promise<YamlValue> {
 	const workingDirectory = process.cwd();
 
 	return {
@@ -199,20 +234,21 @@ export function getConfigManagerExportData(): YamlValue {
 		sensitiveCommands: {
 			all: toYamlValue(getAllSensitiveCommands()),
 		},
+		customCommands: await getCustomCommandsExportData(workingDirectory),
 		hooks: getHooksExportData(),
 		language: toYamlValue(loadLanguageConfig()),
 		theme: toYamlValue(loadThemeConfig()),
 	};
 }
 
-export function serializeConfigManagerExportToYaml(): string {
-	return `${serializeYamlValue(getConfigManagerExportData())}\n`;
+export async function serializeConfigManagerExportToYaml(): Promise<string> {
+	return `${serializeYamlValue(await getConfigManagerExportData())}\n`;
 }
 
 export async function exportConfigManagerToYamlFile(
 	filePath: string,
 ): Promise<void> {
-	await writeFile(filePath, serializeConfigManagerExportToYaml(), 'utf8');
+	await writeFile(filePath, await serializeConfigManagerExportToYaml(), 'utf8');
 }
 
 export interface ConfigImportResult {
@@ -230,6 +266,7 @@ const IMPORTABLE_KEYS = [
 	'codebase',
 	'subAgents',
 	'sensitiveCommands',
+	'customCommands',
 	'hooks',
 	'language',
 	'theme',
@@ -345,6 +382,34 @@ function importSensitiveCommands(value: unknown): void {
 	}
 }
 
+async function importCustomCommandsConfig(value: unknown): Promise<void> {
+	if (Array.isArray(value)) {
+		await importCustomCommandsForLocation(value, 'global');
+		await registerCustomCommands(process.cwd());
+		return;
+	}
+
+	if (!isPlainObject(value)) {
+		throw new TypeError('customCommands must be an object or array');
+	}
+
+	const scopes: CommandLocation[] = ['global', 'project'];
+	for (const scope of scopes) {
+		if (!hasOwn(value, scope)) {
+			continue;
+		}
+
+		await importCustomCommandsForLocation(
+			value[scope],
+			scope,
+			scope === 'project' ? process.cwd() : undefined,
+		);
+	}
+
+	await registerCustomCommands(process.cwd());
+}
+
+
 function importHooks(value: unknown): void {
 	if (!isPlainObject(value)) {
 		throw new TypeError('hooks must be an object');
@@ -420,6 +485,12 @@ export async function importConfigManagerFromYamlFile(
 		importSensitiveCommands(data['sensitiveCommands']);
 		importedKeys.push('sensitiveCommands');
 	}
+
+	if (hasOwn(data, 'customCommands')) {
+		await importCustomCommandsConfig(data['customCommands']);
+		importedKeys.push('customCommands');
+	}
+
 
 	if (hasOwn(data, 'hooks')) {
 		importHooks(data['hooks']);
