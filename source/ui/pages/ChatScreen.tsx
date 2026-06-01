@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../i18n/I18nContext.js';
@@ -23,6 +23,8 @@ import {usePanelState} from '../../hooks/ui/usePanelState.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
+import {getProjectName} from '../../utils/session/projectUtils.js';
+import {formatTerminalTitle} from '../../utils/ui/terminal-title-formatter.js';
 import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
 import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
 import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
@@ -51,10 +53,10 @@ export default function ChatScreen({
 	enablePlan,
 }: Props) {
 	const {t} = useI18n();
-	useTerminalTitle(`Snow CLI - ${t.chatScreen.headerTitle}`);
+	const workingDirectory = process.cwd();
+	const projectName = getProjectName(workingDirectory);
 	const {theme} = useTheme();
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
-	const workingDirectory = process.cwd();
 
 	const {
 		messages,
@@ -255,6 +257,61 @@ export default function ChatScreen({
 	}
 
 	const handleProfileSelect = panelState.handleProfileSelect;
+	const [terminalTitleFrame, setTerminalTitleFrame] = useState(0);
+
+	const foregroundTerminalCommand =
+		terminalExecutionState.state.isExecuting &&
+		!terminalExecutionState.state.isBackgrounded &&
+		Boolean(terminalExecutionState.state.command);
+	const backgroundTerminalCommand =
+		terminalExecutionState.state.isExecuting &&
+		terminalExecutionState.state.isBackgrounded;
+	const hasRunningBackgroundProcess = backgroundProcesses.processes.some(
+		backgroundProcess => backgroundProcess.status === 'running',
+	);
+	const hasPendingAction =
+		Boolean(pendingToolConfirmation) ||
+		Boolean(pendingUserQuestion) ||
+		Boolean(bashSensitiveCommand) ||
+		terminalExecutionState.state.needsInput;
+	const hasActiveProgress =
+		streamingState.isStreaming ||
+		isSaving ||
+		isCompressing ||
+		isExecutingTerminalCommand ||
+		bashMode.state.isExecuting ||
+		foregroundTerminalCommand ||
+		backgroundTerminalCommand ||
+		(customCommandExecution?.isRunning ?? false) ||
+		schedulerExecutionState.state.isRunning ||
+		hasRunningBackgroundProcess;
+	const terminalTitleActive = hasActiveProgress || hasPendingAction;
+
+	useEffect(() => {
+		if (!terminalTitleActive) {
+			setTerminalTitleFrame(0);
+			return;
+		}
+
+		const intervalId = setInterval(
+			() => {
+				setTerminalTitleFrame(frame => frame + 1);
+			},
+			hasPendingAction ? 500 : 120,
+		);
+
+		return () => {
+			clearInterval(intervalId);
+		};
+	}, [terminalTitleActive, hasPendingAction]);
+
+	const terminalTitle = formatTerminalTitle({
+		projectName,
+		activity: hasActiveProgress,
+		actionRequired: hasPendingAction,
+		animationFrame: terminalTitleFrame,
+	});
+	useTerminalTitle(terminalTitle);
 
 	/**
 	 * /goal resume 面板的选中回调。
