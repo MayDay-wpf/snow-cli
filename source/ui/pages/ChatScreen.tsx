@@ -306,6 +306,7 @@ export default function ChatScreen({
 	}, [terminalTitleActive, hasPendingAction]);
 
 	const terminalTitle = formatTerminalTitle({
+		appTitle: t.chatScreen.headerTitle,
 		projectName,
 		activity: hasActiveProgress,
 		actionRequired: hasPendingAction,
