@@ -22,6 +22,7 @@ import type {
 } from './conversationTypes.js';
 import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
+import {visionAgent} from '../../../agents/visionAgent.js';
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -147,7 +148,7 @@ export async function handleToolCallRound(ctx: {
 		streamingEnabled,
 	);
 
-	const toolResults = await executeToolCalls(
+	const rawToolResults = await executeToolCalls(
 		approvedTools,
 		controller.signal,
 		setStreamTokenCount,
@@ -191,6 +192,12 @@ export async function handleToolCallRound(ctx: {
 				multiSelect,
 			);
 		},
+	);
+
+	const toolResults = await Promise.all(
+		rawToolResults.map(result =>
+			visionAgent.prepareToolResultForNonVisionModel(result, controller.signal),
+		),
 	);
 
 	if (controller.signal.aborted) {
@@ -358,7 +365,11 @@ export async function handleToolCallRound(ctx: {
 
 				const uiMessage: Message = {
 					role: 'subagent',
-					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${spawnedResult.agentName}\x1b[0m (by ${spawnedResult.spawnedBy.agentName}): ${spawnedResult.success ? 'completed' : 'failed'}`,
+					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${
+						spawnedResult.agentName
+					}\x1b[0m (by ${spawnedResult.spawnedBy.agentName}): ${
+						spawnedResult.success ? 'completed' : 'failed'
+					}`,
 					streaming: false,
 					messageStatus: spawnedResult.success ? 'success' : 'error',
 					subAgent: {

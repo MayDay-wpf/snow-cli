@@ -13,7 +13,10 @@ import {
 	saveConfig,
 	DEFAULT_CONFIG,
 	DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+	normalizeBaseUrlMode,
+	type ApiConfig,
 	type AppConfig,
+	type RequestMethod,
 } from './apiConfig.js';
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
@@ -168,6 +171,19 @@ function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	return value;
 }
 
+function normalizeRequestMethod(method: unknown): RequestMethod {
+	if (
+		method === 'chat' ||
+		method === 'responses' ||
+		method === 'gemini' ||
+		method === 'anthropic'
+	) {
+		return method;
+	}
+
+	return DEFAULT_CONFIG.snowcfg.requestMethod;
+}
+
 /**
  * Load a specific profile with deep merge of default config
  * This ensures new config fields (like browserPath) are preserved
@@ -185,15 +201,25 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 	try {
 		const configData = readFileSync(profilePath, 'utf8');
 		const parsedConfig = JSON.parse(configData) as Partial<AppConfig>;
+		const parsedSnowcfg = (parsedConfig.snowcfg || {}) as Partial<ApiConfig>;
 
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...parsedConfig,
 			snowcfg: {
 				...DEFAULT_CONFIG.snowcfg,
-				...(parsedConfig.snowcfg || {}),
+				...parsedSnowcfg,
+				baseUrlMode: normalizeBaseUrlMode(parsedSnowcfg.baseUrlMode),
+				visionBaseUrlMode: normalizeBaseUrlMode(
+					parsedSnowcfg.visionBaseUrlMode,
+				),
+				requestMethod: normalizeRequestMethod(parsedSnowcfg.requestMethod),
+				visionRequestMethod: normalizeRequestMethod(
+					parsedSnowcfg.visionRequestMethod,
+				),
+				supportsVision: parsedSnowcfg.supportsVision !== false,
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
-					parsedConfig.snowcfg?.streamIdleTimeoutSec,
+					parsedSnowcfg.streamIdleTimeoutSec,
 				),
 			},
 		};

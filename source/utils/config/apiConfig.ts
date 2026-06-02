@@ -43,6 +43,12 @@ export interface ApiConfig {
 	requestMethod: RequestMethod;
 	advancedModel?: string;
 	basicModel?: string;
+	supportsVision?: boolean; // Whether the primary model supports vision (default: true)
+	visionBaseUrl?: string; // Base URL for the dedicated vision model
+	visionBaseUrlMode?: BaseUrlMode; // Base URL mode for the dedicated vision model
+	visionApiKey?: string; // API key for the dedicated vision model
+	visionRequestMethod?: RequestMethod; // Request method for the dedicated vision model
+	visionModel?: string; // Dedicated vision model when primary model doesn't support vision
 	maxContextTokens?: number;
 	maxTokens?: number; // Max tokens for single response (API request parameter)
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
@@ -155,6 +161,12 @@ export const DEFAULT_CONFIG: AppConfig = {
 		requestMethod: 'chat',
 		advancedModel: '',
 		basicModel: '',
+		supportsVision: true,
+		visionBaseUrl: '',
+		visionBaseUrlMode: 'auto',
+		visionApiKey: '',
+		visionRequestMethod: 'chat',
+		visionModel: '',
 		maxContextTokens: 200000,
 		maxTokens: 64000,
 		anthropicBeta: false,
@@ -272,11 +284,15 @@ export function loadConfig(): AppConfig {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				...configWithoutMcp.snowcfg,
-				baseUrlMode: normalizeBaseUrlMode(
-					configWithoutMcp.snowcfg.baseUrlMode,
+				baseUrlMode: normalizeBaseUrlMode(configWithoutMcp.snowcfg.baseUrlMode),
+				visionBaseUrlMode: normalizeBaseUrlMode(
+					configWithoutMcp.snowcfg.visionBaseUrlMode,
 				),
 				requestMethod: normalizeRequestMethod(
 					configWithoutMcp.snowcfg.requestMethod,
+				),
+				visionRequestMethod: normalizeRequestMethod(
+					configWithoutMcp.snowcfg.visionRequestMethod,
 				),
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
 					configWithoutMcp.snowcfg.streamIdleTimeoutSec,
@@ -286,7 +302,9 @@ export function loadConfig(): AppConfig {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				baseUrlMode: DEFAULT_CONFIG.snowcfg.baseUrlMode,
+				visionBaseUrlMode: DEFAULT_CONFIG.snowcfg.visionBaseUrlMode,
 				requestMethod: DEFAULT_CONFIG.snowcfg.requestMethod,
+				visionRequestMethod: DEFAULT_CONFIG.snowcfg.visionRequestMethod,
 				streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
 			};
 		}
@@ -370,12 +388,23 @@ export async function updateSnowConfig(
 	const normalizedBaseUrlMode = normalizeBaseUrlMode(
 		apiConfig.baseUrlMode ?? currentConfig.snowcfg.baseUrlMode,
 	);
+	const normalizedVisionBaseUrlMode = normalizeBaseUrlMode(
+		apiConfig.visionBaseUrlMode ?? currentConfig.snowcfg.visionBaseUrlMode,
+	);
+	const normalizedVisionRequestMethod = normalizeRequestMethod(
+		apiConfig.visionRequestMethod ?? currentConfig.snowcfg.visionRequestMethod,
+	);
 	const updatedConfig: AppConfig = {
 		...currentConfig,
 		snowcfg: {
 			...currentConfig.snowcfg,
 			...apiConfig,
 			baseUrlMode: normalizedBaseUrlMode,
+			visionBaseUrlMode: normalizedVisionBaseUrlMode,
+			requestMethod: normalizeRequestMethod(
+				apiConfig.requestMethod ?? currentConfig.snowcfg.requestMethod,
+			),
+			visionRequestMethod: normalizedVisionRequestMethod,
 			streamIdleTimeoutSec: normalizedIdleTimeoutSec,
 		},
 	};
@@ -396,7 +425,6 @@ export async function updateSnowConfig(
 		// Profiles system not available yet (during initialization), skip sync
 	}
 }
-
 
 export function getSnowConfig(): ApiConfig {
 	const config = loadConfig();

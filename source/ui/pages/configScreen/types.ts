@@ -28,6 +28,13 @@ export type ConfigField =
 	| 'chatReasoningEffort'
 	| 'advancedModel'
 	| 'basicModel'
+	| 'supportsVision'
+	| 'visionConfig'
+	| 'visionBaseUrl'
+	| 'visionBaseUrlMode'
+	| 'visionApiKey'
+	| 'visionRequestMethod'
+	| 'visionModel'
 	| 'maxContextTokens'
 	| 'maxTokens'
 	| 'streamIdleTimeoutSec'
@@ -99,6 +106,9 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'customHeadersSchemeId',
 	'advancedModel',
 	'basicModel',
+	'visionBaseUrlMode',
+	'visionRequestMethod',
+	'visionModel',
 	'thinkingMode',
 	'thinkingEffort',
 	'geminiThinkingLevel',
@@ -130,6 +140,7 @@ export const TOGGLE_FIELDS: ConfigField[] = [
 	'responsesReasoningEnabled',
 	'responsesFastMode',
 	'chatThinkingEnabled',
+	'supportsVision',
 ];
 
 export type RequestMethodOption = {

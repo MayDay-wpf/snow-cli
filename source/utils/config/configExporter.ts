@@ -8,20 +8,28 @@ import {
 	type ConfigProfile,
 } from './configManager.js';
 import {
+	DEFAULT_CONFIG,
 	getCustomHeadersConfig,
 	getGlobalMCPConfig,
 	getMCPConfig,
 	getProjectMCPConfig,
 	getSystemPromptConfig,
+	normalizeBaseUrlMode,
 	saveCustomHeadersConfig,
 	saveSystemPromptConfig,
 	updateMCPConfig,
 	type AppConfig,
+	type ApiConfig,
 	type CustomHeadersConfig,
 	type MCPConfig,
+	type RequestMethod,
 	type SystemPromptConfig,
 } from './apiConfig.js';
-import {loadCodebaseConfig, saveCodebaseConfig, type CodebaseConfig} from './codebaseConfig.js';
+import {
+	loadCodebaseConfig,
+	saveCodebaseConfig,
+	type CodebaseConfig,
+} from './codebaseConfig.js';
 import {
 	getAllHookTypes,
 	loadHookConfig,
@@ -31,8 +39,17 @@ import {
 	type HookType,
 } from './hooksConfig.js';
 import {loadLanguageConfig, saveLanguageConfig} from './languageConfig.js';
-import {getProxyConfig, saveProxyConfig, type ProxyConfig} from './proxyConfig.js';
-import {getSubAgents, getUserSubAgents, saveUserSubAgents, type SubAgent} from './subAgentConfig.js';
+import {
+	getProxyConfig,
+	saveProxyConfig,
+	type ProxyConfig,
+} from './proxyConfig.js';
+import {
+	getSubAgents,
+	getUserSubAgents,
+	saveUserSubAgents,
+	type SubAgent,
+} from './subAgentConfig.js';
 import {loadThemeConfig, saveThemeConfig} from './themeConfig.js';
 import {
 	getAllSensitiveCommands,
@@ -49,16 +66,48 @@ import {
 	type CustomCommand,
 } from '../commands/custom.js';
 
-
 type YamlScalar = string | number | boolean | null;
 type YamlValue = YamlScalar | YamlValue[] | {[key: string]: YamlValue};
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		!Array.isArray(value)
-	);
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeRequestMethod(method: unknown): RequestMethod {
+	if (
+		method === 'chat' ||
+		method === 'responses' ||
+		method === 'gemini' ||
+		method === 'anthropic'
+	) {
+		return method;
+	}
+
+	return DEFAULT_CONFIG.snowcfg.requestMethod;
+}
+
+function normalizeApiConfigForImport(value: unknown): ApiConfig {
+	const raw = isPlainObject(value) ? (value as Partial<ApiConfig>) : {};
+
+	return {
+		...DEFAULT_CONFIG.snowcfg,
+		...raw,
+		baseUrlMode: normalizeBaseUrlMode(raw.baseUrlMode),
+		visionBaseUrlMode: normalizeBaseUrlMode(raw.visionBaseUrlMode),
+		requestMethod: normalizeRequestMethod(raw.requestMethod),
+		visionRequestMethod: normalizeRequestMethod(raw.visionRequestMethod),
+		supportsVision: raw.supportsVision !== false,
+	};
+}
+
+function normalizeAppConfigForImport(value: unknown): AppConfig {
+	const raw = isPlainObject(value) ? (value as Partial<AppConfig>) : {};
+
+	return {
+		...DEFAULT_CONFIG,
+		...raw,
+		snowcfg: normalizeApiConfigForImport(raw.snowcfg),
+	};
 }
 
 function toYamlValue(value: unknown): YamlValue {
@@ -104,7 +153,9 @@ function formatScalar(value: YamlScalar): string {
 	}
 
 	if (typeof value === 'number') {
-		return Number.isFinite(value) ? String(value) : JSON.stringify(String(value));
+		return Number.isFinite(value)
+			? String(value)
+			: JSON.stringify(String(value));
 	}
 
 	if (typeof value === 'boolean') {
@@ -200,7 +251,6 @@ async function getCustomCommandsExportData(
 	};
 }
 
-
 export async function getConfigManagerExportData(): Promise<YamlValue> {
 	const workingDirectory = process.cwd();
 
@@ -213,7 +263,7 @@ export async function getConfigManagerExportData(): Promise<YamlValue> {
 			name: profile.name,
 			displayName: profile.displayName,
 			isActive: profile.isActive,
-			config: toYamlValue(profile.config),
+			config: toYamlValue(normalizeAppConfigForImport(profile.config)),
 		})),
 		systemPrompt: toYamlValue(getSystemPromptConfig() ?? null),
 		customHeaders: toYamlValue(getCustomHeadersConfig() ?? null),
@@ -278,9 +328,11 @@ function hasOwn(data: Record<string, unknown>, key: string): boolean {
 
 function parseYamlConfig(content: string): Record<string, unknown> {
 	try {
-		const yamlEngine = (matter as typeof matter & {
-			engines: {yaml: {parse: (input: string) => unknown}};
-		}).engines.yaml;
+		const yamlEngine = (
+			matter as typeof matter & {
+				engines: {yaml: {parse: (input: string) => unknown}};
+			}
+		).engines.yaml;
 		const parsed = yamlEngine.parse(content);
 		if (!isPlainObject(parsed)) {
 			throw new TypeError('Configuration YAML root must be an object');
@@ -305,7 +357,7 @@ function importProfiles(value: unknown): void {
 
 		const profile = item as Partial<ConfigProfile>;
 		if (typeof profile.name === 'string' && isPlainObject(profile.config)) {
-			saveProfile(profile.name, profile.config as AppConfig);
+			saveProfile(profile.name, normalizeAppConfigForImport(profile.config));
 		}
 	}
 }
@@ -344,7 +396,9 @@ function importSubAgents(value: unknown): void {
 	}
 }
 
-function stripSensitiveScope(commands: SensitiveCommand[]): SensitiveCommandsConfig {
+function stripSensitiveScope(
+	commands: SensitiveCommand[],
+): SensitiveCommandsConfig {
 	return {
 		commands: commands.map(command => {
 			const {id, pattern, description, enabled, isPreset} = command;
@@ -364,21 +418,21 @@ function importSensitiveCommands(value: unknown): void {
 	}
 
 	if (hasOwn(value, 'global')) {
-		saveSensitiveCommandsForScope(
-			'global',
-			{commands: value['global'] as SensitiveCommandsConfig['commands']},
-		);
+		saveSensitiveCommandsForScope('global', {
+			commands: value['global'] as SensitiveCommandsConfig['commands'],
+		});
 	}
 
 	if (hasOwn(value, 'project')) {
-		saveSensitiveCommandsForScope(
-			'project',
-			{commands: value['project'] as SensitiveCommandsConfig['commands']},
-		);
+		saveSensitiveCommandsForScope('project', {
+			commands: value['project'] as SensitiveCommandsConfig['commands'],
+		});
 	}
 
 	if (hasOwn(value, 'all') && Array.isArray(value['all'])) {
-		saveSensitiveCommands(stripSensitiveScope(value['all'] as SensitiveCommand[]));
+		saveSensitiveCommands(
+			stripSensitiveScope(value['all'] as SensitiveCommand[]),
+		);
 	}
 }
 
@@ -408,7 +462,6 @@ async function importCustomCommandsConfig(value: unknown): Promise<void> {
 
 	await registerCustomCommands(process.cwd());
 }
-
 
 function importHooks(value: unknown): void {
 	if (!isPlainObject(value)) {
@@ -491,14 +544,15 @@ export async function importConfigManagerFromYamlFile(
 		importedKeys.push('customCommands');
 	}
 
-
 	if (hasOwn(data, 'hooks')) {
 		importHooks(data['hooks']);
 		importedKeys.push('hooks');
 	}
 
 	if (hasOwn(data, 'language')) {
-		saveLanguageConfig(data['language'] as ReturnType<typeof loadLanguageConfig>);
+		saveLanguageConfig(
+			data['language'] as ReturnType<typeof loadLanguageConfig>,
+		);
 		importedKeys.push('language');
 	}
 

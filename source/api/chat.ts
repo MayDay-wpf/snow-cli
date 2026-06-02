@@ -2,6 +2,7 @@ import {
 	getSnowConfig,
 	getCustomHeadersForConfig,
 	getCustomSystemPromptForConfig,
+	type ApiConfig,
 } from '../utils/config/apiConfig.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
@@ -54,6 +55,7 @@ export interface ChatCompletionOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
 export interface ChatCompletionChunk {
@@ -496,6 +498,9 @@ export async function* createStreamingChatCompletion(
 		// No configProfile specified, use main config
 		config = getSnowConfig();
 	}
+	if (options.configOverride) {
+		config = {...config, ...options.configOverride};
+	}
 
 	// Get system prompt (with custom override support)
 	let customSystemPromptContent: string[] | undefined;
@@ -550,7 +555,11 @@ export async function* createStreamingChatCompletion(
 				}
 			}
 
-			const url = resolveApiEndpoint(config.baseUrl, 'chat', config.baseUrlMode);
+			const url = resolveApiEndpoint(
+				config.baseUrl,
+				'chat',
+				config.baseUrlMode,
+			);
 
 			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 			const customHeaders =

@@ -233,6 +233,22 @@ export const en: TranslationKeys = {
 		chatReasoningEffort: 'Chat Reasoning Effort:',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
+		supportsVision: 'Current Model Supports Vision:',
+		supportsVisionYes: 'Yes',
+		supportsVisionNo: 'No, configure a dedicated vision model',
+		visionConfig: 'Vision Model Configuration:',
+		visionConfigTitle: 'Vision Model Configuration',
+		visionConfigSubtitle:
+			'Configure an independent vision model URL, API key, request method, and model for a primary model without vision support',
+		visionConfigOpenHint:
+			'(Press Enter to enter, Esc to return to main configuration)',
+		visionConfigNavigationHint:
+			'↑↓ Navigate · Enter edit/select · Esc return to main configuration · Ctrl+S save',
+		visionBaseUrl: 'Vision Model URL:',
+		visionBaseUrlMode: 'Vision Model URL Mode:',
+		visionApiKey: 'Vision Model API Key:',
+		visionRequestMethod: 'Vision Model Request Method:',
+		visionModel: 'Vision Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
 		streamIdleTimeoutSec: 'Stream Idle Timeout(sec):',

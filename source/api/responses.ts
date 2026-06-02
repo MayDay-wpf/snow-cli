@@ -2,6 +2,7 @@ import {
 	getSnowConfig,
 	getCustomSystemPromptForConfig,
 	getCustomHeadersForConfig,
+	type ApiConfig,
 } from '../utils/config/apiConfig.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
@@ -47,6 +48,7 @@ export interface ResponseOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
 /**
@@ -532,6 +534,9 @@ export async function* createStreamingResponse(
 	} else {
 		// No configProfile specified, use main config
 		config = getSnowConfig();
+	}
+	if (options.configOverride) {
+		config = {...config, ...options.configOverride};
 	}
 
 	// Get system prompt (with custom override support)

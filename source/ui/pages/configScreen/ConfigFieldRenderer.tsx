@@ -60,6 +60,14 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		// Model settings
 		advancedModel,
 		basicModel,
+		supportsVision,
+		visionBaseUrl,
+		setVisionBaseUrl,
+		visionBaseUrlMode,
+		visionApiKey,
+		setVisionApiKey,
+		visionRequestMethod,
+		visionModel,
 		maxContextTokens,
 		maxTokens,
 		streamIdleTimeoutSec,
@@ -768,6 +776,156 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{basicModel || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'supportsVision':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.supportsVision}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{supportsVision
+								? t.configScreen.supportsVisionYes
+								: t.configScreen.supportsVisionNo}{' '}
+							{t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'visionConfig':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionConfig}
+					</Text>
+					<Box marginLeft={3} flexDirection="column">
+						<Text color={theme.colors.menuSecondary}>
+							{t.configScreen.visionConfigSubtitle}
+						</Text>
+						{isActive && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.configScreen.visionConfigOpenHint}
+							</Text>
+						)}
+					</Box>
+				</Box>
+			);
+
+		case 'visionBaseUrl':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionBaseUrl}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={visionBaseUrl}
+								onChange={value => setVisionBaseUrl(stripFocusArtifacts(value))}
+								placeholder="https://api.openai.com/v1"
+							/>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionBaseUrl || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionBaseUrlMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionBaseUrlMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionBaseUrlMode === 'base'
+									? t.configScreen.baseUrlModeBase
+									: visionBaseUrlMode === 'endpoint'
+									? t.configScreen.baseUrlModeEndpoint
+									: t.configScreen.baseUrlModeAuto}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionApiKey':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionApiKey}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={visionApiKey}
+								onChange={value => setVisionApiKey(stripFocusArtifacts(value))}
+								placeholder="sk-..."
+								mask="*"
+							/>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionApiKey
+									? '*'.repeat(Math.min(visionApiKey.length, 20))
+									: t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionRequestMethod':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionRequestMethod}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{requestMethodOptions.find(
+									opt => opt.value === visionRequestMethod,
+								)?.label || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionModel':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionModel}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionModel || t.configScreen.notSet}
 							</Text>
 						</Box>
 					)}

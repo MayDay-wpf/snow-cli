@@ -68,6 +68,7 @@ export async function handleConversationWithTools(
 		editorContext,
 		imageContents,
 		saveMessage,
+		abortSignal: controller.signal,
 	});
 
 	const encoderManager = new EncoderManager();

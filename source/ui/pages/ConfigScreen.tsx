@@ -35,6 +35,7 @@ export default function ConfigScreen({
 		profileMode,
 		loading,
 		manualInputMode,
+		visionConfigMode,
 		isEditing,
 		currentField,
 		activeProfile,
@@ -81,9 +82,15 @@ export default function ConfigScreen({
 					paddingX={2}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.configScreen.title}</Gradient>
+						<Gradient name="rainbow">
+							{visionConfigMode
+								? t.configScreen.visionConfigTitle
+								: t.configScreen.title}
+						</Gradient>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.configScreen.subtitle}
+							{visionConfigMode
+								? t.configScreen.visionConfigSubtitle
+								: t.configScreen.subtitle}
 						</Text>
 						{activeProfile && (
 							<Text color={theme.colors.menuInfo} dimColor>
@@ -159,7 +166,11 @@ export default function ConfigScreen({
 										: t.configScreen.editingHintGeneral
 							  }
 ${t.configScreen.requestUrlLabel}${getRequestUrl()}`
-							: `${t.configScreen.navigationHint}
+							: `${
+									visionConfigMode
+										? t.configScreen.visionConfigNavigationHint
+										: t.configScreen.navigationHint
+							  }
 ${t.configScreen.requestUrlLabel}${getRequestUrl()}`}
 					</Alert>
 				</Box>

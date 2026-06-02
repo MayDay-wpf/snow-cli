@@ -10,6 +10,7 @@ import {initializeConversationSession} from './sessionInitializer.js';
 import {buildEditorContextContent} from './editorContextBuilder.js';
 import {cleanOrphanedToolCalls} from '../utils/messageCleanup.js';
 import type {ConversationHandlerOptions} from './conversationTypes.js';
+import {visionAgent} from '../../../agents/visionAgent.js';
 
 export type PreparedConversationSetup = {
 	conversationMessages: ChatMessage[];
@@ -65,6 +66,7 @@ export async function appendUserMessageAndSyncContext(options: {
 	editorContext: ConversationHandlerOptions['editorContext'];
 	imageContents: ConversationHandlerOptions['imageContents'];
 	saveMessage: ConversationHandlerOptions['saveMessage'];
+	abortSignal?: AbortSignal;
 }): Promise<void> {
 	const {
 		conversationMessages,
@@ -72,24 +74,32 @@ export async function appendUserMessageAndSyncContext(options: {
 		editorContext,
 		imageContents,
 		saveMessage,
+		abortSignal,
 	} = options;
+
+	const processedVisionContent =
+		await visionAgent.prepareContentForNonVisionModel(
+			userContent,
+			imageContents,
+			{source: 'user', abortSignal},
+		);
 
 	const finalUserContent = buildEditorContextContent(
 		editorContext,
-		userContent,
+		processedVisionContent.content,
 	);
 
 	conversationMessages.push({
 		role: 'user',
 		content: finalUserContent,
-		images: imageContents,
+		images: processedVisionContent.images,
 	});
 
 	try {
 		await saveMessage({
 			role: 'user',
-			content: userContent,
-			images: imageContents,
+			content: processedVisionContent.content,
+			images: processedVisionContent.images,
 		});
 	} catch (error) {
 		console.error('Failed to save user message:', error);

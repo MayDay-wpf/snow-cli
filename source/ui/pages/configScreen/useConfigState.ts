@@ -122,6 +122,14 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
+	const [supportsVision, setSupportsVision] = useState(true);
+	const [visionBaseUrl, setVisionBaseUrl] = useState('');
+	const [visionBaseUrlMode, setVisionBaseUrlMode] =
+		useState<BaseUrlMode>('auto');
+	const [visionApiKey, setVisionApiKey] = useState('');
+	const [visionRequestMethod, setVisionRequestMethod] =
+		useState<RequestMethod>('chat');
+	const [visionModel, setVisionModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
 	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
@@ -141,6 +149,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
+	const [visionConfigMode, setVisionConfigMode] = useState(false);
 	const [, forceUpdate] = useState(0);
 
 	const supportsXHigh = requestMethod === 'responses';
@@ -165,6 +174,16 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	];
 
 	const getAllFields = (): ConfigField[] => {
+		if (visionConfigMode) {
+			return [
+				'visionBaseUrl',
+				'visionBaseUrlMode',
+				'visionApiKey',
+				'visionRequestMethod',
+				'visionModel',
+			];
+		}
+
 		return [
 			// 仅在未指定 targetProfileName（即从主菜单常规进入 ConfigScreen）时才允许
 			// 显示/操作 profile 切换项；从 ProfileEditPanel 进入时彻底隐藏，
@@ -216,6 +235,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				: []),
 			'advancedModel',
 			'basicModel',
+			'supportsVision',
+			...(supportsVision ? [] : ['visionConfig' as ConfigField]),
 			'maxContextTokens',
 			'maxTokens',
 			'streamIdleTimeoutSec',
@@ -306,6 +327,22 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	}, [enableAutoCompress, currentField]);
 
 	useEffect(() => {
+		if (
+			supportsVision &&
+			(visionConfigMode ||
+				currentField === 'visionConfig' ||
+				currentField === 'visionBaseUrl' ||
+				currentField === 'visionBaseUrlMode' ||
+				currentField === 'visionApiKey' ||
+				currentField === 'visionRequestMethod' ||
+				currentField === 'visionModel')
+		) {
+			setVisionConfigMode(false);
+			setCurrentField('supportsVision');
+		}
+	}, [supportsVision, visionConfigMode, currentField]);
+
+	useEffect(() => {
 		if (responsesReasoningEffort === 'xhigh' && !supportsXHigh) {
 			setResponsesReasoningEffort('high');
 		}
@@ -362,6 +399,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setChatReasoningEffort(config.chatThinking?.reasoning_effort || 'high');
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
+		setSupportsVision(config.supportsVision !== false);
+		setVisionBaseUrl(config.visionBaseUrl || '');
+		setVisionBaseUrlMode(config.visionBaseUrlMode || 'auto');
+		setVisionApiKey(config.visionApiKey || '');
+		setVisionRequestMethod(config.visionRequestMethod || 'chat');
+		setVisionModel(config.visionModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
@@ -388,11 +431,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setLoading(true);
 		setLoadError('');
 
+		const isVisionModelField = currentField === 'visionModel';
 		const tempConfig: Partial<ApiConfig> = {
-			baseUrl,
-			baseUrlMode,
-			apiKey,
-			requestMethod,
+			baseUrl: isVisionModelField ? visionBaseUrl : baseUrl,
+			baseUrlMode: isVisionModelField ? visionBaseUrlMode : baseUrlMode,
+			apiKey: isVisionModelField ? visionApiKey : apiKey,
+			requestMethod: isVisionModelField ? visionRequestMethod : requestMethod,
 			customHeadersSchemeId,
 		};
 
@@ -442,6 +486,11 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		if (currentField === 'apiKey') return apiKey;
 		if (currentField === 'advancedModel') return advancedModel;
 		if (currentField === 'basicModel') return basicModel;
+		if (currentField === 'visionBaseUrl') return visionBaseUrl;
+		if (currentField === 'visionBaseUrlMode') return visionBaseUrlMode;
+		if (currentField === 'visionApiKey') return visionApiKey;
+		if (currentField === 'visionRequestMethod') return visionRequestMethod;
+		if (currentField === 'visionModel') return visionModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
 		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'streamIdleTimeoutSec')
@@ -469,9 +518,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const getNormalizedBaseUrl = (value: string) =>
 		value.trim().replace(/\/+$/, '');
 
-	const getResolvedBaseUrl = (method: RequestMethod) => {
+	const getResolvedBaseUrl = (
+		method: RequestMethod,
+		baseUrlValue: string = baseUrl,
+	) => {
 		const defaultOpenAiBaseUrl = 'https://api.openai.com/v1';
-		const trimmedBaseUrl = getNormalizedBaseUrl(baseUrl || '');
+		const trimmedBaseUrl = getNormalizedBaseUrl(baseUrlValue || '');
 		const shouldUseCustomBaseUrl =
 			trimmedBaseUrl.length > 0 && trimmedBaseUrl !== defaultOpenAiBaseUrl;
 
@@ -494,31 +546,50 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	};
 
 	const getRequestUrl = () => {
-		const resolvedBaseUrl = getResolvedBaseUrl(requestMethod);
+		const isVisionField =
+			visionConfigMode ||
+			currentField === 'visionBaseUrl' ||
+			currentField === 'visionBaseUrlMode' ||
+			currentField === 'visionApiKey' ||
+			currentField === 'visionRequestMethod' ||
+			currentField === 'visionModel';
+		const activeRequestMethod = isVisionField
+			? visionRequestMethod
+			: requestMethod;
+		const activeBaseUrlMode = isVisionField ? visionBaseUrlMode : baseUrlMode;
+		const activeModel = isVisionField ? visionModel : advancedModel;
+		const resolvedBaseUrl = getResolvedBaseUrl(
+			activeRequestMethod,
+			isVisionField ? visionBaseUrl : baseUrl,
+		);
 
-		if (requestMethod === 'responses') {
-			return resolveApiEndpoint(resolvedBaseUrl, 'responses', baseUrlMode);
+		if (activeRequestMethod === 'responses') {
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'responses',
+				activeBaseUrlMode,
+			);
 		}
 
-		if (requestMethod === 'anthropic') {
+		if (activeRequestMethod === 'anthropic') {
 			return resolveApiEndpoint(
 				resolvedBaseUrl,
 				'anthropicMessages',
-				baseUrlMode,
+				activeBaseUrlMode,
 				{anthropicBeta},
 			);
 		}
 
-		if (requestMethod === 'gemini') {
+		if (activeRequestMethod === 'gemini') {
 			return resolveApiEndpoint(
 				resolvedBaseUrl,
 				'geminiStreamGenerateContent',
-				baseUrlMode,
-				{modelName: advancedModel || 'model-id'},
+				activeBaseUrlMode,
+				{modelName: activeModel || 'model-id'},
 			);
 		}
 
-		return resolveApiEndpoint(resolvedBaseUrl, 'chat', baseUrlMode);
+		return resolveApiEndpoint(resolvedBaseUrl, 'chat', activeBaseUrlMode);
 	};
 
 	const getSystemPromptSelectItems = () => {
@@ -608,9 +679,9 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		try {
 			const currentConfig = {
 				snowcfg: {
-						baseUrl,
-						baseUrlMode,
-						apiKey,
+					baseUrl,
+					baseUrlMode,
+					apiKey,
 					requestMethod,
 					systemPromptId,
 					customHeadersSchemeId,
@@ -631,6 +702,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 						: undefined,
 					advancedModel,
 					basicModel,
+					supportsVision,
+					visionBaseUrl,
+					visionBaseUrlMode,
+					visionApiKey,
+					visionRequestMethod,
+					visionModel,
 					maxContextTokens,
 					maxTokens,
 					streamIdleTimeoutSec,
@@ -726,6 +803,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
 			setBasicModel(value);
+		} else if (currentField === 'visionModel') {
+			setVisionModel(value);
 		}
 
 		setIsEditing(false);
@@ -754,6 +833,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				streamingDisplay,
 				advancedModel,
 				basicModel,
+				supportsVision,
+				visionBaseUrl,
+				visionBaseUrlMode,
+				visionApiKey,
+				visionRequestMethod,
+				visionModel,
 				maxContextTokens,
 				maxTokens,
 				streamIdleTimeoutSec,
@@ -847,6 +932,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 							: undefined,
 						advancedModel,
 						basicModel,
+						supportsVision,
+						visionBaseUrl,
+						visionBaseUrlMode,
+						visionApiKey,
+						visionRequestMethod,
+						visionModel,
 						maxContextTokens,
 						maxTokens,
 						streamIdleTimeoutSec,
@@ -947,6 +1038,18 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setAdvancedModel,
 		basicModel,
 		setBasicModel,
+		supportsVision,
+		setSupportsVision,
+		visionBaseUrl,
+		setVisionBaseUrl,
+		visionBaseUrlMode,
+		setVisionBaseUrlMode,
+		visionApiKey,
+		setVisionApiKey,
+		visionRequestMethod,
+		setVisionRequestMethod,
+		visionModel,
+		setVisionModel,
 		maxContextTokens,
 		setMaxContextTokens,
 		maxTokens,
@@ -972,6 +1075,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setManualInputMode,
 		manualInputValue,
 		setManualInputValue,
+		visionConfigMode,
+		setVisionConfigMode,
 		// Derived
 		supportsXHigh,
 		requestMethodOptions,

@@ -70,6 +70,11 @@ export function useConfigInput(
 		setAutoCompressThreshold,
 		setAdvancedModel,
 		setBasicModel,
+		supportsVision,
+		setSupportsVision,
+		setVisionModel,
+		visionConfigMode,
+		setVisionConfigMode,
 		systemPromptId,
 	} = state;
 
@@ -185,6 +190,8 @@ export function useConfigInput(
 						setAdvancedModel(cleaned);
 					} else if (currentField === 'basicModel') {
 						setBasicModel(cleaned);
+					} else if (currentField === 'visionModel') {
+						setVisionModel(cleaned);
 					}
 				}
 				setManualInputMode(false);
@@ -215,7 +222,12 @@ export function useConfigInput(
 
 		// Handle editing mode
 		if (isEditing) {
-			if (currentField === 'baseUrl' || currentField === 'apiKey') {
+			if (
+				currentField === 'baseUrl' ||
+				currentField === 'apiKey' ||
+				currentField === 'visionBaseUrl' ||
+				currentField === 'visionApiKey'
+			) {
 				if (key.return) {
 					setIsEditing(false);
 				}
@@ -229,9 +241,9 @@ export function useConfigInput(
 				currentField === 'streamIdleTimeoutSec' ||
 				currentField === 'toolResultTokenLimit' ||
 				currentField === 'thinkingBudgetTokens' ||
-			currentField === 'autoCompressThreshold'
-		) {
-			handleNumericInput(input, key);
+				currentField === 'autoCompressThreshold'
+			) {
+				handleNumericInput(input, key);
 				return;
 			}
 
@@ -252,11 +264,21 @@ export function useConfigInput(
 				}
 			});
 		} else if (key.escape) {
+			if (visionConfigMode) {
+				setVisionConfigMode(false);
+				setCurrentField('visionConfig');
+				setIsEditing(false);
+				return;
+			}
 			saveConfiguration().then(() => onBack());
 		} else if (key.return) {
 			handleEnterKey();
 		} else if (input === 'm' && !isEditing) {
-			if (currentField === 'advancedModel' || currentField === 'basicModel') {
+			if (
+				currentField === 'advancedModel' ||
+				currentField === 'basicModel' ||
+				currentField === 'visionModel'
+			) {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -380,6 +402,12 @@ export function useConfigInput(
 			const next = !state.chatThinkingEnabled;
 			state.setChatThinkingEnabled(next);
 			if (!next) setShowThinking(false);
+		} else if (currentField === 'supportsVision') {
+			setSupportsVision(!supportsVision);
+		} else if (currentField === 'visionConfig') {
+			setVisionConfigMode(true);
+			setCurrentField('visionBaseUrl');
+			setIsEditing(false);
 		} else if (
 			currentField === 'anthropicCacheTTL' ||
 			currentField === 'anthropicSpeed' ||
@@ -400,9 +428,10 @@ export function useConfigInput(
 			currentField === 'autoCompressThreshold'
 		) {
 			setIsEditing(true);
-	} else if (
+		} else if (
 			currentField === 'advancedModel' ||
-			currentField === 'basicModel'
+			currentField === 'basicModel' ||
+			currentField === 'visionModel'
 		) {
 			loadModels()
 				.then(() => {

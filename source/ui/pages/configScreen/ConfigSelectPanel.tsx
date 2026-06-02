@@ -2,7 +2,10 @@ import React, {useState} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
-import type {BaseUrlMode, RequestMethod} from '../../../utils/config/apiConfig.js';
+import type {
+	BaseUrlMode,
+	RequestMethod,
+} from '../../../utils/config/apiConfig.js';
 import {switchProfile} from '../../../utils/config/configManager.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -21,6 +24,10 @@ export default function ConfigSelectPanel({state}: Props) {
 		requestMethod,
 		setRequestMethod,
 		requestMethodOptions,
+		visionBaseUrlMode,
+		setVisionBaseUrlMode,
+		visionRequestMethod,
+		setVisionRequestMethod,
 		thinkingMode,
 		setThinkingMode,
 		thinkingEffort,
@@ -50,6 +57,12 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.advancedModel.replace(':', '');
 			case 'basicModel':
 				return t.configScreen.basicModel.replace(':', '');
+			case 'visionBaseUrlMode':
+				return t.configScreen.visionBaseUrlMode.replace(':', '');
+			case 'visionRequestMethod':
+				return t.configScreen.visionRequestMethod.replace(':', '');
+			case 'visionModel':
+				return t.configScreen.visionModel.replace(':', '');
 			case 'thinkingMode':
 				return t.configScreen.thinkingMode.replace(':', '');
 			case 'thinkingEffort':
@@ -112,6 +125,29 @@ export default function ConfigSelectPanel({state}: Props) {
 						}}
 					/>
 				)}
+				{currentField === 'visionBaseUrlMode' && (
+					<ScrollableSelectInput
+						items={[
+							{label: t.configScreen.baseUrlModeAuto, value: 'auto'},
+							{label: t.configScreen.baseUrlModeBase, value: 'base'},
+							{
+								label: t.configScreen.baseUrlModeEndpoint,
+								value: 'endpoint',
+							},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['auto', 'base', 'endpoint'] as const).indexOf(
+								visionBaseUrlMode,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setVisionBaseUrlMode(item.value as BaseUrlMode);
+							setIsEditing(false);
+						}}
+					/>
+				)}
 				{currentField === 'systemPromptId' && (
 					<SystemPromptSelect state={state} />
 				)}
@@ -136,7 +172,24 @@ export default function ConfigSelectPanel({state}: Props) {
 						);
 					})()}
 				{(currentField === 'advancedModel' ||
-					currentField === 'basicModel') && <ModelSelect state={state} />}
+					currentField === 'basicModel' ||
+					currentField === 'visionModel') && <ModelSelect state={state} />}
+				{currentField === 'visionRequestMethod' && (
+					<ScrollableSelectInput
+						items={requestMethodOptions}
+						initialIndex={Math.max(
+							0,
+							requestMethodOptions.findIndex(
+								opt => opt.value === visionRequestMethod,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setVisionRequestMethod(item.value as RequestMethod);
+							setIsEditing(false);
+						}}
+					/>
+				)}
 				{currentField === 'thinkingMode' && (
 					<ScrollableSelectInput
 						items={[

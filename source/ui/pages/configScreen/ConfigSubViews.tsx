@@ -247,6 +247,7 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 				<Text color={theme.colors.menuInfo}>
 					{currentField === 'advancedModel' && t.configScreen.advancedModel}
 					{currentField === 'basicModel' && t.configScreen.basicModel}
+					{currentField === 'visionModel' && t.configScreen.visionModel}
 				</Text>
 				<Box marginLeft={2}>
 					<Text color={theme.colors.menuSelected}>
