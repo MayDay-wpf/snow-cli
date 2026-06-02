@@ -56,8 +56,14 @@ jobs:
 
             ### What's New
 
-            - Table rendering adaptive width
-            - Fixed the reentrancy issue when pasting text on Windows
+            - Fixed the issue where AI output may be truncated
+            - Fixed the issue where DiffViewer does not display in some scenarios
+            - Fixed the issue where the browser process is occupied during batch network search
+            - Added notification after AI work is completed (Stop Hooks take priority)
+            - Added /del-session command for convenient session deletion
+            - More command support at any location: /models, /auto-format, /simple
+            - Beautiful display of compressed summary information
+            - API configuration supports separate configuration of visual model to provide multimodal patches for text model
             
             ### Installation
             ```bash
