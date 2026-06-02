@@ -11,6 +11,9 @@ export type ThemeType =
 	| 'nord'
 	| 'tiffany'
 	| 'macaron-pink'
+	| 'trump-gold'
+	| 'china-red'
+	| 'eva-purple'
 	| 'custom';
 
 export interface ThemeColors {
@@ -373,6 +376,102 @@ export const themes: Record<ThemeType, Theme> = {
 			userMessageBackground: '#ffd1e3',
 			// User message text color
 			userMessageText: '#5a2a4a',
+			// Diff highlight opacity
+			diffOpacity: 1,
+		},
+	},
+	'trump-gold': {
+		name: 'Trump Gold',
+		type: 'trump-gold',
+		colors: {
+			background: '#120d08',
+			text: '#f7e6a3',
+			border: '#d4af37',
+			diffAdded: '#2f3d1b',
+			diffRemoved: '#5a2118',
+			diffModified: '#7a4f13',
+			lineNumber: '#b88a2a',
+			lineNumberBorder: '#6f4e16',
+			// Menu colors - bold presidential gold palette
+			menuSelected: '#ffd700',
+			menuNormal: '#f7e6a3',
+			menuInfo: '#f4b942',
+			menuSecondary: '#b88a2a',
+			// Status colors
+			error: '#ff6b4a',
+			warning: '#ffd700',
+			success: '#7bd88f',
+			cyan: '#f4b942',
+			// Logo gradient - rich gold tones
+			logoGradient: ['#fff2a8', '#ffd700', '#b8860b'],
+			// User message background - deep antique gold
+			userMessageBackground: '#5a3d0c',
+			// User message text color
+			userMessageText: '#fff7cc',
+			// Diff highlight opacity
+			diffOpacity: 1,
+		},
+	},
+	'china-red': {
+		name: 'China Red',
+		type: 'china-red',
+		colors: {
+			background: '#1a0a0a',
+			text: '#f7d4d4',
+			border: '#cc2936',
+			diffAdded: '#1d3a1d',
+			diffRemoved: '#5a1a1a',
+			diffModified: '#7a5a2a',
+			lineNumber: '#d47a7a',
+			lineNumberBorder: '#8b2222',
+			// Menu colors - bold Chinese red palette
+			menuSelected: '#e60012',
+			menuNormal: '#f7d4d4',
+			menuInfo: '#e8585e',
+			menuSecondary: '#b54343',
+			// Status colors
+			error: '#ff4d4d',
+			warning: '#ffd166',
+			success: '#6fcf6f',
+			cyan: '#e8585e',
+			// Logo gradient - red to gold
+			logoGradient: ['#e60012', '#d43038', '#ffd166'],
+			// User message background - deep red
+			userMessageBackground: '#3d0d0d',
+			// User message text color
+			userMessageText: '#fff0e0',
+			// Diff highlight opacity
+			diffOpacity: 1,
+		},
+	},
+	'eva-purple': {
+		name: 'Optimus Prime',
+		type: 'eva-purple',
+		colors: {
+			background: '#151a2e',
+			text: '#e2e4f0',
+			border: '#c42828',
+			diffAdded: '#1d3a2e',
+			diffRemoved: '#5a2020',
+			diffModified: '#3d456e',
+			lineNumber: '#8a98b0',
+			lineNumberBorder: '#2a355e',
+			// Menu colors - Optimus Prime red/blue/silver
+			menuSelected: '#e63946',
+			menuNormal: '#e2e4f0',
+			menuInfo: '#5b9bd5',
+			menuSecondary: '#7a88a0',
+			// Status colors
+			error: '#e63946',
+			warning: '#f5c542',
+			success: '#5b9bd5',
+			cyan: '#5b9bd5',
+			// Logo gradient - red to silver to blue
+			logoGradient: ['#e63946', '#b0b8d0', '#5b9bd5'],
+			// User message background - dark red
+			userMessageBackground: '#3d1c1c',
+			// User message text color
+			userMessageText: '#fff0e0',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},

@@ -152,6 +152,30 @@ export default function ThemeSettingsScreen({
 			},
 			{
 				label:
+					selectedTheme === 'trump-gold'
+						? `✓ ${t.themeSettings.trumpGold}`
+						: t.themeSettings.trumpGold,
+				value: 'trump-gold',
+				infoText: t.themeSettings.trumpGoldInfo,
+			},
+			{
+				label:
+					selectedTheme === 'china-red'
+						? `✓ ${t.themeSettings.chinaRed}`
+						: t.themeSettings.chinaRed,
+				value: 'china-red',
+				infoText: t.themeSettings.chinaRedInfo,
+			},
+			{
+				label:
+					selectedTheme === 'eva-purple'
+						? `✓ ${t.themeSettings.evaPurple}`
+						: t.themeSettings.evaPurple,
+				value: 'eva-purple',
+				infoText: t.themeSettings.evaPurpleInfo,
+			},
+			{
+				label:
 					selectedTheme === 'custom'
 						? `✓ ${t.themeSettings?.custom || 'Custom'}`
 						: t.themeSettings?.custom || 'Custom',

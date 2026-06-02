@@ -466,6 +466,12 @@ export type TranslationKeys = {
 		tiffanyInfo: string;
 		macaronPink: string;
 		macaronPinkInfo: string;
+		trumpGold: string;
+		trumpGoldInfo: string;
+		chinaRed: string;
+		chinaRedInfo: string;
+		evaPurple: string;
+		evaPurpleInfo: string;
 		custom: string;
 		customInfo: string;
 		editCustom: string;
