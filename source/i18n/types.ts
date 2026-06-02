@@ -1108,6 +1108,11 @@ export type TranslationKeys = {
 		commandMessage: string;
 		discontinuedMessage: string;
 		aiCompletionTimeMessage: string;
+		compressionSummaryAutoTitle: string;
+		compressionSummaryManualTitle: string;
+		compressionSummaryStats: string;
+		compressionSummaryPreviewPrefix: string;
+		compressionSummaryOriginalSaved: string;
 		// File operations
 		fileCreated: string;
 		fileModified: string;

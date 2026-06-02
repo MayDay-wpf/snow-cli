@@ -9,6 +9,7 @@ import ToolResultPreview from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
+import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -135,6 +136,54 @@ export default function MessageRenderer({
 		return getDisplayContent(content)
 			.split('\n')
 			.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+	};
+
+	const formatCompactCount = (value: number): string => {
+		if (value >= 1000) {
+			return `${(value / 1000).toFixed(1)}K`;
+		}
+
+		return String(value);
+	};
+
+	const formatCompressionSummaryBubbleLines = (
+		content: string,
+		totalWidth: number,
+	): string[] | null => {
+		const summaryDisplay = getCompressionSummaryDisplay(
+			getDisplayContent(content),
+			{
+				maxPreviewWidth: Math.max(totalWidth - 6, 24),
+			},
+		);
+		if (!summaryDisplay) {
+			return null;
+		}
+
+		const title =
+			summaryDisplay.kind === 'auto'
+				? t.chatScreen.compressionSummaryAutoTitle
+				: t.chatScreen.compressionSummaryManualTitle;
+		const stats = t.chatScreen.compressionSummaryStats
+			.replace('{lines}', formatCompactCount(summaryDisplay.lineCount))
+			.replace('{chars}', formatCompactCount(summaryDisplay.charCount));
+		const previewLines =
+			summaryDisplay.previewLines.length > 0
+				? [
+						`${t.chatScreen.compressionSummaryPreviewPrefix}: ${summaryDisplay.previewLines[0]}`,
+						...summaryDisplay.previewLines.slice(1).map(line => `  ${line}`),
+				  ]
+				: [];
+
+		return formatUserBubbleLines(
+			[
+				title,
+				stats,
+				...previewLines,
+				t.chatScreen.compressionSummaryOriginalSaved,
+			].join('\n'),
+			totalWidth,
+		);
 	};
 
 	const formatAiCompletionTime = (value: Date | string): string => {
@@ -466,9 +515,15 @@ export default function MessageRenderer({
 															flexDirection="column"
 															width={contentColumnWidth}
 														>
-															{formatUserBubbleLines(
-																getDisplayContent(message.content),
-																contentColumnWidth,
+															{(
+																formatCompressionSummaryBubbleLines(
+																	message.content,
+																	contentColumnWidth,
+																) ??
+																formatUserBubbleLines(
+																	getDisplayContent(message.content),
+																	contentColumnWidth,
+																)
 															).map((line, lineIndex) => (
 																<Text
 																	key={lineIndex}

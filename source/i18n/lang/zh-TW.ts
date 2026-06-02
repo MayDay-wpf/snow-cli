@@ -685,10 +685,13 @@ export const zhTW: TranslationKeys = {
 				fileDialogUnsupported: '目前平台不支援檔案對話方塊，已取消設定操作。',
 				exportSuccess: '設定已成功匯出到:\n{path}',
 				exportFailed: '設定匯出失敗: {error}',
-				importWarning: '設定匯入將覆蓋 YAML 中包含的設定項；YAML 中沒有的設定項會跳過並保持不變。',
+				importWarning:
+					'設定匯入將覆蓋 YAML 中包含的設定項；YAML 中沒有的設定項會跳過並保持不變。',
 				importConfirmTitle: '確認匯入設定',
-				importConfirmMessage: '這是覆蓋式匯入：YAML 中包含的設定項會覆蓋目前設定，未包含的設定項會跳過。是否繼續？',
-				importSuccess: '設定已成功從以下檔案匯入:\n{path}\n已匯入: {imported}\n已跳過: {skipped}',
+				importConfirmMessage:
+					'這是覆蓋式匯入：YAML 中包含的設定項會覆蓋目前設定，未包含的設定項會跳過。是否繼續？',
+				importSuccess:
+					'設定已成功從以下檔案匯入:\n{path}\n已匯入: {imported}\n已跳過: {skipped}',
 				importFailed: '設定匯入失敗: {error}',
 				none: '無',
 				usage: '用法: /config <export|import>',
@@ -1121,6 +1124,11 @@ export const zhTW: TranslationKeys = {
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 使用者中斷',
 		aiCompletionTimeMessage: '└─ AI 結束時間：{time}',
+		compressionSummaryAutoTitle: '自動壓縮摘要已摺疊',
+		compressionSummaryManualTitle: '手動壓縮摘要已摺疊',
+		compressionSummaryStats: '{lines} 行 · {chars} 字元',
+		compressionSummaryPreviewPrefix: '摘要預覽',
+		compressionSummaryOriginalSaved: '僅最佳化顯示，原文已完整儲存',
 		// File operations
 		fileCreated: '已建立',
 		fileModified: '已修改',

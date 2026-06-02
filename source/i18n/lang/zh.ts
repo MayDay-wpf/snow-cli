@@ -684,10 +684,13 @@ export const zh: TranslationKeys = {
 				fileDialogUnsupported: '当前平台不支持文件对话框，已取消配置操作。',
 				exportSuccess: '配置已成功导出到:\n{path}',
 				exportFailed: '配置导出失败: {error}',
-				importWarning: '配置导入将覆盖 YAML 中包含的配置项；YAML 中没有的配置项会跳过并保持不变。',
+				importWarning:
+					'配置导入将覆盖 YAML 中包含的配置项；YAML 中没有的配置项会跳过并保持不变。',
 				importConfirmTitle: '确认导入配置',
-				importConfirmMessage: '这是覆盖式导入：YAML 中包含的配置项会覆盖当前配置，未包含的配置项会跳过。是否继续？',
-				importSuccess: '配置已成功从以下文件导入:\n{path}\n已导入: {imported}\n已跳过: {skipped}',
+				importConfirmMessage:
+					'这是覆盖式导入：YAML 中包含的配置项会覆盖当前配置，未包含的配置项会跳过。是否继续？',
+				importSuccess:
+					'配置已成功从以下文件导入:\n{path}\n已导入: {imported}\n已跳过: {skipped}',
 				importFailed: '配置导入失败: {error}',
 				none: '无',
 				usage: '用法: /config <export|import>',
@@ -1121,6 +1124,11 @@ export const zh: TranslationKeys = {
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 用户中断',
 		aiCompletionTimeMessage: '└─ AI 结束时间：{time}',
+		compressionSummaryAutoTitle: '自动压缩摘要已折叠',
+		compressionSummaryManualTitle: '手动压缩摘要已折叠',
+		compressionSummaryStats: '{lines} 行 · {chars} 字符',
+		compressionSummaryPreviewPrefix: '摘要预览',
+		compressionSummaryOriginalSaved: '仅优化显示，原文已完整保存',
 		// File operations
 		fileCreated: '已创建',
 		fileModified: '已修改',

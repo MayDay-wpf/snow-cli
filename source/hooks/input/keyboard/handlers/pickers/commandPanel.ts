@@ -3,7 +3,9 @@ import {commandUsageManager} from '../../../../../utils/session/commandUsageMana
 import {COMMAND_ARGS_OPTIONS} from '../../../../ui/useCommandPanel.js';
 import {
 	findInlineCommandTrigger,
-	isInlineInsertionCommand,
+	isInlineExecutableCommand,
+	isInlinePickerCommand,
+	isInlineTextInsertionCommand,
 } from '../../utils/inlineCommandTrigger.js';
 import type {HandlerContext} from '../../types.js';
 
@@ -61,7 +63,8 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 			if (selectedCommand) {
 				if (inlineTrigger) {
 					const inlineInsertionText =
-						!inlineTrigger.isAtStart && isInlineInsertionCommand(selectedCommand)
+						!inlineTrigger.isAtStart &&
+						isInlineTextInsertionCommand(selectedCommand)
 							? selectedCommand.insertionText
 							: undefined;
 					buffer.replaceRange(
@@ -76,7 +79,9 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
 				const cmdArgsOptions = COMMAND_ARGS_OPTIONS[selectedCommand.name];
-				if (cmdArgsOptions && cmdArgsOptions.length > 0) {
+				const shouldOpenArgsPicker =
+					cmdArgsOptions && cmdArgsOptions.length > 0;
+				if (shouldOpenArgsPicker) {
 					setShowArgsPicker(true);
 					setArgsSelectedIndex(0);
 				}
@@ -96,7 +101,7 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 			const selectedCommand = filteredCommands[commandSelectedIndex];
 			if (selectedCommand) {
 				if (isInlineTrigger) {
-					if (selectedCommand.name === 'gitline' && inlineTrigger) {
+					if (isInlinePickerCommand(selectedCommand) && inlineTrigger) {
 						setShowCommands(false);
 						setCommandSelectedIndex(0);
 						openGitLinePicker({
@@ -107,7 +112,29 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 						return true;
 					}
 
-					if (isInlineInsertionCommand(selectedCommand) && inlineTrigger) {
+					if (isInlineExecutableCommand(selectedCommand) && inlineTrigger) {
+						buffer.replaceRange(
+							inlineTrigger.slashIndex,
+							inlineTrigger.endIndex,
+							'',
+						);
+						setShowCommands(false);
+						setCommandSelectedIndex(0);
+						executeCommand(selectedCommand.name).then(result => {
+							commandUsageManager.recordUsage(selectedCommand.name);
+							if (onCommand) {
+								Promise.resolve(onCommand(selectedCommand.name, result)).catch(
+									error => {
+										console.error('Command execution error:', error);
+									},
+								);
+							}
+						});
+						triggerUpdate();
+						return true;
+					}
+
+					if (isInlineTextInsertionCommand(selectedCommand) && inlineTrigger) {
 						buffer.replaceRange(
 							inlineTrigger.slashIndex,
 							inlineTrigger.endIndex,

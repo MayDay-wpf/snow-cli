@@ -511,14 +511,21 @@ export default function ChatScreen({
 		!hasBlockingPanel &&
 		!snapshotState.pendingRollback;
 
-	// 统一处理：任何会隐藏输入框的场景（面板打开、footer 隐藏等），
-	// 都需要清空 draftContent，避免面板关闭后 ChatInput 重新挂载时
-	// 通过 draftContent 把旧文本恢复回输入框。
+	const shouldPreserveInputDraftWhileFooterHidden = panelState.showModelsPanel;
+
+	// 统一处理：多数会隐藏输入框的场景需要清空 draftContent，避免面板关闭后
+	// ChatInput 重新挂载时通过 draftContent 把旧文本恢复回输入框。
+	// ModelsPanel 是临时设置面板，不代表用户放弃当前输入，因此需要保留草稿，
+	// 让关闭模型面板后输入框恢复到打开面板前的内容。
 	useEffect(() => {
-		if (!shouldShowFooter) {
+		if (!shouldShowFooter && !shouldPreserveInputDraftWhileFooterHidden) {
 			setInputDraftContent(null);
 		}
-	}, [shouldShowFooter, setInputDraftContent]);
+	}, [
+		shouldShowFooter,
+		shouldPreserveInputDraftWhileFooterHidden,
+		setInputDraftContent,
+	]);
 
 	// remountKey 变化时清空 draftContent：
 	// /resume、/clear、/compact、/branch 等指令通过 setRemountKey 触发 ChatInput 重挂载，

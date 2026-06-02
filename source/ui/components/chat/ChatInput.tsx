@@ -23,7 +23,10 @@ import {
 	COMMAND_ARGS_HINTS,
 	COMMAND_ARGS_OPTIONS,
 } from '../../../hooks/ui/useCommandPanel.js';
-import {isInlineInsertionCommand} from '../../../hooks/input/keyboard/utils/inlineCommandTrigger.js';
+import {
+	findInlineCommandTrigger,
+	isInlineCommand,
+} from '../../../hooks/input/keyboard/utils/inlineCommandTrigger.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
 import {useHistoryNavigation} from '../../../hooks/input/useHistoryNavigation.js';
 import {useClipboard} from '../../../hooks/input/useClipboard.js';
@@ -352,12 +355,15 @@ export default function ChatInput({
 	// Compute current command name and its available args options
 	const argsPickerContext = useMemo(() => {
 		const text = buffer.text;
-		const match = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
-		if (!match) return {commandName: '', options: [] as string[]};
-		const cmd = match[1] ?? '';
+		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
+		const inlineTrigger = findInlineCommandTrigger(
+			text,
+			buffer.getCursorPosition(),
+		);
+		const cmd = rootMatch?.[1] ?? inlineTrigger?.query ?? '';
 		const options = COMMAND_ARGS_OPTIONS[cmd];
 		return {commandName: cmd, options: options || []};
-	}, [buffer.text]);
+	}, [buffer, buffer.text]);
 
 	// Use file picker hook
 	const {
@@ -865,7 +871,7 @@ export default function ChatInput({
 			if (!commandToken) return 0;
 
 			const availableCommands = inlineOnly
-				? allCommands.filter(isInlineInsertionCommand)
+				? allCommands.filter(isInlineCommand)
 				: allCommands;
 			const exact = availableCommands.some(c => c.name === commandToken);
 			if (exact) return 1 + commandToken.length;

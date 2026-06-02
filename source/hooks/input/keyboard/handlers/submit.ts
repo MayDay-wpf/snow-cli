@@ -1,5 +1,9 @@
 import {executeCommand} from '../../../../utils/execution/commandExecutor.js';
 import {commandUsageManager} from '../../../../utils/session/commandUsageManager.js';
+import {
+	findInlineCommandInvocation,
+	isInlineExecutableCommand,
+} from '../utils/inlineCommandTrigger.js';
 import type {HandlerContext} from '../types.js';
 
 export function submitHandler(ctx: HandlerContext): boolean {
@@ -66,6 +70,47 @@ export function submitHandler(ctx: HandlerContext): boolean {
 	const markedMessage = buffer.hasTextPlaceholders()
 		? buffer.getFullTextWithPasteMarkers().trim()
 		: message;
+	const inlineInvocation = findInlineCommandInvocation(fullText, cursorPos);
+	if (inlineInvocation && !inlineInvocation.isAtStart && getAllCommands) {
+		const inlineCommand = getAllCommands().find(
+			cmd => cmd.name === inlineInvocation.commandName,
+		);
+		if (inlineCommand && isInlineExecutableCommand(inlineCommand)) {
+			if (isProcessing && inlineCommand.type !== 'prompt') {
+				buffer.replaceRange(
+					inlineInvocation.slashIndex,
+					inlineInvocation.endIndex,
+					'',
+				);
+				setShowCommands(false);
+				setCommandSelectedIndex(0);
+				triggerUpdate();
+				return true;
+			}
+
+			executeCommand(inlineInvocation.commandName, inlineInvocation.args).then(
+				result => {
+					commandUsageManager.recordUsage(inlineInvocation.commandName);
+					if (onCommand) {
+						Promise.resolve(
+							onCommand(inlineInvocation.commandName, result),
+						).catch(error => {
+							console.error('Command execution error:', error);
+						});
+					}
+				},
+			);
+			buffer.replaceRange(
+				inlineInvocation.slashIndex,
+				inlineInvocation.endIndex,
+				'',
+			);
+			setShowCommands(false);
+			setCommandSelectedIndex(0);
+			triggerUpdate();
+			return true;
+		}
+	}
 	if (message) {
 		// Check if message is a command with arguments (e.g., /review [note])
 		if (message.startsWith('/')) {

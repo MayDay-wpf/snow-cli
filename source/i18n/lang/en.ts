@@ -627,7 +627,8 @@ export const en: TranslationKeys = {
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
-			config: 'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
+			config:
+				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
 			skillsPicker:
@@ -657,7 +658,8 @@ export const en: TranslationKeys = {
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
-			ultraTodo: 'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
+			ultraTodo:
+				'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
 			branch: 'Fork current conversation into a new branch',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
@@ -1188,6 +1190,12 @@ export const en: TranslationKeys = {
 		commandMessage: 'Command',
 		discontinuedMessage: '└─ user discontinue',
 		aiCompletionTimeMessage: '└─ AI finished at {time}',
+		compressionSummaryAutoTitle: 'Auto-compressed summary collapsed',
+		compressionSummaryManualTitle: 'Manual compressed summary collapsed',
+		compressionSummaryStats: '{lines} lines · {chars} chars',
+		compressionSummaryPreviewPrefix: 'Preview',
+		compressionSummaryOriginalSaved:
+			'Display only; original text is fully preserved',
 		// File operations
 		fileCreated: 'Created',
 		fileModified: 'Modified',

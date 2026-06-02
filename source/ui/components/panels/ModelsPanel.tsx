@@ -16,6 +16,7 @@ import {
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {configEvents} from '../../../utils/config/configEvents.js';
+import {setPickerActive} from '../../../utils/ui/pickerState.js';
 
 interface Props {
 	advancedModel: string;
@@ -39,6 +40,11 @@ export const ModelsPanel: React.FC<Props> = ({
 }) => {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+
+	const closePanel = useCallback(() => {
+		setPickerActive(false);
+		onClose();
+	}, [onClose]);
 
 	const [activeTab, setActiveTab] = useState<Tab>('advanced');
 
@@ -710,7 +716,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 
 				// 如果在主视图，ESC 才关闭面板
-				onClose();
+				closePanel();
 				return;
 			}
 

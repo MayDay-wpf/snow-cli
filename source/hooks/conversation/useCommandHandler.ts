@@ -5,6 +5,7 @@ import type {CompressionStatus} from '../../ui/components/compression/Compressio
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
+import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
@@ -157,6 +158,8 @@ export async function executeContextCompression(
 			reasoning: msg.reasoning,
 			thinking: msg.thinking,
 			subAgentInternal: msg.subAgentInternal,
+			messageStatus: (msg as any).messageStatus,
+			editDiffData: (msg as any).editDiffData,
 		}));
 
 		// ── /goal: 提前加载当前会话的 goal，供压缩指令注入和后续 objective 注入复用 ──
@@ -395,14 +398,12 @@ export async function executeContextCompression(
 
 			onStatusUpdate?.({step: 'completed', sessionId: compressedSession.id});
 
-			// Build UI messages (skip tool messages)
-			const newUIMessages: Message[] = newSessionMessages
-				.filter((msg: any) => msg.role !== 'tool')
-				.map((msg: any) => ({
-					role: msg.role as any,
-					content: msg.content || '',
-					streaming: false,
-				}));
+			// Build UI messages from session messages so preserved tool results keep
+			// their DiffViewer metadata after compression.
+			const newUIMessages = convertSessionMessagesToUI(
+				(sessionManager.getCurrentSession()?.messages ??
+					newSessionMessages) as any,
+			);
 
 			const apiUsage = hybridResult.compressionApiUsage;
 			const afterEstimate = hybridResult.afterTokensEstimate || 0;
@@ -461,37 +462,10 @@ export async function executeContextCompression(
 
 		let finalContent = `${goalHeader}[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
 
-		if (
-			compressionResult.preservedMessages &&
-			compressionResult.preservedMessages.length > 0
-		) {
+		const preservedMessages = compressionResult.preservedMessages ?? [];
+		if (preservedMessages.length > 0) {
 			finalContent +=
-				'\n\n---\n\n[Last Interaction - Preserved for Continuity]\n\n';
-
-			for (const msg of compressionResult.preservedMessages) {
-				if (msg.role === 'user') {
-					finalContent += `**User:**\n${msg.content}\n\n`;
-				} else if (msg.role === 'assistant') {
-					finalContent += `**Assistant:**\n${msg.content}`;
-
-					if (msg.tool_calls && msg.tool_calls.length > 0) {
-						finalContent += '\n\n**[Tool Calls Initiated]:**\n```json\n';
-						finalContent += JSON.stringify(msg.tool_calls, null, 2);
-						finalContent += '\n```\n\n';
-					} else {
-						finalContent += '\n\n';
-					}
-				} else if (msg.role === 'tool') {
-					finalContent += `**[Tool Result - ${msg.tool_call_id}]:**\n`;
-					try {
-						const parsed = JSON.parse(msg.content);
-						finalContent +=
-							'```json\n' + JSON.stringify(parsed, null, 2) + '\n```\n\n';
-					} catch {
-						finalContent += `${msg.content}\n\n`;
-					}
-				}
-			}
+				'\n\n---\n\n[Last Interaction - Preserved Below for Continuity]';
 		}
 
 		newSessionMessages.push({
@@ -499,6 +473,15 @@ export async function executeContextCompression(
 			content: finalContent,
 			timestamp: Date.now(),
 		});
+
+		if (preservedMessages.length > 0) {
+			newSessionMessages.push(
+				...preservedMessages.map((msg: any) => ({
+					...msg,
+					timestamp: Date.now(),
+				})),
+			);
+		}
 
 		// 创建新会话而不是覆盖旧会话
 		// 这样可以保留压缩前的完整历史，支持回滚到压缩前的任意快照点
@@ -606,36 +589,12 @@ export async function executeContextCompression(
 		// 新会话有独立的快照系统，不需要重映射旧会话的快照
 		// 旧会话的快照保持不变，如果需要回滚到压缩前，可以切换回旧会话
 
-		// 同步更新UI消息列表：从会话消息转换为UI Message格式
-		const newUIMessages: Message[] = [];
-
-		for (const sessionMsg of newSessionMessages) {
-			// 跳过 tool 角色的消息（工具执行结果），避免UI显示大量JSON
-			if (sessionMsg.role === 'tool') {
-				continue;
-			}
-
-			const uiMessage: Message = {
-				role: sessionMsg.role as any,
-				content: sessionMsg.content,
-				streaming: false,
-			};
-
-			// 如果有 tool_calls，显示工具调用信息（但不显示详细参数）
-			if (sessionMsg.tool_calls && sessionMsg.tool_calls.length > 0) {
-				// 在内容中添加简洁的工具调用摘要
-				const toolSummary = sessionMsg.tool_calls
-					.map((tc: any) => `[Tool: ${tc.function.name}]`)
-					.join(', ');
-
-				// 如果内容为空或很短，显示工具调用摘要
-				if (!uiMessage.content || uiMessage.content.length < 10) {
-					uiMessage.content = toolSummary;
-				}
-			}
-
-			newUIMessages.push(uiMessage);
-		}
+		// 同步更新UI消息列表：从会话消息转换为UI Message格式，保留工具结果
+		// 中的 editDiffData，确保压缩后编辑工具仍能显示 DiffViewer。
+		const newUIMessages = convertSessionMessagesToUI(
+			(sessionManager.getCurrentSession()?.messages ??
+				newSessionMessages) as any,
+		);
 
 		return {
 			uiMessages: newUIMessages,
@@ -821,7 +780,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				}
 				return;
 			}
-
 
 			if (result.success && result.action === 'deleteCurrentSession') {
 				const currentSession = sessionManager.getCurrentSession();
@@ -1491,7 +1449,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				});
 			} else if (result.success && result.action === 'toggleUltraTodo') {
 				const messages =
-					translations[getCurrentLanguage()].commandPanel.commandOutput.ultraTodo;
+					translations[getCurrentLanguage()].commandPanel.commandOutput
+						.ultraTodo;
 				try {
 					const {getUltraTodoEnabled, setUltraTodoEnabled} = await import(
 						'../../utils/config/projectSettings.js'
@@ -1757,7 +1716,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					options.setMessages(prev => [...prev, successMessage]);
 				} catch (error) {
 					const errorMsg =
-						error instanceof Error ? error.message : configMessages.unknownError;
+						error instanceof Error
+							? error.message
+							: configMessages.unknownError;
 					const errorMessage: Message = {
 						role: 'command',
 						content: configMessages.exportFailed.replace('{error}', errorMsg),
@@ -1811,8 +1772,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 
 					const importResult = await importConfigManagerFromYamlFile(filePath);
-					const imported = importResult.importedKeys.join(', ') || configMessages.none;
-					const skipped = importResult.skippedKeys.join(', ') || configMessages.none;
+					const imported =
+						importResult.importedKeys.join(', ') || configMessages.none;
+					const skipped =
+						importResult.skippedKeys.join(', ') || configMessages.none;
 					const successMessage: Message = {
 						role: 'command',
 						content: configMessages.importSuccess
@@ -1824,7 +1787,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					options.setMessages(prev => [...prev, successMessage]);
 				} catch (error) {
 					const errorMsg =
-						error instanceof Error ? error.message : configMessages.unknownError;
+						error instanceof Error
+							? error.message
+							: configMessages.unknownError;
 					const errorMessage: Message = {
 						role: 'command',
 						content: configMessages.importFailed.replace('{error}', errorMsg),

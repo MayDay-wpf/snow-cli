@@ -13,7 +13,7 @@ import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTrack
 import {teamTracker} from '../../utils/execution/teamTracker.js';
 import {
 	findInlineCommandTrigger,
-	isInlineInsertionCommand,
+	isInlineCommand,
 } from '../input/keyboard/utils/inlineCommandTrigger.js';
 
 const subscribeToSubAgentTracker = (cb: () => void) =>
@@ -403,7 +403,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			  )
 			: trigger.isAtStart
 			? allCommands
-			: allCommands.filter(isInlineInsertionCommand);
+			: allCommands.filter(isInlineCommand);
 
 		// Filter and sort commands by priority and usage frequency
 		// Priority order:
@@ -482,7 +482,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			const allCommands = getAllCommands();
 			const availableCommands = trigger.isAtStart
 				? allCommands
-				: allCommands.filter(isInlineInsertionCommand);
+				: allCommands.filter(isInlineCommand);
 			const query = trigger.query.toLowerCase();
 			const hasMatch = availableCommands.some(
 				command =>
