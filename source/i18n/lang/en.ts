@@ -616,6 +616,32 @@ export const en: TranslationKeys = {
 		useCommandPrefix: 'Use',
 		useCommandSuffix: 'command to disconnect',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry Telemetry',
+		description1:
+			'Collects traces and metrics only when explicitly enabled. Data is exported in OpenTelemetry format to external collectors such as Jaeger, Prometheus, Grafana, or APM/HPM platforms.',
+		description2:
+			'Settings are saved to Snow JSON project settings and are passed directly to OpenTelemetry exporters. Environment variables are not used.',
+		enableTelemetry: 'Enable telemetry',
+		tracesExporter: 'Traces exporter',
+		metricsExporter: 'Metrics exporter',
+		logsExporter: 'Logs exporter',
+		otlpProtocol: 'OTLP protocol',
+		otlpEndpoint: 'OTLP endpoint',
+		otlpHeaders: 'OTLP headers',
+		hintEnabled: 'Stored in Snow JSON project settings',
+		hintTracesExporter: 'Options: otlp, console, none',
+		hintMetricsExporter: 'Options: otlp, prometheus, console, none',
+		hintLogsExporter: 'Options: otlp, console, none',
+		hintOtlpProtocol: 'Options: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint: 'Example: http://localhost:4317',
+		hintOtlpHeaders: 'Example: Authorization=Bearer your-token',
+		empty: '(empty)',
+		savedMessage:
+			'OpenTelemetry telemetry settings saved. Restart Snow to reinitialize exporters.',
+		navigationHint:
+			'\u2191\u2193 select \u00b7 \u2190\u2192 change \u00b7 S save \u00b7 Esc save+close',
+	},
 	commandPanel: {
 		title: 'Command Panel',
 		availableCommands: 'Available Commands',
@@ -682,6 +708,7 @@ export const en: TranslationKeys = {
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
 			ultraTodo:
 				'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
+			telemetry: 'Configure OpenTelemetry telemetry exporters and endpoint',
 			branch: 'Fork current conversation into a new branch',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
@@ -1367,6 +1394,8 @@ export const en: TranslationKeys = {
 			'⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
 		ultraTodoActive:
 			'◈ Ultra TODO Mode Active - phase advancement requires completion checks',
+		telemetryActive:
+			'OpenTelemetry telemetry active - traces and metrics are exported externally',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',

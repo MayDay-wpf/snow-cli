@@ -573,6 +573,29 @@ export type TranslationKeys = {
 		useCommandPrefix: string;
 		useCommandSuffix: string;
 	};
+	// Telemetry Panel
+	telemetryPanel: {
+		title: string;
+		description1: string;
+		description2: string;
+		enableTelemetry: string;
+		tracesExporter: string;
+		metricsExporter: string;
+		logsExporter: string;
+		otlpProtocol: string;
+		otlpEndpoint: string;
+		otlpHeaders: string;
+		hintEnabled: string;
+		hintTracesExporter: string;
+		hintMetricsExporter: string;
+		hintLogsExporter: string;
+		hintOtlpProtocol: string;
+		hintOtlpEndpoint: string;
+		hintOtlpHeaders: string;
+		empty: string;
+		savedMessage: string;
+		navigationHint: string;
+	};
 	// Command Panel
 	commandPanel: {
 		title: string;
@@ -626,6 +649,7 @@ export type TranslationKeys = {
 			hybridCompress: string;
 			team: string;
 			ultraTodo: string;
+			telemetry: string;
 			branch: string; // Fork conversation into a new branch
 			worktree: string; // Git branch management panel
 			diff: string;
@@ -1269,6 +1293,7 @@ export type TranslationKeys = {
 		hybridCompressEnabled: string;
 		teamModeActive: string;
 		ultraTodoActive: string;
+		telemetryActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;

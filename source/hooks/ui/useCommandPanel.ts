@@ -299,6 +299,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Generate a refined prompt from your requirement using AI',
 			},
 			{
+				name: 'telemetry',
+				description:
+					t.commandPanel.commands.telemetry ||
+					'Configure OpenTelemetry telemetry exporters and endpoint',
+			},
+			{
 				name: 'team',
 				description:
 					t.commandPanel.commands.team ||

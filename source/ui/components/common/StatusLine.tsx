@@ -27,6 +27,7 @@ import type {
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
 const execFileAsync = promisify(execFile);
+const TELEMETRY_STATUS_ICON = '⌁';
 const WINDOWS_POWERSHELL_CANDIDATES = [
 	'pwsh.exe',
 	'powershell.exe',
@@ -212,6 +213,7 @@ type Props = {
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
+	telemetryEnabled?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -290,6 +292,7 @@ export default function StatusLine({
 	hybridCompressEnabled = false,
 	teamMode = false,
 	ultraTodoEnabled = false,
+	telemetryEnabled = false,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -342,6 +345,7 @@ export default function StatusLine({
 					hybridCompress: hybridCompressEnabled,
 					team: teamMode,
 					ultraTodo: ultraTodoEnabled,
+					telemetry: telemetryEnabled,
 					simple: simpleMode,
 				},
 				ide: {
@@ -428,6 +432,7 @@ export default function StatusLine({
 		vulnerabilityHuntingMode,
 		watcherEnabled,
 		ultraTodoEnabled,
+		telemetryEnabled,
 		yoloMode,
 	]);
 	const {items: statusLineHookItems, externalHookIds} = useStatusLineHookItems(
@@ -586,6 +591,16 @@ export default function StatusLine({
 			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeUltraTodo)
 		) {
 			statusItems.push({text: '◈ Ultra TODO', color: '#A78BFA'});
+		}
+
+		if (
+			telemetryEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.telemetry)
+		) {
+			statusItems.push({
+				text: `${TELEMETRY_STATUS_ICON} OTel`,
+				color: theme.colors.menuInfo,
+			});
 		}
 
 		if (
@@ -797,6 +812,15 @@ export default function StatusLine({
 					<Box>
 						<Text color="#A78BFA" dimColor>
 							{t.chatScreen.ultraTodoActive}
+						</Text>
+					</Box>
+				)}
+
+			{telemetryEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.telemetry) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{TELEMETRY_STATUS_ICON} {t.chatScreen.telemetryActive}
 						</Text>
 					</Box>
 				)}

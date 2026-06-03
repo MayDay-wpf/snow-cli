@@ -23,6 +23,7 @@ import type {
 import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
+import {sessionManager} from '../../../utils/session/sessionManager.js';
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -192,6 +193,7 @@ export async function handleToolCallRound(ctx: {
 				multiSelect,
 			);
 		},
+		sessionManager.getCurrentSession()?.id,
 	);
 
 	const toolResults = await Promise.all(

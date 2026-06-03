@@ -582,6 +582,32 @@ export const zh: TranslationKeys = {
 		useCommandPrefix: '使用',
 		useCommandSuffix: '命令断开连接',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry 遥测',
+		description1:
+			'仅在显式启用时采集 trace 和 metric。数据以 OpenTelemetry 格式导出到外部采集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+		description2:
+			'设置保存到 Snow JSON 项目配置中，并直接传递给 OpenTelemetry 导出器。不使用环境变量。',
+		enableTelemetry: '启用遥测',
+		tracesExporter: 'Traces 导出器',
+		metricsExporter: 'Metrics 导出器',
+		logsExporter: 'Logs 导出器',
+		otlpProtocol: 'OTLP 协议',
+		otlpEndpoint: 'OTLP 端点',
+		otlpHeaders: 'OTLP 请求头',
+		hintEnabled: '存储在 Snow JSON 项目配置中',
+		hintTracesExporter: '可选: otlp, console, none',
+		hintMetricsExporter: '可选: otlp, prometheus, console, none',
+		hintLogsExporter: '可选: otlp, console, none',
+		hintOtlpProtocol: '可选: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint: '例如: http://localhost:4317',
+		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		empty: '(空)',
+		savedMessage:
+			'OpenTelemetry 遥测设置已保存。重启 Snow 以重新初始化导出器。',
+		navigationHint:
+			'\u2191\u2193 选择 \u00b7 \u2190\u2192 切换 \u00b7 S 保存 \u00b7 Esc 保存并关闭',
+	},
 	commandPanel: {
 		title: '命令面板',
 		availableCommands: '可用命令',
@@ -637,6 +663,7 @@ export const zh: TranslationKeys = {
 				'切换混合压缩模式（AI 摘要 + 智能截断，用于 /compact 和自动压缩）',
 			team: '切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
 			ultraTodo: '切换 Ultra TODO 模式 - 按阶段细分任务并在阶段推进前强制校验',
+			telemetry: '配置 OpenTelemetry 遥测导出器和端点',
 			branch: '将当前对话分叉为新分支，可用 /resume 返回原会话',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
@@ -1290,6 +1317,8 @@ export const zh: TranslationKeys = {
 		hybridCompressEnabled: '⇌ 混合压缩已开启 - AI 摘要 + 智能截断',
 		teamModeActive: '⚑ Agent Team 模式已激活 - 多代理独立 Worktree 协同工作',
 		ultraTodoActive: '◈ Ultra TODO 模式已激活 - 阶段任务推进将强制校验',
+		telemetryActive:
+			'OpenTelemetry 遥测已开启 - trace 和 metric 将导出到外部组件',
 		tokens: ' 个词元',
 		cached: '已缓存',
 		newCache: '新缓存',

@@ -76,6 +76,7 @@ type ChatFooterProps = {
 	hybridCompressEnabled: boolean;
 	teamMode: boolean;
 	ultraTodoEnabled: boolean;
+	telemetryEnabled: boolean;
 	setTeamMode: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
@@ -428,6 +429,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							hybridCompressEnabled={props.hybridCompressEnabled}
 							teamMode={props.teamMode}
 							ultraTodoEnabled={props.ultraTodoEnabled}
+							telemetryEnabled={props.telemetryEnabled}
 							vscodeConnectionStatus={props.vscodeConnectionStatus}
 							editorContext={props.editorContext}
 							connectionStatus={connectionStatus}

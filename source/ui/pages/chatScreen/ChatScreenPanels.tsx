@@ -118,6 +118,7 @@ export default function ChatScreenPanels({
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showBranchPanel={panelState.showBranchPanel}
 				showConnectionPanel={panelState.showConnectionPanel}
+				showTelemetryPanel={panelState.showTelemetryPanel}
 				showTodoListPanel={panelState.showTodoListPanel}
 				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
 				setShowSessionPanel={panelState.setShowSessionPanel}
@@ -134,6 +135,7 @@ export default function ChatScreenPanels({
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
 				setShowConnectionPanel={panelState.setShowConnectionPanel}
+				setShowTelemetryPanel={panelState.setShowTelemetryPanel}
 				setShowTodoListPanel={panelState.setShowTodoListPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
 				handleGoalSessionPanelSelect={handleGoalSessionPanelSelect}

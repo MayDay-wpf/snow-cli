@@ -22,6 +22,12 @@ import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
 import {getVersionHeader} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
+import {
+	endChatSpan,
+	recordChatContent,
+	recordChatUsage,
+	startChatSpan,
+} from '../utils/telemetry/otel.js';
 
 export interface AnthropicOptions {
 	model: string;
@@ -643,435 +649,479 @@ export async function* createStreamingAnthropicCompletion(
 	abortSignal?: AbortSignal,
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<AnthropicStreamChunk, void, unknown> {
-	yield* withRetryGenerator(
-		async function* () {
-			// Load configuration: if configProfile is specified, load it; otherwise use main config
-			let config: ReturnType<typeof getSnowConfig>;
-			if (options.configProfile) {
-				try {
-					const {loadProfile} = await import(
-						'../utils/config/configManager.js'
-					);
-					const profileConfig = loadProfile(options.configProfile);
-					if (profileConfig?.snowcfg) {
-						config = profileConfig.snowcfg;
-					} else {
-						// Profile not found, fallback to main config
+	const telemetry = startChatSpan({
+		provider: 'anthropic',
+		model: options.model,
+		streaming: true,
+		conversationId: options.sessionId,
+		sessionId: options.sessionId,
+	});
+
+	try {
+		yield* withRetryGenerator(
+			async function* () {
+				// Load configuration: if configProfile is specified, load it; otherwise use main config
+				let config: ReturnType<typeof getSnowConfig>;
+				if (options.configProfile) {
+					try {
+						const {loadProfile} = await import(
+							'../utils/config/configManager.js'
+						);
+						const profileConfig = loadProfile(options.configProfile);
+						if (profileConfig?.snowcfg) {
+							config = profileConfig.snowcfg;
+						} else {
+							// Profile not found, fallback to main config
+							config = getSnowConfig();
+							logger.warn(
+								`Profile ${options.configProfile} not found, using main config`,
+							);
+						}
+					} catch (error) {
+						// If loading profile fails, fallback to main config
 						config = getSnowConfig();
 						logger.warn(
-							`Profile ${options.configProfile} not found, using main config`,
+							`Failed to load profile ${options.configProfile}, using main config:`,
+							error,
 						);
 					}
-				} catch (error) {
-					// If loading profile fails, fallback to main config
+				} else {
+					// No configProfile specified, use main config
 					config = getSnowConfig();
-					logger.warn(
-						`Failed to load profile ${options.configProfile}, using main config:`,
-						error,
+				}
+				if (options.configOverride) {
+					config = {...config, ...options.configOverride};
+				}
+
+				// Get system prompt (with custom override support)
+				let customSystemPromptContent: string[] | undefined;
+				if (options.customSystemPromptId) {
+					const {getSystemPromptConfig} = await import(
+						'../utils/config/apiConfig.js'
+					);
+					const systemPromptConfig = getSystemPromptConfig();
+					const customPrompt = systemPromptConfig?.prompts.find(
+						p => p.id === options.customSystemPromptId,
+					);
+					if (customPrompt?.content) {
+						customSystemPromptContent = [customPrompt.content];
+					}
+				}
+
+				// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
+				customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
+
+				const {system, messages} = convertToAnthropicMessages(
+					options.messages,
+					options.includeBuiltinSystemPrompt !== false,
+					customSystemPromptContent,
+					config.anthropicCacheTTL || '5m',
+					options.disableThinking || false,
+					options.planMode || false,
+					options.vulnerabilityHuntingMode || false,
+					options.toolSearchDisabled || false,
+					options.teamMode || false,
+				);
+
+				// Use persistent userId that remains the same until application restart
+				const userId = getPersistentUserId();
+
+				const requestBody: any = {
+					model: options.model || config.advancedModel,
+					max_tokens: options.max_tokens || 4096,
+					system,
+					messages,
+					tools: convertToolsToAnthropic(options.tools),
+					metadata: {
+						user_id: userId,
+					},
+					stream: true,
+				};
+
+				if (config.anthropicSpeed) {
+					requestBody.speed = config.anthropicSpeed;
+				}
+
+				// Add thinking configuration if enabled and not explicitly disabled
+				// When thinking is enabled, temperature must be 1
+				// Note: agents and other internal tools should set disableThinking=true
+				// Debug: Log thinking decision for troubleshooting
+				if (config.thinking) {
+					logger.debug('Thinking config check:', {
+						configThinking: !!config.thinking,
+						disableThinking: options.disableThinking,
+						willEnableThinking: config.thinking && !options.disableThinking,
+					});
+					if (config.thinking && !options.disableThinking) {
+						if (config.thinking.type === 'adaptive') {
+							requestBody.thinking = {
+								type: 'adaptive',
+							};
+							requestBody.output_config = {
+								effort: config.thinking.effort || 'high',
+							};
+						} else {
+							requestBody.thinking = config.thinking;
+						}
+						requestBody.temperature = 1;
+					}
+				}
+
+				recordChatContent(
+					telemetry.span,
+					'request',
+					requestBody,
+					telemetry.metricAttributes,
+				);
+
+				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+				const customHeaders =
+					options.customHeaders || getCustomHeadersForConfig(config);
+
+				// Prepare headers
+				const headers: Record<string, string> = {
+					'Content-Type': 'application/json',
+					'x-api-key': config.apiKey,
+					Authorization: `Bearer ${config.apiKey}`,
+					'x-snow': getVersionHeader(),
+					...customHeaders,
+				};
+
+				// Add beta parameter if configured
+				// if (config.anthropicBeta) {
+				// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+				// }
+
+				// Use configured baseUrl or default Anthropic URL
+				//移除末尾斜杠，避免拼接时出现双斜杠（如 /v1//messages）
+				const baseUrl = (
+					config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+						? config.baseUrl
+						: 'https://api.anthropic.com/v1'
+				).replace(/\/+$/, '');
+
+				const url = resolveApiEndpoint(
+					baseUrl,
+					'anthropicMessages',
+					config.baseUrlMode,
+					{anthropicBeta: config.anthropicBeta},
+				);
+
+				const fetchOptions = addProxyToFetchOptions(url, {
+					method: 'POST',
+					headers,
+					body: JSON.stringify(requestBody),
+					signal: abortSignal,
+				});
+
+				let response: Response;
+				try {
+					response = await fetch(url, fetchOptions);
+				} catch (error) {
+					// 捕获 fetch 底层错误（网络错误、连接超时等）
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					throw new Error(
+						`Anthropic API fetch failed: ${errorMessage}\n` +
+							`URL: ${url}\n` +
+							`Model: ${requestBody.model}\n` +
+							`Error type: ${
+								error instanceof TypeError
+									? 'Network/Connection Error'
+									: 'Unknown Error'
+							}\n` +
+							`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
 					);
 				}
-			} else {
-				// No configProfile specified, use main config
-				config = getSnowConfig();
-			}
-			if (options.configOverride) {
-				config = {...config, ...options.configOverride};
-			}
 
-			// Get system prompt (with custom override support)
-			let customSystemPromptContent: string[] | undefined;
-			if (options.customSystemPromptId) {
-				const {getSystemPromptConfig} = await import(
-					'../utils/config/apiConfig.js'
-				);
-				const systemPromptConfig = getSystemPromptConfig();
-				const customPrompt = systemPromptConfig?.prompts.find(
-					p => p.id === options.customSystemPromptId,
-				);
-				if (customPrompt?.content) {
-					customSystemPromptContent = [customPrompt.content];
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`,
+					);
 				}
-			}
 
-			// 如果没有显式的 customSystemPromptId，则按当前配置（含 profile 覆盖）解析
-			customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
-
-			const {system, messages} = convertToAnthropicMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false,
-				customSystemPromptContent,
-				config.anthropicCacheTTL || '5m',
-				options.disableThinking || false,
-				options.planMode || false,
-				options.vulnerabilityHuntingMode || false,
-				options.toolSearchDisabled || false,
-				options.teamMode || false,
-			);
-
-			// Use persistent userId that remains the same until application restart
-			const userId = getPersistentUserId();
-
-			const requestBody: any = {
-				model: options.model || config.advancedModel,
-				max_tokens: options.max_tokens || 4096,
-				system,
-				messages,
-				tools: convertToolsToAnthropic(options.tools),
-				metadata: {
-					user_id: userId,
-				},
-				stream: true,
-			};
-
-			if (config.anthropicSpeed) {
-				requestBody.speed = config.anthropicSpeed;
-			}
-
-			// Add thinking configuration if enabled and not explicitly disabled
-			// When thinking is enabled, temperature must be 1
-			// Note: agents and other internal tools should set disableThinking=true
-			// Debug: Log thinking decision for troubleshooting
-			if (config.thinking) {
-				logger.debug('Thinking config check:', {
-					configThinking: !!config.thinking,
-					disableThinking: options.disableThinking,
-					willEnableThinking: config.thinking && !options.disableThinking,
-				});
-				if (config.thinking && !options.disableThinking) {
-					if (config.thinking.type === 'adaptive') {
-						requestBody.thinking = {
-							type: 'adaptive',
-						};
-						requestBody.output_config = {
-							effort: config.thinking.effort || 'high',
-						};
-					} else {
-						requestBody.thinking = config.thinking;
-					}
-					requestBody.temperature = 1;
+				if (!response.body) {
+					throw new Error('No response body from Anthropic API');
 				}
-			}
 
-			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
-			const customHeaders =
-				options.customHeaders || getCustomHeadersForConfig(config);
-
-			// Prepare headers
-			const headers: Record<string, string> = {
-				'Content-Type': 'application/json',
-				'x-api-key': config.apiKey,
-				Authorization: `Bearer ${config.apiKey}`,
-				'x-snow': getVersionHeader(),
-				...customHeaders,
-			};
-
-			// Add beta parameter if configured
-			// if (config.anthropicBeta) {
-			// 	headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
-			// }
-
-			// Use configured baseUrl or default Anthropic URL
-			//移除末尾斜杠，避免拼接时出现双斜杠（如 /v1//messages）
-			const baseUrl = (
-				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-					? config.baseUrl
-					: 'https://api.anthropic.com/v1'
-			).replace(/\/+$/, '');
-
-			const url = resolveApiEndpoint(
-				baseUrl,
-				'anthropicMessages',
-				config.baseUrlMode,
-				{anthropicBeta: config.anthropicBeta},
-			);
-
-			const fetchOptions = addProxyToFetchOptions(url, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify(requestBody),
-				signal: abortSignal,
-			});
-
-			let response: Response;
-			try {
-				response = await fetch(url, fetchOptions);
-			} catch (error) {
-				// 捕获 fetch 底层错误（网络错误、连接超时等）
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				throw new Error(
-					`Anthropic API fetch failed: ${errorMessage}\n` +
-						`URL: ${url}\n` +
-						`Model: ${requestBody.model}\n` +
-						`Error type: ${
-							error instanceof TypeError
-								? 'Network/Connection Error'
-								: 'Unknown Error'
-						}\n` +
-						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
-				);
-			}
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`,
-				);
-			}
-
-			if (!response.body) {
-				throw new Error('No response body from Anthropic API');
-			}
-
-			let contentBuffer = '';
-			let thinkingTextBuffer = ''; // Accumulate thinking text content
-			let thinkingSignature = ''; // Accumulate thinking signature
-			let toolCallsBuffer: Map<
-				string,
-				{
-					id: string;
-					type: 'function';
-					function: {
-						name: string;
-						arguments: string;
-					};
-				}
-			> = new Map();
-			let hasToolCalls = false;
-			let usageData: UsageInfo | undefined;
-			let blockIndexToId: Map<number, string> = new Map();
-			let blockIndexToType: Map<number, string> = new Map(); // Track block types (text, thinking, tool_use)
-			let completedToolBlocks = new Set<string>(); // Track which tool blocks have finished streaming
-			const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
-
-			for await (const event of parseSSEStream(
-				response.body.getReader(),
-				abortSignal,
-				idleTimeoutMs,
-			)) {
-				// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
-				if (event.type === 'content_block_start') {
-					const block = event.content_block;
-					const blockIndex = event.index;
-
-					// Track block type for later reference
-					blockIndexToType.set(blockIndex, block.type);
-
-					if (block.type === 'tool_use') {
-						hasToolCalls = true;
-						blockIndexToId.set(blockIndex, block.id);
-
-						toolCallsBuffer.set(block.id, {
-							id: block.id,
-							type: 'function',
-							function: {
-								name: block.name,
-								arguments: '',
-							},
-						});
-
-						yield {
-							type: 'tool_call_delta',
-							delta: block.name,
+				let contentBuffer = '';
+				let thinkingTextBuffer = ''; // Accumulate thinking text content
+				let thinkingSignature = ''; // Accumulate thinking signature
+				let toolCallsBuffer: Map<
+					string,
+					{
+						id: string;
+						type: 'function';
+						function: {
+							name: string;
+							arguments: string;
 						};
 					}
-					// Handle thinking block start (Extended Thinking feature)
-					else if (block.type === 'thinking') {
-						// Thinking block started - emit reasoning_started event
-						yield {
-							type: 'reasoning_started',
-						};
-					}
-				} else if (event.type === 'content_block_delta') {
-					const delta = event.delta;
+				> = new Map();
+				let hasToolCalls = false;
+				let usageData: UsageInfo | undefined;
+				let blockIndexToId: Map<number, string> = new Map();
+				let blockIndexToType: Map<number, string> = new Map(); // Track block types (text, thinking, tool_use)
+				let completedToolBlocks = new Set<string>(); // Track which tool blocks have finished streaming
+				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
 
-					if (delta.type === 'text_delta') {
-						const text = delta.text;
-						contentBuffer += text;
-						yield {
-							type: 'content',
-							content: text,
-						};
-					}
-
-					// Handle thinking_delta (Extended Thinking feature)
-					// Emit reasoning_delta event for thinking content
-					if (delta.type === 'thinking_delta') {
-						const thinkingText = delta.thinking;
-						thinkingTextBuffer += thinkingText; // Accumulate thinking text
-						yield {
-							type: 'reasoning_delta',
-							delta: thinkingText,
-						};
-					}
-
-					// Handle signature_delta (Extended Thinking feature)
-					// Signature is required for thinking blocks
-					if (delta.type === 'signature_delta') {
-						thinkingSignature += delta.signature; // Accumulate signature
-					}
-
-					if (delta.type === 'input_json_delta') {
-						const jsonDelta = delta.partial_json;
+				for await (const event of parseSSEStream(
+					response.body.getReader(),
+					abortSignal,
+					idleTimeoutMs,
+				)) {
+					// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
+					if (event.type === 'content_block_start') {
+						const block = event.content_block;
 						const blockIndex = event.index;
-						const toolId = blockIndexToId.get(blockIndex);
 
-						if (toolId) {
-							const toolCall = toolCallsBuffer.get(toolId);
-							if (toolCall) {
-								// Filter out any XML-like tags that might be mixed in the JSON delta
-								// This can happen when the model output contains XML that gets interpreted as JSON
-								const cleanedDelta = jsonDelta.replace(
-									/<\/?parameter[^>]*>/g,
-									'',
-								);
+						// Track block type for later reference
+						blockIndexToType.set(blockIndex, block.type);
 
-								if (cleanedDelta) {
-									toolCall.function.arguments += cleanedDelta;
+						if (block.type === 'tool_use') {
+							hasToolCalls = true;
+							blockIndexToId.set(blockIndex, block.id);
 
-									yield {
-										type: 'tool_call_delta',
-										delta: cleanedDelta,
-									};
+							toolCallsBuffer.set(block.id, {
+								id: block.id,
+								type: 'function',
+								function: {
+									name: block.name,
+									arguments: '',
+								},
+							});
+
+							yield {
+								type: 'tool_call_delta',
+								delta: block.name,
+							};
+						}
+						// Handle thinking block start (Extended Thinking feature)
+						else if (block.type === 'thinking') {
+							// Thinking block started - emit reasoning_started event
+							yield {
+								type: 'reasoning_started',
+							};
+						}
+					} else if (event.type === 'content_block_delta') {
+						const delta = event.delta;
+
+						if (delta.type === 'text_delta') {
+							const text = delta.text;
+							contentBuffer += text;
+							yield {
+								type: 'content',
+								content: text,
+							};
+						}
+
+						// Handle thinking_delta (Extended Thinking feature)
+						// Emit reasoning_delta event for thinking content
+						if (delta.type === 'thinking_delta') {
+							const thinkingText = delta.thinking;
+							thinkingTextBuffer += thinkingText; // Accumulate thinking text
+							yield {
+								type: 'reasoning_delta',
+								delta: thinkingText,
+							};
+						}
+
+						// Handle signature_delta (Extended Thinking feature)
+						// Signature is required for thinking blocks
+						if (delta.type === 'signature_delta') {
+							thinkingSignature += delta.signature; // Accumulate signature
+						}
+
+						if (delta.type === 'input_json_delta') {
+							const jsonDelta = delta.partial_json;
+							const blockIndex = event.index;
+							const toolId = blockIndexToId.get(blockIndex);
+
+							if (toolId) {
+								const toolCall = toolCallsBuffer.get(toolId);
+								if (toolCall) {
+									// Filter out any XML-like tags that might be mixed in the JSON delta
+									// This can happen when the model output contains XML that gets interpreted as JSON
+									const cleanedDelta = jsonDelta.replace(
+										/<\/?parameter[^>]*>/g,
+										'',
+									);
+
+									if (cleanedDelta) {
+										toolCall.function.arguments += cleanedDelta;
+
+										yield {
+											type: 'tool_call_delta',
+											delta: cleanedDelta,
+										};
+									}
 								}
 							}
 						}
-					}
-				} else if (event.type === 'content_block_stop') {
-					// Mark this block as completed
-					const blockIndex = event.index;
-					const toolId = blockIndexToId.get(blockIndex);
-					if (toolId) {
-						completedToolBlocks.add(toolId);
-					}
-				} else if (event.type === 'message_start') {
-					if (event.message.usage) {
-						const cacheCreation =
-							(event.message.usage as any).cache_creation_input_tokens || 0;
-						const cacheRead =
-							(event.message.usage as any).cache_read_input_tokens || 0;
-						usageData = {
-							prompt_tokens: event.message.usage.input_tokens || 0,
-							completion_tokens: event.message.usage.output_tokens || 0,
-							total_tokens:
-								(event.message.usage.input_tokens || 0) +
-								(event.message.usage.output_tokens || 0) +
-								cacheCreation +
-								cacheRead,
-							cache_creation_input_tokens: cacheCreation || undefined,
-							cache_read_input_tokens: cacheRead || undefined,
-						};
-					}
-				} else if (event.type === 'message_delta') {
-					if (event.usage) {
-						if (!usageData) {
+					} else if (event.type === 'content_block_stop') {
+						// Mark this block as completed
+						const blockIndex = event.index;
+						const toolId = blockIndexToId.get(blockIndex);
+						if (toolId) {
+							completedToolBlocks.add(toolId);
+						}
+					} else if (event.type === 'message_start') {
+						if (event.message.usage) {
+							const cacheCreation =
+								(event.message.usage as any).cache_creation_input_tokens || 0;
+							const cacheRead =
+								(event.message.usage as any).cache_read_input_tokens || 0;
 							usageData = {
-								prompt_tokens: 0,
-								completion_tokens: 0,
-								total_tokens: 0,
+								prompt_tokens: event.message.usage.input_tokens || 0,
+								completion_tokens: event.message.usage.output_tokens || 0,
+								total_tokens:
+									(event.message.usage.input_tokens || 0) +
+									(event.message.usage.output_tokens || 0) +
+									cacheCreation +
+									cacheRead,
+								cache_creation_input_tokens: cacheCreation || undefined,
+								cache_read_input_tokens: cacheRead || undefined,
 							};
 						}
-						// Update prompt_tokens if present in message_delta
-						if (event.usage.input_tokens !== undefined) {
-							usageData.prompt_tokens = event.usage.input_tokens;
+					} else if (event.type === 'message_delta') {
+						if (event.usage) {
+							if (!usageData) {
+								usageData = {
+									prompt_tokens: 0,
+									completion_tokens: 0,
+									total_tokens: 0,
+								};
+							}
+							// Update prompt_tokens if present in message_delta
+							if (event.usage.input_tokens !== undefined) {
+								usageData.prompt_tokens = event.usage.input_tokens;
+							}
+							usageData.completion_tokens = event.usage.output_tokens || 0;
+							if (
+								(event.usage as any).cache_creation_input_tokens !== undefined
+							) {
+								usageData.cache_creation_input_tokens = (
+									event.usage as any
+								).cache_creation_input_tokens;
+							}
+							if ((event.usage as any).cache_read_input_tokens !== undefined) {
+								usageData.cache_read_input_tokens = (
+									event.usage as any
+								).cache_read_input_tokens;
+							}
+							usageData.total_tokens =
+								usageData.prompt_tokens +
+								usageData.completion_tokens +
+								(usageData.cache_creation_input_tokens || 0) +
+								(usageData.cache_read_input_tokens || 0);
 						}
-						usageData.completion_tokens = event.usage.output_tokens || 0;
-						if (
-							(event.usage as any).cache_creation_input_tokens !== undefined
-						) {
-							usageData.cache_creation_input_tokens = (
-								event.usage as any
-							).cache_creation_input_tokens;
-						}
-						if ((event.usage as any).cache_read_input_tokens !== undefined) {
-							usageData.cache_read_input_tokens = (
-								event.usage as any
-							).cache_read_input_tokens;
-						}
-						usageData.total_tokens =
-							usageData.prompt_tokens +
-							usageData.completion_tokens +
-							(usageData.cache_creation_input_tokens || 0) +
-							(usageData.cache_read_input_tokens || 0);
-					}
-				}
-			}
-
-			if (hasToolCalls && toolCallsBuffer.size > 0) {
-				const toolCalls = Array.from(toolCallsBuffer.values());
-				for (const toolCall of toolCalls) {
-					// Normalize the arguments
-					let args = toolCall.function.arguments.trim();
-
-					// If arguments is empty, use empty object
-					if (!args) {
-						args = '{}';
-					}
-
-					// Try to parse the JSON using the unified parseJsonWithFix utility
-					if (completedToolBlocks.has(toolCall.id)) {
-						// Tool block was completed, parse with fix and logging
-						const parseResult = parseJsonWithFix(args, {
-							toolName: toolCall.function.name,
-							fallbackValue: {},
-							logWarning: true,
-							logError: true,
-						});
-
-						// Use the parsed data or fallback value
-						toolCall.function.arguments = JSON.stringify(parseResult.data);
-					} else {
-						// Tool block wasn't completed, likely interrupted stream
-						// Try to parse without logging errors (incomplete data is expected)
-						const parseResult = parseJsonWithFix(args, {
-							toolName: toolCall.function.name,
-							fallbackValue: {},
-							logWarning: false,
-							logError: false,
-						});
-
-						if (!parseResult.success) {
-							logger.warn(
-								`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using fallback data.`,
-							);
-						}
-
-						toolCall.function.arguments = JSON.stringify(parseResult.data);
 					}
 				}
 
+				if (hasToolCalls && toolCallsBuffer.size > 0) {
+					const toolCalls = Array.from(toolCallsBuffer.values());
+					for (const toolCall of toolCalls) {
+						// Normalize the arguments
+						let args = toolCall.function.arguments.trim();
+
+						// If arguments is empty, use empty object
+						if (!args) {
+							args = '{}';
+						}
+
+						// Try to parse the JSON using the unified parseJsonWithFix utility
+						if (completedToolBlocks.has(toolCall.id)) {
+							// Tool block was completed, parse with fix and logging
+							const parseResult = parseJsonWithFix(args, {
+								toolName: toolCall.function.name,
+								fallbackValue: {},
+								logWarning: true,
+								logError: true,
+							});
+
+							// Use the parsed data or fallback value
+							toolCall.function.arguments = JSON.stringify(parseResult.data);
+						} else {
+							// Tool block wasn't completed, likely interrupted stream
+							// Try to parse without logging errors (incomplete data is expected)
+							const parseResult = parseJsonWithFix(args, {
+								toolName: toolCall.function.name,
+								fallbackValue: {},
+								logWarning: false,
+								logError: false,
+							});
+
+							if (!parseResult.success) {
+								logger.warn(
+									`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using fallback data.`,
+								);
+							}
+
+							toolCall.function.arguments = JSON.stringify(parseResult.data);
+						}
+					}
+
+					yield {
+						type: 'tool_calls',
+						tool_calls: toolCalls,
+					};
+				}
+
+				if (usageData) {
+					// Save usage to file system at API layer
+					saveUsageToFile(options.model, usageData);
+					recordChatUsage(
+						usageData,
+						telemetry.metricAttributes,
+						telemetry.span,
+					);
+
+					yield {
+						type: 'usage',
+						usage: usageData,
+					};
+				}
+
+				if (contentBuffer) {
+					recordChatContent(
+						telemetry.span,
+						'response',
+						contentBuffer,
+						telemetry.metricAttributes,
+					);
+				}
+				// Return complete thinking block with signature if thinking content exists
+				const thinkingBlock = thinkingTextBuffer
+					? {
+							type: 'thinking' as const,
+							thinking: thinkingTextBuffer,
+							signature: thinkingSignature || '',
+					  }
+					: undefined;
+
 				yield {
-					type: 'tool_calls',
-					tool_calls: toolCalls,
+					type: 'done',
+					thinking: thinkingBlock,
 				};
-			}
-
-			if (usageData) {
-				// Save usage to file system at API layer
-				saveUsageToFile(options.model, usageData);
-
-				yield {
-					type: 'usage',
-					usage: usageData,
-				};
-			}
-			// Return complete thinking block with signature if thinking content exists
-			const thinkingBlock = thinkingTextBuffer
-				? {
-						type: 'thinking' as const,
-						thinking: thinkingTextBuffer,
-						signature: thinkingSignature || '',
-				  }
-				: undefined;
-
-			yield {
-				type: 'done',
-				thinking: thinkingBlock,
-			};
-		},
-		{
-			abortSignal,
-			onRetry,
-		},
-	);
+			},
+			{
+				abortSignal,
+				onRetry,
+			},
+		);
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+		);
+	} catch (error) {
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+			error,
+		);
+		throw error;
+	}
 }

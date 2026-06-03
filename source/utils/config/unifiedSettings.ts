@@ -40,6 +40,15 @@ export interface UnifiedSettings {
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
+	telemetry?: {
+		enabled?: boolean;
+		tracesExporter?: 'otlp' | 'console' | 'none';
+		metricsExporter?: 'otlp' | 'prometheus' | 'console' | 'none';
+		logsExporter?: 'otlp' | 'console' | 'none';
+		otlpProtocol?: 'grpc' | 'http/protobuf' | 'http/json';
+		otlpEndpoint?: string;
+		otlpHeaders?: string;
+	};
 
 	// === 来自旧 codebase.json ===
 	codebase?: {
@@ -219,9 +228,7 @@ export function updateSettings(
  * present (callers that need fine-grained merging should fetch each scope
  * separately).
  */
-export function readMergedSettings(
-	workingDirectory?: string,
-): UnifiedSettings {
+export function readMergedSettings(workingDirectory?: string): UnifiedSettings {
 	const globalSettings = readSettings('global');
 	const projectSettings = readSettings('project', workingDirectory);
 	return {...globalSettings, ...projectSettings};

@@ -2,6 +2,11 @@ import {executeMCPTool} from './mcpToolsManager.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import {teamService} from '../../mcp/team.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+import {
+	endToolSpan,
+	recordToolContent,
+	startToolSpan,
+} from '../telemetry/otel.js';
 
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
@@ -223,9 +228,15 @@ export async function executeToolCall(
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
+	sessionId?: string,
 ): Promise<ToolResult> {
 	let result: ToolResult | undefined;
 	let executionError: Error | null = null;
+	const telemetry = startToolSpan({
+		toolName: toolCall.function.name,
+		toolCallId: toolCall.id,
+		sessionId,
+	});
 
 	// Setup ESC key listener for terminal commands (allows user to interrupt long-running commands)
 	let escKeyListener: ((data: Buffer) => void) | undefined;
@@ -254,6 +265,12 @@ export async function executeToolCall(
 
 	try {
 		const args = safeParseToolArguments(toolCall.function.arguments);
+		recordToolContent(
+			telemetry.span,
+			'tool.input',
+			args,
+			telemetry.metricAttributes,
+		);
 
 		// Execute beforeToolCall hook
 		try {
@@ -267,13 +284,14 @@ export async function executeToolCall(
 			);
 			const interpreted = interpretHookResult('beforeToolCall', hookResult);
 			if (interpreted.action === 'block') {
-				return {
+				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
 					content: interpreted.replacedContent || '',
 					hookFailed: interpreted.hookFailed,
 					hookErrorDetails: interpreted.errorDetails,
 				};
+				return result;
 			}
 		} catch (error) {
 			console.warn('Failed to execute beforeToolCall hook:', error);
@@ -612,6 +630,35 @@ export async function executeToolCall(
 		} catch (error) {
 			console.warn('Failed to execute afterToolCall hook:', error);
 		}
+
+		const telemetryStatus =
+			result?.messageStatus === 'error' || result?.hookFailed
+				? 'error'
+				: 'success';
+		const telemetryAttributes = {
+			...telemetry.metricAttributes,
+			'snow.tool.status': telemetryStatus,
+			...(result?.content
+				? {'snow.tool.output.length': result.content.length}
+				: {}),
+		};
+		if (result) {
+			recordToolContent(
+				telemetry.span,
+				'tool.output',
+				result.content,
+				telemetryAttributes,
+			);
+		}
+		endToolSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetryAttributes,
+			executionError ??
+				(telemetryStatus === 'error'
+					? new Error(result?.content || 'Tool execution failed')
+					: undefined),
+		);
 	}
 
 	// Cleanup ESC key listener
@@ -741,6 +788,7 @@ export async function executeToolCalls(
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
+	sessionId?: string,
 ): Promise<ToolResult[]> {
 	// Group tool calls by their resource identifier
 	const resourceGroups = new Map<string, ToolCall[]>();
@@ -780,6 +828,7 @@ export async function executeToolCalls(
 					yoloMode,
 					addToAlwaysApproved,
 					onUserInteractionNeeded,
+					sessionId,
 				);
 				groupResults.push(result);
 

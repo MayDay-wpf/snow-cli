@@ -17,6 +17,7 @@ export const BUILTIN_STATUSLINE_IDS = {
 	modeUltraTodo: 'builtin.mode-ultra-todo',
 	toolSearch: 'builtin.tool-search',
 	hybridCompress: 'builtin.hybrid-compress',
+	telemetry: 'builtin.telemetry',
 	ideConnection: 'builtin.ide-connection',
 	backendConnection: 'builtin.backend-connection',
 	codebaseIndexing: 'builtin.codebase-indexing',

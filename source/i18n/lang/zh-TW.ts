@@ -583,6 +583,32 @@ export const zhTW: TranslationKeys = {
 		useCommandPrefix: '使用',
 		useCommandSuffix: '命令中斷連線',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry 遙測',
+		description1:
+			'僅在明確啟用時收集 trace 和 metric。資料以 OpenTelemetry 格式匯出到外部收集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+		description2:
+			'設定儲存到 Snow JSON 專案設定中，並直接傳遞給 OpenTelemetry 匯出器。不使用環境變數。',
+		enableTelemetry: '啟用遙測',
+		tracesExporter: 'Traces 匯出器',
+		metricsExporter: 'Metrics 匯出器',
+		logsExporter: 'Logs 匯出器',
+		otlpProtocol: 'OTLP 協定',
+		otlpEndpoint: 'OTLP 端點',
+		otlpHeaders: 'OTLP 標頭',
+		hintEnabled: '儲存在 Snow JSON 專案設定中',
+		hintTracesExporter: '可選: otlp, console, none',
+		hintMetricsExporter: '可選: otlp, prometheus, console, none',
+		hintLogsExporter: '可選: otlp, console, none',
+		hintOtlpProtocol: '可選: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint: '例如: http://localhost:4317',
+		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		empty: '(空)',
+		savedMessage:
+			'OpenTelemetry 遙測設定已儲存。重啟 Snow 以重新初始化匯出器。',
+		navigationHint:
+			'\u2191\u2193 選擇 \u00b7 \u2190\u2192 切換 \u00b7 S 儲存 \u00b7 Esc 儲存並關閉',
+	},
 	commandPanel: {
 		title: '命令面板',
 		availableCommands: '可用命令',
@@ -638,6 +664,7 @@ export const zhTW: TranslationKeys = {
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
 			team: '切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
 			ultraTodo: '切換 Ultra TODO 模式 - 按階段細分任務並在階段推進前強制校驗',
+			telemetry: '設定 OpenTelemetry 遙測',
 			branch: '將目前對話分叉為新分支，可用 /resume 返回原會話',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
@@ -1290,6 +1317,8 @@ export const zhTW: TranslationKeys = {
 		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
 		teamModeActive: '⚑ Agent Team 模式已啟用 - 多代理獨立 Worktree 協同工作',
 		ultraTodoActive: '◈ Ultra TODO 模式已啟用 - 階段任務推進將強制校驗',
+		telemetryActive:
+			'OpenTelemetry 遙測已開啟 - trace 和 metric 將匯出到外部元件',
 		tokens: ' 個詞元',
 		cached: '已快取',
 		newCache: '新快取',

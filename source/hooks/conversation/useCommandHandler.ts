@@ -640,6 +640,7 @@ type CommandHandlerOptions = {
 	 */
 	onResumeGoalSession?: (sessionId: string) => Promise<void>;
 	setShowConnectionPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowTelemetryPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: React.Dispatch<
 		React.SetStateAction<string | undefined>
 	>;
@@ -967,6 +968,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'showConnectionPanel') {
 				options.setConnectionPanelApiUrl(result.apiUrl);
 				options.setShowConnectionPanel(true);
+			} else if (result.success && result.action === 'showTelemetryPanel') {
+				options.setShowTelemetryPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
 				const commandMessage: Message = {
@@ -1021,6 +1024,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'help') {
 				// Help shown as an in-chat panel, ESC closes panel without resetting terminal.
 				options.setShowHelpPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'showTelemetryPanel') {
+				options.setShowTelemetryPanel(true);
 				// Don't add command message to keep UI clean
 			} else if (result.success && result.action === 'pixel') {
 				// Pixel editor shown as an overlay panel

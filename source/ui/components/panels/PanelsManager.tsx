@@ -14,6 +14,7 @@ import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
+import TelemetryPanel from './TelemetryPanel.js';
 import TodoListPanel from './TodoListPanel.js';
 import HelpPanel from './HelpPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
@@ -49,6 +50,7 @@ type PanelsManagerProps = {
 	showWorkingDirPanel: boolean;
 	showBranchPanel: boolean;
 	showConnectionPanel: boolean;
+	showTelemetryPanel: boolean;
 	showTodoListPanel: boolean;
 	connectionPanelApiUrl?: string;
 	setShowSessionPanel: (show: boolean) => void;
@@ -65,6 +67,7 @@ type PanelsManagerProps = {
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
 	setShowConnectionPanel: (show: boolean) => void;
+	setShowTelemetryPanel: (show: boolean) => void;
 	setShowTodoListPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
 	/**
@@ -117,6 +120,7 @@ export default function PanelsManager({
 	showWorkingDirPanel,
 	showBranchPanel,
 	showConnectionPanel,
+	showTelemetryPanel,
 	showTodoListPanel,
 	connectionPanelApiUrl,
 	setShowSessionPanel,
@@ -133,6 +137,7 @@ export default function PanelsManager({
 	setShowWorkingDirPanel,
 	setShowBranchPanel,
 	setShowConnectionPanel,
+	setShowTelemetryPanel,
 	setShowTodoListPanel,
 	handleSessionPanelSelect,
 	handleGoalSessionPanelSelect,
@@ -329,6 +334,13 @@ export default function PanelsManager({
 						onClose={() => setShowConnectionPanel(false)}
 						initialApiUrl={connectionPanelApiUrl}
 					/>
+				</Box>
+			)}
+
+			{/* Show OpenTelemetry telemetry panel if active */}
+			{showTelemetryPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<TelemetryPanel onClose={() => setShowTelemetryPanel(false)} />
 				</Box>
 			)}
 

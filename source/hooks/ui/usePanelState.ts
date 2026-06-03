@@ -32,6 +32,7 @@ export type PanelState = {
 	showModelsPanel: boolean;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
+	showTelemetryPanel: boolean;
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
 	showPixelEditor: boolean;
@@ -49,6 +50,7 @@ export type PanelActions = {
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
 	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTelemetryPanel: Dispatch<SetStateAction<boolean>>;
 	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
@@ -122,6 +124,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+	const [showTelemetryPanel, setShowTelemetryPanel] = useState(false);
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
@@ -164,6 +167,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
+			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
 			showPixelEditor ||
@@ -320,6 +324,11 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let ConnectionPanel handle ESC
 		}
 
+		// TelemetryPanel handles its own ESC key logic internally
+		if (showTelemetryPanel) {
+			return false;
+		}
+
 		// ProfileEditPanel 完全交由 ConfigScreen 内部处理 ESC：
 		// 内部 useConfigInput 会按层级处理（先关闭 select 子项 / 退出编辑模式，
 		// 再按 ESC 才会保存并通过 onBack 触发 closeProfileEditAndReturnToPicker）。
@@ -383,6 +392,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
+			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
 			showPixelEditor ||
@@ -415,6 +425,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showModelsPanel,
 		showDiffReviewPanel,
 		showConnectionPanel,
+		showTelemetryPanel,
 		showNewPromptPanel,
 		showTodoListPanel,
 		showPixelEditor,
@@ -449,6 +460,7 @@ export function usePanelState(): PanelState & PanelActions {
 		closeProfileEditAndReturnToPicker,
 		setShowDiffReviewPanel,
 		setShowConnectionPanel,
+		setShowTelemetryPanel,
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
 		setShowPixelEditor,

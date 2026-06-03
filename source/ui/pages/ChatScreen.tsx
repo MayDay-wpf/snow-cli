@@ -28,6 +28,7 @@ import {formatTerminalTitle} from '../../utils/ui/terminal-title-formatter.js';
 import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
 import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
 import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
+import {isTelemetryActive} from '../../utils/telemetry/otel.js';
 import {useChatScreenCommands} from './chatScreen/useChatScreenCommands.js';
 import {useChatScreenInputHandler} from './chatScreen/useChatScreenInputHandler.js';
 import {useChatScreenLocalState} from './chatScreen/useChatScreenLocalState.js';
@@ -388,6 +389,7 @@ export default function ChatScreen({
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
 		setShowConnectionPanel: panelState.setShowConnectionPanel,
 		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
+		setShowTelemetryPanel: panelState.setShowTelemetryPanel,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
 		setShowIdeSelectPanel: panelState.setShowIdeSelectPanel,
@@ -497,6 +499,7 @@ export default function ChatScreen({
 		panelState.showWorkingDirPanel ||
 		panelState.showBranchPanel ||
 		panelState.showConnectionPanel ||
+		panelState.showTelemetryPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
 		panelState.showPixelEditor ||
@@ -707,6 +710,7 @@ export default function ChatScreen({
 					hybridCompressEnabled={hybridCompressEnabled}
 					teamMode={teamMode}
 					ultraTodoEnabled={ultraTodoEnabled}
+					telemetryEnabled={isTelemetryActive()}
 					setTeamMode={setTeamMode}
 					contextUsage={footerContextUsage}
 					initialContent={restoreInputContent}

@@ -80,6 +80,7 @@ export interface StatusLineSystemState {
 		hybridCompress: boolean;
 		team: boolean;
 		ultraTodo: boolean;
+		telemetry: boolean;
 		simple: boolean;
 	};
 	ide: {

@@ -18,6 +18,12 @@ import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
+import {
+	endChatSpan,
+	recordChatContent,
+	recordChatUsage,
+	startChatSpan,
+} from '../utils/telemetry/otel.js';
 
 export interface GeminiOptions {
 	model: string;
@@ -30,6 +36,7 @@ export interface GeminiOptions {
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
+	sessionId?: string; // Session ID for telemetry and correlation
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
@@ -480,352 +487,395 @@ export async function* createStreamingGeminiCompletion(
 	customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
 
 	// 使用重试包装生成器
-	yield* withRetryGenerator(
-		async function* () {
-			const {systemInstruction, contents} = convertToGeminiMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false,
-				customSystemPromptContent,
-				options.planMode || false,
-				options.vulnerabilityHuntingMode || false,
-				options.toolSearchDisabled || false,
-				options.teamMode || false,
-			);
+	const telemetry = startChatSpan({
+		provider: 'gemini',
+		model: options.model || config.advancedModel,
+		streaming: true,
+		sessionId: options.sessionId,
+	});
 
-			// Build request payload
-			const requestBody: any = {
-				contents,
-				systemInstruction: systemInstruction
-					? {parts: systemInstruction.map(text => ({text}))}
-					: undefined,
-			};
+	try {
+		yield* withRetryGenerator(
+			async function* () {
+				const {systemInstruction, contents} = convertToGeminiMessages(
+					options.messages,
+					options.includeBuiltinSystemPrompt !== false,
+					customSystemPromptContent,
+					options.planMode || false,
+					options.vulnerabilityHuntingMode || false,
+					options.toolSearchDisabled || false,
+					options.teamMode || false,
+				);
 
-			// Add thinking configuration if enabled and not disabled
-			// Only include generationConfig when thinking is enabled
-			if (config.geminiThinking?.enabled && !options.disableThinking) {
-				requestBody.generationConfig = {
-					thinkingConfig: {
-						thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
+				// Build request payload
+				const requestBody: any = {
+					contents,
+					systemInstruction: systemInstruction
+						? {parts: systemInstruction.map(text => ({text}))}
+						: undefined,
+				};
+
+				// Add thinking configuration if enabled and not disabled
+				// Only include generationConfig when thinking is enabled
+				if (config.geminiThinking?.enabled && !options.disableThinking) {
+					requestBody.generationConfig = {
+						thinkingConfig: {
+							thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
+						},
+					};
+				}
+
+				// Add tools if provided
+				const geminiTools = convertToolsToGemini(options.tools);
+				if (geminiTools) {
+					requestBody.tools = geminiTools;
+				}
+
+				recordChatContent(
+					telemetry.span,
+					'request',
+					requestBody,
+					telemetry.metricAttributes,
+				);
+
+				// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
+				const effectiveModel = options.model || config.advancedModel || '';
+				const modelName = effectiveModel.startsWith('models/')
+					? effectiveModel
+					: `models/${effectiveModel}`;
+
+				// Use configured baseUrl or default Gemini URL
+				const baseUrl =
+					config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
+						? config.baseUrl
+						: 'https://generativelanguage.googleapis.com/v1beta';
+
+				const url = resolveApiEndpoint(
+					baseUrl,
+					'geminiStreamGenerateContent',
+					config.baseUrlMode,
+					{modelName},
+				);
+
+				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+				const customHeaders =
+					options.customHeaders || getCustomHeadersForConfig(config);
+
+				const fetchOptions = addProxyToFetchOptions(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${config.apiKey}`,
+						'x-goog-api-key': config.apiKey,
+						'x-snow': getVersionHeader(),
+						...customHeaders,
 					},
-				};
-			}
+					body: JSON.stringify(requestBody),
+					signal: abortSignal,
+				});
 
-			// Add tools if provided
-			const geminiTools = convertToolsToGemini(options.tools);
-			if (geminiTools) {
-				requestBody.tools = geminiTools;
-			}
-
-			// Extract model name from options.model (e.g., "gemini-pro" or "models/gemini-pro")
-			const effectiveModel = options.model || config.advancedModel || '';
-			const modelName = effectiveModel.startsWith('models/')
-				? effectiveModel
-				: `models/${effectiveModel}`;
-
-			// Use configured baseUrl or default Gemini URL
-			const baseUrl =
-				config.baseUrl && config.baseUrl !== 'https://api.openai.com/v1'
-					? config.baseUrl
-					: 'https://generativelanguage.googleapis.com/v1beta';
-
-			const url = resolveApiEndpoint(
-				baseUrl,
-				'geminiStreamGenerateContent',
-				config.baseUrlMode,
-				{modelName},
-			);
-
-			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
-			const customHeaders =
-				options.customHeaders || getCustomHeadersForConfig(config);
-
-			const fetchOptions = addProxyToFetchOptions(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${config.apiKey}`,
-					'x-goog-api-key': config.apiKey,
-					'x-snow': getVersionHeader(),
-					...customHeaders,
-				},
-				body: JSON.stringify(requestBody),
-				signal: abortSignal,
-			});
-
-			let response: Response;
-			try {
-				response = await fetch(url, fetchOptions);
-			} catch (error) {
-				// 捕获 fetch 底层错误（网络错误、连接超时等）
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				throw new Error(
-					`Gemini API fetch failed: ${errorMessage}\n` +
-						`URL: ${url}\n` +
-						`Model: ${effectiveModel}\n` +
-						`Error type: ${
-							error instanceof TypeError
-								? 'Network/Connection Error'
-								: 'Unknown Error'
-						}\n` +
-						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
-				);
-			}
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
-				);
-			}
-
-			if (!response.body) {
-				throw new Error('No response body from Gemini API');
-			}
-
-			let contentBuffer = '';
-			let thinkingTextBuffer = ''; // Accumulate thinking text content
-			let sharedThoughtSignature: string | undefined; // Store first thoughtSignature for reuse
-			let toolCallsBuffer: Array<{
-				id: string;
-				type: 'function';
-				function: {
-					name: string;
-					arguments: string;
-				};
-				thoughtSignature?: string; // For Gemini thinking mode
-			}> = [];
-			let hasToolCalls = false;
-			let toolCallIndex = 0;
-			let totalTokens = {prompt: 0, completion: 0, total: 0};
-
-			// Parse SSE stream
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
-			// 创建空闲超时保护器
-			const guard = createIdleTimeoutGuard({
-				reader,
-				idleTimeoutMs,
-				onTimeout: () => {
-					throw new StreamIdleTimeoutError(
-						`No data received for ${idleTimeoutMs}ms`,
-						idleTimeoutMs,
+				let response: Response;
+				try {
+					response = await fetch(url, fetchOptions);
+				} catch (error) {
+					// 捕获 fetch 底层错误（网络错误、连接超时等）
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					throw new Error(
+						`Gemini API fetch failed: ${errorMessage}\n` +
+							`URL: ${url}\n` +
+							`Model: ${effectiveModel}\n` +
+							`Error type: ${
+								error instanceof TypeError
+									? 'Network/Connection Error'
+									: 'Unknown Error'
+							}\n` +
+							`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
 					);
-				},
-			});
+				}
 
-			try {
-				while (true) {
-					if (abortSignal?.aborted) {
-						guard.abandon();
-						return;
-					}
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
+					);
+				}
 
-					const {done, value} = await reader.read();
+				if (!response.body) {
+					throw new Error('No response body from Gemini API');
+				}
 
-					// 检查是否有超时错误需要在读取循环中抛出(确保被正确的 try/catch 捕获)
-					const timeoutError = guard.getTimeoutError();
-					if (timeoutError) {
-						throw timeoutError;
-					}
+				let contentBuffer = '';
+				let thinkingTextBuffer = ''; // Accumulate thinking text content
+				let sharedThoughtSignature: string | undefined; // Store first thoughtSignature for reuse
+				let toolCallsBuffer: Array<{
+					id: string;
+					type: 'function';
+					function: {
+						name: string;
+						arguments: string;
+					};
+					thoughtSignature?: string; // For Gemini thinking mode
+				}> = [];
+				let hasToolCalls = false;
+				let toolCallIndex = 0;
+				let totalTokens = {prompt: 0, completion: 0, total: 0};
 
-					// 检查是否已被丢弃(竞态条件防护)
-					if (guard.isAbandoned()) {
-						continue;
-					}
+				// Parse SSE stream
+				const reader = response.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = '';
 
-					if (done) {
-						// 连接异常中断时,残留半包不应被静默丢弃,应抛出可重试错误
-						if (buffer.trim()) {
-							// 连接异常中断,抛出明确错误
-							const errorMsg = `[API_ERROR] [RETRIABLE] Gemini stream terminated unexpectedly with incomplete data`;
-							const bufferPreview = buffer.substring(0, 100);
-							throw new Error(`${errorMsg}: ${bufferPreview}...`);
+				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
+				// 创建空闲超时保护器
+				const guard = createIdleTimeoutGuard({
+					reader,
+					idleTimeoutMs,
+					onTimeout: () => {
+						throw new StreamIdleTimeoutError(
+							`No data received for ${idleTimeoutMs}ms`,
+							idleTimeoutMs,
+						);
+					},
+				});
+
+				try {
+					while (true) {
+						if (abortSignal?.aborted) {
+							guard.abandon();
+							return;
 						}
-						break; // 正常结束
-					}
 
-					buffer += decoder.decode(value, {stream: true});
-					const lines = buffer.split('\n');
-					buffer = lines.pop() || '';
+						const {done, value} = await reader.read();
 
-					for (const line of lines) {
-						const trimmed = line.trim();
-						if (!trimmed || trimmed.startsWith(':')) continue;
-
-						if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
-							break;
+						// 检查是否有超时错误需要在读取循环中抛出(确保被正确的 try/catch 捕获)
+						const timeoutError = guard.getTimeoutError();
+						if (timeoutError) {
+							throw timeoutError;
 						}
 
-						// 处理 "event: " 和 "event:" 两种格式
-						if (trimmed.startsWith('event:')) {
-							// 事件类型,后面会跟随数据
+						// 检查是否已被丢弃(竞态条件防护)
+						if (guard.isAbandoned()) {
 							continue;
 						}
 
-						// 处理 "data: " 和 "data:" 两种格式
-						if (trimmed.startsWith('data:')) {
-							const data = trimmed.startsWith('data: ')
-								? trimmed.slice(6)
-								: trimmed.slice(5);
-							const parseResult = parseJsonWithFix(data, {
-								toolName: 'Gemini SSE stream',
-								logWarning: false,
-								logError: true,
-							});
+						if (done) {
+							// 连接异常中断时,残留半包不应被静默丢弃,应抛出可重试错误
+							if (buffer.trim()) {
+								// 连接异常中断,抛出明确错误
+								const errorMsg = `[API_ERROR] [RETRIABLE] Gemini stream terminated unexpectedly with incomplete data`;
+								const bufferPreview = buffer.substring(0, 100);
+								throw new Error(`${errorMsg}: ${bufferPreview}...`);
+							}
+							break; // 正常结束
+						}
 
-							if (parseResult.success) {
-								const chunk = parseResult.data;
-								const hasBusinessDelta = !!chunk?.candidates?.some(
-									(candidate: any) =>
-										candidate?.content?.parts?.some((part: any) =>
-											Boolean(part?.text || part?.functionCall),
-										),
-								);
-								if (hasBusinessDelta) {
-									guard.touch();
-								}
+						buffer += decoder.decode(value, {stream: true});
+						const lines = buffer.split('\n');
+						buffer = lines.pop() || '';
 
-								// Process candidates
-								if (chunk.candidates && chunk.candidates.length > 0) {
-									const candidate = chunk.candidates[0];
-									if (candidate.content && candidate.content.parts) {
-										for (const part of candidate.content.parts) {
-											// Process thought content (Gemini thinking)
-											// When part.thought === true, the text field contains thinking content
-											if (part.thought === true && part.text) {
-												thinkingTextBuffer += part.text;
-												if (!guard.isAbandoned()) {
-													yield {
-														type: 'reasoning_delta',
-														delta: part.text,
-													};
-												}
-											}
-											// Process regular text content (when thought is not true)
-											else if (part.text) {
-												contentBuffer += part.text;
-												if (!guard.isAbandoned()) {
-													yield {
-														type: 'content',
-														content: part.text,
-													};
-												}
-											}
+						for (const line of lines) {
+							const trimmed = line.trim();
+							if (!trimmed || trimmed.startsWith(':')) continue;
 
-											// Process function calls
-											if (part.functionCall) {
-												hasToolCalls = true;
-												const fc = part.functionCall;
+							if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') {
+								break;
+							}
 
-												const toolCall: any = {
-													id: `call_${toolCallIndex++}`,
-													type: 'function' as const,
-													function: {
-														name: fc.name,
-														arguments: JSON.stringify(fc.args || {}),
-													},
-												};
+							// 处理 "event: " 和 "event:" 两种格式
+							if (trimmed.startsWith('event:')) {
+								// 事件类型,后面会跟随数据
+								continue;
+							}
 
-												// Capture thoughtSignature from part level (Gemini thinking mode)
-												// According to Gemini docs, thoughtSignature is at part level, sibling to functionCall
-												// IMPORTANT: Gemini only returns thoughtSignature on the FIRST function call
-												// We need to save it and reuse for all subsequent function calls
-												const partSignature =
-													part.thoughtSignature || part.thought_signature;
-												if (partSignature) {
-													// Save the first signature for reuse
-													if (!sharedThoughtSignature) {
-														sharedThoughtSignature = partSignature;
+							// 处理 "data: " 和 "data:" 两种格式
+							if (trimmed.startsWith('data:')) {
+								const data = trimmed.startsWith('data: ')
+									? trimmed.slice(6)
+									: trimmed.slice(5);
+								const parseResult = parseJsonWithFix(data, {
+									toolName: 'Gemini SSE stream',
+									logWarning: false,
+									logError: true,
+								});
+
+								if (parseResult.success) {
+									const chunk = parseResult.data;
+									const hasBusinessDelta = !!chunk?.candidates?.some(
+										(candidate: any) =>
+											candidate?.content?.parts?.some((part: any) =>
+												Boolean(part?.text || part?.functionCall),
+											),
+									);
+									if (hasBusinessDelta) {
+										guard.touch();
+									}
+
+									// Process candidates
+									if (chunk.candidates && chunk.candidates.length > 0) {
+										const candidate = chunk.candidates[0];
+										if (candidate.content && candidate.content.parts) {
+											for (const part of candidate.content.parts) {
+												// Process thought content (Gemini thinking)
+												// When part.thought === true, the text field contains thinking content
+												if (part.thought === true && part.text) {
+													thinkingTextBuffer += part.text;
+													if (!guard.isAbandoned()) {
+														yield {
+															type: 'reasoning_delta',
+															delta: part.text,
+														};
 													}
-													toolCall.thoughtSignature = partSignature;
-												} else if (sharedThoughtSignature) {
-													// Use shared signature for subsequent function calls
-													toolCall.thoughtSignature = sharedThoughtSignature;
+												}
+												// Process regular text content (when thought is not true)
+												else if (part.text) {
+													contentBuffer += part.text;
+													if (!guard.isAbandoned()) {
+														yield {
+															type: 'content',
+															content: part.text,
+														};
+													}
 												}
 
-												toolCallsBuffer.push(toolCall);
+												// Process function calls
+												if (part.functionCall) {
+													hasToolCalls = true;
+													const fc = part.functionCall;
 
-												// Yield delta for token counting
-												const deltaText =
-													fc.name + JSON.stringify(fc.args || {});
-												yield {
-													type: 'tool_call_delta',
-													delta: deltaText,
-												};
+													const toolCall: any = {
+														id: `call_${toolCallIndex++}`,
+														type: 'function' as const,
+														function: {
+															name: fc.name,
+															arguments: JSON.stringify(fc.args || {}),
+														},
+													};
+
+													// Capture thoughtSignature from part level (Gemini thinking mode)
+													// According to Gemini docs, thoughtSignature is at part level, sibling to functionCall
+													// IMPORTANT: Gemini only returns thoughtSignature on the FIRST function call
+													// We need to save it and reuse for all subsequent function calls
+													const partSignature =
+														part.thoughtSignature || part.thought_signature;
+													if (partSignature) {
+														// Save the first signature for reuse
+														if (!sharedThoughtSignature) {
+															sharedThoughtSignature = partSignature;
+														}
+														toolCall.thoughtSignature = partSignature;
+													} else if (sharedThoughtSignature) {
+														// Use shared signature for subsequent function calls
+														toolCall.thoughtSignature = sharedThoughtSignature;
+													}
+
+													toolCallsBuffer.push(toolCall);
+
+													// Yield delta for token counting
+													const deltaText =
+														fc.name + JSON.stringify(fc.args || {});
+													yield {
+														type: 'tool_call_delta',
+														delta: deltaText,
+													};
+												}
 											}
 										}
 									}
-								}
 
-								// Track usage info
-								if (chunk.usageMetadata) {
-									totalTokens = {
-										prompt: chunk.usageMetadata.promptTokenCount || 0,
-										completion: chunk.usageMetadata.candidatesTokenCount || 0,
-										total: chunk.usageMetadata.totalTokenCount || 0,
-									};
+									// Track usage info
+									if (chunk.usageMetadata) {
+										totalTokens = {
+											prompt: chunk.usageMetadata.promptTokenCount || 0,
+											completion: chunk.usageMetadata.candidatesTokenCount || 0,
+											total: chunk.usageMetadata.totalTokenCount || 0,
+										};
+									}
 								}
 							}
 						}
 					}
+				} catch (error) {
+					const {logger} = await import('../utils/core/logger.js');
+					logger.error('Gemini SSE stream parsing error:', {
+						error: error instanceof Error ? error.message : 'Unknown error',
+						remainingBuffer: buffer.substring(0, 200),
+					});
+					throw error;
+				} finally {
+					guard.dispose();
 				}
-			} catch (error) {
-				const {logger} = await import('../utils/core/logger.js');
-				logger.error('Gemini SSE stream parsing error:', {
-					error: error instanceof Error ? error.message : 'Unknown error',
-					remainingBuffer: buffer.substring(0, 200),
-				});
-				throw error;
-			} finally {
-				guard.dispose();
-			}
 
-			// Yield tool calls if any
-			if (hasToolCalls && toolCallsBuffer.length > 0) {
+				// Yield tool calls if any
+				if (hasToolCalls && toolCallsBuffer.length > 0) {
+					yield {
+						type: 'tool_calls',
+						tool_calls: toolCallsBuffer,
+					};
+				}
+
+				// Yield usage info
+				if (totalTokens.total > 0) {
+					const usageData = {
+						prompt_tokens: totalTokens.prompt,
+						completion_tokens: totalTokens.completion,
+						total_tokens: totalTokens.total,
+					};
+
+					// Save usage to file system at API layer
+					saveUsageToFile(options.model, usageData);
+					recordChatUsage(
+						usageData,
+						telemetry.metricAttributes,
+						telemetry.span,
+					);
+
+					yield {
+						type: 'usage',
+						usage: usageData,
+					};
+				}
+
+				if (contentBuffer) {
+					recordChatContent(
+						telemetry.span,
+						'response',
+						contentBuffer,
+						telemetry.metricAttributes,
+					);
+				}
+
+				// Return complete thinking block if thinking content exists
+				const thinkingBlock = thinkingTextBuffer
+					? {
+							type: 'thinking' as const,
+							thinking: thinkingTextBuffer,
+					  }
+					: undefined;
+
+				// Signal completion
 				yield {
-					type: 'tool_calls',
-					tool_calls: toolCallsBuffer,
+					type: 'done',
+					thinking: thinkingBlock,
 				};
-			}
-
-			// Yield usage info
-			if (totalTokens.total > 0) {
-				const usageData = {
-					prompt_tokens: totalTokens.prompt,
-					completion_tokens: totalTokens.completion,
-					total_tokens: totalTokens.total,
-				};
-
-				// Save usage to file system at API layer
-				saveUsageToFile(options.model, usageData);
-
-				yield {
-					type: 'usage',
-					usage: usageData,
-				};
-			}
-
-			// Return complete thinking block if thinking content exists
-			const thinkingBlock = thinkingTextBuffer
-				? {
-						type: 'thinking' as const,
-						thinking: thinkingTextBuffer,
-				  }
-				: undefined;
-
-			// Signal completion
-			yield {
-				type: 'done',
-				thinking: thinkingBlock,
-			};
-		},
-		{
-			abortSignal,
-			onRetry,
-		},
-	);
+			},
+			{
+				abortSignal,
+				onRetry,
+			},
+		);
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+		);
+	} catch (error) {
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+			error,
+		);
+		throw error;
+	}
 }

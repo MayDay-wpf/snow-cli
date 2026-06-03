@@ -16,6 +16,17 @@ export interface ProjectSettings {
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
+	telemetry?: TelemetryConfig;
+}
+
+export interface TelemetryConfig {
+	enabled?: boolean;
+	tracesExporter?: 'otlp' | 'console' | 'none';
+	metricsExporter?: 'otlp' | 'prometheus' | 'console' | 'none';
+	logsExporter?: 'otlp' | 'console' | 'none';
+	otlpProtocol?: 'grpc' | 'http/protobuf' | 'http/json';
+	otlpEndpoint?: string;
+	otlpHeaders?: string;
 }
 
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
@@ -48,6 +59,7 @@ function loadSettings(): ProjectSettings {
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		teamMode: pick('teamMode'),
 		ultraTodoEnabled: pick('ultraTodoEnabled'),
+		telemetry: pick('telemetry'),
 	};
 }
 
@@ -153,7 +165,6 @@ export function setTeamMode(enabled: boolean): void {
 	setField('teamMode', enabled);
 }
 
-
 export function getUltraTodoEnabled(): boolean {
 	const settings = loadSettings();
 	return settings.ultraTodoEnabled ?? false;
@@ -161,4 +172,93 @@ export function getUltraTodoEnabled(): boolean {
 
 export function setUltraTodoEnabled(enabled: boolean): void {
 	setField('ultraTodoEnabled', enabled);
+}
+
+export function getTelemetryConfig(): TelemetryConfig {
+	const settings = loadSettings();
+	return {
+		enabled: settings.telemetry?.enabled ?? false,
+		tracesExporter: settings.telemetry?.tracesExporter ?? 'otlp',
+		metricsExporter: settings.telemetry?.metricsExporter ?? 'otlp',
+		logsExporter: settings.telemetry?.logsExporter ?? 'none',
+		otlpProtocol: settings.telemetry?.otlpProtocol ?? 'grpc',
+		otlpEndpoint: settings.telemetry?.otlpEndpoint ?? 'http://localhost:4317',
+		otlpHeaders: settings.telemetry?.otlpHeaders ?? '',
+	};
+}
+
+export function setTelemetryConfig(config: TelemetryConfig): void {
+	setField('telemetry', config);
+}
+
+export function isTelemetryEnabled(): boolean {
+	return getTelemetryConfig().enabled === true;
+}
+
+export function getTelemetryEnabled(): boolean {
+	return getTelemetryConfig().enabled === true;
+}
+
+export function setTelemetryEnabled(enabled: boolean): void {
+	setTelemetryConfig({...getTelemetryConfig(), enabled});
+}
+
+export function getTelemetryTracesExporter(): string {
+	return getTelemetryConfig().tracesExporter ?? 'otlp';
+}
+
+export function setTelemetryTracesExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		tracesExporter: value as TelemetryConfig['tracesExporter'],
+	});
+}
+
+export function getTelemetryMetricsExporter(): string {
+	return getTelemetryConfig().metricsExporter ?? 'otlp';
+}
+
+export function setTelemetryMetricsExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		metricsExporter: value as TelemetryConfig['metricsExporter'],
+	});
+}
+
+export function getTelemetryLogsExporter(): string {
+	return getTelemetryConfig().logsExporter ?? 'none';
+}
+
+export function setTelemetryLogsExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		logsExporter: value as TelemetryConfig['logsExporter'],
+	});
+}
+
+export function getTelemetryOtlpProtocol(): string {
+	return getTelemetryConfig().otlpProtocol ?? 'grpc';
+}
+
+export function setTelemetryOtlpProtocol(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		otlpProtocol: value as TelemetryConfig['otlpProtocol'],
+	});
+}
+
+export function getTelemetryOtlpEndpoint(): string {
+	return getTelemetryConfig().otlpEndpoint ?? 'http://localhost:4317';
+}
+
+export function setTelemetryOtlpEndpoint(value: string): void {
+	setTelemetryConfig({...getTelemetryConfig(), otlpEndpoint: value});
+}
+
+export function getTelemetryOtlpHeaders(): string {
+	return getTelemetryConfig().otlpHeaders ?? '';
+}
+
+export function setTelemetryOtlpHeaders(value: string): void {
+	setTelemetryConfig({...getTelemetryConfig(), otlpHeaders: value});
 }

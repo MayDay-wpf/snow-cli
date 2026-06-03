@@ -61,30 +61,48 @@ export class TodoService {
 		todos: TodoItem[],
 		existingList?: TodoList | null,
 	): Promise<TodoList> {
-		// 使用现有TODO列表的createdAt信息，或者使用当前时间
-		const sessionCreatedAt = existingList?.createdAt
-			? new Date(existingList.createdAt).getTime()
+		const now = new Date().toISOString();
+		let persistedList: TodoList | null = null;
+		let baseList = existingList ?? null;
+
+		if (!baseList) {
+			baseList = await this.getTodoList(sessionId);
+		}
+
+		// 使用现有 TODO 列表的 createdAt 定位原始日期目录，避免跨天保存时新建空文件覆盖当前视图。
+		const parsedCreatedAt = baseList?.createdAt
+			? new Date(baseList.createdAt).getTime()
 			: Date.now();
+		const sessionCreatedAt = Number.isNaN(parsedCreatedAt)
+			? Date.now()
+			: parsedCreatedAt;
 		const sessionDate = new Date(sessionCreatedAt);
 		await this.ensureTodoDir(sessionDate);
 		const todoPath = this.getTodoPath(sessionId, sessionDate);
 
 		try {
 			const content = await fs.readFile(todoPath, 'utf-8');
-			existingList = JSON.parse(content);
+			persistedList = JSON.parse(content);
 		} catch {
 			// 文件不存在,创建新的
 		}
 
-		const now = new Date().toISOString();
+		// 调用方传入的 existingList 可能已经在内存中更新过 phases/currentPhaseId。
+		// 这里只能用磁盘内容补默认值，不能反向覆盖调用方的新状态，否则 todo-ultra 更新会把阶段列表重置为空。
+		const metadataList: TodoList | null = baseList
+			? persistedList
+				? {...persistedList, ...baseList}
+				: baseList
+			: persistedList;
+
 		const todoList: TodoList = {
 			sessionId,
 			todos,
-			createdAt: existingList?.createdAt ?? now,
+			createdAt: metadataList?.createdAt ?? now,
 			updatedAt: now,
-			ultraMode: existingList?.ultraMode,
-			phases: existingList?.phases,
-			currentPhaseId: existingList?.currentPhaseId,
+			ultraMode: metadataList?.ultraMode,
+			phases: metadataList?.phases,
+			currentPhaseId: metadataList?.currentPhaseId,
 		};
 
 		await fs.writeFile(todoPath, JSON.stringify(todoList, null, 2));
@@ -300,9 +318,7 @@ export class TodoService {
 				{
 					type: 'text',
 					text:
-						typeof value === 'string'
-							? value
-							: JSON.stringify(value, null, 2),
+						typeof value === 'string' ? value : JSON.stringify(value, null, 2),
 				},
 			],
 		};
@@ -363,13 +379,19 @@ export class TodoService {
 		return todoList.todos.filter(todo => todo.phaseId === phaseId);
 	}
 
-	private getIncompletePhaseTodos(todoList: TodoList, phaseId: string): TodoItem[] {
+	private getIncompletePhaseTodos(
+		todoList: TodoList,
+		phaseId: string,
+	): TodoItem[] {
 		return this.getPhaseTodos(todoList, phaseId).filter(
 			todo => todo.status !== 'completed',
 		);
 	}
 
-	private findPhase(todoList: TodoList, phaseId: string): TodoPhase | undefined {
+	private findPhase(
+		todoList: TodoList,
+		phaseId: string,
+	): TodoPhase | undefined {
 		return todoList.phases?.find(phase => phase.id === phaseId);
 	}
 
@@ -440,11 +462,14 @@ export class TodoService {
 				}
 
 				case 'add_phase': {
-					const title = typeof args['title'] === 'string' ? args['title'].trim() : '';
+					const title =
+						typeof args['title'] === 'string' ? args['title'].trim() : '';
 					const items = this.normalizeStringArray(args['items']);
 
 					if (!title) {
-						return this.createErrorResult('Error: action=add_phase requires "title"');
+						return this.createErrorResult(
+							'Error: action=add_phase requires "title"',
+						);
 					}
 
 					if (!items || items.length === 0) {
@@ -495,7 +520,9 @@ export class TodoService {
 							: undefined;
 
 					if (!content) {
-						return this.createErrorResult('Error: action=add_item requires "content"');
+						return this.createErrorResult(
+							'Error: action=add_item requires "content"',
+						);
 					}
 
 					if (!phaseId || !this.findPhase(todoList, phaseId)) {
@@ -533,7 +560,9 @@ export class TodoService {
 					const content = args['content'];
 
 					if (todoId === undefined || todoId === null) {
-						return this.createErrorResult('Error: action=update_item requires "todoId"');
+						return this.createErrorResult(
+							'Error: action=update_item requires "todoId"',
+						);
 					}
 
 					if (
@@ -587,7 +616,10 @@ export class TodoService {
 						return this.createErrorResult(`Error: phase not found: ${phaseId}`);
 					}
 
-					const incompleteTodos = this.getIncompletePhaseTodos(todoList, phaseId);
+					const incompleteTodos = this.getIncompletePhaseTodos(
+						todoList,
+						phaseId,
+					);
 					if (incompleteTodos.length > 0) {
 						return this.createErrorResult(
 							this.buildIncompletePhaseMessage(phase, incompleteTodos),
@@ -625,7 +657,8 @@ export class TodoService {
 					}
 
 					const requestedNextPhaseId =
-						typeof args['nextPhaseId'] === 'string' && args['nextPhaseId'].trim()
+						typeof args['nextPhaseId'] === 'string' &&
+						args['nextPhaseId'].trim()
 							? args['nextPhaseId'].trim()
 							: undefined;
 					const nextPhase = requestedNextPhaseId
@@ -653,7 +686,9 @@ export class TodoService {
 				case 'delete_item': {
 					const todoId = args['todoId'] as string | string[] | undefined;
 					if (todoId === undefined || todoId === null) {
-						return this.createErrorResult('Error: action=delete_item requires "todoId"');
+						return this.createErrorResult(
+							'Error: action=delete_item requires "todoId"',
+						);
 					}
 
 					const ids = Array.isArray(todoId) ? todoId : [todoId];
@@ -676,7 +711,6 @@ export class TodoService {
 			);
 		}
 	}
-
 
 	/**
 	 * 复制 TODO 列表到新会话（用于会话压缩时继承 TODO）
@@ -909,7 +943,8 @@ EXAMPLES:
 								{
 									type: 'array',
 									items: {type: 'string'},
-									description: 'Multiple ids (same update or delete applies to all)',
+									description:
+										'Multiple ids (same update or delete applies to all)',
 								},
 							],
 							description:
