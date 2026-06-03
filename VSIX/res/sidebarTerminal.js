@@ -1,5 +1,6 @@
 (function () {
 	const vscode = acquireVsCodeApi();
+	const isRemoteSsh = document.body?.dataset?.remoteSsh === 'true';
 
 	const normalizeLogMessage = value => {
 		if (typeof value === 'string') {
@@ -453,7 +454,7 @@
 		const isMacPlatform = /mac/i.test(navigator.userAgent);
 		const SUPPORTED_IMAGE_MIME_PATTERN = /^image\/(?:png|jpe?g|gif|webp)$/i;
 		const IMAGE_PASTE_DEDUPE_MS = 1000;
-		let lastImagePasteDataUrl = '';
+		let lastImagePasteSignature = '';
 		let lastImagePasteAt = 0;
 		let pendingSystemPasteShortcut = false;
 		let suppressPasteUntilSystemPasteKeyup = false;
@@ -461,6 +462,39 @@
 		const normalizeImageMimeType = mimeType => {
 			const normalized = String(mimeType || 'image/png').toLowerCase();
 			return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+		};
+
+		const getImageBlobSignature = (blob, mimeType) => {
+			if (!blob) {
+				return '';
+			}
+			const normalizedMimeType = normalizeImageMimeType(mimeType || blob.type);
+			const size = typeof blob.size === 'number' ? blob.size : 0;
+			const lastModified =
+				typeof blob.lastModified === 'number' ? blob.lastModified : 0;
+			return `${normalizedMimeType}:${size}:${lastModified}`;
+		};
+
+		const shouldSkipDuplicateImagePaste = (signature, source) => {
+			if (!signature) {
+				return false;
+			}
+
+			const now = Date.now();
+			if (
+				signature === lastImagePasteSignature &&
+				now - lastImagePasteAt <= IMAGE_PASTE_DEDUPE_MS
+			) {
+				logInfo('Skipped duplicate clipboard image paste.', {
+					source,
+					signature,
+				});
+				return true;
+			}
+
+			lastImagePasteSignature = signature;
+			lastImagePasteAt = now;
+			return false;
 		};
 
 		const writeClipboardText = (text, source) => {
@@ -481,6 +515,20 @@
 					error: stringifyLogDetails(error),
 				});
 			});
+		};
+
+		const forwardImagePasteShortcutToTerminal = source => {
+			// In local Windows/Linux extension hosts, the Snow CLI image paste shortcut
+			// is Alt+V, which arrives at the Ink input layer as ESC followed by "v".
+			// Delegating lets the CLI read/compress the clipboard image itself instead
+			// of pushing a multi-megabyte data URL through the webview and PTY input
+			// stream. Remote SSH keeps the original PTY data URL path because the CLI
+			// runs remotely and cannot read the user's local clipboard image.
+			sendInput('\x1bv');
+			logInfo('Forwarded clipboard image paste to terminal shortcut.', {
+				source,
+			});
+			return true;
 		};
 
 		const blobToDataUrl = blob =>
@@ -515,7 +563,7 @@
 			return undefined;
 		};
 
-		const readImageDataUrlFromClipboardItems = async clipboardItems => {
+		const readImageBlobFromClipboardItems = async clipboardItems => {
 			for (const item of clipboardItems || []) {
 				const imageType = (item.types || []).find(type =>
 					SUPPORTED_IMAGE_MIME_PATTERN.test(normalizeImageMimeType(type)),
@@ -524,48 +572,64 @@
 					continue;
 				}
 				const blob = await item.getType(imageType);
-				return blobToDataUrl(blob);
+				return {blob, mimeType: imageType};
 			}
 			return undefined;
 		};
 
-		const readImageDataUrlFromNavigatorClipboard = async () => {
+		const readImageBlobFromNavigatorClipboard = async () => {
 			if (
 				!navigator.clipboard ||
 				typeof navigator.clipboard.read !== 'function'
 			) {
 				return undefined;
 			}
-			return readImageDataUrlFromClipboardItems(
-				await navigator.clipboard.read(),
-			);
+			return readImageBlobFromClipboardItems(await navigator.clipboard.read());
 		};
 
-		const sendClipboardImageDataUrl = (dataUrl, source) => {
+		const getDataUrlSignature = dataUrl => {
+			const prefix = dataUrl.slice(0, 96);
+			const suffix = dataUrl.slice(Math.max(0, dataUrl.length - 96));
+			return `data-url:${dataUrl.length}:${prefix}:${suffix}`;
+		};
+
+		const sendClipboardImageDataUrl = (
+			dataUrl,
+			source,
+			signature,
+			{dedupeChecked = false} = {},
+		) => {
 			if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
 				return false;
 			}
 
-			const now = Date.now();
+			const imageSignature = signature || getDataUrlSignature(dataUrl);
 			if (
-				dataUrl === lastImagePasteDataUrl &&
-				now - lastImagePasteAt <= IMAGE_PASTE_DEDUPE_MS
+				!dedupeChecked &&
+				shouldSkipDuplicateImagePaste(imageSignature, source)
 			) {
-				logInfo('Skipped duplicate clipboard image paste.', {
-					source,
-					length: dataUrl.length,
-				});
 				return true;
 			}
 
-			lastImagePasteDataUrl = dataUrl;
-			lastImagePasteAt = now;
 			sendInput(dataUrl);
 			logInfo('Clipboard image converted to data URL for terminal input.', {
 				source,
 				length: dataUrl.length,
+				signature: imageSignature,
 			});
 			return true;
+		};
+
+		const readAndSendClipboardImageBlob = async (blob, source, mimeType) => {
+			const signature = getImageBlobSignature(blob, mimeType);
+			if (shouldSkipDuplicateImagePaste(signature, source)) {
+				return true;
+			}
+
+			const dataUrl = await blobToDataUrl(blob);
+			return sendClipboardImageDataUrl(dataUrl, source, signature, {
+				dedupeChecked: true,
+			});
 		};
 
 		const readAndSendClipboardText = async source => {
@@ -594,14 +658,23 @@
 				const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
 				if (pastedFile) {
 					event.preventDefault();
-					const dataUrl = await blobToDataUrl(pastedFile);
-					sendClipboardImageDataUrl(dataUrl, source);
-					return true;
+					return readAndSendClipboardImageBlob(
+						pastedFile,
+						source,
+						pastedFile.type,
+					);
 				}
 
 				if (allowNavigatorImage) {
-					const dataUrl = await readImageDataUrlFromNavigatorClipboard();
-					if (sendClipboardImageDataUrl(dataUrl, source)) {
+					const image = await readImageBlobFromNavigatorClipboard();
+					if (
+						image &&
+						(await readAndSendClipboardImageBlob(
+							image.blob,
+							source,
+							image.mimeType,
+						))
+					) {
 						event?.preventDefault?.();
 						return true;
 					}
@@ -715,12 +788,19 @@
 			}
 
 			event.preventDefault?.();
+			if (!isMacPlatform && !isRemoteSsh) {
+				forwardImagePasteShortcutToTerminal('windows-alt-v-image-shortcut');
+				// Returning false prevents xterm from also translating Alt+V into
+				// ESC+v, which would trigger the CLI image paste handler twice.
+				return false;
+			}
+
 			void handleClipboardPaste({
 				allowNavigatorImage: true,
 				fallbackToText: false,
-				source: isMacPlatform
-					? 'macos-ctrl-v-image-shortcut'
-					: 'windows-alt-v-image-shortcut',
+				source: isRemoteSsh
+					? 'remote-ssh-alt-v-image-shortcut'
+					: 'macos-ctrl-v-image-shortcut',
 			});
 			return false;
 		};
@@ -733,11 +813,6 @@
 			if (!isMacPlatform) {
 				pendingSystemPasteShortcut = true;
 				suppressPasteUntilSystemPasteKeyup = false;
-				void handleClipboardPaste({
-					allowNavigatorImage: true,
-					fallbackToText: false,
-					source: 'windows-ctrl-v-image-probe',
-				});
 				return false;
 			}
 
@@ -785,7 +860,8 @@
 				event?.clipboardData?.getData('text/plain') ||
 				event?.clipboardData?.getData('text') ||
 				'';
-			const isSystemShortcutPaste = !isMacPlatform && pendingSystemPasteShortcut;
+			const isSystemShortcutPaste =
+				!isMacPlatform && pendingSystemPasteShortcut;
 			const isDuplicateSystemShortcutPaste =
 				!isMacPlatform && suppressPasteUntilSystemPasteKeyup;
 
@@ -800,11 +876,19 @@
 			if (pastedFile) {
 				pendingSystemPasteShortcut = false;
 				suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
+				if (isSystemShortcutPaste && !isMacPlatform && !isRemoteSsh) {
+					forwardImagePasteShortcutToTerminal('windows-ctrl-v-image-shortcut');
+					return;
+				}
+
 				void handleClipboardPaste({
 					allowNavigatorImage: false,
 					event,
 					fallbackToText: false,
-					source: 'paste-event-image',
+					source:
+						isSystemShortcutPaste && isRemoteSsh
+							? 'remote-ssh-ctrl-v-image-shortcut'
+							: 'paste-event-image',
 				});
 				return;
 			}
@@ -965,7 +1049,8 @@
 				const viewportHeight =
 					document.documentElement.clientHeight || window.innerHeight;
 				const margin = 6;
-				let left = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+				let left =
+					targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
 				left = Math.max(
 					margin,
 					Math.min(left, viewportWidth - tooltipRect.width - margin),
@@ -2197,9 +2282,10 @@
 		registerDisposable(registerOsc52ClipboardHandler());
 		addManagedListener(document, 'paste', handlePasteEvent, true);
 
-		// System paste shortcuts keep native text paste behavior where possible, while
-		// also probing navigator.clipboard for image data because terminal emulators
-		// only inject pasted text into stdin and never serialize clipboard images.
+		// Returning false from xterm's custom key handler stops terminal key
+		// processing, but the DOM keydown event can still lead to the native paste.
+		// Windows Ctrl+V image paste is delegated to Snow CLI's Alt+V handler so
+		// large images are not serialized through the webview/PTY input stream.
 		// Existing in-app image paste shortcuts still work inside Snow CLI itself.
 		term.attachCustomKeyEventHandler(allowTerminalKeyEvent);
 

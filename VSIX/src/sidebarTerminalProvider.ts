@@ -1562,6 +1562,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			webview,
 			SIDEBAR_SCRIPT_SEGMENTS,
 		);
+		const isRemoteSsh = vscode.env.remoteName === 'ssh-remote';
 		const scriptTags = XTERM_SCRIPT_SEGMENTS.map(
 			segments =>
 				`<script src="${this.getWebviewResourceUri(
@@ -1593,7 +1594,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
   <link rel="stylesheet" href="${xtermCssUri}">
   <link rel="stylesheet" href="${sidebarCssUri}">
 </head>
-<body>
+<body data-remote-ssh="${isRemoteSsh ? 'true' : 'false'}">
   <div id="terminal-root">
     <div id="terminal-tab-strip" role="tablist" aria-label="Terminal tabs"></div>
     ${rendererTestControls}
