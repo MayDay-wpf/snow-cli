@@ -40,6 +40,12 @@ export const zh: TranslationKeys = {
 		exit: '退出',
 		exitInfo: '退出应用程序',
 	},
+	notification: {
+		taskCompletedTitle: 'Snow 任务已完成',
+		taskFailedTitle: 'Snow 任务失败',
+		agentWaitingForInputTitle: 'Snow 智能体正在等待输入',
+		unknownError: '未知错误',
+	},
 	menu: {
 		navigate: '使用 ↑↓ 键导航,按 Enter 选择:',
 	},

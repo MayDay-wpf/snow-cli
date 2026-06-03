@@ -40,6 +40,12 @@ export type TranslationKeys = {
 		exit: string;
 		exitInfo: string;
 	};
+	notification: {
+		taskCompletedTitle: string;
+		taskFailedTitle: string;
+		agentWaitingForInputTitle: string;
+		unknownError: string;
+	};
 	// Menu
 	menu: {
 		navigate: string;

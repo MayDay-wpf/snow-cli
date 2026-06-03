@@ -2,6 +2,9 @@ import {Buffer} from 'node:buffer';
 import {spawn} from 'node:child_process';
 import process from 'node:process';
 
+import {translations} from '../../i18n/translations.js';
+import {getCurrentLanguage} from '../config/languageConfig.js';
+
 const appId = 'Snow CLI';
 const maxTitleLength = 80;
 const maxBodyLength = 240;
@@ -93,17 +96,22 @@ export function escapeAppleScriptString(value: string): string {
 		.replaceAll('"', '\\"');
 }
 
+function getNotificationTranslations() {
+	return translations[getCurrentLanguage()].notification;
+}
+
 export function formatTaskNotification({
 	taskTitle,
 	status,
 	errorMessage,
 }: TaskNotification): NotificationPayload {
-	const title =
-		status === 'completed' ? 'Snow task completed' : 'Snow task failed';
+	const {taskCompletedTitle, taskFailedTitle, unknownError} =
+		getNotificationTranslations();
+	const title = status === 'completed' ? taskCompletedTitle : taskFailedTitle;
 	const body =
 		status === 'completed'
 			? taskTitle
-			: `${taskTitle}: ${errorMessage ?? 'Unknown error'}`;
+			: `${taskTitle}: ${errorMessage ?? unknownError}`;
 
 	return formatNotificationPayload(title, body);
 }
@@ -111,7 +119,9 @@ export function formatTaskNotification({
 export function formatAgentTurnCompletionNotification({
 	projectName,
 }: SessionNotification): NotificationPayload {
-	return formatNotificationPayload('Snow agent waiting for input', projectName);
+	const {agentWaitingForInputTitle} = getNotificationTranslations();
+
+	return formatNotificationPayload(agentWaitingForInputTitle, projectName);
 }
 
 export function shouldNotifyAgentTurnCompletion({

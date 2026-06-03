@@ -44,6 +44,12 @@ export const en: TranslationKeys = {
 		exit: 'Exit',
 		exitInfo: 'Exit the application',
 	},
+	notification: {
+		taskCompletedTitle: 'Snow task completed',
+		taskFailedTitle: 'Snow task failed',
+		agentWaitingForInputTitle: 'Snow agent waiting for input',
+		unknownError: 'Unknown error',
+	},
 	menu: {
 		navigate: 'Use ↑↓ keys to navigate, press Enter to select:',
 	},
