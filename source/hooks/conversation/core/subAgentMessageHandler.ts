@@ -1320,7 +1320,11 @@ export class SubAgentUIHandler {
 							contextStartLine: resultData.contextStartLine,
 						},
 					};
-				} else if (resultData.results && Array.isArray(resultData.results)) {
+				} else if (
+					!fileToolData &&
+					resultData.results &&
+					Array.isArray(resultData.results)
+				) {
 					fileToolData = {
 						name: msg.tool_name,
 						arguments: {
@@ -1329,6 +1333,7 @@ export class SubAgentUIHandler {
 						},
 					};
 				} else if (
+					!fileToolData &&
 					resultData.batchResults &&
 					Array.isArray(resultData.batchResults)
 				) {

@@ -23,6 +23,8 @@ export interface ThemeColors {
 	diffAdded: string;
 	diffRemoved: string;
 	diffModified: string;
+	diffAddedForeground: string;
+	diffRemovedForeground: string;
 	lineNumber: string;
 	lineNumberBorder: string;
 	// Menu colors
@@ -49,9 +51,11 @@ export const defaultCustomColors: ThemeColors = {
 	background: '#1e1e1e',
 	text: '#d4d4d4',
 	border: '#3e3e3e',
-	diffAdded: '#0d4d3d',
-	diffRemoved: '#5a1f1f',
+	diffAdded: '#033a16',
+	diffRemoved: '#67060c',
 	diffModified: '#dcdcaa',
+	diffAddedForeground: '#7ee787',
+	diffRemovedForeground: '#ff7b72',
 	lineNumber: '#858585',
 	lineNumberBorder: '#3e3e3e',
 	menuSelected: '#5e0691ff',
@@ -100,6 +104,8 @@ export interface Theme {
 		diffAdded: string;
 		diffRemoved: string;
 		diffModified: string;
+		diffAddedForeground: string;
+		diffRemovedForeground: string;
 		lineNumber: string;
 		lineNumberBorder: string;
 		// Menu colors
@@ -131,9 +137,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#1e1e1e',
 			text: '#d4d4d4',
 			border: '#3e3e3e',
-			diffAdded: '#0d4d3d',
-			diffRemoved: '#5a1f1f',
+			diffAdded: '#033a16',
+			diffRemoved: '#67060c',
 			diffModified: '#dcdcaa',
+			diffAddedForeground: '#3fb950',
+			diffRemovedForeground: '#f85149',
 			lineNumber: '#858585',
 			lineNumberBorder: '#3e3e3e',
 			// Menu colors
@@ -163,9 +171,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#ffffff',
 			text: '#000000',
 			border: '#e0e0e0',
-			diffAdded: '#006400',
-			diffRemoved: '#8B0000',
-			diffModified: '#0000ff',
+			diffAdded: '#dff7df',
+			diffRemoved: '#ffe2e0',
+			diffModified: '#8250df',
+			diffAddedForeground: '#116329',
+			diffRemovedForeground: '#b42318',
 			lineNumber: '#6e6e6e',
 			lineNumberBorder: '#e0e0e0',
 			// Menu colors - darker for better visibility
@@ -195,9 +205,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#0d1117',
 			text: '#c9d1d9',
 			border: '#30363d',
-			diffAdded: '#1a4d2e',
-			diffRemoved: '#6e1a1a',
-			diffModified: '#9e6a03',
+			diffAdded: '#033a16',
+			diffRemoved: '#67060c',
+			diffModified: '#d29922',
+			diffAddedForeground: '#3fb950',
+			diffRemovedForeground: '#f85149',
 			lineNumber: '#6e7681',
 			lineNumberBorder: '#21262d',
 			// Menu colors
@@ -227,9 +239,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#1a1a2e',
 			text: '#ffffff',
 			border: '#ff6b9d',
-			diffAdded: '#16697a',
-			diffRemoved: '#82204a',
-			diffModified: '#5f4b8b',
+			diffAdded: '#063f3c',
+			diffRemoved: '#4a102f',
+			diffModified: '#ffbe0b',
+			diffAddedForeground: '#06ffa5',
+			diffRemovedForeground: '#ff6b9d',
 			lineNumber: '#ffa07a',
 			lineNumberBorder: '#ff6b9d',
 			// Menu colors - vibrant rainbow colors
@@ -259,9 +273,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#002b36',
 			text: '#839496',
 			border: '#073642',
-			diffAdded: '#0a3d2c',
-			diffRemoved: '#5c1f1f',
-			diffModified: '#5d4f1a',
+			diffAdded: '#123c2e',
+			diffRemoved: '#4d1f26',
+			diffModified: '#b58900',
+			diffAddedForeground: '#859900',
+			diffRemovedForeground: '#dc322f',
 			lineNumber: '#586e75',
 			lineNumberBorder: '#073642',
 			// Menu colors
@@ -291,9 +307,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#2e3440',
 			text: '#d8dee9',
 			border: '#3b4252',
-			diffAdded: '#1d3a2f',
-			diffRemoved: '#5c2a2a',
-			diffModified: '#5a4d2f',
+			diffAdded: '#033a16',
+			diffRemoved: '#67060c',
+			diffModified: '#ebcb8b',
+			diffAddedForeground: '#116329',
+			diffRemovedForeground: '#b42318',
 			lineNumber: '#4c566a',
 			lineNumberBorder: '#3b4252',
 			// Menu colors
@@ -323,9 +341,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#e8f7f5',
 			text: '#0a3a38',
 			border: '#0abab5',
-			diffAdded: '#a7e8d8',
-			diffRemoved: '#f5c2c7',
-			diffModified: '#bfe7e3',
+			diffAdded: '#c8f4ee',
+			diffRemoved: '#ffd9d2',
+			diffModified: '#0abab5',
+			diffAddedForeground: '#007f7a',
+			diffRemovedForeground: '#c0392b',
 			lineNumber: '#5a8a87',
 			lineNumberBorder: '#9bd9d3',
 			// Menu colors
@@ -355,9 +375,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#fff0f5',
 			text: '#5a2a4a',
 			border: '#f7b6d2',
-			diffAdded: '#c8e8d4',
-			diffRemoved: '#fbc4d0',
-			diffModified: '#fde2a7',
+			diffAdded: '#d9f5e8',
+			diffRemoved: '#ffe0ea',
+			diffModified: '#e8a87c',
+			diffAddedForeground: '#4f9b78',
+			diffRemovedForeground: '#e5547d',
 			lineNumber: '#b07a96',
 			lineNumberBorder: '#f3c6dc',
 			// Menu colors - macaron pastel palette
@@ -387,9 +409,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#120d08',
 			text: '#f7e6a3',
 			border: '#d4af37',
-			diffAdded: '#2f3d1b',
-			diffRemoved: '#5a2118',
-			diffModified: '#7a4f13',
+			diffAdded: '#173d22',
+			diffRemoved: '#5a2217',
+			diffModified: '#ffd700',
+			diffAddedForeground: '#7bd88f',
+			diffRemovedForeground: '#ff6b4a',
 			lineNumber: '#b88a2a',
 			lineNumberBorder: '#6f4e16',
 			// Menu colors - bold presidential gold palette
@@ -419,9 +443,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#1a0a0a',
 			text: '#f7d4d4',
 			border: '#cc2936',
-			diffAdded: '#1d3a1d',
-			diffRemoved: '#5a1a1a',
-			diffModified: '#7a5a2a',
+			diffAdded: '#17391f',
+			diffRemoved: '#5a1111',
+			diffModified: '#ffd166',
+			diffAddedForeground: '#6fcf6f',
+			diffRemovedForeground: '#ff4d4d',
 			lineNumber: '#d47a7a',
 			lineNumberBorder: '#8b2222',
 			// Menu colors - bold Chinese red palette
@@ -451,9 +477,11 @@ export const themes: Record<ThemeType, Theme> = {
 			background: '#151a2e',
 			text: '#e2e4f0',
 			border: '#c42828',
-			diffAdded: '#1d3a2e',
-			diffRemoved: '#5a2020',
-			diffModified: '#3d456e',
+			diffAdded: '#193450',
+			diffRemoved: '#4a161d',
+			diffModified: '#b0b8d0',
+			diffAddedForeground: '#5b9bd5',
+			diffRemovedForeground: '#e63946',
 			lineNumber: '#8a98b0',
 			lineNumberBorder: '#2a355e',
 			// Menu colors - Optimus Prime red/blue/silver

@@ -155,35 +155,48 @@ function normalizeHexColor(hex: string): string | null {
 	return null;
 }
 
-function blendHexColors(
-	foreground: string,
-	background: string,
-	alpha: number,
-): string {
-	const normalizedForeground = normalizeHexColor(foreground);
-	const normalizedBackground = normalizeHexColor(background);
+const INK_BACKGROUND_STYLES: Record<string, (text: string) => string> = {
+	black: text => chalk.bgBlack(text),
+	red: text => chalk.bgRed(text),
+	green: text => chalk.bgGreen(text),
+	yellow: text => chalk.bgYellow(text),
+	blue: text => chalk.bgBlue(text),
+	magenta: text => chalk.bgMagenta(text),
+	cyan: text => chalk.bgCyan(text),
+	white: text => chalk.bgWhite(text),
+	gray: text => chalk.bgGray(text),
+	grey: text => chalk.bgGray(text),
+};
 
-	if (!normalizedForeground || !normalizedBackground) {
-		return foreground;
+const INK_FOREGROUND_STYLES: Record<string, (text: string) => string> = {
+	black: text => chalk.black(text),
+	red: text => chalk.red(text),
+	green: text => chalk.green(text),
+	yellow: text => chalk.yellow(text),
+	blue: text => chalk.blue(text),
+	magenta: text => chalk.magenta(text),
+	cyan: text => chalk.cyan(text),
+	white: text => chalk.white(text),
+	gray: text => chalk.gray(text),
+	grey: text => chalk.gray(text),
+};
+
+function applyThemeBackground(text: string, color: string): string {
+	const normalizedHex = normalizeHexColor(color.trim());
+	if (normalizedHex) {
+		return chalk.bgHex(`#${normalizedHex}`)(text);
 	}
 
-	const blendChannel = (foregroundOffset: number, backgroundOffset: number) => {
-		const foregroundValue = Number.parseInt(
-			normalizedForeground.slice(foregroundOffset, foregroundOffset + 2),
-			16,
-		);
-		const backgroundValue = Number.parseInt(
-			normalizedBackground.slice(backgroundOffset, backgroundOffset + 2),
-			16,
-		);
-		const blendedValue = Math.round(
-			foregroundValue * alpha + backgroundValue * (1 - alpha),
-		);
+	return INK_BACKGROUND_STYLES[color.trim().toLowerCase()]?.(text) ?? text;
+}
 
-		return blendedValue.toString(16).padStart(2, '0');
-	};
+function applyThemeForeground(text: string, color: string): string {
+	const normalizedHex = normalizeHexColor(color.trim());
+	if (normalizedHex) {
+		return chalk.hex(`#${normalizedHex}`)(text);
+	}
 
-	return `#${blendChannel(0, 0)}${blendChannel(2, 2)}${blendChannel(4, 4)}`;
+	return INK_FOREGROUND_STYLES[color.trim().toLowerCase()]?.(text) ?? text;
 }
 
 /**
@@ -318,7 +331,7 @@ export default function DiffViewer({
 	completeNewContent,
 	startLineNumber = 1,
 }: Props) {
-	const {theme, diffOpacity} = useTheme();
+	const {theme} = useTheme();
 	const {columns: terminalColumns} = useTerminalSize();
 	const codeLanguage = inferLanguageFromFilename(filename);
 
@@ -330,25 +343,6 @@ export default function DiffViewer({
 	//         <DiffViewer />
 	// Total inset ≈ 5, add 1 safety margin = 6
 	const columns = Math.max(terminalColumns - 6, 40);
-
-	const diffAddedBg = useMemo(
-		() =>
-			blendHexColors(
-				theme.colors.diffAdded,
-				theme.colors.background,
-				diffOpacity,
-			),
-		[diffOpacity, theme.colors.diffAdded, theme.colors.background],
-	);
-	const diffRemovedBg = useMemo(
-		() =>
-			blendHexColors(
-				theme.colors.diffRemoved,
-				theme.colors.background,
-				diffOpacity,
-			),
-		[diffOpacity, theme.colors.diffRemoved, theme.colors.background],
-	);
 
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
 
@@ -365,27 +359,35 @@ export default function DiffViewer({
 		const cleanContent = (c: string) => c.replace(/[\r\n]/g, '');
 		const sideRule = chalk.dim('│');
 		const dimStyle = (text: string) => chalk.dim(text);
-		const subtleAddedStyle = (text: string) => chalk.bgHex(diffAddedBg)(text);
+		const subtleAddedStyle = (text: string) =>
+			applyThemeBackground(text, theme.colors.diffAdded);
 		const subtleRemovedStyle = (text: string) =>
-			chalk.bgHex(diffRemovedBg)(text);
-		const addedSignStyle = (text: string) => chalk.green.bold(text);
-		const removedSignStyle = (text: string) => chalk.red.bold(text);
-		const lineNumStyle = (text: string) => chalk.gray.dim(text);
+			applyThemeBackground(text, theme.colors.diffRemoved);
+		const addedTextStyle = (text: string) =>
+			applyThemeForeground(text, theme.colors.diffAddedForeground);
+		const removedTextStyle = (text: string) =>
+			applyThemeForeground(text, theme.colors.diffRemovedForeground);
+		const addedSignStyle = (text: string) => addedTextStyle(chalk.bold(text));
+		const removedSignStyle = (text: string) =>
+			removedTextStyle(chalk.bold(text));
+		const lineNumberTextStyle = normalizeHexColor(theme.colors.lineNumber)
+			? chalk.hex(theme.colors.lineNumber)
+			: chalk.gray;
+		const lineNumStyle = (text: string) => lineNumberTextStyle(text);
 		const lineNumAddedStyle = (text: string) =>
-			chalk
-				.bgHex(blendHexColors(diffAddedBg, theme.colors.background, 0.55))
-				.gray.dim(text);
+			subtleAddedStyle(lineNumberTextStyle(text));
 		const lineNumRemovedStyle = (text: string) =>
-			chalk
-				.bgHex(blendHexColors(diffRemovedBg, theme.colors.background, 0.55))
-				.gray.dim(text);
-		const hunkStyle = (text: string) => chalk.cyan.dim(text);
+			subtleRemovedStyle(lineNumberTextStyle(text));
+		const hunkStyle = (text: string) =>
+			applyThemeForeground(chalk.dim(text), theme.colors.diffModified);
 
 		const style: DiffRenderStyle = {
 			sideRule,
 			dimStyle,
 			subtleAddedStyle,
 			subtleRemovedStyle,
+			addedTextStyle,
+			removedTextStyle,
 			addedSignStyle,
 			removedSignStyle,
 			lineNumStyle,
@@ -403,7 +405,9 @@ export default function DiffViewer({
 			const headerTitle = filename ?? 'New File';
 			const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
 				headerTitle,
-			)} ${chalk.green.bold('new file')} ${chalk.green(`+${allLines.length}`)}`;
+			)} ${addedSignStyle('new file')} ${addedTextStyle(
+				`+${allLines.length}`,
+			)}`;
 			const body = allLines
 				.flatMap((line, index) => {
 					const lineNum = String(index + 1).padStart(lineNumWidth, ' ');
@@ -448,9 +452,9 @@ export default function DiffViewer({
 			: chalk.dim('unified');
 		const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
 			headerTitle,
-		)} ${chalk.yellow.bold('modified')} ${modeLabel} ${chalk.green(
+		)} ${chalk.yellow.bold('modified')} ${modeLabel} ${addedTextStyle(
 			`+${addedCount}`,
-		)} ${chalk.red(`-${removedCount}`)}`;
+		)} ${removedTextStyle(`-${removedCount}`)}`;
 
 		const hunkStrings = hunks.map(hunk => {
 			const hunkHeader = `${sideRule} ${hunkStyle(
@@ -487,10 +491,14 @@ export default function DiffViewer({
 		startLineNumber,
 		filename,
 		codeLanguage,
-		diffAddedBg,
-		diffRemovedBg,
 		useSideBySide,
 		columns,
+		theme.colors.diffAdded,
+		theme.colors.diffRemoved,
+		theme.colors.diffModified,
+		theme.colors.diffAddedForeground,
+		theme.colors.diffRemovedForeground,
+		theme.colors.lineNumber,
 	]);
 
 	return (
@@ -505,6 +513,8 @@ interface DiffRenderStyle {
 	dimStyle: (s: string) => string;
 	subtleAddedStyle: (s: string) => string;
 	subtleRemovedStyle: (s: string) => string;
+	addedTextStyle: (s: string) => string;
+	removedTextStyle: (s: string) => string;
 	addedSignStyle: (s: string) => string;
 	removedSignStyle: (s: string) => string;
 	lineNumStyle: (s: string) => string;
@@ -792,8 +802,8 @@ function formatSideBySide(
 		return rows.length > 0 ? rows : [' '.repeat(width)];
 	};
 
-	const leftHeader = fitToWidth(chalk.red.bold('OLD'), panelWidth);
-	const rightHeader = fitToWidth(chalk.green.bold('NEW'), panelWidth);
+	const leftHeader = fitToWidth(style.removedSignStyle('OLD'), panelWidth);
+	const rightHeader = fitToWidth(style.addedSignStyle('NEW'), panelWidth);
 	const rule = `${style.sideRule} ${chalk.dim(
 		`${'─'.repeat(panelWidth + 1)}┼${'─'.repeat(panelWidth + 1)}`,
 	)}`;

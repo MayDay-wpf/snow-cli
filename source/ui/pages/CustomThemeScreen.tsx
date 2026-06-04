@@ -28,6 +28,8 @@ const colorKeys: ColorKey[] = [
 	'diffAdded',
 	'diffRemoved',
 	'diffModified',
+	'diffAddedForeground',
+	'diffRemovedForeground',
 	'lineNumber',
 	'lineNumberBorder',
 	'menuSelected',

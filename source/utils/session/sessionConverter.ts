@@ -290,6 +290,7 @@ export function convertSessionMessagesToUI(
 								},
 							};
 						} else if (
+							!fileToolData &&
 							resultData.results &&
 							Array.isArray(resultData.results)
 						) {
@@ -512,6 +513,7 @@ export function convertSessionMessagesToUI(
 								}
 								// Handle batch edit
 								else if (
+									!editDiffData &&
 									resultData.results &&
 									Array.isArray(resultData.results)
 								) {
