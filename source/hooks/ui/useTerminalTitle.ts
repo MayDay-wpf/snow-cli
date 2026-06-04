@@ -1,14 +1,9 @@
 import {useEffect} from 'react';
 import {useStdout} from 'ink';
-
-const titleControlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
-
-function cleanTerminalTitle(title: string): string {
-	return title
-		.replaceAll(titleControlCharacters, ' ')
-		.replaceAll(/\s+/g, ' ')
-		.trim();
-}
+import {
+	cleanTerminalTitle,
+	setTerminalTitle,
+} from '../../utils/ui/terminalTitle.js';
 
 /**
  * 设置终端窗口/标签标题，组件卸载时自动清空。
@@ -48,21 +43,8 @@ export function useTerminalTitle(title: string): void {
 			// 某些受限环境读取 process.title 可能抛错，忽略即可
 		}
 
-		// 1. process.title：Windows 控制台直接生效，类 Unix 仅修改进程名
-		if (safeTitle) {
-			try {
-				process.title = safeTitle;
-			} catch {
-				// 某些平台（如部分容器/沙箱）写入 process.title 会失败，忽略
-			}
-		}
-
-		// 2. OSC 序列：所有支持 ANSI 的终端
-		try {
-			stdout.write(`\x1b]0;${safeTitle}\x07`);
-		} catch {
-			// stdout 已关闭或不可写时忽略，避免应用崩溃
-		}
+		// 1. process.title + 2. OSC 序列：所有支持 ANSI 的终端
+		setTerminalTitle(safeTitle, stdout);
 
 		return () => {
 			if (!stdout?.isTTY) return;

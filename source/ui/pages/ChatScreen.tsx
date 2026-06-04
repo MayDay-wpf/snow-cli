@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../i18n/I18nContext.js';
@@ -178,6 +178,11 @@ export default function ChatScreen({
 		setContextUsage: streamingState.setContextUsage,
 	});
 
+	const [terminalTitleSummary, setTerminalTitleSummary] = useState('');
+	const resetTerminalTitleSummary = useCallback(() => {
+		setTerminalTitleSummary('');
+	}, []);
+
 	const {
 		handleMessageSubmit,
 		processMessage,
@@ -246,6 +251,7 @@ export default function ChatScreen({
 		pendingToolConfirmation,
 		onCompressionStatus: setCompressionStatus,
 		setIsResumingSession,
+		onResetTerminalTitle: resetTerminalTitleSummary,
 	});
 
 	function handleSwitchProfile() {
@@ -259,7 +265,6 @@ export default function ChatScreen({
 
 	const handleProfileSelect = panelState.handleProfileSelect;
 	const [terminalTitleFrame, setTerminalTitleFrame] = useState(0);
-	const [terminalTitleSummary, setTerminalTitleSummary] = useState('');
 
 	useEffect(() => {
 		const syncTerminalTitleSummary = () => {
@@ -417,6 +422,7 @@ export default function ChatScreen({
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
 		onCompressionStatus: setCompressionStatus,
+		onResetTerminalTitle: resetTerminalTitleSummary,
 	});
 
 	useEffect(() => {

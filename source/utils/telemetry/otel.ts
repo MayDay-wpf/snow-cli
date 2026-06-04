@@ -47,8 +47,8 @@ const TRACER_NAME = 'snow.telemetry';
 const SERVICE_NAME = 'snow-cli';
 const OTLP_SIGNAL_PATHS = {
 	logs: '/v1/logs',
-	metrics: '/v1/traces/v1/metrics',
-	traces: '/v1/traces/v1/traces',
+	metrics: '/v1/metrics',
+	traces: '/v1/traces',
 } as const;
 
 type OtlpSignal = keyof typeof OTLP_SIGNAL_PATHS;

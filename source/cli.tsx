@@ -169,6 +169,7 @@ import {readFileSync} from 'fs';
 import {join} from 'path';
 import {fileURLToPath} from 'url';
 import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
+import {shutdownTelemetry} from './utils/telemetry/otel.js';
 
 // Migrate legacy split .snow/*.json files into the unified settings.json before
 // anything else touches config. Safe no-op when nothing legacy is present.
@@ -782,6 +783,16 @@ const cleanupAsync = async () => {
 		commandUsageManager.dispose(),
 		new Promise(resolve => setTimeout(resolve, 500)), // 500ms timeout for saving usage data
 	]);
+
+	// Flush OpenTelemetry spans before process.exit(); process.exit() bypasses beforeExit.
+	try {
+		await Promise.race([
+			shutdownTelemetry(),
+			new Promise(resolve => setTimeout(resolve, 5000)),
+		]);
+	} catch {
+		// Ignore telemetry shutdown errors during exit
+	}
 
 	// Cleanup global singleton resources (close browser, free encoders, etc.)
 	try {

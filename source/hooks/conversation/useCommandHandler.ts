@@ -708,6 +708,7 @@ type CommandHandlerOptions = {
 	onQuit?: () => void;
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
 	onToggleCodebase?: (mode?: string) => Promise<void>;
+	onResetTerminalTitle?: () => void;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -808,6 +809,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				}
 
 				resetTerminal(stdout);
+				options.onResetTerminalTitle?.();
 				options.clearSavedMessages();
 				options.setMessages([]);
 				options.setRemountKey(prev => prev + 1);
@@ -861,6 +863,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 
 						// Hook passed, now clear session
 						resetTerminal(stdout);
+						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
 						options.clearSavedMessages();
 						options.setMessages([]);
@@ -892,6 +895,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						console.error('Failed to execute onSessionStart hook:', error);
 						// On exception, still clear session
 						resetTerminal(stdout);
+						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
 						options.clearSavedMessages();
 						options.setMessages([]);

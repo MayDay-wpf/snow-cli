@@ -142,4 +142,5 @@ export interface UseChatLogicProps {
 			| null,
 	) => void;
 	setIsResumingSession?: React.Dispatch<React.SetStateAction<boolean>>;
+	onResetTerminalTitle?: () => void;
 }

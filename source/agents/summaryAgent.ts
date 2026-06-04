@@ -5,6 +5,7 @@ import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
 import type {RequestMethod} from '../utils/config/apiConfig.js';
+import {setTerminalTitle} from '../utils/ui/terminalTitle.js';
 
 /**
  * Summary Agent Service
@@ -201,18 +202,7 @@ export class SummaryAgent {
 	 */
 	private applyTerminalTitle(summary: string | undefined): void {
 		if (!summary) return;
-		try {
-			if (!process.stdout?.isTTY) return;
-			const finalTitle = `Snow CLI - ${summary}`;
-			try {
-				process.title = finalTitle;
-			} catch {
-				// 某些受限环境写入 process.title 会失败，忽略
-			}
-			process.stdout.write(`\x1b]0;${finalTitle}\x07`);
-		} catch (error) {
-			logger.warn('Summary agent: Failed to set terminal title', error);
-		}
+		setTerminalTitle(`Snow CLI - ${summary}`);
 	}
 
 	private async generateSummaryInternal(

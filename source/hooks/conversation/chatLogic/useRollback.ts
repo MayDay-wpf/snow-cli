@@ -91,6 +91,7 @@ export function useRollback(props: UseChatLogicProps) {
 		setRestoreInputContent,
 		currentContextPercentageRef,
 		streamingState,
+		onResetTerminalTitle,
 	} = props;
 	const {stdout} = useStdout();
 
@@ -250,6 +251,7 @@ export function useRollback(props: UseChatLogicProps) {
 				snapshotState.setSnapshotFileCount(new Map());
 
 				stdout.write(ansiEscapes.clearTerminal);
+				onResetTerminalTitle?.();
 				setTimeout(() => {
 					setRemountKey(prev => prev + 1);
 					snapshotState.setPendingRollback(null);
@@ -286,6 +288,7 @@ export function useRollback(props: UseChatLogicProps) {
 		clearSavedMessages();
 
 		stdout.write(ansiEscapes.clearTerminal);
+		onResetTerminalTitle?.();
 		setTimeout(() => {
 			setRemountKey(prev => prev + 1);
 			snapshotState.setPendingRollback(null);
