@@ -591,7 +591,7 @@ export const zh: TranslationKeys = {
 	telemetryPanel: {
 		title: 'OpenTelemetry 遥测',
 		description1:
-			'仅在显式启用时采集 trace 和 metric。数据以 OpenTelemetry 格式导出到外部采集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+			'仅在显式启用时采集 trace、metric 和 log。数据以 OpenTelemetry 格式导出到外部采集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
 		description2:
 			'设置保存到 Snow JSON 项目配置中，并直接传递给 OpenTelemetry 导出器。不使用环境变量。',
 		enableTelemetry: '启用遥测',
@@ -599,20 +599,24 @@ export const zh: TranslationKeys = {
 		metricsExporter: 'Metrics 导出器',
 		logsExporter: 'Logs 导出器',
 		otlpProtocol: 'OTLP 协议',
-		otlpEndpoint: 'OTLP 端点',
+		otlpEndpoint: 'OTLP 基础端点',
 		otlpHeaders: 'OTLP 请求头',
+		injectSessionIdHeader: '注入 Session-Id 请求头',
 		hintEnabled: '存储在 Snow JSON 项目配置中',
 		hintTracesExporter: '可选: otlp, console, none',
 		hintMetricsExporter: '可选: otlp, prometheus, console, none',
 		hintLogsExporter: '可选: otlp, console, none',
 		hintOtlpProtocol: '可选: grpc, http/protobuf, http/json',
-		hintOtlpEndpoint: '例如: http://localhost:4317',
+		hintOtlpEndpoint:
+			'例如: http://localhost:4317 或 /api/public/otel，导出器会自动补全各信号路径',
 		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'启用后若未手动设置 Session-Id，则使用当前链路 Tags 中的 snow.session_id 注入请求头',
 		empty: '(空)',
 		savedMessage:
 			'OpenTelemetry 遥测设置已保存。重启 Snow 以重新初始化导出器。',
 		navigationHint:
-			'\u2191\u2193 选择 \u00b7 \u2190\u2192 切换 \u00b7 S 保存 \u00b7 Esc 保存并关闭',
+			'\u2191\u2193 选择 \u00b7 \u2190\u2192/Enter 切换 \u00b7 S 保存 \u00b7 Esc 保存并关闭',
 	},
 	commandPanel: {
 		title: '命令面板',

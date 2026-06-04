@@ -45,6 +45,13 @@ let shutdownRegistered = false;
 const METER_NAME = 'snow.telemetry';
 const TRACER_NAME = 'snow.telemetry';
 const SERVICE_NAME = 'snow-cli';
+const OTLP_SIGNAL_PATHS = {
+	logs: '/v1/logs',
+	metrics: '/v1/traces/v1/metrics',
+	traces: '/v1/traces/v1/traces',
+} as const;
+
+type OtlpSignal = keyof typeof OTLP_SIGNAL_PATHS;
 
 const requestCounter = metrics
 	.getMeter(METER_NAME)
@@ -183,34 +190,45 @@ function getEffectiveTelemetryConfig(): TelemetryConfig {
 		otlpProtocol: normalizeProtocol(settings.otlpProtocol),
 		otlpEndpoint: settings.otlpEndpoint ?? 'http://localhost:4317',
 		otlpHeaders: settings.otlpHeaders ?? '',
+		injectSessionIdHeader: settings.injectSessionIdHeader ?? false,
 	};
 }
 
 function parseOtlpHeaders(
 	rawHeaders: string | undefined,
+	injectSessionIdHeader = false,
+	sessionId?: string,
 ): Record<string, string> {
-	if (!rawHeaders?.trim()) {
-		return {};
+	const headers = rawHeaders?.trim()
+		? rawHeaders
+				.split(/[;,\n]/)
+				.map(entry => entry.trim())
+				.filter(Boolean)
+				.reduce<Record<string, string>>((parsedHeaders, entry) => {
+					const separatorIndex = entry.indexOf('=');
+					if (separatorIndex <= 0) {
+						return parsedHeaders;
+					}
+
+					const key = entry.slice(0, separatorIndex).trim();
+					const value = entry.slice(separatorIndex + 1).trim();
+					if (key && value) {
+						parsedHeaders[key] = value;
+					}
+
+					return parsedHeaders;
+				}, {})
+		: {};
+
+	if (
+		injectSessionIdHeader &&
+		sessionId &&
+		!Object.keys(headers).some(key => key.toLowerCase() === 'session-id')
+	) {
+		headers['Session-Id'] = sessionId;
 	}
 
-	return rawHeaders
-		.split(/[;,\n]/)
-		.map(entry => entry.trim())
-		.filter(Boolean)
-		.reduce<Record<string, string>>((headers, entry) => {
-			const separatorIndex = entry.indexOf('=');
-			if (separatorIndex <= 0) {
-				return headers;
-			}
-
-			const key = entry.slice(0, separatorIndex).trim();
-			const value = entry.slice(separatorIndex + 1).trim();
-			if (key && value) {
-				headers[key] = value;
-			}
-
-			return headers;
-		}, {});
+	return headers;
 }
 
 function toGrpcMetadata(headers: Record<string, string>): Metadata | undefined {
@@ -227,29 +245,47 @@ function toGrpcMetadata(headers: Record<string, string>): Metadata | undefined {
 	return metadata;
 }
 
-function getOtlpEndpoint(config: TelemetryConfig): string {
-	return config.otlpEndpoint?.trim() || 'http://localhost:4317';
+function stripTrailingSlash(value: string): string {
+	return value.replace(/\/+$/, '');
+}
+
+function getOtlpEndpoint(config: TelemetryConfig, signal: OtlpSignal): string {
+	const endpoint = config.otlpEndpoint?.trim() || 'http://localhost:4317';
+	const normalizedEndpoint = stripTrailingSlash(endpoint);
+	const suffix = OTLP_SIGNAL_PATHS[signal];
+	if (normalizedEndpoint.endsWith(suffix)) {
+		return normalizedEndpoint;
+	}
+
+	return `${normalizedEndpoint}${suffix}`;
 }
 
 function isGrpcProtocol(config: TelemetryConfig): boolean {
 	return normalizeProtocol(config.otlpProtocol) === 'grpc';
 }
 
-function createTraceProcessors(config: TelemetryConfig): SpanProcessor[] {
+function createTraceProcessors(
+	config: TelemetryConfig,
+	sessionId?: string,
+): SpanProcessor[] {
 	switch (config.tracesExporter) {
 		case 'console': {
 			return [new BatchSpanProcessor(new ConsoleSpanExporter())];
 		}
 
 		case 'otlp': {
-			const headers = parseOtlpHeaders(config.otlpHeaders);
+			const headers = parseOtlpHeaders(
+				config.otlpHeaders,
+				config.injectSessionIdHeader,
+				sessionId,
+			);
 			const exporter = isGrpcProtocol(config)
 				? new OTLPTraceExporterGrpc({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'traces'),
 						metadata: toGrpcMetadata(headers),
 				  })
 				: new OTLPTraceExporterHttp({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'traces'),
 						headers,
 				  });
 			return [new BatchSpanProcessor(exporter)];
@@ -261,7 +297,10 @@ function createTraceProcessors(config: TelemetryConfig): SpanProcessor[] {
 	}
 }
 
-function createMetricReaders(config: TelemetryConfig): IMetricReader[] {
+function createMetricReaders(
+	config: TelemetryConfig,
+	sessionId?: string,
+): IMetricReader[] {
 	switch (config.metricsExporter) {
 		case 'console': {
 			return [
@@ -276,14 +315,18 @@ function createMetricReaders(config: TelemetryConfig): IMetricReader[] {
 		}
 
 		case 'otlp': {
-			const headers = parseOtlpHeaders(config.otlpHeaders);
+			const headers = parseOtlpHeaders(
+				config.otlpHeaders,
+				config.injectSessionIdHeader,
+				sessionId,
+			);
 			const exporter = isGrpcProtocol(config)
 				? new OTLPMetricExporterGrpc({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'metrics'),
 						metadata: toGrpcMetadata(headers),
 				  })
 				: new OTLPMetricExporterHttp({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'metrics'),
 						headers,
 				  });
 			return [new PeriodicExportingMetricReader({exporter})];
@@ -295,21 +338,28 @@ function createMetricReaders(config: TelemetryConfig): IMetricReader[] {
 	}
 }
 
-function createLogProcessors(config: TelemetryConfig): LogRecordProcessor[] {
+function createLogProcessors(
+	config: TelemetryConfig,
+	sessionId?: string,
+): LogRecordProcessor[] {
 	switch (config.logsExporter) {
 		case 'console': {
 			return [new BatchLogRecordProcessor(new ConsoleLogRecordExporter())];
 		}
 
 		case 'otlp': {
-			const headers = parseOtlpHeaders(config.otlpHeaders);
+			const headers = parseOtlpHeaders(
+				config.otlpHeaders,
+				config.injectSessionIdHeader,
+				sessionId,
+			);
 			const exporter = isGrpcProtocol(config)
 				? new OTLPLogExporterGrpc({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'logs'),
 						metadata: toGrpcMetadata(headers),
 				  })
 				: new OTLPLogExporterHttp({
-						url: getOtlpEndpoint(config),
+						url: getOtlpEndpoint(config, 'logs'),
 						headers,
 				  });
 			return [new BatchLogRecordProcessor(exporter)];
@@ -332,7 +382,7 @@ function registerShutdown(): void {
 	});
 }
 
-export function initializeTelemetry(): boolean {
+export function initializeTelemetry(sessionId?: string): boolean {
 	if (telemetryStarted) {
 		return true;
 	}
@@ -347,9 +397,9 @@ export function initializeTelemetry(): boolean {
 			resource: resourceFromAttributes({
 				[ATTR_SERVICE_NAME]: SERVICE_NAME,
 			}),
-			spanProcessors: createTraceProcessors(config),
-			metricReaders: createMetricReaders(config),
-			logRecordProcessors: createLogProcessors(config),
+			spanProcessors: createTraceProcessors(config, sessionId),
+			metricReaders: createMetricReaders(config, sessionId),
+			logRecordProcessors: createLogProcessors(config, sessionId),
 		});
 		telemetrySdk.start();
 		telemetryStarted = true;
@@ -385,32 +435,37 @@ export async function shutdownTelemetry(): Promise<void> {
 }
 
 function toSpanAttributes(attributes: TelemetryChatAttributes): Attributes {
+	const conversationId = attributes.conversationId ?? attributes.sessionId;
 	return {
 		'snow.provider': attributes.provider,
 		'snow.streaming': attributes.streaming ?? true,
 		...(attributes.model ? {'snow.model': attributes.model} : {}),
 		...(attributes.sessionId ? {'snow.session_id': attributes.sessionId} : {}),
-		...(attributes.conversationId
-			? {'snow.conversation_id': attributes.conversationId}
-			: attributes.sessionId
-			? {'snow.conversation_id': attributes.sessionId}
-			: {}),
+		...(conversationId ? {'snow.conversation_id': conversationId} : {}),
 		'gen_ai.system': attributes.provider,
+		'gen_ai.operation.name': 'chat',
+		'gen_ai.request.streaming': attributes.streaming ?? true,
 		...(attributes.model ? {'gen_ai.request.model': attributes.model} : {}),
+		...(conversationId ? {'gen_ai.conversation.id': conversationId} : {}),
 	};
 }
 
 function toToolSpanAttributes(attributes: TelemetryToolAttributes): Attributes {
 	return {
 		'snow.tool.name': attributes.toolName,
+		'gen_ai.operation.name': 'execute_tool',
 		'gen_ai.tool.name': attributes.toolName,
 		...(attributes.toolCallId
-			? {'snow.tool.call_id': attributes.toolCallId}
+			? {
+					'snow.tool.call_id': attributes.toolCallId,
+					'gen_ai.tool.call.id': attributes.toolCallId,
+			  }
 			: {}),
 		...(attributes.sessionId
 			? {
 					'snow.session_id': attributes.sessionId,
 					'snow.conversation_id': attributes.sessionId,
+					'gen_ai.conversation.id': attributes.sessionId,
 			  }
 			: {}),
 	};
@@ -433,7 +488,7 @@ export function startChatSpan(attributes: TelemetryChatAttributes): {
 	startTime: number;
 	metricAttributes: Attributes;
 } {
-	if (!initializeTelemetry()) {
+	if (!initializeTelemetry(attributes.sessionId)) {
 		return {span: null, startTime: Date.now(), metricAttributes: {}};
 	}
 
@@ -469,7 +524,7 @@ export function startToolSpan(attributes: TelemetryToolAttributes): {
 	startTime: number;
 	metricAttributes: Attributes;
 } {
-	if (!initializeTelemetry()) {
+	if (!initializeTelemetry(attributes.sessionId)) {
 		return {span: null, startTime: Date.now(), metricAttributes: {}};
 	}
 
@@ -534,7 +589,7 @@ export function recordChatUsage(
 			: {}),
 	};
 
-	span?.addEvent('snow.chat.usage', usageAttributes);
+	span?.addEvent('gen_ai.usage', usageAttributes);
 	for (const [key, value] of Object.entries(usageAttributes)) {
 		if (typeof value === 'number') {
 			span?.setAttribute(key, value);

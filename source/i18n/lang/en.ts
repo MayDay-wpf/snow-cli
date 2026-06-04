@@ -625,7 +625,7 @@ export const en: TranslationKeys = {
 	telemetryPanel: {
 		title: 'OpenTelemetry Telemetry',
 		description1:
-			'Collects traces and metrics only when explicitly enabled. Data is exported in OpenTelemetry format to external collectors such as Jaeger, Prometheus, Grafana, or APM/HPM platforms.',
+			'Collects traces, metrics, and logs only when explicitly enabled. Data is exported in OpenTelemetry format to external collectors such as Jaeger, Prometheus, Grafana, or APM/HPM platforms.',
 		description2:
 			'Settings are saved to Snow JSON project settings and are passed directly to OpenTelemetry exporters. Environment variables are not used.',
 		enableTelemetry: 'Enable telemetry',
@@ -633,20 +633,24 @@ export const en: TranslationKeys = {
 		metricsExporter: 'Metrics exporter',
 		logsExporter: 'Logs exporter',
 		otlpProtocol: 'OTLP protocol',
-		otlpEndpoint: 'OTLP endpoint',
+		otlpEndpoint: 'OTLP base endpoint',
 		otlpHeaders: 'OTLP headers',
+		injectSessionIdHeader: 'Inject Session-Id header',
 		hintEnabled: 'Stored in Snow JSON project settings',
 		hintTracesExporter: 'Options: otlp, console, none',
 		hintMetricsExporter: 'Options: otlp, prometheus, console, none',
 		hintLogsExporter: 'Options: otlp, console, none',
 		hintOtlpProtocol: 'Options: grpc, http/protobuf, http/json',
-		hintOtlpEndpoint: 'Example: http://localhost:4317',
+		hintOtlpEndpoint:
+			'Example: http://localhost:4317 or /api/public/otel. Exporters auto-complete per-signal paths.',
 		hintOtlpHeaders: 'Example: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'When enabled, injects Session-Id from the current trace tag snow.session_id if Session-Id is not configured manually.',
 		empty: '(empty)',
 		savedMessage:
 			'OpenTelemetry telemetry settings saved. Restart Snow to reinitialize exporters.',
 		navigationHint:
-			'\u2191\u2193 select \u00b7 \u2190\u2192 change \u00b7 S save \u00b7 Esc save+close',
+			'\u2191\u2193 select \u00b7 \u2190\u2192/Enter change \u00b7 S save \u00b7 Esc save+close',
 	},
 	commandPanel: {
 		title: 'Command Panel',

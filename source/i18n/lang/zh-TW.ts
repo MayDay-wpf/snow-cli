@@ -592,7 +592,7 @@ export const zhTW: TranslationKeys = {
 	telemetryPanel: {
 		title: 'OpenTelemetry 遙測',
 		description1:
-			'僅在明確啟用時收集 trace 和 metric。資料以 OpenTelemetry 格式匯出到外部收集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+			'僅在明確啟用時收集 trace、metric 和 log。資料以 OpenTelemetry 格式匯出到外部收集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
 		description2:
 			'設定儲存到 Snow JSON 專案設定中，並直接傳遞給 OpenTelemetry 匯出器。不使用環境變數。',
 		enableTelemetry: '啟用遙測',
@@ -600,15 +600,19 @@ export const zhTW: TranslationKeys = {
 		metricsExporter: 'Metrics 匯出器',
 		logsExporter: 'Logs 匯出器',
 		otlpProtocol: 'OTLP 協定',
-		otlpEndpoint: 'OTLP 端點',
+		otlpEndpoint: 'OTLP 基礎端點',
 		otlpHeaders: 'OTLP 標頭',
+		injectSessionIdHeader: '注入 Session-Id 標頭',
 		hintEnabled: '儲存在 Snow JSON 專案設定中',
 		hintTracesExporter: '可選: otlp, console, none',
 		hintMetricsExporter: '可選: otlp, prometheus, console, none',
 		hintLogsExporter: '可選: otlp, console, none',
 		hintOtlpProtocol: '可選: grpc, http/protobuf, http/json',
-		hintOtlpEndpoint: '例如: http://localhost:4317',
+		hintOtlpEndpoint:
+			'例如: http://localhost:4317 或 /api/public/otel，匯出器會自動補全各訊號路徑',
 		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'啟用後若未手動設定 Session-Id，則使用目前鏈路 Tags 中的 snow.session_id 注入標頭',
 		empty: '(空)',
 		savedMessage:
 			'OpenTelemetry 遙測設定已儲存。重啟 Snow 以重新初始化匯出器。',

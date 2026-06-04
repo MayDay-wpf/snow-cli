@@ -5,6 +5,7 @@ import React, {
 	useCallback,
 	forwardRef,
 	useImperativeHandle,
+	useRef,
 	memo,
 } from 'react';
 import {Box, Text} from 'ink';
@@ -259,6 +260,8 @@ const FileList = memo(
 			const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 				() => new Set(),
 			);
+			const wasVisibleRef = useRef(false);
+			const previousRootPathRef = useRef(rootPath);
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -588,20 +591,29 @@ const FileList = memo(
 				[files, rootPath, terminalWidth],
 			);
 
-			// Load files when component becomes visible
-			// This ensures the file list is always fresh without complex file watching
+			// Load files when component becomes visible or search depth changes.
+			// This ensures the file list is always fresh without complex file watching.
 			useEffect(() => {
+				const wasVisible = wasVisibleRef.current;
+				wasVisibleRef.current = visible;
+
 				if (!visible) {
 					return;
 				}
 
-				// Every time the panel re-opens we start with a clean
-				// multi-select slate. Without this, ESC-then-reopen would
-				// keep the previous checkboxes — surprising to the user since
-				// the panel visually disappeared in between.
-				setSelectedKeys(prev => (prev.size === 0 ? prev : new Set()));
+				const rootPathChanged = previousRootPathRef.current !== rootPath;
+				previousRootPathRef.current = rootPath;
 
-				// Always reload when becoming visible to ensure fresh data
+				// Start with a clean multi-select slate only when opening a new
+				// picker session or switching roots. Deeper searches also rerun
+				// this effect through `loadFiles`, but must preserve already
+				// checked files while the same picker session stays visible.
+				if (!wasVisible || rootPathChanged) {
+					setSelectedKeys(prev => (prev.size === 0 ? prev : new Set()));
+				}
+
+				// Always reload when becoming visible to ensure fresh data, and reload
+				// when progressive depth changes to scan deeper directories.
 				loadFiles();
 			}, [visible, rootPath, loadFiles]);
 

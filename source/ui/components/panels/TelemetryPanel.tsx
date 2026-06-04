@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {
 	getTelemetryConfig,
 	setTelemetryConfig,
@@ -20,7 +21,8 @@ type FieldKey =
 	| 'logsExporter'
 	| 'otlpProtocol'
 	| 'otlpEndpoint'
-	| 'otlpHeaders';
+	| 'otlpHeaders'
+	| 'injectSessionIdHeader';
 
 const FIELD_ORDER: FieldKey[] = [
 	'enabled',
@@ -30,6 +32,7 @@ const FIELD_ORDER: FieldKey[] = [
 	'otlpProtocol',
 	'otlpEndpoint',
 	'otlpHeaders',
+	'injectSessionIdHeader',
 ];
 
 const EXPORTER_OPTIONS = ['otlp', 'console', 'none'] as const;
@@ -40,6 +43,8 @@ const METRICS_EXPORTER_OPTIONS = [
 	'none',
 ] as const;
 const PROTOCOL_OPTIONS = ['grpc', 'http/protobuf', 'http/json'] as const;
+const MIN_VISIBLE_FIELDS = 4;
+const MAX_VISIBLE_FIELDS = 6;
 
 function cycleOption<T extends readonly string[]>(
 	options: T,
@@ -61,29 +66,53 @@ function normalizeConfig(config: TelemetryConfig): Required<TelemetryConfig> {
 		otlpProtocol: config.otlpProtocol ?? 'grpc',
 		otlpEndpoint: config.otlpEndpoint ?? 'http://localhost:4317',
 		otlpHeaders: config.otlpHeaders ?? '',
+		injectSessionIdHeader: config.injectSessionIdHeader ?? false,
 	};
 }
 
 export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	const {rows} = useTerminalSize();
 	const [config, setConfig] = useState<Required<TelemetryConfig>>(() =>
 		normalizeConfig(getTelemetryConfig()),
 	);
 	const [focusIndex, setFocusIndex] = useState(0);
+	const [scrollOffset, setScrollOffset] = useState(0);
 	const [message, setMessage] = useState('');
 
 	const focusedField = FIELD_ORDER[focusIndex];
+	const visibleFieldCount = Math.max(
+		MIN_VISIBLE_FIELDS,
+		Math.min(MAX_VISIBLE_FIELDS, rows - 8),
+	);
 
 	useEffect(() => {
 		setConfig(normalizeConfig(getTelemetryConfig()));
 	}, []);
 
+	useEffect(() => {
+		setScrollOffset(previous => {
+			if (focusIndex < previous) {
+				return focusIndex;
+			}
+
+			if (focusIndex >= previous + visibleFieldCount) {
+				return focusIndex - visibleFieldCount + 1;
+			}
+
+			return Math.min(
+				previous,
+				Math.max(0, FIELD_ORDER.length - visibleFieldCount),
+			);
+		});
+	}, [focusIndex, visibleFieldCount]);
+
 	const save = useCallback(() => {
 		setTelemetryConfig(config);
 		setMessage(t.telemetryPanel.savedMessage);
 		setTimeout(() => setMessage(''), 2000);
-	}, [config]);
+	}, [config, t.telemetryPanel.savedMessage]);
 
 	const cycleFocused = useCallback(
 		(direction: 1 | -1) => {
@@ -137,6 +166,13 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 						};
 					}
 
+					case 'injectSessionIdHeader': {
+						return {
+							...previous,
+							injectSessionIdHeader: !previous.injectSessionIdHeader,
+						};
+					}
+
 					default: {
 						return previous;
 					}
@@ -146,6 +182,12 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 		[focusedField],
 	);
 
+	const moveFocus = useCallback((nextIndex: number) => {
+		const normalizedIndex =
+			(nextIndex + FIELD_ORDER.length) % FIELD_ORDER.length;
+		setFocusIndex(normalizedIndex);
+	}, []);
+
 	useInput((input, key) => {
 		if (key.escape) {
 			save();
@@ -154,14 +196,12 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 		}
 
 		if (key.upArrow) {
-			setFocusIndex(previous =>
-				previous === 0 ? FIELD_ORDER.length - 1 : previous - 1,
-			);
+			moveFocus(focusIndex - 1);
 			return;
 		}
 
 		if (key.downArrow) {
-			setFocusIndex(previous => (previous + 1) % FIELD_ORDER.length);
+			moveFocus(focusIndex + 1);
 			return;
 		}
 
@@ -232,14 +272,39 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 				value: config.otlpHeaders,
 				hint: t.telemetryPanel.hintOtlpHeaders,
 			},
+			{
+				key: 'injectSessionIdHeader' as const,
+				label: t.telemetryPanel.injectSessionIdHeader,
+				value: config.injectSessionIdHeader ? 'on' : 'off',
+				hint: t.telemetryPanel.hintInjectSessionIdHeader,
+			},
 		],
-		[config],
+		[config, t.telemetryPanel],
+	);
+
+	const visibleFields = fields.slice(
+		scrollOffset,
+		scrollOffset + visibleFieldCount,
+	);
+	const hiddenAboveCount = scrollOffset;
+	const hiddenBelowCount = Math.max(
+		0,
+		fields.length - scrollOffset - visibleFieldCount,
 	);
 
 	return (
-		<Box flexDirection="column">
-			<Text color={theme.colors.warning} bold>
+		<Box
+			flexDirection="column"
+			borderStyle="round"
+			borderColor={theme.colors.menuInfo}
+			paddingX={2}
+			paddingY={0}
+		>
+			<Text color={theme.colors.menuInfo} bold>
 				{t.telemetryPanel.title}
+				{fields.length > visibleFieldCount
+					? ` (${focusIndex + 1}/${fields.length})`
+					: ''}
 			</Text>
 			<Text color={theme.colors.menuSecondary} dimColor>
 				{t.telemetryPanel.description1}
@@ -249,23 +314,32 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 			</Text>
 
 			<Box marginTop={1} flexDirection="column">
-				{fields.map((field, index) => {
-					const selected = index === focusIndex;
+				{hiddenAboveCount > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↑ {hiddenAboveCount} more above
+					</Text>
+				)}
+				{visibleFields.map((field, index) => {
+					const actualIndex = scrollOffset + index;
+					const selected = actualIndex === focusIndex;
 					const editable =
 						field.key === 'otlpEndpoint' || field.key === 'otlpHeaders';
+					const valueColor = selected
+						? theme.colors.menuInfo
+						: theme.colors.text;
+
 					return (
-						<Box key={field.key} flexDirection="column" marginBottom={1}>
+						<Box key={field.key} flexDirection="column">
 							<Box>
 								<Text
-									color={
-										selected
-											? theme.colors.menuSelected
-											: theme.colors.menuNormal
-									}
-									bold={selected}
+									color={selected ? theme.colors.menuInfo : theme.colors.text}
 								>
-									{selected ? '> ' : '  '}
-									{field.label}:{' '}
+									{selected ? '❯ ' : '  '}
+									<Text
+										color={selected ? theme.colors.menuInfo : theme.colors.text}
+									>
+										{field.label}:
+									</Text>
 								</Text>
 								{selected && editable ? (
 									<TextInput
@@ -276,23 +350,26 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 										focus
 									/>
 								) : (
-									<Text
-										color={
-											selected
-												? theme.colors.menuSelected
-												: theme.colors.menuInfo
-										}
-									>
+									<Text color={valueColor}>
 										{field.value || t.telemetryPanel.empty}
 									</Text>
 								)}
 							</Box>
-							<Text color={theme.colors.menuSecondary} dimColor>
-								{field.hint}
-							</Text>
+							{selected && (
+								<Box marginLeft={4}>
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{field.hint}
+									</Text>
+								</Box>
+							)}
 						</Box>
 					);
 				})}
+				{hiddenBelowCount > 0 && (
+					<Text color={theme.colors.menuSecondary} dimColor>
+						↓ {hiddenBelowCount} more below
+					</Text>
+				)}
 			</Box>
 
 			{message && <Text color={theme.colors.success}>{message}</Text>}

@@ -27,6 +27,7 @@ export interface TelemetryConfig {
 	otlpProtocol?: 'grpc' | 'http/protobuf' | 'http/json';
 	otlpEndpoint?: string;
 	otlpHeaders?: string;
+	injectSessionIdHeader?: boolean;
 }
 
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
@@ -184,6 +185,7 @@ export function getTelemetryConfig(): TelemetryConfig {
 		otlpProtocol: settings.telemetry?.otlpProtocol ?? 'grpc',
 		otlpEndpoint: settings.telemetry?.otlpEndpoint ?? 'http://localhost:4317',
 		otlpHeaders: settings.telemetry?.otlpHeaders ?? '',
+		injectSessionIdHeader: settings.telemetry?.injectSessionIdHeader ?? false,
 	};
 }
 
@@ -261,4 +263,15 @@ export function getTelemetryOtlpHeaders(): string {
 
 export function setTelemetryOtlpHeaders(value: string): void {
 	setTelemetryConfig({...getTelemetryConfig(), otlpHeaders: value});
+}
+
+export function getTelemetryInjectSessionIdHeader(): boolean {
+	return getTelemetryConfig().injectSessionIdHeader === true;
+}
+
+export function setTelemetryInjectSessionIdHeader(value: boolean): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		injectSessionIdHeader: value,
+	});
 }

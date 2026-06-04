@@ -362,38 +362,100 @@ export default function DiffViewer({
 	const renderedOutput = useMemo(() => {
 		const hl = (content: string) =>
 			highlightCodeContent(expandTabsForDisplay(content), codeLanguage);
-
-		const addedStyle = (text: string) => chalk.bgHex(diffAddedBg).white(text);
-		const removedStyle = (text: string) =>
-			chalk.bgHex(diffRemovedBg).white(text);
-		const dimStyle = (text: string) => chalk.dim(text);
 		const cleanContent = (c: string) => c.replace(/[\r\n]/g, '');
+		const sideRule = chalk.dim('│');
+		const dimStyle = (text: string) => chalk.dim(text);
+		const subtleAddedStyle = (text: string) => chalk.bgHex(diffAddedBg)(text);
+		const subtleRemovedStyle = (text: string) =>
+			chalk.bgHex(diffRemovedBg)(text);
+		const addedSignStyle = (text: string) => chalk.green.bold(text);
+		const removedSignStyle = (text: string) => chalk.red.bold(text);
+		const lineNumStyle = (text: string) => chalk.gray.dim(text);
+		const lineNumAddedStyle = (text: string) =>
+			chalk
+				.bgHex(blendHexColors(diffAddedBg, theme.colors.background, 0.55))
+				.gray.dim(text);
+		const lineNumRemovedStyle = (text: string) =>
+			chalk
+				.bgHex(blendHexColors(diffRemovedBg, theme.colors.background, 0.55))
+				.gray.dim(text);
+		const hunkStyle = (text: string) => chalk.cyan.dim(text);
+
+		const style: DiffRenderStyle = {
+			sideRule,
+			dimStyle,
+			subtleAddedStyle,
+			subtleRemovedStyle,
+			addedSignStyle,
+			removedSignStyle,
+			lineNumStyle,
+			lineNumAddedStyle,
+			lineNumRemovedStyle,
+			hunkStyle,
+		};
 
 		const isNewFile = !diffOldContent || diffOldContent.trim() === '';
 
 		// --- New file ---
 		if (isNewFile) {
-			const header = filename
-				? chalk.cyan.bold(filename) + chalk.green(' (new)')
-				: chalk.green.bold('New File');
 			const allLines = diffNewContent.split('\n');
-			const body = allLines.map(line => addedStyle('+ ' + hl(line))).join('\n');
-			return header + '\n' + body;
+			const lineNumWidth = Math.max(4, String(allLines.length).length);
+			const headerTitle = filename ?? 'New File';
+			const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
+				headerTitle,
+			)} ${chalk.green.bold('new file')} ${chalk.green(`+${allLines.length}`)}`;
+			const body = allLines
+				.flatMap((line, index) => {
+					const lineNum = String(index + 1).padStart(lineNumWidth, ' ');
+					const contentRows = wrapAnsiToWidth(
+						hl(line),
+						getUnifiedContentWidth(columns, lineNumWidth),
+					);
+
+					return contentRows.map((contentRow, rowIdx) => {
+						const lineNumPart =
+							rowIdx === 0 ? lineNum : ''.padStart(lineNumWidth, ' ');
+						const signPart = rowIdx === 0 ? addedSignStyle('+') : ' ';
+
+						return `${sideRule} ${lineNumAddedStyle(
+							lineNumPart + ' ',
+						)}${subtleAddedStyle(`${signPart} ${contentRow}`)}`;
+					});
+				})
+				.join('\n');
+			const footer = `${chalk.dim('╰─')} ${chalk.gray.dim(
+				`${allLines.length} line${allLines.length === 1 ? '' : 's'}`,
+			)}`;
+
+			return `${header}\n${body}\n${footer}`;
 		}
 
 		// --- Modified file ---
 		const hunks = computeHunks(diffOldContent, diffNewContent, startLineNumber);
-
-		const header = filename
-			? chalk.cyan.bold(filename) +
-			  chalk.yellow(' (modified)') +
-			  (useSideBySide ? chalk.dim(' (side-by-side)') : '')
-			: chalk.yellow.bold('File Modified');
+		const addedCount = hunks.reduce(
+			(count, hunk) =>
+				count + hunk.changes.filter(change => change.type === 'added').length,
+			0,
+		);
+		const removedCount = hunks.reduce(
+			(count, hunk) =>
+				count + hunk.changes.filter(change => change.type === 'removed').length,
+			0,
+		);
+		const headerTitle = filename ?? 'File Modified';
+		const modeLabel = useSideBySide
+			? chalk.dim('side-by-side')
+			: chalk.dim('unified');
+		const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
+			headerTitle,
+		)} ${chalk.yellow.bold('modified')} ${modeLabel} ${chalk.green(
+			`+${addedCount}`,
+		)} ${chalk.red(`-${removedCount}`)}`;
 
 		const hunkStrings = hunks.map(hunk => {
-			const hunkHeader = chalk.cyan.dim(
-				`@@ Lines ${hunk.startLine}-${hunk.endLine} @@`,
-			);
+			const hunkHeader = `${sideRule} ${hunkStyle(
+				`@@ ${hunk.startLine}-${hunk.endLine}`,
+			)}`;
 
 			if (useSideBySide) {
 				return formatSideBySide(
@@ -401,32 +463,24 @@ export default function DiffViewer({
 					hunkHeader,
 					columns,
 					hl,
-					addedStyle,
-					removedStyle,
-					dimStyle,
+					style,
 					cleanContent,
 				);
 			}
 
-			return formatUnified(
-				hunk,
-				hunkHeader,
-				hl,
-				addedStyle,
-				removedStyle,
-				dimStyle,
-				cleanContent,
-			);
+			return formatUnified(hunk, hunkHeader, columns, hl, style, cleanContent);
 		});
 
-		let output = header + '\n' + hunkStrings.join('\n');
+		const footer = `${chalk.dim('╰─')} ${chalk.gray.dim(
+			`${hunks.length} region${
+				hunks.length === 1 ? '' : 's'
+			}, +${addedCount} -${removedCount}`,
+		)}`;
+		const body = hunkStrings.join(`\n${sideRule}\n`);
 
-		if (hunks.length > 1) {
-			output +=
-				'\n' + chalk.gray.dim(`Total: ${hunks.length} change region(s)`);
-		}
-
-		return output;
+		return body
+			? `${header}\n${sideRule}\n${body}\n${footer}`
+			: `${header}\n${footer}`;
 	}, [
 		diffOldContent,
 		diffNewContent,
@@ -446,29 +500,156 @@ export default function DiffViewer({
 	);
 }
 
+interface DiffRenderStyle {
+	sideRule: string;
+	dimStyle: (s: string) => string;
+	subtleAddedStyle: (s: string) => string;
+	subtleRemovedStyle: (s: string) => string;
+	addedSignStyle: (s: string) => string;
+	removedSignStyle: (s: string) => string;
+	lineNumStyle: (s: string) => string;
+	lineNumAddedStyle: (s: string) => string;
+	lineNumRemovedStyle: (s: string) => string;
+	hunkStyle: (s: string) => string;
+}
+
+function fitAnsiToWidth(str: string, width: number): string {
+	const measuredWidth = stringWidth(str);
+	if (measuredWidth === width) {
+		return str;
+	}
+	if (measuredWidth > width) {
+		return sliceAnsi(str, 0, width);
+	}
+	return str + ' '.repeat(width - measuredWidth);
+}
+
+function stripAnsiEscapes(str: string): string {
+	return str.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '');
+}
+
+function getWordWrapWidth(piece: string): number | null {
+	const visiblePiece = stripAnsiEscapes(piece);
+	let lastBreakIndex = -1;
+
+	for (let index = 1; index < visiblePiece.length; index++) {
+		if (
+			/\s/.test(visiblePiece[index] ?? '') &&
+			!/^\s+$/.test(visiblePiece.slice(0, index))
+		) {
+			lastBreakIndex = index;
+		}
+	}
+
+	if (lastBreakIndex <= 0) {
+		return null;
+	}
+
+	const breakWidth = stringWidth(visiblePiece.slice(0, lastBreakIndex));
+	return breakWidth > 0 ? breakWidth : null;
+}
+
+function getLeadingWhitespaceWidth(str: string): number {
+	const visibleStr = stripAnsiEscapes(str);
+	const leadingWhitespace = visibleStr.match(/^\s+/)?.[0] ?? '';
+	return stringWidth(leadingWhitespace);
+}
+
+function wrapAnsiToWidth(str: string, width: number): string[] {
+	if (width <= 0) {
+		return [''];
+	}
+
+	const totalWidth = stringWidth(str);
+	if (totalWidth === 0) {
+		return [' '.repeat(width)];
+	}
+
+	const rows: string[] = [];
+	let offset = 0;
+	while (offset < totalWidth) {
+		const remainingWidth = totalWidth - offset;
+		const hardSliceWidth = Math.min(width, remainingWidth);
+		const hardPiece = sliceAnsi(str, offset, offset + hardSliceWidth);
+		const wrapWidth =
+			remainingWidth > width ? getWordWrapWidth(hardPiece) : null;
+		const sliceWidth = wrapWidth ?? hardSliceWidth;
+		const piece = sliceAnsi(str, offset, offset + sliceWidth);
+		const pieceWidth = stringWidth(piece);
+
+		rows.push(fitAnsiToWidth(piece, width));
+		if (pieceWidth <= 0) {
+			break;
+		}
+
+		offset += pieceWidth;
+		if (wrapWidth !== null) {
+			offset += getLeadingWhitespaceWidth(sliceAnsi(str, offset, totalWidth));
+		}
+	}
+
+	return rows.length > 0 ? rows : [' '.repeat(width)];
+}
+
+function getUnifiedContentWidth(columns: number, lineNumWidth: number): number {
+	// "│ " + "NNNN " + "S " leaves the wrapped content in its own column.
+	const prefixWidth = 2 + lineNumWidth + 1 + 2;
+	return Math.max(columns - prefixWidth, 1);
+}
+
 function formatUnified(
 	hunk: DiffHunk,
 	hunkHeader: string,
+	columns: number,
 	hl: (s: string) => string,
-	addedStyle: (s: string) => string,
-	removedStyle: (s: string) => string,
-	dimStyle: (s: string) => string,
+	style: DiffRenderStyle,
 	cleanContent: (s: string) => string,
 ): string {
+	const lineNumWidth = Math.max(
+		4,
+		...hunk.changes.map(
+			change => String(change.oldLineNum ?? change.newLineNum ?? '').length,
+		),
+	);
+	const contentWidth = getUnifiedContentWidth(columns, lineNumWidth);
 	const lines: string[] = [hunkHeader];
 
 	for (const change of hunk.changes) {
 		const lineNum =
 			change.type === 'added' ? change.newLineNum : change.oldLineNum;
-		const lineNumStr = lineNum ? String(lineNum).padStart(4, ' ') : '    ';
-		const content = hl(cleanContent(change.content));
+		const lineNumStr = lineNum
+			? String(lineNum).padStart(lineNumWidth, ' ')
+			: ''.padStart(lineNumWidth, ' ');
+		const contentRows = wrapAnsiToWidth(
+			hl(cleanContent(change.content)),
+			contentWidth,
+		);
 
-		if (change.type === 'added') {
-			lines.push(addedStyle(`${lineNumStr} + ${content}`));
-		} else if (change.type === 'removed') {
-			lines.push(removedStyle(`${lineNumStr} - ${content}`));
-		} else {
-			lines.push(dimStyle(`${lineNumStr}   ${content}`));
+		for (let rowIdx = 0; rowIdx < contentRows.length; rowIdx++) {
+			const content = contentRows[rowIdx] ?? ' '.repeat(contentWidth);
+			const rowLineNumStr =
+				rowIdx === 0 ? lineNumStr : ''.padStart(lineNumWidth, ' ');
+
+			if (change.type === 'added') {
+				const sign = rowIdx === 0 ? style.addedSignStyle('+') : ' ';
+				lines.push(
+					`${style.sideRule} ${style.lineNumAddedStyle(
+						rowLineNumStr + ' ',
+					)}${style.subtleAddedStyle(`${sign} ${content}`)}`,
+				);
+			} else if (change.type === 'removed') {
+				const sign = rowIdx === 0 ? style.removedSignStyle('-') : ' ';
+				lines.push(
+					`${style.sideRule} ${style.lineNumRemovedStyle(
+						rowLineNumStr + ' ',
+					)}${style.subtleRemovedStyle(`${sign} ${content}`)}`,
+				);
+			} else {
+				const basePrefix = `${style.sideRule} ${style.lineNumStyle(
+					rowLineNumStr,
+				)} `;
+				lines.push(`${basePrefix}${style.dimStyle('  ')}${content}`);
+			}
 		}
 	}
 
@@ -480,15 +661,15 @@ function formatSideBySide(
 	hunkHeader: string,
 	columns: number,
 	hl: (s: string) => string,
-	addedStyle: (s: string) => string,
-	removedStyle: (s: string) => string,
-	dimStyle: (s: string) => string,
+	style: DiffRenderStyle,
 	cleanContent: (s: string) => string,
 ): string {
+	const gutterWidth = 2;
 	const separatorWidth = 3;
 	const lineNumWidth = 4;
-	const panelWidth = Math.floor((columns - separatorWidth) / 2);
-	const separator = chalk.dim(' | ');
+	const availableWidth = Math.max(columns - gutterWidth, 40);
+	const panelWidth = Math.floor((availableWidth - separatorWidth) / 2);
+	const separator = chalk.dim(' │ ');
 
 	interface SideBySideLine {
 		left: {
@@ -611,20 +792,17 @@ function formatSideBySide(
 		return rows.length > 0 ? rows : [' '.repeat(width)];
 	};
 
-	const headerDash = '-'.repeat(Math.max(Math.floor((panelWidth - 5) / 2), 1));
-	const leftHeader = fitToWidth(
-		chalk.dim(headerDash) + chalk.red.bold(' OLD ') + chalk.dim(headerDash),
-		panelWidth,
-	);
-	const rightHeader = fitToWidth(
-		chalk.dim(headerDash) + chalk.green.bold(' NEW ') + chalk.dim(headerDash),
-		panelWidth,
-	);
-
-	const lines: string[] = [hunkHeader, leftHeader + separator + rightHeader];
-
+	const leftHeader = fitToWidth(chalk.red.bold('OLD'), panelWidth);
+	const rightHeader = fitToWidth(chalk.green.bold('NEW'), panelWidth);
+	const rule = `${style.sideRule} ${chalk.dim(
+		`${'─'.repeat(panelWidth + 1)}┼${'─'.repeat(panelWidth + 1)}`,
+	)}`;
+	const lines: string[] = [
+		hunkHeader,
+		`${style.sideRule} ${leftHeader}${separator}${rightHeader}`,
+		rule,
+	];
 	const emptyPanel = ' '.repeat(panelWidth);
-
 	const prefixWidth = lineNumWidth + 3; // "NNNN S " → lineNum + space + sign + space
 	const contentWidth = Math.max(panelWidth - prefixWidth, 1);
 	const blankPrefix = ' '.repeat(prefixWidth);
@@ -636,23 +814,10 @@ function formatSideBySide(
 		const rightLineNum = pair.right.lineNum
 			? String(pair.right.lineNum).padStart(lineNumWidth, ' ')
 			: ''.padStart(lineNumWidth, ' ');
-
-		const leftSign =
-			pair.left.type === 'removed'
-				? '-'
-				: pair.left.type === 'unchanged'
-				? ' '
-				: ' ';
-		const rightSign =
-			pair.right.type === 'added'
-				? '+'
-				: pair.right.type === 'unchanged'
-				? ' '
-				: ' ';
-
+		const leftSign = pair.left.type === 'removed' ? '-' : ' ';
+		const rightSign = pair.right.type === 'added' ? '+' : ' ';
 		const leftContent = hl(cleanContent(pair.left.content));
 		const rightContent = hl(cleanContent(pair.right.content));
-
 		const leftRows =
 			pair.left.type === 'empty'
 				? ['']
@@ -661,7 +826,6 @@ function formatSideBySide(
 			pair.right.type === 'empty'
 				? ['']
 				: wrapToWidth(rightContent, contentWidth);
-
 		const rowCount = Math.max(leftRows.length, rightRows.length);
 
 		for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
@@ -669,29 +833,52 @@ function formatSideBySide(
 				rowIdx === 0 ? `${leftLineNum} ${leftSign} ` : blankPrefix;
 			const rightPrefix =
 				rowIdx === 0 ? `${rightLineNum} ${rightSign} ` : blankPrefix;
-
 			const leftRow = leftRows[rowIdx] ?? ' '.repeat(contentWidth);
 			const rightRow = rightRows[rowIdx] ?? ' '.repeat(contentWidth);
-
 			let leftStr: string;
+
 			if (pair.left.type === 'empty') {
 				leftStr = emptyPanel;
 			} else if (pair.left.type === 'removed') {
-				leftStr = fitToWidth(removedStyle(leftPrefix + leftRow), panelWidth);
+				leftStr = fitToWidth(
+					`${style.lineNumRemovedStyle(
+						leftLineNum + ' ',
+					)}${style.subtleRemovedStyle(
+						`${style.removedSignStyle(leftSign)} ${leftRow}`,
+					)}`,
+					panelWidth,
+				);
 			} else {
-				leftStr = fitToWidth(dimStyle(leftPrefix + leftRow), panelWidth);
+				leftStr = fitToWidth(
+					`${style.lineNumStyle(
+						leftPrefix.slice(0, lineNumWidth),
+					)}${leftPrefix.slice(lineNumWidth)}${leftRow}`,
+					panelWidth,
+				);
 			}
 
 			let rightStr: string;
 			if (pair.right.type === 'empty') {
 				rightStr = emptyPanel;
 			} else if (pair.right.type === 'added') {
-				rightStr = fitToWidth(addedStyle(rightPrefix + rightRow), panelWidth);
+				rightStr = fitToWidth(
+					`${style.lineNumAddedStyle(
+						rightLineNum + ' ',
+					)}${style.subtleAddedStyle(
+						`${style.addedSignStyle(rightSign)} ${rightRow}`,
+					)}`,
+					panelWidth,
+				);
 			} else {
-				rightStr = fitToWidth(dimStyle(rightPrefix + rightRow), panelWidth);
+				rightStr = fitToWidth(
+					`${style.lineNumStyle(
+						rightPrefix.slice(0, lineNumWidth),
+					)}${rightPrefix.slice(lineNumWidth)}${rightRow}`,
+					panelWidth,
+				);
 			}
 
-			lines.push(leftStr + separator + rightStr);
+			lines.push(`${style.sideRule} ${leftStr}${separator}${rightStr}`);
 		}
 	}
 

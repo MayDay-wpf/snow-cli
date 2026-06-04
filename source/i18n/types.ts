@@ -591,6 +591,7 @@ export type TranslationKeys = {
 		otlpProtocol: string;
 		otlpEndpoint: string;
 		otlpHeaders: string;
+		injectSessionIdHeader: string;
 		hintEnabled: string;
 		hintTracesExporter: string;
 		hintMetricsExporter: string;
@@ -598,6 +599,7 @@ export type TranslationKeys = {
 		hintOtlpProtocol: string;
 		hintOtlpEndpoint: string;
 		hintOtlpHeaders: string;
+		hintInjectSessionIdHeader: string;
 		empty: string;
 		savedMessage: string;
 		navigationHint: string;
