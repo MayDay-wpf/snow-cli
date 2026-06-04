@@ -1204,6 +1204,7 @@ export const en: TranslationKeys = {
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+O (copy input) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerExpandedView:
 			'Press Ctrl+T: toggle expanded/collapsed view for pasted text',
+		headerSimpleHint: 'Type /simple to switch to simplified display',
 		headerWorkingDirectory: 'Working directory: {directory}',
 		// Status messages
 		statusThinking: 'Thinking...',

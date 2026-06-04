@@ -1137,6 +1137,7 @@ export const zhTW: TranslationKeys = {
 		headerShortcuts:
 			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • Ctrl+O (複製輸入) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切換貼上文字的展開/摺疊顯示',
+		headerSimpleHint: '輸入 /simple 切換至簡易顯示',
 		headerWorkingDirectory: '工作目錄: {directory}',
 		// Status messages
 		statusThinking: '思考中...',

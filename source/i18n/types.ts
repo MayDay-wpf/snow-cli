@@ -1115,6 +1115,7 @@ export type TranslationKeys = {
 		headerYolo: string;
 		headerShortcuts: string;
 		headerExpandedView: string;
+		headerSimpleHint: string;
 		headerWorkingDirectory: string;
 		// Status messages
 		statusThinking: string;

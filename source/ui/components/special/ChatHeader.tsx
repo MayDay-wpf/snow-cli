@@ -66,6 +66,7 @@ export default function ChatHeader({
 							})()}
 						</Text>
 						<Text>• {t.chatScreen.headerExpandedView}</Text>
+						<Text>• {t.chatScreen.headerSimpleHint}</Text>
 						{process.platform === 'win32' && (
 							<Text>• Ctrl+G (Notepad edit)</Text>
 						)}

@@ -1137,6 +1137,7 @@ export const zh: TranslationKeys = {
 		headerShortcuts:
 			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • Ctrl+O (复制输入) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切换粘贴文本的展开/折叠显示',
+		headerSimpleHint: '输入 /simple 切换至简易显示',
 		headerWorkingDirectory: '工作目录: {directory}',
 		// Status messages
 		statusThinking: '思考中...',
