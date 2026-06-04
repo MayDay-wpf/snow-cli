@@ -1,5 +1,8 @@
 import type {TranslationKeys} from '../types.js';
 
+const inputNewlineShortcut =
+	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+
 export const en: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
@@ -826,6 +829,10 @@ export const en: TranslationKeys = {
 				usage:
 					'Usage: /deepresearch <prompt>\nExample: /deepresearch Compare the architectures of OpenAI Deep Research and Gemini Deep Research',
 			},
+			// BTW command messages
+			btw: {
+				usage: 'Usage: /btw <your question>',
+			},
 			// Loop command messages
 			loop: {
 				usage:
@@ -1334,7 +1341,7 @@ export const en: TranslationKeys = {
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count} chars selected',
 		// Input
-		inputPlaceholder: 'Ask me anything about coding...',
+		inputPlaceholder: `Ask me anything about coding... New line: ${inputNewlineShortcut}`,
 		inputProcessing: 'Processing...',
 		inputDisabled: 'Input disabled',
 		// Shortcuts

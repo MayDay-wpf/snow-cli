@@ -1,5 +1,8 @@
 import type {TranslationKeys} from '../types.js';
 
+const inputNewlineShortcut =
+	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+
 export const zhTW: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
@@ -776,6 +779,10 @@ export const zhTW: TranslationKeys = {
 				usage:
 					'用法: /deepresearch <提示詞>\n範例: /deepresearch 對比 OpenAI Deep Research 與 Gemini Deep Research 的架構差異',
 			},
+			// BTW 命令訊息
+			btw: {
+				usage: '用法: /btw <你的問題>',
+			},
 			// Loop 命令訊息
 			loop: {
 				usage:
@@ -1263,7 +1270,7 @@ export const zhTW: TranslationKeys = {
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已選擇 {count} 個字元',
 		// Input
-		inputPlaceholder: '詢問我有關程式設計的任何問題...',
+		inputPlaceholder: `詢問我有關程式設計的任何問題... 換行：${inputNewlineShortcut}`,
 		inputProcessing: '處理中...',
 		inputDisabled: '輸入已停用',
 		// Shortcuts

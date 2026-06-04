@@ -655,6 +655,20 @@ const FileList = memo(
 						// Content search mode (@@)
 						const results = await searchFileContent(query);
 						setAllFilteredFiles(results);
+
+						// Content search uses the same progressively loaded file index as
+						// file-name search. If the current shallow index has no matches,
+						// expand the scan so deeper files can be read and searched.
+						if (
+							!isLoading &&
+							results.length === 0 &&
+							query.trim().length > 0 &&
+							hasMoreDepth
+						) {
+							setSearchDepth(d => d + 3);
+							setIsIncreasingDepth(true);
+							setTimeout(() => setIsIncreasingDepth(false), 400);
+						}
 					} else {
 						// File name search mode (@)
 						const queryLower = query.toLowerCase().replace(/\\/g, '/');
@@ -867,11 +881,9 @@ const FileList = memo(
 						return true;
 					},
 					triggerDeeperSearch: () => {
-						// Only meaningful for the file-name picker; content search reads
-						// from the already-loaded file index.
-						if (searchMode !== 'file') {
-							return false;
-						}
+						// Content search also reads from this progressively loaded file
+						// index, so both @ file search and @@ content search must be
+						// allowed to request a deeper scan.
 						// No deeper directories left to scan, or a scan is already
 						// in flight — nothing to do.
 						if (!hasMoreDepth || isLoading || isIncreasingDepth) {
@@ -1108,7 +1120,7 @@ const FileList = memo(
 					)}
 					{selectedFileFullPath && (
 						<Box marginTop={displayItems.length > effectiveMaxItems ? 0 : 1}>
-							<Text color={theme.colors.menuSecondary} dimColor>
+							<Text color={theme.colors.menuSecondary}>
 								{'⤷ ' + selectedFileFullPath}
 							</Text>
 						</Box>
@@ -1147,7 +1159,7 @@ const FileList = memo(
 					    every checked item separated by a space. */}
 					{displayItems.length > 0 && (
 						<Box>
-							<Text color={theme.colors.menuSecondary} dimColor>
+							<Text color={theme.colors.menuSecondary}>
 								{selectedKeys.size > 0
 									? t.fileList.multiSelectActiveHint.replace(
 											'{count}',

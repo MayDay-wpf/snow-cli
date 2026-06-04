@@ -751,6 +751,10 @@ export type TranslationKeys = {
 			deepResearch: {
 				usage: string;
 			};
+			// BTW command messages
+			btw: {
+				usage: string;
+			};
 			// Loop command messages
 			loop: {
 				usage: string;
