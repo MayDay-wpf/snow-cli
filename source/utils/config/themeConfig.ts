@@ -13,8 +13,8 @@ interface ThemeConfig {
 	diffOpacity?: number;
 }
 const DEFAULT_CONFIG: ThemeConfig = {
-	theme: 'dark',
-	simpleMode: false,
+	theme: 'tiffany',
+	simpleMode: true,
 	diffOpacity: 1,
 };
 
@@ -99,7 +99,7 @@ export function saveCustomColors(colors: ThemeColors): void {
  */
 export function getSimpleMode(): boolean {
 	const config = loadThemeConfig();
-	return config.simpleMode ?? false;
+	return config.simpleMode ?? true;
 }
 
 /**

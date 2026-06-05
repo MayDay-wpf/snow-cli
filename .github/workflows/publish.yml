@@ -56,11 +56,9 @@ jobs:
 
             ### What's New
 
-            - Optimize the generation effect of external visual models
-            - Add multilingual support to built-in notifications
-            - Optimize the display effect of DiffViewer
-            - Add telemetry
-            - Optimize file search performance
+            - Optimize the color scheme of DiffViewer
+            - Default to simple mode
+            - Add tips prompts
             
             ### Installation
             ```bash
