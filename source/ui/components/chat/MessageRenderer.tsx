@@ -650,6 +650,7 @@ export default function MessageRenderer({
 																		oldContent={fileResult.oldContent}
 																		newContent={fileResult.newContent}
 																		filename={fileResult.path}
+																		showFilenameInHeader={false}
 																		completeOldContent={
 																			fileResult.completeOldContent
 																		}

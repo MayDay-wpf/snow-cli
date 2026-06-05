@@ -15,6 +15,7 @@ interface Props {
 	completeOldContent?: string;
 	completeNewContent?: string;
 	startLineNumber?: number;
+	showFilenameInHeader?: boolean;
 }
 
 interface DiffHunk {
@@ -330,6 +331,7 @@ export default function DiffViewer({
 	completeOldContent,
 	completeNewContent,
 	startLineNumber = 1,
+	showFilenameInHeader = true,
 }: Props) {
 	const {theme} = useTheme();
 	const {columns: terminalColumns} = useTerminalSize();
@@ -357,6 +359,10 @@ export default function DiffViewer({
 		const hl = (content: string) =>
 			highlightCodeContent(expandTabsForDisplay(content), codeLanguage);
 		const cleanContent = (c: string) => c.replace(/[\r\n]/g, '');
+		const formatHeaderTitle = (fallback: string) => {
+			const title = showFilenameInHeader ? filename ?? fallback : undefined;
+			return title ? `${chalk.cyan.bold(title)} ` : '';
+		};
 		const sideRule = chalk.dim('│');
 		const dimStyle = (text: string) => chalk.dim(text);
 		const subtleAddedStyle = (text: string) =>
@@ -402,12 +408,9 @@ export default function DiffViewer({
 		if (isNewFile) {
 			const allLines = diffNewContent.split('\n');
 			const lineNumWidth = Math.max(4, String(allLines.length).length);
-			const headerTitle = filename ?? 'New File';
-			const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
-				headerTitle,
-			)} ${addedSignStyle('new file')} ${addedTextStyle(
-				`+${allLines.length}`,
-			)}`;
+			const header = `${chalk.dim('╭─')} ${formatHeaderTitle(
+				'New File',
+			)}${addedSignStyle('new file')} ${addedTextStyle(`+${allLines.length}`)}`;
 			const body = allLines
 				.flatMap((line, index) => {
 					const lineNum = String(index + 1).padStart(lineNumWidth, ' ');
@@ -446,13 +449,12 @@ export default function DiffViewer({
 				count + hunk.changes.filter(change => change.type === 'removed').length,
 			0,
 		);
-		const headerTitle = filename ?? 'File Modified';
 		const modeLabel = useSideBySide
 			? chalk.dim('side-by-side')
 			: chalk.dim('unified');
-		const header = `${chalk.dim('╭─')} ${chalk.cyan.bold(
-			headerTitle,
-		)} ${chalk.yellow.bold('modified')} ${modeLabel} ${addedTextStyle(
+		const header = `${chalk.dim('╭─')} ${formatHeaderTitle(
+			'File Modified',
+		)}${chalk.yellow.bold('modified')} ${modeLabel} ${addedTextStyle(
 			`+${addedCount}`,
 		)} ${removedTextStyle(`-${removedCount}`)}`;
 
@@ -490,6 +492,7 @@ export default function DiffViewer({
 		diffNewContent,
 		startLineNumber,
 		filename,
+		showFilenameInHeader,
 		codeLanguage,
 		useSideBySide,
 		columns,

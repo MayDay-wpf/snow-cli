@@ -2,6 +2,7 @@ import type {TranslationKeys} from '../types.js';
 
 const inputNewlineShortcut =
 	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+const pasteImageShortcut = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 
 export const zhTW: TranslationKeys = {
 	welcome: {
@@ -1313,6 +1314,22 @@ export const zhTW: TranslationKeys = {
 		pressCtrlC: 'Ctrl+C 取消',
 		pressCtrlR: 'Ctrl+R 重新產生',
 		pressCtrlS: 'Ctrl+S 儲存',
+		loadingTips: [
+			'輸入 / 查看所有命令',
+			'使用 /help 查看所有快捷鍵',
+			'輸入 @ 引用檔案，輸入 @@ 搜尋檔案內容',
+			`按 ${pasteImageShortcut} 可從剪貼簿貼上圖片`,
+			`需要多行輸入時，按 ${inputNewlineShortcut} 換行`,
+			'按 ESC 可中斷目前回應',
+			'用 Shift+Tab 或 Ctrl+Y 切換 YOLO、Plan、Team 模式',
+			'先說明目標和限制，結果會更穩定',
+			'需要分步驟時，可以要求先給計畫再執行',
+			'使用 # 選擇子代理處理專項任務',
+			'輸入 /todo 查看或管理任務清單',
+			'複雜專案可用 /add-dir 新增工作目錄',
+			'想減少顯示干擾，可輸入 /simple',
+			'貼上截圖後可以繼續補充文字說明，再一起傳送',
+		],
 		// Context
 		contextUsage: '上下文使用: {percentage}%',
 		contextPercentage: '{percentage}%',

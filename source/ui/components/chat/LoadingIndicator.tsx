@@ -169,9 +169,13 @@ export default function LoadingIndicator({
 		lastStreamActivityElapsedSecondsRef.current = elapsedSeconds;
 	}
 
-	const waitingForStreamSeconds = isStreaming && !shouldIgnoreStreamDelay
-		? Math.max(0, elapsedSeconds - lastStreamActivityElapsedSecondsRef.current)
-		: 0;
+	const waitingForStreamSeconds =
+		isStreaming && !shouldIgnoreStreamDelay
+			? Math.max(
+					0,
+					elapsedSeconds - lastStreamActivityElapsedSecondsRef.current,
+			  )
+			: 0;
 	const streamDelayStage = getStreamDelayStage(waitingForStreamSeconds);
 	const loadingShimmerColors = STREAM_DELAY_SHIMMER_COLORS[streamDelayStage];
 	const loadingIconColor = getDelayAwareColor(
@@ -193,6 +197,24 @@ export default function LoadingIndicator({
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
 	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+	const loadingTips = t.chatScreen.loadingTips;
+	const loadingTip =
+		loadingTips.length > 0
+			? loadingTips[Math.floor(elapsedSeconds / 6) % loadingTips.length] ?? null
+			: null;
+
+	const renderLoadingTip = () => {
+		if (!loadingTip || !isStreaming || isStopping) {
+			return null;
+		}
+
+		return (
+			<Text color={theme.colors.menuSecondary} dimColor>
+				<Text color={theme.colors.menuSecondary}>└─ tips: </Text>
+				{loadingTip}
+			</Text>
+		);
+	};
 
 	const renderAgentEntry = (
 		tm: {
@@ -238,7 +260,8 @@ export default function LoadingIndicator({
 					{tm.agentName}
 				</Text>
 				<Text color={statusColor}>
-					{' '}({status}
+					{' '}
+					({status}
 					{tm.tokenCount > 0 && (
 						<>
 							{' · '}
@@ -385,6 +408,7 @@ export default function LoadingIndicator({
 								{')'}
 							</Text>
 						)}
+						{renderLoadingTip()}
 					</>
 				) : (
 					<Text color={theme.colors.menuSecondary} dimColor>

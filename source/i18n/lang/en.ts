@@ -2,6 +2,7 @@ import type {TranslationKeys} from '../types.js';
 
 const inputNewlineShortcut =
 	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+const pasteImageShortcut = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
 
 export const en: TranslationKeys = {
 	welcome: {
@@ -1385,6 +1386,22 @@ export const en: TranslationKeys = {
 		pressCtrlC: 'Ctrl+C to cancel',
 		pressCtrlR: 'Ctrl+R to regenerate',
 		pressCtrlS: 'Ctrl+S to save',
+		loadingTips: [
+			'Type / to view all commands',
+			'Use /help to view all shortcuts',
+			'Use @ to reference files, @@ to search file content',
+			`Press ${pasteImageShortcut} to paste images from the clipboard`,
+			`Press ${inputNewlineShortcut} for multi-line input`,
+			'Press ESC to interrupt the current response',
+			'Use Shift+Tab or Ctrl+Y to switch YOLO, Plan, and Team modes',
+			'State your goal and constraints first for steadier results',
+			'For multi-step work, ask for a plan before execution',
+			'Use # to pick a sub-agent for specialized tasks',
+			'Type /todo to view or manage the task list',
+			'Use /add-dir to add a working directory for complex projects',
+			'Type /simple to reduce display noise',
+			'After pasting a screenshot, add text context before sending',
+		],
 		// Context
 		contextUsage: 'Context usage: {percentage}%',
 		contextPercentage: '{percentage}%',

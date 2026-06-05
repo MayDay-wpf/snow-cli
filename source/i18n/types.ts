@@ -1286,6 +1286,7 @@ export type TranslationKeys = {
 		pressCtrlC: string;
 		pressCtrlR: string;
 		pressCtrlS: string;
+		loadingTips: string[];
 		// Context
 		contextUsage: string;
 		contextPercentage: string;
