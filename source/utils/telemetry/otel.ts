@@ -1,9 +1,11 @@
 import {
+	SpanKind,
 	SpanStatusCode,
 	context,
 	metrics,
 	trace,
 	type Attributes,
+	type Context,
 	type Span,
 } from '@opentelemetry/api';
 import {Metadata} from '@grpc/grpc-js';
@@ -33,6 +35,7 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import {ATTR_SERVICE_NAME} from '@opentelemetry/semantic-conventions';
 import {
+	DEFAULT_TELEMETRY_SERVICE_NAME,
 	getTelemetryConfig,
 	isTelemetryEnabled,
 	type TelemetryConfig,
@@ -44,7 +47,7 @@ let shutdownRegistered = false;
 
 const METER_NAME = 'snow.telemetry';
 const TRACER_NAME = 'snow.telemetry';
-const SERVICE_NAME = 'snow-cli';
+const DEFAULT_WORKFLOW_NAME = 'snow.cli.workflow';
 const OTLP_SIGNAL_PATHS = {
 	logs: '/v1/logs',
 	metrics: '/v1/metrics',
@@ -91,12 +94,45 @@ export type TelemetryChatAttributes = {
 	streaming?: boolean;
 	conversationId?: string;
 	sessionId?: string;
+	parentContext?: Context;
 };
 
 export type TelemetryToolAttributes = {
 	toolName: string;
 	toolCallId?: string;
 	sessionId?: string;
+	conversationId?: string;
+	parentContext?: Context;
+};
+
+export type TelemetryTurnAttributes = {
+	sessionId?: string;
+	conversationId?: string;
+	turnId?: string;
+	model?: string;
+	requestMethod?: string;
+	planMode?: boolean;
+	vulnerabilityHuntingMode?: boolean;
+	teamMode?: boolean;
+	parentContext?: Context;
+};
+
+export type TelemetryWorkflowAttributes = {
+	name?: string;
+	sessionId?: string;
+	conversationId?: string;
+	userId?: string;
+	parentContext?: Context;
+};
+
+export type TelemetryAgentAttributes = {
+	agentId?: string;
+	agentName: string;
+	instanceId?: string;
+	sessionId?: string;
+	conversationId?: string;
+	spawnDepth?: number;
+	parentContext?: Context;
 };
 
 export type TelemetryContentPhase =
@@ -184,6 +220,7 @@ function getEffectiveTelemetryConfig(): TelemetryConfig {
 	return {
 		...settings,
 		enabled: isTelemetryEnabled(),
+		serviceName: settings.serviceName?.trim() || DEFAULT_TELEMETRY_SERVICE_NAME,
 		tracesExporter: normalizeTraceExporter(settings.tracesExporter, 'otlp'),
 		metricsExporter: normalizeMetricExporter(settings.metricsExporter, 'otlp'),
 		logsExporter: normalizeLogExporter(settings.logsExporter, 'none'),
@@ -394,8 +431,12 @@ export function initializeTelemetry(sessionId?: string): boolean {
 
 	try {
 		telemetrySdk = new NodeSDK({
+			// Keep resource attributes minimal. The default process detector records
+			// process.command_args, which can include full headless --ask prompts.
+			autoDetectResources: false,
 			resource: resourceFromAttributes({
-				[ATTR_SERVICE_NAME]: SERVICE_NAME,
+				[ATTR_SERVICE_NAME]:
+					config.serviceName ?? DEFAULT_TELEMETRY_SERVICE_NAME,
 			}),
 			spanProcessors: createTraceProcessors(config, sessionId),
 			metricReaders: createMetricReaders(config, sessionId),
@@ -434,42 +475,178 @@ export async function shutdownTelemetry(): Promise<void> {
 	}
 }
 
-function toSpanAttributes(attributes: TelemetryChatAttributes): Attributes {
-	const conversationId = attributes.conversationId ?? attributes.sessionId;
+function getConversationId(attributes: {
+	conversationId?: string;
+	sessionId?: string;
+}): string | undefined {
+	return attributes.conversationId ?? attributes.sessionId;
+}
+
+function getSessionId(attributes: {
+	conversationId?: string;
+	sessionId?: string;
+}): string | undefined {
+	return attributes.sessionId ?? attributes.conversationId;
+}
+
+function getParentContext(parentContext?: Context): Context {
+	return parentContext ?? context.active();
+}
+
+function toSessionAttributes(attributes: {
+	conversationId?: string;
+	sessionId?: string;
+}): Attributes {
+	const conversationId = getConversationId(attributes);
+	const sessionId = getSessionId(attributes);
+
 	return {
+		...(sessionId
+			? {
+					'snow.session_id': sessionId,
+					'session.id': sessionId,
+					'langfuse.session.id': sessionId,
+			  }
+			: {}),
+		...(conversationId
+			? {
+					'snow.conversation_id': conversationId,
+					'gen_ai.conversation.id': conversationId,
+					'langfuse.trace.metadata.conversation_id': conversationId,
+			  }
+			: {}),
+	};
+}
+
+function toSpanAttributes(attributes: TelemetryChatAttributes): Attributes {
+	return {
+		...toSessionAttributes(attributes),
 		'snow.provider': attributes.provider,
 		'snow.streaming': attributes.streaming ?? true,
 		...(attributes.model ? {'snow.model': attributes.model} : {}),
-		...(attributes.sessionId ? {'snow.session_id': attributes.sessionId} : {}),
-		...(conversationId ? {'snow.conversation_id': conversationId} : {}),
-		'gen_ai.system': attributes.provider,
+		'gen_ai.provider.name': attributes.provider,
 		'gen_ai.operation.name': 'chat',
-		'gen_ai.request.streaming': attributes.streaming ?? true,
-		...(attributes.model ? {'gen_ai.request.model': attributes.model} : {}),
-		...(conversationId ? {'gen_ai.conversation.id': conversationId} : {}),
+		'gen_ai.request.stream': attributes.streaming ?? true,
+		...(attributes.model
+			? {
+					'gen_ai.request.model': attributes.model,
+					'gen_ai.response.model': attributes.model,
+					'langfuse.observation.model.name': attributes.model,
+			  }
+			: {}),
+		'langfuse.observation.type': 'generation',
+		'langfuse.observation.metadata.provider': attributes.provider,
 	};
 }
 
 function toToolSpanAttributes(attributes: TelemetryToolAttributes): Attributes {
 	return {
+		...toSessionAttributes(attributes),
 		'snow.tool.name': attributes.toolName,
 		'gen_ai.operation.name': 'execute_tool',
 		'gen_ai.tool.name': attributes.toolName,
+		'gen_ai.tool.type': 'function',
+		'langfuse.observation.type': 'span',
+		'langfuse.observation.metadata.snow_observation_type': 'tool',
+		'langfuse.observation.metadata.tool_name': attributes.toolName,
 		...(attributes.toolCallId
 			? {
 					'snow.tool.call_id': attributes.toolCallId,
 					'gen_ai.tool.call.id': attributes.toolCallId,
-			  }
-			: {}),
-		...(attributes.sessionId
-			? {
-					'snow.session_id': attributes.sessionId,
-					'snow.conversation_id': attributes.sessionId,
-					'gen_ai.conversation.id': attributes.sessionId,
+					'langfuse.observation.metadata.tool_call_id': attributes.toolCallId,
 			  }
 			: {}),
 	};
 }
+
+function toTurnSpanAttributes(attributes: TelemetryTurnAttributes): Attributes {
+	return {
+		...toSessionAttributes(attributes),
+		'langfuse.trace.name': 'snow.cli.turn',
+		'langfuse.trace.tags': ['snow-cli', 'interactive'],
+		'snow.trace.schema_version': '2026-06-04',
+		'snow.turn.id': attributes.turnId ?? 'unknown',
+		'snow.mode.plan': attributes.planMode ?? false,
+		'snow.mode.vulnerability_hunting':
+			attributes.vulnerabilityHuntingMode ?? false,
+		'snow.mode.team': attributes.teamMode ?? false,
+		...(attributes.turnId
+			? {'langfuse.trace.metadata.turn_id': attributes.turnId}
+			: {}),
+		...(attributes.model
+			? {
+					'snow.model': attributes.model,
+					'langfuse.trace.metadata.model': attributes.model,
+			  }
+			: {}),
+		...(attributes.requestMethod
+			? {
+					'snow.request_method': attributes.requestMethod,
+					'langfuse.trace.metadata.request_method': attributes.requestMethod,
+			  }
+			: {}),
+	};
+}
+
+function toWorkflowSpanAttributes(
+	attributes: TelemetryWorkflowAttributes,
+): Attributes {
+	const workflowName = attributes.name ?? DEFAULT_WORKFLOW_NAME;
+
+	return {
+		...toSessionAttributes(attributes),
+		'langfuse.trace.name': workflowName,
+		'langfuse.trace.tags': ['snow-cli', 'workflow', 'compact'],
+		'snow.workflow.name': workflowName,
+		'snow.workflow.type': 'compact',
+		'snow.trace.schema_version': '2026-06-04',
+		...(attributes.userId
+			? {
+					'snow.user.id': attributes.userId,
+					'langfuse.user.id': attributes.userId,
+					'langfuse.trace.metadata.user_id': attributes.userId,
+			  }
+			: {}),
+	};
+}
+
+function toAgentSpanAttributes(
+	attributes: TelemetryAgentAttributes,
+): Attributes {
+	return {
+		...toSessionAttributes(attributes),
+		'snow.agent.name': attributes.agentName,
+		'gen_ai.operation.name': 'invoke_agent',
+		'gen_ai.agent.name': attributes.agentName,
+		'langfuse.observation.type': 'span',
+		'langfuse.observation.metadata.snow_observation_type': 'agent',
+		'langfuse.observation.metadata.agent_name': attributes.agentName,
+		'langfuse.observation.metadata.is_subagent': true,
+		...(attributes.agentId
+			? {
+					'snow.agent.id': attributes.agentId,
+					'gen_ai.agent.id': attributes.agentId,
+					'langfuse.observation.metadata.agent_id': attributes.agentId,
+			  }
+			: {}),
+		...(attributes.instanceId
+			? {
+					'snow.agent.instance_id': attributes.instanceId,
+					'langfuse.observation.metadata.agent_instance_id':
+						attributes.instanceId,
+			  }
+			: {}),
+		...(attributes.spawnDepth !== undefined
+			? {
+					'snow.agent.spawn_depth': attributes.spawnDepth,
+					'langfuse.observation.metadata.agent_spawn_depth':
+						attributes.spawnDepth,
+			  }
+			: {}),
+	};
+}
+
+const DEFAULT_CONTENT_MAX_LENGTH = 4096;
 
 function stringifyTelemetryContent(content: unknown): string {
 	if (typeof content === 'string') {
@@ -483,6 +660,96 @@ function stringifyTelemetryContent(content: unknown): string {
 	}
 }
 
+function normalizeContentMaxLength(value: number | undefined): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) {
+		return DEFAULT_CONTENT_MAX_LENGTH;
+	}
+
+	return Math.max(0, Math.floor(value));
+}
+
+function getContentCaptureConfig(): {
+	captureContent: boolean;
+	contentMaxLength: number;
+} {
+	const config = getEffectiveTelemetryConfig();
+	return {
+		captureContent: config.captureContent !== false,
+		contentMaxLength: normalizeContentMaxLength(config.contentMaxLength),
+	};
+}
+
+function captureTelemetryContent(content: unknown): {
+	contentText: string;
+	truncatedContent: string;
+	contentMaxLength: number;
+	truncated: boolean;
+} {
+	const {contentMaxLength} = getContentCaptureConfig();
+	const contentText = stringifyTelemetryContent(content);
+	const truncatedContent =
+		contentMaxLength > 0 ? contentText.slice(0, contentMaxLength) : '';
+
+	return {
+		contentText,
+		truncatedContent,
+		contentMaxLength,
+		truncated: truncatedContent.length < contentText.length,
+	};
+}
+
+function toContentEventAttributes(
+	phase: TelemetryContentPhase,
+	content: unknown,
+	attributes: Attributes,
+): Attributes {
+	const {captureContent} = getContentCaptureConfig();
+	if (!captureContent) {
+		return {
+			...attributes,
+			'snow.content.phase': phase,
+			'snow.content.capture_enabled': false,
+		};
+	}
+
+	const captured = captureTelemetryContent(content);
+
+	return {
+		...attributes,
+		'snow.content.phase': phase,
+		'snow.content.capture_enabled': true,
+		'snow.content': captured.truncatedContent,
+		'snow.content.length': captured.contentText.length,
+		'snow.content.max_length': captured.contentMaxLength,
+		'snow.content.truncated': captured.truncated,
+	};
+}
+
+function setLangfuseContentAttribute(
+	span: Span,
+	langfuseKey:
+		| 'langfuse.trace.input'
+		| 'langfuse.trace.output'
+		| 'langfuse.observation.input'
+		| 'langfuse.observation.output',
+	phase: TelemetryContentPhase,
+	content: unknown,
+): void {
+	const {captureContent} = getContentCaptureConfig();
+	if (!captureContent) {
+		return;
+	}
+
+	const captured = captureTelemetryContent(content);
+	span.setAttributes({
+		[langfuseKey]: captured.truncatedContent,
+		'snow.content.capture_enabled': true,
+		[`snow.content.${phase}.length`]: captured.contentText.length,
+		[`snow.content.${phase}.max_length`]: captured.contentMaxLength,
+		[`snow.content.${phase}.truncated`]: captured.truncated,
+	});
+}
+
 export function startChatSpan(attributes: TelemetryChatAttributes): {
 	span: Span | null;
 	startTime: number;
@@ -493,10 +760,16 @@ export function startChatSpan(attributes: TelemetryChatAttributes): {
 	}
 
 	const metricAttributes = toSpanAttributes(attributes);
+	const spanName = attributes.model ? `chat ${attributes.model}` : 'chat';
 	requestCounter.add(1, metricAttributes);
-	const span = trace
-		.getTracer(TRACER_NAME)
-		.startSpan('snow.chat.completion', {attributes: metricAttributes});
+	const span = trace.getTracer(TRACER_NAME).startSpan(
+		spanName,
+		{
+			kind: SpanKind.CLIENT,
+			attributes: metricAttributes,
+		},
+		getParentContext(attributes.parentContext),
+	);
 	return {span, startTime: Date.now(), metricAttributes};
 }
 
@@ -510,13 +783,44 @@ export function recordChatContent(
 		return;
 	}
 
-	const contentText = stringifyTelemetryContent(content);
-	span.addEvent(`snow.chat.${phase}`, {
-		...attributes,
-		'snow.content.phase': phase,
-		'snow.content': contentText,
-		'snow.content.length': contentText.length,
-	});
+	span.addEvent(
+		`snow.chat.${phase}`,
+		toContentEventAttributes(phase, content, attributes),
+	);
+	setLangfuseContentAttribute(
+		span,
+		phase === 'request'
+			? 'langfuse.observation.input'
+			: 'langfuse.observation.output',
+		phase,
+		content,
+	);
+}
+
+export function recordTurnContent(
+	phase: Extract<TelemetryContentPhase, 'request' | 'response'>,
+	content: unknown,
+	attributes: Attributes = {},
+): void {
+	if (!initializeTelemetry()) {
+		return;
+	}
+
+	const span = trace.getSpan(context.active());
+	if (!span) {
+		return;
+	}
+
+	span.addEvent(
+		`snow.turn.${phase}`,
+		toContentEventAttributes(phase, content, attributes),
+	);
+	setLangfuseContentAttribute(
+		span,
+		phase === 'request' ? 'langfuse.trace.input' : 'langfuse.trace.output',
+		phase,
+		content,
+	);
 }
 
 export function startToolSpan(attributes: TelemetryToolAttributes): {
@@ -530,10 +834,143 @@ export function startToolSpan(attributes: TelemetryToolAttributes): {
 
 	const metricAttributes = toToolSpanAttributes(attributes);
 	toolCounter.add(1, metricAttributes);
-	const span = trace
-		.getTracer(TRACER_NAME)
-		.startSpan('snow.tool.execution', {attributes: metricAttributes});
+	const span = trace.getTracer(TRACER_NAME).startSpan(
+		`execute_tool ${attributes.toolName}`,
+		{
+			kind: SpanKind.INTERNAL,
+			attributes: metricAttributes,
+		},
+		getParentContext(attributes.parentContext),
+	);
 	return {span, startTime: Date.now(), metricAttributes};
+}
+
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+export async function withActiveTelemetrySpan<T>(
+	span: Span | null | undefined,
+	fn: () => Promise<T>,
+): Promise<T> {
+	if (!span || !initializeTelemetry()) {
+		return fn();
+	}
+
+	return context.with(trace.setSpan(context.active(), span), fn);
+}
+
+export async function withTurnSpan<T>(
+	attributes: TelemetryTurnAttributes,
+	fn: () => Promise<T>,
+): Promise<T> {
+	if (!initializeTelemetry(attributes.sessionId)) {
+		return fn();
+	}
+
+	const spanAttributes = toTurnSpanAttributes(attributes);
+	return trace.getTracer(TRACER_NAME).startActiveSpan(
+		'snow.cli.turn',
+		{
+			kind: SpanKind.INTERNAL,
+			attributes: spanAttributes,
+		},
+		getParentContext(attributes.parentContext),
+		async span => {
+			try {
+				const result = await fn();
+				span.setStatus({code: SpanStatusCode.OK});
+				return result;
+			} catch (error) {
+				const normalizedError = toError(error);
+				span.recordException(normalizedError);
+				span.setStatus({
+					code: SpanStatusCode.ERROR,
+					message: normalizedError.message,
+				});
+				throw error;
+			} finally {
+				span.end();
+			}
+		},
+	);
+}
+
+export async function withAgentSpan<T>(
+	attributes: TelemetryAgentAttributes,
+	fn: () => Promise<T>,
+): Promise<T> {
+	if (!initializeTelemetry(attributes.sessionId)) {
+		return fn();
+	}
+
+	const spanAttributes = toAgentSpanAttributes(attributes);
+	return trace.getTracer(TRACER_NAME).startActiveSpan(
+		`invoke_agent ${attributes.agentName}`,
+		{
+			kind: SpanKind.INTERNAL,
+			attributes: spanAttributes,
+		},
+		getParentContext(attributes.parentContext),
+		async span => {
+			try {
+				const result = await fn();
+				span.setStatus({code: SpanStatusCode.OK});
+				return result;
+			} catch (error) {
+				const normalizedError = toError(error);
+				span.recordException(normalizedError);
+				span.setStatus({
+					code: SpanStatusCode.ERROR,
+					message: normalizedError.message,
+				});
+				throw error;
+			} finally {
+				span.end();
+			}
+		},
+	);
+}
+
+export async function withCompactSpan<T>(
+	attributes: TelemetryWorkflowAttributes,
+	fn: () => Promise<T>,
+): Promise<T> {
+	if (!initializeTelemetry(attributes.sessionId)) {
+		return fn();
+	}
+
+	const spanName = attributes.name ?? 'snow.cli.compact';
+	const spanAttributes = toWorkflowSpanAttributes({
+		...attributes,
+		name: spanName,
+	});
+
+	return trace.getTracer(TRACER_NAME).startActiveSpan(
+		spanName,
+		{
+			kind: SpanKind.INTERNAL,
+			attributes: spanAttributes,
+		},
+		getParentContext(attributes.parentContext),
+		async span => {
+			try {
+				const result = await fn();
+				span.setStatus({code: SpanStatusCode.OK});
+				return result;
+			} catch (error) {
+				const normalizedError = toError(error);
+				span.recordException(normalizedError);
+				span.setStatus({
+					code: SpanStatusCode.ERROR,
+					message: normalizedError.message,
+				});
+				throw error;
+			} finally {
+				span.end();
+			}
+		},
+	);
 }
 
 export function recordToolContent(
@@ -546,13 +983,18 @@ export function recordToolContent(
 		return;
 	}
 
-	const contentText = stringifyTelemetryContent(content);
-	span.addEvent(`snow.${phase}`, {
-		...attributes,
-		'snow.content.phase': phase,
-		'snow.content': contentText,
-		'snow.content.length': contentText.length,
-	});
+	span.addEvent(
+		`snow.${phase}`,
+		toContentEventAttributes(phase, content, attributes),
+	);
+	setLangfuseContentAttribute(
+		span,
+		phase === 'tool.input'
+			? 'langfuse.observation.input'
+			: 'langfuse.observation.output',
+		phase,
+		content,
+	);
 }
 
 export function recordChatUsage(
@@ -564,6 +1006,8 @@ export function recordChatUsage(
 		return;
 	}
 
+	const cacheReadInputTokens =
+		usage.cache_read_input_tokens ?? usage.cached_tokens;
 	const usageAttributes: Attributes = {
 		...attributes,
 		...(usage.prompt_tokens !== undefined
@@ -579,10 +1023,15 @@ export function recordChatUsage(
 			? {
 					'snow.usage.cache_creation_input_tokens':
 						usage.cache_creation_input_tokens,
+					'gen_ai.usage.cache_creation.input_tokens':
+						usage.cache_creation_input_tokens,
 			  }
 			: {}),
-		...(usage.cache_read_input_tokens !== undefined
-			? {'snow.usage.cache_read_input_tokens': usage.cache_read_input_tokens}
+		...(cacheReadInputTokens !== undefined
+			? {
+					'snow.usage.cache_read_input_tokens': cacheReadInputTokens,
+					'gen_ai.usage.cache_read.input_tokens': cacheReadInputTokens,
+			  }
 			: {}),
 		...(usage.cached_tokens !== undefined
 			? {'snow.usage.cached_tokens': usage.cached_tokens}

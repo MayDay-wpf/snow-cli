@@ -599,6 +599,7 @@ export const zh: TranslationKeys = {
 		description2:
 			'设置保存到 Snow JSON 项目配置中，并直接传递给 OpenTelemetry 导出器。不使用环境变量。',
 		enableTelemetry: '启用遥测',
+		serviceName: 'Service 名称',
 		tracesExporter: 'Traces 导出器',
 		metricsExporter: 'Metrics 导出器',
 		logsExporter: 'Logs 导出器',
@@ -606,7 +607,11 @@ export const zh: TranslationKeys = {
 		otlpEndpoint: 'OTLP 基础端点',
 		otlpHeaders: 'OTLP 请求头',
 		injectSessionIdHeader: '注入 Session-Id 请求头',
+		captureContent: '采集 prompt/tool 原文',
+		contentMaxLength: '原文最大长度',
 		hintEnabled: '存储在 Snow JSON 项目配置中',
+		hintServiceName:
+			'OpenTelemetry resource.service.name。留空使用默认 snow-cli。修改后需重启 Snow 生效。',
 		hintTracesExporter: '可选: otlp, console, none',
 		hintMetricsExporter: '可选: otlp, prometheus, console, none',
 		hintLogsExporter: '可选: otlp, console, none',
@@ -616,6 +621,9 @@ export const zh: TranslationKeys = {
 		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
 		hintInjectSessionIdHeader:
 			'启用后若未手动设置 Session-Id，则使用当前链路 Tags 中的 snow.session_id 注入请求头',
+		hintCaptureContent:
+			'默认开启。如果 trace 不应包含 prompt、completion、tool 参数或 tool 结果，请关闭。',
+		hintContentMaxLength: '开启原文采集后，每个 content 事件最多保留的字符数。',
 		empty: '(空)',
 		savedMessage:
 			'OpenTelemetry 遥测设置已保存。重启 Snow 以重新初始化导出器。',

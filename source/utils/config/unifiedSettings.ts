@@ -42,12 +42,16 @@ export interface UnifiedSettings {
 	ultraTodoEnabled?: boolean;
 	telemetry?: {
 		enabled?: boolean;
+		serviceName?: string;
 		tracesExporter?: 'otlp' | 'console' | 'none';
 		metricsExporter?: 'otlp' | 'prometheus' | 'console' | 'none';
 		logsExporter?: 'otlp' | 'console' | 'none';
 		otlpProtocol?: 'grpc' | 'http/protobuf' | 'http/json';
 		otlpEndpoint?: string;
 		otlpHeaders?: string;
+		injectSessionIdHeader?: boolean;
+		captureContent?: boolean;
+		contentMaxLength?: number;
 	};
 
 	// === 来自旧 codebase.json ===
