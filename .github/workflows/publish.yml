@@ -56,9 +56,7 @@ jobs:
 
             ### What's New
 
-            - Optimize the color scheme of DiffViewer
-            - Default to simple mode
-            - Add tips prompts
+            - Urgent: Crash and flashback when pasting large images
             
             ### Installation
             ```bash

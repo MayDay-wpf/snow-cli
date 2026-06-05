@@ -31,15 +31,42 @@ function sanitizeInput(str: string): string {
 	);
 }
 
+function isStrictBase64(base64Data: string): boolean {
+	if (base64Data.length <= 100) return false;
+	if (base64Data.length % 4 !== 0) return false;
+
+	let paddingStart = base64Data.length;
+	for (let index = 0; index < base64Data.length; index += 1) {
+		const code = base64Data.charCodeAt(index);
+		const isBase64Char =
+			(code >= 0x41 && code <= 0x5a) ||
+			(code >= 0x61 && code <= 0x7a) ||
+			(code >= 0x30 && code <= 0x39) ||
+			code === 0x2b ||
+			code === 0x2f;
+
+		if (isBase64Char) {
+			if (paddingStart !== base64Data.length) return false;
+			continue;
+		}
+
+		if (code === 0x3d) {
+			if (paddingStart === base64Data.length) paddingStart = index;
+			continue;
+		}
+
+		return false;
+	}
+
+	const paddingLength = base64Data.length - paddingStart;
+	if (paddingLength > 2) return false;
+	if (paddingLength > 0 && paddingStart < base64Data.length - 2) return false;
+
+	return true;
+}
+
 function decodeStrictBase64(base64Data: string): Uint8Array | null {
-	if (base64Data.length <= 100) return null;
-	if (base64Data.length % 4 !== 0) return null;
-	if (
-		!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-			base64Data,
-		)
-	)
-		return null;
+	if (!isStrictBase64(base64Data)) return null;
 
 	const decoded = Buffer.from(base64Data, 'base64');
 	if (decoded.length === 0) return null;
