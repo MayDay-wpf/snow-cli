@@ -1,4 +1,13 @@
+import {context, type Context} from '@opentelemetry/api';
+
 import {getSubAgent} from '../config/subAgentConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {
+	endToolSpan,
+	recordToolContent,
+	startToolSpan,
+	withActiveTelemetrySpan,
+} from '../telemetry/otel.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
@@ -10,12 +19,79 @@ export interface InterceptResult {
 	remainingToolCalls: any[];
 }
 
+type InterceptedToolExecution<T> = {
+	result: T;
+	outputContent: string;
+};
+
+async function withInterceptedToolSpan<T>(
+	toolCall: any,
+	args: unknown,
+	fn: () => Promise<InterceptedToolExecution<T>> | InterceptedToolExecution<T>,
+): Promise<T> {
+	const currentSession = sessionManager.getCurrentSession();
+	const telemetry = startToolSpan({
+		toolName: toolCall.function.name,
+		toolCallId: toolCall.id,
+		sessionId: currentSession?.id,
+		conversationId: currentSession?.id,
+	});
+	recordToolContent(
+		telemetry.span,
+		'tool.input',
+		args,
+		telemetry.metricAttributes,
+	);
+
+	try {
+		const {result, outputContent} = await withActiveTelemetrySpan(
+			telemetry.span,
+			async () => fn(),
+		);
+		const telemetryAttributes = {
+			...telemetry.metricAttributes,
+			'snow.tool.status': 'success',
+			'snow.tool.output.length': outputContent.length,
+		};
+		recordToolContent(
+			telemetry.span,
+			'tool.output',
+			outputContent,
+			telemetryAttributes,
+		);
+		endToolSpan(telemetry.span, telemetry.startTime, telemetryAttributes);
+		return result;
+	} catch (error) {
+		const normalizedError =
+			error instanceof Error ? error : new Error(String(error));
+		const errorContent = `Error: ${normalizedError.message}`;
+		const telemetryAttributes = {
+			...telemetry.metricAttributes,
+			'snow.tool.status': 'error',
+			'snow.tool.output.length': errorContent.length,
+		};
+		recordToolContent(
+			telemetry.span,
+			'tool.output',
+			errorContent,
+			telemetryAttributes,
+		);
+		endToolSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetryAttributes,
+			normalizedError,
+		);
+		throw error;
+	}
+}
+
 // ── send_message_to_agent ──
 
-export function interceptSendMessage(
+export async function interceptSendMessage(
 	ctx: SubAgentExecutionContext,
 	toolCalls: any[],
-): InterceptResult {
+): Promise<InterceptResult> {
 	const sendMsgTools = toolCalls.filter(
 		(tc: any) => tc.function.name === 'send_message_to_agent',
 	);
@@ -25,90 +101,99 @@ export function interceptSendMessage(
 	}
 
 	for (const sendMsgTool of sendMsgTools) {
-		let targetAgentId: string | undefined;
-		let targetInstanceId: string | undefined;
-		let msgContent = '';
+		await withInterceptedToolSpan(
+			sendMsgTool,
+			sendMsgTool.function.arguments,
+			() => {
+				let targetAgentId: string | undefined;
+				let targetInstanceId: string | undefined;
+				let msgContent = '';
 
-		try {
-			const args = JSON.parse(sendMsgTool.function.arguments);
-			targetAgentId = args.target_agent_id;
-			targetInstanceId = args.target_instance_id;
-			msgContent = args.message || '';
-		} catch (error) {
-			console.error(
-				'Failed to parse send_message_to_agent arguments:',
-				error,
-			);
-		}
-
-		let success = false;
-		let resultText = '';
-
-		if (!msgContent) {
-			resultText = 'Error: message content is empty';
-		} else if (targetInstanceId) {
-			success = runningSubAgentTracker.sendInterAgentMessage(
-				ctx.instanceId!,
-				targetInstanceId,
-				msgContent,
-			);
-			if (success) {
-				const targetAgent = runningSubAgentTracker
-					.getRunningAgents()
-					.find(a => a.instanceId === targetInstanceId);
-				resultText = `Message sent to ${
-					targetAgent?.agentName || targetInstanceId
-				}`;
-			} else {
-				resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
-			}
-		} else if (targetAgentId) {
-			const targetAgent =
-				runningSubAgentTracker.findInstanceByAgentId(targetAgentId);
-			if (targetAgent && targetAgent.instanceId !== ctx.instanceId) {
-				success = runningSubAgentTracker.sendInterAgentMessage(
-					ctx.instanceId!,
-					targetAgent.instanceId,
-					msgContent,
-				);
-				if (success) {
-					resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
-				} else {
-					resultText = `Error: Failed to send message to ${targetAgentId}`;
+				try {
+					const args = JSON.parse(sendMsgTool.function.arguments);
+					targetAgentId = args.target_agent_id;
+					targetInstanceId = args.target_instance_id;
+					msgContent = args.message || '';
+				} catch (error) {
+					console.error(
+						'Failed to parse send_message_to_agent arguments:',
+						error,
+					);
 				}
-			} else if (targetAgent && targetAgent.instanceId === ctx.instanceId) {
-				resultText = 'Error: Cannot send a message to yourself';
-			} else {
-				resultText = `Error: No running agent found with ID "${targetAgentId}"`;
-			}
-		} else {
-			resultText =
-				'Error: Either target_agent_id or target_instance_id must be provided';
-		}
 
-		ctx.messages.push({
-			role: 'tool' as const,
-			tool_call_id: sendMsgTool.id,
-			content: JSON.stringify({success, result: resultText}),
-		});
+				let success = false;
+				let resultText = '';
 
-		emitSubAgentMessage(ctx, {
-			type: 'inter_agent_sent',
-			targetAgentId: targetAgentId || targetInstanceId || 'unknown',
-			targetAgentName:
-				(targetInstanceId
-					? runningSubAgentTracker
+				if (!msgContent) {
+					resultText = 'Error: message content is empty';
+				} else if (targetInstanceId) {
+					success = runningSubAgentTracker.sendInterAgentMessage(
+						ctx.instanceId!,
+						targetInstanceId,
+						msgContent,
+					);
+					if (success) {
+						const targetAgent = runningSubAgentTracker
 							.getRunningAgents()
-							.find(a => a.instanceId === targetInstanceId)?.agentName
-					: targetAgentId
-					? runningSubAgentTracker.findInstanceByAgentId(targetAgentId)
-							?.agentName
-					: undefined) ||
-				targetAgentId ||
-				'unknown',
-			content: msgContent,
-			success,
-		});
+							.find(a => a.instanceId === targetInstanceId);
+						resultText = `Message sent to ${
+							targetAgent?.agentName || targetInstanceId
+						}`;
+					} else {
+						resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
+					}
+				} else if (targetAgentId) {
+					const targetAgent =
+						runningSubAgentTracker.findInstanceByAgentId(targetAgentId);
+					if (targetAgent && targetAgent.instanceId !== ctx.instanceId) {
+						success = runningSubAgentTracker.sendInterAgentMessage(
+							ctx.instanceId!,
+							targetAgent.instanceId,
+							msgContent,
+						);
+						if (success) {
+							resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
+						} else {
+							resultText = `Error: Failed to send message to ${targetAgentId}`;
+						}
+					} else if (targetAgent && targetAgent.instanceId === ctx.instanceId) {
+						resultText = 'Error: Cannot send a message to yourself';
+					} else {
+						resultText = `Error: No running agent found with ID "${targetAgentId}"`;
+					}
+				} else {
+					resultText =
+						'Error: Either target_agent_id or target_instance_id must be provided';
+				}
+
+				const resultContent = JSON.stringify({success, result: resultText});
+				ctx.messages.push({
+					role: 'tool' as const,
+					tool_call_id: sendMsgTool.id,
+					content: resultContent,
+				});
+
+				emitSubAgentMessage(ctx, {
+					type: 'inter_agent_sent',
+					targetAgentId: targetAgentId || targetInstanceId || 'unknown',
+					targetAgentName:
+						(targetInstanceId
+							? runningSubAgentTracker
+									.getRunningAgents()
+									.find(a => a.instanceId === targetInstanceId)?.agentName
+							: targetAgentId
+							? runningSubAgentTracker.findInstanceByAgentId(targetAgentId)
+									?.agentName
+							: undefined) ||
+						targetAgentId ||
+						'unknown',
+					content: msgContent,
+					success,
+				});
+
+				return {result: undefined, outputContent: resultContent};
+			},
+		);
 	}
 
 	const remaining = toolCalls.filter(
@@ -119,10 +204,10 @@ export function interceptSendMessage(
 
 // ── query_agents_status ──
 
-export function interceptQueryStatus(
+export async function interceptQueryStatus(
 	ctx: SubAgentExecutionContext,
 	toolCalls: any[],
-): InterceptResult {
+): Promise<InterceptResult> {
 	const queryStatusTools = toolCalls.filter(
 		(tc: any) => tc.function.name === 'query_agents_status',
 	);
@@ -132,26 +217,35 @@ export function interceptQueryStatus(
 	}
 
 	for (const queryTool of queryStatusTools) {
-		const allAgents = runningSubAgentTracker.getRunningAgents();
-		const statusList = allAgents.map(a => ({
-			instanceId: a.instanceId,
-			agentId: a.agentId,
-			agentName: a.agentName,
-			prompt: a.prompt ? a.prompt.substring(0, 150) : 'N/A',
-			runningFor: `${Math.floor(
-				(Date.now() - a.startedAt.getTime()) / 1000,
-			)}s`,
-			isSelf: a.instanceId === ctx.instanceId,
-		}));
+		await withInterceptedToolSpan(
+			queryTool,
+			queryTool.function.arguments,
+			() => {
+				const allAgents = runningSubAgentTracker.getRunningAgents();
+				const statusList = allAgents.map(a => ({
+					instanceId: a.instanceId,
+					agentId: a.agentId,
+					agentName: a.agentName,
+					prompt: a.prompt ? a.prompt.substring(0, 150) : 'N/A',
+					runningFor: `${Math.floor(
+						(Date.now() - a.startedAt.getTime()) / 1000,
+					)}s`,
+					isSelf: a.instanceId === ctx.instanceId,
+				}));
+				const resultContent = JSON.stringify({
+					totalRunning: allAgents.length,
+					agents: statusList,
+				});
 
-		ctx.messages.push({
-			role: 'tool' as const,
-			tool_call_id: queryTool.id,
-			content: JSON.stringify({
-				totalRunning: allAgents.length,
-				agents: statusList,
-			}),
-		});
+				ctx.messages.push({
+					role: 'tool' as const,
+					tool_call_id: queryTool.id,
+					content: resultContent,
+				});
+
+				return {result: undefined, outputContent: resultContent};
+			},
+		);
 	}
 
 	const remaining = toolCalls.filter(
@@ -162,7 +256,7 @@ export function interceptQueryStatus(
 
 // ── spawn_sub_agent ──
 
-export function interceptSpawnSubAgent(
+export async function interceptSpawnSubAgent(
 	ctx: SubAgentExecutionContext,
 	toolCalls: any[],
 	executeSubAgentFn: (
@@ -177,8 +271,9 @@ export function interceptSpawnSubAgent(
 		requestUserQuestion?: any,
 		instanceId?: string,
 		spawnDepth?: number,
+		parentContext?: Context,
 	) => Promise<any>,
-): InterceptResult {
+): Promise<InterceptResult> {
 	const spawnTools = toolCalls.filter(
 		(tc: any) => tc.function.name === 'spawn_sub_agent',
 	);
@@ -187,145 +282,160 @@ export function interceptSpawnSubAgent(
 		return {remainingToolCalls: toolCalls};
 	}
 
+	const parentInstanceId = ctx.instanceId;
+
 	for (const spawnTool of spawnTools) {
-		let spawnAgentId = '';
-		let spawnPrompt = '';
+		await withInterceptedToolSpan(
+			spawnTool,
+			spawnTool.function.arguments,
+			() => {
+				let spawnAgentId = '';
+				let spawnPrompt = '';
 
-		try {
-			const args = JSON.parse(spawnTool.function.arguments);
-			spawnAgentId = args.agent_id || '';
-			spawnPrompt = args.prompt || '';
-		} catch (error) {
-			console.error('Failed to parse spawn_sub_agent arguments:', error);
-		}
+				try {
+					const args = JSON.parse(spawnTool.function.arguments);
+					spawnAgentId = args.agent_id || '';
+					spawnPrompt = args.prompt || '';
+				} catch (error) {
+					console.error('Failed to parse spawn_sub_agent arguments:', error);
+				}
 
-		if (!spawnAgentId || !spawnPrompt) {
-			ctx.messages.push({
-				role: 'tool' as const,
-				tool_call_id: spawnTool.id,
-				content: JSON.stringify({
-					success: false,
-					error: 'Both agent_id and prompt are required',
-				}),
-			});
-			continue;
-		}
+				if (!spawnAgentId || !spawnPrompt) {
+					const resultContent = JSON.stringify({
+						success: false,
+						error: 'Both agent_id and prompt are required',
+					});
+					ctx.messages.push({
+						role: 'tool' as const,
+						tool_call_id: spawnTool.id,
+						content: resultContent,
+					});
+					return {result: undefined, outputContent: resultContent};
+				}
 
-		if (spawnAgentId === ctx.agent.id) {
-			ctx.messages.push({
-				role: 'tool' as const,
-				tool_call_id: spawnTool.id,
-				content: JSON.stringify({
-					success: false,
-					error: `REJECTED: You (${ctx.agent.name}) attempted to spawn another "${spawnAgentId}" which is the SAME type as yourself. This is not allowed because it wastes resources and delegates work you should complete yourself. If you need help from a DIFFERENT specialization, spawn a different agent type. If the task is within your capabilities, do it yourself.`,
-				}),
-			});
-			continue;
-		}
+				if (spawnAgentId === ctx.agent.id) {
+					const resultContent = JSON.stringify({
+						success: false,
+						error: `REJECTED: You (${ctx.agent.name}) attempted to spawn another "${spawnAgentId}" which is the SAME type as yourself. This is not allowed because it wastes resources and delegates work you should complete yourself. If you need help from a DIFFERENT specialization, spawn a different agent type. If the task is within your capabilities, do it yourself.`,
+					});
+					ctx.messages.push({
+						role: 'tool' as const,
+						tool_call_id: spawnTool.id,
+						content: resultContent,
+					});
+					return {result: undefined, outputContent: resultContent};
+				}
 
-		let spawnAgentName = spawnAgentId;
-		try {
-			const agentConfig = getSubAgent(spawnAgentId);
-			if (agentConfig) {
-				spawnAgentName = agentConfig.name;
-			}
-		} catch {
-			const builtinNames: Record<string, string> = {
-				agent_explore: 'Explore Agent',
-				agent_plan: 'Plan Agent',
-				agent_general: 'General Purpose Agent',
-				agent_analyze: 'Requirement Analysis Agent',
-				agent_qa: 'QA Agent',
-				agent_debug: 'Debug Assistant',
-			};
-			spawnAgentName = builtinNames[spawnAgentId] || spawnAgentId;
-		}
+				let spawnAgentName = spawnAgentId;
+				try {
+					const agentConfig = getSubAgent(spawnAgentId);
+					if (agentConfig) {
+						spawnAgentName = agentConfig.name;
+					}
+				} catch {
+					const builtinNames: Record<string, string> = {
+						agent_explore: 'Explore Agent',
+						agent_plan: 'Plan Agent',
+						agent_general: 'General Purpose Agent',
+						agent_analyze: 'Requirement Analysis Agent',
+						agent_qa: 'QA Agent',
+						agent_debug: 'Debug Assistant',
+					};
+					spawnAgentName = builtinNames[spawnAgentId] || spawnAgentId;
+				}
 
-		const spawnInstanceId = `spawn-${Date.now()}-${Math.random()
-			.toString(36)
-			.slice(2, 8)}`;
+				const spawnInstanceId = `spawn-${Date.now()}-${Math.random()
+					.toString(36)
+					.slice(2, 8)}`;
 
-		const spawnerInfo = {
-			instanceId: ctx.instanceId,
-			agentId: ctx.agent.id,
-			agentName: ctx.agent.name,
-		};
+				const spawnerInfo = {
+					instanceId: parentInstanceId,
+					agentId: ctx.agent.id,
+					agentName: ctx.agent.name,
+				};
 
-		ctx.spawnedChildInstanceIds.add(spawnInstanceId);
+				ctx.spawnedChildInstanceIds.add(spawnInstanceId);
 
-		runningSubAgentTracker.register({
-			instanceId: spawnInstanceId,
-			agentId: spawnAgentId,
-			agentName: spawnAgentName,
-			prompt: spawnPrompt,
-			startedAt: new Date(),
-		});
-
-		executeSubAgentFn(
-			spawnAgentId,
-			spawnPrompt,
-			ctx.onMessage,
-			ctx.abortSignal,
-			ctx.requestToolConfirmation,
-			ctx.isToolAutoApproved,
-			ctx.yoloMode,
-			ctx.addToAlwaysApproved,
-			ctx.requestUserQuestion,
-			spawnInstanceId,
-			ctx.spawnDepth + 1,
-		)
-			.then(result => {
-				runningSubAgentTracker.storeSpawnedResult({
+				runningSubAgentTracker.register({
 					instanceId: spawnInstanceId,
 					agentId: spawnAgentId,
 					agentName: spawnAgentName,
-					prompt:
-						spawnPrompt.length > 200
-							? spawnPrompt.substring(0, 200) + '...'
-							: spawnPrompt,
-					success: result.success,
-					result: result.result,
-					error: result.error,
-					completedAt: new Date(),
-					spawnedBy: spawnerInfo,
+					prompt: spawnPrompt,
+					startedAt: new Date(),
 				});
-			})
-			.catch(error => {
-				runningSubAgentTracker.storeSpawnedResult({
-					instanceId: spawnInstanceId,
-					agentId: spawnAgentId,
-					agentName: spawnAgentName,
-					prompt:
-						spawnPrompt.length > 200
-							? spawnPrompt.substring(0, 200) + '...'
-							: spawnPrompt,
-					success: false,
-					result: '',
-					error: error instanceof Error ? error.message : 'Unknown error',
-					completedAt: new Date(),
-					spawnedBy: spawnerInfo,
+
+				const parentContext = context.active();
+				executeSubAgentFn(
+					spawnAgentId,
+					spawnPrompt,
+					ctx.onMessage,
+					ctx.abortSignal,
+					ctx.requestToolConfirmation,
+					ctx.isToolAutoApproved,
+					ctx.yoloMode,
+					ctx.addToAlwaysApproved,
+					ctx.requestUserQuestion,
+					spawnInstanceId,
+					ctx.spawnDepth + 1,
+					parentContext,
+				)
+					.then(result => {
+						runningSubAgentTracker.storeSpawnedResult({
+							instanceId: spawnInstanceId,
+							agentId: spawnAgentId,
+							agentName: spawnAgentName,
+							prompt:
+								spawnPrompt.length > 200
+									? spawnPrompt.substring(0, 200) + '...'
+									: spawnPrompt,
+							success: result.success,
+							result: result.result,
+							error: result.error,
+							completedAt: new Date(),
+							spawnedBy: spawnerInfo,
+						});
+					})
+					.catch(error => {
+						runningSubAgentTracker.storeSpawnedResult({
+							instanceId: spawnInstanceId,
+							agentId: spawnAgentId,
+							agentName: spawnAgentName,
+							prompt:
+								spawnPrompt.length > 200
+									? spawnPrompt.substring(0, 200) + '...'
+									: spawnPrompt,
+							success: false,
+							result: '',
+							error: error instanceof Error ? error.message : 'Unknown error',
+							completedAt: new Date(),
+							spawnedBy: spawnerInfo,
+						});
+					})
+					.finally(() => {
+						runningSubAgentTracker.unregister(spawnInstanceId);
+					});
+
+				emitSubAgentMessage(ctx, {
+					type: 'agent_spawned',
+					spawnedAgentId: spawnAgentId,
+					spawnedAgentName: spawnAgentName,
+					spawnedInstanceId: spawnInstanceId,
+					spawnedPrompt: spawnPrompt,
 				});
-			})
-			.finally(() => {
-				runningSubAgentTracker.unregister(spawnInstanceId);
-			});
 
-		emitSubAgentMessage(ctx, {
-			type: 'agent_spawned',
-			spawnedAgentId: spawnAgentId,
-			spawnedAgentName: spawnAgentName,
-			spawnedInstanceId: spawnInstanceId,
-			spawnedPrompt: spawnPrompt,
-		});
+				const resultContent = JSON.stringify({
+					success: true,
+					result: `Agent "${spawnAgentName}" (${spawnAgentId}) has been spawned and is now running in the background with instance ID "${spawnInstanceId}". Its results will be automatically reported to the main workflow when it completes.`,
+				});
+				ctx.messages.push({
+					role: 'tool' as const,
+					tool_call_id: spawnTool.id,
+					content: resultContent,
+				});
 
-		ctx.messages.push({
-			role: 'tool' as const,
-			tool_call_id: spawnTool.id,
-			content: JSON.stringify({
-				success: true,
-				result: `Agent "${spawnAgentName}" (${spawnAgentId}) has been spawned and is now running in the background with instance ID "${spawnInstanceId}". Its results will be automatically reported to the main workflow when it completes.`,
-			}),
-		});
+				return {result: undefined, outputContent: resultContent};
+			},
+		);
 	}
 
 	const remaining = toolCalls.filter(
@@ -343,121 +453,140 @@ export async function interceptAskUser(
 	const askUserTool = toolCalls.find((tc: any) =>
 		tc.function.name.startsWith('askuser-'),
 	);
+	const requestUserQuestion = ctx.requestUserQuestion;
 
-	if (!askUserTool || !ctx.requestUserQuestion) {
+	if (!askUserTool || !requestUserQuestion) {
 		return {remainingToolCalls: toolCalls};
 	}
 
-	let question = 'Please select an option:';
-	let options: string[] = ['Yes', 'No'];
-	let multiSelect = false;
-	let parsedArgs: Record<string, any> = {};
+	await withInterceptedToolSpan(
+		askUserTool,
+		askUserTool.function.arguments,
+		async () => {
+			let question = 'Please select an option:';
+			let options: string[] = ['Yes', 'No'];
+			let multiSelect = false;
+			let parsedArgs: Record<string, any> = {};
 
-	try {
-		parsedArgs = JSON.parse(askUserTool.function.arguments);
-		if (parsedArgs['question']) question = parsedArgs['question'];
-		if (parsedArgs['options'] && Array.isArray(parsedArgs['options'])) {
-			options = parsedArgs['options'];
-		}
-		if (parsedArgs['multiSelect'] === true) {
-			multiSelect = true;
-		}
-	} catch (error) {
-		console.error('Failed to parse askuser tool arguments:', error);
-	}
+			try {
+				parsedArgs = JSON.parse(askUserTool.function.arguments);
+				if (parsedArgs['question']) question = parsedArgs['question'];
+				if (parsedArgs['options'] && Array.isArray(parsedArgs['options'])) {
+					options = parsedArgs['options'];
+				}
+				if (parsedArgs['multiSelect'] === true) {
+					multiSelect = true;
+				}
+			} catch (error) {
+				console.error('Failed to parse askuser tool arguments:', error);
+			}
 
-	// Execute beforeToolCall hook
-	try {
-		const hookResult = await unifiedHooksExecutor.executeHooks(
-			'beforeToolCall',
-			{toolName: askUserTool.function.name, args: parsedArgs},
-		);
-		const interpreted = interpretHookResult('beforeToolCall', hookResult);
-		if (interpreted.action === 'block') {
-			const content = interpreted.replacedContent || '';
-			ctx.messages.push({
+			// Execute beforeToolCall hook inside the askuser tool span.
+			try {
+				const hookResult = await unifiedHooksExecutor.executeHooks(
+					'beforeToolCall',
+					{toolName: askUserTool.function.name, args: parsedArgs},
+				);
+				const interpreted = interpretHookResult('beforeToolCall', hookResult);
+				if (interpreted.action === 'block') {
+					const content = interpreted.replacedContent || '';
+					ctx.messages.push({
+						role: 'tool' as const,
+						tool_call_id: askUserTool.id,
+						content,
+						...(interpreted.hookFailed
+							? {
+									hookFailed: true,
+									hookErrorDetails: interpreted.errorDetails,
+							  }
+							: {}),
+					} as ChatMessage);
+					emitSubAgentMessage(ctx, {
+						type: 'tool_result',
+						tool_call_id: askUserTool.id,
+						tool_name: askUserTool.function.name,
+						content,
+						...(interpreted.hookFailed
+							? {
+									hookFailed: true,
+									hookErrorDetails: interpreted.errorDetails,
+							  }
+							: {}),
+					});
+					return {result: undefined, outputContent: content};
+				}
+			} catch (hookError) {
+				console.warn(
+					'Failed to execute beforeToolCall hook for askuser in sub-agent:',
+					hookError,
+				);
+			}
+
+			// Notify server that user interaction is needed.
+			if (connectionManager.isConnected()) {
+				await connectionManager.notifyUserInteractionNeeded(
+					question,
+					options,
+					askUserTool.id,
+					multiSelect,
+				);
+			}
+
+			const userAnswer = await requestUserQuestion(
+				question,
+				options,
+				multiSelect,
+			);
+
+			const answerText = userAnswer.customInput
+				? `${
+						Array.isArray(userAnswer.selected)
+							? userAnswer.selected.join(', ')
+							: userAnswer.selected
+				  }: ${userAnswer.customInput}`
+				: Array.isArray(userAnswer.selected)
+				? userAnswer.selected.join(', ')
+				: userAnswer.selected;
+
+			const resultContent = JSON.stringify({
+				answer: answerText,
+				selected: userAnswer.selected,
+				customInput: userAnswer.customInput,
+			});
+
+			const toolResult = {
 				role: 'tool' as const,
 				tool_call_id: askUserTool.id,
-				content,
-				...(interpreted.hookFailed ? {hookFailed: true, hookErrorDetails: interpreted.errorDetails} : {}),
-			} as ChatMessage);
+				content: resultContent,
+			};
+
+			ctx.messages.push(toolResult);
+
 			emitSubAgentMessage(ctx, {
 				type: 'tool_result',
 				tool_call_id: askUserTool.id,
 				tool_name: askUserTool.function.name,
-				content,
-				...(interpreted.hookFailed ? {hookFailed: true, hookErrorDetails: interpreted.errorDetails} : {}),
+				content: resultContent,
 			});
-			const remainingTools = toolCalls.filter(
-				(tc: any) => tc.id !== askUserTool.id,
-			);
-			return {remainingToolCalls: remainingTools};
-		}
-	} catch (hookError) {
-		console.warn(
-			'Failed to execute beforeToolCall hook for askuser in sub-agent:',
-			hookError,
-		);
-	}
 
-	// Notify server that user interaction is needed
-	if (connectionManager.isConnected()) {
-		await connectionManager.notifyUserInteractionNeeded(
-			question,
-			options,
-			askUserTool.id,
-			multiSelect,
-		);
-	}
+			// Execute afterToolCall hook inside the askuser tool span.
+			try {
+				await unifiedHooksExecutor.executeHooks('afterToolCall', {
+					toolName: askUserTool.function.name,
+					args: parsedArgs,
+					result: toolResult,
+					error: null,
+				});
+			} catch (hookError) {
+				console.warn(
+					'Failed to execute afterToolCall hook for askuser in sub-agent:',
+					hookError,
+				);
+			}
 
-	const userAnswer = await ctx.requestUserQuestion(
-		question,
-		options,
-		multiSelect,
+			return {result: undefined, outputContent: resultContent};
+		},
 	);
-
-	const answerText = userAnswer.customInput
-		? `${
-				Array.isArray(userAnswer.selected)
-					? userAnswer.selected.join(', ')
-					: userAnswer.selected
-		  }: ${userAnswer.customInput}`
-		: Array.isArray(userAnswer.selected)
-		? userAnswer.selected.join(', ')
-		: userAnswer.selected;
-
-	const resultContent = JSON.stringify({
-		answer: answerText,
-		selected: userAnswer.selected,
-		customInput: userAnswer.customInput,
-	});
-
-	const toolResult = {
-		role: 'tool' as const,
-		tool_call_id: askUserTool.id,
-		content: resultContent,
-	};
-
-	ctx.messages.push(toolResult);
-
-	emitSubAgentMessage(ctx, {
-		type: 'tool_result',
-		tool_call_id: askUserTool.id,
-		tool_name: askUserTool.function.name,
-		content: resultContent,
-	});
-
-	// Execute afterToolCall hook
-	try {
-		await unifiedHooksExecutor.executeHooks('afterToolCall', {
-			toolName: askUserTool.function.name,
-			args: parsedArgs,
-			result: toolResult,
-			error: null,
-		});
-	} catch (hookError) {
-		console.warn('Failed to execute afterToolCall hook for askuser in sub-agent:', hookError);
-	}
 
 	const remaining = toolCalls.filter((tc: any) => tc.id !== askUserTool.id);
 	return {remainingToolCalls: remaining};

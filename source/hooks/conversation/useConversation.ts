@@ -2,6 +2,8 @@ import type {ChatMessage} from '../../api/chat.js';
 import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
+import {recordTurnContent, withTurnSpan} from '../../utils/telemetry/otel.js';
 import {extractThinkingContent} from './utils/thinkingExtractor.js';
 import {EncoderManager} from './core/encoderManager.js';
 import {
@@ -26,6 +28,33 @@ export type {
  * Returns the usage data collected during the conversation.
  */
 export async function handleConversationWithTools(
+	options: ConversationHandlerOptions,
+): Promise<{usage: ConversationUsage | null}> {
+	const config = getSnowConfig();
+	const model = options.useBasicModel
+		? config.basicModel || config.advancedModel || 'gpt-5'
+		: config.advancedModel || 'gpt-5';
+	const currentSession = sessionManager.getCurrentSession();
+	const turnId = currentSession
+		? `${currentSession.id}:${currentSession.messageCount + 1}`
+		: undefined;
+
+	return withTurnSpan(
+		{
+			sessionId: currentSession?.id,
+			conversationId: currentSession?.id,
+			turnId,
+			model,
+			requestMethod: config.requestMethod,
+			planMode: options.planMode,
+			vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+			teamMode: options.teamMode,
+		},
+		() => runConversationWithTools(options),
+	);
+}
+
+async function runConversationWithTools(
 	options: ConversationHandlerOptions,
 ): Promise<{usage: ConversationUsage | null}> {
 	const {
@@ -69,6 +98,12 @@ export async function handleConversationWithTools(
 		imageContents,
 		saveMessage,
 		abortSignal: controller.signal,
+	});
+	recordTurnContent('request', userContent, {
+		'snow.content.source': 'user',
+		...(imageContents?.length
+			? {'snow.content.image_count': imageContents.length}
+			: {}),
 	});
 
 	const encoderManager = new EncoderManager();
@@ -161,10 +196,15 @@ export async function handleConversationWithTools(
 			}
 
 			if (streamResult.streamedContent.trim()) {
+				const assistantContent = streamResult.streamedContent.trim();
+				recordTurnContent('response', assistantContent, {
+					'snow.content.source': 'assistant',
+				});
+
 				if (!streamResult.hasStreamedLines) {
 					const finalAssistantMessage: Message = {
 						role: 'assistant',
-						content: streamResult.streamedContent.trim(),
+						content: assistantContent,
 						streaming: false,
 						discontinued: controller.signal.aborted,
 						thinking: extractThinkingContent(
@@ -178,7 +218,7 @@ export async function handleConversationWithTools(
 
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
-					content: streamResult.streamedContent.trim(),
+					content: assistantContent,
 					reasoning: streamResult.receivedReasoning,
 					thinking: streamResult.receivedThinking,
 					reasoning_content: streamResult.receivedReasoningContent,

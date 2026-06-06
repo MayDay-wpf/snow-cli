@@ -5,6 +5,7 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {
+	DEFAULT_TELEMETRY_SERVICE_NAME,
 	getTelemetryConfig,
 	setTelemetryConfig,
 	type TelemetryConfig,
@@ -16,16 +17,20 @@ interface Props {
 
 type FieldKey =
 	| 'enabled'
+	| 'serviceName'
 	| 'tracesExporter'
 	| 'metricsExporter'
 	| 'logsExporter'
 	| 'otlpProtocol'
 	| 'otlpEndpoint'
 	| 'otlpHeaders'
-	| 'injectSessionIdHeader';
+	| 'injectSessionIdHeader'
+	| 'captureContent'
+	| 'contentMaxLength';
 
 const FIELD_ORDER: FieldKey[] = [
 	'enabled',
+	'serviceName',
 	'tracesExporter',
 	'metricsExporter',
 	'logsExporter',
@@ -33,6 +38,8 @@ const FIELD_ORDER: FieldKey[] = [
 	'otlpEndpoint',
 	'otlpHeaders',
 	'injectSessionIdHeader',
+	'captureContent',
+	'contentMaxLength',
 ];
 
 const EXPORTER_OPTIONS = ['otlp', 'console', 'none'] as const;
@@ -60,6 +67,7 @@ function cycleOption<T extends readonly string[]>(
 function normalizeConfig(config: TelemetryConfig): Required<TelemetryConfig> {
 	return {
 		enabled: config.enabled ?? false,
+		serviceName: config.serviceName?.trim() || DEFAULT_TELEMETRY_SERVICE_NAME,
 		tracesExporter: config.tracesExporter ?? 'otlp',
 		metricsExporter: config.metricsExporter ?? 'otlp',
 		logsExporter: config.logsExporter ?? 'none',
@@ -67,6 +75,8 @@ function normalizeConfig(config: TelemetryConfig): Required<TelemetryConfig> {
 		otlpEndpoint: config.otlpEndpoint ?? 'http://localhost:4317',
 		otlpHeaders: config.otlpHeaders ?? '',
 		injectSessionIdHeader: config.injectSessionIdHeader ?? false,
+		captureContent: config.captureContent ?? true,
+		contentMaxLength: config.contentMaxLength ?? 4096,
 	};
 }
 
@@ -109,7 +119,7 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 	}, [focusIndex, visibleFieldCount]);
 
 	const save = useCallback(() => {
-		setTelemetryConfig(config);
+		setTelemetryConfig(normalizeConfig(config));
 		setMessage(t.telemetryPanel.savedMessage);
 		setTimeout(() => setMessage(''), 2000);
 	}, [config, t.telemetryPanel.savedMessage]);
@@ -173,6 +183,10 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 						};
 					}
 
+					case 'captureContent': {
+						return {...previous, captureContent: !previous.captureContent};
+					}
+
 					default: {
 						return previous;
 					}
@@ -212,7 +226,12 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 
 		if (key.return) {
 			// Enter no longer saves; just cycle to the next field
-			if (focusedField !== 'otlpEndpoint' && focusedField !== 'otlpHeaders') {
+			if (
+				focusedField !== 'serviceName' &&
+				focusedField !== 'otlpEndpoint' &&
+				focusedField !== 'otlpHeaders' &&
+				focusedField !== 'contentMaxLength'
+			) {
 				cycleFocused(1);
 			}
 			return;
@@ -235,6 +254,12 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 				label: t.telemetryPanel.enableTelemetry,
 				value: config.enabled ? 'on' : 'off',
 				hint: t.telemetryPanel.hintEnabled,
+			},
+			{
+				key: 'serviceName' as const,
+				label: t.telemetryPanel.serviceName,
+				value: config.serviceName,
+				hint: t.telemetryPanel.hintServiceName,
 			},
 			{
 				key: 'tracesExporter' as const,
@@ -277,6 +302,18 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 				label: t.telemetryPanel.injectSessionIdHeader,
 				value: config.injectSessionIdHeader ? 'on' : 'off',
 				hint: t.telemetryPanel.hintInjectSessionIdHeader,
+			},
+			{
+				key: 'captureContent' as const,
+				label: t.telemetryPanel.captureContent,
+				value: config.captureContent ? 'on' : 'off',
+				hint: t.telemetryPanel.hintCaptureContent,
+			},
+			{
+				key: 'contentMaxLength' as const,
+				label: t.telemetryPanel.contentMaxLength,
+				value: String(config.contentMaxLength),
+				hint: t.telemetryPanel.hintContentMaxLength,
 			},
 		],
 		[config, t.telemetryPanel],
@@ -323,7 +360,10 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 					const actualIndex = scrollOffset + index;
 					const selected = actualIndex === focusIndex;
 					const editable =
-						field.key === 'otlpEndpoint' || field.key === 'otlpHeaders';
+						field.key === 'serviceName' ||
+						field.key === 'otlpEndpoint' ||
+						field.key === 'otlpHeaders' ||
+						field.key === 'contentMaxLength';
 					const valueColor = selected
 						? theme.colors.menuInfo
 						: theme.colors.text;
@@ -345,7 +385,13 @@ export const TelemetryPanel: React.FC<Props> = ({onClose}) => {
 									<TextInput
 										value={field.value}
 										onChange={value =>
-											setConfig(previous => ({...previous, [field.key]: value}))
+											setConfig(previous => ({
+												...previous,
+												[field.key]:
+													field.key === 'contentMaxLength'
+														? Math.max(0, Number.parseInt(value, 10) || 0)
+														: value,
+											}))
 										}
 										focus
 									/>

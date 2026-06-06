@@ -21,6 +21,7 @@ export interface ProjectSettings {
 
 export interface TelemetryConfig {
 	enabled?: boolean;
+	serviceName?: string;
 	tracesExporter?: 'otlp' | 'console' | 'none';
 	metricsExporter?: 'otlp' | 'prometheus' | 'console' | 'none';
 	logsExporter?: 'otlp' | 'console' | 'none';
@@ -28,8 +29,11 @@ export interface TelemetryConfig {
 	otlpEndpoint?: string;
 	otlpHeaders?: string;
 	injectSessionIdHeader?: boolean;
+	captureContent?: boolean;
+	contentMaxLength?: number;
 }
 
+export const DEFAULT_TELEMETRY_SERVICE_NAME = 'snow-cli';
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
 
 /**
@@ -179,6 +183,8 @@ export function getTelemetryConfig(): TelemetryConfig {
 	const settings = loadSettings();
 	return {
 		enabled: settings.telemetry?.enabled ?? false,
+		serviceName:
+			settings.telemetry?.serviceName?.trim() || DEFAULT_TELEMETRY_SERVICE_NAME,
 		tracesExporter: settings.telemetry?.tracesExporter ?? 'otlp',
 		metricsExporter: settings.telemetry?.metricsExporter ?? 'otlp',
 		logsExporter: settings.telemetry?.logsExporter ?? 'none',
@@ -186,6 +192,8 @@ export function getTelemetryConfig(): TelemetryConfig {
 		otlpEndpoint: settings.telemetry?.otlpEndpoint ?? 'http://localhost:4317',
 		otlpHeaders: settings.telemetry?.otlpHeaders ?? '',
 		injectSessionIdHeader: settings.telemetry?.injectSessionIdHeader ?? false,
+		captureContent: settings.telemetry?.captureContent ?? true,
+		contentMaxLength: settings.telemetry?.contentMaxLength ?? 4096,
 	};
 }
 

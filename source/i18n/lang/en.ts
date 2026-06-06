@@ -633,6 +633,7 @@ export const en: TranslationKeys = {
 		description2:
 			'Settings are saved to Snow JSON project settings and are passed directly to OpenTelemetry exporters. Environment variables are not used.',
 		enableTelemetry: 'Enable telemetry',
+		serviceName: 'Service name',
 		tracesExporter: 'Traces exporter',
 		metricsExporter: 'Metrics exporter',
 		logsExporter: 'Logs exporter',
@@ -640,7 +641,11 @@ export const en: TranslationKeys = {
 		otlpEndpoint: 'OTLP base endpoint',
 		otlpHeaders: 'OTLP headers',
 		injectSessionIdHeader: 'Inject Session-Id header',
+		captureContent: 'Capture prompt/tool content',
+		contentMaxLength: 'Content max length',
 		hintEnabled: 'Stored in Snow JSON project settings',
+		hintServiceName:
+			'OpenTelemetry resource service.name. Empty uses the default snow-cli. Restart Snow after changing.',
 		hintTracesExporter: 'Options: otlp, console, none',
 		hintMetricsExporter: 'Options: otlp, prometheus, console, none',
 		hintLogsExporter: 'Options: otlp, console, none',
@@ -650,6 +655,10 @@ export const en: TranslationKeys = {
 		hintOtlpHeaders: 'Example: Authorization=Bearer your-token',
 		hintInjectSessionIdHeader:
 			'When enabled, injects Session-Id from the current trace tag snow.session_id if Session-Id is not configured manually.',
+		hintCaptureContent:
+			'On by default. Disable if traces must not include prompts, completions, tool args, or tool results.',
+		hintContentMaxLength:
+			'Max characters per captured content event when content capture is enabled.',
 		empty: '(empty)',
 		savedMessage:
 			'OpenTelemetry telemetry settings saved. Restart Snow to reinitialize exporters.',

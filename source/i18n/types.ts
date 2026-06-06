@@ -579,12 +579,12 @@ export type TranslationKeys = {
 		useCommandPrefix: string;
 		useCommandSuffix: string;
 	};
-	// Telemetry Panel
 	telemetryPanel: {
 		title: string;
 		description1: string;
 		description2: string;
 		enableTelemetry: string;
+		serviceName: string;
 		tracesExporter: string;
 		metricsExporter: string;
 		logsExporter: string;
@@ -592,7 +592,10 @@ export type TranslationKeys = {
 		otlpEndpoint: string;
 		otlpHeaders: string;
 		injectSessionIdHeader: string;
+		captureContent: string;
+		contentMaxLength: string;
 		hintEnabled: string;
+		hintServiceName: string;
 		hintTracesExporter: string;
 		hintMetricsExporter: string;
 		hintLogsExporter: string;
@@ -600,6 +603,8 @@ export type TranslationKeys = {
 		hintOtlpEndpoint: string;
 		hintOtlpHeaders: string;
 		hintInjectSessionIdHeader: string;
+		hintCaptureContent: string;
+		hintContentMaxLength: string;
 		empty: string;
 		savedMessage: string;
 		navigationHint: string;
