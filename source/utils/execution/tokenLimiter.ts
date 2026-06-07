@@ -255,6 +255,10 @@ function isFilesystemEditToolName(toolName: string): boolean {
 	);
 }
 
+function isTokenLimitBypassToolName(toolName: string): boolean {
+	return toolName === 'skill-execute';
+}
+
 /**
  * 包装工具结果，在返回前进行 token 限制检查
  * 如果超限，会截断内容并附加提示信息
@@ -268,6 +272,10 @@ export async function wrapToolResultWithTokenLimit(
 	toolName: string,
 	maxTokens?: number,
 ): Promise<any> {
+	if (isTokenLimitBypassToolName(toolName)) {
+		return result;
+	}
+
 	const limit = maxTokens ?? getToolResultTokenLimit();
 	const validation = await validateTokenLimit(result, limit);
 
@@ -276,14 +284,15 @@ export async function wrapToolResultWithTokenLimit(
 	}
 
 	const strippedForModel =
-		isFilesystemEditToolName(toolName) &&
-		result &&
-		typeof result === 'object'
+		isFilesystemEditToolName(toolName) && result && typeof result === 'object'
 			? stripFilesystemDiffPayload(result)
 			: null;
 
 	if (strippedForModel) {
-		const strippedValidation = await validateTokenLimit(strippedForModel, limit);
+		const strippedValidation = await validateTokenLimit(
+			strippedForModel,
+			limit,
+		);
 		if (strippedValidation.isValid) {
 			return strippedForModel;
 		}
