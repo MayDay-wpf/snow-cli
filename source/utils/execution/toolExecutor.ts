@@ -1,4 +1,5 @@
 import {executeMCPTool} from './mcpToolsManager.js';
+import {maskToolResultContentIfNeeded} from '../../api/privacyMask.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import {teamService} from '../../mcp/team.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
@@ -644,6 +645,13 @@ export async function executeToolCall(
 				}
 			} catch (error) {
 				console.warn('Failed to execute afterToolCall hook:', error);
+			}
+
+			if (result && !executionError && !result.hookFailed) {
+				result.content = await maskToolResultContentIfNeeded(
+					toolCall.function.name,
+					result.content,
+				);
 			}
 
 			const telemetryStatus =

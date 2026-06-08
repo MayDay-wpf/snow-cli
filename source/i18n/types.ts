@@ -28,6 +28,8 @@ export type TranslationKeys = {
 		languageSettingsInfo: string;
 		themeSettings: string;
 		themeSettingsInfo: string;
+		privacySettings: string;
+		privacySettingsInfo: string;
 		hooksSettings: string;
 		hooksSettingsInfo: string;
 		updateNoticeTitle: string;
@@ -516,6 +518,37 @@ export type TranslationKeys = {
 		customInfo: string;
 		editCustom: string;
 		editCustomInfo: string;
+	};
+	privacySettings: {
+		title: string;
+		apiConfig: string;
+		apiConfigInfo: string;
+		toolResultsConfig: string;
+		toolResultsConfigInfo: string;
+		enablePrivacy: string;
+		enablePrivacyInfo: string;
+		enabled: string;
+		disabled: string;
+		configLocation: string;
+		projectLocation: string;
+		projectLocationInfo: string;
+		globalLocation: string;
+		globalLocationInfo: string;
+		scopeSelectInfo: string;
+		urlLabel: string;
+		urlInfo: string;
+		apiKeyLabel: string;
+		apiKeyInfo: string;
+		modelLabel: string;
+		modelInfo: string;
+		notSet: string;
+		configured: string;
+		optional: string;
+		save: string;
+		saveInfo: string;
+		savedInfo: string;
+		back: string;
+		backInfo: string;
 	};
 	customTheme: {
 		title: string;

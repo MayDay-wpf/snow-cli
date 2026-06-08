@@ -143,6 +143,19 @@ export interface UnifiedSettings {
 		enabled: boolean;
 		isPreset: boolean;
 	}>;
+
+	// === 隐私设置 ===
+	privacy?: {
+		enabled?: boolean;
+		api?: {
+			url?: string;
+			apiKey?: string;
+			model?: string;
+		};
+		toolResults?: {
+			tools?: string[];
+		};
+	};
 }
 
 export type SettingsScope = 'project' | 'global';
