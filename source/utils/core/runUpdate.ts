@@ -1,15 +1,100 @@
 import {spawnSync} from 'child_process';
 
+const OFFICIAL_NPM_REGISTRY = 'https://registry.npmjs.org/';
+const MANUAL_UPDATE_COMMANDS = [
+	'npm uninstall -g snow-ai',
+	'npm cache clean --force',
+	'npm install -g snow-ai@latest',
+];
+
+type NpmStep = {
+	label: string;
+	args: string[];
+};
+
+function normalizeRegistry(registry: string): string {
+	return registry.trim().replace(/\/+$/, '').toLowerCase();
+}
+
+function printManualUpdateHint(): void {
+	console.log(
+		`\nYou can also update manually:\n  ${MANUAL_UPDATE_COMMANDS.join('\n  ')}`,
+	);
+}
+
+function getNpmRegistry(): string | null {
+	const result = spawnSync('npm', ['config', 'get', 'registry'], {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
+
+	if (
+		result.error ||
+		(typeof result.status === 'number' && result.status !== 0)
+	) {
+		console.warn(
+			'Unable to check npm registry before updating. Continuing anyway.',
+		);
+		return null;
+	}
+
+	return result.stdout.trim();
+}
+
+function warnIfUsingMirrorRegistry(): void {
+	const registry = getNpmRegistry();
+	if (!registry) {
+		return;
+	}
+
+	if (
+		normalizeRegistry(registry) !== normalizeRegistry(OFFICIAL_NPM_REGISTRY)
+	) {
+		console.warn(
+			`npm registry is currently set to ${registry}. Mirror registries may lag behind the official npm registry, so the latest snow-ai version might not be available immediately. The update will continue.\n`,
+		);
+	}
+}
+
+function runNpmStep(step: NpmStep): number {
+	console.log(`\n${step.label}...`);
+	const result = spawnSync('npm', step.args, {
+		stdio: 'inherit',
+	});
+
+	if (result.error) {
+		console.error(
+			`\nUpdate failed while running: npm ${step.args.join(' ')}`,
+			result.error instanceof Error
+				? result.error.message
+				: String(result.error),
+		);
+		return 1;
+	}
+
+	if (typeof result.status === 'number' && result.status !== 0) {
+		console.error(
+			`\nUpdate failed while running: npm ${step.args.join(
+				' ',
+			)} exited with code ${result.status}`,
+		);
+		return result.status;
+	}
+
+	return 0;
+}
+
 /**
  * Trigger an in-place global update of snow-ai.
  *
  * Steps:
  * 1. Unmount Ink so the React tree releases stdin/raw mode and the terminal
  *    is back to a normal scrollback state.
- * 2. Print a short progress hint.
- * 3. Run `npm i -g snow-ai` synchronously with stdio inherited so the user
- *    sees real-time npm output.
- * 4. Exit the CLI with the npm exit code (0 on success, otherwise non-zero).
+ * 2. Check whether npm uses a mirror registry and warn about possible delay.
+ * 3. Uninstall the current global snow-ai package.
+ * 4. Clean npm cache.
+ * 5. Install snow-ai@latest globally with the same npm executable.
+ * 6. Exit the CLI with the npm exit code (0 on success, otherwise non-zero).
  *
  * The function never returns: the process is terminated via process.exit().
  */
@@ -35,28 +120,34 @@ export function runUpdateAndExit(): never {
 	}
 
 	console.log('\nUpdating snow-ai to the latest version...\n');
+	warnIfUsingMirrorRegistry();
+
+	const updateSteps: NpmStep[] = [
+		{
+			label: 'Uninstalling current snow-ai',
+			args: ['uninstall', '-g', 'snow-ai'],
+		},
+		{
+			label: 'Cleaning npm cache',
+			args: ['cache', 'clean', '--force'],
+		},
+		{
+			label: 'Installing latest snow-ai',
+			args: ['install', '-g', 'snow-ai@latest'],
+		},
+	];
 
 	let exitCode = 0;
 	try {
-		const result = spawnSync('npm i -g snow-ai', {
-			stdio: 'inherit',
-			shell: true,
-		});
+		for (const step of updateSteps) {
+			exitCode = runNpmStep(step);
+			if (exitCode !== 0) {
+				printManualUpdateHint();
+				break;
+			}
+		}
 
-		if (result.error) {
-			console.error(
-				'\nUpdate failed:',
-				result.error instanceof Error
-					? result.error.message
-					: String(result.error),
-			);
-			console.log('\nYou can also update manually:\n  npm i -g snow-ai');
-			exitCode = 1;
-		} else if (typeof result.status === 'number' && result.status !== 0) {
-			console.error(`\nUpdate failed: npm exited with code ${result.status}`);
-			console.log('\nYou can also update manually:\n  npm i -g snow-ai');
-			exitCode = result.status;
-		} else {
+		if (exitCode === 0) {
 			console.log('\nUpdate completed successfully.');
 		}
 	} catch (error) {
@@ -64,7 +155,7 @@ export function runUpdateAndExit(): never {
 			'\nUpdate failed:',
 			error instanceof Error ? error.message : String(error),
 		);
-		console.log('\nYou can also update manually:\n  npm i -g snow-ai');
+		printManualUpdateHint();
 		exitCode = 1;
 	}
 

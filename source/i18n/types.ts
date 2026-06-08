@@ -46,6 +46,40 @@ export type TranslationKeys = {
 		agentWaitingForInputTitle: string;
 		unknownError: string;
 	};
+	updateCheck: {
+		checking: string;
+		failed: string;
+		error: string;
+		stderr: string;
+		exitCode: string;
+		notFoundInPath: string;
+		allFoundInPath: string;
+		npmPath: string;
+		npmPathLookup: string;
+		warningMultipleNpm: string;
+		npm: string;
+		cannotUpdateNpmUnavailable: string;
+		npmGlobalPrefix: string;
+		npmGlobalRoot: string;
+		snowPath: string;
+		snowPathLookup: string;
+		warningMultipleSnow: string;
+		warningSnowOutsidePrefix: string;
+		globalSnowAiPackage: string;
+		globalSnowAiPackageLabel: string;
+		npmRegistry: string;
+		warningNonOfficialRegistry: string;
+		officialLatestVersion: string;
+		latestOfficialRegistry: string;
+		configuredLatestVersion: string;
+		latestConfiguredRegistry: string;
+		warningRegistryLatestDiffers: string;
+		currentSnowAi: string;
+		updateCheckFailed: string;
+		alreadyUpToDate: string;
+		updatePossibleWithWarnings: string;
+		environmentSuitable: string;
+	};
 	// Menu
 	menu: {
 		navigate: string;

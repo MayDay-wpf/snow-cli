@@ -50,6 +50,46 @@ export const zhTW: TranslationKeys = {
 		agentWaitingForInputTitle: 'Snow 智能體正在等待輸入',
 		unknownError: '未知錯誤',
 	},
+	updateCheck: {
+		checking: '正在檢查 snow-ai 是否可以安全更新...',
+		failed: '- {label}: 失敗',
+		error: '  錯誤: {error}',
+		stderr: '  stderr: {stderr}',
+		exitCode: '  退出碼: {code}',
+		notFoundInPath: '- {label}: 未在 PATH 中找到',
+		allFoundInPath: '  PATH 中找到的所有 {label}:',
+		npmPath: 'npm 路徑',
+		npmPathLookup: 'npm 路徑查找',
+		warningMultipleNpm:
+			'  警告: PATH 中發現多個 npm 可執行檔。更新時可能會使用與你的 shell 目前使用的 npm 不同的 npm 來安裝 snow-ai。',
+		npm: 'npm',
+		cannotUpdateNpmUnavailable: '無法更新，因為 npm 不可用。',
+		npmGlobalPrefix: 'npm 全域 prefix',
+		npmGlobalRoot: 'npm 全域 root',
+		snowPath: 'snow 路徑',
+		snowPathLookup: 'snow 路徑查找',
+		warningMultipleSnow:
+			'  警告: PATH 中發現多個 snow 可執行檔。更新後，你的 shell 可能仍會優先執行舊的 snow。',
+		warningSnowOutsidePrefix:
+			'  警告: 至少有一個 snow 可執行檔不在目前 npm 全域 prefix 下。更新可能不會影響你的 shell 實際優先執行的 snow 指令。',
+		globalSnowAiPackage: '全域 snow-ai 套件',
+		globalSnowAiPackageLabel: '- 全域 snow-ai 套件:',
+		npmRegistry: 'npm registry',
+		warningNonOfficialRegistry:
+			'  警告: 目前不是官方 npm registry。鏡像 registry 可能落後於官方最新版本。',
+		officialLatestVersion: '官方 registry 最新版本',
+		latestOfficialRegistry: '- 官方 registry 最新版本: {version}',
+		configuredLatestVersion: '目前配置 registry 最新版本',
+		latestConfiguredRegistry: '- 目前配置 registry 最新版本: {version}',
+		warningRegistryLatestDiffers:
+			'  警告: 目前配置 registry 的最新版本與官方 registry 不一致。現在更新可能會安裝到鏡像延遲版本。',
+		currentSnowAi: '- 目前 snow-ai: {version}',
+		updateCheckFailed: '更新檢查失敗。請先修復上面的阻塞問題再更新。',
+		alreadyUpToDate: 'snow-ai 已是最新版本。',
+		updatePossibleWithWarnings:
+			'可以更新，但請先確認上面的警告，再執行 snow --update。',
+		environmentSuitable: '目前環境適合更新。執行 snow --update 即可更新。',
+	},
 	menu: {
 		navigate: '使用 ↑↓ 鍵導航,按 Enter 選擇:',
 	},

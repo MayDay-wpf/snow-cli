@@ -54,6 +54,48 @@ export const en: TranslationKeys = {
 		agentWaitingForInputTitle: 'Snow agent waiting for input',
 		unknownError: 'Unknown error',
 	},
+	updateCheck: {
+		checking: 'Checking whether snow-ai can be updated safely...',
+		failed: '- {label}: failed',
+		error: '  Error: {error}',
+		stderr: '  stderr: {stderr}',
+		exitCode: '  Exit code: {code}',
+		notFoundInPath: '- {label}: not found in PATH',
+		allFoundInPath: '  All {label} found in PATH:',
+		npmPath: 'npm path',
+		npmPathLookup: 'npm path lookup',
+		warningMultipleNpm:
+			'  Warning: multiple npm executables were found in PATH. The update may install snow-ai with a different npm than the one used by your shell.',
+		npm: 'npm',
+		cannotUpdateNpmUnavailable: 'Cannot update because npm is not available.',
+		npmGlobalPrefix: 'npm global prefix',
+		npmGlobalRoot: 'npm global root',
+		snowPath: 'snow path',
+		snowPathLookup: 'snow path lookup',
+		warningMultipleSnow:
+			'  Warning: multiple snow executables were found in PATH. After updating, your shell may still run an older snow executable first.',
+		warningSnowOutsidePrefix:
+			'  Warning: at least one snow executable is outside the current npm global prefix. Updating may not affect the snow command that your shell runs first.',
+		globalSnowAiPackage: 'global snow-ai package',
+		globalSnowAiPackageLabel: '- global snow-ai package:',
+		npmRegistry: 'npm registry',
+		warningNonOfficialRegistry:
+			'  Warning: this is not the official npm registry. Mirror registries may lag behind the official latest version.',
+		officialLatestVersion: 'official registry latest version',
+		latestOfficialRegistry: '- latest on official registry: {version}',
+		configuredLatestVersion: 'configured registry latest version',
+		latestConfiguredRegistry: '- latest on configured registry: {version}',
+		warningRegistryLatestDiffers:
+			'  Warning: configured registry latest version differs from the official registry. Updating now may install a delayed mirror version.',
+		currentSnowAi: '- current snow-ai: {version}',
+		updateCheckFailed:
+			'Update check failed. Please fix the blocking issue above before updating.',
+		alreadyUpToDate: 'snow-ai is already up to date.',
+		updatePossibleWithWarnings:
+			'Update is possible, but review the warnings above before running snow --update.',
+		environmentSuitable:
+			'Environment looks suitable for updating. Run snow --update to update.',
+	},
 	menu: {
 		navigate: 'Use ↑↓ keys to navigate, press Enter to select:',
 	},

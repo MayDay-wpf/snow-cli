@@ -147,6 +147,7 @@ const isQuickCommand = args.some(
 		arg === '-v' ||
 		arg === '--help' ||
 		arg === '-h' ||
+		arg === '--update-check' ||
 		arg === '--acp' ||
 		arg === '--sse' ||
 		arg === '--sse-daemon',
@@ -165,6 +166,7 @@ import {setUpdateNotice} from './utils/ui/updateNotice.js';
 import Spinner from 'ink-spinner';
 import meow from 'meow';
 import {spawn} from 'child_process';
+import {runUpdateCheckAndExit} from './utils/core/updateCheck.js';
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import {fileURLToPath} from 'url';
@@ -269,6 +271,7 @@ Options
 		--help        Show help
 		--version     Show version
 		--update      Update to latest version
+		--update-check Check whether the environment is suitable for updating
 		-c            Skip welcome screen and resume last conversation (optionally specify sessionId)
 		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
 		--task        Create a background AI task (headless mode, saves session)
@@ -293,6 +296,11 @@ Options
 			update: {
 				type: 'boolean',
 				default: false,
+			},
+			updateCheck: {
+				type: 'boolean',
+				default: false,
+				alias: 'update-check',
 			},
 			c: {
 				type: 'boolean',
@@ -374,6 +382,11 @@ Options
 		},
 	},
 );
+
+// Handle update check flag
+if (cli.flags.updateCheck) {
+	runUpdateCheckAndExit(VERSION);
+}
 
 // Handle update flag
 if (cli.flags.update) {
