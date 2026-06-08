@@ -4,6 +4,9 @@ import type {Message} from '../../ui/components/chat/MessageList.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {recordTurnContent, withTurnSpan} from '../../utils/telemetry/otel.js';
+import {getCompanion, isCompanionMuted} from '../../buddy/companion.js';
+import {generateBuddyContextReply} from '../../buddy/buddyAi.js';
+import {companionReaction} from '../../buddy/companionEvents.js';
 import {extractThinkingContent} from './utils/thinkingExtractor.js';
 import {EncoderManager} from './core/encoderManager.js';
 import {
@@ -238,6 +241,11 @@ async function runConversationWithTools(
 				if (hookResult.shouldContinue) {
 					continue;
 				}
+
+				await triggerBuddyContextReaction(
+					conversationMessages,
+					controller.signal,
+				);
 			}
 
 			break;
@@ -266,6 +274,33 @@ async function runConversationWithTools(
 	}
 
 	return {usage: accumulatedUsage};
+}
+
+async function triggerBuddyContextReaction(
+	conversationMessages: ChatMessage[],
+	abortSignal: AbortSignal,
+): Promise<void> {
+	if (abortSignal.aborted || isCompanionMuted()) {
+		return;
+	}
+
+	const companion = getCompanion();
+	if (!companion) {
+		return;
+	}
+
+	try {
+		const reply = await generateBuddyContextReply(
+			companion,
+			conversationMessages,
+			abortSignal,
+		);
+		if (!abortSignal.aborted && reply.trim()) {
+			companionReaction(reply);
+		}
+	} catch (error) {
+		console.error('Failed to generate buddy context reaction:', error);
+	}
 }
 
 function mergeUsage(

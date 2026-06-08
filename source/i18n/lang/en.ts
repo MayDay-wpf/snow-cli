@@ -802,6 +802,8 @@ export const en: TranslationKeys = {
 			autoFormat:
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
 			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
+			buddy:
+				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
@@ -851,6 +853,52 @@ export const en: TranslationKeys = {
 				disabled: 'Simple mode: Disabled',
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
+			},
+			// Buddy command messages
+			buddy: {
+				noCompanion:
+					'No buddy has hatched yet. Use /buddy hatch [name] to hatch one.',
+				statusLine: '{name} the {shiny}{rarity} {species}',
+				shinyPrefix: 'shiny ',
+				personalityLabel: 'Personality',
+				hatLabel: 'Hat',
+				eyeLabel: 'Eye',
+				mutedLabel: 'Muted',
+				mutedYes: 'yes',
+				mutedNo: 'no',
+				hatchedLabel: 'Hatched',
+				statsLabel: 'Stats',
+				alreadyExists:
+					'A buddy already exists.\n\n{status}\n\nUse /buddy reset before hatching a new one.',
+				availableSpecies: 'Available buddy species: {species}',
+				invalidSpecies:
+					'Unknown buddy species "{species}". Available species: {available}',
+				hatchGreeting:
+					'{name} hatched as a{shiny} {rarity} {species}{hat}: {flavor}. Try /buddy say hello.',
+				hatchedSummary: 'Hatched {name} the {rarity} {species}.',
+				hatchKeepChatting:
+					'Use /buddy pet or /buddy say <message> to keep chatting.',
+				noBuddyToPet: 'No buddy to pet yet. Use /buddy hatch [name] first.',
+				petReaction: '{name} seems pleased.',
+				petSuccess: 'You pet {name}.',
+				noBuddyToRename:
+					'No buddy to rename yet. Use /buddy hatch [name] first.',
+				renameUsage: 'Usage: /buddy rename <name>',
+				renameReaction: '{oldName} is now {newName}.',
+				renameSuccess: 'Renamed buddy from {oldName} to {newName}.',
+				noBuddyToTalk:
+					'No buddy to talk to yet. Use /buddy hatch [name] first.',
+				sayUsage: 'Usage: /buddy say <message>',
+				muted:
+					'Buddy muted. UI companion and prompt context are hidden until /buddy unmute.',
+				unmutedReaction: 'I am back.',
+				unmuted: 'Buddy unmuted.',
+				reset: 'Buddy reset. Use /buddy hatch [name] to hatch a new companion.',
+				usage:
+					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|say <message>|mute|unmute|reset]',
+				teaser: 'Psst... try /buddy',
+				noModelConfigured: 'No model configured for buddy reply',
+				emptyReply: '{name} is listening.',
 			},
 			// Ultra TODO command messages
 			ultraTodo: {

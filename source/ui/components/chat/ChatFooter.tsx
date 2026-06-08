@@ -14,6 +14,7 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
+import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
@@ -366,53 +367,60 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 								<BtwPanel prompt={props.btwPrompt} onClose={props.onBtwClose} />
 							</Suspense>
 						) : (
-							<ChatInput
-								onSubmit={props.onSubmit}
-								onCommand={props.onCommand}
-								placeholder={t.chatScreen.inputPlaceholder}
-								disabled={props.disabled}
-								disableKeyboardNavigation={props.showBackgroundPanel}
-								isProcessing={props.isProcessing}
-								chatHistory={props.chatHistory}
-								onHistorySelect={props.handleHistorySelect}
-								yoloMode={props.yoloMode}
-								setYoloMode={props.setYoloMode}
-								planMode={props.planMode}
-								setPlanMode={props.setPlanMode}
-								vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-								setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
-								teamMode={props.teamMode}
-								setTeamMode={props.setTeamMode}
-								contextUsage={props.contextUsage}
-								initialContent={props.initialContent}
-								draftContent={props.draftContent}
-								onDraftChange={props.onDraftChange}
-								onContextPercentageChange={props.onContextPercentageChange}
-								onInitialContentConsumed={props.onInitialContentConsumed}
-								showProfilePicker={props.showProfilePicker}
-								setShowProfilePicker={props.setShowProfilePicker}
-								profileSelectedIndex={props.profileSelectedIndex}
-								setProfileSelectedIndex={props.setProfileSelectedIndex}
-								getFilteredProfiles={props.getFilteredProfiles}
-								handleProfileSelect={props.handleProfileSelect}
-								handleProfileEdit={props.handleProfileEdit}
-								profileSearchQuery={props.profileSearchQuery}
-								setProfileSearchQuery={props.setProfileSearchQuery}
-								onSwitchProfile={props.onSwitchProfile}
-								onCopyInputSuccess={() => {
-									setCopyStatusMessage({
-										text: `✔ ${t.chatScreen.inputCopySuccess}`,
-										timestamp: Date.now(),
-									});
-								}}
-								onCopyInputError={errorMessage => {
-									setCopyStatusMessage({
-										text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
-										isError: true,
-										timestamp: Date.now(),
-									});
-								}}
-							/>
+							<>
+								<Box width="100%" justifyContent="flex-end" marginRight={4}>
+									<CompanionSprite terminalColumns={props.terminalWidth} />
+								</Box>
+								<ChatInput
+									onSubmit={props.onSubmit}
+									onCommand={props.onCommand}
+									placeholder={t.chatScreen.inputPlaceholder}
+									disabled={props.disabled}
+									disableKeyboardNavigation={props.showBackgroundPanel}
+									isProcessing={props.isProcessing}
+									chatHistory={props.chatHistory}
+									onHistorySelect={props.handleHistorySelect}
+									yoloMode={props.yoloMode}
+									setYoloMode={props.setYoloMode}
+									planMode={props.planMode}
+									setPlanMode={props.setPlanMode}
+									vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+									setVulnerabilityHuntingMode={
+										props.setVulnerabilityHuntingMode
+									}
+									teamMode={props.teamMode}
+									setTeamMode={props.setTeamMode}
+									contextUsage={props.contextUsage}
+									initialContent={props.initialContent}
+									draftContent={props.draftContent}
+									onDraftChange={props.onDraftChange}
+									onContextPercentageChange={props.onContextPercentageChange}
+									onInitialContentConsumed={props.onInitialContentConsumed}
+									showProfilePicker={props.showProfilePicker}
+									setShowProfilePicker={props.setShowProfilePicker}
+									profileSelectedIndex={props.profileSelectedIndex}
+									setProfileSelectedIndex={props.setProfileSelectedIndex}
+									getFilteredProfiles={props.getFilteredProfiles}
+									handleProfileSelect={props.handleProfileSelect}
+									handleProfileEdit={props.handleProfileEdit}
+									profileSearchQuery={props.profileSearchQuery}
+									setProfileSearchQuery={props.setProfileSearchQuery}
+									onSwitchProfile={props.onSwitchProfile}
+									onCopyInputSuccess={() => {
+										setCopyStatusMessage({
+											text: `✔ ${t.chatScreen.inputCopySuccess}`,
+											timestamp: Date.now(),
+										});
+									}}
+									onCopyInputError={errorMessage => {
+										setCopyStatusMessage({
+											text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
+											isError: true,
+											timestamp: Date.now(),
+										});
+									}}
+								/>
+							</>
 						)}
 
 						{showTodos && todos.length > 0 && (

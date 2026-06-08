@@ -94,6 +94,18 @@ export interface MCPConfig {
 
 export interface AppConfig {
 	snowcfg: ApiConfig;
+	companion?: {
+		name: string;
+		personality: string;
+		hatchedAt: number;
+		rarity?: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+		species?: string;
+		eye?: string;
+		hat?: string;
+		shiny?: boolean;
+		stats?: Record<string, number>;
+	};
+	companionMuted?: boolean;
 }
 
 /**

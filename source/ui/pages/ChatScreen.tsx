@@ -37,6 +37,7 @@ import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLi
 import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
+import {useBuddyNotification} from '../../buddy/useBuddyNotification.js';
 
 const MIN_TERMINAL_HEIGHT = 10;
 
@@ -58,6 +59,7 @@ export default function ChatScreen({
 	const projectName = getProjectName(workingDirectory);
 	const {theme} = useTheme();
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
+	useBuddyNotification();
 
 	const {
 		messages,

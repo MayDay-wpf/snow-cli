@@ -265,6 +265,7 @@ type Props = {
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 	onCopyInputSuccess?: () => void;
 	onCopyInputError?: (errorMessage: string) => void;
+	reservedColumns?: number;
 	disableKeyboardNavigation?: boolean; // Disable arrow keys and Ctrl+K when background panel is active
 };
 
@@ -302,6 +303,7 @@ export default function ChatInput({
 	onSwitchProfile,
 	onCopyInputSuccess,
 	onCopyInputError,
+	reservedColumns = 0,
 	disableKeyboardNavigation = false,
 }: Props) {
 	// Use i18n hook for translations
@@ -320,7 +322,12 @@ export default function ChatInput({
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
-	const viewportWidth = Math.max(40, terminalWidth - uiOverhead);
+	const effectiveReservedColumns = Math.max(0, reservedColumns);
+	const inputTerminalWidth = Math.max(
+		40,
+		terminalWidth - effectiveReservedColumns,
+	);
+	const viewportWidth = Math.max(40, inputTerminalWidth - uiOverhead);
 	const viewport: Viewport = useMemo(
 		() => ({
 			width: viewportWidth,
@@ -1094,7 +1101,7 @@ export default function ChatInput({
 	};
 
 	return (
-		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
+		<Box flexDirection="column" paddingX={1} width={inputTerminalWidth}>
 			<Suspense fallback={null}>
 				<RollbackMenuPanel
 					isVisible={showHistoryMenu}
@@ -1107,7 +1114,7 @@ export default function ChatInput({
 			</Suspense>
 			{!showHistoryMenu && (
 				<>
-					<Box flexDirection="column" width={terminalWidth - 2}>
+					<Box flexDirection="column" width={inputTerminalWidth - 2}>
 						<Text
 							color={
 								isPureBashMode
@@ -1120,8 +1127,8 @@ export default function ChatInput({
 							}
 						>
 							{buffer.isExpandedView
-								? '═'.repeat(terminalWidth - 2)
-								: '─'.repeat(terminalWidth - 2)}
+								? '═'.repeat(inputTerminalWidth - 2)
+								: '─'.repeat(inputTerminalWidth - 2)}
 						</Text>
 						<Box flexDirection="row">
 							<Text
@@ -1159,8 +1166,8 @@ export default function ChatInput({
 								}
 							>
 								{buffer.isExpandedView
-									? '═'.repeat(terminalWidth - 2)
-									: '─'.repeat(terminalWidth - 2)}
+									? '═'.repeat(inputTerminalWidth - 2)
+									: '─'.repeat(inputTerminalWidth - 2)}
 							</Text>
 						</Box>
 						{buffer.isExpandedView && (

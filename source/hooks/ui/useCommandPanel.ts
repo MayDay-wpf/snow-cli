@@ -39,6 +39,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	reindex: '[-force]',
 	codebase: '[on|off|status]',
 	'auto-format': '[on|off|status]',
+	buddy: '[status|hatch|pet|rename|say|mute|unmute|reset]',
 	simple: '[on|off|status]',
 	'add-dir': '[path]',
 	loop: '[daemon] <interval> <prompt> | list | tasks | cancel <id>',
@@ -60,6 +61,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 export const COMMAND_ARGS_OPTIONS: Record<string, string[]> = {
 	codebase: ['on', 'off', 'status'],
 	'auto-format': ['on', 'off', 'status'],
+	buddy: ['status', 'hatch', 'pet', 'rename', 'say', 'mute', 'unmute', 'reset'],
 	simple: ['on', 'off', 'status'],
 	reindex: ['-force'],
 	role: ['-l', '-d'],
@@ -249,6 +251,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.simple ||
 					'Toggle theme simple mode. Usage: /simple [on|off|status]',
+			},
+			{
+				name: 'buddy',
+				description:
+					t.commandPanel.commands.buddy ||
+					'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
 			},
 			{
 				name: 'tool-search',

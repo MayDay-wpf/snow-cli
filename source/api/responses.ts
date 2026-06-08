@@ -214,13 +214,16 @@ function convertToResponseInput(
 	systemInstructions: string;
 } {
 	const customSystemPrompts = customSystemPromptOverride;
+	const explicitSystemPrompts: string[] = [];
 	const result: any[] = [];
 
 	for (const msg of messages) {
 		if (!msg) continue;
 
-		// 跳过 system 消息（不放入 input，也不放入 instructions）
+		// system 消息应进入 Responses API instructions；否则 includeBuiltinSystemPrompt=false
+		// 时会退回 "You are a helpful assistant."，导致内部专用提示词被覆盖。
 		if (msg.role === 'system') {
+			explicitSystemPrompts.push(msg.content);
 			continue;
 		}
 
@@ -342,10 +345,36 @@ function convertToResponseInput(
 		}
 	}
 
-	// 确定系统提示词：参考 anthropic.ts 的逻辑
+	// 确定系统提示词：显式 system 消息优先，其次自定义提示词，再按需使用内置提示词。
 	let systemInstructions: string;
-	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompts && customSystemPrompts.length > 0) {
+	if (explicitSystemPrompts.length > 0) {
+		systemInstructions = explicitSystemPrompts.join('\n\n');
+		if (customSystemPrompts && customSystemPrompts.length > 0) {
+			systemInstructions = `${customSystemPrompts.join(
+				'\n\n',
+			)}\n\n${systemInstructions}`;
+		}
+		if (includeBuiltinSystemPrompt) {
+			result.unshift({
+				type: 'message',
+				role: 'user',
+				content: [
+					{
+						type: 'input_text',
+						text:
+							'<environment_context>' +
+							getSystemPromptForMode(
+								planMode,
+								vulnerabilityHuntingMode,
+								toolSearchDisabled,
+								teamMode,
+							) +
+							'</environment_context>',
+					},
+				],
+			});
+		}
+	} else if (customSystemPrompts && customSystemPrompts.length > 0) {
 		// 有自定义系统提示词：拼接多条作为 instructions
 		systemInstructions = customSystemPrompts.join('\n\n');
 		if (includeBuiltinSystemPrompt) {
@@ -378,7 +407,7 @@ function convertToResponseInput(
 			teamMode,
 		);
 	} else {
-		// 既没有自定义系统提示词，也不需要添加默认系统提示词
+		// 没有任何系统提示时才使用通用兜底，避免覆盖内部专用 system 消息。
 		systemInstructions = 'You are a helpful assistant.';
 	}
 

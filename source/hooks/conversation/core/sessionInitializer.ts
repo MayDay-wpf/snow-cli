@@ -3,6 +3,7 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {formatTodoContext} from '../../../utils/core/todoPreprocessor.js';
 import {getSystemPromptForMode} from '../../../prompt/systemPrompt.js';
+import {getCompanionSystemPromptAddon} from '../../../buddy/prompt.js';
 
 /**
  * Initialize conversation session and TODO context
@@ -34,10 +35,19 @@ export async function initializeConversationSession(
 	const existingTodoList = await todoService.getTodoList(currentSession.id);
 
 	// Build conversation history with TODO context as pinned user message
+	const baseSystemPrompt = getSystemPromptForMode(
+		planMode,
+		vulnerabilityHuntingMode,
+		toolSearchDisabled,
+		teamMode,
+	);
+	const companionPromptAddon = getCompanionSystemPromptAddon();
 	const conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
+			content: companionPromptAddon
+				? `${baseSystemPrompt}\n\n${companionPromptAddon}`
+				: baseSystemPrompt,
 		},
 	];
 

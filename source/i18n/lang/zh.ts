@@ -753,6 +753,8 @@ export const zh: TranslationKeys = {
 			autoFormat:
 				'文件编辑后自动格式化开关。用法: /auto-format [on|off|status]',
 			simple: '切换主题简易模式。用法: /simple [on|off|status]',
+			buddy:
+				'管理终端宠物伙伴。用法: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
 			toolSearch: '切换工具搜索（渐进式工具加载）。默认启用以节省上下文',
 			hybridCompress:
 				'切换混合压缩模式（AI 摘要 + 智能截断，用于 /compact 和自动压缩）',
@@ -798,6 +800,47 @@ export const zh: TranslationKeys = {
 				disabled: '简易模式: 已禁用',
 				statusEnabled: '简易模式: 已启用',
 				statusDisabled: '简易模式: 已禁用',
+			},
+			// 宠物命令消息
+			buddy: {
+				noCompanion: '还没有宠物伙伴孵化。使用 /buddy hatch [名字] 孵化一个。',
+				statusLine: '{name}，{shiny}{rarity} {species}',
+				shinyPrefix: '闪光',
+				personalityLabel: '性格',
+				hatLabel: '帽子',
+				eyeLabel: '眼睛',
+				mutedLabel: '已静音',
+				mutedYes: '是',
+				mutedNo: '否',
+				hatchedLabel: '孵化时间',
+				statsLabel: '属性',
+				alreadyExists:
+					'已经有一个宠物伙伴了。\n\n{status}\n\n孵化新伙伴前请先使用 /buddy reset。',
+				availableSpecies: '可孵化宠物类型：{species}',
+				invalidSpecies: '未知宠物类型“{species}”。可选类型：{available}',
+				hatchGreeting:
+					'{name} 孵化成了{shiny}{rarity} {species}{hat}：{flavor}。试试 /buddy say hello。',
+				hatchedSummary: '已孵化 {name}，{rarity} {species}。',
+				hatchKeepChatting: '使用 /buddy pet 或 /buddy say <消息> 继续互动。',
+				noBuddyToPet: '还没有可摸摸的宠物。请先使用 /buddy hatch [名字]。',
+				petReaction: '{name} 看起来很开心。',
+				petSuccess: '你摸了摸 {name}。',
+				noBuddyToRename: '还没有可改名的宠物。请先使用 /buddy hatch [名字]。',
+				renameUsage: '用法: /buddy rename <名字>',
+				renameReaction: '{oldName} 现在叫 {newName} 了。',
+				renameSuccess: '已将宠物从 {oldName} 改名为 {newName}。',
+				noBuddyToTalk: '还没有可聊天的宠物。请先使用 /buddy hatch [名字]。',
+				sayUsage: '用法: /buddy say <消息>',
+				muted:
+					'宠物已静音。UI 宠物和提示词上下文将隐藏，直到使用 /buddy unmute。',
+				unmutedReaction: '我回来啦。',
+				unmuted: '宠物已取消静音。',
+				reset: '宠物已重置。使用 /buddy hatch [名字] 孵化新的伙伴。',
+				usage:
+					'用法: /buddy [status|hatch [名字] [--species=类型] [--list-species] [--personality=文本]|pet|rename <名字>|say <消息>|mute|unmute|reset]',
+				teaser: '悄悄说一句……试试 /buddy',
+				noModelConfigured: '没有为宠物回复配置模型',
+				emptyReply: '{name} 正在认真听。',
 			},
 			// Ultra TODO 命令消息
 			ultraTodo: {

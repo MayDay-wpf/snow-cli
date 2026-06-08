@@ -725,6 +725,7 @@ export type TranslationKeys = {
 			vulnerabilityHunting: string;
 			autoFormat: string;
 			simple: string;
+			buddy: string;
 			toolSearch: string;
 			hybridCompress: string;
 			team: string;
@@ -768,6 +769,43 @@ export type TranslationKeys = {
 				disabled: string;
 				statusEnabled: string;
 				statusDisabled: string;
+			};
+			// Buddy command messages
+			buddy: {
+				noCompanion: string;
+				statusLine: string;
+				shinyPrefix: string;
+				personalityLabel: string;
+				hatLabel: string;
+				eyeLabel: string;
+				mutedLabel: string;
+				mutedYes: string;
+				mutedNo: string;
+				hatchedLabel: string;
+				statsLabel: string;
+				alreadyExists: string;
+				availableSpecies: string;
+				invalidSpecies: string;
+				hatchGreeting: string;
+				hatchedSummary: string;
+				hatchKeepChatting: string;
+				noBuddyToPet: string;
+				petReaction: string;
+				petSuccess: string;
+				noBuddyToRename: string;
+				renameUsage: string;
+				renameReaction: string;
+				renameSuccess: string;
+				noBuddyToTalk: string;
+				sayUsage: string;
+				muted: string;
+				unmutedReaction: string;
+				unmuted: string;
+				reset: string;
+				usage: string;
+				teaser: string;
+				noModelConfigured: string;
+				emptyReply: string;
 			};
 			// Ultra TODO command messages
 			ultraTodo: {
