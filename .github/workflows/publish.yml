@@ -56,7 +56,10 @@ jobs:
 
             ### What's New
 
-            - Urgent: Crash and flashback when pasting large images
+            - Add privacy settings, using the `openai/privacy-filter` model to desensitize tool results
+            - Add tool response limit whitelist to prevent skills content from being truncated
+            - Add `snow --update-check` as a pre-update check
+            - Re-adjust the update automation process
             
             ### Installation
             ```bash
