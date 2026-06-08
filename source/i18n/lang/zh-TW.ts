@@ -865,14 +865,13 @@ export const zhTW: TranslationKeys = {
 			btw: {
 				usage: '用法: /btw <你的問題>',
 			},
-			// Loop 命令訊息
 			loop: {
 				usage:
-					'用法: /loop 5m <提示詞> | /loop 8h30m <提示詞> | /loop <提示詞> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'用法: /loop 5m <提示詞> | /loop daemon 5m <提示詞> | /loop 8h30m <提示詞> | /loop <提示詞> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: '正在開啟任務管理員...',
 				relatedLoopTasks: '相關迴圈任務:',
 				noActiveLoops:
-					'目前沒有活躍的迴圈任務。可使用 /loop 5m <提示詞> 或 /loop <提示詞> every 2 hours 建立。',
+					'目前沒有活躍的迴圈任務。可使用 /loop 5m <提示詞> 建立，或使用 /loop daemon 5m <提示詞> 建立守護迴圈。',
 				loopNotFound: '找不到迴圈任務: {id}',
 				cancelled: '已取消迴圈任務 {id}（每 {interval}）',
 				created: '迴圈任務已建立: {id}',
@@ -880,6 +879,9 @@ export const zhTW: TranslationKeys = {
 				promptLabel: '提示詞: {prompt}',
 				nextRun: '下次執行: {time}',
 				sessionScopedNote: '僅限會話作用域: Snow CLI 結束後迴圈任務將停止。',
+				daemonScopedNote:
+					'守護模式: Snow CLI 結束後迴圈仍會繼續執行，只能透過手動取消停止。',
+				logPath: '日誌: {path}',
 				usageHint:
 					'使用 /loop list 檢視任務，或使用 /loop cancel <id> 停止某個任務。',
 			},

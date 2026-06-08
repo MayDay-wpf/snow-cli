@@ -35,6 +35,7 @@ export type PanelState = {
 	showTelemetryPanel: boolean;
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
+	showTaskManagerPanel: boolean;
 	showPixelEditor: boolean;
 	showIdeSelectPanel: boolean;
 	connectionPanelApiUrl?: string;
@@ -56,6 +57,10 @@ export type PanelActions = {
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsListPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
+	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
+	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowRoleList: Dispatch<SetStateAction<boolean>>;
@@ -69,6 +74,9 @@ export type PanelActions = {
 	setShowProfileEditPanel: Dispatch<SetStateAction<boolean>>;
 	setEditingProfileName: Dispatch<SetStateAction<string | null>>;
 	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
+	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
+	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
+	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
 	/**
 	 * 打开 ProfileEditPanel 编辑指定 profile：
 	 * 同时关闭 ProfilePanel（picker），切换为编辑视图。
@@ -78,12 +86,6 @@ export type PanelActions = {
 	 * 关闭 ProfileEditPanel 并回到 ProfilePanel（picker）。
 	 */
 	closeProfileEditAndReturnToPicker: () => void;
-	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
-	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
-	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
-	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
-	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
-	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
 	handleSwitchProfile: (options: {
 		isStreaming: boolean;
 		hasPendingRollback: boolean;
@@ -127,6 +129,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showTelemetryPanel, setShowTelemetryPanel] = useState(false);
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
+	const [showTaskManagerPanel, setShowTaskManagerPanel] = useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
 	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
@@ -170,6 +173,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
+			showTaskManagerPanel ||
 			showPixelEditor ||
 			showIdeSelectPanel ||
 			options.hasPendingRollback ||
@@ -357,6 +361,12 @@ export function usePanelState(): PanelState & PanelActions {
 			setShowTodoListPanel(false);
 			return true;
 		}
+
+		if (showTaskManagerPanel) {
+			setShowTaskManagerPanel(false);
+			return true;
+		}
+
 		if (showPixelEditor) {
 			return false; // Let PixelEditorScreen handle ESC
 		}
@@ -395,6 +405,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
+			showTaskManagerPanel ||
 			showPixelEditor ||
 			showIdeSelectPanel
 		);
@@ -428,6 +439,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showTelemetryPanel,
 		showNewPromptPanel,
 		showTodoListPanel,
+		showTaskManagerPanel,
 		showPixelEditor,
 		showIdeSelectPanel,
 		connectionPanelApiUrl,
@@ -463,6 +475,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowTelemetryPanel,
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
+		setShowTaskManagerPanel,
 		setShowPixelEditor,
 		setShowIdeSelectPanel,
 		setConnectionPanelApiUrl,

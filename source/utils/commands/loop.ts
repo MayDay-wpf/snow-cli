@@ -87,6 +87,8 @@ registerCommand('loop', {
 
 		const schedule = parseLoopSchedule(trimmedArgs);
 		const loop = loopManager.createLoop(schedule);
+		const modeNote =
+			loop.mode === 'daemon' ? m('daemonScopedNote') : m('sessionScopedNote');
 		return {
 			success: true,
 			message: [
@@ -96,9 +98,12 @@ registerCommand('loop', {
 				format(m('nextRun'), {
 					time: new Date(loop.nextRunAt).toLocaleString(),
 				}),
-				m('sessionScopedNote'),
+				modeNote,
+				loop.logPath ? format(m('logPath'), {path: loop.logPath}) : undefined,
 				m('usageHint'),
-			].join('\n'),
+			]
+				.filter((line): line is string => Boolean(line))
+				.join('\n'),
 		};
 	},
 });

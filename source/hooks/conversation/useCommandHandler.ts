@@ -11,9 +11,9 @@ import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
 import {goalManager} from '../../utils/task/goalManager.js';
 import type {GoalRecord} from '../../utils/task/goalManager.js';
-import {navigateTo} from '../integration/useGlobalNavigation.js';
 import type {UsageInfo} from '../../api/chat.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
+import {navigateTo} from '../integration/useGlobalNavigation.js';
 import {
 	showSaveDialog,
 	showOpenDialog,
@@ -652,6 +652,7 @@ type CommandHandlerOptions = {
 			| null,
 	) => void;
 	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1244,7 +1245,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showTaskManager') {
-				navigateTo('tasks');
+				options.setShowTaskManagerPanel(true);
 			} else if (result.success && result.action === 'showTodoListPanel') {
 				options.setShowTodoListPanel(true);
 			} else if (

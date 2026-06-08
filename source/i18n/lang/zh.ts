@@ -864,14 +864,13 @@ export const zh: TranslationKeys = {
 			btw: {
 				usage: '用法: /btw <你的问题>',
 			},
-			// Loop 命令消息
 			loop: {
 				usage:
-					'用法: /loop 5m <提示词> | /loop 8h30m <提示词> | /loop <提示词> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'用法: /loop 5m <提示词> | /loop daemon 5m <提示词> | /loop 8h30m <提示词> | /loop <提示词> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: '正在打开任务管理器...',
 				relatedLoopTasks: '相关循环任务:',
 				noActiveLoops:
-					'暂无活跃的循环任务。可使用 /loop 5m <提示词> 或 /loop <提示词> every 2 hours 创建。',
+					'暂无活跃的循环任务。可使用 /loop 5m <提示词> 创建，或使用 /loop daemon 5m <提示词> 创建守护循环。',
 				loopNotFound: '未找到循环任务: {id}',
 				cancelled: '已取消循环任务 {id}（每 {interval}）',
 				created: '循环任务已创建: {id}',
@@ -879,6 +878,9 @@ export const zh: TranslationKeys = {
 				promptLabel: '提示词: {prompt}',
 				nextRun: '下次运行: {time}',
 				sessionScopedNote: '仅限会话作用域: Snow CLI 退出后循环任务将停止。',
+				daemonScopedNote:
+					'守护模式: Snow CLI 退出后循环仍会继续运行，只能通过手动取消停止。',
+				logPath: '日志: {path}',
 				usageHint:
 					'使用 /loop list 查看任务，或使用 /loop cancel <id> 停止某个任务。',
 			},

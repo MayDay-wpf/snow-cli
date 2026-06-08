@@ -840,6 +840,8 @@ export type TranslationKeys = {
 				promptLabel: string;
 				nextRun: string;
 				sessionScopedNote: string;
+				daemonScopedNote: string;
+				logPath: string;
 				usageHint: string;
 			};
 			// Goal command messages

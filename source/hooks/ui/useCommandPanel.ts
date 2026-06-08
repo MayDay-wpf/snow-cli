@@ -41,7 +41,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	'auto-format': '[on|off|status]',
 	simple: '[on|off|status]',
 	'add-dir': '[path]',
-	loop: '<interval> <prompt> | list | tasks | cancel <id>',
+	loop: '[daemon] <interval> <prompt> | list | tasks | cancel <id>',
 	goal: '<objective> [--budget=N] | pause | resume | clear | status',
 	init: '[prompt]',
 	role: '[-l|--list | -d|--delete]',
@@ -66,7 +66,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, string[]> = {
 	skills: ['-l'],
 	'role-subagent': ['-l', '-d'],
 	'subagent-depth': ['status'],
-	loop: ['list', 'tasks', 'cancel'],
+	loop: ['daemon', 'list', 'tasks', 'cancel'],
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
 };

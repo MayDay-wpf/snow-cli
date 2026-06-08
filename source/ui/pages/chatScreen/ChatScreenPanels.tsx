@@ -33,6 +33,7 @@ const SubAgentDepthPanel = lazy(
 const ProfileEditPanel = lazy(
 	() => import('../../components/panels/ProfileEditPanel.js'),
 );
+const TaskManagerScreen = lazy(() => import('../TaskManagerScreen.js'));
 const ModelsPanel = lazy(() =>
 	import('../../components/panels/ModelsPanel.js').then(m => ({
 		default: m.ModelsPanel,
@@ -70,6 +71,7 @@ type Props = {
 	setMessages: Dispatch<SetStateAction<Message[]>>;
 	t: any;
 	onPromptAccept: (prompt: string) => void;
+	onTaskResume: () => void;
 	handleRollbackConfirm: (
 		mode: RollbackMode | null,
 		selectedFiles?: string[],
@@ -95,6 +97,7 @@ export default function ChatScreenPanels({
 	setMessages,
 	t,
 	onPromptAccept,
+	onTaskResume,
 	handleRollbackConfirm,
 }: Props) {
 	return (
@@ -474,6 +477,28 @@ export default function ChatScreenPanels({
 					<PixelEditorScreen
 						onBack={() => panelState.setShowPixelEditor(false)}
 					/>
+				</Box>
+			)}
+
+			{panelState.showTaskManagerPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<TaskManagerScreen
+							onBack={() => panelState.setShowTaskManagerPanel(false)}
+							onResumeTask={() => {
+								panelState.setShowTaskManagerPanel(false);
+								onTaskResume();
+							}}
+						/>
+					</Suspense>
 				</Box>
 			)}
 

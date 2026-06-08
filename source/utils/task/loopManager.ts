@@ -1,10 +1,23 @@
+import {spawn} from 'child_process';
 import {randomUUID} from 'crypto';
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	unlinkSync,
+	writeFileSync,
+} from 'fs';
+import {homedir} from 'os';
+import {join} from 'path';
 import {taskManager} from './taskManager.js';
 import {executeTaskInBackground} from './taskExecutor.js';
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_ACTIVE_LOOPS = 50;
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'running', 'paused']);
+const LOOP_DAEMON_DIR = join(homedir(), '.snow', 'loop-daemons');
+const LOOP_DAEMON_LOG_DIR = join(homedir(), '.snow', 'loop-logs');
 
 type LoopExecutionTaskStatus =
 	| 'pending'
@@ -13,10 +26,13 @@ type LoopExecutionTaskStatus =
 	| 'failed'
 	| 'completed';
 
+export type LoopMode = 'session' | 'daemon';
+
 export interface LoopSchedule {
 	prompt: string;
 	intervalMs: number;
 	intervalLabel: string;
+	mode: LoopMode;
 }
 
 export interface LoopJobSummary {
@@ -32,10 +48,84 @@ export interface LoopJobSummary {
 	runCount: number;
 	skippedCount: number;
 	lastError?: string;
+	mode: LoopMode;
+	pid?: number;
+	logPath?: string;
 }
 
 interface LoopJob extends LoopJobSummary {
 	timer: NodeJS.Timeout;
+}
+
+interface LoopDaemonState extends LoopJobSummary {
+	cwd: string;
+}
+
+function ensureLoopDaemonDirs(): void {
+	if (!existsSync(LOOP_DAEMON_DIR)) {
+		mkdirSync(LOOP_DAEMON_DIR, {recursive: true});
+	}
+
+	if (!existsSync(LOOP_DAEMON_LOG_DIR)) {
+		mkdirSync(LOOP_DAEMON_LOG_DIR, {recursive: true});
+	}
+}
+
+function getLoopDaemonFilePath(loopId: string): string {
+	ensureLoopDaemonDirs();
+	return join(LOOP_DAEMON_DIR, `${loopId}.json`);
+}
+
+function getLoopDaemonLogPath(loopId: string): string {
+	ensureLoopDaemonDirs();
+	return join(LOOP_DAEMON_LOG_DIR, `${loopId}.log`);
+}
+
+function isProcessAlive(pid?: number): boolean {
+	if (!pid) {
+		return false;
+	}
+
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function readLoopDaemonState(filePath: string): LoopDaemonState | null {
+	try {
+		const state: LoopDaemonState = JSON.parse(readFileSync(filePath, 'utf-8'));
+		if (!isProcessAlive(state.pid)) {
+			unlinkSync(filePath);
+			return null;
+		}
+
+		return state;
+	} catch {
+		try {
+			unlinkSync(filePath);
+		} catch {}
+
+		return null;
+	}
+}
+
+function writeLoopDaemonState(state: LoopDaemonState): void {
+	writeFileSync(
+		getLoopDaemonFilePath(state.id),
+		JSON.stringify(state, null, 2),
+	);
+}
+
+function writeLoopDaemonLog(loopId: string, message: string): void {
+	try {
+		const timestamp = new Date().toISOString();
+		writeFileSync(getLoopDaemonLogPath(loopId), `[${timestamp}] ${message}\n`, {
+			flag: 'a',
+		});
+	} catch {}
 }
 
 function clampPositiveInteger(value: number): number {
@@ -122,11 +212,32 @@ function formatTimestamp(timestamp: number): string {
 	return new Date(timestamp).toLocaleString();
 }
 
+function normalizeLoopModeArgs(rawArgs: string): {
+	args: string;
+	mode: LoopMode;
+} {
+	let args = rawArgs.trim();
+	let mode: LoopMode = 'session';
+
+	if (/^daemon\s+/i.test(args)) {
+		mode = 'daemon';
+		args = args.replace(/^daemon\s+/i, '').trim();
+	}
+
+	if (/(?:^|\s)--daemon(?:\s|$)/i.test(args)) {
+		mode = 'daemon';
+		args = args.replace(/(?:^|\s)--daemon(?=\s|$)/gi, ' ').trim();
+	}
+
+	return {args, mode};
+}
+
 export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
-	const args = rawArgs?.trim() || '';
+	const raw = rawArgs?.trim() || '';
+	const {args, mode} = normalizeLoopModeArgs(raw);
 	if (!args) {
 		throw new Error(
-			'Usage: /loop 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+			'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
 		);
 	}
 
@@ -141,6 +252,7 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 			prompt: prefixMatch[2].trim(),
 			intervalMs,
 			intervalLabel: millisecondsToLabel(intervalMs),
+			mode,
 		};
 	}
 
@@ -154,6 +266,7 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 			prompt: suffixMatch[1].trim(),
 			intervalMs,
 			intervalLabel: millisecondsToLabel(intervalMs),
+			mode,
 		};
 	}
 
@@ -161,6 +274,7 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 		prompt: args,
 		intervalMs: DEFAULT_INTERVAL_MS,
 		intervalLabel: millisecondsToLabel(DEFAULT_INTERVAL_MS),
+		mode,
 	};
 }
 
@@ -168,41 +282,22 @@ class LoopManager {
 	private readonly loops = new Map<string, LoopJob>();
 
 	createLoop(schedule: LoopSchedule): LoopJobSummary {
-		if (this.loops.size >= MAX_ACTIVE_LOOPS) {
-			throw new Error(
-				`Loop limit reached (${MAX_ACTIVE_LOOPS}). Cancel an existing loop before creating a new one.`,
-			);
+		if (schedule.mode === 'daemon') {
+			return this.createDaemonLoop(schedule);
 		}
 
-		const id = randomUUID().replace(/-/g, '').slice(0, 8);
-		const now = Date.now();
-		const timer = setInterval(() => {
-			void this.triggerLoop(id);
-		}, schedule.intervalMs);
-		timer.unref?.();
-
-		const loop: LoopJob = {
-			id,
-			prompt: schedule.prompt,
-			intervalMs: schedule.intervalMs,
-			intervalLabel: schedule.intervalLabel,
-			createdAt: now,
-			nextRunAt: now + schedule.intervalMs,
-			runCount: 0,
-			skippedCount: 0,
-			timer,
-		};
-
-		this.loops.set(id, loop);
-		return this.toSummary(loop);
+		return this.createSessionLoop(schedule);
 	}
 
 	async listLoops(): Promise<LoopJobSummary[]> {
 		const loops = [...this.loops.values()];
 		await Promise.all(loops.map(async loop => this.syncTaskState(loop)));
-		return loops
-			.map(loop => this.toSummary(loop))
-			.sort((a, b) => a.nextRunAt - b.nextRunAt);
+		const sessionLoops = loops.map(loop => this.toSummary(loop));
+		const daemonLoops = await this.listDaemonLoops();
+
+		return [...sessionLoops, ...daemonLoops].sort(
+			(a, b) => a.nextRunAt - b.nextRunAt,
+		);
 	}
 
 	async listTaskSummaries(): Promise<string[]> {
@@ -225,14 +320,181 @@ class LoopManager {
 
 	async cancelLoop(loopId: string): Promise<LoopJobSummary | null> {
 		const loop = this.loops.get(loopId);
-		if (!loop) {
+		if (loop) {
+			await this.syncTaskState(loop);
+			clearInterval(loop.timer);
+			this.loops.delete(loopId);
+			return this.toSummary(loop);
+		}
+
+		return this.cancelDaemonLoop(loopId);
+	}
+
+	async runDaemonLoop(state: LoopDaemonState): Promise<void> {
+		const loop: LoopJob = {
+			...state,
+			pid: process.pid,
+			mode: 'daemon',
+			timer: setInterval(() => {
+				void this.triggerLoop(state.id);
+			}, state.intervalMs),
+		};
+
+		this.loops.set(loop.id, loop);
+		writeLoopDaemonState({...this.toSummary(loop), cwd: state.cwd});
+		writeLoopDaemonLog(loop.id, `Loop daemon started. PID: ${process.pid}`);
+
+		process.on('SIGTERM', () => {
+			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGTERM.');
+			try {
+				unlinkSync(getLoopDaemonFilePath(loop.id));
+			} catch {}
+
+			process.exit(0);
+		});
+
+		process.on('SIGINT', () => {
+			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGINT.');
+			try {
+				unlinkSync(getLoopDaemonFilePath(loop.id));
+			} catch {}
+
+			process.exit(0);
+		});
+
+		await new Promise(() => {});
+	}
+
+	private createSessionLoop(schedule: LoopSchedule): LoopJobSummary {
+		if (this.loops.size >= MAX_ACTIVE_LOOPS) {
+			throw new Error(
+				`Loop limit reached (${MAX_ACTIVE_LOOPS}). Cancel an existing loop before creating a new one.`,
+			);
+		}
+
+		const id = randomUUID().replace(/-/g, '').slice(0, 8);
+		const now = Date.now();
+		const timer = setInterval(() => {
+			void this.triggerLoop(id);
+		}, schedule.intervalMs);
+		timer.unref?.();
+
+		const loop: LoopJob = {
+			id,
+			prompt: schedule.prompt,
+			intervalMs: schedule.intervalMs,
+			intervalLabel: schedule.intervalLabel,
+			createdAt: now,
+			nextRunAt: now + schedule.intervalMs,
+			runCount: 0,
+			skippedCount: 0,
+			mode: 'session',
+			timer,
+		};
+
+		this.loops.set(id, loop);
+		return this.toSummary(loop);
+	}
+
+	private createDaemonLoop(schedule: LoopSchedule): LoopJobSummary {
+		const id = randomUUID().replace(/-/g, '').slice(0, 8);
+		const now = Date.now();
+		const logPath = getLoopDaemonLogPath(id);
+		const state: LoopDaemonState = {
+			id,
+			prompt: schedule.prompt,
+			intervalMs: schedule.intervalMs,
+			intervalLabel: schedule.intervalLabel,
+			createdAt: now,
+			nextRunAt: now + schedule.intervalMs,
+			runCount: 0,
+			skippedCount: 0,
+			mode: 'daemon',
+			logPath,
+			cwd: process.cwd(),
+		};
+
+		const scriptPath = process.argv[1] || '';
+		const payload = Buffer.from(JSON.stringify(state), 'utf-8').toString(
+			'base64',
+		);
+		const commandArgs = ['--loop-daemon-execute', payload];
+		const isDev = scriptPath.includes('source');
+		const command = isDev ? 'npx' : process.execPath;
+		const args = isDev
+			? ['tsx', scriptPath, ...commandArgs]
+			: [scriptPath, ...commandArgs];
+		const child = spawn(command, args, {
+			detached: true,
+			stdio: ['ignore', 'ignore', 'ignore'],
+			windowsHide: true,
+			cwd: state.cwd,
+			env: {...process.env, SNOW_LOOP_DAEMON: 'true', SNOW_LOOP_ID: id},
+		});
+
+		child.unref();
+		state.pid = child.pid;
+		writeLoopDaemonState(state);
+		writeLoopDaemonLog(
+			id,
+			`Loop daemon spawned. PID: ${child.pid ?? 'unknown'}`,
+		);
+
+		return state;
+	}
+
+	private async listDaemonLoops(): Promise<LoopJobSummary[]> {
+		ensureLoopDaemonDirs();
+		return readdirSync(LOOP_DAEMON_DIR)
+			.filter(file => file.endsWith('.json'))
+			.map(file => readLoopDaemonState(join(LOOP_DAEMON_DIR, file)))
+			.filter((state): state is LoopDaemonState => Boolean(state))
+			.map(state => ({
+				id: state.id,
+				prompt: state.prompt,
+				intervalMs: state.intervalMs,
+				intervalLabel: state.intervalLabel,
+				createdAt: state.createdAt,
+				nextRunAt: state.nextRunAt,
+				lastRunAt: state.lastRunAt,
+				lastTaskId: state.lastTaskId,
+				lastTaskStatus: state.lastTaskStatus,
+				runCount: state.runCount,
+				skippedCount: state.skippedCount,
+				lastError: state.lastError,
+				mode: 'daemon',
+				pid: state.pid,
+				logPath: state.logPath,
+			}));
+	}
+
+	private async cancelDaemonLoop(
+		loopId: string,
+	): Promise<LoopJobSummary | null> {
+		const filePath = getLoopDaemonFilePath(loopId);
+		if (!existsSync(filePath)) {
 			return null;
 		}
 
-		await this.syncTaskState(loop);
-		clearInterval(loop.timer);
-		this.loops.delete(loopId);
-		return this.toSummary(loop);
+		const state = readLoopDaemonState(filePath);
+		if (!state) {
+			return null;
+		}
+
+		if (state.pid) {
+			try {
+				process.kill(state.pid, 'SIGTERM');
+			} catch (error) {
+				state.lastError =
+					error instanceof Error ? error.message : 'Failed to stop loop daemon';
+			}
+		}
+
+		try {
+			unlinkSync(filePath);
+		} catch {}
+
+		return state;
 	}
 
 	private async syncTaskState(loop: LoopJob): Promise<void> {
@@ -260,6 +522,7 @@ class LoopManager {
 		if (loop.lastTaskStatus && ACTIVE_TASK_STATUSES.has(loop.lastTaskStatus)) {
 			loop.skippedCount += 1;
 			loop.nextRunAt = Date.now() + loop.intervalMs;
+			this.persistDaemonState(loop);
 			return;
 		}
 
@@ -278,6 +541,16 @@ class LoopManager {
 			loop.lastError =
 				error instanceof Error ? error.message : 'Unknown loop execution error';
 		}
+
+		this.persistDaemonState(loop);
+	}
+
+	private persistDaemonState(loop: LoopJob): void {
+		if (loop.mode !== 'daemon') {
+			return;
+		}
+
+		writeLoopDaemonState({...this.toSummary(loop), cwd: process.cwd()});
 	}
 
 	private toSummary(loop: LoopJob): LoopJobSummary {
@@ -294,19 +567,32 @@ class LoopManager {
 			runCount: loop.runCount,
 			skippedCount: loop.skippedCount,
 			lastError: loop.lastError,
+			mode: loop.mode,
+			pid: loop.pid,
+			logPath: loop.logPath,
 		};
 	}
 }
 
 export function formatLoopSummary(loop: LoopJobSummary): string {
 	const lines = [
-		`${loop.id} • every ${loop.intervalLabel}`,
+		`Loop ID: ${loop.id}`,
+		`Mode: ${loop.mode}`,
+		`Schedule: every ${loop.intervalLabel}`,
 		`Prompt: ${loop.prompt}`,
 		`Created: ${formatTimestamp(loop.createdAt)}`,
 		`Next run: ${formatTimestamp(loop.nextRunAt)}`,
 		`Runs: ${loop.runCount}`,
 		`Skipped: ${loop.skippedCount}`,
 	];
+
+	if (loop.pid) {
+		lines.push(`PID: ${loop.pid}`);
+	}
+
+	if (loop.logPath) {
+		lines.push(`Log: ${loop.logPath}`);
+	}
 
 	if (loop.lastRunAt) {
 		lines.push(`Last run: ${formatTimestamp(loop.lastRunAt)}`);

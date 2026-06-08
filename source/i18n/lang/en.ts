@@ -924,11 +924,11 @@ export const en: TranslationKeys = {
 			// Loop command messages
 			loop: {
 				usage:
-					'Usage: /loop 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: 'Opening task manager...',
 				relatedLoopTasks: 'Related loop tasks:',
 				noActiveLoops:
-					'No active loops. Create one with /loop 5m <prompt> or /loop <prompt> every 2 hours.',
+					'No active loops. Create one with /loop 5m <prompt>, or /loop daemon 5m <prompt> for a daemon loop.',
 				loopNotFound: 'Loop not found: {id}',
 				cancelled: 'Cancelled loop {id} (every {interval})',
 				created: 'Loop created: {id}',
@@ -937,6 +937,9 @@ export const en: TranslationKeys = {
 				nextRun: 'Next run: {time}',
 				sessionScopedNote:
 					'Session-scoped only: loop jobs stop when Snow CLI exits.',
+				daemonScopedNote:
+					'Daemon mode: loop keeps running after Snow CLI exits and only stops when manually cancelled.',
+				logPath: 'Log: {path}',
 				usageHint:
 					'Use /loop list to inspect jobs or /loop cancel <id> to stop one.',
 			},

@@ -400,6 +400,7 @@ export default function ChatScreen({
 		setShowIdeSelectPanel: panelState.setShowIdeSelectPanel,
 		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		setShowTodoListPanel: panelState.setShowTodoListPanel,
+		setShowTaskManagerPanel: panelState.setShowTaskManagerPanel,
 		setShowPixelEditor: panelState.setShowPixelEditor,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
@@ -508,6 +509,7 @@ export default function ChatScreen({
 		panelState.showTelemetryPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
+		panelState.showTaskManagerPanel ||
 		panelState.showPixelEditor ||
 		showPermissionsPanel ||
 		showSubAgentDepthPanel;
@@ -645,6 +647,9 @@ export default function ChatScreen({
 				t={t}
 				onPromptAccept={prompt => {
 					setRestoreInputContent({text: prompt});
+				}}
+				onTaskResume={() => {
+					setRemountKey(prev => prev + 1);
 				}}
 				handleRollbackConfirm={handleRollbackConfirm}
 			/>
