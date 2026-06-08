@@ -65,6 +65,7 @@
 
 	"viewsContainer.sidebar.title": "Snow CLI",
 	"view.terminal.name": "Terminal",
+	"view.gitBlameTimeline.name": "Git Timeline",
 
 	"command.openTerminal.title": "Open Snow CLI",
 	"command.restartSidebarTerminal.title": "Restart Terminal",
@@ -77,6 +78,7 @@
 	"command.sendSelectionLocation.title": "Send to Snow CLI",
 	"command.toggleGitBlame.title": "Snow CLI: Toggle Git Blame",
 	"command.toggleFileAnnotations.title": "Snow CLI: Toggle File Annotations",
+	"command.openGitBlameTimeline.title": "Snow CLI: Open Git Timeline",
 	"command.generateCommitMessage.title": "Snow CLI: Generate Commit Message",
 	"command.generateCommitMessageWithRequirements.title": "Snow CLI: Generate Commit Message with Requirements",
 	"command.cancelCommitMessageGeneration.title": "Snow CLI: Stop Generating Commit Message",

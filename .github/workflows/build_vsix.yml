@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - Fixed the reentrancy issue when pasting text on Windows
+            - Add Git timeline
 
             ### Installation
 

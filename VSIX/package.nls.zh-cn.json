@@ -65,6 +65,7 @@
 
 	"viewsContainer.sidebar.title": "Snow CLI",
 	"view.terminal.name": "终端",
+	"view.gitBlameTimeline.name": "Git 时间轴",
 
 	"command.openTerminal.title": "打开 Snow CLI",
 	"command.restartSidebarTerminal.title": "重启终端",
@@ -77,6 +78,7 @@
 	"command.sendSelectionLocation.title": "发送到 Snow CLI",
 	"command.toggleGitBlame.title": "Snow CLI：切换 Git Blame",
 	"command.toggleFileAnnotations.title": "Snow CLI：切换文件注解",
+	"command.openGitBlameTimeline.title": "Snow CLI：打开 Git 时间轴",
 	"command.generateCommitMessage.title": "Snow CLI：生成提交信息",
 	"command.generateCommitMessageWithRequirements.title": "Snow CLI：按要求生成提交信息",
 	"command.cancelCommitMessageGeneration.title": "Snow CLI：停止生成提交信息",

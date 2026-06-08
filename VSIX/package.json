@@ -2,7 +2,7 @@
 	"name": "snow-cli",
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
-	"version": "0.4.32",
+	"version": "0.4.33",
 	"publisher": "mufasa",
 	"icon": "snow.png",
 	"repository": {
@@ -360,6 +360,14 @@
 					"icon": "snow.png",
 					"when": "snow-cli.sidebarMode"
 				}
+			],
+			"scm": [
+				{
+					"id": "snowCliGitBlameTimeline",
+					"name": "%view.gitBlameTimeline.name%",
+					"icon": "$(git-commit)",
+					"initialSize": 8
+				}
 			]
 		},
 		"commands": [
@@ -419,6 +427,11 @@
 				"command": "snow-cli.toggleFileAnnotations",
 				"title": "%command.toggleFileAnnotations.title%",
 				"icon": "$(list-flat)"
+			},
+			{
+				"command": "snow-cli.openGitBlameTimeline",
+				"title": "%command.openGitBlameTimeline.title%",
+				"icon": "$(timeline-view-icon)"
 			},
 			{
 				"command": "snow-cli.generateCommitMessage",
