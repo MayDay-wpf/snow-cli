@@ -605,6 +605,8 @@ class AcpManager {
 						false,
 						addToAlwaysApproved,
 						undefined,
+						undefined,
+						workingDirectory,
 					);
 					if (result) {
 						// 添加工具结果到消息

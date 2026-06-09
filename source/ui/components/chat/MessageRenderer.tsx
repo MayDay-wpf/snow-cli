@@ -82,6 +82,41 @@ export default function MessageRenderer({
 		return text.replace(/\x1b\[[0-9;]*m/g, '');
 	};
 
+	type CommandResultSegment = {
+		text: string;
+		color?: string;
+	};
+
+	const parseAnsiCommandLine = (line: string): CommandResultSegment[] => {
+		const segments: CommandResultSegment[] = [];
+		const ansiPattern = /\x1b\[([0-9;]*)m/g;
+		let cursor = 0;
+		let activeColor: string | undefined;
+		let match: RegExpExecArray | null;
+
+		const pushText = (text: string): void => {
+			const cleanText = removeAnsiCodes(text);
+			if (cleanText) {
+				segments.push({text: cleanText, color: activeColor});
+			}
+		};
+
+		while ((match = ansiPattern.exec(line)) !== null) {
+			pushText(line.slice(cursor, match.index));
+			const codes = (match[1] || '0').split(';');
+			if (codes.includes('33') || codes.includes('93')) {
+				activeColor = 'yellow';
+			} else if (codes.includes('0') || codes.includes('39')) {
+				activeColor = undefined;
+			}
+
+			cursor = match.index + match[0].length;
+		}
+
+		pushText(line.slice(cursor));
+		return segments.length > 0 ? segments : [{text: ' '}];
+	};
+
 	const getDisplayContent = (content: string): string => {
 		// 只做视觉隐藏：保留原始 message.content 用于请求体/持久化。
 		return maskSkillInjectedText(removeAnsiCodes(content || '')).displayText;
@@ -132,10 +167,15 @@ export default function MessageRenderer({
 		});
 	};
 
-	const formatCommandResultLines = (content: string): string[] => {
-		return getDisplayContent(content)
+	const formatCommandResultLines = (
+		content: string,
+	): CommandResultSegment[][] => {
+		const displayContent = maskSkillInjectedText(content || '').displayText;
+		return displayContent
 			.split('\n')
-			.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+			.map((line, index) =>
+				parseAnsiCommandLine(`${index === 0 ? '└─ ' : '   '}${line || ' '}`),
+			);
 	};
 
 	const formatCompactCount = (value: number): string => {
@@ -370,14 +410,20 @@ export default function MessageRenderer({
 									{message.content && (
 										<Box flexDirection="column">
 											{formatCommandResultLines(message.content).map(
-												(line, lineIndex) => (
-													<Text
-														key={lineIndex}
-														color={theme.colors.menuSecondary}
-														dimColor
-													>
-														{line}
-													</Text>
+												(lineSegments, lineIndex) => (
+													<Box key={lineIndex}>
+														{lineSegments.map((segment, segmentIndex) => (
+															<Text
+																key={segmentIndex}
+																color={
+																	segment.color ?? theme.colors.menuSecondary
+																}
+																dimColor={!segment.color}
+															>
+																{segment.text}
+															</Text>
+														))}
+													</Box>
 												),
 											)}
 										</Box>

@@ -231,6 +231,7 @@ export async function executeToolCall(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
 	sessionId?: string,
+	workingDirectory?: string,
 ): Promise<ToolResult> {
 	let result: ToolResult | undefined;
 	let executionError: Error | null = null;
@@ -651,6 +652,7 @@ export async function executeToolCall(
 				result.content = await maskToolResultContentIfNeeded(
 					toolCall.function.name,
 					result.content,
+					workingDirectory,
 				);
 			}
 
@@ -813,6 +815,7 @@ export async function executeToolCalls(
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
 	sessionId?: string,
+	workingDirectory?: string,
 ): Promise<ToolResult[]> {
 	// Group tool calls by their resource identifier
 	const resourceGroups = new Map<string, ToolCall[]>();
@@ -853,6 +856,7 @@ export async function executeToolCalls(
 					addToAlwaysApproved,
 					onUserInteractionNeeded,
 					sessionId,
+					workingDirectory,
 				);
 				groupResults.push(result);
 

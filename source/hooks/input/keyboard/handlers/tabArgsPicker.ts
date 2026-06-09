@@ -1,4 +1,4 @@
-import {COMMAND_ARGS_OPTIONS} from '../../../ui/useCommandPanel.js';
+import {getCommandArgsOptions} from '../../../ui/useCommandPanel.js';
 import {findInlineCommandTrigger} from '../utils/inlineCommandTrigger.js';
 import type {HandlerContext} from '../types.js';
 
@@ -16,13 +16,15 @@ export function tabArgsPickerHandler(ctx: HandlerContext): boolean {
 	if (key.tab && !showCommands && !showFilePicker && !showArgsPicker) {
 		const text = buffer.text;
 		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
+		const buddyProfileMatch = text.match(/^\/(buddy)\s+profile\s*$/);
 		const inlineTrigger = findInlineCommandTrigger(
 			text,
 			buffer.getCursorPosition(),
 		);
-		const cmdName = rootMatch?.[1] ?? inlineTrigger?.query ?? '';
-		const cmdOpts = COMMAND_ARGS_OPTIONS[cmdName];
-		if (cmdOpts && cmdOpts.length > 0) {
+		const cmdName =
+			rootMatch?.[1] ?? buddyProfileMatch?.[1] ?? inlineTrigger?.query ?? '';
+		const cmdOpts = getCommandArgsOptions(cmdName, text);
+		if (cmdOpts.length > 0) {
 			setShowArgsPicker(true);
 			setArgsSelectedIndex(0);
 			return true;

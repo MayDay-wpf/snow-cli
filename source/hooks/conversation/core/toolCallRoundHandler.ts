@@ -84,6 +84,40 @@ export async function handleToolCallRound(ctx: {
 	let {accumulatedUsage} = ctx;
 
 	const receivedToolCalls = streamResult.receivedToolCalls!;
+	const summarizeToolNames = (toolCalls: ToolCall[]) =>
+		toolCalls.map(toolCall => toolCall.function.name).join(', ');
+	const compactBuddyProgressText = (value: string, maxLength = 180) => {
+		const compacted = value.replace(/\s+/g, ' ').trim();
+		return compacted.length > maxLength
+			? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
+			: compacted;
+	};
+	const summarizeToolCalls = (toolCalls: ToolCall[]) =>
+		toolCalls
+			.map(toolCall => {
+				const args = compactBuddyProgressText(
+					toolCall.function.arguments || '',
+					90,
+				);
+				return args
+					? `${toolCall.function.name}(${args})`
+					: toolCall.function.name;
+			})
+			.join('; ');
+	const summarizeToolResults = (
+		toolCalls: ToolCall[],
+		toolResults: Array<{content: string}>,
+	) =>
+		toolResults
+			.slice(0, 4)
+			.map((result, index) => {
+				const toolName = toolCalls[index]?.function.name ?? 'tool';
+				const failed = result.content.startsWith('Error:');
+				return `${toolName} ${
+					failed ? 'failed' : 'returned'
+				}: ${compactBuddyProgressText(result.content, 120)}`;
+			})
+			.join('; ');
 
 	const {parallelGroupId} = await processToolCallsAfterStream({
 		receivedToolCalls,
@@ -124,6 +158,12 @@ export async function handleToolCallRound(ctx: {
 	}
 
 	const approvedTools = confirmResult.approvedTools;
+	options.onBuddyProgress?.({
+		stage: 'tool_execution_started',
+		summary: `running ${approvedTools.length} tool${
+			approvedTools.length === 1 ? '' : 's'
+		}: ${summarizeToolCalls(approvedTools)}`,
+	});
 
 	if (controller.signal.aborted) {
 		for (const toolCall of approvedTools) {
@@ -194,6 +234,7 @@ export async function handleToolCallRound(ctx: {
 			);
 		},
 		sessionManager.getCurrentSession()?.id,
+		process.cwd(),
 	);
 
 	const toolResults = await Promise.all(
@@ -284,6 +325,12 @@ export async function handleToolCallRound(ctx: {
 			console.error('Failed to save tool result before compression:', error);
 		}
 	}
+	options.onBuddyProgress?.({
+		stage: 'tool_results_ready',
+		summary: `tool results ready for ${summarizeToolNames(
+			receivedToolCalls,
+		)}; ${summarizeToolResults(receivedToolCalls, toolResults)}`,
+	});
 
 	const autoCompressOpts = {
 		getCurrentContextPercentage: options.getCurrentContextPercentage,

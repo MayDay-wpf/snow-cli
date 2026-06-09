@@ -368,8 +368,10 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							</Suspense>
 						) : (
 							<>
-								<Box width="100%" justifyContent="flex-end" marginRight={4}>
-									<CompanionSprite terminalColumns={props.terminalWidth} />
+								<Box width="100%" paddingRight={1}>
+									<CompanionSprite
+										terminalColumns={Math.max(0, props.terminalWidth - 1)}
+									/>
 								</Box>
 								<ChatInput
 									onSubmit={props.onSubmit}

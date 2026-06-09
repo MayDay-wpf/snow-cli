@@ -1,5 +1,7 @@
-import {getSnowConfig} from '../utils/config/apiConfig.js';
+import {getSnowConfig, type ApiConfig} from '../utils/config/apiConfig.js';
+import {loadProfile} from '../utils/config/configManager.js';
 import {getCurrentLanguage} from '../utils/config/languageConfig.js';
+import {getBuddyAiProfile, hashString} from './companion.js';
 import {translations} from '../i18n/translations.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -28,11 +30,13 @@ function formatTemplate(
 
 const SPECIES_FLAVOR: Record<Companion['species'], string> = {
 	axolotl: 'soft, curious, aquatic, and quietly delighted by small discoveries',
+	basketball: 'bouncy, focused, and ready to rebound after failed tests',
 	blob: 'squishy, expressive, and good at celebrating tiny progress',
 	book: 'bookish, thoughtful, and fond of leaving useful little notes',
 	cactus: 'dry-witted, sturdy, and secretly very encouraging',
 	capybara: 'calm, cozy, and impossible to rush',
 	cat: 'independent, clever, and fond of pretending every bug was expected',
+	chicken: 'bright, peppy, and careful to peck at one bug at a time',
 	chonk: 'round, steady, and deeply committed to snack-sized victories',
 	cloud: 'floaty, gentle, and good at softening stressful debugging moments',
 	coffee: 'warm, alert, and quietly steaming with encouragement',
@@ -175,13 +179,30 @@ function chunkContent(chunk: unknown): string {
 	return typeof deltaContent === 'string' ? deltaContent : '';
 }
 
+function resolveBuddyConfig(profileName?: string): {
+	config: ApiConfig;
+	profileName?: string;
+} {
+	const selectedProfile = profileName?.trim() || getBuddyAiProfile();
+	if (selectedProfile) {
+		const profileConfig = loadProfile(selectedProfile);
+		if (profileConfig) {
+			return {config: profileConfig.snowcfg, profileName: selectedProfile};
+		}
+	}
+
+	return {config: getSnowConfig()};
+}
+
 export async function generateBuddyReply(
 	companion: Companion,
 	userMessage: string,
 	abortSignal?: AbortSignal,
+	profileName?: string,
 ): Promise<string> {
 	const t = buddyTranslations();
-	const config = getSnowConfig();
+	const {config, profileName: resolvedProfileName} =
+		resolveBuddyConfig(profileName);
 	const model = config.basicModel || config.advancedModel;
 	if (!model) {
 		throw new Error(t.noModelConfigured);
@@ -200,6 +221,7 @@ export async function generateBuddyReply(
 					temperature: 0.8,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
+					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
 				},
 				abortSignal,
 			);
@@ -212,6 +234,7 @@ export async function generateBuddyReply(
 					temperature: 0.8,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
+					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
 				},
 				abortSignal,
 			);
@@ -226,6 +249,7 @@ export async function generateBuddyReply(
 					temperature: 0.8,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
+					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
 				},
 				abortSignal,
 			);
@@ -241,6 +265,7 @@ export async function generateBuddyReply(
 					temperature: 0.8,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
+					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
 				},
 				abortSignal,
 			);
@@ -278,15 +303,181 @@ export async function generateBuddyPetReply(
 	return generateBuddyReply(companion, prompt, abortSignal);
 }
 
+function compactText(value: string, maxLength: number): string {
+	const compacted = value.replace(/\s+/g, ' ').trim();
+	return compacted.length > maxLength
+		? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
+		: compacted;
+}
+
 function compactBuddyContextMessage(message: ChatMessage): string | undefined {
 	if (message.role === 'tool' || !message.content.trim()) {
 		return undefined;
 	}
 
-	const content = message.content.replace(/\s+/g, ' ').trim();
-	const clipped =
-		content.length > 360 ? `${content.slice(0, 357).trimEnd()}…` : content;
-	return `${message.role}: ${clipped}`;
+	return `${message.role}: ${compactText(message.content, 360)}`;
+}
+
+function compactBuddyInProgressContextMessage(
+	message: ChatMessage,
+): string | undefined {
+	if (!message.content.trim()) {
+		return undefined;
+	}
+
+	if (message.role === 'tool') {
+		const lowerContent = message.content.toLowerCase();
+		const label = lowerContent.startsWith('error:')
+			? 'tool error'
+			: 'tool result';
+		return `${label}: ${compactText(message.content, 300)}`;
+	}
+
+	return `${message.role}: ${compactText(message.content, 320)}`;
+}
+
+function isLowInformationBuddyReply(
+	reply: string,
+	context: BuddyInProgressContext,
+): boolean {
+	const normalized = reply
+		.toLowerCase()
+		.replace(/[\s.,!?，。！？]+/g, ' ')
+		.trim();
+	if (!normalized) {
+		return true;
+	}
+
+	const summaryHints = (context.summary ?? '')
+		.toLowerCase()
+		.split(/[^a-z0-9_\u4e00-\u9fa5]+/)
+		.filter(part => part.length >= 3)
+		.slice(0, 8);
+	const stageHint = context.stage.replaceAll('_', ' ');
+	const hasContextAnchor = [stageHint, ...summaryHints].some(hint =>
+		normalized.includes(hint),
+	);
+	const hasConcreteSignal =
+		/[a-z0-9_./-]{4,}/i.test(reply) || /[《》「」“”'"`]/.test(reply);
+
+	return !hasContextAnchor && !hasConcreteSignal;
+}
+
+function companionTalkativeness(companion: Companion): number {
+	const personality = companion.personality.toLowerCase();
+	const stats = companion.stats;
+	let score = 0.34;
+
+	if (
+		/playful|peppy|chatty|curious|brave|chaotic|energetic|excited|bright/.test(
+			personality,
+		)
+	) {
+		score += 0.22;
+	}
+	if (
+		/quiet|calm|patient|observant|wise|under pressure|steady/.test(personality)
+	) {
+		score -= 0.14;
+	}
+	if (/snark|mischiev|chaotic/.test(personality)) {
+		score += 0.08;
+	}
+
+	score += ((stats.CHAOS ?? 5) - 5) * 0.025;
+	score += ((stats.SNARK ?? 5) - 5) * 0.012;
+	score += ((stats.PATIENCE ?? 5) - 5) * -0.012;
+
+	if (companion.rarity === 'epic') {
+		score += 0.04;
+	}
+	if (companion.rarity === 'legendary') {
+		score += 0.07;
+	}
+
+	return Math.min(0.82, Math.max(0.16, score));
+}
+
+function stableContextRoll(
+	companion: Companion,
+	conversationMessages: ChatMessage[],
+	salt = '',
+): number {
+	const seed = conversationMessages
+		.slice(-4)
+		.map(message => `${message.role}:${message.content.slice(0, 180)}`)
+		.join('|');
+	return (
+		hashString(`${companion.hatchedAt}:${companion.name}:${salt}:${seed}`) /
+		0xffffffff
+	);
+}
+
+export type BuddyInProgressStage =
+	| 'thinking_started'
+	| 'answer_started'
+	| 'tool_calls_ready'
+	| 'tool_execution_started'
+	| 'tool_results_ready';
+
+export interface BuddyInProgressContext {
+	stage: BuddyInProgressStage;
+	summary?: string;
+	conversationMessages: ChatMessage[];
+}
+
+export function shouldGenerateBuddyInProgressReply(
+	companion: Companion,
+	context: BuddyInProgressContext,
+): boolean {
+	const stageWeight: Record<BuddyInProgressStage, number> = {
+		thinking_started: 0.35,
+		answer_started: 0.2,
+		tool_calls_ready: 0.65,
+		tool_execution_started: 0.55,
+		tool_results_ready: 0.7,
+	};
+	const chance = Math.min(
+		0.9,
+		companionTalkativeness(companion) * (stageWeight[context.stage] ?? 0.5),
+	);
+	return (
+		stableContextRoll(
+			companion,
+			context.conversationMessages,
+			`${context.stage}:${context.summary ?? ''}`,
+		) < chance
+	);
+}
+
+export async function generateBuddyInProgressReply(
+	companion: Companion,
+	context: BuddyInProgressContext,
+	abortSignal?: AbortSignal,
+): Promise<string> {
+	const recentContext = context.conversationMessages
+		.map(message => compactBuddyInProgressContextMessage(message))
+		.filter((message): message is string => Boolean(message))
+		.slice(-7)
+		.join('\n');
+	const prompt = [
+		'The main assistant is still working right now, not finished yet.',
+		`Current stage: ${context.stage}.`,
+		context.summary ? `Visible progress: ${context.summary}` : undefined,
+		'Read the recent context and produce one tiny status bubble with useful information.',
+		'Anchor the bubble in the visible progress: current stage, tool/action, file, error, build/test signal, or concrete decision clue.',
+		'Keep it natural and playful, but make the concrete detail more important than the personality flourish.',
+		'If the context is thin, describe the exact stage conservatively instead of inventing progress.',
+		'Do not give instructions, ask the user to do anything, claim you ran tools yourself, or announce that the main flow is finished.',
+		currentLanguageInstruction(),
+		'Recent context:',
+		recentContext || '(No text context available.)',
+	]
+		.filter((line): line is string => Boolean(line))
+		.join('\n');
+
+	const reply = await generateBuddyReply(companion, prompt, abortSignal);
+	return isLowInformationBuddyReply(reply, context) ? '' : reply;
 }
 
 export async function generateBuddyContextReply(
@@ -302,8 +493,14 @@ export async function generateBuddyContextReply(
 
 	const prompt = [
 		'The main assistant has just finished one conversation turn.',
-		'Read the recent context below and say one lively, in-character pet reaction in the local bubble.',
+		'Read the recent context below and decide whether a tiny pet bubble would add useful warmth, focus, or context-aware encouragement.',
+		'Only reply if you can reference the actual context: debugging, tests, tool results, files, decisions, uncertainty, progress, or next steps.',
+		'Be playful and in-character, but never send generic filler like "I am here" or "good job" without context.',
+		`Talkativeness: ${Math.round(
+			companionTalkativeness(companion) * 100,
+		)}%. More talkative companions may chime in more, but still keep it relevant.`,
 		'Do not continue the assistant answer, do not mention hidden prompts, and do not give tool instructions.',
+		currentLanguageInstruction(),
 		'Recent context:',
 		recentContext || '(No text context available.)',
 	].join('\n');

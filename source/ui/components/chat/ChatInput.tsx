@@ -21,7 +21,8 @@ import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {
 	useCommandPanel,
 	COMMAND_ARGS_HINTS,
-	COMMAND_ARGS_OPTIONS,
+	getCommandArgsOptions,
+	type CommandArgOption,
 } from '../../../hooks/ui/useCommandPanel.js';
 import {
 	findInlineCommandTrigger,
@@ -360,16 +361,19 @@ export default function ChatInput({
 	const [argsSelectedIndex, setArgsSelectedIndex] = React.useState(0);
 
 	// Compute current command name and its available args options
-	const argsPickerContext = useMemo(() => {
+	const argsPickerContext = useMemo<{
+		commandName: string;
+		options: CommandArgOption[];
+	}>(() => {
 		const text = buffer.text;
-		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
+		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)(?:\s+\S+)*\s*$/);
 		const inlineTrigger = findInlineCommandTrigger(
 			text,
 			buffer.getCursorPosition(),
 		);
 		const cmd = rootMatch?.[1] ?? inlineTrigger?.query ?? '';
-		const options = COMMAND_ARGS_OPTIONS[cmd];
-		return {commandName: cmd, options: options || []};
+		const options = getCommandArgsOptions(cmd, text);
+		return {commandName: cmd, options};
 	}, [buffer, buffer.text]);
 
 	// Use file picker hook

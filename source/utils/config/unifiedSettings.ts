@@ -147,6 +147,7 @@ export interface UnifiedSettings {
 	// === 隐私设置 ===
 	privacy?: {
 		enabled?: boolean;
+		mode?: 'api' | 'local';
 		api?: {
 			url?: string;
 			apiKey?: string;

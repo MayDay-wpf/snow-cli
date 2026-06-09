@@ -529,6 +529,12 @@ export type TranslationKeys = {
 		enablePrivacyInfo: string;
 		enabled: string;
 		disabled: string;
+		modeLabel: string;
+		modeApi: string;
+		modeApiInfo: string;
+		modeLocalRules: string;
+		modeLocalRulesInfo: string;
+		modeSelectInfo: string;
 		configLocation: string;
 		projectLocation: string;
 		projectLocationInfo: string;
@@ -781,6 +787,8 @@ export type TranslationKeys = {
 				mutedLabel: string;
 				mutedYes: string;
 				mutedNo: string;
+				profileLabel: string;
+				currentProfileLabel: string;
 				hatchedLabel: string;
 				statsLabel: string;
 				alreadyExists: string;
@@ -798,6 +806,12 @@ export type TranslationKeys = {
 				renameSuccess: string;
 				noBuddyToTalk: string;
 				sayUsage: string;
+				profileListTitle: string;
+				profileListItem: string;
+				profileUsage: string;
+				profileSet: string;
+				profileCleared: string;
+				profileNotFound: string;
 				muted: string;
 				unmutedReaction: string;
 				unmuted: string;

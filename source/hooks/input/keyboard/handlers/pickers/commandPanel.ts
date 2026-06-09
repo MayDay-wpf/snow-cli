@@ -1,6 +1,6 @@
 import {executeCommand} from '../../../../../utils/execution/commandExecutor.js';
 import {commandUsageManager} from '../../../../../utils/session/commandUsageManager.js';
-import {COMMAND_ARGS_OPTIONS} from '../../../../ui/useCommandPanel.js';
+import {getCommandArgsOptions} from '../../../../ui/useCommandPanel.js';
 import {
 	findInlineCommandTrigger,
 	isInlineExecutableCommand,
@@ -78,9 +78,11 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 				}
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
-				const cmdArgsOptions = COMMAND_ARGS_OPTIONS[selectedCommand.name];
-				const shouldOpenArgsPicker =
-					cmdArgsOptions && cmdArgsOptions.length > 0;
+				const cmdArgsOptions = getCommandArgsOptions(
+					selectedCommand.name,
+					buffer.text,
+				);
+				const shouldOpenArgsPicker = cmdArgsOptions.length > 0;
 				if (shouldOpenArgsPicker) {
 					setShowArgsPicker(true);
 					setArgsSelectedIndex(0);

@@ -23,6 +23,7 @@ interface BuddyState {
 	version: number;
 	companion?: StoredCompanion;
 	muted?: boolean;
+	aiProfile?: string;
 }
 
 const RARITY_WEIGHTS: Array<[Rarity, number]> = [
@@ -133,12 +134,17 @@ function readBuddyStateFile(): BuddyState {
 		const parsed = JSON.parse(
 			readFileSync(BUDDY_STATE_FILE, 'utf8'),
 		) as Partial<BuddyState>;
+		const aiProfile =
+			typeof parsed.aiProfile === 'string' && parsed.aiProfile.trim()
+				? parsed.aiProfile.trim()
+				: undefined;
 		return {
 			version: parsed.version ?? BUDDY_STATE_VERSION,
 			companion: isStoredCompanion(parsed.companion)
 				? parsed.companion
 				: undefined,
 			muted: Boolean(parsed.muted),
+			aiProfile,
 		};
 	} catch {
 		return {version: BUDDY_STATE_VERSION};
@@ -251,6 +257,21 @@ export function getCompanion(): Companion | undefined {
 
 export function isCompanionMuted(): boolean {
 	return Boolean(loadBuddyState().muted);
+}
+
+export function getBuddyAiProfile(): string | undefined {
+	return loadBuddyState().aiProfile;
+}
+
+export function setBuddyAiProfile(profileName: string | undefined): void {
+	const state = loadBuddyState();
+	const trimmedProfileName = profileName?.trim();
+	if (trimmedProfileName) {
+		state.aiProfile = trimmedProfileName;
+	} else {
+		delete state.aiProfile;
+	}
+	saveBuddyState(state);
 }
 
 export function saveCompanion(companion: StoredCompanion | undefined): void {

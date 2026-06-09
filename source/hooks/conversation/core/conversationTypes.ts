@@ -17,6 +17,16 @@ export type ConversationUsage = {
 	cached_tokens?: number;
 };
 
+export type BuddyProgressEvent = {
+	stage:
+		| 'thinking_started'
+		| 'answer_started'
+		| 'tool_calls_ready'
+		| 'tool_execution_started'
+		| 'tool_results_ready';
+	summary?: string;
+};
+
 export type ConversationHandlerOptions = {
 	userContent: string;
 	editorContext?: {
@@ -78,6 +88,7 @@ export type ConversationHandlerOptions = {
 	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>;
 	onCompressionStatus?: (status: CompressionStatus | null) => void;
 	setIsAutoCompressing?: (value: boolean) => void;
+	onBuddyProgress?: (event: BuddyProgressEvent) => void;
 };
 
 export type TokenEncoder = {

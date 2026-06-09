@@ -7,13 +7,16 @@ import {translations} from '../../i18n/translations.js';
 import type {Species} from '../../buddy/types.js';
 import {SPECIES} from '../../buddy/types.js';
 import {
+	getBuddyAiProfile,
 	getCompanion,
 	hatchCompanion,
 	isCompanionMuted,
 	renameCompanion,
 	resetCompanion,
+	setBuddyAiProfile,
 	setCompanionMuted,
 } from '../../buddy/companion.js';
+import {getActiveProfileName, getAllProfiles} from '../config/configManager.js';
 import {
 	generateBuddyPetReply,
 	generateBuddyReply,
@@ -42,6 +45,16 @@ function formatTemplate(
 	);
 }
 
+function currentBuddyProfileName(): string {
+	return getBuddyAiProfile() || getActiveProfileName();
+}
+
+const YELLOW_STAR = '\u001B[33m★\u001B[39m';
+
+function formatStatStars(value: number): string {
+	return YELLOW_STAR.repeat(Math.max(0, value));
+}
+
 function formatCompanionStatus(): string {
 	const t = buddyTranslations();
 	const companion = getCompanion();
@@ -51,7 +64,7 @@ function formatCompanionStatus(): string {
 
 	const muted = isCompanionMuted();
 	const stats = Object.entries(companion.stats)
-		.map(([name, value]) => `${name}: ${value}`)
+		.map(([name, value]) => `${name}: ${formatStatStars(value)}`)
 		.join('\n');
 
 	return [
@@ -65,9 +78,28 @@ function formatCompanionStatus(): string {
 		`${t.hatLabel}: ${companion.hat}`,
 		`${t.eyeLabel}: ${companion.eye}`,
 		`${t.mutedLabel}: ${muted ? t.mutedYes : t.mutedNo}`,
+		`${t.profileLabel}: ${currentBuddyProfileName()}`,
 		`${t.hatchedLabel}: ${new Date(companion.hatchedAt).toLocaleString()}`,
 		`${t.statsLabel}:`,
 		stats,
+	].join('\n');
+}
+
+function formatProfileList(): string {
+	const t = buddyTranslations();
+	const currentProfile = currentBuddyProfileName();
+	const activeProfile = getActiveProfileName();
+	const items = getAllProfiles().map(profile =>
+		formatTemplate(t.profileListItem, {
+			marker: profile.name === currentProfile ? '*' : ' ',
+			name: profile.name,
+			active: profile.name === activeProfile ? t.currentProfileLabel : '',
+		}),
+	);
+
+	return [
+		formatTemplate(t.profileListTitle, {profile: currentProfile}),
+		...items,
 	].join('\n');
 }
 
@@ -267,6 +299,53 @@ registerCommand('buddy', {
 			return {
 				success: true,
 				message: `${companion.name}: ${reply}`,
+			};
+		}
+
+		if (subcommand === 'profile') {
+			const requestedProfile = remainder.trim();
+			if (!requestedProfile || requestedProfile === 'list') {
+				return {
+					success: true,
+					message: formatProfileList(),
+				};
+			}
+
+			if (requestedProfile === 'current') {
+				return {
+					success: true,
+					message: formatTemplate(t.profileListTitle, {
+						profile: currentBuddyProfileName(),
+					}),
+				};
+			}
+
+			if (requestedProfile === 'default' || requestedProfile === 'reset') {
+				setBuddyAiProfile(undefined);
+				return {
+					success: true,
+					message: formatTemplate(t.profileCleared, {
+						profile: getActiveProfileName(),
+					}),
+				};
+			}
+
+			const profile = getAllProfiles().find(
+				item => item.name === requestedProfile,
+			);
+			if (!profile) {
+				return {
+					success: false,
+					message: formatTemplate(t.profileNotFound, {
+						profile: requestedProfile,
+					}),
+				};
+			}
+
+			setBuddyAiProfile(profile.name);
+			return {
+				success: true,
+				message: formatTemplate(t.profileSet, {profile: profile.name}),
 			};
 		}
 

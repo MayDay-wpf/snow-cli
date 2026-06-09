@@ -2,9 +2,11 @@ import type {CompanionBones, Eye, Hat, Species} from './types.js';
 import {
 	axolotl,
 	blob,
+	basketball,
 	cactus,
 	capybara,
 	cat,
+	chicken,
 	chonk,
 	dragon,
 	duck,
@@ -36,6 +38,62 @@ import {
 	unicorn,
 	whale,
 } from './types.js';
+
+export function speciesColor(species: Species): string {
+	switch (species) {
+		case duck:
+		case chicken:
+			return 'yellow';
+		case goose:
+		case ghost:
+		case rabbit:
+		case snowman:
+			return 'white';
+		case blob:
+		case octopus:
+		case axolotl:
+		case unicorn:
+			return 'magentaBright';
+		case cat:
+		case capybara:
+		case hamster:
+		case chonk:
+			return 'yellowBright';
+		case dragon:
+		case turtle:
+		case cactus:
+			return 'green';
+		case owl:
+		case snail:
+		case mushroom:
+		case raccoon:
+			return 'gray';
+		case penguin:
+		case panda:
+			return 'whiteBright';
+		case robot:
+		case laptop:
+			return 'cyan';
+		case fox:
+			return 'red';
+		case whale:
+			return 'blue';
+		case teapot:
+		case treasure:
+		case book:
+		case coffee:
+		case basketball:
+			return 'yellow';
+		case rocket:
+		case moon:
+			return 'whiteBright';
+		case cloud:
+			return 'cyanBright';
+		case lantern:
+		case star:
+			return 'yellowBright';
+	}
+}
 
 const BODIES: Record<Species, string[][]> = {
 	[duck]: [
@@ -82,6 +140,29 @@ const BODIES: Record<Species, string[][]> = {
 			'     ||     ',
 			'   _(__)_   ',
 			'    ^^^^    ',
+		],
+	],
+	[chicken]: [
+		[
+			'            ',
+			'    __      ',
+			'  _({E})>    ',
+			'  (  v )    ',
+			'   ^^ ^^    ',
+		],
+		[
+			'            ',
+			'    __      ',
+			'  _({E})>    ',
+			'  (  V )    ',
+			'   ^^ ^^    ',
+		],
+		[
+			'    ,       ',
+			'    __      ',
+			'  _({E})>>   ',
+			'  (  v )    ',
+			'   ^^ ^^    ',
 		],
 	],
 	[blob]: [
@@ -358,6 +439,29 @@ const BODIES: Record<Species, string[][]> = {
 			' | |{E}  {E}| | ',
 			' |_|    |_| ',
 			'   |    |   ',
+		],
+	],
+	[basketball]: [
+		[
+			'            ',
+			'   .----.   ',
+			'  /{E} || {E}\\  ',
+			' |---++---| ',
+			'  \\_ || _/  ',
+		],
+		[
+			'            ',
+			'   .----.   ',
+			'  /{E} /\\ {E}\\  ',
+			' |--<  >--| ',
+			'  \\_/\\_/  ',
+		],
+		[
+			'    dunk    ',
+			'   .----.   ',
+			'  /{E} || {E}\\  ',
+			' |---++---| ',
+			'  \\_ || _/  ',
 		],
 	],
 	[robot]: [
@@ -861,6 +965,46 @@ const HAT_LINES: Record<Hat, string> = {
 	visor: '   =====    ',
 };
 
+const PET_LINES: Record<Species, string[]> = {
+	[duck]: ['  scritch  ', '  wing wig ', '  tail wag '],
+	[goose]: [' neck rub  ', '  honk hum ', '  feather  '],
+	[chicken]: ['  comb pat ', '  wing flap', '  peck hop '],
+	[blob]: ['  squish   ', '  wobble   ', '  jiggle   '],
+	[cat]: ['  chin rub ', '  purr purr', '  tail curl'],
+	[dragon]: ['  scale rub', ' smoke puff', '  wing hum '],
+	[octopus]: [' tentacle  ', '  bubble   ', '  soft pat '],
+	[owl]: ['  head pat ', '  feather  ', '  blink hoot'],
+	[penguin]: ['  belly pat', '  flipper  ', '  slide hop'],
+	[turtle]: [' shell rub ', '  slow nod ', '  tiny step'],
+	[snail]: [' shell buff', ' feeler wig', '  slime hop'],
+	[ghost]: ['  spooky pat', '  soft boo ', '  drift hug'],
+	[axolotl]: ['  gill rub ', '  water wig', '  happy gill'],
+	[capybara]: ['  cozy rub ', '  nose boop', '  chill hum'],
+	[cactus]: ['  safe pat ', ' flower nod', '  prickly ok'],
+	[basketball]: ['  spin pat ', '  bounce   ', '  swish    '],
+	[robot]: ['  tune up  ', '  beep purr', '  gear hum '],
+	[rabbit]: ['  ear rub  ', '  nose wig ', '  hop hop  '],
+	[mushroom]: [' cap brush ', '  spore puff', '  damp hum '],
+	[chonk]: [' belly rub ', '  chonk hum', '  loaf wig '],
+	[fox]: ['  ear scritch', '  tail swish', '  sly purr '],
+	[panda]: ['  bamboo pat', '  paw wave ', '  munch hum'],
+	[raccoon]: [' mask rub  ', '  paw grab ', '  trash joy'],
+	[unicorn]: [' mane brush', '  horn glow', '  prance   '],
+	[whale]: ['  wave pat ', '  splash   ', '  whale hum'],
+	[hamster]: ['  cheek rub', '  tiny paws', '  wheel hop'],
+	[teapot]: ['  lid pat  ', '  steam hum', '  warm sip '],
+	[rocket]: ['  fin polish', '  boost hum', '  spark puff'],
+	[laptop]: [' key taps  ', '  fan purr ', '  screen glow'],
+	[moon]: ['  moon rub ', '  crater pat', '  tide hum '],
+	[cloud]: ['  fluff pat', '  mist puff', '  floaty   '],
+	[lantern]: [' glass wipe', '  warm glow', '  wick hum '],
+	[treasure]: [' coin shine', '  latch pat', '  gem blink'],
+	[book]: [' page brush', '  spine pat', '  quiet hum'],
+	[star]: ['  star polish', '  twinkle  ', '  comet hop'],
+	[coffee]: [' mug warm  ', '  steam pat', '  cozy sip '],
+	[snowman]: ['  snow pat ', '  scarf tug', '  chilly hum'],
+};
+
 export function renderSprite(bones: CompanionBones, frame = 0): string[] {
 	const frames = BODIES[bones.species];
 	const body = frames[frame % frames.length]!.map(line =>
@@ -876,6 +1020,15 @@ export function renderSprite(bones: CompanionBones, frame = 0): string[] {
 	return lines;
 }
 
+export function renderPetSprite(bones: CompanionBones, frame = 0): string[] {
+	const lines = renderSprite(bones, frame);
+	const petLines = PET_LINES[bones.species];
+	const petLine = petLines[frame % petLines.length]!;
+	const targetIndex = Math.max(0, lines.length - 1);
+	lines[targetIndex] = petLine;
+	return lines;
+}
+
 export function spriteFrameCount(species: Species): number {
 	return BODIES[species].length;
 }
@@ -885,6 +1038,7 @@ export function renderFace(bones: CompanionBones): string {
 	switch (bones.species) {
 		case duck:
 		case goose:
+		case chicken:
 			return `(${eye}>`;
 		case blob:
 			return `(${eye}${eye})`;
@@ -950,6 +1104,8 @@ export function renderFace(bones: CompanionBones): string {
 			return `<${eye}${eye}>`;
 		case coffee:
 			return `|${eye}${eye}|`;
+		case basketball:
+			return `(${eye}||${eye})`;
 		case snowman:
 			return `(${eye}_${eye})`;
 	}

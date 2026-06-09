@@ -63,6 +63,7 @@
 	},
 	"devDependencies": {
 		"@agentclientprotocol/sdk": "^0.14.1",
+		"@blindfold/sdk": "^1.0.2",
 		"@alcalzone/ansi-tokenize": "^0.3.0",
 		"@grpc/grpc-js": "^1.14.4",
 		"@inkjs/ui": "^2.0.0",

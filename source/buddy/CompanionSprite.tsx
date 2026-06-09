@@ -3,17 +3,25 @@ import {Box, Text} from 'ink';
 import stringWidth from 'string-width';
 import {getCompanion, isCompanionMuted} from './companion.js';
 import {companionEvents} from './companionEvents.js';
-import {renderFace, renderSprite, spriteFrameCount} from './sprites.js';
+import {
+	renderFace,
+	renderPetSprite,
+	renderSprite,
+	speciesColor,
+	spriteFrameCount,
+} from './sprites.js';
 import type {Companion} from './types.js';
 
 const TICK_MS = 500;
 const BUBBLE_SHOW = 20;
 const FADE_WINDOW = 6;
 const PET_BURST_MS = 2500;
-const MIN_COLS_FOR_FULL_SPRITE = 100;
+const MIN_COLS_FOR_FULL_SPRITE = 64;
+const MAX_RESERVED_COLUMNS = 30;
+const SPEAKING_RESERVED_COLUMNS = 18;
+const DIALOGUE_MAX_WIDTH = 36;
 const IDLE_SEQUENCE = [0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 2, 0, 0, 0];
 const PET_SEQUENCE = [2, 1, 0, 1, 2, 0];
-const PET_HEARTS = [' <3', ' <3 <3', ' <3 <3 <3'];
 
 function textWidth(value: string): number {
 	return stringWidth(value);
@@ -121,8 +129,11 @@ export function companionReservedColumns(
 	}
 	const spriteWidth = maxLineWidth(renderSprite(companion, 0));
 	const nameWidth = textWidth(companion.name) + 2;
-	const bubbleWidth = speaking ? 28 : 0;
-	return Math.min(44, Math.max(spriteWidth, nameWidth, bubbleWidth) + 4);
+	const bubbleWidth = speaking ? SPEAKING_RESERVED_COLUMNS : 0;
+	return Math.min(
+		MAX_RESERVED_COLUMNS,
+		Math.max(spriteWidth, nameWidth, bubbleWidth) + 2,
+	);
 }
 
 interface CompanionSpriteProps {
@@ -170,7 +181,7 @@ export function CompanionSprite({
 		}
 		const frameCount = spriteFrameCount(companion.species);
 		if (isPetting) {
-			return renderSprite(
+			return renderPetSprite(
 				{...companion, eye: companion.eye === '✦' ? '◉' : '✦'},
 				petFrame % frameCount,
 			);
@@ -190,61 +201,60 @@ export function CompanionSprite({
 	const visibleReaction =
 		reaction && bubbleAgeTicks < BUBBLE_SHOW ? reaction : undefined;
 	const fade = visibleReaction && bubbleAgeTicks >= BUBBLE_SHOW - FADE_WINDOW;
-	const petHearts = PET_HEARTS[tick % PET_HEARTS.length] ?? ' <3';
 	const spriteWidth = Math.max(
 		maxLineWidth(frameLines),
 		textWidth(companion.name),
 	);
-	const dialogueMaxWidth = Math.max(
-		20,
-		Math.min(72, terminalColumns - spriteWidth - 12),
-	);
-	const dialogueLines = visibleReaction
-		? renderDialogueBox(visibleReaction, dialogueMaxWidth)
-		: [];
+	const companionColor = companion.shiny
+		? 'yellow'
+		: speciesColor(companion.species);
 
 	if (terminalColumns < MIN_COLS_FOR_FULL_SPRITE) {
 		return (
 			<Box marginLeft={1}>
-				<Text color={isPetting ? 'yellow' : 'magenta'}>
+				<Text color={isPetting ? 'yellow' : companionColor}>
 					{renderFace(isPetting ? {...companion, eye: '✦'} : companion)}
 				</Text>
-				{isPetting && <Text color="red">{petHearts}</Text>}
 			</Box>
 		);
 	}
 
+	const reservedColumns = companionReservedColumns(terminalColumns, false);
+	const dialogueMaxWidth = Math.min(
+		DIALOGUE_MAX_WIDTH,
+		terminalColumns - reservedColumns - 4,
+	);
+	const dialogueLines =
+		visibleReaction && dialogueMaxWidth >= 20
+			? renderDialogueBox(visibleReaction, dialogueMaxWidth)
+			: [];
+
 	return (
-		<Box width="100%" justifyContent="flex-end" alignItems="flex-end">
-			{dialogueLines.length > 0 && (
-				<Box flexDirection="column" marginRight={2}>
-					{dialogueLines.map((line, index) => (
-						<Text key={`${index}-${line}`} color={fade ? 'gray' : 'cyan'}>
-							{line}
-						</Text>
-					))}
-				</Box>
-			)}
-			<Box
-				flexDirection="column"
-				marginLeft={1}
-				minWidth={companionReservedColumns(terminalColumns, false)}
-			>
-				<Box flexDirection="column">
-					{frameLines.map((line, index) => (
-						<Text
-							key={`${index}-${line}`}
-							color={
-								isPetting ? 'yellow' : companion.shiny ? 'yellow' : 'magenta'
-							}
-						>
-							{line}
-						</Text>
-					))}
-				</Box>
-				<Box width={spriteWidth} justifyContent="center">
-					<Text color="gray">{companion.name}</Text>
-					{isPetting && <Text color="red">{petHearts}</Text>}
+		<Box width="100%" justifyContent="flex-end">
+			<Box flexDirection="row" alignItems="flex-end" flexShrink={0}>
+				{dialogueLines.length > 0 && (
+					<Box flexDirection="column" marginRight={2} flexShrink={0}>
+						{dialogueLines.map((line, index) => (
+							<Text key={`${index}-${line}`} color={fade ? 'gray' : 'cyan'}>
+								{line}
+							</Text>
+						))}
+					</Box>
+				)}
+				<Box flexDirection="column" width={reservedColumns} flexShrink={0}>
+					<Box flexDirection="column">
+						{frameLines.map((line, index) => (
+							<Text
+								key={`${index}-${line}`}
+								color={isPetting ? 'yellow' : companionColor}
+							>
+								{line}
+							</Text>
+						))}
+					</Box>
+					<Box width={spriteWidth} justifyContent="center">
+						<Text color="gray">{companion.name}</Text>
+					</Box>
 				</Box>
 			</Box>
 		</Box>

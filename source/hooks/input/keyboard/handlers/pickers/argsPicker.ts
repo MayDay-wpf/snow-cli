@@ -1,4 +1,5 @@
 import {setPickerActive} from '../../../../../utils/ui/pickerState.js';
+import {getCommandArgOptionValue} from '../../../../ui/useCommandPanel.js';
 import type {HandlerContext} from '../../types.js';
 
 export function argsPickerHandler(ctx: HandlerContext): boolean {
@@ -40,9 +41,10 @@ export function argsPickerHandler(ctx: HandlerContext): boolean {
 		if (argOptions.length > 0 && argsSelectedIndex < argOptions.length) {
 			const selected = argOptions[argsSelectedIndex];
 			if (selected) {
+				const value = getCommandArgOptionValue(selected);
 				const text = buffer.text;
-				const hasTrailingSpace = /^\/[a-zA-Z0-9_-]+\s+$/.test(text);
-				const suffix = hasTrailingSpace ? selected : ' ' + selected;
+				const hasTrailingSpace = /^\/[a-zA-Z0-9_-]+(?:\s+\S+)*\s+$/.test(text);
+				const suffix = hasTrailingSpace ? value : ' ' + value;
 				buffer.insert(suffix);
 				buffer.setCursorPosition(buffer.text.length);
 				setShowArgsPicker(false);

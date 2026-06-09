@@ -16,6 +16,13 @@ const THINKING_TAG_PATTERN = /\s*<\/?think(?:ing)?>\s*/gi;
 const LIST_ITEM_PATTERN = /^\s*\d+[.)]\s|^\s*[-*+]\s/;
 const LIST_CONTINUATION_PATTERN = /^\s{2,}/;
 
+function compactBuddyProgressText(value: string, maxLength = 180): string {
+	const compacted = value.replace(/\s+/g, ' ').trim();
+	return compacted.length > maxLength
+		? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
+		: compacted;
+}
+
 function cleanThinkingContent(content: string): string {
 	return content.replace(THINKING_TAG_PATTERN, '');
 }
@@ -77,6 +84,8 @@ export async function processStreamRound(ctx: {
 	let hasReceivedContentChunk = false;
 	let hasStartedContent = false;
 	let hasStreamedLines = false;
+	let hasEmittedThinkingBuddyProgress = false;
+	let hasEmittedAnswerBuddyProgress = false;
 
 	let inCodeBlock = false;
 	let codeBlockBuffer = '';
@@ -186,7 +195,10 @@ export async function processStreamRound(ctx: {
 			return;
 		}
 
-		if (listBuffer && (line.trim() === '' || LIST_CONTINUATION_PATTERN.test(line))) {
+		if (
+			listBuffer &&
+			(line.trim() === '' || LIST_CONTINUATION_PATTERN.test(line))
+		) {
 			listBuffer += line + '\n';
 			return;
 		}
@@ -253,6 +265,20 @@ export async function processStreamRound(ctx: {
 		if (chunk.type === 'reasoning_started') {
 			if (!hasReceivedContentChunk) {
 				setIsReasoning?.(true);
+				if (!hasEmittedThinkingBuddyProgress) {
+					hasEmittedThinkingBuddyProgress = true;
+					options.onBuddyProgress?.({
+						stage: 'thinking_started',
+						summary: `reasoning started; recent messages: ${
+							conversationMessages.length
+						}; available tools: ${
+							activeTools
+								.slice(0, 4)
+								.map(tool => tool.function.name)
+								.join(', ') || 'none'
+						}`,
+					});
+				}
 			}
 			continue;
 		}
@@ -286,6 +312,16 @@ export async function processStreamRound(ctx: {
 			if (!hasReceivedContentChunk) {
 				hasReceivedContentChunk = true;
 				flushThinkingBufferToStream();
+				if (!hasEmittedAnswerBuddyProgress) {
+					hasEmittedAnswerBuddyProgress = true;
+					options.onBuddyProgress?.({
+						stage: 'answer_started',
+						summary: `assistant answer started with: ${compactBuddyProgressText(
+							chunk.content,
+							160,
+						)}`,
+					});
+				}
 			}
 			setIsReasoning?.(false);
 			streamedContent += chunk.content;
@@ -307,6 +343,20 @@ export async function processStreamRound(ctx: {
 
 		if (chunk.type === 'tool_calls' && chunk.tool_calls) {
 			receivedToolCalls = chunk.tool_calls;
+			options.onBuddyProgress?.({
+				stage: 'tool_calls_ready',
+				summary: `assistant requested tools: ${chunk.tool_calls
+					.map(toolCall => {
+						const args = compactBuddyProgressText(
+							toolCall.function.arguments || '',
+							90,
+						);
+						return args
+							? `${toolCall.function.name}(${args})`
+							: toolCall.function.name;
+					})
+					.join('; ')}`,
+			});
 			continue;
 		}
 

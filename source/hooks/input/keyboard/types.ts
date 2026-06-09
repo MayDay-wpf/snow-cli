@@ -2,6 +2,7 @@ import type {Key} from 'ink';
 import type React from 'react';
 import {TextBuffer} from '../../../utils/ui/textBuffer.js';
 import type {SubAgent} from '../../../utils/config/subAgentConfig.js';
+import type {CommandArgOption} from '../../ui/useCommandPanel.js';
 
 export type KeyboardInputOptions = {
 	buffer: TextBuffer;
@@ -199,7 +200,7 @@ export type KeyboardInputOptions = {
 	setShowArgsPicker: (show: boolean) => void;
 	argsSelectedIndex: number;
 	setArgsSelectedIndex: (index: number | ((prev: number) => number)) => void;
-	argsPickerContext: {commandName: string; options: string[]};
+	argsPickerContext: {commandName: string; options: CommandArgOption[]};
 };
 
 export type HandlerRefs = {

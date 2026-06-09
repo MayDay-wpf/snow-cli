@@ -2,11 +2,16 @@ import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import {
+	getCommandArgOptionLabel,
+	getCommandArgOptionValue,
+	type CommandArgOption,
+} from '../../../hooks/ui/useCommandPanel.js';
 import PickerList from '../common/PickerList.js';
 
 interface Props {
 	commandName: string;
-	options: string[];
+	options: CommandArgOption[];
 	selectedIndex: number;
 	visible: boolean;
 }
@@ -27,7 +32,9 @@ const CommandArgsPanel = memo(
 				visible={visible}
 				maxDisplayItems={6}
 				itemHeight={1}
-				getItemKey={(option: string) => option}
+				getItemKey={(option: CommandArgOption) =>
+					getCommandArgOptionValue(option)
+				}
 				title={
 					<>
 						<Text color={theme.colors.warning} bold>
@@ -38,19 +45,17 @@ const CommandArgsPanel = memo(
 						</Text>
 					</>
 				}
-				renderItem={(option: string, isSelected: boolean) => (
+				renderItem={(option: CommandArgOption, isSelected: boolean) => (
 					<Box overflow="hidden">
 						<Text
 							color={
-								isSelected
-									? theme.colors.menuSelected
-									: theme.colors.menuNormal
+								isSelected ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
 							bold={isSelected}
 							wrap="truncate-end"
 						>
-							{isSelected ? '❯ ' : '  '}
-							{option}
+							{isSelected ? '> ' : '  '}
+							{getCommandArgOptionLabel(option)}
 						</Text>
 					</Box>
 				)}

@@ -28,6 +28,7 @@ type Props = {
 
 type View = 'menu' | 'api-form' | 'tool-results';
 type ApiField = 'url' | 'apiKey' | 'model';
+type PrivacyMode = 'api' | 'local';
 
 type ApiDraft = {
 	url: string;
@@ -53,6 +54,10 @@ function loadEnabled(scope: SettingsScope): boolean {
 	return readSettings(scope).privacy?.enabled ?? false;
 }
 
+function loadPrivacyMode(scope: SettingsScope): PrivacyMode {
+	return readSettings(scope).privacy?.mode ?? 'api';
+}
+
 function loadToolResults(scope: SettingsScope): Set<string> {
 	return new Set(
 		readSettings(scope).privacy?.toolResults?.tools ??
@@ -69,6 +74,9 @@ export default function PrivacySettingsScreen({
 	const [view, setView] = useState<View>('menu');
 	const [scope, setScope] = useState<SettingsScope>('project');
 	const [enabled, setEnabled] = useState(() => loadEnabled('project'));
+	const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(() =>
+		loadPrivacyMode('project'),
+	);
 	const [apiDraft, setApiDraft] = useState<ApiDraft>(() =>
 		loadApiDraft('project'),
 	);
@@ -192,6 +200,20 @@ export default function PrivacySettingsScreen({
 		[scope, t.privacySettings.savedInfo],
 	);
 
+	const savePrivacyMode = useCallback(
+		(nextMode: PrivacyMode) => {
+			updateSettings(scope, settings => {
+				settings.privacy = {
+					...settings.privacy,
+					mode: nextMode,
+				};
+			});
+			setPrivacyMode(nextMode);
+			setInfoText(t.privacySettings.savedInfo);
+		},
+		[scope, t.privacySettings.savedInfo],
+	);
+
 	const openApiForm = useCallback(() => {
 		setApiDraft(loadApiDraft(scope));
 		setEditingField(undefined);
@@ -237,8 +259,13 @@ export default function PrivacySettingsScreen({
 		setView('menu');
 	}, [scope, selectedTools, t.privacySettings.savedInfo]);
 
-	const privacyOptions = useMemo(
-		() => [
+	const privacyOptions = useMemo(() => {
+		const options: Array<{
+			label: string;
+			value: string;
+			infoText: string;
+			color?: string;
+		}> = [
 			{
 				label: `${t.privacySettings.configLocation}: ${
 					scope === 'project'
@@ -256,10 +283,28 @@ export default function PrivacySettingsScreen({
 				infoText: t.privacySettings.enablePrivacyInfo,
 			},
 			{
+				label: `${t.privacySettings.modeLabel}: ${
+					privacyMode === 'api'
+						? t.privacySettings.modeApi
+						: t.privacySettings.modeLocalRules
+				}`,
+				value: 'toggle-mode',
+				infoText:
+					privacyMode === 'api'
+						? t.privacySettings.modeApiInfo
+						: t.privacySettings.modeLocalRulesInfo,
+			},
+		];
+
+		if (privacyMode === 'api') {
+			options.push({
 				label: t.privacySettings.apiConfig,
 				value: 'api-config',
 				infoText: t.privacySettings.apiConfigInfo,
-			},
+			});
+		}
+
+		options.push(
 			{
 				label: t.privacySettings.toolResultsConfig,
 				value: 'tool-results-config',
@@ -271,15 +316,17 @@ export default function PrivacySettingsScreen({
 				color: theme.colors.menuSecondary,
 				infoText: t.privacySettings.backInfo,
 			},
-		],
-		[
-			enabled,
-			scope,
-			settingsPath,
-			t.privacySettings,
-			theme.colors.menuSecondary,
-		],
-	);
+		);
+
+		return options;
+	}, [
+		enabled,
+		privacyMode,
+		scope,
+		settingsPath,
+		t.privacySettings,
+		theme.colors.menuSecondary,
+	]);
 
 	const apiFormOptions = useMemo(
 		() => [
@@ -367,30 +414,42 @@ export default function PrivacySettingsScreen({
 				const nextScope = scope === 'project' ? 'global' : 'project';
 				setScope(nextScope);
 				setEnabled(loadEnabled(nextScope));
+				setPrivacyMode(loadPrivacyMode(nextScope));
 				setApiDraft(loadApiDraft(nextScope));
 				setSelectedTools(loadToolResults(nextScope));
 				setInfoText(getSettingsPath(nextScope));
 			} else if (value === 'toggle-enabled') {
 				saveEnabled(!enabled);
+			} else if (value === 'toggle-mode') {
+				savePrivacyMode(privacyMode === 'api' ? 'local' : 'api');
 			} else if (value === 'api-config') {
 				openApiForm();
 			} else if (value === 'tool-results-config') {
 				openToolResults();
 			}
 		},
-		[enabled, onBack, openApiForm, openToolResults, saveEnabled, scope],
+		[
+			enabled,
+			onBack,
+			openApiForm,
+			openToolResults,
+			privacyMode,
+			saveEnabled,
+			savePrivacyMode,
+			scope,
+		],
 	);
 
 	const returnToMenuFromApiForm = useCallback(() => {
 		saveApiConfig();
 		setEditingField(undefined);
-		setPrivacyMenuIndex(2);
+		setPrivacyMenuIndex(3);
 	}, [saveApiConfig]);
 
 	const returnToMenuFromToolResults = useCallback(() => {
 		saveToolResults();
-		setPrivacyMenuIndex(3);
-	}, [saveToolResults]);
+		setPrivacyMenuIndex(privacyMode === 'api' ? 4 : 3);
+	}, [privacyMode, saveToolResults]);
 
 	const handleApiFormSelect = useCallback(
 		(value: string) => {

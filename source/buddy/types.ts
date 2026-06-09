@@ -3,6 +3,8 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export const duck = 'duck';
 export const goose = 'goose';
 export const blob = 'blob';
+export const chicken = 'chicken';
+export const basketball = 'basketball';
 export const cat = 'cat';
 export const dragon = 'dragon';
 export const octopus = 'octopus';
@@ -40,6 +42,8 @@ export type Species =
 	| typeof duck
 	| typeof goose
 	| typeof blob
+	| typeof chicken
+	| typeof basketball
 	| typeof cat
 	| typeof dragon
 	| typeof octopus
@@ -123,6 +127,8 @@ export const SPECIES: Species[] = [
 	duck,
 	goose,
 	blob,
+	chicken,
+	basketball,
 	cat,
 	dragon,
 	octopus,

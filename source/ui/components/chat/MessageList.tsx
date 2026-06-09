@@ -100,10 +100,51 @@ interface Props {
 }
 const STREAM_COLORS = ['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'] as const;
 
-function formatCommandResultLines(content: string): string[] {
+type CommandResultSegment = {
+	text: string;
+	color?: string;
+};
+
+function removeAnsiCodes(text: string): string {
+	return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function parseAnsiCommandLine(line: string): CommandResultSegment[] {
+	const segments: CommandResultSegment[] = [];
+	const ansiPattern = /\x1b\[([0-9;]*)m/g;
+	let cursor = 0;
+	let activeColor: string | undefined;
+	let match: RegExpExecArray | null;
+
+	const pushText = (text: string): void => {
+		const cleanText = removeAnsiCodes(text);
+		if (cleanText) {
+			segments.push({text: cleanText, color: activeColor});
+		}
+	};
+
+	while ((match = ansiPattern.exec(line)) !== null) {
+		pushText(line.slice(cursor, match.index));
+		const codes = (match[1] || '0').split(';');
+		if (codes.includes('33') || codes.includes('93')) {
+			activeColor = 'yellow';
+		} else if (codes.includes('0') || codes.includes('39')) {
+			activeColor = undefined;
+		}
+
+		cursor = match.index + match[0].length;
+	}
+
+	pushText(line.slice(cursor));
+	return segments.length > 0 ? segments : [{text: ' '}];
+}
+
+function formatCommandResultLines(content: string): CommandResultSegment[][] {
 	return content
 		.split('\n')
-		.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+		.map((line, index) =>
+			parseAnsiCommandLine(`${index === 0 ? '└─ ' : '   '}${line || ' '}`),
+		);
 }
 
 function formatAiCompletionTime(value: Date | string): string {
@@ -209,10 +250,18 @@ const MessageList = memo(
 										)}
 										{message.content &&
 											formatCommandResultLines(message.content).map(
-												(line, lineIndex) => (
-													<Text key={lineIndex} color="gray" dimColor>
-														{line}
-													</Text>
+												(lineSegments, lineIndex) => (
+													<Box key={lineIndex}>
+														{lineSegments.map((segment, segmentIndex) => (
+															<Text
+																key={segmentIndex}
+																color={segment.color ?? 'gray'}
+																dimColor={!segment.color}
+															>
+																{segment.text}
+															</Text>
+														))}
+													</Box>
 												),
 											)}
 									</Box>

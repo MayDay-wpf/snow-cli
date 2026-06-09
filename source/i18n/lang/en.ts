@@ -575,14 +575,21 @@ export const en: TranslationKeys = {
 	privacySettings: {
 		title: 'Privacy Settings',
 		apiConfig: 'API Configuration',
-		apiConfigInfo: 'Manage privacy options related to API configuration',
+		apiConfigInfo: 'Manage online privacy filter API configuration',
 		toolResultsConfig: 'Tool Results Configuration',
 		toolResultsConfigInfo: 'Manage privacy options related to tool results',
 		enablePrivacy: 'Enable Privacy Filter',
 		enablePrivacyInfo:
-			'Use the privacy filter API for related content when enabled',
+			'Process related content with the selected mode when enabled',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',
+		modeLabel: 'Filter Mode',
+		modeApi: 'Online API',
+		modeApiInfo: 'Use the configured online privacy filter API for redaction',
+		modeLocalRules: 'Local Rules',
+		modeLocalRulesInfo:
+			'Use @blindfold/sdk local rules for redaction without API configuration',
+		modeSelectInfo: 'Choose privacy filter mode',
 		configLocation: 'Config Location',
 		projectLocation: 'Project',
 		projectLocationInfo:
@@ -590,7 +597,7 @@ export const en: TranslationKeys = {
 		globalLocation: 'Global',
 		globalLocationInfo:
 			'Save to .snow/settings.json under the user home directory',
-		scopeSelectInfo: 'Choose where to save API configuration first',
+		scopeSelectInfo: 'Choose where to save privacy configuration first',
 		urlLabel: 'URL (full path)',
 		urlInfo: 'Enter the full URL of the privacy filter API',
 		apiKeyLabel: 'APIKEY (optional)',
@@ -866,6 +873,8 @@ export const en: TranslationKeys = {
 				mutedLabel: 'Muted',
 				mutedYes: 'yes',
 				mutedNo: 'no',
+				profileLabel: 'AI Profile',
+				currentProfileLabel: '(current Snow profile)',
 				hatchedLabel: 'Hatched',
 				statsLabel: 'Stats',
 				alreadyExists:
@@ -889,13 +898,22 @@ export const en: TranslationKeys = {
 				noBuddyToTalk:
 					'No buddy to talk to yet. Use /buddy hatch [name] first.',
 				sayUsage: 'Usage: /buddy say <message>',
+				profileListTitle: 'Buddy AI profile: {profile}',
+				profileListItem: '{marker} {name} {active}',
+				profileUsage:
+					'Usage: /buddy profile [list|current|default|reset|<profile>]',
+				profileSet: 'Buddy AI profile set to {profile}.',
+				profileCleared:
+					'Buddy AI profile cleared. It will follow current Snow profile: {profile}.',
+				profileNotFound:
+					'Profile "{profile}" not found. Use /buddy profile list.',
 				muted:
 					'Buddy muted. UI companion and prompt context are hidden until /buddy unmute.',
 				unmutedReaction: 'I am back.',
 				unmuted: 'Buddy unmuted.',
 				reset: 'Buddy reset. Use /buddy hatch [name] to hatch a new companion.',
 				usage:
-					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|say <message>|mute|unmute|reset]',
+					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
 				teaser: 'Psst... try /buddy',
 				noModelConfigured: 'No model configured for buddy reply',
 				emptyReply: '{name} is listening.',
