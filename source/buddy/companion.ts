@@ -107,6 +107,36 @@ function rollStats(random: () => number): CompanionStats {
 	}, {} as CompanionStats);
 }
 
+function isValidRarity(value: unknown): value is Rarity {
+	return (
+		value === 'common' ||
+		value === 'uncommon' ||
+		value === 'rare' ||
+		value === 'epic' ||
+		value === 'legendary'
+	);
+}
+
+function isValidSpecies(value: unknown): value is Species {
+	return typeof value === 'string' && SPECIES.includes(value as Species);
+}
+
+function isValidEye(value: unknown): boolean {
+	return typeof value === 'string' && EYES.includes(value as never);
+}
+
+function isValidHat(value: unknown): boolean {
+	return typeof value === 'string' && HATS.includes(value as never);
+}
+
+function isValidStats(value: unknown): value is CompanionStats {
+	if (!value || typeof value !== 'object') {
+		return false;
+	}
+	const stats = value as Partial<Record<keyof CompanionStats, unknown>>;
+	return COMPANION_STATS.every(stat => typeof stats[stat] === 'number');
+}
+
 function isStoredCompanion(value: unknown): value is StoredCompanion {
 	if (!value || typeof value !== 'object') {
 		return false;
@@ -116,12 +146,12 @@ function isStoredCompanion(value: unknown): value is StoredCompanion {
 		typeof candidate.name === 'string' &&
 		typeof candidate.personality === 'string' &&
 		typeof candidate.hatchedAt === 'number' &&
-		typeof candidate.rarity === 'string' &&
-		typeof candidate.species === 'string' &&
-		typeof candidate.eye === 'string' &&
-		typeof candidate.hat === 'string' &&
+		isValidRarity(candidate.rarity) &&
+		isValidSpecies(candidate.species) &&
+		isValidEye(candidate.eye) &&
+		isValidHat(candidate.hat) &&
 		typeof candidate.shiny === 'boolean' &&
-		Boolean(candidate.stats)
+		isValidStats(candidate.stats)
 	);
 }
 

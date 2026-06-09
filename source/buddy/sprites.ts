@@ -1005,14 +1005,29 @@ const PET_LINES: Record<Species, string[]> = {
 	[snowman]: ['  snow pat ', '  scarf tug', '  chilly hum'],
 };
 
+function spriteFramesFor(species: Species): string[][] {
+	return (
+		(BODIES as Partial<Record<Species, string[][]>>)[species] ?? BODIES[duck]
+	);
+}
+
+function petLinesFor(species: Species): string[] {
+	return (
+		(PET_LINES as Partial<Record<Species, string[]>>)[species] ??
+		PET_LINES[duck]
+	);
+}
+
 export function renderSprite(bones: CompanionBones, frame = 0): string[] {
-	const frames = BODIES[bones.species];
-	const body = frames[frame % frames.length]!.map(line =>
+	const frames = spriteFramesFor(bones.species);
+	const normalizedFrame = Math.max(0, frame) % frames.length;
+	const body = frames[normalizedFrame]!.map(line =>
 		line.replaceAll('{E}', bones.eye),
 	);
 	const lines = [...body];
-	if (bones.hat !== 'none' && !lines[0]!.trim()) {
-		lines[0] = HAT_LINES[bones.hat];
+	const hatLine = bones.hat === 'none' ? undefined : HAT_LINES[bones.hat];
+	if (hatLine && !lines[0]!.trim()) {
+		lines[0] = hatLine;
 	}
 	if (!lines[0]!.trim() && frames.every(f => !f[0]!.trim())) {
 		lines.shift();
@@ -1022,15 +1037,16 @@ export function renderSprite(bones: CompanionBones, frame = 0): string[] {
 
 export function renderPetSprite(bones: CompanionBones, frame = 0): string[] {
 	const lines = renderSprite(bones, frame);
-	const petLines = PET_LINES[bones.species];
-	const petLine = petLines[frame % petLines.length]!;
+	const petLines = petLinesFor(bones.species);
+	const normalizedFrame = Math.max(0, frame) % petLines.length;
+	const petLine = petLines[normalizedFrame]!;
 	const targetIndex = Math.max(0, lines.length - 1);
 	lines[targetIndex] = petLine;
 	return lines;
 }
 
 export function spriteFrameCount(species: Species): number {
-	return BODIES[species].length;
+	return spriteFramesFor(species).length;
 }
 
 export function renderFace(bones: CompanionBones): string {
