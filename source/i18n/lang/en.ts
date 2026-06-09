@@ -800,7 +800,7 @@ export const en: TranslationKeys = {
 				'Toggle codebase indexing for current project. Usage: /codebase [on|off|status]',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
-			loop: 'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
+			loop: 'Schedule recurring tasks by interval or daily time. Usage: /loop 5m <prompt> or /loop daily 09:30 <prompt>',
 			profiles: 'Switch configuration profiles',
 			models: 'Open the model switching panel',
 			subAgentDepth: 'Set the maximum nested spawn depth for sub-agents',
@@ -990,15 +990,15 @@ export const en: TranslationKeys = {
 			// Loop command messages
 			loop: {
 				usage:
-					'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop daily 09:30 <prompt> | /loop at 09:30 <prompt> | /loop every day at 09:30 <prompt> | /loop <prompt> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: 'Opening task manager...',
 				relatedLoopTasks: 'Related loop tasks:',
 				noActiveLoops:
-					'No active loops. Create one with /loop 5m <prompt>, or /loop daemon 5m <prompt> for a daemon loop.',
+					'No active loops. Create one with /loop 5m <prompt>, /loop daily 09:30 <prompt>, or /loop daemon 5m <prompt> for a daemon loop.',
 				loopNotFound: 'Loop not found: {id}',
-				cancelled: 'Cancelled loop {id} (every {interval})',
+				cancelled: 'Cancelled loop {id} ({schedule})',
 				created: 'Loop created: {id}',
-				scheduleEvery: 'Schedule: every {interval}',
+				scheduleEvery: 'Schedule: {schedule}',
 				promptLabel: 'Prompt: {prompt}',
 				nextRun: 'Next run: {time}',
 				sessionScopedNote:

@@ -1,10 +1,12 @@
 import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {extname, join} from 'node:path';
 import {getProxyConfig} from '../utils/config/proxyConfig.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 // Type definitions
 import type {SearchResponse, WebPageContent} from './types/websearch.types.js';
+import {IMAGE_MIME_TYPES} from './types/filesystem.types.js';
 // Utility functions
 import {
 	findBrowserExecutable,
@@ -306,6 +308,91 @@ export class WebSearchService {
 		}
 	}
 
+	private getImageMimeTypeFromUrl(url: string): string | undefined {
+		try {
+			const pathname = new URL(url).pathname;
+			const ext = extname(pathname).toLowerCase();
+			return IMAGE_MIME_TYPES[ext as keyof typeof IMAGE_MIME_TYPES];
+		} catch {
+			return undefined;
+		}
+	}
+
+	private normalizeImageMimeType(
+		contentType: string | null,
+	): string | undefined {
+		if (!contentType) {
+			return undefined;
+		}
+
+		const mimeType = contentType.split(';')[0]?.trim().toLowerCase();
+		return mimeType && mimeType.startsWith('image/') ? mimeType : undefined;
+	}
+
+	private async convertImageBufferToBase64(
+		buffer: Buffer,
+		mimeType: string,
+	): Promise<{data: string; mimeType: string}> {
+		if (mimeType === 'image/svg+xml') {
+			try {
+				const sharp = (await import('sharp')).default;
+				const pngBuffer = await sharp(buffer).png().toBuffer();
+
+				return {
+					data: pngBuffer.toString('base64'),
+					mimeType: 'image/png',
+				};
+			} catch {
+				return {
+					data: buffer.toString('base64'),
+					mimeType,
+				};
+			}
+		}
+
+		return {
+			data: buffer.toString('base64'),
+			mimeType,
+		};
+	}
+
+	private async fetchRemoteImageAsBase64(
+		url: string,
+		abortSignal?: AbortSignal,
+	): Promise<{data: string; mimeType: string} | null> {
+		const mimeTypeFromUrl = this.getImageMimeTypeFromUrl(url);
+		const response = await fetch(
+			url,
+			addProxyToFetchOptions(url, {
+				signal: abortSignal,
+				headers: {
+					Accept:
+						'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+				},
+			}),
+		);
+
+		if (!response.ok) {
+			if (mimeTypeFromUrl) {
+				throw new Error(
+					`Failed to fetch image: ${response.status} ${response.statusText}`,
+				);
+			}
+
+			return null;
+		}
+
+		const mimeType =
+			this.normalizeImageMimeType(response.headers.get('content-type')) ||
+			mimeTypeFromUrl;
+		if (!mimeType) {
+			return null;
+		}
+
+		const arrayBuffer = await response.arrayBuffer();
+		return this.convertImageBufferToBase64(Buffer.from(arrayBuffer), mimeType);
+	}
+
 	/**
 	 * Fetch and extract content from a web page
 	 * @param url - URL of the web page to fetch
@@ -315,7 +402,7 @@ export class WebSearchService {
 	 * @param abortSignal - Optional abort signal from main flow
 	 * @param onTokenUpdate - Optional callback to update token count during compression
 	 * @param enableAiSummary - Whether to enable AI summarization for non-user-provided URLs (default: false). Ignored when isUserProvided=true.
-	 * @returns Cleaned page content
+	 * @returns Cleaned page content, or multimodal text + image content for direct image URLs
 	 */
 	async fetchPage(
 		url: string,
@@ -329,6 +416,32 @@ export class WebSearchService {
 		let page: Page | null = null;
 
 		try {
+			if (isUserProvided || this.getImageMimeTypeFromUrl(url)) {
+				const imageContent = await this.fetchRemoteImageAsBase64(
+					url,
+					abortSignal,
+				);
+
+				if (imageContent) {
+					const text = `Image URL fetched successfully: ${url} (${imageContent.mimeType})`;
+
+					return {
+						url,
+						title: 'Image',
+						content: [
+							{type: 'text', text},
+							{
+								type: 'image',
+								data: imageContent.data,
+								mimeType: imageContent.mimeType,
+							},
+						],
+						textLength: text.length,
+						contentPreview: text,
+					};
+				}
+			}
+
 			// Launch browser with proxy
 			const browser = await this.launchBrowser();
 			page = await browser.newPage();
@@ -500,19 +613,19 @@ export const mcpTools = [
 	{
 		name: 'websearch-fetch',
 		description:
-			'Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **COMPRESSION CONTROL**: User-provided URLs (isUserProvided=true) ALWAYS return full cleaned content without AI summarization. For AI-discovered URLs (isUserProvided=false), use enableAiSummary to choose: true = compact AI model extracts query-relevant info (80-95% smaller), false = return full cleaned content. Set enableAiSummary=true when you only need targeted facts; set false when you need the original full text.',
+			'Fetch and read the full content of a web page or a direct image URL. For HTML pages, automatically cleans and extracts main text content. For direct image URLs (detected by image content-type or image file extension), downloads the image, converts it to base64, and returns multimodal content with an image block so the model can inspect the image. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **COMPRESSION CONTROL**: User-provided URLs (isUserProvided=true) ALWAYS return full cleaned content without AI summarization. For AI-discovered URLs (isUserProvided=false), use enableAiSummary to choose: true = compact AI model extracts query-relevant info (80-95% smaller), false = return full cleaned content. Set enableAiSummary=true when you only need targeted facts; set false when you need the original full text.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				url: {
 					type: 'string',
 					description:
-						'Full URL of the web page to fetch (e.g., "https://example.com/article")',
+						'Full URL of the web page or direct image to fetch (e.g., "https://example.com/article" or "https://example.com/image.png")',
 				},
 				maxLength: {
 					type: 'number',
 					description:
-						'Maximum content length in characters (default: 50000, max: 100000)',
+						'Maximum content length in characters for HTML pages (default: 50000, max: 100000). Ignored for direct image URLs.',
 					default: 50000,
 					minimum: 1000,
 					maximum: 100000,
@@ -525,13 +638,13 @@ export const mcpTools = [
 				enableAiSummary: {
 					type: 'boolean',
 					description:
-						'Whether to apply AI summarization for non-user-provided URLs. Only effective when isUserProvided=false AND userQuery is provided. Default: false (return full cleaned content). Set true when you only need query-relevant information and want to reduce content size by 80-95%.',
+						'Whether to apply AI summarization for non-user-provided HTML pages. Only effective when isUserProvided=false AND userQuery is provided. Default: false (return full cleaned content). Ignored for direct image URLs.',
 					default: false,
 				},
 				userQuery: {
 					type: 'string',
 					description:
-						"Optional: User's original question or query. Only used when isUserProvided=false AND enableAiSummary=true. The compact AI model will extract only information relevant to this query.",
+						"Optional: User's original question or query. Only used for non-user-provided HTML pages when enableAiSummary=true. Direct image URLs are returned as image content instead of summarized text.",
 				},
 			},
 			required: ['url', 'isUserProvided'],

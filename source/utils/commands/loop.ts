@@ -3,6 +3,7 @@ import {
 	type CommandResult,
 } from '../execution/commandExecutor.js';
 import {
+	formatLoopSchedule,
 	formatLoopSummary,
 	loopManager,
 	parseLoopSchedule,
@@ -76,24 +77,30 @@ registerCommand('loop', {
 				};
 			}
 
+			const scheduleText = formatLoopSchedule(loop);
 			return {
 				success: true,
 				message: format(m('cancelled'), {
 					id: loop.id,
-					interval: loop.intervalLabel,
+					interval: scheduleText,
+					schedule: scheduleText,
 				}),
 			};
 		}
 
 		const schedule = parseLoopSchedule(trimmedArgs);
 		const loop = loopManager.createLoop(schedule);
+		const scheduleText = formatLoopSchedule(loop);
 		const modeNote =
 			loop.mode === 'daemon' ? m('daemonScopedNote') : m('sessionScopedNote');
 		return {
 			success: true,
 			message: [
 				format(m('created'), {id: loop.id}),
-				format(m('scheduleEvery'), {interval: loop.intervalLabel}),
+				format(m('scheduleEvery'), {
+					interval: scheduleText,
+					schedule: scheduleText,
+				}),
 				format(m('promptLabel'), {prompt: loop.prompt}),
 				format(m('nextRun'), {
 					time: new Date(loop.nextRunAt).toLocaleString(),

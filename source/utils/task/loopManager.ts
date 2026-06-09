@@ -27,12 +27,21 @@ type LoopExecutionTaskStatus =
 	| 'completed';
 
 export type LoopMode = 'session' | 'daemon';
+export type LoopScheduleKind = 'interval' | 'dailyTime';
+
+export interface LoopDailyTime {
+	hour: number;
+	minute: number;
+	label: string;
+}
 
 export interface LoopSchedule {
 	prompt: string;
 	intervalMs: number;
 	intervalLabel: string;
 	mode: LoopMode;
+	scheduleKind: LoopScheduleKind;
+	dailyTime?: LoopDailyTime;
 }
 
 export interface LoopJobSummary {
@@ -51,10 +60,11 @@ export interface LoopJobSummary {
 	mode: LoopMode;
 	pid?: number;
 	logPath?: string;
+	scheduleKind: LoopScheduleKind;
+	dailyTime?: LoopDailyTime;
 }
-
 interface LoopJob extends LoopJobSummary {
-	timer: NodeJS.Timeout;
+	timer?: NodeJS.Timeout;
 }
 
 interface LoopDaemonState extends LoopJobSummary {
@@ -102,7 +112,10 @@ function readLoopDaemonState(filePath: string): LoopDaemonState | null {
 			return null;
 		}
 
-		return state;
+		return {
+			...state,
+			scheduleKind: state.scheduleKind ?? 'interval',
+		};
 	} catch {
 		try {
 			unlinkSync(filePath);
@@ -232,12 +245,63 @@ function normalizeLoopModeArgs(rawArgs: string): {
 	return {args, mode};
 }
 
+function parseDailyTime(timeText: string): LoopDailyTime {
+	const match = timeText.match(/^(\d{1,2}):(\d{2})$/);
+	if (!match?.[1] || !match[2]) {
+		throw new Error('Daily loop time must use HH:mm format.');
+	}
+
+	const hour = Number.parseInt(match[1], 10);
+	const minute = Number.parseInt(match[2], 10);
+	if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+		throw new Error('Daily loop time must be between 00:00 and 23:59.');
+	}
+
+	return {
+		hour,
+		minute,
+		label: `${hour.toString().padStart(2, '0')}:${minute
+			.toString()
+			.padStart(2, '0')}`,
+	};
+}
+
+function createIntervalSchedule(
+	prompt: string,
+	intervalMs: number,
+	mode: LoopMode,
+): LoopSchedule {
+	return {
+		prompt: prompt.trim(),
+		intervalMs,
+		intervalLabel: millisecondsToLabel(intervalMs),
+		mode,
+		scheduleKind: 'interval',
+	};
+}
+
+function createDailyTimeSchedule(
+	prompt: string,
+	timeText: string,
+	mode: LoopMode,
+): LoopSchedule {
+	const dailyTime = parseDailyTime(timeText);
+	return {
+		prompt: prompt.trim(),
+		intervalMs: 24 * 60 * 60 * 1000,
+		intervalLabel: dailyTime.label,
+		mode,
+		scheduleKind: 'dailyTime',
+		dailyTime,
+	};
+}
+
 export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 	const raw = rawArgs?.trim() || '';
 	const {args, mode} = normalizeLoopModeArgs(raw);
 	if (!args) {
 		throw new Error(
-			'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop 8h30m <prompt> | /loop <prompt> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+			'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop daily 09:30 <prompt> | /loop at 09:30 <prompt> | /loop every day at 09:30 <prompt> | /loop <prompt> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
 		);
 	}
 
@@ -245,15 +309,47 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 		throw new Error('Loop prompt is required after the interval.');
 	}
 
+	const dailyPrefixMatch = args.match(/^(?:daily|at)\s+(\S+)\s+([\s\S]+)$/i);
+	if (dailyPrefixMatch?.[1] && dailyPrefixMatch[2]) {
+		return createDailyTimeSchedule(
+			dailyPrefixMatch[2],
+			dailyPrefixMatch[1],
+			mode,
+		);
+	}
+
+	if (/^(?:daily|at)\s+/i.test(args)) {
+		throw new Error(
+			'Daily loop time and prompt are required. Example: /loop daily 09:30 <prompt>',
+		);
+	}
+
+	const dailyEveryPrefixMatch = args.match(
+		/^every\s+day\s+at\s+(\S+)\s+([\s\S]+)$/i,
+	);
+	if (dailyEveryPrefixMatch?.[1] && dailyEveryPrefixMatch[2]) {
+		return createDailyTimeSchedule(
+			dailyEveryPrefixMatch[2],
+			dailyEveryPrefixMatch[1],
+			mode,
+		);
+	}
+
+	const dailySuffixMatch = args.match(
+		/^([\s\S]+?)\s+every\s+day\s+at\s+(\S+)$/i,
+	);
+	if (dailySuffixMatch?.[1] && dailySuffixMatch[2]) {
+		return createDailyTimeSchedule(
+			dailySuffixMatch[1],
+			dailySuffixMatch[2],
+			mode,
+		);
+	}
+
 	const prefixMatch = args.match(/^((?:\d+\s*[a-zA-Z]+\s*)+?)\s+([\s\S]+)$/);
 	if (prefixMatch?.[1] && prefixMatch[2]) {
 		const intervalMs = parseDurationString(prefixMatch[1]);
-		return {
-			prompt: prefixMatch[2].trim(),
-			intervalMs,
-			intervalLabel: millisecondsToLabel(intervalMs),
-			mode,
-		};
+		return createIntervalSchedule(prefixMatch[2], intervalMs, mode);
 	}
 
 	const suffixMatch = args.match(/^([\s\S]+?)\s+every\s+(\d+)\s*([a-zA-Z]+)$/i);
@@ -262,20 +358,10 @@ export function parseLoopSchedule(rawArgs?: string): LoopSchedule {
 			Number.parseInt(suffixMatch[2], 10),
 			suffixMatch[3],
 		);
-		return {
-			prompt: suffixMatch[1].trim(),
-			intervalMs,
-			intervalLabel: millisecondsToLabel(intervalMs),
-			mode,
-		};
+		return createIntervalSchedule(suffixMatch[1], intervalMs, mode);
 	}
 
-	return {
-		prompt: args,
-		intervalMs: DEFAULT_INTERVAL_MS,
-		intervalLabel: millisecondsToLabel(DEFAULT_INTERVAL_MS),
-		mode,
-	};
+	return createIntervalSchedule(args, DEFAULT_INTERVAL_MS, mode);
 }
 
 class LoopManager {
@@ -287,6 +373,31 @@ class LoopManager {
 		}
 
 		return this.createSessionLoop(schedule);
+	}
+
+	private calculateNextRunAt(
+		loop: Pick<LoopJobSummary, 'scheduleKind' | 'dailyTime' | 'intervalMs'>,
+		from = Date.now(),
+	): number {
+		if (loop.scheduleKind !== 'dailyTime' || !loop.dailyTime) {
+			return from + loop.intervalMs;
+		}
+
+		const next = new Date(from);
+		next.setHours(loop.dailyTime.hour, loop.dailyTime.minute, 0, 0);
+		if (next.getTime() <= from) {
+			next.setDate(next.getDate() + 1);
+		}
+
+		return next.getTime();
+	}
+
+	private scheduleTimer(loop: LoopJob): void {
+		const delayMs = Math.max(1, loop.nextRunAt - Date.now());
+		loop.timer = setTimeout(() => {
+			void this.triggerLoop(loop.id);
+		}, delayMs);
+		loop.timer.unref?.();
 	}
 
 	async listLoops(): Promise<LoopJobSummary[]> {
@@ -322,7 +433,10 @@ class LoopManager {
 		const loop = this.loops.get(loopId);
 		if (loop) {
 			await this.syncTaskState(loop);
-			clearInterval(loop.timer);
+			if (loop.timer) {
+				clearTimeout(loop.timer);
+			}
+
 			this.loops.delete(loopId);
 			return this.toSummary(loop);
 		}
@@ -333,14 +447,14 @@ class LoopManager {
 	async runDaemonLoop(state: LoopDaemonState): Promise<void> {
 		const loop: LoopJob = {
 			...state,
+			scheduleKind: state.scheduleKind ?? 'interval',
 			pid: process.pid,
 			mode: 'daemon',
-			timer: setInterval(() => {
-				void this.triggerLoop(state.id);
-			}, state.intervalMs),
 		};
 
+		loop.nextRunAt = this.calculateNextRunAt(loop);
 		this.loops.set(loop.id, loop);
+		this.scheduleTimer(loop);
 		writeLoopDaemonState({...this.toSummary(loop), cwd: state.cwd});
 		writeLoopDaemonLog(loop.id, `Loop daemon started. PID: ${process.pid}`);
 
@@ -374,25 +488,22 @@ class LoopManager {
 
 		const id = randomUUID().replace(/-/g, '').slice(0, 8);
 		const now = Date.now();
-		const timer = setInterval(() => {
-			void this.triggerLoop(id);
-		}, schedule.intervalMs);
-		timer.unref?.();
-
 		const loop: LoopJob = {
 			id,
 			prompt: schedule.prompt,
 			intervalMs: schedule.intervalMs,
 			intervalLabel: schedule.intervalLabel,
 			createdAt: now,
-			nextRunAt: now + schedule.intervalMs,
+			nextRunAt: this.calculateNextRunAt(schedule, now),
 			runCount: 0,
 			skippedCount: 0,
 			mode: 'session',
-			timer,
+			scheduleKind: schedule.scheduleKind,
+			dailyTime: schedule.dailyTime,
 		};
 
 		this.loops.set(id, loop);
+		this.scheduleTimer(loop);
 		return this.toSummary(loop);
 	}
 
@@ -406,11 +517,13 @@ class LoopManager {
 			intervalMs: schedule.intervalMs,
 			intervalLabel: schedule.intervalLabel,
 			createdAt: now,
-			nextRunAt: now + schedule.intervalMs,
+			nextRunAt: this.calculateNextRunAt(schedule, now),
 			runCount: 0,
 			skippedCount: 0,
 			mode: 'daemon',
 			logPath,
+			scheduleKind: schedule.scheduleKind,
+			dailyTime: schedule.dailyTime,
 			cwd: process.cwd(),
 		};
 
@@ -465,6 +578,8 @@ class LoopManager {
 				mode: 'daemon',
 				pid: state.pid,
 				logPath: state.logPath,
+				scheduleKind: state.scheduleKind,
+				dailyTime: state.dailyTime,
 			}));
 	}
 
@@ -521,8 +636,9 @@ class LoopManager {
 		await this.syncTaskState(loop);
 		if (loop.lastTaskStatus && ACTIVE_TASK_STATUSES.has(loop.lastTaskStatus)) {
 			loop.skippedCount += 1;
-			loop.nextRunAt = Date.now() + loop.intervalMs;
+			loop.nextRunAt = this.calculateNextRunAt(loop);
 			this.persistDaemonState(loop);
+			this.scheduleTimer(loop);
 			return;
 		}
 
@@ -532,17 +648,18 @@ class LoopManager {
 			loop.lastTaskId = task.id;
 			loop.lastTaskStatus = 'pending';
 			loop.lastRunAt = Date.now();
-			loop.nextRunAt = loop.lastRunAt + loop.intervalMs;
+			loop.nextRunAt = this.calculateNextRunAt(loop, loop.lastRunAt);
 			loop.runCount += 1;
 			loop.lastError = undefined;
 		} catch (error) {
 			loop.lastRunAt = Date.now();
-			loop.nextRunAt = loop.lastRunAt + loop.intervalMs;
+			loop.nextRunAt = this.calculateNextRunAt(loop, loop.lastRunAt);
 			loop.lastError =
 				error instanceof Error ? error.message : 'Unknown loop execution error';
 		}
 
 		this.persistDaemonState(loop);
+		this.scheduleTimer(loop);
 	}
 
 	private persistDaemonState(loop: LoopJob): void {
@@ -570,15 +687,25 @@ class LoopManager {
 			mode: loop.mode,
 			pid: loop.pid,
 			logPath: loop.logPath,
+			scheduleKind: loop.scheduleKind,
+			dailyTime: loop.dailyTime,
 		};
 	}
+}
+
+export function formatLoopSchedule(
+	loop: Pick<LoopJobSummary, 'scheduleKind' | 'intervalLabel'>,
+): string {
+	return loop.scheduleKind === 'dailyTime'
+		? `daily at ${loop.intervalLabel}`
+		: `every ${loop.intervalLabel}`;
 }
 
 export function formatLoopSummary(loop: LoopJobSummary): string {
 	const lines = [
 		`Loop ID: ${loop.id}`,
 		`Mode: ${loop.mode}`,
-		`Schedule: every ${loop.intervalLabel}`,
+		`Schedule: ${formatLoopSchedule(loop)}`,
 		`Prompt: ${loop.prompt}`,
 		`Created: ${formatTimestamp(loop.createdAt)}`,
 		`Next run: ${formatTimestamp(loop.nextRunAt)}`,

@@ -751,7 +751,7 @@ export const zh: TranslationKeys = {
 			codebase: '切换当前项目的代码库索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理始终批准的工具权限',
 			backend: '显示后台进程面板',
-			loop: '创建会话级循环任务。用法: /loop 5m <提示词>',
+			loop: '按间隔或每日具体时刻创建循环任务。用法: /loop 5m <提示词> 或 /loop daily 09:30 <提示词>',
 			profiles: '打开配置文件切换面板',
 			models: '打开模型切换面板',
 			subAgentDepth: '设置子代理嵌套创建深度上限',
@@ -925,15 +925,15 @@ export const zh: TranslationKeys = {
 			},
 			loop: {
 				usage:
-					'用法: /loop 5m <提示词> | /loop daemon 5m <提示词> | /loop 8h30m <提示词> | /loop <提示词> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'用法: /loop 5m <提示词> | /loop daemon 5m <提示词> | /loop daily 09:30 <提示词> | /loop at 09:30 <提示词> | /loop every day at 09:30 <提示词> | /loop <提示词> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: '正在打开任务管理器...',
 				relatedLoopTasks: '相关循环任务:',
 				noActiveLoops:
-					'暂无活跃的循环任务。可使用 /loop 5m <提示词> 创建，或使用 /loop daemon 5m <提示词> 创建守护循环。',
+					'暂无活跃的循环任务。可使用 /loop 5m <提示词>、/loop daily 09:30 <提示词> 创建，或使用 /loop daemon 5m <提示词> 创建守护循环。',
 				loopNotFound: '未找到循环任务: {id}',
-				cancelled: '已取消循环任务 {id}（每 {interval}）',
+				cancelled: '已取消循环任务 {id}（{schedule}）',
 				created: '循环任务已创建: {id}',
-				scheduleEvery: '调度: 每 {interval}',
+				scheduleEvery: '调度: {schedule}',
 				promptLabel: '提示词: {prompt}',
 				nextRun: '下次运行: {time}',
 				sessionScopedNote: '仅限会话作用域: Snow CLI 退出后循环任务将停止。',

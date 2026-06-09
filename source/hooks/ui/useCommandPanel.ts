@@ -58,7 +58,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	buddy: '[status|hatch|pet|rename|say|profile|mute|unmute|reset]',
 	simple: '[on|off|status]',
 	'add-dir': '[path]',
-	loop: '[daemon] <interval> <prompt> | list | tasks | cancel <id>',
+	loop: '[daemon] <interval> <prompt> | daily HH:mm <prompt> | at HH:mm <prompt> | list | tasks | cancel <id>',
 	goal: '<objective> [--budget=N] | pause | resume | clear | status',
 	init: '[prompt]',
 	role: '[-l|--list | -d|--delete]',
@@ -94,7 +94,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	skills: ['-l'],
 	'role-subagent': ['-l', '-d'],
 	'subagent-depth': ['status'],
-	loop: ['daemon', 'list', 'tasks', 'cancel'],
+	loop: ['daemon', 'daily', 'at', 'list', 'tasks', 'cancel'],
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
 };
@@ -222,7 +222,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'loop',
 				description:
 					t.commandPanel.commands.loop ||
-					'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
+					'Schedule recurring tasks. Usage: /loop 5m <prompt> or /loop daily 09:30 <prompt>',
 			},
 			{
 				name: 'subagent-depth',

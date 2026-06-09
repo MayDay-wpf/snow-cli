@@ -267,7 +267,7 @@ export function getAllProfiles(): ConfigProfile[] {
 				if (config) {
 					profiles.push({
 						name: profileName,
-						displayName: getProfileDisplayName(profileName),
+						displayName: profileName,
 						isActive: profileName === activeProfile,
 						config,
 					});
@@ -284,7 +284,7 @@ export function getAllProfiles(): ConfigProfile[] {
 		saveProfile('default', defaultConfig);
 		profiles.push({
 			name: 'default',
-			displayName: 'Default',
+			displayName: 'default',
 			isActive: true,
 			config: defaultConfig,
 		});
@@ -292,14 +292,6 @@ export function getAllProfiles(): ConfigProfile[] {
 	}
 
 	return profiles.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Get a user-friendly display name for a profile
- */
-function getProfileDisplayName(profileName: string): string {
-	// Capitalize first letter
-	return profileName.charAt(0).toUpperCase() + profileName.slice(1);
 }
 
 /**

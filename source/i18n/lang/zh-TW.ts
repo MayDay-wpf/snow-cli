@@ -752,7 +752,7 @@ export const zhTW: TranslationKeys = {
 			codebase: '切換當前專案的代碼庫索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理永遠允許的工具權限',
 			backend: '顯示背景處理程序面板',
-			loop: '建立會話級循環任務。用法: /loop 5m <提示詞>',
+			loop: '按間隔或每日具體時刻建立循環任務。用法: /loop 5m <提示詞> 或 /loop daily 09:30 <提示詞>',
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
 			subAgentDepth: '設定子代理巢狀建立深度上限',
@@ -927,15 +927,15 @@ export const zhTW: TranslationKeys = {
 			},
 			loop: {
 				usage:
-					'用法: /loop 5m <提示詞> | /loop daemon 5m <提示詞> | /loop 8h30m <提示詞> | /loop <提示詞> every 2 hours | /loop list | /loop cancel <id> | /loop tasks',
+					'用法: /loop 5m <提示詞> | /loop daemon 5m <提示詞> | /loop daily 09:30 <提示詞> | /loop at 09:30 <提示詞> | /loop every day at 09:30 <提示詞> | /loop <提示詞> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
 				openingTaskManager: '正在開啟任務管理員...',
 				relatedLoopTasks: '相關迴圈任務:',
 				noActiveLoops:
-					'目前沒有活躍的迴圈任務。可使用 /loop 5m <提示詞> 建立，或使用 /loop daemon 5m <提示詞> 建立守護迴圈。',
+					'目前沒有活躍的迴圈任務。可使用 /loop 5m <提示詞>、/loop daily 09:30 <提示詞> 建立，或使用 /loop daemon 5m <提示詞> 建立守護迴圈。',
 				loopNotFound: '找不到迴圈任務: {id}',
-				cancelled: '已取消迴圈任務 {id}（每 {interval}）',
+				cancelled: '已取消迴圈任務 {id}（{schedule}）',
 				created: '迴圈任務已建立: {id}',
-				scheduleEvery: '排程: 每 {interval}',
+				scheduleEvery: '排程: {schedule}',
 				promptLabel: '提示詞: {prompt}',
 				nextRun: '下次執行: {time}',
 				sessionScopedNote: '僅限會話作用域: Snow CLI 結束後迴圈任務將停止。',
