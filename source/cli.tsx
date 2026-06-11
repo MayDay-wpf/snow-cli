@@ -147,6 +147,7 @@ const isQuickCommand = args.some(
 		arg === '-v' ||
 		arg === '--help' ||
 		arg === '-h' ||
+		arg === '--doctor' ||
 		arg === '--update-check' ||
 		arg === '--acp' ||
 		arg === '--sse' ||
@@ -168,6 +169,7 @@ import Spinner from 'ink-spinner';
 import meow from 'meow';
 import {spawn} from 'child_process';
 import {runUpdateCheckAndExit} from './utils/core/updateCheck.js';
+import {runDoctorAndExit} from './utils/core/doctor.js';
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import {fileURLToPath} from 'url';
@@ -267,11 +269,13 @@ Usage
   $ snow --ask "your prompt" <sessionId>
   $ snow --task "your task description"
   $ snow --task-list
+  $ snow --doctor
   $ snow --loop-daemon-execute <base64-loop-state>
 
 Options
 		--help        Show help
 		--version     Show version
+		--doctor      Run environment diagnostics
 		--update      Update to latest version
 		--update-check Check whether the environment is suitable for updating
 		-c            Skip welcome screen and resume last conversation (optionally specify sessionId)
@@ -298,6 +302,10 @@ Options
 		importMeta: import.meta,
 		flags: {
 			update: {
+				type: 'boolean',
+				default: false,
+			},
+			doctor: {
 				type: 'boolean',
 				default: false,
 			},
@@ -390,6 +398,10 @@ Options
 		},
 	},
 );
+// Handle doctor flag
+if (cli.flags.doctor) {
+	runDoctorAndExit(VERSION, packageJson);
+}
 
 // Handle update check flag
 if (cli.flags.updateCheck) {
