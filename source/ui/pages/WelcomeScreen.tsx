@@ -469,6 +469,7 @@ export default function WelcomeScreen({
 										paddingX={2}
 										paddingY={showUpdateNoticeInLogoPane ? 1 : 0}
 										flexGrow={1}
+										flexShrink={1}
 									>
 										<ChatHeaderLogo
 											terminalWidth={logoColumnWidth}
@@ -476,13 +477,23 @@ export default function WelcomeScreen({
 											hideCompact
 											revealChars={logoRevealChars}
 										/>
-										<Box marginTop={1}>
-											<Text color="gray" dimColor>
+										<Box
+											marginTop={1}
+											width="100%"
+											justifyContent="center"
+											overflow="hidden"
+										>
+											<Text color="gray" dimColor wrap="truncate">
 												v{version} • {t.welcome.subtitle}
 											</Text>
 										</Box>
 										{showUpdateNoticeInLogoPane && updateNotice && (
-											<Box marginTop={1}>
+											<Box
+												marginTop={1}
+												width="100%"
+												justifyContent="center"
+												overflow="hidden"
+											>
 												<UpdateNotice
 													currentVersion={updateNotice.currentVersion}
 													latestVersion={updateNotice.latestVersion}
