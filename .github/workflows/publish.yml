@@ -56,8 +56,10 @@ jobs:
 
             ### What's New
 
-            - Buddy system launched
-            - Supports local rule-based desensitization
+            - Loop supports setting a specific time
+            - Remove the first letter capitalization in the configuration file name
+            - Add doctor parameter for diagnosing the running environment
+            - Optimize some display effects
             
             ### Installation
             ```bash
