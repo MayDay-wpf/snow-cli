@@ -17,8 +17,6 @@
 
 **Telegram**: [https://t.me/snow_cli](https://t.me/snow_cli)
 
-**AI Community**: [https://linux.do](https://linux.do)
-
 _Agentic coding in your terminal_
 
 </div>

@@ -17,8 +17,6 @@
 
 **Telegram**: [https://t.me/snow_cli](https://t.me/snow_cli)
 
-**AI 社区**: [https://linux.do](https://linux.do)
-
 _在终端中进行 Agentic 编程_
 
 </div>
