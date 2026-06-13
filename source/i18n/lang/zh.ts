@@ -1011,7 +1011,7 @@ export const zh: TranslationKeys = {
 				usageObjective:
 					'  /goal <目标>                 创建并启动一个新的可持久化目标',
 				usageBudget:
-					'  /goal <目标> --budget=N      设置 Token 预算（默认 2,000,000）',
+					'  /goal <目标> --budget=N      设置 Token 预算，单位 M（默认 2M）',
 				usagePause: '  /goal pause                  暂停当前活跃的目标',
 				usageResume:
 					'  /goal resume                 打开目标会话选择面板（或恢复当前已暂停的目标）',

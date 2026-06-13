@@ -20,6 +20,7 @@ import path from 'path';
 import os from 'os';
 import {randomUUID} from 'crypto';
 import {sessionManager} from '../session/sessionManager.js';
+import {getDefaultGoalTokenBudget} from '../config/unifiedSettings.js';
 
 export type GoalStatus =
 	| 'pursuing'
@@ -47,8 +48,6 @@ export interface GoalStatusUpdate {
 	status: 'achieved' | 'unmet';
 	explanation?: string;
 }
-
-const DEFAULT_TOKEN_BUDGET = 2_000_000; // 2M tokens 默认预算
 
 function safeJsonParse<T>(content: string): T | null {
 	try {
@@ -179,7 +178,7 @@ class GoalManager {
 			sessionId: session.id,
 			objective: trimmed,
 			status: 'pursuing',
-			tokenBudget: tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+			tokenBudget: tokenBudget ?? getDefaultGoalTokenBudget(),
 			tokensUsed: 0,
 			runCount: 0,
 			createdAt: now,
@@ -361,7 +360,7 @@ class GoalManager {
 		}
 		goal.tokensUsed += deltaTokens;
 		goal.updatedAt = Date.now();
-		const budget = goal.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+		const budget = goal.tokenBudget ?? getDefaultGoalTokenBudget();
 		const exceeded = goal.tokensUsed >= budget;
 		if (exceeded) {
 			goal.status = 'budget-limited';
@@ -417,7 +416,7 @@ class GoalManager {
 	 * 用于命令面板/状态栏的轻量摘要。
 	 */
 	formatSummary(goal: GoalRecord): string {
-		const budget = goal.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+		const budget = goal.tokenBudget ?? getDefaultGoalTokenBudget();
 		const usedPct =
 			budget > 0 ? Math.min(100, (goal.tokensUsed / budget) * 100) : 0;
 		const lines = [
@@ -488,7 +487,7 @@ class GoalManager {
  */
 function buildContinuationPrompt(goal: GoalRecord): string {
 	const remaining =
-		(goal.tokenBudget ?? DEFAULT_TOKEN_BUDGET) - goal.tokensUsed;
+		(goal.tokenBudget ?? getDefaultGoalTokenBudget()) - goal.tokensUsed;
 	return [
 		'[GOAL CONTINUATION]',
 		`Active goal (id=${goal.id}, run #${goal.runCount + 1}):`,
@@ -511,7 +510,7 @@ function buildContinuationPrompt(goal: GoalRecord): string {
 		'7. Otherwise, execute the next concrete step toward the objective (updating todolist status as you go) and the loop will re-prompt you next turn.',
 		'',
 		`Token budget: ~${remaining} tokens remaining (used ${goal.tokensUsed} / ${
-			goal.tokenBudget ?? DEFAULT_TOKEN_BUDGET
+			goal.tokenBudget ?? getDefaultGoalTokenBudget()
 		}). Prefer small, verifiable steps.`,
 		'',
 		'CRITICAL: Do not declare completion by chat text alone. The loop only stops when you call `goal-update_goal`. A stale or missing todolist is itself a violation of goal-mode requirements.',

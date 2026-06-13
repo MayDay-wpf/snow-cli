@@ -145,7 +145,6 @@ function migrateScope(
 		});
 	}
 
-
 	// working-dirs.json
 	tryMigrate<{directories?: unknown}>(LEGACY_FILES.workingDirs, data => {
 		if (
@@ -276,6 +275,15 @@ function migrateScope(
 		}
 		return false;
 	});
+
+
+	if (settings.goal?.defaultTokenBudgetM === undefined) {
+		settings.goal = {
+			...(settings.goal || {}),
+			defaultTokenBudgetM: 2,
+		};
+		mutated = true;
+	}
 
 	if (mutated) {
 		writeSettings(scope, settings, workingDirectory);

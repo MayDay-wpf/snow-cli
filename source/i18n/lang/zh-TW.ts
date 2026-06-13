@@ -1013,7 +1013,7 @@ export const zhTW: TranslationKeys = {
 				usageObjective:
 					'  /goal <目標>                 建立並啟動一個新的可持久化目標',
 				usageBudget:
-					'  /goal <目標> --budget=N      設定 Token 預算（預設 2,000,000）',
+					'  /goal <目標> --budget=N      設定 Token 預算，單位 M（預設 2M）',
 				usagePause: '  /goal pause                  暫停目前活躍的目標',
 				usageResume:
 					'  /goal resume                 開啟目標會話選擇面板（或恢復目前已暫停的目標）',

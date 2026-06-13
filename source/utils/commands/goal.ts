@@ -3,9 +3,10 @@
  *
  * 支持的子命令:
  *   /goal <objective>           创建并启动新目标
- *   /goal <objective> --budget=N 设置 token 预算（默认 2,000,000）
+ *   /goal <objective> --budget=N 设置 token 预算，单位 M（默认 2，即 2,000,000 tokens）
  *   /goal pause                 暂停当前目标
  *   /goal resume                恢复已暂停的目标（立即触发一轮续接）
+ *   /goal resume <sessionId>    恢复指定会话的目标
  *   /goal clear                 清除当前目标
  *   /goal status                显示当前目标摘要
  *
@@ -36,12 +37,15 @@ function parseArgs(rawArgs: string): ParsedArgs {
 	const trimmed = rawArgs.trim();
 	if (!trimmed) return {};
 
-	// 提取 --budget=N 或 --budget N
+	// 提取 --budget=N 或 --budget N，单位 M（百万 tokens），支持小数如 1.5
 	let working = trimmed;
 	let budget: number | undefined;
-	const budgetMatch = working.match(/\s*--budget(?:=|\s+)(\d+)\s*/);
+	const budgetMatch = working.match(/\s*--budget(?:=|\s+)(\d+(?:\.\d+)?)\s*/);
 	if (budgetMatch && budgetMatch[1]) {
-		budget = Number.parseInt(budgetMatch[1], 10);
+		const budgetM = Number.parseFloat(budgetMatch[1]);
+		if (!Number.isNaN(budgetM) && budgetM > 0) {
+			budget = Math.round(budgetM * 1_000_000);
+		}
 		working = working.replace(budgetMatch[0], ' ').trim();
 	}
 
@@ -213,10 +217,9 @@ registerCommand('goal', {
 				return {
 					success: true,
 					action: 'startGoalLoop',
-					message: [
-						format(m.resumeSuccess, {id: goal.id}),
-						m.resumeHint,
-					].join('\n'),
+					message: [format(m.resumeSuccess, {id: goal.id}), m.resumeHint].join(
+						'\n',
+					),
 					prompt: goal.objective,
 				};
 			}

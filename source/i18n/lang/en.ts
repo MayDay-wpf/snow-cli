@@ -1079,7 +1079,7 @@ export const en: TranslationKeys = {
 				usageObjective:
 					'  /goal <objective>            Create and start a new persistent goal',
 				usageBudget:
-					'  /goal <objective> --budget=N Set token budget (default 2,000,000)',
+					'  /goal <objective> --budget=N Set token budget in millions (default 2M)',
 				usagePause: '  /goal pause                  Pause the active goal',
 				usageResume:
 					'  /goal resume                 Open goal session picker (or resume current paused goal)',

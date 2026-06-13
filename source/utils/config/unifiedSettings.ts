@@ -157,6 +157,12 @@ export interface UnifiedSettings {
 			tools?: string[];
 		};
 	};
+
+	// === Goal 默认预算（单位：百万 tokens） ===
+	goal?: {
+		/** 默认 token 预算，单位 M（百万）。例如 2 表示 2,000,000 tokens。 */
+		defaultTokenBudgetM?: number;
+	};
 }
 
 export type SettingsScope = 'project' | 'global';
@@ -250,4 +256,20 @@ export function readMergedSettings(workingDirectory?: string): UnifiedSettings {
 	const globalSettings = readSettings('global');
 	const projectSettings = readSettings('project', workingDirectory);
 	return {...globalSettings, ...projectSettings};
+}
+
+const DEFAULT_GOAL_TOKEN_BUDGET_M = 2; // 2M tokens = 2,000,000
+
+/**
+ * 读取 Goal 默认 token 预算（单位：tokens）。
+ * 配置按 项目 > 全局 优先级合并，字段为 `goal.defaultTokenBudgetM`，单位 M（百万）。
+ * 例如 2 表示 2,000,000 tokens；支持小数如 1.5 表示 1,500,000 tokens。
+ */
+export function getDefaultGoalTokenBudget(workingDirectory?: string): number {
+	const merged = readMergedSettings(workingDirectory);
+	const budgetM = merged.goal?.defaultTokenBudgetM;
+	if (typeof budgetM === 'number' && Number.isFinite(budgetM) && budgetM > 0) {
+		return Math.round(budgetM * 1_000_000);
+	}
+	return DEFAULT_GOAL_TOKEN_BUDGET_M * 1_000_000;
 }
