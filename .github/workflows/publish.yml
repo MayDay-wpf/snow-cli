@@ -56,10 +56,8 @@ jobs:
 
             ### What's New
 
-            - Loop supports setting a specific time
-            - Remove the first letter capitalization in the configuration file name
-            - Add doctor parameter for diagnosing the running environment
-            - Optimize some display effects
+            - The default budget of the `/goal` command can be configured, and the unit is changed to `M`.
+            - Team mode and sub-agent are changed to sub-process mode, reducing the memory usage of the main heap.
             
             ### Installation
             ```bash

@@ -6,7 +6,23 @@ import {mkdirSync, rmSync} from 'fs';
 const WORKTREE_BASE = join(process.cwd(), '.snow', 'worktrees');
 
 function sanitizeName(name: string): string {
-	return name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+	return name
+		.normalize('NFKC')
+		.replace(/[^\p{L}\p{N}_-]/gu, '_')
+		.replace(/_+/g, '_')
+		.replace(/^_+|_+$/g, '')
+		.toLowerCase();
+}
+
+export function validateTeamWorktreeName(name: string, label = 'name'): string {
+	const sanitized = sanitizeName(name);
+	if (!/[\p{L}\p{N}]/u.test(sanitized)) {
+		throw new Error(
+			`Invalid ${label}: must contain at least one letter or number after sanitization. Chinese, English letters, numbers, "_" and "-" are supported.`,
+		);
+	}
+
+	return sanitized;
 }
 
 export function getWorktreeBase(): string {
@@ -14,17 +30,29 @@ export function getWorktreeBase(): string {
 }
 
 export function getWorktreePath(teamName: string, memberName: string): string {
-	return join(WORKTREE_BASE, sanitizeName(teamName), sanitizeName(memberName));
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
+		memberName,
+		'teammate name',
+	);
+	return join(WORKTREE_BASE, sanitizedTeamName, sanitizedMemberName);
 }
 
 export async function createTeamWorktree(
 	teamName: string,
 	memberName: string,
 ): Promise<string> {
-	const worktreePath = getWorktreePath(teamName, memberName);
-	const branchName = `snow-team/${sanitizeName(teamName)}/${sanitizeName(
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
 		memberName,
-	)}`;
+		'teammate name',
+	);
+	const worktreePath = join(
+		WORKTREE_BASE,
+		sanitizedTeamName,
+		sanitizedMemberName,
+	);
+	const branchName = `snow-team/${sanitizedTeamName}/${sanitizedMemberName}`;
 
 	if (existsSync(worktreePath)) {
 		return worktreePath;
@@ -148,7 +176,12 @@ export function getTeammateBranchName(
 	teamName: string,
 	memberName: string,
 ): string {
-	return `snow-team/${sanitizeName(teamName)}/${sanitizeName(memberName)}`;
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
+		memberName,
+		'teammate name',
+	);
+	return `snow-team/${sanitizedTeamName}/${sanitizedMemberName}`;
 }
 
 export function hasUncommittedChanges(worktreePath: string): boolean {

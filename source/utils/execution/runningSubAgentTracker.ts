@@ -204,10 +204,14 @@ class RunningSubAgentTracker {
 
 			// Also handle abort signal
 			if (abortSignal) {
-				abortSignal.addEventListener('abort', () => {
-					cleanup();
-					resolve(false);
-				}, {once: true});
+				abortSignal.addEventListener(
+					'abort',
+					() => {
+						cleanup();
+						resolve(false);
+					},
+					{once: true},
+				);
 			}
 
 			// Initial check (in case they all finished between our first check and subscribe)
@@ -297,6 +301,29 @@ class RunningSubAgentTracker {
 		const messages = [...queue];
 		queue.length = 0;
 		return messages;
+	}
+
+	enqueueExternalInterAgentMessage(
+		targetInstanceId: string,
+		message: InterAgentMessage,
+	): boolean {
+		const queue = this.interAgentQueues.get(targetInstanceId);
+		if (!queue) {
+			return false;
+		}
+
+		queue.push(message);
+		const fromAgent =
+			this.agents.get(message.fromInstanceId) ||
+			({
+				instanceId: message.fromInstanceId,
+				agentId: message.fromAgentId,
+				agentName: message.fromAgentName,
+				prompt: '',
+				startedAt: message.sentAt,
+			} as RunningSubAgent);
+		this.notifyInterAgentListeners(fromAgent, targetInstanceId, message);
+		return true;
 	}
 
 	/**

@@ -71,6 +71,20 @@ winget install Microsoft.WindowsTerminal
 # 或使用 Microsoft Store 安装
 ```
 
+## 安装
+
+通过 npm 全局安装 Snow CLI：
+
+```bash
+npm install -g snow-ai
+```
+
+安装完成后，运行：
+
+```bash
+snow
+```
+
 ## 文档目录
 
 - [安装指南](docs/usage/zh/01.安装指南.md) - 系统要求、安装(更新、卸载)步骤、IDE 扩展安装

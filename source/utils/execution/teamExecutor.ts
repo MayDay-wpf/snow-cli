@@ -36,6 +36,8 @@ export interface TeammateExecutionOptions {
 		multiSelect?: boolean,
 	) => Promise<{selected: string | string[]; customInput?: string}>;
 	requirePlanApproval?: boolean;
+	/** Stable externally visible instance ID used by the parent process tracker. */
+	instanceId?: string;
 }
 
 export interface TeammateExecutionResult {
@@ -64,7 +66,7 @@ export async function executeTeammate(
 		requirePlanApproval,
 	} = options;
 
-	const instanceId = `teammate-${memberId}-${Date.now()}`;
+	const instanceId = options.instanceId ?? `teammate-${memberId}-${Date.now()}`;
 
 	// Register with team tracker
 	teamTracker.register({

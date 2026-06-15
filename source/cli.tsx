@@ -152,7 +152,8 @@ const isQuickCommand = args.some(
 		arg === '--acp' ||
 		arg === '--sse' ||
 		arg === '--sse-daemon' ||
-		arg === '--loop-daemon-execute',
+		arg === '--loop-daemon-execute' ||
+		arg === '--snow-agent-child-worker',
 );
 
 // Show loading indicator only for non-quick commands
@@ -175,6 +176,14 @@ import {join} from 'path';
 import {fileURLToPath} from 'url';
 import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
 import {shutdownTelemetry} from './utils/telemetry/otel.js';
+
+if (args.includes('--snow-agent-child-worker')) {
+	const {runAgentChildProcessWorker} = await import(
+		'./utils/execution/agentChildProcessWorker.js'
+	);
+	await runAgentChildProcessWorker();
+	process.exit(0);
+}
 
 // Migrate legacy split .snow/*.json files into the unified settings.json before
 // anything else touches config. Safe no-op when nothing legacy is present.
