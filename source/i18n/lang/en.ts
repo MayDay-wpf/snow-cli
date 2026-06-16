@@ -1989,6 +1989,7 @@ export const en: TranslationKeys = {
 		notebookCount: '{count} notebook(s) will also be rolled back',
 		teamCount:
 			'{count} team member(s) will be terminated and worktrees cleaned up',
+		todoCount: '{count} TODO snapshot(s) will also be rolled back',
 		question: 'Choose rollback mode:',
 		conversationOnly: 'Rollback conversation only',
 		conversationAndFiles: 'Rollback conversation + files',
@@ -2006,7 +2007,7 @@ export const en: TranslationKeys = {
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
 		emptyHint: 'No files to rollback',
-		noFilesConfirm: 'No file changes detected. Rollback conversation only?',
+		noFilesConfirm: 'No file changes detected. Confirm rollback?',
 		noFilesConfirmHint: 'Enter confirm · ESC cancel',
 	},
 	usagePanel: {

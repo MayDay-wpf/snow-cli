@@ -1775,6 +1775,7 @@ export type TranslationKeys = {
 		filesCountWithSelection: string;
 		notebookCount: string;
 		teamCount: string;
+		todoCount: string;
 		question: string;
 		conversationOnly: string;
 		conversationAndFiles: string;

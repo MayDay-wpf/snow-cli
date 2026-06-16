@@ -1876,6 +1876,7 @@ export const zhTW: TranslationKeys = {
 			'{count} 個檔案將被回滾 ({selected}/{total} 已選擇)',
 		notebookCount: '{count} 條備忘錄也將被回滾',
 		teamCount: '{count} 個團隊成員將被終止，工作區將被清理',
+		todoCount: '{count} 個 TODO 快照也將被回滾',
 		question: '請選擇回滾方式：',
 		conversationOnly: '僅回滾對話',
 		conversationAndFiles: '回滾對話 + 檔案',
@@ -1893,7 +1894,7 @@ export const zhTW: TranslationKeys = {
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 關閉',
 		emptyHint: '無檔案可回滾',
-		noFilesConfirm: '未偵測到檔案變更。僅回滾對話？',
+		noFilesConfirm: '未偵測到檔案變更。確認回滾？',
 		noFilesConfirmHint: 'Enter 確認 · ESC 取消',
 	},
 	usagePanel: {

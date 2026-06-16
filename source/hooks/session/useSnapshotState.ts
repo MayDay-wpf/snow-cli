@@ -14,6 +14,7 @@ export function useSnapshotState(messagesLength: number) {
 		filePaths?: string[];
 		notebookCount?: number;
 		teamCount?: number;
+		todoCount?: number;
 		message?: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 		crossSessionRollback?: boolean;

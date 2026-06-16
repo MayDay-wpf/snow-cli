@@ -21,6 +21,13 @@ import {
 	clearAllTeamSnapshots,
 } from '../../../utils/team/teamSnapshot.js';
 import {
+	getTodoRollbackCount,
+	rollbackTodos,
+	deleteTodoSnapshotsFromIndex,
+	clearAllTodoSnapshots,
+} from '../../../mcp/utils/todo/rollback.utils.js';
+import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
+import {
 	clearAllTeammateStreamEntries,
 	clearAllSubAgentStreamEntries,
 } from '../core/subAgentMessageHandler.js';
@@ -106,6 +113,7 @@ export function useRollback(props: UseChatLogicProps) {
 			filePaths: pendingRollback.filePaths || [],
 			notebookCount: pendingRollback.notebookCount || 0,
 			teamCount: pendingRollback.teamCount || 0,
+			todoCount: pendingRollback.todoCount || 0,
 		});
 	}, [snapshotState.pendingRollback]);
 
@@ -151,6 +159,16 @@ export function useRollback(props: UseChatLogicProps) {
 			}
 		}
 
+		if (currentSession) {
+			try {
+				await rollbackTodos(currentSession.id, sIdx, todoList =>
+					getTodoService().restoreTodoList(currentSession.id, todoList),
+				);
+			} catch (error) {
+				console.error('Failed to rollback TODO list:', error);
+			}
+		}
+
 		// Always clean up team state when rolling back (regardless of file rollback choice)
 		if (currentSession) {
 			try {
@@ -168,6 +186,7 @@ export function useRollback(props: UseChatLogicProps) {
 					currentSession.id,
 					sIdx,
 				);
+				deleteTodoSnapshotsFromIndex(currentSession.id, sIdx);
 
 				const snapshots = await hashBasedSnapshotManager.listSnapshots(
 					currentSession.id,
@@ -239,6 +258,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 				clearAllNotebookSnapshots(currentSession.id);
 				clearAllTeamSnapshots(currentSession.id);
+				clearAllTodoSnapshots(currentSession.id);
 
 				await sessionManager.deleteSession(currentSession.id);
 
@@ -267,6 +287,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 			if (!rollbackFiles) {
 				deleteNotebookSnapshotsFromIndex(currentSession.id, sIdx);
+				deleteTodoSnapshotsFromIndex(currentSession.id, sIdx);
 			}
 
 			deleteTeamSnapshotsFromIndex(currentSession.id, sIdx);
@@ -329,6 +350,7 @@ export function useRollback(props: UseChatLogicProps) {
 				try {
 					await hashBasedSnapshotManager.clearAllSnapshots(compressedSessionId);
 					clearAllNotebookSnapshots(compressedSessionId);
+					clearAllTodoSnapshots(compressedSessionId);
 					const deleted = await sessionManager.deleteSession(
 						compressedSessionId,
 					);
@@ -384,7 +406,8 @@ export function useRollback(props: UseChatLogicProps) {
 			);
 			const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
 			const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
-			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
+			const tdCount = getTodoRollbackCount(currentSession.id, sIdx);
+			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0 || tdCount > 0) {
 				snapshotState.setPendingRollback({
 					messageIndex: selectedIndex,
 					previewTargetMessageIndex: sIdx,
@@ -392,6 +415,7 @@ export function useRollback(props: UseChatLogicProps) {
 					filePaths,
 					notebookCount: nbCount,
 					teamCount: tmCount,
+					todoCount: tdCount,
 					message: cleanIDEContext(message),
 					images,
 					crossSessionRollback: true,
@@ -421,8 +445,9 @@ export function useRollback(props: UseChatLogicProps) {
 
 		const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
 		const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
+		const tdCount = getTodoRollbackCount(currentSession.id, sIdx);
 
-		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0) {
+		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0 || tdCount > 0) {
 			snapshotState.setPendingRollback({
 				messageIndex: selectedIndex,
 				previewTargetMessageIndex: sIdx,
@@ -430,6 +455,7 @@ export function useRollback(props: UseChatLogicProps) {
 				filePaths,
 				notebookCount: nbCount,
 				teamCount: tmCount,
+				todoCount: tdCount,
 				message: cleanIDEContext(message),
 				images,
 			});
@@ -442,6 +468,7 @@ export function useRollback(props: UseChatLogicProps) {
 				filePaths: [],
 				notebookCount: 0,
 				teamCount: 0,
+				todoCount: 0,
 				message: cleanIDEContext(message),
 				images,
 			});

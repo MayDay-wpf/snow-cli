@@ -42,6 +42,8 @@ export interface PendingQuestion {
 export interface PendingRollbackConfirmation {
 	filePaths: string[];
 	notebookCount: number;
+	teamCount: number;
+	todoCount: number;
 }
 
 export interface InFlightState {

@@ -85,6 +85,7 @@ export class InteractionManager {
 		filePaths: string[];
 		notebookCount?: number;
 		teamCount?: number;
+		todoCount?: number;
 	}): Promise<void> {
 		if (!this.isConnected() || !this.connection) {
 			return;
@@ -93,6 +94,8 @@ export class InteractionManager {
 		this.stateManager.setPendingRollbackConfirmation({
 			filePaths: payload.filePaths || [],
 			notebookCount: payload.notebookCount ?? 0,
+			teamCount: payload.teamCount ?? 0,
+			todoCount: payload.todoCount ?? 0,
 		});
 
 		try {
@@ -100,6 +103,8 @@ export class InteractionManager {
 				'NotifyRollbackConfirmationNeeded',
 				JSON.stringify(payload.filePaths || []),
 				payload.notebookCount ?? 0,
+				payload.teamCount ?? 0,
+				payload.todoCount ?? 0,
 			);
 		} catch {
 			// Silently fail - do not block local rollback flow

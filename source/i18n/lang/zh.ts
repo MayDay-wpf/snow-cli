@@ -1876,6 +1876,7 @@ export const zh: TranslationKeys = {
 			'{count} 个文件将被回滚 ({selected}/{total} 已选择)',
 		notebookCount: '{count} 条备忘录也将被回滚',
 		teamCount: '{count} 个团队成员将被终止，工作区将被清理',
+		todoCount: '{count} 个 TODO 快照也将被回滚',
 		question: '请选择回滚方式：',
 		conversationOnly: '仅回滚对话',
 		conversationAndFiles: '回滚对话 + 文件',
@@ -1893,7 +1894,7 @@ export const zh: TranslationKeys = {
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 关闭',
 		emptyHint: '无文件可回滚',
-		noFilesConfirm: '未检测到文件变更。仅回滚对话？',
+		noFilesConfirm: '未检测到文件变更。确认回滚？',
 		noFilesConfirmHint: 'Enter 确认 · ESC 取消',
 	},
 	usagePanel: {

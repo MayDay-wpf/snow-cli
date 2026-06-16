@@ -10,8 +10,10 @@ import type {
 } from './types/todo.types.js';
 // Utility functions
 import {formatDateForFolder} from './utils/todo/date.utils.js';
+import {recordTodoSnapshot} from './utils/todo/rollback.utils.js';
 // Event emitter
 import {todoEvents} from '../utils/events/todoEvents.js';
+import {getConversationContext} from '../utils/codebase/conversationContext.js';
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
@@ -336,6 +338,40 @@ export class TodoService {
 		};
 	}
 
+	private async recordSnapshotBeforeMutation(sessionId: string): Promise<void> {
+		try {
+			const context = getConversationContext();
+			if (context?.sessionId !== sessionId) {
+				return;
+			}
+
+			recordTodoSnapshot(
+				sessionId,
+				context.messageIndex,
+				await this.getTodoList(sessionId),
+			);
+		} catch {
+			// Snapshot tracking is best-effort and must not block TODO mutations.
+		}
+	}
+
+	async restoreTodoList(
+		sessionId: string,
+		todoList: TodoList | null,
+	): Promise<void> {
+		await this.deleteTodoList(sessionId);
+
+		if (!todoList) {
+			todoEvents.emitTodoUpdate(sessionId, []);
+			return;
+		}
+
+		await this.saveTodoList(sessionId, todoList.todos, {
+			...todoList,
+			sessionId,
+		});
+	}
+
 	private async getOrCreateTodoList(
 		sessionId: string,
 		ultraMode = false,
@@ -450,6 +486,10 @@ export class TodoService {
 
 		try {
 			const action = rawAction as (typeof allowedActions)[number];
+			if (action !== 'get') {
+				await this.recordSnapshotBeforeMutation(sessionId);
+			}
+
 			const todoList = await this.getOrCreateTodoList(sessionId, true);
 			todoList.phases = todoList.phases ?? [];
 
@@ -752,11 +792,13 @@ export class TodoService {
 	 * 删除整个会话的 TODO 列表
 	 */
 	async deleteTodoList(sessionId: string): Promise<boolean> {
+		let deleted = false;
+
 		// 首先尝试删除旧格式（向下兼容）
 		try {
 			const oldTodoPath = path.join(this.todoDir, `${sessionId}.json`);
 			await fs.unlink(oldTodoPath);
-			return true;
+			deleted = true;
 		} catch (error) {
 			// 旧格式不存在，搜索日期文件夹
 		}
@@ -774,7 +816,7 @@ export class TodoService {
 					const todoPath = path.join(filePath, `${sessionId}.json`);
 					try {
 						await fs.unlink(todoPath);
-						return true;
+						deleted = true;
 					} catch (error) {
 						// 文件不存在，继续搜索
 						continue;
@@ -785,7 +827,7 @@ export class TodoService {
 			// 目录读取失败
 		}
 
-		return false;
+		return deleted;
 	}
 
 	/**
@@ -1018,6 +1060,10 @@ EXAMPLES:
 		const action = rawAction as 'get' | 'add' | 'update' | 'delete';
 
 		try {
+			if (action !== 'get') {
+				await this.recordSnapshotBeforeMutation(sessionId);
+			}
+
 			switch (action) {
 				case 'get': {
 					let result = await this.getTodoList(sessionId);

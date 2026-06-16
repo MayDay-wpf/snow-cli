@@ -144,6 +144,8 @@ export class StateManager {
 				? {
 						filePaths: [...this.pendingRollbackConfirmation.filePaths],
 						notebookCount: this.pendingRollbackConfirmation.notebookCount,
+						teamCount: this.pendingRollbackConfirmation.teamCount,
+						todoCount: this.pendingRollbackConfirmation.todoCount,
 				  }
 				: null,
 		};

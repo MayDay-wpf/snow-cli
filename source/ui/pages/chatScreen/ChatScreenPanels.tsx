@@ -49,6 +49,7 @@ type SnapshotState = {
 		filePaths?: string[];
 		notebookCount?: number;
 		teamCount?: number;
+		todoCount?: number;
 	} | null;
 };
 
@@ -462,6 +463,7 @@ export default function ChatScreenPanels({
 					filePaths={snapshotState.pendingRollback.filePaths || []}
 					notebookCount={snapshotState.pendingRollback.notebookCount}
 					teamCount={snapshotState.pendingRollback.teamCount}
+					todoCount={snapshotState.pendingRollback.todoCount}
 					previewSessionId={sessionManager.getCurrentSession()?.id}
 					previewTargetMessageIndex={
 						snapshotState.pendingRollback.previewTargetMessageIndex ??
