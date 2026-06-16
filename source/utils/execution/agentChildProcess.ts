@@ -2,6 +2,8 @@ import {fork, type ChildProcess} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 
+import {getConversationContext} from '../codebase/conversationContext.js';
+
 import {
 	runningSubAgentTracker,
 	type InterAgentMessage,
@@ -56,9 +58,15 @@ type AgentChildProcessMessage<T> =
 	| ChildProcessResultMessage<T>
 	| ChildProcessErrorMessage;
 
+interface AgentChildConversationContext {
+	sessionId: string;
+	messageIndex: number;
+}
+
 interface BaseChildPayload {
 	kind: AgentChildKind;
 	yoloMode?: boolean;
+	conversationContext?: AgentChildConversationContext;
 }
 
 interface SubAgentChildPayload extends BaseChildPayload {
@@ -94,6 +102,16 @@ interface RunAgentChildProcessOptions {
 	requestUserQuestion?: UserQuestionCallback;
 	messagePump?: (child: ChildProcess) => NodeJS.Timeout | undefined;
 	abortErrorMessage: string;
+}
+
+function buildChildPayloadWithConversationContext<T extends AgentChildPayload>(
+	payload: T,
+): T {
+	const conversationContext = getConversationContext();
+	if (!conversationContext) {
+		return payload;
+	}
+	return {...payload, conversationContext};
 }
 
 function getCliEntryPath(): string {
@@ -387,14 +405,14 @@ export async function executeSubAgentInChildProcess(
 	spawnDepth: number = 0,
 ): Promise<SubAgentResult> {
 	return await runAgentChildProcess<SubAgentResult>({
-		payload: {
+		payload: buildChildPayloadWithConversationContext({
 			kind: 'subagent',
 			agentId,
 			prompt,
 			instanceId,
 			spawnDepth,
 			yoloMode,
-		},
+		}),
 		onMessage,
 		abortSignal,
 		requestToolConfirmation,
@@ -417,7 +435,7 @@ export async function executeTeammateInChildProcess(
 	instanceId: string,
 ): Promise<TeammateExecutionResult> {
 	return await runAgentChildProcess<TeammateExecutionResult>({
-		payload: {
+		payload: buildChildPayloadWithConversationContext({
 			kind: 'teammate',
 			memberId,
 			memberName,
@@ -429,7 +447,7 @@ export async function executeTeammateInChildProcess(
 			role,
 			yoloMode: options.yoloMode,
 			requirePlanApproval: options.requirePlanApproval,
-		},
+		}),
 		onMessage: options.onMessage,
 		abortSignal: options.abortSignal,
 		requestToolConfirmation: options.requestToolConfirmation,

@@ -1,5 +1,6 @@
 import {executeSubAgent} from './subAgentExecutor.js';
 import {executeTeammate} from './teamExecutor.js';
+import {setConversationContext} from '../codebase/conversationContext.js';
 import {
 	runningSubAgentTracker,
 	type InterAgentMessage,
@@ -22,6 +23,17 @@ interface PendingRequest {
 const pendingRequests = new Map<string, PendingRequest>();
 let requestCounter = 0;
 let abortController: AbortController | undefined;
+
+function restoreConversationContext(payload: AgentChildPayload): void {
+	const conversationContext = payload.conversationContext;
+	if (!conversationContext) {
+		return;
+	}
+	setConversationContext(
+		conversationContext.sessionId,
+		conversationContext.messageIndex,
+	);
+}
 
 function send(message: any): void {
 	if (process.send) {
@@ -111,6 +123,8 @@ function installMessageInjectionHandlers(): void {
 async function runSubAgentPayload(
 	payload: Extract<AgentChildPayload, {kind: 'subagent'}>,
 ) {
+	restoreConversationContext(payload);
+
 	if (payload.instanceId) {
 		runningSubAgentTracker.register({
 			instanceId: payload.instanceId,
@@ -224,6 +238,7 @@ function bridgeTeamTrackerToParent(): void {
 async function runTeammatePayload(
 	payload: Extract<AgentChildPayload, {kind: 'teammate'}>,
 ) {
+	restoreConversationContext(payload);
 	registerTeammateSnapshots(payload.teammates);
 	bridgeTeamTrackerToParent();
 

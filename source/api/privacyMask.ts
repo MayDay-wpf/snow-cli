@@ -583,7 +583,12 @@ function resolvePrivacyToolResultMaskConfig(
 export async function maskPrivacyText(
 	text: string,
 	config: PrivacyMaskConfig,
+	abortSignal?: AbortSignal,
 ): Promise<string> {
+	if (abortSignal?.aborted) {
+		return text;
+	}
+
 	try {
 		if (config.mode === 'local') {
 			return maskWithLocalFallback(text);
@@ -606,6 +611,7 @@ export async function maskPrivacyText(
 		const fetchOptions = addProxyToFetchOptions(config.url, {
 			method: 'POST',
 			headers,
+			signal: abortSignal,
 			body: JSON.stringify({
 				text,
 				aggregation_strategy: 'simple',
@@ -614,16 +620,29 @@ export async function maskPrivacyText(
 		});
 
 		const response = await fetch(config.url, fetchOptions);
+		if (abortSignal?.aborted) {
+			return text;
+		}
+
 		if (!response.ok) {
 			return maskWithLocalFallback(text);
 		}
 
 		const data = (await response.json()) as PrivacyMaskResponse;
+		if (abortSignal?.aborted) {
+			return text;
+		}
+
 		const maskedText =
 			typeof data.masked_text === 'string' ? data.masked_text : text;
 
 		return maskWithLocalFallback(maskedText);
-	} catch {
+	} catch (error) {
+		const errorName = error instanceof Error ? error.name : undefined;
+		if (abortSignal?.aborted || errorName === 'AbortError') {
+			return text;
+		}
+
 		return maskWithLocalFallback(text);
 	}
 }
@@ -632,8 +651,9 @@ export async function maskToolResultContentIfNeeded(
 	toolName: string,
 	content: string,
 	workingDirectory?: string,
+	abortSignal?: AbortSignal,
 ): Promise<string> {
-	if (!content) {
+	if (!content || abortSignal?.aborted) {
 		return content;
 	}
 
@@ -642,5 +662,5 @@ export async function maskToolResultContentIfNeeded(
 		return content;
 	}
 
-	return maskPrivacyText(content, config);
+	return maskPrivacyText(content, config, abortSignal);
 }

@@ -653,6 +653,7 @@ export async function executeToolCall(
 					toolCall.function.name,
 					result.content,
 					workingDirectory,
+					abortSignal,
 				);
 			}
 
