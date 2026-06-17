@@ -1018,21 +1018,49 @@ function petLinesFor(species: Species): string[] {
 	);
 }
 
-export function renderSprite(bones: CompanionBones, frame = 0): string[] {
+const SLEEP_ZZZ_FRAMES = ['  z   ', ' Zz   ', ' Zzz  ', 'Zzzz  '];
+const SLEEP_BREATH_FRAMES = [0, 0, 1, 1];
+
+function sleepBodyFrame(frame: number): number {
+	return SLEEP_BREATH_FRAMES[frame % SLEEP_BREATH_FRAMES.length] ?? 0;
+}
+
+function sleepZzzLine(frame: number, width: number): string {
+	const zzz = SLEEP_ZZZ_FRAMES[frame % SLEEP_ZZZ_FRAMES.length] ?? '  z   ';
+	return zzz
+		.padStart(Math.floor((width + zzz.length) / 2), ' ')
+		.padEnd(width, ' ')
+		.slice(0, width);
+}
+
+export function renderSprite(
+	bones: CompanionBones,
+	frame = 0,
+	sleeping = false,
+): string[] {
 	const frames = spriteFramesFor(bones.species);
-	const normalizedFrame = Math.max(0, frame) % frames.length;
-	const body = frames[normalizedFrame]!.map(line =>
-		line.replaceAll('{E}', bones.eye),
-	);
+	const bodyFrame = sleeping
+		? sleepBodyFrame(frame)
+		: Math.max(0, frame) % frames.length;
+	const eye = sleeping ? '-' : bones.eye;
+	const body = frames[bodyFrame]!.map(line => line.replaceAll('{E}', eye));
 	const lines = [...body];
 	const hatLine = bones.hat === 'none' ? undefined : HAT_LINES[bones.hat];
 	if (hatLine && !lines[0]!.trim()) {
 		lines[0] = hatLine;
 	}
+	if (sleeping) {
+		const width = lines[0]!.length;
+		lines.unshift(sleepZzzLine(frame, width));
+	}
 	if (!lines[0]!.trim() && frames.every(f => !f[0]!.trim())) {
 		lines.shift();
 	}
 	return lines;
+}
+
+export function renderSleepSprite(bones: CompanionBones, frame = 0): string[] {
+	return renderSprite(bones, frame, true);
 }
 
 export function renderPetSprite(bones: CompanionBones, frame = 0): string[] {
@@ -1125,4 +1153,8 @@ export function renderFace(bones: CompanionBones): string {
 		case snowman:
 			return `(${eye}_${eye})`;
 	}
+}
+export function renderSleepFace(bones: CompanionBones, frame = 0): string {
+	const zzz = 'z'.repeat(1 + (frame % 3));
+	return `${renderFace({...bones, eye: '-'})} ${zzz}`;
 }

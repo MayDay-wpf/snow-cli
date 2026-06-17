@@ -6,6 +6,8 @@ import {companionEvents} from './companionEvents.js';
 import {
 	renderFace,
 	renderPetSprite,
+	renderSleepFace,
+	renderSleepSprite,
 	renderSprite,
 	speciesColor,
 	spriteFrameCount,
@@ -16,6 +18,7 @@ const TICK_MS = 500;
 const BUBBLE_SHOW = 20;
 const FADE_WINDOW = 6;
 const PET_BURST_MS = 2500;
+const SLEEP_TIMEOUT_MS = 3 * 60 * 1000;
 const MIN_COLS_FOR_FULL_SPRITE = 64;
 const MAX_RESERVED_COLUMNS = 30;
 const SPEAKING_RESERVED_COLUMNS = 18;
@@ -147,6 +150,7 @@ export function CompanionSprite({
 	const [reaction, setReaction] = useState<string | undefined>(undefined);
 	const [reactionStartedAt, setReactionStartedAt] = useState(0);
 	const [petAt, setPetAt] = useState<number | undefined>(undefined);
+	const [lastInteractionAt, setLastInteractionAt] = useState(Date.now());
 	const [companion, setCompanion] = useState<Companion | undefined>(() =>
 		getCompanion(),
 	);
@@ -164,9 +168,11 @@ export function CompanionSprite({
 			if (payload.reaction !== undefined) {
 				setReaction(payload.reaction);
 				setReactionStartedAt(Date.now());
+				setLastInteractionAt(Date.now());
 			}
 			if (payload.petAt !== undefined) {
 				setPetAt(payload.petAt);
+				setLastInteractionAt(Date.now());
 			}
 		});
 	}, []);
@@ -174,6 +180,7 @@ export function CompanionSprite({
 	const muted = isCompanionMuted();
 	const now = Date.now();
 	const isPetting = petAt !== undefined && now - petAt < PET_BURST_MS;
+	const isSleeping = !isPetting && now - lastInteractionAt >= SLEEP_TIMEOUT_MS;
 	const petFrame = PET_SEQUENCE[tick % PET_SEQUENCE.length] ?? 0;
 	const frameLines = useMemo(() => {
 		if (!companion) {
@@ -186,12 +193,15 @@ export function CompanionSprite({
 				petFrame % frameCount,
 			);
 		}
+		if (isSleeping) {
+			return renderSleepSprite(companion, tick);
+		}
 		const sequenceFrame = IDLE_SEQUENCE[tick % IDLE_SEQUENCE.length] ?? 0;
 		if (sequenceFrame === -1) {
 			return renderSprite({...companion, eye: '-'}, 0);
 		}
 		return renderSprite(companion, sequenceFrame % frameCount);
-	}, [companion, isPetting, petFrame, tick]);
+	}, [companion, isPetting, isSleeping, petFrame, tick]);
 
 	if (!companion || muted) {
 		return null;
@@ -213,7 +223,9 @@ export function CompanionSprite({
 		return (
 			<Box marginLeft={1}>
 				<Text color={isPetting ? 'yellow' : companionColor}>
-					{renderFace(isPetting ? {...companion, eye: '✦'} : companion)}
+					{isSleeping
+						? renderSleepFace(companion, tick)
+						: renderFace(isPetting ? {...companion, eye: '✦'} : companion)}
 				</Text>
 			</Box>
 		);
