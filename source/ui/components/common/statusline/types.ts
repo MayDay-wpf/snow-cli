@@ -67,6 +67,15 @@ export interface StatusLineContextWindowMetrics {
 	hasAnyCache: boolean;
 }
 
+export interface StatusLinePrivacyState {
+	configured: boolean;
+	enabled: boolean;
+	mode: 'api' | 'local';
+	apiUrlConfigured: boolean;
+	model?: string;
+	toolResultTools: string[];
+}
+
 export interface StatusLineSystemState {
 	memory: {
 		usageMb: number;
@@ -102,6 +111,7 @@ export interface StatusLineSystemState {
 		fileUpdateNotification?: StatusLineFileUpdateNotification | null;
 	};
 	clipboard?: StatusLineCopyStatusMessage | null;
+	privacy: StatusLinePrivacyState;
 	profile: {
 		currentName?: string;
 		baseUrl?: string;

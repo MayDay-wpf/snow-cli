@@ -11,6 +11,7 @@ import {
 	loadProfile,
 	getActiveProfileName,
 } from '../../../utils/config/configManager.js';
+import {readSettings} from '../../../utils/config/unifiedSettings.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
 import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
 import type {
@@ -21,6 +22,7 @@ import type {
 	StatusLineCopyStatusMessage,
 	StatusLineEditorContext,
 	StatusLineFileUpdateNotification,
+	StatusLinePrivacyState,
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
 
@@ -284,6 +286,50 @@ function buildContextWindowState(
 	};
 }
 
+function pickProjectFirst<T>(
+	projectValue: T | undefined,
+	globalValue: T | undefined,
+): T | undefined {
+	return projectValue !== undefined ? projectValue : globalValue;
+}
+
+function buildPrivacyState(
+	workingDirectory = process.cwd(),
+): StatusLinePrivacyState {
+	const globalSettings = readSettings('global');
+	const projectSettings = readSettings('project', workingDirectory);
+	const globalPrivacy = globalSettings.privacy;
+	const projectPrivacy = projectSettings.privacy;
+	const enabled = pickProjectFirst(
+		projectPrivacy?.enabled,
+		globalPrivacy?.enabled,
+	);
+	const mode =
+		pickProjectFirst(projectPrivacy?.mode, globalPrivacy?.mode) ?? 'api';
+	const apiUrl = pickProjectFirst(
+		projectPrivacy?.api?.url,
+		globalPrivacy?.api?.url,
+	)?.trim();
+	const model = pickProjectFirst(
+		projectPrivacy?.api?.model,
+		globalPrivacy?.api?.model,
+	)?.trim();
+	const toolResultTools =
+		pickProjectFirst(
+			projectPrivacy?.toolResults?.tools,
+			globalPrivacy?.toolResults?.tools,
+		) ?? [];
+
+	return {
+		configured: Boolean(projectPrivacy || globalPrivacy),
+		enabled: enabled === true,
+		mode,
+		apiUrlConfigured: Boolean(apiUrl),
+		model: model || undefined,
+		toolResultTools: [...toolResultTools],
+	};
+}
+
 export default function StatusLine({
 	yoloMode = false,
 	planMode = false,
@@ -315,6 +361,7 @@ export default function StatusLine({
 		() => (contextUsage ? buildContextWindowState(contextUsage) : undefined),
 		[contextUsage],
 	);
+	const privacyState = buildPrivacyState();
 
 	// 获取当前 profile 的完整配置（不含 apiKey）
 	const profileConfig = React.useMemo(() => {
@@ -367,6 +414,7 @@ export default function StatusLine({
 					fileUpdateNotification,
 				},
 				clipboard: copyStatusMessage,
+				privacy: privacyState,
 				profile: {
 					currentName: currentProfileName,
 					baseUrl: cfg?.baseUrl,
@@ -422,6 +470,7 @@ export default function StatusLine({
 		language,
 		memoryUsageMb,
 		planMode,
+		privacyState,
 		profileConfig,
 		simpleMode,
 		t.chatScreen.gitBranch,
