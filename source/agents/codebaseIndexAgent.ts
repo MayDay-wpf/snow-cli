@@ -280,6 +280,12 @@ export class CodebaseIndexAgent {
 	 * Stop indexing gracefully
 	 */
 	async stop(): Promise<void> {
+		// Immediately clear progress callback to prevent stale progress reports
+		// from this agent. This is critical for force reindex scenarios where a
+		// new agent will take over - the old agent must not emit any more progress
+		// updates that would conflict with the new agent's progress.
+		this.progressCallback = undefined;
+
 		if (!this.isRunning) {
 			return;
 		}
@@ -502,6 +508,13 @@ export class CodebaseIndexAgent {
 		filePath: string,
 		relativePath: string,
 	): Promise<void> {
+		// Skip if agent is being stopped (e.g., during force reindex).
+		// This prevents the watcher from triggering file processing and
+		// progress reports after the agent has been asked to stop.
+		if (this.shouldStop) {
+			return;
+		}
+
 		try {
 			// Notify UI that file is being reindexed
 			this.notifyProgress({
@@ -784,27 +797,27 @@ export class CodebaseIndexAgent {
 
 					// Reset failure counter on success
 					this.consecutiveFailures = 0;
-			} catch (error) {
-				this.consecutiveFailures++;
-				const detailedError = this.extractDetailedError(error);
-				logger.error(
-					`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
-					detailedError,
-				);
-
-				// Stop indexing if too many consecutive failures
-				if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+				} catch (error) {
+					this.consecutiveFailures++;
+					const detailedError = this.extractDetailedError(error);
 					logger.error(
-						`Stopping indexing after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+						`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
+						detailedError,
 					);
-					this.db.updateProgress({
-						status: 'error',
-						lastError: `Too many failures: ${detailedError}`,
-					});
-					throw new Error(
-						`Indexing stopped after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
-					);
-				}
+
+					// Stop indexing if too many consecutive failures
+					if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+						logger.error(
+							`Stopping indexing after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+						);
+						this.db.updateProgress({
+							status: 'error',
+							lastError: `Too many failures: ${detailedError}`,
+						});
+						throw new Error(
+							`Indexing stopped after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+						);
+					}
 
 					// Skip this batch and continue
 					continue;
