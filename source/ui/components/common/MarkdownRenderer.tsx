@@ -49,7 +49,13 @@ marked.use({
 });
 
 const VERTICAL_TABLE_SEPARATOR_CHAR = '─';
-const VERTICAL_TABLE_RESERVED_COLUMNS = 2;
+// MarkdownRenderer 在不同场景下的实际可用宽度不同：
+// - streaming 消息(MessageRenderer): Box paddingX(1)*2 + 图标列(1) + marginLeft(1) = 4 列，
+//   可用宽度 = terminalWidth - 4
+// - 非流式消息(MessageList): 图标列(1) + marginLeft(1) = 2 列，
+//   可用宽度 = terminalWidth - 2
+// 取最大预留值 4，确保纵向表格分隔线在所有场景下都不会超出可用宽度而溢出换行。
+const VERTICAL_TABLE_RESERVED_COLUMNS = 4;
 
 function renderInlineTokens(parser: any, cell: Tokens.TableCell): string {
 	return cell.tokens ? parser.parseInline(cell.tokens) : cell.text;
@@ -69,7 +75,9 @@ function calculateHorizontalTableWidth(
 
 	// cli-table3 renders tables with left/right padding around every cell,
 	// plus one border per column boundary.
-	return widths.reduce((total, width) => total + width + 2, 0) + widths.length + 1;
+	return (
+		widths.reduce((total, width) => total + width + 2, 0) + widths.length + 1
+	);
 }
 
 function formatVerticalTableSeparator(width: number): string {
@@ -254,7 +262,6 @@ export default function MarkdownRenderer({content}: Props) {
 
 		let lines = rendered.split('\n');
 		lines = trimLines(lines);
-
 
 		return (
 			<Box flexDirection="column">

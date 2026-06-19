@@ -1,4 +1,5 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
+import {visionAgent} from '../../../agents/visionAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {
 	handleAutoCompression,
@@ -15,6 +16,7 @@ export type PendingMessagesOptions = {
 	saveMessage: (message: any) => Promise<void>;
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 	autoCompressOptions: AutoCompressOptions;
+	abortSignal?: AbortSignal;
 };
 
 export type PendingMessagesResult = {
@@ -178,28 +180,38 @@ export async function handlePendingMessages(
 			data: img.data,
 			mimeType: img.mimeType,
 		}));
+	const displayImages =
+		allPendingImages.length > 0 ? allPendingImages : undefined;
 
-	// Add user message to UI
+	// Add user message to UI. Keep the original images visible in the UI, just like
+	// the normal send path; the model-facing/session copy may be converted below.
 	const userMessage: Message = {
 		role: 'user',
 		content: combinedMessage,
-		images: allPendingImages.length > 0 ? allPendingImages : undefined,
+		images: displayImages,
 	};
 	setMessages(prev => [...prev, userMessage]);
+
+	const processedPendingContent =
+		await visionAgent.prepareContentForNonVisionModel(
+			combinedMessage,
+			displayImages,
+			{source: 'user', abortSignal: options.abortSignal},
+		);
 
 	// Add to conversation history
 	activeConversationMessages.push({
 		role: 'user',
-		content: combinedMessage,
-		images: allPendingImages.length > 0 ? allPendingImages : undefined,
+		content: processedPendingContent.content,
+		images: processedPendingContent.images,
 	});
 
 	// Save and set conversation context
 	try {
 		await saveMessage({
 			role: 'user',
-			content: combinedMessage,
-			images: allPendingImages.length > 0 ? allPendingImages : undefined,
+			content: processedPendingContent.content,
+			images: processedPendingContent.images,
 		});
 
 		const {setConversationContext} = await import(

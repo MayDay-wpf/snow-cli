@@ -442,6 +442,7 @@ export async function handleToolCallRound(ctx: {
 		saveMessage,
 		setMessages,
 		autoCompressOptions: autoCompressOpts,
+		abortSignal: controller.signal,
 	});
 
 	if (pendingResult.hookFailed) {
