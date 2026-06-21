@@ -17,6 +17,13 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		theme,
 		currentField,
 		isEditing,
+		// Group expansion
+		apiConnectionExpanded,
+		promptHeadersExpanded,
+		displayCompressExpanded,
+		reasoningExpanded,
+		modelExpanded,
+		tokenTimeoutExpanded,
 		// Profile
 		profiles,
 		activeProfile,
@@ -72,6 +79,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		maxTokens,
 		streamIdleTimeoutSec,
 		toolResultTokenLimit,
+		maxRetries,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -86,6 +94,14 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		: theme.colors.menuNormal;
 
 	switch (field) {
+		case 'apiConnectionGroup':
+		case 'promptHeadersGroup':
+		case 'displayCompressGroup':
+		case 'reasoningGroup':
+		case 'modelGroup':
+		case 'tokenTimeoutGroup':
+			return renderGroupHeader(field);
+
 		case 'profile':
 			return (
 				<Box key={field} flexDirection="column">
@@ -988,8 +1004,61 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 			);
 		}
 
+		case 'maxRetries':
+			return renderNumericField(field, t.configScreen.maxRetries, maxRetries);
+
 		default:
 			return null;
+	}
+
+	function renderGroupHeader(groupField: ConfigField) {
+		let label: string;
+		let expanded: boolean;
+		switch (groupField) {
+			case 'apiConnectionGroup':
+				label = t.configScreen.apiConnectionGroup;
+				expanded = apiConnectionExpanded;
+				break;
+			case 'promptHeadersGroup':
+				label = t.configScreen.promptHeadersGroup;
+				expanded = promptHeadersExpanded;
+				break;
+			case 'displayCompressGroup':
+				label = t.configScreen.displayCompressGroup;
+				expanded = displayCompressExpanded;
+				break;
+			case 'reasoningGroup':
+				label = t.configScreen.reasoningGroup;
+				expanded = reasoningExpanded;
+				break;
+			case 'modelGroup':
+				label = t.configScreen.modelGroup;
+				expanded = modelExpanded;
+				break;
+			case 'tokenTimeoutGroup':
+				label = t.configScreen.tokenTimeoutGroup;
+				expanded = tokenTimeoutExpanded;
+				break;
+			default:
+				return null;
+		}
+		const groupColor = isActive
+			? theme.colors.menuSelected
+			: theme.colors.menuInfo;
+		return (
+			<Box key={groupField} flexDirection="column">
+				<Text color={groupColor} bold>
+					{activeIndicator}
+					{expanded ? '▼ ' : '▶ '}
+					{label}
+				</Text>
+				<Box marginLeft={3}>
+					<Text color={theme.colors.menuSecondary}>
+						{t.configScreen.groupExpandHint}
+					</Text>
+				</Box>
+			</Box>
+		);
 	}
 
 	function renderNumericField(

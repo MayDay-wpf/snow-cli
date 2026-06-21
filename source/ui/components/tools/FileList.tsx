@@ -11,6 +11,7 @@ import React, {
 import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
+import stringWidth from 'string-width';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -20,6 +21,11 @@ import {
 	getFileListDisplayMode,
 	setFileListDisplayMode,
 } from '../../../utils/config/projectSettings.js';
+import {
+	fileSearchAgent,
+	type FileSearchPreviewLabels,
+	type FileSearchResult,
+} from '../../../agents/fileSearchAgent.js';
 
 type FileItem = {
 	name: string;
@@ -228,6 +234,80 @@ const getFullFilePath = (file: FileItem, rootPath: string) => {
 	return path.join(baseDir, file.path);
 };
 
+const AGENT_PREVIEW_VIEWPORT_HEIGHT = 5;
+const AGENT_PREVIEW_INDENT_WIDTH = 2;
+const AGENT_PREVIEW_RESERVED_COLUMNS = 8;
+const AGENT_PREVIEW_PANEL_PADDING = 2;
+
+type AgentPreviewLine = {
+	text: string;
+};
+
+const normalizeAgentPreviewContent = (content: string | undefined): string => {
+	return (
+		content
+			?.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n')
+			.replace(/[\t\v\f]+/g, ' ') ?? ''
+	);
+};
+
+const sliceByVisualWidth = (text: string, maxWidth: number): string => {
+	if (!text || maxWidth <= 0) {
+		return '';
+	}
+
+	let result = '';
+	let width = 0;
+	for (const char of text) {
+		const charWidth = stringWidth(char);
+		if (width + charWidth > maxWidth) {
+			break;
+		}
+		result += char;
+		width += charWidth;
+	}
+
+	return result;
+};
+
+const getSafeAgentPreviewLineWidth = (terminalWidth: number): number => {
+	return Math.max(
+		1,
+		terminalWidth -
+			AGENT_PREVIEW_INDENT_WIDTH -
+			AGENT_PREVIEW_RESERVED_COLUMNS -
+			AGENT_PREVIEW_PANEL_PADDING,
+	);
+};
+
+const buildAgentPreviewLines = (
+	content: string | undefined,
+	terminalWidth: number,
+	fallback: string,
+): AgentPreviewLine[] => {
+	const width = getSafeAgentPreviewLineWidth(terminalWidth);
+	const normalized = normalizeAgentPreviewContent(content).trim();
+	const logicalLines = (normalized || fallback).split('\n');
+	const visibleLines = logicalLines.slice(-AGENT_PREVIEW_VIEWPORT_HEIGHT);
+
+	return [
+		...Array(
+			Math.max(0, AGENT_PREVIEW_VIEWPORT_HEIGHT - visibleLines.length),
+		).fill({text: ' '}),
+		...visibleLines.map(line => ({
+			text: sliceByVisualWidth(line || ' ', width) || ' ',
+		})),
+	];
+};
+
+const buildSafeAgentPreviewTitle = (
+	title: string,
+	terminalWidth: number,
+): string => {
+	return sliceByVisualWidth(title, Math.max(1, terminalWidth - 1)) || ' ';
+};
+
 const FileList = memo(
 	forwardRef<FileListRef, Props>(
 		(
@@ -263,8 +343,44 @@ const FileList = memo(
 			const wasVisibleRef = useRef(false);
 			const previousRootPathRef = useRef(rootPath);
 
+			// Agent search state (@?? / @@?? natural-language file search).
+			const [agentResults, setAgentResults] = useState<FileItem[]>([]);
+			const [isAgentSearching, setIsAgentSearching] = useState(false);
+			const [agentRound, setAgentRound] = useState(0);
+			const [agentPreviewContent, setAgentPreviewContent] = useState('');
+			const [agentError, setAgentError] = useState<string | null>(null);
+			const agentAbortRef = useRef<AbortController | null>(null);
+			const wasAgentModeRef = useRef(false);
+			// True when the @ / @@ query starts with "??" → trigger the AI agent.
+			const isAgentMode = query.startsWith('??');
+
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
+
+			const agentPreviewLabels = useMemo<FileSearchPreviewLabels>(
+				() => ({
+					assistantPrefix: t.fileList.agentPreviewAssistantPrefix,
+					roundRequest: t.fileList.agentPreviewRoundRequest,
+					requestedToolCalls: t.fileList.agentPreviewRequestedToolCalls,
+					toolCall: t.fileList.agentPreviewToolCall,
+					toolResultCandidates: t.fileList.agentPreviewToolResultCandidates,
+					toolResultReceived: t.fileList.agentPreviewToolResultReceived,
+					toolError: t.fileList.agentPreviewToolError,
+					parsingFinalResults: t.fileList.agentPreviewParsingFinalResults,
+					finalizing: t.fileList.agentPreviewFinalizing,
+				}),
+				[
+					t.fileList.agentPreviewAssistantPrefix,
+					t.fileList.agentPreviewRoundRequest,
+					t.fileList.agentPreviewRequestedToolCalls,
+					t.fileList.agentPreviewToolCall,
+					t.fileList.agentPreviewToolResultCandidates,
+					t.fileList.agentPreviewToolResultReceived,
+					t.fileList.agentPreviewToolError,
+					t.fileList.agentPreviewParsingFinalResults,
+					t.fileList.agentPreviewFinalizing,
+				],
+			);
 
 			// Fixed maximum display items to prevent rendering issues
 			const MAX_DISPLAY_ITEMS = 5;
@@ -645,6 +761,13 @@ const FileList = memo(
 
 			// Filter files based on query and search mode with debounce
 			useEffect(() => {
+				// Agent mode (@?? / @@??): bypass the BFS index + filter pipeline
+				// and surface the agent's results directly.
+				if (isAgentMode) {
+					setAllFilteredFiles(agentResults);
+					return;
+				}
+
 				const performSearch = async () => {
 					if (!query.trim()) {
 						setAllFilteredFiles(files);
@@ -757,10 +880,103 @@ const FileList = memo(
 				searchFileContent,
 				isLoading,
 				hasMoreDepth,
+				isAgentMode,
+				agentResults,
 			]);
 
+			// Agent search (@?? / @@??): run the file search agent in its own AI
+			// loop and stream status previews into `agentPreviewContent`. Debounced so
+			// the user can finish typing; previous searches are aborted on query change.
+			useEffect(() => {
+				const agentQuery = isAgentMode ? query.slice(2).trim() : '';
+
+				if (!visible || !isAgentMode || !agentQuery) {
+					// Leaving agent mode (or empty query): cancel + reset once.
+					if (wasAgentModeRef.current) {
+						wasAgentModeRef.current = false;
+						if (agentAbortRef.current) {
+							agentAbortRef.current.abort();
+							agentAbortRef.current = null;
+						}
+						setIsAgentSearching(false);
+						setAgentError(null);
+						setAgentResults([]);
+						setAgentRound(0);
+						setAgentPreviewContent('');
+					}
+					return;
+				}
+
+				wasAgentModeRef.current = true;
+				const controller = new AbortController();
+				agentAbortRef.current = controller;
+
+				const mapResult = (r: FileSearchResult): FileItem => ({
+					name: r.name,
+					path: r.path,
+					isDirectory: false,
+					lineNumber: r.lineNumber,
+					lineContent: r.lineContent || r.reason,
+					sourceDir: r.sourceDir,
+				});
+
+				const timer = setTimeout(async () => {
+					setIsAgentSearching(true);
+					setAgentError(null);
+					setAgentResults([]);
+					setAgentRound(0);
+					setAgentPreviewContent('');
+
+					try {
+						const workingDirs = await getWorkingDirectories();
+						const generator = fileSearchAgent.search(
+							agentQuery,
+							searchMode,
+							workingDirs,
+							controller.signal,
+							agentPreviewLabels,
+						);
+						for await (const event of generator) {
+							if (controller.signal.aborted) {
+								break;
+							}
+							if (event.type === 'progress') {
+								setAgentRound(event.round);
+							} else if (event.type === 'preview') {
+								setAgentRound(event.round);
+								setAgentPreviewContent(event.content);
+							} else if (event.type === 'done') {
+								// Only show results once the agent has fully finished.
+								// Showing partials mid-loop makes the user think the
+								// search is already over when it is still running.
+								setAgentResults(event.results.map(mapResult));
+							} else if (event.type === 'error') {
+								setAgentError(event.message);
+							}
+						}
+					} catch (error) {
+						if (!controller.signal.aborted) {
+							setAgentError(
+								error instanceof Error ? error.message : 'Agent search failed',
+							);
+						}
+					} finally {
+						if (agentAbortRef.current === controller) {
+							agentAbortRef.current = null;
+						}
+						setIsAgentSearching(false);
+					}
+				}, 700);
+
+				return () => {
+					clearTimeout(timer);
+					controller.abort();
+				};
+				// eslint-disable-next-line react-hooks/exhaustive-deps
+			}, [query, searchMode, visible, isAgentMode, agentPreviewLabels]);
+
 			const displayItems = useMemo<DisplayItem[]>(() => {
-				if (searchMode === 'content') {
+				if (isAgentMode || searchMode === 'content') {
 					return allFilteredFiles.map(file => ({
 						file,
 						key: getDisplayItemKey(file),
@@ -782,7 +998,14 @@ const FileList = memo(
 					label: file.path,
 					depth: 0,
 				}));
-			}, [allFilteredFiles, files, displayMode, searchMode, query]);
+			}, [
+				allFilteredFiles,
+				files,
+				displayMode,
+				searchMode,
+				query,
+				isAgentMode,
+			]);
 
 			const normalizedSelectedIndex = useMemo(() => {
 				if (displayItems.length === 0) {
@@ -983,6 +1206,77 @@ const FileList = memo(
 				return null;
 			}
 
+			// Agent search mode (@?? / @@??): handle its own loading / error /
+			// empty states before falling through to the normal render path.
+			if (isAgentMode) {
+				if (isAgentSearching && displayItems.length === 0) {
+					const agentSearchStatus = t.fileList.agentSearching.replace(
+						'{round}',
+						String(agentRound || 1),
+					);
+					const previewLines = buildAgentPreviewLines(
+						agentPreviewContent,
+						terminalWidth,
+						agentSearchStatus,
+					);
+					const previewTitle = buildSafeAgentPreviewTitle(
+						agentSearchStatus,
+						terminalWidth,
+					);
+
+					return (
+						<Box
+							paddingX={1}
+							marginTop={1}
+							flexDirection="column"
+							width={terminalWidth}
+						>
+							<Box height={1}>
+								<Text color={theme.colors.menuInfo} bold wrap="truncate">
+									{previewTitle}
+								</Text>
+							</Box>
+							<Box
+								paddingLeft={AGENT_PREVIEW_INDENT_WIDTH}
+								marginTop={1}
+								flexDirection="column"
+							>
+								{previewLines.map((line, index) => (
+									<Box key={`agent-preview-line-${index}`} height={1}>
+										<Text
+											italic
+											dimColor
+											color={theme.colors.menuSecondary}
+											wrap="truncate"
+										>
+											{line.text}
+										</Text>
+									</Box>
+								))}
+							</Box>
+						</Box>
+					);
+				}
+				if (agentError && displayItems.length === 0) {
+					return (
+						<Box paddingX={1} marginTop={1}>
+							<Text color={theme.colors.warning}>
+								{t.fileList.agentSearchError.replace('{error}', agentError)}
+							</Text>
+						</Box>
+					);
+				}
+				if (!isAgentSearching && !agentError && displayItems.length === 0) {
+					return (
+						<Box paddingX={1} marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.fileList.agentNoResults}
+							</Text>
+						</Box>
+					);
+				}
+			}
+
 			// Treat "still searching" broadly: either a scan is in flight, or a
 			// deeper rescan was just queued (isIncreasingDepth), or there are still
 			// untouched deeper directories that the next query miss can expand into.
@@ -993,7 +1287,7 @@ const FileList = memo(
 				isIncreasingDepth ||
 				(query.trim().length > 0 && hasMoreDepth);
 
-			if (stillSearching && displayItems.length === 0) {
+			if (!isAgentMode && stillSearching && displayItems.length === 0) {
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color="blue" dimColor>
@@ -1022,7 +1316,9 @@ const FileList = memo(
 				<Box paddingX={1} marginTop={1} flexDirection="column">
 					<Box marginBottom={1}>
 						<Text color={theme.colors.menuInfo} bold>
-							{searchMode === 'content'
+							{isAgentMode
+								? t.fileList.agentSearchHeader
+								: searchMode === 'content'
 								? t.fileList.contentSearchHeader
 								: t.fileList.filesHeader.replace(
 										'{mode}',
@@ -1039,7 +1335,7 @@ const FileList = memo(
 						const isSelected = index === displaySelectedIndex;
 						const isTreeMode = searchMode === 'file' && displayMode === 'tree';
 						const prefix =
-							searchMode === 'content'
+							isAgentMode || searchMode === 'content'
 								? ''
 								: isTreeMode
 								? `${'  '.repeat(item.depth)}${
@@ -1071,25 +1367,34 @@ const FileList = memo(
 									}
 									color={color}
 									dimColor={Boolean(item.isContextOnly && !isSelected)}
+									wrap={
+										isAgentMode || searchMode === 'content'
+											? 'truncate-end'
+											: 'wrap'
+									}
 								>
 									{isSelected ? '❯ ' : '  '}
 									{checkbox}
-									{searchMode === 'content'
+									{isAgentMode || searchMode === 'content'
 										? item.label
 										: `${prefix}${item.label}`}
 								</Text>
-								{searchMode === 'content' && file.lineContent && (
-									<Text
-										backgroundColor={
-											isSelected ? theme.colors.menuSelected : undefined
-										}
-										color={theme.colors.menuSecondary}
-										dimColor
-									>
-										{'  '}
-										{file.lineContent}
-									</Text>
-								)}
+								{(isAgentMode || searchMode === 'content') &&
+									file.lineContent && (
+										<Box overflow="hidden">
+											<Text
+												backgroundColor={
+													isSelected ? theme.colors.menuSelected : undefined
+												}
+												color={theme.colors.menuSecondary}
+												dimColor
+												wrap="truncate-end"
+											>
+												{'  '}
+												{file.lineContent}
+											</Text>
+										</Box>
+									)}
 							</Box>
 						);
 					})}
@@ -1125,7 +1430,7 @@ const FileList = memo(
 							</Text>
 						</Box>
 					)}
-					{isLoading && (
+					{!isAgentMode && isLoading && (
 						<Box>
 							<Text color="blue" dimColor>
 								{isIncreasingDepth
@@ -1143,7 +1448,8 @@ const FileList = memo(
 					    deeper directories that have not been scanned, so the
 					    user knows they can press ↓ on the last item to dig
 					    deeper instead of assuming the list is exhaustive. */}
-					{searchMode === 'file' &&
+					{!isAgentMode &&
+						searchMode === 'file' &&
 						hasMoreDepth &&
 						!isLoading &&
 						!isIncreasingDepth &&

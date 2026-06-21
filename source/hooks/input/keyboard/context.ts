@@ -54,7 +54,7 @@ export function createHelpers(
 		refs.isProcessingInput.current = false;
 
 		buffer.setCursorPosition(savedCursorPosition);
-		buffer.insert(accumulated);
+		buffer.insert(accumulated, {isPasteChunk: true});
 		refs.inputStartCursorPos.current = buffer.getCursorPosition();
 	};
 

@@ -524,12 +524,14 @@ export default function ChatScreen({
 		!hasBlockingPanel &&
 		!snapshotState.pendingRollback;
 
-	const shouldPreserveInputDraftWhileFooterHidden = panelState.showModelsPanel;
+	// 这些场景只是临时替代输入框，交互结束后应恢复草稿。
+	const shouldPreserveInputDraftWhileFooterHidden =
+		panelState.showModelsPanel ||
+		!!pendingToolConfirmation ||
+		!!pendingUserQuestion ||
+		!!bashSensitiveCommand;
 
-	// 统一处理：多数会隐藏输入框的场景需要清空 draftContent，避免面板关闭后
-	// ChatInput 重新挂载时通过 draftContent 把旧文本恢复回输入框。
-	// ModelsPanel 是临时设置面板，不代表用户放弃当前输入，因此需要保留草稿，
-	// 让关闭模型面板后输入框恢复到打开面板前的内容。
+	// 其余隐藏输入框的场景需清空草稿，避免恢复旧文本。
 	useEffect(() => {
 		if (!shouldShowFooter && !shouldPreserveInputDraftWhileFooterHidden) {
 			setInputDraftContent(null);

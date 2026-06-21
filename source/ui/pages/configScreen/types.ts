@@ -2,18 +2,23 @@ import type {RequestMethod} from '../../../utils/config/apiConfig.js';
 
 export type ConfigField =
 	| 'profile'
+	| 'apiConnectionGroup'
 	| 'baseUrl'
 	| 'baseUrlMode'
 	| 'apiKey'
 	| 'requestMethod'
+	| 'promptHeadersGroup'
 	| 'systemPromptId'
 	| 'customHeadersSchemeId'
+	| 'displayCompressGroup'
 	| 'anthropicBeta'
 	| 'anthropicCacheTTL'
 	| 'anthropicSpeed'
 	| 'enableAutoCompress'
 	| 'autoCompressThreshold'
 	| 'showThinking'
+	| 'streamingDisplay'
+	| 'reasoningGroup'
 	| 'thinkingEnabled'
 	| 'thinkingMode'
 	| 'thinkingBudgetTokens'
@@ -26,10 +31,12 @@ export type ConfigField =
 	| 'responsesFastMode'
 	| 'chatThinkingEnabled'
 	| 'chatReasoningEffort'
+	| 'modelGroup'
 	| 'advancedModel'
 	| 'basicModel'
 	| 'supportsVision'
 	| 'visionConfig'
+	| 'tokenTimeoutGroup'
 	| 'visionBaseUrl'
 	| 'visionBaseUrlMode'
 	| 'visionApiKey'
@@ -39,7 +46,20 @@ export type ConfigField =
 	| 'maxTokens'
 	| 'streamIdleTimeoutSec'
 	| 'toolResultTokenLimit'
-	| 'streamingDisplay';
+	| 'streamingDisplay'
+	| 'maxRetries';
+
+export const GROUP_FIELDS: ConfigField[] = [
+	'apiConnectionGroup',
+	'promptHeadersGroup',
+	'displayCompressGroup',
+	'reasoningGroup',
+	'modelGroup',
+	'tokenTimeoutGroup',
+];
+
+export const isGroupField = (field: ConfigField) =>
+	GROUP_FIELDS.includes(field);
 
 export type ProfileMode = 'normal' | 'creating' | 'renaming' | 'deleting';
 
@@ -128,6 +148,7 @@ export const NUMERIC_FIELDS: ConfigField[] = [
 	'toolResultTokenLimit',
 	'thinkingBudgetTokens',
 	'autoCompressThreshold',
+	'maxRetries',
 ];
 
 export const TOGGLE_FIELDS: ConfigField[] = [

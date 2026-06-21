@@ -134,12 +134,13 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [maxTokens, setMaxTokens] = useState(4096);
 	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
+	const [maxRetries, setMaxRetries] = useState(5);
 
 	// UI state
 	// 当从 ProfileEditPanel 进入（提供 targetProfileName）时，profile 字段被隐藏，
-	// 初始光标应落在 baseUrl，避免 currentFieldIndex 为 -1。
+	// 初始光标应落在第一个分组标题 apiConnectionGroup，避免 currentFieldIndex 为 -1。
 	const [currentField, setCurrentField] = useState<ConfigField>(
-		targetProfileName ? 'baseUrl' : 'profile',
+		targetProfileName ? 'apiConnectionGroup' : 'profile',
 	);
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
@@ -150,6 +151,15 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [visionConfigMode, setVisionConfigMode] = useState(false);
+
+	// Group expansion state (collapsible categories)
+	const [apiConnectionExpanded, setApiConnectionExpanded] = useState(false);
+	const [promptHeadersExpanded, setPromptHeadersExpanded] = useState(false);
+	const [displayCompressExpanded, setDisplayCompressExpanded] = useState(false);
+	const [reasoningExpanded, setReasoningExpanded] = useState(false);
+	const [modelExpanded, setModelExpanded] = useState(false);
+	const [tokenTimeoutExpanded, setTokenTimeoutExpanded] = useState(false);
+
 	const [, forceUpdate] = useState(0);
 
 	const supportsXHigh = requestMethod === 'responses';
@@ -189,58 +199,83 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			// 显示/操作 profile 切换项；从 ProfileEditPanel 进入时彻底隐藏，
 			// 防止用户切换 active profile 或对 profile 进行增删改。
 			...(targetProfileName ? [] : ['profile' as ConfigField]),
-			'baseUrl',
-			'baseUrlMode',
-			'apiKey',
-			'requestMethod',
-			'systemPromptId',
-			'customHeadersSchemeId',
-			'enableAutoCompress',
-			...(enableAutoCompress ? ['autoCompressThreshold' as ConfigField] : []),
-			'showThinking',
-			'streamingDisplay',
-			...(requestMethod === 'anthropic'
-				? [
-						'anthropicBeta' as ConfigField,
-						'anthropicCacheTTL' as ConfigField,
-						'anthropicSpeed' as ConfigField,
-						'thinkingEnabled' as ConfigField,
-						'thinkingMode' as ConfigField,
-						...(thinkingEnabled && thinkingMode === 'tokens'
-							? ['thinkingBudgetTokens' as ConfigField]
-							: []),
-						...(thinkingEnabled && thinkingMode === 'adaptive'
-							? ['thinkingEffort' as ConfigField]
-							: []),
-				  ]
-				: requestMethod === 'gemini'
-				? [
-						'geminiThinkingEnabled' as ConfigField,
-						'geminiThinkingLevel' as ConfigField,
-				  ]
-				: requestMethod === 'responses'
-				? [
-						'responsesReasoningEnabled' as ConfigField,
-						'responsesReasoningEffort' as ConfigField,
-						'responsesVerbosity' as ConfigField,
-						'responsesFastMode' as ConfigField,
-				  ]
-				: requestMethod === 'chat'
-				? [
-						'chatThinkingEnabled' as ConfigField,
-						...(chatThinkingEnabled
-							? ['chatReasoningEffort' as ConfigField]
-							: []),
-				  ]
+			'apiConnectionGroup',
+			...(apiConnectionExpanded
+				? ([
+						'baseUrl',
+						'baseUrlMode',
+						'apiKey',
+						'requestMethod',
+				  ] as ConfigField[])
 				: []),
-			'advancedModel',
-			'basicModel',
-			'supportsVision',
-			...(supportsVision ? [] : ['visionConfig' as ConfigField]),
-			'maxContextTokens',
-			'maxTokens',
-			'streamIdleTimeoutSec',
-			'toolResultTokenLimit',
+			'promptHeadersGroup',
+			...(promptHeadersExpanded
+				? (['systemPromptId', 'customHeadersSchemeId'] as ConfigField[])
+				: []),
+			'displayCompressGroup',
+			...(displayCompressExpanded
+				? ([
+						'enableAutoCompress',
+						...(enableAutoCompress
+							? ['autoCompressThreshold' as ConfigField]
+							: []),
+						'showThinking',
+						'streamingDisplay',
+				  ] as ConfigField[])
+				: []),
+			'reasoningGroup',
+			...(reasoningExpanded
+				? requestMethod === 'anthropic'
+					? ([
+							'anthropicBeta',
+							'anthropicCacheTTL',
+							'anthropicSpeed',
+							'thinkingEnabled',
+							'thinkingMode',
+							...(thinkingEnabled && thinkingMode === 'tokens'
+								? ['thinkingBudgetTokens' as ConfigField]
+								: []),
+							...(thinkingEnabled && thinkingMode === 'adaptive'
+								? ['thinkingEffort' as ConfigField]
+								: []),
+					  ] as ConfigField[])
+					: requestMethod === 'gemini'
+					? (['geminiThinkingEnabled', 'geminiThinkingLevel'] as ConfigField[])
+					: requestMethod === 'responses'
+					? ([
+							'responsesReasoningEnabled',
+							'responsesReasoningEffort',
+							'responsesVerbosity',
+							'responsesFastMode',
+					  ] as ConfigField[])
+					: requestMethod === 'chat'
+					? ([
+							'chatThinkingEnabled',
+							...(chatThinkingEnabled
+								? ['chatReasoningEffort' as ConfigField]
+								: []),
+					  ] as ConfigField[])
+					: []
+				: []),
+			'modelGroup',
+			...(modelExpanded
+				? ([
+						'advancedModel',
+						'basicModel',
+						'supportsVision',
+						...(supportsVision ? [] : ['visionConfig' as ConfigField]),
+				  ] as ConfigField[])
+				: []),
+			'tokenTimeoutGroup',
+			...(tokenTimeoutExpanded
+				? ([
+						'maxContextTokens',
+						'maxTokens',
+						'streamIdleTimeoutSec',
+						'toolResultTokenLimit',
+						'maxRetries',
+				  ] as ConfigField[])
+				: []),
 		];
 	};
 
@@ -293,14 +328,14 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				currentField === 'thinkingEnabled' ||
 				currentField === 'thinkingBudgetTokens')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 		if (
 			requestMethod !== 'gemini' &&
 			(currentField === 'geminiThinkingEnabled' ||
 				currentField === 'geminiThinkingLevel')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 		if (
 			requestMethod !== 'responses' &&
@@ -309,14 +344,14 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				currentField === 'responsesVerbosity' ||
 				currentField === 'responsesFastMode')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 		if (
 			requestMethod !== 'chat' &&
 			(currentField === 'chatThinkingEnabled' ||
 				currentField === 'chatReasoningEffort')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 	}, [requestMethod, currentField]);
 
@@ -409,6 +444,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setMaxTokens(config.maxTokens || 4096);
 		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
+		setMaxRetries(config.maxRetries ?? 5);
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -497,6 +533,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			return streamIdleTimeoutSec.toString();
 		if (currentField === 'toolResultTokenLimit')
 			return toolResultTokenLimit.toString();
+		if (currentField === 'maxRetries') return maxRetries.toString();
 		if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'thinkingMode') return thinkingMode;
@@ -712,6 +749,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 					maxTokens,
 					streamIdleTimeoutSec,
 					toolResultTokenLimit,
+					maxRetries,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -843,6 +881,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				maxTokens,
 				streamIdleTimeoutSec,
 				toolResultTokenLimit,
+				maxRetries,
 			};
 
 			if (thinkingEnabled) {
@@ -942,6 +981,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 						maxTokens,
 						streamIdleTimeoutSec,
 						toolResultTokenLimit,
+						maxRetries,
 					},
 				};
 				// 写回的目标固定为 editingProfile（与上面 updateSnowConfig 判定使用同一个值）。
@@ -1058,6 +1098,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setStreamIdleTimeoutSec,
 		toolResultTokenLimit,
 		setToolResultTokenLimit,
+		maxRetries,
+		setMaxRetries,
 		// UI state
 		currentField,
 		setCurrentField,
@@ -1077,6 +1119,19 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setManualInputValue,
 		visionConfigMode,
 		setVisionConfigMode,
+		// Group expansion
+		apiConnectionExpanded,
+		setApiConnectionExpanded,
+		promptHeadersExpanded,
+		setPromptHeadersExpanded,
+		displayCompressExpanded,
+		setDisplayCompressExpanded,
+		reasoningExpanded,
+		setReasoningExpanded,
+		modelExpanded,
+		setModelExpanded,
+		tokenTimeoutExpanded,
+		setTokenTimeoutExpanded,
 		// Derived
 		supportsXHigh,
 		requestMethodOptions,

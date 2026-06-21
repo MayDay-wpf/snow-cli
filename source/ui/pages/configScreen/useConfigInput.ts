@@ -3,6 +3,7 @@ import {
 	stripFocusArtifacts,
 	isFocusEventInput,
 	isSelectField,
+	isGroupField,
 } from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -76,6 +77,19 @@ export function useConfigInput(
 		visionConfigMode,
 		setVisionConfigMode,
 		systemPromptId,
+		// Group expansion
+		apiConnectionExpanded,
+		setApiConnectionExpanded,
+		promptHeadersExpanded,
+		setPromptHeadersExpanded,
+		displayCompressExpanded,
+		setDisplayCompressExpanded,
+		reasoningExpanded,
+		setReasoningExpanded,
+		modelExpanded,
+		setModelExpanded,
+		tokenTimeoutExpanded,
+		setTokenTimeoutExpanded,
 	} = state;
 
 	useInput((rawInput, key) => {
@@ -372,6 +386,31 @@ export function useConfigInput(
 	function handleEnterKey() {
 		if (isEditing) {
 			setIsEditing(false);
+			return;
+		}
+
+		// Toggle group expansion
+		if (isGroupField(currentField)) {
+			switch (currentField) {
+				case 'apiConnectionGroup':
+					setApiConnectionExpanded(!apiConnectionExpanded);
+					break;
+				case 'promptHeadersGroup':
+					setPromptHeadersExpanded(!promptHeadersExpanded);
+					break;
+				case 'displayCompressGroup':
+					setDisplayCompressExpanded(!displayCompressExpanded);
+					break;
+				case 'reasoningGroup':
+					setReasoningExpanded(!reasoningExpanded);
+					break;
+				case 'modelGroup':
+					setModelExpanded(!modelExpanded);
+					break;
+				case 'tokenTimeoutGroup':
+					setTokenTimeoutExpanded(!tokenTimeoutExpanded);
+					break;
+			}
 			return;
 		}
 

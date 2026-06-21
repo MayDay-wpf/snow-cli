@@ -378,7 +378,8 @@ export class TextBuffer {
 		this.scheduleUpdate();
 	}
 
-	insert(input: string): void {
+	insert(input: string, options?: {isPasteChunk?: boolean}): void {
+		const isPasteChunk = options?.isPasteChunk ?? false;
 		const sanitized = sanitizeInput(input);
 		if (!sanitized) {
 			return;
@@ -434,7 +435,10 @@ export class TextBuffer {
 		}
 
 		const now = Date.now();
+		// 只有显式标记为粘贴分片（缓冲 flush / flushPendingInput）的输入才允许合并到上一个占位符。
+		// 用户手动键入的单字符 / IME commit 不应被合并，否则粘贴标签后立即输入的内容会被吞掉不显示。
 		const shouldMerge =
+			isPasteChunk &&
 			this.lastTextPlaceholderId !== null &&
 			now - this.lastTextPlaceholderAt < 1200;
 

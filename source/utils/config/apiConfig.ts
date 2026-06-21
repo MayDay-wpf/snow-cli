@@ -74,6 +74,8 @@ export interface ApiConfig {
 	toolResultTokenLimit?: number;
 	// 流式逐行显示 AI 回复 (默认: true)
 	streamingDisplay?: boolean;
+	// API 请求最大重试次数 (默认: 5)
+	maxRetries?: number;
 }
 
 export interface MCPServer {

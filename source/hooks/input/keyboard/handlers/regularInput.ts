@@ -37,9 +37,8 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 		// 表现为光标插入错位、内容渲染像“总是显示末尾”。
 		// 因此：短的多字符输入直接落盘；只对明显的粘贴/大输入走缓冲。
 		const isSingleCharInput = input.length === 1;
-		const looksLikeImageDataPaste = /data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(
-			input,
-		);
+		const looksLikeImageDataPaste =
+			/data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(input);
 		const isSmallMultiCharInput =
 			input.length > 1 &&
 			input.length <= pasteIndicatorThreshold &&
@@ -148,11 +147,11 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 					// Temporarily set cursor to saved position for insertion
 					// This is safe because we're in a timeout, not during active cursor movement
 					buffer.setCursorPosition(savedCursorPosition);
-					buffer.insert(accumulated);
+					buffer.insert(accumulated, {isPasteChunk: true});
 					// No need to restore cursor - insert() moves it naturally
 				} else {
 					// User moved cursor during input, insert at current position
-					buffer.insert(accumulated);
+					buffer.insert(accumulated, {isPasteChunk: true});
 				}
 
 				// Reset inputStartCursorPos after processing to prevent stale position

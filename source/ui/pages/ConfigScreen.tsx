@@ -6,6 +6,7 @@ import {
 	type ConfigScreenProps,
 	MAX_VISIBLE_FIELDS,
 	isSelectField,
+	isGroupField,
 } from './configScreen/types.js';
 import {useConfigState} from './configScreen/useConfigState.js';
 import {useConfigInput} from './configScreen/useConfigInput.js';
@@ -136,9 +137,15 @@ export default function ConfigScreen({
 				<ConfigSelectPanel state={state} />
 			) : (
 				<Box flexDirection="column">
-					{fieldsDisplayWindow.items.map(field => (
-						<ConfigFieldRenderer key={field} field={field} state={state} />
-					))}
+					{fieldsDisplayWindow.items.map(field => {
+						const isGroupChild =
+							!visionConfigMode && !isGroupField(field) && field !== 'profile';
+						return (
+							<Box key={field} marginLeft={isGroupChild ? 2 : 0}>
+								<ConfigFieldRenderer field={field} state={state} />
+							</Box>
+						);
+					})}
 				</Box>
 			)}
 

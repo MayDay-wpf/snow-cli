@@ -790,6 +790,7 @@ export async function* createStreamingChatCompletion(
 			{
 				abortSignal,
 				onRetry,
+				maxRetries: config.maxRetries,
 			},
 		);
 		endChatSpan(

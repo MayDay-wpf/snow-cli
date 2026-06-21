@@ -657,42 +657,40 @@ export async function* createStreamingAnthropicCompletion(
 		sessionId: options.sessionId,
 	});
 
+	// Load configuration: if configProfile is specified, load it; otherwise use main config
+	let config: ReturnType<typeof getSnowConfig>;
+	if (options.configProfile) {
+		try {
+			const {loadProfile} = await import('../utils/config/configManager.js');
+			const profileConfig = loadProfile(options.configProfile);
+			if (profileConfig?.snowcfg) {
+				config = profileConfig.snowcfg;
+			} else {
+				// Profile not found, fallback to main config
+				config = getSnowConfig();
+				logger.warn(
+					`Profile ${options.configProfile} not found, using main config`,
+				);
+			}
+		} catch (error) {
+			// If loading profile fails, fallback to main config
+			config = getSnowConfig();
+			logger.warn(
+				`Failed to load profile ${options.configProfile}, using main config:`,
+				error,
+			);
+		}
+	} else {
+		// No configProfile specified, use main config
+		config = getSnowConfig();
+	}
+	if (options.configOverride) {
+		config = {...config, ...options.configOverride};
+	}
+
 	try {
 		yield* withRetryGenerator(
 			async function* () {
-				// Load configuration: if configProfile is specified, load it; otherwise use main config
-				let config: ReturnType<typeof getSnowConfig>;
-				if (options.configProfile) {
-					try {
-						const {loadProfile} = await import(
-							'../utils/config/configManager.js'
-						);
-						const profileConfig = loadProfile(options.configProfile);
-						if (profileConfig?.snowcfg) {
-							config = profileConfig.snowcfg;
-						} else {
-							// Profile not found, fallback to main config
-							config = getSnowConfig();
-							logger.warn(
-								`Profile ${options.configProfile} not found, using main config`,
-							);
-						}
-					} catch (error) {
-						// If loading profile fails, fallback to main config
-						config = getSnowConfig();
-						logger.warn(
-							`Failed to load profile ${options.configProfile}, using main config:`,
-							error,
-						);
-					}
-				} else {
-					// No configProfile specified, use main config
-					config = getSnowConfig();
-				}
-				if (options.configOverride) {
-					config = {...config, ...options.configOverride};
-				}
-
 				// Get system prompt (with custom override support)
 				let customSystemPromptContent: string[] | undefined;
 				if (options.customSystemPromptId) {
@@ -1108,6 +1106,7 @@ export async function* createStreamingAnthropicCompletion(
 			{
 				abortSignal,
 				onRetry,
+				maxRetries: config.maxRetries,
 			},
 		);
 		endChatSpan(

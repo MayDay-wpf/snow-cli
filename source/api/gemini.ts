@@ -862,6 +862,7 @@ export async function* createStreamingGeminiCompletion(
 			{
 				abortSignal,
 				onRetry,
+				maxRetries: config.maxRetries,
 			},
 		);
 		endChatSpan(

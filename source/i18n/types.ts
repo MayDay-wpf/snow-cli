@@ -330,6 +330,7 @@ export type TranslationKeys = {
 		maxContextTokens: string;
 		maxTokens: string;
 		streamIdleTimeoutSec: string;
+		maxRetries: string;
 		toolResultTokenLimit: string;
 		toolResultTokenLimitHint: string;
 		toolResultTokenLimitDesc: string;
@@ -393,6 +394,13 @@ export type TranslationKeys = {
 		modelSelectFilterLabel: string;
 		modelSelectModelCount: string;
 		modelSelectScrollHint: string;
+		apiConnectionGroup: string;
+		promptHeadersGroup: string;
+		displayCompressGroup: string;
+		reasoningGroup: string;
+		modelGroup: string;
+		tokenTimeoutGroup: string;
+		groupExpandHint: string;
 	};
 	// Custom Headers Screen
 	customHeaders: {
@@ -1030,6 +1038,20 @@ export type TranslationKeys = {
 		filesHeader: string; // {mode}
 		treeMode: string;
 		listMode: string;
+		// AI agent search (@?? / @@??): status / error / empty / header labels.
+		agentSearching: string; // {round}
+		agentSearchError: string; // {error}
+		agentNoResults: string;
+		agentSearchHeader: string;
+		agentPreviewAssistantPrefix: string;
+		agentPreviewRoundRequest: string; // {round} {maxRounds}
+		agentPreviewRequestedToolCalls: string; // {count}
+		agentPreviewToolCall: string; // {tool} {args}
+		agentPreviewToolResultCandidates: string; // {count}
+		agentPreviewToolResultReceived: string;
+		agentPreviewToolError: string; // {error}
+		agentPreviewParsingFinalResults: string;
+		agentPreviewFinalizing: string;
 	};
 	// IDE Select Panel
 	ideSelectPanel: {
