@@ -633,10 +633,11 @@ export async function maskPrivacyText(
 			return text;
 		}
 
-		const maskedText =
-			typeof data.masked_text === 'string' ? data.masked_text : text;
+		if (typeof data.masked_text === 'string') {
+			return data.masked_text;
+		}
 
-		return maskWithLocalFallback(maskedText);
+		return maskWithLocalFallback(text);
 	} catch (error) {
 		const errorName = error instanceof Error ? error.name : undefined;
 		if (abortSignal?.aborted || errorName === 'AbortError') {
