@@ -56,8 +56,12 @@ jobs:
 
             ### What's New
 
-            - The default budget of the `/goal` command can be configured, and the unit is changed to `M`.
-            - Team mode and sub-agent are changed to sub-process mode, reducing the memory usage of the main heap.
+            - Retry times are supported for configuration
+            - Fixed the bug that caused the draft to be lost in the input box due to the interaction panel
+            - Fixed the issue of cursor loss in the paste scenario
+            - TODO list supports snapshot + rollback
+            - Added more data masking rules
+            - Added AI search for files or content
             
             ### Installation
             ```bash
