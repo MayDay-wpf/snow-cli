@@ -109,14 +109,14 @@ export class FileSearchAgent {
 		try {
 			const config = getSnowConfig();
 
-			// Tool-calling search needs a capable model; prefer advancedModel,
-			// fall back to basicModel so the feature still works on minimal setups.
-			const advancedModel = config.advancedModel?.trim();
+			// Prefer basicModel to save cost; fall back to advancedModel so the
+			// feature still works when only a capable model is configured.
 			const basicModel = config.basicModel?.trim();
-			if (advancedModel) {
-				this.modelName = advancedModel;
-			} else if (basicModel) {
+			const advancedModel = config.advancedModel?.trim();
+			if (basicModel) {
 				this.modelName = basicModel;
+			} else if (advancedModel) {
+				this.modelName = advancedModel;
 			} else {
 				return false;
 			}
