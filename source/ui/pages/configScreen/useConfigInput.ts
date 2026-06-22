@@ -4,6 +4,7 @@ import {
 	isFocusEventInput,
 	isSelectField,
 	isGroupField,
+	NUMERIC_FIELDS,
 } from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -65,14 +66,16 @@ export function useConfigInput(
 		setStreamIdleTimeoutSec,
 		toolResultTokenLimit,
 		setToolResultTokenLimit,
+		maxRetries,
+		setMaxRetries,
 		thinkingBudgetTokens,
 		setThinkingBudgetTokens,
 		autoCompressThreshold,
 		setAutoCompressThreshold,
 		setAdvancedModel,
 		setBasicModel,
-		supportsVision,
 		setSupportsVision,
+		supportsVision,
 		setVisionModel,
 		visionConfigMode,
 		setVisionConfigMode,
@@ -249,14 +252,7 @@ export function useConfigInput(
 			}
 
 			// Handle numeric / decimal input
-			if (
-				currentField === 'maxContextTokens' ||
-				currentField === 'maxTokens' ||
-				currentField === 'streamIdleTimeoutSec' ||
-				currentField === 'toolResultTokenLimit' ||
-				currentField === 'thinkingBudgetTokens' ||
-				currentField === 'autoCompressThreshold'
-			) {
+			if (NUMERIC_FIELDS.includes(currentField)) {
 				handleNumericInput(input, key);
 				return;
 			}
@@ -345,6 +341,12 @@ export function useConfigInput(
 				set: setToolResultTokenLimit,
 				min: 20,
 				max: 80,
+			},
+			maxRetries: {
+				get: () => maxRetries,
+				set: setMaxRetries,
+				min: 0,
+				max: Infinity,
 			},
 			thinkingBudgetTokens: {
 				get: () => thinkingBudgetTokens,
@@ -458,14 +460,7 @@ export function useConfigInput(
 			currentField === 'chatReasoningEffort'
 		) {
 			setIsEditing(true);
-		} else if (
-			currentField === 'maxContextTokens' ||
-			currentField === 'maxTokens' ||
-			currentField === 'streamIdleTimeoutSec' ||
-			currentField === 'toolResultTokenLimit' ||
-			currentField === 'thinkingBudgetTokens' ||
-			currentField === 'autoCompressThreshold'
-		) {
+		} else if (NUMERIC_FIELDS.includes(currentField)) {
 			setIsEditing(true);
 		} else if (
 			currentField === 'advancedModel' ||
