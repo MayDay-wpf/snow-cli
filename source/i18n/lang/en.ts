@@ -492,6 +492,8 @@ export const en: TranslationKeys = {
 		headerValuePlaceholder: 'Header value',
 		headerEditingHint:
 			'↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel',
+		placeholderHint:
+			'Values support {{placeholder}} syntax, resolved by plugins in ~/.snow/plugin/custom_headers/',
 	},
 	subAgentConfig: {
 		title: 'Sub-Agent Configuration',

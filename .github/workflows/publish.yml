@@ -56,12 +56,10 @@ jobs:
 
             ### What's New
 
-            - Retry times are supported for configuration
-            - Fixed the bug that caused the draft to be lost in the input box due to the interaction panel
-            - Fixed the issue of cursor loss in the paste scenario
-            - TODO list supports snapshot + rollback
-            - Added more data masking rules
-            - Added AI search for files or content
+            - Fixed bug where retry count could not be edited
+            - Cancel the scheme of desensitizing data after online API and then reinforcing it again with local policies
+            - Implement dynamic request headers with a plugin scheme for custom request headers
+            - File search Agent prioritizes the basic model
             
             ### Installation
             ```bash

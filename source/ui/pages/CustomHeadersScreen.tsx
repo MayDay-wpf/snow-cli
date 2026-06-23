@@ -646,6 +646,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						{t.customHeaders.editingHint}
 					</Text>
 				</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuInfo} dimColor>
+						{t.customHeaders.placeholderHint}
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -708,6 +713,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.customHeaders.headerNavigationHint}
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuInfo} dimColor>
+								{t.customHeaders.placeholderHint}
 							</Text>
 						</Box>
 					</>

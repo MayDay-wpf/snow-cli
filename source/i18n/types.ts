@@ -441,6 +441,7 @@ export type TranslationKeys = {
 		headerKeyPlaceholder: string;
 		headerValuePlaceholder: string;
 		headerEditingHint: string;
+		placeholderHint: string;
 	};
 	subAgentConfig: {
 		title: string;

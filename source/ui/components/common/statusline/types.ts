@@ -72,6 +72,7 @@ export interface StatusLinePrivacyState {
 	enabled: boolean;
 	mode: 'api' | 'local';
 	apiUrlConfigured: boolean;
+	apiUrl?: string;
 	model?: string;
 	toolResultTools: string[];
 }

@@ -4,6 +4,7 @@ import {
 	getCustomHeadersForConfig,
 	type ApiConfig,
 } from '../utils/config/apiConfig.js';
+import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
@@ -558,8 +559,12 @@ export async function* createStreamingGeminiCompletion(
 				);
 
 				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
-				const customHeaders =
+				// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
+				const rawCustomHeaders =
 					options.customHeaders || getCustomHeadersForConfig(config);
+				const customHeaders = await resolveCustomHeaderPlaceholders(
+					rawCustomHeaders,
+				);
 
 				const fetchOptions = addProxyToFetchOptions(url, {
 					method: 'POST',

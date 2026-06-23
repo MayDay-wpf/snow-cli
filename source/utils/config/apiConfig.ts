@@ -201,6 +201,11 @@ const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // æ–°ç‰
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 export const STATUSLINE_HOOKS_DIR = join(CONFIG_DIR, 'plugin', 'statusline');
 export const SEARCH_ENGINES_DIR = join(CONFIG_DIR, 'plugin', 'search_engines');
+export const CUSTOM_HEADERS_PLUGIN_DIR = join(
+	CONFIG_DIR,
+	'plugin',
+	'custom_headers',
+);
 
 export type MCPConfigScope = 'global' | 'project';
 

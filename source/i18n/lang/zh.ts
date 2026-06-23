@@ -457,6 +457,8 @@ export const zh: TranslationKeys = {
 		headerKeyPlaceholder: '请求头键 (例如, X-API-Key)',
 		headerValuePlaceholder: '请求头值',
 		headerEditingHint: '↑↓: 导航字段 | Enter: 编辑 | Ctrl+S: 保存 | ESC: 取消',
+		placeholderHint:
+			'值支持 {{占位符}} 语法,由 ~/.snow/plugin/custom_headers/ 中的插件动态解析',
 	},
 	subAgentConfig: {
 		title: '子代理配置',

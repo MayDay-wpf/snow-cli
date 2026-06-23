@@ -458,6 +458,8 @@ export const zhTW: TranslationKeys = {
 		headerKeyPlaceholder: '請求頭鍵 (例如, X-API-Key)',
 		headerValuePlaceholder: '請求頭值',
 		headerEditingHint: '↑↓: 導航欄位 | Enter: 編輯 | Ctrl+S: 儲存 | ESC: 取消',
+		placeholderHint:
+			'值支援 {{占位符}} 語法,由 ~/.snow/plugin/custom_headers/ 中的外掛動態解析',
 	},
 	subAgentConfig: {
 		title: '子代理配置',

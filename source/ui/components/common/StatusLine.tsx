@@ -325,6 +325,7 @@ function buildPrivacyState(
 		enabled: enabled === true,
 		mode,
 		apiUrlConfigured: Boolean(apiUrl),
+		apiUrl: mode === 'api' ? apiUrl || undefined : undefined,
 		model: model || undefined,
 		toolResultTools: [...toolResultTools],
 	};

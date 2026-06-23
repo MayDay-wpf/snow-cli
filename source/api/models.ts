@@ -4,6 +4,7 @@ import {
 	getCustomHeadersForConfig,
 	type ApiConfig,
 } from '../utils/config/apiConfig.js';
+import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
 
@@ -189,9 +190,11 @@ export async function fetchAvailableModels(
 		);
 	}
 
-	const customHeaders = overrideConfig
+	const rawCustomHeaders = overrideConfig
 		? getCustomHeadersForConfig(config)
 		: getCustomHeaders();
+	// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
+	const customHeaders = await resolveCustomHeaderPlaceholders(rawCustomHeaders);
 
 	try {
 		let models: Model[];
