@@ -369,6 +369,7 @@ export const en: TranslationKeys = {
 		maxTokens: 'Max Tokens:',
 		streamIdleTimeoutSec: 'Stream Idle Timeout(sec):',
 		maxRetries: 'Max Retries:',
+		retryDelayMs: 'Retry Delay (ms):',
 		toolResultTokenLimit: 'Tool Result Limit (%):',
 		toolResultTokenLimitHint:
 			'Algorithm: maxContextTokens × {percentage}% = {actualLimit} tokens',

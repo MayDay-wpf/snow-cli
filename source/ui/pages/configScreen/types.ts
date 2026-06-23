@@ -47,7 +47,8 @@ export type ConfigField =
 	| 'streamIdleTimeoutSec'
 	| 'toolResultTokenLimit'
 	| 'streamingDisplay'
-	| 'maxRetries';
+	| 'maxRetries'
+	| 'retryDelayMs';
 
 export const GROUP_FIELDS: ConfigField[] = [
 	'apiConnectionGroup',
@@ -149,6 +150,7 @@ export const NUMERIC_FIELDS: ConfigField[] = [
 	'thinkingBudgetTokens',
 	'autoCompressThreshold',
 	'maxRetries',
+	'retryDelayMs',
 ];
 
 export const TOGGLE_FIELDS: ConfigField[] = [

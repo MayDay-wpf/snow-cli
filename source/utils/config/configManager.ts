@@ -13,6 +13,7 @@ import {
 	saveConfig,
 	DEFAULT_CONFIG,
 	DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+	DEFAULT_RETRY_DELAY_MS,
 	normalizeBaseUrlMode,
 	type ApiConfig,
 	type AppConfig,
@@ -171,6 +172,19 @@ function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	return value;
 }
 
+/**
+ * 归一化 retryDelayMs.
+ * 缺失或非法值统一回退默认值(3000ms).
+ * 允许 0 (立即重试), 拒绝负数和非整数.
+ */
+function normalizeRetryDelayMs(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+		return DEFAULT_RETRY_DELAY_MS;
+	}
+
+	return value;
+}
+
 function normalizeRequestMethod(method: unknown): RequestMethod {
 	if (
 		method === 'chat' ||
@@ -221,6 +235,7 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
 					parsedSnowcfg.streamIdleTimeoutSec,
 				),
+				retryDelayMs: normalizeRetryDelayMs(parsedSnowcfg.retryDelayMs),
 			},
 		};
 

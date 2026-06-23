@@ -80,6 +80,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		streamIdleTimeoutSec,
 		toolResultTokenLimit,
 		maxRetries,
+		retryDelayMs,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -1006,6 +1007,13 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 
 		case 'maxRetries':
 			return renderNumericField(field, t.configScreen.maxRetries, maxRetries);
+
+		case 'retryDelayMs':
+			return renderNumericField(
+				field,
+				t.configScreen.retryDelayMs,
+				retryDelayMs,
+			);
 
 		default:
 			return null;

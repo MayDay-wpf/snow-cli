@@ -76,6 +76,8 @@ export interface ApiConfig {
 	streamingDisplay?: boolean;
 	// API 请求最大重试次数 (默认: 5)
 	maxRetries?: number;
+	// API 请求重试间隔 (单位: ms, 默认: 3000)
+	retryDelayMs?: number;
 }
 
 export interface MCPServer {
@@ -147,6 +149,7 @@ export interface CustomHeadersConfig {
 }
 
 export const DEFAULT_STREAM_IDLE_TIMEOUT_SEC = 180;
+export const DEFAULT_RETRY_DELAY_MS = 3000;
 export const DEFAULT_AUTO_COMPRESS_THRESHOLD = 80;
 export const DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT = 30;
 export const MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT = 80;
@@ -154,6 +157,19 @@ export const MIN_TOOL_RESULT_TOKEN_LIMIT_PERCENT = 20;
 function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
 		return DEFAULT_STREAM_IDLE_TIMEOUT_SEC;
+	}
+
+	return value;
+}
+
+/**
+ * 归一化 retryDelayMs.
+ * 缺失或非法值统一回退默认值(3000ms).
+ * 允许 0 (立即重试), 拒绝负数和非整数.
+ */
+function normalizeRetryDelayMs(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+		return DEFAULT_RETRY_DELAY_MS;
 	}
 
 	return value;
@@ -185,6 +201,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxTokens: 64000,
 		anthropicBeta: false,
 		streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+		retryDelayMs: DEFAULT_RETRY_DELAY_MS,
 		streamingDisplay: true,
 	},
 };
@@ -316,6 +333,9 @@ export function loadConfig(): AppConfig {
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
 					configWithoutMcp.snowcfg.streamIdleTimeoutSec,
 				),
+				retryDelayMs: normalizeRetryDelayMs(
+					configWithoutMcp.snowcfg.retryDelayMs,
+				),
 			};
 		} else {
 			apiConfig = {
@@ -325,6 +345,7 @@ export function loadConfig(): AppConfig {
 				requestMethod: DEFAULT_CONFIG.snowcfg.requestMethod,
 				visionRequestMethod: DEFAULT_CONFIG.snowcfg.visionRequestMethod,
 				streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+				retryDelayMs: DEFAULT_RETRY_DELAY_MS,
 			};
 		}
 
@@ -404,6 +425,9 @@ export async function updateSnowConfig(
 		apiConfig.streamIdleTimeoutSec ??
 			currentConfig.snowcfg.streamIdleTimeoutSec,
 	);
+	const normalizedRetryDelayMs = normalizeRetryDelayMs(
+		apiConfig.retryDelayMs ?? currentConfig.snowcfg.retryDelayMs,
+	);
 	const normalizedBaseUrlMode = normalizeBaseUrlMode(
 		apiConfig.baseUrlMode ?? currentConfig.snowcfg.baseUrlMode,
 	);
@@ -425,6 +449,7 @@ export async function updateSnowConfig(
 			),
 			visionRequestMethod: normalizedVisionRequestMethod,
 			streamIdleTimeoutSec: normalizedIdleTimeoutSec,
+			retryDelayMs: normalizedRetryDelayMs,
 		},
 	};
 	saveConfig(updatedConfig);

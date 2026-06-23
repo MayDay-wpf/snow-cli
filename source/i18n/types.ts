@@ -331,6 +331,7 @@ export type TranslationKeys = {
 		maxTokens: string;
 		streamIdleTimeoutSec: string;
 		maxRetries: string;
+		retryDelayMs: string;
 		toolResultTokenLimit: string;
 		toolResultTokenLimitHint: string;
 		toolResultTokenLimitDesc: string;

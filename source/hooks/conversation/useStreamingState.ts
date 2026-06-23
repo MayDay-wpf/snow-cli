@@ -5,6 +5,7 @@ export type RetryStatus = {
 	isRetrying: boolean;
 	attempt: number;
 	nextDelay: number;
+	maxRetries?: number;
 	remainingSeconds?: number;
 	errorMessage?: string;
 };

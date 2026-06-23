@@ -344,6 +344,7 @@ export const zh: TranslationKeys = {
 		maxTokens: '最大回复令牌数:',
 		streamIdleTimeoutSec: '流式空闲超时(秒):',
 		maxRetries: '最大重试次数:',
+		retryDelayMs: '重试间隔(毫秒):',
 		toolResultTokenLimit: '工具返回结果限制(%):',
 		toolResultTokenLimitHint:
 			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',

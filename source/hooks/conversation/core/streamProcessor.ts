@@ -231,6 +231,7 @@ export async function processStreamRound(ctx: {
 				isRetrying: true,
 				attempt,
 				nextDelay,
+				maxRetries: config.maxRetries ?? 5,
 				errorMessage: error.message,
 			});
 		}

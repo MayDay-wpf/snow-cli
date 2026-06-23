@@ -854,7 +854,8 @@ ACTIONS:
 IMPORTANT:
 - Do not start a new phase until advance_phase succeeds.
 - If advance_phase or complete_phase is blocked, update every listed incomplete item before trying again.
-- In Ultra TODO mode, the legacy todo-manage tool is not available.`,
+- In Ultra TODO mode, the legacy todo-manage tool is not available.
+- Update each TODO item's status IMMEDIATELY after completing it — do NOT batch multiple updates at the end. Completing several steps first and then doing one bulk status update is strictly forbidden.`,
 					inputSchema: {
 						type: 'object',
 						properties: {

@@ -68,6 +68,8 @@ export function useConfigInput(
 		setToolResultTokenLimit,
 		maxRetries,
 		setMaxRetries,
+		retryDelayMs,
+		setRetryDelayMs,
 		thinkingBudgetTokens,
 		setThinkingBudgetTokens,
 		autoCompressThreshold,
@@ -345,6 +347,12 @@ export function useConfigInput(
 			maxRetries: {
 				get: () => maxRetries,
 				set: setMaxRetries,
+				min: 0,
+				max: Infinity,
+			},
+			retryDelayMs: {
+				get: () => retryDelayMs,
+				set: setRetryDelayMs,
 				min: 0,
 				max: Infinity,
 			},

@@ -135,6 +135,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
 	const [maxRetries, setMaxRetries] = useState(5);
+	const [retryDelayMs, setRetryDelayMs] = useState(3000);
 
 	// UI state
 	// 当从 ProfileEditPanel 进入（提供 targetProfileName）时，profile 字段被隐藏，
@@ -274,6 +275,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 						'streamIdleTimeoutSec',
 						'toolResultTokenLimit',
 						'maxRetries',
+						'retryDelayMs',
 				  ] as ConfigField[])
 				: []),
 		];
@@ -445,6 +447,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
 		setMaxRetries(config.maxRetries ?? 5);
+		setRetryDelayMs(config.retryDelayMs ?? 3000);
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -534,6 +537,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		if (currentField === 'toolResultTokenLimit')
 			return toolResultTokenLimit.toString();
 		if (currentField === 'maxRetries') return maxRetries.toString();
+		if (currentField === 'retryDelayMs') return retryDelayMs.toString();
 		if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'thinkingMode') return thinkingMode;
@@ -750,6 +754,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 					streamIdleTimeoutSec,
 					toolResultTokenLimit,
 					maxRetries,
+					retryDelayMs,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -882,8 +887,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				streamIdleTimeoutSec,
 				toolResultTokenLimit,
 				maxRetries,
+				retryDelayMs,
 			};
-
 			if (thinkingEnabled) {
 				config.thinking =
 					thinkingMode === 'adaptive'
@@ -982,6 +987,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 						streamIdleTimeoutSec,
 						toolResultTokenLimit,
 						maxRetries,
+						retryDelayMs,
 					},
 				};
 				// 写回的目标固定为 editingProfile（与上面 updateSnowConfig 判定使用同一个值）。
@@ -1100,6 +1106,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setToolResultTokenLimit,
 		maxRetries,
 		setMaxRetries,
+		retryDelayMs,
+		setRetryDelayMs,
 		// UI state
 		currentField,
 		setCurrentField,

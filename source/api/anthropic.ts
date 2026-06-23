@@ -1112,6 +1112,7 @@ export async function* createStreamingAnthropicCompletion(
 				abortSignal,
 				onRetry,
 				maxRetries: config.maxRetries,
+				baseDelay: config.retryDelayMs,
 			},
 		);
 		endChatSpan(

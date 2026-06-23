@@ -452,7 +452,10 @@ export default function HeadlessModeScreen({
 					console.log(
 						`\n\x1b[93m${t.chatScreen.retryAttempt
 							.replace('{current}', String(streamingState.retryStatus.attempt))
-							.replace('{max}', '5')} \x1b[93m${t.chatScreen.retryIn.replace(
+							.replace(
+								'{max}',
+								String(streamingState.retryStatus.maxRetries ?? 5),
+							)} \x1b[93m${t.chatScreen.retryIn.replace(
 							'{seconds}',
 							String(streamingState.retryStatus.remainingSeconds),
 						)}\x1b[93m...\x1b[0m`,
@@ -461,7 +464,10 @@ export default function HeadlessModeScreen({
 					console.log(
 						`\n\x1b[93m${t.chatScreen.retryResending
 							.replace('{current}', String(streamingState.retryStatus.attempt))
-							.replace('{max}', '5')}\x1b[0m`,
+							.replace(
+								'{max}',
+								String(streamingState.retryStatus.maxRetries ?? 5),
+							)}\x1b[0m`,
 					);
 				}
 			} else {

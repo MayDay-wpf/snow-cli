@@ -97,6 +97,7 @@ type LoadingIndicatorProps = {
 		errorMessage?: string;
 		remainingSeconds?: number;
 		attempt: number;
+		maxRetries?: number;
 	} | null;
 	codebaseSearchStatus: {
 		isSearching: boolean;
@@ -333,7 +334,10 @@ export default function LoadingIndicator({
 									<Text color={theme.colors.warning} dimColor>
 										{t.chatScreen.retryAttempt
 											.replace('{current}', String(retryStatus.attempt))
-											.replace('{max}', '5')}{' '}
+											.replace(
+												'{max}',
+												String(retryStatus.maxRetries ?? 5),
+											)}{' '}
 										{t.chatScreen.retryIn.replace(
 											'{seconds}',
 											String(retryStatus.remainingSeconds),
@@ -343,7 +347,7 @@ export default function LoadingIndicator({
 									<Text color={theme.colors.warning} dimColor>
 										{t.chatScreen.retryResending
 											.replace('{current}', String(retryStatus.attempt))
-											.replace('{max}', '5')}
+											.replace('{max}', String(retryStatus.maxRetries ?? 5))}
 									</Text>
 								)}
 							</Box>

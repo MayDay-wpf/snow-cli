@@ -740,8 +740,8 @@ function getToolResourceType(toolName: string): string {
 function getResourceIdentifier(toolCall: ToolCall): string {
 	const toolName = toolCall.function.name;
 
-	// todo-manage: only get can run in parallel with other work; mutating actions share todo-state
-	if (toolName === 'todo-manage') {
+	// todo-manage / todo-ultra: only get can run in parallel with other work; mutating actions share todo-state
+	if (toolName === 'todo-manage' || toolName === 'todo-ultra') {
 		try {
 			const args = safeParseToolArguments(toolCall.function.arguments);
 			if (args?.['action'] === 'get') {

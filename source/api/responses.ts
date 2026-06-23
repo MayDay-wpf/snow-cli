@@ -917,6 +917,7 @@ export async function* createStreamingResponse(
 				abortSignal,
 				onRetry,
 				maxRetries: config.maxRetries,
+				baseDelay: config.retryDelayMs,
 			},
 		);
 		endChatSpan(
