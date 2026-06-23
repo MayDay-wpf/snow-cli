@@ -16,6 +16,7 @@ export interface ProjectSettings {
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
+	disableBashAiSummary?: boolean;
 	telemetry?: TelemetryConfig;
 }
 
@@ -64,6 +65,7 @@ function loadSettings(): ProjectSettings {
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		teamMode: pick('teamMode'),
 		ultraTodoEnabled: pick('ultraTodoEnabled'),
+		disableBashAiSummary: pick('disableBashAiSummary'),
 		telemetry: pick('telemetry'),
 	};
 }
@@ -177,6 +179,16 @@ export function getUltraTodoEnabled(): boolean {
 
 export function setUltraTodoEnabled(enabled: boolean): void {
 	setField('ultraTodoEnabled', enabled);
+}
+
+/**
+ * Whether AI summary for bash/terminal command output is globally disabled.
+ * This is a user-maintained setting (no UI entry); when true, the bash
+ * service skips AI summarization regardless of the enableAiSummary argument.
+ */
+export function getDisableBashAiSummary(): boolean {
+	const settings = loadSettings();
+	return settings.disableBashAiSummary === true;
 }
 
 export function getTelemetryConfig(): TelemetryConfig {

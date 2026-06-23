@@ -23,6 +23,7 @@ import {
 } from '../utils/config/workingDirConfig.js';
 import {detectWindowsPowerShell} from '../prompt/shared/promptHelpers.js';
 import {bashOutputSummaryAgent} from '../agents/bashOutputSummaryAgent.js';
+import {getDisableBashAiSummary} from '../utils/config/projectSettings.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -64,14 +65,15 @@ export class TerminalCommandService {
 		abortSignal?: AbortSignal,
 	): Promise<CommandExecutionResult> {
 		try {
-			if (!enableAiSummary) {
+			if (!enableAiSummary || getDisableBashAiSummary()) {
 				return commandResult;
 			}
 
-			const summarizedResult = await bashOutputSummaryAgent.summarizeCommandResult(
-				commandResult,
-				abortSignal,
-			);
+			const summarizedResult =
+				await bashOutputSummaryAgent.summarizeCommandResult(
+					commandResult,
+					abortSignal,
+				);
 
 			if (summarizedResult.stdout !== commandResult.stdout) {
 				appendTerminalOutput('[AI Summary] Output was compressed by AI.');
@@ -465,9 +467,11 @@ export class TerminalCommandService {
 				if (typeof timeout === 'number' && timeout > 0) {
 					timeoutTimer = setTimeout(triggerTimeout, timeout);
 				}
-				const abortTimeoutHandler = abortSignal ? () => {
-					safeClearTimeout();
-				} : null;
+				const abortTimeoutHandler = abortSignal
+					? () => {
+							safeClearTimeout();
+					  }
+					: null;
 				if (abortSignal && abortTimeoutHandler) {
 					abortSignal.addEventListener('abort', abortTimeoutHandler);
 				}

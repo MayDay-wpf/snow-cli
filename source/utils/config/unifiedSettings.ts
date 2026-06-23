@@ -40,6 +40,7 @@ export interface UnifiedSettings {
 	hybridCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
+	disableBashAiSummary?: boolean;
 	telemetry?: {
 		enabled?: boolean;
 		serviceName?: string;
