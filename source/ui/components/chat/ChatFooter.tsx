@@ -354,6 +354,12 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							teamMode={props.teamMode}
 						/>
 
+						{showTodos && todos.length > 0 && (
+							<Box marginTop={1}>
+								<TodoTree todos={todos} />
+							</Box>
+						)}
+
 						{props.btwPrompt ? (
 							<Suspense
 								fallback={
@@ -423,12 +429,6 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 									}}
 								/>
 							</>
-						)}
-
-						{showTodos && todos.length > 0 && (
-							<Box marginTop={1}>
-								<TodoTree todos={todos} />
-							</Box>
 						)}
 
 						<StatusLine
