@@ -17,6 +17,7 @@ export interface StatusLineRenderItem {
 	text: string;
 	detailedText?: string;
 	color?: string;
+	gradient?: string[];
 	priority?: number;
 }
 
@@ -148,6 +149,11 @@ export interface StatusLineSystemState {
 	};
 	compression: {
 		blockToast?: string | null;
+	};
+	speedometer: {
+		enabled: boolean;
+		tps: number;
+		peakTps: number;
 	};
 }
 

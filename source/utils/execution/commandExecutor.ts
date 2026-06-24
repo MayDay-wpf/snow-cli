@@ -55,6 +55,7 @@ export interface CommandResult {
 		| 'toggleHybridCompress'
 		| 'toggleTeam'
 		| 'toggleUltraTodo'
+		| 'toggleSpeedometer'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'

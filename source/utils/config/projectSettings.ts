@@ -17,6 +17,7 @@ export interface ProjectSettings {
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
+	speedometerEnabled?: boolean;
 	telemetry?: TelemetryConfig;
 }
 
@@ -66,6 +67,7 @@ function loadSettings(): ProjectSettings {
 		teamMode: pick('teamMode'),
 		ultraTodoEnabled: pick('ultraTodoEnabled'),
 		disableBashAiSummary: pick('disableBashAiSummary'),
+		speedometerEnabled: pick('speedometerEnabled'),
 		telemetry: pick('telemetry'),
 	};
 }
@@ -189,6 +191,15 @@ export function setUltraTodoEnabled(enabled: boolean): void {
 export function getDisableBashAiSummary(): boolean {
 	const settings = loadSettings();
 	return settings.disableBashAiSummary === true;
+}
+
+export function getSpeedometerEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.speedometerEnabled === true;
+}
+
+export function setSpeedometerEnabled(enabled: boolean): void {
+	setField('speedometerEnabled', enabled);
 }
 
 export function getTelemetryConfig(): TelemetryConfig {

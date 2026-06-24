@@ -205,82 +205,102 @@ export async function generateBuddyReply(
 		resolveBuddyConfig(profileName);
 	const model = config.basicModel || config.advancedModel;
 	if (!model) {
-		throw new Error(t.noModelConfigured);
+		return formatTemplate(t.replyError, {
+			name: companion.name,
+			error: t.noModelConfigured,
+		});
 	}
 
 	const messages = buildBuddyMessages(companion, userMessage);
 	let stream: AsyncGenerator<unknown, void, unknown>;
-
-	switch (config.requestMethod) {
-		case 'anthropic':
-			stream = createStreamingAnthropicCompletion(
-				{
-					model,
-					messages,
-					max_tokens: 256,
-					temperature: 0.8,
-					includeBuiltinSystemPrompt: false,
-					disableThinking: true,
-					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
-				},
-				abortSignal,
-			);
-			break;
-		case 'gemini':
-			stream = createStreamingGeminiCompletion(
-				{
-					model,
-					messages,
-					temperature: 0.8,
-					includeBuiltinSystemPrompt: false,
-					disableThinking: true,
-					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
-				},
-				abortSignal,
-			);
-			break;
-		case 'responses':
-			stream = createStreamingResponse(
-				{
-					model,
-					messages,
-					stream: true,
-					max_tokens: 256,
-					temperature: 0.8,
-					includeBuiltinSystemPrompt: false,
-					disableThinking: true,
-					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
-				},
-				abortSignal,
-			);
-			break;
-		case 'chat':
-		default:
-			stream = createStreamingChatCompletion(
-				{
-					model,
-					messages,
-					stream: true,
-					max_tokens: 256,
-					temperature: 0.8,
-					includeBuiltinSystemPrompt: false,
-					disableThinking: true,
-					...(resolvedProfileName ? {configProfile: resolvedProfileName} : {}),
-				},
-				abortSignal,
-			);
-			break;
-	}
-
 	let reply = '';
-	for await (const chunk of stream) {
-		if (abortSignal?.aborted) {
-			break;
+
+	try {
+		switch (config.requestMethod) {
+			case 'anthropic':
+				stream = createStreamingAnthropicCompletion(
+					{
+						model,
+						messages,
+						max_tokens: 256,
+						temperature: 0.8,
+						includeBuiltinSystemPrompt: false,
+						disableThinking: true,
+						...(resolvedProfileName
+							? {configProfile: resolvedProfileName}
+							: {}),
+					},
+					abortSignal,
+				);
+				break;
+			case 'gemini':
+				stream = createStreamingGeminiCompletion(
+					{
+						model,
+						messages,
+						temperature: 0.8,
+						includeBuiltinSystemPrompt: false,
+						disableThinking: true,
+						...(resolvedProfileName
+							? {configProfile: resolvedProfileName}
+							: {}),
+					},
+					abortSignal,
+				);
+				break;
+			case 'responses':
+				stream = createStreamingResponse(
+					{
+						model,
+						messages,
+						stream: true,
+						max_tokens: 256,
+						temperature: 0.8,
+						includeBuiltinSystemPrompt: false,
+						disableThinking: true,
+						...(resolvedProfileName
+							? {configProfile: resolvedProfileName}
+							: {}),
+					},
+					abortSignal,
+				);
+				break;
+			case 'chat':
+			default:
+				stream = createStreamingChatCompletion(
+					{
+						model,
+						messages,
+						stream: true,
+						max_tokens: 256,
+						temperature: 0.8,
+						includeBuiltinSystemPrompt: false,
+						disableThinking: true,
+						...(resolvedProfileName
+							? {configProfile: resolvedProfileName}
+							: {}),
+					},
+					abortSignal,
+				);
+				break;
 		}
 
-		reply += chunkContent(chunk);
-		if (reply.length > MAX_BUDDY_REPLY_CHARS * 2) {
-			break;
+		for await (const chunk of stream) {
+			if (abortSignal?.aborted) {
+				break;
+			}
+
+			reply += chunkContent(chunk);
+			if (reply.length > MAX_BUDDY_REPLY_CHARS * 2) {
+				break;
+			}
+		}
+	} catch (error) {
+		if (!abortSignal?.aborted) {
+			return formatTemplate(t.replyError, {
+				name: companion.name,
+				error: error instanceof Error ? error.message : String(error),
+			});
 		}
 	}
 

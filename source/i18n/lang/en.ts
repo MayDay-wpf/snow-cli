@@ -906,6 +906,8 @@ export const en: TranslationKeys = {
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
 				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			speedometer:
+				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -948,6 +950,13 @@ export const en: TranslationKeys = {
 				set: (mode: string) => `Tool display mode set to: ${mode}`,
 				invalid:
 					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			// Speedometer command messages
+			speedometer: {
+				enabled: 'Speedometer: Enabled',
+				disabled: 'Speedometer: Disabled',
+				statusEnabled: 'Speedometer: Enabled',
+				statusDisabled: 'Speedometer: Disabled',
 			},
 			// Buddy command messages
 			buddy: {
@@ -1005,6 +1014,7 @@ export const en: TranslationKeys = {
 				teaser: 'Psst... try /buddy',
 				noModelConfigured: 'No model configured for buddy reply',
 				emptyReply: '{name} is listening.',
+				replyError: '{name} wanted to reply, but something went wrong: {error}',
 			},
 			// Ultra TODO command messages
 			ultraTodo: {
@@ -1498,6 +1508,7 @@ export const en: TranslationKeys = {
 		profileSwitchHint: 'switch',
 		gitBranch: 'Git Branch',
 		memoryUsageLabel: 'Memory Usage:',
+		speedometerLabel: 'Speed',
 		// Tool execution
 		toolCall: 'Tool call',
 		toolThinking: 'Thinking',

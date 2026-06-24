@@ -852,6 +852,8 @@ export const zhTW: TranslationKeys = {
 				'執行自主多步聯網深度研究，並將帶引用的 Markdown 報告儲存到 .snow/deepresearch/',
 			toolDisplay:
 				'控制工具呼叫顯示模式。用法: /tool-display [full|compact|hidden|status]',
+			speedometer:
+				'切換即時測速儀，監控 token/s 輸出速率。用法: /speedometer [on|off|status]',
 			quit: '退出應用程式',
 		},
 		copyLastFeedback: {
@@ -892,6 +894,13 @@ export const zhTW: TranslationKeys = {
 						: '（隱藏所有工具呼叫，僅顯示 AI 回覆）'),
 				set: (mode: string) => `工具顯示模式已設定為: ${mode}`,
 				invalid: '無效的模式。用法: /tool-display [full|compact|hidden|status]',
+			},
+			// 測速儀命令訊息
+			speedometer: {
+				enabled: '測速儀: 已啟用',
+				disabled: '測速儀: 已停用',
+				statusEnabled: '測速儀: 已啟用',
+				statusDisabled: '測速儀: 已停用',
 			},
 			// 寵物命令訊息
 			buddy: {
@@ -944,6 +953,7 @@ export const zhTW: TranslationKeys = {
 				teaser: '悄悄說一句……試試 /buddy',
 				noModelConfigured: '沒有為寵物回覆設定模型',
 				emptyReply: '{name} 正在認真聽。',
+				replyError: '{name} 想回應，但出了點小狀況：{error}',
 			},
 			// Ultra TODO 命令訊息
 			ultraTodo: {
@@ -1414,6 +1424,7 @@ export const zhTW: TranslationKeys = {
 		profileSwitchHint: '切換',
 		gitBranch: 'Git分支',
 		memoryUsageLabel: '記憶體佔用:',
+		speedometerLabel: '測速',
 		// Tool execution
 		toolCall: '工具呼叫',
 		toolThinking: '思考',

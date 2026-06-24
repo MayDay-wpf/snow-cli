@@ -16,7 +16,9 @@ import {
 	setTeamMode as persistTeamMode,
 	getUltraTodoEnabled,
 	setUltraTodoEnabled as persistUltraTodoEnabled,
+	getSpeedometerEnabled,
 } from '../../../utils/config/projectSettings.js';
+import {tpsTracker} from '../../../hooks/conversation/core/tpsTracker.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 import {getToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {ToolDisplayMode} from '../../../utils/config/themeConfig.js';
@@ -90,6 +92,13 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	useEffect(() => {
 		persistUltraTodoEnabled(ultraTodoEnabled);
 	}, [ultraTodoEnabled]);
+
+	// 启动时从持久化设置恢复测速仪状态
+	useEffect(() => {
+		if (getSpeedometerEnabled()) {
+			tpsTracker.start();
+		}
+	}, []);
 
 	useEffect(() => {
 		const interval = setInterval(() => {

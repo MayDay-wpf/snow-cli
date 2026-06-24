@@ -71,6 +71,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	export: '[txt|md|html|json]',
 	config: '<export|import>',
 	'tool-display': '[full|compact|hidden|status]',
+	speedometer: '[on|off|status]',
 };
 
 // 指令参数可选值列表：用于 Tab 弹出参数选择面板
@@ -99,6 +100,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
 	'tool-display': ['full', 'compact', 'hidden', 'status'],
+	speedometer: ['on', 'off', 'status'],
 };
 
 function getBuddyProfileArgOptions(): CommandArgOption[] {
@@ -408,6 +410,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.toolDisplay ||
 					'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			{
+				name: 'speedometer',
+				description:
+					t.commandPanel.commands.speedometer ||
+					'Toggle real-time speedometer to monitor token/s output rate',
 			},
 		],
 		[t],

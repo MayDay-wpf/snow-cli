@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import React from 'react';
+import React, {useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/index.js';
@@ -14,6 +14,11 @@ import {
 import {readSettings} from '../../../utils/config/unifiedSettings.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
 import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
+import {
+	tpsTracker,
+	subscribeTpsTracker,
+	getTpsTrackerSnapshot,
+} from '../../../hooks/conversation/core/tpsTracker.js';
 import type {
 	BackendConnectionStatus,
 	StatusLineCodebaseProgress,
@@ -25,6 +30,7 @@ import type {
 	StatusLinePrivacyState,
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
+import {GradientText} from './statusline/GradientText.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
@@ -358,6 +364,11 @@ export default function StatusLine({
 	const simpleMode = getSimpleMode();
 	const memoryUsageMb = useCurrentProcessMemoryUsage();
 	const formattedMemoryUsage = formatMemoryUsage(memoryUsageMb);
+	// 订阅 TPS 追踪器，测速仪启用时每秒更新
+	const tpsSnapshot = useSyncExternalStore(
+		subscribeTpsTracker,
+		getTpsTrackerSnapshot,
+	);
 	const contextWindowState = React.useMemo(
 		() => (contextUsage ? buildContextWindowState(contextUsage) : undefined),
 		[contextUsage],
@@ -454,6 +465,11 @@ export default function StatusLine({
 				compression: {
 					blockToast: compressBlockToast,
 				},
+				speedometer: {
+					enabled: tpsTracker.isActive(),
+					tps: tpsSnapshot.tps,
+					peakTps: tpsSnapshot.peakTps,
+				},
 			},
 		};
 	}, [
@@ -484,6 +500,7 @@ export default function StatusLine({
 		ultraTodoEnabled,
 		telemetryEnabled,
 		yoloMode,
+		tpsSnapshot,
 	]);
 	const {items: statusLineHookItems, externalHookIds} = useStatusLineHookItems(
 		statusLineHookContext,
@@ -580,7 +597,8 @@ export default function StatusLine({
 		currentProfileName ||
 		compressBlockToast ||
 		statusLineHookItems.length > 0 ||
-		detailedMemoryStatusText;
+		detailedMemoryStatusText ||
+		tpsTracker.isActive();
 
 	if (!hasAnyStatus) {
 		return null;
@@ -588,7 +606,11 @@ export default function StatusLine({
 
 	// 简易模式：横向单行显示状态，词元信息单独一行
 	if (simpleMode) {
-		const statusItems: Array<{text: string; color: string}> = [];
+		const statusItems: Array<{
+			text: string;
+			color: string;
+			gradient?: string[];
+		}> = [];
 
 		if (
 			currentProfileName &&
@@ -604,6 +626,7 @@ export default function StatusLine({
 			statusItems.push({
 				text: item.text,
 				color: item.color || theme.colors.menuSecondary,
+				gradient: item.gradient,
 			});
 		}
 
@@ -764,6 +787,17 @@ export default function StatusLine({
 			});
 		}
 
+		if (
+			tpsTracker.isActive() &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.speedometer)
+		) {
+			statusItems.push({
+				text: `⏱ ${tpsSnapshot.tps} tok/s`,
+				color:
+					tpsSnapshot.tps > 0 ? theme.colors.cyan : theme.colors.menuSecondary,
+			});
+		}
+
 		return (
 			<Box flexDirection="column" paddingX={1} marginTop={1}>
 				{contextUsage && <Box marginBottom={1}>{renderContextUsage()}</Box>}
@@ -775,7 +809,12 @@ export default function StatusLine({
 									{index > 0 && (
 										<Text color={theme.colors.menuSecondary}> | </Text>
 									)}
-									<Text color={item.color}>{item.text}</Text>
+									<GradientText
+										text={item.text}
+										color={item.color}
+										gradient={item.gradient}
+										dimColor
+									/>
 								</React.Fragment>
 							))}
 						</Text>
@@ -801,9 +840,12 @@ export default function StatusLine({
 
 			{statusLineHookItems.map(item => (
 				<Box key={item.id}>
-					<Text color={item.color || theme.colors.menuSecondary} dimColor>
-						{item.detailedText || item.text}
-					</Text>
+					<GradientText
+						text={item.detailedText || item.text}
+						color={item.color || theme.colors.menuSecondary}
+						gradient={item.gradient}
+						dimColor
+					/>
 				</Box>
 			))}
 
@@ -814,6 +856,28 @@ export default function StatusLine({
 					</Text>
 				</Box>
 			)}
+
+			{tpsTracker.isActive() &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.speedometer) && (
+					<Box>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							⏱ {t.chatScreen.speedometerLabel || 'tps'}:{' '}
+							<Text
+								color={
+									tpsSnapshot.tps > 0
+										? theme.colors.cyan
+										: theme.colors.menuSecondary
+								}
+								bold
+							>
+								{tpsSnapshot.tps}
+							</Text>
+							{' tok/s'}
+							{' · peak '}
+							<Text color={theme.colors.warning}>{tpsSnapshot.peakTps}</Text>
+						</Text>
+					</Box>
+				)}
 
 			{yoloMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeYolo) && (
 				<Box>

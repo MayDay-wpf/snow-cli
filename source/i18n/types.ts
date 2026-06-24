@@ -818,6 +818,7 @@ export type TranslationKeys = {
 			btw: string;
 			deepresearch: string;
 			toolDisplay: string;
+			speedometer: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -852,6 +853,13 @@ export type TranslationKeys = {
 				status: (mode: string) => string;
 				set: (mode: string) => string;
 				invalid: string;
+			};
+			// Speedometer command messages
+			speedometer: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
 			};
 			// Buddy command messages
 			buddy: {
@@ -897,6 +905,7 @@ export type TranslationKeys = {
 				teaser: string;
 				noModelConfigured: string;
 				emptyReply: string;
+				replyError: string;
 			};
 			// Ultra TODO command messages
 			ultraTodo: {
@@ -1363,6 +1372,7 @@ export type TranslationKeys = {
 		profileSwitchHint: string;
 		gitBranch: string;
 		memoryUsageLabel: string;
+		speedometerLabel: string;
 		// Tool execution
 		toolCall: string;
 		toolThinking: string;

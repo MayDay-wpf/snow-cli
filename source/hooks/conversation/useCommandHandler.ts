@@ -1452,6 +1452,15 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				});
 			} else if (result.success && result.action === 'toggleToolSearch') {
 				options.setToolSearchDisabled(prev => !prev);
+			} else if (result.success && result.action === 'toggleSpeedometer') {
+				// 测速仪切换由 speedometer.ts 命令直接调用 tpsTracker.start()/stop()，
+				// 这里只需添加命令反馈消息。
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'toggleHybridCompress') {
 				options.setHybridCompressEnabled(prev => !prev);
 			} else if (result.success && result.action === 'toggleTeam') {

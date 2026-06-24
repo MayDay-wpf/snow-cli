@@ -41,6 +41,7 @@ export interface UnifiedSettings {
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
+	speedometerEnabled?: boolean;
 	telemetry?: {
 		enabled?: boolean;
 		serviceName?: string;

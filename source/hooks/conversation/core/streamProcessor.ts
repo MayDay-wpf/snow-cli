@@ -3,6 +3,7 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {createStreamGenerator} from './streamFactory.js';
+import {tpsTracker} from './tpsTracker.js';
 import type {
 	ConversationHandlerOptions,
 	ConversationUsage,
@@ -211,6 +212,8 @@ export async function processStreamRound(ctx: {
 		try {
 			const deltaTokens = encoder.encode(text);
 			currentTokenCount += deltaTokens.length;
+			// 记录到 TPS 追踪器（仅在测速仪启用时生效）
+			tpsTracker.recordTokens(deltaTokens.length);
 			const now = Date.now();
 			if (now - lastTokenUpdateTime >= TOKEN_UPDATE_INTERVAL) {
 				setStreamTokenCount(currentTokenCount);

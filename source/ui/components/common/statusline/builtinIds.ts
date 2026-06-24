@@ -27,6 +27,7 @@ export const BUILTIN_STATUSLINE_IDS = {
 	copyStatus: 'builtin.copy-status',
 	compressBlock: 'builtin.compress-block',
 	memory: 'builtin.memory',
+	speedometer: 'builtin.speedometer',
 	gitBranch: 'builtin.git-branch',
 } as const;
 
