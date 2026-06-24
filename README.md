@@ -38,10 +38,6 @@ _Agentic coding in your terminal_
   </thead>
   <tbody>
     <tr>
-      <td><a href="https://acker798.xyz/">acker798.xyz</a></td>
-      <td>AI Relay Station, supports Codex</td>
-    </tr>
-    <tr>
       <td><a href="https://www.jetbrains.com/">JetBrains</a></td>
       <td>Open Source Project Sponsor, providing free IDE licenses</td>
     </tr>

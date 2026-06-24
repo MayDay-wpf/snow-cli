@@ -38,10 +38,6 @@ _在终端中进行 Agentic 编程_
   </thead>
   <tbody>
     <tr>
-      <td><a href="https://acker798.xyz/">acker798.xyz</a></td>
-      <td>AI 中转站，支持 Codex</td>
-    </tr>
-    <tr>
       <td><a href="https://www.jetbrains.com/">JetBrains</a></td>
       <td>开源项目赞助者，提供全套 IDE 免费许可证</td>
     </tr>
