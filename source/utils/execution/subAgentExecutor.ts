@@ -338,7 +338,10 @@ async function handleSpawnedChildren(
 	}
 
 	if (runningChildren.length > 0) {
-		await runningSubAgentTracker.waitForSpawnedAgents(300_000, ctx.abortSignal);
+		await runningSubAgentTracker.waitForSpawnedAgents(
+			1_200_000,
+			ctx.abortSignal,
+		);
 	}
 
 	const spawnedResults = runningSubAgentTracker.drainSpawnedResults();

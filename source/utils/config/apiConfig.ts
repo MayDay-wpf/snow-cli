@@ -89,7 +89,7 @@ export interface MCPServer {
 	environment?: Record<string, string>; // 环境变量的别名，与 env 等价
 	headers?: Record<string, string>; // HTTP 请求头
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
-	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
+	timeout?: number; // 工具调用超时时间（毫秒），默认 1200000 (20分钟)
 }
 
 export interface MCPConfig {

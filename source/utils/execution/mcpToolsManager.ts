@@ -1303,7 +1303,9 @@ export async function executeMCPTool(
 		}
 
 		if (serviceName === 'todo') {
-			const {getUltraTodoEnabled} = await import('../config/projectSettings.js');
+			const {getUltraTodoEnabled} = await import(
+				'../config/projectSettings.js'
+			);
 			const ultraTodoEnabled = getUltraTodoEnabled();
 			if (ultraTodoEnabled && actualToolName === 'manage') {
 				throw new Error(
@@ -1708,10 +1710,7 @@ export async function executeMCPTool(
 			switch (actualToolName) {
 				case 'schedule_task': {
 					// Validate parameters
-					if (
-						typeof args.duration !== 'number' ||
-						args.duration < 1
-					) {
+					if (typeof args.duration !== 'number' || args.duration < 1) {
 						return {
 							content: [
 								{
@@ -1926,8 +1925,8 @@ async function executeOnExternalMCPService(
 			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 		);
 
-		// 获取 timeout 配置，默认 5 分钟
-		const timeout = server.timeout ?? 300000;
+		// 获取 timeout 配置，默认 20 分钟
+		const timeout = server.timeout ?? 1200000;
 
 		// Execute the tool with the original tool name (not prefixed)
 		const result = await client.callTool(
