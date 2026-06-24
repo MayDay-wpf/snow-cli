@@ -817,6 +817,7 @@ export type TranslationKeys = {
 			pixel: string;
 			btw: string;
 			deepresearch: string;
+			toolDisplay: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -845,6 +846,12 @@ export type TranslationKeys = {
 				disabled: string;
 				statusEnabled: string;
 				statusDisabled: string;
+			};
+			// Tool display mode command messages
+			toolDisplay: {
+				status: (mode: string) => string;
+				set: (mode: string) => string;
+				invalid: string;
 			};
 			// Buddy command messages
 			buddy: {

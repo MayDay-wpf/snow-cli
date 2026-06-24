@@ -18,6 +18,142 @@ function removeAnsiCodes(text: string): string {
 }
 
 /**
+ * Extract a brief summary string from a tool result for compact display mode.
+ * Returns null if no meaningful summary can be extracted.
+ * This is a pure function (no React/Ink dependency) so it can be used outside render.
+ */
+export function getToolResultSummary(
+	toolName: string,
+	result: string,
+): string | null {
+	try {
+		const data = JSON.parse(result);
+
+		if (toolName.startsWith('subagent-')) {
+			if (!data.result) return null;
+			const lines = data.result.split('\n').filter((l: string) => l.trim());
+			return `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`;
+		}
+
+		if (toolName === 'terminal-execute') {
+			const hasError = data.exitCode !== 0;
+			if (hasError) return `exit ${data.exitCode}`;
+			const stdoutLines = data.stdout
+				? data.stdout.split('\n').filter((l: string) => l.trim()).length
+				: 0;
+			return stdoutLines > 0
+				? `${stdoutLines} ${stdoutLines === 1 ? 'line' : 'lines'} output`
+				: 'done';
+		}
+
+		if (toolName === 'filesystem-read') {
+			if (!data.content) return null;
+			const lines = data.content.split('\n');
+			return `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`;
+		}
+
+		if (toolName === 'filesystem-create') {
+			return data.message || 'created';
+		}
+
+		if (
+			toolName === 'filesystem-edit' ||
+			toolName === 'filesystem-replaceedit'
+		) {
+			if (data.totalLines) return `${data.totalLines} lines`;
+			if (data.message) return data.message;
+			return 'edited';
+		}
+
+		if (toolName === 'websearch-search') {
+			const count = data.totalResults || data.results?.length || 0;
+			return `${count} ${count === 1 ? 'result' : 'results'}`;
+		}
+
+		if (toolName === 'websearch-fetch') {
+			const len = data.textLength || data.content?.length || 0;
+			return `${len} chars`;
+		}
+
+		if (toolName.startsWith('ace-')) {
+			// text_search / find_references results
+			if (Array.isArray(data)) {
+				if (data.length === 0) return 'no matches';
+				if (data[0] && 'referenceType' in data[0])
+					return `${data.length} ${data.length === 1 ? 'ref' : 'refs'}`;
+				if (data[0] && 'content' in data[0] && 'line' in data[0])
+					return `${data.length} ${data.length === 1 ? 'match' : 'matches'}`;
+				if (data[0] && 'name' in data[0] && 'type' in data[0])
+					return `${data.length} ${data.length === 1 ? 'symbol' : 'symbols'}`;
+			}
+			// semantic_search
+			if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+				if ('totalResults' in data) {
+					const total =
+						(data.symbols?.length || 0) + (data.references?.length || 0);
+					if (total === 0) return 'no results';
+					return `${total} ${total === 1 ? 'result' : 'results'}`;
+				}
+				// find_definition
+				if ('name' in data && 'filePath' in data && 'line' in data) {
+					return `${data.name}`;
+				}
+			}
+			return null;
+		}
+
+		if (toolName.startsWith('todo-')) {
+			// todo tools return various shapes; try common ones
+			if (Array.isArray(data))
+				return `${data.length} ${data.length === 1 ? 'item' : 'items'}`;
+			if (data.todos && Array.isArray(data.todos))
+				return `${data.todos.length} ${
+					data.todos.length === 1 ? 'todo' : 'todos'
+				}`;
+			if (data.phases && Array.isArray(data.phases))
+				return `${data.phases.length} ${
+					data.phases.length === 1 ? 'phase' : 'phases'
+				}`;
+			if (data.message) return data.message;
+			return null;
+		}
+
+		if (toolName === 'ide-get_diagnostics') {
+			if (Array.isArray(data)) {
+				const errors = data.filter((d: any) => d.severity === 'error').length;
+				const warnings = data.filter(
+					(d: any) => d.severity === 'warning',
+				).length;
+				if (errors === 0 && warnings === 0) return 'no issues';
+				const parts: string[] = [];
+				if (errors > 0)
+					parts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+				if (warnings > 0)
+					parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+				return parts.join(', ');
+			}
+			return null;
+		}
+
+		// Generic fallback: try to count array items or object keys
+		if (Array.isArray(data)) {
+			if (data.length === 0) return 'empty';
+			return `${data.length} ${data.length === 1 ? 'item' : 'items'}`;
+		}
+		if (typeof data === 'object' && data !== null) {
+			if (data.message) return data.message;
+			const keys = Object.keys(data);
+			if (keys.length > 0)
+				return `${keys.length} ${keys.length === 1 ? 'field' : 'fields'}`;
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Display a compact preview of tool execution results
  * Shows a tree-like structure with limited content
  */
@@ -129,9 +265,7 @@ function renderTerminalExecutePreview(
 					</Box>
 				)}
 				<Text
-					color={
-						hasError ? theme.colors.error : theme.colors.menuSecondary
-					}
+					color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 					dimColor
 				>
 					├─ exitCode: {data.exitCode}
@@ -160,9 +294,7 @@ function renderTerminalExecutePreview(
 				{hasStderr && (
 					<Box flexDirection="column">
 						<Text
-							color={
-								hasError ? theme.colors.error : theme.colors.menuSecondary
-							}
+							color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 							dimColor
 						>
 							└─ stderr:

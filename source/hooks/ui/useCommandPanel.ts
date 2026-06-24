@@ -70,6 +70,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	connect: '[apiUrl]',
 	export: '[txt|md|html|json]',
 	config: '<export|import>',
+	'tool-display': '[full|compact|hidden|status]',
 };
 
 // 指令参数可选值列表：用于 Tab 弹出参数选择面板
@@ -97,6 +98,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	loop: ['daemon', 'daily', 'at', 'list', 'tasks', 'cancel'],
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
+	'tool-display': ['full', 'compact', 'hidden', 'status'],
 };
 
 function getBuddyProfileArgOptions(): CommandArgOption[] {
@@ -399,7 +401,13 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'deepresearch',
 				description:
 					t.commandPanel.commands.deepresearch ||
-					'Run an autonomous web research workflow and save a cited markdown report to .snow/deepresearch/',
+					'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
+			},
+			{
+				name: 'tool-display',
+				description:
+					t.commandPanel.commands.toolDisplay ||
+					'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
 			},
 		],
 		[t],

@@ -1,7 +1,7 @@
 import {EventEmitter} from 'events';
 
 export type ConfigChangeEvent = {
-	type: 'showThinking' | 'simpleMode' | 'other';
+	type: 'showThinking' | 'simpleMode' | 'toolDisplayMode' | 'other';
 	value: any;
 };
 

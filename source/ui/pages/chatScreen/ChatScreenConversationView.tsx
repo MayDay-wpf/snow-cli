@@ -30,6 +30,7 @@ type Props = {
 	simpleMode: boolean;
 	messages: Message[];
 	showThinking: boolean;
+	toolDisplayMode: 'full' | 'compact' | 'hidden';
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
@@ -51,6 +52,7 @@ export default function ChatScreenConversationView({
 	simpleMode,
 	messages,
 	showThinking,
+	toolDisplayMode,
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
@@ -85,6 +87,7 @@ export default function ChatScreenConversationView({
 								filteredMessages={filteredMessages}
 								terminalWidth={terminalWidth}
 								showThinking={showThinking}
+								toolDisplayMode={toolDisplayMode}
 							/>
 						)),
 				]}

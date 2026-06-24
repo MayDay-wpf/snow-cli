@@ -6,6 +6,7 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
+import {getToolResultSummary} from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
@@ -25,6 +26,7 @@ type Props = {
 	filteredMessages: Message[];
 	terminalWidth: number;
 	showThinking?: boolean;
+	toolDisplayMode?: 'full' | 'compact' | 'hidden';
 };
 
 export default function MessageRenderer({
@@ -33,6 +35,7 @@ export default function MessageRenderer({
 	filteredMessages,
 	terminalWidth,
 	showThinking = true,
+	toolDisplayMode = 'full',
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -73,6 +76,17 @@ export default function MessageRenderer({
 		!message.terminalResult &&
 		!message.discontinued &&
 		!message.hookError
+	) {
+		return null;
+	}
+
+	// toolDisplayMode 'hidden': completely hide tool call messages
+	// (messages with toolStatus that are not streaming lines or user messages)
+	if (
+		toolDisplayMode === 'hidden' &&
+		message.messageStatus !== undefined &&
+		(message.role === 'assistant' || message.role === 'subagent') &&
+		!message.streaming
 	) {
 		return null;
 	}
@@ -500,6 +514,21 @@ export default function MessageRenderer({
 													<>
 														<Text color={toolStatusColor}>
 															{removeAnsiCodes(titleLine)}
+															{/* compact mode: append brief result summary */}
+															{toolDisplayMode === 'compact' &&
+																message.messageStatus === 'success' &&
+																message.toolResult &&
+																(() => {
+																	const toolName = removeAnsiCodes(titleLine)
+																		.replace(/^[✓✗⚡]\s*/, '')
+																		.replace(/.*⚇✓\s*/, '')
+																		.trim();
+																	const summary = getToolResultSummary(
+																		toolName,
+																		message.toolResult,
+																	);
+																	return summary ? ` — ${summary}` : null;
+																})()}
 														</Text>
 														{treeLines.length > 0 && (
 															<Text color={theme.colors.menuSecondary}>
@@ -623,7 +652,9 @@ export default function MessageRenderer({
 									{message.toolDisplay &&
 										message.toolDisplay.args.length > 0 &&
 										// Hide tool arguments for sub-agent internal tools
-										!message.subAgentInternal && (
+										!message.subAgentInternal &&
+										// Hide tool arguments in compact mode
+										toolDisplayMode === 'full' && (
 											<Box flexDirection="column">
 												{message.toolDisplay.args.map((arg, argIndex) => (
 													<Text
@@ -723,7 +754,9 @@ export default function MessageRenderer({
 											message.toolCall &&
 											(message.toolCall.arguments?.oldContent ||
 												message.toolCall.arguments?.batchResults)
-										) && (
+										) &&
+										// Hide result preview in compact mode
+										toolDisplayMode === 'full' && (
 											<ToolResultPreview
 												toolName={
 													(message.content || '')

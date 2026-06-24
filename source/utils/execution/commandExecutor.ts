@@ -10,6 +10,7 @@ export interface CommandResult {
 		| 'toggleYolo'
 		| 'togglePlan'
 		| 'toggleSimple'
+		| 'toggleToolDisplay'
 		| 'toggleVulnerabilityHunting'
 		| 'toggleToolSearch'
 		| 'initProject'

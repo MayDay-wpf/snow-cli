@@ -95,7 +95,7 @@ export class SummaryAgent {
 					{
 						model: this.modelName,
 						messages,
-						max_tokens: 500, // Limited tokens for summary generation
+						max_tokens: 4096, // Limited tokens for summary generation
 						includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						disableThinking: true, // Agents 不使用 Extended Thinking
 					},

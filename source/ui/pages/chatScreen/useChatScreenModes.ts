@@ -18,6 +18,8 @@ import {
 	setUltraTodoEnabled as persistUltraTodoEnabled,
 } from '../../../utils/config/projectSettings.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
+import {getToolDisplayMode} from '../../../utils/config/themeConfig.js';
+import type {ToolDisplayMode} from '../../../utils/config/themeConfig.js';
 
 type Options = {
 	enableYolo?: boolean;
@@ -57,6 +59,9 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		const config = getSnowConfig();
 		return config.showThinking !== false;
 	});
+	const [toolDisplayMode, setToolDisplayMode] = useState<ToolDisplayMode>(() =>
+		getToolDisplayMode(),
+	);
 
 	useEffect(() => {
 		persistYoloMode(yoloMode);
@@ -105,6 +110,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 				// /simple 命令切换后通过事件即时同步 React state，
 				// 避免 1s 轮询造成 ChatHeader 第一次重挂载时仍用旧值。
 				setSimpleMode(Boolean(event.value));
+			} else if (event.type === 'toolDisplayMode') {
+				setToolDisplayMode(event.value);
 			}
 		};
 
@@ -132,5 +139,6 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		setUltraTodoEnabled,
 		simpleMode,
 		showThinking,
+		toolDisplayMode,
 	};
 }

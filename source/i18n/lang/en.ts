@@ -904,6 +904,8 @@ export const en: TranslationKeys = {
 			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
 			deepresearch:
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
+			toolDisplay:
+				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -933,6 +935,19 @@ export const en: TranslationKeys = {
 				disabled: 'Simple mode: Disabled',
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
+			},
+			// Tool display mode command messages
+			toolDisplay: {
+				status: (mode: string) =>
+					`Tool display mode: ${mode}` +
+					(mode === 'full'
+						? ' (show tool name + args + result)'
+						: mode === 'compact'
+						? ' (show tool name + brief status only)'
+						: ' (hide all tool calls, show only AI reply)'),
+				set: (mode: string) => `Tool display mode set to: ${mode}`,
+				invalid:
+					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
 			},
 			// Buddy command messages
 			buddy: {

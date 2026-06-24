@@ -850,6 +850,8 @@ export const zhTW: TranslationKeys = {
 			btw: '在 AI 運行時快速提問（臨時對話，不儲存上下文）',
 			deepresearch:
 				'執行自主多步聯網深度研究，並將帶引用的 Markdown 報告儲存到 .snow/deepresearch/',
+			toolDisplay:
+				'控制工具呼叫顯示模式。用法: /tool-display [full|compact|hidden|status]',
 			quit: '退出應用程式',
 		},
 		copyLastFeedback: {
@@ -878,6 +880,18 @@ export const zhTW: TranslationKeys = {
 				disabled: '簡易模式: 已停用',
 				statusEnabled: '簡易模式: 已啟用',
 				statusDisabled: '簡易模式: 已停用',
+			},
+			// 工具顯示模式命令訊息
+			toolDisplay: {
+				status: (mode: string) =>
+					`工具顯示模式: ${mode}` +
+					(mode === 'full'
+						? '（顯示工具名 + 參數 + 結果）'
+						: mode === 'compact'
+						? '（僅顯示工具名 + 簡要狀態）'
+						: '（隱藏所有工具呼叫，僅顯示 AI 回覆）'),
+				set: (mode: string) => `工具顯示模式已設定為: ${mode}`,
+				invalid: '無效的模式。用法: /tool-display [full|compact|hidden|status]',
 			},
 			// 寵物命令訊息
 			buddy: {

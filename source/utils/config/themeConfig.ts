@@ -11,11 +11,16 @@ interface ThemeConfig {
 	customColors?: ThemeColors;
 	simpleMode?: boolean;
 	diffOpacity?: number;
+	toolDisplayMode?: ToolDisplayMode;
 }
+
+export type ToolDisplayMode = 'full' | 'compact' | 'hidden';
+
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'tiffany',
 	simpleMode: true,
 	diffOpacity: 1,
+	toolDisplayMode: 'full',
 };
 
 function ensureConfigDirectory(): void {
@@ -124,4 +129,20 @@ export function getDiffOpacity(): number {
 export function setDiffOpacity(diffOpacity: number): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, diffOpacity});
+}
+
+/**
+ * Get tool display mode setting
+ */
+export function getToolDisplayMode(): ToolDisplayMode {
+	const config = loadThemeConfig();
+	return config.toolDisplayMode ?? 'full';
+}
+
+/**
+ * Set tool display mode and persist to file system
+ */
+export function setToolDisplayMode(mode: ToolDisplayMode): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, toolDisplayMode: mode});
 }

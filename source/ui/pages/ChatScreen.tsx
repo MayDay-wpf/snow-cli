@@ -122,6 +122,7 @@ export default function ChatScreen({
 		setUltraTodoEnabled,
 		simpleMode,
 		showThinking,
+		toolDisplayMode,
 	} = useChatScreenModes({enableYolo, enablePlan});
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
@@ -617,6 +618,7 @@ export default function ChatScreen({
 				simpleMode={simpleMode}
 				messages={messages}
 				showThinking={showThinking}
+				toolDisplayMode={toolDisplayMode}
 				pendingMessages={pendingMessages}
 				pendingToolConfirmation={pendingToolConfirmation}
 				pendingUserQuestion={pendingUserQuestion}
