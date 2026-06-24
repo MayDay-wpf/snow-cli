@@ -41,6 +41,44 @@ function send(message: any): void {
 	}
 }
 
+/**
+ * Send a terminal message (result or error) and wait for the parent's `ack`
+ * before resolving, so that the child does not exit before the parent has
+ * processed the message.
+ *
+ * Falls back to resolving when the IPC channel disconnects or after a timeout,
+ * so the child can always exit even if the parent never acknowledges.
+ */
+function sendAndWaitForAck(message: any): Promise<void> {
+	return new Promise<void>(resolve => {
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			clearTimeout(timer);
+			process.off('message', handler);
+			process.off('disconnect', onDisconnect);
+			resolve();
+		};
+
+		const handler = (msg: any) => {
+			if (msg && typeof msg === 'object' && msg.type === 'ack') {
+				finish();
+			}
+		};
+
+		const onDisconnect = () => finish();
+
+		// Safety timeout: if the parent never acknowledges (e.g. it crashed or
+		// is unresponsive), don't hang the child forever.
+		const timer = setTimeout(finish, 5000);
+
+		process.on('message', handler);
+		process.on('disconnect', onDisconnect);
+		send(message);
+	});
+}
+
 function requestParent(
 	kind: ChildProcessRequestMessage['kind'],
 	payload: any,
@@ -295,9 +333,12 @@ export async function runAgentChildProcessWorker(): Promise<void> {
 						payload.kind === 'subagent'
 							? await runSubAgentPayload(payload)
 							: await runTeammatePayload(payload);
-					send({type: 'result', result});
+					// Send the result and wait for the parent's ack so the child
+					// doesn't exit before the parent has processed the result,
+					// which would otherwise race the 'exit' event.
+					await sendAndWaitForAck({type: 'result', result});
 				} catch (error) {
-					send({
+					await sendAndWaitForAck({
 						type: 'error',
 						error: error instanceof Error ? error.message : String(error),
 						stack: error instanceof Error ? error.stack : undefined,

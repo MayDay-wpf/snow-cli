@@ -56,7 +56,8 @@ type AgentChildProcessMessage<T> =
 	| {type: 'teamTracker'; action: string; payload: any}
 	| ChildProcessRequestMessage
 	| ChildProcessResultMessage<T>
-	| ChildProcessErrorMessage;
+	| ChildProcessErrorMessage
+	| {type: 'ack'};
 
 interface AgentChildConversationContext {
 	sessionId: string;
@@ -359,12 +360,17 @@ async function runAgentChildProcess<T>(
 			}
 
 			if (raw.type === 'result') {
+				// Acknowledge receipt so the child knows it can safely exit
+				// without racing the 'exit' event in the parent.
+				safeSend(child, {type: 'ack'});
 				finish(() => resolvePromise(raw.result));
 				return;
 			}
 
 			if (raw.type === 'error') {
+				safeSend(child, {type: 'ack'});
 				finish(() => rejectPromise(new Error(raw.error)));
+				return;
 			}
 		});
 
