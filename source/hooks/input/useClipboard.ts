@@ -3,7 +3,10 @@ import {exec} from 'child_process';
 import {promisify} from 'util';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {logger} from '../../utils/core/logger.js';
-import {isWSL} from '../../mcp/utils/websearch/browser.utils.js';
+import {
+	isWSL,
+	findPowerShellInWSL,
+} from '../../mcp/utils/websearch/browser.utils.js';
 
 // 使用异步 exec 替代 execSync，避免阻塞 React 渲染线程，
 // 这样确认剪贴板包含图片后，[image upload...] loading 占位符可以及时显示。
@@ -55,10 +58,30 @@ export function useClipboard(
 
 		try {
 			const isWslEnv = process.platform === 'linux' && isWSL();
-			const psCmd = isWslEnv ? 'powershell.exe' : 'powershell';
+			// Resolve the PowerShell binary. Under WSL with `appendWindowsPath=false`,
+			// the bare `powershell.exe` name is not on PATH (Issue #176), so we probe
+			// well-known /mnt/c paths via findPowerShellInWSL(). On native Windows we
+			// keep using `powershell` (resolved by the OS). If no PowerShell is found
+			// in WSL, psCmd stays empty and the Windows/WSL clipboard branch below is
+			// skipped, falling through to the Linux text clipboard path.
+			let psCmd: string;
+			if (isWslEnv) {
+				const psPath = findPowerShellInWSL() ?? '';
+				// exec()/execAsync() routes the command through a shell. Under WSL
+				// that shell is bash, which splits on unquoted whitespace — so a
+				// path like "/mnt/c/Program Files/PowerShell/7/pwsh.exe" would be
+				// broken into "/mnt/c/Program" + "Files/...". Wrap the path in
+				// single quotes (the strongest form of bash quoting) so it is
+				// passed verbatim. findPowerShellInWSL() only returns paths from
+				// well-known /mnt/c candidates or `which`, neither of which
+				// contain single quotes, so this is safe.
+				psCmd = psPath ? `'${psPath}'` : '';
+			} else {
+				psCmd = 'powershell';
+			}
 
 			// Try to read image from clipboard
-			if (process.platform === 'win32' || isWslEnv) {
+			if (process.platform === 'win32' || (isWslEnv && psCmd)) {
 				// Windows / WSL: Use PowerShell to read image from clipboard
 				try {
 					const probeScript =
@@ -275,7 +298,7 @@ end try'`;
 			// fallback for image-probe errors and non-Windows platforms.
 			try {
 				let clipboardText = '';
-				if (process.platform === 'win32' || isWslEnv) {
+				if (process.platform === 'win32' || (isWslEnv && psCmd)) {
 					// PowerShell 5.x may emit Get-Clipboard text using the active console
 					// code page, which makes Node's utf-8 decoding corrupt Chinese text.
 					// Encode the Unicode clipboard text to UTF-8 base64 inside PowerShell,

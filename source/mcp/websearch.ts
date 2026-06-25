@@ -41,6 +41,13 @@ export class WebSearchService {
 	private userDataDir: string | undefined;
 	private browserLaunchPromise: Promise<Browser> | null = null;
 	private browserClosePromise: Promise<void> | null = null;
+	// Tracks how the current `this.browser` was obtained so we close it
+	// correctly: `puppeteer.launch()` processes must be `browser.close()`-d
+	// (otherwise they leak as zombies), while `puppeteer.connect()` sessions
+	// to a Windows browser under WSL should only be `browser.disconnect()`-ed.
+	// In WSL mode we may fall back to `launchBrowserDirect()` (Issue #176),
+	// so `isWSLMode` alone is NOT sufficient to decide the close strategy.
+	private browserIsLocallyLaunched: boolean = false;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
@@ -124,11 +131,12 @@ export class WebSearchService {
 			wsEndpoint = await launchWindowsBrowserFromWSL(browserPath, debugPort);
 
 			if (!wsEndpoint) {
-				throw new Error(
-					`Failed to launch Windows browser from WSL. Browser path: ${browserPath}. ` +
-						`Debug port: ${debugPort}. Make sure the browser is not already running ` +
-						`or try a different port in ~/.snow/proxy-config.json (browserDebugPort).`,
-				);
+				// Windows browser launch failed (e.g. PowerShell not on PATH under
+				// WSL `appendWindowsPath=false`, or spawn ENOENT). Fall back to a
+				// native Linux browser (google-chrome / chromium) so web search
+				// still works instead of hard-failing. This is the permanent fix
+				// for Issue #176 (spawn powershell.exe ENOENT).
+				return this.launchBrowserDirect(proxyConfig);
 			}
 		}
 
@@ -136,6 +144,11 @@ export class WebSearchService {
 			this.browser = await puppeteer.connect({
 				browserWSEndpoint: wsEndpoint,
 			});
+			// Connected to a remote Windows browser via WebSocket — it is NOT
+			// a locally launched process, so we must only disconnect (not close)
+			// it during shutdown to avoid killing a browser the user may still
+			// want running on the Windows side.
+			this.browserIsLocallyLaunched = false;
 			return this.browser;
 		} catch (error: unknown) {
 			const errorMessage =
@@ -190,6 +203,11 @@ export class WebSearchService {
 				args: launchArgs,
 				userDataDir: this.userDataDir,
 			});
+			// We spawned this browser process ourselves (either in standard
+			// non-WSL mode, or as the WSL fallback path when a Windows browser
+			// could not be launched). It MUST be `browser.close()`-d on
+			// shutdown — `disconnect()` alone would leak a zombie process.
+			this.browserIsLocallyLaunched = true;
 		} catch (error: unknown) {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -229,22 +247,28 @@ export class WebSearchService {
 			return;
 		}
 
-		if (this.isWSLMode) {
-			// In WSL mode, just disconnect (don't close the Windows browser)
-			try {
-				if (browser.connected) {
-					browser.disconnect();
-				}
-			} catch {
-				// Ignore disconnect errors
-			}
-		} else {
+		if (this.browserIsLocallyLaunched) {
+			// We spawned this browser process via puppeteer.launch() — close it
+			// so the child process is terminated (a bare disconnect() would
+			// leak a zombie). This covers both standard non-WSL mode and the
+			// WSL fallback path that launches a native Linux browser.
 			try {
 				if (browser.connected) {
 					await browser.close();
 				}
 			} catch {
 				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
+			}
+		} else {
+			// Remote session obtained via puppeteer.connect() (WSL connecting
+			// to a Windows browser). Only disconnect — don't close the browser
+			// the user may still want running on the Windows side.
+			try {
+				if (browser.connected) {
+					browser.disconnect();
+				}
+			} catch {
+				// Ignore disconnect errors
 			}
 		}
 

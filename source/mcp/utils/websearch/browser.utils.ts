@@ -49,6 +49,67 @@ export function findWindowsBrowserInWSL(): string | null {
 	return null;
 }
 
+/**
+ * Find a usable Windows PowerShell executable path when running inside WSL.
+ *
+ * WSL with `appendWindowsPath=false` (a common configuration) does NOT inject
+ * the Windows PATH into the Linux side, so `powershell.exe` / `pwsh.exe`
+ * cannot be invoked by their bare names — `spawn('powershell.exe', ...)` fails
+ * with `ENOENT`. This function enumerates well-known Windows mount paths
+ * and falls back to a `which` lookup (for `appendWindowsPath=true` users) to
+ * resolve a usable PowerShell binary. The result is cached for the process
+ * lifetime to avoid repeated filesystem probes.
+ *
+ * @returns PowerShell executable path accessible from WSL, or null if none found
+ */
+let cachedPowerShellPath: string | null | undefined;
+
+export function findPowerShellInWSL(): string | null {
+	if (cachedPowerShellPath !== undefined) {
+		return cachedPowerShellPath;
+	}
+
+	// Well-known Windows PowerShell locations (mounted under /mnt/c by WSL).
+	// Prefer Windows PowerShell 5.x first because the Start-Process / clipboard
+	// scripts use features that are stable across 5.1+, then PowerShell 7+.
+	const candidates = [
+		'/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+		'/mnt/c/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell.exe',
+		'/mnt/c/Program Files/PowerShell/7/pwsh.exe',
+		'/mnt/c/Program Files/PowerShell/6/pwsh.exe',
+	];
+
+	for (const candidate of candidates) {
+		try {
+			if (existsSync(candidate)) {
+				cachedPowerShellPath = candidate;
+				return candidate;
+			}
+		} catch {
+			// Ignore permission/IO errors on individual candidates
+		}
+	}
+
+	// Fallback: query PATH via `which` (works when appendWindowsPath=true).
+	for (const bin of ['powershell.exe', 'pwsh.exe', 'powershell', 'pwsh']) {
+		try {
+			const resolved = execSync(`which ${bin}`, {
+				encoding: 'utf8',
+				stdio: ['ignore', 'pipe', 'ignore'],
+			}).trim();
+			if (resolved) {
+				cachedPowerShellPath = resolved;
+				return resolved;
+			}
+		} catch {
+			// Not in PATH, try next candidate
+		}
+	}
+
+	cachedPowerShellPath = null;
+	return null;
+}
+
 // Store reference to spawned browser process for cleanup
 let spawnedBrowserProcess: ChildProcess | null = null;
 
@@ -82,14 +143,33 @@ export async function launchWindowsBrowserFromWSL(
 	];
 
 	try {
+		// Resolve a usable PowerShell binary. With WSL `appendWindowsPath=false`,
+		// the bare `powershell.exe` name is NOT on PATH and `spawn` would fail
+		// with ENOENT. findPowerShellInWSL() probes well-known /mnt/c paths.
+		const psExe = findPowerShellInWSL();
+		if (!psExe) {
+			// No Windows PowerShell accessible from WSL — return null so the
+			// caller can fall back to launching a native Linux browser instead.
+			return null;
+		}
+
 		// Use PowerShell to start the browser process on Windows side
 		const psCommand = `Start-Process -FilePath '${windowsPath}' -ArgumentList '${args.join(
 			' ',
 		)}' -PassThru`;
 
-		spawnedBrowserProcess = spawn('powershell.exe', ['-Command', psCommand], {
+		spawnedBrowserProcess = spawn(psExe, ['-Command', psCommand], {
 			detached: true,
 			stdio: 'ignore',
+		});
+
+		// `spawn()` emits the 'error' event asynchronously (e.g. ENOENT when the
+		// binary cannot be executed, or EACCES). Without a listener Node would
+		// crash the process with an uncaught exception; capture the failure so
+		// we can return null and let callers fall back gracefully.
+		let spawnFailed = false;
+		spawnedBrowserProcess.on('error', () => {
+			spawnFailed = true;
 		});
 
 		spawnedBrowserProcess.unref();
@@ -100,6 +180,11 @@ export async function launchWindowsBrowserFromWSL(
 
 		for (let i = 0; i < maxRetries; i++) {
 			await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+			if (spawnFailed) {
+				// PowerShell failed to start (ENOENT / permission / exec format).
+				return null;
+			}
 
 			// Use node:http to check if browser is ready (avoids proxy issues)
 			const wsUrl = await getRunningBrowserWSEndpoint(debugPort);
