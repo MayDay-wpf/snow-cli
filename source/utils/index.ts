@@ -6,6 +6,8 @@ import './commands/agent.js';
 import './commands/backend.js';
 import './commands/branch.js';
 import './commands/buddy.js';
+import './commands/btw.js';
+import './commands/games.js';
 import './commands/clear.js';
 import './commands/codebase.js';
 import './commands/compact.js';

@@ -223,6 +223,7 @@ export const CUSTOM_HEADERS_PLUGIN_DIR = join(
 	'plugin',
 	'custom_headers',
 );
+export const GAMES_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'games');
 
 export type MCPConfigScope = 'global' | 'project';
 

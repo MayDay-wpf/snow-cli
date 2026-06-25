@@ -654,6 +654,7 @@ type CommandHandlerOptions = {
 	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1036,6 +1037,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'pixel') {
 				// Pixel editor shown as an overlay panel
 				options.setShowPixelEditor(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'showGamesPanel') {
+				// Games panel shown as an overlay panel
+				options.setShowGamesPanel(true);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&

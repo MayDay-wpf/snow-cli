@@ -21,6 +21,7 @@ import type {
 	PanelState,
 } from '../../../hooks/ui/usePanelState.js';
 import PixelEditorScreen from '../PixelEditorScreen.js';
+import GamesScreen from '../GamesScreen.js';
 const PermissionsPanel = lazy(
 	() => import('../../components/panels/PermissionsPanel.js'),
 );
@@ -478,6 +479,15 @@ export default function ChatScreenPanels({
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<PixelEditorScreen
 						onBack={() => panelState.setShowPixelEditor(false)}
+					/>
+				</Box>
+			)}
+
+			{panelState.showGamesPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<GamesScreen
+						onBack={() => panelState.setShowGamesPanel(false)}
+						terminalWidth={terminalWidth}
 					/>
 				</Box>
 			)}

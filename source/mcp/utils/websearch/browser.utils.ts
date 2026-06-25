@@ -247,6 +247,49 @@ export async function getRunningBrowserWSEndpoint(
 }
 
 /**
+ * Check whether a given file path looks like a native executable for the
+ * current operating system. This is used to guard `proxyConfig.browserPath`
+ * before passing it to `puppeteer.launch({ executablePath })`.
+ *
+ * The primary motivation is WSL: a user (or auto-detection) may set
+ * `browserPath` to a Windows .exe path such as
+ * `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`. On the Linux
+ * side of WSL this file *exists* (existsSync returns true) but it is a
+ * Windows PE binary that cannot be exec'd by the Linux kernel, causing
+ * puppeteer.launch() to crash (Issue #176 Bug #2).
+ *
+ * Rules:
+ *  - win32  : only accept paths ending in `.exe` or `.bat` (case-insensitive).
+ *  - darwin : reject `.exe`/`.bat` (those are Windows binaries).
+ *  - linux  : reject `.exe`/`.bat` and reject `/mnt/<drive>/` style WSL
+ *             mount paths (those map to Windows files).
+ *
+ * @param filePath - The browser path to validate
+ * @returns true if the path is a plausible native executable for this OS
+ */
+export function isExecutableForPlatform(filePath: string): boolean {
+	const os = platform();
+	const lower = filePath.toLowerCase();
+
+	if (os === 'win32') {
+		return lower.endsWith('.exe') || lower.endsWith('.bat');
+	}
+
+	// Linux and macOS: a Windows .exe / .bat is never a valid native binary.
+	if (lower.endsWith('.exe') || lower.endsWith('.bat')) {
+		return false;
+	}
+
+	// On Linux (including WSL), /mnt/<drive>/ paths point to the Windows
+	// filesystem — those files are Windows binaries even without a .exe suffix.
+	if (os === 'linux' && /^\/mnt\/[a-z]\//i.test(filePath)) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * Detect system Chrome/Edge browser executable path
  * @returns Browser executable path or null if not found
  */

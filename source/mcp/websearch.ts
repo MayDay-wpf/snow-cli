@@ -11,6 +11,7 @@ import {IMAGE_MIME_TYPES} from './types/filesystem.types.js';
 import {
 	findBrowserExecutable,
 	isWSL,
+	isExecutableForPlatform,
 	findWindowsBrowserInWSL,
 	launchWindowsBrowserFromWSL,
 	getRunningBrowserWSEndpoint,
@@ -132,11 +133,24 @@ export class WebSearchService {
 
 			if (!wsEndpoint) {
 				// Windows browser launch failed (e.g. PowerShell not on PATH under
-				// WSL `appendWindowsPath=false`, or spawn ENOENT). Fall back to a
-				// native Linux browser (google-chrome / chromium) so web search
-				// still works instead of hard-failing. This is the permanent fix
-				// for Issue #176 (spawn powershell.exe ENOENT).
-				return this.launchBrowserDirect(proxyConfig);
+				// WSL `appendWindowsPath=false`, or spawn ENOENT, or NAT-mode WSL2
+				// cannot reach Windows 127.0.0.1). Fall back to a native Linux
+				// browser (google-chrome / chromium) so web search still works
+				// instead of hard-failing. This is the permanent fix for Issue
+				// #176.
+				//
+				// CRITICAL: strip the Windows browser path before delegating.
+				// `proxyConfig.browserPath` (or the auto-detected `browserPath`
+				// from findWindowsBrowserInWSL) points to a Windows .exe under
+				// /mnt/c/... . Passing it to launchBrowserDirect() would make
+				// puppeteer.launch({executablePath}) attempt to execute a Windows
+				// PE binary on Linux, which crashes. We must clear browserPath so
+				// launchBrowserDirect() falls through to findBrowserExecutable()
+				// which discovers a native Linux browser instead.
+				return this.launchBrowserDirect({
+					...proxyConfig,
+					browserPath: undefined,
+				});
 			}
 		}
 
@@ -169,8 +183,15 @@ export class WebSearchService {
 		// Find browser executable path (cache it)
 		// Priority: 1. User-configured path, 2. Auto-detect
 		if (!this.executablePath) {
-			// First try user-configured browser path
-			if (proxyConfig.browserPath && existsSync(proxyConfig.browserPath)) {
+			// First try user-configured browser path. Validate that the path
+			// is a native executable for the current OS — a Windows .exe path
+			// (e.g. /mnt/c/.../chrome.exe) is unusable on Linux/WSL and would
+			// cause puppeteer.launch() to crash (Issue #176 Bug #2).
+			if (
+				proxyConfig.browserPath &&
+				isExecutableForPlatform(proxyConfig.browserPath) &&
+				existsSync(proxyConfig.browserPath)
+			) {
 				this.executablePath = proxyConfig.browserPath;
 			} else {
 				// Fallback to auto-detection

@@ -388,6 +388,13 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				mainFlowOnly: true,
 			},
 			{
+				name: 'games',
+				description:
+					t.commandPanel.commands.games ||
+					'Open the games panel - play built-in and plugin games',
+				mainFlowOnly: true,
+			},
+			{
 				name: 'quit',
 				description: t.commandPanel.commands.quit,
 			},

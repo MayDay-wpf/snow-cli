@@ -901,6 +901,7 @@ export const en: TranslationKeys = {
 			connectionStatus: 'Show current Snow Instance connection status',
 			newPrompt: 'Generate a refined prompt from your requirement using AI',
 			pixel: 'Open the terminal pixel editor',
+			games: 'Open the games panel - play built-in and plugin games',
 			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
 			deepresearch:
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
@@ -2348,6 +2349,16 @@ export const en: TranslationKeys = {
 		exitImageDisabled: 'Exit image disabled',
 		failedDisableExitImage: 'Failed to disable exit image',
 		setAsExitImage: 'Set "{name}" as exit image',
+	},
+	gamesScreen: {
+		screenTitle: 'Games',
+		loading: 'Loading game list...',
+		noGames:
+			'No games found. Drop game plugins into ~/.snow/plugin/games/ to load.',
+		menuHint: '↑↓ navigate • Enter play • Esc back',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		pluginDirHint: 'Plugin directory: ~/.snow/plugin/games/ (.js/.mjs/.cjs)',
 	},
 	agentPickerPanel: {
 		title: 'Sub-Agent Selection',

@@ -846,6 +846,7 @@ export const zh: TranslationKeys = {
 			connectionStatus: '显示当前 Snow Instance 连接状态',
 			newPrompt: '根据需求使用 AI 生成精炼的提示词',
 			pixel: '打开终端像素编辑器',
+			games: '打开游戏面板 - 玩内置和插件小游戏',
 			btw: '在 AI 运行时快速提问（临时对话，不保存上下文）',
 			deepresearch:
 				'执行自主多步联网深度研究，并将带引用的 Markdown 报告保存到 .snow/deepresearch/',
@@ -2224,6 +2225,15 @@ export const zh: TranslationKeys = {
 		exitImageDisabled: '已关闭退出画面',
 		failedDisableExitImage: '关闭退出画面失败',
 		setAsExitImage: '已将「{name}」设为退出画面',
+	},
+	gamesScreen: {
+		screenTitle: '小游戏',
+		loading: '正在加载游戏列表...',
+		noGames: '暂无游戏。将游戏插件放入 ~/.snow/plugin/games/ 目录即可加载。',
+		menuHint: '↑↓ 选择 • Enter 开始游戏 • Esc 返回',
+		moreAbove: '↑ 上方还有 {count} 项',
+		moreBelow: '↓ 下方还有 {count} 项',
+		pluginDirHint: '插件目录: ~/.snow/plugin/games/ (.js/.mjs/.cjs)',
 	},
 	agentPickerPanel: {
 		title: '子代理选择',

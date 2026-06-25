@@ -37,6 +37,7 @@ export type PanelState = {
 	showTodoListPanel: boolean;
 	showTaskManagerPanel: boolean;
 	showPixelEditor: boolean;
+	showGamesPanel: boolean;
 	showIdeSelectPanel: boolean;
 	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
@@ -60,6 +61,7 @@ export type PanelActions = {
 	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
+	setShowGamesPanel: Dispatch<SetStateAction<boolean>>;
 	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
@@ -131,6 +133,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
 	const [showTaskManagerPanel, setShowTaskManagerPanel] = useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
+	const [showGamesPanel, setShowGamesPanel] = useState(false);
 	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
 		string | undefined
@@ -175,6 +178,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTodoListPanel ||
 			showTaskManagerPanel ||
 			showPixelEditor ||
+			showGamesPanel ||
 			showIdeSelectPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
@@ -371,6 +375,10 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let PixelEditorScreen handle ESC
 		}
 
+		if (showGamesPanel) {
+			return false; // Let GamesScreen handle ESC
+		}
+
 		if (showIdeSelectPanel) {
 			setShowIdeSelectPanel(false);
 			return true;
@@ -407,6 +415,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTodoListPanel ||
 			showTaskManagerPanel ||
 			showPixelEditor ||
+			showGamesPanel ||
 			showIdeSelectPanel
 		);
 	};
@@ -441,6 +450,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showTodoListPanel,
 		showTaskManagerPanel,
 		showPixelEditor,
+		showGamesPanel,
 		showIdeSelectPanel,
 		connectionPanelApiUrl,
 		profileSelectedIndex,
@@ -477,6 +487,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowTodoListPanel,
 		setShowTaskManagerPanel,
 		setShowPixelEditor,
+		setShowGamesPanel,
 		setShowIdeSelectPanel,
 		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,

@@ -815,6 +815,7 @@ export type TranslationKeys = {
 			connectionStatus: string;
 			newPrompt: string;
 			pixel: string;
+			games: string;
 			btw: string;
 			deepresearch: string;
 			toolDisplay: string;
@@ -2112,6 +2113,15 @@ export type TranslationKeys = {
 		exitImageDisabled: string;
 		failedDisableExitImage: string;
 		setAsExitImage: string;
+	};
+	gamesScreen: {
+		screenTitle: string;
+		loading: string;
+		noGames: string;
+		menuHint: string;
+		moreAbove: string;
+		moreBelow: string;
+		pluginDirHint: string;
 	};
 	agentPickerPanel: {
 		title: string;

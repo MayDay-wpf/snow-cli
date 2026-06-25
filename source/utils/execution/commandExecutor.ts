@@ -70,6 +70,7 @@ export interface CommandResult {
 		| 'startGoalLoop'
 		// /goal resume 无参数 -> 打开 goal 会话列表面板
 		| 'showGoalSessionPanel'
+		| 'showGamesPanel'
 		| 'quit'
 		| 'disconnect';
 	prompt?: string;
