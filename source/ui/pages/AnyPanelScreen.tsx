@@ -54,11 +54,13 @@ export default function AnyPanelScreen({
 	const closedRef = useRef(false);
 
 	// 加载插件
+	// 每次打开面板都强制 bustCache=true，绕过 ESM 模块缓存，
+	// 确保开发期修改的插件代码无需重启 CLI 即可生效。
 	useEffect(() => {
 		let disposed = false;
 		(async () => {
 			try {
-				const plugins = await loadAnyPanelPlugins();
+				const plugins = await loadAnyPanelPlugins(true);
 				const indexed = indexAnyPanelPlugins(plugins);
 				const found = indexed.get(pluginId);
 				if (disposed) return;
