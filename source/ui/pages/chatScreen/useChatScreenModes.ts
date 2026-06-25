@@ -22,6 +22,8 @@ import {tpsTracker} from '../../../hooks/conversation/core/tpsTracker.js';
 import {getSimpleMode} from '../../../utils/config/themeConfig.js';
 import {getToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {ToolDisplayMode} from '../../../utils/config/themeConfig.js';
+import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 
 type Options = {
 	enableYolo?: boolean;
@@ -63,6 +65,9 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	});
 	const [toolDisplayMode, setToolDisplayMode] = useState<ToolDisplayMode>(() =>
 		getToolDisplayMode(),
+	);
+	const [thinkDisplayMode, setThinkDisplayMode] = useState<ThinkDisplayMode>(
+		() => getThinkDisplayMode(),
 	);
 
 	useEffect(() => {
@@ -121,6 +126,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 				setSimpleMode(Boolean(event.value));
 			} else if (event.type === 'toolDisplayMode') {
 				setToolDisplayMode(event.value);
+			} else if (event.type === 'thinkDisplayMode') {
+				setThinkDisplayMode(event.value);
 			}
 		};
 
@@ -149,5 +156,6 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		simpleMode,
 		showThinking,
 		toolDisplayMode,
+		thinkDisplayMode,
 	};
 }

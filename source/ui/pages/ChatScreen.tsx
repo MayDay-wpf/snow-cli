@@ -100,6 +100,8 @@ export default function ChatScreen({
 		requestUserQuestion,
 		compressionStatus,
 		setCompressionStatus,
+		thinkingStatus,
+		setThinkingStatus,
 		isResumingSession,
 		setIsResumingSession,
 		btwPrompt,
@@ -123,6 +125,7 @@ export default function ChatScreen({
 		simpleMode,
 		showThinking,
 		toolDisplayMode,
+		thinkDisplayMode,
 	} = useChatScreenModes({enableYolo, enablePlan});
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
@@ -253,6 +256,7 @@ export default function ChatScreen({
 		},
 		pendingToolConfirmation,
 		onCompressionStatus: setCompressionStatus,
+		onThinkingStatus: setThinkingStatus,
 		setIsResumingSession,
 		onResetTerminalTitle: resetTerminalTitleSummary,
 	});
@@ -429,6 +433,7 @@ export default function ChatScreen({
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
 		onCompressionStatus: setCompressionStatus,
+		onThinkingStatus: setThinkingStatus,
 		onResetTerminalTitle: resetTerminalTitleSummary,
 	});
 
@@ -624,6 +629,7 @@ export default function ChatScreen({
 				messages={messages}
 				showThinking={showThinking}
 				toolDisplayMode={toolDisplayMode}
+				thinkDisplayMode={thinkDisplayMode}
 				pendingMessages={pendingMessages}
 				pendingToolConfirmation={pendingToolConfirmation}
 				pendingUserQuestion={pendingUserQuestion}
@@ -636,6 +642,7 @@ export default function ChatScreen({
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
 				setHookError={setHookError}
 				compressionStatus={compressionStatus}
+				thinkingStatus={thinkingStatus}
 			/>
 
 			<ChatScreenPanels

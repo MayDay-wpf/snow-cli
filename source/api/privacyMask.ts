@@ -129,7 +129,7 @@ const DIRECT_SECRET_VALUE_PATTERNS: Array<{
 ];
 
 const SENSITIVE_KEY_NAME_PATTERN =
-	'(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|gemini[_-]?api[_-]?key|google[_-]?api[_-]?key|x-api-key|x-api-token|token|access[_-]?token|refresh[_-]?token|id[_-]?token|secret|client[_-]?secret|password|passwd|pwd|authorization|cookie|session[_-]?(?:id|token|key)?|access[_-]?key|secret[_-]?key|private[_-]?key|webhook[_-]?secret|signing[_-]?secret)';
+	'(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|gemini[_-]?api[_-]?key|google[_-]?api[_-]?key|x-api-key|x-api-token|token|access[_-]?token|refresh[_-]?token|id[_-]?token|secret|client[_-]?secret|password|passwd|pwd|authorization|cookie|session[_-]?(?:id|token|key)|access[_-]?key|secret[_-]?key|private[_-]?key|webhook[_-]?secret|signing[_-]?secret)';
 const CONTEXT_SECRET_KEY_PATTERN =
 	'[\'"]?(' + SENSITIVE_KEY_NAME_PATTERN + ')[\'"]?';
 
@@ -183,6 +183,68 @@ function isStrongSensitiveKey(keyName: string): boolean {
 	);
 }
 
+/**
+ * 检测非常明确的代码结构特征。
+ * 仅匹配绝不会出现在真实密钥中的结构（函数调用、new 构造、代码关键字、$变量），
+ * 用于强敏感键名的安全优先判定——宁可多脱敏代码引用，也不漏脱敏真实密钥。
+ */
+function isDefinitelyCode(value: string): boolean {
+	// 代码关键字作为右值（如 "new" 被空格截断为独立值），几乎一定是代码
+	if (
+		/^(?:new|return|await|yield|throw|typeof|void|delete|class|function|async|this|super|self)$/i.test(
+			value,
+		)
+	) {
+		return true;
+	}
+
+	// new Foo(...)（锚定开头，避免 "a new secret" 等自然语言误匹配）
+	if (/^new\s+\S/.test(value)) {
+		return true;
+	}
+
+	// 函数调用：以标识符开头，紧跟 ( ... )
+	if (/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*\s*\(/.test(value)) {
+		return true;
+	}
+
+	// $variable 引用（Shell/模板变量）
+	if (/^\$[A-Za-z_$][\w$]*/.test(value)) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * 识别代码常见的赋值右值，避免将代码误判为密钥值而脱敏。
+ * 在 isDefinitelyCode 基础上额外检测成员访问链、索引访问、对象字面量等结构。
+ * 注意：成员访问链等额外检查可能误判带点号的真实密钥（如 "my.app.token"），
+ * 因此仅用于非强敏感键名的场景。
+ */
+function isCodeLikeValue(value: string): boolean {
+	if (isDefinitelyCode(value)) {
+		return true;
+	}
+
+	// 成员访问链：a.b.c（点号分隔，至少一个点号，两端为标识符）
+	if (/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*){1,}$/.test(value)) {
+		return true;
+	}
+
+	// 索引访问：foo[bar]、config["key"]（锚定到开头，避免误判自然语言中的 [..]）
+	if (/^[A-Za-z_$][\w$]*\s*\[[^\]]+\]/.test(value)) {
+		return true;
+	}
+
+	// 对象字面量：{key: value} 或 {}
+	if (/^\{[^}]*:/.test(value) || /^\{\s*\}/.test(value)) {
+		return true;
+	}
+
+	return false;
+}
+
 function shouldMaskContextValue(value: string, keyName: string): boolean {
 	const normalized = value.trim();
 	if (isPlaceholderSecret(normalized)) {
@@ -190,7 +252,16 @@ function shouldMaskContextValue(value: string, keyName: string): boolean {
 	}
 
 	if (isStrongSensitiveKey(keyName)) {
+		// 强敏感键名：仅对非常明确的代码结构跳过脱敏，
+		// 不使用成员访问链等可能误判真实密钥的检查
+		if (isDefinitelyCode(normalized)) {
+			return false;
+		}
 		return true;
+	}
+
+	if (isCodeLikeValue(normalized)) {
+		return false;
 	}
 
 	if (/^\d+$/.test(normalized) && normalized.length < 12) {

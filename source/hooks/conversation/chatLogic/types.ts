@@ -141,6 +141,11 @@ export interface UseChatLogicProps {
 			| import('../../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	onThinkingStatus?: (
+		status:
+			| import('../../../ui/components/chat/ThinkingStatus.js').ThinkingStatus
+			| null,
+	) => void;
 	setIsResumingSession?: React.Dispatch<React.SetStateAction<boolean>>;
 	onResetTerminalTitle?: () => void;
 }

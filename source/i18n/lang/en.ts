@@ -907,6 +907,8 @@ export const en: TranslationKeys = {
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
 				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			thinkDisplay:
+				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			speedometer:
 				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			quit: 'Exit the application',
@@ -951,6 +953,16 @@ export const en: TranslationKeys = {
 				set: (mode: string) => `Tool display mode set to: ${mode}`,
 				invalid:
 					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			// Think display mode command messages
+			thinkDisplay: {
+				status: (mode: string) =>
+					`Think display mode: ${mode}` +
+					(mode === 'full'
+						? ' (move all thinking content to static area)'
+						: ' (compact thinking content then move to static area)'),
+				set: (mode: string) => `Think display mode set to: ${mode}`,
+				invalid: 'Invalid mode. Usage: /think-display [full|compact|status]',
 			},
 			// Speedometer command messages
 			speedometer: {

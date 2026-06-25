@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
+import type {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
 import type {
 	BashSensitiveCommandState,
 	CustomCommandExecutionState,
@@ -45,6 +46,9 @@ export function useChatScreenLocalState() {
 		useState<PendingUserQuestionState>(null);
 	const [compressionStatus, setCompressionStatus] =
 		useState<CompressionStatus | null>(null);
+	const [thinkingStatus, setThinkingStatus] = useState<ThinkingStatus | null>(
+		null,
+	);
 	const [isResumingSession, setIsResumingSession] = useState(false);
 	const [btwPrompt, setBtwPrompt] = useState<string | null>(null);
 
@@ -139,6 +143,8 @@ export function useChatScreenLocalState() {
 		requestUserQuestion,
 		compressionStatus,
 		setCompressionStatus,
+		thinkingStatus,
+		setThinkingStatus,
 		isResumingSession,
 		setIsResumingSession,
 		btwPrompt,

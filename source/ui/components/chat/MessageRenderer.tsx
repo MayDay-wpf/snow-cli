@@ -11,13 +11,40 @@ import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
+import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 
 /**
  * Clean thinking content by removing XML-like tags
- * Some third-party APIs may include <think></think> or <thinking></thinking> tags
+ * Some third-party APIs may include </think> or <thinking></thinking> tags
  */
 function cleanThinkingContent(content: string): string {
 	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
+}
+
+/**
+ * Compact thinking content for display in compact mode.
+ * Keeps head + tail lines with ellipsis, truncates to maxLength.
+ */
+function compactThinkingContent(
+	content: string,
+	maxLines = 6,
+	maxLength = 200,
+): string {
+	const lines = content.split('\n').filter(line => line.trim());
+	let result: string;
+	if (lines.length <= maxLines) {
+		result = lines.join('\n');
+	} else {
+		const headLines = Math.ceil(maxLines / 2);
+		const tailLines = Math.floor(maxLines / 2);
+		const head = lines.slice(0, headLines).join('\n');
+		const tail = lines.slice(-tailLines).join('\n');
+		result = `${head}\n  …\n${tail}`;
+	}
+	if (result.length > maxLength) {
+		return `${result.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+	return result;
 }
 
 type Props = {
@@ -27,6 +54,7 @@ type Props = {
 	terminalWidth: number;
 	showThinking?: boolean;
 	toolDisplayMode?: 'full' | 'compact' | 'hidden';
+	thinkDisplayMode?: ThinkDisplayMode;
 };
 
 export default function MessageRenderer({
@@ -36,6 +64,7 @@ export default function MessageRenderer({
 	terminalWidth,
 	showThinking = true,
 	toolDisplayMode = 'full',
+	thinkDisplayMode = 'compact',
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
@@ -581,7 +610,11 @@ export default function MessageRenderer({
 																dimColor
 																italic
 															>
-																{cleanThinkingContent(message.thinking)}
+																{thinkDisplayMode === 'compact'
+																	? compactThinkingContent(
+																			cleanThinkingContent(message.thinking),
+																	  )
+																	: cleanThinkingContent(message.thinking)}
 															</Text>
 														</Box>
 													)}

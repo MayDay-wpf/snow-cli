@@ -651,6 +651,11 @@ type CommandHandlerOptions = {
 			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	onThinkingStatus?: (
+		status:
+			| import('../../ui/components/chat/ThinkingStatus.js').ThinkingStatus
+			| null,
+	) => void;
 	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1454,6 +1459,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'toggleToolDisplay') {
 				// /tool-display 切换工具显示模式后，<Static> 区域中的历史工具消息
 				// 不会随 toolDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。
+				resetTerminal(stdout);
+				options.setRemountKey(prev => prev + 1);
+			} else if (result.success && result.action === 'toggleThinkDisplay') {
+				// /think-display 切换思考显示模式后，<Static> 区域中的历史思考消息
+				// 不会随 thinkDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。
 				resetTerminal(stdout);
 				options.setRemountKey(prev => prev + 1);
 			} else if (

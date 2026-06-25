@@ -1,5 +1,6 @@
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import type {CompressionStatus} from '../../../ui/components/compression/CompressionStatus.js';
+import type {ThinkingStatus} from '../../../ui/components/chat/ThinkingStatus.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
 
@@ -87,6 +88,7 @@ export type ConversationHandlerOptions = {
 	getCurrentContextPercentage?: () => number;
 	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>;
 	onCompressionStatus?: (status: CompressionStatus | null) => void;
+	onThinkingStatus?: (status: ThinkingStatus | null) => void;
 	setIsAutoCompressing?: (value: boolean) => void;
 	onBuddyProgress?: (event: BuddyProgressEvent) => void;
 };

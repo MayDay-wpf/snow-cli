@@ -819,6 +819,7 @@ export type TranslationKeys = {
 			btw: string;
 			deepresearch: string;
 			toolDisplay: string;
+			thinkDisplay: string;
 			speedometer: string;
 			quit: string;
 		};
@@ -851,6 +852,12 @@ export type TranslationKeys = {
 			};
 			// Tool display mode command messages
 			toolDisplay: {
+				status: (mode: string) => string;
+				set: (mode: string) => string;
+				invalid: string;
+			};
+			// Think display mode command messages
+			thinkDisplay: {
 				status: (mode: string) => string;
 				set: (mode: string) => string;
 				invalid: string;

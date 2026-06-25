@@ -15,6 +15,9 @@ import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {CompressionStatus as CompressionStatusType} from '../../components/compression/CompressionStatus.js';
+import {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
+import type {ThinkingStatus as ThinkingStatusType} from '../../components/chat/ThinkingStatus.js';
+import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
@@ -31,6 +34,7 @@ type Props = {
 	messages: Message[];
 	showThinking: boolean;
 	toolDisplayMode: 'full' | 'compact' | 'hidden';
+	thinkDisplayMode: ThinkDisplayMode;
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
@@ -43,6 +47,7 @@ type Props = {
 	handleUserQuestionAnswer: (result: any) => void;
 	setHookError: React.Dispatch<React.SetStateAction<HookErrorDetails | null>>;
 	compressionStatus: CompressionStatusType | null;
+	thinkingStatus: ThinkingStatusType | null;
 };
 
 export default function ChatScreenConversationView({
@@ -53,6 +58,7 @@ export default function ChatScreenConversationView({
 	messages,
 	showThinking,
 	toolDisplayMode,
+	thinkDisplayMode,
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
@@ -65,6 +71,7 @@ export default function ChatScreenConversationView({
 	handleUserQuestionAnswer,
 	setHookError,
 	compressionStatus,
+	thinkingStatus,
 }: Props) {
 	return (
 		<>
@@ -88,6 +95,7 @@ export default function ChatScreenConversationView({
 								terminalWidth={terminalWidth}
 								showThinking={showThinking}
 								toolDisplayMode={toolDisplayMode}
+								thinkDisplayMode={thinkDisplayMode}
 							/>
 						)),
 				]}
@@ -109,6 +117,15 @@ export default function ChatScreenConversationView({
 				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
 					<CompressionStatus
 						status={compressionStatus}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
+			)}
+
+			{thinkingStatus && thinkingStatus.isActive && showThinking && (
+				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+					<ThinkingStatus
+						status={thinkingStatus}
 						terminalWidth={terminalWidth}
 					/>
 				</Box>

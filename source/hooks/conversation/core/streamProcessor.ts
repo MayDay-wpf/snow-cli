@@ -4,6 +4,7 @@ import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {createStreamGenerator} from './streamFactory.js';
 import {tpsTracker} from './tpsTracker.js';
+import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {
 	ConversationHandlerOptions,
 	ConversationUsage,
@@ -26,6 +27,33 @@ function compactBuddyProgressText(value: string, maxLength = 180): string {
 
 function cleanThinkingContent(content: string): string {
 	return content.replace(THINKING_TAG_PATTERN, '');
+}
+
+// compact 模式下将完整思考内容缩减为摘要后推入静态区。
+// 策略：保留首行 + 末尾若干行，中间用省略号替代，控制总长度。
+// 注意：不能复用 compactBuddyProgressText，因为它会把换行压缩成空格，
+// 导致首尾行保留逻辑失效。
+function compactThinkingContent(
+	content: string,
+	maxLines = 6,
+	maxLength = 200,
+): string {
+	const lines = content.split('\n').filter(line => line.trim());
+	let result: string;
+	if (lines.length <= maxLines) {
+		result = lines.join('\n');
+	} else {
+		const headLines = Math.ceil(maxLines / 2);
+		const tailLines = Math.floor(maxLines / 2);
+		const head = lines.slice(0, headLines).join('\n');
+		const tail = lines.slice(-tailLines).join('\n');
+		result = `${head}\n  …\n${tail}`;
+	}
+	// 仅做总长度截断，不压缩换行，保留多行结构
+	if (result.length > maxLength) {
+		return `${result.slice(0, maxLength - 1).trimEnd()}…`;
+	}
+	return result;
 }
 
 function isTableRow(line: string): boolean {
@@ -78,8 +106,11 @@ export async function processStreamRound(ctx: {
 	let roundUsage: ConversationUsage | null = null;
 
 	const streamingEnabled = config.streamingDisplay !== false;
+	const thinkDisplayMode = getThinkDisplayMode();
 
 	let thinkingLineBuffer = '';
+	let lastThinkingStatusTime = 0;
+	let isThinkingStatusActive = false;
 	let contentLineBuffer = '';
 	let isFirstStreamLine = true;
 	let hasReceivedContentChunk = false;
@@ -136,16 +167,34 @@ export async function processStreamRound(ctx: {
 	};
 
 	const flushThinkingBufferToStream = () => {
-		if (hasReceivedContentChunk || !thinkingLineBuffer) {
-			thinkingLineBuffer = '';
+		if (!thinkingLineBuffer) {
+			if (isThinkingStatusActive) {
+				isThinkingStatusActive = false;
+				options.onThinkingStatus?.(null);
+			}
 			return;
 		}
 
 		const cleaned = cleanThinkingContent(thinkingLineBuffer);
-		if (cleaned.trim()) {
-			emitStreamLine(cleaned, true);
+		// showThinking=false 时，思考内容不推入静态区（与 MessageRenderer
+		// 中 showThinking=false 时隐藏思考行的行为一致）。
+		if (cleaned.trim() && config.showThinking !== false) {
+			if (thinkDisplayMode === 'full') {
+				// full 模式：将完整思考内容一次性推送到 Static 区。
+				emitStreamLine(cleaned, true);
+			} else {
+				// compact 模式：缩减思考内容后推入静态区。
+				const compacted = compactThinkingContent(cleaned);
+				if (compacted.trim()) {
+					emitStreamLine(compacted, true);
+				}
+			}
 		}
 		thinkingLineBuffer = '';
+		if (isThinkingStatusActive) {
+			isThinkingStatusActive = false;
+			options.onThinkingStatus?.(null);
+		}
 	};
 
 	const flushListBuffer = () => {
@@ -292,6 +341,10 @@ export async function processStreamRound(ctx: {
 				hasStartedReasoning = true;
 				if (!hasReceivedContentChunk) {
 					setIsReasoning?.(true);
+					if (!isThinkingStatusActive) {
+						isThinkingStatusActive = true;
+						options.onThinkingStatus?.({isActive: true, content: ''});
+					}
 				}
 			}
 			countTokens(chunk.delta);
@@ -301,14 +354,15 @@ export async function processStreamRound(ctx: {
 			}
 
 			thinkingLineBuffer += chunk.delta;
-			const thinkLines = thinkingLineBuffer.split('\n');
-			for (let i = 0; i < thinkLines.length - 1; i++) {
-				const cleaned = cleanThinkingContent(thinkLines[i] ?? '');
-				if (cleaned || hasStreamedLines) {
-					emitStreamLine(cleaned, true);
-				}
+			const now = Date.now();
+			if (now - lastThinkingStatusTime >= STREAM_FLUSH_INTERVAL) {
+				lastThinkingStatusTime = now;
+				isThinkingStatusActive = true;
+				options.onThinkingStatus?.({
+					isActive: true,
+					content: cleanThinkingContent(thinkingLineBuffer),
+				});
 			}
-			thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
 			continue;
 		}
 
@@ -396,6 +450,10 @@ export async function processStreamRound(ctx: {
 		flushThinkingBufferToStream();
 	} else {
 		thinkingLineBuffer = '';
+		if (isThinkingStatusActive) {
+			isThinkingStatusActive = false;
+			options.onThinkingStatus?.(null);
+		}
 	}
 	if (contentLineBuffer.trim()) {
 		processContentLine(contentLineBuffer);

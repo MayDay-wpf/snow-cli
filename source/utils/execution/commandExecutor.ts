@@ -11,6 +11,7 @@ export interface CommandResult {
 		| 'togglePlan'
 		| 'toggleSimple'
 		| 'toggleToolDisplay'
+		| 'toggleThinkDisplay'
 		| 'toggleVulnerabilityHunting'
 		| 'toggleToolSearch'
 		| 'initProject'

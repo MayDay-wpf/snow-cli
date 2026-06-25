@@ -71,6 +71,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	export: '[txt|md|html|json]',
 	config: '<export|import>',
 	'tool-display': '[full|compact|hidden|status]',
+	'think-display': '[full|compact|status]',
 	speedometer: '[on|off|status]',
 };
 
@@ -100,6 +101,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
 	'tool-display': ['full', 'compact', 'hidden', 'status'],
+	'think-display': ['full', 'compact', 'status'],
 	speedometer: ['on', 'off', 'status'],
 };
 
@@ -417,6 +419,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.toolDisplay ||
 					'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			{
+				name: 'think-display',
+				description:
+					t.commandPanel.commands.thinkDisplay ||
+					'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			},
 			{
 				name: 'speedometer',

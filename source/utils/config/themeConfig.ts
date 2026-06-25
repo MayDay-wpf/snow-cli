@@ -12,15 +12,18 @@ interface ThemeConfig {
 	simpleMode?: boolean;
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
+	thinkDisplayMode?: ThinkDisplayMode;
 }
 
 export type ToolDisplayMode = 'full' | 'compact' | 'hidden';
+export type ThinkDisplayMode = 'full' | 'compact';
 
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'tiffany',
 	simpleMode: true,
 	diffOpacity: 1,
 	toolDisplayMode: 'full',
+	thinkDisplayMode: 'compact',
 };
 
 function ensureConfigDirectory(): void {
@@ -145,4 +148,20 @@ export function getToolDisplayMode(): ToolDisplayMode {
 export function setToolDisplayMode(mode: ToolDisplayMode): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, toolDisplayMode: mode});
+}
+
+/**
+ * Get think display mode setting
+ */
+export function getThinkDisplayMode(): ThinkDisplayMode {
+	const config = loadThemeConfig();
+	return config.thinkDisplayMode ?? 'compact';
+}
+
+/**
+ * Set think display mode and persist to file system
+ */
+export function setThinkDisplayMode(mode: ThinkDisplayMode): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, thinkDisplayMode: mode});
 }

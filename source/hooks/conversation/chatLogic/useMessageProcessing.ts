@@ -370,6 +370,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					onThinkingStatus: props.onThinkingStatus,
 					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
@@ -387,6 +388,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}
+			props.onThinkingStatus?.(null);
 		} finally {
 			// CRITICAL: 必须先用局部变量快照住 userInterruptedRef.current 的值！
 			// 下面的清理逻辑会把它 reset 为 false，之后 goal 续接调度（最末尾）
@@ -887,6 +889,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					onThinkingStatus: props.onThinkingStatus,
 					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
@@ -904,6 +907,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}
+			props.onThinkingStatus?.(null);
 		} finally {
 			if (userInterruptedRef.current) {
 				const session = sessionManager.getCurrentSession();

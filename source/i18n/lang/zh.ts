@@ -852,6 +852,8 @@ export const zh: TranslationKeys = {
 				'执行自主多步联网深度研究，并将带引用的 Markdown 报告保存到 .snow/deepresearch/',
 			toolDisplay:
 				'控制工具调用显示模式。用法: /tool-display [full|compact|hidden|status]',
+			thinkDisplay:
+				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
 			speedometer:
 				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
 			quit: '退出应用程序',
@@ -894,6 +896,16 @@ export const zh: TranslationKeys = {
 						: '（隐藏所有工具调用，仅显示 AI 回复）'),
 				set: (mode: string) => `工具显示模式已设置为: ${mode}`,
 				invalid: '无效的模式。用法: /tool-display [full|compact|hidden|status]',
+			},
+			// 思考显示模式命令消息
+			thinkDisplay: {
+				status: (mode: string) =>
+					`思考显示模式: ${mode}` +
+					(mode === 'full'
+						? '（全量思考内容移入静态区）'
+						: '（缩减思考内容后移入静态区）'),
+				set: (mode: string) => `思考显示模式已设置为: ${mode}`,
+				invalid: '无效的模式。用法: /think-display [full|compact|status]',
 			},
 			// 测速仪命令消息
 			speedometer: {
