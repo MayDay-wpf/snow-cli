@@ -13,7 +13,7 @@ interface Props {
 	onSave: (
 		name: string,
 		command: string,
-		type: 'execute' | 'prompt',
+		type: 'execute' | 'prompt' | 'panel',
 		location: CommandLocation,
 		description?: string,
 	) => Promise<void>;
@@ -29,14 +29,14 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 	const {theme} = useTheme();
 	const {t} = useI18n();
 	const [step, setStep] = useState<
-		'name' | 'command' | 'description' | 'type' | 'location' | 'confirm'
+		'name' | 'type' | 'command' | 'description' | 'location' | 'confirm'
 	>('name');
 	const [commandName, setCommandName] = useState('');
 	const [commandText, setCommandText] = useState('');
 	const [commandDescription, setCommandDescription] = useState('');
-	const [commandType, setCommandType] = useState<'execute' | 'prompt'>(
-		'execute',
-	);
+	const [commandType, setCommandType] = useState<
+		'execute' | 'prompt' | 'panel'
+	>('execute');
 	const [location, setLocation] = useState<CommandLocation>('global');
 	const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -48,12 +48,12 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 				if (step === 'confirm') {
 					setStep('location');
 				} else if (step === 'location') {
-					setStep('type');
-				} else if (step === 'type') {
 					setStep('description');
 				} else if (step === 'description') {
 					setStep('command');
 				} else if (step === 'command') {
+					setStep('type');
+				} else if (step === 'type') {
 					setStep('name');
 				} else if (step === 'name') {
 					handleCancel();
@@ -64,10 +64,13 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 			if (step === 'type') {
 				if (input.toLowerCase() === 'e') {
 					setCommandType('execute');
-					setStep('location');
+					setStep('command');
 				} else if (input.toLowerCase() === 'p') {
 					setCommandType('prompt');
-					setStep('location');
+					setStep('command');
+				} else if (input.toLowerCase() === 'a') {
+					setCommandType('panel');
+					setStep('command');
 				}
 			} else if (step === 'location') {
 				if (input.toLowerCase() === 'g') {
@@ -127,7 +130,7 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 
 				setErrorMessage('');
 				setCommandName(trimmedName);
-				setStep('command');
+				setStep('type');
 			}
 		},
 		[projectRoot],
@@ -142,7 +145,7 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 
 	const handleDescriptionSubmit = useCallback((value: string) => {
 		setCommandDescription(value.trim());
-		setStep('type');
+		setStep('location');
 	}, []);
 
 	const handleConfirm = useCallback(async () => {
@@ -162,6 +165,27 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 	const handleCancel = useCallback(() => {
 		onCancel();
 	}, [onCancel]);
+
+	const typeDisplay =
+		commandType === 'execute'
+			? t.customCommand.typeExecute
+			: commandType === 'prompt'
+				? t.customCommand.typePrompt
+				: t.customCommand.typePanel;
+
+	const commandLabel =
+		commandType === 'execute'
+			? t.customCommand.commandLabelExecute
+			: commandType === 'prompt'
+				? t.customCommand.commandLabelPrompt
+				: t.customCommand.commandLabelPanel;
+
+	const commandPlaceholder =
+		commandType === 'execute'
+			? t.customCommand.commandPlaceholderExecute
+			: commandType === 'prompt'
+				? t.customCommand.commandPlaceholderPrompt
+				: t.customCommand.commandPlaceholderPanel;
 
 	return (
 		<Box
@@ -198,6 +222,57 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 				</Box>
 			)}
 
+			{step === 'type' && (
+				<Box flexDirection="column">
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{t.customCommand.nameLabel}{' '}
+							<Text bold color={theme.colors.success}>
+								{commandName}
+							</Text>
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>{t.customCommand.typeLabel}</Text>
+					</Box>
+					<Box marginTop={1} gap={2}>
+						<Box>
+							<Text color={theme.colors.success} bold>
+								[E]
+							</Text>
+							<Text color={theme.colors.text}>
+								{' '}
+								{t.customCommand.typeExecute}
+							</Text>
+						</Box>
+						<Box>
+							<Text color={theme.colors.menuSelected} bold>
+								[P]
+							</Text>
+							<Text color={theme.colors.text}>
+								{' '}
+								{t.customCommand.typePrompt}
+							</Text>
+						</Box>
+						<Box>
+							<Text color={theme.colors.menuInfo} bold>
+								[A]
+							</Text>
+							<Text color={theme.colors.text}>
+								{' '}
+								{t.customCommand.typePanel}
+							</Text>
+						</Box>
+					</Box>
+					<Box marginTop={1}>
+						<Text dimColor>{t.customCommand.typePanelHint}</Text>
+					</Box>
+					<Box marginTop={1}>
+						<Text dimColor>{t.customCommand.escCancel}</Text>
+					</Box>
+				</Box>
+			)}
+
 			{step === 'command' && (
 				<Box flexDirection="column">
 					<Box marginBottom={1}>
@@ -210,15 +285,26 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							{t.customCommand.commandLabel}
+							{'Type: '}
+							<Text bold color={theme.colors.menuSelected}>
+								{typeDisplay}
+							</Text>
 						</Text>
 					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>{commandLabel}</Text>
+					</Box>
 					<TextInput
-						placeholder={t.customCommand.commandPlaceholder}
+						placeholder={commandPlaceholder}
 						value={commandText}
 						onChange={setCommandText}
 						onSubmit={handleCommandSubmit}
 					/>
+					{commandType === 'panel' && (
+						<Box marginTop={1}>
+							<Text dimColor>{t.customCommand.typePanelHint}</Text>
+						</Box>
+					)}
 					<Box marginTop={1}>
 						<Text dimColor>{t.customCommand.escCancel}</Text>
 					</Box>
@@ -232,6 +318,14 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 							{t.customCommand.nameLabel}{' '}
 							<Text bold color={theme.colors.success}>
 								{commandName}
+							</Text>
+						</Text>
+					</Box>
+					<Box marginBottom={1}>
+						<Text color={theme.colors.text}>
+							{'Type: '}
+							<Text bold color={theme.colors.menuSelected}>
+								{typeDisplay}
 							</Text>
 						</Text>
 					</Box>
@@ -261,43 +355,6 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 				</Box>
 			)}
 
-			{step === 'type' && (
-				<Box flexDirection="column">
-					<Box marginBottom={1}>
-						<Text color={theme.colors.text}>
-							Command:{' '}
-							<Text color={theme.colors.menuNormal}>{commandText}</Text>
-						</Text>
-					</Box>
-					<Box marginBottom={1}>
-						<Text color={theme.colors.text}>{t.customCommand.typeLabel}</Text>
-					</Box>
-					<Box marginTop={1} gap={2}>
-						<Box>
-							<Text color={theme.colors.success} bold>
-								[E]
-							</Text>
-							<Text color={theme.colors.text}>
-								{' '}
-								{t.customCommand.typeExecute}
-							</Text>
-						</Box>
-						<Box>
-							<Text color={theme.colors.menuSelected} bold>
-								[P]
-							</Text>
-							<Text color={theme.colors.text}>
-								{' '}
-								{t.customCommand.typePrompt}
-							</Text>
-						</Box>
-					</Box>
-					<Box marginTop={1}>
-						<Text dimColor>{t.customCommand.escCancel}</Text>
-					</Box>
-				</Box>
-			)}
-
 			{step === 'location' && (
 				<Box flexDirection="column">
 					<Box marginBottom={1}>
@@ -310,18 +367,16 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							Command:{' '}
-							<Text color={theme.colors.menuNormal}>{commandText}</Text>
+							{'Type: '}
+							<Text bold color={theme.colors.menuSelected}>
+								{typeDisplay}
+							</Text>
 						</Text>
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							Type:{' '}
-							<Text bold color={theme.colors.menuSelected}>
-								{commandType === 'execute'
-									? t.customCommand.typeExecute
-									: t.customCommand.typePrompt}
-							</Text>
+							{t.customCommand.commandLabel}{' '}
+							<Text color={theme.colors.menuNormal}>{commandText}</Text>
 						</Text>
 					</Box>
 					<Box marginBottom={1}>
@@ -381,18 +436,16 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							Command:{' '}
-							<Text color={theme.colors.menuNormal}>{commandText}</Text>
+							{'Type: '}
+							<Text bold color={theme.colors.menuSelected}>
+								{typeDisplay}
+							</Text>
 						</Text>
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							Type:{' '}
-							<Text bold color={theme.colors.menuSelected}>
-								{commandType === 'execute'
-									? t.customCommand.typeExecute
-									: t.customCommand.typePrompt}
-							</Text>
+							{t.customCommand.commandLabel}{' '}
+							<Text color={theme.colors.menuNormal}>{commandText}</Text>
 						</Text>
 					</Box>
 					<Box marginBottom={1}>
@@ -405,7 +458,7 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 					</Box>
 					<Box marginBottom={1}>
 						<Text color={theme.colors.text}>
-							Location:{' '}
+							{'Location: '}
 							<Text bold color={theme.colors.menuSelected}>
 								{location === 'global'
 									? t.customCommand.locationGlobal

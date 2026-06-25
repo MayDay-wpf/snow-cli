@@ -14,7 +14,7 @@ export type CommandLocation = 'global' | 'project';
 export interface CustomCommand {
 	name: string;
 	command: string;
-	type: 'execute' | 'prompt'; // execute: run in terminal, prompt: send to AI
+	type: 'execute' | 'prompt' | 'panel'; // execute: run in terminal, prompt: send to AI, panel: show AnyPanel plugin
 	description?: string;
 	location?: CommandLocation; // 新增，可选以兼容旧数据
 }
@@ -27,7 +27,6 @@ type CommandFileEntry = {
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
 
 function isValidSlashCommandName(name: string): boolean {
 	const trimmed = name.trim();
@@ -267,7 +266,6 @@ export async function loadCustomCommandsForLocation(
 	return loadCommandsFromDir(dir, location);
 }
 
-
 // Check if command name conflicts with built-in or existing custom commands
 export function isCommandNameConflict(name: string): boolean {
 	const allCommands = getAvailableCommands();
@@ -293,7 +291,7 @@ export function checkCommandExists(
 export async function saveCustomCommand(
 	name: string,
 	command: string,
-	type: 'execute' | 'prompt',
+	type: 'execute' | 'prompt' | 'panel',
 	description?: string,
 	location: CommandLocation = 'global',
 	projectRoot?: string,
@@ -353,7 +351,7 @@ function normalizeImportedCustomCommand(
 	if (
 		typeof name !== 'string' ||
 		typeof command !== 'string' ||
-		(type !== 'execute' && type !== 'prompt')
+		(type !== 'execute' && type !== 'prompt' && type !== 'panel')
 	) {
 		return null;
 	}
@@ -402,7 +400,6 @@ export async function importCustomCommandsForLocation(
 	}
 }
 
-
 // Delete a custom command
 export async function deleteCustomCommand(
 	name: string,
@@ -450,6 +447,17 @@ export async function registerCustomCommands(
 						message: `Executing: ${finalCommand}`,
 						action: 'executeTerminalCommand',
 						prompt: finalCommand,
+					};
+				}
+
+				if (cmd.type === 'panel') {
+					// panel 类型：加载 ~/.snow/plugin/anypanel/ 中的插件并显示面板
+					// cmd.command 字段存储的是 AnyPanel 插件的 id
+					return {
+						success: true,
+						message: `Opening panel: ${cmd.command}`,
+						action: 'showAnyPanel',
+						prompt: cmd.command,
 					};
 				}
 

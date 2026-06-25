@@ -96,12 +96,17 @@ function runUpdateCheckCommand(
 	const result = spawnSync(command, args, {
 		encoding: 'utf8',
 		stdio: ['ignore', 'pipe', 'pipe'],
+		// On Windows, commands like `npm` are actually `npm.cmd` batch files.
+		// Without `shell: true`, spawnSync cannot resolve them (ENOENT), and
+		// result.stdout/stderr are null, causing crashes downstream.
+		shell: process.platform === 'win32',
 	});
 
 	return {
 		ok: !result.error && result.status === 0,
-		stdout: result.stdout.trim(),
-		stderr: result.stderr.trim(),
+		// Guard against null when spawnSync fails (e.g. ENOENT on Windows).
+		stdout: (result.stdout ?? '').trim(),
+		stderr: (result.stderr ?? '').trim(),
 		status: result.status,
 		error: result.error
 			? result.error instanceof Error

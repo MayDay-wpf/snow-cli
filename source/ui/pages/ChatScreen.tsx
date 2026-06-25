@@ -406,6 +406,8 @@ export default function ChatScreen({
 		setShowTaskManagerPanel: panelState.setShowTaskManagerPanel,
 		setShowPixelEditor: panelState.setShowPixelEditor,
 		setShowGamesPanel: panelState.setShowGamesPanel,
+		setShowAnyPanel: panelState.setShowAnyPanel,
+		setActiveAnyPanelPluginId: panelState.setActiveAnyPanelPluginId,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
@@ -516,6 +518,7 @@ export default function ChatScreen({
 		panelState.showTaskManagerPanel ||
 		panelState.showPixelEditor ||
 		panelState.showGamesPanel ||
+		panelState.showAnyPanel ||
 		showPermissionsPanel ||
 		showSubAgentDepthPanel;
 	const shouldShowFooter =
@@ -660,6 +663,10 @@ export default function ChatScreen({
 					setRemountKey(prev => prev + 1);
 				}}
 				handleRollbackConfirm={handleRollbackConfirm}
+				showAnyPanel={panelState.showAnyPanel}
+				activeAnyPanelPluginId={panelState.activeAnyPanelPluginId}
+				setShowAnyPanel={panelState.setShowAnyPanel}
+				setActiveAnyPanelPluginId={panelState.setActiveAnyPanelPluginId}
 			/>
 
 			{shouldShowFooter && (

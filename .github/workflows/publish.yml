@@ -56,13 +56,9 @@ jobs:
 
             ### What's New
 
-            - Add real-time speedometer for token output monitoring with `/speedometer` command to toggle and display current/peak TPS
-            - Add `tool-display` command to switch tool call display density
-            - Add TodoTree component to display todos in ChatFooter
-            - Implement acknowledgment mechanism for child process messages
-            - Increase timeout for MCP tools and spawned agents to 20 minutes
-            - Add `disableBashAiSummary` setting to disable AI summary for terminal commands
-            - Add `retryDelayMs` configuration for retry delay customization
+            - Add games plugin and custom panel plugin
+            - Optimize WSL usage experience
+            - Fix the --update-check exception in the Windows system
 
             ### Installation
             ```bash

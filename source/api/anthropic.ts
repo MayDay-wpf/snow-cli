@@ -746,11 +746,11 @@ export async function* createStreamingAnthropicCompletion(
 				// Note: agents and other internal tools should set disableThinking=true
 				// Debug: Log thinking decision for troubleshooting
 				if (config.thinking) {
-					logger.debug('Thinking config check:', {
-						configThinking: !!config.thinking,
-						disableThinking: options.disableThinking,
-						willEnableThinking: config.thinking && !options.disableThinking,
-					});
+					// logger.debug('Thinking config check:', {
+					// 	configThinking: !!config.thinking,
+					// 	disableThinking: options.disableThinking,
+					// 	willEnableThinking: config.thinking && !options.disableThinking,
+					// });
 					if (config.thinking && !options.disableThinking) {
 						if (config.thinking.type === 'adaptive') {
 							requestBody.thinking = {

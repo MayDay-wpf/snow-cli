@@ -79,7 +79,7 @@ type PanelsManagerProps = {
 	onCustomCommandSave: (
 		name: string,
 		command: string,
-		type: 'execute' | 'prompt',
+		type: 'execute' | 'prompt' | 'panel',
 		location: CommandLocation,
 		description?: string,
 	) => Promise<void>;

@@ -28,7 +28,7 @@ export type KeyboardInputOptions = {
 	getFilteredCommands: () => Array<{
 		name: string;
 		description: string;
-		type: 'builtin' | 'execute' | 'prompt';
+		type: 'builtin' | 'execute' | 'prompt' | 'panel';
 		isCustom?: boolean;
 		insertionText?: string;
 	}>;
@@ -37,7 +37,7 @@ export type KeyboardInputOptions = {
 	getAllCommands?: () => Array<{
 		name: string;
 		description: string;
-		type: 'builtin' | 'execute' | 'prompt';
+		type: 'builtin' | 'execute' | 'prompt' | 'panel';
 		isCustom?: boolean;
 		insertionText?: string;
 	}>; // Get all available commands for validation

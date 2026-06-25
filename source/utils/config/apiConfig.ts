@@ -224,6 +224,7 @@ export const CUSTOM_HEADERS_PLUGIN_DIR = join(
 	'custom_headers',
 );
 export const GAMES_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'games');
+export const ANYPANEL_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'anypanel');
 
 export type MCPConfigScope = 'global' | 'project';
 

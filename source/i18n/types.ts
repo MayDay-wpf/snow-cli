@@ -1314,6 +1314,12 @@ export type TranslationKeys = {
 		namePlaceholder: string;
 		commandLabel: string;
 		commandPlaceholder: string;
+		commandLabelExecute: string;
+		commandLabelPrompt: string;
+		commandLabelPanel: string;
+		commandPlaceholderExecute: string;
+		commandPlaceholderPrompt: string;
+		commandPlaceholderPanel: string;
 		descriptionLabel: string;
 		descriptionPlaceholder: string;
 		descriptionHint: string;
@@ -1321,6 +1327,8 @@ export type TranslationKeys = {
 		typeLabel: string;
 		typeExecute: string;
 		typePrompt: string;
+		typePanel: string;
+		typePanelHint: string;
 		locationLabel: string;
 		locationGlobal: string;
 		locationProject: string;
@@ -1332,6 +1340,7 @@ export type TranslationKeys = {
 		escCancel: string;
 		resultTypeExecute: string;
 		resultTypePrompt: string;
+		resultTypePanel: string;
 		resultLocationGlobal: string;
 		resultLocationProject: string;
 		saveSuccessMessage: string;
@@ -2122,6 +2131,14 @@ export type TranslationKeys = {
 		moreAbove: string;
 		moreBelow: string;
 		pluginDirHint: string;
+	};
+	anyPanel: {
+		loading: string;
+		errorTitle: string;
+		pluginNotFound: string;
+		loadError: string;
+		renderError: string;
+		pressEscToClose: string;
 	};
 	agentPickerPanel: {
 		title: string;

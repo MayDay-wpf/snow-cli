@@ -22,6 +22,7 @@ import type {
 } from '../../../hooks/ui/usePanelState.js';
 import PixelEditorScreen from '../PixelEditorScreen.js';
 import GamesScreen from '../GamesScreen.js';
+import AnyPanelScreen from '../AnyPanelScreen.js';
 const PermissionsPanel = lazy(
 	() => import('../../components/panels/PermissionsPanel.js'),
 );
@@ -78,6 +79,10 @@ type Props = {
 		mode: RollbackMode | null,
 		selectedFiles?: string[],
 	) => void;
+	showAnyPanel: boolean;
+	activeAnyPanelPluginId: string | null;
+	setShowAnyPanel: (show: boolean) => void;
+	setActiveAnyPanelPluginId: (id: string | null) => void;
 };
 
 export default function ChatScreenPanels({
@@ -101,6 +106,10 @@ export default function ChatScreenPanels({
 	onPromptAccept,
 	onTaskResume,
 	handleRollbackConfirm,
+	showAnyPanel,
+	activeAnyPanelPluginId,
+	setShowAnyPanel,
+	setActiveAnyPanelPluginId,
 }: Props) {
 	return (
 		<>
@@ -164,7 +173,9 @@ export default function ChatScreenPanels({
 					const typeDesc =
 						type === 'execute'
 							? t.customCommand.resultTypeExecute
-							: t.customCommand.resultTypePrompt;
+							: type === 'prompt'
+							? t.customCommand.resultTypePrompt
+							: t.customCommand.resultTypePanel;
 					const locationDesc =
 						location === 'global'
 							? t.customCommand.resultLocationGlobal
@@ -488,6 +499,18 @@ export default function ChatScreenPanels({
 					<GamesScreen
 						onBack={() => panelState.setShowGamesPanel(false)}
 						terminalWidth={terminalWidth}
+					/>
+				</Box>
+			)}
+			{showAnyPanel && activeAnyPanelPluginId && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<AnyPanelScreen
+						pluginId={activeAnyPanelPluginId}
+						terminalWidth={terminalWidth}
+						onClose={() => {
+							setShowAnyPanel(false);
+							setActiveAnyPanelPluginId(null);
+						}}
 					/>
 				</Box>
 			)}

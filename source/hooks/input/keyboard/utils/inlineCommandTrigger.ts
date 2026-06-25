@@ -12,7 +12,7 @@ export type InlineCommandInvocation = InlineCommandTrigger & {
 
 type InlineCommandCandidate = {
 	name: string;
-	type: 'builtin' | 'execute' | 'prompt';
+	type: 'builtin' | 'execute' | 'prompt' | 'panel';
 	isCustom?: boolean;
 };
 

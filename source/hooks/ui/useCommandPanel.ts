@@ -26,7 +26,7 @@ const getTeamSnapshot = () => teamTracker.getRunningTeammates();
 export type CommandPanelCommand = {
 	name: string;
 	description: string;
-	type: 'builtin' | 'execute' | 'prompt';
+	type: 'builtin' | 'execute' | 'prompt' | 'panel';
 	mainFlowOnly?: boolean;
 	isCustom?: boolean;
 	insertionText?: string;

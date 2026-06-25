@@ -223,11 +223,11 @@ class HashBasedSnapshotManager {
 		const releaseLock = await this.acquireLock(snapshotPath);
 
 		try {
-			logger.info(
-				`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
-			);
+			// logger.info(
+			// 	`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
+			// );
 			await this.ensureSnapshotsDir();
-			logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
+			// logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
 
 			// Calculate relative path (always store with forward slashes
 			// to keep cross-platform consistency, especially for later

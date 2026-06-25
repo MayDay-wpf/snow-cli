@@ -38,6 +38,8 @@ export type PanelState = {
 	showTaskManagerPanel: boolean;
 	showPixelEditor: boolean;
 	showGamesPanel: boolean;
+	showAnyPanel: boolean;
+	activeAnyPanelPluginId: string | null;
 	showIdeSelectPanel: boolean;
 	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
@@ -62,6 +64,8 @@ export type PanelActions = {
 	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
 	setShowGamesPanel: Dispatch<SetStateAction<boolean>>;
+	setShowAnyPanel: Dispatch<SetStateAction<boolean>>;
+	setActiveAnyPanelPluginId: Dispatch<SetStateAction<string | null>>;
 	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
@@ -134,6 +138,10 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showTaskManagerPanel, setShowTaskManagerPanel] = useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
 	const [showGamesPanel, setShowGamesPanel] = useState(false);
+	const [showAnyPanel, setShowAnyPanel] = useState(false);
+	const [activeAnyPanelPluginId, setActiveAnyPanelPluginId] = useState<
+		string | null
+	>(null);
 	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
 		string | undefined
@@ -179,6 +187,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTaskManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
+			showAnyPanel ||
 			showIdeSelectPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
@@ -378,6 +387,10 @@ export function usePanelState(): PanelState & PanelActions {
 		if (showGamesPanel) {
 			return false; // Let GamesScreen handle ESC
 		}
+		// AnyPanelScreen handles its own ESC key logic internally
+		if (showAnyPanel) {
+			return false; // Let AnyPanelScreen handle ESC
+		}
 
 		if (showIdeSelectPanel) {
 			setShowIdeSelectPanel(false);
@@ -416,6 +429,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showTaskManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
+			showAnyPanel ||
 			showIdeSelectPanel
 		);
 	};
@@ -451,6 +465,8 @@ export function usePanelState(): PanelState & PanelActions {
 		showTaskManagerPanel,
 		showPixelEditor,
 		showGamesPanel,
+		showAnyPanel,
+		activeAnyPanelPluginId,
 		showIdeSelectPanel,
 		connectionPanelApiUrl,
 		profileSelectedIndex,
@@ -488,6 +504,8 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowTaskManagerPanel,
 		setShowPixelEditor,
 		setShowGamesPanel,
+		setShowAnyPanel,
+		setActiveAnyPanelPluginId,
 		setShowIdeSelectPanel,
 		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,

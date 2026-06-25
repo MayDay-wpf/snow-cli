@@ -655,6 +655,10 @@ type CommandHandlerOptions = {
 	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowAnyPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setActiveAnyPanelPluginId: React.Dispatch<
+		React.SetStateAction<string | null>
+	>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1041,6 +1045,15 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'showGamesPanel') {
 				// Games panel shown as an overlay panel
 				options.setShowGamesPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (
+				result.success &&
+				result.action === 'showAnyPanel' &&
+				result.prompt
+			) {
+				// AnyPanel plugin panel shown as an overlay panel
+				options.setActiveAnyPanelPluginId(result.prompt);
+				options.setShowAnyPanel(true);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&

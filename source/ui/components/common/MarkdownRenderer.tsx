@@ -253,10 +253,10 @@ export default function MarkdownRenderer({content}: Props) {
 		const rendered = marked.parse(sanitizedContent) as string;
 
 		if (!rendered || typeof rendered !== 'string') {
-			logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
-				renderedType: typeof rendered,
-				renderedValue: rendered,
-			});
+			// logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
+			// 	renderedType: typeof rendered,
+			// 	renderedValue: rendered,
+			// });
 			return renderFallback(content);
 		}
 
