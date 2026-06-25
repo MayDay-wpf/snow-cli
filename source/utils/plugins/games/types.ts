@@ -160,3 +160,55 @@ export function getLocalizedDescription(
 		description[language] ?? description.en ?? Object.values(description)[0]
 	);
 }
+
+/**
+ * 将任意值安全转换为可被 React 渲染的字符串。
+ *
+ * 外部插件是运行时动态加载的 JS 文件，TypeScript 类型约束在运行时无效。
+ * 当插件的 name / author / getHint() / getScore() / render() 等返回了
+ * 多语言对象 `{en, zh, zh-TW}` 或其他非字符串值时，直接传入 React 子节点
+ * 会触发 "Objects are not valid as a React child" 闪退。
+ *
+ * 此函数做防御性降级：
+ *   - string / number → 直接转字符串
+ *   - 多语言对象 `{en, zh, 'zh-TW', ...}` → 取 en，再取第一个可用值
+ *   - 数组 → 逐元素递归后 join
+ *   - null / undefined / object / boolean → 空字符串（避免闪退）
+ *
+ * @param value 插件返回的任意值
+ * @returns 可安全渲染的字符串
+ */
+export function safeText(value: unknown): string {
+	if (value === null || value === undefined) {
+		return '';
+	}
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (typeof value === 'number') {
+		return String(value);
+	}
+	// 多语言对象：Partial<Record<Language, string>>
+	if (typeof value === 'object' && !Array.isArray(value)) {
+		const record = value as Record<string, unknown>;
+		// 优先取 en，其次取第一个可用值
+		const en = record['en'];
+		if (typeof en === 'string') {
+			return en;
+		}
+		const values = Object.values(record);
+		const first = values.find(v => typeof v === 'string');
+		if (typeof first === 'string') {
+			return first;
+		}
+		return '';
+	}
+	if (Array.isArray(value)) {
+		return value
+			.map(item => safeText(item))
+			.filter(Boolean)
+			.join('');
+	}
+	// boolean / symbol / bigint / function 等——避免闪退
+	return '';
+}

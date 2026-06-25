@@ -5,6 +5,7 @@ import type {
 	GameInput,
 	GameInitContext,
 } from '../../../utils/plugins/games/index.js';
+import {safeText} from '../../../utils/plugins/games/index.js';
 
 interface GameRunnerProps {
 	game: GamePlugin;
@@ -93,10 +94,12 @@ export default function GameRunner({
 		});
 	});
 
-	// 渲染游戏
-	const renderLines = game.render(state);
+	// 渲染游戏——用 safeText 防御插件返回非字符串值（如多语言对象）导致 React 闪退
+	const renderLines = (game.render(state) as unknown[]).map(line =>
+		safeText(line),
+	);
 	const status = game.getStatus(state);
-	const hint = game.getHint?.(state) ?? '';
+	const hint = safeText(game.getHint?.(state));
 	const score = game.getScore?.(state) ?? null;
 
 	const statusColor =
@@ -113,12 +116,12 @@ export default function GameRunner({
 			{/* 标题行 */}
 			<Box justifyContent="space-between">
 				<Text bold color="cyan">
-					{game.name}
+					{safeText(game.name)}
 				</Text>
 				<Box>
 					{score !== null && (
 						<Text color="yellow" bold>
-							{score}
+							{safeText(score)}
 						</Text>
 					)}
 					{score !== null && status !== 'playing' && <Text> </Text>}

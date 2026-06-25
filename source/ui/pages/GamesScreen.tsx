@@ -8,6 +8,7 @@ import {
 	loadExternalGamePlugins,
 	mergeGamePlugins,
 	getLocalizedDescription,
+	safeText,
 	type GamePlugin,
 } from '../../utils/plugins/games/index.js';
 import GameRunner from '../components/games/GameRunner.js';
@@ -171,8 +172,8 @@ export default function GamesScreen({onBack, terminalWidth}: Props) {
 								bold={isSelected}
 							>
 								{isSelected ? '❯ ' : '  '}
-								{game.name}
-								{game.author ? ` (${game.author})` : ''}
+								{safeText(game.name)}
+								{game.author ? ` (${safeText(game.author)})` : ''}
 							</Text>
 						);
 					})

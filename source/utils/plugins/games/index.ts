@@ -13,7 +13,7 @@ export type {
 	GameStatus,
 } from './types.js';
 
-export {getLocalizedDescription} from './types.js';
+export {getLocalizedDescription, safeText} from './types.js';
 
 export {
 	loadExternalGamePlugins,
