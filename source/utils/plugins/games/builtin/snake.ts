@@ -162,10 +162,7 @@ function handleInputSnake(
 	state: SnakeGameState,
 	input: GameInput,
 ): SnakeGameState {
-	if (input.key.escape) {
-		return {...state, status: 'paused'};
-	}
-
+	// ESC 和暂停（p 键）由 GameRunner 引擎层统一处理，插件不再拦截
 	if (state.status === 'gameover') {
 		// 游戏结束后按 Enter 重新开始
 		if (input.key.return) {
@@ -265,10 +262,7 @@ function getHintSnake(state: SnakeGameState): string {
 	if (state.status === 'gameover') {
 		return 'Game Over! Press Enter to restart, ESC to exit.';
 	}
-	if (state.status === 'paused') {
-		return 'Paused. ESC to exit.';
-	}
-	return 'Arrow keys to move. Eat * to grow. ESC to exit.';
+	return 'Arrow keys to move. Eat * to grow. P to pause. ESC to exit.';
 }
 
 function getScoreSnake(state: SnakeGameState): string | null {
@@ -278,6 +272,7 @@ function getScoreSnake(state: SnakeGameState): string | null {
 export const snakeGamePlugin: GamePlugin<SnakeGameState> = {
 	id: 'builtin.snake',
 	name: 'Snake',
+	tickInterval: TICK_INTERVAL_MS,
 	description: {
 		en: 'Classic snake game. Eat food to grow, avoid walls and yourself.',
 		zh: '经典贪吃蛇游戏。吃食物成长，避免撞墙和撞到自己。',

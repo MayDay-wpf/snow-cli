@@ -9,11 +9,17 @@ export type {
 	GameInitContext,
 	GamePlugin,
 	GameRenderResult,
+	GameRenderLine,
+	GameRenderSegment,
 	GamePluginModule,
 	GameStatus,
 } from './types.js';
 
-export {getLocalizedDescription, safeText} from './types.js';
+export {
+	getLocalizedDescription,
+	safeText,
+	DEFAULT_TICK_INTERVAL_MS,
+} from './types.js';
 
 export {
 	loadExternalGamePlugins,

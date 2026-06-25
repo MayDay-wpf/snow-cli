@@ -55,15 +55,51 @@ export interface GameInitContext {
 }
 
 /**
- * 游戏渲染结果——一组字符串行，每行对应终端一行。
- * GameRunner 会用 <Text> 逐行渲染。
+ * 渲染段——一段带样式信息的文本。
+ *
+ * 游戏可通过返回 `GameRenderSegment[]` 实现行内多色渲染：
+ * 同一行的不同字符可以使用不同的颜色/加粗/暗淡。
+ * 例如坦克大战中玩家、敌方、砖墙可以用不同颜色在同一行内显示。
  */
-export type GameRenderResult = string[];
+export interface GameRenderSegment {
+	/** 文本内容 */
+	text: string;
+	/** 文本颜色，支持 ink 支持的颜色名（如 'red'、'green'、'cyan'、'yellow' 等） */
+	color?: string;
+	/** 是否加粗 */
+	bold?: boolean;
+	/** 是否暗淡显示 */
+	dim?: boolean;
+}
+
+/**
+ * 渲染行——一行终端输出。
+ *
+ * 支持两种形式：
+ *   - 纯字符串：整行无样式（向后兼容），GameRunner 会按整体着色
+ *   - GameRenderSegment[]：行内多色，每个段落可独立设置颜色/加粗/暗淡
+ *
+ * 游戏的 `render()` 返回 `GameRenderLine[]`，两种形式可混用。
+ */
+export type GameRenderLine = string | GameRenderSegment[];
+
+/**
+ * 游戏渲染结果——一组渲染行，每行对应终端一行。
+ *
+ * 每行可以是纯字符串（向后兼容）或带样式的段落数组（行内多色）。
+ * GameRunner 会逐行渲染：纯字符串行用单个 <Text>，段落数组行用多个内联 <Text>。
+ */
+export type GameRenderResult = GameRenderLine[];
 
 /**
  * 游戏状态查询结果。
  */
 export type GameStatus = 'playing' | 'gameover' | 'won' | 'paused';
+
+/**
+ * 默认 tick 间隔（毫秒），当插件未指定 tickInterval 时使用。
+ */
+export const DEFAULT_TICK_INTERVAL_MS = 200;
 
 /**
  * 游戏插件定义。
@@ -124,6 +160,34 @@ export interface GamePlugin<S = GameGameState> {
 	 * 获取分数文本（如适用）。
 	 */
 	getScore?(state: S): string | number | null;
+
+	/**
+	 * Tick 间隔（毫秒）。
+	 *
+	 * 若未指定，默认 200ms（DEFAULT_TICK_INTERVAL_MS）。
+	 * 静态值适用于固定节奏的游戏；需要随游戏状态动态变速时使用 getTickInterval()。
+	 */
+	tickInterval?: number;
+
+	/**
+	 * 动态获取 tick 间隔（毫秒），优先级高于 tickInterval。
+	 *
+	 * 允许游戏随状态变化调整节奏，例如贪吃蛇随分数加速、
+	 * boss 战变速。返回值应 > 0；若返回无效值则回退到 tickInterval 或默认值。
+	 */
+	getTickInterval?(state: S): number;
+
+	/**
+	 * 引擎暂停时调用（可选）。
+	 * 当用户按 p 键触发引擎级暂停时通知插件，可用于暂停音效、保存状态等。
+	 */
+	onPause?(state: S): void;
+
+	/**
+	 * 引擎恢复时调用（可选）。
+	 * 当用户按 p 键恢复游戏时通知插件。
+	 */
+	onResume?(state: S): void;
 }
 
 /**
