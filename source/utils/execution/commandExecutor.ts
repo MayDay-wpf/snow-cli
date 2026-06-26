@@ -68,6 +68,7 @@ export interface CommandResult {
 		| 'showTaskManager'
 		| 'forkSession'
 		| 'btw'
+		| 'interruptAndSend'
 		| 'deepResearch'
 		| 'startGoalLoop'
 		// /goal resume 无参数 -> 打开 goal 会话列表面板

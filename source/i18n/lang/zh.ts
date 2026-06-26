@@ -856,6 +856,7 @@ export const zh: TranslationKeys = {
 				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
 			speedometer:
 				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
+			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
 			quit: '退出应用程序',
 		},
 		copyLastFeedback: {

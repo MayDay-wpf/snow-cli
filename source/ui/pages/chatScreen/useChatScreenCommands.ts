@@ -58,6 +58,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/toolDisplay.js'),
 			import('../../../utils/commands/thinkDisplay.js'),
 			import('../../../utils/commands/speedometer.js'),
+			import('../../../utils/commands/interrupt.js'),
 		])
 			.then(async () => {
 				await registerCustomCommands(workingDirectory);

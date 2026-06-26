@@ -432,6 +432,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.speedometer ||
 					'Toggle real-time speedometer to monitor token/s output rate',
 			},
+			{
+				name: 'cut',
+				description:
+					t.commandPanel.commands.cut || 'Interrupt AI and send a message',
+				allowDuringProcessing: true,
+			},
 		],
 		[t],
 	);

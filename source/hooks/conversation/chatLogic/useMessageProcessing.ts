@@ -101,6 +101,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		setCompressionError,
 		currentContextPercentageRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
 		hasFocus,
@@ -395,6 +396,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			// 如果还读 userInterruptedRef.current，会得到错误的 false，导致 ESC 中断
 			// 后仍然立即触发下一轮续接（典型 bug 现象：用户按 ESC 不能停）。
 			const wasUserInterrupted = userInterruptedRef.current;
+			const wasCutInterrupt = cutInterruptRef.current;
 
 			if (wasUserInterrupted) {
 				const session = sessionManager.getCurrentSession();
@@ -463,22 +465,30 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					})();
 				}
 
-				setMessages(prev => [
-					...prev,
-					{
-						role: 'assistant',
-						content: '',
-						streaming: false,
-						discontinued: true,
-					},
-				]);
+				// /cut 中断时静默过渡：不追加 discontinued 标记消息，
+				// 让用户消息直接紧接 AI 的不完整回复，避免割裂感。
+				if (!wasCutInterrupt) {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: '',
+							streaming: false,
+							discontinued: true,
+						},
+					]);
+				}
 
 				userInterruptedRef.current = false;
+				cutInterruptRef.current = false;
 
 				streamingState.setIsStopping(false);
 			}
 
-			appendAiCompletionTimeMessage();
+			// /cut 中断时跳过 AI 完成时间标记，避免与用户消息间产生割裂的视觉间隔
+			if (!wasCutInterrupt) {
+				appendAiCompletionTimeMessage();
+			}
 
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);

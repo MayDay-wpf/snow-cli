@@ -911,6 +911,7 @@ export const en: TranslationKeys = {
 				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			speedometer:
 				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
+			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {

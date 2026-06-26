@@ -41,6 +41,7 @@ export interface UseChatLogicProps {
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
 	userInterruptedRef: React.MutableRefObject<boolean>;
+	cutInterruptRef: React.MutableRefObject<boolean>;
 	pendingMessagesRef: React.MutableRefObject<
 		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>;

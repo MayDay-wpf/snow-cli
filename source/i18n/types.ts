@@ -821,6 +821,7 @@ export type TranslationKeys = {
 			toolDisplay: string;
 			thinkDisplay: string;
 			speedometer: string;
+			cut: string;
 			quit: string;
 		};
 		copyLastFeedback: {

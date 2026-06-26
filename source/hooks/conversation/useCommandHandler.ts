@@ -720,6 +720,10 @@ type CommandHandlerOptions = {
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
 	onToggleCodebase?: (mode?: string) => Promise<void>;
 	onResetTerminalTitle?: () => void;
+	/** ESC interrupt handler - aborts current AI streaming */
+	handleInterrupt?: () => boolean;
+	/** Ref set to true when /cut triggers the interrupt, to suppress discontinued UI */
+	cutInterruptRef?: React.MutableRefObject<boolean>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -1932,6 +1936,28 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (
+				result.success &&
+				result.action === 'interruptAndSend' &&
+				result.prompt
+			) {
+				// /cut <message> - Interrupt AI mid-response and queue user message
+				// The interrupt triggers the same abort path as ESC, causing the
+				// streaming finally block to save the incomplete AI content and
+				// mark it with discontinued=true. The user message is added to
+				// pendingMessages so it auto-sends once streaming fully stops.
+				if (options.cutInterruptRef) {
+					options.cutInterruptRef.current = true;
+				}
+				if (options.handleInterrupt) {
+					options.handleInterrupt();
+				}
+				if (options.setPendingMessages) {
+					options.setPendingMessages(prev => [
+						...prev,
+						{text: result.prompt as string},
+					]);
 				}
 			} else if (result.success && result.action === 'btw' && result.prompt) {
 				options.setBtwPrompt(result.prompt);

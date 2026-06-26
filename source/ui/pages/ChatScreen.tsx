@@ -69,6 +69,7 @@ export default function ChatScreen({
 		setPendingMessages,
 		pendingMessagesRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		remountKey,
 		setRemountKey,
 		setCurrentContextPercentage,
@@ -201,6 +202,7 @@ export default function ChatScreen({
 		handleToggleCodebase,
 		handleReviewCommitConfirm,
 		handleEscKey,
+		handleInterrupt,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -228,6 +230,7 @@ export default function ChatScreen({
 		setCompressionError,
 		currentContextPercentageRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
 		pendingUserQuestion,
@@ -435,6 +438,8 @@ export default function ChatScreen({
 		onCompressionStatus: setCompressionStatus,
 		onThinkingStatus: setThinkingStatus,
 		onResetTerminalTitle: resetTerminalTitleSummary,
+		handleInterrupt,
+		cutInterruptRef,
 	});
 
 	useEffect(() => {

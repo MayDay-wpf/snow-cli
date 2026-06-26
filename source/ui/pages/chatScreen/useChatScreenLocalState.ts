@@ -21,6 +21,7 @@ export function useChatScreenLocalState() {
 	);
 	const pendingMessagesRef = useRef<PendingMessageInput[]>([]);
 	const userInterruptedRef = useRef(false);
+	const cutInterruptRef = useRef(false);
 	const [remountKey, setRemountKey] = useState(0);
 	const [currentContextPercentage, setCurrentContextPercentage] = useState(0);
 	const currentContextPercentageRef = useRef(0);
@@ -111,6 +112,7 @@ export function useChatScreenLocalState() {
 		setPendingMessages,
 		pendingMessagesRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		remountKey,
 		setRemountKey,
 		currentContextPercentage,
