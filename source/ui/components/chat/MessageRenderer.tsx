@@ -9,6 +9,7 @@ import ToolResultPreview from '../tools/ToolResultPreview.js';
 import {getToolResultSummary} from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
+import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
@@ -162,7 +163,9 @@ export default function MessageRenderer({
 
 	const getDisplayContent = (content: string): string => {
 		// 只做视觉隐藏：保留原始 message.content 用于请求体/持久化。
-		return maskSkillInjectedText(removeAnsiCodes(content || '')).displayText;
+		// 先折叠 Skill 注入块，再折叠 GitLine 注入块（diff 内容可能很长）。
+		const afterSkill = maskSkillInjectedText(removeAnsiCodes(content || ''));
+		return maskGitLineText(afterSkill.displayText).displayText;
 	};
 
 	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
@@ -213,7 +216,8 @@ export default function MessageRenderer({
 	const formatCommandResultLines = (
 		content: string,
 	): CommandResultSegment[][] => {
-		const displayContent = maskSkillInjectedText(content || '').displayText;
+		const afterSkill = maskSkillInjectedText(content || '');
+		const displayContent = maskGitLineText(afterSkill.displayText).displayText;
 		return displayContent
 			.split('\n')
 			.map((line, index) =>
