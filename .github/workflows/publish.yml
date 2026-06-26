@@ -56,12 +56,8 @@ jobs:
 
             ### What's New
 
-            - Add `/cut` command to interrupt AI mid-response and immediately send a message
-            - Add `/think-display` command to control thinking content display mode (full/compact/status)
-            - Enhance AnyPanel plugin interface with session context management, generic state management, and lifecycle hooks
-            - Enhance game plugin system with dynamic tick intervals and engine-level pause mechanism
-            - Force bypass ESM module cache to support hot reloading of plugin code during development
-            - Reduce the pollution of gitline messages on terminal display
+            - Urgent fix for the issue of Token waste in Responses requests
+            - Add automatic fallback to the request for obtaining the Models list
 
             ### Installation
             ```bash

@@ -348,6 +348,17 @@ function convertToResponseInput(
 
 	// 确定系统提示词：显式 system 消息优先，其次自定义提示词，再按需使用内置提示词。
 	let systemInstructions: string;
+	// 预先计算内置系统提示词。默认会话流程中 sessionInitializer 已将内置提示词作为
+	// system 消息注入，此时它会进入 explicitSystemPrompts 并成为 instructions 的一部分，
+	// 因此需要据此判断是否还要再次作为 <environment_context> 用户消息注入，避免重复。
+	const builtinPrompt = includeBuiltinSystemPrompt
+		? getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+				toolSearchDisabled,
+				teamMode,
+		  )
+		: '';
 	if (explicitSystemPrompts.length > 0) {
 		systemInstructions = explicitSystemPrompts.join('\n\n');
 		if (customSystemPrompts && customSystemPrompts.length > 0) {
@@ -355,22 +366,16 @@ function convertToResponseInput(
 				'\n\n',
 			)}\n\n${systemInstructions}`;
 		}
-		if (includeBuiltinSystemPrompt) {
+		// 仅当内置提示词尚未包含在 instructions 中时才作为用户消息注入，
+		// 避免默认流程下内置提示词同时出现在 instructions 与 user 消息中。
+		if (builtinPrompt && !systemInstructions.includes(builtinPrompt)) {
 			result.unshift({
 				type: 'message',
 				role: 'user',
 				content: [
 					{
 						type: 'input_text',
-						text:
-							'<environment_context>' +
-							getSystemPromptForMode(
-								planMode,
-								vulnerabilityHuntingMode,
-								toolSearchDisabled,
-								teamMode,
-							) +
-							'</environment_context>',
+						text: `<environment_context>${builtinPrompt}</environment_context>`,
 					},
 				],
 			});
@@ -378,35 +383,22 @@ function convertToResponseInput(
 	} else if (customSystemPrompts && customSystemPrompts.length > 0) {
 		// 有自定义系统提示词：拼接多条作为 instructions
 		systemInstructions = customSystemPrompts.join('\n\n');
-		if (includeBuiltinSystemPrompt) {
-			// 默认系统提示词作为第一条用户消息
+		// 默认系统提示词作为第一条用户消息（仅在尚未包含于 instructions 时）
+		if (builtinPrompt && !systemInstructions.includes(builtinPrompt)) {
 			result.unshift({
 				type: 'message',
 				role: 'user',
 				content: [
 					{
 						type: 'input_text',
-						text:
-							'<environment_context>' +
-							getSystemPromptForMode(
-								planMode,
-								vulnerabilityHuntingMode,
-								toolSearchDisabled,
-								teamMode,
-							) +
-							'</environment_context>',
+						text: `<environment_context>${builtinPrompt}</environment_context>`,
 					},
 				],
 			});
 		}
 	} else if (includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstructions = getSystemPromptForMode(
-			planMode,
-			vulnerabilityHuntingMode,
-			toolSearchDisabled,
-			teamMode,
-		);
+		systemInstructions = builtinPrompt;
 	} else {
 		// 没有任何系统提示时才使用通用兜底，避免覆盖内部专用 system 消息。
 		systemInstructions = 'You are a helpful assistant.';
