@@ -24,28 +24,20 @@ function cleanThinkingContent(content: string): string {
 
 /**
  * Compact thinking content for display in compact mode.
- * Keeps head + tail lines with ellipsis, truncates to maxLength.
+ * Keeps head + tail of the full text with ellipsis in the middle.
  */
-function compactThinkingContent(
-	content: string,
-	maxLines = 6,
-	maxLength = 200,
-): string {
-	const lines = content.split('\n').filter(line => line.trim());
-	let result: string;
-	if (lines.length <= maxLines) {
-		result = lines.join('\n');
-	} else {
-		const headLines = Math.ceil(maxLines / 2);
-		const tailLines = Math.floor(maxLines / 2);
-		const head = lines.slice(0, headLines).join('\n');
-		const tail = lines.slice(-tailLines).join('\n');
-		result = `${head}\n  …\n${tail}`;
+function compactThinkingContent(content: string, maxLength = 200): string {
+	const trimmed = content.trim();
+	if (trimmed.length <= maxLength) {
+		return trimmed;
 	}
-	if (result.length > maxLength) {
-		return `${result.slice(0, maxLength - 1).trimEnd()}…`;
-	}
-	return result;
+	const ellipsis = '......';
+	const keepLength = maxLength - ellipsis.length;
+	const headLength = Math.ceil(keepLength / 2);
+	const tailLength = Math.floor(keepLength / 2);
+	const head = trimmed.slice(0, headLength).trimEnd();
+	const tail = trimmed.slice(-tailLength).trimStart();
+	return `${head}${ellipsis}${tail}`;
 }
 
 type Props = {

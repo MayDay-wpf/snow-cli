@@ -30,30 +30,19 @@ function cleanThinkingContent(content: string): string {
 }
 
 // compact 模式下将完整思考内容缩减为摘要后推入静态区。
-// 策略：保留首行 + 末尾若干行，中间用省略号替代，控制总长度。
-// 注意：不能复用 compactBuddyProgressText，因为它会把换行压缩成空格，
-// 导致首尾行保留逻辑失效。
-function compactThinkingContent(
-	content: string,
-	maxLines = 6,
-	maxLength = 200,
-): string {
-	const lines = content.split('\n').filter(line => line.trim());
-	let result: string;
-	if (lines.length <= maxLines) {
-		result = lines.join('\n');
-	} else {
-		const headLines = Math.ceil(maxLines / 2);
-		const tailLines = Math.floor(maxLines / 2);
-		const head = lines.slice(0, headLines).join('\n');
-		const tail = lines.slice(-tailLines).join('\n');
-		result = `${head}\n  …\n${tail}`;
+// 策略：保留全文开头和结尾，中间用省略号替代，控制总长度。
+function compactThinkingContent(content: string, maxLength = 200): string {
+	const trimmed = content.trim();
+	if (trimmed.length <= maxLength) {
+		return trimmed;
 	}
-	// 仅做总长度截断，不压缩换行，保留多行结构
-	if (result.length > maxLength) {
-		return `${result.slice(0, maxLength - 1).trimEnd()}…`;
-	}
-	return result;
+	const ellipsis = '......';
+	const keepLength = maxLength - ellipsis.length;
+	const headLength = Math.ceil(keepLength / 2);
+	const tailLength = Math.floor(keepLength / 2);
+	const head = trimmed.slice(0, headLength).trimEnd();
+	const tail = trimmed.slice(-tailLength).trimStart();
+	return `${head}${ellipsis}${tail}`;
 }
 
 function isTableRow(line: string): boolean {

@@ -26,6 +26,10 @@ type Props = {
 	terminalWidth: number;
 	/** 关闭面板回调 */
 	onClose: () => void;
+	/** 当前会话 ID，无上下文时传空字符串 */
+	sessionId?: string;
+	/** 当前会话的 JSON 原文，无上下文时传空字符串 */
+	sessionJson?: string;
 };
 
 /**
@@ -49,6 +53,8 @@ export default function AnyPanelScreen({
 	pluginId,
 	terminalWidth,
 	onClose,
+	sessionId = '',
+	sessionJson = '',
 }: Props) {
 	const {t, language} = useI18n();
 	const {theme} = useTheme();
@@ -94,6 +100,8 @@ export default function AnyPanelScreen({
 					terminalHeight: 40, // 估算值，ink 无法直接获取终端高度
 					language,
 					cwd: process.cwd(),
+					sessionId,
+					sessionJson,
 				};
 				stateRef.current = found.init(ctx);
 				setPlugin(found);
@@ -341,6 +349,8 @@ export default function AnyPanelScreen({
 			theme,
 			language,
 			terminalWidth,
+			sessionId,
+			sessionJson,
 			forceRerender: () => forceRender(n => n + 1),
 		};
 		try {

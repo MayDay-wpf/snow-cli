@@ -507,6 +507,12 @@ export default function ChatScreenPanels({
 					<AnyPanelScreen
 						pluginId={activeAnyPanelPluginId}
 						terminalWidth={terminalWidth}
+						sessionId={sessionManager.getCurrentSession()?.id ?? ''}
+						sessionJson={
+							sessionManager.getCurrentSession()
+								? JSON.stringify(sessionManager.getCurrentSession())
+								: ''
+						}
 						onClose={() => {
 							setShowAnyPanel(false);
 							setActiveAnyPanelPluginId(null);

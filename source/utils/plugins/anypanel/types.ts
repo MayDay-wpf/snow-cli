@@ -35,6 +35,17 @@ export interface AnyPanelInitContext {
 	language: Language;
 	/** 当前工作目录 */
 	cwd: string;
+	/**
+	 * 当前会话 ID。
+	 * 无会话上下文（如独立面板）时为空字符串。
+	 */
+	sessionId: string;
+	/**
+	 * 当前会话的 JSON 原文（`Session` 对象的 `JSON.stringify` 结果）。
+	 * 无会话上下文时为空字符串。
+	 * 插件可自行 `JSON.parse` 后读取消息列表、标题、摘要等任意字段。
+	 */
+	sessionJson: string;
 }
 
 /**
@@ -121,6 +132,17 @@ export interface AnyPanelRenderContext {
 	language: Language;
 	/** 终端宽度 */
 	terminalWidth: number;
+	/**
+	 * 当前会话 ID。
+	 * 无会话上下文（如独立面板）时为空字符串。
+	 */
+	sessionId: string;
+	/**
+	 * 当前会话的 JSON 原文（`Session` 对象的 `JSON.stringify` 结果）。
+	 * 无会话上下文时为空字符串。
+	 * 插件可自行 `JSON.parse` 后读取消息列表、标题、摘要等任意字段。
+	 */
+	sessionJson: string;
 	/**
 	 * 请求 AnyPanelScreen 重新渲染。
 	 * 用于异步操作（如 fetch 完成后）需要刷新画面的场景。
