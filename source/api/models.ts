@@ -204,6 +204,14 @@ export async function fetchAvailableModels(
 		const isDefaultBaseUrl =
 			!trimmedBaseUrl || trimmedBaseUrl === defaultOpenAiBaseUrl;
 
+		// 以 OpenAI 兼容方式获取模型列表（用作非 OpenAI 请求失败或为空时的回退）
+		const fetchOpenAICompat = async (): Promise<Model[]> =>
+			fetchOpenAIModels(
+				resolveApiEndpoint(config.baseUrl, 'models', config.baseUrlMode),
+				config.apiKey,
+				customHeaders,
+			);
+
 		switch (config.requestMethod) {
 			case 'gemini': {
 				if (!config.apiKey) {
@@ -212,7 +220,15 @@ export async function fetchAvailableModels(
 				const geminiBaseUrl = isDefaultBaseUrl
 					? 'https://generativelanguage.googleapis.com/v1beta'
 					: trimmedBaseUrl;
-				models = await fetchGeminiModels(geminiBaseUrl, config.apiKey);
+				// 获取失败或为空时回退为 OpenAI 兼容方式重新尝试获取
+				try {
+					models = await fetchGeminiModels(geminiBaseUrl, config.apiKey);
+				} catch {
+					models = [];
+				}
+				if (models.length === 0) {
+					models = await fetchOpenAICompat();
+				}
 				break;
 			}
 
@@ -223,11 +239,19 @@ export async function fetchAvailableModels(
 				const anthropicBaseUrl = isDefaultBaseUrl
 					? 'https://api.anthropic.com/v1'
 					: trimmedBaseUrl;
-				models = await fetchAnthropicModels(
-					anthropicBaseUrl,
-					config.apiKey,
-					customHeaders,
-				);
+				// 获取失败或为空时回退为 OpenAI 兼容方式重新尝试获取
+				try {
+					models = await fetchAnthropicModels(
+						anthropicBaseUrl,
+						config.apiKey,
+						customHeaders,
+					);
+				} catch {
+					models = [];
+				}
+				if (models.length === 0) {
+					models = await fetchOpenAICompat();
+				}
 				break;
 			}
 
@@ -235,11 +259,7 @@ export async function fetchAvailableModels(
 			case 'responses':
 			default:
 				// OpenAI-compatible API
-				models = await fetchOpenAIModels(
-					resolveApiEndpoint(config.baseUrl, 'models', config.baseUrlMode),
-					config.apiKey,
-					customHeaders,
-				);
+				models = await fetchOpenAICompat();
 				break;
 		}
 
