@@ -241,8 +241,22 @@ function convertToOpenAIMessages(
 		return baseMessage as ChatCompletionMessageParam;
 	});
 
-	// 如果第一条消息已经是 system 消息，跳过
+	// 如果第一条消息已经是 system 消息（默认会话流程中 sessionInitializer
+	// 已将内置系统提示词作为 messages[0] 注入），则不再重复添加内置提示词；
+	// 但仍需前置自定义系统提示词，否则 customSystemPrompts 会被静默丢弃。
 	if (result.length > 0 && result[0]?.role === 'system') {
+		if (customSystemPrompts && customSystemPrompts.length > 0) {
+			result = [
+				{
+					role: 'system',
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		}
 		return result;
 	}
 
