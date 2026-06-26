@@ -44,6 +44,7 @@ export interface CommandResult {
 		| 'showAnyPanel'
 		| 'showSkillsCreation'
 		| 'showSkillsListPanel'
+		| 'showSkillsInstall'
 		| 'showRoleCreation'
 		| 'showRoleDeletion'
 		| 'showRoleList'

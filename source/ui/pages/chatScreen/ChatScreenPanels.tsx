@@ -123,6 +123,7 @@ export default function ChatScreenPanels({
 				showHelpPanel={panelState.showHelpPanel}
 				showCustomCommandConfig={panelState.showCustomCommandConfig}
 				showSkillsCreation={panelState.showSkillsCreation}
+				showSkillsInstall={panelState.showSkillsInstall}
 				showRoleCreation={panelState.showRoleCreation}
 				showRoleDeletion={panelState.showRoleDeletion}
 				showRoleList={panelState.showRoleList}
@@ -140,6 +141,7 @@ export default function ChatScreenPanels({
 				setShowMcpPanel={panelState.setShowMcpPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}
+				setShowSkillsInstall={panelState.setShowSkillsInstall}
 				setShowRoleCreation={panelState.setShowRoleCreation}
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowRoleList={panelState.setShowRoleList}
@@ -240,6 +242,15 @@ export default function ChatScreenPanels({
 						};
 						setMessages(prev => [...prev, errorMessage]);
 					}
+				}}
+				onSkillsInstall={(success, _skillId, message) => {
+					const content = success ? message : message;
+					const resultMessage: Message = {
+						role: 'command',
+						content,
+						commandName: 'skills',
+					};
+					setMessages(prev => [...prev, resultMessage]);
 				}}
 				onRoleSave={async location => {
 					const {createRoleFile} = await import(

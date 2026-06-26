@@ -5,6 +5,7 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {CustomCommandConfigPanel} from './CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from './SkillsCreationPanel.js';
+import {SkillsInstallPanel} from './SkillsInstallPanel.js';
 import {RoleCreationPanel} from './RoleCreationPanel.js';
 import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import {RoleListPanel} from './RoleListPanel.js';
@@ -41,6 +42,7 @@ type PanelsManagerProps = {
 	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showSkillsInstall: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
@@ -58,6 +60,7 @@ type PanelsManagerProps = {
 	setShowMcpPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
+	setShowSkillsInstall: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
 	setShowRoleDeletion: (show: boolean) => void;
 	setShowRoleList: (show: boolean) => void;
@@ -89,6 +92,7 @@ type PanelsManagerProps = {
 		location: SkillLocation,
 		generated?: GeneratedSkillContent,
 	) => Promise<void>;
+	onSkillsInstall: (success: boolean, skillId: string, message: string) => void;
 	onRoleSave: (location: RoleLocation) => Promise<void>;
 	onRoleDelete: (location: RoleLocation) => Promise<void>;
 	onRoleSubagentSave: (
@@ -111,6 +115,7 @@ export default function PanelsManager({
 	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
+	showSkillsInstall,
 	showRoleCreation,
 	showRoleDeletion,
 	showRoleList,
@@ -128,6 +133,7 @@ export default function PanelsManager({
 	setShowMcpPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
+	setShowSkillsInstall,
 	setShowRoleCreation,
 	setShowRoleDeletion,
 	setShowRoleList,
@@ -143,6 +149,7 @@ export default function PanelsManager({
 	handleGoalSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
+	onSkillsInstall,
 	onRoleSave,
 	onRoleDelete,
 	onRoleSubagentSave,
@@ -244,6 +251,20 @@ export default function PanelsManager({
 						projectRoot={workingDirectory}
 						onSave={onSkillsSave}
 						onCancel={() => setShowSkillsCreation(false)}
+					/>
+				</Box>
+			)}
+
+			{/* Show skills install panel if active */}
+			{showSkillsInstall && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<SkillsInstallPanel
+						projectRoot={workingDirectory}
+						onComplete={(success, skillId, message) => {
+							onSkillsInstall(success, skillId, message);
+							setShowSkillsInstall(false);
+						}}
+						onCancel={() => setShowSkillsInstall(false)}
 					/>
 				</Box>
 			)}

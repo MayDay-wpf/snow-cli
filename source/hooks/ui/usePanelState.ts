@@ -15,6 +15,7 @@ export type PanelState = {
 	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showSkillsInstall: boolean;
 	showSkillsListPanel: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
@@ -59,6 +60,7 @@ export type PanelActions = {
 	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
+	setShowSkillsInstall: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
@@ -112,6 +114,7 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
+	const [showSkillsInstall, setShowSkillsInstall] = useState(false);
 	const [showSkillsListPanel, setShowSkillsListPanel] = useState(false);
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
 	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
@@ -168,6 +171,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showUsagePanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showSkillsInstall ||
 			showSkillsListPanel ||
 			showRoleCreation ||
 			showRoleDeletion ||
@@ -279,6 +283,10 @@ export function usePanelState(): PanelState & PanelActions {
 		// Don't close it here - let the panel decide when to close
 		if (showSkillsCreation) {
 			return false; // Let SkillsCreationPanel handle ESC
+		}
+		// SkillsInstallPanel handles its own ESC key logic internally
+		if (showSkillsInstall) {
+			return false; // Let SkillsInstallPanel handle ESC
 		}
 		if (showSkillsListPanel) {
 			setShowSkillsListPanel(false);
@@ -408,6 +416,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showUsagePanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showSkillsInstall ||
 			showSkillsListPanel ||
 			showRoleCreation ||
 			showRoleDeletion ||
@@ -443,6 +452,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showHelpPanel,
 		showCustomCommandConfig,
 		showSkillsCreation,
+		showSkillsInstall,
 		showSkillsListPanel,
 		showRoleCreation,
 		showRoleDeletion,
@@ -480,6 +490,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowHelpPanel,
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
+		setShowSkillsInstall,
 		setShowSkillsListPanel,
 		setShowRoleCreation,
 		setShowRoleDeletion,

@@ -392,6 +392,7 @@ export default function ChatScreen({
 		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
+		setShowSkillsInstall: panelState.setShowSkillsInstall,
 		setShowSkillsListPanel: panelState.setShowSkillsListPanel,
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
@@ -513,6 +514,7 @@ export default function ChatScreen({
 		panelState.showModelsPanel ||
 		panelState.showCustomCommandConfig ||
 		panelState.showSkillsCreation ||
+		panelState.showSkillsInstall ||
 		panelState.showRoleCreation ||
 		panelState.showRoleDeletion ||
 		panelState.showRoleList ||

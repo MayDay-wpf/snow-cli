@@ -1637,6 +1637,25 @@ export type TranslationKeys = {
 		createErrorMessage: string;
 		errorUnknown: string;
 	};
+	skillsInstall: {
+		title: string;
+		urlLabel: string;
+		urlPlaceholder: string;
+		urlHint: string;
+		urlExamples: string;
+		urlActions: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationProject: string;
+		locationActions: string;
+		installing: string;
+		installingHint: string;
+		installSuccess: string;
+		batchInstallSuccess: string;
+		installError: string;
+		errorUnknown: string;
+		resultActions: string;
+	};
 	roleCreation: {
 		title: string;
 		locationLabel: string;
@@ -2002,6 +2021,16 @@ export type TranslationKeys = {
 		navigationHint: string;
 		moreAbove: string;
 		moreBelow: string;
+		updateInProgress: string;
+		updateSingleSuccess: string;
+		updateSingleUpToDate: string;
+		updateNoSkills: string;
+		updateFailed: string;
+		updateTimeout: string;
+		updateAllInProgress: string;
+		updateResult: string;
+		updateAllUpToDate: string;
+		updatePartial: string;
 	};
 	mcpConfigScreen: {
 		title: string;

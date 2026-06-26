@@ -780,6 +780,15 @@ registerCommand('skills', {
 			};
 		}
 
+		// install <github-url>: open the GitHub install panel
+		if (trimmedArgs === 'install' || trimmedArgs?.startsWith('install ')) {
+			return {
+				success: true,
+				action: 'showSkillsInstall',
+				message: 'Opening Skills install panel...',
+			};
+		}
+
 		// Default: show creation dialog
 		return {
 			success: true,
