@@ -1363,11 +1363,19 @@ export async function executeMCPTool(
 					}
 					if (args.content === undefined || args.content === null) {
 						throw new Error(
-							`Missing required parameter 'content' for filesystem-create tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
+							`Missing required parameter 'content' for filesystem-create tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
 								`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+						);
+					}
+					if (typeof args.content !== 'string') {
+						throw new Error(
+							`Invalid type for parameter 'content' in filesystem-create tool. ` +
+								`Expected string but received ${typeof args.content}.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: The 'content' parameter must be a string. If you need to write JSON, ` +
+								`serialize it first using JSON.stringify(). For example: ` +
+								`content: JSON.stringify({ ... }) instead of content: { ... }.`,
 						);
 					}
 					result = await filesystemService.createFile(
@@ -1397,6 +1405,23 @@ export async function executeMCPTool(
 								`AI Tip: Provide an array of {type, startAnchor, endAnchor, content} operations (endAnchor required; same as startAnchor for single-line edits).`,
 						);
 					}
+					// Validate that content fields in operations are strings
+					for (let i = 0; i < args.operations.length; i++) {
+						const op = args.operations[i];
+						if (
+							op &&
+							op.content !== undefined &&
+							op.content !== null &&
+							typeof op.content !== 'string'
+						) {
+							throw new Error(
+								`Invalid type for 'content' in operations[${i}] for filesystem-edit tool. ` +
+									`Expected string but received ${typeof op.content}.\n` +
+									`AI Tip: The 'content' field in each operation must be a string. ` +
+									`If you need to write JSON, serialize it first using JSON.stringify().`,
+							);
+						}
+					}
 					result = await filesystemService.editFile(
 						args.filePath,
 						args.operations,
@@ -1409,6 +1434,30 @@ export async function executeMCPTool(
 						throw new Error(
 							`Missing required parameter 'filePath' for filesystem-replaceedit tool.\n` +
 								`Received args: ${JSON.stringify(args, null, 2)}`,
+						);
+					}
+					if (
+						args.searchContent !== undefined &&
+						args.searchContent !== null &&
+						typeof args.searchContent !== 'string'
+					) {
+						throw new Error(
+							`Invalid type for parameter 'searchContent' in filesystem-replaceedit tool. ` +
+								`Expected string but received ${typeof args.searchContent}.\n` +
+								`AI Tip: The 'searchContent' parameter must be a string. ` +
+								`If you need to write JSON, serialize it first using JSON.stringify().`,
+						);
+					}
+					if (
+						args.replaceContent !== undefined &&
+						args.replaceContent !== null &&
+						typeof args.replaceContent !== 'string'
+					) {
+						throw new Error(
+							`Invalid type for parameter 'replaceContent' in filesystem-replaceedit tool. ` +
+								`Expected string but received ${typeof args.replaceContent}.\n` +
+								`AI Tip: The 'replaceContent' parameter must be a string. ` +
+								`If you need to write JSON, serialize it first using JSON.stringify().`,
 						);
 					}
 					result = await filesystemService.editFileBySearch(

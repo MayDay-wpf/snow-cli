@@ -49,6 +49,9 @@ function expandTabsForDisplay(line: string, tabWidth = 2): string {
 }
 
 function stripLineNumbers(content: string): string {
+	if (typeof content !== 'string') {
+		return '';
+	}
 	const hashlineRe = /^\s*\d+:[0-9a-fA-F]{2}→(.*)$/;
 	const lineNumArrowRe = /^\s*\d+→(.*)$/;
 	return content
