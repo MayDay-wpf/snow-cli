@@ -198,6 +198,10 @@ export default function LoadingIndicator({
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
 	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+	const isRetryResending =
+		retryStatus?.isRetrying === true &&
+		(retryStatus.remainingSeconds === undefined ||
+			retryStatus.remainingSeconds === 0);
 	const loadingTips = t.chatScreen.loadingTips;
 	const loadingTip =
 		loadingTips.length > 0
@@ -343,13 +347,17 @@ export default function LoadingIndicator({
 											String(retryStatus.remainingSeconds),
 										)}
 									</Text>
-								) : (
-									<Text color={theme.colors.warning} dimColor>
-										{t.chatScreen.retryResending
-											.replace('{current}', String(retryStatus.attempt))
-											.replace('{max}', String(retryStatus.maxRetries ?? 5))}
+								) : isRetryResending ? (
+									<Text color={theme.colors.warning} dimColor bold>
+										<ShimmerText
+											text={t.chatScreen.retryResending
+												.replace('{current}', String(retryStatus.attempt))
+												.replace('{max}', String(retryStatus.maxRetries ?? 5))}
+											baseColor={theme.colors.warning}
+											shimmerColor={STREAM_DELAY_SHIMMER_COLORS.warning.shimmer}
+										/>
 									</Text>
-								)}
+								) : null}
 							</Box>
 						) : codebaseSearchStatus?.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
