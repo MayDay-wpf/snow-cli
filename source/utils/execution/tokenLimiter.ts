@@ -226,6 +226,12 @@ export function stripFilesystemDiffPayload(result: any): any {
 		return rest;
 	}
 
+	// For filesystem-create single file result (has content + message)
+	if (result.content !== undefined && result.message !== undefined) {
+		const {content: _content, ...rest} = result;
+		return rest;
+	}
+
 	if (Array.isArray(result.results)) {
 		return {
 			...result,
@@ -239,6 +245,7 @@ export function stripFilesystemDiffPayload(result: any): any {
 					completeOldContent: _completeOldContent,
 					completeNewContent: _completeNewContent,
 					replacedContent: _replacedContent,
+					content: _content,
 					...rest
 				} = item;
 				return rest;
@@ -251,7 +258,9 @@ export function stripFilesystemDiffPayload(result: any): any {
 
 function isFilesystemEditToolName(toolName: string): boolean {
 	return (
-		toolName === 'filesystem-edit' || toolName === 'filesystem-replaceedit'
+		toolName === 'filesystem-edit' ||
+		toolName === 'filesystem-replaceedit' ||
+		toolName === 'filesystem-create'
 	);
 }
 

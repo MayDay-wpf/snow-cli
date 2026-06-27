@@ -1,5 +1,8 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
-import type {ToolCall, ToolResult} from '../../../utils/execution/toolExecutor.js';
+import type {
+	ToolCall,
+	ToolResult,
+} from '../../../utils/execution/toolExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
 import {
 	extractFilesystemEditDiffFromRawResult,
@@ -79,7 +82,8 @@ function extractEditDiffData(
 ): Record<string, any> | undefined {
 	if (
 		toolCall.function.name !== 'filesystem-edit' &&
-		toolCall.function.name !== 'filesystem-replaceedit'
+		toolCall.function.name !== 'filesystem-replaceedit' &&
+		toolCall.function.name !== 'filesystem-create'
 	) {
 		return undefined;
 	}
@@ -115,5 +119,25 @@ function extractEditDiffData(
 	} catch {
 		// If parsing fails, show regular result
 	}
+
+	// For filesystem-create single file: the result is a plain string message,
+	// not a JSON object. Extract content/path from the tool call arguments.
+	if (toolCall.function.name === 'filesystem-create') {
+		try {
+			const callArgs = JSON.parse(toolCall.function.arguments);
+			if (
+				typeof callArgs.filePath === 'string' &&
+				typeof callArgs.content === 'string'
+			) {
+				return {
+					content: callArgs.content,
+					path: callArgs.filePath,
+				};
+			}
+		} catch {
+			// ignore
+		}
+	}
+
 	return undefined;
 }

@@ -698,6 +698,7 @@ export default function MessageRenderer({
 										)}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
+										!message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.content && (
 											<Box marginTop={1}>
 												<DiffViewer
@@ -775,6 +776,38 @@ export default function MessageRenderer({
 												)}
 											</Box>
 										)}
+									{/* Show batch create results */}
+									{message.toolCall &&
+										message.toolCall.name === 'filesystem-create' &&
+										message.toolCall.arguments.isBatch &&
+										message.toolCall.arguments.batchResults &&
+										Array.isArray(message.toolCall.arguments.batchResults) && (
+											<Box marginTop={1} flexDirection="column">
+												{message.toolCall.arguments.batchResults.map(
+													(fileResult: any, index: number) => {
+														if (fileResult.success && fileResult.content) {
+															return (
+																<Box
+																	key={index}
+																	flexDirection="column"
+																	marginBottom={1}
+																>
+																	<Text bold color="cyan">
+																		{`File ${index + 1}: ${fileResult.path}`}
+																	</Text>
+																	<DiffViewer
+																		newContent={fileResult.content}
+																		filename={fileResult.path}
+																		showFilenameInHeader={false}
+																	/>
+																</Box>
+															);
+														}
+														return null;
+													},
+												)}
+											</Box>
+										)}
 									{/* Show tool result preview for successful tool executions */}
 									{message.messageStatus === 'success' &&
 										message.toolResult &&
@@ -782,6 +815,7 @@ export default function MessageRenderer({
 										!(
 											message.toolCall &&
 											(message.toolCall.arguments?.oldContent ||
+												message.toolCall.arguments?.content ||
 												message.toolCall.arguments?.batchResults)
 										) &&
 										// Hide result preview in compact mode

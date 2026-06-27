@@ -150,6 +150,16 @@ export interface EditBySearchConfig {
 }
 
 /**
+ * Create file batch config
+ */
+export interface FileCreateConfig {
+	path: string;
+	content: string;
+	overwrite?: boolean;
+	createDirectories?: boolean;
+}
+
+/**
  * Hashline edit operation types
  */
 export type HashlineOperationType = 'replace' | 'insert_after' | 'delete';
@@ -252,3 +262,17 @@ export type EditByHashlineResult =
 export type EditBySearchResult =
 	| EditBySearchSingleResult
 	| BatchOperationResult<EditBySearchBatchResultItem>;
+
+/**
+ * Create file batch result item
+ */
+export type FileCreateBatchResultItem = BatchResultItem & {
+	content?: string; // File content for DiffViewer display
+};
+
+/**
+ * Create file result (single string message or batch result)
+ */
+export type FileCreateResult =
+	| string
+	| BatchOperationResult<FileCreateBatchResultItem>;

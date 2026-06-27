@@ -87,7 +87,11 @@ export function extractFilesystemEditDiffFromRawResult(
 	toolName: string,
 	toolResult: unknown,
 ): Record<string, any> | undefined {
-	if (toolName !== 'filesystem-edit' && toolName !== 'filesystem-replaceedit') {
+	if (
+		toolName !== 'filesystem-edit' &&
+		toolName !== 'filesystem-replaceedit' &&
+		toolName !== 'filesystem-create'
+	) {
 		return undefined;
 	}
 	if (!toolResult || typeof toolResult !== 'object') {
@@ -147,7 +151,9 @@ export function extractFilesystemEditDiffDataForPersistence(
 	content: string,
 ): Record<string, any> | undefined {
 	if (
-		(toolName !== 'filesystem-edit' && toolName !== 'filesystem-replaceedit') ||
+		(toolName !== 'filesystem-edit' &&
+			toolName !== 'filesystem-replaceedit' &&
+			toolName !== 'filesystem-create') ||
 		content.startsWith('Error:')
 	) {
 		return undefined;

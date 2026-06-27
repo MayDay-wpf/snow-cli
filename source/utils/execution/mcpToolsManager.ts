@@ -1354,36 +1354,76 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-create tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
-						);
-					}
-					if (args.content === undefined || args.content === null) {
-						throw new Error(
-							`Missing required parameter 'content' for filesystem-create tool.\n` +
+							`Missing required parameter 'filePath' for filesystem-create tool.\n` +
 								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
-					if (typeof args.content !== 'string') {
-						throw new Error(
-							`Invalid type for parameter 'content' in filesystem-create tool. ` +
-								`Expected string but received ${typeof args.content}.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: The 'content' parameter must be a string. If you need to write JSON, ` +
-								`serialize it first using JSON.stringify(). For example: ` +
-								`content: JSON.stringify({ ... }) instead of content: { ... }.`,
+					if (Array.isArray(args.filePath)) {
+						// Batch mode: validate each item
+						for (let i = 0; i < args.filePath.length; i++) {
+							const item = args.filePath[i];
+							if (!item || typeof item !== 'object' || !item.path) {
+								throw new Error(
+									`Invalid item at index ${i} in filePath array for filesystem-create tool.\n` +
+										`Each item must be an object with 'path' and 'content' properties.\n` +
+										`Received args: ${JSON.stringify(args, null, 2)}`,
+								);
+							}
+							if (item.content === undefined || item.content === null) {
+								throw new Error(
+									`Missing 'content' in filePath[${i}] for filesystem-create tool.\n` +
+										`Received args: ${JSON.stringify(args, null, 2)}`,
+								);
+							}
+							if (typeof item.content !== 'string') {
+								throw new Error(
+									`Invalid type for 'content' in filePath[${i}] for filesystem-create tool. ` +
+										`Expected string but received ${typeof item.content}.\n` +
+										`AI Tip: The 'content' field must be a string. If you need to write JSON, ` +
+										`serialize it first using JSON.stringify().`,
+								);
+							}
+						}
+						result = await filesystemService.createFile(
+							args.filePath,
+							undefined,
+							args.createDirectories,
+							args.overwrite,
+						);
+					} else {
+						// Single file mode
+						if (typeof args.filePath !== 'string') {
+							throw new Error(
+								`Invalid type for parameter 'filePath' for filesystem-create tool. ` +
+									`Expected string or array but received ${typeof args.filePath}.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}`,
+							);
+						}
+						if (args.content === undefined || args.content === null) {
+							throw new Error(
+								`Missing required parameter 'content' for filesystem-create tool.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}\n` +
+									`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+							);
+						}
+						if (typeof args.content !== 'string') {
+							throw new Error(
+								`Invalid type for parameter 'content' in filesystem-create tool. ` +
+									`Expected string but received ${typeof args.content}.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}\n` +
+									`AI Tip: The 'content' parameter must be a string. If you need to write JSON, ` +
+									`serialize it first using JSON.stringify(). For example: ` +
+									`content: JSON.stringify({ ... }) instead of content: { ... }.`,
+							);
+						}
+						result = await filesystemService.createFile(
+							args.filePath,
+							args.content,
+							args.createDirectories,
+							args.overwrite,
 						);
 					}
-					result = await filesystemService.createFile(
-						args.filePath,
-						args.content,
-						args.createDirectories,
-						args.overwrite,
-					);
 					break;
 				case 'edit':
 					if (!args.filePath) {
@@ -1911,10 +1951,26 @@ export async function executeMCPTool(
 	const {extractFilesystemEditDiffFromRawResult} = await import(
 		'../config/toolDisplayConfig.js'
 	);
-	const preservedEditDiffData = extractFilesystemEditDiffFromRawResult(
+	let preservedEditDiffData = extractFilesystemEditDiffFromRawResult(
 		toolName,
 		result,
 	);
+
+	// For filesystem-create single file: the result is a plain string message,
+	// not a JSON object. Construct editDiffData from the tool call args so that
+	// all downstream paths (main agent, sub-agent, team) can render DiffViewer.
+	if (
+		!preservedEditDiffData &&
+		toolName === 'filesystem-create' &&
+		args &&
+		typeof args.filePath === 'string' &&
+		typeof args.content === 'string'
+	) {
+		preservedEditDiffData = {
+			content: args.content,
+			path: args.filePath,
+		};
+	}
 
 	// Apply token limit validation before returning result (truncates if exceeded)
 	const {wrapToolResultWithTokenLimit} = await import('./tokenLimiter.js');

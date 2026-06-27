@@ -1290,6 +1290,7 @@ export class SubAgentUIHandler {
 			if (
 				msg.editDiffData &&
 				(typeof msg.editDiffData.oldContent === 'string' ||
+					typeof msg.editDiffData.content === 'string' ||
 					Array.isArray(msg.editDiffData.batchResults))
 			) {
 				fileToolData = {

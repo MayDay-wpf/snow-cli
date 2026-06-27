@@ -256,6 +256,7 @@ export function convertSessionMessagesToUI(
 					if (
 						editDiffData &&
 						(typeof editDiffData.oldContent === 'string' ||
+							typeof editDiffData.content === 'string' ||
 							Array.isArray(editDiffData.batchResults))
 					) {
 						fileToolData = {
@@ -443,6 +444,8 @@ export function convertSessionMessagesToUI(
 				| {
 						oldContent?: string;
 						newContent?: string;
+						content?: string;
+						path?: string;
 						filename?: string;
 						completeOldContent?: string;
 						completeNewContent?: string;
@@ -481,12 +484,14 @@ export function convertSessionMessagesToUI(
 						// Extract edit diff data
 						if (
 							(toolName === 'filesystem-edit' ||
-								toolName === 'filesystem-replaceedit') &&
+								toolName === 'filesystem-replaceedit' ||
+								toolName === 'filesystem-create') &&
 							!isError
 						) {
 							if (
 								(msg as any).editDiffData &&
 								(typeof (msg as any).editDiffData.oldContent === 'string' ||
+									typeof (msg as any).editDiffData.content === 'string' ||
 									Array.isArray((msg as any).editDiffData.batchResults))
 							) {
 								editDiffData = (msg as any).editDiffData;
@@ -494,8 +499,17 @@ export function convertSessionMessagesToUI(
 							}
 							try {
 								const resultData = JSON.parse(msg.content);
+								// Handle single file create
+								if (resultData.content) {
+									editDiffData = {
+										content: resultData.content,
+										path: resultData.path || resultData.filename,
+									};
+									toolArgs.content = resultData.content;
+									toolArgs.path = resultData.path || resultData.filename;
+								}
 								// Handle single file edit
-								if (resultData.oldContent && resultData.newContent) {
+								else if (resultData.oldContent && resultData.newContent) {
 									editDiffData = {
 										oldContent: resultData.oldContent,
 										newContent: resultData.newContent,
@@ -511,7 +525,7 @@ export function convertSessionMessagesToUI(
 									toolArgs.completeNewContent = resultData.completeNewContent;
 									toolArgs.contextStartLine = resultData.contextStartLine;
 								}
-								// Handle batch edit
+								// Handle batch edit/create
 								else if (
 									!editDiffData &&
 									resultData.results &&

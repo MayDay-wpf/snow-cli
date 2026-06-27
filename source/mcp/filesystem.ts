@@ -21,6 +21,9 @@ import type {
 	SingleFileReadResult,
 	MultipleFilesReadResult,
 	ImageContent,
+	FileCreateConfig,
+	FileCreateBatchResultItem,
+	FileCreateResult,
 } from './types/filesystem.types.js';
 import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
 import {
@@ -29,9 +32,7 @@ import {
 } from './utils/filesystem/batch-operations.utils.js';
 import {tryFixPath} from './utils/filesystem/path-fixer.utils.js';
 import {getFreshDiagnostics} from './utils/filesystem/diagnostics.utils.js';
-import {
-	appendDiagnosticsSummary,
-} from './utils/filesystem/message-format.utils.js';
+import {appendDiagnosticsSummary} from './utils/filesystem/message-format.utils.js';
 import {backupFileBeforeMutation} from './utils/filesystem/backup.utils.js';
 import {
 	executeEditBySearchSingle,
@@ -496,11 +497,77 @@ export class FilesystemMCPService {
 	 * @throws Error if file creation fails
 	 */
 	async createFile(
+		filePath: string | string[] | FileCreateConfig[],
+		content?: string,
+		createDirectories: boolean = true,
+		overwrite: boolean = false,
+	): Promise<FileCreateResult> {
+		// Handle array of files (batch mode)
+		if (Array.isArray(filePath)) {
+			return await executeBatchOperation<
+				FileCreateConfig,
+				{message: string; filePath: string; content: string},
+				FileCreateBatchResultItem
+			>(
+				filePath,
+				fileItem => {
+					if (typeof fileItem === 'string') {
+						if (content === undefined) {
+							throw new Error(
+								'content is required when filePath is an array of strings',
+							);
+						}
+						return {
+							path: fileItem,
+							content,
+							createDirectories,
+							overwrite,
+						};
+					}
+					return {
+						path: fileItem.path,
+						content: fileItem.content,
+						createDirectories: fileItem.createDirectories ?? createDirectories,
+						overwrite: fileItem.overwrite ?? overwrite,
+					};
+				},
+				(path, fileContent, fileCreateDirs, fileOverwrite) =>
+					this.createFileSingle(
+						path,
+						fileContent,
+						fileCreateDirs,
+						fileOverwrite,
+					),
+				(path, result) => ({
+					path,
+					content: result.content,
+				}),
+			);
+		}
+
+		// Single file mode
+		if (content === undefined || content === null) {
+			throw new Error('content is required for single file mode');
+		}
+		const singleResult = await this.createFileSingle(
+			filePath,
+			content,
+			createDirectories,
+			overwrite,
+		);
+		return singleResult.message;
+	}
+
+	/**
+	 * Internal method: Create a single file
+	 * @private
+	 */
+	private async createFileSingle(
 		filePath: string,
 		content: string,
 		createDirectories: boolean = true,
 		overwrite: boolean = false,
-	): Promise<string> {
+	): Promise<{message: string; filePath: string; content: string}> {
 		try {
 			const fullPath = this.resolvePath(filePath);
 
@@ -551,7 +618,7 @@ export class FilesystemMCPService {
 				// Optional diagnostics retrieval, do not block create success
 			}
 
-			return message;
+			return {message, filePath, content};
 		} catch (error) {
 			throw new Error(
 				`Failed to create file ${filePath}: ${
@@ -725,7 +792,6 @@ export class FilesystemMCPService {
 			contextLines,
 		);
 	}
-
 
 	/**
 	 * Edit file(s) using hashline anchors.
@@ -923,17 +989,50 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories.',
+			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
-					type: 'string',
-					description: 'Path where the file should be created',
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path where the file should be created',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'Path where the file should be created',
+									},
+									content: {
+										type: 'string',
+										description: 'Content to write to the file',
+									},
+									overwrite: {
+										type: 'boolean',
+										description:
+											'Whether to overwrite the file if it already exists',
+									},
+									createDirectories: {
+										type: 'boolean',
+										description:
+											"Whether to create parent directories if they don't exist",
+									},
+								},
+								required: ['path', 'content'],
+							},
+							description: 'Array of file configs for batch creation',
+						},
+					],
 				},
 				content: {
 					type: 'string',
-					description: 'Content to write to the file',
+					description:
+						'Content to write to the file (required for single file mode; ignored in batch mode where each item has its own content)',
 				},
 				overwrite: {
 					type: 'boolean',
@@ -947,7 +1046,7 @@ export const mcpTools = [
 					default: true,
 				},
 			},
-			required: ['filePath', 'content', 'overwrite'],
+			required: ['filePath', 'overwrite'],
 		},
 	},
 	{
@@ -1097,12 +1196,7 @@ export const mcpTools = [
 														'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 												},
 											},
-											required: [
-												'type',
-												'startAnchor',
-												'endAnchor',
-												'content',
-											],
+											required: ['type', 'startAnchor', 'endAnchor', 'content'],
 										},
 										description: 'Array of edit operations for this file',
 									},
