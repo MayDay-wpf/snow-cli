@@ -1,4 +1,6 @@
 import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {getCurrentLanguage} from '../config/languageConfig.js';
+import {translations} from '../../i18n/index.js';
 
 // Interrupt command handler
 // /cut <message> - Interrupt the AI mid-response and immediately send the user's message.
@@ -8,9 +10,13 @@ registerCommand('cut', {
 	execute: async (args?: string): Promise<CommandResult> => {
 		const userMessage = args?.trim();
 		if (!userMessage) {
+			const lang = getCurrentLanguage();
+			const usage =
+				translations[lang]?.commandPanel?.commandOutput?.cut?.usage ||
+				'Usage: /cut <message>';
 			return {
 				success: false,
-				message: 'Usage: /cut <message>',
+				message: usage,
 			};
 		}
 		return {

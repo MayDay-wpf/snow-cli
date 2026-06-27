@@ -1030,6 +1030,10 @@ export const zhTW: TranslationKeys = {
 				usage:
 					'用法: /deepresearch <提示詞>\n範例: /deepresearch 對比 OpenAI Deep Research 與 Gemini Deep Research 的架構差異',
 			},
+			// Cut (打斷) 命令訊息
+			cut: {
+				usage: '用法: /cut <訊息>',
+			},
 			// BTW 命令訊息
 			btw: {
 				usage: '用法: /btw <你的問題>',

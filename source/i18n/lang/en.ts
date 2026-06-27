@@ -1095,6 +1095,10 @@ export const en: TranslationKeys = {
 				usage:
 					'Usage: /deepresearch <prompt>\nExample: /deepresearch Compare the architectures of OpenAI Deep Research and Gemini Deep Research',
 			},
+			// Cut (interrupt) command messages
+			cut: {
+				usage: 'Usage: /cut <message>',
+			},
 			// BTW command messages
 			btw: {
 				usage: 'Usage: /btw <your question>',

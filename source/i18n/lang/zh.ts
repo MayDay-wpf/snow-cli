@@ -1028,6 +1028,10 @@ export const zh: TranslationKeys = {
 				usage:
 					'用法: /deepresearch <提示词>\n示例: /deepresearch 对比 OpenAI Deep Research 与 Gemini Deep Research 的架构差异',
 			},
+			// Cut (打断) 命令消息
+			cut: {
+				usage: '用法: /cut <消息>',
+			},
 			// BTW 命令消息
 			btw: {
 				usage: '用法: /btw <你的问题>',

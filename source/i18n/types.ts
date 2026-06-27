@@ -970,6 +970,10 @@ export type TranslationKeys = {
 			deepResearch: {
 				usage: string;
 			};
+			// Cut (interrupt) command messages
+			cut: {
+				usage: string;
+			};
 			// BTW command messages
 			btw: {
 				usage: string;
