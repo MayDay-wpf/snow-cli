@@ -56,8 +56,11 @@ jobs:
 
             ### What's New
 
-            - Urgent fix for the issue of Token waste in Responses requests
-            - Add automatic fallback to the request for obtaining the Models list
+            - Add GitHub skills installation and update functionality, supporting multi-skill repositories with individual or bulk update
+            - Add `/cut` command support with multi-language usage instructions
+            - Add retry resending indication in the loading indicator
+            - Optimize message conversion logic to support custom system prompts when system messages already exist
+            - Fix web search browser launch failure on Windows by switching to manual process spawn with DevTools connection
 
             ### Installation
             ```bash

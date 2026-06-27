@@ -2,6 +2,7 @@ import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {extname, join} from 'node:path';
+import {spawn, type ChildProcess} from 'node:child_process';
 import {getProxyConfig} from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 // Type definitions
@@ -49,6 +50,11 @@ export class WebSearchService {
 	// In WSL mode we may fall back to `launchBrowserDirect()` (Issue #176),
 	// so `isWSLMode` alone is NOT sufficient to decide the close strategy.
 	private browserIsLocallyLaunched: boolean = false;
+	// On Windows we manually spawn the browser process (puppeteer.launch()
+	// is unreliable — see launchBrowserManual). We keep a reference so
+	// closeBrowserInternal() can kill it as a fallback if browser.close()
+	// fails or the CDP connection was already lost.
+	private browserProcess: ChildProcess | null = null;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
@@ -183,10 +189,6 @@ export class WebSearchService {
 		// Find browser executable path (cache it)
 		// Priority: 1. User-configured path, 2. Auto-detect
 		if (!this.executablePath) {
-			// First try user-configured browser path. Validate that the path
-			// is a native executable for the current OS — a Windows .exe path
-			// (e.g. /mnt/c/.../chrome.exe) is unusable on Linux/WSL and would
-			// cause puppeteer.launch() to crash (Issue #176 Bug #2).
 			if (
 				proxyConfig.browserPath &&
 				isExecutableForPlatform(proxyConfig.browserPath) &&
@@ -194,7 +196,6 @@ export class WebSearchService {
 			) {
 				this.executablePath = proxyConfig.browserPath;
 			} else {
-				// Fallback to auto-detection
 				this.executablePath = findBrowserExecutable();
 				if (!this.executablePath) {
 					throw new Error(
@@ -217,6 +218,21 @@ export class WebSearchService {
 			launchArgs.unshift(`--proxy-server=http://127.0.0.1:${proxyConfig.port}`);
 		}
 
+		// On Windows, puppeteer.launch() is unreliable with Edge/Chrome: the
+		// browser's launcher process exits immediately with Code: 0 before the
+		// DevTools endpoint is ready, causing puppeteer to throw "Failed to
+		// launch the browser process: Code: 0". The actual browser process
+		// keeps running fine — we just need to poll the HTTP endpoint instead
+		// of relying on puppeteer's stdout-parsing.
+		//
+		// So on Windows we skip puppeteer.launch() entirely and use a manual
+		// spawn + HTTP-poll + puppeteer.connect() approach. This also lets us
+		// add --headless=new to keep the browser invisible.
+		if (process.platform === 'win32') {
+			return this.launchBrowserManual(this.executablePath, launchArgs);
+		}
+
+		// Non-Windows (Linux/macOS): use puppeteer.launch() directly.
 		try {
 			this.browser = await puppeteer.launch({
 				executablePath: this.executablePath,
@@ -224,10 +240,6 @@ export class WebSearchService {
 				args: launchArgs,
 				userDataDir: this.userDataDir,
 			});
-			// We spawned this browser process ourselves (either in standard
-			// non-WSL mode, or as the WSL fallback path when a Windows browser
-			// could not be launched). It MUST be `browser.close()`-d on
-			// shutdown — `disconnect()` alone would leak a zombie process.
 			this.browserIsLocallyLaunched = true;
 		} catch (error: unknown) {
 			const errorMessage =
@@ -241,6 +253,119 @@ export class WebSearchService {
 		}
 
 		return this.browser;
+	}
+
+	/**
+	 * Manually launch the browser as a headless child process and connect to
+	 * it via the DevTools WebSocket protocol.
+	 *
+	 * This is used on Windows where puppeteer.launch() fails because the
+	 * Edge/Chrome launcher process exits immediately (Code: 0) before the
+	 * DevTools endpoint is ready. The real browser process survives, so we
+	 * poll the HTTP /json/version endpoint until it responds, then connect.
+	 *
+	 * The browser is launched with --headless=new so no window is shown.
+	 *
+	 * @internal
+	 */
+	private async launchBrowserManual(
+		executablePath: string,
+		args: string[],
+	): Promise<Browser> {
+		// Pick a random debug port to avoid conflicts with other instances.
+		const debugPort = 9300 + Math.floor(Math.random() * 100);
+
+		const allArgs = [
+			...args,
+			'--headless=new',
+			'--no-first-run',
+			'--no-default-browser-check',
+			`--remote-debugging-port=${debugPort}`,
+			'--remote-debugging-address=127.0.0.1',
+		];
+
+		// Use a per-process user-data-dir to avoid profile lock conflicts.
+		if (this.userDataDir) {
+			allArgs.push(`--user-data-dir=${this.userDataDir}`);
+		}
+
+		// Spawn the browser process. windowsHide prevents a console window
+		// from flashing. The launcher process will exit quickly (Code: 0)
+		// but the real browser process keeps running in the background.
+		this.browserProcess = spawn(executablePath, allArgs, {
+			stdio: 'ignore',
+			windowsHide: true,
+			detached: false,
+		});
+
+		// Capture spawn errors (ENOENT, EACCES, etc.)
+		// Use a wrapper object so TypeScript control-flow analysis doesn't
+		// narrow `spawnError` back to `null` after the async callback.
+		const spawnErrorRef: {error: Error | null} = {error: null};
+		this.browserProcess.on('error', (err: Error) => {
+			spawnErrorRef.error = err;
+		});
+
+		// Poll for the DevTools WebSocket endpoint. The browser may need a
+		// few hundred ms to start up and begin listening on the debug port.
+		const maxRetries = 30;
+		const retryDelay = 500;
+		let wsEndpoint: string | null = null;
+
+		for (let i = 0; i < maxRetries; i++) {
+			await new Promise(resolve => setTimeout(resolve, retryDelay));
+			wsEndpoint = await getRunningBrowserWSEndpoint(debugPort);
+			if (wsEndpoint) {
+				break;
+			}
+			// If the spawn itself failed, stop early.
+			if (spawnErrorRef.error) {
+				break;
+			}
+		}
+
+		if (spawnErrorRef.error) {
+			throw new Error(
+				`Failed to spawn browser process: ${spawnErrorRef.error.message}. Path: ${executablePath}`,
+			);
+		}
+
+		if (!wsEndpoint) {
+			// Kill the process if it's still running but didn't open the
+			// debug port in time.
+			this.killBrowserProcess();
+			throw new Error(
+				`Browser launched but DevTools endpoint was not reachable on port ${debugPort} after ${maxRetries} retries. Path: ${executablePath}`,
+			);
+		}
+
+		// Connect via WebSocket. browserIsLocallyLaunched = true so that
+		// closeBrowserInternal() calls browser.close() (which sends a CDP
+		// Browser.close command) instead of just disconnecting.
+		this.browser = await puppeteer.connect({browserWSEndpoint: wsEndpoint});
+		this.browserIsLocallyLaunched = true;
+		return this.browser;
+	}
+
+	/**
+	 * Kill the manually spawned browser process if it is still running.
+	 * Called as a fallback when browser.close() fails or the process
+	 * was never connected.
+	 *
+	 * @internal
+	 */
+	private killBrowserProcess(): void {
+		if (!this.browserProcess) {
+			return;
+		}
+		try {
+			if (!this.browserProcess.killed) {
+				this.browserProcess.kill();
+			}
+		} catch {
+			// Ignore — process may have already exited
+		}
+		this.browserProcess = null;
 	}
 
 	/**
@@ -265,14 +390,15 @@ export class WebSearchService {
 
 		if (!browser) {
 			this.browser = null;
+			this.killBrowserProcess();
 			return;
 		}
 
 		if (this.browserIsLocallyLaunched) {
-			// We spawned this browser process via puppeteer.launch() — close it
-			// so the child process is terminated (a bare disconnect() would
-			// leak a zombie). This covers both standard non-WSL mode and the
-			// WSL fallback path that launches a native Linux browser.
+			// We spawned this browser process (either via puppeteer.launch()
+			// on Linux/macOS, or via manual spawn + connect on Windows).
+			// Call browser.close() which sends a CDP Browser.close command to
+			// terminate the browser gracefully.
 			try {
 				if (browser.connected) {
 					await browser.close();
@@ -280,6 +406,9 @@ export class WebSearchService {
 			} catch {
 				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
 			}
+			// If browser.close() didn't fully terminate the process (e.g.,
+			// CDP connection was already lost), kill it as a fallback.
+			this.killBrowserProcess();
 		} else {
 			// Remote session obtained via puppeteer.connect() (WSL connecting
 			// to a Windows browser). Only disconnect — don't close the browser
