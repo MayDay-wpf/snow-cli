@@ -1804,6 +1804,7 @@ export const en: TranslationKeys = {
 		modeLabel: 'Creation Mode:',
 		modeAi: 'AI Generate (describe requirement)',
 		modeManual: 'Manual (create templates)',
+		modeInstall: 'Install from GitHub',
 		requirementLabel: 'Requirement:',
 		requirementHint:
 			'Describe what you want this Skill to do (content will follow this language)',

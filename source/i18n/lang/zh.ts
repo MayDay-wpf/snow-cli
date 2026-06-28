@@ -1707,6 +1707,7 @@ export const zh: TranslationKeys = {
 		modeLabel: '选择创建方式:',
 		modeAi: 'AI 生成（输入需求即可）',
 		modeManual: '手动创建（生成模板）',
+		modeInstall: '从 GitHub 安装技能',
 		requirementLabel: '技能需求:',
 		requirementHint: '简要描述你希望该技能完成什么（生成内容将跟随此语言）',
 		requirementPlaceholder: '例如：生成一个用于发布 npm 包的技能…',

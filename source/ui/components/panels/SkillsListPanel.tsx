@@ -2,6 +2,8 @@ import React, {useState, useEffect, useMemo, useCallback, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {visualWidth} from '../../../utils/core/textUtils.js';
 import {
 	toggleSkill,
 	isSkillEnabled,
@@ -114,6 +116,48 @@ export default function SkillsListPanel({onClose}: Props) {
 		}
 		return `${description.slice(0, NON_FOCUSED_SKILL_DESC_MAX_LEN - 3)}...`;
 	};
+
+	const {columns} = useTerminalSize();
+	// border (2) + paddingX (2*2) = 6 columns of chrome for the outer Box
+	const panelContentWidth = Math.max(1, columns - 6);
+
+	/**
+	 * Wrap a long single-line string into multiple lines that fit within
+	 * `maxWidth` visual columns. Wide characters (CJK, emoji) are accounted
+	 * for via visualWidth().
+	 */
+	const wrapTextToWidth = useCallback(
+		(text: string, maxWidth: number): string[] => {
+			if (!text) return [''];
+			const chars = [...text];
+			const result: string[] = [];
+			let current = '';
+			let currentWidth = 0;
+
+			for (const ch of chars) {
+				const chWidth = Math.max(1, visualWidth(ch));
+				if (currentWidth + chWidth > maxWidth) {
+					result.push(current || ' ');
+					current = ch;
+					currentWidth = chWidth;
+				} else {
+					current += ch;
+					currentWidth += chWidth;
+				}
+			}
+			if (current.length > 0) {
+				result.push(current);
+			}
+			return result.length > 0 ? result : [''];
+		},
+		[],
+	);
+
+	const wrappedUpdateMessage = useMemo(
+		() =>
+			updateMessage ? wrapTextToWidth(updateMessage, panelContentWidth) : [],
+		[updateMessage, wrapTextToWidth, panelContentWidth],
+	);
 
 	const handleUpdate = useCallback(async () => {
 		if (updateStatus === 'updating') return;
@@ -358,18 +402,21 @@ export default function SkillsListPanel({onClose}: Props) {
 						{t.skillsListPanel?.noSkills || 'No skills available'}
 					</Text>
 					{updateStatus !== 'idle' && updateMessage && (
-						<Box marginTop={1}>
-							<Text
-								color={
-									updateStatus === 'error'
-										? theme.colors.error
-										: updateStatus === 'updating'
-										? theme.colors.warning
-										: theme.colors.success
-								}
-							>
-								{updateMessage}
-							</Text>
+						<Box marginTop={1} flexDirection="column">
+							{wrappedUpdateMessage.map((line, i) => (
+								<Text
+									key={i}
+									color={
+										updateStatus === 'error'
+											? theme.colors.error
+											: updateStatus === 'updating'
+											? theme.colors.warning
+											: theme.colors.success
+									}
+								>
+									{line}
+								</Text>
+							))}
 						</Box>
 					)}
 					<Box marginTop={1}>
@@ -472,23 +519,32 @@ export default function SkillsListPanel({onClose}: Props) {
 				)}
 
 				{updateStatus !== 'idle' && updateMessage && (
-					<Box marginTop={1}>
-						<Text
-							color={
-								updateStatus === 'error'
-									? theme.colors.error
-									: updateStatus === 'updating'
-									? theme.colors.warning
-									: theme.colors.success
-							}
-						>
-							{updateStatus === 'updating'
-								? '⟳ '
-								: updateStatus === 'done'
-								? '✓ '
-								: '✗ '}
-							{updateMessage}
-						</Text>
+					<Box marginTop={1} flexDirection="column">
+						{wrappedUpdateMessage.map((line, i) => {
+							const prefix =
+								i === 0
+									? updateStatus === 'updating'
+										? '⟳ '
+										: updateStatus === 'done'
+										? '✓ '
+										: '✗ '
+									: '';
+							return (
+								<Text
+									key={i}
+									color={
+										updateStatus === 'error'
+											? theme.colors.error
+											: updateStatus === 'updating'
+											? theme.colors.warning
+											: theme.colors.success
+									}
+								>
+									{prefix}
+									{line}
+								</Text>
+							);
+						})}
 					</Box>
 				)}
 

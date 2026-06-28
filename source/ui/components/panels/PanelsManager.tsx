@@ -251,6 +251,10 @@ export default function PanelsManager({
 						projectRoot={workingDirectory}
 						onSave={onSkillsSave}
 						onCancel={() => setShowSkillsCreation(false)}
+						onInstall={() => {
+							setShowSkillsCreation(false);
+							setShowSkillsInstall(true);
+						}}
 					/>
 				</Box>
 			)}

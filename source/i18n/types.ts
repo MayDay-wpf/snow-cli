@@ -1601,6 +1601,7 @@ export type TranslationKeys = {
 		modeLabel: string;
 		modeAi: string;
 		modeManual: string;
+		modeInstall: string;
 		requirementLabel: string;
 		requirementHint: string;
 		requirementPlaceholder: string;
