@@ -93,7 +93,7 @@ interface TeammateChildPayload extends BaseChildPayload {
 
 export type AgentChildPayload = SubAgentChildPayload | TeammateChildPayload;
 
-interface RunAgentChildProcessOptions {
+interface RunAgentChildProcessOptions<T = unknown> {
 	payload: AgentChildPayload;
 	onMessage?: (message: SubAgentMessage) => void;
 	abortSignal?: AbortSignal;
@@ -103,6 +103,13 @@ interface RunAgentChildProcessOptions {
 	requestUserQuestion?: UserQuestionCallback;
 	messagePump?: (child: ChildProcess) => NodeJS.Timeout | undefined;
 	abortErrorMessage: string;
+	/**
+	 * When provided, the parent resolves with this value instead of rejecting
+	 * when the child process exits due to an intentional abort (e.g. graceful
+	 * teammate shutdown). This prevents misleading error logs for expected
+	 * shutdowns where the child simply didn't finish cleanup before SIGTERM.
+	 */
+	abortResult?: T;
 }
 
 function buildChildPayloadWithConversationContext<T extends AgentChildPayload>(
@@ -288,7 +295,7 @@ async function handleChildRequest(
 }
 
 async function runAgentChildProcess<T>(
-	options: RunAgentChildProcessOptions,
+	options: RunAgentChildProcessOptions<T>,
 ): Promise<T> {
 	const child = fork(getCliEntryPath(), ['--snow-agent-child-worker'], {
 		env: {...process.env, SNOW_AGENT_CHILD_PROCESS: '1'},
@@ -319,7 +326,7 @@ async function runAgentChildProcess<T>(
 			safeSend(child, {type: 'abort'});
 			abortKillTimer = setTimeout(() => {
 				if (!child.killed) child.kill('SIGTERM');
-			}, 1500);
+			}, 5000);
 		};
 
 		if (options.abortSignal?.aborted) {
@@ -381,6 +388,15 @@ async function runAgentChildProcess<T>(
 		child.on('exit', (code, signal) => {
 			if (settled) return;
 			const aborted = options.abortSignal?.aborted;
+			// When the child is killed by an intentional abort (e.g. teammate
+			// shutdown) and the caller provided an abortResult, resolve with it
+			// instead of rejecting.  The child may have been SIGTERM'd before it
+			// could send its own result message, but that is expected for a
+			// graceful shutdown — not an error condition.
+			if (aborted && options.abortResult !== undefined) {
+				finish(() => resolvePromise(options.abortResult as T));
+				return;
+			}
 			const details = stderr.trim() ? `\nChild stderr:\n${stderr.trim()}` : '';
 			finish(() =>
 				rejectPromise(
@@ -462,6 +478,10 @@ export async function executeTeammateInChildProcess(
 		requestUserQuestion: options.requestUserQuestion,
 		messagePump: createTeammateMessagePump(instanceId),
 		abortErrorMessage: 'Teammate execution aborted',
+		abortResult: {
+			success: true,
+			result: '',
+		} as TeammateExecutionResult,
 	});
 }
 
