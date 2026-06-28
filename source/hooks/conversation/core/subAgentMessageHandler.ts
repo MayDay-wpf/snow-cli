@@ -398,76 +398,16 @@ export class SubAgentUIHandler {
 		state.lastTokenFlushTime = now;
 	}
 
-	private isTeammate(agentId: string): boolean {
-		return agentId.startsWith('teammate-');
-	}
-
 	private emitStreamLine(
-		lines: Message[],
-		state: StreamState,
-		subAgentMessage: SubAgentMessage,
-		content: string,
-		isThinking: boolean,
+		_lines: Message[],
+		_state: StreamState,
+		_subAgentMessage: SubAgentMessage,
+		_content: string,
+		_isThinking: boolean,
 	): void {
 		if (!this.streamingEnabled) return;
-		// Teammate: skip content/thinking stream lines to reduce clutter and memory
-		if (this.isTeammate(subAgentMessage.agentId)) return;
-
-		const isFirst = state.isFirstStreamLine;
-		const isFirstContent = !isThinking && !state.hasStartedContent;
-		if (isFirst) state.isFirstStreamLine = false;
-		if (isFirstContent) state.hasStartedContent = true;
-		state.hasEmittedStreamLine = true;
-
-		const msg: Message = {
-			role: 'assistant' as const,
-			content,
-			streamingLine: true,
-			isThinkingLine: isThinking,
-			isFirstStreamLine: isFirst,
-			isFirstContentLine: isFirstContent,
-			subAgent: {
-				agentId: subAgentMessage.agentId,
-				agentName: subAgentMessage.agentName,
-				isComplete: false,
-			},
-			subAgentInternal: true,
-		};
-
-		const agentId = subAgentMessage.agentId;
-
-		if (this.activeDisplayAgentId === null) {
-			this.activeDisplayAgentId = agentId;
-			this.emitAgentTitle(lines, subAgentMessage);
-			lines.push(msg);
-		} else if (agentId === this.activeDisplayAgentId) {
-			lines.push(msg);
-		} else {
-			if (!this.displayQueue.includes(agentId)) {
-				this.displayQueue.push(agentId);
-			}
-			const buf = this.bufferedStreamLines.get(agentId) || [];
-			buf.push(msg);
-			this.bufferedStreamLines.set(agentId, buf);
-		}
-	}
-
-	private emitAgentTitle(
-		lines: Message[],
-		subAgentMessage: SubAgentMessage,
-	): void {
-		const name = subAgentMessage.agentName;
-		lines.push({
-			role: 'subagent' as const,
-			content: `\x1b[36m⚇ ${name}\x1b[0m`,
-			streaming: false,
-			subAgent: {
-				agentId: subAgentMessage.agentId,
-				agentName: name,
-				isComplete: false,
-			},
-			subAgentInternal: true,
-		});
+		// Sub-agent content/thinking is not displayed, only show tools and diffs
+		return;
 	}
 
 	/**
@@ -771,23 +711,8 @@ export class SubAgentUIHandler {
 		if (state.hasReceivedContentChunk || !this.streamingEnabled) {
 			return prev;
 		}
-
-		// Teammate: skip thinking stream lines (fullThinkingContent still accumulated above)
-		if (this.isTeammate(subAgentMessage.agentId)) {
-			return prev;
-		}
-
-		const newLines: Message[] = [];
-		state.thinkingLineBuffer += incomingDelta;
-		const thinkLines = state.thinkingLineBuffer.split('\n');
-		for (let i = 0; i < thinkLines.length - 1; i++) {
-			const cleaned = this.cleanThinkingContent(thinkLines[i] ?? '');
-			if (cleaned || state.hasEmittedStreamLine) {
-				this.emitStreamLine(newLines, state, subAgentMessage, cleaned, true);
-			}
-		}
-		state.thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
-		return newLines.length > 0 ? [...prev, ...newLines] : prev;
+		// Sub-agent: skip thinking stream lines (fullThinkingContent still accumulated above)
+		return prev;
 	}
 
 	private handleToolCallDelta(
@@ -1406,34 +1331,12 @@ export class SubAgentUIHandler {
 			this.flushTokenCount(subAgentMessage.agentId, now);
 		}
 
-		const isFirstContentChunk = !state.hasReceivedContentChunk;
 		state.hasReceivedContentChunk = true;
 		if (!this.streamingEnabled) {
 			return prev;
 		}
-
-		// Teammate: skip content stream lines (fullContent still accumulated above)
-		if (this.isTeammate(subAgentMessage.agentId)) {
-			return prev;
-		}
-
-		const newLines: Message[] = [];
-		if (isFirstContentChunk) {
-			this.flushThinkingBuffer(state, newLines, subAgentMessage);
-		}
-
-		state.contentLineBuffer += incomingContent;
-		const contentLines = state.contentLineBuffer.split('\n');
-		for (let i = 0; i < contentLines.length - 1; i++) {
-			this.processContentLine(
-				state,
-				newLines,
-				contentLines[i] ?? '',
-				subAgentMessage,
-			);
-		}
-		state.contentLineBuffer = contentLines[contentLines.length - 1] ?? '';
-		return newLines.length > 0 ? [...prev, ...newLines] : prev;
+		// Sub-agent: skip content stream lines (fullContent still accumulated above)
+		return prev;
 	}
 
 	private handleDone(

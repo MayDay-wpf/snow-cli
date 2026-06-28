@@ -62,11 +62,8 @@ export default function MessageRenderer({
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
-	// Teammate: hide persisted content/thinking messages, only show tools and diffs
-	if (
-		message.subAgentContent === true &&
-		message.subAgent?.agentId?.startsWith('teammate-')
-	) {
+	// Sub-agent: hide persisted content/thinking messages, only show tools and diffs
+	if (message.subAgentContent === true) {
 		return null;
 	}
 
@@ -361,10 +358,7 @@ export default function MessageRenderer({
 			toolStatusColor = 'red';
 		} else {
 			// subAgentInternal 消息使用 cyan，其他 subagent 消息使用 magenta
-			if (
-				message.subAgentContent === true ||
-				(message.role === 'subagent' && message.subAgentInternal === true)
-			) {
+			if (message.role === 'subagent' && message.subAgentInternal === true) {
 				toolStatusColor = 'cyan';
 			} else {
 				toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
@@ -525,12 +519,9 @@ export default function MessageRenderer({
 											const hasToolStatus = message.messageStatus !== undefined;
 											const isSubAgentInternal =
 												message.subAgentInternal === true;
-											const isSubAgentContent =
-												message.subAgentContent === true;
 
 											if (
-												(hasToolStatus ||
-													(isSubAgentInternal && !isSubAgentContent)) &&
+												(hasToolStatus || isSubAgentInternal) &&
 												(message.role === 'assistant' ||
 													message.role === 'subagent')
 											) {
