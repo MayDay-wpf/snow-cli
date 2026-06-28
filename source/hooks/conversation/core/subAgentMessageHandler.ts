@@ -398,6 +398,10 @@ export class SubAgentUIHandler {
 		state.lastTokenFlushTime = now;
 	}
 
+	private isTeammate(agentId: string): boolean {
+		return agentId.startsWith('teammate-');
+	}
+
 	private emitStreamLine(
 		lines: Message[],
 		state: StreamState,
@@ -406,6 +410,8 @@ export class SubAgentUIHandler {
 		isThinking: boolean,
 	): void {
 		if (!this.streamingEnabled) return;
+		// Teammate: skip content/thinking stream lines to reduce clutter and memory
+		if (this.isTeammate(subAgentMessage.agentId)) return;
 
 		const isFirst = state.isFirstStreamLine;
 		const isFirstContent = !isThinking && !state.hasStartedContent;
@@ -763,6 +769,11 @@ export class SubAgentUIHandler {
 			this.flushTokenCount(subAgentMessage.agentId, now);
 		}
 		if (state.hasReceivedContentChunk || !this.streamingEnabled) {
+			return prev;
+		}
+
+		// Teammate: skip thinking stream lines (fullThinkingContent still accumulated above)
+		if (this.isTeammate(subAgentMessage.agentId)) {
 			return prev;
 		}
 
@@ -1398,6 +1409,11 @@ export class SubAgentUIHandler {
 		const isFirstContentChunk = !state.hasReceivedContentChunk;
 		state.hasReceivedContentChunk = true;
 		if (!this.streamingEnabled) {
+			return prev;
+		}
+
+		// Teammate: skip content stream lines (fullContent still accumulated above)
+		if (this.isTeammate(subAgentMessage.agentId)) {
 			return prev;
 		}
 

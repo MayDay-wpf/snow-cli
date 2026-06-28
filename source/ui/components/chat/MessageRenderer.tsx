@@ -62,6 +62,14 @@ export default function MessageRenderer({
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
+	// Teammate: hide persisted content/thinking messages, only show tools and diffs
+	if (
+		message.subAgentContent === true &&
+		message.subAgent?.agentId?.startsWith('teammate-')
+	) {
+		return null;
+	}
+
 	if (message.streamingLine) {
 		if (message.isThinkingLine && !showThinking) return null;
 
