@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -42,19 +42,19 @@ function compactThinkingContent(content: string, maxLength = 200): string {
 
 type Props = {
 	message: Message;
-	index: number;
-	filteredMessages: Message[];
 	terminalWidth: number;
+	isFirstInGroup?: boolean;
+	isLastInGroup?: boolean;
 	showThinking?: boolean;
 	toolDisplayMode?: 'full' | 'compact' | 'hidden';
 	thinkDisplayMode?: ThinkDisplayMode;
 };
 
-export default function MessageRenderer({
+function MessageRendererImpl({
 	message,
-	index,
-	filteredMessages,
 	terminalWidth,
+	isFirstInGroup = false,
+	isLastInGroup = false,
 	showThinking = true,
 	toolDisplayMode = 'full',
 	thinkDisplayMode = 'compact',
@@ -314,26 +314,14 @@ export default function MessageRenderer({
 	// Only show parallel group indicators for non-time-consuming tools
 	const shouldShowParallelIndicator = isInParallelGroup && !isTimeConsumingTool;
 
-	const isFirstInGroup =
-		shouldShowParallelIndicator &&
-		(index === 0 ||
-			filteredMessages[index - 1]?.parallelGroup !== message.parallelGroup ||
-			// Previous message is time-consuming tool, so this is the first non-time-consuming one
-			filteredMessages[index - 1]?.toolPending ||
-			filteredMessages[index - 1]?.messageStatus === 'pending');
-
-	// Check if this is the last message in the parallel group
-	// Show end indicator if next message is not in the same parallel group
-	const nextMessage = filteredMessages[index + 1];
-	const nextInSameGroup =
-		nextMessage &&
-		nextMessage.parallelGroup !== undefined &&
-		nextMessage.parallelGroup !== null &&
-		nextMessage.parallelGroup === message.parallelGroup;
-	const isLastInGroup = shouldShowParallelIndicator && !nextInSameGroup;
+	// isFirstInGroup / isLastInGroup are now passed as props from the parent
+	// (pre-computed via computeParallelGroupEdges), so we only need to apply
+	// the shouldShowParallelIndicator gate here.
+	const effectiveIsFirstInGroup = shouldShowParallelIndicator && isFirstInGroup;
+	const effectiveIsLastInGroup = shouldShowParallelIndicator && isLastInGroup;
 
 	const leadingIndicator =
-		shouldShowParallelIndicator && !isFirstInGroup ? '│' : '';
+		shouldShowParallelIndicator && !effectiveIsFirstInGroup ? '│' : '';
 	const messageIcon =
 		message.role === 'user'
 			? message.subAgentDirected
@@ -368,7 +356,6 @@ export default function MessageRenderer({
 
 	return (
 		<Box
-			key={`msg-${index}`}
 			marginTop={message.role === 'user' ? 1 : 0}
 			marginBottom={1}
 			paddingX={1}
@@ -388,7 +375,7 @@ export default function MessageRenderer({
 			) : (
 				<>
 					{/* Show parallel group indicator */}
-					{isFirstInGroup && (
+					{effectiveIsFirstInGroup && (
 						<Box marginBottom={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
 								{t.chatScreen.parallelStart}
@@ -881,7 +868,7 @@ export default function MessageRenderer({
 					</Box>
 
 					{/* Show parallel group end indicator */}
-					{!message.plainOutput && isLastInGroup && (
+					{!message.plainOutput && effectiveIsLastInGroup && (
 						<Box marginTop={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
 								{t.chatScreen.parallelEnd}
@@ -892,4 +879,65 @@ export default function MessageRenderer({
 			)}
 		</Box>
 	);
+}
+
+/**
+ * Custom memo comparator for MessageRenderer.
+ * Skips re-render when message reference is unchanged and no display-affecting props changed.
+ */
+function areMessageRendererPropsEqual(prev: Props, next: Props): boolean {
+	if (prev.message !== next.message) return false;
+	if (prev.terminalWidth !== next.terminalWidth) return false;
+	if (prev.showThinking !== next.showThinking) return false;
+	if (prev.toolDisplayMode !== next.toolDisplayMode) return false;
+	if (prev.thinkDisplayMode !== next.thinkDisplayMode) return false;
+	if (prev.isFirstInGroup !== next.isFirstInGroup) return false;
+	if (prev.isLastInGroup !== next.isLastInGroup) return false;
+	return true;
+}
+
+const MessageRenderer = memo(MessageRendererImpl, areMessageRendererPropsEqual);
+MessageRenderer.displayName = 'MessageRenderer';
+export default MessageRenderer;
+
+/**
+ * Pre-compute parallel group edges for a list of messages.
+ * Returns isFirstInGroup[] and isLastInGroup[] arrays to pass as props.
+ */
+export function computeParallelGroupEdges(messages: Message[]): {
+	isFirstInGroup: boolean[];
+	isLastInGroup: boolean[];
+} {
+	const len = messages.length;
+	const isFirstInGroup = new Array<boolean>(len).fill(false);
+	const isLastInGroup = new Array<boolean>(len).fill(false);
+
+	for (let i = 0; i < len; i++) {
+		const msg = messages[i]!;
+		const isInParallelGroup =
+			msg.parallelGroup !== undefined && msg.parallelGroup !== null;
+		const isTimeConsumingTool =
+			msg.toolPending || msg.messageStatus === 'pending';
+		const shouldShowParallelIndicator =
+			isInParallelGroup && !isTimeConsumingTool;
+
+		if (!shouldShowParallelIndicator) continue;
+
+		const prev = i > 0 ? messages[i - 1] : undefined;
+		isFirstInGroup[i] =
+			!prev ||
+			prev.parallelGroup !== msg.parallelGroup ||
+			prev.toolPending ||
+			prev.messageStatus === 'pending';
+
+		const next = i < len - 1 ? messages[i + 1] : undefined;
+		const nextInSameGroup =
+			next &&
+			next.parallelGroup !== undefined &&
+			next.parallelGroup !== null &&
+			next.parallelGroup === msg.parallelGroup;
+		isLastInGroup[i] = !nextInSameGroup;
+	}
+
+	return {isFirstInGroup, isLastInGroup};
 }

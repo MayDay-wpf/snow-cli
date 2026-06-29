@@ -18,14 +18,12 @@ export default function UserMessagePreview({content}: Props) {
 		[content],
 	);
 
-	const filteredMessages = useMemo(() => [message], [message]);
-
 	return (
 		<MessageRenderer
 			message={message}
-			index={0}
-			filteredMessages={filteredMessages}
 			terminalWidth={terminalWidth}
+			isFirstInGroup={false}
+			isLastInGroup={false}
 			showThinking={false}
 		/>
 	);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {Box, Static} from 'ink';
 import type {Message} from '../../components/chat/MessageList.js';
 import PendingMessages from '../../components/chat/PendingMessages.js';
@@ -10,7 +10,9 @@ import {
 } from '../../components/bash/BashCommandConfirmation.js';
 import {CustomCommandExecutionDisplay} from '../../components/bash/CustomCommandExecutionDisplay.js';
 import {SchedulerCountdown} from '../../components/scheduler/SchedulerCountdown.js';
-import MessageRenderer from '../../components/chat/MessageRenderer.js';
+import MessageRenderer, {
+	computeParallelGroupEdges,
+} from '../../components/chat/MessageRenderer.js';
 import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
@@ -73,6 +75,18 @@ export default function ChatScreenConversationView({
 	compressionStatus,
 	thinkingStatus,
 }: Props) {
+	// Pre-compute parallel group edges for non-streaming messages.
+	// This replaces the old index-based lookups inside MessageRenderer,
+	// enabling React.memo to skip re-renders for unchanged messages.
+	const staticMessages = useMemo(
+		() => messages.filter(m => !m.streaming),
+		[messages],
+	);
+	const {isFirstInGroup, isLastInGroup} = useMemo(
+		() => computeParallelGroupEdges(staticMessages),
+		[staticMessages],
+	);
+
 	return (
 		<>
 			<Static
@@ -84,20 +98,18 @@ export default function ChatScreenConversationView({
 						simpleMode={simpleMode}
 						workingDirectory={workingDirectory}
 					/>,
-					...messages
-						.filter(m => !m.streaming)
-						.map((message, index, filteredMessages) => (
-							<MessageRenderer
-								key={`msg-${index}`}
-								message={message}
-								index={index}
-								filteredMessages={filteredMessages}
-								terminalWidth={terminalWidth}
-								showThinking={showThinking}
-								toolDisplayMode={toolDisplayMode}
-								thinkDisplayMode={thinkDisplayMode}
-							/>
-						)),
+					...staticMessages.map((message, index) => (
+						<MessageRenderer
+							key={`msg-${index}`}
+							message={message}
+							terminalWidth={terminalWidth}
+							isFirstInGroup={isFirstInGroup[index]}
+							isLastInGroup={isLastInGroup[index]}
+							showThinking={showThinking}
+							toolDisplayMode={toolDisplayMode}
+							thinkDisplayMode={thinkDisplayMode}
+						/>
+					)),
 				]}
 			>
 				{item => item}
