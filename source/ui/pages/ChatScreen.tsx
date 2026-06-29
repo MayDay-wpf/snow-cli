@@ -1,4 +1,10 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../i18n/I18nContext.js';
@@ -64,6 +70,7 @@ export default function ChatScreen({
 	const {
 		messages,
 		setMessages,
+		messagesRef,
 		isSaving,
 		pendingMessages,
 		setPendingMessages,
@@ -180,6 +187,7 @@ export default function ChatScreen({
 		remountKey,
 		setRemountKey,
 		setMessages,
+		messagesRef,
 		initializeFromSession,
 		setIsResumingSession,
 		setContextUsage: streamingState.setContextUsage,
@@ -581,6 +589,11 @@ export default function ChatScreen({
 		  }
 		: undefined;
 
+	// useDeferredValue: 延迟消息渲染到 transition 优先级,让输入框在流式输出时保持响应。
+	// 输入框(ChatFooter)和业务逻辑使用原始 messages;消息列表渲染使用 deferredMessages。
+	// 当流式 token 高频到达时,React 在空闲时间批量处理 deferred 值,不阻塞用户输入。
+	const deferredMessages = useDeferredValue(messages);
+
 	if (terminalHeight < MIN_TERMINAL_HEIGHT) {
 		return (
 			<Box flexDirection="column" padding={2}>
@@ -633,7 +646,7 @@ export default function ChatScreen({
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
 				simpleMode={simpleMode}
-				messages={messages}
+				messages={deferredMessages}
 				showThinking={showThinking}
 				toolDisplayMode={toolDisplayMode}
 				thinkDisplayMode={thinkDisplayMode}
