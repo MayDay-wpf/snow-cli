@@ -1967,7 +1967,7 @@ export const zh: TranslationKeys = {
 		emptyHint: '无后台进程',
 	},
 	fileRollback: {
-		title: '文件回滚确认',
+		title: '回滚确认',
 		description: '此检查点包含',
 		filesCount: '{count} 个文件将被回滚',
 		filesCountWithSelection:

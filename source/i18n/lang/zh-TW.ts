@@ -1967,7 +1967,7 @@ export const zhTW: TranslationKeys = {
 		emptyHint: '無背景處理程序',
 	},
 	fileRollback: {
-		title: '檔案回滾確認',
+		title: '回滾確認',
 		description: '此檢查點包含',
 		filesCount: '{count} 個檔案將被回滾',
 		filesCountWithSelection:

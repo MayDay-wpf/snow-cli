@@ -2082,7 +2082,7 @@ export const en: TranslationKeys = {
 		emptyHint: 'No background processes',
 	},
 	fileRollback: {
-		title: 'File Rollback Confirmation',
+		title: 'Rollback Confirmation',
 		description: 'This checkpoint has',
 		filesCount: '{count} file(s) will be rolled back',
 		filesCountWithSelection:
