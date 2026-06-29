@@ -333,138 +333,135 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 				!props.showIdeSelectPanel &&
 				!props.showDiffReviewPanel &&
 				!props.showSkillsListPanel && (
-					<Box flexDirection="column" flexGrow={1}>
-						<Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
-							<LoadingIndicator
-								isStreaming={props.isStreaming}
-								isStopping={props.isStopping}
-								isSaving={props.isSaving}
-								isCompressing={props.isCompressing}
-								isAutoCompressing={props.isAutoCompressing}
-								hasPendingToolConfirmation={props.hasPendingToolConfirmation}
-								hasPendingUserQuestion={props.hasPendingUserQuestion}
-								hasBlockingOverlay={props.hasBlockingOverlay}
-								terminalWidth={props.terminalWidth}
-								animationFrame={props.animationFrame}
-								retryStatus={props.retryStatus}
-								codebaseSearchStatus={props.codebaseSearchStatus}
-								isReasoning={props.isReasoning}
-								streamTokenCount={props.streamTokenCount}
-								elapsedSeconds={props.elapsedSeconds}
-								currentModel={props.currentModel}
-								teamMode={props.teamMode}
-							/>
-							{showTodos && todos.length > 0 && (
-								<Box marginTop={1}>
-									<TodoTree todos={todos} />
-								</Box>
-							)}
-						</Box>
-						<Box flexShrink={0} flexDirection="column">
-							{props.btwPrompt ? (
-								<Suspense
-									fallback={
-										<Box>
-											<Text>
-												<Spinner type="dots" /> Loading...
-											</Text>
-										</Box>
-									}
-								>
-									<BtwPanel
-										prompt={props.btwPrompt}
-										onClose={props.onBtwClose}
-									/>
-								</Suspense>
-							) : (
-								<>
-									<Box width="100%" paddingRight={1}>
-										<CompanionSprite
-											terminalColumns={Math.max(0, props.terminalWidth - 1)}
-										/>
+					<>
+						<LoadingIndicator
+							isStreaming={props.isStreaming}
+							isStopping={props.isStopping}
+							isSaving={props.isSaving}
+							isCompressing={props.isCompressing}
+							isAutoCompressing={props.isAutoCompressing}
+							hasPendingToolConfirmation={props.hasPendingToolConfirmation}
+							hasPendingUserQuestion={props.hasPendingUserQuestion}
+							hasBlockingOverlay={props.hasBlockingOverlay}
+							terminalWidth={props.terminalWidth}
+							animationFrame={props.animationFrame}
+							retryStatus={props.retryStatus}
+							codebaseSearchStatus={props.codebaseSearchStatus}
+							isReasoning={props.isReasoning}
+							streamTokenCount={props.streamTokenCount}
+							elapsedSeconds={props.elapsedSeconds}
+							currentModel={props.currentModel}
+							teamMode={props.teamMode}
+						/>
+
+						{showTodos && todos.length > 0 && (
+							<Box marginTop={1}>
+								<TodoTree todos={todos} />
+							</Box>
+						)}
+
+						{props.btwPrompt ? (
+							<Suspense
+								fallback={
+									<Box>
+										<Text>
+											<Spinner type="dots" /> Loading...
+										</Text>
 									</Box>
-									<ChatInput
-										onSubmit={props.onSubmit}
-										onCommand={props.onCommand}
-										placeholder={t.chatScreen.inputPlaceholder}
-										disabled={props.disabled}
-										disableKeyboardNavigation={props.showBackgroundPanel}
-										isProcessing={props.isProcessing}
-										chatHistory={props.chatHistory}
-										onHistorySelect={props.handleHistorySelect}
-										yoloMode={props.yoloMode}
-										setYoloMode={props.setYoloMode}
-										planMode={props.planMode}
-										setPlanMode={props.setPlanMode}
-										vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-										setVulnerabilityHuntingMode={
-											props.setVulnerabilityHuntingMode
-										}
-										teamMode={props.teamMode}
-										setTeamMode={props.setTeamMode}
-										contextUsage={props.contextUsage}
-										initialContent={props.initialContent}
-										draftContent={props.draftContent}
-										onDraftChange={props.onDraftChange}
-										onContextPercentageChange={props.onContextPercentageChange}
-										onInitialContentConsumed={props.onInitialContentConsumed}
-										showProfilePicker={props.showProfilePicker}
-										setShowProfilePicker={props.setShowProfilePicker}
-										profileSelectedIndex={props.profileSelectedIndex}
-										setProfileSelectedIndex={props.setProfileSelectedIndex}
-										getFilteredProfiles={props.getFilteredProfiles}
-										handleProfileSelect={props.handleProfileSelect}
-										handleProfileEdit={props.handleProfileEdit}
-										profileSearchQuery={props.profileSearchQuery}
-										setProfileSearchQuery={props.setProfileSearchQuery}
-										onSwitchProfile={props.onSwitchProfile}
-										onCopyInputSuccess={() => {
-											setCopyStatusMessage({
-												text: `✔ ${t.chatScreen.inputCopySuccess}`,
-												timestamp: Date.now(),
-											});
-										}}
-										onCopyInputError={errorMessage => {
-											setCopyStatusMessage({
-												text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
-												isError: true,
-												timestamp: Date.now(),
-											});
-										}}
+								}
+							>
+								<BtwPanel prompt={props.btwPrompt} onClose={props.onBtwClose} />
+							</Suspense>
+						) : (
+							<>
+								<Box width="100%" paddingRight={1}>
+									<CompanionSprite
+										terminalColumns={Math.max(0, props.terminalWidth - 1)}
 									/>
-								</>
-							)}
-							<StatusLine
-								yoloMode={props.yoloMode}
-								planMode={props.planMode}
-								vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-								toolSearchDisabled={props.toolSearchDisabled}
-								hybridCompressEnabled={props.hybridCompressEnabled}
-								teamMode={props.teamMode}
-								ultraTodoEnabled={props.ultraTodoEnabled}
-								telemetryEnabled={props.telemetryEnabled}
-								vscodeConnectionStatus={props.vscodeConnectionStatus}
-								editorContext={props.editorContext}
-								connectionStatus={connectionStatus}
-								connectionInstanceName={connectionInstanceName}
-								contextUsage={props.contextUsage}
-								codebaseIndexing={props.codebaseIndexing}
-								codebaseProgress={props.codebaseProgress}
-								watcherEnabled={props.watcherEnabled}
-								fileUpdateNotification={props.fileUpdateNotification}
-								copyStatusMessage={copyStatusMessage}
-								currentProfileName={props.currentProfileName}
-								compressBlockToast={props.compressBlockToast}
-							/>
-							{props.showBackgroundPanel && (
-								<BackgroundProcessPanel
-									processes={props.backgroundProcesses}
-									selectedIndex={props.selectedProcessIndex}
-									terminalWidth={props.terminalWidth}
+								</Box>
+								<ChatInput
+									onSubmit={props.onSubmit}
+									onCommand={props.onCommand}
+									placeholder={t.chatScreen.inputPlaceholder}
+									disabled={props.disabled}
+									disableKeyboardNavigation={props.showBackgroundPanel}
+									isProcessing={props.isProcessing}
+									chatHistory={props.chatHistory}
+									onHistorySelect={props.handleHistorySelect}
+									yoloMode={props.yoloMode}
+									setYoloMode={props.setYoloMode}
+									planMode={props.planMode}
+									setPlanMode={props.setPlanMode}
+									vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+									setVulnerabilityHuntingMode={
+										props.setVulnerabilityHuntingMode
+									}
+									teamMode={props.teamMode}
+									setTeamMode={props.setTeamMode}
+									contextUsage={props.contextUsage}
+									initialContent={props.initialContent}
+									draftContent={props.draftContent}
+									onDraftChange={props.onDraftChange}
+									onContextPercentageChange={props.onContextPercentageChange}
+									onInitialContentConsumed={props.onInitialContentConsumed}
+									showProfilePicker={props.showProfilePicker}
+									setShowProfilePicker={props.setShowProfilePicker}
+									profileSelectedIndex={props.profileSelectedIndex}
+									setProfileSelectedIndex={props.setProfileSelectedIndex}
+									getFilteredProfiles={props.getFilteredProfiles}
+									handleProfileSelect={props.handleProfileSelect}
+									handleProfileEdit={props.handleProfileEdit}
+									profileSearchQuery={props.profileSearchQuery}
+									setProfileSearchQuery={props.setProfileSearchQuery}
+									onSwitchProfile={props.onSwitchProfile}
+									onCopyInputSuccess={() => {
+										setCopyStatusMessage({
+											text: `✔ ${t.chatScreen.inputCopySuccess}`,
+											timestamp: Date.now(),
+										});
+									}}
+									onCopyInputError={errorMessage => {
+										setCopyStatusMessage({
+											text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
+											isError: true,
+											timestamp: Date.now(),
+										});
+									}}
 								/>
-							)}
-						</Box>
-					</Box>
+							</>
+						)}
+
+						<StatusLine
+							yoloMode={props.yoloMode}
+							planMode={props.planMode}
+							vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+							toolSearchDisabled={props.toolSearchDisabled}
+							hybridCompressEnabled={props.hybridCompressEnabled}
+							teamMode={props.teamMode}
+							ultraTodoEnabled={props.ultraTodoEnabled}
+							telemetryEnabled={props.telemetryEnabled}
+							vscodeConnectionStatus={props.vscodeConnectionStatus}
+							editorContext={props.editorContext}
+							connectionStatus={connectionStatus}
+							connectionInstanceName={connectionInstanceName}
+							contextUsage={props.contextUsage}
+							codebaseIndexing={props.codebaseIndexing}
+							codebaseProgress={props.codebaseProgress}
+							watcherEnabled={props.watcherEnabled}
+							fileUpdateNotification={props.fileUpdateNotification}
+							copyStatusMessage={copyStatusMessage}
+							currentProfileName={props.currentProfileName}
+							compressBlockToast={props.compressBlockToast}
+						/>
+
+						{props.showBackgroundPanel && (
+							<BackgroundProcessPanel
+								processes={props.backgroundProcesses}
+								selectedIndex={props.selectedProcessIndex}
+								terminalWidth={props.terminalWidth}
+							/>
+						)}
+					</>
 				)}
 
 			{props.showReviewCommitPanel && (

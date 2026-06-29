@@ -8,7 +8,6 @@ import {
 	BashCommandConfirmation,
 	BashCommandExecutionStatus,
 } from '../../components/bash/BashCommandConfirmation.js';
-import {getFocusedOverlay} from './types.js';
 import {CustomCommandExecutionDisplay} from '../../components/bash/CustomCommandExecutionDisplay.js';
 import {SchedulerCountdown} from '../../components/scheduler/SchedulerCountdown.js';
 import MessageRenderer from '../../components/chat/MessageRenderer.js';
@@ -74,13 +73,6 @@ export default function ChatScreenConversationView({
 	compressionStatus,
 	thinkingStatus,
 }: Props) {
-	// 焦点优先级系统: 同一时刻只渲染一个阻塞式对话框
-	const focusedOverlay = getFocusedOverlay({
-		pendingUserQuestion,
-		bashSensitiveCommand,
-		pendingToolConfirmation,
-	});
-
 	return (
 		<>
 			<Static
@@ -139,8 +131,8 @@ export default function ChatScreenConversationView({
 				</Box>
 			)}
 
-			{/* 焦点优先级系统: 阻塞式对话框互斥渲染 */}
-			{focusedOverlay === 'tool-confirmation' && (
+			{/* 当同时存在工具确认和交互问题时，优先显示交互组件（AskUserQuestion）*/}
+			{pendingToolConfirmation && !pendingUserQuestion && (
 				<ToolConfirmation
 					toolName={
 						pendingToolConfirmation.batchToolNames ||
@@ -159,11 +151,11 @@ export default function ChatScreenConversationView({
 				/>
 			)}
 
-			{focusedOverlay === 'bash-sensitive-command' && (
+			{bashSensitiveCommand && (
 				<Box paddingX={1} width={terminalWidth}>
 					<BashCommandConfirmation
-						command={bashSensitiveCommand!.command}
-						onConfirm={bashSensitiveCommand!.resolve}
+						command={bashSensitiveCommand.command}
+						onConfirm={bashSensitiveCommand.resolve}
 						terminalWidth={terminalWidth}
 					/>
 				</Box>
@@ -220,10 +212,10 @@ export default function ChatScreenConversationView({
 					</Box>
 				)}
 
-			{focusedOverlay === 'user-question' && (
+			{pendingUserQuestion && (
 				<AskUserQuestion
-					question={pendingUserQuestion!.question}
-					options={pendingUserQuestion!.options}
+					question={pendingUserQuestion.question}
+					options={pendingUserQuestion.options}
 					onAnswer={handleUserQuestionAnswer}
 				/>
 			)}

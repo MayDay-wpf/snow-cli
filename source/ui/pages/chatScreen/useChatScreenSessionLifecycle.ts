@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import {useEffect, useRef} from 'react';
 import type {Dispatch, SetStateAction} from 'react';
 import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
@@ -17,8 +17,6 @@ type Options = {
 	remountKey: number;
 	setRemountKey: Dispatch<SetStateAction<number>>;
 	setMessages: Dispatch<SetStateAction<Message[]>>;
-	// messagesRef 同步更新: resume 后可立即读取最新消息,无需等 React batch
-	messagesRef?: React.RefObject<Message[]>;
 	initializeFromSession: (messages: SessionChatMessage[]) => void;
 	setIsResumingSession?: (value: boolean) => void;
 	setContextUsage?: Dispatch<SetStateAction<UsageInfo | null>>;
@@ -31,15 +29,12 @@ export function useChatScreenSessionLifecycle({
 	remountKey,
 	setRemountKey,
 	setMessages,
-	messagesRef,
 	initializeFromSession,
 	setIsResumingSession,
 	setContextUsage,
 }: Options) {
 	const {stdout} = useStdout();
 	const isInitialMount = useRef(true);
-	// messagesRef 由 setMessages 包装器自动同步,此处接收以备 resume 流程后立即读取最新消息
-	void messagesRef;
 
 	useEffect(() => {
 		if (!autoResume) {

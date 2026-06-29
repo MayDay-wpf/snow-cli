@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
@@ -14,18 +14,7 @@ import type {
 } from './types.js';
 
 export function useChatScreenLocalState() {
-	const [messages, setMessagesRaw] = useState<Message[]>([]);
-	// messagesRef 同步更新: 包装 setMessages 使 ref 在调用时立即更新,
-	// 避免 React batch 导致异步流程中读取 stale messages。
-	const messagesRef = useRef<Message[]>([]);
-	const setMessages = useCallback((action: React.SetStateAction<Message[]>) => {
-		const next =
-			typeof action === 'function'
-				? (action as (prev: Message[]) => Message[])(messagesRef.current)
-				: action;
-		messagesRef.current = next;
-		setMessagesRaw(next);
-	}, []);
+	const [messages, setMessages] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<PendingMessageInput[]>(
 		[],
@@ -118,7 +107,6 @@ export function useChatScreenLocalState() {
 	return {
 		messages,
 		setMessages,
-		messagesRef,
 		isSaving,
 		pendingMessages,
 		setPendingMessages,
