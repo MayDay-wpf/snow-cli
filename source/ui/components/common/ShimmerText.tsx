@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, memo} from 'react';
 import {Text} from 'ink';
 import chalk from 'chalk';
 
@@ -12,9 +12,30 @@ const DEFAULT_SHIMMER_COLOR = '#00FFFF';
 const DEFAULT_BASE_COLOR = '#1ACEB0';
 
 /**
- * ShimmerText component that displays text with a shimmer effect flowing through base text
+ * Width of the shimmer highlight window (in characters).
+ * A value of 3 means the highlight covers 3 characters at a time,
+ * producing a soft "glow band" instead of a single hard pixel.
  */
-export default function ShimmerText({
+const SHIMMER_WINDOW = 3;
+/**
+ * Animation interval in ms. 200ms keeps the glow visibly flowing while
+ * drastically reducing repaint frequency vs the previous 100ms, which
+ * mitigates terminal flicker caused by excessive ANSI re-emission.
+ */
+const SHIMMER_INTERVAL_MS = 200;
+
+/**
+ * ShimmerText component that displays text with a shimmer effect flowing through base text.
+ *
+ * Optimization notes:
+ * - Renders the text in up to 3 contiguous segments (prefix / highlight / suffix)
+ *   instead of per-character chalk calls, dramatically cutting the number of
+ *   ANSI escape sequences emitted each frame.
+ * - The frame state is driven by a dedicated interval (200ms) decoupled from
+ *   parent re-renders; combined with React.memo this prevents cascading
+ *   repaints when the parent (e.g. LoadingIndicator) updates token counts.
+ */
+function ShimmerText({
 	text,
 	baseColor = DEFAULT_BASE_COLOR,
 	shimmerColor = DEFAULT_SHIMMER_COLOR,
@@ -22,25 +43,32 @@ export default function ShimmerText({
 	const [frame, setFrame] = useState(0);
 
 	useEffect(() => {
+		if (text.length === 0) return;
+
+		const totalFrames = text.length + SHIMMER_WINDOW;
 		const interval = setInterval(() => {
-			setFrame(prev => (prev + 1) % (text.length + 5));
-		}, 100); // Update every 100ms for smooth animation
+			setFrame(prev => (prev + 1) % totalFrames);
+		}, SHIMMER_INTERVAL_MS);
 
 		return () => clearInterval(interval);
 	}, [text.length]);
 
-	// Build the colored text with shimmer effect
-	let output = '';
-	for (let i = 0; i < text.length; i++) {
-		const char = text[i];
-		const distance = Math.abs(i - frame);
+	// Highlight window: [frame-1 .. frame+1] clamped to text bounds.
+	const halfWindow = Math.floor(SHIMMER_WINDOW / 2);
+	const highlightStart = Math.max(0, frame - halfWindow);
+	const highlightEnd = Math.min(text.length, frame + halfWindow + 1);
 
-		if (distance <= 1) {
-			output += chalk.bold.hex(shimmerColor)(char);
-		} else {
-			output += chalk.bold.hex(baseColor)(char);
-		}
-	}
+	const prefix = text.slice(0, highlightStart);
+	const highlight = text.slice(highlightStart, highlightEnd);
+	const suffix = text.slice(highlightEnd);
 
-	return <Text>{output}</Text>;
+	return (
+		<Text>
+			{prefix && <Text bold>{chalk.hex(baseColor)(prefix)}</Text>}
+			{highlight && <Text bold>{chalk.hex(shimmerColor)(highlight)}</Text>}
+			{suffix && <Text bold>{chalk.hex(baseColor)(suffix)}</Text>}
+		</Text>
+	);
 }
+
+export default memo(ShimmerText);
