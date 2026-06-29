@@ -202,6 +202,10 @@ export function useRollback(props: UseChatLogicProps) {
 			return;
 		}
 
+		// 真实执行会话回滚时才清理上下文用量，避免用户取消回滚后丢失上下文信息
+		streamingState.setContextUsage(null);
+		currentContextPercentageRef.current = 0;
+
 		if (currentSession) {
 			const messagesAfterSelected = messages.slice(selectedIndex);
 			const uiUserMessagesToDelete = messagesAfterSelected.filter(
@@ -336,6 +340,7 @@ export function useRollback(props: UseChatLogicProps) {
 			clearSavedMessages();
 			setMessages(uiMessages);
 			streamingState.setContextUsage(originalSession.contextUsage ?? null);
+			currentContextPercentageRef.current = 0;
 
 			const snapshots = await hashBasedSnapshotManager.listSnapshots(
 				originalSession.id,
@@ -383,9 +388,6 @@ export function useRollback(props: UseChatLogicProps) {
 		message: string,
 		images?: Array<{type: 'image'; data: string; mimeType: string}>,
 	) => {
-		streamingState.setContextUsage(null);
-		currentContextPercentageRef.current = 0;
-
 		const currentSession = sessionManager.getCurrentSession();
 		if (!currentSession) return;
 
