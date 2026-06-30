@@ -56,11 +56,13 @@ jobs:
 
             ### What's New
 
-            - Add GitHub skills installation and update functionality, supporting multi-skill repositories with individual or bulk update
-            - Add `/cut` command support with multi-language usage instructions
-            - Add retry resending indication in the loading indicator
-            - Optimize message conversion logic to support custom system prompts when system messages already exist
-            - Fix web search browser launch failure on Windows by switching to manual process spawn with DevTools connection
+            - Add AI completion duration tracking with updated status messages
+            - Enhance MessageRenderer with memoization and parallel group handling for smoother rendering
+            - Optimize session rollback experience by clearing context usage and unifying confirmation titles across languages
+            - Add "Install from GitHub" option to skills creation for easier skill discovery
+            - Improve sub-agent UI clarity by hiding persisted content/thinking messages and skipping teammate messages
+            - Enhance child process options to support `abortResult` for graceful shutdowns
+            - Enhance `filesystem-create` tool to support batch file creation and add content parameter validation
 
             ### Installation
             ```bash
