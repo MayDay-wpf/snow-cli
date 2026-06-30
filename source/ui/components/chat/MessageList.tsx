@@ -10,6 +10,7 @@ export interface Message {
 	streaming?: boolean;
 	discontinued?: boolean;
 	aiCompletionTime?: Date | string;
+	aiCompletionDurationMs?: number;
 	messageStatus?: 'pending' | 'success' | 'error';
 	commandName?: string;
 	hideCommandName?: boolean; // Don't show command name prefix for output chunks
@@ -158,7 +159,26 @@ function formatAiCompletionTime(value: Date | string): string {
 		hour: '2-digit',
 		minute: '2-digit',
 		second: '2-digit',
+		hour12: false,
 	});
+}
+
+function formatAiCompletionDuration(ms: number): string {
+	if (!Number.isFinite(ms) || ms < 0) {
+		return '';
+	}
+	const totalSeconds = Math.floor(ms / 1000);
+	if (totalSeconds < 60) {
+		return `${totalSeconds}s`;
+	}
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	if (minutes < 60) {
+		return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+	}
+	const hours = Math.floor(minutes / 60);
+	const remainMinutes = minutes % 60;
+	return `${hours}h${remainMinutes.toString().padStart(2, '0')}m`;
 }
 
 const MessageList = memo(
@@ -175,14 +195,26 @@ const MessageList = memo(
 						const completionTime = formatAiCompletionTime(
 							message.aiCompletionTime,
 						);
+						const durationStr =
+							typeof message.aiCompletionDurationMs === 'number' &&
+							Number.isFinite(message.aiCompletionDurationMs) &&
+							message.aiCompletionDurationMs >= 0
+								? formatAiCompletionDuration(message.aiCompletionDurationMs)
+								: '';
+
+						const displayText = durationStr
+							? t.chatScreen.aiCompletionTimeWithDurationMessage
+									.replace('{time}', completionTime)
+									.replace('{duration}', durationStr)
+							: t.chatScreen.aiCompletionTimeMessage.replace(
+									'{time}',
+									completionTime,
+							  );
 
 						return (
 							<Box key={index}>
 								<Text color="gray" dimColor>
-									{t.chatScreen.aiCompletionTimeMessage.replace(
-										'{time}',
-										completionTime,
-									)}
+									{displayText}
 								</Text>
 							</Box>
 						);

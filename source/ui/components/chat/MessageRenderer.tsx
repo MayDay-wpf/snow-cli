@@ -281,19 +281,47 @@ function MessageRendererImpl({
 			hour: '2-digit',
 			minute: '2-digit',
 			second: '2-digit',
+			hour12: false,
 		});
+	};
+
+	const formatAiCompletionDuration = (ms: number): string => {
+		if (!Number.isFinite(ms) || ms < 0) {
+			return '';
+		}
+		const totalSeconds = Math.floor(ms / 1000);
+		if (totalSeconds < 60) {
+			return `${totalSeconds}s`;
+		}
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = totalSeconds % 60;
+		if (minutes < 60) {
+			return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+		}
+		const hours = Math.floor(minutes / 60);
+		const remainMinutes = minutes % 60;
+		return `${hours}h${remainMinutes.toString().padStart(2, '0')}m`;
 	};
 
 	if (message.aiCompletionTime) {
 		const completionTime = formatAiCompletionTime(message.aiCompletionTime);
+		const durationStr =
+			typeof message.aiCompletionDurationMs === 'number' &&
+			Number.isFinite(message.aiCompletionDurationMs) &&
+			message.aiCompletionDurationMs >= 0
+				? formatAiCompletionDuration(message.aiCompletionDurationMs)
+				: '';
+
+		const displayText = durationStr
+			? t.chatScreen.aiCompletionTimeWithDurationMessage
+					.replace('{time}', completionTime)
+					.replace('{duration}', durationStr)
+			: t.chatScreen.aiCompletionTimeMessage.replace('{time}', completionTime);
 
 		return (
 			<Box paddingX={1} width={terminalWidth} marginBottom={1}>
 				<Text color={theme.colors.menuSecondary} dimColor>
-					{t.chatScreen.aiCompletionTimeMessage.replace(
-						'{time}',
-						completionTime,
-					)}
+					{displayText}
 				</Text>
 			</Box>
 		);

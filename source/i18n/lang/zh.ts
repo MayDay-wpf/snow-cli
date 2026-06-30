@@ -1470,6 +1470,8 @@ export const zh: TranslationKeys = {
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 用户中断',
 		aiCompletionTimeMessage: '└─ AI 结束时间：{time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI 结束时间：{time} (耗时 {duration})',
 		compressionSummaryAutoTitle: '自动压缩摘要已折叠',
 		compressionSummaryManualTitle: '手动压缩摘要已折叠',
 		compressionSummaryStats: '{lines} 行 · {chars} 字符',

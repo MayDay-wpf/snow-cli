@@ -1413,6 +1413,7 @@ export type TranslationKeys = {
 		commandMessage: string;
 		discontinuedMessage: string;
 		aiCompletionTimeMessage: string;
+		aiCompletionTimeWithDurationMessage: string;
 		compressionSummaryAutoTitle: string;
 		compressionSummaryManualTitle: string;
 		compressionSummaryStats: string;

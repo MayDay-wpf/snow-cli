@@ -1,6 +1,7 @@
 import {fork, type ChildProcess} from 'node:child_process';
 import {existsSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {basename, dirname, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {getConversationContext} from '../codebase/conversationContext.js';
 
@@ -123,14 +124,52 @@ function buildChildPayloadWithConversationContext<T extends AgentChildPayload>(
 }
 
 function getCliEntryPath(): string {
+	// Most reliable: resolve relative to *this* module. The CLI entrypoint that
+	// spawned the current process is always reachable from here, regardless of
+	// how the process was launched (npm bin symlink, direct `node`, VSIX
+	// integration, etc.) or what the user's `process.cwd()` happens to be.
+	//
+	// Layout (two supported runtime shapes):
+	//   1. Bundle (published): everything is inlined into a single file at
+	//      `bundle/cli.mjs`. `import.meta.url` already points at that file, so
+	//      it IS the entrypoint — no traversal needed.
+	//   2. Dev / `tsc` output: this module lives at
+	//      `dist/utils/execution/agentChildProcess.js`, while the entrypoint is
+	//      `dist/cli.js` (two levels up).
+	const moduleFile = fileURLToPath(import.meta.url);
+	const moduleDir = dirname(moduleFile);
+
+	const devEntry = resolve(moduleDir, '..', '..', 'cli.js');
+	if (moduleFile.endsWith('.js') && existsSync(devEntry)) {
+		// Dev layout: this module is under dist/utils/execution/, entry is
+		// dist/cli.js. Guard with existsSync so the bundle (single-file) path
+		// below wins when the dev entrypoint is not actually present.
+		return devEntry;
+	}
+
+	// Bundle layout: esbuild inlines every module into a single entry file
+	// (bundle/cli.mjs). In that shape `import.meta.url` — and therefore
+	// `moduleFile` — already points at that entry file, so returning it is
+	// correct. Guard with a basename check so we only trust the current module
+	// when it IS the known CLI entrypoint name, instead of accepting any
+	// existing .js file. The previous `/\.(mjs|cjs|js)$/` + existsSync check was
+	// a tautology (the running module always exists), which masked the argv
+	// fallback below and could return a non-entrypoint module in non-standard
+	// embedding scenarios.
+	const moduleBaseName = basename(moduleFile);
+	if (
+		(moduleBaseName === 'cli.mjs' || moduleBaseName === 'cli.js') &&
+		existsSync(moduleFile)
+	) {
+		return moduleFile;
+	}
+
+	// Last resort: the process' own declared entry script. This is only reached
+	// in unusual embedding scenarios, and `argv[1]` is not guaranteed to be a
+	// real path (it may be a wrapper/launcher), so check existence first.
 	const argvEntry = process.argv[1];
 	if (argvEntry && existsSync(argvEntry)) {
 		return argvEntry;
-	}
-
-	const fallback = resolve(process.cwd(), 'dist/cli.js');
-	if (existsSync(fallback)) {
-		return fallback;
 	}
 
 	throw new Error(

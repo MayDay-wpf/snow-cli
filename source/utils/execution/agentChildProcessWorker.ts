@@ -14,6 +14,7 @@ import type {
 	AgentChildPayload,
 	ChildProcessRequestMessage,
 } from './agentChildProcess.js';
+import {vscodeConnection} from '../ui/vscodeConnection.js';
 
 interface PendingRequest {
 	resolve: (value: any) => void;
@@ -33,6 +34,31 @@ function restoreConversationContext(payload: AgentChildPayload): void {
 		conversationContext.sessionId,
 		conversationContext.messageIndex,
 	);
+}
+
+/**
+ * Ensure the IDE (VSCode/JetBrains) WebSocket connection is established inside
+ * the child process.
+ *
+ * The child process is a fresh `fork()` that does NOT share the parent's
+ * `vscodeConnection` singleton state, so without this the sub-agent's
+ * `ide-get_diagnostics` tool always reports "IDE connection not available".
+ *
+ * The connection is kicked off in the background as soon as the worker is ready
+ * so it is likely established by the time a tool actually needs it. Failures
+ * (e.g. no IDE running for the current workspace) are swallowed: tools that
+ * depend on the IDE will surface their own error to the model.
+ */
+let ideConnectionReady: Promise<void> | undefined;
+
+function ensureIdeConnection(): Promise<void> {
+	if (!ideConnectionReady) {
+		ideConnectionReady = vscodeConnection.start().catch(() => {
+			// No matching IDE / workspace — leave the connection disconnected.
+			// Tools depending on the IDE handle the disconnected state themselves.
+		});
+	}
+	return ideConnectionReady;
 }
 
 function send(message: any): void {
@@ -317,6 +343,12 @@ export async function runAgentChildProcessWorker(): Promise<void> {
 	abortController = new AbortController();
 	send({type: 'ready'});
 
+	// Kick off the IDE WebSocket connection in the background right after ready.
+	// The child process does not share the parent's vscodeConnection state, so it
+	// must establish its own connection for ide-get_diagnostics (and any other
+	// IDE-backed tool) to work inside sub-agents.
+	void ensureIdeConnection();
+
 	await new Promise<void>(resolve => {
 		let started = false;
 
@@ -329,6 +361,10 @@ export async function runAgentChildProcessWorker(): Promise<void> {
 			void (async () => {
 				try {
 					const payload = (message as any).payload as AgentChildPayload;
+					// Make sure the IDE connection attempt has settled before running
+					// the agent, so IDE-backed tools see a connected state when one is
+					// available for this workspace.
+					await ensureIdeConnection();
 					const result =
 						payload.kind === 'subagent'
 							? await runSubAgentPayload(payload)

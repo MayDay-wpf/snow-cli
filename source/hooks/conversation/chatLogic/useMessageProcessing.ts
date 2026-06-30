@@ -128,7 +128,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		hasFocusRef.current = hasFocus ?? true;
 	}, [hasFocus]);
 
-	const appendAiCompletionTimeMessage = () => {
+	const appendAiCompletionTimeMessage = (durationMs?: number) => {
 		setMessages(prev => [
 			...prev,
 			{
@@ -136,6 +136,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				content: '',
 				streaming: false,
 				aiCompletionTime: new Date(),
+				aiCompletionDurationMs:
+					typeof durationMs === 'number' &&
+					Number.isFinite(durationMs) &&
+					durationMs >= 0
+						? durationMs
+						: undefined,
 			},
 		]);
 	};
@@ -152,6 +158,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
 	) => {
+		const turnStartTime = Date.now();
 		const autoCompressConfig = getSnowConfig();
 		if (
 			autoCompressConfig.enableAutoCompress !== false &&
@@ -487,7 +494,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 			// /cut 中断时跳过 AI 完成时间标记，避免与用户消息间产生割裂的视觉间隔
 			if (!wasCutInterrupt) {
-				appendAiCompletionTimeMessage();
+				appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 			}
 
 			streamingState.setIsStreaming(false);
@@ -771,6 +778,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const pendingMessages = pendingMessagesRef.current;
 		if (pendingMessages.length === 0) return;
 
+		const turnStartTime = Date.now();
 		streamingState.setRetryStatus(null);
 
 		const messagesToProcess = [...pendingMessages];
@@ -986,7 +994,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				streamingState.setIsStopping(false);
 			}
 
-			appendAiCompletionTimeMessage();
+			appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);

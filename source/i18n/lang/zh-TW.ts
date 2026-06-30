@@ -1471,6 +1471,8 @@ export const zhTW: TranslationKeys = {
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 使用者中斷',
 		aiCompletionTimeMessage: '└─ AI 結束時間：{time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI 結束時間：{time} (耗時 {duration})',
 		compressionSummaryAutoTitle: '自動壓縮摘要已摺疊',
 		compressionSummaryManualTitle: '手動壓縮摘要已摺疊',
 		compressionSummaryStats: '{lines} 行 · {chars} 字元',

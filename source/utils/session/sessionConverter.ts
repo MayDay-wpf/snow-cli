@@ -18,6 +18,7 @@ function isValidTimestamp(timestamp: unknown): timestamp is number {
 function appendAiCompletionTimeMessage(
 	uiMessages: Message[],
 	timestamp: unknown,
+	durationMs?: number,
 ): void {
 	if (!isValidTimestamp(timestamp)) {
 		return;
@@ -28,6 +29,12 @@ function appendAiCompletionTimeMessage(
 		content: '',
 		streaming: false,
 		aiCompletionTime: new Date(timestamp),
+		aiCompletionDurationMs:
+			typeof durationMs === 'number' &&
+			Number.isFinite(durationMs) &&
+			durationMs >= 0
+				? durationMs
+				: undefined,
 	});
 }
 
@@ -634,7 +641,34 @@ export function convertSessionMessagesToUI(
 			});
 
 			if (msg.role === 'assistant') {
-				appendAiCompletionTimeMessage(uiMessages, (msg as any).timestamp);
+				// 计算本轮耗时：向前查找最近的 user 消息 timestamp，
+				// 用 assistant 的 timestamp 减去它得到总耗时（毫秒）。
+				let durationMs: number | undefined;
+				const assistantTimestamp = (msg as any).timestamp;
+				if (isValidTimestamp(assistantTimestamp)) {
+					for (let j = i - 1; j >= 0; j--) {
+						const prevMsg = sessionMessages[j];
+						if (
+							prevMsg &&
+							prevMsg.role === 'user' &&
+							!prevMsg.subAgentInternal
+						) {
+							const userTimestamp = (prevMsg as any).timestamp;
+							if (isValidTimestamp(userTimestamp)) {
+								const diff = assistantTimestamp - userTimestamp;
+								if (diff >= 0) {
+									durationMs = diff;
+								}
+							}
+							break;
+						}
+					}
+				}
+				appendAiCompletionTimeMessage(
+					uiMessages,
+					assistantTimestamp,
+					durationMs,
+				);
 			}
 
 			continue;

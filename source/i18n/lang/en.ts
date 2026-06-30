@@ -1555,6 +1555,8 @@ export const en: TranslationKeys = {
 		commandMessage: 'Command',
 		discontinuedMessage: '└─ user discontinue',
 		aiCompletionTimeMessage: '└─ AI finished at {time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI finished at {time} ({duration})',
 		compressionSummaryAutoTitle: 'Auto-compressed summary collapsed',
 		compressionSummaryManualTitle: 'Manual compressed summary collapsed',
 		compressionSummaryStats: '{lines} lines · {chars} chars',
