@@ -16,7 +16,7 @@
 	"config.startupCommand.description": "Command(s) to run when terminals start. Use comma to separate multiple commands; new terminals are assigned commands in round-robin order and each terminal keeps its assigned command across restarts.",
 
 	"config.terminal.shellType.description": "Shell for the sidebar terminal. Use 'auto' to follow VS Code's default terminal profile, or enter a shell executable path (e.g. 'C:\\Program Files\\Git\\bin\\bash.exe', 'pwsh.exe', 'cmd.exe', '/usr/bin/zsh'). Falls back to PowerShell (Windows) or $SHELL (macOS/Linux) if the path is not found.",
-	"config.terminal.proxyUrl.description": "Optional proxy URL injected into Snow CLI terminals as HTTP_PROXY/HTTPS_PROXY. Leave empty to fall back to VS Code's http.proxy setting.",
+	"config.terminal.proxyUrl.description": "Optional proxy URL injected into Snow CLI terminals as HTTP_PROXY/HTTPS_PROXY. Leave empty to fall back to VS Code's http.proxy setting. Set to 'null' to explicitly disable the proxy and not inherit VS Code's http.proxy.",
 	"config.terminal.fontFamily.description": "Font family for the sidebar terminal. Leave empty to use the default monospace font.",
 	"config.terminal.fontSize.description": "Font size (px) for the sidebar terminal.",
 	"config.terminal.fontWeight.description": "Font weight for the sidebar terminal.",

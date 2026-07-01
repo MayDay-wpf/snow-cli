@@ -16,7 +16,7 @@
 	"config.startupCommand.description": "终端启动时执行的命令，多个命令用英文逗号分隔；新建终端会按轮询顺序分配命令，每个终端在重启后会保留各自分配到的命令。",
 
 	"config.terminal.shellType.description": "侧边栏终端使用的 Shell。填 'auto' 跟随 VS Code 的默认终端配置，或填入 Shell 可执行文件路径（例如 'C:\\Program Files\\Git\\bin\\bash.exe'、'pwsh.exe'、'cmd.exe'、'/usr/bin/zsh'）。若路径无效，将回退到 PowerShell（Windows）或 $SHELL（macOS/Linux）。",
-	"config.terminal.proxyUrl.description": "可选的代理 URL，将以 HTTP_PROXY / HTTPS_PROXY 注入 Snow CLI 终端。留空则使用 VS Code 的 http.proxy 设置。",
+	"config.terminal.proxyUrl.description": "可选的代理 URL，将以 HTTP_PROXY / HTTPS_PROXY 注入 Snow CLI 终端。留空则使用 VS Code 的 http.proxy 设置；填入 'null' 则显式禁用代理，不继承 VS Code 的 http.proxy。",
 	"config.terminal.fontFamily.description": "侧边栏终端的字体。留空则使用默认等宽字体。",
 	"config.terminal.fontSize.description": "侧边栏终端的字号（像素）。",
 	"config.terminal.fontWeight.description": "侧边栏终端的字重。",
