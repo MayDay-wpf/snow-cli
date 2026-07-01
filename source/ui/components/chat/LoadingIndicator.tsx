@@ -159,11 +159,21 @@ export default function LoadingIndicator({
 	const previousStreamActivityMarkerRef = useRef<string | null>(null);
 	const lastStreamActivityElapsedSecondsRef = useRef(elapsedSeconds);
 
+	// 检测新的 streaming 会话启动（从非 streaming 变为 streaming）。
+	// 回滚等操作后 LoadingIndicator 不会被卸载（只要 ChatFooter 仍渲染），
+	// 内部 refs 保留了上一轮的值，导致 lastStreamActivityElapsedSecondsRef
+	// 基于旧 elapsedSeconds 计算，延迟变色阈值失效。
+	// 在新一轮 streaming 开始时重置这两个 ref，确保延迟计时基于当前 elapsedSeconds 重新开始。
+	const wasStreamingRef = useRef(false);
+	const isStreamingStarted = isStreaming && !wasStreamingRef.current;
+	wasStreamingRef.current = isStreaming;
+
 	const shouldIgnoreStreamDelay = isCompressing || isAutoCompressing;
 
 	if (
 		!isStreaming ||
 		shouldIgnoreStreamDelay ||
+		isStreamingStarted ||
 		previousStreamActivityMarkerRef.current !== streamActivityMarker
 	) {
 		previousStreamActivityMarkerRef.current = streamActivityMarker;
