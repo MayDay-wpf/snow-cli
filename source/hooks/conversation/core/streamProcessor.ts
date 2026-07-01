@@ -293,6 +293,9 @@ export async function processStreamRound(ctx: {
 		onRetry,
 	});
 
+	// 重置测速仪会话统计（TTFT 计时起点）
+	tpsTracker.resetSession();
+
 	for await (const chunk of streamGenerator) {
 		if (controller.signal.aborted) {
 			break;

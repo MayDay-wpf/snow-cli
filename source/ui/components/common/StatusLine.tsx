@@ -469,6 +469,7 @@ export default function StatusLine({
 					enabled: tpsTracker.isActive(),
 					tps: tpsSnapshot.tps,
 					peakTps: tpsSnapshot.peakTps,
+					ttftMs: tpsSnapshot.ttftMs,
 				},
 			},
 		};
@@ -791,8 +792,13 @@ export default function StatusLine({
 			tpsTracker.isActive() &&
 			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.speedometer)
 		) {
+			let speedometerText = `⏱ ${tpsSnapshot.tps} tok/s`;
+			if (tpsSnapshot.ttftMs !== null) {
+				const ttftSec = (tpsSnapshot.ttftMs / 1000).toFixed(1);
+				speedometerText += ` · ttft ${ttftSec}s`;
+			}
 			statusItems.push({
-				text: `⏱ ${tpsSnapshot.tps} tok/s`,
+				text: speedometerText,
 				color:
 					tpsSnapshot.tps > 0 ? theme.colors.cyan : theme.colors.menuSecondary,
 			});
@@ -875,6 +881,14 @@ export default function StatusLine({
 							{' tok/s'}
 							{' · peak '}
 							<Text color={theme.colors.warning}>{tpsSnapshot.peakTps}</Text>
+							{tpsSnapshot.ttftMs !== null && (
+								<>
+									{' · ttft '}
+									<Text color={theme.colors.menuInfo}>
+										{(tpsSnapshot.ttftMs / 1000).toFixed(1)}s
+									</Text>
+								</>
+							)}
 						</Text>
 					</Box>
 				)}

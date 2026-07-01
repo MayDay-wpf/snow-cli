@@ -21,6 +21,8 @@ export interface TpsSnapshot {
 	tps: number;
 	/** 峰值 TPS */
 	peakTps: number;
+	/** 首字延迟（Time To First Token），单位毫秒；null 表示当前会话尚未收到首字 */
+	ttftMs: number | null;
 }
 
 type Listener = () => void;
@@ -41,6 +43,7 @@ class TpsTracker {
 	private snapshot: TpsSnapshot = {
 		tps: 0,
 		peakTps: 0,
+		ttftMs: null,
 	};
 
 	/**
@@ -58,6 +61,15 @@ class TpsTracker {
 
 	/** 当前秒内累计的 token 数（与 tokenBuckets[currentSecond] 同步） */
 	private currentSecondTokens: number = 0;
+
+	/** 当前会话开始时间（resetInternal 时设置） */
+	private sessionStartTime: number = 0;
+
+	/** 首字延迟（毫秒），null 表示尚未收到首字 */
+	private ttftMs: number | null = null;
+
+	/** 当前会话是否已收到首个 token */
+	private hasFirstToken: boolean = false;
 
 	/** 当前快照对象引用（用于 getSnapshot 返回，确保引用稳定性） */
 	private snapshotRef: TpsSnapshot = this.snapshot;
@@ -107,6 +119,13 @@ class TpsTracker {
 		}
 
 		const now = Date.now();
+
+		// 首字延迟计算：记录首个 token 到达时间
+		if (!this.hasFirstToken) {
+			this.hasFirstToken = true;
+			this.ttftMs = now - this.sessionStartTime;
+		}
+
 		const second = Math.floor(now / 1000);
 
 		// 如果进入了新的秒，将前一秒的累积值写入 buckets
@@ -165,9 +184,13 @@ class TpsTracker {
 		this.tokenBuckets.clear();
 		this.currentSecond = 0;
 		this.currentSecondTokens = 0;
+		this.sessionStartTime = Date.now();
+		this.ttftMs = null;
+		this.hasFirstToken = false;
 		this.snapshot = {
 			tps: 0,
 			peakTps: 0,
+			ttftMs: null,
 		};
 		this.snapshotRef = this.snapshot;
 	}
@@ -226,6 +249,7 @@ class TpsTracker {
 		this.snapshot = {
 			tps,
 			peakTps,
+			ttftMs: this.ttftMs,
 		};
 		this.snapshotRef = this.snapshot;
 
