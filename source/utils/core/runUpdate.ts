@@ -26,6 +26,9 @@ function getNpmRegistry(): string | null {
 	const result = spawnSync('npm', ['config', 'get', 'registry'], {
 		encoding: 'utf8',
 		stdio: ['ignore', 'pipe', 'pipe'],
+		// On Windows, `npm` is actually `npm.cmd`; without a shell spawnSync
+		// cannot resolve it (ENOENT) and result.stdout/stderr are null.
+		shell: process.platform === 'win32',
 	});
 
 	if (
@@ -38,7 +41,7 @@ function getNpmRegistry(): string | null {
 		return null;
 	}
 
-	return result.stdout.trim();
+	return (result.stdout ?? '').trim();
 }
 
 function warnIfUsingMirrorRegistry(): void {
@@ -60,6 +63,10 @@ function runNpmStep(step: NpmStep): number {
 	console.log(`\n${step.label}...`);
 	const result = spawnSync('npm', step.args, {
 		stdio: 'inherit',
+		// On Windows, `npm` is actually `npm.cmd`; without a shell spawnSync
+		// cannot resolve it (ENOENT), aborting the update with
+		// "spawnSync npm ENOENT".
+		shell: process.platform === 'win32',
 	});
 
 	if (result.error) {
