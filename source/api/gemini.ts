@@ -91,8 +91,12 @@ export function resetGeminiClient(): void {
  * 将图片数据转换为 Gemini API 所需的格式
  * 处理三种情况：
  * 1. 远程 URL (http/https): 返回 fileData 格式
- * 2. 已经是 data URL: 返回 inlineData 格式，并确保 data 带 data: 头
- * 3. 纯 base64 数据: 使用提供的 mimeType 补齐 data URL 格式
+ * 2. 已经是 data URL: 提取纯 base64 数据，返回 inlineData 格式
+ * 3. 纯 base64 数据: 直接使用，返回 inlineData 格式
+ *
+ * 注意：Gemini API 的 inlineData.data 字段只接受纯 base64 编码字符串，
+ * 不能包含 data:...;base64, 前缀，否则模型会返回空响应。
+ * 参考: https://ai.google.dev/gemini-api/docs/image-understanding
  */
 function toGeminiImagePart(image: {
 	data: string;
@@ -114,23 +118,23 @@ function toGeminiImagePart(image: {
 		};
 	}
 
-	// 已经是 data URL 格式，直接使用原值作为 data
+	// 已经是 data URL 格式，提取纯 base64 数据部分
 	const dataUrlMatch = data.match(/^data:([^;]+);base64,(.+)$/);
 	if (dataUrlMatch) {
 		return {
 			inlineData: {
 				mimeType: dataUrlMatch[1] || image.mimeType || 'image/png',
-				data: image.data, // 保留完整的 data URL
+				data: dataUrlMatch[2]!, // 只保留纯 base64 数据
 			},
 		};
 	}
 
-	// 纯 base64 数据，补齐 data URL 格式
+	// 纯 base64 数据，直接使用
 	const mimeType = image.mimeType?.trim() || 'image/png';
 	return {
 		inlineData: {
 			mimeType,
-			data: `data:${mimeType};base64,${data}`, // 补齐 data: 头
+			data, // 纯 base64 数据
 		},
 	};
 }
