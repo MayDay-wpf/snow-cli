@@ -1125,6 +1125,7 @@ export const zhTW: TranslationKeys = {
 		deeperSearchHint: '尚有更深目錄未掃描 · 在末項按 ↓ 繼續深入搜尋',
 		multiSelectHint: '空白鍵 勾選 · Enter 一次插入 · 支援多選',
 		multiSelectActiveHint: '已勾選 {count} 項 · 空白鍵 切換 · Enter 一次插入',
+		workspaceFilterHint: '工作區: {filter} · 僅搜尋所選目錄',
 		contentSearchHeader: '≡ 內容搜尋',
 		filesHeader: '≡ 檔案 [{mode} • Ctrl+T]',
 		treeMode: '樹狀',

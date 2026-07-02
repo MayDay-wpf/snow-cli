@@ -388,6 +388,7 @@ export default function ChatInput({
 		setAtSymbolPosition,
 		filteredFileCount,
 		searchMode,
+		workspaceFilter,
 		updateFilePickerState,
 		handleFileSelect,
 		handleMultipleFileSelect,
@@ -1225,6 +1226,7 @@ export default function ChatInput({
 								rootPath={process.cwd()}
 								onFilteredCountChange={handleFilteredCountChange}
 								searchMode={searchMode}
+								workspaceFilter={workspaceFilter}
 							/>
 						</Suspense>
 						<Suspense fallback={null}>

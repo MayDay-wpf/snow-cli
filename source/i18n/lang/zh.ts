@@ -1124,6 +1124,7 @@ export const zh: TranslationKeys = {
 		deeperSearchHint: '尚有更深目录未扫描 · 在末项按 ↓ 继续深入搜索',
 		multiSelectHint: '空格 勾选 · Enter 一次插入 · 支持多选',
 		multiSelectActiveHint: '已勾选 {count} 项 · 空格 切换 · Enter 一次插入',
+		workspaceFilterHint: '工作区: {filter} · 仅搜索所选目录',
 		contentSearchHeader: '≡ 内容搜索',
 		filesHeader: '≡ 文件 [{mode} • Ctrl+T]',
 		treeMode: '树形',

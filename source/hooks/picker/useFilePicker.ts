@@ -9,6 +9,10 @@ type FilePickerState = {
 	atSymbolPosition: number;
 	filteredFileCount: number;
 	searchMode: 'file' | 'content'; // 'file' for @ search, 'content' for @@ search
+	// When the user picks a working directory in @: mode, this holds the
+	// full dir path so FileList can scope its scan.  The input box shows
+	// a short tag like @[snow-app] instead of the raw path.
+	workspaceFilter: string | null;
 };
 
 type FilePickerAction =
@@ -17,6 +21,7 @@ type FilePickerAction =
 			query: string;
 			position: number;
 			searchMode: 'file' | 'content';
+			workspaceFilter?: string | null;
 	  }
 	| {type: 'HIDE'}
 	| {type: 'SELECT_FILE'}
@@ -36,6 +41,10 @@ function filePickerReducer(
 				fileQuery: action.query,
 				atSymbolPosition: action.position,
 				searchMode: action.searchMode,
+				workspaceFilter:
+					action.workspaceFilter !== undefined
+						? action.workspaceFilter
+						: state.workspaceFilter,
 			};
 		case 'HIDE':
 			return {
@@ -44,6 +53,7 @@ function filePickerReducer(
 				fileSelectedIndex: 0,
 				fileQuery: '',
 				atSymbolPosition: -1,
+				workspaceFilter: null,
 			};
 		case 'SELECT_FILE':
 			return {
@@ -52,6 +62,7 @@ function filePickerReducer(
 				fileSelectedIndex: 0,
 				fileQuery: '',
 				atSymbolPosition: -1,
+				workspaceFilter: null,
 			};
 		case 'SET_SELECTED_INDEX':
 			return {
@@ -76,6 +87,7 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 		atSymbolPosition: -1,
 		filteredFileCount: 0,
 		searchMode: 'file',
+		workspaceFilter: null,
 	});
 
 	const fileListRef = useRef<FileListRef>(null);
@@ -185,18 +197,59 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 	// Handle file selection
 	const handleFileSelect = useCallback(
-		async (filePath: string) => {
+		async (filePath: string, displayName?: string) => {
 			if (state.atSymbolPosition !== -1) {
 				// Use display text (with placeholders) for position calculations
 				const displayText = buffer.text;
 				const cursorPos = buffer.getCursorPosition();
+				// Workspace selection mode: when the query starts with ":"
+				// the user is picking a working directory from the list.
+				// We write a short tag like @[snow-app] into the input box,
+				// set workspaceFilter to the dir path, and keep the picker open
+				// so the user can immediately type a fuzzy search term.
+				const isWorkspaceSelection = state.fileQuery.startsWith(':');
+
+				const beforeAt = displayText.slice(0, state.atSymbolPosition);
+				const afterCursor = displayText.slice(cursorPos);
+				const prefix = state.searchMode === 'content' ? '@@' : '@';
+
+				if (isWorkspaceSelection) {
+					// Write @[displayName] tag into the input box.
+					// filePath is the full workspace path (ends with "/"),
+					// displayName is the human-readable name for the tag.
+					const tag =
+						displayName ||
+						filePath.replace(/\/$/, '').split('/').pop() ||
+						filePath;
+					const tagText = `${prefix}[${tag}]`;
+					const newText = beforeAt + tagText + afterCursor;
+
+					buffer.setText(newText);
+
+					// Position cursor right after the ] so the user can
+					// immediately start typing a search query.
+					const targetPos = state.atSymbolPosition + tagText.length;
+					for (let i = 0; i < targetPos; i++) {
+						if (i < buffer.text.length) {
+							buffer.moveRight();
+						}
+					}
+
+					// Keep picker open with empty query, scoped to workspace.
+					dispatch({
+						type: 'SHOW',
+						query: '',
+						position: state.atSymbolPosition,
+						searchMode: state.searchMode,
+						workspaceFilter: filePath,
+					});
+					triggerUpdate();
+					return;
+				}
 
 				// Replace query with selected file path
 				// For content search (@@), the filePath already includes line number
 				// For file search (@), directories can keep the picker open for deeper filtering
-				const beforeAt = displayText.slice(0, state.atSymbolPosition);
-				const afterCursor = displayText.slice(cursorPos);
-				const prefix = state.searchMode === 'content' ? '@@' : '@';
 				const isDirectoryContinuation =
 					state.searchMode === 'file' && filePath.endsWith('/');
 				const suffix = isDirectoryContinuation ? '' : ' ';
@@ -229,7 +282,13 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 				triggerUpdate();
 			}
 		},
-		[state.atSymbolPosition, state.searchMode, buffer, triggerUpdate],
+		[
+			state.atSymbolPosition,
+			state.searchMode,
+			state.fileQuery,
+			buffer,
+			triggerUpdate,
+		],
 	);
 
 	// Handle multi-file selection from the FileList checkbox picker.
@@ -329,6 +388,7 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 		},
 		filteredFileCount: state.filteredFileCount,
 		searchMode: state.searchMode,
+		workspaceFilter: state.workspaceFilter,
 		updateFilePickerState,
 		handleFileSelect,
 		handleMultipleFileSelect,

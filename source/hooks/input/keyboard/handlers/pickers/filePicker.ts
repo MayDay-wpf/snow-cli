@@ -78,11 +78,11 @@ export function filePickerHandler(ctx: HandlerContext): boolean {
 
 			const selectedFile = fileListRef.current?.getSelectedFile();
 			if (selectedFile) {
-				handleFileSelect(selectedFile);
+				const displayName = fileListRef.current?.getSelectedDisplayName?.();
+				handleFileSelect(selectedFile, displayName ?? undefined);
 			}
 		}
 		return true;
 	}
-
 	return false;
 }

@@ -46,9 +46,17 @@ type Props = {
 	rootPath?: string;
 	onFilteredCountChange?: (count: number) => void;
 	searchMode?: 'file' | 'content';
+	// When the user selects a workspace via @: mode, this holds the
+	// workspace directory path. loadFiles and agent search only scan
+	// this directory; the input box shows a @[tag] label instead.
+	workspaceFilter?: string | null;
 };
 export type FileListRef = {
 	getSelectedFile: () => string | null;
+	// Returns the display name of the selected workspace item (only
+	// relevant in workspace-selection mode). Used by handleFileSelect
+	// to write a @[displayName] tag into the input box.
+	getSelectedDisplayName: () => string | null;
 	toggleDisplayMode: () => boolean;
 	// Manually expand the BFS scan depth (used when the user navigates past
 	// the last filtered result and may want results from deeper directories).
@@ -108,6 +116,20 @@ const getTreeDepth = (file: FileItem) => {
 	}
 
 	return relativePath.split('/').filter(Boolean).length;
+};
+
+// Extract a human-readable name from a source directory path.
+// For local dirs this is the basename; for ssh:// URLs it is the remote
+// directory name (or host when the path has no trailing segment).
+const getSourceDirName = (sourceDir: string): string => {
+	if (sourceDir.startsWith('ssh://')) {
+		const sshInfo = parseSSHUrl(sourceDir);
+		if (sshInfo) {
+			return sshInfo.path.split('/').pop() || sshInfo.host;
+		}
+		return sourceDir;
+	}
+	return path.basename(sourceDir) || sourceDir;
 };
 
 const compareTreeItems = (a: FileItem, b: FileItem) => {
@@ -319,6 +341,7 @@ const FileList = memo(
 				rootPath = process.cwd(),
 				onFilteredCountChange,
 				searchMode = 'file',
+				workspaceFilter = null,
 			},
 			ref,
 		) => {
@@ -351,8 +374,22 @@ const FileList = memo(
 			const [agentError, setAgentError] = useState<string | null>(null);
 			const agentAbortRef = useRef<AbortController | null>(null);
 			const wasAgentModeRef = useRef(false);
+			// Workspace selection mode: when the query starts with ":" the user
+			// is browsing working directories to pick one. After picking, a
+			// @[displayName] tag is written into the input box and workspaceFilter
+			// state is set so loadFiles only scans that directory.
+			const isWorkspaceSelectionMode = query.startsWith(':');
+			// In workspace-selection mode, downstream search logic uses an empty
+			// query so the list shows all working directories unfiltered by name.
+			// When a workspaceFilter is active, strip the leading [tag] from the
+			// query so fuzzy search uses only the text after the tag.
+			const normalizedQuery = isWorkspaceSelectionMode
+				? ''
+				: workspaceFilter && query.startsWith('[')
+				? query.replace(/^\[[^\]]*\]/, '')
+				: query;
 			// True when the @ / @@ query starts with "??" → trigger the AI agent.
-			const isAgentMode = query.startsWith('??');
+			const isAgentMode = normalizedQuery.startsWith('??');
 
 			// Get terminal size for dynamic content display
 			const {columns: terminalWidth} = useTerminalSize();
@@ -394,7 +431,16 @@ const FileList = memo(
 			// pushes incremental updates to `files` so the input box can filter
 			// against partial results in real time. No file count cap.
 			const loadFiles = useCallback(async () => {
-				const workingDirs = await getWorkingDirectories();
+				const allDirs = await getWorkingDirectories();
+				// If a workspace filter is active (user selected a workspace via @:),
+				// only scan that single directory.
+				const workingDirs = workspaceFilter
+					? allDirs.filter(
+							d =>
+								d.path === workspaceFilter ||
+								d.path === workspaceFilter.replace(/\/$/, ''),
+					  )
+					: allDirs;
 				const collected: FileItem[] = [];
 				// Tracks whether we encountered subdirectories that were skipped
 				// because they exceeded `searchDepth`, signalling more depth is available.
@@ -614,7 +660,7 @@ const FileList = memo(
 				flush(true);
 				setHasMoreDepth(depthLimitHit);
 				setIsLoading(false);
-			}, [searchDepth]);
+			}, [searchDepth, workspaceFilter]);
 
 			// Search file content for content search mode
 			const searchFileContent = useCallback(
@@ -736,6 +782,48 @@ const FileList = memo(
 			// State for filtered files (needed for async content search)
 			const [allFilteredFiles, setAllFilteredFiles] = useState<FileItem[]>([]);
 
+			// Workspace selection mode: load the list of working directories so
+			// the user can pick one with ↑↓ + Enter.
+			const [workspaceDirs, setWorkspaceDirs] = useState<FileItem[]>([]);
+			useEffect(() => {
+				if (!visible || !isWorkspaceSelectionMode) {
+					return;
+				}
+				let cancelled = false;
+				(async () => {
+					const dirs = await getWorkingDirectories();
+					if (cancelled) return;
+					// Build FileItems for each working directory. The `path` field
+					// carries the full dir path (ending with "/") so handleFileSelect
+					// can write it directly into the input box for directory continuation.
+					const items: FileItem[] = dirs.map(dir => {
+						const dirName = dir.displayName || getSourceDirName(dir.path);
+						return {
+							name: dirName,
+							path: dir.path.endsWith('/') ? dir.path : `${dir.path}/`,
+							isDirectory: true,
+							sourceDir: dir.path,
+						};
+					});
+					setWorkspaceDirs(items);
+				})();
+				return () => {
+					cancelled = true;
+				};
+			}, [visible, isWorkspaceSelectionMode]);
+
+			// Filter workspace list by the text typed after ":".
+			const filteredWorkspaceDirs = useMemo(() => {
+				if (!isWorkspaceSelectionMode) return [];
+				const filterText = query.slice(1).toLowerCase();
+				if (!filterText) return workspaceDirs;
+				return workspaceDirs.filter(
+					dir =>
+						dir.name.toLowerCase().includes(filterText) ||
+						(dir.sourceDir || '').toLowerCase().includes(filterText),
+				);
+			}, [isWorkspaceSelectionMode, query, workspaceDirs]);
+
 			// Release cached results after the panel has been hidden for
 			// SEARCH_RESULT_TTL_MS. Toggling visible cancels the pending timer so
 			// quick close/reopen reuses the cache; only a sustained close evicts it.
@@ -769,14 +857,14 @@ const FileList = memo(
 				}
 
 				const performSearch = async () => {
-					if (!query.trim()) {
+					if (!normalizedQuery.trim()) {
 						setAllFilteredFiles(files);
 						return;
 					}
 
 					if (searchMode === 'content') {
 						// Content search mode (@@)
-						const results = await searchFileContent(query);
+						const results = await searchFileContent(normalizedQuery);
 						setAllFilteredFiles(results);
 
 						// Content search uses the same progressively loaded file index as
@@ -785,7 +873,7 @@ const FileList = memo(
 						if (
 							!isLoading &&
 							results.length === 0 &&
-							query.trim().length > 0 &&
+							normalizedQuery.trim().length > 0 &&
 							hasMoreDepth
 						) {
 							setSearchDepth(d => d + 3);
@@ -794,7 +882,9 @@ const FileList = memo(
 						}
 					} else {
 						// File name search mode (@)
-						const queryLower = query.toLowerCase().replace(/\\/g, '/');
+						const queryLower = normalizedQuery
+							.toLowerCase()
+							.replace(/\\/g, '/');
 						const filtered = files.filter(file => {
 							const fileName = file.name.toLowerCase();
 							const filePath = file.path.toLowerCase().replace(/\\/g, '/');
@@ -855,7 +945,7 @@ const FileList = memo(
 						if (
 							!isLoading &&
 							filtered.length === 0 &&
-							query.trim().length > 0 &&
+							normalizedQuery.trim().length > 0 &&
 							hasMoreDepth
 						) {
 							setSearchDepth(d => d + 3);
@@ -875,7 +965,7 @@ const FileList = memo(
 				return () => clearTimeout(timer);
 			}, [
 				files,
-				query,
+				normalizedQuery,
 				searchMode,
 				searchFileContent,
 				isLoading,
@@ -888,7 +978,7 @@ const FileList = memo(
 			// loop and stream status previews into `agentPreviewContent`. Debounced so
 			// the user can finish typing; previous searches are aborted on query change.
 			useEffect(() => {
-				const agentQuery = isAgentMode ? query.slice(2).trim() : '';
+				const agentQuery = isAgentMode ? normalizedQuery.slice(2).trim() : '';
 
 				if (!visible || !isAgentMode || !agentQuery) {
 					// Leaving agent mode (or empty query): cancel + reset once.
@@ -928,7 +1018,14 @@ const FileList = memo(
 					setAgentPreviewContent('');
 
 					try {
-						const workingDirs = await getWorkingDirectories();
+						const allDirs = await getWorkingDirectories();
+						const workingDirs = workspaceFilter
+							? allDirs.filter(
+									d =>
+										d.path === workspaceFilter ||
+										d.path === workspaceFilter.replace(/\/$/, ''),
+							  )
+							: allDirs;
 						const generator = fileSearchAgent.search(
 							agentQuery,
 							searchMode,
@@ -973,7 +1070,14 @@ const FileList = memo(
 					controller.abort();
 				};
 				// eslint-disable-next-line react-hooks/exhaustive-deps
-			}, [query, searchMode, visible, isAgentMode, agentPreviewLabels]);
+			}, [
+				normalizedQuery,
+				searchMode,
+				visible,
+				isAgentMode,
+				agentPreviewLabels,
+				workspaceFilter,
+			]);
 
 			const displayItems = useMemo<DisplayItem[]>(() => {
 				if (isAgentMode || searchMode === 'content') {
@@ -989,7 +1093,11 @@ const FileList = memo(
 				}
 
 				if (displayMode === 'tree') {
-					return buildTreeDisplayItems(allFilteredFiles, files, query);
+					return buildTreeDisplayItems(
+						allFilteredFiles,
+						files,
+						normalizedQuery,
+					);
 				}
 
 				return allFilteredFiles.map(file => ({
@@ -1003,7 +1111,7 @@ const FileList = memo(
 				files,
 				displayMode,
 				searchMode,
-				query,
+				normalizedQuery,
 				isAgentMode,
 			]);
 
@@ -1051,9 +1159,19 @@ const FileList = memo(
 
 			useEffect(() => {
 				if (onFilteredCountChange) {
-					onFilteredCountChange(displayItems.length);
+					// In workspace-selection mode the visible count is the
+					// filtered workspace directory count, not the file count.
+					const count = isWorkspaceSelectionMode
+						? filteredWorkspaceDirs.length
+						: displayItems.length;
+					onFilteredCountChange(count);
 				}
-			}, [displayItems.length, onFilteredCountChange]);
+			}, [
+				displayItems.length,
+				onFilteredCountChange,
+				isWorkspaceSelectionMode,
+				filteredWorkspaceDirs.length,
+			]);
 
 			// Resolve the canonical "insertion path" for a display entry.
 			// Mirrors what `getSelectedFile` returns so that toggleSelection and
@@ -1087,11 +1205,32 @@ const FileList = memo(
 				ref,
 				() => ({
 					getSelectedFile: () => {
+						// Workspace selection mode: return the selected
+						// working-directory path directly (already ends with "/").
+						if (isWorkspaceSelectionMode) {
+							const wsIndex = Math.min(
+								selectedIndex,
+								Math.max(0, filteredWorkspaceDirs.length - 1),
+							);
+							const wsItem = filteredWorkspaceDirs[wsIndex];
+							return wsItem ? wsItem.path : null;
+						}
 						const selectedEntry = displayItems[normalizedSelectedIndex];
 						if (!selectedEntry) {
 							return null;
 						}
 						return resolveInsertionPath(selectedEntry);
+					},
+					getSelectedDisplayName: () => {
+						if (isWorkspaceSelectionMode) {
+							const wsIndex = Math.min(
+								selectedIndex,
+								Math.max(0, filteredWorkspaceDirs.length - 1),
+							);
+							const wsItem = filteredWorkspaceDirs[wsIndex];
+							return wsItem ? wsItem.name : null;
+						}
+						return null;
 					},
 					toggleDisplayMode: () => {
 						if (searchMode !== 'file') {
@@ -1185,6 +1324,9 @@ const FileList = memo(
 					displayMode,
 					selectedKeys,
 					resolveInsertionPath,
+					isWorkspaceSelectionMode,
+					filteredWorkspaceDirs,
+					selectedIndex,
 				],
 			);
 
@@ -1204,6 +1346,71 @@ const FileList = memo(
 
 			if (!visible) {
 				return null;
+			}
+
+			// Workspace selection mode (@: / @@:): show a simple list of working
+			// directories. The user picks one with ↑↓ + Enter; handleFileSelect in
+			// useFilePicker writes the workspace path into the input box (e.g.
+			// `@/path/to/workspace/`) and the existing directory-continuation
+			// logic takes over for fuzzy search within that workspace.
+			if (isWorkspaceSelectionMode) {
+				const wsItems = filteredWorkspaceDirs;
+				const wsSelectedIndex = Math.min(
+					selectedIndex,
+					Math.max(0, wsItems.length - 1),
+				);
+				const wsWindow = wsItems.slice(0, effectiveMaxItems);
+				if (wsItems.length === 0) {
+					return (
+						<Box paddingX={1} marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.fileList.noFilesFound}
+							</Text>
+						</Box>
+					);
+				}
+				return (
+					<Box paddingX={1} marginTop={1} flexDirection="column">
+						<Box marginBottom={1}>
+							<Text color={theme.colors.menuInfo} bold>
+								{t.fileList.workspaceFilterHint.replace(
+									'{filter}',
+									query.slice(1) || '*',
+								)}
+							</Text>
+						</Box>
+						{wsWindow.map((item, index) => {
+							const isSelected = index === wsSelectedIndex;
+							return (
+								<Text
+									key={`${item.sourceDir}::${item.path}`}
+									backgroundColor={
+										isSelected ? theme.colors.menuSelected : undefined
+									}
+									color={
+										isSelected ? theme.colors.menuNormal : theme.colors.warning
+									}
+									wrap="truncate-end"
+								>
+									{isSelected ? '❯ ' : '  '}
+									{'◇ '}
+									{item.name}
+								</Text>
+							);
+						})}
+						{wsItems.length > effectiveMaxItems && (
+							<Box marginTop={1}>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.commandPanel.scrollHint}
+									{t.commandPanel.moreBelow.replace(
+										'{count}',
+										(wsItems.length - effectiveMaxItems).toString(),
+									)}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
 			}
 
 			// Agent search mode (@?? / @@??): handle its own loading / error /
@@ -1285,13 +1492,14 @@ const FileList = memo(
 			const stillSearching =
 				isLoading ||
 				isIncreasingDepth ||
-				(query.trim().length > 0 && hasMoreDepth);
+				(normalizedQuery.trim().length > 0 && hasMoreDepth);
 
 			if (!isAgentMode && stillSearching && displayItems.length === 0) {
 				return (
 					<Box paddingX={1} marginTop={1}>
 						<Text color="blue" dimColor>
-							{isIncreasingDepth || (query.trim().length > 0 && hasMoreDepth)
+							{isIncreasingDepth ||
+							(normalizedQuery.trim().length > 0 && hasMoreDepth)
 								? t.fileList.searchingDeeper.replace(
 										'{depth}',
 										searchDepth.toString(),
@@ -1330,6 +1538,16 @@ const FileList = memo(
 								`(${normalizedSelectedIndex + 1}/${displayItems.length})`}
 						</Text>
 					</Box>
+					{workspaceFilter && !isWorkspaceSelectionMode && (
+						<Box>
+							<Text color={theme.colors.menuInfo} bold>
+								{t.fileList.workspaceFilterHint.replace(
+									'{filter}',
+									getSourceDirName(workspaceFilter),
+								)}
+							</Text>
+						</Box>
+					)}
 					{filteredFiles.map((item, index) => {
 						const file = item.file;
 						const isSelected = index === displaySelectedIndex;
@@ -1461,8 +1679,8 @@ const FileList = memo(
 							</Box>
 						)}
 					{/* Multi-select hint + count summary. Space toggles the
-					    checkbox on the current item; pressing Enter inserts
-					    every checked item separated by a space. */}
+				    checkbox on the current item; pressing Enter inserts
+				    every checked item separated by a space. */}
 					{displayItems.length > 0 && (
 						<Box>
 							<Text color={theme.colors.menuSecondary}>

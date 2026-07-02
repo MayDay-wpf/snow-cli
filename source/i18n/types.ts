@@ -1064,6 +1064,9 @@ export type TranslationKeys = {
 		// Multi-select hint shown after at least one file has been checked.
 		// {count} is the number of currently checked items.
 		multiSelectActiveHint: string;
+		// Workspace pre-filter hint shown when @: or @@: narrows to a workspace.
+		// {filter} is the workspace filter word typed by the user.
+		workspaceFilterHint: string;
 		// Header labels
 		contentSearchHeader: string;
 		filesHeader: string; // {mode}

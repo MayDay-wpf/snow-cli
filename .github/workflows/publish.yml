@@ -56,13 +56,11 @@ jobs:
 
             ### What's New
 
-            - Add AI completion duration tracking with updated status messages
-            - Enhance MessageRenderer with memoization and parallel group handling for smoother rendering
-            - Optimize session rollback experience by clearing context usage and unifying confirmation titles across languages
-            - Add "Install from GitHub" option to skills creation for easier skill discovery
-            - Improve sub-agent UI clarity by hiding persisted content/thinking messages and skipping teammate messages
-            - Enhance child process options to support `abortResult` for graceful shutdowns
-            - Enhance `filesystem-create` tool to support batch file creation and add content parameter validation
+            - Add first character delay (TTFT) statistics to the speedometer with improved latency timing via streaming session reset
+            - Fix npm registry resolution on Windows by ensuring shell usage in spawnSync
+            - Enhance proxy URL handling to support `null` for explicitly disabling proxy settings
+            - Update Gemini image part conversion to extract pure base64 data
+            - Add workspace filter mode (`@:` / `@@:`) to scope file searches within a selected working directory, displaying a `@[tag]` label in the input box
 
             ### Installation
             ```bash

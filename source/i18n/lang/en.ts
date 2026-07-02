@@ -1199,6 +1199,7 @@ export const en: TranslationKeys = {
 		multiSelectHint:
 			'Space toggle · Enter insert · select multiple files at once',
 		multiSelectActiveHint: '{count} selected · Space toggle · Enter insert all',
+		workspaceFilterHint: 'Workspace: {filter} · searching in selected dir only',
 		contentSearchHeader: '≡ Content Search',
 		filesHeader: '≡ Files [{mode} • Ctrl+T]',
 		treeMode: 'Tree',

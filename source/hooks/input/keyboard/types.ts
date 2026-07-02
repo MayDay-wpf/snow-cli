@@ -52,10 +52,11 @@ export type KeyboardInputOptions = {
 	setAtSymbolPosition: (pos: number) => void;
 	filteredFileCount: number;
 	updateFilePickerState: (text: string, cursorPos: number) => void;
-	handleFileSelect: (filePath: string) => Promise<void>;
+	handleFileSelect: (filePath: string, displayName?: string) => Promise<void>;
 	handleMultipleFileSelect?: (filePaths: string[]) => Promise<void>;
 	fileListRef: React.RefObject<{
 		getSelectedFile: () => string | null;
+		getSelectedDisplayName: () => string | null;
 		toggleDisplayMode: () => boolean;
 		triggerDeeperSearch: () => boolean;
 		toggleSelection: () => boolean;
