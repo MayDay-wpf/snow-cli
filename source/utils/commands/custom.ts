@@ -17,6 +17,8 @@ export interface CustomCommand {
 	type: 'execute' | 'prompt' | 'panel'; // execute: run in terminal, prompt: send to AI, panel: show AnyPanel plugin
 	description?: string;
 	location?: CommandLocation; // 新增，可选以兼容旧数据
+	argsHint?: string; // 参数提示文本，在输入框中显示可用参数组合
+	argsOptions?: string[]; // 参数可选值列表，用于 Tab 弹出参数选择面板
 }
 
 type CommandFileEntry = {
@@ -123,6 +125,14 @@ async function listJsonCommandsRecursively(
 		const entryPath = join(dir, entry.name);
 
 		if (entry.isDirectory()) {
+			// Skip hidden directories (e.g., `.omc/`, `.git/`) so runtime state
+			// files written under them are never treated as commands. Aligns
+			// behavior with skills.ts loader; without this, `.json` state
+			// files under `~/.snow/commands/<ns>/.omc/state/sessions/` get loaded
+			// as commands with undefined name/description and crash the panel.
+			if (entry.name.startsWith('.')) {
+				continue;
+			}
 			const childPrefix = prefixPath
 				? `${prefixPath}/${entry.name}`
 				: entry.name;
@@ -162,9 +172,30 @@ async function loadCustomCommandFromFile(
 		const content = await readFile(entry.filePath, 'utf-8');
 		const cmd = JSON.parse(content) as CustomCommand;
 
+		// Reject non-command JSON files (e.g., runtime state files accidentally
+		// written under the commands directory). A valid command needs a string
+		// `command` field and a known `type`; without these, loading it would
+		// inject an object with undefined name/description into the panel and
+		// crash `command.description.toLowerCase()` during render.
+		if (typeof cmd.command !== 'string' || cmd.command.length === 0) {
+			return null;
+		}
+		if (
+			cmd.type !== 'execute' &&
+			cmd.type !== 'prompt' &&
+			cmd.type !== 'panel'
+		) {
+			return null;
+		}
+
 		// Use file path to infer command name for stability and namespace support
 		cmd.name = entry.inferredCommandName;
-		cmd.description = cmd.description || cmd.command;
+		// Coerce description to a string: fallback to `command` (the prompt/
+		// terminal text), then empty string, so callers can always call
+		// `.toLowerCase()` / `.includes()` safely.
+		const rawDesc = cmd.description ?? cmd.command;
+		cmd.description =
+			typeof rawDesc === 'string' ? rawDesc : '';
 
 		// Fill default location for backward compatibility
 		if (!cmd.location) {
@@ -295,6 +326,8 @@ export async function saveCustomCommand(
 	description?: string,
 	location: CommandLocation = 'global',
 	projectRoot?: string,
+	argsHint?: string,
+	argsOptions?: string[],
 ): Promise<void> {
 	// Check for command name conflicts with built-in commands
 	if (isCommandNameConflict(name)) {
@@ -310,7 +343,15 @@ export async function saveCustomCommand(
 	// Ensure parent directory exists (for namespaced commands)
 	await mkdir(dirname(filePath), {recursive: true});
 
-	const data: CustomCommand = {name, command, type, description, location};
+	const data: CustomCommand = {
+		name,
+		command,
+		type,
+		description,
+		location,
+		...(argsHint !== undefined ? {argsHint} : {}),
+		...(argsOptions !== undefined ? {argsOptions} : {}),
+	};
 	await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -347,7 +388,7 @@ function normalizeImportedCustomCommand(
 		return null;
 	}
 
-	const {name, command, type, description} = value;
+	const {name, command, type, description, argsHint, argsOptions} = value;
 	if (
 		typeof name !== 'string' ||
 		typeof command !== 'string' ||
@@ -366,6 +407,14 @@ function normalizeImportedCustomCommand(
 		command,
 		type,
 		...(typeof description === 'string' ? {description} : {}),
+		...(typeof argsHint === 'string' ? {argsHint} : {}),
+		...(Array.isArray(argsOptions)
+			? {
+					argsOptions: argsOptions.filter(
+						(v): v is string => typeof v === 'string',
+					),
+			  }
+			: {}),
 		location,
 	};
 }

@@ -15,7 +15,7 @@ export function tabArgsPickerHandler(ctx: HandlerContext): boolean {
 	// Tab to open command args picker when hints are visible
 	if (key.tab && !showCommands && !showFilePicker && !showArgsPicker) {
 		const text = buffer.text;
-		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)\s*$/);
+		const rootMatch = text.match(/^\/([a-zA-Z0-9_:-]+)\s*$/);
 		const buddyProfileMatch = text.match(/^\/(buddy)\s+profile\s*$/);
 		const inlineTrigger = findInlineCommandTrigger(
 			text,

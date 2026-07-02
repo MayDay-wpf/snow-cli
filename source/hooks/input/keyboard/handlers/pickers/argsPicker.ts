@@ -43,7 +43,7 @@ export function argsPickerHandler(ctx: HandlerContext): boolean {
 			if (selected) {
 				const value = getCommandArgOptionValue(selected);
 				const text = buffer.text;
-				const hasTrailingSpace = /^\/[a-zA-Z0-9_-]+(?:\s+\S+)*\s+$/.test(text);
+				const hasTrailingSpace = /^\/[a-zA-Z0-9_:-]+(?:\s+\S+)*\s+$/.test(text);
 				const suffix = hasTrailingSpace ? value : ' ' + value;
 				buffer.insert(suffix);
 				buffer.setCursorPosition(buffer.text.length);

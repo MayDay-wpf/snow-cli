@@ -129,7 +129,32 @@ export function getCommandArgsOptions(
 		return getBuddyProfileArgOptions();
 	}
 
-	return COMMAND_ARGS_OPTIONS[commandName] ?? [];
+	// Check static dictionary first
+	const staticOptions = COMMAND_ARGS_OPTIONS[commandName];
+	if (staticOptions) {
+		return staticOptions;
+	}
+
+	// Fall back to custom commands cache for namespaced commands (e.g., oms:auto)
+	const customCmd = getCustomCommands().find(cmd => cmd.name === commandName);
+	if (customCmd?.argsOptions && customCmd.argsOptions.length > 0) {
+		return customCmd.argsOptions;
+	}
+
+	return [];
+}
+
+// 查询命令参数提示文本：先查静态字典，再查自定义命令缓存
+export function getCommandArgsHint(commandName: string): string {
+	// Check static dictionary first
+	const staticHint = COMMAND_ARGS_HINTS[commandName];
+	if (staticHint) {
+		return staticHint;
+	}
+
+	// Fall back to custom commands cache for namespaced commands (e.g., oms:auto)
+	const customCmd = getCustomCommands().find(cmd => cmd.name === commandName);
+	return customCmd?.argsHint ?? '';
 }
 
 export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
