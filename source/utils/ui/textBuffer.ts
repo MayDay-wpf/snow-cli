@@ -788,6 +788,12 @@ export class TextBuffer {
 			pushRange(m.index, m.index + m[0].length, 'bracket');
 		}
 
+		// 1b) @[workspace] 工作区标签（@ 前缀 + [name]）
+		const wsTagPattern = /@\[[^\]]+\]/g;
+		while ((m = wsTagPattern.exec(text)) !== null) {
+			pushRange(m.index, m.index + m[0].length, 'wsTag');
+		}
+
 		// 2) #agent_xxx 裸文本子代理标签：要求前面是行首或空白（不能是字母/数字/[]）
 		// 只匹配 `#` + ASCII 开头的标识符，避免误伤中文 #标题 这类常规文本
 		const agentPattern = /(^|\s)(#[A-Za-z][\w-]*)/g;

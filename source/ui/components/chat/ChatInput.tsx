@@ -964,7 +964,8 @@ export default function ChatInput({
 					/^\[image #\d+\]$/.test(tag) ||
 					/^\[Skill:[^\]]+\]$/.test(tag) ||
 					/^\[GitLine:[^\]]+\]$/.test(tag) ||
-					/^\[»[^\]]*\]$/.test(tag);
+					/^\[»[^\]]*\]$/.test(tag) ||
+					/^\[[^\]]+\]$/.test(tag); // @[workspace] workspace tag (the @ prefix is handled separately)
 
 				let i = 0;
 				while (i < line.length) {
@@ -998,9 +999,18 @@ export default function ChatInput({
 						if (closeIdx !== -1) {
 							const tagText = line.slice(i, closeIdx + 1);
 							if (isPlaceholderTag(tagText)) {
+								// If preceded by '@', include it in the highlighted token
+								// (e.g. @[workspace] workspace tags)
+								const atPrefix = i > 0 && line[i - 1] === '@' ? '@' : '';
+								if (atPrefix) {
+									// Remove the '@' from plainBuf if it was the last char
+									if (plainBuf.endsWith('@')) {
+										plainBuf = plainBuf.slice(0, -1);
+									}
+								}
 								flushPlain();
 								// 标签本身高亮；可能紧跟一个分隔空格，空格不高亮
-								tokens.push({text: tagText, highlight: true});
+								tokens.push({text: atPrefix + tagText, highlight: true});
 								i = closeIdx + 1;
 								continue;
 							}
