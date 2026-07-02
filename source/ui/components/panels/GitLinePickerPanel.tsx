@@ -104,11 +104,8 @@ const GitLinePickerPanel = memo(
 				title={
 					<Text color={theme.colors.warning} bold>
 						{t.gitLinePickerPanel.title}{' '}
-						{commits.length > 5 &&
-							`(${selectedIndex + 1}/${commits.length})`}
-						{isLoadingMore
-							? ` ${t.gitLinePickerPanel.loadingMoreSuffix}`
-							: ''}
+						{commits.length > 5 && `(${selectedIndex + 1}/${commits.length})`}
+						{isLoadingMore ? ` ${t.gitLinePickerPanel.loadingMoreSuffix}` : ''}
 					</Text>
 				}
 				header={
@@ -128,8 +125,7 @@ const GitLinePickerPanel = memo(
 					selectedCommits.size > 0 ? (
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuInfo}>
-								{t.gitLinePickerPanel.selectedLabel}:{' '}
-								{selectedCommits.size}
+								{t.gitLinePickerPanel.selectedLabel}: {selectedCommits.size}
 							</Text>
 						</Box>
 					) : undefined
@@ -140,19 +136,13 @@ const GitLinePickerPanel = memo(
 						{above > 0 && (
 							<>
 								·{' '}
-								{t.commandPanel.moreAbove.replace(
-									'{count}',
-									above.toString(),
-								)}
+								{t.commandPanel.moreAbove.replace('{count}', above.toString())}
 							</>
 						)}
 						{below > 0 && (
 							<>
 								·{' '}
-								{t.commandPanel.moreBelow.replace(
-									'{count}',
-									below.toString(),
-								)}
+								{t.commandPanel.moreBelow.replace('{count}', below.toString())}
 							</>
 						)}
 						{hasMore && <>· {t.gitLinePickerPanel.scrollToLoadMore}</>}
@@ -160,19 +150,21 @@ const GitLinePickerPanel = memo(
 				)}
 				renderItem={(commit: GitLineCommit, isSelected: boolean) => {
 					const isChecked = selectedCommits.has(commit.sha);
-					const title =
-						commit.kind === 'staged'
-							? `${t.reviewCommitPanel.stagedLabel} (${
-									commit.fileCount ?? 0
-							  } ${t.reviewCommitPanel.filesLabel})`
-							: `${formatShortSha(commit.sha)} ${truncateText(
-									commit.subject,
-									72,
-							  )}`;
-					const subtitle =
-						commit.kind === 'staged'
-							? ''
-							: `${commit.authorName} · ${formatDate(commit.dateIso)}`;
+					const isWorkingTreeEntry =
+						commit.kind === 'staged' || commit.kind === 'unstaged';
+					const title = isWorkingTreeEntry
+						? `${
+								commit.kind === 'staged'
+									? t.reviewCommitPanel.stagedLabel
+									: t.reviewCommitPanel.unstagedLabel
+						  } (${commit.fileCount ?? 0} ${t.reviewCommitPanel.filesLabel})`
+						: `${formatShortSha(commit.sha)} ${truncateText(
+								commit.subject,
+								72,
+						  )}`;
+					const subtitle = isWorkingTreeEntry
+						? ''
+						: `${commit.authorName} · ${formatDate(commit.dateIso)}`;
 
 					return (
 						<>
