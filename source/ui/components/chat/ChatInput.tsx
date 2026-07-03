@@ -20,8 +20,8 @@ const CommandArgsPanel = lazy(() => import('../panels/CommandArgsPanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
 import {
 	useCommandPanel,
-	COMMAND_ARGS_HINTS,
 	getCommandArgsOptions,
+	getCommandArgsHint,
 	type CommandArgOption,
 } from '../../../hooks/ui/useCommandPanel.js';
 import {
@@ -366,7 +366,7 @@ export default function ChatInput({
 		options: CommandArgOption[];
 	}>(() => {
 		const text = buffer.text;
-		const rootMatch = text.match(/^\/([a-zA-Z0-9_-]+)(?:\s+\S+)*\s*$/);
+		const rootMatch = text.match(/^\/([a-zA-Z0-9_:-]+)(?:\s+\S+)*\s*$/);
 		const inlineTrigger = findInlineCommandTrigger(
 			text,
 			buffer.getCursorPosition(),
@@ -861,10 +861,10 @@ export default function ChatInput({
 	const commandArgsHint = useMemo(() => {
 		const text = buffer.text;
 		if (!text.startsWith('/')) return '';
-		const match = text.match(/^\/([a-zA-Z0-9_-]+)(\s*)$/);
+		const match = text.match(/^\/([a-zA-Z0-9_:-]+)(\s*)$/);
 		if (!match) return '';
 		const cmd = match[1] ?? '';
-		const hint = COMMAND_ARGS_HINTS[cmd];
+		const hint = getCommandArgsHint(cmd);
 		if (!hint) return '';
 		// 若已经有尾随空格则直接拼接，否则前置空格将 cmd 与提示分隔
 		return match[2] && match[2].length > 0 ? hint : ` ${hint}`;
