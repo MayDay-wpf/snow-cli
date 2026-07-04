@@ -467,6 +467,24 @@ export async function deleteCustomCommand(
 	customCommandsCache = customCommandsCache.filter(cmd => cmd.name !== name);
 }
 
+// Substitute user-supplied args into a command template. If the template
+// contains a `$ARGUMENTS` placeholder, the args replace it in-place — this
+// matches the convention used by the skill path in useSkillsPicker.ts and
+// Claude Code's slash commands, letting command authors control exactly
+// where user input lands. When no placeholder is present, fall back to the
+// legacy behavior of appending args to the end, so existing commands that
+// don't use `$ARGUMENTS` keep working unchanged.
+function applyArgsToCommand(command: string, args?: string): string {
+	const trimmedArgs = args?.trim();
+	if (!trimmedArgs) {
+		return command;
+	}
+	if (command.includes('$ARGUMENTS')) {
+		return command.split('$ARGUMENTS').join(trimmedArgs);
+	}
+	return `${command} ${trimmedArgs}`;
+}
+
 // Register dynamic custom commands
 export async function registerCustomCommands(
 	projectRoot?: string,
@@ -489,8 +507,7 @@ export async function registerCustomCommands(
 				}
 
 				if (cmd.type === 'execute') {
-					// 支持补充输入：将args叠加到命令后面
-					const finalCommand = args ? `${cmd.command} ${args}` : cmd.command;
+					const finalCommand = applyArgsToCommand(cmd.command, args);
 					return {
 						success: true,
 						message: `Executing: ${finalCommand}`,
@@ -510,8 +527,8 @@ export async function registerCustomCommands(
 					};
 				}
 
-				// 支持补充输入：将args叠加到prompt后面
-				const finalPrompt = args ? `${cmd.command} ${args}` : cmd.command;
+				// 支持补充输入：有 $ARGUMENTS 占位符则原地替换，否则追加到末尾
+				const finalPrompt = applyArgsToCommand(cmd.command, args);
 				return {
 					success: true,
 					message: `Sending to AI: ${finalPrompt}`,
