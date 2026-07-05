@@ -194,8 +194,7 @@ async function loadCustomCommandFromFile(
 		// terminal text), then empty string, so callers can always call
 		// `.toLowerCase()` / `.includes()` safely.
 		const rawDesc = cmd.description ?? cmd.command;
-		cmd.description =
-			typeof rawDesc === 'string' ? rawDesc : '';
+		cmd.description = typeof rawDesc === 'string' ? rawDesc : '';
 
 		// Fill default location for backward compatibility
 		if (!cmd.location) {
@@ -476,11 +475,15 @@ export async function deleteCustomCommand(
 // don't use `$ARGUMENTS` keep working unchanged.
 function applyArgsToCommand(command: string, args?: string): string {
 	const trimmedArgs = args?.trim();
+	if (command.includes('$ARGUMENTS')) {
+		// Even when args is empty, replace the placeholder with an empty
+		// string so the literal `$ARGUMENTS` text never leaks into the
+		// prompt or terminal command. This matches the skill path in
+		// useSkillsPicker.ts which always replaces, regardless of append.
+		return command.split('$ARGUMENTS').join(trimmedArgs ?? '');
+	}
 	if (!trimmedArgs) {
 		return command;
-	}
-	if (command.includes('$ARGUMENTS')) {
-		return command.split('$ARGUMENTS').join(trimmedArgs);
 	}
 	return `${command} ${trimmedArgs}`;
 }
