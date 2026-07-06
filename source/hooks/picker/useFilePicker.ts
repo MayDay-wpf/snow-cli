@@ -228,12 +228,11 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 					// Position cursor right after the ] so the user can
 					// immediately start typing a search query.
+					// setText() does not reset cursor to 0, so we must set it
+					// explicitly instead of relying on moveRight() from a
+					// potentially stale cursor index.
 					const targetPos = state.atSymbolPosition + tagText.length;
-					for (let i = 0; i < targetPos; i++) {
-						if (i < buffer.text.length) {
-							buffer.moveRight();
-						}
-					}
+					buffer.setCursorPosition(targetPos);
 
 					// Keep picker open with empty query, scoped to workspace.
 					dispatch({
@@ -262,12 +261,10 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 				const insertedLength = prefix.length + filePath.length + suffix.length;
 				const targetPos = state.atSymbolPosition + insertedLength;
 
-				// Reset cursor to beginning, then move to correct position
-				for (let i = 0; i < targetPos; i++) {
-					if (i < buffer.text.length) {
-						buffer.moveRight();
-					}
-				}
+				// setText() does not reset cursor to 0, so we must set it
+				// explicitly instead of relying on moveRight() from a
+				// potentially stale cursor index.
+				buffer.setCursorPosition(targetPos);
 
 				if (isDirectoryContinuation) {
 					dispatch({
@@ -325,12 +322,11 @@ export function useFilePicker(buffer: TextBuffer, triggerUpdate: () => void) {
 
 			buffer.setText(newText);
 
+			// setText() does not reset cursor to 0, so we must set it
+			// explicitly instead of relying on moveRight() from a
+			// potentially stale cursor index.
 			const targetPos = state.atSymbolPosition + insertedSegment.length;
-			for (let i = 0; i < targetPos; i++) {
-				if (i < buffer.text.length) {
-					buffer.moveRight();
-				}
-			}
+			buffer.setCursorPosition(targetPos);
 
 			dispatch({type: 'SELECT_FILE'});
 			triggerUpdate();
