@@ -14,6 +14,7 @@ import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
 import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
+import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 
 //安全解析JSON，处理可能被拼接的多个JSON对象
 function safeParseToolArguments(argsString: string): Record<string, any> {
@@ -218,6 +219,96 @@ function extractMultimodalContent(result: any): {
 }
 
 /**
+ * 将 askuser-ask_question 的选择结果格式化为 AI 可读的文本。
+ *
+ * @param selected - 用户选择的值（单个或多个）
+ * @param customInput - 用户额外输入的自定义文本（可选）
+ * @returns 格式化后的回答文本
+ */
+function formatAskUserAnswer(
+	selected: string | string[],
+	customInput?: string,
+): string {
+	const selectedText = Array.isArray(selected) ? selected.join(', ') : selected;
+	return customInput ? `${selectedText}: ${customInput}` : selectedText;
+}
+
+/**
+ * 从 beforeToolCall Hook 的执行结果中提取 askuser-ask_question 的选择结果。
+ *
+ * 当工具为 askuser-ask_question 且 Hook 命令以退出码 0 返回了 stdout 时，
+ * 尝试将 stdout 解析为用户的选择结果，从而跳过实际的 UI 交互流程。
+ *
+ * 支持的 stdout 格式：
+ * 1. 纯文本: 直接作为 selected 值
+ *    示例: "选项A"
+ * 2. JSON 对象: 包含 selected 和可选的 customInput 字段
+ *    示例: {"selected": "选项A", "customInput": "补充说明"}
+ *    示例: {"selected": ["选项A", "选项B"], "customInput": "补充说明"}
+ * 3. JSON 数组: 直接作为多选结果
+ *    示例: ["选项A", "选项B"]
+ *
+ * @param hookResult - Hook 执行结果
+ * @returns 解析出的选择结果，如果无法解析则返回 null
+ */
+function extractHookProvidedAnswer(
+	hookResult: UnifiedHookExecutionResult,
+): {selected: string | string[]; customInput?: string} | null {
+	// 遍历所有 Hook 执行结果，查找第一个成功的 command 输出
+	for (const result of hookResult.results) {
+		if (result.type !== 'command' || !result.success || !result.output) {
+			continue;
+		}
+
+		const rawOutput = result.output.trim();
+		if (!rawOutput) {
+			continue;
+		}
+
+		// 尝试解析为 JSON
+		try {
+			const parsed = JSON.parse(rawOutput);
+
+			// JSON 对象格式: {selected, customInput?}
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				!Array.isArray(parsed) &&
+				parsed.selected !== undefined
+			) {
+				const selected = parsed.selected;
+				if (
+					typeof selected === 'string' ||
+					(Array.isArray(selected) &&
+						selected.every((s: any) => typeof s === 'string'))
+				) {
+					return {
+						selected,
+						customInput:
+							typeof parsed.customInput === 'string'
+								? parsed.customInput
+								: undefined,
+					};
+				}
+			}
+
+			// JSON 数组格式: ["选项A", "选项B"]
+			if (
+				Array.isArray(parsed) &&
+				parsed.every((s: any) => typeof s === 'string')
+			) {
+				return {selected: parsed};
+			}
+		} catch {
+			// 不是有效的 JSON，按纯文本处理
+			return {selected: rawOutput};
+		}
+	}
+
+	return null;
+}
+
+/**
  * Execute a single tool call and return the result
  */
 export async function executeToolCall(
@@ -278,6 +369,7 @@ export async function executeToolCall(
 			);
 
 			// Execute beforeToolCall hook
+			let beforeHookResult: UnifiedHookExecutionResult | null = null;
 			try {
 				const {unifiedHooksExecutor} = await import(
 					'../execution/unifiedHooksExecutor.js'
@@ -285,11 +377,14 @@ export async function executeToolCall(
 				const {interpretHookResult} = await import(
 					'./hookResultInterpreter.js'
 				);
-				const hookResult = await unifiedHooksExecutor.executeHooks(
+				beforeHookResult = await unifiedHooksExecutor.executeHooks(
 					'beforeToolCall',
 					{toolName: toolCall.function.name, args},
 				);
-				const interpreted = interpretHookResult('beforeToolCall', hookResult);
+				const interpreted = interpretHookResult(
+					'beforeToolCall',
+					beforeHookResult,
+				);
 				if (interpreted.action === 'block') {
 					result = {
 						tool_call_id: toolCall.id,
@@ -302,6 +397,35 @@ export async function executeToolCall(
 				}
 			} catch (error) {
 				console.warn('Failed to execute beforeToolCall hook:', error);
+			}
+
+			// If the tool is askuser-ask_question, check whether the
+			// beforeToolCall hook has already provided an answer on stdout.
+			// When a hook returns a selection result, we skip the interactive
+			// UI and feed the answer directly back to the AI, allowing the
+			// workflow to continue without user intervention.
+			if (
+				toolCall.function.name === 'askuser-ask_question' &&
+				beforeHookResult
+			) {
+				const hookAnswer = extractHookProvidedAnswer(beforeHookResult);
+				if (hookAnswer) {
+					const answerText = formatAskUserAnswer(
+						hookAnswer.selected,
+						hookAnswer.customInput,
+					);
+
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: JSON.stringify({
+							answer: answerText,
+							selected: hookAnswer.selected,
+							customInput: hookAnswer.customInput,
+						}),
+					};
+					return result;
+				}
 			}
 
 			// Check if this is a team tool
@@ -580,15 +704,10 @@ export async function executeToolCall(
 					}
 
 					//返回用户的响应作为工具结果
-					const answerText = response.customInput
-						? `${
-								Array.isArray(response.selected)
-									? response.selected.join(', ')
-									: response.selected
-						  }: ${response.customInput}`
-						: Array.isArray(response.selected)
-						? response.selected.join(', ')
-						: response.selected;
+					const answerText = formatAskUserAnswer(
+						response.selected,
+						response.customInput,
+					);
 
 					result = {
 						tool_call_id: toolCall.id,
