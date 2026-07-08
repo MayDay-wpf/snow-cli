@@ -98,6 +98,29 @@ export class WebSearchService {
 		const proxyConfig = getProxyConfig();
 		const debugPort = proxyConfig.browserDebugPort || 9222;
 
+		// WSL Mode normally connects to a Windows browser via WebSocket. But a
+		// WSL user may have configured a *native Linux* browser path (e.g. a
+		// Playwright-installed Chrome at
+		// ~/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome) in
+		// proxyConfig.browserPath. In that case we must launch it directly on
+		// Linux instead of forcing the Windows-browser-via-PowerShell path:
+		// that path would fail (the configured path isn't a /mnt/c/... Windows
+		// .exe), and the fallback inside launchBrowserWSL() strips browserPath,
+		// losing the user's explicit configuration and ultimately yielding
+		// "No system browser found" (Issue #183).
+		//
+		// isExecutableForPlatform() rejects /mnt/<drive>/ Windows mount paths
+		// and .exe/.bat files on Linux, so a true result here guarantees a
+		// usable native Linux binary.
+		if (
+			this.isWSLMode &&
+			proxyConfig.browserPath &&
+			existsSync(proxyConfig.browserPath) &&
+			isExecutableForPlatform(proxyConfig.browserPath)
+		) {
+			return this.launchBrowserDirect(proxyConfig);
+		}
+
 		// WSL Mode: Connect to Windows browser via WebSocket
 		if (this.isWSLMode) {
 			return this.launchBrowserWSL(proxyConfig, debugPort);
