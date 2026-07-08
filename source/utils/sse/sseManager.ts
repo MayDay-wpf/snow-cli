@@ -11,6 +11,8 @@ import {
 } from '../config/permissionsConfig.js';
 import {isSensitiveCommand} from '../execution/sensitiveCommandManager.js';
 import {randomUUID} from 'crypto';
+import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
+import {extractHookProvidedConfirmation} from '../execution/hookResultInterpreter.js';
 
 /**
  * 待处理的交互请求
@@ -544,6 +546,33 @@ class SSEManager {
 				{value: 'reject_with_reply', label: 'Reject with reply'},
 				{value: 'reject', label: 'Reject and end session'},
 			);
+
+			// 执行 toolConfirmation Hook，若返回 exit code 0 + stdout
+			// 则自动确认/拒绝，跳过客户端交互
+			try {
+				const hookContext = {
+					toolName: toolCall.function.name,
+					args: toolCall.function.arguments,
+					isSensitive,
+					matchedPattern: sensitiveInfo?.pattern,
+					matchedReason: sensitiveInfo?.description,
+					allTools: allTools?.map(t => ({
+						name: t.function.name,
+						arguments: t.function.arguments,
+					})),
+				};
+
+				const hookResult = await unifiedHooksExecutor.executeHooks(
+					'toolConfirmation',
+					hookContext,
+				);
+				const autoResult = extractHookProvidedConfirmation(hookResult);
+				if (autoResult) {
+					return autoResult;
+				}
+			} catch {
+				// Hook 执行失败时回退到客户端交互
+			}
 
 			// 发送工具确认请求
 			sendEvent({

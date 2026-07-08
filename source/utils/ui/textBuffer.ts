@@ -1553,7 +1553,8 @@ export class TextBuffer {
 						placeholderText.match(/^\[image #\d+\] ?$/) ||
 						placeholderText === '[Pasting...]' ||
 						placeholderText === '[Pasting...] ' ||
-						placeholderText.match(/^\[Skill:[^\]]+\] ?$/)
+						placeholderText.match(/^\[Skill:[^\]]+\] ?$/) ||
+						placeholderText.match(/^\[GitLine:[^\]]+\] ?$/)
 					) {
 						return {start: openPos, end};
 					}

@@ -7,7 +7,10 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
-import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
+import {
+	interpretHookResult,
+	extractHookProvidedConfirmation,
+} from '../../../utils/execution/hookResultInterpreter.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import fs from 'fs';
 
@@ -242,6 +245,8 @@ export default function ToolConfirmation({
 			toolName,
 			args: toolArguments,
 			isSensitive: sensitiveCommandCheck.isSensitive,
+			matchedPattern: sensitiveCommandCheck.matchedCommand?.pattern,
+			matchedReason: sensitiveCommandCheck.matchedCommand?.description,
 			allTools: allTools?.map(t => ({
 				name: t.function.name,
 				arguments: t.function.arguments,
@@ -252,6 +257,16 @@ export default function ToolConfirmation({
 		unifiedHooksExecutor
 			.executeHooks('toolConfirmation', context)
 			.then(hookResult => {
+				// If Hook returned exit code 0 with stdout, attempt to
+				// auto-confirm/reject to skip the interactive UI and let the
+				// AI workflow continue automatically.
+				const autoResult = extractHookProvidedConfirmation(hookResult);
+				if (autoResult) {
+					setHasSelected(true);
+					onConfirm(autoResult);
+					return;
+				}
+
 				const interpreted = interpretHookResult('toolConfirmation', hookResult);
 				if (interpreted.action === 'warn' && interpreted.warningMessage) {
 					console.warn(interpreted.warningMessage);
@@ -266,7 +281,13 @@ export default function ToolConfirmation({
 			.catch(error => {
 				console.error('Failed to execute toolConfirmation hook:', error);
 			});
-	}, [toolName, toolArguments, sensitiveCommandCheck.isSensitive, allTools]);
+	}, [
+		toolName,
+		toolArguments,
+		sensitiveCommandCheck.isSensitive,
+		sensitiveCommandCheck.matchedCommand,
+		allTools,
+	]);
 	useEffect(() => {
 		// Only show diff for filesystem operations and when VSCode is connected
 		if (!vscodeConnection.isConnected()) {
