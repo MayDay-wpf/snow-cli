@@ -1,6 +1,7 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {getPostAppendSnapshotMessageIndex} from './snapshotMessageIndex.js';
 import {
 	handleAutoCompression,
 	type AutoCompressOptions,
@@ -219,18 +220,9 @@ export async function handlePendingMessages(
 		);
 		const updatedSession = sessionManager.getCurrentSession();
 		if (updatedSession) {
-			const {convertSessionMessagesToUI} = await import(
-				'../../../utils/session/sessionConverter.js'
+			const snapshotMessageIndex = getPostAppendSnapshotMessageIndex(
+				updatedSession.messages,
 			);
-			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
-			const compressedSummaryIndex = uiMessages.findIndex(
-				msg =>
-					msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected,
-			);
-			const snapshotMessageIndex =
-				updatedSession.compressedFrom != null
-					? Math.max(0, compressedSummaryIndex)
-					: uiMessages.length;
 			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {

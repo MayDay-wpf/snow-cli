@@ -713,7 +713,8 @@ function MessageRendererImpl({
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
 										!message.toolCall.arguments.isBatch &&
-										message.toolCall.arguments.content && (
+										message.toolCall.arguments.content &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1}>
 												<DiffViewer
 													newContent={message.toolCall.arguments.content}
@@ -725,7 +726,8 @@ function MessageRendererImpl({
 										(message.toolCall.name === 'filesystem-edit' ||
 											message.toolCall.name === 'filesystem-replaceedit') &&
 										message.toolCall.arguments.oldContent &&
-										message.toolCall.arguments.newContent && (
+										message.toolCall.arguments.newContent &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1}>
 												<DiffViewer
 													oldContent={message.toolCall.arguments.oldContent}

@@ -7,6 +7,7 @@ import {
 import {toolSearchService} from '../../../utils/execution/toolSearchService.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {initializeConversationSession} from './sessionInitializer.js';
+import {getPostAppendSnapshotMessageIndex} from './snapshotMessageIndex.js';
 import {buildEditorContextContent} from './editorContextBuilder.js';
 import {cleanOrphanedToolCalls} from '../utils/messageCleanup.js';
 import type {ConversationHandlerOptions} from './conversationTypes.js';
@@ -111,18 +112,9 @@ export async function appendUserMessageAndSyncContext(options: {
 		);
 		const updatedSession = sessionManager.getCurrentSession();
 		if (updatedSession) {
-			const {convertSessionMessagesToUI} = await import(
-				'../../../utils/session/sessionConverter.js'
+			const snapshotMessageIndex = getPostAppendSnapshotMessageIndex(
+				updatedSession.messages,
 			);
-			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
-			const compressedSummaryIndex = uiMessages.findIndex(
-				msg =>
-					msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected,
-			);
-			const snapshotMessageIndex =
-				updatedSession.compressedFrom != null
-					? Math.max(0, compressedSummaryIndex)
-					: uiMessages.length;
 			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
