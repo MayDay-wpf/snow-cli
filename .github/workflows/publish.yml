@@ -56,9 +56,8 @@ jobs:
 
             ### What's New
 
-            - Add diff preview for filesystem edits, with support for batch processing
-            - Enrich pending edit arguments for more accurate filesystem operation previews
-            - Add support for native Linux browser in WSL mode for web search
+            - Update reasoning effort types to accept string values for greater flexibility
+            - Enrich filesystem edit arguments with diff preview data for improved sub-agent UI rendering
 
             ### Installation
             ```bash
