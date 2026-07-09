@@ -27,9 +27,15 @@ interface Props {
 
 type Tab = 'advanced' | 'basic' | 'thinking';
 
-type ThinkingInputMode = null | 'anthropicBudgetTokens';
+type ThinkingInputMode =
+	| null
+	| 'anthropicBudgetTokens'
+	| 'thinkingEffort'
+	| 'geminiThinkingLevel'
+	| 'responsesReasoningEffort'
+	| 'chatReasoningEffort';
 
-type ResponsesReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+type ResponsesReasoningEffort = string;
 type ResponsesVerbosity = 'low' | 'medium' | 'high';
 
 export const ModelsPanel: React.FC<Props> = ({
@@ -78,13 +84,10 @@ export const ModelsPanel: React.FC<Props> = ({
 		'tokens',
 	);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
-	const [thinkingEffort, setThinkingEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [thinkingEffort, setThinkingEffort] = useState<string>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
-		'minimal' | 'low' | 'medium' | 'high'
-	>('high');
+	const [geminiThinkingLevel, setGeminiThinkingLevel] =
+		useState<string>('high');
 	const [isGeminiLevelSelecting, setIsGeminiLevelSelecting] = useState(false);
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
@@ -108,9 +111,8 @@ export const ModelsPanel: React.FC<Props> = ({
 	>(undefined);
 	const [isSpeedSelecting, setIsSpeedSelecting] = useState(false);
 	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
-	const [chatReasoningEffort, setChatReasoningEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [chatReasoningEffort, setChatReasoningEffort] =
+		useState<string>('high');
 	const [isChatEffortSelecting, setIsChatEffortSelecting] = useState(false);
 
 	useEffect(() => {
@@ -505,7 +507,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyThinkingEffort = useCallback(
-		async (next: 'low' | 'medium' | 'high' | 'max') => {
+		async (next: string) => {
 			setErrorMessage('');
 			try {
 				setThinkingEffort(next);
@@ -524,7 +526,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyGeminiLevel = useCallback(
-		async (next: 'minimal' | 'low' | 'medium' | 'high') => {
+		async (next: string) => {
 			setErrorMessage('');
 			try {
 				setGeminiThinkingLevel(next);
@@ -543,7 +545,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyResponsesEffort = useCallback(
-		async (effort: ResponsesReasoningEffort) => {
+		async (effort: string) => {
 			setErrorMessage('');
 			try {
 				setResponsesReasoningEffort(effort);
@@ -580,7 +582,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyChatReasoningEffort = useCallback(
-		async (effort: 'low' | 'medium' | 'high' | 'max') => {
+		async (effort: string) => {
 			setErrorMessage('');
 			try {
 				setChatReasoningEffort(effort);
@@ -722,11 +724,40 @@ export const ModelsPanel: React.FC<Props> = ({
 
 			// Thinking numeric input
 			if (thinkingInputMode) {
-				if (key.return) {
-					const parsed = Number.parseInt(thinkingInputValue.trim(), 10);
-					if (!Number.isNaN(parsed) && parsed >= 0) {
-						if (thinkingInputMode === 'anthropicBudgetTokens') {
+				if (thinkingInputMode === 'anthropicBudgetTokens') {
+					if (key.return) {
+						const parsed = Number.parseInt(thinkingInputValue.trim(), 10);
+						if (!Number.isNaN(parsed) && parsed >= 0) {
 							void applyAnthropicBudgetTokens(parsed);
+						}
+						setThinkingInputMode(null);
+						setThinkingInputValue('');
+						return;
+					}
+
+					if (key.backspace || key.delete) {
+						setThinkingInputValue(prev => prev.slice(0, -1));
+						return;
+					}
+
+					if (input && /[0-9]/.test(input)) {
+						setThinkingInputValue(prev => prev + input);
+					}
+					return;
+				}
+
+				// Text input mode for thinking effort fields
+				if (key.return) {
+					const cleaned = thinkingInputValue.trim();
+					if (cleaned) {
+						if (thinkingInputMode === 'thinkingEffort') {
+							void applyThinkingEffort(cleaned);
+						} else if (thinkingInputMode === 'geminiThinkingLevel') {
+							void applyGeminiLevel(cleaned);
+						} else if (thinkingInputMode === 'responsesReasoningEffort') {
+							void applyResponsesEffort(cleaned);
+						} else if (thinkingInputMode === 'chatReasoningEffort') {
+							void applyChatReasoningEffort(cleaned);
 						}
 					}
 					setThinkingInputMode(null);
@@ -739,7 +770,7 @@ export const ModelsPanel: React.FC<Props> = ({
 					return;
 				}
 
-				if (input && /[0-9]/.test(input)) {
+				if (input && /[a-zA-Z0-9_-]/.test(input)) {
 					setThinkingInputValue(prev => prev + input);
 				}
 				return;
@@ -1098,7 +1129,9 @@ export const ModelsPanel: React.FC<Props> = ({
 					{thinkingInputMode && (
 						<Box flexDirection="column" marginTop={1}>
 							<Text color={theme.colors.menuInfo}>
-								{t.modelsPanel.inputNumberHint}
+								{thinkingInputMode === 'anthropicBudgetTokens'
+									? t.modelsPanel.inputNumberHint
+									: t.modelsPanel.manualInputHint}
 							</Text>
 							<Box marginLeft={1}>
 								<Text color={theme.colors.menuSelected}>
@@ -1139,12 +1172,20 @@ export const ModelsPanel: React.FC<Props> = ({
 							<ScrollableSelectInput
 								items={(requestMethod === 'anthropic'
 									? [
+											{
+												label: t.modelsPanel.manualInputOption,
+												value: '__MANUAL_INPUT__',
+											},
 											{label: 'low', value: 'low'},
 											{label: 'medium', value: 'medium'},
 											{label: 'high', value: 'high'},
 											{label: 'max', value: 'max'},
 									  ]
 									: [
+											{
+												label: t.modelsPanel.manualInputOption,
+												value: '__MANUAL_INPUT__',
+											},
 											{label: 'none', value: 'none'},
 											{label: 'low', value: 'low'},
 											{label: 'medium', value: 'medium'},
@@ -1161,22 +1202,37 @@ export const ModelsPanel: React.FC<Props> = ({
 									0,
 									requestMethod === 'anthropic'
 										? (['low', 'medium', 'high', 'max'] as const).indexOf(
-												thinkingEffort,
+												thinkingEffort as 'low' | 'medium' | 'high' | 'max',
 										  )
 										: (
 												['none', 'low', 'medium', 'high', 'xhigh'] as const
-										  ).indexOf(responsesReasoningEffort),
+										  ).indexOf(
+												responsesReasoningEffort as
+													| 'none'
+													| 'low'
+													| 'medium'
+													| 'high'
+													| 'xhigh',
+										  ),
 								)}
 								isFocused={true}
 								onSelect={item => {
+									if (item.value === '__MANUAL_INPUT__') {
+										if (requestMethod === 'anthropic') {
+											setIsThinkingEffortSelecting(false);
+											setThinkingInputMode('thinkingEffort');
+											setThinkingInputValue(thinkingEffort);
+										} else {
+											setIsThinkingEffortSelecting(false);
+											setThinkingInputMode('responsesReasoningEffort');
+											setThinkingInputValue(responsesReasoningEffort);
+										}
+										return;
+									}
 									if (requestMethod === 'anthropic') {
-										void applyThinkingEffort(
-											item.value as 'low' | 'medium' | 'high' | 'max',
-										);
+										void applyThinkingEffort(item.value);
 									} else {
-										void applyResponsesEffort(
-											item.value as ResponsesReasoningEffort,
-										);
+										void applyResponsesEffort(item.value);
 									}
 									setIsThinkingEffortSelecting(false);
 								}}
@@ -1215,6 +1271,10 @@ export const ModelsPanel: React.FC<Props> = ({
 						<Box marginTop={1}>
 							<ScrollableSelectInput
 								items={[
+									{
+										label: t.modelsPanel.manualInputOption,
+										value: '__MANUAL_INPUT__',
+									},
 									{label: 'MINIMAL', value: 'minimal'},
 									{label: 'LOW', value: 'low'},
 									{label: 'MEDIUM', value: 'medium'},
@@ -1225,14 +1285,22 @@ export const ModelsPanel: React.FC<Props> = ({
 								initialIndex={Math.max(
 									0,
 									(['minimal', 'low', 'medium', 'high'] as const).indexOf(
-										geminiThinkingLevel,
+										geminiThinkingLevel as
+											| 'minimal'
+											| 'low'
+											| 'medium'
+											| 'high',
 									),
 								)}
 								isFocused={true}
 								onSelect={item => {
-									void applyGeminiLevel(
-										item.value as 'minimal' | 'low' | 'medium' | 'high',
-									);
+									if (item.value === '__MANUAL_INPUT__') {
+										setIsGeminiLevelSelecting(false);
+										setThinkingInputMode('geminiThinkingLevel');
+										setThinkingInputValue(geminiThinkingLevel);
+										return;
+									}
+									void applyGeminiLevel(item.value);
 									setIsGeminiLevelSelecting(false);
 								}}
 							/>
@@ -1279,6 +1347,10 @@ export const ModelsPanel: React.FC<Props> = ({
 						<Box marginTop={1}>
 							<ScrollableSelectInput
 								items={[
+									{
+										label: t.modelsPanel.manualInputOption,
+										value: '__MANUAL_INPUT__',
+									},
 									{label: 'LOW', value: 'low'},
 									{label: 'MEDIUM', value: 'medium'},
 									{label: 'HIGH', value: 'high'},
@@ -1289,14 +1361,18 @@ export const ModelsPanel: React.FC<Props> = ({
 								initialIndex={Math.max(
 									0,
 									(['low', 'medium', 'high', 'max'] as const).indexOf(
-										chatReasoningEffort,
+										chatReasoningEffort as 'low' | 'medium' | 'high' | 'max',
 									),
 								)}
 								isFocused={true}
 								onSelect={item => {
-									void applyChatReasoningEffort(
-										item.value as 'low' | 'medium' | 'high' | 'max',
-									);
+									if (item.value === '__MANUAL_INPUT__') {
+										setIsChatEffortSelecting(false);
+										setThinkingInputMode('chatReasoningEffort');
+										setThinkingInputValue(chatReasoningEffort);
+										return;
+									}
+									void applyChatReasoningEffort(item.value);
 									setIsChatEffortSelecting(false);
 								}}
 							/>

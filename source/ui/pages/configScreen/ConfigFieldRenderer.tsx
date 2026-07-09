@@ -608,9 +608,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									{label: 'HIGH', value: 'high'},
 								]}
 								onChange={value => {
-									setGeminiThinkingLevel(
-										value as 'minimal' | 'low' | 'medium' | 'high',
-									);
+									setGeminiThinkingLevel(value);
 									state.setIsEditing(false);
 								}}
 							/>
@@ -669,9 +667,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
 								]}
 								onChange={value => {
-									setResponsesReasoningEffort(
-										value as 'none' | 'low' | 'medium' | 'high' | 'xhigh',
-									);
+									setResponsesReasoningEffort(value);
 									state.setIsEditing(false);
 								}}
 							/>

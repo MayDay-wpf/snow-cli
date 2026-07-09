@@ -14,22 +14,21 @@ export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
 export interface ThinkingConfig {
 	type: 'enabled' | 'adaptive';
 	budget_tokens?: number; // For 'enabled' type
-	effort?: 'low' | 'medium' | 'high' | 'max'; // For 'adaptive' type
+	effort?: string; // For 'adaptive' type (e.g. 'low', 'medium', 'high', 'max', or custom)
 }
 
-export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+export type GeminiThinkingLevel = string; // e.g. 'minimal', 'low', 'medium', 'high', or custom
 
 export interface GeminiThinkingConfig {
 	enabled: boolean;
 	thinkingLevel: GeminiThinkingLevel;
 }
-
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
-	effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+	effort: string; // e.g. 'none', 'low', 'medium', 'high', 'xhigh', or custom
 }
 
-export type ChatReasoningEffort = 'low' | 'medium' | 'high' | 'max';
+export type ChatReasoningEffort = string;
 
 export interface ChatThinkingConfig {
 	enabled: boolean;

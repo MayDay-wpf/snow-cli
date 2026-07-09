@@ -210,25 +210,30 @@ export default function ConfigSelectPanel({state}: Props) {
 				{currentField === 'thinkingEffort' && (
 					<ScrollableSelectInput
 						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
 							{label: 'low', value: 'low'},
 							{label: 'medium', value: 'medium'},
 							{label: 'high', value: 'high'},
 							{label: 'max', value: 'max'},
 						]}
-						initialIndex={
-							thinkingEffort === 'low'
-								? 0
-								: thinkingEffort === 'medium'
-								? 1
-								: thinkingEffort === 'high'
-								? 2
-								: 3
-						}
+						initialIndex={Math.max(
+							0,
+							['__MANUAL_INPUT__', 'low', 'medium', 'high', 'max'].indexOf(
+								thinkingEffort,
+							),
+						)}
 						isFocused={true}
 						onSelect={item => {
-							setThinkingEffort(
-								item.value as 'low' | 'medium' | 'high' | 'max',
-							);
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(thinkingEffort);
+								return;
+							}
+							setThinkingEffort(item.value);
 							setIsEditing(false);
 						}}
 					/>
@@ -236,6 +241,10 @@ export default function ConfigSelectPanel({state}: Props) {
 				{currentField === 'geminiThinkingLevel' && (
 					<ScrollableSelectInput
 						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
 							{label: 'MINIMAL', value: 'minimal'},
 							{label: 'LOW', value: 'low'},
 							{label: 'MEDIUM', value: 'medium'},
@@ -243,15 +252,19 @@ export default function ConfigSelectPanel({state}: Props) {
 						]}
 						initialIndex={Math.max(
 							0,
-							(['minimal', 'low', 'medium', 'high'] as const).indexOf(
+							['__MANUAL_INPUT__', 'minimal', 'low', 'medium', 'high'].indexOf(
 								geminiThinkingLevel,
 							),
 						)}
 						isFocused={true}
 						onSelect={item => {
-							setGeminiThinkingLevel(
-								item.value as 'minimal' | 'low' | 'medium' | 'high',
-							);
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(geminiThinkingLevel);
+								return;
+							}
+							setGeminiThinkingLevel(item.value);
 							setIsEditing(false);
 						}}
 					/>
@@ -284,6 +297,10 @@ export default function ConfigSelectPanel({state}: Props) {
 				{currentField === 'chatReasoningEffort' && (
 					<ScrollableSelectInput
 						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
 							{label: 'LOW', value: 'low'},
 							{label: 'MEDIUM', value: 'medium'},
 							{label: 'HIGH', value: 'high'},
@@ -291,15 +308,19 @@ export default function ConfigSelectPanel({state}: Props) {
 						]}
 						initialIndex={Math.max(
 							0,
-							(['low', 'medium', 'high', 'max'] as const).indexOf(
+							['__MANUAL_INPUT__', 'low', 'medium', 'high', 'max'].indexOf(
 								chatReasoningEffort,
 							),
 						)}
 						isFocused={true}
 						onSelect={item => {
-							setChatReasoningEffort(
-								item.value as 'low' | 'medium' | 'high' | 'max',
-							);
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(chatReasoningEffort);
+								return;
+							}
+							setChatReasoningEffort(item.value);
 							setIsEditing(false);
 						}}
 					/>
@@ -582,6 +603,7 @@ function ModelSelect({state}: Props) {
 
 function ReasoningEffortSelect({state}: Props) {
 	const {
+		t,
 		supportsXHigh,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
@@ -589,6 +611,7 @@ function ReasoningEffortSelect({state}: Props) {
 	} = state;
 
 	const effortOptions = [
+		{label: t.configScreen.manualInputOption, value: '__MANUAL_INPUT__'},
 		{label: 'NONE', value: 'none'},
 		{label: 'LOW', value: 'low'},
 		{label: 'MEDIUM', value: 'medium'},
@@ -605,15 +628,13 @@ function ReasoningEffortSelect({state}: Props) {
 			)}
 			isFocused={true}
 			onSelect={item => {
-				const nextEffort = item.value as
-					| 'none'
-					| 'low'
-					| 'medium'
-					| 'high'
-					| 'xhigh';
-				setResponsesReasoningEffort(
-					nextEffort === 'xhigh' && !supportsXHigh ? 'high' : nextEffort,
-				);
+				if (item.value === '__MANUAL_INPUT__') {
+					setIsEditing(false);
+					state.setManualInputMode(true);
+					state.setManualInputValue(responsesReasoningEffort);
+					return;
+				}
+				setResponsesReasoningEffort(item.value);
 				setIsEditing(false);
 			}}
 		/>

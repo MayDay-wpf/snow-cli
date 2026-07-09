@@ -95,18 +95,14 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		'tokens',
 	);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
-	const [thinkingEffort, setThinkingEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [thinkingEffort, setThinkingEffort] = useState<string>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
-		'minimal' | 'low' | 'medium' | 'high'
-	>('high');
+	const [geminiThinkingLevel, setGeminiThinkingLevel] =
+		useState<string>('high');
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
-	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<
-		'none' | 'low' | 'medium' | 'high' | 'xhigh'
-	>('high');
+	const [responsesReasoningEffort, setResponsesReasoningEffort] =
+		useState<string>('high');
 	const [responsesVerbosity, setResponsesVerbosity] = useState<
 		'low' | 'medium' | 'high'
 	>('medium');
@@ -115,9 +111,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		'fast' | 'standard' | undefined
 	>(undefined);
 	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
-	const [chatReasoningEffort, setChatReasoningEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [chatReasoningEffort, setChatReasoningEffort] =
+		useState<string>('high');
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');

@@ -248,6 +248,13 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 					{currentField === 'advancedModel' && t.configScreen.advancedModel}
 					{currentField === 'basicModel' && t.configScreen.basicModel}
 					{currentField === 'visionModel' && t.configScreen.visionModel}
+					{currentField === 'thinkingEffort' && t.configScreen.thinkingEffort}
+					{currentField === 'geminiThinkingLevel' &&
+						t.configScreen.geminiThinkingLevel}
+					{currentField === 'responsesReasoningEffort' &&
+						t.configScreen.responsesReasoningEffort}
+					{currentField === 'chatReasoningEffort' &&
+						t.configScreen.chatReasoningEffort}
 				</Text>
 				<Box marginLeft={2}>
 					<Text color={theme.colors.menuSelected}>

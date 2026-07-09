@@ -164,7 +164,7 @@ export interface ResponseStreamChunk {
 }
 
 function getResponsesReasoningConfig(): {
-	effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+	effort?: string;
 	summary?: 'auto' | 'none';
 } | null {
 	const config = getSnowConfig();

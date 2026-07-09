@@ -72,6 +72,10 @@ export function useConfigInput(
 		setRetryDelayMs,
 		thinkingBudgetTokens,
 		setThinkingBudgetTokens,
+		setThinkingEffort,
+		setGeminiThinkingLevel,
+		setResponsesReasoningEffort,
+		setChatReasoningEffort,
 		autoCompressThreshold,
 		setAutoCompressThreshold,
 		setAdvancedModel,
@@ -211,6 +215,14 @@ export function useConfigInput(
 						setBasicModel(cleaned);
 					} else if (currentField === 'visionModel') {
 						setVisionModel(cleaned);
+					} else if (currentField === 'thinkingEffort') {
+						setThinkingEffort(cleaned);
+					} else if (currentField === 'geminiThinkingLevel') {
+						setGeminiThinkingLevel(cleaned);
+					} else if (currentField === 'responsesReasoningEffort') {
+						setResponsesReasoningEffort(cleaned);
+					} else if (currentField === 'chatReasoningEffort') {
+						setChatReasoningEffort(cleaned);
 					}
 				}
 				setManualInputMode(false);

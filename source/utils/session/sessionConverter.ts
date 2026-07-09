@@ -1,8 +1,82 @@
 import type {ChatMessage} from '../../api/chat.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {formatToolCallMessage} from '../ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
+import {
+	isToolNeedTwoStepDisplay,
+	extractFilesystemEditDiffDataForPersistence,
+} from '../config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../ui/diffPreview.js';
+
+/**
+ * 从后续的 tool result 消息中提取 editDiffData。
+ *
+ * 当 resume 会话时，pending 消息需要恢复 DiffViewer 显示。但此时文件
+ * 已经被编辑过，enrichPendingEditArgs 从磁盘读取的文件内容无法正确
+ * 计算 diff（searchContent 找不到、hash 锚点失效等）。
+ *
+ * 因此需要从后续的 tool result 消息中提取保存的 editDiffData —— 这是
+ * 工具执行时提取的原始 diff 元数据，包含了正确的 oldContent/newContent。
+ *
+ * @param sessionMessages - 完整的会话消息列表
+ * @param startIndex - 当前 assistant 消息的索引
+ * @param toolCallId - 要查找的 tool_call ID
+ * @returns editDiffData 或 undefined
+ */
+function findToolResultDiffData(
+	sessionMessages: ChatMessage[],
+	startIndex: number,
+	toolCallId: string,
+): Record<string, any> | undefined {
+	for (let j = startIndex + 1; j < sessionMessages.length; j++) {
+		const nextMsg = sessionMessages[j];
+		if (!nextMsg) break;
+		// tool result 消息的 tool_call_id 匹配
+		if (nextMsg.role === 'tool' && nextMsg.tool_call_id === toolCallId) {
+			// 优先使用保存的 editDiffData 字段
+			const savedEditDiffData = (nextMsg as any).editDiffData;
+			if (
+				savedEditDiffData &&
+				(typeof savedEditDiffData.oldContent === 'string' ||
+					typeof savedEditDiffData.content === 'string' ||
+					Array.isArray(savedEditDiffData.batchResults))
+			) {
+				return savedEditDiffData;
+			}
+			// 回退：从 content JSON 中提取
+			const toolName = findToolNameForToolCall(
+				sessionMessages,
+				startIndex,
+				toolCallId,
+			);
+			if (toolName) {
+				return extractFilesystemEditDiffDataForPersistence(
+					toolName,
+					nextMsg.content,
+				);
+			}
+			return undefined;
+		}
+		// 遇到下一个 assistant 消息就停止
+		if (nextMsg.role === 'assistant' && !nextMsg.subAgentInternal) {
+			break;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * 向前查找 assistant 消息中某个 tool_call 的工具名。
+ */
+function findToolNameForToolCall(
+	sessionMessages: ChatMessage[],
+	assistantIndex: number,
+	toolCallId: string,
+): string | undefined {
+	const msg = sessionMessages[assistantIndex];
+	if (!msg || !msg.tool_calls) return undefined;
+	const tc = msg.tool_calls.find(t => t.id === toolCallId);
+	return tc?.function.name;
+}
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -127,13 +201,23 @@ export function convertSessionMessagesToUI(
 					paramDisplay = ` (${params})`;
 				}
 
+				// Prefer saved editDiffData from the subsequent tool result
+				// (same rationale as the non-subagent path above).
+				const subAgentSavedDiffData = findToolResultDiffData(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
+				const subAgentEnrichedArgs = subAgentSavedDiffData
+					? {...toolArgs, ...subAgentSavedDiffData}
+					: enrichPendingEditArgs(toolCall.function.name, toolArgs);
 				uiMessages.push({
 					role: 'subagent',
 					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 					streaming: false,
 					toolCall: {
 						name: toolCall.function.name,
-						arguments: enrichPendingEditArgs(toolCall.function.name, toolArgs),
+						arguments: subAgentEnrichedArgs,
 					},
 					toolCallId: toolCall.id,
 					toolPending: false,
@@ -395,11 +479,20 @@ export function convertSessionMessagesToUI(
 				// Only add "in progress" message for tools that need two-step display
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
 				if (needTwoSteps) {
-					// Enrich args with diff preview data so DiffViewer can render
-					const enrichedArgs = enrichPendingEditArgs(
-						toolCall.function.name,
-						toolArgs,
+					// When resuming a session, the file on disk has already been
+					// edited, so enrichPendingEditArgs (which reads the current
+					// file) cannot compute a correct diff. Instead, prefer the
+					// editDiffData saved in the subsequent tool result message —
+					// it contains the original oldContent/newContent captured at
+					// execution time.
+					const savedDiffData = findToolResultDiffData(
+						sessionMessages,
+						i,
+						toolCall.id,
 					);
+					const enrichedArgs = savedDiffData
+						? {...toolArgs, ...savedDiffData}
+						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
 					// Add tool call message (in progress)
 					uiMessages.push({
 						role: 'assistant',
