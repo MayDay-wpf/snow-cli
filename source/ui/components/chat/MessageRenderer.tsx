@@ -745,13 +745,14 @@ function MessageRendererImpl({
 												/>
 											</Box>
 										)}
-									{/* Show batch edit results */}
+									{/* Show batch edit results (pending only — success uses tool result) */}
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
 											message.toolCall.name === 'filesystem-replaceedit') &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
-										Array.isArray(message.toolCall.arguments.batchResults) && (
+										Array.isArray(message.toolCall.arguments.batchResults) &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {
@@ -792,12 +793,13 @@ function MessageRendererImpl({
 												)}
 											</Box>
 										)}
-									{/* Show batch create results */}
+									{/* Show batch create results (pending only — success uses tool result) */}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
-										Array.isArray(message.toolCall.arguments.batchResults) && (
+										Array.isArray(message.toolCall.arguments.batchResults) &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {

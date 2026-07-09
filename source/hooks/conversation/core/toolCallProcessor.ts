@@ -105,8 +105,9 @@ export async function processToolCallsAfterStream(
 		}
 
 		if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
-			// For filesystem-edit/replaceedit, compute oldContent/newContent
-			// from the original file so DiffViewer can render during pending.
+			// For filesystem-edit/replaceedit/create, compute diff preview data
+			// (oldContent/newContent for single-file, batchResults for batch)
+			// so DiffViewer can render during pending.
 			const enrichedArgs = enrichPendingEditArgs(
 				toolCall.function.name,
 				toolArgs,

@@ -2,6 +2,7 @@ import type {ChatMessage} from '../../api/chat.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {formatToolCallMessage} from '../ui/messageFormatter.js';
 import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
+import {enrichPendingEditArgs} from '../ui/diffPreview.js';
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -132,7 +133,7 @@ export function convertSessionMessagesToUI(
 					streaming: false,
 					toolCall: {
 						name: toolCall.function.name,
-						arguments: toolArgs,
+						arguments: enrichPendingEditArgs(toolCall.function.name, toolArgs),
 					},
 					toolCallId: toolCall.id,
 					toolPending: false,
@@ -394,6 +395,11 @@ export function convertSessionMessagesToUI(
 				// Only add "in progress" message for tools that need two-step display
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
 				if (needTwoSteps) {
+					// Enrich args with diff preview data so DiffViewer can render
+					const enrichedArgs = enrichPendingEditArgs(
+						toolCall.function.name,
+						toolArgs,
+					);
 					// Add tool call message (in progress)
 					uiMessages.push({
 						role: 'assistant',
@@ -401,7 +407,7 @@ export function convertSessionMessagesToUI(
 						streaming: false,
 						toolCall: {
 							name: toolCall.function.name,
-							arguments: toolArgs,
+							arguments: enrichedArgs,
 						},
 						toolDisplay,
 						messageStatus: 'pending',
