@@ -5,6 +5,7 @@ import {
 	extractFilesystemEditDiffDataForPersistence,
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
+import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -1008,6 +1009,13 @@ export class SubAgentUIHandler {
 				toolArgs = {};
 			}
 
+			// Enrich filesystem edit/create args with diff preview data so
+			// DiffViewer can render during pending (single-file + batch).
+			const enrichedArgs = enrichPendingEditArgs(
+				toolCall.function.name,
+				toolArgs,
+			);
+
 			let paramDisplay = '';
 			if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
 				paramDisplay = ` "${toolArgs.command}"`;
@@ -1022,7 +1030,7 @@ export class SubAgentUIHandler {
 				role: 'subagent' as const,
 				content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 				streaming: false,
-				toolCall: {name: toolCall.function.name, arguments: toolArgs},
+				toolCall: {name: toolCall.function.name, arguments: enrichedArgs},
 				toolCallId: toolCall.id,
 				toolPending: true,
 				messageStatus: 'pending',
