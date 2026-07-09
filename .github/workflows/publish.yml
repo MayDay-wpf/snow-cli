@@ -56,15 +56,9 @@ jobs:
 
             ### What's New
 
-            - Support display and processing of unstaged changes with GitLine integration
-            - Highlight workspace tags with `@` prefix parsing and tag display
-            - Add `argsHint`/`argsOptions` and namespace support for custom commands
-            - Support `$ARGUMENTS` placeholder substitution in custom commands, replacing with empty string for empty arguments
-            - Enhance `formatTodoContext` to support follow-up scenarios and ultra TODO mode
-            - Add auto-answering support for `askuser-ask_question` via `beforeToolCall` hook
-            - Add `toolConfirmation` hook auto-confirm/reject: parse stdout (exit code 0) as confirmation result to skip interactive UI across CLI, ACP, and SSE modes
-            - Support inline `# GitLine:` / `# Skill:` markers that appear mid-line, preserving preceding user text
-            - Fix cursor position handling in file picker after text insertion
+            - Add diff preview for filesystem edits, with support for batch processing
+            - Enrich pending edit arguments for more accurate filesystem operation previews
+            - Add support for native Linux browser in WSL mode for web search
 
             ### Installation
             ```bash
