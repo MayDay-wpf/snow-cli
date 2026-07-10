@@ -47,6 +47,7 @@ export interface AnthropicOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 system，其余系统提示词降级为 user
 	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
@@ -228,11 +229,13 @@ function convertToAnthropicMessages(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): {
 	system?: any;
 	messages: AnthropicMessageParam[];
 } {
 	const customSystemPrompts = customSystemPromptOverride;
+	const explicitSystemPrompts: string[] = [];
 	let systemContents: string[] | undefined;
 	const anthropicMessages: AnthropicMessageParam[] = [];
 
@@ -249,6 +252,7 @@ function convertToAnthropicMessages(
 		}
 
 		if (msg.role === 'system') {
+			explicitSystemPrompts.push(msg.content);
 			systemContents = [msg.content];
 			continue;
 		}
@@ -427,19 +431,52 @@ function convertToAnthropicMessages(
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
 	if (customSystemPrompts && customSystemPrompts.length > 0) {
 		systemContents = customSystemPrompts;
-		if (includeBuiltinSystemPrompt) {
+		const builtinPrompt = includeBuiltinSystemPrompt
+			? getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+			  )
+			: '';
+
+		if (isSubAgentRequest) {
+			// 子代理的 system 只保留用户配置；已有 system 与内置提示词全部降级为 user。
+			const hasBuiltinInExplicitSystem =
+				builtinPrompt.length > 0 &&
+				explicitSystemPrompts.some(prompt => prompt.includes(builtinPrompt));
+			const downgradedSystemMessages: AnthropicMessageParam[] =
+				explicitSystemPrompts.map(prompt => ({
+					role: 'user',
+					content: prompt,
+				}));
+			const downgradedBuiltinMessages: AnthropicMessageParam[] =
+				builtinPrompt && !hasBuiltinInExplicitSystem
+					? [
+							{
+								role: 'user',
+								content: [
+									{
+										type: 'text',
+										text: builtinPrompt,
+										cache_control: {type: 'ephemeral', ttl: cacheTTL},
+									},
+								] as any,
+							},
+					  ]
+					: [];
+			anthropicMessages.unshift(
+				...downgradedSystemMessages,
+				...downgradedBuiltinMessages,
+			);
+		} else if (builtinPrompt) {
 			// 将默认系统提示词作为第一条用户消息
 			anthropicMessages.unshift({
 				role: 'user',
 				content: [
 					{
 						type: 'text',
-						text: getSystemPromptForMode(
-							planMode,
-							vulnerabilityHuntingMode,
-							toolSearchDisabled,
-							teamMode,
-						),
+						text: builtinPrompt,
 						cache_control: {type: 'ephemeral', ttl: cacheTTL},
 					},
 				] as any,
@@ -720,6 +757,7 @@ export async function* createStreamingAnthropicCompletion(
 					options.vulnerabilityHuntingMode || false,
 					options.toolSearchDisabled || false,
 					options.teamMode || false,
+					options.isSubAgentRequest || false,
 				);
 
 				// Use persistent userId that remains the same until application restart

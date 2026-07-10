@@ -63,6 +63,7 @@ export interface ChatCompletionOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 system，其余系统提示词降级为 user
 	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
@@ -122,6 +123,7 @@ function convertToOpenAIMessages(
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
 	thinkingEnabled: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompts = customSystemPromptOverride;
 
@@ -240,6 +242,58 @@ function convertToOpenAIMessages(
 
 		return baseMessage as ChatCompletionMessageParam;
 	});
+
+	// 子代理配置了自定义系统提示词时，该提示词必须独占 system 角色。
+	// 消息中已有的 system 内容与内置提示词全部降级为 user，避免污染用户配置。
+	if (
+		isSubAgentRequest &&
+		customSystemPrompts &&
+		customSystemPrompts.length > 0
+	) {
+		const builtinPrompt = includeBuiltinSystemPrompt
+			? getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+			  )
+			: '';
+		const explicitSystemMessages = messages.filter(
+			msg => msg.role === 'system',
+		);
+		const hasBuiltinInExplicitSystem =
+			builtinPrompt.length > 0 &&
+			explicitSystemMessages.some(msg => msg.content.includes(builtinPrompt));
+		const downgradedSystemMessages = explicitSystemMessages.map(
+			msg =>
+				({
+					role: 'user',
+					content: msg.content,
+				} as ChatCompletionMessageParam),
+		);
+		const downgradedBuiltinMessage =
+			builtinPrompt && !hasBuiltinInExplicitSystem
+				? [
+						{
+							role: 'user',
+							content: builtinPrompt,
+						} as ChatCompletionMessageParam,
+				  ]
+				: [];
+
+		return [
+			{
+				role: 'system',
+				content: customSystemPrompts.map(text => ({
+					type: 'text' as const,
+					text,
+				})),
+			} as ChatCompletionMessageParam,
+			...downgradedSystemMessages,
+			...downgradedBuiltinMessage,
+			...result.filter(message => message.role !== 'system'),
+		];
+	}
 
 	// 如果第一条消息已经是 system 消息（默认会话流程中 sessionInitializer
 	// 已将内置系统提示词作为 messages[0] 注入），则不再重复添加内置提示词；
@@ -567,6 +621,7 @@ export async function* createStreamingChatCompletion(
 						options.toolSearchDisabled || false,
 						options.teamMode || false,
 						thinkingEnabled,
+						options.isSubAgentRequest || false,
 					),
 					stream: true,
 					stream_options: {include_usage: true},

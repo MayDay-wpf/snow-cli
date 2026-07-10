@@ -56,6 +56,7 @@ export interface ResponseOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 instructions，其余系统提示词降级为 user
 	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
@@ -210,6 +211,7 @@ function convertToResponseInput(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): {
 	input: any[];
 	systemInstructions: string;
@@ -359,6 +361,43 @@ function convertToResponseInput(
 				teamMode,
 		  )
 		: '';
+
+	// 子代理配置了自定义系统提示词时，instructions 只允许保留用户配置。
+	// 消息中已有的 system 内容与内置提示词全部降级到 input 的 user 消息。
+	if (
+		isSubAgentRequest &&
+		customSystemPrompts &&
+		customSystemPrompts.length > 0
+	) {
+		systemInstructions = customSystemPrompts.join('\n\n');
+		const hasBuiltinInExplicitSystem =
+			builtinPrompt.length > 0 &&
+			explicitSystemPrompts.some(prompt => prompt.includes(builtinPrompt));
+		const downgradedSystemMessages = explicitSystemPrompts.map(prompt => ({
+			type: 'message',
+			role: 'user',
+			content: [{type: 'input_text', text: prompt}],
+		}));
+		const downgradedBuiltinMessages =
+			builtinPrompt && !hasBuiltinInExplicitSystem
+				? [
+						{
+							type: 'message',
+							role: 'user',
+							content: [
+								{
+									type: 'input_text',
+									text: `<environment_context>${builtinPrompt}</environment_context>`,
+								},
+							],
+						},
+				  ]
+				: [];
+
+		result.unshift(...downgradedSystemMessages, ...downgradedBuiltinMessages);
+		return {input: result, systemInstructions};
+	}
+
 	if (explicitSystemPrompts.length > 0) {
 		systemInstructions = explicitSystemPrompts.join('\n\n');
 		if (customSystemPrompts && customSystemPrompts.length > 0) {
@@ -595,6 +634,7 @@ export async function* createStreamingResponse(
 		options.vulnerabilityHuntingMode || false,
 		options.toolSearchDisabled || false,
 		options.teamMode || false,
+		options.isSubAgentRequest || false,
 	);
 
 	// 获取配置的 reasoning 设置

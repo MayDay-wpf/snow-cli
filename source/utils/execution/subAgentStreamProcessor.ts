@@ -40,6 +40,7 @@ export function createApiStream(
 				tools: allowedTools,
 				sessionId,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -52,6 +53,7 @@ export function createApiStream(
 				temperature: 0,
 				tools: allowedTools,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -65,6 +67,7 @@ export function createApiStream(
 				tools: allowedTools,
 				prompt_cache_key: sessionId,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -76,6 +79,7 @@ export function createApiStream(
 			temperature: 0,
 			tools: allowedTools,
 			configProfile,
+			isSubAgentRequest: true,
 		},
 		abortSignal,
 	);

@@ -42,6 +42,7 @@ export interface GeminiOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 systemInstruction，其余系统提示词降级为 user
 	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
@@ -183,11 +184,13 @@ function convertToGeminiMessages(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): {
 	systemInstruction?: string[];
 	contents: any[];
 } {
 	const customSystemPrompts = customSystemPromptOverride;
+	const explicitSystemPrompts: string[] = [];
 	let systemInstruction: string[] | undefined;
 	const contents: any[] = [];
 
@@ -200,6 +203,7 @@ function convertToGeminiMessages(
 
 		// Extract system message as systemInstruction
 		if (msg.role === 'system') {
+			explicitSystemPrompts.push(msg.content);
 			systemInstruction = [msg.content];
 			continue;
 		}
@@ -401,20 +405,42 @@ function convertToGeminiMessages(
 	// 如果配置了自定义系统提示词（最高优先级，始终添加）
 	if (customSystemPrompts && customSystemPrompts.length > 0) {
 		systemInstruction = customSystemPrompts;
-		if (includeBuiltinSystemPrompt) {
+		const builtinPrompt = includeBuiltinSystemPrompt
+			? getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+			  )
+			: '';
+
+		if (isSubAgentRequest) {
+			// 子代理的 systemInstruction 只保留用户配置；已有 system 与内置提示词全部降级为 user。
+			const hasBuiltinInExplicitSystem =
+				builtinPrompt.length > 0 &&
+				explicitSystemPrompts.some(prompt => prompt.includes(builtinPrompt));
+			const downgradedSystemContents = explicitSystemPrompts.map(prompt => ({
+				role: 'user',
+				parts: [{text: prompt}],
+			}));
+			const downgradedBuiltinContents =
+				builtinPrompt && !hasBuiltinInExplicitSystem
+					? [
+							{
+								role: 'user',
+								parts: [{text: builtinPrompt}],
+							},
+					  ]
+					: [];
+			contents.unshift(
+				...downgradedSystemContents,
+				...downgradedBuiltinContents,
+			);
+		} else if (builtinPrompt) {
 			// Prepend default system prompt as first user message
 			contents.unshift({
 				role: 'user',
-				parts: [
-					{
-						text: getSystemPromptForMode(
-							planMode,
-							vulnerabilityHuntingMode,
-							toolSearchDisabled,
-							teamMode,
-						),
-					},
-				],
+				parts: [{text: builtinPrompt}],
 			});
 		}
 	} else if (!systemInstruction && includeBuiltinSystemPrompt) {
@@ -510,6 +536,7 @@ export async function* createStreamingGeminiCompletion(
 					options.vulnerabilityHuntingMode || false,
 					options.toolSearchDisabled || false,
 					options.teamMode || false,
+					options.isSubAgentRequest || false,
 				);
 
 				// Build request payload
