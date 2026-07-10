@@ -8,6 +8,7 @@ import {
 	type RequestMethod,
 	type BaseUrlMode,
 	type ApiConfig,
+	type ResponsesReasoningMode,
 } from '../../../utils/config/apiConfig.js';
 import {
 	fetchAvailableModels,
@@ -103,6 +104,9 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] =
 		useState<string>('high');
+	const [responsesReasoningMode, setResponsesReasoningMode] = useState<
+		ResponsesReasoningMode | undefined
+	>(undefined);
 	const [responsesVerbosity, setResponsesVerbosity] = useState<
 		'low' | 'medium' | 'high'
 	>('medium');
@@ -241,6 +245,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 					? ([
 							'responsesReasoningEnabled',
 							'responsesReasoningEffort',
+							'responsesReasoningMode',
 							'responsesVerbosity',
 							'responsesFastMode',
 					  ] as ConfigField[])
@@ -338,6 +343,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			requestMethod !== 'responses' &&
 			(currentField === 'responsesReasoningEnabled' ||
 				currentField === 'responsesReasoningEffort' ||
+				currentField === 'responsesReasoningMode' ||
 				currentField === 'responsesVerbosity' ||
 				currentField === 'responsesFastMode')
 		) {
@@ -424,6 +430,12 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setGeminiThinkingLevel(config.geminiThinking?.thinkingLevel || 'high');
 		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
 		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
+		setResponsesReasoningMode(
+			config.responsesReasoning?.mode === 'standard' ||
+				config.responsesReasoning?.mode === 'pro'
+				? config.responsesReasoning.mode
+				: undefined,
+		);
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
 		setResponsesFastMode(config.responsesFastMode || false);
 		setAnthropicSpeed(config.anthropicSpeed);
@@ -908,9 +920,10 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				(config as any).geminiThinking = undefined;
 			}
 
-			(config as any).responsesReasoning = {
+			config.responsesReasoning = {
 				enabled: responsesReasoningEnabled,
 				effort: responsesReasoningEffort,
+				mode: responsesReasoningMode,
 			};
 
 			config.responsesFastMode = responsesFastMode;
@@ -962,6 +975,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 						responsesReasoning: {
 							enabled: responsesReasoningEnabled,
 							effort: responsesReasoningEffort,
+							mode: responsesReasoningMode,
 						},
 						responsesVerbosity,
 						responsesFastMode,
@@ -1064,6 +1078,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setResponsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		responsesFastMode,

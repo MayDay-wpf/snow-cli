@@ -7,6 +7,7 @@ import type {
 	RequestMethod,
 } from '../../../utils/config/apiConfig.js';
 import {switchProfile} from '../../../utils/config/configManager.js';
+import {ResponsesReasoningModeSelect} from './ConfigSubViews.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
 type Props = {
@@ -34,6 +35,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		setThinkingEffort,
 		geminiThinkingLevel,
 		setGeminiThinkingLevel,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		anthropicSpeed,
@@ -71,6 +74,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.geminiThinkingLevel.replace(':', '');
 			case 'responsesReasoningEffort':
 				return t.configScreen.responsesReasoningEffort.replace(':', '');
+			case 'responsesReasoningMode':
+				return t.configScreen.responsesReasoningMode.replace(':', '');
 			case 'responsesVerbosity':
 				return t.configScreen.responsesVerbosity.replace(':', '');
 			case 'anthropicSpeed':
@@ -271,6 +276,16 @@ export default function ConfigSelectPanel({state}: Props) {
 				)}
 				{currentField === 'responsesReasoningEffort' && (
 					<ReasoningEffortSelect state={state} />
+				)}
+				{currentField === 'responsesReasoningMode' && (
+					<ResponsesReasoningModeSelect
+						value={responsesReasoningMode}
+						noneLabel={t.configScreen.responsesReasoningModeNone}
+						onChange={value => {
+							setResponsesReasoningMode(value);
+							setIsEditing(false);
+						}}
+					/>
 				)}
 				{currentField === 'responsesVerbosity' && (
 					<ScrollableSelectInput

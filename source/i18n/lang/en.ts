@@ -343,6 +343,8 @@ export const en: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini Thinking Level:',
 		responsesReasoningEnabled: 'Responses Reasoning Enabled:',
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
+		responsesReasoningMode: 'Responses Reasoning Mode:',
+		responsesReasoningModeNone: 'None',
 		responsesVerbosity: 'Responses Verbosity:',
 		responsesFastMode: 'Responses Fast Mode (priority):',
 		chatThinkingEnabled: 'Chat Thinking (DeepSeek):',

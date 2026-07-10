@@ -23,9 +23,13 @@ export interface GeminiThinkingConfig {
 	enabled: boolean;
 	thinkingLevel: GeminiThinkingLevel;
 }
+
+export type ResponsesReasoningMode = 'standard' | 'pro';
+
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
 	effort: string; // e.g. 'none', 'low', 'medium', 'high', 'xhigh', or custom
+	mode?: ResponsesReasoningMode; // Optional Responses API reasoning mode; undefined means omit
 }
 
 export type ChatReasoningEffort = string;

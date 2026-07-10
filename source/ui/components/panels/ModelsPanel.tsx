@@ -12,6 +12,7 @@ import {
 	getSnowConfig,
 	updateSnowConfig,
 	type RequestMethod,
+	type ResponsesReasoningMode,
 } from '../../../utils/config/apiConfig.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
@@ -93,6 +94,9 @@ export const ModelsPanel: React.FC<Props> = ({
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] =
 		useState<ResponsesReasoningEffort>('high');
+	const [responsesReasoningMode, setResponsesReasoningMode] = useState<
+		ResponsesReasoningMode | undefined
+	>(undefined);
 	const [responsesFastMode, setResponsesFastMode] = useState(false);
 	const [responsesVerbosity, setResponsesVerbosity] =
 		useState<ResponsesVerbosity>('medium');
@@ -104,6 +108,8 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [thinkingInputValue, setThinkingInputValue] = useState('');
 	const [isThinkingModeSelecting, setIsThinkingModeSelecting] = useState(false);
 	const [isThinkingEffortSelecting, setIsThinkingEffortSelecting] =
+		useState(false);
+	const [isResponsesModeSelecting, setIsResponsesModeSelecting] =
 		useState(false);
 	const [isVerbositySelecting, setIsVerbositySelecting] = useState(false);
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
@@ -137,6 +143,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		setThinkingInputMode(null);
 		setThinkingInputValue('');
 		setIsThinkingEffortSelecting(false);
+		setIsResponsesModeSelecting(false);
 		setIsVerbositySelecting(false);
 		setIsSpeedSelecting(false);
 		setErrorMessage('');
@@ -163,6 +170,12 @@ export const ModelsPanel: React.FC<Props> = ({
 		);
 		setResponsesReasoningEffort(
 			(cfg as any).responsesReasoning?.effort || 'high',
+		);
+		setResponsesReasoningMode(
+			(cfg as any).responsesReasoning?.mode === 'standard' ||
+				(cfg as any).responsesReasoning?.mode === 'pro'
+				? (cfg as any).responsesReasoning.mode
+				: undefined,
 		);
 		setResponsesFastMode((cfg as any).responsesFastMode || false);
 		setResponsesVerbosity((cfg as any).responsesVerbosity || 'medium');
@@ -430,6 +443,7 @@ export const ModelsPanel: React.FC<Props> = ({
 						responsesReasoning: {
 							enabled: next,
 							effort: responsesReasoningEffort,
+							mode: responsesReasoningMode,
 						},
 					} as any);
 					return;
@@ -459,6 +473,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			thinkingEffort,
 			geminiThinkingLevel,
 			responsesReasoningEffort,
+			responsesReasoningMode,
 			applyChatThinkingEnabled,
 			t,
 		],
@@ -553,6 +568,7 @@ export const ModelsPanel: React.FC<Props> = ({
 					responsesReasoning: {
 						enabled: responsesReasoningEnabled,
 						effort,
+						mode: responsesReasoningMode,
 					},
 				} as any);
 			} catch (err) {
@@ -561,7 +577,28 @@ export const ModelsPanel: React.FC<Props> = ({
 				setErrorMessage(message);
 			}
 		},
-		[responsesReasoningEnabled],
+		[responsesReasoningEnabled, responsesReasoningMode],
+	);
+
+	const applyResponsesMode = useCallback(
+		async (mode: ResponsesReasoningMode | undefined) => {
+			setErrorMessage('');
+			try {
+				setResponsesReasoningMode(mode);
+				await updateSnowConfig({
+					responsesReasoning: {
+						enabled: responsesReasoningEnabled,
+						effort: responsesReasoningEffort,
+						mode,
+					},
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[responsesReasoningEnabled, responsesReasoningEffort],
 	);
 
 	const applyResponsesVerbosity = useCallback(
@@ -635,12 +672,12 @@ export const ModelsPanel: React.FC<Props> = ({
 	// 每种请求方案的最大聚焦索引（各自独立）
 	// anthropic: 0=showThinking, 1=enableThinking, 2=thinkingMode, 3=thinkingStrength, 4=anthropicSpeed
 	// gemini:    0=showThinking, 1=enableThinking, 2=thinkingStrength
-	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=verbosity, 4=fastMode
+	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=mode, 4=verbosity, 5=fastMode
 	// chat:      0=showThinking, 1=enableThinking, 2=thinkingStrength
 	// other:     0=showThinking, 1=enableThinking
 	const maxThinkingIndex = useMemo(() => {
 		if (requestMethod === 'anthropic') return 4;
-		if (requestMethod === 'responses') return 4;
+		if (requestMethod === 'responses') return 5;
 		if (requestMethod === 'gemini') return 2;
 		if (requestMethod === 'chat') return 2;
 		return 1;
@@ -682,6 +719,10 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (isThinkingEffortSelecting) {
 					setIsThinkingEffortSelecting(false);
+					return;
+				}
+				if (isResponsesModeSelecting) {
+					setIsResponsesModeSelecting(false);
 					return;
 				}
 				if (isVerbositySelecting) {
@@ -810,6 +851,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				isThinkingModeSelecting ||
 				isGeminiLevelSelecting ||
 				isThinkingEffortSelecting ||
+				isResponsesModeSelecting ||
 				isVerbositySelecting ||
 				isSpeedSelecting ||
 				isChatEffortSelecting
@@ -866,14 +908,19 @@ export const ModelsPanel: React.FC<Props> = ({
 								setIsThinkingEffortSelecting(true);
 							}
 						} else if (requestMethod === 'responses') {
-							setIsVerbositySelecting(true);
+							setIsResponsesModeSelecting(true);
 						}
 					} else if (thinkingFocusIndex === 4) {
 						if (requestMethod === 'anthropic') {
 							setIsSpeedSelecting(true);
 						} else if (requestMethod === 'responses') {
-							void applyResponsesFastMode(!responsesFastMode);
+							setIsVerbositySelecting(true);
 						}
+					} else if (
+						thinkingFocusIndex === 5 &&
+						requestMethod === 'responses'
+					) {
+						void applyResponsesFastMode(!responsesFastMode);
 					}
 					return;
 				}
@@ -1099,11 +1146,12 @@ export const ModelsPanel: React.FC<Props> = ({
 								}
 							>
 								{thinkingFocusIndex === 3 ? '❯ ' : '  '}
-								{t.configScreen.responsesVerbosity}
+								{t.configScreen.responsesReasoningMode}
 							</Text>
 							<Text color={theme.colors.menuSelected}>
 								{' '}
-								{responsesVerbosity.toUpperCase()}
+								{responsesReasoningMode ??
+									t.configScreen.responsesReasoningModeNone}
 							</Text>
 						</Box>
 					)}
@@ -1117,6 +1165,24 @@ export const ModelsPanel: React.FC<Props> = ({
 								}
 							>
 								{thinkingFocusIndex === 4 ? '❯ ' : '  '}
+								{t.configScreen.responsesVerbosity}
+							</Text>
+							<Text color={theme.colors.menuSelected}>
+								{' '}
+								{responsesVerbosity.toUpperCase()}
+							</Text>
+						</Box>
+					)}
+					{requestMethod === 'responses' && (
+						<Box>
+							<Text
+								color={
+									thinkingFocusIndex === 5
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+							>
+								{thinkingFocusIndex === 5 ? '❯ ' : '  '}
 								{t.configScreen.responsesFastMode}
 							</Text>
 							<Text color={theme.colors.menuSelected}>
@@ -1235,6 +1301,38 @@ export const ModelsPanel: React.FC<Props> = ({
 										void applyResponsesEffort(item.value);
 									}
 									setIsThinkingEffortSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
+					{isResponsesModeSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{
+										label: t.configScreen.responsesReasoningModeNone,
+										value: 'none',
+									},
+									{label: 'standard', value: 'standard'},
+									{label: 'pro', value: 'pro'},
+								]}
+								limit={3}
+								disableNumberShortcuts={true}
+								initialIndex={Math.max(
+									0,
+									(['none', 'standard', 'pro'] as const).indexOf(
+										responsesReasoningMode ?? 'none',
+									),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									void applyResponsesMode(
+										item.value === 'none'
+											? undefined
+											: (item.value as ResponsesReasoningMode),
+									);
+									setIsResponsesModeSelecting(false);
 								}}
 							/>
 						</Box>
@@ -1383,6 +1481,7 @@ export const ModelsPanel: React.FC<Props> = ({
 						!isThinkingModeSelecting &&
 						!isGeminiLevelSelecting &&
 						!isThinkingEffortSelecting &&
+						!isResponsesModeSelecting &&
 						!isVerbositySelecting &&
 						!isSpeedSelecting &&
 						!isChatEffortSelecting && (

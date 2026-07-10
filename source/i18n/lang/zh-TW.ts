@@ -320,6 +320,8 @@ export const zhTW: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini 思考級別:',
 		responsesReasoningEnabled: '啟用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理強度:',
+		responsesReasoningMode: 'Responses 推理模式:',
+		responsesReasoningModeNone: '無',
 		responsesVerbosity: 'Responses 輸出詳細度:',
 		responsesFastMode: 'Responses Fast (priority):',
 		chatThinkingEnabled: '啟用 Chat 思考 (DeepSeek):',

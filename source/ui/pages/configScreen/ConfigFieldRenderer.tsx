@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import {Select} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
+import {ResponsesReasoningModeSelect} from './ConfigSubViews.js';
 import {stripFocusArtifacts, type ConfigField} from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -58,6 +59,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		responsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		responsesFastMode,
@@ -668,6 +671,36 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 								]}
 								onChange={value => {
 									setResponsesReasoningEffort(value);
+									state.setIsEditing(false);
+								}}
+							/>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'responsesReasoningMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.responsesReasoningMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{responsesReasoningMode ??
+									t.configScreen.responsesReasoningModeNone}
+							</Text>
+						</Box>
+					)}
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<ResponsesReasoningModeSelect
+								value={responsesReasoningMode}
+								noneLabel={t.configScreen.responsesReasoningModeNone}
+								onChange={value => {
+									setResponsesReasoningMode(value);
 									state.setIsEditing(false);
 								}}
 							/>

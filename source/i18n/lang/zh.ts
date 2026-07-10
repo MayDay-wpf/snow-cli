@@ -319,6 +319,8 @@ export const zh: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini 思考级别:',
 		responsesReasoningEnabled: '启用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理强度:',
+		responsesReasoningMode: 'Responses 推理模式:',
+		responsesReasoningModeNone: '无',
 		responsesVerbosity: 'Responses 输出详细度:',
 		responsesFastMode: 'Responses Fast (priority):',
 		chatThinkingEnabled: '启用 Chat 思考 (DeepSeek):',

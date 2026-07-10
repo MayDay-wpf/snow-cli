@@ -476,6 +476,7 @@ export function useConfigInput(
 			currentField === 'thinkingEffort' ||
 			currentField === 'geminiThinkingLevel' ||
 			currentField === 'responsesReasoningEffort' ||
+			currentField === 'responsesReasoningMode' ||
 			currentField === 'responsesVerbosity' ||
 			currentField === 'chatReasoningEffort'
 		) {

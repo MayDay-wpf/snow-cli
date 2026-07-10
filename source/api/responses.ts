@@ -41,6 +41,7 @@ export interface ResponseOptions {
 	reasoning?: {
 		summary?: 'auto' | 'none';
 		effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+		mode?: 'standard' | 'pro';
 	} | null; // null means don't pass reasoning parameter (for small models)
 	prompt_cache_key?: string;
 	sessionId?: string; // Session ID for telemetry and correlation
@@ -167,6 +168,7 @@ export interface ResponseStreamChunk {
 function getResponsesReasoningConfig(): {
 	effort?: string;
 	summary?: 'auto' | 'none';
+	mode?: 'standard' | 'pro';
 } | null {
 	const config = getSnowConfig();
 	const reasoningConfig = config.responsesReasoning;
@@ -175,9 +177,15 @@ function getResponsesReasoningConfig(): {
 		return null;
 	}
 
+	const mode =
+		reasoningConfig.mode === 'standard' || reasoningConfig.mode === 'pro'
+			? reasoningConfig.mode
+			: undefined;
+
 	return {
 		effort: reasoningConfig.effort || 'high',
 		summary: 'auto',
+		...(mode && {mode}),
 	};
 }
 

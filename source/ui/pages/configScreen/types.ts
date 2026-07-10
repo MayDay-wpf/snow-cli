@@ -27,6 +27,7 @@ export type ConfigField =
 	| 'geminiThinkingLevel'
 	| 'responsesReasoningEnabled'
 	| 'responsesReasoningEffort'
+	| 'responsesReasoningMode'
 	| 'responsesVerbosity'
 	| 'responsesFastMode'
 	| 'chatThinkingEnabled'
@@ -134,6 +135,7 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'thinkingEffort',
 	'geminiThinkingLevel',
 	'responsesReasoningEffort',
+	'responsesReasoningMode',
 	'responsesVerbosity',
 	'anthropicSpeed',
 	'chatReasoningEffort',

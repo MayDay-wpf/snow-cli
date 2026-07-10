@@ -308,6 +308,8 @@ export type TranslationKeys = {
 		geminiThinkingLevel: string;
 		responsesReasoningEnabled: string;
 		responsesReasoningEffort: string;
+		responsesReasoningMode: string;
+		responsesReasoningModeNone: string;
 		responsesVerbosity: string;
 		responsesFastMode: string;
 		chatThinkingEnabled: string;
