@@ -1,4 +1,5 @@
 import fs from 'fs';
+import {calculateSimilarity} from '../../mcp/utils/filesystem/similarity.utils.js';
 
 /**
  * Read the original content of a file, returning null if the file
@@ -42,8 +43,20 @@ export function computeHashlinePreview(
 		.filter(op => op.startLine > 0 && op.endLine > 0)
 		.sort((a, b) => b.startLine - a.startLine);
 
+	const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
+	const sanitizeContent = (raw: string): string => {
+		const contentLines = raw.split('\n');
+		const hasHashlines =
+			contentLines.length > 0 &&
+			contentLines.every(line => line === '' || hashlineContentRe.test(line));
+		if (!hasHashlines) return raw;
+		return contentLines
+			.map(line => line.replace(hashlineContentRe, ''))
+			.join('\n');
+	};
+
 	for (const op of parsed) {
-		const newLines = op.content.split('\n');
+		const newLines = sanitizeContent(op.content).split('\n');
 		switch (op.type) {
 			case 'replace':
 				mutableLines.splice(
@@ -73,16 +86,80 @@ export function computeReplaceEditPreview(
 	originalContent: string,
 	searchContent: string,
 	replaceContent: string,
+	occurrence: number = 1,
 ): string {
-	const idx = originalContent.indexOf(searchContent);
-	if (idx !== -1) {
-		return (
-			originalContent.substring(0, idx) +
-			replaceContent +
-			originalContent.substring(idx + searchContent.length)
-		);
+	const normalizedSearch = searchContent
+		.replace(/\r\n/g, '\n')
+		.replace(/\r/g, '\n');
+	const normalizedContent = originalContent
+		.replace(/\r\n/g, '\n')
+		.replace(/\r/g, '\n');
+	const searchLines = normalizedSearch.split('\n');
+	const contentLines = normalizedContent.split('\n');
+
+	if (searchLines.length === 0 || contentLines.length < searchLines.length) {
+		return originalContent;
 	}
-	return originalContent;
+
+	const matches: Array<{
+		startLine: number;
+		endLine: number;
+		similarity: number;
+	}> = [];
+	const threshold = 0.75;
+	const usePreFilter = searchLines.length >= 5;
+
+	for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+		if (usePreFilter) {
+			const firstLineSimilarity = calculateSimilarity(
+				searchLines[0]?.replace(/\s+/g, ' ').trim() || '',
+				contentLines[i]?.replace(/\s+/g, ' ').trim() || '',
+				0.2,
+			);
+			if (firstLineSimilarity < 0.2) continue;
+		}
+
+		const similarity = calculateSimilarity(
+			normalizedSearch,
+			contentLines.slice(i, i + searchLines.length).join('\n'),
+			threshold,
+		);
+		if (similarity >= threshold) {
+			matches.push({
+				startLine: i + 1,
+				endLine: i + searchLines.length,
+				similarity,
+			});
+		}
+	}
+
+	matches.sort((a, b) => b.similarity - a.similarity);
+	const selectedMatch =
+		occurrence === -1 && matches.length === 1
+			? matches[0]
+			: occurrence > 0
+			? matches[occurrence - 1]
+			: undefined;
+	if (!selectedMatch) return originalContent;
+
+	const replaceLines = replaceContent
+		.replace(/\r\n/g, '\n')
+		.replace(/\r/g, '\n')
+		.split('\n');
+	const originalFirstLine =
+		originalContent.split('\n')[selectedMatch.startLine - 1];
+	const originalIndent = originalFirstLine?.match(/^(\s*)/)?.[1] || '';
+	const replaceFirstLine = replaceLines[0];
+	const replaceIndent = replaceFirstLine?.match(/^(\s*)/)?.[1] || '';
+	if (originalIndent !== replaceIndent && replaceFirstLine) {
+		replaceLines[0] = originalIndent + replaceFirstLine.trim();
+	}
+
+	return [
+		...originalContent.split('\n').slice(0, selectedMatch.startLine - 1),
+		...replaceLines,
+		...originalContent.split('\n').slice(selectedMatch.endLine),
+	].join('\n');
 }
 
 export interface DiffPreviewEntry {
@@ -140,7 +217,20 @@ export function collectDiffPreviewEntries(
 				}
 			} else if (Array.isArray(parsed.filePath)) {
 				for (const item of parsed.filePath) {
-					if (
+					if (typeof item === 'string') {
+						const originalContent = readOriginalFile(item);
+						if (originalContent !== null) {
+							const newContent = computeHashlinePreview(
+								originalContent,
+								parsed.operations,
+							);
+							entries.push({
+								filePath: item,
+								oldContent: originalContent,
+								newContent,
+							});
+						}
+					} else if (
 						item &&
 						typeof item === 'object' &&
 						typeof item.path === 'string'
@@ -149,7 +239,7 @@ export function collectDiffPreviewEntries(
 						if (originalContent !== null) {
 							const newContent = computeHashlinePreview(
 								originalContent,
-								item.operations,
+								item.operations ?? parsed.operations,
 							);
 							entries.push({
 								filePath: item.path,
@@ -167,11 +257,13 @@ export function collectDiffPreviewEntries(
 				const originalContent = readOriginalFile(parsed.filePath);
 				if (originalContent !== null) {
 					const newContent =
-						parsed.searchContent && parsed.replaceContent !== undefined
+						typeof parsed.searchContent === 'string' &&
+						parsed.replaceContent !== undefined
 							? computeReplaceEditPreview(
 									originalContent,
 									parsed.searchContent,
 									parsed.replaceContent,
+									parsed.occurrence,
 							  )
 							: originalContent;
 					entries.push({
@@ -186,11 +278,13 @@ export function collectDiffPreviewEntries(
 						const originalContent = readOriginalFile(item);
 						if (originalContent !== null) {
 							const newContent =
-								parsed.searchContent && parsed.replaceContent !== undefined
+								typeof parsed.searchContent === 'string' &&
+								parsed.replaceContent !== undefined
 									? computeReplaceEditPreview(
 											originalContent,
 											parsed.searchContent,
 											parsed.replaceContent,
+											parsed.occurrence,
 									  )
 									: originalContent;
 							entries.push({
@@ -209,8 +303,13 @@ export function collectDiffPreviewEntries(
 							const search = item.searchContent ?? parsed.searchContent;
 							const replace = item.replaceContent ?? parsed.replaceContent;
 							const newContent =
-								search && replace !== undefined
-									? computeReplaceEditPreview(originalContent, search, replace)
+								typeof search === 'string' && replace !== undefined
+									? computeReplaceEditPreview(
+											originalContent,
+											search,
+											replace,
+											item.occurrence ?? parsed.occurrence,
+									  )
 									: originalContent;
 							entries.push({
 								filePath: item.path,

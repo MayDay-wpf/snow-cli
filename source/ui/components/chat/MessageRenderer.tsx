@@ -725,8 +725,8 @@ function MessageRendererImpl({
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
 											message.toolCall.name === 'filesystem-replaceedit') &&
-										message.toolCall.arguments.oldContent &&
-										message.toolCall.arguments.newContent &&
+										typeof message.toolCall.arguments.oldContent === 'string' &&
+										typeof message.toolCall.arguments.newContent === 'string' &&
 										message.messageStatus === 'pending' && (
 											<Box marginTop={1}>
 												<DiffViewer
@@ -758,8 +758,8 @@ function MessageRendererImpl({
 													(fileResult: any, index: number) => {
 														if (
 															fileResult.success &&
-															fileResult.oldContent &&
-															fileResult.newContent
+															typeof fileResult.oldContent === 'string' &&
+															typeof fileResult.newContent === 'string'
 														) {
 															return (
 																<Box
