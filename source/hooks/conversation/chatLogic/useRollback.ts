@@ -409,35 +409,24 @@ export function useRollback(props: UseChatLogicProps) {
 			const nbCount = getNotebookRollbackCount(currentSession.id, sIdx);
 			const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
 			const tdCount = getTodoRollbackCount(currentSession.id, sIdx);
-			if (filePaths.length > 0 || nbCount > 0 || tmCount > 0 || tdCount > 0) {
-				snapshotState.setPendingRollback({
-					messageIndex: selectedIndex,
-					previewTargetMessageIndex: sIdx,
-					fileCount: filePaths.length,
-					filePaths,
-					notebookCount: nbCount,
-					teamCount: tmCount,
-					todoCount: tdCount,
-					message: cleanIDEContext(message),
-					images,
-					crossSessionRollback: true,
-					originalSessionId: currentSession.compressedFrom,
-				});
-				return;
-			}
 
-			const originalSessionId = currentSession.compressedFrom;
-			const switchedToOriginalSession = await switchToOriginalCompressedSession(
-				originalSessionId,
-				currentSession.id,
-			);
-			if (switchedToOriginalSession) {
-				stdout.write(ansiEscapes.clearTerminal);
-				setTimeout(() => {
-					setRemountKey(prev => prev + 1);
-				}, 0);
-				return;
-			}
+			// Rolling back the compressed summary crosses a session boundary. Always
+			// require confirmation so the user can choose whether post-compression
+			// file changes should be restored before returning to the original session.
+			snapshotState.setPendingRollback({
+				messageIndex: selectedIndex,
+				previewTargetMessageIndex: sIdx,
+				fileCount: filePaths.length,
+				filePaths,
+				notebookCount: nbCount,
+				teamCount: tmCount,
+				todoCount: tdCount,
+				message: cleanIDEContext(message),
+				images,
+				crossSessionRollback: true,
+				originalSessionId: currentSession.compressedFrom,
+			});
+			return;
 		}
 
 		const filePaths = await hashBasedSnapshotManager.getFilesToRollback(
@@ -449,32 +438,17 @@ export function useRollback(props: UseChatLogicProps) {
 		const tmCount = getTeamRollbackCount(currentSession.id, sIdx);
 		const tdCount = getTodoRollbackCount(currentSession.id, sIdx);
 
-		if (filePaths.length > 0 || nbCount > 0 || tmCount > 0 || tdCount > 0) {
-			snapshotState.setPendingRollback({
-				messageIndex: selectedIndex,
-				previewTargetMessageIndex: sIdx,
-				fileCount: filePaths.length,
-				filePaths,
-				notebookCount: nbCount,
-				teamCount: tmCount,
-				todoCount: tdCount,
-				message: cleanIDEContext(message),
-				images,
-			});
-		} else {
-			// Show confirmation even when no files to rollback
-			snapshotState.setPendingRollback({
-				messageIndex: selectedIndex,
-				previewTargetMessageIndex: sIdx,
-				fileCount: 0,
-				filePaths: [],
-				notebookCount: 0,
-				teamCount: 0,
-				todoCount: 0,
-				message: cleanIDEContext(message),
-				images,
-			});
-		}
+		snapshotState.setPendingRollback({
+			messageIndex: selectedIndex,
+			previewTargetMessageIndex: sIdx,
+			fileCount: filePaths.length,
+			filePaths,
+			notebookCount: nbCount,
+			teamCount: tmCount,
+			todoCount: tdCount,
+			message: cleanIDEContext(message),
+			images,
+		});
 	};
 
 	const handleRollbackConfirm = async (
