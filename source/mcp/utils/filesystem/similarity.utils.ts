@@ -12,10 +12,8 @@ export function calculateSimilarity(
 	str2: string,
 	threshold: number = 0,
 ): number {
-	// Normalize whitespace for comparison: collapse all whitespace to single spaces
-	const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
-	const norm1 = normalize(str1);
-	const norm2 = normalize(str2);
+	const norm1 = normalizeWhitespace(str1);
+	const norm2 = normalizeWhitespace(str2);
 
 	const len1 = norm1.length;
 	const len2 = norm2.length;
@@ -119,6 +117,13 @@ export async function levenshteinDistanceAsync(
 		return maxDistance + 1;
 	}
 
+	// Limit each uninterrupted batch by both rows and total matrix cells. A fixed
+	// row count can still block the event loop for a long time when lines are wide.
+	const rowsPerYield = Math.max(
+		1,
+		Math.min(batchSize, Math.floor(32_768 / Math.max(1, len2))),
+	);
+
 	// Use single-row algorithm to save memory (only need previous row)
 	let prevRow: number[] = Array.from({length: len2 + 1}, (_, i) => i);
 
@@ -144,10 +149,9 @@ export async function levenshteinDistanceAsync(
 
 		prevRow = currRow;
 
-		// Yield to event loop periodically to prevent UI freeze
-		// This maintains the same computation but allows async execution
-		if (i % batchSize === 0) {
-			await new Promise(resolve => setImmediate(resolve));
+		// Yield to the event loop periodically without changing the calculation.
+		if (i % rowsPerYield === 0) {
+			await new Promise<void>(resolve => setImmediate(resolve));
 		}
 	}
 
@@ -155,25 +159,28 @@ export async function levenshteinDistanceAsync(
 }
 
 /**
- * Async version of calculateSimilarity - preserves 100% precision
- * Uses async Levenshtein distance to prevent UI freeze on large searches
- * @param str1 First string
- * @param str2 Second string
+ * Collapse whitespace to single spaces and trim surrounding whitespace.
+ */
+export function normalizeWhitespace(content: string): string {
+	return content.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Calculate similarity for strings whose whitespace has already been normalized.
+ * This avoids re-normalizing the search text and every sliding-window candidate.
+ *
+ * @param normalizedStr1 First normalized string
+ * @param normalizedStr2 Second normalized string
  * @param threshold Similarity threshold for early exit consideration
  * @returns Promise<number> - Similarity value between 0 and 1
  */
-export async function calculateSimilarityAsync(
-	str1: string,
-	str2: string,
+export async function calculateNormalizedSimilarityAsync(
+	normalizedStr1: string,
+	normalizedStr2: string,
 	threshold: number = 0,
 ): Promise<number> {
-	// Normalize whitespace for comparison: collapse all whitespace to single spaces
-	const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
-	const norm1 = normalize(str1);
-	const norm2 = normalize(str2);
-
-	const len1 = norm1.length;
-	const len2 = norm2.length;
+	const len1 = normalizedStr1.length;
+	const len2 = normalizedStr2.length;
 
 	if (len1 === 0) return len2 === 0 ? 1 : 0;
 	if (len2 === 0) return 0;
@@ -186,15 +193,25 @@ export async function calculateSimilarityAsync(
 		return lengthRatio; // Can't possibly meet threshold
 	}
 
-	// Use async Levenshtein distance for better similarity calculation
-	// This yields to event loop periodically to prevent UI freeze
 	const distance = await levenshteinDistanceAsync(
-		norm1,
-		norm2,
+		normalizedStr1,
+		normalizedStr2,
 		Math.ceil(maxLen * (1 - threshold)),
 	);
 
 	return 1 - distance / maxLen;
+}
+
+export async function calculateSimilarityAsync(
+	str1: string,
+	str2: string,
+	threshold: number = 0,
+): Promise<number> {
+	return calculateNormalizedSimilarityAsync(
+		normalizeWhitespace(str1),
+		normalizeWhitespace(str2),
+		threshold,
+	);
 }
 
 /**

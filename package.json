@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.8.14",
+	"version": "0.8.15",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -32,7 +32,7 @@
 		"npm": ">=8.3.0"
 	},
 	"scripts": {
-		"build": "node scripts/clean-build.cjs && tsc && node build.mjs",
+		"build": "node scripts/clean-build.cjs && tsc && node scripts/build-native.cjs && node build.mjs",
 		"build:ts": "tsc",
 		"build:bundle": "node build.mjs",
 		"dev": "tsc --watch",

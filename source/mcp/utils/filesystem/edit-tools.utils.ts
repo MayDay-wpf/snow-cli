@@ -14,8 +14,9 @@ import {
 } from '../../../utils/ui/escapeHandler.js';
 import {
 	calculateSimilarity,
-	calculateSimilarityAsync,
+	calculateNormalizedSimilarityAsync,
 	normalizeForDisplay,
+	normalizeWhitespace,
 } from '../../utils/filesystem/similarity.utils.js';
 import {
 	analyzeCodeStructure,
@@ -25,7 +26,15 @@ import {
 	findClosestMatches,
 	generateDiffMessage,
 } from '../../utils/filesystem/match-finder.utils.js';
-import {readFileWithEncoding, writeFileWithEncoding} from '../../utils/filesystem/encoding.utils.js';
+import {
+	applyTextEditsWithNative,
+	scanFuzzyMatchesWithNative,
+	type NativeTextEdit,
+} from '../../utils/filesystem/native-edit.utils.js';
+import {
+	readFileWithEncoding,
+	writeFileWithEncoding,
+} from '../../utils/filesystem/encoding.utils.js';
 import {getAutoFormatEnabled} from '../../../utils/config/projectSettings.js';
 import {
 	formatLineWithHashDisplay,
@@ -80,47 +89,75 @@ export async function executeEditBySearchSingle(
 			originalContent: content,
 		});
 
-		let normalizedSearch = searchContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-		const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+		let normalizedSearch = searchContent
+			.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n');
+		const normalizedContent = content
+			.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n');
 		let searchLines = normalizedSearch.split('\n');
 		const contentLines = normalizedContent.split('\n');
-
-		const matches: Array<{startLine: number; endLine: number; similarity: number}> = [];
+		const matches: Array<{
+			startLine: number;
+			endLine: number;
+			similarity: number;
+		}> = [];
 		const threshold = 0.75;
 		const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
 		const usePreFilter = searchLines.length >= 5;
 		const preFilterThreshold = 0.2;
 		const maxMatches = 10;
+		const nativeMatches = await scanFuzzyMatchesWithNative(
+			normalizedContent,
+			normalizedSearch,
+			threshold,
+			maxMatches,
+			usePreFilter,
+			preFilterThreshold,
+		);
 
-		for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-			if (usePreFilter) {
-				const firstLineCandidate = contentLines[i]?.replace(/\s+/g, ' ').trim() || '';
-				const firstLineSimilarity = calculateSimilarity(
-					searchFirstLine,
-					firstLineCandidate,
-					preFilterThreshold,
-				);
-				if (firstLineSimilarity < preFilterThreshold) {
-					continue;
+		if (nativeMatches) {
+			matches.push(...nativeMatches);
+		} else {
+			const normalizedSearchForSimilarity =
+				normalizeWhitespace(normalizedSearch);
+			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+				// Keep the UI responsive even when every candidate is rejected by the pre-filter.
+				if (i > 0 && i % 100 === 0) {
+					await new Promise<void>(resolve => setImmediate(resolve));
 				}
-			}
 
-			const candidateLines = contentLines.slice(i, i + searchLines.length);
-			const candidateContent = candidateLines.join('\n');
-			const similarity = await calculateSimilarityAsync(
-				normalizedSearch,
-				candidateContent,
-				threshold,
-			);
+				if (usePreFilter) {
+					const firstLineSimilarity = calculateSimilarity(
+						searchFirstLine,
+						normalizeWhitespace(contentLines[i] || ''),
+						preFilterThreshold,
+					);
+					if (firstLineSimilarity < preFilterThreshold) {
+						continue;
+					}
+				}
 
-			if (similarity >= threshold) {
-				matches.push({
-					startLine: i + 1,
-					endLine: i + searchLines.length,
-					similarity,
-				});
-				if (similarity >= 0.95 || matches.length >= maxMatches) {
-					break;
+				const candidateLines = contentLines.slice(i, i + searchLines.length);
+				const candidateContent = candidateLines.join('\n');
+				const similarity =
+					candidateContent === normalizedSearch
+						? 1
+						: await calculateNormalizedSimilarityAsync(
+								normalizedSearchForSimilarity,
+								normalizeWhitespace(candidateContent),
+								threshold,
+						  );
+
+				if (similarity >= threshold) {
+					matches.push({
+						startLine: i + 1,
+						endLine: i + searchLines.length,
+						similarity,
+					});
+					if (similarity >= 0.95 || matches.length >= maxMatches) {
+						break;
+					}
 				}
 			}
 		}
@@ -128,21 +165,51 @@ export async function executeEditBySearchSingle(
 		matches.sort((a, b) => b.similarity - a.similarity);
 
 		if (matches.length === 0) {
-			const unescapeFix = tryUnescapeFix(normalizedContent, normalizedSearch, 1);
+			const unescapeFix = tryUnescapeFix(
+				normalizedContent,
+				normalizedSearch,
+				1,
+			);
 			if (unescapeFix) {
 				const correctedSearchLines = unescapeFix.correctedString.split('\n');
-				for (let i = 0; i <= contentLines.length - correctedSearchLines.length; i++) {
-					const candidateLines = contentLines.slice(i, i + correctedSearchLines.length);
-					const similarity = await calculateSimilarityAsync(
+				const correctedNativeMatches = await scanFuzzyMatchesWithNative(
+					normalizedContent,
+					unescapeFix.correctedString,
+					threshold,
+					maxMatches,
+					correctedSearchLines.length >= 5,
+					preFilterThreshold,
+				);
+				if (correctedNativeMatches) {
+					matches.push(...correctedNativeMatches);
+				} else {
+					const normalizedCorrectedSearch = normalizeWhitespace(
 						unescapeFix.correctedString,
-						candidateLines.join('\n'),
 					);
-					if (similarity >= threshold) {
-						matches.push({
-							startLine: i + 1,
-							endLine: i + correctedSearchLines.length,
-							similarity,
-						});
+					for (
+						let i = 0;
+						i <= contentLines.length - correctedSearchLines.length;
+						i++
+					) {
+						if (i > 0 && i % 100 === 0) {
+							await new Promise<void>(resolve => setImmediate(resolve));
+						}
+						const candidateLines = contentLines.slice(
+							i,
+							i + correctedSearchLines.length,
+						);
+						const similarity = await calculateNormalizedSimilarityAsync(
+							normalizedCorrectedSearch,
+							normalizeWhitespace(candidateLines.join('\n')),
+							threshold,
+						);
+						if (similarity >= threshold) {
+							matches.push({
+								startLine: i + 1,
+								endLine: i + correctedSearchLines.length,
+								similarity,
+							});
+						}
 					}
 				}
 				matches.sort((a, b) => b.similarity - a.similarity);
@@ -174,7 +241,9 @@ export async function executeEditBySearchSingle(
 				if (closestMatches.length > 0) {
 					errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
 					closestMatches.forEach((candidate, idx) => {
-						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${candidate.endLine} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
+						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
+							candidate.endLine
+						} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
 						errorMessage += `${candidate.preview}\n\n`;
 					});
 
@@ -183,7 +252,11 @@ export async function executeEditBySearchSingle(
 						const bestMatchContent = lines
 							.slice(bestMatch.startLine - 1, bestMatch.endLine)
 							.join('\n');
-						const diffMsg = generateDiffMessage(normalizedSearch, bestMatchContent, 5);
+						const diffMsg = generateDiffMessage(
+							normalizedSearch,
+							bestMatchContent,
+							5,
+						);
 						if (diffMsg) {
 							errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
 						}
@@ -196,7 +269,9 @@ export async function executeEditBySearchSingle(
 					errorMessage += `⚠️  No similar content found in the file.\n\n`;
 					errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
 					searchLines.slice(0, 5).forEach((line, idx) => {
-						errorMessage += `${idx + 1}. ${JSON.stringify(normalizeForDisplay(line))}\n`;
+						errorMessage += `${idx + 1}. ${JSON.stringify(
+							normalizeForDisplay(line),
+						)}\n`;
 					});
 					errorMessage += `\n💡 Copy exact source text (not hashline-prefixed read lines)\n`;
 				}
@@ -215,14 +290,18 @@ export async function executeEditBySearchSingle(
 			}
 		} else if (occurrence < 1 || occurrence > matches.length) {
 			throw new Error(
-				`Invalid occurrence ${occurrence}. Found ${matches.length} match(es) at lines: ${matches.map(m => m.startLine).join(', ')}`,
+				`Invalid occurrence ${occurrence}. Found ${
+					matches.length
+				} match(es) at lines: ${matches.map(m => m.startLine).join(', ')}`,
 			);
 		} else {
 			selectedMatch = matches[occurrence - 1]!;
 		}
 
 		const {startLine, endLine} = selectedMatch;
-		const normalizedReplace = replaceContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+		const normalizedReplace = replaceContent
+			.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n');
 		const beforeLines = lines.slice(0, startLine - 1);
 		const afterLines = lines.slice(endLine);
 		let replaceLines = normalizedReplace.split('\n');
@@ -257,13 +336,17 @@ export async function executeEditBySearchSingle(
 			await writeFileWithEncoding(fullPath, modifiedContent);
 		}
 
-		const diffContextEnd = Math.min(modifiedLines.length, contextEnd + lineDifference);
+		const diffContextEnd = Math.min(
+			modifiedLines.length,
+			contextEnd + lineDifference,
+		);
 		let finalContent = modifiedContent;
 		let finalLines = modifiedLines;
 		let finalTotalLines = modifiedLines.length;
 		const fileExtension = path.extname(fullPath).toLowerCase();
 		const shouldFormat =
-			getAutoFormatEnabled() && ctx.prettierSupportedExtensions.includes(fileExtension);
+			getAutoFormatEnabled() &&
+			ctx.prettierSupportedExtensions.includes(fileExtension);
 
 		if (shouldFormat) {
 			try {
@@ -295,12 +378,19 @@ export async function executeEditBySearchSingle(
 			.join('\n');
 		const editLineDelta = modifiedLines.length - lines.length;
 		const completeNewStart = Math.max(1, completeOldStart);
-		const completeNewEnd = Math.min(modifiedLines.length, completeOldEnd + editLineDelta);
+		const completeNewEnd = Math.min(
+			modifiedLines.length,
+			completeOldEnd + editLineDelta,
+		);
 		const completeNewContent = modifiedLines
 			.slice(completeNewStart - 1, completeNewEnd)
 			.join('\n');
 
-		const structureAnalysis = analyzeCodeStructure(finalContent, filePath, replaceLines);
+		const structureAnalysis = analyzeCodeStructure(
+			finalContent,
+			filePath,
+			replaceLines,
+		);
 		let diagnostics: Diagnostic[] = [];
 		try {
 			diagnostics = await getFreshDiagnostics(fullPath);
@@ -332,9 +422,14 @@ export async function executeEditBySearchSingle(
 
 		if (diagnostics.length > 0) {
 			result.diagnostics = diagnostics.slice(0, 10);
-			result.message = appendDiagnosticsSummary(result.message, filePath, diagnostics, {
-				includeTip: true,
-			});
+			result.message = appendDiagnosticsSummary(
+				result.message,
+				filePath,
+				diagnostics,
+				{
+					includeTip: true,
+				},
+			);
 		}
 
 		result.message = appendStructureWarnings(
@@ -413,7 +508,9 @@ export async function executeHashlineEditSingle(
 				(typeof op.endAnchor === 'string' && op.endAnchor.trim() === '');
 			if (endAnchorMissing) {
 				anchorErrors.push(
-					`Operation ${originalIndex + 1} (${op.type}): endAnchor is required. For a single-line replace or delete, set endAnchor to the same "lineNum:hash" as startAnchor. For insert_after, repeat startAnchor as endAnchor.`,
+					`Operation ${originalIndex + 1} (${
+						op.type
+					}): endAnchor is required. For a single-line replace or delete, set endAnchor to the same "lineNum:hash" as startAnchor. For insert_after, repeat startAnchor as endAnchor.`,
 				);
 				hasValidRange = false;
 			} else {
@@ -439,12 +536,20 @@ export async function executeHashlineEditSingle(
 				}
 			}
 
-			if ((op.type === 'replace' || op.type === 'insert_after') && op.content === undefined) {
+			if (
+				(op.type === 'replace' || op.type === 'insert_after') &&
+				op.content === undefined
+			) {
 				anchorErrors.push(`Operation "${op.type}" requires content`);
 			}
 
 			if (hasValidRange) {
-				preparedOps.push({op, originalIndex, startLine: startV.lineNum, endLine});
+				preparedOps.push({
+					op,
+					originalIndex,
+					startLine: startV.lineNum,
+					endLine,
+				});
 			}
 		}
 
@@ -477,11 +582,16 @@ export async function executeHashlineEditSingle(
 				if (sameSingleLineAnchor && hasInsertAfter) continue;
 
 				const overlaps =
-					current.startLine <= next.endLine && next.startLine <= current.endLine;
+					current.startLine <= next.endLine &&
+					next.startLine <= current.endLine;
 				if (!overlaps) continue;
 
 				conflictErrors.push(
-					`Operation ${current.originalIndex + 1} (${current.op.type} ${current.startLine}-${current.endLine}) conflicts with operation ${next.originalIndex + 1} (${next.op.type} ${next.startLine}-${next.endLine})`,
+					`Operation ${current.originalIndex + 1} (${current.op.type} ${
+						current.startLine
+					}-${current.endLine}) conflicts with operation ${
+						next.originalIndex + 1
+					} (${next.op.type} ${next.startLine}-${next.endLine})`,
 				);
 			}
 		}
@@ -498,7 +608,8 @@ export async function executeHashlineEditSingle(
 			if (a.startLine !== b.startLine) return b.startLine - a.startLine;
 			const aInsertAfter = a.op.type === 'insert_after';
 			const bInsertAfter = b.op.type === 'insert_after';
-			if (aInsertAfter && bInsertAfter) return b.originalIndex - a.originalIndex;
+			if (aInsertAfter && bInsertAfter)
+				return b.originalIndex - a.originalIndex;
 			if (aInsertAfter !== bInsertAfter) return aInsertAfter ? -1 : 1;
 			if (a.endLine !== b.endLine) return b.endLine - a.endLine;
 			return b.originalIndex - a.originalIndex;
@@ -506,7 +617,8 @@ export async function executeHashlineEditSingle(
 
 		let editStartLine = Infinity;
 		let editEndLine = 0;
-		const mutableLines = [...lines];
+		let mutableLines = [...lines];
+		const nativeEdits: NativeTextEdit[] = [];
 		const opSummaries: string[] = [];
 		const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
 		const sanitizeContent = (raw: string): string => {
@@ -533,23 +645,67 @@ export async function executeHashlineEditSingle(
 			editEndLine = Math.max(editEndLine, endLine);
 			switch (op.type) {
 				case 'replace': {
-					const newLines = sanitizeContent(op.content ?? '').split('\n');
-					mutableLines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
+					const replacement = sanitizeContent(op.content ?? '');
+					const newLines = replacement.split('\n');
+					nativeEdits.push({
+						kind: 'replace',
+						startLine,
+						endLine,
+						content: replacement,
+					});
 					opSummaries.push(
 						`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
 					);
 					break;
 				}
 				case 'insert_after': {
-					const newLines = sanitizeContent(op.content ?? '').split('\n');
-					mutableLines.splice(startLine, 0, ...newLines);
-					opSummaries.push(`insert ${newLines.length} line(s) after line ${startLine}`);
+					const insertion = sanitizeContent(op.content ?? '');
+					const newLines = insertion.split('\n');
+					nativeEdits.push({
+						kind: 'insert_after',
+						startLine,
+						endLine,
+						content: insertion,
+					});
+					opSummaries.push(
+						`insert ${newLines.length} line(s) after line ${startLine}`,
+					);
 					break;
 				}
 				case 'delete': {
-					mutableLines.splice(startLine - 1, endLine - startLine + 1);
+					nativeEdits.push({kind: 'delete', startLine, endLine});
 					opSummaries.push(`delete lines ${startLine}-${endLine}`);
 					break;
+				}
+			}
+		}
+
+		const nativeContent = await applyTextEditsWithNative(content, nativeEdits);
+		if (nativeContent !== undefined) {
+			mutableLines = nativeContent.split('\n');
+		} else {
+			for (const edit of nativeEdits) {
+				const newLines = (edit.content ?? '').split('\n');
+				switch (edit.kind) {
+					case 'replace': {
+						mutableLines.splice(
+							edit.startLine - 1,
+							edit.endLine - edit.startLine + 1,
+							...newLines,
+						);
+						break;
+					}
+					case 'insert_after': {
+						mutableLines.splice(edit.startLine, 0, ...newLines);
+						break;
+					}
+					case 'delete': {
+						mutableLines.splice(
+							edit.startLine - 1,
+							edit.endLine - edit.startLine + 1,
+						);
+						break;
+					}
 				}
 			}
 		}
@@ -588,10 +744,14 @@ export async function executeHashlineEditSingle(
 		let finalLines = mutableLines;
 		let finalTotalLines = mutableLines.length;
 		const lineDifference = mutableLines.length - lines.length;
-		let finalContextEnd = Math.min(finalTotalLines, contextEnd + lineDifference);
+		let finalContextEnd = Math.min(
+			finalTotalLines,
+			contextEnd + lineDifference,
+		);
 		const fileExtension = path.extname(fullPath).toLowerCase();
 		const shouldFormat =
-			getAutoFormatEnabled() && ctx.prettierSupportedExtensions.includes(fileExtension);
+			getAutoFormatEnabled() &&
+			ctx.prettierSupportedExtensions.includes(fileExtension);
 
 		if (shouldFormat) {
 			try {
@@ -662,11 +822,16 @@ export async function executeHashlineEditSingle(
 
 		if (diagnostics.length > 0) {
 			result.diagnostics = diagnostics.slice(0, 10);
-			result.message = appendDiagnosticsSummary(result.message, filePath, diagnostics, {
-				headerLabel: 'Diagnostics',
-				detailsLabel: 'Details',
-				moreSuffix: 'more',
-			});
+			result.message = appendDiagnosticsSummary(
+				result.message,
+				filePath,
+				diagnostics,
+				{
+					headerLabel: 'Diagnostics',
+					detailsLabel: 'Details',
+					moreSuffix: 'more',
+				},
+			);
 		}
 
 		result.message = appendStructureWarnings(result.message, structureAnalysis);

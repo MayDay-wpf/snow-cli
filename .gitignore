@@ -10,3 +10,4 @@ CONTEXT.md
 ROLE*.md
 .venv
 .idea
+crates/*/target/
