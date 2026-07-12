@@ -9,7 +9,11 @@ const architecture = process.arch;
 const target = process.env.SNOW_NATIVE_TARGET || `${platform}-${architecture}`;
 const extension =
 	platform === 'win32' ? 'dll' : platform === 'darwin' ? 'dylib' : 'so';
-const source = join('crates', 'snow-native', 'target', 'release', `snow_native.${extension}`);
+const libraryName =
+	platform === 'win32'
+		? `snow_native.${extension}`
+		: `libsnow_native.${extension}`;
+const source = join('crates', 'snow-native', 'target', 'release', libraryName);
 const destinationDirectory = join('bundle', 'native');
 const destination = join(destinationDirectory, `snow_native.${target}.node`);
 execFileSync(
