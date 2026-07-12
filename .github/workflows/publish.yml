@@ -24,7 +24,7 @@ jobs:
         include:
           - os: windows-latest
             platform: win32-x64
-          - os: macos-13
+          - os: macos-15-intel
             platform: darwin-x64
           - os: macos-14
             platform: darwin-arm64
