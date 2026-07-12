@@ -13,8 +13,8 @@ import {
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
-import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
 import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
+import {extractMultimodalContent} from './toolResultNormalizer.js';
 
 //安全解析JSON，处理可能被拼接的多个JSON对象
 function safeParseToolArguments(argsString: string): Record<string, any> {
@@ -129,93 +129,6 @@ export interface UserInteractionCallback {
 		customInput?: string;
 		cancelled?: boolean;
 	}>;
-}
-
-/**
- * Check if a value is a multimodal content array
- */
-function isMultimodalContent(value: any): value is MultimodalContent {
-	return (
-		Array.isArray(value) &&
-		value.length > 0 &&
-		value.every(
-			(item: any) =>
-				item &&
-				typeof item === 'object' &&
-				(item.type === 'text' || item.type === 'image'),
-		)
-	);
-}
-
-/**
- * Extract images and text content from a result that may be multimodal
- */
-function extractMultimodalContent(result: any): {
-	textContent: string;
-	images?: ImageContent[];
-} {
-	// Check if result has multimodal content array
-	let contentToCheck = result;
-
-	// Handle wrapped results (e.g., {content: [...], files: [...], totalFiles: n})
-	if (result && typeof result === 'object' && result.content) {
-		contentToCheck = result.content;
-	}
-
-	if (isMultimodalContent(contentToCheck)) {
-		const textParts: string[] = [];
-		const images: ImageContent[] = [];
-
-		for (const item of contentToCheck) {
-			if (item.type === 'text') {
-				textParts.push(item.text);
-			} else if (item.type === 'image') {
-				images.push({
-					type: 'image',
-					data: item.data,
-					mimeType: item.mimeType,
-				});
-			}
-		}
-
-		// If we extracted the content, we need to rebuild the result
-		if (
-			result &&
-			typeof result === 'object' &&
-			result.content === contentToCheck
-		) {
-			// Check if result has only 'content' field (pure MCP response)
-			// In this case, return the extracted text directly without wrapping
-			const resultKeys = Object.keys(result);
-			if (resultKeys.length === 1 && resultKeys[0] === 'content') {
-				// Pure MCP response - return extracted text directly
-				return {
-					textContent: textParts.join('\n\n'),
-					images: images.length > 0 ? images : undefined,
-				};
-			}
-
-			// Result has additional fields (e.g., files, totalFiles) - preserve them
-			const newResult = {...result, content: textParts.join('\n\n')};
-			return {
-				textContent: JSON.stringify(newResult),
-				images: images.length > 0 ? images : undefined,
-			};
-		}
-
-		return {
-			textContent: textParts.join('\n\n'),
-			images: images.length > 0 ? images : undefined,
-		};
-	}
-
-	// Not multimodal — convert to string for tool result content
-	if (typeof result === 'string') {
-		return {textContent: result};
-	}
-	return {
-		textContent: JSON.stringify(result),
-	};
 }
 
 /**
