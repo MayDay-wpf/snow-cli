@@ -38,6 +38,14 @@ _在终端中进行 Agentic 编程_
   </thead>
   <tbody>
     <tr>
+      <td align="center">
+        <a href="https://bloome.im/login?ref=MayDaywpf"><img src="docs/images/bloome-home.png" alt="Bloome" width="360"/></a>
+        <br/>
+        ☁️ <a href="https://bloome.im/login?ref=MayDaywpf"><b>Bloome</b></a>
+      </td>
+      <td>AI Agent IM 平台 —— 让多个 AI agent（Claude、ChatGPT、DeepSeek 等）在同一个对话里协作：自动分工、互相交接、交叉校验，把结果打磨到靠谱为止。零配置、云端运行，还能一键分享给团队。立即体验 👉 <a href="https://bloome.im/login?ref=MayDaywpf">Bloome</a></td>
+    </tr>
+    <tr>
       <td><a href="https://www.jetbrains.com/">JetBrains</a></td>
       <td>开源项目赞助者，提供全套 IDE 免费许可证</td>
     </tr>
