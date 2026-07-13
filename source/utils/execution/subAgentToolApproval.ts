@@ -5,6 +5,7 @@ import {checkYoloPermission} from './yoloPermissionChecker.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
 import {sessionManager} from '../session/sessionManager.js';
+import {extractMultimodalContent} from './toolResultNormalizer.js';
 import {
 	endToolSpan,
 	recordToolContent,
@@ -285,11 +286,13 @@ export async function executeMcpTools(
 				editDiffData['filename'] = args['filePath'];
 			}
 
-			const resultContent = JSON.stringify(contentSource);
+			const {textContent: resultContent, images} =
+				extractMultimodalContent(contentSource);
 			toolResults.push({
 				role: 'tool' as const,
 				tool_call_id: toolCall.id,
 				content: resultContent,
+				...(images ? {images} : {}),
 				...(editDiffData ? {editDiffData} : {}),
 			} as ChatMessage);
 			emitSubAgentMessage(ctx, {
@@ -327,6 +330,7 @@ export async function executeMcpTools(
 							tool_call_id: toolCall.id,
 							role: 'tool',
 							content: resultContent,
+							...(images ? {images} : {}),
 						},
 						error: null,
 					},

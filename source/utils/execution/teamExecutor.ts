@@ -17,6 +17,7 @@ import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
+import {extractMultimodalContent} from './toolResultNormalizer.js';
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -345,7 +346,11 @@ ${role ? `Your role: ${role}` : ''}
 			toolName: string,
 			result: unknown,
 			args: any,
-		): {resultContent: string; editDiffData?: Record<string, any>} => {
+		): {
+			resultContent: string;
+			editDiffData?: Record<string, any>;
+			images?: import('../../api/types.js').ImageContent[];
+		} => {
 			let contentSource: unknown = result;
 			let editDiffData: Record<string, any> | undefined;
 
@@ -374,12 +379,9 @@ ${role ? `Your role: ${role}` : ''}
 				editDiffData['filename'] = args['filePath'];
 			}
 
-			const serializedContent =
-				typeof contentSource === 'string'
-					? contentSource
-					: JSON.stringify(contentSource) ?? String(contentSource);
+			const {textContent, images} = extractMultimodalContent(contentSource);
 
-			return {resultContent: serializedContent, editDiffData};
+			return {resultContent: textContent, editDiffData, images};
 		};
 
 		// eslint-disable-next-line no-constant-condition
@@ -1018,12 +1020,15 @@ ${role ? `Your role: ${role}` : ''}
 									toolArgs,
 									abortSignal,
 								);
-								const {resultContent: rawResultContent, editDiffData} =
-									normalizeToolResultPayload(
-										tc.function.name,
-										result,
-										toolArgs,
-									);
+								const {
+									resultContent: rawResultContent,
+									editDiffData,
+									images,
+								} = normalizeToolResultPayload(
+									tc.function.name,
+									result,
+									toolArgs,
+								);
 								let resultContent = rawResultContent;
 
 								// afterToolCall hook
@@ -1037,6 +1042,7 @@ ${role ? `Your role: ${role}` : ''}
 												tool_call_id: tc.id,
 												role: 'tool',
 												content: resultContent,
+												...(images ? {images} : {}),
 											},
 											error: null,
 										},
@@ -1053,6 +1059,7 @@ ${role ? `Your role: ${role}` : ''}
 									role: 'tool' as const,
 									tool_call_id: tc.id,
 									content: resultContent,
+									...(images ? {images} : {}),
 									...(editDiffData ? {editDiffData} : {}),
 								} as ChatMessage);
 								emitToolResultEvent(
@@ -1181,8 +1188,11 @@ ${role ? `Your role: ${role}` : ''}
 								toolArgs,
 								abortSignal,
 							);
-							const {resultContent: rawResultContent, editDiffData} =
-								normalizeToolResultPayload(toolName, result, toolArgs);
+							const {
+								resultContent: rawResultContent,
+								editDiffData,
+								images,
+							} = normalizeToolResultPayload(toolName, result, toolArgs);
 							let resultContent = rawResultContent;
 
 							// afterToolCall hook
@@ -1196,6 +1206,7 @@ ${role ? `Your role: ${role}` : ''}
 											tool_call_id: tc.id,
 											role: 'tool',
 											content: resultContent,
+											...(images ? {images} : {}),
 										},
 										error: null,
 									},
@@ -1212,6 +1223,7 @@ ${role ? `Your role: ${role}` : ''}
 								role: 'tool' as const,
 								tool_call_id: tc.id,
 								content: resultContent,
+								...(images ? {images} : {}),
 								...(editDiffData ? {editDiffData} : {}),
 							} as ChatMessage);
 							emitToolResultEvent(tc.id, toolName, resultContent, editDiffData);
