@@ -431,6 +431,9 @@ export async function executeContextCompression(
 
 			const imageResult = await performImageCompression(
 				chatMessages,
+				currentSession.id,
+				sessionManager.getProjectId(),
+				currentSession.createdAt,
 				currentSession.imageContextArchive,
 			);
 

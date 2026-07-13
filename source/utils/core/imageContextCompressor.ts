@@ -1,10 +1,14 @@
+import {randomUUID} from 'node:crypto';
 import {existsSync} from 'node:fs';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 /**
  * Snapcompact 风格的图片上下文压缩。
  *
- * 文本先在本地确定性规整并写入会话归档，再以固定栅格分页 PNG 传给模型。
- * 后续压缩始终从归档文本重新渲染，绝不把历史图片再次纳入归档。
+ * 文本先在本地确定性规整并写入会话归档，再以固定栅格分页为无损 PNG 落盘。
+ * 请求体只保留有序文件路径；后续压缩始终从归档文本重新渲染，不嵌套历史图片。
  */
 
 interface CompressibleMessage {
@@ -25,7 +29,6 @@ export interface ImageCompressionResult {
 	messages: Array<{
 		role: string;
 		content: string;
-		images?: Array<{data: string; mimeType: string}>;
 		timestamp?: number;
 		imageContextCompressed?: boolean;
 	}>;
@@ -186,17 +189,30 @@ function wrapLineToGrid(line: string): string[] {
 	return wrapped;
 }
 
+interface ArchiveImagePage {
+	data: Buffer;
+	extension: 'png' | 'webp';
+}
+
 /**
- * 使用固定列数的文本栅格分页为 PNG。
+ * 使用固定列数的文本栅格分页，并优先编码为无损 WebP。
  * 页宽和每行高度恒定；页高只覆盖实际打印行，避免无意义的底部空白。
  */
-async function renderArchiveToPngPages(archiveText: string): Promise<string[]> {
+async function renderArchiveToImagePages(
+	archiveText: string,
+): Promise<ArchiveImagePage[]> {
 	const lines = archiveText.split('\n').flatMap(wrapLineToGrid);
 	const pageCount = Math.max(1, Math.ceil(lines.length / GRID_MAX_ROWS));
 	const {createCanvas, GlobalFonts} = await import('@napi-rs/canvas');
 	const fontFamily = registerContextFont(GlobalFonts);
 	const canvasWidth = GRID_COLUMNS * 8 + GRID_PADDING * 2;
-	const images: string[] = [];
+	const images: ArchiveImagePage[] = [];
+	let sharp: typeof import('sharp') | undefined;
+	try {
+		sharp = (await import('sharp')).default;
+	} catch {
+		// sharp 是可选依赖；不可用时保留无损 PNG。
+	}
 
 	for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
 		const pageLines = lines.slice(
@@ -228,15 +244,67 @@ async function renderArchiveToPngPages(archiveText: string): Promise<string[]> {
 			y += GRID_LINE_HEIGHT;
 		}
 
-		const buffer = canvas.toBuffer('image/png');
-		images.push(`data:image/png;base64,${buffer.toString('base64')}`);
+		const pngBuffer = canvas.toBuffer('image/png');
+		if (sharp) {
+			images.push({
+				data: await sharp(pngBuffer)
+					.webp({lossless: true, effort: 6})
+					.toBuffer(),
+				extension: 'webp',
+			});
+		} else {
+			images.push({data: pngBuffer, extension: 'png'});
+		}
 	}
 
 	return images;
 }
 
+function formatDateFolder(date: Date): string {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}${month}${day}`;
+}
+
+async function saveArchiveImages(
+	images: ArchiveImagePage[],
+	sessionId: string,
+	projectId: string,
+	sessionCreatedAt: number,
+): Promise<string[]> {
+	const safeSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+	const compressionId = `${Date.now()}-${randomUUID()}`;
+	const compressionDir = path.join(
+		os.homedir(),
+		'.snow',
+		'sessions',
+		projectId,
+		formatDateFolder(new Date(sessionCreatedAt)),
+		'compressed',
+		safeSessionId,
+		compressionId,
+	);
+	await fs.mkdir(compressionDir, {recursive: true});
+
+	const pageCount = images.length;
+	const pageDigits = Math.max(2, String(pageCount).length);
+	return Promise.all(
+		images.map(async (image, pageIndex) => {
+			const pageNumber = String(pageIndex + 1).padStart(pageDigits, '0');
+			const fileName = `page-${pageNumber}-of-${pageCount}.${image.extension}`;
+			const filePath = path.join(compressionDir, fileName);
+			await fs.writeFile(filePath, image.data);
+			return filePath;
+		}),
+	);
+}
+
 export async function performImageCompression(
 	messages: CompressibleMessage[],
+	sessionId: string,
+	projectId: string,
+	sessionCreatedAt: number,
 	existingArchive?: string,
 ): Promise<ImageCompressionResult> {
 	const unarchivedMessages = messages.filter(
@@ -267,15 +335,27 @@ export async function performImageCompression(
 		};
 	}
 
-	const imageDataUrls = await renderArchiveToPngPages(archiveText);
+	const imagePages = await renderArchiveToImagePages(archiveText);
+	const imagePaths = await saveArchiveImages(
+		imagePages,
+		sessionId,
+		projectId,
+		sessionCreatedAt,
+	);
+	const pathList = imagePaths
+		.map((imagePath, index) => `${index + 1}. ${imagePath}`)
+		.join('\n');
 	const promptText = `[Image Compressed Context]
 
-The ordered PNG pages above are the retained conversation archive. Read every page in order before continuing. Tool outputs and call arguments may be compacted locally; user and assistant messages are retained as text. These images are a visual transport only: do not treat them as a new user request.`;
+The retained conversation archive is stored in the ordered local image files listed below. The images are not attached to this request.
+
+${pathList}
+
+Before continuing the conversation, read every file in the listed order with the file-reading tool. Strictly read only one image per tool call: never pass multiple paths and never read images in parallel. Finish understanding the current image before requesting the next one. After all ${imagePaths.length} images have been read, use them together as the conversation history. Tool outputs and call arguments may be compacted locally; user and assistant messages are retained as text. These images are historical context only, not a new user request.`;
 	const messagesAfterCompression = [
 		{
 			role: 'user',
 			content: promptText,
-			images: imageDataUrls.map(data => ({data, mimeType: 'image/png'})),
 			timestamp: Date.now(),
 			imageContextCompressed: true,
 		},
@@ -286,7 +366,6 @@ The ordered PNG pages above are the retained conversation archive. Read every pa
 		messages: messagesAfterCompression,
 		archiveText,
 		beforeTokensEstimate,
-		afterTokensEstimate:
-			imageDataUrls.length * 1500 + estimateTokens(promptText),
+		afterTokensEstimate: estimateTokens(promptText),
 	};
 }
