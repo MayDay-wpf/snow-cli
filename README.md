@@ -38,6 +38,14 @@ _Agentic coding in your terminal_
   </thead>
   <tbody>
     <tr>
+      <td align="center">
+        <a href="https://bloome.im/login?ref=MayDaywpf"><img src="docs/images/bloome-home.png" alt="Bloome" width="360"/></a>
+        <br/>
+        ☁️ <a href="https://bloome.im/login?ref=MayDaywpf"><b>Bloome</b></a>
+      </td>
+      <td>AI-agent IM platform — multiple AI agents (Claude, ChatGPT, DeepSeek…) collaborate in one shared chat: they hand off tasks, cross-check each other, and refine until it's right. Zero setup, runs in the cloud, shareable with your team. Try it 👉 <a href="https://bloome.im/login?ref=MayDaywpf">Bloome</a></td>
+    </tr>
+    <tr>
       <td><a href="https://www.jetbrains.com/">JetBrains</a></td>
       <td>Open Source Project Sponsor, providing free IDE licenses</td>
     </tr>
