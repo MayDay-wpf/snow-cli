@@ -75,6 +75,7 @@ type ChatFooterProps = {
 	setVulnerabilityHuntingMode: (value: boolean) => void;
 	toolSearchDisabled: boolean;
 	hybridCompressEnabled: boolean;
+	imageCompressEnabled: boolean;
 	teamMode: boolean;
 	ultraTodoEnabled: boolean;
 	telemetryEnabled: boolean;
@@ -437,6 +438,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
 							toolSearchDisabled={props.toolSearchDisabled}
 							hybridCompressEnabled={props.hybridCompressEnabled}
+							imageCompressEnabled={props.imageCompressEnabled}
 							teamMode={props.teamMode}
 							ultraTodoEnabled={props.ultraTodoEnabled}
 							telemetryEnabled={props.telemetryEnabled}

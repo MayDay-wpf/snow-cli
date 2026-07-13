@@ -179,11 +179,13 @@ function getPersistentUserId(): string {
 }
 
 /**
- * Convert OpenAI-style tools to Anthropic tool format
- * Adds cache_control to the last tool for prompt caching
+ * Convert OpenAI-style tools to Anthropic tool format.
+ * Cache the full static tool prefix using the same TTL as system/message cache
+ * breakpoints, preserving Anthropic's required TTL ordering.
  */
 function convertToolsToAnthropic(
 	tools?: ChatCompletionTool[],
+	cacheTTL: '5m' | '1h' = '5m',
 ): AnthropicTool[] | undefined {
 	if (!tools || tools.length === 0) {
 		return undefined;
@@ -191,7 +193,7 @@ function convertToolsToAnthropic(
 
 	const convertedTools = tools
 		.filter(tool => tool.type === 'function' && 'function' in tool)
-		.map(tool => {
+		.map((tool): AnthropicTool => {
 			if (tool.type === 'function' && 'function' in tool) {
 				return {
 					name: tool.function.name,
@@ -202,11 +204,10 @@ function convertToolsToAnthropic(
 			throw new Error('Invalid tool format');
 		});
 
-	// Do not add cache_control to tools to avoid TTL ordering issues
-	// if (convertedTools.length > 0) {
-	// 	const lastTool = convertedTools[convertedTools.length - 1];
-	// 	(lastTool as any).cache_control = {type: 'ephemeral', ttl: '5m'};
-	// }
+	const lastTool = convertedTools[convertedTools.length - 1];
+	if (lastTool) {
+		lastTool.cache_control = {type: 'ephemeral', ttl: cacheTTL};
+	}
 
 	return convertedTools;
 }
@@ -768,7 +769,10 @@ export async function* createStreamingAnthropicCompletion(
 					max_tokens: options.max_tokens || 4096,
 					system,
 					messages,
-					tools: convertToolsToAnthropic(options.tools),
+					tools: convertToolsToAnthropic(
+						options.tools,
+						config.anthropicCacheTTL || '5m',
+					),
 					metadata: {
 						user_id: userId,
 					},

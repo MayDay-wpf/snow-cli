@@ -12,6 +12,8 @@ import {
 	setVulnerabilityHuntingMode as persistVulnerabilityHuntingMode,
 	getHybridCompressEnabled,
 	setHybridCompressEnabled as persistHybridCompressEnabled,
+	getImageCompressEnabled,
+	setImageCompressEnabled as persistImageCompressEnabled,
 	getTeamMode,
 	setTeamMode as persistTeamMode,
 	getUltraTodoEnabled,
@@ -54,6 +56,9 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	const [hybridCompressEnabled, setHybridCompressEnabled] = useState(() =>
 		getHybridCompressEnabled(),
 	);
+	const [imageCompressEnabled, setImageCompressEnabled] = useState(() =>
+		getImageCompressEnabled(),
+	);
 	const [teamMode, setTeamMode] = useState(() => getTeamMode());
 	const [ultraTodoEnabled, setUltraTodoEnabled] = useState(() =>
 		getUltraTodoEnabled(),
@@ -89,6 +94,10 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	useEffect(() => {
 		persistHybridCompressEnabled(hybridCompressEnabled);
 	}, [hybridCompressEnabled]);
+
+	useEffect(() => {
+		persistImageCompressEnabled(imageCompressEnabled);
+	}, [imageCompressEnabled]);
 
 	useEffect(() => {
 		persistTeamMode(teamMode);
@@ -149,6 +158,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		setToolSearchDisabled,
 		hybridCompressEnabled,
 		setHybridCompressEnabled,
+		imageCompressEnabled,
+		setImageCompressEnabled,
 		teamMode,
 		setTeamMode,
 		ultraTodoEnabled,

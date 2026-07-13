@@ -89,6 +89,7 @@ export interface StatusLineSystemState {
 		vulnerabilityHunting: boolean;
 		toolSearchEnabled: boolean;
 		hybridCompress: boolean;
+		imageCompress: boolean;
 		team: boolean;
 		ultraTodo: boolean;
 		telemetry: boolean;

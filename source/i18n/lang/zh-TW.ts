@@ -838,6 +838,8 @@ export const zhTW: TranslationKeys = {
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
+			imageCompress:
+				'切換圖片壓縮模式（歷史記錄生成 PNG 圖片，用於 /compact 和自動壓縮）',
 			team: '切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
 			ultraTodo: '切換 Ultra TODO 模式 - 按階段細分任務並在階段推進前強制校驗',
 			telemetry: '設定 OpenTelemetry 遙測',
@@ -1664,6 +1666,7 @@ export const zhTW: TranslationKeys = {
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
 		toolSearchEnabled: '♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
 		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
+		imageCompressEnabled: '🖼 圖片壓縮已開啟 - 歷史記錄渲染為 PNG 圖片',
 		teamModeActive: '⚑ Agent Team 模式已啟用 - 多代理獨立 Worktree 協同工作',
 		ultraTodoActive: '◈ Ultra TODO 模式已啟用 - 階段任務推進將強制校驗',
 		telemetryActive:

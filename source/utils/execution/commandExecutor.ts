@@ -56,6 +56,7 @@ export interface CommandResult {
 		| 'copyLastMessage'
 		| 'toggleCodebase'
 		| 'toggleHybridCompress'
+		| 'toggleImageCompress'
 		| 'toggleTeam'
 		| 'toggleUltraTodo'
 		| 'toggleSpeedometer'

@@ -119,6 +119,8 @@ export default function ChatScreen({
 		setToolSearchDisabled,
 		hybridCompressEnabled,
 		setHybridCompressEnabled,
+		imageCompressEnabled,
+		setImageCompressEnabled,
 		teamMode,
 		setTeamMode,
 		ultraTodoEnabled,
@@ -423,6 +425,7 @@ export default function ChatScreen({
 		setVulnerabilityHuntingMode,
 		setToolSearchDisabled,
 		setHybridCompressEnabled,
+		setImageCompressEnabled,
 		setTeamMode,
 		setUltraTodoEnabled,
 		setContextUsage: streamingState.setContextUsage,
@@ -748,6 +751,7 @@ export default function ChatScreen({
 					setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
 					toolSearchDisabled={toolSearchDisabled}
 					hybridCompressEnabled={hybridCompressEnabled}
+					imageCompressEnabled={imageCompressEnabled}
 					teamMode={teamMode}
 					ultraTodoEnabled={ultraTodoEnabled}
 					telemetryEnabled={isTelemetryActive()}

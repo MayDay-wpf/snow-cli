@@ -34,6 +34,8 @@ export interface Session {
 	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
 	compressedAt?: number; // 压缩时间戳
 	originalMessageIndex?: number; // 压缩点在原会话中的消息索引
+	// 图片压缩的本地文本归档：后续压缩从此文本重新渲染，不嵌套历史图片。
+	imageContextArchive?: string;
 	branchedFrom?: string; // 如果是 fork 产生的会话，记录来源会话ID
 	branchName?: string; // 用户指定的分支名称
 	contextUsage?: UsageInfo; // 最近一次 API 响应的上下文 token 使用信息（可选，向下兼容）

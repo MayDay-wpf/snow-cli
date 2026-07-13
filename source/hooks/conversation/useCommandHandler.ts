@@ -5,9 +5,11 @@ import type {CompressionStatus} from '../../ui/components/compression/Compressio
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
+import {performImageCompression} from '../../utils/core/imageContextCompressor.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
+import {getImageCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
 import {goalManager} from '../../utils/task/goalManager.js';
 import type {GoalRecord} from '../../utils/task/goalManager.js';
@@ -155,6 +157,7 @@ export async function executeContextCompression(
 			tool_call_id: msg.tool_call_id,
 			tool_calls: msg.tool_calls,
 			images: msg.images,
+			imageContextCompressed: (msg as any).imageContextCompressed,
 			reasoning: msg.reasoning,
 			thinking: msg.thinking,
 			subAgentInternal: msg.subAgentInternal,
@@ -182,6 +185,11 @@ export async function executeContextCompression(
 
 		// Check if Hybrid Compress mode is enabled
 		const useHybridCompress = getHybridCompressEnabled();
+		const apiConfig = getSnowConfig();
+		// Image compression produces PNG context and therefore requires the active model to support vision.
+		const imageCompressionEnabled = getImageCompressEnabled();
+		const useImageCompress =
+			imageCompressionEnabled && apiConfig.supportsVision !== false;
 
 		let compressionStreamStarted = false;
 		let compressionStreamScore = 0;
@@ -413,6 +421,125 @@ export async function executeContextCompression(
 				usage: {
 					prompt_tokens: afterEstimate,
 					completion_tokens: apiUsage?.completion_tokens || 0,
+					total_tokens: afterEstimate,
+				},
+			};
+		}
+		// ── Image Compress path: history -> PNG image ──
+		if (useImageCompress) {
+			flushCompressionStreamBuffer(true);
+
+			const imageResult = await performImageCompression(
+				chatMessages,
+				currentSession.imageContextArchive,
+			);
+
+			if (!imageResult.compressed) {
+				onStatusUpdate?.({
+					step: 'skipped',
+					message: 'Not enough history to compress',
+					sessionId,
+				});
+				return null;
+			}
+
+			// Build session messages
+			const newSessionMessages: Array<any> = imageResult.messages.map(msg => ({
+				...msg,
+				timestamp: Date.now(),
+			}));
+
+			// ── /goal: inject goal objective block ──
+			if (activeGoalForCompression) {
+				const goalBlock = buildGoalObjectiveBlock(activeGoalForCompression);
+				const firstUserIdx = newSessionMessages.findIndex(
+					(m: any) => m && m.role === 'user',
+				);
+				if (firstUserIdx >= 0) {
+					const first = newSessionMessages[firstUserIdx];
+					first.content = `${goalBlock}\n\n${first.content || ''}`;
+				} else {
+					newSessionMessages.unshift({
+						role: 'user',
+						content: goalBlock,
+						timestamp: Date.now(),
+					});
+				}
+			}
+
+			// Create new session
+			const compressedSession = await sessionManager.createNewSession(
+				false,
+				true,
+			);
+			compressedSession.messages = newSessionMessages;
+			compressedSession.messageCount = newSessionMessages.length;
+			compressedSession.updatedAt = Date.now();
+			compressedSession.title = currentSession.title;
+			compressedSession.summary = currentSession.summary;
+			compressedSession.compressedFrom = currentSession.id;
+			compressedSession.compressedAt = Date.now();
+			compressedSession.originalMessageIndex = currentSession.messages.length;
+			compressedSession.imageContextArchive = imageResult.archiveText;
+
+			if (currentSession.hasGoal) {
+				compressedSession.hasGoal = true;
+			}
+
+			await sessionManager.saveSession(compressedSession);
+
+			// ── /goal: migrate goal file to new sessionId ──
+			if (currentSession.hasGoal) {
+				try {
+					await goalManager.migrateGoalToSession(
+						currentSession.id,
+						compressedSession.id,
+					);
+					const {clearMCPToolsCache} = await import(
+						'../../utils/execution/mcpToolsManager.js'
+					);
+					clearMCPToolsCache();
+				} catch (err) {
+					console.error(
+						'[goal] Failed to migrate goal after image compression:',
+						err,
+					);
+				}
+			}
+
+			// Inherit TODO list
+			try {
+				const todoService = getTodoService();
+				await todoService.copyTodoList(currentSession.id, compressedSession.id);
+			} catch {
+				// Non-critical
+			}
+
+			// Reload session
+			onStatusUpdate?.({step: 'loading', sessionId: compressedSession.id});
+			const reloadedSession = await sessionManager.loadSession(
+				compressedSession.id,
+			);
+			if (reloadedSession) {
+				sessionManager.setCurrentSession(reloadedSession);
+			} else {
+				sessionManager.setCurrentSession(compressedSession);
+			}
+
+			onStatusUpdate?.({step: 'completed', sessionId: compressedSession.id});
+
+			const newUIMessages = convertSessionMessagesToUI(
+				(sessionManager.getCurrentSession()?.messages ??
+					newSessionMessages) as any,
+			);
+
+			const afterEstimate = imageResult.afterTokensEstimate || 0;
+
+			return {
+				uiMessages: newUIMessages,
+				usage: {
+					prompt_tokens: afterEstimate,
+					completion_tokens: 0,
 					total_tokens: afterEstimate,
 				},
 			};
@@ -661,6 +788,10 @@ type CommandHandlerOptions = {
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowAnyPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setImageCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setUltraTodoEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setActiveAnyPanelPluginId: React.Dispatch<
 		React.SetStateAction<string | null>
 	>;
@@ -690,9 +821,6 @@ type CommandHandlerOptions = {
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
-	setUltraTodoEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -1503,7 +1631,21 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'toggleHybridCompress') {
-				options.setHybridCompressEnabled(prev => !prev);
+				options.setHybridCompressEnabled(prev => {
+					const newValue = !prev;
+					if (newValue) {
+						options.setImageCompressEnabled(false);
+					}
+					return newValue;
+				});
+			} else if (result.success && result.action === 'toggleImageCompress') {
+				options.setImageCompressEnabled(prev => {
+					const newValue = !prev;
+					if (newValue) {
+						options.setHybridCompressEnabled(false);
+					}
+					return newValue;
+				});
 			} else if (result.success && result.action === 'toggleTeam') {
 				options.setTeamMode(prev => {
 					const newValue = !prev;

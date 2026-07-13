@@ -361,6 +361,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Toggle Hybrid Compress mode (AI summary + smart truncation)',
 			},
 			{
+				name: 'image-compress',
+				description:
+					t.commandPanel.commands.imageCompress ||
+					'Toggle Image Compress mode (history -> PNG image)',
+			},
+			{
 				name: 'diff',
 				description:
 					t.commandPanel.commands.diff ||

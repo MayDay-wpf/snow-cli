@@ -219,6 +219,7 @@ type Props = {
 	vulnerabilityHuntingMode?: boolean;
 	toolSearchDisabled?: boolean;
 	hybridCompressEnabled?: boolean;
+	imageCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
 	telemetryEnabled?: boolean;
@@ -343,6 +344,7 @@ export default function StatusLine({
 	vulnerabilityHuntingMode = false,
 	toolSearchDisabled = true,
 	hybridCompressEnabled = false,
+	imageCompressEnabled = false,
 	teamMode = false,
 	ultraTodoEnabled = false,
 	telemetryEnabled = false,
@@ -402,6 +404,7 @@ export default function StatusLine({
 					vulnerabilityHunting: vulnerabilityHuntingMode,
 					toolSearchEnabled: !toolSearchDisabled,
 					hybridCompress: hybridCompressEnabled,
+					imageCompress: imageCompressEnabled,
 					team: teamMode,
 					ultraTodo: ultraTodoEnabled,
 					telemetry: telemetryEnabled,
@@ -588,6 +591,7 @@ export default function StatusLine({
 		ultraTodoEnabled ||
 		!toolSearchDisabled ||
 		hybridCompressEnabled ||
+		imageCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
@@ -683,6 +687,16 @@ export default function StatusLine({
 		) {
 			statusItems.push({
 				text: '⇌ Hybrid Compress',
+				color: theme.colors.menuInfo,
+			});
+		}
+
+		if (
+			imageCompressEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.imageCompress)
+		) {
+			statusItems.push({
+				text: '🖼 Image Compress',
 				color: theme.colors.menuInfo,
 			});
 		}
@@ -958,6 +972,15 @@ export default function StatusLine({
 					<Box>
 						<Text color={theme.colors.menuInfo} dimColor>
 							{t.chatScreen.hybridCompressEnabled}
+						</Text>
+					</Box>
+				)}
+
+			{imageCompressEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.imageCompress) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{t.chatScreen.imageCompressEnabled}
 						</Text>
 					</Box>
 				)}

@@ -14,6 +14,7 @@ export interface ProjectSettings {
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
+	imageCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
@@ -64,6 +65,7 @@ function loadSettings(): ProjectSettings {
 		planMode: pick('planMode'),
 		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
+		imageCompressEnabled: pick('imageCompressEnabled'),
 		teamMode: pick('teamMode'),
 		ultraTodoEnabled: pick('ultraTodoEnabled'),
 		disableBashAiSummary: pick('disableBashAiSummary'),
@@ -163,6 +165,15 @@ export function getHybridCompressEnabled(): boolean {
 
 export function setHybridCompressEnabled(enabled: boolean): void {
 	setField('hybridCompressEnabled', enabled);
+}
+
+export function getImageCompressEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.imageCompressEnabled ?? false;
+}
+
+export function setImageCompressEnabled(enabled: boolean): void {
+	setField('imageCompressEnabled', enabled);
 }
 
 export function getTeamMode(): boolean {

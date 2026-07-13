@@ -806,6 +806,7 @@ export type TranslationKeys = {
 			buddy: string;
 			toolSearch: string;
 			hybridCompress: string;
+			imageCompress: string;
 			team: string;
 			ultraTodo: string;
 			telemetry: string;
@@ -1560,6 +1561,7 @@ export type TranslationKeys = {
 		vulnerabilityHuntingModeActive: string;
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;
+		imageCompressEnabled: string;
 		teamModeActive: string;
 		ultraTodoActive: string;
 		telemetryActive: string;

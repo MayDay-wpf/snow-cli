@@ -38,6 +38,7 @@ export interface UnifiedSettings {
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
+	imageCompressEnabled?: boolean;
 	teamMode?: boolean;
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;

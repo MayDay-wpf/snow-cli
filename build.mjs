@@ -11,10 +11,6 @@ const stubPlugin = {
 			path: 'react-devtools-core',
 			namespace: 'stub-ns',
 		}));
-		build.onResolve({filter: /^@napi-rs\/canvas$/}, () => ({
-			path: '@napi-rs/canvas',
-			namespace: 'stub-ns',
-		}));
 		build.onLoad({filter: /.*/, namespace: 'stub-ns'}, () => ({
 			contents: 'export default {}',
 		}));
@@ -188,6 +184,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 		...builtinModules.map(m => `node:${m}`),
 		// Optional native dependencies (dynamically imported in code)
 		'sharp',
+		'@napi-rs/canvas',
 		// SSH2 includes native .node addons that cannot be bundled by esbuild
 		'ssh2',
 		'cpu-features',

@@ -2,6 +2,7 @@ import type {Context} from '@opentelemetry/api';
 
 import {collectAllMCPTools} from './mcpToolsManager.js';
 import {getSnowConfig} from '../config/apiConfig.js';
+import {getConversationContext} from '../codebase/conversationContext.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
@@ -72,14 +73,16 @@ export async function executeSubAgent(
 			return {success: false, result: '', error: resolveError};
 		}
 
-		const currentSession = sessionManager.getCurrentSession();
+		const sessionId =
+			sessionManager.getCurrentSession()?.id ??
+			getConversationContext()?.sessionId;
 		return await withAgentSpan(
 			{
 				agentId: agent.id ?? agentId,
 				agentName: agent.name ?? agentId,
 				instanceId,
-				sessionId: currentSession?.id,
-				conversationId: currentSession?.id,
+				sessionId,
+				conversationId: sessionId,
 				spawnDepth,
 				parentContext,
 			},
@@ -146,13 +149,12 @@ export async function executeSubAgent(
 
 					// Resolve config + create API stream
 					const {config, model} = await resolveConfig(agent);
-					const currentSession = sessionManager.getCurrentSession();
 					const stream = createApiStream(
 						config,
 						model,
 						ctx.messages,
 						allowedTools,
-						currentSession?.id,
+						sessionId,
 						agent.configProfile,
 						abortSignal,
 					);

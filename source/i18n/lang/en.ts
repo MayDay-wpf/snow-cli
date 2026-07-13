@@ -890,6 +890,8 @@ export const en: TranslationKeys = {
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
+			imageCompress:
+				'Toggle Image Compress mode (history -> PNG image for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
 			ultraTodo:
 				'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
@@ -1756,6 +1758,7 @@ export const en: TranslationKeys = {
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
 		hybridCompressEnabled:
 			'⇌ Hybrid Compress ON - AI summary + smart truncation',
+		imageCompressEnabled: '🖼 Image Compress ON - History rendered as PNG',
 		teamModeActive:
 			'⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
 		ultraTodoActive:
