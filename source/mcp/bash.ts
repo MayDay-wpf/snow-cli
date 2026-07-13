@@ -329,7 +329,7 @@ export class TerminalCommandService {
 				shell = selectedShell.shell;
 
 				if (selectedShell.isPowerShell) {
-					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command} }`;
+					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}; $commandSucceeded = $?; $commandExitCode = $LASTEXITCODE; if ($commandExitCode -ne $null) { exit $commandExitCode }; if (-not $commandSucceeded) { exit 1 } }`;
 					shellArgs = ['-NoProfile', '-Command', utf8WrappedCommand];
 				} else {
 					const utf8Command = `chcp 65001>nul && ${command}`;

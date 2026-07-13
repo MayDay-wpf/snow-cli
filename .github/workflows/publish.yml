@@ -104,7 +104,8 @@ jobs:
 
             ### What's New
 
-            - Added Rust native acceleration for filesystem replace and hashline edits.
+            - Added image context compression, which archives chat history as PNG images to reduce context usage, with commands and project settings to control it.
+            - Preserved sub-agent image tool results as structured multimodal content.
 
             ### Installation
             ```bash
