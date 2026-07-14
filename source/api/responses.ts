@@ -765,72 +765,6 @@ export async function* createStreamingResponse(
 							encrypted_content?: string;
 					  }
 					| undefined;
-				const emittedTextByPart = new Map<string, string>();
-				const getTextPartKey = (
-					itemId: unknown,
-					outputIndex: unknown,
-					contentIndex: unknown,
-				): string => {
-					const outputKey =
-						typeof itemId === 'string' && itemId
-							? `item-${itemId}`
-							: typeof outputIndex === 'number'
-							? `output-${outputIndex}`
-							: 'output-unknown';
-					const normalizedContentIndex =
-						typeof contentIndex === 'number' ? contentIndex : 0;
-					return `${outputKey}:${normalizedContentIndex}`;
-				};
-				const recordTextDelta = (key: string, delta: unknown): string => {
-					if (typeof delta !== 'string' || delta.length === 0) {
-						return '';
-					}
-
-					const emittedText = emittedTextByPart.get(key) || '';
-					emittedTextByPart.set(key, emittedText + delta);
-					contentBuffer += delta;
-					return delta;
-				};
-				const recordCompletedText = (key: string, text: unknown): string => {
-					if (typeof text !== 'string' || text.length === 0) {
-						return '';
-					}
-
-					const emittedText = emittedTextByPart.get(key) || '';
-					if (emittedText === text || emittedText.startsWith(text)) {
-						return '';
-					}
-
-					if (emittedText && !text.startsWith(emittedText)) {
-						// 上游最终文本与已流出的增量不一致时不重复下发整段文本。
-						return '';
-					}
-
-					const missingText = text.slice(emittedText.length);
-					emittedTextByPart.set(key, text);
-					contentBuffer += missingText;
-					return missingText;
-				};
-				const getMessageTextParts = (
-					item: any,
-					outputIndex: unknown,
-				): Array<{key: string; text: string}> => {
-					if (item?.type !== 'message' || !Array.isArray(item.content)) {
-						return [];
-					}
-
-					const textParts: Array<{key: string; text: string}> = [];
-					for (const [contentIndex, part] of item.content.entries()) {
-						if (part?.type === 'output_text' && typeof part.text === 'string') {
-							textParts.push({
-								key: getTextPartKey(item.id, outputIndex, contentIndex),
-								text: part.text,
-							});
-						}
-					}
-
-					return textParts;
-				};
 				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
 
 				for await (const chunk of parseSSEStream(
@@ -916,22 +850,6 @@ export async function* createStreamingResponse(
 								content: item.content,
 								encrypted_content: item.encrypted_content,
 							};
-						} else if (item?.type === 'message') {
-							for (const textPart of getMessageTextParts(
-								item,
-								chunk.output_index,
-							)) {
-								const missingText = recordCompletedText(
-									textPart.key,
-									textPart.text,
-								);
-								if (missingText) {
-									yield {
-										type: 'content',
-										content: missingText,
-									};
-								}
-							}
 						}
 						continue;
 					} else if (eventType === 'response.content_part.added') {
@@ -948,59 +866,22 @@ export async function* createStreamingResponse(
 						}
 					} else if (eventType === 'response.output_text.delta') {
 						// 文本增量更新
-						const delta = recordTextDelta(
-							getTextPartKey(
-								chunk.item_id,
-								chunk.output_index,
-								chunk.content_index,
-							),
-							chunk.delta,
-						);
+						const delta = chunk.delta;
 						if (delta) {
+							contentBuffer += delta;
 							yield {
 								type: 'content',
 								content: delta,
 							};
 						}
 					} else if (eventType === 'response.output_text.done') {
-						// 部分兼容服务仅在 done 事件中返回完整正文，补发未流出的部分。
-						const missingText = recordCompletedText(
-							getTextPartKey(
-								chunk.item_id,
-								chunk.output_index,
-								chunk.content_index,
-							),
-							chunk.text,
-						);
-						if (missingText) {
-							yield {
-								type: 'content',
-								content: missingText,
-							};
-						}
+						// 文本输出完成 - 忽略
 						continue;
 					} else if (eventType === 'response.content_part.done') {
-						// 兼容仅在 content part 完成事件中提供完整正文的服务。
-						const part = chunk.part;
-						if (part?.type === 'output_text') {
-							const missingText = recordCompletedText(
-								getTextPartKey(
-									chunk.item_id,
-									chunk.output_index,
-									chunk.content_index,
-								),
-								part.text,
-							);
-							if (missingText) {
-								yield {
-									type: 'content',
-									content: missingText,
-								};
-							}
-						}
+						// 内容部分完成 - 忽略
 						continue;
 					} else if (eventType === 'response.completed') {
-						// 响应完全完成 - 从 response 对象中提取 usage，并以最终 output 兜底正文。
+						// 响应完全完成 - 从 response 对象中提取 usage
 						if (chunk.response && chunk.response.usage) {
 							usageData = {
 								prompt_tokens: chunk.response.usage.input_tokens || 0,
@@ -1010,26 +891,6 @@ export async function* createStreamingResponse(
 								cached_tokens: (chunk.response.usage as any)
 									.input_tokens_details?.cached_tokens,
 							};
-						}
-
-						if (Array.isArray(chunk.response?.output)) {
-							for (const [
-								outputIndex,
-								item,
-							] of chunk.response.output.entries()) {
-								for (const textPart of getMessageTextParts(item, outputIndex)) {
-									const missingText = recordCompletedText(
-										textPart.key,
-										textPart.text,
-									);
-									if (missingText) {
-										yield {
-											type: 'content',
-											content: missingText,
-										};
-									}
-								}
-							}
 						}
 						break;
 					} else if (
