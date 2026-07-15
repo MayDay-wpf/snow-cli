@@ -71,8 +71,7 @@ export const mcpTools = [
 				},
 				maxChars: {
 					type: 'number',
-					description:
-						'Optional max characters to return (default 24000).',
+					description: 'Optional max characters to return (default 24000).',
 				},
 			},
 			required: ['path'],
@@ -93,12 +92,15 @@ export async function executeSnowDocsTool(
 			const lines = [
 				`# Snow CLI docs catalogue (v${result.version})`,
 				`Locale: ${result.locale}`,
-				`Root: ${result.docsRoot}`,
+				// Intentionally omit absolute docsRoot to avoid leaking local paths/usernames.
 				'',
 				'Use snow-docs-get with an id below for full content. Do not load every document.',
 				'',
 				...result.docs.map(
-					doc => `- \`${doc.id}\` — **${doc.title}**${doc.summary ? ` — ${doc.summary}` : ''}`,
+					doc =>
+						`- \`${doc.id}\` — **${doc.title}**${
+							doc.summary ? ` — ${doc.summary}` : ''
+						}`,
 				),
 			];
 			return lines.join('\n');
@@ -137,7 +139,7 @@ export async function executeSnowDocsTool(
 				`- id: ${result.id}`,
 				`- locale: ${result.locale}`,
 				`- version: ${result.version}`,
-				`- path: ${result.absPath}`,
+				// Prefer relative doc id over absolute filesystem path in tool output.
 				result.truncated ? '- truncated: true' : '- truncated: false',
 				'',
 				'---',

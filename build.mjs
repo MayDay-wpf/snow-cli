@@ -4,9 +4,7 @@ import {
 	cpSync,
 	existsSync,
 	mkdirSync,
-	readdirSync,
 	rmSync,
-	statSync,
 } from 'fs';
 import {builtinModules} from 'module';
 import {join, resolve} from 'path';
