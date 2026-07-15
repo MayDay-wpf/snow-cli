@@ -16,6 +16,7 @@ import {
 	type CompanionUpdate,
 } from '../../buddy/companion.js';
 import {
+	COMPANION_NAMED_COLORS,
 	COMPANION_STATS,
 	EYES,
 	HATS,
@@ -144,6 +145,7 @@ function companionPublic(
 		shiny: companion.shiny,
 		hat: companion.hat,
 		eye: companion.eye,
+		color: companion.color,
 		hatchedAt: companion.hatchedAt,
 		stats: companion.stats,
 	};
@@ -317,6 +319,12 @@ function parseSetArgs(raw: string): {
 		}
 	}
 
+	const color = extract('--color=');
+	if (color !== undefined) {
+		hasAny = true;
+		updates.color = color.trim();
+	}
+
 	const stats: Partial<Record<CompanionStat, number>> = {};
 	for (const stat of COMPANION_STATS) {
 		const value = extract(`--${stat.toLowerCase()}=`);
@@ -376,6 +384,10 @@ function parseSetArgs(raw: string): {
 			} else {
 				updates.shiny = parsed.value;
 			}
+			continue;
+		}
+		if (key === 'color') {
+			updates.color = value;
 			continue;
 		}
 		const statKey = key.toUpperCase();
@@ -545,11 +557,14 @@ async function handleBuddy(
 					eyes: [...EYES],
 					rarities: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
 					species: [...SPECIES],
+					colors: [...COMPANION_NAMED_COLORS, '#RGB/#RRGGBB', 'default'],
 					stats: [...COMPANION_STATS],
 				},
 				`Hats: ${HATS.join(', ')} | Eyes: ${EYES.join(
 					' ',
-				)} | Rarities: common, uncommon, rare, epic, legendary`,
+				)} | Colors: ${COMPANION_NAMED_COLORS.join(
+					', ',
+				)}, #RGB/#RRGGBB, default | Rarities: common, uncommon, rare, epic, legendary`,
 				meta.risk,
 			);
 		}
@@ -565,7 +580,7 @@ async function handleBuddy(
 			return failResult(
 				meta.id,
 				'INVALID_ARGS',
-				'Usage: buddy set --hat=crown --eye=✦ --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10]',
+				'Usage: buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10]',
 				meta.risk,
 			);
 		}
