@@ -24,6 +24,7 @@ export type ConfigChangeEvent = {
 		| 'codebaseEnabled'
 		| 'codebaseFlags'
 		| 'theme'
+		| 'customColors'
 		| 'diffOpacity'
 		| 'other';
 	value: any;

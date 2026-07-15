@@ -5,6 +5,7 @@
  *   - 内置游戏与外部插件按 id 合并，外部插件可覆盖同 id 的内置游戏。
  *   - 外部插件从 `~/.snow/plugin/games/` 懒加载，支持 `.js` / `.mjs` / `.cjs`。
  *   - 加载失败只 warn，不中断其他插件。
+ *   - 每次 load 使用 cache-busted import，打开面板即可拿到最新插件代码。
  */
 import {existsSync, readdirSync} from 'node:fs';
 import {extname, join} from 'node:path';
@@ -58,8 +59,14 @@ function collectFromModule(mod: GamePluginModule): GamePlugin[] {
 	return candidates.filter(isGamePlugin);
 }
 
+/** Bust ESM import cache so edited plugins reload without process restart. */
+function buildCacheBustedModuleUrl(modulePath: string): string {
+	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
+}
+
 /**
  * 加载外部游戏插件（从 `~/.snow/plugin/games/` 目录）。
+ * 每次调用都会 cache-bust 重新 import，保证改插件后重新打开面板即可生效。
  * 返回所有有效插件的数组。
  */
 export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
@@ -89,7 +96,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 	for (const file of files) {
 		const modulePath = join(GAMES_PLUGIN_DIR, file.name);
 		try {
-			const moduleUrl = pathToFileURL(modulePath).href;
+			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
 			const mod = (await import(moduleUrl)) as GamePluginModule;
 			const collected = collectFromModule(mod);
 			if (collected.length === 0) {

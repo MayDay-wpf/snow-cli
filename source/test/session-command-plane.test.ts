@@ -636,6 +636,60 @@ test('runSessionCommand theme status is readable without confirm', async t => {
 	t.is(typeof data.hasCustomColors, 'boolean');
 });
 
+test('runSessionCommand theme colors emits customColors and hot-applies custom theme', async t => {
+	const seen: ConfigChangeEvent[] = [];
+	const onChange = (event: ConfigChangeEvent) => {
+		seen.push(event);
+	};
+	configEvents.onConfigChange(onChange);
+
+	const themeStatus = await runSessionCommand({
+		command: 'theme',
+		args: 'status',
+		mode: 'cli',
+	});
+	t.true(themeStatus.ok, themeStatus.message);
+	const originalTheme =
+		(themeStatus.data as {theme?: string})?.theme ?? 'tiffany';
+
+	try {
+		seen.length = 0;
+		const colorsPayload = JSON.stringify({
+			background: '#0B0E1A',
+			text: '#E2E4F0',
+			menuSelected: '#A78BFA',
+		});
+		const result = await runSessionCommand({
+			command: 'theme',
+			args: `colors ${colorsPayload}`,
+			mode: 'cli',
+		});
+		t.true(result.ok, result.message);
+		const data = result.data as {
+			theme?: string;
+			hasCustomColors?: boolean;
+			changed?: {theme?: string; customColors?: boolean};
+		};
+		t.is(data.theme, 'custom');
+		t.true(data.hasCustomColors);
+		t.true(
+			seen.some(e => e.type === 'customColors'),
+			`expected customColors event, got ${JSON.stringify(seen)}`,
+		);
+		t.true(
+			seen.some(e => e.type === 'theme' && e.value === 'custom'),
+			`expected theme=custom event, got ${JSON.stringify(seen)}`,
+		);
+	} finally {
+		configEvents.removeConfigChangeListener(onChange);
+		await runSessionCommand({
+			command: 'theme',
+			args: `set ${originalTheme}`,
+			mode: 'cli',
+		});
+	}
+});
+
 test('runSessionCommand permissions status returns alwaysApprovedTools', async t => {
 	const result = await runSessionCommand({
 		command: 'permissions',

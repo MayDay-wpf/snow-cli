@@ -14,10 +14,12 @@ import {
 	getDiffOpacity,
 	setDiffOpacity,
 	getCustomColors,
+	saveCustomColors,
 	type ToolDisplayMode,
 	type ThinkDisplayMode,
 } from '../config/themeConfig.js';
 import {configEvents} from '../config/configEvents.js';
+import {defaultCustomColors, type ThemeColors} from '../../ui/themes/index.js';
 import {
 	getYoloMode,
 	getPlanMode,
@@ -34,7 +36,10 @@ import {
 	getVulnerabilityHuntingMode,
 } from '../config/projectSettings.js';
 import {getActiveProfileName} from '../config/configManager.js';
-import {isCodebaseEnabled, loadCodebaseConfig} from '../config/codebaseConfig.js';
+import {
+	isCodebaseEnabled,
+	loadCodebaseConfig,
+} from '../config/codebaseConfig.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {getSnowConfig} from '../config/apiConfig.js';
 import {readSettings} from '../config/unifiedSettings.js';
@@ -61,6 +66,66 @@ const THEME_TYPES = Object.keys(themes) as ThemeType[];
 
 function isThemeType(value: string): value is ThemeType {
 	return THEME_TYPES.includes(value as ThemeType);
+}
+
+function applyCustomThemeColors(
+	meta: SessionCommandMeta,
+	rawJson: string,
+): SessionCommandResult {
+	const trimmed = rawJson.trim();
+	if (!trimmed) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'Usage: theme colors <json> | theme set colors=<json>',
+			meta.risk,
+		);
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(trimmed);
+	} catch {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'customColors must be valid JSON object',
+			meta.risk,
+		);
+	}
+
+	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'customColors must be a JSON object of color keys',
+			meta.risk,
+		);
+	}
+
+	const colors: ThemeColors = {
+		...defaultCustomColors,
+		...(parsed as Partial<ThemeColors>),
+	};
+	if (!colors.logoGradient) {
+		colors.logoGradient = defaultCustomColors.logoGradient;
+	}
+
+	saveCustomColors(colors);
+	setCurrentTheme('custom');
+	// saveCustomColors already emits customColors; also flip theme type for TUI.
+	configEvents.emitConfigChange({type: 'theme', value: 'custom'});
+
+	return okResult(
+		meta.id,
+		{
+			changed: {theme: 'custom' as ThemeType, customColors: true},
+			theme: getCurrentTheme(),
+			hasCustomColors: true,
+		},
+		'Custom theme colors applied (hot-refresh, no restart).',
+		meta.risk,
+	);
 }
 
 function goalPublic(goal: {
@@ -123,6 +188,16 @@ export function handleTheme(
 		);
 	}
 
+	// theme colors / customColors — apply custom palette with hot-refresh.
+	// Accepts: theme colors <json> | theme set colors=<json> | theme set customColors=<json>
+	if (sub === 'colors' || sub === 'customcolors') {
+		const raw =
+			meta.subcommand === 'colors' || meta.subcommand === 'customcolors'
+				? (args ?? '').trim()
+				: tokens.slice(1).join(' ').trim();
+		return applyCustomThemeColors(meta, raw);
+	}
+
 	if (sub === 'set') {
 		const changed: {
 			theme?: ThemeType;
@@ -130,6 +205,7 @@ export function handleTheme(
 			toolDisplay?: string;
 			thinkDisplay?: string;
 			diffOpacity?: number;
+			customColors?: boolean;
 		} = {};
 		const rawTokens =
 			meta.subcommand === 'set'
@@ -142,9 +218,16 @@ export function handleTheme(
 			return failResult(
 				meta.id,
 				'INVALID_ARGS',
-				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|thinkDisplay=...|diffOpacity=0..1',
+				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|thinkDisplay=...|diffOpacity=0..1|colors=<json>|customColors=<json>',
 				meta.risk,
 			);
+		}
+
+		// theme set colors=<json...>  (JSON may contain spaces / equals)
+		const joined = rawTokens.join(' ');
+		const colorsEq = joined.match(/^(?:colors|customcolors)=(.*)$/i);
+		if (colorsEq) {
+			return applyCustomThemeColors(meta, colorsEq[1] ?? '');
 		}
 
 		if (rawTokens.length === 1 && !rawTokens[0]!.includes('=')) {

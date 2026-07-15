@@ -98,6 +98,15 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		subcommand: 'set',
 	}),
 	meta(
+		'theme.colors',
+		'theme',
+		'low_write',
+		'Set custom theme colors (JSON) with hot-refresh, no restart',
+		{
+			subcommand: 'colors',
+		},
+	),
+	meta(
 		'statusline.status',
 		'statusline',
 		'read',
