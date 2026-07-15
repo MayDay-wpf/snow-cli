@@ -95,6 +95,17 @@ export function speciesColor(species: Species): string {
 	}
 }
 
+/** Resolve effective body color: custom override > shiny yellow > species default. */
+export function companionColor(bones: CompanionBones): string {
+	if (bones.color) {
+		return bones.color;
+	}
+	if (bones.shiny) {
+		return 'yellow';
+	}
+	return speciesColor(bones.species);
+}
+
 const BODIES: Record<Species, string[][]> = {
 	[duck]: [
 		[

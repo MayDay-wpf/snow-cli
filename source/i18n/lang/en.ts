@@ -986,6 +986,8 @@ export const en: TranslationKeys = {
 				personalityLabel: 'Personality',
 				hatLabel: 'Hat',
 				eyeLabel: 'Eye',
+				colorLabel: 'Color',
+				colorDefault: 'default (species/shiny)',
 				mutedLabel: 'Muted',
 				mutedYes: 'yes',
 				mutedNo: 'no',
@@ -1014,7 +1016,7 @@ export const en: TranslationKeys = {
 				noBuddyToSet:
 					'No buddy to customize yet. Use /buddy hatch [name] first.',
 				setUsage:
-					'Usage: /buddy set --hat=crown --eye=✦ --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] or /buddy set --list',
+					'Usage: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] or /buddy set --list',
 				setSuccess: 'Updated {name}: {changed}.',
 				setReaction: 'Looking sharp! Updated {changed}.',
 				setOptionsTitle: 'Buddy customization options:',
@@ -1022,6 +1024,7 @@ export const en: TranslationKeys = {
 				setOptionsEyes: 'Eyes: {eyes}',
 				setOptionsRarities: 'Rarities: {rarities}',
 				setOptionsSpecies: 'Species: {species}',
+				setOptionsColors: 'Colors: {colors}',
 				setOptionsStats: 'Stats (1-10): {stats}',
 				noBuddyToTalk:
 					'No buddy to talk to yet. Use /buddy hatch [name] first.',

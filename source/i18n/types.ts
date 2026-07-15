@@ -882,6 +882,8 @@ export type TranslationKeys = {
 				personalityLabel: string;
 				hatLabel: string;
 				eyeLabel: string;
+				colorLabel: string;
+				colorDefault: string;
 				mutedLabel: string;
 				mutedYes: string;
 				mutedNo: string;
@@ -911,6 +913,7 @@ export type TranslationKeys = {
 				setOptionsEyes: string;
 				setOptionsRarities: string;
 				setOptionsSpecies: string;
+				setOptionsColors: string;
 				setOptionsStats: string;
 				noBuddyToTalk: string;
 				sayUsage: string;

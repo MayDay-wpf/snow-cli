@@ -77,7 +77,8 @@ export type Species =
 	| typeof coffee
 	| typeof snowman;
 
-export type Eye = '·' | '✦' | '×' | '◉' | '@' | '°' | '-';
+/** Preset eyes shown in /buddy set --list. Freeform 1–2 char eyes are also allowed. */
+export type Eye = string;
 
 export type Hat =
 	| 'none'
@@ -103,6 +104,30 @@ export type CompanionStat =
 
 export type CompanionStats = Record<CompanionStat, number>;
 
+/** Ink/chalk named colors accepted by buddy --color. */
+export const COMPANION_NAMED_COLORS = [
+	'black',
+	'red',
+	'green',
+	'yellow',
+	'blue',
+	'magenta',
+	'cyan',
+	'white',
+	'gray',
+	'grey',
+	'blackBright',
+	'redBright',
+	'greenBright',
+	'yellowBright',
+	'blueBright',
+	'magentaBright',
+	'cyanBright',
+	'whiteBright',
+] as const;
+
+export type CompanionNamedColor = (typeof COMPANION_NAMED_COLORS)[number];
+
 export interface CompanionBones {
 	rarity: Rarity;
 	species: Species;
@@ -110,6 +135,8 @@ export interface CompanionBones {
 	hat: Hat;
 	shiny: boolean;
 	stats: CompanionStats;
+	/** Optional body color override (named chalk color or #RGB/#RRGGBB). */
+	color?: string;
 }
 
 export interface CompanionSoul {
@@ -163,7 +190,7 @@ export const SPECIES: Species[] = [
 	snowman,
 ];
 
-export const EYES: Eye[] = ['·', '✦', '×', '◉', '@', '°'];
+export const EYES: Eye[] = ['·', '✦', '×', '◉', '@', '°', '♥', '★', '•', '~'];
 
 export const HATS: Hat[] = [
 	'none',

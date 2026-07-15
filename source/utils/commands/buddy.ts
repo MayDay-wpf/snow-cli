@@ -5,7 +5,7 @@ import {
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/translations.js';
 import type {CompanionStat, Species} from '../../buddy/types.js';
-import {COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
+import {COMPANION_NAMED_COLORS, COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
 import {
 	getBuddyAiProfile,
 	getCompanion,
@@ -79,6 +79,7 @@ function formatCompanionStatus(): string {
 		`${t.personalityLabel}: ${companion.personality}`,
 		`${t.hatLabel}: ${companion.hat}`,
 		`${t.eyeLabel}: ${companion.eye}`,
+		`${t.colorLabel}: ${companion.color ?? t.colorDefault}`,
 		`${t.mutedLabel}: ${muted ? t.mutedYes : t.mutedNo}`,
 		`${t.profileLabel}: ${currentBuddyProfileName()}`,
 		`${t.hatchedLabel}: ${new Date(companion.hatchedAt).toLocaleString()}`,
@@ -237,6 +238,12 @@ function parseSetArgs(args: string): {
 		}
 	}
 
+	const color = extract('--color=');
+	if (color !== undefined) {
+		hasAny = true;
+		updates.color = color.trim();
+	}
+
 	const stats: Partial<Record<CompanionStat, number>> = {};
 	for (const stat of COMPANION_STATS) {
 		const value = extract(`--${stat.toLowerCase()}=`);
@@ -299,6 +306,10 @@ function parseSetArgs(args: string): {
 			}
 			continue;
 		}
+		if (key === 'color') {
+			updates.color = value;
+			continue;
+		}
 		const statKey = key.toUpperCase();
 		if (isCompanionStat(statKey)) {
 			const numeric = Number(value);
@@ -329,6 +340,9 @@ function formatSetOptions(): string {
 			rarities: 'common, uncommon, rare, epic, legendary',
 		}),
 		formatTemplate(t.setOptionsSpecies, {species: SPECIES.join(', ')}),
+		formatTemplate(t.setOptionsColors, {
+			colors: `${COMPANION_NAMED_COLORS.join(', ')}, #RGB/#RRGGBB, default`,
+		}),
 		formatTemplate(t.setOptionsStats, {stats: COMPANION_STATS.join(', ')}),
 	].join('\n');
 }
