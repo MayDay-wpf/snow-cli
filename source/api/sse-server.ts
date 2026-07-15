@@ -355,9 +355,72 @@ export class SSEServer {
 			return;
 		}
 
+		// Session/slash control plane (issue #190)
+		if (pathname === '/session/command' && req.method === 'POST') {
+			this.handleSessionCommand(req, res);
+			return;
+		}
+
 		// 未知端点
 		res.writeHead(404);
 		res.end('Not Found');
+	}
+
+	/**
+	 * Execute allowlisted session/slash control commands (issue #190).
+	 * Body: { command: string, args?: string, confirm?: boolean }
+	 */
+	private handleSessionCommand(
+		req: IncomingMessage,
+		res: ServerResponse,
+	): void {
+		void (async () => {
+			try {
+				const body = await this.readJsonBody<{
+					command?: string;
+					args?: string;
+					confirm?: boolean;
+				}>(req);
+
+				if (!body.command || typeof body.command !== 'string') {
+					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.end(
+						JSON.stringify({
+							ok: false,
+							code: 'INVALID_ARGS',
+							message: 'command is required',
+						}),
+					);
+					return;
+				}
+
+				const {runSessionCommand} = await import(
+					'../utils/execution/sessionCommandPlane.js'
+				);
+				const result = await runSessionCommand({
+					command: body.command,
+					args: body.args,
+					mode: 'sse',
+					confirm: Boolean(body.confirm),
+				});
+
+				res.writeHead(result.ok ? 200 : 400, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
+				res.end(JSON.stringify(result));
+			} catch (error) {
+				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.end(
+					JSON.stringify({
+						ok: false,
+						code: 'EXECUTION_FAILED',
+						message:
+							error instanceof Error ? error.message : 'Session command failed',
+					}),
+				);
+			}
+		})();
 	}
 
 	private handleSessionCreate(req: IncomingMessage, res: ServerResponse): void {
