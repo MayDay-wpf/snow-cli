@@ -256,6 +256,26 @@ export function saveProfile(profileName: string, config: AppConfig): void {
 	try {
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(profilePath, configData, 'utf8');
+		// If this is the active profile and config.json was already updated via
+		// saveConfig/updateSnowConfig, apiConfig event is emitted there.
+		// If agent only rewrote the profile file path (or saveProfile alone),
+		// still tip UI to re-read — clearConfigCache so getSnowConfig can resync
+		// when paired with a later config.json write.
+		if (profileName === getActiveProfileName()) {
+			try {
+				// Dynamic import avoids circular init with apiConfig
+				void import('./configEvents.js').then(({configEvents}) => {
+					// Profile file alone is UI source for StatusLine (loadProfile);
+					// runtime getSnowConfig still reads config.json — agent should write both.
+					configEvents.emitConfigChange({
+						type: 'apiConfig',
+						value: config.snowcfg ?? null,
+					});
+				});
+			} catch {
+				// ignore
+			}
+		}
 	} catch (error) {
 		throw new Error(`Failed to save profile: ${error}`);
 	}

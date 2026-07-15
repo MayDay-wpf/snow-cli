@@ -41,7 +41,7 @@ import {
 	loadCodebaseConfig,
 } from '../config/codebaseConfig.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
-import {getSnowConfig} from '../config/apiConfig.js';
+import {getSnowConfig, updateSnowConfig} from '../config/apiConfig.js';
 import {readSettings} from '../config/unifiedSettings.js';
 import {
 	loadPermissionsConfig,
@@ -1293,6 +1293,7 @@ export function handleConfigSnapshot(
 	meta: SessionCommandMeta,
 ): SessionCommandResult {
 	// Safe non-secret snapshot only — never dump API keys.
+	const snow = getSnowConfig();
 	return okResult(
 		meta.id,
 		{
@@ -1302,6 +1303,13 @@ export function handleConfigSnapshot(
 			toolDisplay: getToolDisplayMode(),
 			thinkDisplay: getThinkDisplayMode(),
 			diffOpacity: getDiffOpacity(),
+			api: {
+				advancedModel: snow.advancedModel ?? null,
+				basicModel: snow.basicModel ?? null,
+				requestMethod: snow.requestMethod ?? null,
+				maxContextTokens: snow.maxContextTokens ?? null,
+				maxTokens: snow.maxTokens ?? null,
+			},
 			modes: {
 				yolo: getYoloMode(),
 				plan: getPlanMode(),
@@ -1319,7 +1327,7 @@ export function handleConfigSnapshot(
 			subAgentMaxSpawnDepth: getSubAgentMaxSpawnDepth(),
 			fileListDisplayMode: getFileListDisplayMode(),
 			language: getCurrentLanguage(),
-			showThinking: getSnowConfig().showThinking !== false,
+			showThinking: snow.showThinking !== false,
 			privacy: (() => {
 				const settings = readSettings('project');
 				return {
@@ -1340,6 +1348,229 @@ export function handleConfigSnapshot(
 		meta.risk,
 	);
 }
+
+/**
+ * Read active API limits (maxContextTokens / maxTokens / models).
+ * Prefer this over force-writing ~/.snow/config.json.
+ */
+export function handleConfigStatus(
+	meta: SessionCommandMeta,
+): SessionCommandResult {
+	const snow = getSnowConfig();
+	const data = {
+		profile: getActiveProfileName(),
+		advancedModel: snow.advancedModel ?? null,
+		basicModel: snow.basicModel ?? null,
+		requestMethod: snow.requestMethod ?? null,
+		maxContextTokens: snow.maxContextTokens ?? null,
+		maxTokens: snow.maxTokens ?? null,
+	};
+	return okResult(
+		meta.id,
+		data,
+		`Context=${data.maxContextTokens ?? '?'} maxTokens=${
+			data.maxTokens ?? '?'
+		} model=${data.advancedModel ?? '?'}`,
+		meta.risk,
+	);
+}
+
+function parsePositiveInt(raw: string): number | null {
+	const n = Number(raw.trim().replace(/[,_]/g, ''));
+	if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return null;
+	return n;
+}
+
+const CONFIG_SET_KEYS =
+	'maxContextTokens, maxTokens, advancedModel, basicModel, requestMethod';
+
+/**
+ * Hot-set active snowcfg via updateSnowConfig (writes config.json +
+ * active profile, emits apiConfig, no process restart).
+ *
+ * Usage:
+ *   config set maxContextTokens=450000 maxTokens=128000
+ *   config set advancedModel=grok-4.5 basicModel=grok-4.5
+ *   config set requestMethod=chat
+ *
+ * Does NOT set apiKey (by design — no silent key mutation on the plane).
+ */
+export async function handleConfigSet(
+	meta: SessionCommandMeta,
+	args?: string,
+): Promise<SessionCommandResult> {
+	const tokens = parseTokens(args);
+	// Drop leading "set" if present (when resolved as bare config set ...)
+	const body = tokens[0]?.toLowerCase() === 'set' ? tokens.slice(1) : tokens;
+
+	if (body.length === 0) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			`Usage: config set key=value [...]. Supported: ${CONFIG_SET_KEYS}`,
+			meta.risk,
+		);
+	}
+
+	const patch: {
+		maxContextTokens?: number;
+		maxTokens?: number;
+		advancedModel?: string;
+		basicModel?: string;
+		requestMethod?: 'chat' | 'responses' | 'gemini' | 'anthropic';
+	} = {};
+	for (const token of body) {
+		const eq = token.indexOf('=');
+		if (eq <= 0) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				`Expected key=value, got "${token}". Supported: ${CONFIG_SET_KEYS}`,
+				meta.risk,
+			);
+		}
+		const key = token.slice(0, eq).toLowerCase();
+		const value = token.slice(eq + 1);
+		if (key === 'maxcontexttokens' || key === 'context' || key === 'ctx') {
+			const n = parsePositiveInt(value);
+			if (n === null) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					`maxContextTokens must be a positive integer, got "${value}"`,
+					meta.risk,
+				);
+			}
+			patch.maxContextTokens = n;
+			continue;
+		}
+		if (
+			key === 'maxtokens' ||
+			key === 'max_tokens' ||
+			key === 'output' ||
+			key === 'maxoutput'
+		) {
+			const n = parsePositiveInt(value);
+			if (n === null) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					`maxTokens must be a positive integer, got "${value}"`,
+					meta.risk,
+				);
+			}
+			patch.maxTokens = n;
+			continue;
+		}
+		if (
+			key === 'advancedmodel' ||
+			key === 'advanced' ||
+			key === 'model' ||
+			key === 'mainmodel'
+		) {
+			if (!value.trim()) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					'advancedModel must be a non-empty string',
+					meta.risk,
+				);
+			}
+			patch.advancedModel = value.trim();
+			continue;
+		}
+		if (key === 'basicmodel' || key === 'basic' || key === 'fastmodel') {
+			if (!value.trim()) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					'basicModel must be a non-empty string',
+					meta.risk,
+				);
+			}
+			patch.basicModel = value.trim();
+			continue;
+		}
+		if (
+			key === 'requestmethod' ||
+			key === 'method' ||
+			key === 'apimethod' ||
+			key === 'protocol'
+		) {
+			const method = value.trim().toLowerCase();
+			if (
+				method !== 'chat' &&
+				method !== 'responses' &&
+				method !== 'gemini' &&
+				method !== 'anthropic'
+			) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					`requestMethod must be chat|responses|gemini|anthropic, got "${value}"`,
+					meta.risk,
+				);
+			}
+			patch.requestMethod = method;
+			continue;
+		}
+		if (key === 'apikey' || key === 'api_key' || key === 'key') {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				'apiKey cannot be set via session-command (no silent key mutation). Use the Config UI.',
+				meta.risk,
+			);
+		}
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			`Unknown config key "${key}". Supported: ${CONFIG_SET_KEYS}`,
+			meta.risk,
+		);
+	}
+
+	if (Object.keys(patch).length === 0) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			`Nothing to set. Supported: ${CONFIG_SET_KEYS}`,
+			meta.risk,
+		);
+	}
+
+	const previous = getSnowConfig();
+	await updateSnowConfig(patch);
+	// updateSnowConfig -> saveConfig already emits apiConfig for hot UI refresh.
+	const next = getSnowConfig();
+
+	return okResult(
+		meta.id,
+		{
+			changed: patch,
+			previous: {
+				maxContextTokens: previous.maxContextTokens ?? null,
+				maxTokens: previous.maxTokens ?? null,
+				advancedModel: previous.advancedModel ?? null,
+				basicModel: previous.basicModel ?? null,
+				requestMethod: previous.requestMethod ?? null,
+			},
+			current: {
+				maxContextTokens: next.maxContextTokens ?? null,
+				maxTokens: next.maxTokens ?? null,
+				advancedModel: next.advancedModel ?? null,
+				basicModel: next.basicModel ?? null,
+				requestMethod: next.requestMethod ?? null,
+			},
+			profile: getActiveProfileName(),
+		},
+		`Config updated (hot-refresh): context=${
+			next.maxContextTokens ?? '?'
+		} maxTokens=${next.maxTokens ?? '?'} model=${next.advancedModel ?? '?'}`,
+		meta.risk,
+	);
+}
+
 export function handleHome(meta: SessionCommandMeta): SessionCommandResult {
 	return failResult(
 		meta.id,

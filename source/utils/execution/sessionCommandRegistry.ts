@@ -399,6 +399,20 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 	meta('config.snapshot', 'config', 'read', 'Safe non-secret config snapshot', {
 		subcommand: 'snapshot',
 	}),
+	meta(
+		'config.status',
+		'config',
+		'read',
+		'Show active API limits (maxContextTokens/maxTokens/models)',
+		{subcommand: 'status'},
+	),
+	meta(
+		'config.set',
+		'config',
+		'low_write',
+		'Hot-set active API limits (maxContextTokens/maxTokens)',
+		{subcommand: 'set'},
+	),
 	meta('home', 'home', 'read', 'TUI home navigation (headless unsupported)', {
 		headlessSupported: false,
 	}),
@@ -488,10 +502,29 @@ export function resolveSessionCommandMeta(
 	if (plain) {
 		return plain;
 	}
-
-	// profiles switch <name>
+	// profiles create|delete|rename|switch <name>
+	if (top === 'profiles' && sub === 'create') {
+		return byId.get('profiles.create');
+	}
+	if (
+		top === 'profiles' &&
+		(sub === 'delete' || sub === 'remove' || sub === 'rm')
+	) {
+		return byId.get('profiles.delete');
+	}
+	if (top === 'profiles' && sub === 'rename') {
+		return byId.get('profiles.rename');
+	}
 	if (top === 'profiles' && sub && sub !== 'list' && sub !== 'current') {
 		return byId.get('profiles.switch');
+	}
+
+	// config set maxContextTokens=... | config status
+	if (top === 'config' && sub === 'set') {
+		return byId.get('config.set');
+	}
+	if (top === 'config' && (sub === 'status' || sub === 'get')) {
+		return byId.get('config.status');
 	}
 
 	return undefined;

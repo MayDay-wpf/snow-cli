@@ -842,6 +842,85 @@ test('runSessionCommand config snapshot is secret-free', async t => {
 		data['fileListDisplayMode'] === 'list' ||
 			data['fileListDisplayMode'] === 'tree',
 	);
+	// Hot-refresh fields for context limits (non-secret)
+	const api = data['api'] as Record<string, unknown> | undefined;
+	t.truthy(api);
+	t.true(
+		api!['maxContextTokens'] === null ||
+			typeof api!['maxContextTokens'] === 'number',
+	);
+	t.true(api!['maxTokens'] === null || typeof api!['maxTokens'] === 'number');
+});
+
+test('runSessionCommand config status/set hot-updates maxContextTokens/maxTokens', async t => {
+	t.is(resolveSessionCommandMeta('config', 'status')?.id, 'config.status');
+	t.is(
+		resolveSessionCommandMeta('config', 'set maxTokens=1')?.id,
+		'config.set',
+	);
+	t.is(resolveSessionCommandMeta('config.set')?.id, 'config.set');
+
+	const status = await runSessionCommand({
+		command: 'config',
+		args: 'status',
+		mode: 'cli',
+	});
+	t.true(status.ok);
+	const before = status.data as {
+		maxContextTokens: number | null;
+		maxTokens: number | null;
+	};
+	t.truthy(before);
+
+	const prevCtx = before.maxContextTokens ?? 200000;
+	const prevMax = before.maxTokens ?? 64000;
+	const nextCtx = prevCtx === 450000 ? 451000 : 450000;
+	const nextMax = prevMax === 128000 ? 129000 : 128000;
+
+	const events: Array<{type: string}> = [];
+	const onChange = (event: {type: string}) => {
+		events.push(event);
+	};
+	configEvents.onConfigChange(onChange);
+	try {
+		const setResult = await runSessionCommand({
+			command: 'config',
+			args: `set maxContextTokens=${nextCtx} maxTokens=${nextMax}`,
+			mode: 'agent',
+		});
+		t.true(setResult.ok, setResult.message);
+		const setData = setResult.data as {
+			current: {maxContextTokens: number; maxTokens: number};
+		};
+		t.is(setData.current.maxContextTokens, nextCtx);
+		t.is(setData.current.maxTokens, nextMax);
+		t.true(
+			events.some(e => e.type === 'apiConfig'),
+			'config set should emit apiConfig for hot UI refresh',
+		);
+
+		const mid = await runSessionCommand({
+			command: 'config',
+			args: 'status',
+			mode: 'cli',
+		});
+		t.true(mid.ok);
+		const midData = mid.data as {
+			maxContextTokens: number;
+			maxTokens: number;
+		};
+		t.is(midData.maxContextTokens, nextCtx);
+		t.is(midData.maxTokens, nextMax);
+
+		// restore
+		await runSessionCommand({
+			command: 'config',
+			args: `set maxContextTokens=${prevCtx} maxTokens=${prevMax}`,
+			mode: 'agent',
+		});
+	} finally {
+		configEvents.removeConfigChangeListener(onChange);
+	}
 });
 
 test('runSessionCommand home is HEADLESS_UNSUPPORTED', async t => {

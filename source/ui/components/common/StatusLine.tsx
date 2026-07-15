@@ -377,10 +377,15 @@ export default function StatusLine({
 		[contextUsage],
 	);
 	const [privacyRevision, setPrivacyRevision] = React.useState(0);
+	/** Bumps when apiConfig / profile files change so maxContextTokens etc. re-read. */
+	const [profileConfigRevision, setProfileConfigRevision] = React.useState(0);
 	React.useEffect(() => {
 		const handleConfigChange = (event: {type: string; value: any}) => {
 			if (event.type === 'privacy') {
 				setPrivacyRevision(prev => prev + 1);
+			} else if (event.type === 'apiConfig') {
+				// Agent force-write or updateSnowConfig — re-load profile from disk
+				setProfileConfigRevision(prev => prev + 1);
 			}
 		};
 		configEvents.onConfigChange(handleConfigChange);
@@ -397,7 +402,8 @@ export default function StatusLine({
 	const profileConfig = React.useMemo(() => {
 		const profileName = currentProfileName ?? getActiveProfileName();
 		return loadProfile(profileName);
-	}, [currentProfileName]);
+		// profileConfigRevision: external/same-process snowcfg hot-reload
+	}, [currentProfileName, profileConfigRevision]);
 
 	const statusLineHookContext = React.useMemo(() => {
 		const cfg = profileConfig?.snowcfg;

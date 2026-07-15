@@ -1,6 +1,7 @@
 /**
  * Centralized cleanup for global/singleton resources.
- * Called by /clear command and application exit to reclaim memory.
+ * Called by /clear command and application exit (incl. fatal crash path)
+ * to reclaim memory and avoid orphaned MCP / browser / OTEL handles on Windows.
  */
 
 import {logger} from './logger.js';
@@ -8,7 +9,9 @@ import {logger} from './logger.js';
 export async function cleanupGlobalResources(): Promise<void> {
 	// 1. Free the module-level tiktoken encoder in subAgentContextCompressor
 	try {
-		const {freeSubAgentEncoder} = await import('./subAgentContextCompressor.js');
+		const {freeSubAgentEncoder} = await import(
+			'./subAgentContextCompressor.js'
+		);
 		freeSubAgentEncoder();
 	} catch {
 		// Module may not be loaded yet — nothing to free
@@ -30,19 +33,42 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// ACE module not loaded
 	}
 
-	// 4. Clear sub-agent stream state maps
+	// 4. Close persistent MCP clients + drop tools cache (prevents orphaned children)
 	try {
-		const {
-			clearAllTeammateStreamEntries,
-			clearAllSubAgentStreamEntries,
-		} = await import('../../hooks/conversation/core/subAgentMessageHandler.js');
+		const {closeAllMCPConnections, clearMCPToolsCache} = await import(
+			'../execution/mcpToolsManager.js'
+		);
+		await Promise.race([
+			closeAllMCPConnections(),
+			new Promise<void>(resolve => setTimeout(resolve, 2000)),
+		]);
+		clearMCPToolsCache();
+	} catch {
+		// MCP manager not loaded
+	}
+
+	// 5. Flush OpenTelemetry (process.exit bypasses beforeExit)
+	try {
+		const {shutdownTelemetry} = await import('../telemetry/otel.js');
+		await Promise.race([
+			shutdownTelemetry(),
+			new Promise<void>(resolve => setTimeout(resolve, 2000)),
+		]);
+	} catch {
+		// OTEL not started
+	}
+
+	// 6. Clear sub-agent stream state maps
+	try {
+		const {clearAllTeammateStreamEntries, clearAllSubAgentStreamEntries} =
+			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
 		clearAllTeammateStreamEntries();
 		clearAllSubAgentStreamEntries();
 	} catch {
 		// Not loaded
 	}
 
-	// 5. Clear runningSubAgentTracker
+	// 7. Clear runningSubAgentTracker
 	try {
 		const {runningSubAgentTracker} = await import(
 			'../execution/runningSubAgentTracker.js'
@@ -52,7 +78,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Not loaded
 	}
 
-	// 6. Clear conversation context
+	// 8. Clear conversation context
 	try {
 		const {clearConversationContext} = await import(
 			'../codebase/conversationContext.js'
@@ -62,9 +88,9 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Not loaded
 	}
 
-	// 7. Clear Ink fullStaticOutput buffer
+	// 9. Clear Ink fullStaticOutput buffer
 	try {
-		const ink = await import('ink') as any;
+		const ink = (await import('ink')) as any;
 		if (typeof ink.clearInkStaticOutput === 'function') {
 			ink.clearInkStaticOutput(process.stdout);
 		}
@@ -72,7 +98,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Ink module not loaded
 	}
 
-	// 8. Force GC if available
+	// 10. Force GC if available
 	if (global.gc) {
 		global.gc();
 	}

@@ -21,7 +21,12 @@
  *   2. Registering it in `BUILT_IN_ENGINES` below.
  */
 
-import {existsSync, readdirSync, watch as watchDir, type FSWatcher} from 'node:fs';
+import {
+	existsSync,
+	readdirSync,
+	watch as watchDir,
+	type FSWatcher,
+} from 'node:fs';
 import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -52,6 +57,12 @@ const ENGINES: Map<string, SearchEngine> = new Map(
 
 let externalLoadPromise: Promise<void> | null = null;
 let externalLoaded = false;
+/** Bumps on each reload so concurrent ensure/reload don't serve a half-cleared registry. */
+let loadGeneration = 0;
+/** Serializes reloadSearchEngines — concurrent watch events share one in-flight reload. */
+let reloadInFlight: Promise<void> | null = null;
+/** When true, another reload was requested during the current in-flight run. */
+let reloadQueued = false;
 let pluginWatcher: FSWatcher | null = null;
 let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let watcherBootstrapped = false;
@@ -209,30 +220,60 @@ function ensurePluginWatcher(): void {
 /**
  * Ensure that external search engine plugins are loaded into the registry.
  * Safe to call multiple times — first load is cached until `reloadSearchEngines`.
+ * Concurrent callers share one promise; never observes a mid-reload map.
  */
 export function ensureSearchEnginesLoaded(): Promise<void> {
 	ensurePluginWatcher();
+	// If a reload is in flight, wait for it (new generation) instead of racing.
+	if (reloadInFlight) return reloadInFlight;
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
+	const gen = loadGeneration;
 	externalLoadPromise = loadExternalEngines().then(() => {
-		externalLoaded = true;
+		// Only mark loaded if no reload superseded this load.
+		if (gen === loadGeneration) {
+			externalLoaded = true;
+		}
 	});
 	return externalLoadPromise;
 }
 
 /**
  * Force re-scan plugin directory and re-import modules (cache-busted).
- * Used by fs.watch hot-reload when agent/user edits plugins.
+ * Serialized with queue-latest: concurrent watch events share one run; if another
+ * reload is requested mid-flight, one more pass runs after the current finishes.
+ * Generation token prevents ensure* from publishing a half-cleared registry.
  */
 export async function reloadSearchEngines(): Promise<void> {
 	ensurePluginWatcher();
-	externalLoaded = false;
-	externalLoadPromise = null;
-	resetEnginesToBuiltins();
-	externalLoadPromise = loadExternalEngines().then(() => {
-		externalLoaded = true;
+	if (reloadInFlight) {
+		reloadQueued = true;
+		await reloadInFlight;
+		return;
+	}
+
+	reloadInFlight = (async () => {
+		do {
+			reloadQueued = false;
+			loadGeneration += 1;
+			const gen = loadGeneration;
+			externalLoaded = false;
+			externalLoadPromise = null;
+			// Reset only after claiming the generation so concurrent ensure waits on us.
+			resetEnginesToBuiltins();
+			const loadPromise = loadExternalEngines().then(() => {
+				if (gen === loadGeneration) {
+					externalLoaded = true;
+				}
+			});
+			externalLoadPromise = loadPromise;
+			await loadPromise;
+		} while (reloadQueued);
+	})().finally(() => {
+		reloadInFlight = null;
 	});
-	await externalLoadPromise;
+
+	await reloadInFlight;
 }
 
 /**

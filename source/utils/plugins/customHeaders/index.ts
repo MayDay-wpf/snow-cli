@@ -19,7 +19,12 @@
  * function returns synchronously without touching the plugin directory.
  */
 
-import {existsSync, readdirSync, watch as watchDir, type FSWatcher} from 'node:fs';
+import {
+	existsSync,
+	readdirSync,
+	watch as watchDir,
+	type FSWatcher,
+} from 'node:fs';
 import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -61,7 +66,9 @@ function isPluginEnabled(plugin: CustomHeaderPlugin): boolean {
 	return plugin.enable !== false;
 }
 
-function collectFromModule(mod: CustomHeaderPluginModule): CustomHeaderPlugin[] {
+function collectFromModule(
+	mod: CustomHeaderPluginModule,
+): CustomHeaderPlugin[] {
 	const candidates: unknown[] = [];
 	const pushOne = (val: unknown) => {
 		if (Array.isArray(val)) candidates.push(...val);
@@ -85,6 +92,12 @@ function buildCacheBustedModuleUrl(modulePath: string): string {
 let PLUGINS: CustomHeaderPlugin[] = [];
 let externalLoadPromise: Promise<void> | null = null;
 let externalLoaded = false;
+/** Bumps on each reload so concurrent ensure/reload don't serve a half-cleared list. */
+let loadGeneration = 0;
+/** Serializes reloadCustomHeaderPlugins — concurrent watch events share one reload. */
+let reloadInFlight: Promise<void> | null = null;
+/** When true, another reload was requested during the current in-flight run. */
+let reloadQueued = false;
 let pluginWatcher: FSWatcher | null = null;
 let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let watcherBootstrapped = false;
@@ -130,10 +143,9 @@ async function loadExternalPlugins(): Promise<void> {
 				nextPlugins.push(plugin);
 			}
 		} catch (error) {
-			logger.warn(
-				`[custom-headers] failed to load plugin "${file.name}":`,
-				{error},
-			);
+			logger.warn(`[custom-headers] failed to load plugin "${file.name}":`, {
+				error,
+			});
 		}
 	}
 
@@ -185,27 +197,59 @@ function ensurePluginWatcher(): void {
 /**
  * Ensure that external custom header plugins are loaded into the registry.
  * Safe to call multiple times — first load is cached until reload.
+ * Concurrent callers share one promise; never observes a mid-reload list.
  */
 export function ensureCustomHeaderPluginsLoaded(): Promise<void> {
 	ensurePluginWatcher();
+	if (reloadInFlight) return reloadInFlight;
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
+	const gen = loadGeneration;
 	externalLoadPromise = loadExternalPlugins().then(() => {
-		externalLoaded = true;
+		if (gen === loadGeneration) {
+			externalLoaded = true;
+		}
 	});
 	return externalLoadPromise;
 }
 
-/** Force re-scan + cache-busted re-import of custom header plugins. */
+/**
+ * Force re-scan + cache-busted re-import of custom header plugins.
+ * Serialized with queue-latest + generation token so concurrent watch events /
+ * ensure* cannot read a half-cleared PLUGINS array mid-reload, and mid-flight
+ * edits still trigger one extra pass after the current run finishes.
+ */
 export async function reloadCustomHeaderPlugins(): Promise<void> {
 	ensurePluginWatcher();
-	externalLoaded = false;
-	externalLoadPromise = null;
-	PLUGINS = [];
-	externalLoadPromise = loadExternalPlugins().then(() => {
-		externalLoaded = true;
+	if (reloadInFlight) {
+		reloadQueued = true;
+		await reloadInFlight;
+		return;
+	}
+
+	reloadInFlight = (async () => {
+		do {
+			reloadQueued = false;
+			loadGeneration += 1;
+			const gen = loadGeneration;
+			externalLoaded = false;
+			externalLoadPromise = null;
+			// Clear only after claiming generation so ensure* waits on reloadInFlight.
+			// loadExternalPlugins assigns PLUGINS = next when done.
+			PLUGINS = [];
+			const loadPromise = loadExternalPlugins().then(() => {
+				if (gen === loadGeneration) {
+					externalLoaded = true;
+				}
+			});
+			externalLoadPromise = loadPromise;
+			await loadPromise;
+		} while (reloadQueued);
+	})().finally(() => {
+		reloadInFlight = null;
 	});
-	await externalLoadPromise;
+
+	await reloadInFlight;
 }
 
 /** All registered (enabled) plugins (sync — only sees what's loaded so far). */
@@ -221,9 +265,7 @@ export function listCustomHeaderPlugins(): CustomHeaderPlugin[] {
  * Extract all unique placeholder names from a set of header values.
  * Returns an empty array when no `{{...}}` tokens are present.
  */
-export function extractPlaceholders(
-	headers: Record<string, string>,
-): string[] {
+export function extractPlaceholders(headers: Record<string, string>): string[] {
 	const names = new Set<string>();
 	for (const value of Object.values(headers)) {
 		if (typeof value !== 'string') continue;

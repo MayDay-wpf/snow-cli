@@ -120,13 +120,22 @@ function isStreamDestroyedError(err: unknown): boolean {
 	);
 }
 
+// Fatal-exit cleanup is wired after cleanupAsync is defined (see below).
+// Placeholders so early throws still get a best-effort path once registered.
+let runFatalExitCleanup: ((err: unknown, code: number) => void) | null = null;
+
 process.on('uncaughtException', (err: Error) => {
 	if (isStreamDestroyedError(err)) {
 		// Silently ignore — these are expected when an LSP child process
 		// exits while vscode-jsonrpc still has pending writes.
 		return;
 	}
-	// For all other errors, preserve the default crash behaviour.
+	// Prefer full cleanup (MCP / browser / OTEL / Ink) before exit — especially
+	// on Windows where process.exit(1) can leave orphaned child handles.
+	if (runFatalExitCleanup) {
+		runFatalExitCleanup(err, 1);
+		return;
+	}
 	console.error('Uncaught Exception:', err);
 	process.exit(1);
 });
@@ -919,6 +928,29 @@ process.on('SIGTERM', async () => {
 	await cleanupPromise;
 	setTimeout(() => process.exit(0), 50);
 });
+
+// Wire fatal uncaughtException to the same graceful path as SIGINT (MCP/browser/OTEL/Ink).
+// Defined here so cleanupAsync is in scope; early crashes still use the simple exit path.
+runFatalExitCleanup = (err: unknown, code: number) => {
+	const message =
+		err instanceof Error
+			? err.stack || err.message
+			: typeof err === 'string'
+			? err
+			: String(err);
+	console.error('Uncaught Exception:', message);
+
+	// Reuse cleanupPromise so concurrent fatals / signals share one teardown.
+	if (!cleanupPromise) {
+		cleanupPromise = cleanupAsync().catch(() => {
+			// best-effort
+		});
+	}
+	void cleanupPromise.finally(() => {
+		// Short delay so Windows libuv can finish closing handles.
+		setTimeout(() => process.exit(code), 50);
+	});
+};
 const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
 const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
 

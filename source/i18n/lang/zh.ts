@@ -2184,7 +2184,7 @@ export const zh: TranslationKeys = {
 		scopeProject: '项目级配置',
 		scopeGlobal: '全局配置',
 		navigationHint: '↑↓ 导航 • Enter 编辑 • ESC 返回',
-		savedSuccess: '{scope} MCP 配置保存成功！请用 `snow` 重启！',
+		savedSuccess: '{scope} MCP 配置保存成功！工具列表已热刷新，无需重启。',
 		configErrors: '配置错误: {errors}',
 		reverted: '修改已回退至上一个有效配置。',
 		invalidJson: 'JSON 格式无效，修改已回退至上一个有效配置。',

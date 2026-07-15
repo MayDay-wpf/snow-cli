@@ -80,6 +80,9 @@ import {
 	getActiveProfileName,
 	getAllProfiles,
 	switchProfile,
+	createProfile,
+	deleteProfile,
+	renameProfile,
 } from '../config/configManager.js';
 import {
 	loadCodebaseConfig,
@@ -811,13 +814,14 @@ function handleProfiles(
 		);
 	}
 
-	if (sub === 'switch') {
+	if (sub === 'switch' || meta.id === 'profiles.switch') {
 		const name = (
-			meta.subcommand === 'switch'
-				? tokens.join(' ')
+			meta.subcommand === 'switch' || tokens[0]?.toLowerCase() === 'switch'
+				? tokens[0]?.toLowerCase() === 'switch'
+					? tokens.slice(1).join(' ')
+					: tokens.join(' ')
 				: tokens.slice(1).join(' ')
 		).trim();
-		// When resolved as profiles.switch with args "switch foo", strip leading switch
 		const target = name.startsWith('switch ')
 			? name.slice('switch '.length).trim()
 			: name;
@@ -847,40 +851,113 @@ function handleProfiles(
 		}
 	}
 
-	// bare profiles <name> treated as switch when meta is profiles.switch
-	if (meta.id === 'profiles.switch') {
-		const target =
-			tokens[0] === 'switch' ? tokens.slice(1).join(' ') : tokens.join(' ');
-		if (!target.trim()) {
+	if (sub === 'create' || meta.id === 'profiles.create') {
+		const rest =
+			tokens[0]?.toLowerCase() === 'create' ? tokens.slice(1) : tokens;
+		const name = rest.join(' ').trim();
+		if (!name) {
 			return failResult(
 				meta.id,
 				'INVALID_ARGS',
-				'Usage: profiles switch <name>',
+				'Usage: profiles create <name>',
 				meta.risk,
 			);
 		}
 		try {
-			switchProfile(target.trim());
+			createProfile(name);
 			return okResult(
 				meta.id,
-				{current: getActiveProfileName()},
-				`Switched to profile ${getActiveProfileName()}`,
+				{created: name, current: getActiveProfileName()},
+				`Profile "${name}" created (cloned from active config).`,
 				meta.risk,
 			);
 		} catch (error) {
+			const msg =
+				error instanceof Error ? error.message : 'Profile create failed';
+			const code = msg.includes('already exists')
+				? 'ALREADY_EXISTS'
+				: 'EXECUTION_FAILED';
+			return failResult(meta.id, code, msg, meta.risk);
+		}
+	}
+
+	if (
+		sub === 'delete' ||
+		sub === 'remove' ||
+		sub === 'rm' ||
+		meta.id === 'profiles.delete'
+	) {
+		const rest = ['delete', 'remove', 'rm'].includes(
+			tokens[0]?.toLowerCase() ?? '',
+		)
+			? tokens.slice(1)
+			: tokens;
+		const name = rest.join(' ').trim();
+		if (!name) {
 			return failResult(
 				meta.id,
-				'NOT_FOUND',
-				error instanceof Error ? error.message : 'Profile switch failed',
+				'INVALID_ARGS',
+				'Usage: profiles delete <name>',
 				meta.risk,
 			);
+		}
+		try {
+			deleteProfile(name);
+			return okResult(
+				meta.id,
+				{deleted: name, current: getActiveProfileName()},
+				`Profile "${name}" deleted.`,
+				meta.risk,
+			);
+		} catch (error) {
+			const msg =
+				error instanceof Error ? error.message : 'Profile delete failed';
+			const code = msg.includes('not found') ? 'NOT_FOUND' : 'EXECUTION_FAILED';
+			return failResult(meta.id, code, msg, meta.risk);
+		}
+	}
+
+	if (sub === 'rename' || meta.id === 'profiles.rename') {
+		const rest =
+			tokens[0]?.toLowerCase() === 'rename' ? tokens.slice(1) : tokens;
+		const oldName = rest[0]?.trim() ?? '';
+		const newName = rest.slice(1).join(' ').trim();
+		if (!oldName || !newName) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				'Usage: profiles rename <oldName> <newName>',
+				meta.risk,
+			);
+		}
+		try {
+			renameProfile(oldName, newName);
+			return okResult(
+				meta.id,
+				{
+					oldName,
+					newName,
+					current: getActiveProfileName(),
+				},
+				`Profile renamed: ${oldName} → ${newName}`,
+				meta.risk,
+			);
+		} catch (error) {
+			const msg =
+				error instanceof Error ? error.message : 'Profile rename failed';
+			const code = msg.includes('not found')
+				? 'NOT_FOUND'
+				: msg.includes('already exists')
+				? 'ALREADY_EXISTS'
+				: 'EXECUTION_FAILED';
+			return failResult(meta.id, code, msg, meta.risk);
 		}
 	}
 
 	return failResult(
 		meta.id,
 		'INVALID_ARGS',
-		`Unknown profiles subcommand "${sub}".`,
+		`Unknown profiles subcommand "${sub}". Use list|current|switch|create|delete|rename.`,
 		meta.risk,
 	);
 }
@@ -2115,9 +2192,18 @@ export async function executeSessionCommandHandler(
 			return handleHelp(meta);
 		}
 		case 'config': {
-			const {handleConfigSnapshot} = await import(
-				'./sessionCommandHandlersExtra.js'
-			);
+			const {handleConfigSnapshot, handleConfigStatus, handleConfigSet} =
+				await import('./sessionCommandHandlersExtra.js');
+			if (meta.id === 'config.set' || meta.subcommand === 'set') {
+				return handleConfigSet(meta, normalizedArgs);
+			}
+			if (
+				meta.id === 'config.status' ||
+				meta.subcommand === 'status' ||
+				meta.subcommand === 'get'
+			) {
+				return handleConfigStatus(meta);
+			}
 			return handleConfigSnapshot(meta);
 		}
 		case 'home': {

@@ -2180,7 +2180,7 @@ export const zhTW: TranslationKeys = {
 		scopeProject: '專案級設定',
 		scopeGlobal: '全域設定',
 		navigationHint: '↑↓ 導航 • Enter 編輯 • ESC 返回',
-		savedSuccess: '{scope} MCP 設定儲存成功！請用 `snow` 重新啟動！',
+		savedSuccess: '{scope} MCP 設定儲存成功！工具列表已熱刷新，無需重啟。',
 		configErrors: '設定錯誤: {errors}',
 		reverted: '修改已還原至上一個有效設定。',
 		invalidJson: 'JSON 格式無效，修改已還原至上一個有效設定。',

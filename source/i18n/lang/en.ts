@@ -2306,7 +2306,7 @@ export const en: TranslationKeys = {
 		scopeGlobal: 'Global Config',
 		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
 		savedSuccess:
-			'{scope} MCP configuration saved successfully! Please use `snow` restart!',
+			'{scope} MCP configuration saved successfully! Tools cache hot-refreshed (no restart).',
 		configErrors: 'Configuration errors: {errors}',
 		reverted: 'Changes have been reverted to the previous valid configuration.',
 		invalidJson:
