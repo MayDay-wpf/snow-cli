@@ -96,6 +96,7 @@ export default function ChatScreen({
 		setSuppressLoadingIndicator,
 		hookError,
 		setHookError,
+		hookStatus,
 		pendingUserQuestion,
 		setPendingUserQuestion,
 		requestUserQuestion,
@@ -649,6 +650,7 @@ export default function ChatScreen({
 				customCommandExecution={customCommandExecution}
 				bashMode={bashMode}
 				hookError={hookError}
+				hookStatus={hookStatus}
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
 				setHookError={setHookError}
 				compressionStatus={compressionStatus}

@@ -5,6 +5,7 @@ export type ConfigChangeEvent = {
 		| 'showThinking'
 		| 'simpleMode'
 		| 'toolDisplayMode'
+		| 'toolIcons'
 		| 'thinkDisplayMode'
 		| 'yoloMode'
 		| 'planMode'

@@ -67,8 +67,9 @@ export const defaultCustomColors: ThemeColors = {
 	success: 'green',
 	cyan: 'cyan',
 	logoGradient: ['#d3d3d3', '#808080', '#505050'],
-	userMessageBackground: '#2a4a2a',
-	userMessageText: 'white',
+	// Accent bar color for user messages (no full-line background fill)
+	userMessageBackground: '#6a9f6a',
+	userMessageText: '#d4d4d4',
 	diffOpacity: 1,
 };
 
@@ -156,10 +157,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: 'cyan',
 			// Logo gradient - gray gradient
 			logoGradient: ['#d3d3d3', '#808080', '#505050'],
-			// User message background - dark green
-			userMessageBackground: '#2a4a2a',
+			// User message accent bar
+			userMessageBackground: '#6a9f6a',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#d4d4d4',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -190,10 +191,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#0066cc',
 			// Logo gradient - darker for light theme
 			logoGradient: ['#606060', '#404040', '#202020'],
-			// User message background - light green
-			userMessageBackground: '#d4f1d4',
+			// User message accent bar
+			userMessageBackground: '#2d8a4e',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#000000',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -224,10 +225,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#58a6ff',
 			// Logo gradient - GitHub blue tones
 			logoGradient: ['#58a6ff', '#1f6feb', '#0d419d'],
-			// User message background - GitHub dark green
-			userMessageBackground: '#1a4d2e',
+			// User message accent bar
+			userMessageBackground: '#3fb950',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#c9d1d9',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -258,10 +259,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#00f5ff',
 			// Logo gradient - rainbow colors
 			logoGradient: ['#ff006e', '#8338ec', '#00f5ff'],
-			// User message background - rainbow green
-			userMessageBackground: '#16697a',
+			// User message accent bar
+			userMessageBackground: '#00f5ff',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#ffffff',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -292,10 +293,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#2aa198',
 			// Logo gradient - Solarized accent colors
 			logoGradient: ['#2aa198', '#268bd2', '#6c71c4'],
-			// User message background - Solarized green
-			userMessageBackground: '#0a3d2c',
+			// User message accent bar
+			userMessageBackground: '#2aa198',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#93a1a1',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -326,10 +327,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#88c0d0',
 			// Logo gradient - Nord frost colors
 			logoGradient: ['#88c0d0', '#81a1c1', '#5e81ac'],
-			// User message background - Nord green
-			userMessageBackground: '#1d3a2f',
+			// User message accent bar
+			userMessageBackground: '#a3be8c',
 			// User message text color
-			userMessageText: 'white',
+			userMessageText: '#d8dee9',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -360,10 +361,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#0abab5',
 			// Logo gradient - Tiffany blue tones
 			logoGradient: ['#0abab5', '#5fd6d1', '#9bd9d3'],
-			// User message background - Tiffany pale
-			userMessageBackground: '#bfe7e3',
+			// User message accent bar
+			userMessageBackground: '#0abab5',
 			// User message text color
-			userMessageText: '#000000',
+			userMessageText: '#0a3a38',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -394,8 +395,8 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#8fd3d8',
 			// Logo gradient - pink to lavender macaron
 			logoGradient: ['#ffb3d1', '#ff7eb6', '#b388eb'],
-			// User message background - soft pink macaron
-			userMessageBackground: '#ffd1e3',
+			// User message accent bar
+			userMessageBackground: '#ff7eb6',
 			// User message text color
 			userMessageText: '#5a2a4a',
 			// Diff highlight opacity
@@ -428,10 +429,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#f4b942',
 			// Logo gradient - rich gold tones
 			logoGradient: ['#fff2a8', '#ffd700', '#b8860b'],
-			// User message background - deep antique gold
-			userMessageBackground: '#5a3d0c',
+			// User message accent bar
+			userMessageBackground: '#ffd700',
 			// User message text color
-			userMessageText: '#fff7cc',
+			userMessageText: '#f7e6a3',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -462,10 +463,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#e8585e',
 			// Logo gradient - red to gold
 			logoGradient: ['#e60012', '#d43038', '#ffd166'],
-			// User message background - deep red
-			userMessageBackground: '#3d0d0d',
+			// User message accent bar
+			userMessageBackground: '#e60012',
 			// User message text color
-			userMessageText: '#fff0e0',
+			userMessageText: '#f7d4d4',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},
@@ -496,10 +497,10 @@ export const themes: Record<ThemeType, Theme> = {
 			cyan: '#5b9bd5',
 			// Logo gradient - red to silver to blue
 			logoGradient: ['#e63946', '#b0b8d0', '#5b9bd5'],
-			// User message background - dark red
-			userMessageBackground: '#3d1c1c',
+			// User message accent bar
+			userMessageBackground: '#e63946',
 			// User message text color
-			userMessageText: '#fff0e0',
+			userMessageText: '#e2e4f0',
 			// Diff highlight opacity
 			diffOpacity: 1,
 		},

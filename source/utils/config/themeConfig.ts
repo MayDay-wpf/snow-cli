@@ -7,6 +7,19 @@ import {configEvents} from './configEvents.js';
 const CONFIG_DIR = join(homedir(), '.snow');
 const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');
 
+/**
+ * Tool type-icon preferences (category emoji next to tool name).
+ * - boolean: enable/disable only
+ * - object: enable + optional per-tool overrides (e.g. "websearch-search": "🔎")
+ */
+export type ToolIconsConfig =
+	| boolean
+	| {
+			enabled?: boolean;
+			/** Per-tool icon overrides; keys are exact tool names. */
+			tools?: Record<string, string>;
+	  };
+
 interface ThemeConfig {
 	theme: ThemeType;
 	customColors?: ThemeColors;
@@ -14,6 +27,8 @@ interface ThemeConfig {
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
 	thinkDisplayMode?: ThinkDisplayMode;
+	/** Tool category icons (🔍/💻/…); default true. */
+	toolIcons?: ToolIconsConfig;
 }
 
 export type ToolDisplayMode = 'full' | 'compact' | 'hidden';
@@ -25,6 +40,7 @@ const DEFAULT_CONFIG: ThemeConfig = {
 	diffOpacity: 1,
 	toolDisplayMode: 'full',
 	thinkDisplayMode: 'compact',
+	toolIcons: true,
 };
 
 function ensureConfigDirectory(): void {
@@ -167,4 +183,100 @@ export function getThinkDisplayMode(): ThinkDisplayMode {
 export function setThinkDisplayMode(mode: ThinkDisplayMode): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, thinkDisplayMode: mode});
+}
+
+function normalizeToolIconsConfig(raw: ToolIconsConfig | undefined): {
+	enabled: boolean;
+	tools: Record<string, string>;
+} {
+	if (raw === undefined || raw === null) {
+		return {enabled: true, tools: {}};
+	}
+	if (typeof raw === 'boolean') {
+		return {enabled: raw, tools: {}};
+	}
+	const tools: Record<string, string> = {};
+	if (raw.tools && typeof raw.tools === 'object') {
+		for (const [k, v] of Object.entries(raw.tools)) {
+			if (typeof v === 'string' && v.trim()) {
+				tools[k] = v.trim();
+			}
+		}
+	}
+	return {
+		enabled: raw.enabled !== false,
+		tools,
+	};
+}
+
+/**
+ * Whether tool category icons (🔍/💻/…) are shown next to tool names.
+ * Independent of toolDisplayMode full|compact|hidden.
+ */
+export function getToolIconsEnabled(): boolean {
+	const config = loadThemeConfig();
+	return normalizeToolIconsConfig(config.toolIcons).enabled;
+}
+
+/**
+ * Per-tool icon overrides from theme.json.
+ */
+export function getToolIconOverrides(): Record<string, string> {
+	const config = loadThemeConfig();
+	return normalizeToolIconsConfig(config.toolIcons).tools;
+}
+
+/**
+ * Enable/disable tool category icons (preserves existing overrides).
+ */
+export function setToolIconsEnabled(enabled: boolean): void {
+	const config = loadThemeConfig();
+	const current = normalizeToolIconsConfig(config.toolIcons);
+	const next: ToolIconsConfig =
+		Object.keys(current.tools).length > 0
+			? {enabled, tools: current.tools}
+			: enabled;
+	saveThemeConfig({...config, toolIcons: next});
+	configEvents.emitConfigChange({type: 'toolIcons', value: next});
+}
+
+/**
+ * Replace tool icon config wholesale (boolean or {enabled, tools}).
+ */
+export function setToolIconsConfig(value: ToolIconsConfig): void {
+	const config = loadThemeConfig();
+	const normalized = normalizeToolIconsConfig(value);
+	const next: ToolIconsConfig =
+		Object.keys(normalized.tools).length > 0
+			? {enabled: normalized.enabled, tools: normalized.tools}
+			: normalized.enabled;
+	saveThemeConfig({...config, toolIcons: next});
+	configEvents.emitConfigChange({type: 'toolIcons', value: next});
+}
+
+/**
+ * Set/override a single tool icon. Pass empty string to clear override.
+ */
+export function setToolIconOverride(
+	toolName: string,
+	icon: string | null | undefined,
+): void {
+	const config = loadThemeConfig();
+	const current = normalizeToolIconsConfig(config.toolIcons);
+	const tools = {...current.tools};
+	const name = toolName.trim();
+	if (!name) {
+		return;
+	}
+	if (!icon || !String(icon).trim()) {
+		delete tools[name];
+	} else {
+		tools[name] = String(icon).trim();
+	}
+	const next: ToolIconsConfig =
+		Object.keys(tools).length > 0
+			? {enabled: current.enabled, tools}
+			: current.enabled;
+	saveThemeConfig({...config, toolIcons: next});
+	configEvents.emitConfigChange({type: 'toolIcons', value: next});
 }

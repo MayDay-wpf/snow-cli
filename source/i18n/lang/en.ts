@@ -705,7 +705,8 @@ export const en: TranslationKeys = {
 		confirm: 'Confirm',
 		preview: 'Preview',
 		userMessagePreview: 'User message preview',
-		userMessageSample: 'Check if userMessageBackground looks right.',
+		userMessageSample:
+			'Check if the user message accent bar (userMessageBackground) looks right.',
 		colorHint: 'Press Enter to edit this color',
 	},
 	helpPanel: {

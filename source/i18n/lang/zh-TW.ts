@@ -665,7 +665,8 @@ export const zhTW: TranslationKeys = {
 		confirm: '確認',
 		preview: '預覽',
 		userMessagePreview: '使用者訊息預覽',
-		userMessageSample: '用於檢查 userMessageBackground 是否合適。',
+		userMessageSample:
+			'用於檢查使用者訊息左側強調條（userMessageBackground）是否合適。',
 		colorHint: '按 Enter 編輯此顏色',
 	},
 	helpPanel: {

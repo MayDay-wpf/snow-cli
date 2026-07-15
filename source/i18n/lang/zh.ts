@@ -664,7 +664,8 @@ export const zh: TranslationKeys = {
 		confirm: '确认',
 		preview: '预览',
 		userMessagePreview: '用户消息预览',
-		userMessageSample: '用于检查 userMessageBackground 是否合适。',
+		userMessageSample:
+			'用于检查用户消息左侧强调条（userMessageBackground）是否合适。',
 		colorHint: '按 Enter 编辑此颜色',
 	},
 	helpPanel: {

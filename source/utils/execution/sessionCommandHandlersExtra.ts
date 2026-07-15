@@ -7,6 +7,10 @@ import {
 	setSimpleMode,
 	getToolDisplayMode,
 	setToolDisplayMode,
+	getToolIconsEnabled,
+	setToolIconsEnabled,
+	setToolIconOverride,
+	getToolIconOverrides,
 	getThinkDisplayMode,
 	setThinkDisplayMode,
 	getCurrentTheme,
@@ -171,6 +175,8 @@ export function handleTheme(
 		const toolDisplay = getToolDisplayMode();
 		const thinkDisplay = getThinkDisplayMode();
 		const diffOpacity = getDiffOpacity();
+		const toolIcons = getToolIconsEnabled();
+		const toolIconOverrides = getToolIconOverrides();
 		const hasCustomColors = Boolean(getCustomColors());
 		return okResult(
 			meta.id,
@@ -180,10 +186,14 @@ export function handleTheme(
 				toolDisplay,
 				thinkDisplay,
 				diffOpacity,
+				toolIcons,
+				toolIconOverrides,
 				hasCustomColors,
 				availableThemes: THEME_TYPES,
 			},
-			`Theme: ${theme}, simple=${simpleMode ? 'on' : 'off'}`,
+			`Theme: ${theme}, simple=${simpleMode ? 'on' : 'off'}, toolIcons=${
+				toolIcons ? 'on' : 'off'
+			}`,
 			meta.risk,
 		);
 	}
@@ -205,6 +215,7 @@ export function handleTheme(
 			toolDisplay?: string;
 			thinkDisplay?: string;
 			diffOpacity?: number;
+			toolIcons?: boolean | string;
 			customColors?: boolean;
 		} = {};
 		const rawTokens =
@@ -218,7 +229,7 @@ export function handleTheme(
 			return failResult(
 				meta.id,
 				'INVALID_ARGS',
-				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|thinkDisplay=...|diffOpacity=0..1|colors=<json>|customColors=<json>',
+				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|toolIcons=on|off|thinkDisplay=...|diffOpacity=0..1|colors=<json>|customColors=<json>',
 				meta.risk,
 			);
 		}
@@ -301,6 +312,30 @@ export function handleTheme(
 					configEvents.emitConfigChange({type: 'toolDisplayMode', value: mode});
 					changed.toolDisplay = mode;
 					continue;
+				}
+				if (key === 'toolicons' || key === 'toolicon' || key === 'tool-icons') {
+					const lower = value.toLowerCase();
+					if (['true', 'false', 'on', 'off', '1', '0'].includes(lower)) {
+						const enabled = ['true', 'on', '1'].includes(lower);
+						setToolIconsEnabled(enabled);
+						changed.toolIcons = enabled;
+						continue;
+					}
+					// toolIcons=websearch-search:🔎  or toolIcons=terminal-execute=
+					const colon = value.indexOf(':');
+					if (colon > 0) {
+						const toolName = value.slice(0, colon).trim();
+						const icon = value.slice(colon + 1);
+						setToolIconOverride(toolName, icon);
+						changed.toolIcons = `${toolName}=${icon || '(cleared)'}`;
+						continue;
+					}
+					return failResult(
+						meta.id,
+						'INVALID_ARGS',
+						'toolIcons must be on|off or <toolName>:<emoji>',
+						meta.risk,
+					);
 				}
 				if (key === 'thinkdisplay') {
 					const mode = value.toLowerCase();

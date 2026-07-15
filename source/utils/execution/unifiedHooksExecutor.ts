@@ -17,6 +17,10 @@ import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {RequestMethod} from '../config/apiConfig.js';
+import {
+	emitHookStatus,
+	summarizeHookAction,
+} from './hookStatusEvents.js';
 
 /**
  * Prompt Hook 执行结果（小模型返回的 JSON）
@@ -169,11 +173,56 @@ export class UnifiedHooksExecutor {
 			};
 		}
 
+		// Pre-count enabled actions that will run (for progress UI)
+		const plannedActions: Array<{
+			type: 'command' | 'prompt';
+			label: string;
+		}> = [];
+		for (const rule of rules) {
+			if (!this.matchRule(rule, context)) {
+				continue;
+			}
+			for (const action of rule.hooks) {
+				if (action.enabled !== true) {
+					continue;
+				}
+				if (action.type === 'command' && action.command) {
+					plannedActions.push({
+						type: 'command',
+						label: summarizeHookAction(action.command) || action.command,
+					});
+				} else if (action.type === 'prompt' && action.prompt) {
+					plannedActions.push({
+						type: 'prompt',
+						label: summarizeHookAction(action.prompt) || 'prompt',
+					});
+				}
+			}
+		}
+
+		if (plannedActions.length === 0) {
+			return {
+				success: true,
+				results: [],
+				executedActions: 0,
+				skippedActions: rules.reduce((n, r) => n + r.hooks.length, 0),
+			};
+		}
+
+		emitHookStatus({
+			phase: 'start',
+			hookType,
+			totalActions: plannedActions.length,
+			actionIndex: 0,
+		});
+
 		// 4. 执行所有匹配的规则
 		let totalExecuted = 0;
 		let totalSkipped = 0;
+		let failedActions = 0;
 		const allResults: HookActionResult[] = [];
 		let hasError = false;
+		let abortedHard = false;
 
 		for (const rule of rules) {
 			// 检查 matcher
@@ -192,10 +241,32 @@ export class UnifiedHooksExecutor {
 
 				// 根据类型执行相应的 action
 				let result: HookActionResult | null = null;
+				let actionType: 'command' | 'prompt' | undefined;
+				let actionLabel: string | undefined;
 
 				if (action.type === 'command' && action.command) {
+					actionType = 'command';
+					actionLabel = summarizeHookAction(action.command);
+					emitHookStatus({
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
 					result = await this.executeCommand(action, context);
 				} else if (action.type === 'prompt' && action.prompt) {
+					actionType = 'prompt';
+					actionLabel = summarizeHookAction(action.prompt);
+					emitHookStatus({
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
 					result = await this.executePrompt(action, context);
 				} else {
 					// 类型不匹配或缺少必要参数
@@ -209,14 +280,32 @@ export class UnifiedHooksExecutor {
 				// 检查是否有错误
 				if (!result.success) {
 					hasError = true;
+					failedActions++;
 
 					// 如果是 Command 类型且 exitCode >= 2,停止后续 Action 执行
 					if (result.type === 'command' && result.exitCode >= 2) {
+						abortedHard = true;
 						break;
 					}
 				}
 			}
+			if (abortedHard) {
+				break;
+			}
 		}
+
+		emitHookStatus({
+			phase: hasError ? 'failed' : 'success',
+			hookType,
+			executedActions: totalExecuted,
+			failedActions,
+			totalActions: plannedActions.length,
+			message: hasError
+				? abortedHard
+					? 'stopped (exit ≥ 2)'
+					: `${failedActions} action(s) failed`
+				: undefined,
+		});
 
 		return {
 			success: !hasError,
@@ -232,7 +321,10 @@ export class UnifiedHooksExecutor {
 	 * @param context - 上下文对象
 	 * @returns 替换后的文本
 	 */
-	private replacePlaceholders(text: string, context?: Record<string, any>): string {
+	private replacePlaceholders(
+		text: string,
+		context?: Record<string, any>,
+	): string {
 		if (!context) {
 			return text;
 		}

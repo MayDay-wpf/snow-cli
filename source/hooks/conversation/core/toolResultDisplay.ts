@@ -8,6 +8,7 @@ import {
 	extractFilesystemEditDiffFromRawResult,
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 
 /**
  * Build UI messages for tool execution results.
@@ -26,7 +27,7 @@ export function buildToolResultMessages(
 		if (!toolCall) continue;
 
 		const isError = result.content.startsWith('Error:');
-		const statusIcon = isError ? '✗' : '✓';
+		const statusKey = isError ? 'error' : 'success';
 
 		// Sub-agent tools
 		if (toolCall.function.name.startsWith('subagent-')) {
@@ -42,7 +43,7 @@ export function buildToolResultMessages(
 
 			resultMessages.push({
 				role: 'assistant',
-				content: `${statusIcon} ${toolCall.function.name}`,
+				content: formatToolTitleLine(toolCall.function.name, statusKey),
 				streaming: false,
 				messageStatus: isError ? 'error' : 'success',
 				toolResult: !isError ? result.content : undefined,
@@ -61,7 +62,7 @@ export function buildToolResultMessages(
 
 		resultMessages.push({
 			role: 'assistant',
-			content: `${statusIcon} ${toolCall.function.name}`,
+			content: formatToolTitleLine(toolCall.function.name, statusKey),
 			streaming: false,
 			messageStatus: isError ? 'error' : 'success',
 			toolCall: editDiffData

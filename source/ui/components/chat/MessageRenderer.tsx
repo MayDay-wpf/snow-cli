@@ -417,7 +417,9 @@ function MessageRendererImpl({
 								message.role === 'user'
 									? message.subAgentDirected
 										? 'magenta'
-										: 'green'
+										: theme.colors.userMessageBackground ||
+										  theme.colors.menuSelected ||
+										  'green'
 									: message.role === 'command'
 									? theme.colors.menuSecondary
 									: toolStatusColor
@@ -559,7 +561,11 @@ function MessageRendererImpl({
 																message.toolResult &&
 																(() => {
 																	const toolName = removeAnsiCodes(titleLine)
-																		.replace(/^[✓✗⚡]\s*/, '')
+																		// Status glyphs + optional tool-type emoji (when toolIcons enabled)
+																		.replace(
+																			/^[✓✗⚡✅❌⚠️⏳]\s*(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*)?/u,
+																			'',
+																		)
 																		.replace(/.*⚇✓\s*/, '')
 																		.trim();
 																	const summary = getToolResultSummary(
@@ -642,17 +648,25 @@ function MessageRendererImpl({
 																	getDisplayContent(message.content),
 																	contentColumnWidth,
 																)
-															).map((line, lineIndex) => (
-																<Text
-																	key={lineIndex}
-																	color={theme.colors.userMessageText}
-																	backgroundColor={
-																		theme.colors.userMessageBackground
-																	}
-																>
-																	{line}
-																</Text>
-															))}
+															).map((line, lineIndex) => {
+																// Left accent bar (no full-line bg → no stairstep / ghosting).
+																// Reuse userMessageBackground as the accent color so theme
+																// customization still has a dedicated user-message token.
+																const accentColor = message.subAgentDirected
+																	? 'magenta'
+																	: theme.colors.userMessageBackground ||
+																	  theme.colors.menuSelected ||
+																	  theme.colors.success ||
+																	  'green';
+																return (
+																	<Box key={lineIndex}>
+																		<Text color={accentColor}>│ </Text>
+																		<Text color={theme.colors.userMessageText}>
+																			{line}
+																		</Text>
+																	</Box>
+																);
+															})}
 														</Box>
 													) : message.content ? (
 														<MarkdownRenderer

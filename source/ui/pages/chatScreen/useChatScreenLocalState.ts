@@ -3,6 +3,8 @@ import type {Message} from '../../components/chat/MessageList.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
+import type {HookStatusEvent} from '../../../utils/execution/hookStatusEvents.js';
+import {onHookStatus} from '../../../utils/execution/hookStatusEvents.js';
 import type {
 	BashSensitiveCommandState,
 	CustomCommandExecutionState,
@@ -43,6 +45,10 @@ export function useChatScreenLocalState() {
 		useState(false);
 	const hadBashSensitiveCommandRef = useRef(false);
 	const [hookError, setHookError] = useState<HookErrorDetails | null>(null);
+	const [hookStatus, setHookStatus] = useState<HookStatusEvent | null>(null);
+	const hookStatusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const [pendingUserQuestion, setPendingUserQuestion] =
 		useState<PendingUserQuestionState>(null);
 	const [compressionStatus, setCompressionStatus] =
@@ -60,6 +66,42 @@ export function useChatScreenLocalState() {
 	useEffect(() => {
 		pendingMessagesRef.current = pendingMessages;
 	}, [pendingMessages]);
+
+	// Live Hook execution status (Unicode icons + spinner in HookStatusDisplay)
+	useEffect(() => {
+		const unsubscribe = onHookStatus(event => {
+			if (hookStatusClearTimerRef.current) {
+				clearTimeout(hookStatusClearTimerRef.current);
+				hookStatusClearTimerRef.current = null;
+			}
+
+			if (!event || event.phase === 'idle') {
+				setHookStatus(null);
+				return;
+			}
+
+			setHookStatus(event);
+
+			// Auto-clear terminal success/failed banner so it does not stick
+			if (event.phase === 'success' || event.phase === 'failed') {
+				const delayMs = event.phase === 'success' ? 1600 : 3200;
+				hookStatusClearTimerRef.current = setTimeout(() => {
+					setHookStatus(current =>
+						current && current.phase === event.phase ? null : current,
+					);
+					hookStatusClearTimerRef.current = null;
+				}, delayMs);
+			}
+		});
+
+		return () => {
+			unsubscribe();
+			if (hookStatusClearTimerRef.current) {
+				clearTimeout(hookStatusClearTimerRef.current);
+				hookStatusClearTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		const hasPanel = !!bashSensitiveCommand;
@@ -140,6 +182,8 @@ export function useChatScreenLocalState() {
 		setSuppressLoadingIndicator,
 		hookError,
 		setHookError,
+		hookStatus,
+		setHookStatus,
 		pendingUserQuestion,
 		setPendingUserQuestion,
 		requestUserQuestion,
