@@ -132,11 +132,49 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 			} else if (event.type === 'simpleMode') {
 				// /simple 命令切换后通过事件即时同步 React state，
 				// 避免 1s 轮询造成 ChatHeader 第一次重挂载时仍用旧值。
-				setSimpleMode(Boolean(event.value));
+				setSimpleMode(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
 			} else if (event.type === 'toolDisplayMode') {
 				setToolDisplayMode(event.value);
 			} else if (event.type === 'thinkDisplayMode') {
 				setThinkDisplayMode(event.value);
+			} else if (event.type === 'yoloMode') {
+				setYoloMode(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'planMode') {
+				setPlanMode(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'teamMode') {
+				setTeamMode(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'vulnerabilityHuntingMode') {
+				setVulnerabilityHuntingMode(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'toolSearchEnabled') {
+				setToolSearchDisabled(prev => {
+					const next = !Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'ultraTodoEnabled') {
+				setUltraTodoEnabled(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'imageCompressEnabled') {
+				setImageCompressEnabled(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
 			}
 		};
 

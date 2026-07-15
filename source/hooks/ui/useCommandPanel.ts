@@ -55,7 +55,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	reindex: '[-force]',
 	codebase: '[on|off|status]',
 	'auto-format': '[on|off|status]',
-	buddy: '[status|hatch|pet|rename|say|profile|mute|unmute|reset]',
+	buddy: '[status|hatch|pet|rename|set|say|profile|mute|unmute|reset]',
 	simple: '[on|off|status]',
 	'add-dir': '[path]',
 	loop: '[daemon] <interval> <prompt> | daily HH:mm <prompt> | at HH:mm <prompt> | list | tasks | cancel <id>',
@@ -85,6 +85,8 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 		'hatch',
 		'pet',
 		'rename',
+		'set',
+		'customize',
 		'say',
 		'profile',
 		'mute',
@@ -340,7 +342,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'buddy',
 				description:
 					t.commandPanel.commands.buddy ||
-					'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
+					'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			},
 			{
 				name: 'tool-search',
