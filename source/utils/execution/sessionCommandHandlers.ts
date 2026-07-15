@@ -51,10 +51,15 @@ import {
 	setImageCompressEnabled,
 	getAutoFormatEnabled,
 	setAutoFormatEnabled,
+	getHybridCompressEnabled,
+	setHybridCompressEnabled,
+	getSpeedometerEnabled,
+	setSpeedometerEnabled,
 	getTelemetryEnabled,
 	setTelemetryEnabled,
 	getTelemetryConfig,
 } from '../config/projectSettings.js';
+import {tpsTracker} from '../../hooks/conversation/core/tpsTracker.js';
 import {
 	getActiveProfileName,
 	getAllProfiles,
@@ -1613,6 +1618,30 @@ export async function executeSessionCommandHandler(
 				getAutoFormatEnabled,
 				setAutoFormatEnabled,
 				'Auto-format',
+			);
+		case 'hybrid-compress':
+			return handleBooleanSetting(
+				meta,
+				normalizedArgs,
+				getHybridCompressEnabled,
+				setHybridCompressEnabled,
+				'Hybrid compress',
+			);
+		case 'speedometer':
+			return handleBooleanSetting(
+				meta,
+				normalizedArgs,
+				// Prefer live tracker state; fall back to persisted setting.
+				() => tpsTracker.isActive() || getSpeedometerEnabled(),
+				value => {
+					if (value) {
+						tpsTracker.start();
+					} else {
+						tpsTracker.stop();
+					}
+					setSpeedometerEnabled(value);
+				},
+				'Speedometer',
 			);
 		case 'telemetry':
 			return handleTelemetry(meta, normalizedArgs);

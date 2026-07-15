@@ -38,6 +38,10 @@ test('allowlist includes buddy and display commands', t => {
 	t.true(ids.includes('session.list'));
 	t.true(ids.includes('goal.status'));
 	t.true(ids.includes('skills.list'));
+	t.true(ids.includes('speedometer'));
+	t.true(ids.includes('hybrid-compress'));
+	t.true(ids.includes('auto-format'));
+	t.true(ids.includes('image-compress'));
 });
 
 test('resolveSessionCommandMeta maps defaults and dotted form', t => {
@@ -121,6 +125,74 @@ test('runSessionCommand simple status is readable without confirm', async t => {
 	});
 	t.true(result.ok);
 	t.is(typeof (result.data as {enabled?: boolean})?.enabled, 'boolean');
+});
+
+test('runSessionCommand speedometer status/on/off without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'speedometer',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = Boolean((status.data as {enabled?: boolean})?.enabled);
+
+	try {
+		const on = await runSessionCommand({
+			command: 'speedometer',
+			args: 'on',
+			mode: 'agent',
+		});
+		t.true(on.ok, on.message);
+		t.is((on.data as {enabled?: boolean})?.enabled, true);
+
+		const mid = await runSessionCommand({
+			command: 'speedometer',
+			args: 'status',
+			mode: 'agent',
+		});
+		t.true(mid.ok, mid.message);
+		t.is((mid.data as {enabled?: boolean})?.enabled, true);
+
+		const off = await runSessionCommand({
+			command: 'speedometer',
+			args: 'off',
+			mode: 'agent',
+		});
+		t.true(off.ok, off.message);
+		t.is((off.data as {enabled?: boolean})?.enabled, false);
+	} finally {
+		await runSessionCommand({
+			command: 'speedometer',
+			args: original ? 'on' : 'off',
+			mode: 'agent',
+		});
+	}
+});
+
+test('runSessionCommand hybrid-compress status/toggle without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'hybrid-compress',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = Boolean((status.data as {enabled?: boolean})?.enabled);
+
+	try {
+		const flipped = await runSessionCommand({
+			command: 'hybrid-compress',
+			args: original ? 'off' : 'on',
+			mode: 'agent',
+		});
+		t.true(flipped.ok, flipped.message);
+		t.is((flipped.data as {enabled?: boolean})?.enabled, !original);
+	} finally {
+		await runSessionCommand({
+			command: 'hybrid-compress',
+			args: original ? 'on' : 'off',
+			mode: 'agent',
+		});
+	}
 });
 
 test('runSessionCommand tool-display status returns mode', async t => {

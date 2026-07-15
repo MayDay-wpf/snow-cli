@@ -37,6 +37,10 @@ export const PLANE_TUI_OVERLAP_COMMANDS: readonly string[] = [
 	'ide',
 	'telemetry',
 	'usage',
+	'auto-format',
+	'image-compress',
+	'hybrid-compress',
+	'speedometer',
 ] as const;
 
 /** Critical TUI command modules that should remain present while dual-path exists. */

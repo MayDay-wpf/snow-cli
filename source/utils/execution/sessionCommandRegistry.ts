@@ -218,6 +218,18 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		requiresConfirm: true,
 	}),
 	meta('auto-format', 'auto-format', 'low_write', 'Toggle or set auto-format'),
+	meta(
+		'hybrid-compress',
+		'hybrid-compress',
+		'low_write',
+		'Toggle or set hybrid compress',
+	),
+	meta(
+		'speedometer',
+		'speedometer',
+		'low_write',
+		'Toggle or set token rate speedometer',
+	),
 	meta('telemetry', 'telemetry', 'medium_write', 'Telemetry status/toggle', {
 		requiresConfirm: true,
 	}),
