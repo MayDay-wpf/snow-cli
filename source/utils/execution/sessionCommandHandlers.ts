@@ -35,6 +35,17 @@ import {
 } from '../config/themeConfig.js';
 import {configEvents} from '../config/configEvents.js';
 import {
+	getCurrentLanguage,
+	setCurrentLanguage,
+	type Language,
+} from '../config/languageConfig.js';
+import {getSnowConfig, updateSnowConfig} from '../config/apiConfig.js';
+import {
+	readSettings,
+	updateSettings,
+	type SettingsScope,
+} from '../config/unifiedSettings.js';
+import {
 	getYoloMode,
 	setYoloMode,
 	getPlanMode,
@@ -55,6 +66,10 @@ import {
 	setHybridCompressEnabled,
 	getSpeedometerEnabled,
 	setSpeedometerEnabled,
+	getSubAgentMaxSpawnDepth,
+	setSubAgentMaxSpawnDepth,
+	getFileListDisplayMode,
+	setFileListDisplayMode,
 	getTelemetryEnabled,
 	setTelemetryEnabled,
 	getTelemetryConfig,
@@ -67,6 +82,7 @@ import {
 } from '../config/configManager.js';
 import {
 	loadCodebaseConfig,
+	saveCodebaseConfig,
 	isCodebaseEnabled,
 	enableCodebase,
 	disableCodebase,
@@ -858,12 +874,102 @@ function handleCodebase(
 	meta: SessionCommandMeta,
 	args?: string,
 ): SessionCommandResult {
-	const token = (args ?? '').trim().toLowerCase();
+	const tokens = parseTokens(args);
+	const token = (tokens[0] ?? '').toLowerCase();
+	const subToken = (tokens[1] ?? '').toLowerCase();
 	const config = loadCodebaseConfig();
 	const hasEmbedding = Boolean(
 		config.embedding.baseUrl && config.embedding.apiKey,
 	);
 	const enabled = isCodebaseEnabled();
+
+	const handleFeatureToggle = (
+		feature: 'agent-review' | 'reranking',
+		action: string,
+	): SessionCommandResult => {
+		const current =
+			feature === 'agent-review'
+				? config.enableAgentReview
+				: config.enableReranking;
+		const label =
+			feature === 'agent-review'
+				? 'Codebase agent-review'
+				: 'Codebase reranking';
+
+		if (!action || action === 'status') {
+			return okResult(
+				meta.id,
+				{
+					feature,
+					enabled: current,
+					enableAgentReview: config.enableAgentReview,
+					enableReranking: config.enableReranking,
+				},
+				`${label}: ${current ? 'on' : 'off'}`,
+				meta.risk,
+			);
+		}
+
+		const parsed = parseOnOffToggle(action, current);
+		if (!parsed.ok) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				`Usage: codebase ${feature} [status|on|off|toggle]`,
+				meta.risk,
+			);
+		}
+		if (parsed.isStatus) {
+			return okResult(
+				meta.id,
+				{
+					feature,
+					enabled: current,
+					enableAgentReview: config.enableAgentReview,
+					enableReranking: config.enableReranking,
+				},
+				`${label}: ${current ? 'on' : 'off'}`,
+				meta.risk,
+			);
+		}
+
+		const nextConfig = {...config};
+		if (feature === 'agent-review') {
+			nextConfig.enableAgentReview = parsed.value;
+			if (parsed.value) {
+				nextConfig.enableReranking = false;
+			}
+		} else {
+			nextConfig.enableReranking = parsed.value;
+			if (parsed.value) {
+				nextConfig.enableAgentReview = false;
+			}
+		}
+		saveCodebaseConfig(nextConfig);
+
+		return okResult(
+			meta.id,
+			{
+				feature,
+				enabled:
+					feature === 'agent-review'
+						? nextConfig.enableAgentReview
+						: nextConfig.enableReranking,
+				previous: current,
+				enableAgentReview: nextConfig.enableAgentReview,
+				enableReranking: nextConfig.enableReranking,
+			},
+			`${label}: ${parsed.value ? 'on' : 'off'}`,
+			meta.risk,
+		);
+	};
+
+	if (token === 'agent-review' || token === 'agent_review') {
+		return handleFeatureToggle('agent-review', subToken);
+	}
+	if (token === 'reranking' || token === 'rerank') {
+		return handleFeatureToggle('reranking', subToken);
+	}
 
 	if (!token || token === 'status') {
 		return okResult(
@@ -872,6 +978,8 @@ function handleCodebase(
 				enabled,
 				configured: hasEmbedding,
 				embeddingModel: config.embedding.modelName || null,
+				enableAgentReview: config.enableAgentReview,
+				enableReranking: config.enableReranking,
 			},
 			hasEmbedding
 				? `Codebase: ${enabled ? 'on' : 'off'}`
@@ -934,11 +1042,10 @@ function handleCodebase(
 	return failResult(
 		meta.id,
 		'INVALID_ARGS',
-		'Usage: codebase [status|on|off|toggle]',
+		'Usage: codebase [status|on|off|toggle|agent-review|reranking] ...',
 		meta.risk,
-	);
+);
 }
-
 function handleToolDisplay(
 	meta: SessionCommandMeta,
 	args?: string,
@@ -1035,6 +1142,246 @@ function handleTelemetry(
 	);
 }
 
+function handleSubagentDepth(
+	meta: SessionCommandMeta,
+	args?: string,
+): SessionCommandResult {
+	const token = (args ?? '').trim().toLowerCase();
+	const current = getSubAgentMaxSpawnDepth();
+	if (!token || token === 'status') {
+		return okResult(
+			meta.id,
+			{depth: current},
+			`Sub-agent max spawn depth: ${current}`,
+			meta.risk,
+		);
+	}
+
+	const parsedDepth = Number.parseInt(token, 10);
+	if (
+		!Number.isInteger(parsedDepth) ||
+		parsedDepth < 0 ||
+		!/^\d+$/.test(token)
+	) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'Usage: subagent-depth [non-negative integer|status]',
+			meta.risk,
+		);
+	}
+
+	const normalizedDepth = setSubAgentMaxSpawnDepth(parsedDepth);
+	return okResult(
+		meta.id,
+		{depth: normalizedDepth, previous: current},
+		`Sub-agent max spawn depth: ${normalizedDepth}`,
+		meta.risk,
+	);
+}
+
+function handleFileListDisplay(
+	meta: SessionCommandMeta,
+	args?: string,
+): SessionCommandResult {
+	const token = (args ?? '').trim().toLowerCase();
+	const current = getFileListDisplayMode();
+	if (!token || token === 'status') {
+		return okResult(
+			meta.id,
+			{mode: current},
+			`File list display: ${current}`,
+			meta.risk,
+		);
+	}
+
+	if (token === 'list' || token === 'tree') {
+		setFileListDisplayMode(token);
+		return okResult(
+			meta.id,
+			{mode: token, previous: current},
+			`File list display: ${token}`,
+			meta.risk,
+		);
+	}
+
+	if (token === 'toggle') {
+		const next = current === 'list' ? 'tree' : 'list';
+		setFileListDisplayMode(next);
+		return okResult(
+			meta.id,
+			{mode: next, previous: current},
+			`File list display: ${next}`,
+			meta.risk,
+		);
+	}
+
+	return failResult(
+		meta.id,
+		'INVALID_ARGS',
+		'Usage: file-list-display [list|tree|toggle|status]',
+		meta.risk,
+	);
+}
+
+function handleLanguage(
+	meta: SessionCommandMeta,
+	args?: string,
+): SessionCommandResult {
+	const token = (args ?? '').trim();
+	const current = getCurrentLanguage();
+	if (!token || token.toLowerCase() === 'status') {
+		return okResult(
+			meta.id,
+			{language: current},
+			`Language: ${current}`,
+			meta.risk,
+		);
+	}
+
+	const normalized = token.toLowerCase() === 'zh-tw' ? 'zh-TW' : token.toLowerCase();
+	if (normalized !== 'en' && normalized !== 'zh' && normalized !== 'zh-TW') {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'Usage: language [en|zh|zh-TW|status]',
+			meta.risk,
+		);
+	}
+
+	const next = normalized as Language;
+	setCurrentLanguage(next);
+	return okResult(
+		meta.id,
+		{language: next, previous: current},
+		`Language: ${next}`,
+		meta.risk,
+);
+}
+
+async function handleShowThinking(
+	meta: SessionCommandMeta,
+	args?: string,
+): Promise<SessionCommandResult> {
+	const current = getSnowConfig().showThinking !== false;
+	const parsed = parseOnOffToggle(args, current);
+	if (!parsed.ok) {
+		return failResult(meta.id, 'INVALID_ARGS', parsed.message, meta.risk);
+	}
+	if (parsed.isStatus) {
+		return okResult(
+			meta.id,
+			{enabled: current},
+			`Show thinking: ${current ? 'on' : 'off'}`,
+			meta.risk,
+		);
+	}
+
+	await updateSnowConfig({showThinking: parsed.value});
+	configEvents.emitConfigChange({type: 'showThinking', value: parsed.value});
+	return okResult(
+		meta.id,
+		{enabled: parsed.value, previous: current},
+		`Show thinking: ${parsed.value ? 'on' : 'off'}`,
+		meta.risk,
+);
+}
+
+function parsePrivacyScope(tokens: string[]): {
+	scope: SettingsScope;
+	rest: string[];
+} {
+	if (tokens[0] === 'scope' && (tokens[1] === 'project' || tokens[1] === 'global')) {
+		return {scope: tokens[1], rest: tokens.slice(2)};
+	}
+	if (tokens[0] === 'project' || tokens[0] === 'global') {
+		return {scope: tokens[0], rest: tokens.slice(1)};
+	}
+	return {scope: 'project', rest: tokens};
+}
+
+function privacyPublic(scope: SettingsScope) {
+	const settings = readSettings(scope);
+	const enabled = settings.privacy?.enabled === true;
+	const mode = settings.privacy?.mode === 'local' ? 'local' : 'api';
+	return {scope, enabled, mode};
+}
+
+function handlePrivacy(
+	meta: SessionCommandMeta,
+	args?: string,
+): SessionCommandResult {
+	const tokens = parseTokens(args).map(token => token.toLowerCase());
+	const {scope, rest} = parsePrivacyScope(tokens);
+	const action = rest[0] ?? 'status';
+	const current = privacyPublic(scope);
+
+	if (action === 'status') {
+		return okResult(
+			meta.id,
+			current,
+			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${current.mode}`,
+			meta.risk,
+		);
+	}
+
+	if (action === 'mode') {
+		const modeToken = rest[1];
+		if (!modeToken || (modeToken !== 'api' && modeToken !== 'local')) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				'Usage: privacy [scope project|global] mode [api|local]',
+				meta.risk,
+			);
+		}
+		updateSettings(scope, settings => {
+			settings.privacy = {
+				...settings.privacy,
+				mode: modeToken,
+			};
+		});
+		const next = privacyPublic(scope);
+		return okResult(
+			meta.id,
+			{...next, previousMode: current.mode},
+			`Privacy(${scope}) mode: ${next.mode}`,
+			meta.risk,
+		);
+	}
+
+	const parsed = parseOnOffToggle(action, current.enabled);
+	if (!parsed.ok) {
+		return failResult(
+			meta.id,
+			'INVALID_ARGS',
+			'Usage: privacy [scope project|global] [status|on|off|toggle|mode api|local]',
+			meta.risk,
+		);
+	}
+	if (parsed.isStatus) {
+		return okResult(
+			meta.id,
+			current,
+			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${current.mode}`,
+			meta.risk,
+		);
+	}
+
+	updateSettings(scope, settings => {
+		settings.privacy = {
+			...settings.privacy,
+			enabled: parsed.value,
+		};
+	});
+	const next = privacyPublic(scope);
+	return okResult(
+		meta.id,
+		{...next, previous: current.enabled},
+		`Privacy(${scope}): ${next.enabled ? 'on' : 'off'}`,
+		meta.risk,
+);
+}
 async function handleUsage(
 	meta: SessionCommandMeta,
 ): Promise<SessionCommandResult> {
@@ -1643,6 +1990,16 @@ export async function executeSessionCommandHandler(
 				},
 				'Speedometer',
 			);
+		case 'subagent-depth':
+			return handleSubagentDepth(meta, normalizedArgs);
+		case 'file-list-display':
+			return handleFileListDisplay(meta, normalizedArgs);
+		case 'language':
+			return handleLanguage(meta, normalizedArgs);
+		case 'show-thinking':
+			return handleShowThinking(meta, normalizedArgs);
+		case 'privacy':
+			return handlePrivacy(meta, normalizedArgs);
 		case 'telemetry':
 			return handleTelemetry(meta, normalizedArgs);
 		case 'usage':

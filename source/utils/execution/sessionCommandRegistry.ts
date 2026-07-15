@@ -209,7 +209,7 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		'codebase',
 		'codebase',
 		'medium_write',
-		'Codebase enable/status toggle',
+		'Codebase enable/status and agent-review/reranking toggles',
 		{
 			requiresConfirm: true,
 		},
@@ -229,6 +229,37 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		'speedometer',
 		'low_write',
 		'Toggle or set token rate speedometer',
+	),
+	meta(
+		'subagent-depth',
+		'subagent-depth',
+		'low_write',
+		'Get or set sub-agent max spawn depth',
+	),
+	meta(
+		'file-list-display',
+		'file-list-display',
+		'low_write',
+		'Get or set file list display mode (list|tree)',
+	),
+	meta(
+		'language',
+		'language',
+		'low_write',
+		'Get or set UI language (en|zh|zh-TW)',
+	),
+	meta(
+		'show-thinking',
+		'show-thinking',
+		'low_write',
+		'Toggle or set show-thinking UI preference',
+	),
+	meta(
+		'privacy',
+		'privacy',
+		'medium_write',
+		'Get or set privacy enabled/mode (no secrets)',
+		{requiresConfirm: true},
 	),
 	meta('telemetry', 'telemetry', 'medium_write', 'Telemetry status/toggle', {
 		requiresConfirm: true,

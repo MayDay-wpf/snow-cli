@@ -27,12 +27,17 @@ import {
 	getImageCompressEnabled,
 	getHybridCompressEnabled,
 	getSpeedometerEnabled,
+	getSubAgentMaxSpawnDepth,
+	getFileListDisplayMode,
 	getTeamMode,
 	getUltraTodoEnabled,
 	getVulnerabilityHuntingMode,
 } from '../config/projectSettings.js';
 import {getActiveProfileName} from '../config/configManager.js';
-import {isCodebaseEnabled} from '../config/codebaseConfig.js';
+import {isCodebaseEnabled, loadCodebaseConfig} from '../config/codebaseConfig.js';
+import {getCurrentLanguage} from '../config/languageConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
+import {readSettings} from '../config/unifiedSettings.js';
 import {
 	loadPermissionsConfig,
 	addToolToPermissions,
@@ -1228,13 +1233,30 @@ export function handleConfigSnapshot(
 			imageCompressEnabled: getImageCompressEnabled(),
 			hybridCompressEnabled: getHybridCompressEnabled(),
 			speedometerEnabled: getSpeedometerEnabled(),
+			subAgentMaxSpawnDepth: getSubAgentMaxSpawnDepth(),
+			fileListDisplayMode: getFileListDisplayMode(),
+			language: getCurrentLanguage(),
+			showThinking: getSnowConfig().showThinking !== false,
+			privacy: (() => {
+				const settings = readSettings('project');
+				return {
+					enabled: settings.privacy?.enabled === true,
+					mode: settings.privacy?.mode === 'local' ? 'local' : 'api',
+				};
+			})(),
+			codebaseFlags: (() => {
+				const config = loadCodebaseConfig();
+				return {
+					enableAgentReview: config.enableAgentReview,
+					enableReranking: config.enableReranking,
+				};
+			})(),
 			cwd: process.cwd(),
 		},
 		'Safe config snapshot',
 		meta.risk,
 	);
 }
-
 export function handleHome(meta: SessionCommandMeta): SessionCommandResult {
 	return failResult(
 		meta.id,

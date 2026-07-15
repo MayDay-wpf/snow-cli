@@ -42,6 +42,11 @@ test('allowlist includes buddy and display commands', t => {
 	t.true(ids.includes('hybrid-compress'));
 	t.true(ids.includes('auto-format'));
 	t.true(ids.includes('image-compress'));
+	t.true(ids.includes('subagent-depth'));
+	t.true(ids.includes('file-list-display'));
+	t.true(ids.includes('language'));
+	t.true(ids.includes('show-thinking'));
+	t.true(ids.includes('privacy'));
 });
 
 test('resolveSessionCommandMeta maps defaults and dotted form', t => {
@@ -58,6 +63,14 @@ test('resolveSessionCommandMeta maps defaults and dotted form', t => {
 	t.is(resolveSessionCommandMeta('config')?.id, 'config.snapshot');
 	t.is(resolveSessionCommandMeta('statusline')?.id, 'statusline.status');
 	t.is(resolveSessionCommandMeta('ide')?.id, 'ide.status');
+	t.is(resolveSessionCommandMeta('subagent-depth')?.id, 'subagent-depth');
+	t.is(
+		resolveSessionCommandMeta('file-list-display')?.id,
+		'file-list-display',
+	);
+	t.is(resolveSessionCommandMeta('language')?.id, 'language');
+	t.is(resolveSessionCommandMeta('show-thinking')?.id, 'show-thinking');
+	t.is(resolveSessionCommandMeta('privacy')?.id, 'privacy');
 	t.is(resolveSessionCommandMeta('nope')?.id, undefined);
 });
 
@@ -195,6 +208,276 @@ test('runSessionCommand hybrid-compress status/toggle without confirm', async t 
 	}
 });
 
+test('runSessionCommand subagent-depth status/set without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'subagent-depth',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = Number((status.data as {depth?: number})?.depth);
+	t.true(Number.isInteger(original));
+
+	const target = original === 2 ? 3 : 2;
+	try {
+		const setResult = await runSessionCommand({
+			command: 'subagent-depth',
+			args: String(target),
+			mode: 'agent',
+		});
+		t.true(setResult.ok, setResult.message);
+		t.is((setResult.data as {depth?: number})?.depth, target);
+
+		const mid = await runSessionCommand({
+			command: 'subagent-depth',
+			args: 'status',
+			mode: 'agent',
+		});
+		t.true(mid.ok, mid.message);
+		t.is((mid.data as {depth?: number})?.depth, target);
+
+		const invalid = await runSessionCommand({
+			command: 'subagent-depth',
+			args: 'nope',
+			mode: 'agent',
+		});
+		t.false(invalid.ok);
+		t.is(invalid.code, 'INVALID_ARGS');
+	} finally {
+		await runSessionCommand({
+			command: 'subagent-depth',
+			args: String(original),
+			mode: 'agent',
+		});
+	}
+});
+
+test('runSessionCommand file-list-display status/set without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'file-list-display',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = (status.data as {mode?: string})?.mode;
+	t.true(original === 'list' || original === 'tree');
+
+	const target = original === 'list' ? 'tree' : 'list';
+	try {
+		const setResult = await runSessionCommand({
+			command: 'file-list-display',
+			args: target,
+			mode: 'agent',
+		});
+		t.true(setResult.ok, setResult.message);
+		t.is((setResult.data as {mode?: string})?.mode, target);
+
+		const mid = await runSessionCommand({
+			command: 'file-list-display',
+			args: 'status',
+			mode: 'agent',
+		});
+		t.true(mid.ok, mid.message);
+		t.is((mid.data as {mode?: string})?.mode, target);
+
+		const toggled = await runSessionCommand({
+			command: 'file-list-display',
+			args: 'toggle',
+			mode: 'agent',
+		});
+		t.true(toggled.ok, toggled.message);
+		t.is((toggled.data as {mode?: string})?.mode, original);
+
+		const invalid = await runSessionCommand({
+			command: 'file-list-display',
+			args: 'grid',
+			mode: 'agent',
+		});
+		t.false(invalid.ok);
+		t.is(invalid.code, 'INVALID_ARGS');
+	} finally {
+		await runSessionCommand({
+			command: 'file-list-display',
+			args: original,
+			mode: 'agent',
+		});
+	}
+});
+
+test('runSessionCommand language status/set without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'language',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = (status.data as {language?: string})?.language;
+	t.true(original === 'en' || original === 'zh' || original === 'zh-TW');
+
+	const target = original === 'en' ? 'zh' : 'en';
+	try {
+		const setResult = await runSessionCommand({
+			command: 'language',
+			args: target,
+			mode: 'agent',
+		});
+		t.true(setResult.ok, setResult.message);
+		t.is((setResult.data as {language?: string})?.language, target);
+
+		const mid = await runSessionCommand({
+			command: 'language',
+			args: 'status',
+			mode: 'agent',
+		});
+		t.true(mid.ok, mid.message);
+		t.is((mid.data as {language?: string})?.language, target);
+
+		const invalid = await runSessionCommand({
+			command: 'language',
+			args: 'fr',
+			mode: 'agent',
+		});
+		t.false(invalid.ok);
+		t.is(invalid.code, 'INVALID_ARGS');
+	} finally {
+		await runSessionCommand({
+			command: 'language',
+			args: original,
+			mode: 'agent',
+		});
+	}
+});
+
+test('runSessionCommand show-thinking status/toggle without confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'show-thinking',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(status.ok, status.message);
+	const original = Boolean((status.data as {enabled?: boolean})?.enabled);
+
+	try {
+		const toggled = await runSessionCommand({
+			command: 'show-thinking',
+			args: 'toggle',
+			mode: 'agent',
+		});
+		t.true(toggled.ok, toggled.message);
+		t.is((toggled.data as {enabled?: boolean})?.enabled, !original);
+
+		const mid = await runSessionCommand({
+			command: 'show-thinking',
+			args: 'status',
+			mode: 'agent',
+		});
+		t.true(mid.ok, mid.message);
+		t.is((mid.data as {enabled?: boolean})?.enabled, !original);
+	} finally {
+		await runSessionCommand({
+			command: 'show-thinking',
+			args: original ? 'on' : 'off',
+			mode: 'agent',
+		});
+	}
+});
+
+test('runSessionCommand privacy status/mode with confirm', async t => {
+	const status = await runSessionCommand({
+		command: 'privacy',
+		args: 'status',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.true(status.ok, status.message);
+	const originalEnabled = Boolean((status.data as {enabled?: boolean})?.enabled);
+	const originalMode = (status.data as {mode?: string})?.mode;
+	t.true(originalMode === 'api' || originalMode === 'local');
+
+	const targetMode = originalMode === 'api' ? 'local' : 'api';
+	try {
+		const modeResult = await runSessionCommand({
+			command: 'privacy',
+			args: `mode ${targetMode}`,
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(modeResult.ok, modeResult.message);
+		t.is((modeResult.data as {mode?: string})?.mode, targetMode);
+
+		const setResult = await runSessionCommand({
+			command: 'privacy',
+			args: originalEnabled ? 'off' : 'on',
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(setResult.ok, setResult.message);
+		t.is((setResult.data as {enabled?: boolean})?.enabled, !originalEnabled);
+	} finally {
+		await runSessionCommand({
+			command: 'privacy',
+			args: `mode ${originalMode}`,
+			mode: 'agent',
+			confirm: true,
+		});
+		await runSessionCommand({
+			command: 'privacy',
+			args: originalEnabled ? 'on' : 'off',
+			mode: 'agent',
+			confirm: true,
+		});
+	}
+});
+
+test('runSessionCommand codebase agent-review/reranking toggles', async t => {
+	const status = await runSessionCommand({
+		command: 'codebase',
+		args: 'status',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.true(status.ok, status.message);
+	const originalReview = Boolean(
+		(status.data as {enableAgentReview?: boolean})?.enableAgentReview,
+);
+	const originalRerank = Boolean(
+		(status.data as {enableReranking?: boolean})?.enableReranking,
+);
+
+	try {
+		const reviewOff = await runSessionCommand({
+			command: 'codebase',
+			args: 'agent-review off',
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(reviewOff.ok, reviewOff.message);
+		t.is((reviewOff.data as {enableAgentReview?: boolean})?.enableAgentReview, false);
+
+		const rerankOn = await runSessionCommand({
+			command: 'codebase',
+			args: 'reranking on',
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(rerankOn.ok, rerankOn.message);
+		t.is((rerankOn.data as {enableReranking?: boolean})?.enableReranking, true);
+		t.is((rerankOn.data as {enableAgentReview?: boolean})?.enableAgentReview, false);
+	} finally {
+		await runSessionCommand({
+			command: 'codebase',
+			args: originalReview ? 'agent-review on' : 'agent-review off',
+			mode: 'agent',
+			confirm: true,
+		});
+		await runSessionCommand({
+			command: 'codebase',
+			args: originalRerank ? 'reranking on' : 'reranking off',
+			mode: 'agent',
+			confirm: true,
+		});
+	}
+});
 test('runSessionCommand tool-display status returns mode', async t => {
 	const result = await runSessionCommand({
 		command: 'tool-display',
@@ -464,6 +747,11 @@ test('runSessionCommand config snapshot is secret-free', async t => {
 	}
 	t.is(typeof data['profile'], 'string');
 	t.is(typeof data['theme'], 'string');
+	t.is(typeof data['subAgentMaxSpawnDepth'], 'number');
+	t.true(
+		data['fileListDisplayMode'] === 'list' ||
+			data['fileListDisplayMode'] === 'tree',
+	);
 });
 
 test('runSessionCommand home is HEADLESS_UNSUPPORTED', async t => {

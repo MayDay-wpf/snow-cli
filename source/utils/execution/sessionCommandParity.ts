@@ -41,6 +41,7 @@ export const PLANE_TUI_OVERLAP_COMMANDS: readonly string[] = [
 	'image-compress',
 	'hybrid-compress',
 	'speedometer',
+	'subagent-depth',
 ] as const;
 
 /** Critical TUI command modules that should remain present while dual-path exists. */
