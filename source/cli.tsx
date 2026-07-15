@@ -276,6 +276,9 @@ Usage
   $ snow
   $ snow --ask "your prompt"
   $ snow --ask "your prompt" <sessionId>
+  $ snow cmd buddy status --json
+  $ snow cmd tool-display compact --json
+  $ snow cmd yolo on --yes --json
   $ snow --task "your task description"
   $ snow --task-list
   $ snow --doctor
@@ -296,6 +299,10 @@ Options
 		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
+
+		cmd           Run allowlisted session/slash control commands headlessly
+		              Example: snow cmd buddy hatch name --species=fox --json
+		              Flags: --json (machine output), --yes (confirm medium/high risk)
 
 		--sse         Start SSE server mode for external integration (foreground)
 		--sse-daemon  Start SSE server as background daemon
@@ -407,6 +414,15 @@ Options
 		},
 	},
 );
+// Handle session/slash control plane: snow cmd <command> [args...] [--json] [--yes]
+if (args[0] === 'cmd') {
+	const {runCliSessionCommand} = await import(
+		'./utils/execution/sessionCommandPlane.js'
+	);
+	const exitCode = await runCliSessionCommand(args.slice(1));
+	process.exit(exitCode);
+}
+
 // Handle doctor flag
 if (cli.flags.doctor) {
 	runDoctorAndExit(VERSION, packageJson);

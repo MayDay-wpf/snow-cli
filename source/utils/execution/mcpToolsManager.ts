@@ -36,6 +36,10 @@ import {
 	mcpTools as snowDocsTools,
 	executeSnowDocsTool,
 } from '../../mcp/snowDocs.js';
+import {
+	mcpTools as sessionCommandTools,
+	executeSessionCommandTool,
+} from '../../mcp/sessionCommand.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {
 	isBuiltInServiceEnabled,
@@ -154,6 +158,7 @@ export function getRegisteredServicePrefixes(): string[] {
 		'skill-',
 		'subagent-',
 		'snow-docs-',
+		'session-command-',
 	];
 
 	// 如果有缓存，从缓存中获取外部 MCP 服务名称
@@ -329,6 +334,9 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in Snow Docs tools (bundled official usage docs, progressive disclosure)
 	addBuiltInService('snow-docs', snowDocsTools, 'snow-docs');
+
+	// Session/slash control plane tools (issue #190)
+	addBuiltInService('session-command', sessionCommandTools, 'session-command');
 
 	// Add built-in IDE Diagnostics tools
 	addBuiltInService('ide', ideDiagnosticsTools, 'ide');
@@ -1229,6 +1237,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('snow-docs-')) {
 			serviceName = 'snow-docs';
 			actualToolName = toolName.substring('snow-docs-'.length);
+		} else if (toolName.startsWith('session-command-')) {
+			serviceName = 'session-command';
+			actualToolName = toolName.substring('session-command-'.length);
 		} else if (toolName.startsWith('ide-')) {
 			serviceName = 'ide';
 			actualToolName = toolName.substring('ide-'.length);
@@ -1289,6 +1300,7 @@ export async function executeMCPTool(
 			'ace',
 			'websearch',
 			'snow-docs',
+			'session-command',
 			'ide',
 			'codebase',
 			'askuser',
@@ -1923,6 +1935,9 @@ export async function executeMCPTool(
 		} else if (serviceName === 'snow-docs') {
 			// Handle bundled Snow docs tools (read-only progressive disclosure)
 			result = await executeSnowDocsTool(actualToolName, args);
+		} else if (serviceName === 'session-command') {
+			// Headless session/slash control plane (issue #190)
+			result = await executeSessionCommandTool(actualToolName, args);
 		} else if (serviceName === 'subagent') {
 			// Handle sub-agent tools
 			// actualToolName is the agent ID
