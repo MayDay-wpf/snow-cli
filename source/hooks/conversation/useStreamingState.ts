@@ -121,31 +121,39 @@ export function useStreamingState() {
 		return () => clearInterval(interval);
 	}, [timerStartTime]);
 
-	// Initialize remaining seconds when retry starts
+	// Initialize remaining seconds when retry starts / attempt changes.
+	// 注意：仅依赖 isRetrying 时，remainingSeconds 后置初始化不会触发 countdown 重启。
 	useEffect(() => {
 		if (!retryStatus?.isRetrying) return;
 		if (retryStatus.remainingSeconds !== undefined) return;
 
-		// Initialize remaining seconds from nextDelay (only once)
+		// Initialize remaining seconds from nextDelay (only once per attempt)
 		setRetryStatus(prev =>
 			prev
 				? {
 						...prev,
-						remainingSeconds: Math.ceil(prev.nextDelay / 1000),
+						remainingSeconds: Math.max(0, Math.ceil(prev.nextDelay / 1000)),
 				  }
 				: null,
 		);
-	}, [retryStatus?.isRetrying]); // Only depend on isRetrying flag
+	}, [
+		retryStatus?.isRetrying,
+		retryStatus?.attempt,
+		retryStatus?.remainingSeconds,
+	]);
 
-	// Countdown timer for retry delays
+	// Countdown timer for retry delays.
+	// 依赖 attempt：同一轮 isRetrying 保持 true 时，新一次重试也要重置并重新开表。
+	// 不依赖 remainingSeconds，避免每秒重建 interval。
 	useEffect(() => {
 		if (!retryStatus || !retryStatus.isRetrying) return;
 		if (retryStatus.remainingSeconds === undefined) return;
 
-		// Countdown every second
 		const interval = setInterval(() => {
 			setRetryStatus(prev => {
-				if (!prev || prev.remainingSeconds === undefined) return prev;
+				if (!prev || !prev.isRetrying || prev.remainingSeconds === undefined) {
+					return prev;
+				}
 
 				const newRemaining = prev.remainingSeconds - 1;
 				if (newRemaining <= 0) {
@@ -163,7 +171,11 @@ export function useStreamingState() {
 		}, 1000);
 
 		return () => clearInterval(interval);
-	}, [retryStatus?.isRetrying]); // ✅ 移除 remainingSeconds 避免循环
+	}, [
+		retryStatus?.isRetrying,
+		retryStatus?.attempt,
+		retryStatus?.remainingSeconds === undefined,
+	]);
 
 	return {
 		streamStatus,

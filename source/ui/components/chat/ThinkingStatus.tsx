@@ -66,10 +66,18 @@ function buildStreamViewportLines(
 		terminalWidth,
 		STREAM_VIEWPORT_INDENT_WIDTH + STREAM_VIEWPORT_RESERVED_COLUMNS,
 	);
-	const logicalLines = normalizeStreamContent(content).split('\n');
+	const normalized = normalizeStreamContent(content);
+	// 没有实际思考内容时不渲染空白占位行，避免“空思考”面板。
+	if (!normalized.trim()) {
+		return [];
+	}
+
+	const logicalLines = normalized.split('\n');
 	const visibleLines = logicalLines.slice(-STREAM_VIEWPORT_HEIGHT);
 
 	return [
+		// 仅在已有内容时补齐高度，保证流式滚动视口稳定；
+		// 空内容上面已 early-return，不会再出现 5 行空白。
 		...Array(Math.max(0, STREAM_VIEWPORT_HEIGHT - visibleLines.length)).fill({
 			text: ' ',
 		}),
@@ -101,6 +109,7 @@ export function ThinkingStatus({status, terminalWidth}: ThinkingStatusProps) {
 		terminalWidth,
 	);
 	const safeShimmerText = buildSafeShimmerText(TITLE_TEXT, terminalWidth);
+	const hasThinkingContent = streamViewportLines.length > 0;
 
 	return (
 		<Box
@@ -120,24 +129,26 @@ export function ThinkingStatus({status, terminalWidth}: ThinkingStatusProps) {
 				</Text>
 			</Box>
 
-			<Box
-				paddingLeft={STREAM_VIEWPORT_INDENT_WIDTH}
-				marginTop={1}
-				flexDirection="column"
-			>
-				{streamViewportLines.map((line, index) => (
-					<Box key={`thinking-stream-line-${index}`} height={1}>
-						<Text
-							italic
-							dimColor
-							color={theme.colors.menuSecondary}
-							wrap="truncate"
-						>
-							{line.text}
-						</Text>
-					</Box>
-				))}
-			</Box>
+			{hasThinkingContent && (
+				<Box
+					paddingLeft={STREAM_VIEWPORT_INDENT_WIDTH}
+					marginTop={1}
+					flexDirection="column"
+				>
+					{streamViewportLines.map((line, index) => (
+						<Box key={`thinking-stream-line-${index}`} height={1}>
+							<Text
+								italic
+								dimColor
+								color={theme.colors.menuSecondary}
+								wrap="truncate"
+							>
+								{line.text}
+							</Text>
+						</Box>
+					))}
+				</Box>
+			)}
 		</Box>
 	);
 }
