@@ -40,8 +40,16 @@ function hexToRgb(hex: string): Rgb | undefined {
 	return undefined;
 }
 
-function resolveColor(color: string): Rgb | undefined {
+function resolveColor(color: unknown): Rgb | undefined {
+	// Plugins / hot-reloaded theme data may pass undefined/null/non-string
+	// entries in gradient arrays — never throw on .trim().
+	if (typeof color !== 'string') {
+		return undefined;
+	}
 	const trimmed = color.trim().toLowerCase();
+	if (!trimmed) {
+		return undefined;
+	}
 	const named = NAMED_COLORS[trimmed];
 	if (named) {
 		return hexToRgb(named);
@@ -75,11 +83,15 @@ export function generateGradientColors(
 	colors: string[],
 	steps: number,
 ): string[] {
-	if (steps <= 0 || colors.length === 0) {
+	if (steps <= 0 || !Array.isArray(colors) || colors.length === 0) {
 		return [];
 	}
 
-	const rgbs = colors.map(resolveColor).filter((c): c is Rgb => c !== undefined);
+	// Drop holes / non-strings before mapping (e.g. sparse logoGradient mid-write).
+	const rgbs = colors
+		.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+		.map(resolveColor)
+		.filter((c): c is Rgb => c !== undefined);
 
 	if (rgbs.length === 0) {
 		return [];
