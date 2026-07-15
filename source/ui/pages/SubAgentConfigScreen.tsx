@@ -141,6 +141,10 @@ export default function SubAgentConfigScreen({
 			tools: ['websearch-search', 'websearch-fetch'],
 		},
 		{
+			name: t.subAgentConfig.snowDocsTools || 'Snow Docs',
+			tools: ['snow-docs-list', 'snow-docs-search', 'snow-docs-get'],
+		},
+		{
 			name: t.subAgentConfig.ideTools,
 			tools: ['ide-get_diagnostics'],
 		},

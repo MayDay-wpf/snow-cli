@@ -32,6 +32,10 @@ import {
 	getMCPTools as getSkillTools,
 	executeSkillTool,
 } from '../../mcp/skills.js';
+import {
+	mcpTools as snowDocsTools,
+	executeSnowDocsTool,
+} from '../../mcp/snowDocs.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {
 	isBuiltInServiceEnabled,
@@ -149,6 +153,7 @@ export function getRegisteredServicePrefixes(): string[] {
 		'goal-',
 		'skill-',
 		'subagent-',
+		'snow-docs-',
 	];
 
 	// 如果有缓存，从缓存中获取外部 MCP 服务名称
@@ -321,6 +326,9 @@ async function refreshToolsCache(): Promise<void> {
 
 	// Add built-in Web Search tools
 	addBuiltInService('websearch', websearchTools, 'websearch');
+
+	// Add built-in Snow Docs tools (bundled official usage docs, progressive disclosure)
+	addBuiltInService('snow-docs', snowDocsTools, 'snow-docs');
 
 	// Add built-in IDE Diagnostics tools
 	addBuiltInService('ide', ideDiagnosticsTools, 'ide');
@@ -596,6 +604,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		serviceName === 'todo' ||
 		serviceName === 'ace' ||
 		serviceName === 'websearch' ||
+		serviceName === 'snow-docs' ||
 		serviceName === 'codebase' ||
 		serviceName === 'askuser' ||
 		serviceName === 'scheduler' ||
@@ -1217,6 +1226,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('websearch-')) {
 			serviceName = 'websearch';
 			actualToolName = toolName.substring('websearch-'.length);
+		} else if (toolName.startsWith('snow-docs-')) {
+			serviceName = 'snow-docs';
+			actualToolName = toolName.substring('snow-docs-'.length);
 		} else if (toolName.startsWith('ide-')) {
 			serviceName = 'ide';
 			actualToolName = toolName.substring('ide-'.length);
@@ -1276,6 +1288,7 @@ export async function executeMCPTool(
 			'terminal',
 			'ace',
 			'websearch',
+			'snow-docs',
 			'ide',
 			'codebase',
 			'askuser',
@@ -1907,6 +1920,9 @@ export async function executeMCPTool(
 			// Handle skill tools (no connection needed)
 			const projectRoot = process.cwd();
 			result = await executeSkillTool(toolName, args, projectRoot);
+		} else if (serviceName === 'snow-docs') {
+			// Handle bundled Snow docs tools (read-only progressive disclosure)
+			result = await executeSnowDocsTool(actualToolName, args);
 		} else if (serviceName === 'subagent') {
 			// Handle sub-agent tools
 			// actualToolName is the agent ID

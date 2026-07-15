@@ -4,6 +4,7 @@ import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import matter from 'gray-matter';
 import {getDisabledSkills} from '../utils/config/disabledSkills.js';
+import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
 
 export interface SkillMetadata {
 	name: string;
@@ -11,13 +12,13 @@ export interface SkillMetadata {
 	allowedTools?: string[];
 }
 
-export type SkillSource = 'snow' | 'agents';
+export type SkillSource = 'snow' | 'agents' | 'builtin';
 
 export interface Skill {
 	id: string;
 	name: string;
 	description: string;
-	location: 'project' | 'global';
+	location: 'project' | 'global' | 'builtin';
 	source: SkillSource;
 	path: string;
 	content: string;
@@ -179,15 +180,16 @@ async function loadSkillsFromDirectory(
  *
  * Sources scanned (in priority order from LOWEST to HIGHEST — later loads
  * override earlier ones because Map.set replaces existing entries):
- *   1. ~/.agents/skills          (global,  source=agent)
+ *   0. CLI bundled skills        (builtin, source=builtin) — e.g. snow-docs
+ *   1. ~/.agents/skills          (global,  source=agents)
  *   2. ~/.snow/skills            (global,  source=snow)
- *   3. <project>/.agents/skills  (project, source=agent)
+ *   3. <project>/.agents/skills  (project, source=agents)
  *   4. <project>/.snow/skills    (project, source=snow)
  *
- * Rationale: project > global, and within the same scope .snow (native CLI
- * directory) takes precedence over .agents (compatibility directory). When
- * two skills share the same id across these locations, the higher-priority
- * one wins and the lower-priority one is silently shadowed.
+ * Rationale: project > global > builtin, and within the same scope .snow
+ * (native CLI directory) takes precedence over .agents (compatibility
+ * directory). When two skills share the same id across these locations, the
+ * higher-priority one wins and the lower-priority one is silently shadowed.
  */
 async function loadAvailableSkills(
 	projectRoot?: string,
@@ -205,6 +207,15 @@ async function loadAvailableSkills(
 
 	// Order matters: load lowest-priority first so higher-priority entries
 	// overwrite via Map.set.
+	const builtInSkillsDir = resolveBuiltInSkillsRoot();
+	if (builtInSkillsDir) {
+		await loadSkillsFromDirectory(
+			skills,
+			builtInSkillsDir,
+			'builtin',
+			'builtin',
+		);
+	}
 	await loadSkillsFromDirectory(
 		skills,
 		globalAgentsSkillsDir,

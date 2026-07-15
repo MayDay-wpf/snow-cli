@@ -367,6 +367,7 @@ All tools are pre-loaded and available for immediate use. You can call any tool 
 - **terminal** - Execute shell commands
 - **todo** - Task management (TODO lists)
 - **websearch** - Web search and page fetching
+- **snow-docs** - Official Snow CLI usage docs (list/search/get, progressive disclosure)
 - **ide** - IDE diagnostics (error checking)
 - **notebook** - Code memory and notes
 - **askuser** - Ask user interactive questions
@@ -391,6 +392,7 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 - **terminal** - Execute shell commands
 - **todo** - Task management (TODO lists)
 - **websearch** - Web search and page fetching
+- **snow-docs** - Official Snow CLI usage docs (list/search/get, progressive disclosure)
 - **ide** - IDE diagnostics (error checking)
 - **notebook** - Code memory and notes
 - **askuser** - Ask user interactive questions
@@ -401,6 +403,7 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 **First action pattern:** When you receive a task, immediately search for the tools you need:
 - For coding tasks: \`tool_search(query="filesystem")\` + \`tool_search(query="ace code search")\`
 - For running commands: \`tool_search(query="terminal")\`
+- For Snow CLI setup/config questions: \`tool_search(query="snow-docs")\` then list/search/get one topic
 - For complex tasks: \`tool_search(query="todo")\` + \`tool_search(query="filesystem")\``,
 };
 
