@@ -10,7 +10,7 @@ export type SkillsPickerItem = {
 	id: string;
 	name: string;
 	description: string;
-	location: 'project' | 'global';
+	location: 'project' | 'global' | 'builtin';
 };
 
 interface Props {
@@ -72,8 +72,7 @@ const SkillsPickerPanel = memo(
 					<>
 						<Text color={theme.colors.warning} bold>
 							{t.skillsPickerPanel.title}{' '}
-							{skills.length > 5 &&
-								`(${selectedIndex + 1}/${skills.length})`}
+							{skills.length > 5 && `(${selectedIndex + 1}/${skills.length})`}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
 							{t.skillsPickerPanel.keyboardHint}
@@ -158,9 +157,7 @@ const SkillsPickerPanel = memo(
 					<>
 						<Text
 							color={
-								isSelected
-									? theme.colors.menuSelected
-									: theme.colors.menuNormal
+								isSelected ? theme.colors.menuSelected : theme.colors.menuNormal
 							}
 							bold
 						>

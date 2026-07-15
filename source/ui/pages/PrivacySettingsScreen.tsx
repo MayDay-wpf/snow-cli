@@ -149,6 +149,10 @@ export default function PrivacySettingsScreen({
 				tools: ['websearch-search', 'websearch-fetch'],
 			},
 			{
+				name: t.subAgentConfig.snowDocsTools,
+				tools: ['snow-docs-list', 'snow-docs-search', 'snow-docs-get'],
+			},
+			{
 				name: t.subAgentConfig.ideTools,
 				tools: ['ide-get_diagnostics'],
 			},

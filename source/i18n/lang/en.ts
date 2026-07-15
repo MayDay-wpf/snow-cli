@@ -530,6 +530,7 @@ export const en: TranslationKeys = {
 		terminalTools: 'Terminal Tools',
 		todoTools: 'TODO Management Tools',
 		webSearchTools: 'Web Search Tools',
+		snowDocsTools: 'Snow Docs Tools',
 		ideTools: 'IDE Diagnostics Tools',
 		userInteractionTools: 'User Interaction Tools',
 		skillTools: 'Skill Tools',
