@@ -859,6 +859,10 @@ export const zhTW: TranslationKeys = {
 				'執行自主多步聯網深度研究，並將帶引用的 Markdown 報告儲存到 .snow/deepresearch/',
 			toolDisplay:
 				'控制工具呼叫顯示模式。用法: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'控制工具類型圖示。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'自訂工具顯示名（官方路徑，勿整檔改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
 			thinkDisplay:
 				'控制思考內容顯示模式。用法: /think-display [full|compact|status]',
 			speedometer:
@@ -904,6 +908,60 @@ export const zhTW: TranslationKeys = {
 						: '（隱藏所有工具呼叫，僅顯示 AI 回覆）'),
 				set: (mode: string) => `工具顯示模式已設定為: ${mode}`,
 				invalid: '無效的模式。用法: /tool-display [full|compact|hidden|status]',
+			},
+			// 工具類型圖示 + 狀態前綴命令訊息
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? '無覆蓋'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `工具類型圖示: ${
+						enabled ? '開啟' : '關閉'
+					} · 覆蓋: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`工具類型圖示已${enabled ? '開啟' : '關閉'}（僅影響新工具標題）`,
+				setOverride: (toolName: string, icon: string) =>
+					`已設定 ${toolName} 圖示為 ${icon}`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的圖示覆蓋`,
+				setStatusEnabled: (enabled: boolean) =>
+					`工具狀態前綴已${
+						enabled ? '開啟' : '關閉'
+					}（預設 ✓/·/✗，僅影響新標題）`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`已設定狀態 ${statusKey} 符號為 ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`已恢復狀態 ${statusKey} 為預設符號`,
+				invalid:
+					'無效參數。用法: /tool-icons [on|off|status|status on|off|status:<key>:<符號>|<tool>:<emoji>]',
+			},
+			// 工具顯示名（僅使用者覆蓋，無內建預設譯名）
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return '工具顯示名: 無覆蓋（顯示技術 ID）。批量請用 /tool-names a:甲 b:乙（勿整檔改 theme.json）';
+					}
+					return (
+						`工具顯示名覆蓋 (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`已設定 ${toolName} 顯示為「${displayName}」（僅影響新工具標題）`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的顯示名覆蓋`,
+				batch: (set: number, cleared: number) =>
+					`已批量更新工具顯示名：設定 ${set} 項` +
+					(cleared > 0 ? `，清除 ${cleared} 項` : '') +
+					'（僅影響新工具標題）',
+				clearAll: (count: number) =>
+					count === 0
+						? '工具顯示名: 本無覆蓋'
+						: `已清除全部 ${count} 項工具顯示名覆蓋`,
+				invalid:
+					'無效參數。用法: /tool-names [status|clear|<tool>:<顯示名> …]；可批量空格/逗號分隔；`<tool>:` 清除單項',
 			},
 			// 思考顯示模式命令訊息
 			thinkDisplay: {

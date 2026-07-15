@@ -913,6 +913,10 @@ export const en: TranslationKeys = {
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
 				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
 			thinkDisplay:
 				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			speedometer:
@@ -960,6 +964,63 @@ export const en: TranslationKeys = {
 				set: (mode: string) => `Tool display mode set to: ${mode}`,
 				invalid:
 					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? 'none'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `Tool category icons: ${
+						enabled ? 'on' : 'off'
+					} · overrides: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`Tool category icons ${
+						enabled ? 'enabled' : 'disabled'
+					} (affects new tool titles only)`,
+				setOverride: (toolName: string, icon: string) =>
+					`Set icon for ${toolName} to ${icon}`,
+				cleared: (toolName: string) => `Cleared icon override for ${toolName}`,
+				setStatusEnabled: (enabled: boolean) =>
+					`Tool status prefixes ${
+						enabled ? 'enabled' : 'disabled'
+					} (default ✓/·/✗; new titles only)`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`Set status ${statusKey} glyph to ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`Reset status ${statusKey} to default glyph`,
+				invalid:
+					'Invalid args. Usage: /tool-icons [on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
+			},
+			// Tool display names (user overrides only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return 'Tool display names: no overrides (technical ids). Batch: /tool-names a:A b:B (prefer over editing theme.json)';
+					}
+					return (
+						`Tool display name overrides (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`Set display name for ${toolName} to "${displayName}" (new titles only)`,
+				cleared: (toolName: string) =>
+					`Cleared display name override for ${toolName}`,
+				batch: (set: number, cleared: number) =>
+					`Batch-updated tool display names: set ${set}` +
+					(cleared > 0 ? `, cleared ${cleared}` : '') +
+					' (new titles only)',
+				clearAll: (count: number) =>
+					count === 0
+						? 'Tool display names: nothing to clear'
+						: `Cleared all ${count} tool display name override(s)`,
+				invalid:
+					'Invalid args. Usage: /tool-names [status|clear|<tool>:<display> …]; space/comma batch; `<tool>:` clears one',
 			},
 			// Think display mode command messages
 			thinkDisplay: {

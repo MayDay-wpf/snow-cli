@@ -11,17 +11,17 @@
  */
 
 import {
+	DEFAULT_TOOL_STATUS_ICONS,
+	getToolDisplayName,
 	getToolIconOverrides,
 	getToolIconsEnabled,
+	getToolStatusIconMap,
+	getToolStatusIconsEnabled,
+	type ToolStatusIconKey,
 } from '../../../utils/config/themeConfig.js';
 
-export const TOOL_STATUS_ICONS = {
-	pending: '⚡',
-	success: '✅',
-	error: '❌',
-	warning: '⚠️',
-	running: '⏳',
-} as const;
+/** @deprecated Use DEFAULT_TOOL_STATUS_ICONS / getToolStatusIconMap — compact ✓ defaults. */
+export const TOOL_STATUS_ICONS = DEFAULT_TOOL_STATUS_ICONS;
 
 /** Fallback when no category matches. */
 export const TOOL_FALLBACK_ICON = '🛠';
@@ -113,25 +113,32 @@ export function getToolIcon(toolName: string | undefined | null): string {
 	return resolveBuiltinToolIcon(toolName);
 }
 
-export function getToolStatusIcon(
-	status: 'pending' | 'success' | 'error' | 'warning' | 'running',
-): string {
-	return TOOL_STATUS_ICONS[status] ?? TOOL_STATUS_ICONS.running;
+export function getToolStatusIcon(status: ToolStatusIconKey): string {
+	if (!getToolStatusIconsEnabled()) {
+		return '';
+	}
+	const map = getToolStatusIconMap();
+	return map[status] ?? map.running ?? DEFAULT_TOOL_STATUS_ICONS.success;
 }
 
 /**
- * Compose a short tool title line:
- *   enabled:  "✅ 🔍 websearch-search"
- *   disabled: "✅ websearch-search"
+ * Compose a short tool title line (classic CLI style by default):
+ *   status + category + label:
+ *     "✓ 💻 终端命令"   or   "✓ terminal-execute"
+ *   status off, category on:
+ *     "💻 终端命令"
+ *   both off:
+ *     "终端命令" / technical id
+ *
+ * Status glyphs default to compact ✓/·/✗ (theme toolIcons.status).
+ * Display names are pure user overrides from toolDisplayNames.
  */
 export function formatToolTitleLine(
 	toolName: string,
-	status: 'pending' | 'success' | 'error' | 'warning' | 'running' = 'pending',
+	status: ToolStatusIconKey = 'pending',
 ): string {
 	const statusIcon = getToolStatusIcon(status);
 	const toolIcon = getToolIcon(toolName);
-	if (toolIcon) {
-		return `${statusIcon} ${toolIcon} ${toolName}`;
-	}
-	return `${statusIcon} ${toolName}`;
+	const label = getToolDisplayName(toolName) || toolName;
+	return [statusIcon, toolIcon, label].filter(Boolean).join(' ');
 }

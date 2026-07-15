@@ -823,6 +823,8 @@ export type TranslationKeys = {
 			btw: string;
 			deepresearch: string;
 			toolDisplay: string;
+			toolIcons: string;
+			toolNames: string;
 			thinkDisplay: string;
 			speedometer: string;
 			cut: string;
@@ -859,6 +861,26 @@ export type TranslationKeys = {
 			toolDisplay: {
 				status: (mode: string) => string;
 				set: (mode: string) => string;
+				invalid: string;
+			};
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => string;
+				setEnabled: (enabled: boolean) => string;
+				setOverride: (toolName: string, icon: string) => string;
+				cleared: (toolName: string) => string;
+				setStatusEnabled: (enabled: boolean) => string;
+				setStatusOverride: (statusKey: string, icon: string) => string;
+				clearedStatus: (statusKey: string) => string;
+				invalid: string;
+			};
+			// Tool display name overrides (user-defined only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => string;
+				setOverride: (toolName: string, displayName: string) => string;
+				cleared: (toolName: string) => string;
+				batch: (set: number, cleared: number) => string;
+				clearAll: (count: number) => string;
 				invalid: string;
 			};
 			// Think display mode command messages

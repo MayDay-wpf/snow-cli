@@ -11,6 +11,11 @@ import {
 	setToolIconsEnabled,
 	setToolIconOverride,
 	getToolIconOverrides,
+	getToolStatusIconsEnabled,
+	setToolStatusIconsEnabled,
+	setToolStatusIconOverride,
+	getToolDisplayNames,
+	setToolDisplayName,
 	getThinkDisplayMode,
 	setThinkDisplayMode,
 	getCurrentTheme,
@@ -177,6 +182,8 @@ export function handleTheme(
 		const diffOpacity = getDiffOpacity();
 		const toolIcons = getToolIconsEnabled();
 		const toolIconOverrides = getToolIconOverrides();
+		const toolStatusIcons = getToolStatusIconsEnabled();
+		const toolDisplayNames = getToolDisplayNames();
 		const hasCustomColors = Boolean(getCustomColors());
 		return okResult(
 			meta.id,
@@ -188,12 +195,14 @@ export function handleTheme(
 				diffOpacity,
 				toolIcons,
 				toolIconOverrides,
+				toolStatusIcons,
+				toolDisplayNames,
 				hasCustomColors,
 				availableThemes: THEME_TYPES,
 			},
 			`Theme: ${theme}, simple=${simpleMode ? 'on' : 'off'}, toolIcons=${
 				toolIcons ? 'on' : 'off'
-			}`,
+			}, toolNames=${Object.keys(toolDisplayNames).length}`,
 			meta.risk,
 		);
 	}
@@ -216,6 +225,7 @@ export function handleTheme(
 			thinkDisplay?: string;
 			diffOpacity?: number;
 			toolIcons?: boolean | string;
+			toolDisplayNames?: string;
 			customColors?: boolean;
 		} = {};
 		const rawTokens =
@@ -229,7 +239,7 @@ export function handleTheme(
 			return failResult(
 				meta.id,
 				'INVALID_ARGS',
-				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|toolIcons=on|off|thinkDisplay=...|diffOpacity=0..1|colors=<json>|customColors=<json>',
+				'Usage: theme set <themeName>|theme=<name>|simpleMode=true|false|toolDisplay=...|toolIcons=on|off|toolDisplayNames=<tool>:<name>|thinkDisplay=...|diffOpacity=0..1|colors=<json>|customColors=<json>',
 				meta.risk,
 			);
 		}
@@ -321,6 +331,37 @@ export function handleTheme(
 						changed.toolIcons = enabled;
 						continue;
 					}
+					// toolIcons=status:on|off  or toolIcons=status:success:✓
+					if (lower.startsWith('status:') || lower.startsWith('status=')) {
+						const rest = value.slice(value.indexOf(':') + 1).trim();
+						const restLower = rest.toLowerCase();
+						if (['true', 'false', 'on', 'off', '1', '0'].includes(restLower)) {
+							const enabled = ['true', 'on', '1'].includes(restLower);
+							setToolStatusIconsEnabled(enabled);
+							changed.toolIcons = `status=${enabled ? 'on' : 'off'}`;
+							continue;
+						}
+						const sc = rest.indexOf(':');
+						if (sc > 0) {
+							const sk = rest.slice(0, sc).trim().toLowerCase();
+							const glyph = rest.slice(sc + 1);
+							if (
+								['pending', 'success', 'error', 'warning', 'running'].includes(
+									sk,
+								)
+							) {
+								setToolStatusIconOverride(sk as any, glyph);
+								changed.toolIcons = `status:${sk}=${glyph || '(default)'}`;
+								continue;
+							}
+						}
+						return failResult(
+							meta.id,
+							'INVALID_ARGS',
+							'toolIcons status must be on|off or status:<key>:<glyph>',
+							meta.risk,
+						);
+					}
 					// toolIcons=websearch-search:🔎  or toolIcons=terminal-execute=
 					const colon = value.indexOf(':');
 					if (colon > 0) {
@@ -333,7 +374,39 @@ export function handleTheme(
 					return failResult(
 						meta.id,
 						'INVALID_ARGS',
-						'toolIcons must be on|off or <toolName>:<emoji>',
+						'toolIcons must be on|off | status:on|off | status:<key>:<glyph> | <tool>:<emoji>',
+						meta.risk,
+					);
+				}
+				if (
+					key === 'tooldisplaynames' ||
+					key === 'tooldisplayname' ||
+					key === 'tool-names' ||
+					key === 'toolnames'
+				) {
+					// toolDisplayNames=websearch-search:网页搜索  or toolDisplayNames=websearch-search:
+					const colon = value.indexOf(':');
+					if (colon > 0) {
+						const toolName = value.slice(0, colon).trim();
+						const displayName = value.slice(colon + 1);
+						if (!toolName) {
+							return failResult(
+								meta.id,
+								'INVALID_ARGS',
+								'toolDisplayNames requires <toolName>:<displayName>',
+								meta.risk,
+							);
+						}
+						setToolDisplayName(toolName, displayName);
+						changed.toolDisplayNames = displayName.trim()
+							? `${toolName}=${displayName.trim()}`
+							: `${toolName}=(cleared)`;
+						continue;
+					}
+					return failResult(
+						meta.id,
+						'INVALID_ARGS',
+						'toolDisplayNames must be <toolName>:<displayName> (empty after : clears)',
 						meta.risk,
 					);
 				}

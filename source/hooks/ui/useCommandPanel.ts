@@ -71,6 +71,10 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	export: '[txt|md|html|json]',
 	config: '<export|import>',
 	'tool-display': '[full|compact|hidden|status]',
+	'tool-icons':
+		'[on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
+	'tool-names': '[status|clear|<tool>:<name> …]',
+	'tool-name': '[status|clear|<tool>:<name> …]',
 	'think-display': '[full|compact|status]',
 	speedometer: '[on|off|status]',
 };
@@ -103,6 +107,9 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	export: ['txt', 'md', 'html', 'json'],
 	config: ['export', 'import'],
 	'tool-display': ['full', 'compact', 'hidden', 'status'],
+	'tool-icons': ['on', 'off', 'status', 'status on', 'status off'],
+	'tool-names': ['status', 'clear'],
+	'tool-name': ['status', 'clear'],
 	'think-display': ['full', 'compact', 'status'],
 	speedometer: ['on', 'off', 'status'],
 };
@@ -452,6 +459,18 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.toolDisplay ||
 					'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			{
+				name: 'tool-icons',
+				description:
+					t.commandPanel.commands.toolIcons ||
+					'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
+			},
+			{
+				name: 'tool-names',
+				description:
+					t.commandPanel.commands.toolNames ||
+					'Override tool display names. Usage: /tool-names [status|<tool>:<display>]',
 			},
 			{
 				name: 'think-display',
