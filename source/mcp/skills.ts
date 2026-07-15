@@ -181,9 +181,9 @@ async function loadSkillsFromDirectory(
  * Sources scanned (in priority order from LOWEST to HIGHEST — later loads
  * override earlier ones because Map.set replaces existing entries):
  *   0. CLI bundled skills        (builtin, source=builtin) — e.g. snow-docs
- *   1. ~/.agents/skills          (global,  source=agent)
+ *   1. ~/.agents/skills          (global,  source=agents)
  *   2. ~/.snow/skills            (global,  source=snow)
- *   3. <project>/.agents/skills  (project, source=agent)
+ *   3. <project>/.agents/skills  (project, source=agents)
  *   4. <project>/.snow/skills    (project, source=snow)
  *
  * Rationale: project > global > builtin, and within the same scope .snow

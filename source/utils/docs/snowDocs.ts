@@ -374,10 +374,7 @@ function listLocaleEntries(locale: DocsLocale): SnowDocEntry[] {
 		.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
 }
 
-export function listSnowDocs(options?: {
-	locale?: string | null;
-	includeOtherLocale?: boolean;
-}): {
+export function listSnowDocs(options?: {locale?: string | null}): {
 	version: string;
 	docsRoot: string;
 	locale: DocsLocale;
@@ -563,7 +560,7 @@ export function getSnowDoc(options: {
 
 	const stat = statSync(entry.absPath);
 	if (!stat.isFile()) {
-		throw new Error(`Not a file: ${entry.absPath}`);
+		throw new Error(`Not a file: ${entry.id}`);
 	}
 
 	const raw = readFileSync(entry.absPath, 'utf-8');
