@@ -22,3 +22,8 @@ Do not paste this whole file into replies. Use tools:
 - Privacy → `privacy` / `隐私`
 
 Full catalogue: `snow-docs-list`.
+
+User-facing docs pages (also available via tools):
+
+- zh: `28.官方文档工具snow-docs.md`
+- en: `28.Official Docs Tools snow-docs.md`
