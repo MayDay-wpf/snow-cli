@@ -886,7 +886,7 @@ export const en: TranslationKeys = {
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
 			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
 			buddy:
-				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
+				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
@@ -1011,6 +1011,18 @@ export const en: TranslationKeys = {
 				renameUsage: 'Usage: /buddy rename <name>',
 				renameReaction: '{oldName} is now {newName}.',
 				renameSuccess: 'Renamed buddy from {oldName} to {newName}.',
+				noBuddyToSet:
+					'No buddy to customize yet. Use /buddy hatch [name] first.',
+				setUsage:
+					'Usage: /buddy set --hat=crown --eye=✦ --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] or /buddy set --list',
+				setSuccess: 'Updated {name}: {changed}.',
+				setReaction: 'Looking sharp! Updated {changed}.',
+				setOptionsTitle: 'Buddy customization options:',
+				setOptionsHats: 'Hats: {hats}',
+				setOptionsEyes: 'Eyes: {eyes}',
+				setOptionsRarities: 'Rarities: {rarities}',
+				setOptionsSpecies: 'Species: {species}',
+				setOptionsStats: 'Stats (1-10): {stats}',
 				noBuddyToTalk:
 					'No buddy to talk to yet. Use /buddy hatch [name] first.',
 				sayUsage: 'Usage: /buddy say <message>',
@@ -1029,7 +1041,7 @@ export const en: TranslationKeys = {
 				unmuted: 'Buddy unmuted.',
 				reset: 'Buddy reset. Use /buddy hatch [name] to hatch a new companion.',
 				usage:
-					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
+					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
 				teaser: 'Psst... try /buddy',
 				noModelConfigured: 'No model configured for buddy reply',
 				emptyReply: '{name} is listening.',
@@ -1520,6 +1532,7 @@ export const en: TranslationKeys = {
 		statusThinking: 'Thinking...',
 		statusDeepThinking: 'Deep thinking...',
 		statusWriting: 'Writing...',
+		statusFinishing: 'Finishing...',
 		statusStreaming: 'Streaming',
 		statusWorking: 'Working',
 		statusIndexing: 'Indexing codebase...',
