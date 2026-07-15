@@ -20,6 +20,11 @@ export type HookStatusEvent = {
 	totalActions?: number;
 	executedActions?: number;
 	failedActions?: number;
+	/**
+	 * Soft outcomes (command exit 1): intentional replace/warn signals,
+	 * not hard failures. UI should not show these as "failed".
+	 */
+	softActions?: number;
 	message?: string;
 };
 

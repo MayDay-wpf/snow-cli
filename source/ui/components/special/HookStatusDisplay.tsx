@@ -37,10 +37,16 @@ export const HookStatusDisplay: React.FC<HookStatusDisplayProps> = ({
 	const typeIcon = getHookTypeIcon(status.hookType);
 	const isRunning = status.phase === 'start' || status.phase === 'action';
 	const phaseMeta = HOOK_PHASE_ICONS[status.phase];
+	// exit 1 soft signals (replace/warn) are success for the banner, but
+	// use warning accent so users still notice content was rewritten.
+	const isSoftSuccess =
+		status.phase === 'success' && (status.softActions ?? 0) > 0;
 
 	const accent =
 		status.phase === 'failed'
 			? theme.colors.error || 'red'
+			: isSoftSuccess
+			? theme.colors.warning || theme.colors.menuSelected || 'yellow'
 			: status.phase === 'success'
 			? theme.colors.success || 'green'
 			: theme.colors.menuInfo || 'cyan';
@@ -52,7 +58,9 @@ export const HookStatusDisplay: React.FC<HookStatusDisplayProps> = ({
 
 	const resultSuffix =
 		status.phase === 'success'
-			? status.executedActions != null
+			? isSoftSuccess
+				? ` · applied ${HOOK_DECOR_ICONS.done}`
+				: status.executedActions != null
 				? ` · ${status.executedActions} ok ${HOOK_DECOR_ICONS.done}`
 				: ` · done ${HOOK_DECOR_ICONS.done}`
 			: status.phase === 'failed'
