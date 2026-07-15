@@ -383,7 +383,10 @@ export class SSEServer {
 				}>(req);
 
 				if (!body.command || typeof body.command !== 'string') {
-					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.writeHead(400, {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					});
 					res.end(
 						JSON.stringify({
 							ok: false,
@@ -410,7 +413,10 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify(result));
 			} catch (error) {
-				res.writeHead(500, {'Content-Type': 'application/json'});
+				res.writeHead(500, {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				});
 				res.end(
 					JSON.stringify({
 						ok: false,

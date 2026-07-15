@@ -252,7 +252,7 @@ function parseSetArgs(args: string): {
 		}
 		hasAny = true;
 		const numeric = Number(value);
-		if (!Number.isFinite(numeric)) {
+		if (!Number.isFinite(numeric) || numeric < 1 || numeric > 10) {
 			errors.push(`Invalid --${stat.toLowerCase()}=${value}. Expected 1-10.`);
 			continue;
 		}
@@ -313,7 +313,7 @@ function parseSetArgs(args: string): {
 		const statKey = key.toUpperCase();
 		if (isCompanionStat(statKey)) {
 			const numeric = Number(value);
-			if (!Number.isFinite(numeric)) {
+			if (!Number.isFinite(numeric) || numeric < 1 || numeric > 10) {
 				errors.push(`Invalid ${key}=${value}. Expected 1-10.`);
 			} else {
 				stats[statKey] = numeric;

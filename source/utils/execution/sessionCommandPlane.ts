@@ -37,7 +37,10 @@ function isStatusOnlyArgs(meta: SessionCommandMeta, args?: string): boolean {
 	if (meta.risk === 'read') {
 		return true;
 	}
-	const token = (args ?? '').trim().toLowerCase();
+	const trimmed = (args ?? '').trim().toLowerCase();
+	// Only the first token decides read-vs-write. Extra flags like
+	// "status --period=day" must still count as status-only.
+	const token = trimmed.split(/\s+/).filter(Boolean)[0] ?? '';
 	if (token === 'status' || token === 'list' || token === 'current') {
 		return true;
 	}
@@ -196,14 +199,15 @@ export async function runSessionCommand(
 		return {
 			...result,
 			command: result.command || resolved.id,
-			risk: result.risk ?? resolved.risk,
+			// Report the policy risk used for confirmation (status-only => read).
+			risk: effectiveRisk,
 		};
 	} catch (error) {
 		return failResult(
 			resolved.id,
 			'EXECUTION_FAILED',
 			error instanceof Error ? error.message : 'Command execution failed',
-			resolved.risk,
+			effectiveRisk,
 		);
 	}
 }

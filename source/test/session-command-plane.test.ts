@@ -125,6 +125,37 @@ test('runSessionCommand requires confirm for yolo on', async t => {
 	// status/list/current are treated as read via isStatusOnlyArgs.
 	t.true(allowed.ok);
 	t.is(typeof (allowed.data as {enabled?: boolean})?.enabled, 'boolean');
+	t.is(allowed.risk, 'read');
+});
+
+test('status-only args with trailing flags stay read risk without confirm', async t => {
+	// Confirmation policy must key off the first token only. Handlers may still
+	// reject unknown trailing flags, but that must not be CONFIRMATION_REQUIRED.
+	const yoloStatusFlags = await runSessionCommand({
+		command: 'yolo',
+		args: 'status --json',
+		mode: 'agent',
+		confirm: false,
+	});
+	t.not(
+		yoloStatusFlags.code,
+		'CONFIRMATION_REQUIRED',
+		`status with flags should not require confirm: ${yoloStatusFlags.message}`,
+	);
+	t.is(yoloStatusFlags.risk, 'read');
+
+	const permissionsStatusFlags = await runSessionCommand({
+		command: 'permissions',
+		args: 'status --json',
+		mode: 'agent',
+		confirm: false,
+	});
+	t.not(
+		permissionsStatusFlags.code,
+		'CONFIRMATION_REQUIRED',
+		`permissions status with flags should not require confirm: ${permissionsStatusFlags.message}`,
+	);
+	t.is(permissionsStatusFlags.risk, 'read');
 });
 
 test('runSessionCommand simple status is readable without confirm', async t => {

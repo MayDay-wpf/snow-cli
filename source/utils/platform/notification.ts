@@ -202,16 +202,8 @@ function Show-SnowCliWinRtToast {
   $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
   $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
 
-  $xml = @'
-<toast>
-  <visual>
-    <binding template="ToastGeneric">
-      <text>${safeXmlTitle}</text>
-      <text>${safeXmlBody}</text>
-    </binding>
-  </visual>
-</toast>
-'@
+  # Avoid PowerShell here-strings (terminator must start at column 0 and is easy to break).
+  $xml = '<toast><visual><binding template="ToastGeneric"><text>${safeXmlTitle}</text><text>${safeXmlBody}</text></binding></visual></toast>'
 
   $document = New-Object Windows.Data.Xml.Dom.XmlDocument
   $document.LoadXml($xml)

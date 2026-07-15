@@ -19,6 +19,10 @@ test('buildToastScript registers Snow CLI AppUserModelID for WinRT toast', t => 
 	t.true(script.includes('<text>Snow agent waiting for input</text>'));
 	t.true(script.includes('<text>snow-cli</text>'));
 	t.true(script.includes('Show-SnowCliBalloonFallback'));
+	// Prefer a plain string XML payload so PowerShell here-string column rules cannot break parsing.
+	t.false(script.includes("@'"));
+	t.false(script.includes("'@"));
+	t.true(script.includes("$xml = '<toast>"));
 });
 
 test('buildToastScript escapes XML special characters in toast content', t => {
