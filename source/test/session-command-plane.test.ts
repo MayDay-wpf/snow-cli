@@ -64,10 +64,7 @@ test('resolveSessionCommandMeta maps defaults and dotted form', t => {
 	t.is(resolveSessionCommandMeta('statusline')?.id, 'statusline.status');
 	t.is(resolveSessionCommandMeta('ide')?.id, 'ide.status');
 	t.is(resolveSessionCommandMeta('subagent-depth')?.id, 'subagent-depth');
-	t.is(
-		resolveSessionCommandMeta('file-list-display')?.id,
-		'file-list-display',
-	);
+	t.is(resolveSessionCommandMeta('file-list-display')?.id, 'file-list-display');
 	t.is(resolveSessionCommandMeta('language')?.id, 'language');
 	t.is(resolveSessionCommandMeta('show-thinking')?.id, 'show-thinking');
 	t.is(resolveSessionCommandMeta('privacy')?.id, 'privacy');
@@ -390,7 +387,9 @@ test('runSessionCommand privacy status/mode with confirm', async t => {
 		confirm: true,
 	});
 	t.true(status.ok, status.message);
-	const originalEnabled = Boolean((status.data as {enabled?: boolean})?.enabled);
+	const originalEnabled = Boolean(
+		(status.data as {enabled?: boolean})?.enabled,
+	);
 	const originalMode = (status.data as {mode?: string})?.mode;
 	t.true(originalMode === 'api' || originalMode === 'local');
 
@@ -439,10 +438,10 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 	t.true(status.ok, status.message);
 	const originalReview = Boolean(
 		(status.data as {enableAgentReview?: boolean})?.enableAgentReview,
-);
+	);
 	const originalRerank = Boolean(
 		(status.data as {enableReranking?: boolean})?.enableReranking,
-);
+	);
 
 	try {
 		const reviewOff = await runSessionCommand({
@@ -452,7 +451,10 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 			confirm: true,
 		});
 		t.true(reviewOff.ok, reviewOff.message);
-		t.is((reviewOff.data as {enableAgentReview?: boolean})?.enableAgentReview, false);
+		t.is(
+			(reviewOff.data as {enableAgentReview?: boolean})?.enableAgentReview,
+			false,
+		);
 
 		const rerankOn = await runSessionCommand({
 			command: 'codebase',
@@ -462,7 +464,10 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 		});
 		t.true(rerankOn.ok, rerankOn.message);
 		t.is((rerankOn.data as {enableReranking?: boolean})?.enableReranking, true);
-		t.is((rerankOn.data as {enableAgentReview?: boolean})?.enableAgentReview, false);
+		t.is(
+			(rerankOn.data as {enableAgentReview?: boolean})?.enableAgentReview,
+			false,
+		);
 	} finally {
 		await runSessionCommand({
 			command: 'codebase',
@@ -1501,6 +1506,176 @@ test('hardening: same-process plan/yolo/theme writes emit configEvents', async t
 			command: 'theme',
 			args: `set ${originalTheme}`,
 			mode: 'cli',
+		});
+	}
+});
+
+test('hardening: same-process matrix writes emit configEvents', async t => {
+	const seen: ConfigChangeEvent[] = [];
+	const onChange = (event: ConfigChangeEvent) => {
+		seen.push(event);
+	};
+	configEvents.onConfigChange(onChange);
+
+	const hybridStatus = await runSessionCommand({
+		command: 'hybrid-compress',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(hybridStatus.ok, hybridStatus.message);
+	const originalHybrid = Boolean(
+		(hybridStatus.data as {enabled?: boolean})?.enabled,
+	);
+
+	const speedStatus = await runSessionCommand({
+		command: 'speedometer',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(speedStatus.ok, speedStatus.message);
+	const originalSpeed = Boolean(
+		(speedStatus.data as {enabled?: boolean})?.enabled,
+	);
+
+	const depthStatus = await runSessionCommand({
+		command: 'subagent-depth',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(depthStatus.ok, depthStatus.message);
+	const originalDepth = Number(
+		(depthStatus.data as {depth?: number})?.depth ?? 0,
+	);
+
+	const fileListStatus = await runSessionCommand({
+		command: 'file-list-display',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(fileListStatus.ok, fileListStatus.message);
+	const originalFileList =
+		((fileListStatus.data as {mode?: string})?.mode as 'list' | 'tree') ??
+		'list';
+
+	const languageStatus = await runSessionCommand({
+		command: 'language',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(languageStatus.ok, languageStatus.message);
+	const originalLanguage =
+		((languageStatus.data as {language?: string})?.language as string) ?? 'en';
+
+	const nextLanguage = originalLanguage === 'en' ? 'zh' : 'en';
+	const nextDepth = originalDepth === 2 ? 3 : 2;
+	const nextFileList = originalFileList === 'list' ? 'tree' : 'list';
+
+	try {
+		seen.length = 0;
+		const hybridWrite = await runSessionCommand({
+			command: 'hybrid-compress',
+			args: originalHybrid ? 'off' : 'on',
+			mode: 'agent',
+		});
+		t.true(hybridWrite.ok, hybridWrite.message);
+		t.true(
+			seen.some(
+				e =>
+					e.type === 'hybridCompressEnabled' &&
+					Boolean(e.value) === !originalHybrid,
+			),
+			`expected hybridCompressEnabled=${!originalHybrid}, got ${JSON.stringify(
+				seen,
+			)}`,
+		);
+
+		seen.length = 0;
+		const speedWrite = await runSessionCommand({
+			command: 'speedometer',
+			args: originalSpeed ? 'off' : 'on',
+			mode: 'agent',
+		});
+		t.true(speedWrite.ok, speedWrite.message);
+		t.true(
+			seen.some(
+				e =>
+					e.type === 'speedometerEnabled' &&
+					Boolean(e.value) === !originalSpeed,
+			),
+			`expected speedometerEnabled=${!originalSpeed}, got ${JSON.stringify(
+				seen,
+			)}`,
+		);
+
+		seen.length = 0;
+		const depthWrite = await runSessionCommand({
+			command: 'subagent-depth',
+			args: String(nextDepth),
+			mode: 'agent',
+		});
+		t.true(depthWrite.ok, depthWrite.message);
+		t.true(
+			seen.some(
+				e => e.type === 'subAgentMaxSpawnDepth' && e.value === nextDepth,
+			),
+			`expected subAgentMaxSpawnDepth=${nextDepth}, got ${JSON.stringify(
+				seen,
+			)}`,
+		);
+
+		seen.length = 0;
+		const fileListWrite = await runSessionCommand({
+			command: 'file-list-display',
+			args: nextFileList,
+			mode: 'agent',
+		});
+		t.true(fileListWrite.ok, fileListWrite.message);
+		t.true(
+			seen.some(
+				e => e.type === 'fileListDisplayMode' && e.value === nextFileList,
+			),
+			`expected fileListDisplayMode=${nextFileList}, got ${JSON.stringify(
+				seen,
+			)}`,
+		);
+
+		seen.length = 0;
+		const languageWrite = await runSessionCommand({
+			command: 'language',
+			args: nextLanguage,
+			mode: 'agent',
+		});
+		t.true(languageWrite.ok, languageWrite.message);
+		t.true(
+			seen.some(e => e.type === 'language' && e.value === nextLanguage),
+			`expected language=${nextLanguage}, got ${JSON.stringify(seen)}`,
+		);
+	} finally {
+		configEvents.removeConfigChangeListener(onChange);
+		await runSessionCommand({
+			command: 'hybrid-compress',
+			args: originalHybrid ? 'on' : 'off',
+			mode: 'agent',
+		});
+		await runSessionCommand({
+			command: 'speedometer',
+			args: originalSpeed ? 'on' : 'off',
+			mode: 'agent',
+		});
+		await runSessionCommand({
+			command: 'subagent-depth',
+			args: String(originalDepth),
+			mode: 'agent',
+		});
+		await runSessionCommand({
+			command: 'file-list-display',
+			args: originalFileList,
+			mode: 'agent',
+		});
+		await runSessionCommand({
+			command: 'language',
+			args: originalLanguage,
+			mode: 'agent',
 		});
 	}
 });

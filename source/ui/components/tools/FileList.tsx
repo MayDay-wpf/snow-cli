@@ -21,6 +21,7 @@ import {
 	getFileListDisplayMode,
 	setFileListDisplayMode,
 } from '../../../utils/config/projectSettings.js';
+import {configEvents} from '../../../utils/config/configEvents.js';
 import {
 	fileSearchAgent,
 	type FileSearchPreviewLabels,
@@ -356,6 +357,21 @@ const FileList = memo(
 			const [displayMode, setDisplayMode] = useState<DisplayMode>(
 				getFileListDisplayMode,
 			);
+
+			// Same-process session-command writes should refresh list/tree mode live.
+			useEffect(() => {
+				const handleConfigChange = (event: {type: string; value: any}) => {
+					if (event.type === 'fileListDisplayMode') {
+						const next = event.value === 'tree' ? 'tree' : 'list';
+						setDisplayMode(prev => (prev === next ? prev : next));
+					}
+				};
+				configEvents.onConfigChange(handleConfigChange);
+				return () => {
+					configEvents.removeConfigChangeListener(handleConfigChange);
+				};
+			}, []);
+
 			// Checkbox multi-select: stores the full insertion paths (the exact
 			// string returned by getFullFilePath / with optional :line suffix).
 			// Using the resolved path keeps selections stable when the filtered

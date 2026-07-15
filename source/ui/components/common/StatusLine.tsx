@@ -12,6 +12,7 @@ import {
 	getActiveProfileName,
 } from '../../../utils/config/configManager.js';
 import {readSettings} from '../../../utils/config/unifiedSettings.js';
+import {configEvents} from '../../../utils/config/configEvents.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
 import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
 import {
@@ -375,7 +376,22 @@ export default function StatusLine({
 		() => (contextUsage ? buildContextWindowState(contextUsage) : undefined),
 		[contextUsage],
 	);
-	const privacyState = buildPrivacyState();
+	const [privacyRevision, setPrivacyRevision] = React.useState(0);
+	React.useEffect(() => {
+		const handleConfigChange = (event: {type: string; value: any}) => {
+			if (event.type === 'privacy') {
+				setPrivacyRevision(prev => prev + 1);
+			}
+		};
+		configEvents.onConfigChange(handleConfigChange);
+		return () => {
+			configEvents.removeConfigChangeListener(handleConfigChange);
+		};
+	}, []);
+	const privacyState = React.useMemo(
+		() => buildPrivacyState(),
+		[privacyRevision],
+	);
 
 	// 获取当前 profile 的完整配置（不含 apiKey）
 	const profileConfig = React.useMemo(() => {

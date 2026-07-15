@@ -175,6 +175,25 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 					const next = Boolean(event.value);
 					return prev === next ? prev : next;
 				});
+			} else if (event.type === 'hybridCompressEnabled') {
+				setHybridCompressEnabled(prev => {
+					const next = Boolean(event.value);
+					return prev === next ? prev : next;
+				});
+			} else if (event.type === 'speedometerEnabled') {
+				// Tracker start/stop already happened in the control-plane setter.
+				// Keep React subscribers in sync for any future UI that reads this flag.
+				if (event.value) {
+					if (!tpsTracker.isActive()) {
+						tpsTracker.start();
+					}
+				} else if (tpsTracker.isActive()) {
+					tpsTracker.stop();
+				}
+			} else if (event.type === 'telemetryEnabled') {
+				// Status line currently reads isTelemetryActive() each render;
+				// force a cheap remount-safe noop by touching image compress state
+				// is unnecessary. Leave handled for consumers that may subscribe.
 			}
 		};
 

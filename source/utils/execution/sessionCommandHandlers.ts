@@ -946,6 +946,13 @@ function handleCodebase(
 			}
 		}
 		saveCodebaseConfig(nextConfig);
+		configEvents.emitConfigChange({
+			type: 'codebaseFlags',
+			value: {
+				enableAgentReview: nextConfig.enableAgentReview,
+				enableReranking: nextConfig.enableReranking,
+			},
+		});
 
 		return okResult(
 			meta.id,
@@ -998,6 +1005,7 @@ function handleCodebase(
 			);
 		}
 		enableCodebase();
+		configEvents.emitConfigChange({type: 'codebaseEnabled', value: true});
 		return okResult(
 			meta.id,
 			{enabled: true, previous: enabled},
@@ -1008,6 +1016,7 @@ function handleCodebase(
 
 	if (token === 'off' || token === 'disable') {
 		disableCodebase();
+		configEvents.emitConfigChange({type: 'codebaseEnabled', value: false});
 		return okResult(
 			meta.id,
 			{enabled: false, previous: enabled},
@@ -1031,6 +1040,7 @@ function handleCodebase(
 			enableCodebase();
 		}
 		const next = isCodebaseEnabled();
+		configEvents.emitConfigChange({type: 'codebaseEnabled', value: next});
 		return okResult(
 			meta.id,
 			{enabled: next, previous: enabled},
@@ -1044,7 +1054,7 @@ function handleCodebase(
 		'INVALID_ARGS',
 		'Usage: codebase [status|on|off|toggle|agent-review|reranking] ...',
 		meta.risk,
-);
+	);
 }
 function handleToolDisplay(
 	meta: SessionCommandMeta,
@@ -1139,6 +1149,9 @@ function handleTelemetry(
 		getTelemetryEnabled,
 		setTelemetryEnabled,
 		'Telemetry',
+		value => {
+			configEvents.emitConfigChange({type: 'telemetryEnabled', value});
+		},
 	);
 }
 
@@ -1172,6 +1185,10 @@ function handleSubagentDepth(
 	}
 
 	const normalizedDepth = setSubAgentMaxSpawnDepth(parsedDepth);
+	configEvents.emitConfigChange({
+		type: 'subAgentMaxSpawnDepth',
+		value: normalizedDepth,
+	});
 	return okResult(
 		meta.id,
 		{depth: normalizedDepth, previous: current},
@@ -1197,6 +1214,10 @@ function handleFileListDisplay(
 
 	if (token === 'list' || token === 'tree') {
 		setFileListDisplayMode(token);
+		configEvents.emitConfigChange({
+			type: 'fileListDisplayMode',
+			value: token,
+		});
 		return okResult(
 			meta.id,
 			{mode: token, previous: current},
@@ -1208,6 +1229,10 @@ function handleFileListDisplay(
 	if (token === 'toggle') {
 		const next = current === 'list' ? 'tree' : 'list';
 		setFileListDisplayMode(next);
+		configEvents.emitConfigChange({
+			type: 'fileListDisplayMode',
+			value: next,
+		});
 		return okResult(
 			meta.id,
 			{mode: next, previous: current},
@@ -1239,7 +1264,8 @@ function handleLanguage(
 		);
 	}
 
-	const normalized = token.toLowerCase() === 'zh-tw' ? 'zh-TW' : token.toLowerCase();
+	const normalized =
+		token.toLowerCase() === 'zh-tw' ? 'zh-TW' : token.toLowerCase();
 	if (normalized !== 'en' && normalized !== 'zh' && normalized !== 'zh-TW') {
 		return failResult(
 			meta.id,
@@ -1251,12 +1277,13 @@ function handleLanguage(
 
 	const next = normalized as Language;
 	setCurrentLanguage(next);
+	configEvents.emitConfigChange({type: 'language', value: next});
 	return okResult(
 		meta.id,
 		{language: next, previous: current},
 		`Language: ${next}`,
 		meta.risk,
-);
+	);
 }
 
 async function handleShowThinking(
@@ -1284,14 +1311,17 @@ async function handleShowThinking(
 		{enabled: parsed.value, previous: current},
 		`Show thinking: ${parsed.value ? 'on' : 'off'}`,
 		meta.risk,
-);
+	);
 }
 
 function parsePrivacyScope(tokens: string[]): {
 	scope: SettingsScope;
 	rest: string[];
 } {
-	if (tokens[0] === 'scope' && (tokens[1] === 'project' || tokens[1] === 'global')) {
+	if (
+		tokens[0] === 'scope' &&
+		(tokens[1] === 'project' || tokens[1] === 'global')
+	) {
 		return {scope: tokens[1], rest: tokens.slice(2)};
 	}
 	if (tokens[0] === 'project' || tokens[0] === 'global') {
@@ -1320,7 +1350,9 @@ function handlePrivacy(
 		return okResult(
 			meta.id,
 			current,
-			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${current.mode}`,
+			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${
+				current.mode
+			}`,
 			meta.risk,
 		);
 	}
@@ -1342,6 +1374,7 @@ function handlePrivacy(
 			};
 		});
 		const next = privacyPublic(scope);
+		configEvents.emitConfigChange({type: 'privacy', value: next});
 		return okResult(
 			meta.id,
 			{...next, previousMode: current.mode},
@@ -1363,7 +1396,9 @@ function handlePrivacy(
 		return okResult(
 			meta.id,
 			current,
-			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${current.mode}`,
+			`Privacy(${scope}): ${current.enabled ? 'on' : 'off'} mode=${
+				current.mode
+			}`,
 			meta.risk,
 		);
 	}
@@ -1375,12 +1410,13 @@ function handlePrivacy(
 		};
 	});
 	const next = privacyPublic(scope);
+	configEvents.emitConfigChange({type: 'privacy', value: next});
 	return okResult(
 		meta.id,
 		{...next, previous: current.enabled},
 		`Privacy(${scope}): ${next.enabled ? 'on' : 'off'}`,
 		meta.risk,
-);
+	);
 }
 async function handleUsage(
 	meta: SessionCommandMeta,
@@ -1965,6 +2001,12 @@ export async function executeSessionCommandHandler(
 				getAutoFormatEnabled,
 				setAutoFormatEnabled,
 				'Auto-format',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'autoFormatEnabled',
+						value,
+					});
+				},
 			);
 		case 'hybrid-compress':
 			return handleBooleanSetting(
@@ -1973,6 +2015,12 @@ export async function executeSessionCommandHandler(
 				getHybridCompressEnabled,
 				setHybridCompressEnabled,
 				'Hybrid compress',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'hybridCompressEnabled',
+						value,
+					});
+				},
 			);
 		case 'speedometer':
 			return handleBooleanSetting(
@@ -1989,6 +2037,12 @@ export async function executeSessionCommandHandler(
 					setSpeedometerEnabled(value);
 				},
 				'Speedometer',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'speedometerEnabled',
+						value,
+					});
+				},
 			);
 		case 'subagent-depth':
 			return handleSubagentDepth(meta, normalizedArgs);
