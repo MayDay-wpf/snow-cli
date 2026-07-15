@@ -10,6 +10,7 @@ import {getToolResultSummary} from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
+import {maskHookInjectedText} from '../../../utils/ui/hookInjectMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
@@ -160,9 +161,10 @@ function MessageRendererImpl({
 
 	const getDisplayContent = (content: string): string => {
 		// 只做视觉隐藏：保留原始 message.content 用于请求体/持久化。
-		// 先折叠 Skill 注入块，再折叠 GitLine 注入块（diff 内容可能很长）。
+		// 先折叠 Skill / GitLine，再剥离 onUserMessage hook 注入（snow-mode 等）。
 		const afterSkill = maskSkillInjectedText(removeAnsiCodes(content || ''));
-		return maskGitLineText(afterSkill.displayText).displayText;
+		const afterGit = maskGitLineText(afterSkill.displayText).displayText;
+		return maskHookInjectedText(afterGit).displayText;
 	};
 
 	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
