@@ -12,8 +12,17 @@ import {
 	setCompanionMuted,
 	getBuddyAiProfile,
 	setBuddyAiProfile,
+	updateCompanion,
+	type CompanionUpdate,
 } from '../../buddy/companion.js';
-import {SPECIES, type Species} from '../../buddy/types.js';
+import {
+	COMPANION_STATS,
+	EYES,
+	HATS,
+	SPECIES,
+	type CompanionStat,
+	type Species,
+} from '../../buddy/types.js';
 import {
 	getSimpleMode,
 	setSimpleMode,
@@ -163,6 +172,211 @@ function isSpecies(value: string): value is Species {
 	return (SPECIES as readonly string[]).includes(value);
 }
 
+function isCompanionStat(value: string): value is CompanionStat {
+	return (COMPANION_STATS as readonly string[]).includes(value);
+}
+
+function parseBooleanFlag(
+	value: string,
+): {ok: true; value: boolean} | {ok: false; error: string} {
+	const normalized = value.trim().toLowerCase();
+	if (['true', '1', 'yes', 'on'].includes(normalized)) {
+		return {ok: true, value: true};
+	}
+	if (['false', '0', 'no', 'off'].includes(normalized)) {
+		return {ok: true, value: false};
+	}
+	return {
+		ok: false,
+		error: `Invalid boolean "${value}". Use true|false|on|off.`,
+	};
+}
+
+function takeOptionValue(
+	args: string,
+	marker: string,
+): {value?: string; remainder: string} {
+	const index = args.indexOf(marker);
+	if (index === -1) {
+		return {remainder: args};
+	}
+
+	const before = args.slice(0, index).trimEnd();
+	const after = args.slice(index + marker.length);
+	if (after.startsWith('"')) {
+		const endQuote = after.indexOf('"', 1);
+		if (endQuote === -1) {
+			return {
+				value: after.slice(1).trim(),
+				remainder: before,
+			};
+		}
+		const value = after.slice(1, endQuote);
+		const rest = `${before} ${after.slice(endQuote + 1)}`.trim();
+		return {value, remainder: rest};
+	}
+
+	const match = after.match(/^(\S+)/);
+	const value = match?.[1];
+	const rest = `${before} ${after.slice(value?.length ?? 0)}`.trim();
+	return {value, remainder: rest};
+}
+
+function parseSetArgs(raw: string): {
+	updates: CompanionUpdate;
+	errors: string[];
+	showOptions: boolean;
+	hasAny: boolean;
+} {
+	let remainder = raw.trim();
+	const updates: CompanionUpdate = {};
+	const errors: string[] = [];
+	let showOptions = false;
+	let hasAny = false;
+
+	const listFlags = ['--list', '--options', 'list', 'options'];
+	const tokens = remainder.split(/\s+/).filter(Boolean);
+	if (tokens.some(token => listFlags.includes(token.toLowerCase()))) {
+		showOptions = true;
+		remainder = tokens
+			.filter(token => !listFlags.includes(token.toLowerCase()))
+			.join(' ');
+	}
+
+	const extract = (marker: string): string | undefined => {
+		const extracted = takeOptionValue(remainder, marker);
+		remainder = extracted.remainder;
+		return extracted.value;
+	};
+
+	const name = extract('--name=');
+	if (name !== undefined) {
+		hasAny = true;
+		updates.name = name;
+	}
+
+	const personality = extract('--personality=');
+	if (personality !== undefined) {
+		hasAny = true;
+		updates.personality = personality;
+	}
+
+	const species = extract('--species=');
+	if (species !== undefined) {
+		hasAny = true;
+		updates.species = species.trim().toLowerCase();
+	}
+
+	const hat = extract('--hat=');
+	if (hat !== undefined) {
+		hasAny = true;
+		updates.hat = hat.trim().toLowerCase();
+	}
+
+	const eye = extract('--eye=');
+	if (eye !== undefined) {
+		hasAny = true;
+		updates.eye = eye.trim();
+	}
+
+	const rarity = extract('--rarity=');
+	if (rarity !== undefined) {
+		hasAny = true;
+		updates.rarity = rarity.trim().toLowerCase();
+	}
+
+	const shiny = extract('--shiny=');
+	if (shiny !== undefined) {
+		hasAny = true;
+		const parsed = parseBooleanFlag(shiny);
+		if (!parsed.ok) {
+			errors.push(parsed.error);
+		} else {
+			updates.shiny = parsed.value;
+		}
+	}
+
+	const stats: Partial<Record<CompanionStat, number>> = {};
+	for (const stat of COMPANION_STATS) {
+		const value = extract(`--${stat.toLowerCase()}=`);
+		if (value === undefined) {
+			continue;
+		}
+		hasAny = true;
+		const numeric = Number(value);
+		if (!Number.isFinite(numeric)) {
+			errors.push(`Invalid --${stat.toLowerCase()}=${value}. Expected 1-10.`);
+			continue;
+		}
+		stats[stat] = numeric;
+	}
+
+	for (const part of remainder.split(/\s+/).filter(Boolean)) {
+		const eq = part.indexOf('=');
+		if (eq <= 0) {
+			errors.push(`Unknown option "${part}".`);
+			continue;
+		}
+		const key = part.slice(0, eq).trim().toLowerCase();
+		const value = part.slice(eq + 1).trim();
+		if (!value) {
+			errors.push(`Empty value for "${key}".`);
+			continue;
+		}
+		hasAny = true;
+		if (key === 'name') {
+			updates.name = value;
+			continue;
+		}
+		if (key === 'personality') {
+			updates.personality = value;
+			continue;
+		}
+		if (key === 'species') {
+			updates.species = value.toLowerCase();
+			continue;
+		}
+		if (key === 'hat') {
+			updates.hat = value.toLowerCase();
+			continue;
+		}
+		if (key === 'eye') {
+			updates.eye = value;
+			continue;
+		}
+		if (key === 'rarity') {
+			updates.rarity = value.toLowerCase();
+			continue;
+		}
+		if (key === 'shiny') {
+			const parsed = parseBooleanFlag(value);
+			if (!parsed.ok) {
+				errors.push(parsed.error);
+			} else {
+				updates.shiny = parsed.value;
+			}
+			continue;
+		}
+		const statKey = key.toUpperCase();
+		if (isCompanionStat(statKey)) {
+			const numeric = Number(value);
+			if (!Number.isFinite(numeric)) {
+				errors.push(`Invalid ${key}=${value}. Expected 1-10.`);
+			} else {
+				stats[statKey] = numeric;
+			}
+			continue;
+		}
+		errors.push(`Unknown option "${part}".`);
+	}
+
+	if (Object.keys(stats).length > 0) {
+		updates.stats = stats;
+	}
+
+	return {updates, errors, showOptions, hasAny};
+}
+
 async function handleBuddy(
 	meta: SessionCommandMeta,
 	args?: string,
@@ -286,6 +500,68 @@ async function handleBuddy(
 			meta.id,
 			{companion: renamed ? companionPublic(renamed) : null},
 			renamed ? `Renamed buddy to ${renamed.name}.` : 'Rename failed.',
+			meta.risk,
+		);
+	}
+
+	if (sub === 'set' || sub === 'customize') {
+		const companion = getCompanion();
+		if (!companion) {
+			return failResult(
+				meta.id,
+				'NOT_FOUND',
+				'No buddy to customize yet. Hatch one first.',
+				meta.risk,
+			);
+		}
+
+		const parsed = parseSetArgs(rest);
+		if (parsed.showOptions) {
+			return okResult(
+				meta.id,
+				{
+					hats: [...HATS],
+					eyes: [...EYES],
+					rarities: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
+					species: [...SPECIES],
+					stats: [...COMPANION_STATS],
+				},
+				`Hats: ${HATS.join(', ')} | Eyes: ${EYES.join(
+					' ',
+				)} | Rarities: common, uncommon, rare, epic, legendary`,
+				meta.risk,
+			);
+		}
+		if (parsed.errors.length > 0) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				parsed.errors.join('; '),
+				meta.risk,
+			);
+		}
+		if (!parsed.hasAny) {
+			return failResult(
+				meta.id,
+				'INVALID_ARGS',
+				'Usage: buddy set --hat=crown --eye=✦ --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10]',
+				meta.risk,
+			);
+		}
+
+		const result = updateCompanion(parsed.updates);
+		if (!result.ok) {
+			const code = result.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'INVALID_ARGS';
+			return failResult(meta.id, code, result.error, meta.risk);
+		}
+
+		return okResult(
+			meta.id,
+			{
+				companion: companionPublic(result.companion),
+				changed: result.changed,
+			},
+			`Updated ${result.companion.name}: ${result.changed.join(', ')}.`,
 			meta.risk,
 		);
 	}
@@ -709,6 +985,8 @@ function handleThinkDisplay(
 	if (token === 'full' || token === 'compact') {
 		const mode = token as ThinkDisplayMode;
 		setThinkDisplayMode(mode);
+		// Best-effort notify TUI subscribers (same as /think-display slash path).
+		configEvents.emitConfigChange({type: 'thinkDisplayMode', value: mode});
 		return okResult(
 			meta.id,
 			{mode, previous: current},
@@ -1051,9 +1329,12 @@ async function handleExport(
 	}
 
 	try {
-		const path = await import('node:path');
 		const {sessionManager} = await import('../session/sessionManager.js');
-		const {exportSessionToFile} = await import('../session/chatExporter.js');
+		const {
+			exportSessionToFile,
+			getDefaultExportDirectory,
+			resolveExportFilePath,
+		} = await import('../session/chatExporter.js');
 
 		const sessionId =
 			parsed.sessionId ?? sessionManager.getCurrentSession()?.id;
@@ -1076,11 +1357,11 @@ async function handleExport(
 			);
 		}
 
-		const shortId = session.id.slice(0, 8);
-		const defaultName = `snow-export-${shortId}.${parsed.format}`;
-		const filePath = parsed.outPath
-			? path.resolve(parsed.outPath)
-			: path.resolve(process.cwd(), defaultName);
+		const filePath = resolveExportFilePath(
+			session.id,
+			parsed.format,
+			parsed.outPath,
+		);
 
 		await exportSessionToFile(session, filePath, parsed.format);
 
@@ -1090,6 +1371,7 @@ async function handleExport(
 				path: filePath,
 				format: parsed.format,
 				sessionId: session.id,
+				defaultDir: parsed.outPath ? undefined : getDefaultExportDirectory(),
 				messageCount: session.messages?.length ?? session.messageCount ?? 0,
 			},
 			`Exported session ${session.id} to ${filePath}`,
@@ -1230,6 +1512,12 @@ export async function executeSessionCommandHandler(
 				getImageCompressEnabled,
 				setImageCompressEnabled,
 				'Image compress',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'imageCompressEnabled',
+						value,
+					});
+				},
 			);
 		case 'yolo':
 			return handleBooleanSetting(
@@ -1238,6 +1526,9 @@ export async function executeSessionCommandHandler(
 				getYoloMode,
 				setYoloMode,
 				'YOLO',
+				value => {
+					configEvents.emitConfigChange({type: 'yoloMode', value});
+				},
 			);
 		case 'plan':
 			return handleBooleanSetting(
@@ -1246,6 +1537,9 @@ export async function executeSessionCommandHandler(
 				getPlanMode,
 				setPlanMode,
 				'Plan',
+				value => {
+					configEvents.emitConfigChange({type: 'planMode', value});
+				},
 			);
 		case 'tool-search':
 			return handleBooleanSetting(
@@ -1254,6 +1548,12 @@ export async function executeSessionCommandHandler(
 				getToolSearchEnabled,
 				setToolSearchEnabled,
 				'Tool search',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'toolSearchEnabled',
+						value,
+					});
+				},
 			);
 		case 'vulnerability-hunting':
 			return handleBooleanSetting(
@@ -1262,6 +1562,12 @@ export async function executeSessionCommandHandler(
 				getVulnerabilityHuntingMode,
 				setVulnerabilityHuntingMode,
 				'Vulnerability hunting',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'vulnerabilityHuntingMode',
+						value,
+					});
+				},
 			);
 		case 'team':
 			return handleBooleanSetting(
@@ -1270,6 +1576,9 @@ export async function executeSessionCommandHandler(
 				getTeamMode,
 				setTeamMode,
 				'Team',
+				value => {
+					configEvents.emitConfigChange({type: 'teamMode', value});
+				},
 			);
 		case 'ultra-todo':
 			return handleBooleanSetting(
@@ -1278,6 +1587,12 @@ export async function executeSessionCommandHandler(
 				getUltraTodoEnabled,
 				setUltraTodoEnabled,
 				'Ultra todo',
+				value => {
+					configEvents.emitConfigChange({
+						type: 'ultraTodoEnabled',
+						value,
+					});
+				},
 			);
 		case 'mcp': {
 			const {handleMcpManage} = await import(

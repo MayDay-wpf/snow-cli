@@ -17,6 +17,7 @@ import {
 	type ToolDisplayMode,
 	type ThinkDisplayMode,
 } from '../config/themeConfig.js';
+import {configEvents} from '../config/configEvents.js';
 import {
 	getYoloMode,
 	getPlanMode,
@@ -150,6 +151,7 @@ export function handleTheme(
 				);
 			}
 			setCurrentTheme(name);
+			configEvents.emitConfigChange({type: 'theme', value: name});
 			changed.theme = name;
 			return okResult(
 				meta.id,
@@ -175,6 +177,7 @@ export function handleTheme(
 						);
 					}
 					setCurrentTheme(value);
+					configEvents.emitConfigChange({type: 'theme', value});
 					changed.theme = value;
 					continue;
 				}
@@ -190,6 +193,7 @@ export function handleTheme(
 					}
 					const enabled = ['true', 'on', '1'].includes(lower);
 					setSimpleMode(enabled);
+					configEvents.emitConfigChange({type: 'simpleMode', value: enabled});
 					changed.simpleMode = enabled;
 					continue;
 				}
@@ -204,6 +208,7 @@ export function handleTheme(
 						);
 					}
 					setToolDisplayMode(mode as ToolDisplayMode);
+					configEvents.emitConfigChange({type: 'toolDisplayMode', value: mode});
 					changed.toolDisplay = mode;
 					continue;
 				}
@@ -218,6 +223,10 @@ export function handleTheme(
 						);
 					}
 					setThinkDisplayMode(mode as ThinkDisplayMode);
+					configEvents.emitConfigChange({
+						type: 'thinkDisplayMode',
+						value: mode,
+					});
 					changed.thinkDisplay = mode;
 					continue;
 				}
@@ -232,6 +241,7 @@ export function handleTheme(
 						);
 					}
 					setDiffOpacity(num);
+					configEvents.emitConfigChange({type: 'diffOpacity', value: num});
 					changed.diffOpacity = num;
 					continue;
 				}
@@ -256,6 +266,7 @@ export function handleTheme(
 				}
 				const enabled = next === 'on';
 				setSimpleMode(enabled);
+				configEvents.emitConfigChange({type: 'simpleMode', value: enabled});
 				changed.simpleMode = enabled;
 				continue;
 			}
