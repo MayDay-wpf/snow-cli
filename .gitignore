@@ -3,6 +3,10 @@ dist
 bundle
 out
 .snow
+snow-export-*.md
+snow-export-*.txt
+snow-export-*.html
+snow-export-*.json
 AGENTS.md
 pr.md
 CHANGELOG.md

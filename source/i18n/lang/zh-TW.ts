@@ -835,7 +835,7 @@ export const zhTW: TranslationKeys = {
 				'文件編輯後自動格式化開關。用法: /auto-format [on|off|status]',
 			simple: '切換主題簡易模式。用法: /simple [on|off|status]',
 			buddy:
-				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
+				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
@@ -952,6 +952,17 @@ export const zhTW: TranslationKeys = {
 				renameUsage: '用法: /buddy rename <名字>',
 				renameReaction: '{oldName} 現在叫 {newName} 了。',
 				renameSuccess: '已將寵物從 {oldName} 重新命名為 {newName}。',
+				noBuddyToSet: '還沒有可自訂的寵物。請先使用 /buddy hatch [名字]。',
+				setUsage:
+					'用法: /buddy set --hat=crown --eye=✦ --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] 或 /buddy set --list',
+				setSuccess: '已更新 {name}：{changed}。',
+				setReaction: '新造型好看！已更新 {changed}。',
+				setOptionsTitle: '桌寵自訂選項：',
+				setOptionsHats: '帽子: {hats}',
+				setOptionsEyes: '眼睛: {eyes}',
+				setOptionsRarities: '稀有度: {rarities}',
+				setOptionsSpecies: '物種: {species}',
+				setOptionsStats: '屬性 (1-10): {stats}',
 				noBuddyToTalk: '還沒有可聊天的寵物。請先使用 /buddy hatch [名字]。',
 				sayUsage: '用法: /buddy say <訊息>',
 				profileListTitle: '寵物 AI 配置：{profile}',
@@ -968,7 +979,7 @@ export const zhTW: TranslationKeys = {
 				unmuted: '寵物已取消靜音。',
 				reset: '寵物已重置。使用 /buddy hatch [名字] 孵化新的夥伴。',
 				usage:
-					'用法: /buddy [status|hatch [名字] [--species=類型] [--list-species] [--personality=文字]|pet|rename <名字>|say <訊息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
+					'用法: /buddy [status|hatch [名字] [--species=類型] [--list-species] [--personality=文字]|pet|rename <名字>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <訊息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
 				teaser: '悄悄說一句……試試 /buddy',
 				noModelConfigured: '沒有為寵物回覆設定模型',
 				emptyReply: '{name} 正在認真聽。',
@@ -1436,6 +1447,7 @@ export const zhTW: TranslationKeys = {
 		statusThinking: '思考中...',
 		statusDeepThinking: '深度思考中...',
 		statusWriting: '輸出中...',
+		statusFinishing: '收尾中...',
 		statusStreaming: '串流傳輸中',
 		statusWorking: '工作中',
 		statusIndexing: '索引代碼庫...',

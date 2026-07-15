@@ -4,8 +4,8 @@ import {
 } from '../execution/commandExecutor.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/translations.js';
-import type {Species} from '../../buddy/types.js';
-import {SPECIES} from '../../buddy/types.js';
+import type {CompanionStat, Species} from '../../buddy/types.js';
+import {COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
 import {
 	getBuddyAiProfile,
 	getCompanion,
@@ -15,6 +15,8 @@ import {
 	resetCompanion,
 	setBuddyAiProfile,
 	setCompanionMuted,
+	updateCompanion,
+	type CompanionUpdate,
 } from '../../buddy/companion.js';
 import {getActiveProfileName, getAllProfiles} from '../config/configManager.js';
 import {
@@ -109,6 +111,226 @@ function speciesList(): string {
 
 function isSpecies(value: string): value is Species {
 	return SPECIES.includes(value as Species);
+}
+
+function isCompanionStat(value: string): value is CompanionStat {
+	return COMPANION_STATS.includes(value as CompanionStat);
+}
+
+function parseBooleanFlag(
+	value: string,
+): {ok: true; value: boolean} | {ok: false; error: string} {
+	const normalized = value.trim().toLowerCase();
+	if (['true', '1', 'yes', 'on'].includes(normalized)) {
+		return {ok: true, value: true};
+	}
+	if (['false', '0', 'no', 'off'].includes(normalized)) {
+		return {ok: true, value: false};
+	}
+	return {
+		ok: false,
+		error: `Invalid boolean "${value}". Use true|false|on|off.`,
+	};
+}
+
+function takeOptionValue(
+	args: string,
+	marker: string,
+): {value?: string; remainder: string} {
+	const index = args.indexOf(marker);
+	if (index === -1) {
+		return {remainder: args};
+	}
+
+	const before = args.slice(0, index).trimEnd();
+	const after = args.slice(index + marker.length);
+	if (after.startsWith('"')) {
+		const endQuote = after.indexOf('"', 1);
+		if (endQuote === -1) {
+			return {
+				value: after.slice(1).trim(),
+				remainder: before,
+			};
+		}
+		const value = after.slice(1, endQuote);
+		const rest = `${before} ${after.slice(endQuote + 1)}`.trim();
+		return {value, remainder: rest};
+	}
+
+	const match = after.match(/^(\S+)/);
+	const value = match?.[1];
+	const rest = `${before} ${after.slice(value?.length ?? 0)}`.trim();
+	return {value, remainder: rest};
+}
+
+function parseSetArgs(args: string): {
+	updates: CompanionUpdate;
+	errors: string[];
+	showOptions: boolean;
+	hasAny: boolean;
+} {
+	let remainder = args.trim();
+	const updates: CompanionUpdate = {};
+	const errors: string[] = [];
+	let showOptions = false;
+	let hasAny = false;
+
+	const listFlags = ['--list', '--options', 'list', 'options'];
+	const tokens = remainder.split(/\s+/).filter(Boolean);
+	if (tokens.some(token => listFlags.includes(token.toLowerCase()))) {
+		showOptions = true;
+		remainder = tokens
+			.filter(token => !listFlags.includes(token.toLowerCase()))
+			.join(' ');
+	}
+
+	const extract = (marker: string): string | undefined => {
+		const extracted = takeOptionValue(remainder, marker);
+		remainder = extracted.remainder;
+		return extracted.value;
+	};
+
+	const name = extract('--name=');
+	if (name !== undefined) {
+		hasAny = true;
+		updates.name = name;
+	}
+
+	const personality = extract('--personality=');
+	if (personality !== undefined) {
+		hasAny = true;
+		updates.personality = personality;
+	}
+
+	const species = extract('--species=');
+	if (species !== undefined) {
+		hasAny = true;
+		updates.species = species.trim().toLowerCase();
+	}
+
+	const hat = extract('--hat=');
+	if (hat !== undefined) {
+		hasAny = true;
+		updates.hat = hat.trim().toLowerCase();
+	}
+
+	const eye = extract('--eye=');
+	if (eye !== undefined) {
+		hasAny = true;
+		updates.eye = eye.trim();
+	}
+
+	const rarity = extract('--rarity=');
+	if (rarity !== undefined) {
+		hasAny = true;
+		updates.rarity = rarity.trim().toLowerCase();
+	}
+
+	const shiny = extract('--shiny=');
+	if (shiny !== undefined) {
+		hasAny = true;
+		const parsed = parseBooleanFlag(shiny);
+		if (!parsed.ok) {
+			errors.push(parsed.error);
+		} else {
+			updates.shiny = parsed.value;
+		}
+	}
+
+	const stats: Partial<Record<CompanionStat, number>> = {};
+	for (const stat of COMPANION_STATS) {
+		const value = extract(`--${stat.toLowerCase()}=`);
+		if (value === undefined) {
+			continue;
+		}
+		hasAny = true;
+		const numeric = Number(value);
+		if (!Number.isFinite(numeric)) {
+			errors.push(`Invalid --${stat.toLowerCase()}=${value}. Expected 1-10.`);
+			continue;
+		}
+		stats[stat] = numeric;
+	}
+
+	// Support compact form: hat=crown eye=✦ rarity=legendary
+	for (const part of remainder.split(/\s+/).filter(Boolean)) {
+		const eq = part.indexOf('=');
+		if (eq <= 0) {
+			errors.push(`Unknown option "${part}".`);
+			continue;
+		}
+		const key = part.slice(0, eq).trim().toLowerCase();
+		const value = part.slice(eq + 1).trim();
+		if (!value) {
+			errors.push(`Empty value for "${key}".`);
+			continue;
+		}
+		hasAny = true;
+		if (key === 'name') {
+			updates.name = value;
+			continue;
+		}
+		if (key === 'personality') {
+			updates.personality = value;
+			continue;
+		}
+		if (key === 'species') {
+			updates.species = value.toLowerCase();
+			continue;
+		}
+		if (key === 'hat') {
+			updates.hat = value.toLowerCase();
+			continue;
+		}
+		if (key === 'eye') {
+			updates.eye = value;
+			continue;
+		}
+		if (key === 'rarity') {
+			updates.rarity = value.toLowerCase();
+			continue;
+		}
+		if (key === 'shiny') {
+			const parsed = parseBooleanFlag(value);
+			if (!parsed.ok) {
+				errors.push(parsed.error);
+			} else {
+				updates.shiny = parsed.value;
+			}
+			continue;
+		}
+		const statKey = key.toUpperCase();
+		if (isCompanionStat(statKey)) {
+			const numeric = Number(value);
+			if (!Number.isFinite(numeric)) {
+				errors.push(`Invalid ${key}=${value}. Expected 1-10.`);
+			} else {
+				stats[statKey] = numeric;
+			}
+			continue;
+		}
+		errors.push(`Unknown option "${part}".`);
+	}
+
+	if (Object.keys(stats).length > 0) {
+		updates.stats = stats;
+	}
+
+	return {updates, errors, showOptions, hasAny};
+}
+
+function formatSetOptions(): string {
+	const t = buddyTranslations();
+	return [
+		t.setOptionsTitle,
+		formatTemplate(t.setOptionsHats, {hats: HATS.join(', ')}),
+		formatTemplate(t.setOptionsEyes, {eyes: EYES.join(' ')}),
+		formatTemplate(t.setOptionsRarities, {
+			rarities: 'common, uncommon, rare, epic, legendary',
+		}),
+		formatTemplate(t.setOptionsSpecies, {species: SPECIES.join(', ')}),
+		formatTemplate(t.setOptionsStats, {stats: COMPANION_STATS.join(', ')}),
+	].join('\n');
 }
 
 function parseHatchArgs(args: string): {
@@ -277,6 +499,62 @@ registerCommand('buddy', {
 					oldName: companion.name,
 					newName: renamedCompanion.name,
 				}),
+			};
+		}
+
+		if (subcommand === 'set' || subcommand === 'customize') {
+			const companion = getCompanion();
+			if (!companion) {
+				return {
+					success: true,
+					message: t.noBuddyToSet,
+				};
+			}
+
+			const parsed = parseSetArgs(remainder);
+			if (parsed.showOptions) {
+				return {
+					success: true,
+					message: formatSetOptions(),
+				};
+			}
+			if (parsed.errors.length > 0) {
+				return {
+					success: false,
+					message: parsed.errors.join('\n'),
+				};
+			}
+			if (!parsed.hasAny) {
+				return {
+					success: true,
+					message: t.setUsage,
+				};
+			}
+
+			const result = updateCompanion(parsed.updates);
+			if (!result.ok) {
+				return {
+					success: false,
+					message: result.error,
+				};
+			}
+
+			companionRefresh();
+			companionReaction(
+				formatTemplate(t.setReaction, {
+					name: result.companion.name,
+					changed: result.changed.join(', '),
+				}),
+			);
+			return {
+				success: true,
+				message: [
+					formatTemplate(t.setSuccess, {
+						name: result.companion.name,
+						changed: result.changed.join(', '),
+					}),
+					formatCompanionStatus(),
+				].join('\n'),
 			};
 		}
 

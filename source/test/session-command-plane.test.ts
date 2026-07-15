@@ -17,6 +17,10 @@ import {
 	getPlaneTopLevelCommands,
 	PLANE_TUI_OVERLAP_COMMANDS,
 } from '../utils/execution/sessionCommandParity.js';
+import {
+	configEvents,
+	type ConfigChangeEvent,
+} from '../utils/config/configEvents.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -24,6 +28,7 @@ test('allowlist includes buddy and display commands', t => {
 	const ids = listSessionCommands().map(c => c.id);
 	t.true(ids.includes('buddy.hatch'));
 	t.true(ids.includes('buddy.status'));
+	t.true(ids.includes('buddy.set'));
 	t.true(ids.includes('tool-display'));
 	t.true(ids.includes('yolo'));
 	t.true(ids.includes('mcp.status'));
@@ -159,6 +164,20 @@ test('runSessionCommand export rejects invalid format', async t => {
 	});
 	t.false(result.ok);
 	t.is(result.code, 'INVALID_ARGS');
+});
+
+test('runSessionCommand export without session fails clearly', async t => {
+	const result = await runSessionCommand({
+		command: 'export',
+		args: 'md',
+		mode: 'cli',
+		confirm: true,
+	});
+	t.false(result.ok);
+	t.true(
+		result.code === 'SESSION_REQUIRED' || result.code === 'NOT_FOUND',
+		`expected SESSION_REQUIRED or NOT_FOUND, got ${result.code}`,
+	);
 });
 
 test('runSessionCommand compact without session fails clearly', async t => {
@@ -1019,5 +1038,109 @@ test('hardening: plane/TUI overlap inventory', t => {
 			existsSync(join(commandsDir, file)),
 			`missing TUI command module ${file}`,
 		);
+	}
+});
+
+test('hardening: same-process plan/yolo/theme writes emit configEvents', async t => {
+	const seen: ConfigChangeEvent[] = [];
+	const onChange = (event: ConfigChangeEvent) => {
+		seen.push(event);
+	};
+	configEvents.onConfigChange(onChange);
+
+	const planStatus = await runSessionCommand({
+		command: 'plan',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(planStatus.ok, planStatus.message);
+	const originalPlan = Boolean(
+		(planStatus.data as {enabled?: boolean})?.enabled,
+	);
+
+	const yoloStatus = await runSessionCommand({
+		command: 'yolo',
+		args: 'status',
+		mode: 'agent',
+	});
+	t.true(yoloStatus.ok, yoloStatus.message);
+	const originalYolo = Boolean(
+		(yoloStatus.data as {enabled?: boolean})?.enabled,
+	);
+
+	const themeStatus = await runSessionCommand({
+		command: 'theme',
+		args: 'status',
+		mode: 'cli',
+	});
+	t.true(themeStatus.ok, themeStatus.message);
+	const originalTheme = (themeStatus.data as {theme?: string})?.theme ?? 'dark';
+	const availableThemes =
+		(themeStatus.data as {availableThemes?: string[]})?.availableThemes ?? [];
+	const nextTheme =
+		availableThemes.find(name => name !== originalTheme) ??
+		(originalTheme === 'dark' ? 'light' : 'dark');
+
+	try {
+		seen.length = 0;
+		const planOn = await runSessionCommand({
+			command: 'plan',
+			args: originalPlan ? 'off' : 'on',
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(planOn.ok, planOn.message);
+		t.true(
+			seen.some(
+				e => e.type === 'planMode' && Boolean(e.value) === !originalPlan,
+			),
+			`expected planMode=${!originalPlan}, got ${JSON.stringify(seen)}`,
+		);
+
+		seen.length = 0;
+		const yoloOn = await runSessionCommand({
+			command: 'yolo',
+			args: originalYolo ? 'off' : 'on',
+			mode: 'agent',
+			confirm: true,
+		});
+		t.true(yoloOn.ok, yoloOn.message);
+		t.true(
+			seen.some(
+				e => e.type === 'yoloMode' && Boolean(e.value) === !originalYolo,
+			),
+			`expected yoloMode=${!originalYolo}, got ${JSON.stringify(seen)}`,
+		);
+
+		seen.length = 0;
+		const themeSet = await runSessionCommand({
+			command: 'theme',
+			args: `set ${nextTheme}`,
+			mode: 'cli',
+		});
+		t.true(themeSet.ok, themeSet.message);
+		t.true(
+			seen.some(e => e.type === 'theme' && e.value === nextTheme),
+			`expected theme=${nextTheme}, got ${JSON.stringify(seen)}`,
+		);
+	} finally {
+		configEvents.removeConfigChangeListener(onChange);
+		await runSessionCommand({
+			command: 'plan',
+			args: originalPlan ? 'on' : 'off',
+			mode: 'agent',
+			confirm: true,
+		});
+		await runSessionCommand({
+			command: 'yolo',
+			args: originalYolo ? 'on' : 'off',
+			mode: 'agent',
+			confirm: true,
+		});
+		await runSessionCommand({
+			command: 'theme',
+			args: `set ${originalTheme}`,
+			mode: 'cli',
+		});
 	}
 });

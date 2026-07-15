@@ -211,7 +211,7 @@ After running snow, `.snow/` directory is created in your home folder:
 ├── tasks/                  # Async tasks
 ├── hooks/                  # Workflow hooks
 ├── config.json             # API configuration
-├── mcp-config.json         # MCP configuration
+├── settings.json           # Unified settings (includes mcpServers)
 └── ...                     # Other config files
 ```
 

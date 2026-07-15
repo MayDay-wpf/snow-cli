@@ -49,6 +49,15 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 	meta('buddy.rename', 'buddy', 'low_write', 'Rename the buddy companion', {
 		subcommand: 'rename',
 	}),
+	meta(
+		'buddy.set',
+		'buddy',
+		'low_write',
+		'Customize buddy appearance and personality',
+		{
+			subcommand: 'set',
+		},
+	),
 	meta('buddy.mute', 'buddy', 'low_write', 'Mute buddy UI and prompt context', {
 		subcommand: 'mute',
 	}),

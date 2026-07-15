@@ -902,6 +902,16 @@ export type TranslationKeys = {
 				renameUsage: string;
 				renameReaction: string;
 				renameSuccess: string;
+				noBuddyToSet: string;
+				setUsage: string;
+				setSuccess: string;
+				setReaction: string;
+				setOptionsTitle: string;
+				setOptionsHats: string;
+				setOptionsEyes: string;
+				setOptionsRarities: string;
+				setOptionsSpecies: string;
+				setOptionsStats: string;
 				noBuddyToTalk: string;
 				sayUsage: string;
 				profileListTitle: string;
@@ -1380,6 +1390,7 @@ export type TranslationKeys = {
 		statusThinking: string;
 		statusDeepThinking: string;
 		statusWriting: string;
+		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;
 		statusIndexing: string;

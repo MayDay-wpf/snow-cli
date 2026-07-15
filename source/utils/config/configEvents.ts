@@ -6,6 +6,15 @@ export type ConfigChangeEvent = {
 		| 'simpleMode'
 		| 'toolDisplayMode'
 		| 'thinkDisplayMode'
+		| 'yoloMode'
+		| 'planMode'
+		| 'teamMode'
+		| 'vulnerabilityHuntingMode'
+		| 'toolSearchEnabled'
+		| 'ultraTodoEnabled'
+		| 'imageCompressEnabled'
+		| 'theme'
+		| 'diffOpacity'
 		| 'other';
 	value: any;
 };

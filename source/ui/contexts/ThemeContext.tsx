@@ -3,6 +3,7 @@ import React, {
 	useContext,
 	useState,
 	useCallback,
+	useEffect,
 	ReactNode,
 } from 'react';
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
@@ -12,6 +13,7 @@ import {
 	setCurrentTheme,
 	setDiffOpacity,
 } from '../../utils/config/themeConfig.js';
+import {configEvents} from '../../utils/config/configEvents.js';
 
 interface ThemeContextType {
 	theme: Theme;
@@ -53,6 +55,23 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 
 	const refreshCustomTheme = useCallback(() => {
 		setCustomThemeVersion(v => v + 1);
+	}, []);
+
+	// Same-process session-command / agentic writes update React state only.
+	// Do not re-call setters that persist to disk (would loop / thrash).
+	useEffect(() => {
+		const handleConfigChange = (event: {type: string; value: any}) => {
+			if (event.type === 'theme') {
+				setThemeTypeState(event.value as ThemeType);
+			} else if (event.type === 'diffOpacity') {
+				setDiffOpacityState(Number(event.value));
+			}
+		};
+
+		configEvents.onConfigChange(handleConfigChange);
+		return () => {
+			configEvents.removeConfigChangeListener(handleConfigChange);
+		};
 	}, []);
 
 	const getTheme = useCallback((): Theme => {

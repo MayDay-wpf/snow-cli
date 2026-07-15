@@ -129,9 +129,18 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 	}, [hasFocus]);
 
 	const appendAiCompletionTimeMessage = (durationMs?: number) => {
-		setMessages(prev => [
-			...prev,
-			{
+		setMessages(prev => {
+			// 连续自动续跑（onStop/goal 等）可能多次收尾；折叠尾部旧的结束时间，
+			// 只保留最终一次，避免 UI 叠出两条 “AI 结束时间”。
+			const next = [...prev];
+			while (next.length > 0) {
+				const last = next[next.length - 1];
+				if (!last?.aiCompletionTime) {
+					break;
+				}
+				next.pop();
+			}
+			next.push({
 				role: 'assistant',
 				content: '',
 				streaming: false,
@@ -142,8 +151,9 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					durationMs >= 0
 						? durationMs
 						: undefined,
-			},
-		]);
+			});
+			return next;
+		});
 	};
 
 	const notifyAgentTurnWaitingForInput = () => {
@@ -497,9 +507,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 			}
 
-			streamingState.setIsStreaming(false);
-			streamingState.setAbortController(null);
-			streamingState.setStreamTokenCount(0);
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);
@@ -996,6 +1005,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 			appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);

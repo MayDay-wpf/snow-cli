@@ -1,7 +1,46 @@
 import * as fs from 'fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type {ChatMessage, Session} from './sessionManager.js';
 
 export type ExportFormat = 'txt' | 'md' | 'html' | 'json';
+
+/**
+ * Headless / agent exports should never land in process.cwd() (often the
+ * project root). Keep them under the global Snow data dir instead.
+ */
+export function getDefaultExportDirectory(): string {
+	return path.join(os.homedir(), '.snow', 'exports');
+}
+
+export function buildDefaultExportFileName(
+	sessionId: string,
+	format: ExportFormat,
+): string {
+	const shortId = sessionId.slice(0, 8);
+	// ISO seconds only: 2026-07-15T08-52-40 (drop ms / trailing Z)
+	const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+	return `snow-export-${timestamp}-${shortId}.${format}`;
+}
+
+/**
+ * Resolve the final export path.
+ * - Explicit --out / -o wins (absolute or relative to cwd)
+ * - Otherwise: ~/.snow/exports/snow-export-{timestamp}-{shortId}.{format}
+ */
+export function resolveExportFilePath(
+	sessionId: string,
+	format: ExportFormat,
+	outPath?: string,
+): string {
+	if (outPath) {
+		return path.resolve(outPath);
+	}
+	return path.join(
+		getDefaultExportDirectory(),
+		buildDefaultExportFileName(sessionId, format),
+	);
+}
 
 const ROLE_LABELS: Record<string, string> = {
 	user: 'User',
@@ -572,5 +611,6 @@ export async function exportSessionToFile(
 	format: ExportFormat = 'txt',
 ): Promise<void> {
 	const content = renderSession(session, format);
+	await fs.mkdir(path.dirname(filePath), {recursive: true});
 	await fs.writeFile(filePath, content, 'utf-8');
 }

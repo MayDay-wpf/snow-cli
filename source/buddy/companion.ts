@@ -360,6 +360,178 @@ export function renameCompanion(name: string): Companion | undefined {
 	return renamedCompanion;
 }
 
+export type CompanionUpdate = {
+	name?: string;
+	personality?: string;
+	species?: string;
+	eye?: string;
+	hat?: string;
+	rarity?: string;
+	shiny?: boolean;
+	stats?: Partial<CompanionStats>;
+};
+
+export type UpdateCompanionResult =
+	| {ok: true; companion: Companion; changed: string[]}
+	| {
+			ok: false;
+			code: 'NOT_FOUND' | 'INVALID_ARGS' | 'NO_CHANGES';
+			error: string;
+	  };
+
+export function updateCompanion(
+	updates: CompanionUpdate,
+): UpdateCompanionResult {
+	const companion = getStoredCompanion();
+	if (!companion) {
+		return {
+			ok: false,
+			code: 'NOT_FOUND',
+			error: 'No buddy has hatched yet.',
+		};
+	}
+
+	const next: StoredCompanion = {...companion, stats: {...companion.stats}};
+	const changed: string[] = [];
+
+	if (updates.name !== undefined) {
+		const name = updates.name.trim();
+		if (!name) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: 'Name cannot be empty.',
+			};
+		}
+		if (name !== next.name) {
+			next.name = name;
+			changed.push('name');
+		}
+	}
+
+	if (updates.personality !== undefined) {
+		const personality = updates.personality.trim();
+		if (!personality) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: 'Personality cannot be empty.',
+			};
+		}
+		if (personality !== next.personality) {
+			next.personality = personality;
+			changed.push('personality');
+		}
+	}
+
+	if (updates.species !== undefined) {
+		if (!isValidSpecies(updates.species)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid species "${updates.species}". Available: ${SPECIES.join(
+					', ',
+				)}`,
+			};
+		}
+		if (updates.species !== next.species) {
+			next.species = updates.species as Species;
+			changed.push('species');
+		}
+	}
+
+	if (updates.eye !== undefined) {
+		if (!isValidEye(updates.eye)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid eye "${updates.eye}". Available: ${EYES.join(' ')}`,
+			};
+		}
+		if (updates.eye !== next.eye) {
+			next.eye = updates.eye as Companion['eye'];
+			changed.push('eye');
+		}
+	}
+
+	if (updates.hat !== undefined) {
+		if (!isValidHat(updates.hat)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid hat "${updates.hat}". Available: ${HATS.join(', ')}`,
+			};
+		}
+		if (updates.hat !== next.hat) {
+			next.hat = updates.hat as Companion['hat'];
+			changed.push('hat');
+		}
+	}
+
+	if (updates.rarity !== undefined) {
+		if (!isValidRarity(updates.rarity)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid rarity "${updates.rarity}". Available: common, uncommon, rare, epic, legendary`,
+			};
+		}
+		if (updates.rarity !== next.rarity) {
+			next.rarity = updates.rarity as Rarity;
+			changed.push('rarity');
+		}
+	}
+
+	if (updates.shiny !== undefined) {
+		if (updates.shiny !== next.shiny) {
+			next.shiny = updates.shiny;
+			changed.push('shiny');
+		}
+	}
+
+	if (updates.stats) {
+		for (const stat of COMPANION_STATS) {
+			const value = updates.stats[stat];
+			if (value === undefined) {
+				continue;
+			}
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				return {
+					ok: false,
+					code: 'INVALID_ARGS',
+					error: `Invalid stats.${stat}: expected a number.`,
+				};
+			}
+			const normalized = Math.max(1, Math.min(10, Math.round(value)));
+			if (normalized !== next.stats[stat]) {
+				next.stats[stat] = normalized;
+				if (!changed.includes('stats')) {
+					changed.push('stats');
+				}
+			}
+		}
+	}
+
+	if (changed.length === 0) {
+		return {
+			ok: false,
+			code: 'NO_CHANGES',
+			error: 'No valid changes provided.',
+		};
+	}
+
+	if (!isStoredCompanion(next)) {
+		return {
+			ok: false,
+			code: 'INVALID_ARGS',
+			error: 'Updated companion failed validation.',
+		};
+	}
+
+	saveCompanion(next);
+	return {ok: true, companion: next, changed};
+}
+
 export function resetCompanion(): void {
 	saveCompanion(undefined);
 }
