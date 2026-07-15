@@ -495,6 +495,7 @@ export const zh: TranslationKeys = {
 		terminalTools: '终端工具',
 		todoTools: 'TODO 管理工具',
 		webSearchTools: '网络搜索工具',
+		snowDocsTools: 'Snow 官方文档工具',
 		ideTools: 'IDE 诊断工具',
 		userInteractionTools: '用户交互工具',
 		skillTools: '技能工具',

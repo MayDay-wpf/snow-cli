@@ -252,7 +252,7 @@ class ToolSearchService {
 	getToolSearchDefinition(): MCPTool {
 		let description =
 			'Search for available tools by keyword or description. Call this FIRST to discover tools you need. Found tools become immediately available. ' +
-			'Search by category (e.g., "filesystem", "terminal", "todo", "ace", "websearch") or by action (e.g., "edit file", "search code", "run command"). ' +
+			'Search by category (e.g., "filesystem", "terminal", "todo", "ace", "websearch", "snow-docs") or by action (e.g., "edit file", "search code", "run command", "official docs"). ' +
 			'You can call this multiple times to discover different tool categories.';
 
 		if (this.externalServices.length > 0) {
@@ -274,7 +274,7 @@ class ToolSearchService {
 
 		let queryDescription =
 			'Search query - tool name, keyword, or description of what you want to do. ' +
-			'Examples: "filesystem", "code search", "edit file", "terminal execute", "todo", "websearch"';
+			'Examples: "filesystem", "code search", "edit file", "terminal execute", "todo", "websearch", "snow-docs"';
 
 		if (this.externalServices.length > 0) {
 			const extNames = this.externalServices.map(s => `"${s.serviceName}"`).join(', ');

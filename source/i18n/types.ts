@@ -477,6 +477,7 @@ export type TranslationKeys = {
 		terminalTools: string;
 		todoTools: string;
 		webSearchTools: string;
+		snowDocsTools: string;
 		ideTools: string;
 		userInteractionTools: string;
 		skillTools: string;

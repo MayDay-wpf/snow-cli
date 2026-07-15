@@ -1,7 +1,15 @@
 import * as esbuild from 'esbuild';
-import {copyFileSync, existsSync, mkdirSync} from 'fs';
+import {
+	copyFileSync,
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	rmSync,
+	statSync,
+} from 'fs';
 import {builtinModules} from 'module';
-import {resolve} from 'path';
+import {join, resolve} from 'path';
 
 // Plugin to stub out optional dependencies
 const stubPlugin = {
@@ -222,5 +230,24 @@ copyFileSync(
 
 // Copy package.json to bundle directory for version reading
 copyFileSync('package.json', 'bundle/package.json');
+
+// Copy bundled official usage docs + built-in skills so runtime resolvers
+// can find docs/usage and skills/snow-docs next to the published CLI bundle.
+function copyDir(src, dest) {
+	if (!existsSync(src)) {
+		console.warn(`⚠ Skip missing asset: ${src}`);
+		return false;
+	}
+	if (existsSync(dest)) {
+		rmSync(dest, {recursive: true, force: true});
+	}
+	cpSync(src, dest, {recursive: true});
+	return true;
+}
+
+const docsCopied = copyDir(join('docs', 'usage'), join('bundle', 'docs', 'usage'));
+const skillsCopied = copyDir(join('source', 'skills'), join('bundle', 'skills'));
+if (docsCopied) console.log('✓ Bundled docs/usage');
+if (skillsCopied) console.log('✓ Bundled skills');
 
 console.log('✓ Bundle created successfully');
