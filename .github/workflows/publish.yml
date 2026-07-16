@@ -104,8 +104,15 @@ jobs:
 
             ### What's New
 
-            - Added image context compression, which archives chat history as PNG images to reduce context usage, with commands and project settings to control it.
-            - Preserved sub-agent image tool results as structured multimodal content.
+            - **Session Command Control Plane**: Added an allowlisted session/slash command runner accessible via CLI, agent tools, and SSE, with domain handlers for buddy, modes, and config matrix toggles. Includes hot-reload of config and plugins without restart, and same-process hot-sync of TUI state.
+            - **Built-in snow-docs Skill**: Added a progressive-disclosure docs skill with list/search/get tools, so agents can look up official Snow CLI usage docs instead of guessing from memory.
+            - **Buddy Companion Customization**: Added `/buddy set` for custom body color and freeform eyes, with companion updates.
+            - **Tool Display Names & Icons**: Added configurable `toolDisplayNames`, `/tool-icons` and `/tool-names` commands, and configurable status prefixes. Updated tool title icons to markers with enhanced status handling.
+            - **UI Polish**: Accent user message bubble, hook status icons, cleaner web search results (icons removed), and clean user bubble when `onUserMessage` hooks inject content. Hook command exit 1 is now treated as soft success in the status UI.
+            - **Hot-Reload**: Theme colors and user plugins now hot-reload without restart; agentic config and mode toggles hot-sync in TUI.
+            - **LSP & Streaming**: Enhanced error handling in `SafeStreamMessageWriter` with suppressed expected transport write errors. Improved thinking stream UX and turn teardown.
+            - **Image Compression**: Enhanced image context compression with session metadata and save functionality.
+            - **Other Fixes**: Hardened `GradientText` against undefined gradient colors, extracted shared `usageHistory` helpers for the TUI panel, polished notifications/exports/docs paths, and documented `config.set` and profiles control plane in setup guides.
 
             ### Installation
             ```bash
