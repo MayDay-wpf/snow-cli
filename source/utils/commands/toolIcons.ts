@@ -49,14 +49,14 @@ function formatStatusSummary(): string {
 }
 
 // Usage:
-//   /tool-icons                 - Show category + status summary
-//   /tool-icons status          - Same
-//   /tool-icons on|off          - Category icons
-//   /tool-icons status on|off   - Status prefixes (✓/·/✗)
-//   /tool-icons status:success:✓  - Override one status glyph
-//   /tool-icons status:success:   - Reset status glyph to default
-//   /tool-icons <tool>:<emoji>  - Category icon override
-//   /tool-icons <tool>:         - Clear category override
+//   /tool-icons                    - Show category + status summary
+//   /tool-icons status             - Same
+//   /tool-icons on|off             - Category markers
+//   /tool-icons status on|off      - Status prefixes
+//   /tool-icons status:success:✓   - Override one status marker
+//   /tool-icons status:success:    - Reset status marker to default
+//   /tool-icons <tool>:<marker>    - Category marker override
+//   /tool-icons <tool>:            - Clear category override
 registerCommand('tool-icons', {
 	execute: (args?: string): CommandResult => {
 		const raw = args?.trim() ?? '';
@@ -67,7 +67,10 @@ registerCommand('tool-icons', {
 		if (raw === '' || raw.toLowerCase() === 'status') {
 			return {
 				success: true,
-				message: `${messages.status(enabled, overrides)} · ${formatStatusSummary()}`,
+				message: `${messages.status(
+					enabled,
+					overrides,
+				)} · ${formatStatusSummary()}`,
 			};
 		}
 
@@ -89,10 +92,13 @@ registerCommand('tool-icons', {
 					message: messages.setStatusEnabled(boolVal),
 				};
 			}
-			// success:✓  or  success:
+			// success:✓ or success:
 			const colon = rest.indexOf(':');
 			if (colon > 0) {
-				const key = rest.slice(0, colon).trim().toLowerCase() as ToolStatusIconKey;
+				const key = rest
+					.slice(0, colon)
+					.trim()
+					.toLowerCase() as ToolStatusIconKey;
 				const glyph = rest.slice(colon + 1);
 				if (!STATUS_KEYS.includes(key)) {
 					return {success: false, message: messages.invalid};
@@ -121,7 +127,7 @@ registerCommand('tool-icons', {
 			};
 		}
 
-		// tool:emoji or tool: (clear)
+		// tool:marker or tool: (clear)
 		const colon = raw.indexOf(':');
 		if (colon > 0) {
 			const toolName = raw.slice(0, colon).trim();
@@ -134,7 +140,7 @@ registerCommand('tool-icons', {
 				STATUS_KEYS.includes(toolName.toLowerCase() as ToolStatusIconKey) &&
 				toolName.toLowerCase() === toolName
 			) {
-				// Treat as status glyph: /tool-icons success:✓
+				// Treat as a status marker: /tool-icons success:✓
 				const key = toolName.toLowerCase() as ToolStatusIconKey;
 				setToolStatusIconOverride(key, icon);
 				const cleared = !icon || !icon.trim();

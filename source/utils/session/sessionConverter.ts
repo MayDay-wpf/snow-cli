@@ -6,6 +6,7 @@ import {
 	extractFilesystemEditDiffDataForPersistence,
 } from '../config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../ui/diffPreview.js';
+import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
 
 /**
  * 从后续的 tool result 消息中提取 editDiffData。
@@ -213,7 +214,7 @@ export function convertSessionMessagesToUI(
 					: enrichPendingEditArgs(toolCall.function.name, toolArgs);
 				uiMessages.push({
 					role: 'subagent',
-					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
+					content: `\x1b[38;2;184;122;206m\u2687\u26A1 ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 					streaming: false,
 					toolCall: {
 						name: toolCall.function.name,
@@ -303,7 +304,6 @@ export function convertSessionMessagesToUI(
 
 			// For time-consuming tools, always show result with full details
 			if (isTimeConsumingTool) {
-				const statusIcon = isError ? '✗' : '✓';
 				// UI only shows simple failure message, detailed error is sent to AI via msg.content
 				const statusText = '';
 
@@ -402,7 +402,10 @@ export function convertSessionMessagesToUI(
 
 				uiMessages.push({
 					role: 'subagent',
-					content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${toolName}\x1b[0m${statusText}`,
+					content: `${formatToolTitleLine(
+						toolName,
+						isError ? 'error' : 'success',
+					)}${statusText}`,
 					streaming: false,
 					toolResult: !isError ? msg.content : undefined,
 					terminalResult: terminalResultData,
@@ -424,7 +427,7 @@ export function convertSessionMessagesToUI(
 					// UI only shows simple failure message, detailed error is sent to AI
 					uiMessages.push({
 						role: 'subagent',
-						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m`,
+						content: formatToolTitleLine(toolName, 'error'),
 						streaming: false,
 						messageStatus: 'error',
 						subAgentInternal: true,
@@ -493,16 +496,19 @@ export function convertSessionMessagesToUI(
 					const enrichedArgs = savedDiffData
 						? {...toolArgs, ...savedDiffData}
 						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
-					// Add tool call message (in progress)
+					// Rebuild the historical pending step with the current marker config;
+					// the following persisted tool result restores success or error.
 					uiMessages.push({
 						role: 'assistant',
-						content: `⚡ ${toolDisplay.toolName}`,
+						content: formatToolTitleLine(toolCall.function.name, 'pending'),
 						streaming: false,
 						toolCall: {
 							name: toolCall.function.name,
 							arguments: enrichedArgs,
 						},
 						toolDisplay,
+						toolCallId: toolCall.id,
+						toolPending: true,
 						messageStatus: 'pending',
 					});
 				}
@@ -530,7 +536,6 @@ export function convertSessionMessagesToUI(
 					? 'error'
 					: 'success');
 			const isError = status === 'error';
-			const statusIcon = isError ? '✗' : '✓';
 
 			// UI only shows simple failure message, detailed error is sent to AI via msg.content
 			let statusText = '';
@@ -697,7 +702,10 @@ export function convertSessionMessagesToUI(
 
 			uiMessages.push({
 				role: 'assistant',
-				content: `${statusIcon} ${toolName}${statusText}`,
+				content: `${formatToolTitleLine(
+					toolName,
+					isError ? 'error' : 'success',
+				)}${statusText}`,
 				streaming: false,
 				toolResult: !isError ? msg.content : undefined,
 				toolCall:
