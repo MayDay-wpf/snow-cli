@@ -1558,6 +1558,18 @@ test('hardening: profile paths and default profile invariant are protected', asy
 	});
 	t.false(renameDefault.ok);
 	t.regex(renameDefault.message ?? '', /cannot rename the default profile/i);
+
+	for (const name of ['a:b', 'a*b', 'CON', 'con.prod', 'COM1', 'trailing.']) {
+		const invalidName = await runSessionCommand({
+			command: 'profiles.create',
+			args: name,
+			mode: 'cli',
+			confirm: true,
+		});
+		t.false(invalidName.ok);
+		t.is(invalidName.code, 'INVALID_ARGS');
+		t.regex(invalidName.message ?? '', /invalid profile name/i);
+	}
 });
 
 test('hardening: export flags require values', async t => {

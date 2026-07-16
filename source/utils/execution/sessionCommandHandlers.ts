@@ -854,10 +854,12 @@ function handleProfiles(
 				meta.risk,
 			);
 		} catch (error) {
+			const msg =
+				error instanceof Error ? error.message : 'Profile switch failed';
 			return failResult(
 				meta.id,
-				'NOT_FOUND',
-				error instanceof Error ? error.message : 'Profile switch failed',
+				msg === 'Invalid profile name' ? 'INVALID_ARGS' : 'NOT_FOUND',
+				msg,
 				meta.risk,
 			);
 		}
@@ -886,9 +888,12 @@ function handleProfiles(
 		} catch (error) {
 			const msg =
 				error instanceof Error ? error.message : 'Profile create failed';
-			const code = msg.includes('already exists')
-				? 'ALREADY_EXISTS'
-				: 'EXECUTION_FAILED';
+			const code =
+				msg === 'Invalid profile name'
+					? 'INVALID_ARGS'
+					: msg.includes('already exists')
+					? 'ALREADY_EXISTS'
+					: 'EXECUTION_FAILED';
 			return failResult(meta.id, code, msg, meta.risk);
 		}
 	}
@@ -924,7 +929,12 @@ function handleProfiles(
 		} catch (error) {
 			const msg =
 				error instanceof Error ? error.message : 'Profile delete failed';
-			const code = msg.includes('not found') ? 'NOT_FOUND' : 'EXECUTION_FAILED';
+			const code =
+				msg === 'Invalid profile name'
+					? 'INVALID_ARGS'
+					: msg.includes('not found')
+					? 'NOT_FOUND'
+					: 'EXECUTION_FAILED';
 			return failResult(meta.id, code, msg, meta.risk);
 		}
 	}
@@ -957,11 +967,14 @@ function handleProfiles(
 		} catch (error) {
 			const msg =
 				error instanceof Error ? error.message : 'Profile rename failed';
-			const code = msg.includes('not found')
-				? 'NOT_FOUND'
-				: msg.includes('already exists')
-				? 'ALREADY_EXISTS'
-				: 'EXECUTION_FAILED';
+			const code =
+				msg === 'Invalid profile name'
+					? 'INVALID_ARGS'
+					: msg.includes('not found')
+					? 'NOT_FOUND'
+					: msg.includes('already exists')
+					? 'ALREADY_EXISTS'
+					: 'EXECUTION_FAILED';
 			return failResult(meta.id, code, msg, meta.risk);
 		}
 	}

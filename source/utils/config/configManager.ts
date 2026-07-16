@@ -63,6 +63,10 @@ function ensureProfilesDirectory(): void {
 	}
 }
 
+const invalidPortableProfileNameCharacters = /[<>:"/\\|?*\u0000-\u001F\u007F]/u;
+const reservedWindowsProfileName =
+	/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
+
 function isValidProfileName(profileName: unknown): profileName is string {
 	return (
 		typeof profileName === 'string' &&
@@ -71,7 +75,9 @@ function isValidProfileName(profileName: unknown): profileName is string {
 		profileName === profileName.trim() &&
 		profileName !== '.' &&
 		profileName !== '..' &&
-		!/[\\/\u0000-\u001F\u007F]/u.test(profileName)
+		!profileName.endsWith('.') &&
+		!invalidPortableProfileNameCharacters.test(profileName) &&
+		!reservedWindowsProfileName.test(profileName)
 	);
 }
 
