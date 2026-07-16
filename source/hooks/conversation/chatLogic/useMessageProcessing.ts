@@ -129,9 +129,18 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 	}, [hasFocus]);
 
 	const appendAiCompletionTimeMessage = (durationMs?: number) => {
-		setMessages(prev => [
-			...prev,
-			{
+		setMessages(prev => {
+			// 连续自动续跑（onStop/goal 等）可能多次收尾；折叠尾部旧的结束时间，
+			// 只保留最终一次，避免 UI 叠出两条 “AI 结束时间”。
+			const next = [...prev];
+			while (next.length > 0) {
+				const last = next[next.length - 1];
+				if (!last?.aiCompletionTime) {
+					break;
+				}
+				next.pop();
+			}
+			next.push({
 				role: 'assistant',
 				content: '',
 				streaming: false,
@@ -142,8 +151,9 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					durationMs >= 0
 						? durationMs
 						: undefined,
-			},
-		]);
+			});
+			return next;
+		});
 	};
 
 	const notifyAgentTurnWaitingForInput = () => {
@@ -157,6 +167,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		images?: Array<{data: string; mimeType: string}>,
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
+		/**
+		 * Optional text for the chat bubble only.
+		 * When onUserMessage hooks replace the prompt (exit 1 inject), keep the
+		 * user-typed text visible while `message` (possibly enriched) goes to the AI.
+		 */
+		displayMessage?: string,
 	) => {
 		const turnStartTime = Date.now();
 		const autoCompressConfig = getSnowConfig();
@@ -246,9 +262,20 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		streamingState.setRetryStatus(null);
 
+		// UI bubble: prefer user-typed text when hooks rewrote the AI prompt.
+		const uiSource =
+			typeof displayMessage === 'string' && displayMessage.length > 0
+				? displayMessage
+				: message;
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			message,
+			uiSource,
 		);
+		// AI path: may include onUserMessage inject tags (snow-mode / workflow-state).
+		const aiSource = message;
+		const aiCleanContent =
+			aiSource === uiSource
+				? cleanContent
+				: (await parseAndValidateFileReferences(aiSource)).cleanContent;
 
 		const imageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
@@ -282,9 +309,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const controller = new AbortController();
 		streamingState.setAbortController(controller);
 
-		let originalMessage = message;
-		let optimizedMessage = message;
-		let optimizedCleanContent = cleanContent;
+		// originalMessage = what the user typed (for session originalContent).
+		// optimizedMessage / AI body may be hook-enriched.
+		let originalMessage = uiSource;
+		let optimizedMessage = aiSource;
+		let optimizedCleanContent = aiCleanContent;
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(
@@ -497,9 +526,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 			}
 
-			streamingState.setIsStreaming(false);
-			streamingState.setAbortController(null);
-			streamingState.setStreamTokenCount(0);
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);
@@ -642,6 +670,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			return;
 		}
 
+		// Keep user-typed text for the bubble; hook replace only rewrites AI input.
+		const typedMessage = message;
 		try {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
@@ -692,7 +722,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (pureBashResult.hasCommands) {
 				if (pureBashResult.hasRejectedCommands) {
 					setRestoreInputContent({
-						text: message,
+						text: typedMessage,
 						images: images?.map(img => ({type: 'image' as const, ...img})),
 					});
 					return;
@@ -771,7 +801,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			await sessionManager.createNewSession();
 		}
 
-		await processMessage(message, images);
+		// typedMessage = bubble text; message may be hook-enriched for the model.
+		await processMessage(message, images, undefined, undefined, typedMessage);
 	};
 
 	const processPendingMessages = async () => {
@@ -786,6 +817,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
+		// Bubble shows user-typed combined text; AI may get hook inject.
+		const typedPending = combinedMessage;
 		let messageToSend = combinedMessage;
 		try {
 			const {unifiedHooksExecutor} = await import(
@@ -829,8 +862,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		}
 
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			messageToSend,
+			typedPending,
 		);
+		const aiCleanPending =
+			messageToSend === typedPending
+				? cleanContent
+				: (await parseAndValidateFileReferences(messageToSend)).cleanContent;
 
 		const imageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
@@ -870,7 +907,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(
-				cleanContent,
+				aiCleanPending,
 				regularFiles,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
@@ -996,6 +1033,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 			appendAiCompletionTimeMessage(Date.now() - turnStartTime);
 
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);

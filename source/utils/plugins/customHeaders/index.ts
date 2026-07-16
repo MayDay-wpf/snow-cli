@@ -11,6 +11,7 @@
  *   - Module may export `default`, `customHeaderPlugin`, or
  *     `customHeaderPlugins` (single object or array).
  *   - `enable: false` skips the plugin.
+ *   - Plugin directory changes hot-reload without process restart.
  *
  * The main entry point is `resolveCustomHeaderPlaceholders()`, which scans
  * header values for `{{name}}` tokens, asks every enabled plugin to resolve
@@ -18,7 +19,12 @@
  * function returns synchronously without touching the plugin directory.
  */
 
-import {existsSync, readdirSync} from 'node:fs';
+import {
+	existsSync,
+	readdirSync,
+	watch as watchDir,
+	type FSWatcher,
+} from 'node:fs';
 import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -29,6 +35,7 @@ import type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
 export type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
 
 const SUPPORTED_PLUGIN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
+const PLUGIN_RELOAD_DEBOUNCE_MS = 150;
 
 /** Matches `{{placeholder}}` tokens in header values. Capture group 1 = name. */
 const PLACEHOLDER_PATTERN = /\{\{([^}]+)\}\}/g;
@@ -59,7 +66,9 @@ function isPluginEnabled(plugin: CustomHeaderPlugin): boolean {
 	return plugin.enable !== false;
 }
 
-function collectFromModule(mod: CustomHeaderPluginModule): CustomHeaderPlugin[] {
+function collectFromModule(
+	mod: CustomHeaderPluginModule,
+): CustomHeaderPlugin[] {
 	const candidates: unknown[] = [];
 	const pushOne = (val: unknown) => {
 		if (Array.isArray(val)) candidates.push(...val);
@@ -71,13 +80,27 @@ function collectFromModule(mod: CustomHeaderPluginModule): CustomHeaderPlugin[] 
 	return candidates.filter(isCustomHeaderPlugin);
 }
 
+/** Bust ESM import cache so edited plugins reload without process restart. */
+function buildCacheBustedModuleUrl(modulePath: string): string {
+	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
+}
+
 // ---------------------------------------------------------------------------
-// External plugin loading (lazy, runs once)
+// External plugin loading (lazy, hot-reloadable)
 // ---------------------------------------------------------------------------
 
-const PLUGINS: CustomHeaderPlugin[] = [];
+let PLUGINS: CustomHeaderPlugin[] = [];
 let externalLoadPromise: Promise<void> | null = null;
 let externalLoaded = false;
+/** Bumps on each reload so concurrent ensure/reload don't serve a half-cleared list. */
+let loadGeneration = 0;
+/** Serializes reloadCustomHeaderPlugins — concurrent watch events share one reload. */
+let reloadInFlight: Promise<void> | null = null;
+/** When true, another reload was requested during the current in-flight run. */
+let reloadQueued = false;
+let pluginWatcher: FSWatcher | null = null;
+let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
+let watcherBootstrapped = false;
 
 async function loadExternalPlugins(): Promise<void> {
 	if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) return;
@@ -101,10 +124,12 @@ async function loadExternalPlugins(): Promise<void> {
 		)
 		.sort((a, b) => a.name.localeCompare(b.name));
 
+	const nextPlugins: CustomHeaderPlugin[] = [];
+
 	for (const file of files) {
 		const modulePath = join(CUSTOM_HEADERS_PLUGIN_DIR, file.name);
 		try {
-			const moduleUrl = pathToFileURL(modulePath).href;
+			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
 			const mod = (await import(moduleUrl)) as CustomHeaderPluginModule;
 			const plugins = collectFromModule(mod);
 			if (plugins.length === 0) {
@@ -115,28 +140,116 @@ async function loadExternalPlugins(): Promise<void> {
 			}
 			for (const plugin of plugins) {
 				if (!isPluginEnabled(plugin)) continue;
-				PLUGINS.push(plugin);
+				nextPlugins.push(plugin);
 			}
 		} catch (error) {
-			logger.warn(
-				`[custom-headers] failed to load plugin "${file.name}":`,
-				{error},
-			);
+			logger.warn(`[custom-headers] failed to load plugin "${file.name}":`, {
+				error,
+			});
 		}
 	}
+
+	PLUGINS = nextPlugins;
+}
+
+function ensurePluginWatcher(): void {
+	if (watcherBootstrapped) return;
+	watcherBootstrapped = true;
+
+	const startWatch = () => {
+		if (pluginWatcher) return;
+		if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) return;
+		try {
+			pluginWatcher = watchDir(
+				CUSTOM_HEADERS_PLUGIN_DIR,
+				{persistent: false},
+				(_eventType, filename) => {
+					if (
+						filename &&
+						!SUPPORTED_PLUGIN_EXTENSIONS.has(extname(filename).toLowerCase())
+					) {
+						return;
+					}
+					if (pluginReloadTimer) clearTimeout(pluginReloadTimer);
+					pluginReloadTimer = setTimeout(() => {
+						void reloadCustomHeaderPlugins();
+					}, PLUGIN_RELOAD_DEBOUNCE_MS);
+				},
+			);
+			pluginWatcher.on('error', () => {
+				try {
+					pluginWatcher?.close();
+				} catch {
+					// ignore
+				}
+				pluginWatcher = null;
+				setTimeout(startWatch, 300);
+			});
+		} catch {
+			setTimeout(startWatch, 400);
+		}
+	};
+
+	startWatch();
+	setTimeout(startWatch, 800);
 }
 
 /**
  * Ensure that external custom header plugins are loaded into the registry.
- * Safe to call multiple times — actual loading only runs once.
+ * Safe to call multiple times — first load is cached until reload.
+ * Concurrent callers share one promise; never observes a mid-reload list.
  */
 export function ensureCustomHeaderPluginsLoaded(): Promise<void> {
+	ensurePluginWatcher();
+	if (reloadInFlight) return reloadInFlight;
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
+	const gen = loadGeneration;
 	externalLoadPromise = loadExternalPlugins().then(() => {
-		externalLoaded = true;
+		if (gen === loadGeneration) {
+			externalLoaded = true;
+		}
 	});
 	return externalLoadPromise;
+}
+
+/**
+ * Force re-scan + cache-busted re-import of custom header plugins.
+ * Serialized with queue-latest + generation token so concurrent watch events /
+ * ensure* cannot read a half-cleared PLUGINS array mid-reload, and mid-flight
+ * edits still trigger one extra pass after the current run finishes.
+ */
+export async function reloadCustomHeaderPlugins(): Promise<void> {
+	ensurePluginWatcher();
+	if (reloadInFlight) {
+		reloadQueued = true;
+		await reloadInFlight;
+		return;
+	}
+
+	reloadInFlight = (async () => {
+		do {
+			reloadQueued = false;
+			loadGeneration += 1;
+			const gen = loadGeneration;
+			externalLoaded = false;
+			externalLoadPromise = null;
+			// Clear only after claiming generation so ensure* waits on reloadInFlight.
+			// loadExternalPlugins assigns PLUGINS = next when done.
+			PLUGINS = [];
+			const loadPromise = loadExternalPlugins().then(() => {
+				if (gen === loadGeneration) {
+					externalLoaded = true;
+				}
+			});
+			externalLoadPromise = loadPromise;
+			await loadPromise;
+		} while (reloadQueued);
+	})().finally(() => {
+		reloadInFlight = null;
+	});
+
+	await reloadInFlight;
 }
 
 /** All registered (enabled) plugins (sync — only sees what's loaded so far). */
@@ -152,9 +265,7 @@ export function listCustomHeaderPlugins(): CustomHeaderPlugin[] {
  * Extract all unique placeholder names from a set of header values.
  * Returns an empty array when no `{{...}}` tokens are present.
  */
-export function extractPlaceholders(
-	headers: Record<string, string>,
-): string[] {
+export function extractPlaceholders(headers: Record<string, string>): string[] {
 	const names = new Set<string>();
 	for (const value of Object.values(headers)) {
 		if (typeof value !== 'string') continue;
@@ -172,7 +283,7 @@ export function extractPlaceholders(
  * Flow:
  *   1. Extract unique placeholder names from all header values.
  *   2. If none found, return headers unchanged (no plugin loading).
- *   3. Load external plugins (lazy, once).
+ *   3. Load external plugins (lazy, once until hot-reload).
  *   4. Call each enabled plugin's `resolve()` with the placeholder names.
  *      First plugin to resolve a placeholder wins.
  *   5. Substitute resolved values; unresolved placeholders remain as-is.

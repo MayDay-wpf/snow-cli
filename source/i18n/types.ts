@@ -823,6 +823,8 @@ export type TranslationKeys = {
 			btw: string;
 			deepresearch: string;
 			toolDisplay: string;
+			toolIcons: string;
+			toolNames: string;
 			thinkDisplay: string;
 			speedometer: string;
 			cut: string;
@@ -861,6 +863,26 @@ export type TranslationKeys = {
 				set: (mode: string) => string;
 				invalid: string;
 			};
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => string;
+				setEnabled: (enabled: boolean) => string;
+				setOverride: (toolName: string, icon: string) => string;
+				cleared: (toolName: string) => string;
+				setStatusEnabled: (enabled: boolean) => string;
+				setStatusOverride: (statusKey: string, icon: string) => string;
+				clearedStatus: (statusKey: string) => string;
+				invalid: string;
+			};
+			// Tool display name overrides (user-defined only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => string;
+				setOverride: (toolName: string, displayName: string) => string;
+				cleared: (toolName: string) => string;
+				batch: (set: number, cleared: number) => string;
+				clearAll: (count: number) => string;
+				invalid: string;
+			};
 			// Think display mode command messages
 			thinkDisplay: {
 				status: (mode: string) => string;
@@ -882,6 +904,8 @@ export type TranslationKeys = {
 				personalityLabel: string;
 				hatLabel: string;
 				eyeLabel: string;
+				colorLabel: string;
+				colorDefault: string;
 				mutedLabel: string;
 				mutedYes: string;
 				mutedNo: string;
@@ -902,6 +926,17 @@ export type TranslationKeys = {
 				renameUsage: string;
 				renameReaction: string;
 				renameSuccess: string;
+				noBuddyToSet: string;
+				setUsage: string;
+				setSuccess: string;
+				setReaction: string;
+				setOptionsTitle: string;
+				setOptionsHats: string;
+				setOptionsEyes: string;
+				setOptionsRarities: string;
+				setOptionsSpecies: string;
+				setOptionsColors: string;
+				setOptionsStats: string;
 				noBuddyToTalk: string;
 				sayUsage: string;
 				profileListTitle: string;
@@ -1380,6 +1415,7 @@ export type TranslationKeys = {
 		statusThinking: string;
 		statusDeepThinking: string;
 		statusWriting: string;
+		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;
 		statusIndexing: string;

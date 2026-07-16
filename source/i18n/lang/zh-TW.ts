@@ -665,7 +665,8 @@ export const zhTW: TranslationKeys = {
 		confirm: '確認',
 		preview: '預覽',
 		userMessagePreview: '使用者訊息預覽',
-		userMessageSample: '用於檢查 userMessageBackground 是否合適。',
+		userMessageSample:
+			'用於檢查使用者訊息左側強調條（userMessageBackground）是否合適。',
 		colorHint: '按 Enter 編輯此顏色',
 	},
 	helpPanel: {
@@ -835,7 +836,7 @@ export const zhTW: TranslationKeys = {
 				'文件編輯後自動格式化開關。用法: /auto-format [on|off|status]',
 			simple: '切換主題簡易模式。用法: /simple [on|off|status]',
 			buddy:
-				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
+				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
@@ -858,6 +859,10 @@ export const zhTW: TranslationKeys = {
 				'執行自主多步聯網深度研究，並將帶引用的 Markdown 報告儲存到 .snow/deepresearch/',
 			toolDisplay:
 				'控制工具呼叫顯示模式。用法: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'控制工具類型圖示。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'自訂工具顯示名（官方路徑，勿整檔改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
 			thinkDisplay:
 				'控制思考內容顯示模式。用法: /think-display [full|compact|status]',
 			speedometer:
@@ -904,6 +909,60 @@ export const zhTW: TranslationKeys = {
 				set: (mode: string) => `工具顯示模式已設定為: ${mode}`,
 				invalid: '無效的模式。用法: /tool-display [full|compact|hidden|status]',
 			},
+			// 工具類型圖示 + 狀態前綴命令訊息
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? '無覆蓋'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `工具類型圖示: ${
+						enabled ? '開啟' : '關閉'
+					} · 覆蓋: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`工具類型圖示已${enabled ? '開啟' : '關閉'}（僅影響新工具標題）`,
+				setOverride: (toolName: string, icon: string) =>
+					`已設定 ${toolName} 圖示為 ${icon}`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的圖示覆蓋`,
+				setStatusEnabled: (enabled: boolean) =>
+					`工具狀態前綴已${
+						enabled ? '開啟' : '關閉'
+					}（預設 ✓/·/✗，僅影響新標題）`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`已設定狀態 ${statusKey} 符號為 ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`已恢復狀態 ${statusKey} 為預設符號`,
+				invalid:
+					'無效參數。用法: /tool-icons [on|off|status|status on|off|status:<key>:<符號>|<tool>:<emoji>]',
+			},
+			// 工具顯示名（僅使用者覆蓋，無內建預設譯名）
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return '工具顯示名: 無覆蓋（顯示技術 ID）。批量請用 /tool-names a:甲 b:乙（勿整檔改 theme.json）';
+					}
+					return (
+						`工具顯示名覆蓋 (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`已設定 ${toolName} 顯示為「${displayName}」（僅影響新工具標題）`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的顯示名覆蓋`,
+				batch: (set: number, cleared: number) =>
+					`已批量更新工具顯示名：設定 ${set} 項` +
+					(cleared > 0 ? `，清除 ${cleared} 項` : '') +
+					'（僅影響新工具標題）',
+				clearAll: (count: number) =>
+					count === 0
+						? '工具顯示名: 本無覆蓋'
+						: `已清除全部 ${count} 項工具顯示名覆蓋`,
+				invalid:
+					'無效參數。用法: /tool-names [status|clear|<tool>:<顯示名> …]；可批量空格/逗號分隔；`<tool>:` 清除單項',
+			},
 			// 思考顯示模式命令訊息
 			thinkDisplay: {
 				status: (mode: string) =>
@@ -929,6 +988,8 @@ export const zhTW: TranslationKeys = {
 				personalityLabel: '性格',
 				hatLabel: '帽子',
 				eyeLabel: '眼睛',
+				colorLabel: '顏色',
+				colorDefault: '預設（物種/閃光）',
 				mutedLabel: '已靜音',
 				mutedYes: '是',
 				mutedNo: '否',
@@ -952,6 +1013,18 @@ export const zhTW: TranslationKeys = {
 				renameUsage: '用法: /buddy rename <名字>',
 				renameReaction: '{oldName} 現在叫 {newName} 了。',
 				renameSuccess: '已將寵物從 {oldName} 重新命名為 {newName}。',
+				noBuddyToSet: '還沒有可自訂的寵物。請先使用 /buddy hatch [名字]。',
+				setUsage:
+					'用法: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] 或 /buddy set --list',
+				setSuccess: '已更新 {name}：{changed}。',
+				setReaction: '新造型好看！已更新 {changed}。',
+				setOptionsTitle: '桌寵自訂選項：',
+				setOptionsHats: '帽子: {hats}',
+				setOptionsEyes: '眼睛: {eyes}',
+				setOptionsRarities: '稀有度: {rarities}',
+				setOptionsSpecies: '物種: {species}',
+				setOptionsColors: '顏色: {colors}',
+				setOptionsStats: '屬性 (1-10): {stats}',
 				noBuddyToTalk: '還沒有可聊天的寵物。請先使用 /buddy hatch [名字]。',
 				sayUsage: '用法: /buddy say <訊息>',
 				profileListTitle: '寵物 AI 配置：{profile}',
@@ -968,7 +1041,7 @@ export const zhTW: TranslationKeys = {
 				unmuted: '寵物已取消靜音。',
 				reset: '寵物已重置。使用 /buddy hatch [名字] 孵化新的夥伴。',
 				usage:
-					'用法: /buddy [status|hatch [名字] [--species=類型] [--list-species] [--personality=文字]|pet|rename <名字>|say <訊息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
+					'用法: /buddy [status|hatch [名字] [--species=類型] [--list-species] [--personality=文字]|pet|rename <名字>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <訊息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
 				teaser: '悄悄說一句……試試 /buddy',
 				noModelConfigured: '沒有為寵物回覆設定模型',
 				emptyReply: '{name} 正在認真聽。',
@@ -1436,6 +1509,7 @@ export const zhTW: TranslationKeys = {
 		statusThinking: '思考中...',
 		statusDeepThinking: '深度思考中...',
 		statusWriting: '輸出中...',
+		statusFinishing: '收尾中...',
 		statusStreaming: '串流傳輸中',
 		statusWorking: '工作中',
 		statusIndexing: '索引代碼庫...',
@@ -2165,7 +2239,7 @@ export const zhTW: TranslationKeys = {
 		scopeProject: '專案級設定',
 		scopeGlobal: '全域設定',
 		navigationHint: '↑↓ 導航 • Enter 編輯 • ESC 返回',
-		savedSuccess: '{scope} MCP 設定儲存成功！請用 `snow` 重新啟動！',
+		savedSuccess: '{scope} MCP 設定儲存成功！工具列表已熱刷新，無需重啟。',
 		configErrors: '設定錯誤: {errors}',
 		reverted: '修改已還原至上一個有效設定。',
 		invalidJson: 'JSON 格式無效，修改已還原至上一個有效設定。',

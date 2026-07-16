@@ -10,6 +10,7 @@ import {getToolResultSummary} from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
+import {maskHookInjectedText} from '../../../utils/ui/hookInjectMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
@@ -160,9 +161,10 @@ function MessageRendererImpl({
 
 	const getDisplayContent = (content: string): string => {
 		// 只做视觉隐藏：保留原始 message.content 用于请求体/持久化。
-		// 先折叠 Skill 注入块，再折叠 GitLine 注入块（diff 内容可能很长）。
+		// 先折叠 Skill / GitLine，再剥离 onUserMessage hook 注入（snow-mode 等）。
 		const afterSkill = maskSkillInjectedText(removeAnsiCodes(content || ''));
-		return maskGitLineText(afterSkill.displayText).displayText;
+		const afterGit = maskGitLineText(afterSkill.displayText).displayText;
+		return maskHookInjectedText(afterGit).displayText;
 	};
 
 	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
@@ -417,7 +419,9 @@ function MessageRendererImpl({
 								message.role === 'user'
 									? message.subAgentDirected
 										? 'magenta'
-										: 'green'
+										: theme.colors.userMessageBackground ||
+										  theme.colors.menuSelected ||
+										  'green'
 									: message.role === 'command'
 									? theme.colors.menuSecondary
 									: toolStatusColor
@@ -559,7 +563,11 @@ function MessageRendererImpl({
 																message.toolResult &&
 																(() => {
 																	const toolName = removeAnsiCodes(titleLine)
-																		.replace(/^[✓✗⚡]\s*/, '')
+																		// Status glyphs + optional tool-type emoji (when toolIcons enabled)
+																		.replace(
+																			/^[✓✗⚡✅❌⚠️⏳]\s*(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*)?/u,
+																			'',
+																		)
 																		.replace(/.*⚇✓\s*/, '')
 																		.trim();
 																	const summary = getToolResultSummary(
@@ -642,17 +650,25 @@ function MessageRendererImpl({
 																	getDisplayContent(message.content),
 																	contentColumnWidth,
 																)
-															).map((line, lineIndex) => (
-																<Text
-																	key={lineIndex}
-																	color={theme.colors.userMessageText}
-																	backgroundColor={
-																		theme.colors.userMessageBackground
-																	}
-																>
-																	{line}
-																</Text>
-															))}
+															).map((line, lineIndex) => {
+																// Left accent bar (no full-line bg → no stairstep / ghosting).
+																// Reuse userMessageBackground as the accent color so theme
+																// customization still has a dedicated user-message token.
+																const accentColor = message.subAgentDirected
+																	? 'magenta'
+																	: theme.colors.userMessageBackground ||
+																	  theme.colors.menuSelected ||
+																	  theme.colors.success ||
+																	  'green';
+																return (
+																	<Box key={lineIndex}>
+																		<Text color={accentColor}>│ </Text>
+																		<Text color={theme.colors.userMessageText}>
+																			{line}
+																		</Text>
+																	</Box>
+																);
+															})}
 														</Box>
 													) : message.content ? (
 														<MarkdownRenderer

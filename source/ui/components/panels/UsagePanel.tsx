@@ -1,37 +1,19 @@
 import React, {useState, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import type {Theme} from '../../themes/index.js';
+import {
+	loadUsageData,
+	filterByPeriod,
+	aggregateByModel,
+	USAGE_PERIODS,
+	type AggregatedStats,
+	type UsagePeriod,
+} from '../../../utils/core/usageHistory.js';
 
-interface UsageLogEntry {
-	model: string;
-	profileName: string;
-	inputTokens: number;
-	outputTokens: number;
-	cacheCreationInputTokens?: number;
-	cacheReadInputTokens?: number;
-	timestamp: string;
-}
-
-interface ModelStats {
-	input: number;
-	output: number;
-	cacheCreation: number;
-	cacheRead: number;
-	total: number;
-}
-
-interface AggregatedStats {
-	models: Map<string, ModelStats>;
-	grandTotal: number;
-}
-
-type Granularity = 'hour' | 'day' | 'week' | 'month';
+type Granularity = UsagePeriod;
 
 function getModelShortName(modelName: string, maxLength = 20): string {
 	// Extract readable name from model string intelligently
@@ -148,109 +130,6 @@ function getModelShortName(modelName: string, maxLength = 20): string {
 
 	// Step 5: Truncate if too long
 	return result.length > maxLength ? result.slice(0, maxLength) : result;
-}
-
-async function loadUsageData(): Promise<UsageLogEntry[]> {
-	const homeDir = os.homedir();
-	const usageDir = path.join(homeDir, '.snow', 'usage');
-
-	try {
-		const entries: UsageLogEntry[] = [];
-		const dateDirs = await fs.readdir(usageDir);
-
-		for (const dateDir of dateDirs) {
-			const datePath = path.join(usageDir, dateDir);
-			const stats = await fs.stat(datePath);
-
-			if (!stats.isDirectory()) continue;
-
-			const files = await fs.readdir(datePath);
-
-			for (const file of files) {
-				if (!file.endsWith('.jsonl')) continue;
-
-				const filePath = path.join(datePath, file);
-				const content = await fs.readFile(filePath, 'utf-8');
-				const lines = content
-					.trim()
-					.split('\n')
-					.filter(l => l.trim());
-
-				for (const line of lines) {
-					try {
-						const entry = JSON.parse(line) as UsageLogEntry;
-						entries.push(entry);
-					} catch {
-						// Skip invalid lines
-					}
-				}
-			}
-		}
-
-		return entries.sort(
-			(a, b) =>
-				new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-		);
-	} catch (error) {
-		return [];
-	}
-}
-
-function filterByGranularity(
-	entries: UsageLogEntry[],
-	granularity: Granularity,
-): UsageLogEntry[] {
-	if (entries.length === 0) return [];
-
-	const now = new Date();
-	const cutoff = new Date(now);
-
-	switch (granularity) {
-		case 'hour':
-			cutoff.setHours(now.getHours() - 24);
-			break;
-		case 'day':
-			cutoff.setDate(now.getDate() - 7);
-			break;
-		case 'week':
-			cutoff.setDate(now.getDate() - 30);
-			break;
-		case 'month':
-			cutoff.setMonth(now.getMonth() - 12);
-			break;
-	}
-
-	return entries.filter(e => new Date(e.timestamp) >= cutoff);
-}
-
-function aggregateByModel(entries: UsageLogEntry[]): AggregatedStats {
-	const models = new Map<string, ModelStats>();
-	let grandTotal = 0;
-
-	for (const entry of entries) {
-		const modelName = entry.model;
-
-		if (!models.has(modelName)) {
-			models.set(modelName, {
-				input: 0,
-				output: 0,
-				cacheCreation: 0,
-				cacheRead: 0,
-				total: 0,
-			});
-		}
-
-		const stats = models.get(modelName)!;
-		stats.input += entry.inputTokens;
-		stats.output += entry.outputTokens;
-		stats.cacheCreation += entry.cacheCreationInputTokens || 0;
-		stats.cacheRead += entry.cacheReadInputTokens || 0;
-		stats.total += entry.inputTokens + entry.outputTokens;
-
-		grandTotal += entry.inputTokens + entry.outputTokens;
-	}
-
-	return {models, grandTotal};
 }
 
 function formatTokens(tokens: number, compact = false): string {
@@ -536,7 +415,7 @@ export default function UsagePanel() {
 			setIsLoading(true);
 			try {
 				const entries = await loadUsageData();
-				const filtered = filterByGranularity(entries, granularity);
+				const filtered = filterByPeriod(entries, granularity);
 				const aggregated = aggregateByModel(filtered);
 				setStats(aggregated);
 				setError(null);
@@ -559,7 +438,7 @@ export default function UsagePanel() {
 
 	useInput((_input, key) => {
 		if (key.tab) {
-			const granularities: Granularity[] = ['hour', 'day', 'week', 'month'];
+			const granularities = USAGE_PERIODS;
 			const currentIdx = granularities.indexOf(granularity);
 			const nextIdx = (currentIdx + 1) % granularities.length;
 			setGranularity(granularities[nextIdx]!);

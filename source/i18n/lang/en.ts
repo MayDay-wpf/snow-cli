@@ -705,7 +705,8 @@ export const en: TranslationKeys = {
 		confirm: 'Confirm',
 		preview: 'Preview',
 		userMessagePreview: 'User message preview',
-		userMessageSample: 'Check if userMessageBackground looks right.',
+		userMessageSample:
+			'Check if the user message accent bar (userMessageBackground) looks right.',
 		colorHint: 'Press Enter to edit this color',
 	},
 	helpPanel: {
@@ -886,7 +887,7 @@ export const en: TranslationKeys = {
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
 			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
 			buddy:
-				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|say|mute|unmute|status|reset]',
+				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
@@ -912,6 +913,10 @@ export const en: TranslationKeys = {
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
 				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
 			thinkDisplay:
 				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			speedometer:
@@ -960,6 +965,63 @@ export const en: TranslationKeys = {
 				invalid:
 					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
 			},
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? 'none'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `Tool category icons: ${
+						enabled ? 'on' : 'off'
+					} · overrides: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`Tool category icons ${
+						enabled ? 'enabled' : 'disabled'
+					} (affects new tool titles only)`,
+				setOverride: (toolName: string, icon: string) =>
+					`Set icon for ${toolName} to ${icon}`,
+				cleared: (toolName: string) => `Cleared icon override for ${toolName}`,
+				setStatusEnabled: (enabled: boolean) =>
+					`Tool status prefixes ${
+						enabled ? 'enabled' : 'disabled'
+					} (default ✓/·/✗; new titles only)`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`Set status ${statusKey} glyph to ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`Reset status ${statusKey} to default glyph`,
+				invalid:
+					'Invalid args. Usage: /tool-icons [on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
+			},
+			// Tool display names (user overrides only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return 'Tool display names: no overrides (technical ids). Batch: /tool-names a:A b:B (prefer over editing theme.json)';
+					}
+					return (
+						`Tool display name overrides (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`Set display name for ${toolName} to "${displayName}" (new titles only)`,
+				cleared: (toolName: string) =>
+					`Cleared display name override for ${toolName}`,
+				batch: (set: number, cleared: number) =>
+					`Batch-updated tool display names: set ${set}` +
+					(cleared > 0 ? `, cleared ${cleared}` : '') +
+					' (new titles only)',
+				clearAll: (count: number) =>
+					count === 0
+						? 'Tool display names: nothing to clear'
+						: `Cleared all ${count} tool display name override(s)`,
+				invalid:
+					'Invalid args. Usage: /tool-names [status|clear|<tool>:<display> …]; space/comma batch; `<tool>:` clears one',
+			},
 			// Think display mode command messages
 			thinkDisplay: {
 				status: (mode: string) =>
@@ -986,6 +1048,8 @@ export const en: TranslationKeys = {
 				personalityLabel: 'Personality',
 				hatLabel: 'Hat',
 				eyeLabel: 'Eye',
+				colorLabel: 'Color',
+				colorDefault: 'default (species/shiny)',
 				mutedLabel: 'Muted',
 				mutedYes: 'yes',
 				mutedNo: 'no',
@@ -1011,6 +1075,19 @@ export const en: TranslationKeys = {
 				renameUsage: 'Usage: /buddy rename <name>',
 				renameReaction: '{oldName} is now {newName}.',
 				renameSuccess: 'Renamed buddy from {oldName} to {newName}.',
+				noBuddyToSet:
+					'No buddy to customize yet. Use /buddy hatch [name] first.',
+				setUsage:
+					'Usage: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] or /buddy set --list',
+				setSuccess: 'Updated {name}: {changed}.',
+				setReaction: 'Looking sharp! Updated {changed}.',
+				setOptionsTitle: 'Buddy customization options:',
+				setOptionsHats: 'Hats: {hats}',
+				setOptionsEyes: 'Eyes: {eyes}',
+				setOptionsRarities: 'Rarities: {rarities}',
+				setOptionsSpecies: 'Species: {species}',
+				setOptionsColors: 'Colors: {colors}',
+				setOptionsStats: 'Stats (1-10): {stats}',
 				noBuddyToTalk:
 					'No buddy to talk to yet. Use /buddy hatch [name] first.',
 				sayUsage: 'Usage: /buddy say <message>',
@@ -1029,7 +1106,7 @@ export const en: TranslationKeys = {
 				unmuted: 'Buddy unmuted.',
 				reset: 'Buddy reset. Use /buddy hatch [name] to hatch a new companion.',
 				usage:
-					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
+					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
 				teaser: 'Psst... try /buddy',
 				noModelConfigured: 'No model configured for buddy reply',
 				emptyReply: '{name} is listening.',
@@ -1520,6 +1597,7 @@ export const en: TranslationKeys = {
 		statusThinking: 'Thinking...',
 		statusDeepThinking: 'Deep thinking...',
 		statusWriting: 'Writing...',
+		statusFinishing: 'Finishing...',
 		statusStreaming: 'Streaming',
 		statusWorking: 'Working',
 		statusIndexing: 'Indexing codebase...',
@@ -2290,7 +2368,7 @@ export const en: TranslationKeys = {
 		scopeGlobal: 'Global Config',
 		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
 		savedSuccess:
-			'{scope} MCP configuration saved successfully! Please use `snow` restart!',
+			'{scope} MCP configuration saved successfully! Tools cache hot-refreshed (no restart).',
 		configErrors: 'Configuration errors: {errors}',
 		reverted: 'Changes have been reverted to the previous valid configuration.',
 		invalidJson:

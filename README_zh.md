@@ -211,7 +211,7 @@ VSIX/                       # VSCode 扩展源码
 ├── tasks/                  # 异步任务
 ├── hooks/                  # 工作流钩子
 ├── config.json             # API 配置
-├── mcp-config.json         # MCP 配置
+├── settings.json           # 统一设置（含 mcpServers）
 └── ...                     # 其他配置文件
 ```
 

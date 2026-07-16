@@ -8,8 +8,8 @@ import {
 	renderPetSprite,
 	renderSleepFace,
 	renderSleepSprite,
+	companionColor,
 	renderSprite,
-	speciesColor,
 	spriteFrameCount,
 } from './sprites.js';
 import type {Companion} from './types.js';
@@ -215,14 +215,12 @@ export function CompanionSprite({
 		maxLineWidth(frameLines),
 		textWidth(companion.name),
 	);
-	const companionColor = companion.shiny
-		? 'yellow'
-		: speciesColor(companion.species);
+	const bodyColor = companionColor(companion);
 
 	if (terminalColumns < MIN_COLS_FOR_FULL_SPRITE) {
 		return (
 			<Box marginLeft={1}>
-				<Text color={isPetting ? 'yellow' : companionColor}>
+				<Text color={isPetting ? 'yellow' : bodyColor}>
 					{isSleeping
 						? renderSleepFace(companion, tick)
 						: renderFace(isPetting ? {...companion, eye: '✦'} : companion)}
@@ -258,7 +256,7 @@ export function CompanionSprite({
 						{frameLines.map((line, index) => (
 							<Text
 								key={`${index}-${line}`}
-								color={isPetting ? 'yellow' : companionColor}
+								color={isPetting ? 'yellow' : bodyColor}
 							>
 								{line}
 							</Text>

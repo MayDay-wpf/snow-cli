@@ -268,12 +268,15 @@ export async function processStreamRound(ctx: {
 	const onRetry = (error: Error, attempt: number, nextDelay: number) => {
 		retryInProgress = true;
 		if (setRetryStatus) {
+			// 同步写入 remainingSeconds，避免 UI 等 effect 初始化时
+			// isRetrying 已 true、秒数未定义导致倒计时 effect 早退且不再重启。
 			setRetryStatus({
 				isRetrying: true,
 				attempt,
 				nextDelay,
 				maxRetries: config.maxRetries ?? 5,
 				errorMessage: error.message,
+				remainingSeconds: Math.max(0, Math.ceil(nextDelay / 1000)),
 			});
 		}
 	};
@@ -332,11 +335,9 @@ export async function processStreamRound(ctx: {
 			if (!hasStartedReasoning) {
 				hasStartedReasoning = true;
 				if (!hasReceivedContentChunk) {
+					// LoadingIndicator 走 isReasoning 显示“深度思考中”；
+					// ThinkingStatus 面板等真正有内容再激活，避免空思考框。
 					setIsReasoning?.(true);
-					if (!isThinkingStatusActive) {
-						isThinkingStatusActive = true;
-						options.onThinkingStatus?.({isActive: true, content: ''});
-					}
 				}
 			}
 			countTokens(chunk.delta);
@@ -346,13 +347,23 @@ export async function processStreamRound(ctx: {
 			}
 
 			thinkingLineBuffer += chunk.delta;
+			const cleanedThinking = cleanThinkingContent(thinkingLineBuffer);
+			// 清洗后仍为空（例如只有 <think> 标签）时不激活 ThinkingStatus，
+			// 否则会出现“Thinking...”标题 + 5 行空白占位的空思考。
+			if (!cleanedThinking.trim()) {
+				continue;
+			}
+
 			const now = Date.now();
-			if (now - lastThinkingStatusTime >= STREAM_FLUSH_INTERVAL) {
+			if (
+				!isThinkingStatusActive ||
+				now - lastThinkingStatusTime >= STREAM_FLUSH_INTERVAL
+			) {
 				lastThinkingStatusTime = now;
 				isThinkingStatusActive = true;
 				options.onThinkingStatus?.({
 					isActive: true,
-					content: cleanThinkingContent(thinkingLineBuffer),
+					content: cleanedThinking,
 				});
 			}
 			continue;

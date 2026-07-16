@@ -19,6 +19,10 @@ import {
 	isActionTypeAllowed,
 } from '../../utils/config/hooksConfig.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {
+	getHookActionIcon,
+	getHookTypeIcon,
+} from '../components/special/hookIcons.js';
 
 type Props = {
 	onBack: () => void;
@@ -182,10 +186,11 @@ export default function HooksConfigScreen({
 			const isConfigured = configuredHooks.includes(hookType);
 			const rules = isConfigured ? loadHookConfig(hookType, selectedScope) : [];
 			const ruleCount = rules.length;
-			const icon = isConfigured ? '[✓]' : '[ ]';
+			const check = isConfigured ? '[✓]' : '[ ]';
+			const typeIcon = getHookTypeIcon(hookType);
 
 			return {
-				label: `${icon} ${hookType}${
+				label: `${check} ${typeIcon} ${hookType}${
 					ruleCount > 0 ? ` (${ruleCount} ${t.hooksConfig.hookList.rules})` : ''
 				}`,
 				value: hookType,
@@ -395,11 +400,12 @@ export default function HooksConfigScreen({
 		editingRule.hooks.forEach((action, index) => {
 			const enabled = action.enabled !== false;
 			const enabledIcon = enabled ? '[✓]' : '[ ]';
+			const actionGlyph = getHookActionIcon(action.type);
 			const actionLabel =
 				action.type === 'command'
 					? `${action.command || ''}`
 					: `${action.prompt || ''}`;
-			const label = `${enabledIcon} ${index + 1}. ${
+			const label = `${enabledIcon} ${actionGlyph} ${index + 1}. ${
 				action.type
 			}: ${actionLabel}`;
 

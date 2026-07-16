@@ -23,7 +23,13 @@ export function GradientText({
 	dimColor,
 	bold,
 }: GradientTextProps) {
-	if (!gradient || gradient.length < 2 || text.length === 0) {
+	const safeGradient = Array.isArray(gradient)
+		? gradient.filter(
+				(c): c is string => typeof c === 'string' && c.trim().length > 0,
+		  )
+		: undefined;
+
+	if (!safeGradient || safeGradient.length < 2 || text.length === 0) {
 		return (
 			<Text color={color} dimColor={dimColor} bold={bold}>
 				{text}
@@ -31,11 +37,11 @@ export function GradientText({
 		);
 	}
 
-	const colors = generateGradientColors(gradient, text.length);
+	const colors = generateGradientColors(safeGradient, text.length);
 
 	if (colors.length !== text.length) {
 		return (
-			<Text color={color || gradient[0]} dimColor={dimColor} bold={bold}>
+			<Text color={color || safeGradient[0]} dimColor={dimColor} bold={bold}>
 				{text}
 			</Text>
 		);

@@ -1,7 +1,7 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
-import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 
 export type ToolRejectionResult = {
 	shouldContinue: boolean;
@@ -59,8 +59,6 @@ export async function handleToolRejection(
 			console.error('Failed to save tool rejection message:', error);
 		});
 
-		const toolDisplay = formatToolCallMessage(toolCall);
-		const statusIcon = '✗';
 		let statusText = '';
 
 		if (typeof confirmation === 'object' && confirmation.reason) {
@@ -71,7 +69,10 @@ export async function handleToolRejection(
 
 		rejectedToolUIMessages.push({
 			role: 'assistant' as const,
-			content: `${statusIcon} ${toolDisplay.toolName}${statusText}`,
+			content: `${formatToolTitleLine(
+				toolCall.function.name,
+				'error',
+			)}${statusText}`,
 			streaming: false,
 			messageStatus: 'error' as const,
 		});

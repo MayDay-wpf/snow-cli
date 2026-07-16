@@ -643,7 +643,7 @@ function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 		return (
 			<Box marginLeft={2}>
 				<Text color={theme.colors.menuSecondary} dimColor>
-					└─ No results for "{data.query}"
+					└─ 🔍 No results for "{data.query}"
 				</Text>
 			</Box>
 		);
@@ -652,7 +652,7 @@ function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 	return (
 		<Box marginLeft={2}>
 			<Text color={theme.colors.menuSecondary} dimColor>
-				└─ Found {data.totalResults || data.results.length} results for "
+				└─ 🔍 Found {data.totalResults || data.results.length} results for "
 				{data.query}"
 			</Text>
 		</Box>
@@ -664,7 +664,7 @@ function renderWebFetchPreview(data: any, theme: Theme) {
 	return (
 		<Box marginLeft={2}>
 			<Text color={theme.colors.menuSecondary} dimColor>
-				└─ Fetched {contentLength} characters from {data.title || 'page'}
+				└─ 🌐 Fetched {contentLength} characters from {data.title || 'page'}
 			</Text>
 		</Box>
 	);

@@ -6,6 +6,8 @@ import {translations} from '../../i18n/translations.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 
 const appId = 'Snow CLI';
+/** Windows toast identity shown as the notification app name. */
+const windowsAppUserModelId = 'Snow.CLI';
 const maxTitleLength = 80;
 const maxBodyLength = 240;
 const notificationControlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
@@ -163,25 +165,78 @@ export function buildTerminalNotificationSequences(
 }
 
 export function buildToastScript(title: string, body: string): string {
-	const safeTitle = escapePowerShellSingleQuotedString(title || appId);
-	const safeBody = escapePowerShellSingleQuotedString(body || title || appId);
+	const resolvedTitle = title || appId;
+	const resolvedBody = body || title || appId;
+	const safeTitle = escapePowerShellSingleQuotedString(resolvedTitle);
+	const safeBody = escapePowerShellSingleQuotedString(resolvedBody);
+	const safeXmlTitle = escapeXml(resolvedTitle);
+	const safeXmlBody = escapeXml(resolvedBody);
+	const safeAppName = escapePowerShellSingleQuotedString(appId);
+	const safeAumid = escapePowerShellSingleQuotedString(windowsAppUserModelId);
 
+	// Prefer WinRT toast + registered AppUserModelID so Windows shows "Snow CLI"
+	// instead of "Windows PowerShell 5.1" (legacy NotifyIcon balloon tip).
 	return `
-try {
+$ErrorActionPreference = 'Stop'
+$appUserModelId = '${safeAumid}'
+$displayName = '${safeAppName}'
+
+function Register-SnowCliToastIdentity {
+  $regPath = "HKCU:\\Software\\Classes\\AppUserModelId\\$appUserModelId"
+  if (-not (Test-Path -LiteralPath $regPath)) {
+    New-Item -Path $regPath -Force | Out-Null
+  }
+  New-ItemProperty -Path $regPath -Name 'DisplayName' -Value $displayName -PropertyType String -Force | Out-Null
+
+  $settingsPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings\\$appUserModelId"
+  if (-not (Test-Path -LiteralPath $settingsPath)) {
+    New-Item -Path $settingsPath -Force | Out-Null
+  }
+  New-ItemProperty -Path $settingsPath -Name 'Enabled' -Value 1 -PropertyType DWord -Force | Out-Null
+  New-ItemProperty -Path $settingsPath -Name 'ShowInActionCenter' -Value 1 -PropertyType DWord -Force | Out-Null
+}
+
+function Show-SnowCliWinRtToast {
+  Register-SnowCliToastIdentity
+
+  $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+  $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+
+  # Avoid PowerShell here-strings (terminator must start at column 0 and is easy to break).
+  $xml = '<toast><visual><binding template="ToastGeneric"><text>${safeXmlTitle}</text><text>${safeXmlBody}</text></binding></visual></toast>'
+
+  $document = New-Object Windows.Data.Xml.Dom.XmlDocument
+  $document.LoadXml($xml)
+  $toast = [Windows.UI.Notifications.ToastNotification]::new($document)
+  $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appUserModelId)
+  $notifier.Show($toast)
+}
+
+function Show-SnowCliBalloonFallback {
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
 
   $notification = New-Object System.Windows.Forms.NotifyIcon
   $notification.Icon = [System.Drawing.SystemIcons]::Information
   $notification.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+  $notification.Text = $displayName
   $notification.BalloonTipTitle = '${safeTitle}'
   $notification.BalloonTipText = '${safeBody}'
   $notification.Visible = $true
   $notification.ShowBalloonTip(5000)
   Start-Sleep -Seconds 6
   $notification.Dispose()
-} catch {
+}
+
+try {
+  Show-SnowCliWinRtToast
   exit 0
+} catch {
+  try {
+    Show-SnowCliBalloonFallback
+  } catch {
+    exit 0
+  }
 }
 `;
 }
@@ -190,14 +245,17 @@ export function buildWindowsNotificationLauncherScript(
 	title: string,
 	body: string,
 ): string {
-	const toastScript = buildToastScript(title, body).trim();
+	// Nested here-strings break when toast script already contains @' ... '@.
+	// Encode the inner script as Base64 so the launcher stays single-quoted safe.
+	const encodedToastScript = Buffer.from(
+		buildToastScript(title, body),
+		'utf16le',
+	).toString('base64');
 
 	return `
 try {
-  $script = @'
-${toastScript}
-'@
-  Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-Command',$script -WindowStyle Hidden | Out-Null
+  $encoded = '${encodedToastScript}'
+  Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded -WindowStyle Hidden | Out-Null
 } catch {
   exit 0
 }

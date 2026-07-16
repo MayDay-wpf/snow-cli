@@ -254,6 +254,10 @@ async function runConversationWithTools(
 				});
 			}
 
+			// 最终回复已完成：立刻清掉思考态，避免收尾阶段仍显示深度思考。
+			setIsReasoning?.(false);
+			options.onThinkingStatus?.(null);
+
 			if (!controller.signal.aborted) {
 				const hookResult = await handleOnStopHooks({
 					conversationMessages,
@@ -264,7 +268,9 @@ async function runConversationWithTools(
 					continue;
 				}
 
-				await triggerBuddyContextReaction(
+				// Buddy 气泡是装饰性二次 LLM 调用，绝不能阻塞主轮次收尾。
+				// 以前 await 它会导致 isStreaming 一直 true，UI 卡在“收尾中...”数秒。
+				void triggerBuddyContextReaction(
 					conversationMessages,
 					controller.signal,
 				);

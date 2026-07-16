@@ -1,4 +1,9 @@
-import {existsSync, readdirSync} from 'node:fs';
+import {
+	existsSync,
+	readdirSync,
+	watch as watchDir,
+	type FSWatcher,
+} from 'node:fs';
 import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import React from 'react';
@@ -16,6 +21,8 @@ const SUPPORTED_STATUSLINE_HOOK_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 const BUILTIN_STATUSLINE_HOOKS: StatusLineHookDefinition[] = [
 	gitBranchStatusLineHook,
 ];
+/** Debounce window for plugin dir watch events (ms). */
+const STATUSLINE_PLUGIN_RELOAD_DEBOUNCE_MS = 150;
 
 type StatusLineHookModule = {
 	default?: unknown;
@@ -96,6 +103,15 @@ function normalizeStatusLineHookExports(
 	});
 }
 
+/**
+ * Bust ESM module cache so edited statusline plugins reload without restart.
+ * Node caches dynamic import() by full URL, so a unique query is enough.
+ */
+function buildCacheBustedModuleUrl(modulePath: string): string {
+	const baseUrl = pathToFileURL(modulePath).href;
+	return `${baseUrl}?t=${Date.now()}`;
+}
+
 async function loadExternalStatusLineHooks(): Promise<
 	StatusLineHookDefinition[]
 > {
@@ -126,7 +142,7 @@ async function loadExternalStatusLineHooks(): Promise<
 	for (const moduleFile of moduleFiles) {
 		const modulePath = join(STATUSLINE_HOOKS_DIR, moduleFile.name);
 		try {
-			const moduleUrl = pathToFileURL(modulePath).href;
+			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
 			const importedModule = (await import(moduleUrl)) as StatusLineHookModule;
 			hooks.push(...normalizeStatusLineHookExports(importedModule, modulePath));
 		} catch (error) {
@@ -190,11 +206,14 @@ export function useStatusLineHookItems(
 	const [itemsByHookId, setItemsByHookId] = React.useState<
 		Record<string, StatusLineRenderItem[]>
 	>({});
+	// Bump to force re-load of external plugin modules (hot-reload).
+	const [pluginReloadToken, setPluginReloadToken] = React.useState(0);
 
 	React.useEffect(() => {
 		contextRef.current = context;
 	}, [context]);
 
+	// Load (and re-load) external plugins. Re-runs when pluginReloadToken changes.
 	React.useEffect(() => {
 		let disposed = false;
 
@@ -210,6 +229,77 @@ export function useStatusLineHookItems(
 
 		return () => {
 			disposed = true;
+		};
+	}, [pluginReloadToken]);
+
+	// Watch ~/.snow/plugin/statusline for add/change/unlink — hot-reload plugins.
+	React.useEffect(() => {
+		let watcher: FSWatcher | null = null;
+		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+		let disposed = false;
+
+		const scheduleReload = () => {
+			if (disposed) return;
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(() => {
+				if (disposed) return;
+				setPluginReloadToken(token => token + 1);
+			}, STATUSLINE_PLUGIN_RELOAD_DEBOUNCE_MS);
+		};
+
+		const startWatch = () => {
+			if (disposed || watcher) return;
+			if (!existsSync(STATUSLINE_HOOKS_DIR)) {
+				// Directory may appear later after first plugin is created.
+				return;
+			}
+			try {
+				watcher = watchDir(
+					STATUSLINE_HOOKS_DIR,
+					{persistent: false},
+					(eventType, filename) => {
+						// Ignore non-plugin noise when filename is available.
+						if (
+							filename &&
+							!SUPPORTED_STATUSLINE_HOOK_EXTENSIONS.has(extname(filename))
+						) {
+							return;
+						}
+						void eventType;
+						scheduleReload();
+					},
+				);
+				watcher.on('error', () => {
+					try {
+						watcher?.close();
+					} catch {
+						// ignore
+					}
+					watcher = null;
+					if (!disposed) {
+						setTimeout(startWatch, 300);
+					}
+				});
+			} catch {
+				if (!disposed) {
+					setTimeout(startWatch, 400);
+				}
+			}
+		};
+
+		startWatch();
+		// Retry shortly in case the plugin dir is created after mount.
+		const bootTimer = setTimeout(startWatch, 800);
+
+		return () => {
+			disposed = true;
+			clearTimeout(bootTimer);
+			if (debounceTimer) clearTimeout(debounceTimer);
+			try {
+				watcher?.close();
+			} catch {
+				// ignore
+			}
 		};
 	}, []);
 

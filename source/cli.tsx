@@ -120,13 +120,22 @@ function isStreamDestroyedError(err: unknown): boolean {
 	);
 }
 
+// Fatal-exit cleanup is wired after cleanupAsync is defined (see below).
+// Placeholders so early throws still get a best-effort path once registered.
+let runFatalExitCleanup: ((err: unknown, code: number) => void) | null = null;
+
 process.on('uncaughtException', (err: Error) => {
 	if (isStreamDestroyedError(err)) {
 		// Silently ignore — these are expected when an LSP child process
 		// exits while vscode-jsonrpc still has pending writes.
 		return;
 	}
-	// For all other errors, preserve the default crash behaviour.
+	// Prefer full cleanup (MCP / browser / OTEL / Ink) before exit — especially
+	// on Windows where process.exit(1) can leave orphaned child handles.
+	if (runFatalExitCleanup) {
+		runFatalExitCleanup(err, 1);
+		return;
+	}
 	console.error('Uncaught Exception:', err);
 	process.exit(1);
 });
@@ -276,6 +285,9 @@ Usage
   $ snow
   $ snow --ask "your prompt"
   $ snow --ask "your prompt" <sessionId>
+  $ snow cmd buddy status --json
+  $ snow cmd tool-display compact --json
+  $ snow cmd yolo on --yes --json
   $ snow --task "your task description"
   $ snow --task-list
   $ snow --doctor
@@ -296,6 +308,10 @@ Options
 		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
+
+		cmd           Run allowlisted session/slash control commands headlessly
+		              Example: snow cmd buddy hatch name --species=fox --json
+		              Flags: --json (machine output), --yes (confirm medium/high risk)
 
 		--sse         Start SSE server mode for external integration (foreground)
 		--sse-daemon  Start SSE server as background daemon
@@ -407,6 +423,15 @@ Options
 		},
 	},
 );
+// Handle session/slash control plane: snow cmd <command> [args...] [--json] [--yes]
+if (args[0] === 'cmd') {
+	const {runCliSessionCommand} = await import(
+		'./utils/execution/sessionCommandPlane.js'
+	);
+	const exitCode = await runCliSessionCommand(args.slice(1));
+	process.exit(exitCode);
+}
+
 // Handle doctor flag
 if (cli.flags.doctor) {
 	runDoctorAndExit(VERSION, packageJson);
@@ -903,6 +928,29 @@ process.on('SIGTERM', async () => {
 	await cleanupPromise;
 	setTimeout(() => process.exit(0), 50);
 });
+
+// Wire fatal uncaughtException to the same graceful path as SIGINT (MCP/browser/OTEL/Ink).
+// Defined here so cleanupAsync is in scope; early crashes still use the simple exit path.
+runFatalExitCleanup = (err: unknown, code: number) => {
+	const message =
+		err instanceof Error
+			? err.stack || err.message
+			: typeof err === 'string'
+			? err
+			: String(err);
+	console.error('Uncaught Exception:', message);
+
+	// Reuse cleanupPromise so concurrent fatals / signals share one teardown.
+	if (!cleanupPromise) {
+		cleanupPromise = cleanupAsync().catch(() => {
+			// best-effort
+		});
+	}
+	void cleanupPromise.finally(() => {
+		// Short delay so Windows libuv can finish closing handles.
+		setTimeout(() => process.exit(code), 50);
+	});
+};
 const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
 const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
 

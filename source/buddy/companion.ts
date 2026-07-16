@@ -12,7 +12,13 @@ import type {
 	Species,
 	StoredCompanion,
 } from './types.js';
-import {COMPANION_STATS, EYES, HATS, SPECIES} from './types.js';
+import {
+	COMPANION_NAMED_COLORS,
+	COMPANION_STATS,
+	EYES,
+	HATS,
+	SPECIES,
+} from './types.js';
 
 const SALT = 'snow-cli-buddy-v1';
 const BUDDY_STATE_VERSION = 1;
@@ -122,11 +128,73 @@ function isValidSpecies(value: unknown): value is Species {
 }
 
 function isValidEye(value: unknown): boolean {
-	return typeof value === 'string' && EYES.includes(value as never);
+	if (typeof value !== 'string') {
+		return false;
+	}
+	const eye = value.trim();
+	if (!eye) {
+		return false;
+	}
+	// Presets or freeform 1–2 Unicode characters (no whitespace/control).
+	if (EYES.includes(eye as never) || eye === '-') {
+		return true;
+	}
+	if (/\s/u.test(eye) || /[\u0000-\u001F\u007F]/u.test(eye)) {
+		return false;
+	}
+	const chars = Array.from(eye);
+	return chars.length >= 1 && chars.length <= 2;
 }
 
 function isValidHat(value: unknown): boolean {
 	return typeof value === 'string' && HATS.includes(value as never);
+}
+
+function normalizeCompanionColor(
+	value: string,
+): {ok: true; value: string} | {ok: false; error: string} {
+	const trimmed = value.trim();
+	if (
+		!trimmed ||
+		['default', 'auto', 'none', 'clear', 'reset', 'off'].includes(
+			trimmed.toLowerCase(),
+		)
+	) {
+		return {ok: true, value: ''};
+	}
+
+	if (trimmed.startsWith('#')) {
+		const hex = trimmed.slice(1);
+		if (/^[0-9a-fA-F]{3}$/.test(hex) || /^[0-9a-fA-F]{6}$/.test(hex)) {
+			return {ok: true, value: `#${hex.toLowerCase()}`};
+		}
+		return {
+			ok: false,
+			error: `Invalid color "${trimmed}". Use #RGB / #RRGGBB or a named color.`,
+		};
+	}
+
+	const named = COMPANION_NAMED_COLORS.find(
+		color => color.toLowerCase() === trimmed.toLowerCase(),
+	);
+	if (named) {
+		return {ok: true, value: named};
+	}
+
+	return {
+		ok: false,
+		error: `Invalid color "${trimmed}". Available: ${COMPANION_NAMED_COLORS.join(
+			', ',
+		)}, or #RGB/#RRGGBB, or default`,
+	};
+}
+function isValidCompanionColor(value: unknown): boolean {
+	if (typeof value !== 'string') {
+		return false;
+	}
+	const parsed = normalizeCompanionColor(value);
+	// Reset tokens normalize to empty and must not be stored as a color.
+	return parsed.ok && parsed.value !== '';
 }
 
 function isValidStats(value: unknown): value is CompanionStats {
@@ -142,6 +210,11 @@ function isStoredCompanion(value: unknown): value is StoredCompanion {
 		return false;
 	}
 	const candidate = value as Partial<StoredCompanion>;
+	const colorOk =
+		candidate.color === undefined ||
+		(typeof candidate.color === 'string' &&
+			isValidCompanionColor(candidate.color));
+
 	return (
 		typeof candidate.name === 'string' &&
 		typeof candidate.personality === 'string' &&
@@ -151,7 +224,8 @@ function isStoredCompanion(value: unknown): value is StoredCompanion {
 		isValidEye(candidate.eye) &&
 		isValidHat(candidate.hat) &&
 		typeof candidate.shiny === 'boolean' &&
-		isValidStats(candidate.stats)
+		isValidStats(candidate.stats) &&
+		colorOk
 	);
 }
 
@@ -358,6 +432,210 @@ export function renameCompanion(name: string): Companion | undefined {
 	};
 	saveCompanion(renamedCompanion);
 	return renamedCompanion;
+}
+
+export type CompanionUpdate = {
+	name?: string;
+	personality?: string;
+	species?: string;
+	eye?: string;
+	hat?: string;
+	rarity?: string;
+	shiny?: boolean;
+	/** Named color / #hex, or empty/default/clear to reset. */
+	color?: string | null;
+	stats?: Partial<CompanionStats>;
+};
+
+export type UpdateCompanionResult =
+	| {ok: true; companion: Companion; changed: string[]}
+	| {
+			ok: false;
+			code: 'NOT_FOUND' | 'INVALID_ARGS' | 'NO_CHANGES';
+			error: string;
+	  };
+
+export function updateCompanion(
+	updates: CompanionUpdate,
+): UpdateCompanionResult {
+	const companion = getStoredCompanion();
+	if (!companion) {
+		return {
+			ok: false,
+			code: 'NOT_FOUND',
+			error: 'No buddy has hatched yet.',
+		};
+	}
+
+	const next: StoredCompanion = {...companion, stats: {...companion.stats}};
+	const changed: string[] = [];
+
+	if (updates.name !== undefined) {
+		const name = updates.name.trim();
+		if (!name) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: 'Name cannot be empty.',
+			};
+		}
+		if (name !== next.name) {
+			next.name = name;
+			changed.push('name');
+		}
+	}
+
+	if (updates.personality !== undefined) {
+		const personality = updates.personality.trim();
+		if (!personality) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: 'Personality cannot be empty.',
+			};
+		}
+		if (personality !== next.personality) {
+			next.personality = personality;
+			changed.push('personality');
+		}
+	}
+
+	if (updates.species !== undefined) {
+		if (!isValidSpecies(updates.species)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid species "${updates.species}". Available: ${SPECIES.join(
+					', ',
+				)}`,
+			};
+		}
+		if (updates.species !== next.species) {
+			next.species = updates.species as Species;
+			changed.push('species');
+		}
+	}
+
+	if (updates.eye !== undefined) {
+		const eye = updates.eye.trim();
+		if (!isValidEye(eye)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid eye "${updates.eye}". Use a preset (${EYES.join(
+					' ',
+				)}) or 1–2 characters.`,
+			};
+		}
+		if (eye !== next.eye) {
+			next.eye = eye;
+			changed.push('eye');
+		}
+	}
+
+	if (updates.hat !== undefined) {
+		if (!isValidHat(updates.hat)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid hat "${updates.hat}". Available: ${HATS.join(', ')}`,
+			};
+		}
+		if (updates.hat !== next.hat) {
+			next.hat = updates.hat as Companion['hat'];
+			changed.push('hat');
+		}
+	}
+
+	if (updates.rarity !== undefined) {
+		if (!isValidRarity(updates.rarity)) {
+			return {
+				ok: false,
+				code: 'INVALID_ARGS',
+				error: `Invalid rarity "${updates.rarity}". Available: common, uncommon, rare, epic, legendary`,
+			};
+		}
+		if (updates.rarity !== next.rarity) {
+			next.rarity = updates.rarity as Rarity;
+			changed.push('rarity');
+		}
+	}
+
+	if (updates.shiny !== undefined) {
+		if (updates.shiny !== next.shiny) {
+			next.shiny = updates.shiny;
+			changed.push('shiny');
+		}
+	}
+
+	if (updates.color !== undefined) {
+		if (updates.color === null) {
+			if (next.color !== undefined) {
+				delete next.color;
+				changed.push('color');
+			}
+		} else {
+			const parsed = normalizeCompanionColor(updates.color);
+			if (!parsed.ok) {
+				return {
+					ok: false,
+					code: 'INVALID_ARGS',
+					error: parsed.error,
+				};
+			}
+			if (!parsed.value) {
+				if (next.color !== undefined) {
+					delete next.color;
+					changed.push('color');
+				}
+			} else if (parsed.value !== next.color) {
+				next.color = parsed.value;
+				changed.push('color');
+			}
+		}
+	}
+
+	if (updates.stats) {
+		for (const stat of COMPANION_STATS) {
+			const value = updates.stats[stat];
+			if (value === undefined) {
+				continue;
+			}
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				return {
+					ok: false,
+					code: 'INVALID_ARGS',
+					error: `Invalid stats.${stat}: expected a number.`,
+				};
+			}
+			const normalized = Math.max(1, Math.min(10, Math.round(value)));
+			if (normalized !== next.stats[stat]) {
+				next.stats[stat] = normalized;
+				if (!changed.includes('stats')) {
+					changed.push('stats');
+				}
+			}
+		}
+	}
+
+	if (changed.length === 0) {
+		return {
+			ok: false,
+			code: 'NO_CHANGES',
+			error: 'No valid changes provided.',
+		};
+	}
+
+	if (!isStoredCompanion(next)) {
+		return {
+			ok: false,
+			code: 'INVALID_ARGS',
+			error: 'Updated companion failed validation.',
+		};
+	}
+
+	saveCompanion(next);
+	return {ok: true, companion: next, changed};
 }
 
 export function resetCompanion(): void {

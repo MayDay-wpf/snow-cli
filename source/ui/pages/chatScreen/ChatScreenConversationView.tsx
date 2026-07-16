@@ -15,6 +15,8 @@ import MessageRenderer, {
 } from '../../components/chat/MessageRenderer.js';
 import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
+import {HookStatusDisplay} from '../../components/special/HookStatusDisplay.js';
+import type {HookStatusEvent} from '../../../utils/execution/hookStatusEvents.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {CompressionStatus as CompressionStatusType} from '../../components/compression/CompressionStatus.js';
 import {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
@@ -46,6 +48,7 @@ type Props = {
 	customCommandExecution: CustomCommandExecutionState;
 	bashMode: any;
 	hookError: HookErrorDetails | null;
+	hookStatus: HookStatusEvent | null;
 	handleUserQuestionAnswer: (result: any) => void;
 	setHookError: React.Dispatch<React.SetStateAction<HookErrorDetails | null>>;
 	compressionStatus: CompressionStatusType | null;
@@ -70,6 +73,7 @@ export default function ChatScreenConversationView({
 	customCommandExecution,
 	bashMode,
 	hookError,
+	hookStatus,
 	handleUserQuestionAnswer,
 	setHookError,
 	compressionStatus,
@@ -118,6 +122,12 @@ export default function ChatScreenConversationView({
 			<Box paddingX={1} width={terminalWidth}>
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
+
+			{hookStatus && (
+				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+					<HookStatusDisplay status={hookStatus} />
+				</Box>
+			)}
 
 			{hookError && (
 				<Box paddingX={1} width={terminalWidth} marginBottom={1}>

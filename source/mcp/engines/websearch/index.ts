@@ -14,13 +14,19 @@
  *   - An engine MUST be an object with `{id, name, search(page, query,
  *     maxResults)}` where `search` returns `Promise<SearchResult[]>`.
  *   - External engines override built-ins when their `id` collides.
+ *   - Plugin directory changes hot-reload without process restart.
  *
  * Adding a NEW built-in engine still requires only:
  *   1. Implementing `SearchEngine` in a new file under this folder.
  *   2. Registering it in `BUILT_IN_ENGINES` below.
  */
 
-import {existsSync, readdirSync} from 'node:fs';
+import {
+	existsSync,
+	readdirSync,
+	watch as watchDir,
+	type FSWatcher,
+} from 'node:fs';
 import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -32,6 +38,7 @@ import type {SearchEngine, SearchEngineId} from './types.js';
 export const DEFAULT_SEARCH_ENGINE: SearchEngineId = 'duckduckgo';
 
 const SUPPORTED_SEARCH_ENGINE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
+const PLUGIN_RELOAD_DEBOUNCE_MS = 150;
 
 const BUILT_IN_ENGINES: SearchEngine[] = [
 	new DuckDuckGoEngine(),
@@ -50,6 +57,15 @@ const ENGINES: Map<string, SearchEngine> = new Map(
 
 let externalLoadPromise: Promise<void> | null = null;
 let externalLoaded = false;
+/** Bumps on each reload so concurrent ensure/reload don't serve a half-cleared registry. */
+let loadGeneration = 0;
+/** Serializes reloadSearchEngines — concurrent watch events share one in-flight reload. */
+let reloadInFlight: Promise<void> | null = null;
+/** When true, another reload was requested during the current in-flight run. */
+let reloadQueued = false;
+let pluginWatcher: FSWatcher | null = null;
+let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
+let watcherBootstrapped = false;
 
 type SearchEngineModule = {
 	default?: unknown;
@@ -89,6 +105,20 @@ function collectFromModule(mod: SearchEngineModule): SearchEngine[] {
 	return candidates.filter(isSearchEngine);
 }
 
+/** Bust ESM import cache so edited plugins reload without process restart. */
+function buildCacheBustedModuleUrl(modulePath: string): string {
+	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
+}
+
+function resetEnginesToBuiltins(): void {
+	ENGINES.clear();
+	for (const engine of BUILT_IN_ENGINES) {
+		if (isEngineEnabled(engine)) {
+			ENGINES.set(engine.id, engine);
+		}
+	}
+}
+
 async function loadExternalEngines(): Promise<void> {
 	if (!existsSync(SEARCH_ENGINES_DIR)) return;
 
@@ -112,7 +142,7 @@ async function loadExternalEngines(): Promise<void> {
 	for (const file of files) {
 		const modulePath = join(SEARCH_ENGINES_DIR, file.name);
 		try {
-			const moduleUrl = pathToFileURL(modulePath).href;
+			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
 			const mod = (await import(moduleUrl)) as SearchEngineModule;
 			const engines = collectFromModule(mod);
 			if (engines.length === 0) {
@@ -142,17 +172,108 @@ async function loadExternalEngines(): Promise<void> {
 	}
 }
 
+function ensurePluginWatcher(): void {
+	if (watcherBootstrapped) return;
+	watcherBootstrapped = true;
+
+	const startWatch = () => {
+		if (pluginWatcher) return;
+		if (!existsSync(SEARCH_ENGINES_DIR)) return;
+		try {
+			pluginWatcher = watchDir(
+				SEARCH_ENGINES_DIR,
+				{persistent: false},
+				(_eventType, filename) => {
+					if (
+						filename &&
+						!SUPPORTED_SEARCH_ENGINE_EXTENSIONS.has(
+							extname(filename).toLowerCase(),
+						)
+					) {
+						return;
+					}
+					if (pluginReloadTimer) clearTimeout(pluginReloadTimer);
+					pluginReloadTimer = setTimeout(() => {
+						void reloadSearchEngines();
+					}, PLUGIN_RELOAD_DEBOUNCE_MS);
+				},
+			);
+			pluginWatcher.on('error', () => {
+				try {
+					pluginWatcher?.close();
+				} catch {
+					// ignore
+				}
+				pluginWatcher = null;
+				setTimeout(startWatch, 300);
+			});
+		} catch {
+			setTimeout(startWatch, 400);
+		}
+	};
+
+	startWatch();
+	// Directory may appear later after first plugin is created.
+	setTimeout(startWatch, 800);
+}
+
 /**
  * Ensure that external search engine plugins are loaded into the registry.
- * Safe to call multiple times — actual loading only runs once.
+ * Safe to call multiple times — first load is cached until `reloadSearchEngines`.
+ * Concurrent callers share one promise; never observes a mid-reload map.
  */
 export function ensureSearchEnginesLoaded(): Promise<void> {
+	ensurePluginWatcher();
+	// If a reload is in flight, wait for it (new generation) instead of racing.
+	if (reloadInFlight) return reloadInFlight;
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
+	const gen = loadGeneration;
 	externalLoadPromise = loadExternalEngines().then(() => {
-		externalLoaded = true;
+		// Only mark loaded if no reload superseded this load.
+		if (gen === loadGeneration) {
+			externalLoaded = true;
+		}
 	});
 	return externalLoadPromise;
+}
+
+/**
+ * Force re-scan plugin directory and re-import modules (cache-busted).
+ * Serialized with queue-latest: concurrent watch events share one run; if another
+ * reload is requested mid-flight, one more pass runs after the current finishes.
+ * Generation token prevents ensure* from publishing a half-cleared registry.
+ */
+export async function reloadSearchEngines(): Promise<void> {
+	ensurePluginWatcher();
+	if (reloadInFlight) {
+		reloadQueued = true;
+		await reloadInFlight;
+		return;
+	}
+
+	reloadInFlight = (async () => {
+		do {
+			reloadQueued = false;
+			loadGeneration += 1;
+			const gen = loadGeneration;
+			externalLoaded = false;
+			externalLoadPromise = null;
+			// Reset only after claiming the generation so concurrent ensure waits on us.
+			resetEnginesToBuiltins();
+			const loadPromise = loadExternalEngines().then(() => {
+				if (gen === loadGeneration) {
+					externalLoaded = true;
+				}
+			});
+			externalLoadPromise = loadPromise;
+			await loadPromise;
+		} while (reloadQueued);
+	})().finally(() => {
+		reloadInFlight = null;
+	});
+
+	await reloadInFlight;
 }
 
 /**
