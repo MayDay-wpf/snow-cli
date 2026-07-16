@@ -5,6 +5,7 @@ import {
 	createMessageConnection,
 	StreamMessageReader,
 	StreamMessageWriter,
+	type Message,
 	type MessageConnection,
 } from 'vscode-jsonrpc/node.js';
 import type {
@@ -29,6 +30,35 @@ import type {LSPServerConfig} from './LSPServerRegistry.js';
 export interface LSPClientConfig extends LSPServerConfig {
 	language: string;
 	rootPath: string;
+}
+
+function isExpectedTransportWriteError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	const code = (error as NodeJS.ErrnoException).code;
+	return (
+		code === 'EPIPE' ||
+		code === 'ERR_STREAM_DESTROYED' ||
+		code === 'ERR_STREAM_WRITE_AFTER_END' ||
+		error.message.includes('stream was destroyed') ||
+		error.message.includes('write after end')
+	);
+}
+
+class SafeStreamMessageWriter extends StreamMessageWriter {
+	override async write(message: Message): Promise<void> {
+		try {
+			await super.write(message);
+		} catch (error) {
+			if (isExpectedTransportWriteError(error)) {
+				return;
+			}
+
+			throw error;
+		}
+	}
 }
 
 export class LSPClient {
@@ -171,23 +201,19 @@ export class LSPClient {
 
 			this.connection = createMessageConnection(
 				new StreamMessageReader(this.process.stdout!),
-				new StreamMessageWriter(this.process.stdin!),
+				new SafeStreamMessageWriter(this.process.stdin!),
 			);
 
 			// Handle connection-level errors and closure.
-			// Suppress stream-destroyed errors that occur when the child process exits
-			// while a write is still in-flight – these are expected during teardown.
+			// Suppress expected write failures when the child process exits while a
+			// vscode-jsonrpc write is still in flight.
 			this.connection.onError(([error]) => {
 				this.markTransportClosed();
-				const msg = error?.message || '';
-				if (
-					msg.includes('stream was destroyed') ||
-					msg.includes('ERR_STREAM_DESTROYED') ||
-					msg.includes('write after end')
-				) {
+				if (isExpectedTransportWriteError(error)) {
 					return;
 				}
-				console.debug('LSP connection error:', msg || error);
+
+				console.debug('LSP connection error:', error?.message || error);
 			});
 			this.connection.onClose(() => {
 				this.markTransportClosed();
