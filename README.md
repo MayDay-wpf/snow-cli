@@ -52,6 +52,14 @@ _Agentic coding in your terminal_
   </tbody>
 </table>
 
+## Relay Station Recommendations
+
+> The relay stations listed here are mutual recommendation partnerships, not commercial sponsorships. Any relay station that provides a Snow CLI usage tutorial and a test account for availability verification is welcome to join.
+
+| Relay Station | Link                                                   |
+| ------------- | ------------------------------------------------------ |
+| ccapi         | [https://ccapi.ztxfkw.top/](https://ccapi.ztxfkw.top/) |
+
 ![alt text](docs/images/image.png)
 
 ![alt text](docs/images/image2.png)

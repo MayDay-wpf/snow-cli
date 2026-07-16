@@ -52,6 +52,14 @@ _在终端中进行 Agentic 编程_
   </tbody>
 </table>
 
+## 中转站推荐
+
+> 此处列出的中转站为双向推荐关系，而非商务合作关系。任何中转站只需提供 Snow CLI 的使用教程及测试可用性的账号即可加入。
+
+| 中转站 | 链接                                                   |
+| ------ | ------------------------------------------------------ |
+| ccapi  | [https://ccapi.ztxfkw.top/](https://ccapi.ztxfkw.top/) |
+
 ![alt text](docs/images/image_zh.png)
 
 ![alt text](docs/images/image_zh2.png)
