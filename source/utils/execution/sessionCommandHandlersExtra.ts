@@ -1493,8 +1493,8 @@ const CONFIG_SET_KEYS =
 	'maxContextTokens, maxTokens, advancedModel, basicModel, requestMethod';
 
 /**
- * Hot-set active snowcfg via updateSnowConfig (writes config.json +
- * active profile, emits apiConfig, no process restart).
+ * Set active snowcfg via updateSnowConfig (writes config.json + active profile).
+ * Changes take effect on next process start (config is cached per-process).
  *
  * Usage:
  *   config set maxContextTokens=450000 maxTokens=128000
@@ -1649,7 +1649,6 @@ export async function handleConfigSet(
 
 	const previous = getSnowConfig();
 	await updateSnowConfig(patch);
-	// updateSnowConfig -> saveConfig already emits apiConfig for hot UI refresh.
 	const next = getSnowConfig();
 
 	return okResult(

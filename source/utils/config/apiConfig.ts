@@ -6,11 +6,8 @@ import {
 	existsSync,
 	mkdirSync,
 	unlinkSync,
-	watch,
-	type FSWatcher,
 } from 'fs';
 import {readSettings, updateSettings} from './unifiedSettings.js';
-import {configEvents} from './configEvents.js';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
@@ -299,71 +296,7 @@ function cloneDefaultMCPConfig(): MCPConfig {
 // 配置缓存
 let configCache: AppConfig | null = null;
 
-// External / agent force-writes to ~/.snow/config.json must invalidate cache
-// and notify UI without process restart (same pattern as theme.json).
-let configFileWatcher: FSWatcher | null = null;
-let configWatchBootstrapped = false;
-let configWatchDebounce: ReturnType<typeof setTimeout> | null = null;
-/** Suppress re-entrant emit when saveConfig itself triggers fs.watch. */
-let suppressConfigWatchEmit = false;
-
-function notifyApiConfigChanged(config?: AppConfig): void {
-	const snowcfg = config?.snowcfg ?? configCache?.snowcfg;
-	configEvents.emitConfigChange({
-		type: 'apiConfig',
-		value: snowcfg ?? null,
-	});
-}
-
-function ensureConfigFileWatcher(): void {
-	if (configWatchBootstrapped) return;
-	configWatchBootstrapped = true;
-
-	const startWatch = () => {
-		if (configFileWatcher) return;
-		if (!existsSync(CONFIG_FILE)) return;
-		try {
-			configFileWatcher = watch(CONFIG_FILE, {persistent: false}, () => {
-				if (suppressConfigWatchEmit) return;
-				if (configWatchDebounce) clearTimeout(configWatchDebounce);
-				configWatchDebounce = setTimeout(() => {
-					if (suppressConfigWatchEmit) return;
-					// Drop cache so next getSnowConfig() re-reads disk
-					configCache = null;
-					try {
-						const next = loadConfig();
-						notifyApiConfigChanged(next);
-						// Best-effort: drop agent caches so model/token limits apply
-						void import('./configManager.js')
-							.then(m => m.clearAllAgentCaches())
-							.catch(() => {
-								// optional during early boot
-							});
-					} catch {
-						// ignore corrupt transient writes mid-save
-					}
-				}, 100);
-			});
-			configFileWatcher.on('error', () => {
-				try {
-					configFileWatcher?.close();
-				} catch {
-					// ignore
-				}
-				configFileWatcher = null;
-				setTimeout(startWatch, 300);
-			});
-		} catch {
-			setTimeout(startWatch, 400);
-		}
-	};
-
-	startWatch();
-	setTimeout(startWatch, 800);
-}
-
 export function loadConfig(): AppConfig {
-	ensureConfigFileWatcher();
 	// 如果缓存存在，直接返回缓存
 	if (configCache !== null) {
 		return configCache;
@@ -466,22 +399,10 @@ export function saveConfig(config: AppConfig): void {
 
 	try {
 		const configData = JSON.stringify(config, null, 2);
-		// Avoid double notify from our own write + fs.watch
-		suppressConfigWatchEmit = true;
-		try {
-			writeFileSync(CONFIG_FILE, configData, 'utf8');
-		} finally {
-			// Keep suppress briefly so Windows watch callbacks coalesce
-			setTimeout(() => {
-				suppressConfigWatchEmit = false;
-			}, 150);
-		}
-		// Keep cache in sync so getSnowConfig() sees new values immediately
-		configCache = config;
-		// Hot-refresh TUI / listeners without process restart
-		notifyApiConfigChanged(config);
+		writeFileSync(CONFIG_FILE, configData, 'utf8');
+		// 清除缓存，下次加载时会重新读取
+		configCache = null;
 	} catch (error) {
-		suppressConfigWatchEmit = false;
 		throw new Error(`Failed to save configuration: ${error}`);
 	}
 }
