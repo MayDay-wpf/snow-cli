@@ -14,6 +14,7 @@ import {maskHookInjectedText} from '../../../utils/ui/hookInjectMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import {getToolStatusIcon} from '../special/toolIcons.js';
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -118,10 +119,32 @@ function MessageRendererImpl({
 	) {
 		return null;
 	}
-
 	// Helper function to remove ANSI escape codes
 	const removeAnsiCodes = (text: string): string => {
 		return text.replace(/\x1b\[[0-9;]*m/g, '');
+	};
+
+	const getMessageToolName = (titleLine: string): string => {
+		const structuredName = message.toolName ?? message.toolCall?.name;
+		if (structuredName) {
+			return structuredName;
+		}
+
+		const statusIcon = message.messageStatus
+			? getToolStatusIcon(message.messageStatus)
+			: '';
+		const withoutStatus =
+			statusIcon && titleLine.startsWith(statusIcon)
+				? titleLine.slice(statusIcon.length).trimStart()
+				: titleLine;
+		const separatorIndex = withoutStatus.indexOf(' ');
+		const possibleIcon =
+			separatorIndex === -1 ? '' : withoutStatus.slice(0, separatorIndex);
+		const withoutToolIcon =
+			possibleIcon && /^\[[\x21-\x7E]+\]$/.test(possibleIcon)
+				? withoutStatus.slice(separatorIndex + 1).trimStart()
+				: withoutStatus;
+		return withoutToolIcon.trim();
 	};
 
 	type CommandResultSegment = {
@@ -367,6 +390,7 @@ function MessageRendererImpl({
 		terminalWidth - 2 - visualWidth(messagePrefix) - 1,
 		1,
 	);
+	const userBubbleWidth = Math.max(contentColumnWidth - visualWidth('│ '), 2);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
@@ -564,17 +588,9 @@ function MessageRendererImpl({
 																message.messageStatus === 'success' &&
 																message.toolResult &&
 																(() => {
-																	const toolName =
-																		message.toolName ??
-																		message.toolCall?.name ??
-																		removeAnsiCodes(titleLine)
-																			// Status glyphs + optional tool-type emoji (when toolIcons enabled)
-																			.replace(
-																				/^[✓✗⚡✅❌⚠️⏳]\s*(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*)?/u,
-																				'',
-																			)
-																			.replace(/.*⚇✓\s*/, '')
-																			.trim();
+																	const toolName = getMessageToolName(
+																		removeAnsiCodes(titleLine),
+																	);
 																	const summary = getToolResultSummary(
 																		toolName,
 																		message.toolResult,
@@ -642,38 +658,35 @@ function MessageRendererImpl({
 														</Box>
 													)}
 													{message.role === 'user' ? (
-														<Box
-															flexDirection="column"
-															width={contentColumnWidth}
-														>
-															{(
-																formatCompressionSummaryBubbleLines(
-																	message.content,
-																	contentColumnWidth,
-																) ??
-																formatUserBubbleLines(
-																	getDisplayContent(message.content),
-																	contentColumnWidth,
-																)
-															).map((line, lineIndex) => {
-																// Left accent bar (no full-line bg → no stairstep / ghosting).
-																// Reuse userMessageBackground as the accent color so theme
-																// customization still has a dedicated user-message token.
+														<Box width={contentColumnWidth}>
+															{(() => {
 																const accentColor = message.subAgentDirected
 																	? 'magenta'
 																	: theme.colors.userMessageBackground ||
 																	  theme.colors.menuSelected ||
 																	  theme.colors.success ||
 																	  'green';
+																const lines =
+																	formatCompressionSummaryBubbleLines(
+																		message.content,
+																		userBubbleWidth,
+																	) ??
+																	formatUserBubbleLines(
+																		getDisplayContent(message.content),
+																		userBubbleWidth,
+																	);
+
 																return (
-																	<Box key={lineIndex}>
-																		<Text color={accentColor}>│ </Text>
-																		<Text color={theme.colors.userMessageText}>
-																			{line}
+																	<>
+																		<Text color={accentColor}>
+																			{lines.map(() => '│').join('\n')}
 																		</Text>
-																	</Box>
+																		<Text color={theme.colors.userMessageText}>
+																			{` ${lines.join('\n ')}`}
+																		</Text>
+																	</>
 																);
-															})}
+															})()}
 														</Box>
 													) : message.content ? (
 														<MarkdownRenderer
@@ -860,18 +873,11 @@ function MessageRendererImpl({
 										// Hide result preview in compact mode
 										toolDisplayMode === 'full' && (
 											<ToolResultPreview
-												toolName={
-													message.toolName ??
-													message.toolCall?.name ??
-													((message.content || '')
-														.replace(/^✓\s*/, '') // Remove leading ✓
-														.replace(/^⚇✓\s*/, '') // Remove leading ⚇✓
-														.replace(/.*⚇✓\s*/, '') // Remove any prefix before ⚇✓
-														.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI color codes
-														.split('\n')[0]
-														?.trim() ||
-														'')
-												}
+												toolName={getMessageToolName(
+													removeAnsiCodes(
+														(message.content || '').split('\n')[0] || '',
+													),
+												)}
 												result={message.toolResult}
 												maxLines={5}
 												isSubAgentInternal={

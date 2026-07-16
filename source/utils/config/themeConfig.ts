@@ -7,7 +7,7 @@ import {configEvents} from './configEvents.js';
 const CONFIG_DIR = join(homedir(), '.snow');
 const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');
 
-/** Status keys for tool-call title prefixes (✓ / · / ✗ …). */
+/** Status keys for tool-call title prefixes. */
 export type ToolStatusIconKey =
 	| 'pending'
 	| 'success'
@@ -16,24 +16,24 @@ export type ToolStatusIconKey =
 	| 'running';
 
 /**
- * Compact default status glyphs (prefer terminal-friendly over heavy emoji).
- * Matches classic CLI style: `✓ terminal-execute`.
+ * Compact default status symbols from ZGQ-inc/special-ascii.
+ * Keep every symbol single-column and free of Unicode Emoji properties.
  */
 export const DEFAULT_TOOL_STATUS_ICONS: Record<ToolStatusIconKey, string> = {
-	pending: '·',
+	pending: '◇',
 	success: '✓',
 	error: '✗',
-	warning: '!',
-	running: '…',
+	warning: '∆',
+	running: '⋯',
 };
 
 /**
- * Tool type-icon preferences (category emoji next to tool name).
- * - boolean: enable/disable category icons only (status still uses defaults)
+ * Tool type-symbol preferences (text category symbol next to tool name).
+ * - boolean: enable/disable category symbols only (status still uses defaults)
  * - object:
- *   - enabled: category icons on/off
- *   - status: boolean | { enabled?, icons? } for ✓/·/✗ prefixes
- *   - tools: per-tool category icon overrides
+ *   - enabled: category symbols on/off
+ *   - status: boolean | { enabled?, icons? } for configurable status prefixes
+ *   - tools: per-tool category symbol overrides
  */
 export type ToolIconsConfig =
 	| boolean
@@ -41,8 +41,8 @@ export type ToolIconsConfig =
 			enabled?: boolean;
 			/**
 			 * Status prefix before the tool title.
-			 * true/omit = on (compact ✓ defaults); false = hide;
-			 * object = enable + optional glyph overrides.
+			 * true/omit = on (compact defaults); false = hide;
+			 * object = enable + optional marker overrides.
 			 */
 			status?:
 				| boolean
@@ -50,7 +50,7 @@ export type ToolIconsConfig =
 						enabled?: boolean;
 						icons?: Partial<Record<ToolStatusIconKey, string>>;
 				  };
-			/** Per-tool category icon overrides; keys are exact tool names. */
+			/** Per-tool category symbol overrides; keys are exact tool names. */
 			tools?: Record<string, string>;
 	  };
 
@@ -61,7 +61,7 @@ interface ThemeConfig {
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
 	thinkDisplayMode?: ThinkDisplayMode;
-	/** Tool category icons + optional status prefixes; default true. */
+	/** Tool category symbols + optional status prefixes; default true. */
 	toolIcons?: ToolIconsConfig;
 	/**
 	 * Pure user overrides for chat tool titles (no built-in i18n defaults).
@@ -250,7 +250,7 @@ function normalizeStatusIcons(
 		| undefined
 		| null,
 ): NormalizedToolStatusConfig {
-	// Default: status prefixes ON with compact glyphs (✓ / · / ✗).
+	// Default: status prefixes are on and use compact terminal markers.
 	if (raw === undefined || raw === null || raw === true) {
 		return {enabled: true, icons: {...DEFAULT_TOOL_STATUS_ICONS}};
 	}
@@ -350,7 +350,7 @@ function toPersistedToolIconsConfig(
 }
 
 /**
- * Whether tool category icons (🔍/💻/…) are shown next to tool names.
+ * Whether tool category markers are shown next to tool names.
  * Independent of toolDisplayMode full|compact|hidden.
  */
 export function getToolIconsEnabled(): boolean {
@@ -359,20 +359,20 @@ export function getToolIconsEnabled(): boolean {
 }
 
 /**
- * Per-tool icon overrides from theme.json.
+ * Per-tool marker overrides from theme.json.
  */
 export function getToolIconOverrides(): Record<string, string> {
 	const config = loadThemeConfig();
 	return normalizeToolIconsConfig(config.toolIcons).tools;
 }
 
-/** Whether ✓/·/✗ status prefixes are shown on tool titles. */
+/** Whether configured status prefixes are shown on tool titles. */
 export function getToolStatusIconsEnabled(): boolean {
 	const config = loadThemeConfig();
 	return normalizeToolIconsConfig(config.toolIcons).status.enabled;
 }
 
-/** Resolved status glyphs (defaults + user overrides). */
+/** Resolved status markers (defaults + user overrides). */
 export function getToolStatusIconMap(): Record<ToolStatusIconKey, string> {
 	const config = loadThemeConfig();
 	return normalizeToolIconsConfig(config.toolIcons).status.icons;
@@ -394,7 +394,7 @@ function persistToolIcons(
 }
 
 /**
- * Enable/disable tool category icons (preserves overrides + status).
+ * Enable/disable tool category markers (preserves overrides + status).
  */
 export function setToolIconsEnabled(enabled: boolean): void {
 	const config = loadThemeConfig();
@@ -403,14 +403,14 @@ export function setToolIconsEnabled(enabled: boolean): void {
 }
 
 /**
- * Replace tool icon config wholesale (boolean or full object).
+ * Replace the tool marker config wholesale (boolean or full object).
  */
 export function setToolIconsConfig(value: ToolIconsConfig): void {
 	persistToolIcons(normalizeToolIconsConfig(value));
 }
 
 /**
- * Set/override a single tool category icon. Pass empty string to clear.
+ * Set/override a single tool category marker. Pass empty string to clear.
  */
 export function setToolIconOverride(
 	toolName: string,
@@ -431,7 +431,7 @@ export function setToolIconOverride(
 	persistToolIcons({...current, tools});
 }
 
-/** Enable/disable status prefixes (✓ success, · pending, …). */
+/** Enable or disable configured status prefixes. */
 export function setToolStatusIconsEnabled(enabled: boolean): void {
 	const config = loadThemeConfig();
 	const current = normalizeToolIconsConfig(config.toolIcons);
@@ -445,7 +445,7 @@ export function setToolStatusIconsEnabled(enabled: boolean): void {
 }
 
 /**
- * Override one status glyph. Empty clears to default compact glyph.
+ * Override one status marker. Empty clears to the default marker.
  * Keys: pending | success | error | warning | running
  */
 export function setToolStatusIconOverride(
